@@ -3,32 +3,38 @@ import { defineResource } from "../../definers/defineResource";
 import { defineTask } from "../../definers/defineTask";
 import { LRUCache } from "lru-cache";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
+import { safeStringify } from "../../models/utils/safeStringify";
 
 export interface ICacheInstance {
-  set(key: string, value: any): void;
-  get(key: string): any;
-  clear(): void;
+  set(key: string, value: unknown): unknown | Promise<unknown>;
+  get(key: string): unknown | Promise<unknown>;
+  clear(): void | Promise<void>;
   /** Optional presence check to disambiguate cached undefined values */
-  has?(key: string): boolean;
+  has?(key: string): boolean | Promise<boolean>;
 }
+
+type CacheStoredValue = NonNullable<unknown>;
+type CacheFactoryOptions = Partial<
+  LRUCache.Options<string, CacheStoredValue, unknown>
+>;
 
 // Default cache factory task that can be overridden
 export const cacheFactoryTask = defineTask({
   id: "globals.tasks.cacheFactory",
-  run: async (
-    options: LRUCache.Options<any, any, any>,
-  ): Promise<ICacheInstance> => {
-    return new LRUCache(options);
+  run: async (options: CacheFactoryOptions): Promise<ICacheInstance> => {
+    return new LRUCache<string, CacheStoredValue, unknown>(
+      options as LRUCache.Options<string, CacheStoredValue, unknown>,
+    );
   },
 });
 
 export interface CacheResourceConfig {
-  defaultOptions?: any;
+  defaultOptions?: CacheFactoryOptions;
 }
 
-type CacheMiddlewareConfig = {
-  keyBuilder?: (taskId: string, input: any) => string;
-} & any;
+type CacheMiddlewareConfig = CacheFactoryOptions & {
+  keyBuilder?: (taskId: string, input: unknown) => string;
+};
 
 /**
  * Journal keys exposed by the cache middleware.
@@ -48,6 +54,7 @@ export const cacheResource = defineResource({
   init: async (config: CacheResourceConfig, { cacheFactoryTask }) => {
     return {
       map: new Map<string, ICacheInstance>(),
+      pendingCreates: new Map<string, Promise<ICacheInstance>>(),
       cacheFactoryTask,
       defaultOptions: {
         ttl: 10 * 1000,
@@ -58,14 +65,15 @@ export const cacheResource = defineResource({
     };
   },
   dispose: async (cache) => {
+    cache.pendingCreates?.clear();
     for (const cacheInstance of cache.map.values()) {
       await cacheInstance.clear();
     }
   },
 });
 
-const defaultKeyBuilder = (taskId: string, input: any) =>
-  `${taskId}-${JSON.stringify(input)}`;
+const defaultKeyBuilder = (taskId: string, input: unknown) =>
+  `${taskId}-${safeStringify(input)}`;
 
 export const cacheMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.cache",
@@ -89,11 +97,26 @@ export const cacheMiddleware = defineTaskMiddleware({
         ...cache.defaultOptions,
         ...lruOptions,
       };
+      const pendingCreates =
+        cache.pendingCreates ??
+        (cache.pendingCreates = new Map<string, Promise<ICacheInstance>>());
 
-      // Use the factory task to create the cache instance
-      cacheHolderForTask = await cache.cacheFactoryTask(cacheOptions);
-
-      cache.map.set(taskId, cacheHolderForTask);
+      const pendingCreate = pendingCreates.get(taskId);
+      if (pendingCreate) {
+        cacheHolderForTask = await pendingCreate;
+      } else {
+        const createPromise = cache
+          .cacheFactoryTask(cacheOptions)
+          .then((instance) => {
+            cache.map.set(taskId, instance);
+            return instance;
+          })
+          .finally(() => {
+            pendingCreates.delete(taskId);
+          });
+        pendingCreates.set(taskId, createPromise);
+        cacheHolderForTask = await createPromise;
+      }
     }
 
     const key = config.keyBuilder!(taskId, task!.input);
@@ -101,7 +124,7 @@ export const cacheMiddleware = defineTaskMiddleware({
     const cachedValue = await cacheHolderForTask.get(key);
     const hasCachedEntry =
       typeof cacheHolderForTask.has === "function"
-        ? cacheHolderForTask.has(key)
+        ? await cacheHolderForTask.has(key)
         : cachedValue !== undefined;
 
     if (hasCachedEntry) {
@@ -112,7 +135,11 @@ export const cacheMiddleware = defineTaskMiddleware({
     journal.set(journalKeys.hit, false, { override: true });
     const result = await next(task!.input);
 
-    await cacheHolderForTask.set(key, result);
+    try {
+      await cacheHolderForTask.set(key, result);
+    } catch {
+      // Fail-open: preserve successful task result even if cache backend write fails.
+    }
 
     return result;
   },

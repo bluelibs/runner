@@ -13,7 +13,7 @@ describe("resource builder - register function+function merge branch", () => {
 
     expect(typeof composed.register).toBe("function");
     if (typeof composed.register === "function") {
-      // @ts-expect-error test
+      // @ts-expect-error register() expects no config argument in this branch
       const ids = composed.register({}).map((it) => it.id);
       expect(ids).toEqual([a.id, b.id]);
     }
@@ -178,5 +178,18 @@ describe("resource builder - register function+function merge branch", () => {
     const rr = await run(app);
     expect(rr.value).toBe(3);
     await rr.dispose();
+  });
+
+  it("falls back to the base resource when with() is called with detached this", () => {
+    const base = resource<{ name: string }>({
+      id: "tests.builder.resource.detached.with",
+      init: async (cfg) => ({ name: cfg.name }),
+    });
+
+    const detachedWith = base.with;
+    const configured = detachedWith.call(undefined, { name: "detached" });
+
+    expect(configured.resource).toBe(base);
+    expect(configured.config).toEqual({ name: "detached" });
   });
 });

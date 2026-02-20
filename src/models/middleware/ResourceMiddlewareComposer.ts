@@ -8,6 +8,7 @@ import { InterceptorRegistry } from "./InterceptorRegistry";
 import { MiddlewareResolver } from "./MiddlewareResolver";
 import { ValidationHelper } from "./ValidationHelper";
 import { IResourceMiddlewareExecutionInput } from "../../types/resourceMiddleware";
+import type { ResourceMiddlewareInterceptor } from "./types";
 
 /**
  * Composes resource initialization chains with validation, interceptors, and middlewares.
@@ -47,7 +48,12 @@ export class ResourceMiddlewareComposer {
     // 3. Apply global resource interceptors
     runner = this.applyGlobalInterceptors<TConfig, TValue>(runner, resource);
 
-    return runner(config);
+    try {
+      return await runner(config);
+    } catch (error: unknown) {
+      await this.reportUnhandledResourceInitError(resource.id, error);
+      throw error;
+    }
   }
 
   /**
@@ -65,7 +71,7 @@ export class ResourceMiddlewareComposer {
   ): (config: TConfig) => TValue {
     return (async (config: TConfig) => {
       if (!resource.init) {
-        return undefined as unknown as TValue;
+        return undefined;
       }
 
       const rawValue = await resource.init(config, dependencies, context);
@@ -75,8 +81,8 @@ export class ResourceMiddlewareComposer {
         resource.resultSchema,
         resource.id,
         "Resource",
-      ) as unknown as Awaited<TValue>;
-    }) as unknown as (config: TConfig) => TValue;
+      ) as Awaited<TValue>;
+    }) as (config: TConfig) => TValue;
   }
 
   /**
@@ -102,33 +108,20 @@ export class ResourceMiddlewareComposer {
       )!;
       const nextFunction = next;
 
-      // Create base middleware runner with error handling
-      const baseMiddlewareRunner = async (cfg: any) => {
-        try {
-          return await storeMiddleware.middleware.run(
-            {
-              resource: {
-                definition: resource,
-                config: cfg,
-              },
-              next: (...args: [TConfig?]) =>
-                nextFunction((args.length > 0 ? args[0] : cfg) as TConfig),
+      // Create base middleware runner
+      const baseMiddlewareRunner = async (cfg: TConfig) => {
+        return storeMiddleware.middleware.run(
+          {
+            resource: {
+              definition: resource,
+              config: cfg,
             },
-            storeMiddleware.computedDependencies,
-            middleware.config,
-          );
-        } catch (error: unknown) {
-          try {
-            await this.store.onUnhandledError({
-              error,
-              kind: "resourceInit",
-              source: resource.id,
-            });
-          } catch (_) {
-            // Ignore errors from error handler
-          }
-          throw error;
-        }
+            next: (...args: [TConfig?]) =>
+              nextFunction((args.length > 0 ? args[0] : cfg) as TConfig),
+          },
+          storeMiddleware.computedDependencies,
+          middleware.config,
+        );
       };
 
       // Get and apply per-middleware interceptors
@@ -138,7 +131,7 @@ export class ResourceMiddlewareComposer {
         );
 
       next = this.wrapWithInterceptors<TConfig, TValue>(
-        baseMiddlewareRunner as any,
+        baseMiddlewareRunner as (config: TConfig) => TValue,
         middlewareInterceptors,
         resource,
       );
@@ -162,9 +155,9 @@ export class ResourceMiddlewareComposer {
     }
 
     const createExecutionInput = (
-      config: any,
-      nextFunc: any,
-    ): IResourceMiddlewareExecutionInput<any> => ({
+      config: TConfig,
+      nextFunc: (config?: TConfig) => Promise<Awaited<TValue>>,
+    ): IResourceMiddlewareExecutionInput<TConfig, Awaited<TValue>> => ({
       resource: {
         definition: resource,
         config: config,
@@ -179,14 +172,22 @@ export class ResourceMiddlewareComposer {
       const nextFunction = currentNext;
 
       currentNext = (async (cfg: TConfig) => {
-        const executionInput = createExecutionInput(cfg, nextFunction);
+        const nextForExecutionInput = (
+          nextConfig?: TConfig,
+        ): Promise<Awaited<TValue>> => {
+          const effectiveConfig = nextConfig === undefined ? cfg : nextConfig;
+          return nextFunction(effectiveConfig) as Promise<Awaited<TValue>>;
+        };
+        const executionInput = createExecutionInput(cfg, nextForExecutionInput);
         const wrappedNext = (
           input: IResourceMiddlewareExecutionInput<TConfig, Awaited<TValue>>,
         ): Promise<Awaited<TValue>> => {
-          return nextFunction(input.resource.config) as any;
+          return nextFunction(input.resource.config) as Promise<
+            Awaited<TValue>
+          >;
         };
-        return (interceptor as any)(wrappedNext, executionInput);
-      }) as unknown as (config: TConfig) => TValue;
+        return interceptor(wrappedNext, executionInput) as TValue;
+      }) as (config: TConfig) => TValue;
     }
 
     return currentNext;
@@ -197,18 +198,17 @@ export class ResourceMiddlewareComposer {
    */
   private wrapWithInterceptors<TConfig, TValue extends Promise<any>>(
     middlewareRunner: (config: TConfig) => TValue,
-    interceptors: readonly any[],
+    interceptors: readonly ResourceMiddlewareInterceptor[],
     resource: IResource<TConfig, TValue, any, any>,
   ): (config: TConfig) => TValue {
     if (interceptors.length === 0) {
       return middlewareRunner;
     }
 
-    const reversedInterceptors = [...interceptors].reverse();
     let wrapped = middlewareRunner;
 
-    for (let i = reversedInterceptors.length - 1; i >= 0; i--) {
-      const interceptor = reversedInterceptors[i];
+    for (let i = interceptors.length - 1; i >= 0; i--) {
+      const interceptor = interceptors[i];
       const nextFunction = wrapped;
 
       wrapped = (async (config: TConfig) => {
@@ -220,19 +220,38 @@ export class ResourceMiddlewareComposer {
             definition: resource,
             config: config,
           },
-          next: nextFunction as any,
+          next: nextFunction as (
+            resourceConfig?: TConfig,
+          ) => Promise<Awaited<TValue>>,
         };
 
         const wrappedNext = (
           input: IResourceMiddlewareExecutionInput<TConfig, Awaited<TValue>>,
         ): Promise<Awaited<TValue>> => {
-          return nextFunction(input.resource.config) as any;
+          return nextFunction(input.resource.config) as Promise<
+            Awaited<TValue>
+          >;
         };
 
-        return (interceptor as any)(wrappedNext, executionInput);
-      }) as unknown as (config: TConfig) => TValue;
+        return interceptor(wrappedNext, executionInput) as TValue;
+      }) as (config: TConfig) => TValue;
     }
 
     return wrapped;
+  }
+
+  private async reportUnhandledResourceInitError(
+    source: string,
+    error: unknown,
+  ): Promise<void> {
+    try {
+      await this.store.onUnhandledError({
+        error,
+        kind: "resourceInit",
+        source,
+      });
+    } catch (_) {
+      // Ignore errors from error handler
+    }
   }
 }

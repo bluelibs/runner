@@ -2,6 +2,7 @@ import { defineError } from "../../definers/defineError";
 
 describe("defineError httpCode", () => {
   it("exposes httpCode on helper and thrown error", () => {
+    expect.assertions(3);
     const E = defineError<{ code: number; message: string }>({
       id: "tests.errors.define.httpCode",
       httpCode: 422,

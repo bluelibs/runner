@@ -7,7 +7,6 @@ export const aResource = defineResource({
     b: bResource,
   },
   async init(_, { b }) {
-    const result: string = b;
     // @ts-expect-error
     const result2: number = b;
     return `A depends on ${b}`;

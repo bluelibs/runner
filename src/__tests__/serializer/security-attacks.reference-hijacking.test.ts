@@ -77,5 +77,26 @@ describe("Serializer Security Attacks", () => {
         /Unresolved reference id/,
       );
     });
+
+    it("should reject non-canonical __ref objects with extra fields", () => {
+      const payload = JSON.stringify({
+        __graph: true,
+        version: 1,
+        root: { __ref: "obj_1" },
+        nodes: {
+          obj_1: {
+            kind: "object",
+            value: {
+              hijacked: { __ref: "obj_2", extra: "drop-me" },
+            },
+          },
+          obj_2: { kind: "object", value: { ok: true } },
+        },
+      });
+
+      expect(() => serializer.deserialize(payload)).toThrow(
+        /Invalid object reference payload/,
+      );
+    });
   });
 });

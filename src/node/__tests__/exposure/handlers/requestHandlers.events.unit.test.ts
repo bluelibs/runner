@@ -6,7 +6,8 @@ import { defineResource, defineEvent, defineHook } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
 import * as requestBody from "../../../exposure/requestBody";
-import { cancellationError } from "../../../../errors";
+import { cancellationError, createMessageError } from "../../../../errors";
+import { globalTags } from "../../../../globals/globalTags";
 import {
   createReqRes,
   HeaderName,
@@ -266,6 +267,159 @@ describe("requestHandlers - event handling", () => {
       await handleEvent(req, res);
       expect(res._status).toBe(200);
     });
+
+    it("skips async context hydration when tunnel policy disables it", async () => {
+      let current: any;
+      const parse = jest.fn((s: string) => JSON.parse(s));
+      const provide = jest.fn((v: any, fn: any) => {
+        current = v;
+        return fn();
+      });
+      const ctx = {
+        id: "ctx.ev.disabled",
+        use: () => current,
+        serialize: (v: any) => JSON.stringify(v),
+        parse,
+        provide,
+        require: () => ({}) as any,
+      } as any;
+
+      const deps: any = {
+        store: {
+          events: new Map([
+            ["e.ctx.disabled", { event: { id: "e.ctx.disabled" } }],
+          ]),
+          resources: new Map([
+            [
+              "srv",
+              {
+                resource: { id: "srv", tags: [globalTags.tunnel] },
+                value: {
+                  mode: "server",
+                  transport: "http",
+                  allowAsyncContext: false,
+                  events: ["e.ctx.disabled"],
+                },
+              },
+            ],
+          ]),
+          errors: new Map(),
+          asyncContexts: new Map([[ctx.id, ctx]]),
+        },
+        taskRunner: {} as any,
+        eventManager: {
+          emit: async () => {
+            expect(ctx.use()).toBeUndefined();
+          },
+        },
+        logger: { info: () => {}, warn: () => {}, error: () => {} },
+        authenticator: async () => ({ ok: true }),
+        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "event", id: "e.ctx.disabled" }),
+          isUnderBase: () => true,
+        },
+        cors: undefined,
+        serializer,
+      };
+
+      const { handleEvent } = createRequestHandlers(deps);
+      const headers = {
+        [HeaderName.ContentType]: MimeType.ApplicationJson,
+        [HeaderName.XRunnerContext]: serializer.stringify({
+          [ctx.id]: ctx.serialize({ w: 8 }),
+        }),
+      } satisfies NodeLikeHeaders;
+
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/event/e.ctx.disabled",
+        headers,
+        body: JSON.stringify({ payload: { a: 1 } }),
+      });
+      await handleEvent(req, res);
+      expect(res._status).toBe(200);
+      expect(parse).not.toHaveBeenCalled();
+      expect(provide).not.toHaveBeenCalled();
+    });
+
+    it("uses tunnel-level allowAsyncContext=false policy for event ids", async () => {
+      let current: any;
+      const parse = jest.fn((s: string) => JSON.parse(s));
+      const provide = jest.fn((v: any, fn: any) => {
+        current = v;
+        return fn();
+      });
+      const ctx = {
+        id: "ctx.tunnel.policy.event",
+        use: () => current,
+        serialize: (v: any) => JSON.stringify(v),
+        parse,
+        provide,
+        require: () => ({}) as any,
+      } as any;
+
+      const deps: any = {
+        store: {
+          tasks: new Map(),
+          events: new Map([
+            ["e.ctx.policy", { event: { id: "e.ctx.policy" } }],
+          ]),
+          resources: new Map([
+            [
+              "srv",
+              {
+                resource: { id: "srv", tags: [globalTags.tunnel] },
+                value: {
+                  mode: "server",
+                  transport: "http",
+                  allowAsyncContext: false,
+                  events: ["e.ctx.policy"],
+                },
+              },
+            ],
+          ]),
+          errors: new Map(),
+          asyncContexts: new Map([[ctx.id, ctx]]),
+        },
+        taskRunner: {} as any,
+        eventManager: {
+          emit: async () => {
+            expect(ctx.use()).toBeUndefined();
+          },
+        },
+        logger: { info: () => {}, warn: () => {}, error: () => {} },
+        authenticator: async () => ({ ok: true }),
+        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "event", id: "e.ctx.policy" }),
+          isUnderBase: () => true,
+        },
+        cors: undefined,
+        serializer,
+      };
+
+      const { handleEvent } = createRequestHandlers(deps);
+      const headers = {
+        [HeaderName.ContentType]: MimeType.ApplicationJson,
+        [HeaderName.XRunnerContext]: serializer.stringify({
+          [ctx.id]: ctx.serialize({ w: 9 }),
+        }),
+      } satisfies NodeLikeHeaders;
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/event/e.ctx.policy",
+        headers,
+        body: JSON.stringify({ payload: { a: 1 } }),
+      });
+
+      await handleEvent(req, res);
+      expect(res._status).toBe(200);
+      expect(parse).not.toHaveBeenCalled();
+      expect(provide).not.toHaveBeenCalled();
+    });
   });
 
   describe("Cancellations and Aborts", () => {
@@ -432,7 +586,7 @@ describe("requestHandlers - event handling", () => {
         id: "tests.ev.err.hook",
         on: ev,
         async run() {
-          throw new Error("boom");
+          throw createMessageError("boom");
         },
       });
       const exposure = nodeExposure.with({

@@ -1,7 +1,11 @@
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
-import { concurrencyTaskMiddleware } from "../../../globals/middleware/concurrency.middleware";
+import {
+  concurrencyResource,
+  concurrencyTaskMiddleware,
+} from "../../../globals/middleware/concurrency.middleware";
 import { Semaphore } from "../../../models/Semaphore";
+import { createMessageError } from "../../../errors";
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -234,7 +238,7 @@ describe("Concurrency Middleware", () => {
       run: async () => {
         callCount++;
         if (callCount === 1) {
-          throw new Error("Failed");
+          throw createMessageError("Failed");
         }
         return "ok";
       },
@@ -254,5 +258,33 @@ describe("Concurrency Middleware", () => {
     await run(app);
     expect(callCount).toBe(2);
     expect(semaphore.getAvailablePermits()).toBe(1);
+  });
+
+  it("should dispose internally created semaphores on runtime dispose", async () => {
+    const key = "concurrency.dispose.key";
+    let trackedSemaphore: Semaphore | undefined;
+
+    const task = defineTask({
+      id: "concurrency.dispose.task",
+      middleware: [concurrencyTaskMiddleware.with({ limit: 1, key })],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [task],
+      dependencies: { task, state: concurrencyResource },
+      async init(_, { task, state }) {
+        await task();
+        trackedSemaphore = state.semaphoresByKey.get(key)?.semaphore;
+      },
+    });
+
+    const runtime = await run(app);
+    expect(trackedSemaphore).toBeDefined();
+    expect(trackedSemaphore?.isDisposed()).toBe(false);
+
+    await runtime.dispose();
+    expect(trackedSemaphore?.isDisposed()).toBe(true);
   });
 });

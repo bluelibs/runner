@@ -11,7 +11,7 @@ export const cResource = defineResource({
     aTask,
     customResource: value,
   },
-  async init(_, { aTask, customResource }) {
+  async init(_, { aTask, customResource: _customResource }) {
     const result: string = await aTask(); // Still benefits of autocompletion
     return `C depends on ${result}`;
   },

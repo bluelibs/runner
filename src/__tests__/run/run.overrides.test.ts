@@ -2,6 +2,7 @@ import {
   defineTask,
   defineResource,
   defineOverride,
+  defineHook,
   defineTaskMiddleware,
   defineResourceMiddleware,
 } from "../../define";
@@ -148,7 +149,7 @@ describe("run.overrides", () => {
     const resourceOverride: definitions.IResource<any> = {
       ...resource,
       overrides: [overrideTask],
-      async init(config: { test: string }) {
+      async init(_config: { test: string }) {
         return "Resource init";
       },
     };
@@ -254,7 +255,7 @@ describe("run.overrides", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Dependency task2 not found. Did you forget to register it through a resource?",
+      'Override target Task "task2" is not registered, so it cannot be overridden.',
     );
   });
 
@@ -280,7 +281,76 @@ describe("run.overrides", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Dependency override2 not found. Did you forget to register it through a resource?",
+      'Override target Resource "override2" is not registered, so it cannot be overridden.',
+    );
+  });
+
+  it("should throw an override-specific error for unregistered plain resource overrides", async () => {
+    const missingResourceOverride = defineResource({
+      id: "missing.resource.override",
+      init: async () => "nope",
+    });
+
+    const app = defineResource({
+      id: "app.missing.resource.override",
+      overrides: [missingResourceOverride],
+      init: async () => undefined,
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      'Override target Resource "missing.resource.override" is not registered, so it cannot be overridden.',
+    );
+  });
+
+  it("should throw an override-specific error for unregistered hook overrides", async () => {
+    const missingHookOverride = defineHook({
+      id: "missing.hook.override",
+      on: "*",
+      run: async () => undefined,
+    });
+
+    const app = defineResource({
+      id: "app.missing.hook.override",
+      overrides: [missingHookOverride],
+      init: async () => undefined,
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      'Override target Hook "missing.hook.override" is not registered, so it cannot be overridden.',
+    );
+  });
+
+  it("should throw an override-specific error for unregistered task middleware overrides", async () => {
+    const missingMiddlewareOverride = defineTaskMiddleware({
+      id: "missing.task.middleware.override",
+      run: async ({ next }) => next(),
+    });
+
+    const app = defineResource({
+      id: "app.missing.task.middleware.override",
+      overrides: [missingMiddlewareOverride],
+      init: async () => undefined,
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      'Override target Task middleware "missing.task.middleware.override" is not registered, so it cannot be overridden.',
+    );
+  });
+
+  it("should throw an override-specific error for unregistered resource middleware overrides", async () => {
+    const missingMiddlewareOverride = defineResourceMiddleware({
+      id: "missing.resource.middleware.override",
+      run: async ({ next }) => next(),
+    });
+
+    const app = defineResource({
+      id: "app.missing.resource.middleware.override",
+      overrides: [missingMiddlewareOverride],
+      init: async () => undefined,
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      'Override target Resource middleware "missing.resource.middleware.override" is not registered, so it cannot be overridden.',
     );
   });
 

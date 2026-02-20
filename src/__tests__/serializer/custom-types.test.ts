@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach } from "@jest/globals";
 import { Serializer } from "../../serializer/index";
 import type { TypeDefinition } from "../../serializer/index";
+import { createMessageError } from "../../errors";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -242,14 +243,14 @@ describe("Custom Type Tests", () => {
       const secondNode = deserialized.next;
       expect(secondNode).toBeDefined();
       if (!secondNode) {
-        throw new Error("Expected second node to be defined");
+        throw createMessageError("Expected second node to be defined");
       }
       expect(secondNode).toBeInstanceOf(LinkedListNode);
       expect(secondNode.value).toBe("B");
       const thirdNode = secondNode.next;
       expect(thirdNode).toBeDefined();
       if (!thirdNode) {
-        throw new Error("Expected third node to be defined");
+        throw createMessageError("Expected third node to be defined");
       }
       expect(thirdNode).toBeInstanceOf(LinkedListNode);
       expect(thirdNode.value).toBe("C");
@@ -275,7 +276,7 @@ describe("Custom Type Tests", () => {
       const nextNode = deserialized.next;
       expect(nextNode).toBeDefined();
       if (!nextNode) {
-        throw new Error("Expected next node to be defined");
+        throw createMessageError("Expected next node to be defined");
       }
       expect(nextNode.value).toBe("B");
       expect(nextNode).toBe(deserialized.next);
@@ -361,11 +362,11 @@ describe("Custom Type Tests", () => {
       serializer.addType(secondType);
 
       const obj1: FirstType = { type: "first", value: "test1" };
-      const _obj2: SecondType = { type: "second", value: "test2" };
+      ({ type: "second", value: "test2" }) satisfies SecondType;
 
       const serialized1 = serializer.serialize(obj1);
       callOrder = [];
-      const _deserialized1 = serializer.deserialize<FirstType>(serialized1);
+      serializer.deserialize<FirstType>(serialized1);
 
       expect(callOrder).toEqual(["first-deserialize"]);
     });

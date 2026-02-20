@@ -4,6 +4,7 @@ import {
   defineTaskMiddleware,
 } from "../../../define";
 import { globals, run } from "../../../index";
+import { createMessageError } from "../../../errors";
 
 const retryJournalKeys = globals.middleware.task.retry.journalKeys;
 const cacheJournalKeys = globals.middleware.task.cache.journalKeys;
@@ -29,7 +30,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
 
           callCount++;
           if (callCount < 2) {
-            throw new Error("Transient failure");
+            throw createMessageError("Transient failure");
           }
           return "success";
         },
@@ -142,7 +143,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
 
           callCount++;
           if (callCount < 2) {
-            throw new Error("Transient failure");
+            throw createMessageError("Transient failure");
           }
           return "ok";
         },

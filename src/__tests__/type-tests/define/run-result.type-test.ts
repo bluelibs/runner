@@ -1,5 +1,7 @@
-import { defineResource, defineTask } from "../../../define";
+import { defineEvent, defineResource, defineTask } from "../../../define";
+import { EventEmissionFailureMode } from "../../../defs";
 import { run } from "../../../";
+import type { IEventEmitReport } from "../../../types/event";
 
 // Type-only tests for RunResult API typing.
 
@@ -74,4 +76,65 @@ void (async () => {
   void region;
   void retries;
   void idRetries;
+})();
+
+// Scenario: RunResult.emitEvent infers report type from literal options.
+void (async () => {
+  const appEvent = defineEvent<{ v: number }>({
+    id: "types.emitEvent.define",
+  });
+
+  const app = defineResource({
+    id: "types.emitEvent.define.root",
+    register: [appEvent],
+  });
+
+  const rr = await run(app);
+
+  const noReport = await rr.emitEvent(appEvent, { v: 1 });
+  const voidValue: void = noReport;
+  void voidValue;
+
+  const report = await rr.emitEvent(appEvent, { v: 2 }, { report: true });
+  const reportValue: IEventEmitReport = report;
+  reportValue.attemptedListeners;
+
+  const strictReport = await rr.emitEvent(
+    appEvent,
+    { v: 3 },
+    {
+      report: true as const,
+      throwOnError: false,
+      failureMode: EventEmissionFailureMode.Aggregate,
+    },
+  );
+  const strictReportValue: IEventEmitReport = strictReport;
+  strictReportValue.failedListeners;
+
+  const dynamicOptions: { report?: boolean } = {};
+  const dynamic = await rr.emitEvent(appEvent, { v: 4 }, dynamicOptions);
+  // @ts-expect-error dynamic report option yields union
+  const mustBeReport: IEventEmitReport = dynamic;
+})();
+
+// Scenario: RunResult root helpers preserve typing.
+void (async () => {
+  type RootConfig = { mode: "dev" | "prod" };
+  type RootValue = { ready: true };
+
+  const app = defineResource<RootConfig, Promise<RootValue>>({
+    id: "types.root.app",
+    init: async () => ({ ready: true }),
+  });
+
+  const rr = await run(app.with({ mode: "dev" }));
+  const rootId: string = rr.getRootId();
+  const rootConfig = rr.getRootConfig<RootConfig>();
+  const mode: "dev" | "prod" = rootConfig.mode;
+  const rootValue = rr.getRootValue<RootValue>();
+  const ready: true = rootValue.ready;
+
+  void rootId;
+  void mode;
+  void ready;
 })();

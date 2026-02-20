@@ -34,12 +34,10 @@ describe("Logger coverage", () => {
       await child.debug("m");
     } finally {
       process.env = origEnv;
-      if (typeof origIsTTY !== "undefined") {
-        Object.defineProperty(process.stdout, "isTTY", {
-          value: origIsTTY,
-          configurable: true,
-        });
-      }
+      Object.defineProperty(process.stdout, "isTTY", {
+        value: origIsTTY,
+        configurable: true,
+      });
     }
   });
 
@@ -60,12 +58,10 @@ describe("Logger coverage", () => {
       expect(logger).toBeInstanceOf(Logger);
     } finally {
       process.env = origEnv;
-      if (typeof origIsTTY !== "undefined") {
-        Object.defineProperty(process.stdout, "isTTY", {
-          value: origIsTTY,
-          configurable: true,
-        });
-      }
+      Object.defineProperty(process.stdout, "isTTY", {
+        value: origIsTTY,
+        configurable: true,
+      });
     }
   });
 

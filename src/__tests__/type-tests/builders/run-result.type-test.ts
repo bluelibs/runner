@@ -1,4 +1,6 @@
 import { r, run } from "../../../";
+import { EventEmissionFailureMode } from "../../../defs";
+import type { IEventEmitReport } from "../../../types/event";
 
 // Type-only tests for builder RunResult typing.
 
@@ -45,4 +47,40 @@ void (async () => {
 
   // @ts-expect-error wrong deps override type
   await rr.runTask(main, { x: 2 }, { depTask: async (input: number) => "x" });
+})();
+
+// Scenario: emitEvent return type depends on literal report option.
+void (async () => {
+  const evt = r
+    .event("types.emitEvent.builder")
+    .payloadSchema<{ id: string }>({ parse: (x: any) => x })
+    .build();
+
+  const app = r.resource("types.emitEvent.builder.app").register([evt]).build();
+  const rr = await run(app);
+
+  const noReport = await rr.emitEvent(evt, { id: "1" });
+  const voidValue: void = noReport;
+  void voidValue;
+
+  const report = await rr.emitEvent(evt, { id: "2" }, { report: true });
+  const reportValue: IEventEmitReport = report;
+  reportValue.errors;
+
+  const strictReport = await rr.emitEvent(
+    evt,
+    { id: "3" },
+    {
+      report: true as const,
+      throwOnError: false,
+      failureMode: EventEmissionFailureMode.Aggregate,
+    },
+  );
+  const strictReportValue: IEventEmitReport = strictReport;
+  strictReportValue.failedListeners;
+
+  const dynamicOptions: { report?: boolean } = {};
+  const dynamicResult = await rr.emitEvent(evt, { id: "4" }, dynamicOptions);
+  // @ts-expect-error dynamic report option yields a union return type
+  const mustBeReport: IEventEmitReport = dynamicResult;
 })();

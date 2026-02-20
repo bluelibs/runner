@@ -4,7 +4,7 @@ import { Serializer } from "../../serializer";
 describe("http-fetch-tunnel.resource onRequest hook", () => {
   it("invokes onRequest with url and headers", async () => {
     const seen: any[] = [];
-    const fetchImpl: typeof fetch = (async (url: any, init?: any) => {
+    const fetchImpl: typeof fetch = (async (_url: any, _init?: any) => {
       // respond ok envelope
       return {
         text: async () => JSON.stringify({ ok: true, result: 11 }),

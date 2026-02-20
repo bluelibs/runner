@@ -13,6 +13,8 @@ import {
   okTask,
   sleepingExecution,
 } from "./DurableService.unit.helpers";
+import { createMessageError } from "../../../errors";
+import { Logger, type ILog } from "../../../models/Logger";
 
 describe("durable: DurableService — polling & lifecycle (unit)", () => {
   it("polls timers and handles schedule timers end-to-end", async () => {
@@ -125,7 +127,7 @@ describe("durable: DurableService — polling & lifecycle (unit)", () => {
     class BlockingStore extends MemoryStore {
       private callCount = 0;
 
-      override async getReadyTimers(now?: Date): Promise<Timer[]> {
+      override async getReadyTimers(_now?: Date): Promise<Timer[]> {
         this.callCount += 1;
         if (this.callCount === 1) {
           return await new Promise<Timer[]>((resolve) => {
@@ -133,7 +135,9 @@ describe("durable: DurableService — polling & lifecycle (unit)", () => {
             resolveFirstAssigned = true;
           });
         }
-        throw new Error("getReadyTimers should not be called after stop");
+        throw createMessageError(
+          "getReadyTimers should not be called after stop",
+        );
       }
     }
 
@@ -149,7 +153,7 @@ describe("durable: DurableService — polling & lifecycle (unit)", () => {
     await service.stop();
 
     if (!resolveFirstAssigned) {
-      throw new Error("Expected getReadyTimers to have been called");
+      throw createMessageError("Expected getReadyTimers to have been called");
     }
     resolveFirst([]);
 
@@ -248,17 +252,27 @@ describe("durable: DurableService — polling & lifecycle (unit)", () => {
       public shouldThrow = false;
       override async getReadyTimers(now?: Date) {
         if (this.shouldThrow) {
-          throw new Error("boom");
+          throw createMessageError("boom");
         }
         return super.getReadyTimers(now);
       }
     }
 
     const store = new ExplodingStore();
+    const logs: ILog[] = [];
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
+    logger.onLog((log) => {
+      logs.push(log);
+    });
     const service = await initDurableService({
       store,
       taskExecutor: createTaskExecutor({}),
       polling: { interval: 5 },
+      logger,
     });
 
     await store.createTimer({
@@ -277,17 +291,17 @@ describe("durable: DurableService — polling & lifecycle (unit)", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 25));
 
-    const consoleSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
     store.shouldThrow = true;
 
     await new Promise((resolve) => setTimeout(resolve, 25));
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "DurableService polling error:",
-      expect.any(Error),
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "Durable polling loop failed.",
+        }),
+      ]),
     );
-    consoleSpy.mockRestore();
 
     await service.stop();
   });

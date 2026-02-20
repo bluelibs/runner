@@ -1,3 +1,4 @@
+import { durableDeterminismViolationError } from "../../../../errors";
 export type ImplicitInternalStepIdKind = "sleep" | "emit" | "waitForSignal";
 export type ImplicitInternalStepIdsPolicy = "allow" | "warn" | "error";
 
@@ -27,7 +28,7 @@ export function createDurableContextDeterminism(params: {
       `Provide a stable id via { stepId: "..." } (or set determinism.implicitInternalStepIds to "allow").`;
 
     if (policy === "error") {
-      throw new Error(message);
+      durableDeterminismViolationError.throw({ message });
     }
 
     if (params.warnedKinds.has(kind)) return;
@@ -38,24 +39,24 @@ export function createDurableContextDeterminism(params: {
 
   const assertUniqueStepId = (stepId: string): void => {
     if (params.seenStepIds.has(stepId)) {
-      throw new Error(
-        `Duplicate step ID detected: '${stepId}'. Step IDs must be unique within a single execution path to ensure deterministic replay.`,
-      );
+      durableDeterminismViolationError.throw({
+        message: `Duplicate step ID detected: '${stepId}'. Step IDs must be unique within a single execution path to ensure deterministic replay.`,
+      });
     }
     params.seenStepIds.add(stepId);
   };
 
   const assertUserStepId = (stepId: string): void => {
     if (stepId.startsWith("__")) {
-      throw new Error(
-        `Step IDs starting with '__' are reserved for durable internals: '${stepId}'`,
-      );
+      durableDeterminismViolationError.throw({
+        message: `Step IDs starting with '__' are reserved for durable internals: '${stepId}'`,
+      });
     }
 
     if (stepId.startsWith("rollback:")) {
-      throw new Error(
-        `Step IDs starting with 'rollback:' are reserved for durable internals: '${stepId}'`,
-      );
+      durableDeterminismViolationError.throw({
+        message: `Step IDs starting with 'rollback:' are reserved for durable internals: '${stepId}'`,
+      });
     }
   };
 

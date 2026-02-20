@@ -2,10 +2,19 @@ import { createAuthenticator } from "../../../exposure/authenticator";
 import { TaskRunner } from "../../../../models/TaskRunner";
 import { ITask } from "../../../../defs";
 import { IncomingMessage } from "http";
+import {
+  AuthValidatorInput,
+  AuthValidatorResult,
+} from "../../../exposure/types";
 
 const mockTaskRunner = {
   run: jest.fn(),
 } as unknown as jest.Mocked<TaskRunner>;
+type AuthValidatorTask = ITask<
+  AuthValidatorInput,
+  Promise<AuthValidatorResult>,
+  any
+>;
 
 describe("node exposure - authenticator", () => {
   beforeEach(() => {
@@ -104,7 +113,7 @@ describe("node exposure - authenticator", () => {
     });
 
     it("runs validator tasks when token check fails", async () => {
-      const task = { id: "v1" } as unknown as ITask;
+      const task = { id: "v1" } as unknown as AuthValidatorTask;
       mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: true }));
       const auth = createAuthenticator(undefined, mockTaskRunner, [task]);
       const result = await auth({ headers: {} } as unknown as IncomingMessage);
@@ -116,8 +125,8 @@ describe("node exposure - authenticator", () => {
     });
 
     it("tries next validator if first fails", async () => {
-      const t1 = { id: "v1" } as unknown as ITask;
-      const t2 = { id: "v2" } as unknown as ITask;
+      const t1 = { id: "v1" } as unknown as AuthValidatorTask;
+      const t2 = { id: "v2" } as unknown as AuthValidatorTask;
       mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: false }));
       mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: true }));
       const auth = createAuthenticator(undefined, mockTaskRunner, [t1, t2]);
@@ -127,8 +136,8 @@ describe("node exposure - authenticator", () => {
     });
 
     it("treats validator exceptions as failures and continues", async () => {
-      const t1 = { id: "v1" } as unknown as ITask;
-      const t2 = { id: "v2" } as unknown as ITask;
+      const t1 = { id: "v1" } as unknown as AuthValidatorTask;
+      const t2 = { id: "v2" } as unknown as AuthValidatorTask;
       mockTaskRunner.run.mockRejectedValueOnce(new Error("oops"));
       mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: true }));
       const auth = createAuthenticator(undefined, mockTaskRunner, [t1, t2]);
@@ -137,7 +146,7 @@ describe("node exposure - authenticator", () => {
     });
 
     it("fails if all validators fail", async () => {
-      const t1 = { id: "v1" } as unknown as ITask;
+      const t1 = { id: "v1" } as unknown as AuthValidatorTask;
       mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: false }));
       const auth = createAuthenticator(undefined, mockTaskRunner, [t1]);
       const result = await auth({ headers: {} } as unknown as IncomingMessage);

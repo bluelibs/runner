@@ -2,6 +2,7 @@ import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpMixedClient } from "../../http/http-mixed-client";
 import { Serializer } from "../../../serializer";
+import { createMessageError } from "../../../errors";
 
 function asIncoming(
   res: Readable,
@@ -51,7 +52,7 @@ describe("createHttpMixedClient.forceSmart (unit)", () => {
       });
 
     const fetchMock = jest.fn(async () => {
-      throw new Error("fetch path should not be used");
+      throw createMessageError("fetch path should not be used");
     });
 
     const client = createHttpMixedClient({

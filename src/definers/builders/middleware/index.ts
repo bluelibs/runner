@@ -20,6 +20,17 @@ export * from "./utils";
 /**
  * Entry point for creating a task middleware builder.
  */
+export function taskMiddlewareBuilder<In = void>(
+  id: string,
+): TaskMiddlewareFluentBuilder<void, In, void, {}>;
+
+export function taskMiddlewareBuilder<
+  C,
+  In,
+  Out = void,
+  D extends DependencyMapType = {},
+>(id: string): TaskMiddlewareFluentBuilder<C, In, Out, D>;
+
 export function taskMiddlewareBuilder<
   C = void,
   In = void,
@@ -31,21 +42,12 @@ export function taskMiddlewareBuilder<
     id,
     filePath,
     dependencies: {} as D,
-    configSchema: undefined as unknown as TaskMwState<
-      C,
-      In,
-      Out,
-      D
-    >["configSchema"],
-    run: undefined as unknown as TaskMwState<C, In, Out, D>["run"],
+    configSchema: undefined,
+    run: undefined,
     meta: {} as IMiddlewareMeta,
     tags: [] as TagType[],
-    everywhere: undefined as unknown as TaskMwState<
-      C,
-      In,
-      Out,
-      D
-    >["everywhere"],
+    everywhere: undefined,
+    throws: undefined,
   });
 
   return makeTaskMiddlewareBuilder(initial);
@@ -54,6 +56,17 @@ export function taskMiddlewareBuilder<
 /**
  * Entry point for creating a resource middleware builder.
  */
+export function resourceMiddlewareBuilder<C = void>(
+  id: string,
+): ResourceMiddlewareFluentBuilder<C, void, void, {}>;
+
+export function resourceMiddlewareBuilder<
+  C,
+  In,
+  Out = void,
+  D extends DependencyMapType = {},
+>(id: string): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
+
 export function resourceMiddlewareBuilder<
   C = void,
   In = void,
@@ -65,16 +78,12 @@ export function resourceMiddlewareBuilder<
     id,
     filePath,
     dependencies: {} as D,
-    configSchema: undefined as unknown as ResMwState<
-      C,
-      In,
-      Out,
-      D
-    >["configSchema"],
-    run: undefined as unknown as ResMwState<C, In, Out, D>["run"],
+    configSchema: undefined,
+    run: undefined,
     meta: {} as IMiddlewareMeta,
     tags: [] as TagType[],
-    everywhere: undefined as unknown as ResMwState<C, In, Out, D>["everywhere"],
+    everywhere: undefined,
+    throws: undefined,
   });
 
   return makeResourceMiddlewareBuilder(initial);

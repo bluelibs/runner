@@ -11,7 +11,7 @@ import { cancellationError } from "../../errors";
  * the first one is used.
  */
 export function getContentType(headers: IncomingHttpHeaders): string {
-  const raw = (headers as unknown as Record<string, unknown>)["content-type"];
+  const raw = (headers as Record<string, unknown>)["content-type"];
   if (Array.isArray(raw)) return String(raw[0]);
   return String(raw ?? "");
 }
@@ -46,19 +46,26 @@ export function createAbortControllerForRequest(
   res: ServerResponse,
 ): AbortController {
   const controller = new AbortController();
+  const createClientClosedRequestError = (): Error => {
+    try {
+      return cancellationError.throw({ reason: "Client Closed Request" });
+    } catch (error) {
+      return error instanceof Error ? error : new Error(String(error));
+    }
+  };
+
   const onAbort = () => {
     try {
-      controller.abort(
-        // pass a typed error instance
-        (() => {
-          try {
-            cancellationError.throw({ reason: "Client Closed Request" });
-          } catch (e) {
-            return e as Error;
-          }
-        })(),
-      );
-    } catch {}
+      controller.abort(createClientClosedRequestError());
+    } catch (abortError) {
+      const normalized =
+        abortError instanceof Error
+          ? abortError
+          : new Error(String(abortError));
+      console.error("[runner] Failed to abort request controller.", {
+        error: normalized,
+      });
+    }
   };
   attachRequestListener(req, "aborted", onAbort);
   attachRequestListener(res, "close", onAbort);

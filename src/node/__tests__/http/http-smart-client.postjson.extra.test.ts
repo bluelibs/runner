@@ -3,6 +3,7 @@ import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../../http/http-smart-client.model";
 import { Serializer } from "../../../serializer";
 import { createNodeFile } from "../../files";
+import { createMessageError } from "../../../errors";
 
 function asIncoming(
   res: Readable,
@@ -20,7 +21,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
   });
 
   it("event(): aggregates mixed string+buffer chunks as JSON", async () => {
-    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
+    jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
       const payload = new Serializer().stringify({
         ok: true,
         result: undefined,
@@ -55,7 +56,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
   });
 
   it("multipart: parseMaybeJsonResponse aggregates mixed chunks", async () => {
-    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
+    jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
       const env = { ok: true, result: 123 };
       const text = new Serializer().stringify(env);
       const res = new Readable({
@@ -126,7 +127,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
         use: () => ({ k: 1 }),
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
-        provide: (v: any, fn: any) => fn(),
+        provide: (_v: any, fn: any) => fn(),
         require: () => ({}) as any,
       },
     ];
@@ -143,5 +144,33 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
       hdrs["x-runner-context"],
     );
     expect(JSON.parse(map["ctx.demo"]).k).toBe(1);
+  });
+
+  it("fails fast when JSON context serialization fails", async () => {
+    const requestSpy = jest.spyOn(http, "request").mockImplementation(() => {
+      throw createMessageError("request should not run");
+    }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: new Serializer(),
+      contexts: [
+        {
+          id: "ctx.bad",
+          use: () => {
+            throw "missing context";
+          },
+          serialize: (v: unknown) => JSON.stringify(v),
+          parse: (s: string) => JSON.parse(s),
+          provide: (_v: unknown, fn: () => unknown) => fn(),
+          require: () => ({}) as any,
+        } as any,
+      ],
+    });
+
+    await expect(client.task("t.json.bad", { a: 1 } as any)).rejects.toThrow(
+      /Failed to serialize async context "ctx.bad"/,
+    );
+    expect(requestSpy).not.toHaveBeenCalled();
   });
 });

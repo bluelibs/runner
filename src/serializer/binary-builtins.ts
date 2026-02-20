@@ -1,3 +1,4 @@
+import { invalidPayloadError, unsupportedFeatureError } from "./errors";
 import type { TypeDefinition } from "./types";
 
 const INVALID_PAYLOAD_MESSAGE_PREFIX = "Invalid";
@@ -39,6 +40,18 @@ interface RuntimeBufferConstructor {
   isBuffer(value: unknown): boolean;
 }
 
+const isRuntimeBufferConstructor = (
+  value: unknown,
+): value is RuntimeBufferConstructor => {
+  if (typeof value !== "function") {
+    return false;
+  }
+
+  const from = Reflect.get(value, "from");
+  const isBuffer = Reflect.get(value, "isBuffer");
+  return typeof from === "function" && typeof isBuffer === "function";
+};
+
 const getTypedArrayConstructor = (
   typeId: TypedArrayTypeId,
 ): RuntimeTypedArrayConstructor | null => {
@@ -46,24 +59,15 @@ const getTypedArrayConstructor = (
   if (typeof value !== "function") {
     return null;
   }
-  return value as unknown as RuntimeTypedArrayConstructor;
+  return value as RuntimeTypedArrayConstructor;
 };
 
 const getRuntimeBufferConstructor = (): RuntimeBufferConstructor | null => {
   const value = (globalThis as Record<string, unknown>).Buffer;
-  if (typeof value !== "function") {
+  if (!isRuntimeBufferConstructor(value)) {
     return null;
   }
-
-  const valueRecord = value as unknown as Record<string, unknown>;
-  if (
-    typeof valueRecord.from !== "function" ||
-    typeof valueRecord.isBuffer !== "function"
-  ) {
-    return null;
-  }
-
-  return value as unknown as RuntimeBufferConstructor;
+  return value;
 };
 
 const isNodeBuffer = (value: unknown): boolean => {
@@ -79,7 +83,9 @@ const assertBytePayload = (
   typeId: string,
 ): readonly number[] => {
   if (!Array.isArray(payload)) {
-    throw new Error(`${INVALID_PAYLOAD_MESSAGE_PREFIX} ${typeId} payload`);
+    throw invalidPayloadError(
+      `${INVALID_PAYLOAD_MESSAGE_PREFIX} ${typeId} payload`,
+    );
   }
 
   const bytes: number[] = new Array(payload.length);
@@ -91,7 +97,9 @@ const assertBytePayload = (
       byteValue < 0 ||
       byteValue > 255
     ) {
-      throw new Error(`${INVALID_PAYLOAD_MESSAGE_PREFIX} ${typeId} payload`);
+      throw invalidPayloadError(
+        `${INVALID_PAYLOAD_MESSAGE_PREFIX} ${typeId} payload`,
+      );
     }
     bytes[index] = byteValue;
   }
@@ -112,13 +120,15 @@ const deserializeTypedArray = (
 ): ArrayBufferView => {
   const typedArrayConstructor = getTypedArrayConstructor(typeId);
   if (!typedArrayConstructor) {
-    throw new Error(`${typeId} is not available in this runtime`);
+    throw unsupportedFeatureError(`${typeId} is not available in this runtime`);
   }
 
   const bytes = assertBytePayload(payload, typeId);
   const bytesPerElement = typedArrayConstructor.BYTES_PER_ELEMENT;
   if (bytes.length % bytesPerElement !== 0) {
-    throw new Error(`${INVALID_PAYLOAD_MESSAGE_PREFIX} ${typeId} payload`);
+    throw invalidPayloadError(
+      `${INVALID_PAYLOAD_MESSAGE_PREFIX} ${typeId} payload`,
+    );
   }
 
   const arrayBuffer = Uint8Array.from(bytes).buffer;

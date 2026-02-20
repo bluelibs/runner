@@ -23,6 +23,7 @@ export async function createNodeExposure(
   const allowList = createAllowListGuard(
     store,
     !!httpConfig?.dangerouslyAllowOpenExposure,
+    logger,
   );
 
   // Discover auth validator tasks
@@ -48,6 +49,7 @@ export async function createNodeExposure(
       cors: httpConfig?.cors,
       serializer,
       limits: httpConfig?.limits,
+      disableDiscovery: httpConfig?.disableDiscovery,
     });
 
   const serverControls = await createExposureServer({

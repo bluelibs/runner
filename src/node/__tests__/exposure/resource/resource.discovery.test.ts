@@ -100,4 +100,53 @@ describe("nodeExposure discovery endpoint", () => {
 
     await rr.dispose();
   });
+
+  it("returns 404 when disableDiscovery is set", async () => {
+    const t = defineTask<void, Promise<number>>({
+      id: "discovery.disabled.task",
+      run: async () => 42,
+    });
+
+    const tunnelServer = defineResource({
+      id: "discovery.disabled.tunnel",
+      tags: [globals.tags.tunnel],
+      async init(): Promise<TunnelRunner> {
+        return {
+          mode: "server",
+          transport: "http",
+          tasks: [t.id],
+          events: [],
+        } satisfies TunnelRunner;
+      },
+    });
+
+    const exposure = nodeExposure.with({
+      http: {
+        dangerouslyAllowOpenExposure: true,
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { token: "T" },
+        disableDiscovery: true,
+      },
+    });
+
+    const app = defineResource({
+      id: "discovery.disabled.app",
+      register: [t, tunnelServer, exposure],
+    });
+    const rr = await run(app);
+    const handlers = await rr.getResourceValue(exposure.resource as any);
+
+    const rrMock = createReqRes({
+      method: "GET",
+      url: "/__runner/discovery",
+      headers: { "x-runner-token": "T" },
+      body: null,
+    });
+    const handled = await handlers.handleRequest(rrMock.req, rrMock.res);
+    expect(handled).toBe(true);
+    expect(rrMock.status).toBe(404);
+
+    await rr.dispose();
+  });
 });

@@ -33,7 +33,7 @@ export interface TunnelTaskMiddlewarePolicyConfig {
   };
 }
 
-export const tunnelPolicyTag = defineTag<TunnelTaskMiddlewarePolicyConfig>({
+export const tunnelTaskPolicyTag = defineTag<TunnelTaskMiddlewarePolicyConfig>({
   id: "globals.tags.tunnel.middlewarePolicy",
   meta: {
     title: "Tunnel Middleware Policy",
@@ -41,3 +41,6 @@ export const tunnelPolicyTag = defineTag<TunnelTaskMiddlewarePolicyConfig>({
       "Controls which middlewares run on caller vs executor when a task is tunneled (whitelist).",
   },
 });
+
+/** @deprecated Use tunnelTaskPolicyTag instead. */
+export const tunnelPolicyTag = tunnelTaskPolicyTag;

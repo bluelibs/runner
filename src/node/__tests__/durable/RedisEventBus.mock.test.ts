@@ -1,6 +1,7 @@
 import { RedisEventBus } from "../../durable/bus/RedisEventBus";
 import { Serializer } from "../../../serializer";
 import * as ioredisOptional from "../../durable/optionalDeps/ioredis";
+import { createMessageError } from "../../../errors";
 
 describe("durable: RedisEventBus", () => {
   let redisMock: any;
@@ -61,22 +62,37 @@ describe("durable: RedisEventBus", () => {
   });
 
   it("logs handler errors instead of throwing", async () => {
-    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const onHandlerError = jest.fn();
     const serializer = new Serializer();
+    bus = new RedisEventBus({ redis: redisMock, onHandlerError });
 
-    try {
-      await bus.subscribe("chan", async () => {
-        throw new Error("boom");
-      });
+    await bus.subscribe("chan", async () => {
+      throw createMessageError("boom");
+    });
 
-      const event = { type: "t", payload: {}, timestamp: new Date() };
-      onMessage?.("durable:bus:chan", serializer.stringify(event));
+    const event = { type: "t", payload: {}, timestamp: new Date() };
+    onMessage?.("durable:bus:chan", serializer.stringify(event));
 
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(spy).toHaveBeenCalledWith(expect.any(Error));
-    } finally {
-      spy.mockRestore();
-    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onHandlerError).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it("logs synchronous handler errors instead of throwing", async () => {
+    const onHandlerError = jest.fn();
+    const serializer = new Serializer();
+    bus = new RedisEventBus({ redis: redisMock, onHandlerError });
+
+    await bus.subscribe("chan", () => {
+      throw createMessageError("sync-boom");
+    });
+
+    const event = { type: "t", payload: {}, timestamp: new Date() };
+    expect(() =>
+      onMessage?.("durable:bus:chan", serializer.stringify(event)),
+    ).not.toThrow();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onHandlerError).toHaveBeenCalledWith(expect.any(Error));
   });
 
   it("supports tree-encoded Date timestamps (Serializer path)", async () => {
@@ -200,6 +216,23 @@ describe("durable: RedisEventBus", () => {
 
     await bus.dispose?.();
     expect(redisMock.quit).toHaveBeenCalled();
+  });
+
+  it("unsubscribe(channel, handler) only removes that handler until last one", async () => {
+    const handlerA = jest.fn(async () => {});
+    const handlerB = jest.fn(async () => {});
+    await bus.subscribe("chan", handlerA);
+    await bus.subscribe("chan", handlerB);
+
+    await bus.unsubscribe("chan", handlerA);
+    expect(redisMock.unsubscribe).not.toHaveBeenCalled();
+
+    await bus.unsubscribe("chan", handlerB);
+    expect(redisMock.unsubscribe).toHaveBeenCalledWith("durable:bus:chan");
+  });
+
+  it("unsubscribe is a no-op for unknown channels", async () => {
+    await expect(bus.unsubscribe("missing")).resolves.toBeUndefined();
   });
 
   it("supports string redis url and default redis in constructor", async () => {

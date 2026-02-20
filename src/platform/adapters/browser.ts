@@ -35,21 +35,21 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
   readonly id: PlatformId = "browser";
   async init() {}
 
-  onUncaughtException(handler: (error: Error) => void) {
-    const g = globalThis as unknown as BrowserGlobalScope;
+  onUncaughtException(handler: (error: unknown) => void) {
+    const g = globalThis as BrowserGlobalScope;
     const target: BrowserEventTarget = g.window ?? g;
     const h: EventListener = (e) => {
       // Pass through the error property if it exists, otherwise the raw event
       // Runtime may receive non-Error values from browser events
       const errorEvent = e as ErrorEvent;
-      handler((errorEvent?.error ?? e) as Error);
+      handler(errorEvent?.error ?? e);
     };
     target.addEventListener?.("error", h);
     return () => target.removeEventListener?.("error", h);
   }
 
   onUnhandledRejection(handler: (reason: unknown) => void) {
-    const g = globalThis as unknown as BrowserGlobalScope;
+    const g = globalThis as BrowserGlobalScope;
     const target: BrowserEventTarget = g.window ?? g;
     const wrap: EventListener = (e) =>
       handler((e as PromiseRejectionEvent)?.reason ?? e);
@@ -58,7 +58,7 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
   }
 
   onShutdownSignal(handler: () => void) {
-    const g = globalThis as unknown as BrowserGlobalScope;
+    const g = globalThis as BrowserGlobalScope;
     const win: BrowserEventTarget = g.window ?? g;
     const handlers: { before?: EventListener; visibility?: EventListener } = {};
 
@@ -86,13 +86,13 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
   }
 
   getEnv(key: string) {
-    const g = globalThis as unknown as BrowserGlobalScope;
+    const g = globalThis as BrowserGlobalScope;
     if (g.__ENV__ && typeof g.__ENV__ === "object") return g.__ENV__[key];
     if (
       typeof process !== "undefined" &&
-      (process as unknown as { env: Record<string, string> }).env
+      (process as { env: Record<string, string> }).env
     )
-      return (process as unknown as { env: Record<string, string> }).env[key];
+      return (process as { env: Record<string, string> }).env[key];
     if (g.env && typeof g.env === "object") return g.env[key];
     return undefined;
   }
@@ -104,12 +104,9 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
   createAsyncLocalStorage<T>(): IAsyncLocalStorage<T> {
     // Return a wrapper that throws on use; creation itself shouldn't crash callers
     const throwUnsupported = (): never => {
-      platformUnsupportedFunctionError.throw({
+      return platformUnsupportedFunctionError.throw({
         functionName: "createAsyncLocalStorage",
       });
-      // TypeScript knows this is unreachable but we need to satisfy the return type
-      /* istanbul ignore next -- unreachable: throw() always throws */
-      throw new Error("Unreachable");
     };
 
     return {

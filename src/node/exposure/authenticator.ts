@@ -23,9 +23,9 @@ export interface NodeExposureHttpAuthConfig {
 
 function safeCompare(a: string, b: string): boolean {
   try {
-    const bufA = Buffer.from(a) as Uint8Array;
-    const bufB = Buffer.from(b) as Uint8Array;
-    return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+    const digestA = crypto.createHash("sha256").update(a).digest();
+    const digestB = crypto.createHash("sha256").update(b).digest();
+    return crypto.timingSafeEqual(digestA, digestB);
   } catch {
     return false;
   }
@@ -88,7 +88,7 @@ export function createAuthenticator(
         ok: false,
         response: jsonErrorResponse(
           500,
-          "Authentication not configured. Set auth.token, add validator tasks, or explicitly enable auth.allowAnonymous.",
+          "Authentication not configured.",
           "AUTH_NOT_CONFIGURED",
         ),
       };

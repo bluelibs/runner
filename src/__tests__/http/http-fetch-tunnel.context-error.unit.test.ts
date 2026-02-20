@@ -1,6 +1,7 @@
 import { createExposureFetch } from "../../http-fetch-tunnel.resource";
 import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
+import { createMessageError } from "../../errors";
 
 describe("createExposureFetch - context header and typed rethrow", () => {
   const baseUrl = "http://127.0.0.1:8080/__runner";
@@ -30,14 +31,14 @@ describe("createExposureFetch - context header and typed rethrow", () => {
         use: () => ({ a: 1 }),
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
-        provide: (v: any, fn: any) => fn(),
+        provide: (_v: any, fn: any) => fn(),
         require: () => ({}),
       },
     ];
     const helper = {
       id: "tests.errors.app",
       throw: (data: any) => {
-        throw new Error("typed:" + String(data?.code));
+        throw createMessageError("typed:" + String(data?.code));
       },
       is: () => false,
       toString: () => "",
@@ -76,11 +77,11 @@ describe("createExposureFetch - context header and typed rethrow", () => {
       {
         id: "ctx.none",
         use: () => {
-          throw new Error("no ctx");
+          throw createMessageError("no ctx");
         },
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
-        provide: (v: any, fn: any) => fn(),
+        provide: (_v: any, fn: any) => fn(),
         require: () => ({}),
       },
     ];

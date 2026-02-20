@@ -28,6 +28,10 @@ export function makeAsyncContextBuilder<T>(
       return makeAsyncContextBuilder(next);
     },
 
+    schema(schema) {
+      return builder.configSchema(schema);
+    },
+
     meta<TNewMeta extends IAsyncContextMeta>(m: TNewMeta) {
       const next = clone(state, { meta: m });
       return makeAsyncContextBuilder(next);

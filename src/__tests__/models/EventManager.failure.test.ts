@@ -1,6 +1,7 @@
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { IEvent } from "../../defs";
+import { createMessageError } from "../../errors";
 
 describe("EventManager Parallel Failure Behavior", () => {
   let eventManager: EventManager;
@@ -23,7 +24,7 @@ describe("EventManager Parallel Failure Behavior", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw new Error("Fail immediately");
+        throw createMessageError("Fail immediately");
       },
       { order: 0 },
     );

@@ -21,7 +21,7 @@ export class EdgePlatformAdapter extends BrowserPlatformAdapter {
    */
   private probeGlobalAsyncLocalStorage(): boolean {
     if (this.alsClass) return true;
-    const g = globalThis as unknown as Record<string, unknown>;
+    const g = globalThis as Record<string, unknown>;
     if (typeof g.AsyncLocalStorage === "function") {
       this.alsClass = g.AsyncLocalStorage as new <T>() => IAsyncLocalStorage<T>;
       return true;

@@ -8,6 +8,7 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { globalEvents } from "../../globals/globalEvents";
+import { createMessageError } from "../../errors";
 
 describe("run", () => {
   // Initial run
@@ -60,7 +61,7 @@ describe("run", () => {
     it("should be able to register a task with dependencies and execute it", async () => {
       const dependencyTask = defineTask({
         id: "dependency.task",
-        run: async (_, { _d1 }) => {
+        run: async (_) => {
           return "Dependency";
         },
       });
@@ -162,7 +163,7 @@ describe("run", () => {
       const testTask = defineTask({
         id: "test.task",
         run: async () => {
-          throw new Error("Task failed");
+          throw createMessageError("Task failed");
         },
       });
 
@@ -497,7 +498,7 @@ describe("run", () => {
         init: async () => {
           // we do this so it doesn't become a never.
           if (true === true) {
-            throw new Error("Init failed");
+            throw createMessageError("Init failed");
           }
         },
       });
@@ -505,7 +506,7 @@ describe("run", () => {
         id: "error.task",
         run: async (_event) => {
           if (true === true) {
-            throw new Error("Run failed");
+            throw createMessageError("Run failed");
           }
         },
       });

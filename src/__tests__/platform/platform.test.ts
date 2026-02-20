@@ -30,10 +30,7 @@ describe("Platform Abstraction", () => {
 
     const platform = getPlatform();
 
-    let errorCaught = false;
-    const cleanup = platform.onUncaughtException(() => {
-      errorCaught = true;
-    });
+    const cleanup = platform.onUncaughtException(() => {});
 
     // Should not throw
     expect(() => cleanup()).not.toThrow();
@@ -45,10 +42,7 @@ describe("Platform Abstraction", () => {
 
     const platform = getPlatform();
 
-    let shutdownCalled = false;
-    const cleanup = platform.onShutdownSignal(() => {
-      shutdownCalled = true;
-    });
+    const cleanup = platform.onShutdownSignal(() => {});
 
     // Should not throw
     expect(() => cleanup()).not.toThrow();
@@ -86,10 +80,7 @@ describe("Platform Abstraction", () => {
     expect(platform.getEnv("NONEXISTENT_VAR")).toBeUndefined();
 
     // Test unhandled rejection handling
-    let rejectionCaught = false;
-    const cleanupRejection = platform.onUnhandledRejection(() => {
-      rejectionCaught = true;
-    });
+    const cleanupRejection = platform.onUnhandledRejection(() => {});
     expect(() => cleanupRejection()).not.toThrow();
 
     // Test timeout methods
@@ -107,23 +98,14 @@ describe("Platform Abstraction", () => {
     expect(platform.getEnv("PATH")).toBeDefined();
 
     // Test error handling setup/cleanup
-    let errorHandled = false;
-    const cleanupError = platform.onUncaughtException(() => {
-      errorHandled = true;
-    });
+    const cleanupError = platform.onUncaughtException(() => {});
     expect(typeof cleanupError).toBe("function");
 
-    let rejectionHandled = false;
-    const cleanupRejection = platform.onUnhandledRejection(() => {
-      rejectionHandled = true;
-    });
+    const cleanupRejection = platform.onUnhandledRejection(() => {});
     expect(typeof cleanupRejection).toBe("function");
 
     // Test shutdown signal handling
-    let shutdownHandled = false;
-    const cleanupShutdown = platform.onShutdownSignal(() => {
-      shutdownHandled = true;
-    });
+    const cleanupShutdown = platform.onShutdownSignal(() => {});
     expect(typeof cleanupShutdown).toBe("function");
 
     // Clean up listeners
@@ -134,9 +116,6 @@ describe("Platform Abstraction", () => {
 
   it("should test universal adapter environment variable fallbacks", () => {
     const universalAdapter = new PlatformAdapter("universal");
-
-    // Test with simulated environment variables
-    const originalGlobalThis = globalThis;
 
     expect(() => {
       universalAdapter.createAsyncLocalStorage<string>();
@@ -259,9 +238,8 @@ describe("Platform Abstraction", () => {
 
   it("should test Node.js platform exit method (mocked)", () => {
     // Only test if we're in a Node.js environment
-    if (typeof process !== "undefined" && process.exit) {
+    if (typeof process !== "undefined" && typeof process.exit === "function") {
       const nodeAdapter = new PlatformAdapter("node");
-      const originalExit = process.exit;
 
       // Mock process.exit to capture the call
       const exitSpy = jest.fn();
@@ -578,10 +556,10 @@ describe("Platform Abstraction", () => {
 
     it("should test isUniversal utility", () => {
       // Mock universal environment (no Node.js, no browser, no WebWorker)
-      const originalProcess = (globalThis as any).process;
-      const originalWindow = (globalThis as any).window;
-      const originalDocument = (globalThis as any).document;
-      const originalSelf = (globalThis as any).self;
+      (globalThis as any).process;
+      (globalThis as any).window;
+      (globalThis as any).document;
+      (globalThis as any).self;
       const originalImportScripts = (globalThis as any).importScripts;
 
       delete (globalThis as any).process;

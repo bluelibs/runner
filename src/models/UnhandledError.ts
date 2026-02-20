@@ -18,6 +18,24 @@ export type OnUnhandledError = (
   info: OnUnhandledErrorInfo,
 ) => void | Promise<void>;
 
+function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value));
+}
+
+function reportUnhandledErrorReporterFailure(
+  reporterError: unknown,
+  info: OnUnhandledErrorInfo,
+): void {
+  const normalizedReporterError = toError(reporterError);
+  const normalizedOriginalError = toError(info.error);
+  console.error("[runner] Failed to report unhandled error.", {
+    reporterError: normalizedReporterError,
+    originalError: normalizedOriginalError,
+    kind: info.kind,
+    source: info.source,
+  });
+}
+
 export function createDefaultUnhandledError(logger: Logger): OnUnhandledError {
   return async ({ error, kind, source }: OnUnhandledErrorInfo) => {
     const normalizedError =
@@ -42,7 +60,13 @@ export function bindProcessErrorHandler(
   return async (error, source) => {
     try {
       await handler({ error, kind: "process", source });
-    } catch {}
+    } catch (reporterError) {
+      reportUnhandledErrorReporterFailure(reporterError, {
+        error,
+        kind: "process",
+        source,
+      });
+    }
   };
 }
 
@@ -52,5 +76,7 @@ export async function safeReportUnhandledError(
 ): Promise<void> {
   try {
     await handler(info);
-  } catch {}
+  } catch (reporterError) {
+    reportUnhandledErrorReporterFailure(reporterError, info);
+  }
 }

@@ -11,12 +11,12 @@ import type { ITag } from "./tag";
 type TagInputContract<TTag extends ITag<any, any, any>> =
   HasInputContracts<[TTag]> extends true
     ? InferInputOrViolationFromContracts<[TTag]>
-    : any;
+    : unknown;
 
 type TagOutputContract<TTag extends ITag<any, any, any>> =
   HasOutputContracts<[TTag]> extends true
     ? InferOutputOrViolationFromContracts<[TTag]>
-    : any;
+    : unknown;
 
 export type AnyResource = IResource<any, any, any, any, any, any, any>;
 

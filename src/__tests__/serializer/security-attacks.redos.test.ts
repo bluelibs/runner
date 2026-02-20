@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeEach } from "@jest/globals";
 import { Serializer } from "../../serializer/index";
+import { isRegExpPatternSafe } from "../../serializer/regexp-validator";
 
 describe("Serializer Security Attacks", () => {
   let serializer: Serializer;
@@ -36,10 +37,70 @@ describe("Serializer Security Attacks", () => {
       expect(result.source).toBe("test");
     });
 
+    it("should reject invalid RegExp flags", () => {
+      const payload = JSON.stringify({
+        __type: "RegExp",
+        value: { pattern: "test", flags: "xyz" },
+      });
+
+      expect(() => serializer.deserialize(payload)).toThrow(
+        /Invalid RegExp flags/,
+      );
+    });
+
+    it("should accept the ES2024 v RegExp flag when runtime supports it", () => {
+      let supportsVFlag = false;
+      try {
+        new RegExp("a", "v");
+        supportsVFlag = true;
+      } catch {
+        // supportsVFlag remains false
+      }
+      if (!supportsVFlag) {
+        return;
+      }
+
+      const payload = JSON.stringify({
+        __type: "RegExp",
+        value: { pattern: "a", flags: "v" },
+      });
+
+      const result = serializer.deserialize<RegExp>(payload);
+      expect(result).toBeInstanceOf(RegExp);
+      expect(result.flags.includes("v")).toBe(true);
+    });
+
     it("should detect unsafe nested quantifiers by default", () => {
       // Patterns like (a+)+ can cause catastrophic backtracking
       const unsafePattern = "(a+)+";
-      expect(serializer.isRegExpPatternSafe(unsafePattern)).toBe(false);
+      expect(isRegExpPatternSafe(unsafePattern)).toBe(false);
+    });
+
+    it("should detect ambiguous quantified alternation patterns", () => {
+      expect(isRegExpPatternSafe("^(a|aa)+$")).toBe(false);
+
+      const payload = JSON.stringify({
+        __type: "RegExp",
+        value: { pattern: "^(a|aa)+$", flags: "" },
+      });
+
+      expect(() => serializer.deserialize(payload)).toThrow(
+        /Unsafe RegExp pattern/,
+      );
+    });
+
+    it("should allow safe alternation patterns", () => {
+      expect(isRegExpPatternSafe("(ab|cd)+")).toBe(true);
+
+      const payload = JSON.stringify({
+        __type: "RegExp",
+        value: { pattern: "(ab|cd)+", flags: "i" },
+      });
+
+      const result = serializer.deserialize<RegExp>(payload);
+      expect(result).toBeInstanceOf(RegExp);
+      expect(result.source).toBe("(ab|cd)+");
+      expect(result.flags).toBe("i");
     });
 
     it("should allow configuring max RegExp pattern length", () => {
@@ -50,6 +111,18 @@ describe("Serializer Security Attacks", () => {
       });
 
       expect(() => strictSerializer.deserialize(payload)).toThrow();
+    });
+
+    it("should allow unsafe patterns when explicitly configured", () => {
+      const permissive = new Serializer({ allowUnsafeRegExp: true });
+      const payload = JSON.stringify({
+        __type: "RegExp",
+        value: { pattern: "^(a|aa)+$", flags: "" },
+      });
+
+      const result = permissive.deserialize<RegExp>(payload);
+      expect(result).toBeInstanceOf(RegExp);
+      expect(result.source).toBe("^(a|aa)+$");
     });
   });
 });

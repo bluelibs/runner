@@ -11,6 +11,7 @@ import {
   MimeType,
   type NodeLikeHeaders,
 } from "./requestHandlers.test.utils";
+import { createMessageError } from "../../../../errors";
 
 describe("requestHandlers - multipart and sanitization", () => {
   const getDeps = () => ({
@@ -171,7 +172,7 @@ describe("requestHandlers - multipart and sanitization", () => {
       jest
         .spyOn(multipartModule, "parseMultipartInput")
         .mockImplementation(() => {
-          throw new Error("parse-fail");
+          throw createMessageError("parse-fail");
         });
 
       const { handleTask } = createRequestHandlers(getDeps() as any);

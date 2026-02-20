@@ -1,4 +1,5 @@
 import { getPlatform } from "../platform";
+import { normalizeError } from "../globals/resources/tunnel/error-utils";
 
 const platform = getPlatform();
 
@@ -14,18 +15,30 @@ let processSafetyNetsInstalled = false;
 function installGlobalProcessSafetyNetsOnce() {
   if (processSafetyNetsInstalled) return;
   processSafetyNetsInstalled = true;
-  const onUncaughtException = async (err: any) => {
+  const onUncaughtException = async (err: unknown) => {
     for (const handler of activeErrorHandlers) {
       try {
         await handler(err, "uncaughtException");
-      } catch (_) {}
+      } catch (handlerError) {
+        console.error("[runner] Process error handler failed.", {
+          source: "uncaughtException",
+          originalError: normalizeError(err),
+          handlerError: normalizeError(handlerError),
+        });
+      }
     }
   };
-  const onUnhandledRejection = async (reason: any) => {
+  const onUnhandledRejection = async (reason: unknown) => {
     for (const handler of activeErrorHandlers) {
       try {
         await handler(reason, "unhandledRejection");
-      } catch (_) {}
+      } catch (handlerError) {
+        console.error("[runner] Process error handler failed.", {
+          source: "unhandledRejection",
+          originalError: normalizeError(reason),
+          handlerError: normalizeError(handlerError),
+        });
+      }
     }
   };
   platform.onUncaughtException(onUncaughtException);
@@ -53,16 +66,22 @@ function installGlobalShutdownHooksOnce() {
   if (shutdownHooksInstalled) return;
   shutdownHooksInstalled = true;
   const handler = async () => {
+    const disposalErrors: Error[] = [];
     try {
       const disposers = Array.from(activeDisposers);
       for (const d of disposers) {
         try {
           await d();
-        } catch {}
-        activeDisposers.delete(d);
+        } catch (disposeError) {
+          const normalizedError = normalizeError(disposeError);
+          disposalErrors.push(normalizedError);
+          console.error("[runner] Shutdown disposer failed.", normalizedError);
+        } finally {
+          activeDisposers.delete(d);
+        }
       }
     } finally {
-      platform.exit(0);
+      platform.exit(disposalErrors.length === 0 ? 0 : 1);
     }
   };
   platform.onShutdownSignal(handler);

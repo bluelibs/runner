@@ -28,16 +28,13 @@ The goal is simple: keep dependencies explicit, keep lifecycle predictable, and 
 import { r, run, globals } from "@bluelibs/runner";
 import { z } from "zod";
 
+// resources are singletons with lifecycle management and async construction
 const db = r
   .resource("app.db")
-  .init(async () => ({
-    users: {
-      insert: async (input: { name: string; email: string }) => ({
-        id: "user-1",
-        ...input,
-      }),
-    },
-  }))
+  .init(async () => {
+    const conn = await postgres.connect(process.env.DB_URL);
+    return conn;
+  })
   .build();
 
 const mailer = r
@@ -53,7 +50,7 @@ const mailer = r
 const createUser = r
   .task("users.create")
   .dependencies({ db, mailer })
-  .middleware([globals.middleware.task.retry.with({ attempts: 3 })])
+  .middleware([globals.middleware.task.retry.with({ retries: 3 })])
   .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
   .run(async (input, { db, mailer }) => {
     const user = await db.users.insert(input);
@@ -63,7 +60,11 @@ const createUser = r
   .build();
 
 // Compose resources and run your application
-const app = r.resource("app").register([db, mailer, createUser]).build();
+const app = r
+  .resource("app") // top-level app resource
+  .register([db, mailer, createUser]) // register all elements
+  .build();
+
 const runtime = await run(app);
 await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 // await runtime.dispose() when you are done.
@@ -103,13 +104,13 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 ## Platform Support (Quick Summary)
 
-| Capability                                              | Node.js | Browser | Edge | Notes                                      |
-| ------------------------------------------------------- | ------- | ------- | ---- | ------------------------------------------ |
+| Capability                                             | Node.js | Browser | Edge | Notes                                      |
+| ------------------------------------------------------ | ------- | ------- | ---- | ------------------------------------------ |
 | Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
-| Async Context (`r.asyncContext`)            | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
-| Durable workflows (`@bluelibs/runner/node`) | Full    | None    | None | Node-only module                           |
-| Tunnels client (`createExposureFetch`)      | Full    | Full    | Full | Requires `fetch`                           |
-| Tunnels server (`@bluelibs/runner/node`)    | Full    | None    | None | Exposes tasks/events over HTTP             |
+| Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
+| Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                           |
+| Tunnels client (`createHttpClient`)                    | Full    | Full    | Full | Requires `fetch`                           |
+| Tunnels server (`@bluelibs/runner/node`)               | Full    | None    | None | Exposes tasks/events over HTTP             |
 
 ---
 
@@ -117,12 +118,12 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 Use these minimums before starting:
 
-| Requirement     | Minimum                  | Notes                                                                      |
-| --------------- | ------------------------ | -------------------------------------------------------------------------- |
-| Node.js         | `18.x`                   | Enforced by `package.json#engines.node`                                    |
-| TypeScript      | `5.6+` (recommended)     | Required for typed DX and examples in this repository                      |
-| Package manager | npm / pnpm / yarn / bun  | Examples use npm, but any modern package manager works                     |
-| `fetch` runtime | Built-in or polyfilled   | Required for tunnel clients (`createExposureFetch`, universal HTTP client) |
+| Requirement     | Minimum                 | Notes                                                                   |
+| --------------- | ----------------------- | ----------------------------------------------------------------------- |
+| Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                                 |
+| TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository                   |
+| Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works                  |
+| `fetch` runtime | Built-in or polyfilled  | Required for tunnel clients (`createHttpClient`, universal HTTP client) |
 
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 

@@ -45,4 +45,31 @@ describe("normalizeThrows()", () => {
       normalizeThrows(owner, [123] as unknown as ThrowsList),
     ).toThrow(/got number/);
   });
+
+  it("works with hook ThrowOwner kind", () => {
+    const hookOwner = { kind: "hook" as const, id: "spec.hook" };
+    expect(normalizeThrows(hookOwner, ["err.id"])).toEqual(["err.id"]);
+  });
+
+  it("works with task-middleware ThrowOwner kind", () => {
+    const mwOwner = {
+      kind: "task-middleware" as const,
+      id: "spec.tmw",
+    };
+    expect(normalizeThrows(mwOwner, ["err.id"])).toEqual(["err.id"]);
+    expect(() => normalizeThrows(mwOwner, ["   "])).toThrow(
+      /Invalid throws entry for task-middleware/,
+    );
+  });
+
+  it("works with resource-middleware ThrowOwner kind", () => {
+    const mwOwner = {
+      kind: "resource-middleware" as const,
+      id: "spec.rmw",
+    };
+    expect(normalizeThrows(mwOwner, ["err.id"])).toEqual(["err.id"]);
+    expect(() => normalizeThrows(mwOwner, ["   "])).toThrow(
+      /Invalid throws entry for resource-middleware/,
+    );
+  });
 });

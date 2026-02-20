@@ -31,6 +31,7 @@ Here's a complete example showing you everything:
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
+// Assuming: emailService and logger resources are defined elsewhere
 // 1. Define your task - it's just a function with a name and dependencies
 const sendEmail = r
   .task("app.tasks.sendEmail")
@@ -129,6 +130,8 @@ const userService = r
 Resources can be configured with type-safe options. No more guessing at config shapes.
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 type SMTPConfig = {
   smtpUrl: string;
   from: string;
@@ -188,9 +191,21 @@ Use function-based registration when:
 
 #### Resource Forking
 
-Use `.fork(newId)` to create multiple instances of a "template" resource with different identities. If the base resource registers other items, use `.fork(newId, { register: "drop" })` to avoid re-registering them, or `.fork(newId, { register: "deep", reId })` to deep-fork **registered resources** (resource tree) with new ids. This is perfect when you need several instances of the same resource type (e.g., multiple database connections, multiple mailers):
+**When you need multiple instances of the same resource type** — like connecting to multiple databases, sending through different SMTP providers, or handling multi-tenant setups — resource forking lets you define once and instantiate with different configs.
+
+**The naive approach gets tedious:**
 
 ```typescript
+// Copy-paste and rename - error-prone and hard to maintain
+const txMailer = r.resource("app.mailers.tx").init(...).build();
+const mktMailer = r.resource("app.mailers.mkt").init(...).build();
+```
+
+**Fork instead:**
+
+```typescript
+import { r } from "@bluelibs/runner";
+
 // Define a reusable template
 const mailerBase = r
   .resource<{ smtp: string }>("base.mailer")
@@ -222,7 +237,15 @@ const app = r
   .build();
 ```
 
-If the base resource registers other resources and you want a clean clone of the resource tree, use `register: "deep"` with a re-id function:
+##### Shallow vs Deep Fork
+
+| Type                                                                    | Use when                                                                |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `fork("new.id")`                                                        | Simple resources with no registered children                            |
+| `fork("new.id", { register: "drop" })`                                  | Resource that registers things you don't want cloned                    |
+| `fork("new.id", { register: "deep", reId: (id) => \`prefix.\${id}\` })` | You need a complete cloned resource tree (e.g., multi-tenant databases) |
+
+**Deep fork example:**
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -247,22 +270,84 @@ const forked = base.fork("app.base.forked", {
 const app = r.resource("app").register([base, forked]).build();
 ```
 
-Note: `register: "deep"` deep-forks registered **resources**; other registerables (tasks/events/hooks/middleware/tags/errors/async contexts) are not cloned.
-Resource dependencies that point to deep-forked resources are remapped inside the cloned tree.
+> **Note:** `register: "deep"` clones only **resources**; tasks, events, hooks, middleware, tags, errors, and async contexts are not cloned. Dependencies pointing to deep-forked resources are remapped inside the cloned tree.
 
-Key points:
+##### Key Points
 
-- **`.fork()` returns a built `IResource`** - no need to call `.build()` again
+- **`.fork()` returns a built `IResource`** — no need to call `.build()` again
 - **Tags, middleware, and type parameters are inherited**
-- **Each fork gets independent runtime** - no shared state
-- **`register` defaults to `"keep"`**; use `"drop"` for leaf resources or `"deep"` when you want cloned _registered resources_ (resource tree)
+- **Each fork gets independent runtime** — no shared state
+- **`register` defaults to `"keep"`**
 - **Export forked resources** to use them as typed dependencies
+
+#### Resource Exports and Isolation Boundaries
+
+As your app grows, isolation keeps domain internals from leaking across resource boundaries. Use `.exports([...])` to define a small public surface and keep everything else private.
+
+Think of this as an **architectural boundary** for wiring, not a sandbox:
+
+- It controls what other resources can reference through dependencies and explicit hook/middleware wiring
+- It helps enforce domain contracts at bootstrap
+- It does not change the flat store model or id uniqueness rules
+
+**Why this matters in real projects:**
+
+- **Safer refactors**: internal tasks/events/hooks/middleware can change without breaking outside consumers
+- **Clear ownership**: each resource exposes a deliberate contract instead of ambient access
+- **Fail-fast architecture checks**: invalid cross-boundary references fail during `run(app)` bootstrap
+- **Predictable cross-cutting behavior**: private `.everywhere()` middleware stays inside its resource subtree
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const calculateTax = r
+  .task("billing.tasks.calculateTax")
+  .run(async (amount: number) => amount * 0.1)
+  .build();
+
+const createInvoice = r
+  .task("billing.tasks.createInvoice")
+  .dependencies({ calculateTax })
+  .run(
+    async (amount: number, deps) => amount + (await deps.calculateTax(amount)),
+  )
+  .build();
+
+const billing = r
+  .resource("billing")
+  .register([calculateTax, createInvoice])
+  .exports([createInvoice]) // public surface
+  .build();
+```
+
+**Semantics:**
+
+- No `.exports()` means backward-compatible behavior: everything remains public
+- `.exports([])` means nothing from that resource is public outside its registration subtree
+- Visibility checks cover dependency references, hook `.on(event)` subscriptions, and middleware attachment
+- `.everywhere()` middleware follows visibility; non-exported middleware applies only inside its subtree
+- If a resource exports a child resource, that child's own exported surface is visible transitively
+- Validation happens at `run(app)` initialization, not at declaration time
+- IDs remain globally unique even for private items; visibility does not bypass duplicate-id checks
+- `runtime.runTask(task)` / `runtime.runTask("task.id")` remains allowed even for private tasks (runtime is an operator surface)
+
+**Nested export chain rule (`A -> B -> C`):**
+
+- `A.exports([c])` works only if every boundary in between allows it
+- If `B.exports([])` is present, `A` cannot expose `c` from inside `B` to external consumers
+
+**Wildcard hooks note:**
+
+- Explicit hook event references are visibility-checked
+- Wildcard hooks (`.on("*")`) are global by design; use explicit events when you need strict boundary enforcement
 
 #### Optional Dependencies
 
 Mark dependencies as optional when they may not be registered. The injected value will be `undefined` if the dependency is missing:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const analyticsService = r
   .resource("app.analytics")
   .init(async () => ({ track: (event: string) => console.log(event) }))
@@ -288,6 +373,9 @@ Optional dependencies work on tasks, resources, events, async contexts, and erro
 For cases where you need to share variables between `init()` and `dispose()` methods (because sometimes cleanup is complicated), use the enhanced context pattern:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
+// Assuming: connectToDatabase and createPool are defined elsewhere
 const dbResource = r
   .resource("db.service")
   .context(() => ({
@@ -358,7 +446,46 @@ const highVolumeEvent = r
 - If any hook throws, subsequent batches don't run
 - `stopPropagation()` is checked between batches only
 
+#### Emission Reports and Failure Modes
+
+Event emitters (dependency-injected or `runtime.emitEvent`) accept optional emission controls:
+
+- `failureMode`: `"fail-fast"` (default) or `"aggregate"`
+- `throwOnError`: `true` by default
+- `report`: when `true`, emit returns `IEventEmitReport`
+
 ```typescript
+import { r } from "@bluelibs/runner";
+
+const userRegistered = r
+  .event<{ userId: string }>("app.events.userRegistered")
+  .build();
+
+const registerUser = r
+  .task("app.tasks.registerUser")
+  .dependencies({ userRegistered })
+  .run(async (input, { userRegistered }) => {
+    // ...
+    const report = await userRegistered(
+      { userId: input.userId },
+      {
+        report: true,
+        throwOnError: false,
+        failureMode: "aggregate",
+      },
+    );
+
+    if (report.failedListeners > 0) {
+      // log, retry, or publish metrics based on report.errors
+    }
+  })
+  .build();
+```
+
+Use this when one failing hook should not block the entire emission path and you want full error visibility.
+
+```typescript
+// Assuming: userService is defined elsewhere
 const registerUser = r
   .task("app.tasks.registerUser")
   .dependencies({ userService, userRegistered })
@@ -383,6 +510,8 @@ const sendWelcomeEmail = r
 Sometimes you need to be the nosy neighbor of your application:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const logAllEventsHook = r
   .hook("app.hooks.logAllEvents")
   .on("*")
@@ -419,6 +548,7 @@ const internalEvent = r
 Hooks are the modern way to subscribe to events. They are lightweight event subscribers, similar to tasks, but with a few key differences.
 
 ```typescript
+// Assuming: userRegistered and logger are defined elsewhere
 const myHook = r
   .hook("app.hooks.onUserRegistered")
   .on(userRegistered)
@@ -517,6 +647,8 @@ Available system event:
 Sometimes you need to prevent other hooks from processing an event. The `stopPropagation()` method gives you fine-grained control over event flow:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const criticalAlert = r
   .event("app.events.alert")
   .payloadSchema<{ severity: "low" | "medium" | "high" | "critical" }>({
@@ -580,6 +712,8 @@ const adminTask = r
 For middleware with input/output contracts:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 // Middleware that enforces specific input and output types
 type AuthConfig = { requiredRole: string };
 type AuthInput = { user: { role: string } };
@@ -651,6 +785,7 @@ For advanced scenarios, you can intercept framework execution without relying on
 - Resource middleware execution: `middlewareManager.intercept("resource", (next, input) => Promise<any>)`
 - Per-middleware interception: `middlewareManager.interceptMiddleware(mw, interceptor)`
 - Per-task execution (local): inside a resource `init`, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task.
+  Inspect local interceptor ownership with `deps.someTask.getInterceptingResourceIds()` (unique ids in registration order).
 
 Per-task interceptors must be registered during resource initialization (before the system is locked). They are a good fit when you want a specific task to be adjusted by a specific resource (for example: feature toggles, input shaping, or internal routing) without making it global middleware.
 
@@ -747,7 +882,24 @@ const adminTask = r
 
 #### Execution Journal
 
-The Execution Journal is a type-safe registry that travels with your task execution. It allows middleware and tasks to share state without polluting the task input/output.
+Consider this scenario: Your rate-limit middleware needs to share remaining quota with your logging middleware, or your timeout middleware needs to tell your retry middleware what went wrong. They need to communicate, but adding this to task input/output pollutes the API.
+
+**The problem**: Multiple middleware need to share state during execution, but passing data through task input/output makes the API messy and exposes internal concerns.
+
+**The naive solution**: Store shared state in a global variable or module-level map. But this causes race conditions, makes testing difficult, and breaks when tasks run in parallel.
+
+**The better solution**: Use the Execution Journal, a type-safe registry that travels with your task execution.
+
+### When to use the Execution Journal
+
+| Use case      | Why Journal helps                          |
+| ------------- | ------------------------------------------ |
+| Rate limiting | Share remaining quota between middleware   |
+| Tracing       | Propagate trace IDs through the call chain |
+| Retries       | Pass error details to retry logic          |
+| Caching       | Indicate cache hits/misses to logging      |
+
+### Journaling Code Example
 
 ```typescript
 import { r, journal } from "@bluelibs/runner";
@@ -870,6 +1022,7 @@ const customJournal = journal.create();
 customJournal.set(traceIdKey, "manual-trace-id");
 
 // Forward explicit journal to a nested task call
+// Assuming: myTask is defined elsewhere
 const orchestratorTask = r
   .task("app.tasks.orchestrator")
   .dependencies({ myTask })
@@ -890,9 +1043,24 @@ if (customJournal.has(traceIdKey)) {
 
 ### Tags
 
-Tags are metadata that can influence system behavior. Unlike meta properties, tags can be queried at runtime to build dynamic functionality. They can be marker tags (no config) or configured tags.
+Imagine you want to automatically register all your HTTP routes without manually importing them into a list. Or you need to find all "cacheable" tasks to build a cache-warmer. How do you discover components at runtime based on their characteristics?
 
-#### Basic Usage
+**The problem**: You need to categorize tasks/resources and query them dynamically, but static metadata isn't enough.
+
+**The naive solution**: Maintain a manual registry or use naming conventions (e.g., tasks starting with "http."). But this is error-prone and couples naming to functionality.
+
+**The better solution**: Use Tags—metadata that can be queried at runtime to build dynamic functionality.
+
+### When to use Tags
+
+| Use case       | Why Tags help                               |
+| -------------- | ------------------------------------------- |
+| Auto-discovery | Find all HTTP routes without manual imports |
+| Caching        | Mark tasks as cacheable and query them      |
+| Access control | Tag tasks requiring authorization           |
+| Monitoring     | Group tasks by feature for metrics          |
+
+### Tags Code Example
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -912,6 +1080,8 @@ const getUserTask = r
 Repeated `.tags()` calls append by default. If you want to replace the existing list, pass `{ override: true }`.
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const apiTag = r.tag("app.tags.api").build();
 const cacheableTag = r.tag("app.tags.cacheable").build();
 const internalTag = r.tag("app.tags.internal").build();
@@ -962,6 +1132,8 @@ const routeRegistration = r
 #### Tag Extraction and Processing
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 // Check if a tag exists and extract its configuration
 const performanceTag = r
   .tag<{ warnAboveMs: number }>("performance.monitor")
@@ -1021,9 +1193,27 @@ const internalEvent = r
 
 #### Contract Tags
 
-Enforce return value shapes at compile time:
+Consider this: You have an authentication tag, and you want to ensure ALL tasks using it actually accept a `userId` in their input. Or you need to ensure that every "searchable" task returns an `id` field. How do you enforce this at compile time?
+
+**The problem**: You want to ensure tasks using certain tags conform to specific input/output shapes, but plain tags don't enforce anything.
+
+**The naive solution**: Document the requirements and manually verify. But this doesn't scale and bugs slip through.
+
+**The better solution**: Use Contract Tags, which enforce type contracts at compile time.
+
+### When to use Contract Tags
+
+| Use case            | Why Contract Tags help                 |
+| ------------------- | -------------------------------------- |
+| Authentication      | Ensure all auth tasks include userId   |
+| API standardization | Enforce consistent response shapes     |
+| Validation          | Guarantee tasks return required fields |
+
+### Contract Tags Code Example
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 // Tags that enforce type contracts input/output for tasks or config/value for resources
 type InputType = { id: string };
 type OutputType = { name: string };
@@ -1041,7 +1231,7 @@ const profileTask = r
 
 ### Errors
 
-Typed errors can be declared once and injected anywhere. Register them alongside other items and consume via dependencies. The injected value is the error helper itself, exposing `.throw()`, `.is()`, `id`, and optional `httpCode`.
+Typed errors can be declared once and injected anywhere. Register them alongside other items and consume via dependencies. The injected value is the error helper itself, exposing `.new()`, `.create()`, `.throw()`, `.is()`, `id`, and optional `httpCode`.
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -1050,7 +1240,7 @@ import { r } from "@bluelibs/runner";
 const userNotFoundError = r
   .error<{ code: number; message: string }>("app.errors.userNotFound")
   .httpCode(404)
-  .dataSchema(z.object({ ... }))
+  .schema(z.object({ ... }))
   .format((d) => `[${d.code}] ${d.message}`)
   .remediation("Verify the user ID exists before calling getUser.")
   .build();
@@ -1068,11 +1258,13 @@ const app = r.resource("app").register([userNotFoundError, getUser]).build();
 
 The thrown `Error` has `name = id`. By default `message` is `JSON.stringify(data)`, but `.format(data => string)` lets you craft a human-friendly message instead. When `.remediation()` is provided, the fix-it advice is appended to `message` and `toString()`, and is also accessible as `error.remediation`. If you set `.httpCode(...)`, the helper and thrown error expose `httpCode`.
 
+For dependency cycle detection, use the canonical helper name `circularDependencyError`. Legacy aliases `circularDependenciesError` and `dependencyCycleError` remain available as deprecated compatibility exports.
+
 ```ts
 try {
   userNotFoundError.throw({ code: 404, message: "User not found" });
 } catch (err) {
-  if (userNotFoundError.is(err)) {
+  if (userNotFoundError.is(err, { code: 404 })) {
     // err.name      === "app.errors.userNotFound"
     // err.message   === "[404] User not found\n\nRemediation: Verify the user ID exists before calling getUser."
     // err.httpCode  === 404
@@ -1081,7 +1273,22 @@ try {
     console.log(`Caught error: ${err.name} - ${err.message}`);
   }
 }
+
+const error = userNotFoundError.new({
+  code: 404,
+  message: "User not found",
+});
+throw error;
+
+// Alias:
+throw userNotFoundError.create({
+  code: 404,
+  message: "User not found",
+});
 ```
+
+`errorHelper.is(err, partialData?)` accepts an optional partial data filter and performs shallow strict matching (`===`) on each provided key.
+`errorHelper.new(data)` constructs and returns the typed `RunnerError` without throwing, and `errorHelper.create(data)` is an alias.
 
 **Remediation** can also be a function when the advice depends on the error data:
 
@@ -1097,7 +1304,7 @@ const quotaExceeded = r
 
 **Check for any Runner error (not just a specific one):**
 
-Use `r.error.is(error)` to detect whether an error is any Runner error, regardless of its specific type. This is useful in catch blocks, middleware, or error filters when you want to handle all Runner errors differently from standard JavaScript errors:
+Use `r.error.is(error, partialData?)` to detect whether an error is any Runner error, regardless of its specific type. You can optionally filter by a subset of `error.data` using shallow strict matching (`===`) on the provided keys. This is useful in catch blocks, middleware, or error filters when you want to handle all Runner errors differently from standard JavaScript errors:
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -1106,7 +1313,7 @@ try {
   // Some operation that might throw various errors
   await riskyOperation();
 } catch (err) {
-  if (r.error.is(err)) {
+  if (r.error.is(err, { code: 404 })) {
     // It's a Runner error - has id, data, httpCode, remediation
     console.error(`Runner error: ${err.id} (${err.httpCode || "N/A"})`);
     if (err.remediation) {
@@ -1121,6 +1328,43 @@ try {
 
 The `r.error.is()` type guard narrows the error to `RunnerError`, giving you access to `id`, `data`, `httpCode`, and `remediation`. You can also use `instanceof RunnerError` directly if you prefer, but `r.error.is()` is more consistent with the fluent API.
 
+### Declaring Error Contracts with `.throws()`
+
+Use `.throws()` to declare the error ids a definition may produce. This is declarative metadata for documentation and tooling, not runtime enforcement.
+
+`.throws()` is available on task, resource, hook, and middleware builders.
+
+```ts
+import { r, run } from "@bluelibs/runner";
+
+const unauthorized = r
+  .error<{ reason: string }>("app.errors.Unauthorized")
+  .build();
+
+const userNotFound = r
+  .error<{ userId: string }>("app.errors.UserNotFound")
+  .build();
+
+const getUser = r
+  .task("app.tasks.getUser")
+  .throws([unauthorized, userNotFound, "app.errors.Unauthorized"])
+  .run(async () => ({ ok: true }))
+  .build();
+
+const app = r
+  .resource("app")
+  .register([unauthorized, userNotFound, getUser])
+  .build();
+
+const runtime = await run(app);
+const ids = runtime.store.getAllThrows(getUser);
+
+console.log(ids);
+// ["app.errors.Unauthorized", "app.errors.UserNotFound"]
+```
+
+The returned ids are deduplicated and, when applicable, include declarations across the middleware/resource/event-hook chain.
+
 ---
 
 ### Beyond the Big Five
@@ -1128,8 +1372,8 @@ The `r.error.is()` type guard narrows the error to `RunnerError`, giving you acc
 The core concepts above cover most use cases. For specialized features:
 
 - **Async Context**: Per-request/thread-local state via `r.asyncContext()`. See [Async Context](#async-context) for Node.js `AsyncLocalStorage` patterns.
-- **Durable Workflows** (Node-only): Replay-safe primitives like `ctx.step()`, `ctx.sleep()`, and `ctx.waitForSignal()`. See [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md).
-- **HTTP Tunnels**: Expose tasks over HTTP or call remote Runners. See [Tunnels](./readmes/TUNNELS.md).
-- **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](./readmes/SERIALIZER_PROTOCOL.md).
+- **Durable Workflows** (Node-only): Replay-safe primitives like `ctx.step()`, `ctx.sleep()`, and `ctx.waitForSignal()`. See [Durable Workflows](../readmes/DURABLE_WORKFLOWS.md).
+- **HTTP Tunnels**: Expose tasks over HTTP or call remote Runners. See [Tunnels](../readmes/TUNNELS.md).
+- **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](../readmes/SERIALIZER_PROTOCOL.md).
 
 ---

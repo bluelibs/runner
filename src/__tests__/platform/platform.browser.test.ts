@@ -42,7 +42,6 @@ describe("PlatformAdapter (Browser)", () => {
     expect(() => storage.run(new Map(), () => {})).toThrow();
 
     expect(adapter.hasAsyncLocalStorage()).toBe(false);
-    expect(adapter.hasAsyncLocalStorage()).toBe(false);
     const originalAdd = globalThis.addEventListener;
     const originalRemove = globalThis.removeEventListener;
     const addSpy = jest.fn();
@@ -70,7 +69,7 @@ describe("PlatformAdapter (Browser)", () => {
     globalThis.addEventListener = addSpy;
     globalThis.removeEventListener = removeSpy;
 
-    const { window: originalWindow, ..._rest } = globalThis as unknown as {
+    const { window: originalWindow } = globalThis as unknown as {
       window: unknown;
     };
     // Force fallback path by deleting window if it exists (in jsdom it usually does)

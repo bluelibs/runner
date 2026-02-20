@@ -55,5 +55,6 @@ describe("main exports", () => {
     expect(typeof mainExports.globals.events).toBe("object");
     expect(typeof mainExports.globals.resources).toBe("object");
     expect(typeof mainExports.globals.middleware).toBe("object");
+    expect(typeof mainExports.globals.resources.runtime).toBe("object");
   });
 });

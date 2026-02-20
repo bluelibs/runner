@@ -110,6 +110,34 @@ describe("requestBody branches", () => {
     await expect(p).rejects.toMatchObject({ message: "boom" });
   });
 
+  it("rejects when request closes before completion without an AbortSignal", async () => {
+    const req = createReqStub();
+    const p = readRequestBody(req);
+    req.emit("close");
+    await expect(p).rejects.toMatchObject({
+      name: "runner.errors.cancellation",
+    });
+  });
+
+  it("does not abort on close when request is already complete", async () => {
+    const req = createReqStub() as any;
+    const p = readRequestBody(req);
+    req.complete = true;
+    req.emit("close");
+    req.emit("end");
+    await expect(p).resolves.toEqual(Buffer.alloc(0));
+  });
+
+  it("ignores duplicate close notifications after aborting", async () => {
+    const req = createReqStub(true);
+    const p = readRequestBody(req);
+    req.emit("close");
+    await expect(p).rejects.toMatchObject({
+      name: "runner.errors.cancellation",
+    });
+    req.emit("close");
+  });
+
   it("preserves Error instances emitted from the request", async () => {
     const req = createReqStub();
     const p = readRequestBody(req);
@@ -134,7 +162,7 @@ describe("requestBody branches", () => {
       name: "runner.errors.cancellation",
     });
     expect(req.offCalls.map((c) => c.event).sort()).toEqual([
-      "aborted",
+      "close",
       "data",
       "end",
       "error",

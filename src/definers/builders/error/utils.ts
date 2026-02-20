@@ -13,3 +13,5 @@ export function clone<TData extends DefaultErrorType>(
     ...patch,
   });
 }
+
+export { mergeArray } from "../shared/mergeUtils";

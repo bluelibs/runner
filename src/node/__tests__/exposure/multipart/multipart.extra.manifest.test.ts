@@ -1,6 +1,7 @@
 import { parseMultipartInput } from "../../../exposure/multipart";
 import { Serializer } from "../../../../serializer";
 import { createMockRequest, expectErrorCode } from "./multipart.mock.utils";
+import { createMessageError } from "../../../../errors";
 
 jest.mock("busboy", () => {
   class FakeBusboy {
@@ -89,7 +90,7 @@ describe("parseMultipartInput - manifest extra branches", () => {
   it("handleCompletion INVALID_MULTIPART when field handler throws (manifestSeen=true)", async () => {
     const badValue: { [Symbol.toPrimitive]: () => string } = {
       [Symbol.toPrimitive]: (): string => {
-        throw new Error("coercion-error");
+        throw createMessageError("coercion-error");
       },
     };
     const req = createMockRequest(baseHeaders, (busboy) => {

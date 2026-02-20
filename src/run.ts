@@ -17,15 +17,30 @@ import {
   bindProcessErrorHandler,
 } from "./models/UnhandledError";
 import { RunResult } from "./models/RunResult";
-import { RunOptions } from "./types/runner";
+import { ResourceInitMode, RunOptions } from "./types/runner";
 import { getPlatform } from "./platform";
 
+const activeRunResults = new Set<RunResult<any>>();
+
 /**
- * This is the central function that kicks off you runner. You can run as many resources as you want in a single process, they will run in complete isolation.
+ * This is the central function that kicks off your runner. You can run as many resources as you want in a single process, they will run in complete isolation.
  *
  * @param resourceOrResourceWithConfig - The resource or resource with config to run.
  * @param options - The options for the run.
  * @returns A promise that resolves to the result of the run.
+ *
+ * @example
+ * ```ts
+ * import { r, run } from "@bluelibs/runner";
+ *
+ * const app = r.resource("app")
+ *   .register([myTask, myService])
+ *   .build();
+ *
+ * const runtime = await run(app);
+ * await runtime.runTask(myTask, { name: "Ada" });
+ * await runtime.dispose();
+ * ```
  */
 export async function run<C, V extends Promise<any>>(
   resourceOrResourceWithConfig:
@@ -42,9 +57,12 @@ export async function run<C, V extends Promise<any>>(
     errorBoundary = true,
     shutdownHooks = true,
     dryRun = false,
+    lazy = false,
     onUnhandledError: onUnhandledErrorOpt,
     runtimeEventCycleDetection = true,
+    initMode = ResourceInitMode.Sequential,
   } = options || {};
+  const normalizedInitMode = normalizeResourceInitMode(initMode);
 
   const {
     printThreshold = getPlatform().getEnv("NODE_ENV") === "test"
@@ -89,6 +107,13 @@ export async function run<C, V extends Promise<any>>(
     eventManager,
     taskRunner,
     logger,
+    normalizedInitMode,
+    lazy,
+    runtimeEventCycleDetection,
+  );
+
+  store.setPreferInitOrderDisposal(
+    normalizedInitMode === ResourceInitMode.Sequential,
   );
 
   // We may install shutdown hooks; capture unhook function to remove them on dispose
@@ -106,9 +131,17 @@ export async function run<C, V extends Promise<any>>(
         unhookShutdown = undefined;
       }
     } finally {
+      activeRunResults.delete(runtimeResult);
       await store.dispose();
     }
   };
+  const runtimeResult = new RunResult<any>(
+    logger,
+    store,
+    eventManager,
+    taskRunner,
+    disposeAll,
+  );
 
   try {
     if (debug) {
@@ -116,7 +149,7 @@ export async function run<C, V extends Promise<any>>(
     }
 
     // In the registration phase we register deeply all the resources, tasks, middleware and events
-    store.initializeStore(resource, config);
+    store.initializeStore(resource, config, runtimeResult);
 
     // the overrides that were registered now will override the other registered resources
     await store.processOverrides();
@@ -128,14 +161,8 @@ export async function run<C, V extends Promise<any>>(
     const boundedLogger = logger.with({ source: "run" });
     if (dryRun) {
       await boundedLogger.debug("Dry run mode. Skipping initialization...");
-      return new RunResult(
-        store.root.value,
-        logger,
-        store,
-        eventManager,
-        taskRunner,
-        disposeAll,
-      );
+      runtimeResult.setValue(store.root.value);
+      return runtimeResult as RunResult<V extends Promise<infer U> ? U : V>;
     }
 
     // Beginning initialization
@@ -154,6 +181,12 @@ export async function run<C, V extends Promise<any>>(
     // Now we can initialise the root resource
     await processor.initializeRoot();
 
+    const startupUnusedResourceIds = new Set<string>(
+      Array.from(store.resources.values())
+        .filter((resource) => !resource.isInitialized)
+        .map((resource) => resource.resource.id),
+    );
+
     // disallow manipulation or attaching more
     store.lock();
     eventManager.lock();
@@ -167,19 +200,49 @@ export async function run<C, V extends Promise<any>>(
       unhookShutdown = registerShutdownHook(() => store.dispose());
     }
 
-    return new RunResult(
-      store.root.value,
-      logger,
-      store,
-      eventManager,
-      taskRunner,
-      disposeAll,
-    );
+    runtimeResult.setLazyOptions({
+      lazyMode: lazy,
+      startupUnusedResourceIds,
+      lazyResourceLoader: async (resourceId: string) => {
+        const resource = store.resources.get(resourceId)!.resource;
+        return processor.extractResourceDependency(resource);
+      },
+    });
+    runtimeResult.setValue(store.root.value);
+    activeRunResults.add(runtimeResult);
+
+    return runtimeResult;
   } catch (err) {
     // Rollback initialized resources
     await disposeAll();
     throw err;
   }
+}
+
+export async function __disposeActiveRunResultsForTests(): Promise<void> {
+  await __disposeActiveRunResultsForTestsExcept();
+}
+
+export function __snapshotActiveRunResultsForTests(): ReadonlySet<
+  RunResult<any>
+> {
+  return new Set(activeRunResults);
+}
+
+export async function __disposeActiveRunResultsForTestsExcept(
+  keep: ReadonlySet<RunResult<any>> = new Set(),
+): Promise<void> {
+  await Promise.all(
+    Array.from(activeRunResults)
+      .filter((runtime) => !keep.has(runtime))
+      .map(async (runtime) => {
+        try {
+          await runtime.dispose();
+        } catch {
+          // Best-effort cleanup in tests; preserve original test failure surface.
+        }
+      }),
+  );
 }
 
 // process hooks moved to processHooks.ts for clarity
@@ -200,4 +263,13 @@ function extractResourceAndConfig<C, V extends Promise<any>>(
     config = undefined;
   }
   return { resource, config };
+}
+
+function normalizeResourceInitMode(
+  mode: ResourceInitMode | "sequential" | "parallel",
+): ResourceInitMode {
+  if (mode === ResourceInitMode.Parallel) {
+    return ResourceInitMode.Parallel;
+  }
+  return ResourceInitMode.Sequential;
 }

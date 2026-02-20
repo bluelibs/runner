@@ -37,6 +37,7 @@ const globals = {
   events: globalEvents,
   resources: globalResources,
   middleware: globalMiddlewares,
+  middlewares: globalMiddlewares, // Some people prefer this forced plural, for consistency
   tags: globalTags,
   tunnels,
   debug,
@@ -61,7 +62,24 @@ export {
 const createContext = oldCreateContext;
 export { createContext };
 
-// Expose only a single namespace `r` that contains all builder entry points
+/**
+ * The unified fluent builder namespace for creating Runner components.
+ *
+ * @example
+ * ```ts
+ * import { r, run } from "@bluelibs/runner";
+ *
+ * const greet = r.task("app.tasks.greet")
+ *   .inputSchema<{ name: string }>({ parse: (v) => v })
+ *   .run(async (input) => `Hello, ${input.name}!`)
+ *   .build();
+ *
+ * const app = r.resource("app").register([greet]).build();
+ * const runtime = await run(app);
+ * const msg = await runtime.runTask(greet, { name: "Ada" });
+ * await runtime.dispose();
+ * ```
+ */
 export const r = Object.freeze({
   resource: resourceFn,
   task: taskFn,
@@ -78,6 +96,9 @@ export const r = Object.freeze({
 });
 
 export * as definitions from "./defs";
+
+// Re-export public models — internal-only classes (DependencyProcessor,
+// ResourceInitializer) are excluded from the barrel.
 export * from "./models";
 export * from "./globals/types";
 export * as Errors from "./errors";
@@ -88,7 +109,6 @@ export { LockableMap } from "./tools/LockableMap";
 
 // HTTP and tunnel functionality
 export * from "./http-client";
-export * from "./http-fetch-tunnel.resource";
 
 export {
   Serializer,

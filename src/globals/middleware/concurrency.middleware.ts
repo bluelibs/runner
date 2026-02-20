@@ -1,6 +1,7 @@
 import { defineTaskMiddleware, defineResource } from "../../define";
 import { Semaphore } from "../../models/Semaphore";
 import { globalTags } from "../globalTags";
+import { middlewareConcurrencyConflictError } from "../../errors";
 
 export interface ConcurrencyMiddlewareConfig {
   /**
@@ -24,6 +25,7 @@ export interface ConcurrencyMiddlewareConfig {
 export interface ConcurrencyState {
   semaphoresByConfig: WeakMap<ConcurrencyMiddlewareConfig, Semaphore>;
   semaphoresByKey: Map<string, { semaphore: Semaphore; limit: number }>;
+  semaphores: Set<Semaphore>;
 }
 
 export const concurrencyResource = defineResource({
@@ -32,7 +34,15 @@ export const concurrencyResource = defineResource({
   init: async () => ({
     semaphoresByConfig: new WeakMap<ConcurrencyMiddlewareConfig, Semaphore>(),
     semaphoresByKey: new Map<string, { semaphore: Semaphore; limit: number }>(),
+    semaphores: new Set<Semaphore>(),
   }),
+  dispose: async (state) => {
+    for (const semaphore of state.semaphores) {
+      semaphore.dispose();
+    }
+    state.semaphores.clear();
+    state.semaphoresByKey.clear();
+  },
 });
 
 /**
@@ -40,6 +50,7 @@ export const concurrencyResource = defineResource({
  */
 export const concurrencyTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.concurrency",
+  throws: [middlewareConcurrencyConflictError],
   dependencies: { state: concurrencyResource },
   async run({ task, next }, { state }, config: ConcurrencyMiddlewareConfig) {
     let semaphore = config.semaphore;
@@ -49,13 +60,16 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
         const existing = state.semaphoresByKey.get(config.key);
         if (existing) {
           if (existing.limit !== config.limit) {
-            throw new Error(
-              `Concurrency middleware key "${config.key}" is already registered with limit ${existing.limit}, but got ${config.limit}`,
-            );
+            middlewareConcurrencyConflictError.throw({
+              key: config.key,
+              existingLimit: existing.limit,
+              attemptedLimit: config.limit,
+            });
           }
           semaphore = existing.semaphore;
         } else {
           semaphore = new Semaphore(config.limit);
+          state.semaphores.add(semaphore);
           state.semaphoresByKey.set(config.key, {
             semaphore,
             limit: config.limit,
@@ -65,6 +79,7 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
         semaphore = state.semaphoresByConfig.get(config);
         if (!semaphore) {
           semaphore = new Semaphore(config.limit);
+          state.semaphores.add(semaphore);
           state.semaphoresByConfig.set(config, semaphore);
         }
       }

@@ -4,6 +4,9 @@ import type {
   QueueMessage,
 } from "../core/interfaces/queue";
 import { connectAmqplib } from "../optionalDeps/amqplib";
+import { durableQueueNotInitializedError } from "../../../errors";
+import { randomUUID } from "node:crypto";
+import { Logger } from "../../../models/Logger";
 
 type ConsumeMessage = { content: Buffer };
 
@@ -42,6 +45,7 @@ export interface RabbitMQQueueConfig {
     messageTtl?: number;
   };
   prefetch?: number;
+  logger?: Pick<Logger, "error">;
 }
 
 export class RabbitMQQueue implements IDurableQueue {
@@ -53,6 +57,7 @@ export class RabbitMQQueue implements IDurableQueue {
   private readonly isQuorum: boolean;
   private readonly deadLetterQueue?: string;
   private readonly messageTtl?: number;
+  private readonly logger: Pick<Logger, "error">;
   private messageMap = new Map<string, ConsumeMessage>();
 
   constructor(config: RabbitMQQueueConfig) {
@@ -63,6 +68,21 @@ export class RabbitMQQueue implements IDurableQueue {
     this.isQuorum = config.queue?.quorum ?? true;
     this.deadLetterQueue = config.queue?.deadLetter;
     this.messageTtl = config.queue?.messageTtl;
+    this.logger =
+      config.logger ??
+      new Logger({
+        printThreshold: "error",
+        printStrategy: "pretty",
+        bufferLogs: false,
+      }).with({ source: "durable.rabbitmq.queue" });
+  }
+
+  private reportError(message: string, data: Record<string, unknown>) {
+    try {
+      void this.logger.error(message, data);
+    } catch {
+      // Ignore logger failures to preserve queue processing flow.
+    }
   }
 
   async init(): Promise<void> {
@@ -100,9 +120,9 @@ export class RabbitMQQueue implements IDurableQueue {
     message: Omit<QueueMessage<T>, "id" | "createdAt" | "attempts">,
   ): Promise<string> {
     const channel = this.channel;
-    if (!channel) throw new Error("Queue not initialized");
+    if (!channel) durableQueueNotInitializedError.throw();
 
-    const id = Math.random().toString(36).substring(2, 10);
+    const id = randomUUID();
     const fullMessage: QueueMessage<T> = {
       ...message,
       id,
@@ -110,7 +130,7 @@ export class RabbitMQQueue implements IDurableQueue {
       attempts: 0,
     };
 
-    channel.sendToQueue(
+    channel!.sendToQueue(
       this.queueName,
       Buffer.from(JSON.stringify(fullMessage)),
       { persistent: true },
@@ -121,19 +141,51 @@ export class RabbitMQQueue implements IDurableQueue {
 
   async consume<T>(handler: MessageHandler<T>): Promise<void> {
     const channel = this.channel;
-    if (!channel) throw new Error("Queue not initialized");
+    if (!channel) durableQueueNotInitializedError.throw();
 
-    await channel.consume(
+    await channel!.consume(
       this.queueName,
       async (msg: ConsumeMessage | null) => {
         if (msg === null) return;
 
-        const content = JSON.parse(msg.content.toString()) as QueueMessage<T>;
+        let content: QueueMessage<T>;
+        try {
+          const parsed = JSON.parse(msg.content.toString()) as Partial<
+            QueueMessage<T>
+          >;
+          if (!parsed || typeof parsed.id !== "string") {
+            channel!.nack(msg, false, false);
+            return;
+          }
+          const currentAttempts =
+            typeof parsed.attempts === "number" ? parsed.attempts : 0;
+          content = {
+            ...parsed,
+            attempts: currentAttempts + 1,
+          } as QueueMessage<T>;
+        } catch (error) {
+          this.reportError(
+            "RabbitMQQueue failed to parse incoming message; nacking without requeue.",
+            {
+              error: error instanceof Error ? error : new Error(String(error)),
+              payload: msg.content.toString(),
+            },
+          );
+          channel!.nack(msg, false, false);
+          return;
+        }
         this.messageMap.set(content.id, msg);
 
         try {
           await handler(content);
-        } catch {
+        } catch (error) {
+          this.reportError(
+            "RabbitMQQueue handler threw; leaving ack/nack to consumer.",
+            {
+              error: error instanceof Error ? error : new Error(String(error)),
+              messageId: content.id,
+            },
+          );
           // Let the consumer decide ack/nack
         }
       },

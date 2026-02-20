@@ -7,6 +7,7 @@ import { TaskStoreElementType } from "../../types/storeTypes";
 import { ITaskMiddlewareExecutionInput } from "../../types/taskMiddleware";
 import { ExecutionJournalImpl } from "../ExecutionJournal";
 import type { ExecutionJournal } from "../../types/executionJournal";
+import type { TaskMiddlewareInterceptor } from "./types";
 
 /**
  * Composes task execution chains with validation, interceptors, and middlewares.
@@ -93,7 +94,7 @@ export class TaskMiddlewareComposer {
         task.id,
         "Task",
       );
-    }) as unknown as (input: TInput, journal: ExecutionJournal) => TOutput;
+    }) as (input: TInput, journal: ExecutionJournal) => TOutput;
   }
 
   /**
@@ -121,10 +122,10 @@ export class TaskMiddlewareComposer {
 
     let wrapped = runner;
     for (let i = storeTask.interceptors.length - 1; i >= 0; i--) {
-      const interceptor = storeTask.interceptors[i];
+      const interceptor = storeTask.interceptors[i].interceptor;
       const nextFunction = wrapped;
       wrapped = (async (input: TInput, journal: ExecutionJournal) =>
-        interceptor((inp) => nextFunction(inp, journal), input)) as unknown as (
+        interceptor((inp) => nextFunction(inp, journal), input)) as (
         input: TInput,
         journal: ExecutionJournal,
       ) => TOutput;
@@ -136,9 +137,13 @@ export class TaskMiddlewareComposer {
   /**
    * Applies global task middleware interceptors
    */
-  private applyGlobalInterceptors<TInput, TOutput extends Promise<any>>(
+  private applyGlobalInterceptors<
+    TInput,
+    TOutput extends Promise<any>,
+    TDeps extends DependencyMapType,
+  >(
     runner: (input: TInput, journal: ExecutionJournal) => TOutput,
-    task: ITask<TInput, TOutput, any>,
+    task: ITask<TInput, TOutput, TDeps>,
   ): (input: TInput, journal: ExecutionJournal) => TOutput {
     const interceptors = this.interceptorRegistry.getGlobalTaskInterceptors();
     if (interceptors.length === 0) {
@@ -146,10 +151,10 @@ export class TaskMiddlewareComposer {
     }
 
     const createExecutionInput = (
-      input: any,
-      nextFunc: (inp: any) => Promise<any>,
+      input: TInput,
+      nextFunc: (inp?: TInput) => Promise<Awaited<TOutput>>,
       journal: ExecutionJournal,
-    ): ITaskMiddlewareExecutionInput<any> => ({
+    ): ITaskMiddlewareExecutionInput<TInput, Awaited<TOutput>> => ({
       task: {
         definition: task,
         input: input,
@@ -165,8 +170,12 @@ export class TaskMiddlewareComposer {
       const nextFunction = currentNext;
 
       currentNext = (async (input: TInput, journal: ExecutionJournal) => {
-        const wrappedNextForInterceptor = (inp: TInput) =>
-          nextFunction(inp, journal) as any;
+        const wrappedNextForInterceptor = (
+          inp?: TInput,
+        ): Promise<Awaited<TOutput>> =>
+          nextFunction(inp === undefined ? input : inp, journal) as Promise<
+            Awaited<TOutput>
+          >;
         const executionInput = createExecutionInput(
           input,
           wrappedNextForInterceptor,
@@ -175,10 +184,12 @@ export class TaskMiddlewareComposer {
         const wrappedNext = (
           i: ITaskMiddlewareExecutionInput<TInput, Awaited<TOutput>>,
         ): Promise<Awaited<TOutput>> => {
-          return nextFunction(i.task.input, journal) as any;
+          return nextFunction(i.task.input, journal) as Promise<
+            Awaited<TOutput>
+          >;
         };
-        return (interceptor as any)(wrappedNext, executionInput);
-      }) as unknown as (input: TInput, journal: ExecutionJournal) => TOutput;
+        return interceptor(wrappedNext, executionInput) as TOutput;
+      }) as (input: TInput, journal: ExecutionJournal) => TOutput;
     }
 
     return currentNext;
@@ -218,7 +229,7 @@ export class TaskMiddlewareComposer {
 
       // Create base middleware runner (captures journal from closure)
       const baseMiddlewareRunner = async (
-        input: any,
+        input: TInput,
         journal: ExecutionJournal,
       ) => {
         return storeMiddleware.middleware.run(
@@ -243,8 +254,11 @@ export class TaskMiddlewareComposer {
       const middlewareInterceptors =
         this.interceptorRegistry.getTaskMiddlewareInterceptors(middleware.id);
 
-      next = this.wrapWithInterceptors<TInput, TOutput>(
-        baseMiddlewareRunner as any,
+      next = this.wrapWithInterceptors<TInput, TOutput, TDeps>(
+        baseMiddlewareRunner as (
+          input: TInput,
+          journal: ExecutionJournal,
+        ) => TOutput,
         middlewareInterceptors,
         task,
       );
@@ -256,20 +270,23 @@ export class TaskMiddlewareComposer {
   /**
    * Wraps a middleware runner with its specific interceptors in onion style
    */
-  private wrapWithInterceptors<TInput, TOutput extends Promise<any>>(
+  private wrapWithInterceptors<
+    TInput,
+    TOutput extends Promise<any>,
+    TDeps extends DependencyMapType,
+  >(
     middlewareRunner: (input: TInput, journal: ExecutionJournal) => TOutput,
-    interceptors: readonly any[],
-    task: ITask<TInput, TOutput, any>,
+    interceptors: readonly TaskMiddlewareInterceptor[],
+    task: ITask<TInput, TOutput, TDeps>,
   ): (input: TInput, journal: ExecutionJournal) => TOutput {
     if (interceptors.length === 0) {
       return middlewareRunner;
     }
 
-    const reversedInterceptors = [...interceptors].reverse();
     let wrapped = middlewareRunner;
 
-    for (let i = reversedInterceptors.length - 1; i >= 0; i--) {
-      const interceptor = reversedInterceptors[i];
+    for (let i = interceptors.length - 1; i >= 0; i--) {
+      const interceptor = interceptors[i];
       const nextFunction = wrapped;
 
       wrapped = (async (input: TInput, journal: ExecutionJournal) => {
@@ -292,11 +309,13 @@ export class TaskMiddlewareComposer {
         const wrappedNext = (
           i: ITaskMiddlewareExecutionInput<TInput, Awaited<TOutput>>,
         ): Promise<Awaited<TOutput>> => {
-          return nextFunction(i.task.input, journal) as any;
+          return nextFunction(i.task.input, journal) as Promise<
+            Awaited<TOutput>
+          >;
         };
 
-        return interceptor(wrappedNext, executionInput);
-      }) as unknown as (input: TInput, journal: ExecutionJournal) => TOutput;
+        return interceptor(wrappedNext, executionInput) as TOutput;
+      }) as (input: TInput, journal: ExecutionJournal) => TOutput;
     }
 
     return wrapped;

@@ -49,12 +49,14 @@ export function defineTask<
     [symbolFilePath]: filePath,
     id,
     dependencies: taskConfig.dependencies || ({} as Deps),
-    middleware: taskConfig.middleware || ([] as unknown as TMiddleware),
+    middleware:
+      taskConfig.middleware ||
+      ([] as TaskMiddlewareAttachmentType[] as TMiddleware),
     run: taskConfig.run,
     inputSchema: taskConfig.inputSchema,
     resultSchema: taskConfig.resultSchema,
     meta: taskConfig.meta || ({} as TMeta),
-    tags: taskConfig.tags || ([] as unknown as TTags),
+    tags: taskConfig.tags || ([] as TagType[] as TTags),
     throws: normalizeThrows({ kind: "task", id }, taskConfig.throws),
     // autorun,
     optional() {
@@ -71,11 +73,13 @@ export function defineTask<
 defineTask.phantom = <Input = undefined, Output extends Promise<any> = any>(
   taskConfig: Omit<ITaskDefinition<Input, Output, any, any, any, any>, "run">,
 ) => {
+  const phantomRun = (async (_input: Input) => {
+    phantomTaskNotRoutedError.throw({ taskId: taskConfig.id });
+  }) as unknown as ITaskDefinition<Input, Output, any, any, any, any>["run"];
+
   const taskDef = defineTask({
     ...taskConfig,
-    run: async (_input: any): Promise<any> => {
-      phantomTaskNotRoutedError.throw({ taskId: taskConfig.id });
-    },
+    run: phantomRun,
   });
 
   taskDef[symbolPhantomTask] = true;

@@ -25,19 +25,24 @@ export interface TunnelTagConfig {}
 
 export type TunnelTaskRunner = (
   task: ITask<any, any, any, any, any, any>,
-  input?: any,
-) => Promise<any>;
+  input?: unknown,
+) => Promise<unknown>;
 
 export interface TunnelRunner {
   transport?: "http" | string;
   mode?: TunnelMode;
+  /**
+   * Controls whether server-side exposure hydrates incoming x-runner-context headers
+   * for task/event ids selected by this tunnel. Defaults to true.
+   */
+  allowAsyncContext?: boolean;
   tasks?: TunnelTaskSelector;
   events?: TunnelEventSelector;
   eventDeliveryMode?: EventDeliveryMode;
   // Called when a tunneled task runs; receives the task definition
   run?: TunnelTaskRunner;
   // Called when a tunneled event is emitted; receives the event definition
-  emit?: (event: IEventEmission<any>) => Promise<any>;
+  emit?: (event: IEventEmission<any>) => Promise<unknown>;
 }
 
 export interface ExposureFetchAuthConfig {

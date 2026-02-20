@@ -3,19 +3,17 @@ import {
   RegisterableItems,
   ITag,
   AnyTask,
-  ITaskMiddleware,
-  IResourceMiddleware,
-  DependencyMapType,
   TaggedTask,
   TaggedResource,
   AnyResource,
 } from "../defs";
 import { findCircularDependencies } from "./utils/findCircularDependencies";
-import { globalEventsArray } from "../globals/globalEvents";
 import {
-  circularDependenciesError,
+  circularDependencyError,
   storeAlreadyInitializedError,
   eventEmissionCycleError,
+  lockedError,
+  taskRunnerNotSetError,
 } from "../errors";
 import { EventManager } from "./EventManager";
 import { Logger } from "./Logger";
@@ -29,41 +27,18 @@ import {
 } from "../types/storeTypes";
 import { TaskRunner } from "./TaskRunner";
 import { globalResources } from "../globals/globalResources";
-import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
-import {
-  retryTaskMiddleware,
-  retryResourceMiddleware,
-} from "../globals/middleware/retry.middleware";
-import {
-  timeoutTaskMiddleware,
-  timeoutResourceMiddleware,
-} from "../globals/middleware/timeout.middleware";
-import {
-  concurrencyTaskMiddleware,
-  concurrencyResource,
-} from "../globals/middleware/concurrency.middleware";
-import {
-  debounceTaskMiddleware,
-  throttleTaskMiddleware,
-  temporalResource,
-} from "../globals/middleware/temporal.middleware";
-import { fallbackTaskMiddleware } from "../globals/middleware/fallback.middleware";
-import {
-  rateLimitTaskMiddleware,
-  rateLimitResource,
-} from "../globals/middleware/rateLimit.middleware";
-import {
-  circuitBreakerMiddleware,
-  circuitBreakerResource,
-} from "../globals/middleware/circuitBreaker.middleware";
-import { tunnelResourceMiddleware } from "../globals/middleware/tunnel.middleware";
 import { OnUnhandledError } from "./UnhandledError";
-import { globalTags } from "../globals/globalTags";
 import { MiddlewareManager } from "./MiddlewareManager";
 import { RunnerMode } from "../types/runner";
 import { detectRunnerMode } from "../tools/detectRunnerMode";
 import { Serializer } from "../serializer";
 import { getResourcesInDisposeOrder as computeDisposeOrder } from "./utils/disposeOrder";
+import { RunResult } from "./RunResult";
+import { getAllThrows } from "../tools/getAllThrows";
+import type { ITask } from "../types/task";
+import { registerStoreBuiltins } from "./BuiltinsRegistry";
+
+const INTERNAL_ROOT_CRON_DEPENDENCY_KEY = "__runnerCron";
 
 // Re-export types for backward compatibility
 export type {
@@ -83,6 +58,7 @@ export class Store {
   private taskRunner?: TaskRunner;
   private middlewareManager!: MiddlewareManager;
   private readonly initializedResourceIds: string[] = [];
+  private preferInitOrderDisposal = true;
 
   #isLocked = false;
   #isInitialized = false;
@@ -143,6 +119,17 @@ export class Store {
     return this.middlewareManager;
   }
 
+  /**
+   * Checks whether a registered item is visible to a consumer id under the
+   * current exports visibility model.
+   */
+  public isItemVisibleToConsumer(
+    targetId: string,
+    consumerId: string,
+  ): boolean {
+    return this.registry.visibilityTracker.isAccessible(targetId, consumerId);
+  }
+
   get isLocked() {
     return this.#isLocked;
   }
@@ -154,15 +141,13 @@ export class Store {
 
   checkLock() {
     if (this.#isLocked) {
-      throw new Error("Cannot modify the Store when it is locked.");
+      lockedError.throw({ what: "Store" });
     }
   }
 
-  private registerGlobalComponents() {
+  private registerGlobalComponents(runtimeResult: RunResult<unknown>) {
     if (!this.taskRunner) {
-      throw new Error(
-        "TaskRunner is not set. Call store.setTaskRunner() before initializeStore().",
-      );
+      taskRunnerNotSetError.throw();
     }
 
     const builtInResourcesMap = new Map<
@@ -178,9 +163,7 @@ export class Store {
       globalResources.middlewareManager,
       this.middlewareManager,
     );
-
-    this.registry.storeGenericItem(globalResources.queue);
-    this.registry.storeGenericItem(globalResources.httpClientFactory);
+    builtInResourcesMap.set(globalResources.runtime, runtimeResult);
 
     for (const [resource, value] of builtInResourcesMap.entries()) {
       this.registry.storeGenericItem(resource);
@@ -191,76 +174,45 @@ export class Store {
         this.recordResourceInitialized(resource.id);
       }
     }
-
-    // Register global tags
-    Object.values(globalTags).forEach((tag) => {
-      this.registry.storeTag(tag);
-    });
-
-    // Register global events
-    globalEventsArray.forEach((event) => {
-      this.registry.storeEvent(event);
-    });
-
-    // Register built-in middlewares
-    // Built-in middlewares currently target tasks only; adjust as needed per kind
-    const builtInTaskMiddlewares = [
-      requireContextTaskMiddleware,
-      retryTaskMiddleware,
-      timeoutTaskMiddleware,
-      concurrencyTaskMiddleware,
-      debounceTaskMiddleware,
-      throttleTaskMiddleware,
-      fallbackTaskMiddleware,
-      rateLimitTaskMiddleware,
-      circuitBreakerMiddleware,
-    ];
-    builtInTaskMiddlewares.forEach((middleware) => {
-      this.registry.taskMiddlewares.set(middleware.id, {
-        middleware: middleware as unknown as ITaskMiddleware<any>,
-        computedDependencies: {},
-        isInitialized: false,
-      });
-    });
-
-    const builtInResourceMiddlewares = [
-      retryResourceMiddleware,
-      timeoutResourceMiddleware,
-      tunnelResourceMiddleware,
-    ];
-    builtInResourceMiddlewares.forEach((middleware) => {
-      this.registry.resourceMiddlewares.set(middleware.id, {
-        middleware: middleware as unknown as IResourceMiddleware<any>,
-        computedDependencies: {},
-        isInitialized: false,
-      });
-    });
-
-    // Register built-in resources that support the middlewares
-    this.registry.storeGenericItem(rateLimitResource);
-    this.registry.storeGenericItem(circuitBreakerResource);
-    this.registry.storeGenericItem(temporalResource);
-    this.registry.storeGenericItem(concurrencyResource);
+    registerStoreBuiltins(this.registry);
   }
 
   public setTaskRunner(taskRunner: TaskRunner) {
     this.taskRunner = taskRunner;
   }
 
+  public setPreferInitOrderDisposal(prefer: boolean) {
+    this.preferInitOrderDisposal = prefer;
+  }
+
   private setupRootResource(rootDefinition: IResource<any>, config: unknown) {
+    const resolvedDependencies =
+      typeof rootDefinition.dependencies === "function"
+        ? rootDefinition.dependencies(config)
+        : rootDefinition.dependencies;
+
+    const dependenciesObject = (resolvedDependencies || {}) as Record<
+      string,
+      unknown
+    >;
+
+    const rootDependencies = {
+      ...dependenciesObject,
+      [INTERNAL_ROOT_CRON_DEPENDENCY_KEY]:
+        dependenciesObject[INTERNAL_ROOT_CRON_DEPENDENCY_KEY] ||
+        globalResources.cron,
+    };
+
     // Clone the root definition so per-run dependency/register resolution
     // never mutates the reusable user definition object.
     const root: IResource<any> = {
       ...rootDefinition,
-      dependencies:
-        typeof rootDefinition.dependencies === "function"
-          ? rootDefinition.dependencies(config)
-          : rootDefinition.dependencies,
+      dependencies: rootDependencies,
     };
 
     this.root = {
       resource: root,
-      computedDependencies: {},
+      computedDependencies: undefined,
       config,
       value: undefined,
       isInitialized: false,
@@ -276,7 +228,7 @@ export class Store {
     const dependentNodes = this.registry.getDependentNodes();
     const circularDependencies = findCircularDependencies(dependentNodes);
     if (circularDependencies.cycles.length > 0) {
-      circularDependenciesError.throw({ cycles: circularDependencies.cycles });
+      circularDependencyError.throw({ cycles: circularDependencies.cycles });
     }
   }
 
@@ -291,12 +243,13 @@ export class Store {
   public initializeStore(
     root: IResource<any, any, any, any, any>,
     config: unknown,
+    runtimeResult: RunResult<unknown>,
   ) {
     if (this.#isInitialized) {
-      storeAlreadyInitializedError.throw({});
+      storeAlreadyInitializedError.throw();
     }
 
-    this.registerGlobalComponents();
+    this.registerGlobalComponents(runtimeResult);
     this.setupRootResource(root, config);
     this.validator.runSanityChecks();
 
@@ -308,15 +261,41 @@ export class Store {
   }
 
   public async dispose() {
+    const disposalErrors: Error[] = [];
+
     for (const resource of this.getResourcesInDisposeOrder()) {
-      if (resource.isInitialized && resource.resource.dispose) {
-        await resource.resource.dispose(
-          resource.value,
-          resource.config,
-          resource.computedDependencies as unknown as DependencyMapType,
-          resource.context,
+      try {
+        if (resource.isInitialized && resource.resource.dispose) {
+          await resource.resource.dispose(
+            resource.value,
+            resource.config,
+            resource.computedDependencies ?? {},
+            resource.context,
+          );
+        }
+      } catch (error) {
+        disposalErrors.push(
+          error instanceof Error ? error : new Error(String(error)),
         );
       }
+    }
+
+    this.clearRuntimeStateAfterDispose();
+    this.eventManager.dispose();
+
+    if (disposalErrors.length === 1) {
+      throw disposalErrors[0];
+    }
+
+    if (disposalErrors.length > 1) {
+      throw Object.assign(
+        new Error("One or more resources failed to dispose."),
+        {
+          name: "AggregateError",
+          errors: disposalErrors,
+          cause: disposalErrors[0],
+        },
+      );
     }
   }
 
@@ -334,7 +313,20 @@ export class Store {
   }
 
   private getResourcesInDisposeOrder(): ResourceStoreElementType[] {
-    return computeDisposeOrder(this.resources, this.initializedResourceIds);
+    return computeDisposeOrder(this.resources, this.initializedResourceIds, {
+      preferInitOrderFastPath: this.preferInitOrderDisposal,
+    });
+  }
+
+  private clearRuntimeStateAfterDispose() {
+    for (const resource of this.resources.values()) {
+      resource.value = undefined;
+      resource.context = undefined;
+      resource.computedDependencies = undefined;
+      resource.isInitialized = false;
+    }
+
+    this.initializedResourceIds.length = 0;
   }
 
   /**
@@ -381,5 +373,17 @@ export class Store {
     return typeof tag === "string"
       ? this.registry.getResourcesWithTag(tag)
       : this.registry.getResourcesWithTag(tag);
+  }
+
+  /**
+   * Returns all error ids declared across a task or resource and its full
+   * dependency chain: own throws, middleware throws (local + everywhere),
+   * resource dependency throws, and — for tasks — hook throws on events
+   * the task can emit. Deduplicated.
+   */
+  public getAllThrows(
+    target: ITask<any, any, any, any, any, any> | IResource<any, any, any, any>,
+  ): readonly string[] {
+    return getAllThrows(this.registry, target);
   }
 }

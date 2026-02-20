@@ -22,7 +22,7 @@ import z from "zod";
   r.middleware
     .task("middleware")
     .configSchema(z.object({ ttl: z.number().positive() }))
-    .run(async ({ next }, deps, config) => {
+    .run(async ({ next }, _deps, config) => {
       config.ttl;
       // @ts-expect-error
       config.ttl2;
@@ -48,7 +48,7 @@ import z from "zod";
 
   const mw = r.middleware
     .task<ConfigType, InputType, OutputType>("mw")
-    .run(async ({ next }, deps, config) => {
+    .run(async ({ next }, _deps, _config) => {
       // @ts-expect-error
       next({ id: 123 });
       // @ts-expect-error

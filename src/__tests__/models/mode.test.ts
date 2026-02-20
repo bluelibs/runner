@@ -2,6 +2,21 @@ import { r, run } from "../../index";
 import { RunnerMode } from "../../types/runner";
 
 describe("Mode Detection", () => {
+  let originalNodeEnv: string | undefined;
+
+  beforeEach(() => {
+    originalNodeEnv = process.env.NODE_ENV;
+  });
+
+  afterEach(() => {
+    if (typeof originalNodeEnv === "undefined") {
+      delete process.env.NODE_ENV;
+      return;
+    }
+
+    process.env.NODE_ENV = originalNodeEnv;
+  });
+
   it("should default to dev mode when NODE_ENV is not set", async () => {
     // Clear NODE_ENV to test default behavior
     delete process.env.NODE_ENV;

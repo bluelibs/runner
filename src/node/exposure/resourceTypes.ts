@@ -36,6 +36,12 @@ export interface NodeExposureHttpConfig {
    * When true and no server-mode tunnel is registered, exposure is open.
    */
   dangerouslyAllowOpenExposure?: boolean;
+  /**
+   * Disable the discovery endpoint that enumerates registered task/event IDs.
+   * When true, the /__runner/discovery endpoint returns 404.
+   * @default false
+   */
+  disableDiscovery?: boolean;
 }
 
 export interface NodeExposureConfig {

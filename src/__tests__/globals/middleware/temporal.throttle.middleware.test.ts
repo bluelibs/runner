@@ -1,6 +1,7 @@
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { throttleTaskMiddleware } from "../../../globals/middleware/temporal.middleware";
+import { createMessageError } from "../../../errors";
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -73,7 +74,7 @@ describe("Temporal Middleware: Throttle", () => {
       middleware: [throttleTaskMiddleware.with({ ms: 50 })],
       run: async () => {
         callCount++;
-        throw new Error("Throttle error");
+        throw createMessageError("Throttle error");
       },
     });
 
@@ -94,12 +95,13 @@ describe("Temporal Middleware: Throttle", () => {
   });
 
   it("should reject scheduled callers when the scheduled execution fails", async () => {
+    expect.assertions(3);
     const config = { ms: 50 };
     const deps = { state: { throttleStates: new WeakMap() } };
 
     const next = async (input?: string) => {
       if (input === "b") {
-        throw new Error("Throttle error");
+        throw createMessageError("Throttle error");
       }
       return input;
     };
@@ -140,6 +142,8 @@ describe("Temporal Middleware: Throttle", () => {
   });
 
   it("should clear a pending scheduled execution when window elapsed but timer is still pending", async () => {
+    expect.assertions(4);
+    jest.useFakeTimers();
     const config = { ms: 50 };
     let callCount = 0;
     const next = async (input?: string) => {
@@ -154,31 +158,31 @@ describe("Temporal Middleware: Throttle", () => {
       next,
     });
 
-    const deps = { state: { throttleStates: new WeakMap() } };
-    await expect(
-      throttleTaskMiddleware.run(inputFor("a") as any, deps as any, config),
-    ).resolves.toBe("a");
+    try {
+      const deps = { state: { throttleStates: new WeakMap() } };
+      await expect(
+        throttleTaskMiddleware.run(inputFor("a") as any, deps as any, config),
+      ).resolves.toBe("a");
 
-    const pending = throttleTaskMiddleware.run(
-      inputFor("b") as any,
-      deps as any,
-      config,
-    );
+      const pending = throttleTaskMiddleware.run(
+        inputFor("b") as any,
+        deps as any,
+        config,
+      );
 
-    // Block the event loop long enough for the throttle window to pass, but
-    // without allowing the scheduled setTimeout callback to run.
-    const start = Date.now();
-    while (Date.now() - start < 120) {
-      // busy-wait to block event loop
+      // Advance logical time without running pending timers.
+      jest.setSystemTime(Date.now() + 120);
+
+      await expect(
+        throttleTaskMiddleware.run(inputFor("c") as any, deps as any, config),
+      ).resolves.toBe("c");
+
+      // The previously scheduled caller should be resolved by the immediate execution.
+      await expect(pending).resolves.toBe("c");
+      expect(callCount).toBe(2);
+    } finally {
+      jest.useRealTimers();
     }
-
-    await expect(
-      throttleTaskMiddleware.run(inputFor("c") as any, deps as any, config),
-    ).resolves.toBe("c");
-
-    // The previously scheduled callers should be resolved by the immediate execution.
-    await expect(pending).resolves.toBe("c");
-    expect(callCount).toBe(2);
   });
 
   it("should reject scheduled callers when clearing a stale timeout and immediate execution fails", async () => {
@@ -187,7 +191,7 @@ describe("Temporal Middleware: Throttle", () => {
     const next = async (input?: string) => {
       callCount += 1;
       if (input === "c") {
-        throw new Error("boom");
+        throw createMessageError("boom");
       }
       return input;
     };
@@ -224,5 +228,77 @@ describe("Temporal Middleware: Throttle", () => {
     await expect(immediate).rejects.toThrow("boom");
     await expect(pending).rejects.toThrow("boom");
     expect(callCount).toBe(2);
+  });
+
+  it("should clear latestInput after scheduled execution completes", async () => {
+    expect.assertions(4);
+    type ThrottleRunInput = Parameters<typeof throttleTaskMiddleware.run>[0];
+    type ThrottleRunDeps = Parameters<typeof throttleTaskMiddleware.run>[1];
+    type ThrottleRunConfig = Parameters<typeof throttleTaskMiddleware.run>[2];
+
+    const config = { ms: 50 };
+    const deps = {
+      state: {
+        debounceStates: new WeakMap(),
+        throttleStates: new WeakMap(),
+        trackedDebounceStates: new Set(),
+        trackedThrottleStates: new Set(),
+        isDisposed: false,
+      },
+    } satisfies ThrottleRunDeps;
+
+    const next = async (input?: string) => input;
+    const inputFor = (input: string): ThrottleRunInput =>
+      ({
+        task: {
+          definition: {
+            id: "throttle.unit.latest-input",
+          } as unknown as ThrottleRunInput["task"]["definition"],
+          input,
+        },
+        next,
+      }) as unknown as ThrottleRunInput;
+
+    const setTimeoutSpy = jest.spyOn(globalThis, "setTimeout");
+    try {
+      let scheduled: (() => Promise<void>) | undefined;
+      setTimeoutSpy.mockImplementation(((
+        fn: TimerHandler,
+      ): ReturnType<typeof setTimeout> => {
+        if (typeof fn !== "function") {
+          throw createMessageError("Expected function timer callback");
+        }
+        scheduled = fn as () => Promise<void>;
+        return 1 as unknown as ReturnType<typeof setTimeout>;
+      }) as unknown as typeof setTimeout);
+
+      await expect(
+        throttleTaskMiddleware.run(
+          inputFor("a"),
+          deps,
+          config as ThrottleRunConfig,
+        ),
+      ).resolves.toBe("a");
+
+      const pending = throttleTaskMiddleware.run(
+        inputFor("b"),
+        deps,
+        config as ThrottleRunConfig,
+      );
+
+      expect(scheduled).toBeDefined();
+      await scheduled?.();
+      await expect(pending).resolves.toBe("b");
+
+      const throttleState = (
+        deps.state.throttleStates as unknown as WeakMap<
+          ThrottleRunConfig,
+          { latestInput?: unknown }
+        >
+      ).get(config);
+      expect(throttleState?.latestInput).toBeUndefined();
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
   });
 });

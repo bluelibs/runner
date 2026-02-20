@@ -62,6 +62,11 @@ describe("registerUser task", () => {
 
 Use `run()` to start the full app with middleware, events, and lifecycle. Swap infrastructure with `override()`.
 
+Important:
+- `r.override(base, fn)` (or `override(base, patch)`) creates a replacement definition.
+- `.overrides([...])` is what applies replacements in the running container.
+- If you place both base and replacement in `.register([...])`, you'll get duplicate-id registration errors.
+
 ```typescript
 import { run, r, override } from "@bluelibs/runner";
 
@@ -101,34 +106,6 @@ describe("User registration flow", () => {
     }
   });
 });
-```
-
-### Test Harness (`createTestResource`)
-
-`createTestResource(root, { overrides })` is a convenient way to run tasks in a fully initialized runtime while exposing a focused test facade (`runTask`, `getResource`, and internals when needed).
-
-```typescript
-import { createTestResource, run } from "@bluelibs/runner";
-
-const harness = createTestResource(app, { overrides: [mockDb] });
-const { value: testFacade, dispose } = await run(harness);
-
-try {
-  const result = await testFacade.runTask(registerUser, {
-    name: "Ada",
-    email: "ada@example.com",
-  });
-  expect(result).toBeDefined();
-} finally {
-  await dispose();
-}
-```
-
-Equivalent explicit setup with `run()`:
-
-```typescript
-const testApp = r.resource("test").register([app]).overrides([mockDb]).build();
-const { runTask, dispose } = await run(testApp);
 ```
 
 ### Testing Tips

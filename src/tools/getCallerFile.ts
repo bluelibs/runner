@@ -16,10 +16,15 @@ export function getCallerFile(): string {
     // Prefer robust Node path with structured stack frames
     if (isNodeInline()) {
       const err = new Error();
-      Error.prepareStackTrace = (_err, stack) => stack;
-      const stack = err.stack as unknown as Array<{
-        getFileName?: () => string | null;
-      }>;
+      let frames: NodeJS.CallSite[] = [];
+      Error.prepareStackTrace = (_err, stackTrace) => {
+        frames = stackTrace;
+        // Keep stack string materialization deterministic; callers never use it.
+        return "";
+      };
+      // Trigger stack generation so prepareStackTrace captures frames.
+      void err.stack;
+      const stack = [...frames];
 
       // Best-effort: skip current (this fn) and its caller, then read next frame
       stack.shift();

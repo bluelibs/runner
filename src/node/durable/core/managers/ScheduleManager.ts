@@ -11,6 +11,10 @@ import { CronParser } from "../CronParser";
 import { createExecutionId, sleepMs } from "../utils";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { ITask } from "../../../../types/task";
+import {
+  durableExecutionInvariantError,
+  durableScheduleConfigError,
+} from "../../../../errors";
 
 /**
  * Creates and maintains durable schedules.
@@ -31,7 +35,9 @@ export class ScheduleManager {
     options: ScheduleOptions & { id: string },
   ): Promise<string> {
     if (!options.cron && options.interval === undefined) {
-      throw new Error("ensureSchedule() requires cron or interval");
+      durableScheduleConfigError.throw({
+        message: "ensureSchedule() requires cron or interval",
+      });
     }
 
     const task = this.resolveTaskReference(taskRef, "ensureSchedule");
@@ -52,7 +58,9 @@ export class ScheduleManager {
         await sleepMs(5);
       }
       if (lockId === null) {
-        throw new Error(`Failed to acquire schedule lock for '${scheduleId}'`);
+        durableScheduleConfigError.throw({
+          message: `Failed to acquire schedule lock for '${scheduleId}'`,
+        });
       }
     }
 
@@ -64,9 +72,9 @@ export class ScheduleManager {
 
       if (existing) {
         if (existing.taskId !== task.id) {
-          throw new Error(
-            `Schedule '${scheduleId}' already exists for task '${existing.taskId}', cannot rebind to '${task.id}'`,
-          );
+          durableScheduleConfigError.throw({
+            message: `Schedule '${scheduleId}' already exists for task '${existing.taskId}', cannot rebind to '${task.id}'`,
+          });
         }
 
         await this.store.updateSchedule(scheduleId, {
@@ -236,10 +244,10 @@ export class ScheduleManager {
 
     const resolved = this.taskRegistry.find(taskRef);
     if (!resolved) {
-      throw new Error(
-        `DurableService.${apiMethod}() could not resolve task id "${taskRef}". Ensure the task is registered in the runtime store.`,
-      );
+      durableExecutionInvariantError.throw({
+        message: `DurableService.${apiMethod}() could not resolve task id "${taskRef}". Ensure the task is registered in the runtime store.`,
+      });
     }
-    return resolved;
+    return resolved!;
   }
 }

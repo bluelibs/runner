@@ -25,7 +25,7 @@ describe("Tunnel Policy (task-level whitelist)", () => {
       id: "tests.policy.task",
       // Whitelist only mwA locally on caller side
       tags: [
-        globals.tags.tunnelPolicy.with({
+        globals.tags.tunnelTaskPolicy.with({
           client: { middlewareAllowList: [mwA.id] },
         }),
       ],
@@ -79,7 +79,7 @@ describe("Tunnel Policy (task-level whitelist)", () => {
       id: "tests.policy.task2",
       // Whitelist only mwB locally using object form
       tags: [
-        globals.tags.tunnelPolicy.with({
+        globals.tags.tunnelTaskPolicy.with({
           client: { middlewareAllowList: [mwB] },
         }),
       ],
@@ -179,7 +179,7 @@ describe("Tunnel Policy (task-level whitelist)", () => {
       id: "tests.policy.task5",
       // Tag present but only server key set; client allowlist is not set -> no local middleware
       tags: [
-        globals.tags.tunnelPolicy.with({
+        globals.tags.tunnelTaskPolicy.with({
           server: { middlewareAllowList: [mwA.id] },
         }),
       ],
@@ -231,7 +231,7 @@ describe("Tunnel Policy (task-level whitelist)", () => {
     const t = task<{ v: number }, Promise<string>>({
       id: "tests.policy.task4",
       tags: [
-        globals.tags.tunnelPolicy.with({
+        globals.tags.tunnelTaskPolicy.with({
           client: { middlewareAllowList: [] },
         }),
       ],
@@ -274,7 +274,7 @@ describe("Tunnel Policy (task-level whitelist)", () => {
 
     const t = task<{ v: number }, Promise<string>>({
       id: "tests.policy.legacyTask",
-      tags: [globals.tags.tunnelPolicy.with({ client: [mw.id] })],
+      tags: [globals.tags.tunnelTaskPolicy.with({ client: [mw.id] })],
       middleware: [mw],
       run: async () => "local-should-not-run",
     });
@@ -321,7 +321,7 @@ describe("Tunnel Policy (task-level whitelist)", () => {
 
     const t = task<{ v: number }, Promise<string>>({
       id: "tests.policy.unconfiguredTask",
-      tags: [globals.tags.tunnelPolicy],
+      tags: [globals.tags.tunnelTaskPolicy],
       middleware: [mwA, mwB],
       run: async () => "local-should-not-run",
     });
@@ -348,7 +348,7 @@ describe("Tunnel Policy (task-level whitelist)", () => {
     expect(calledB).toBe(0);
   });
 
-  it("supports previous grouped config { middlewareAllowList: { client: [...] } }", async () => {
+  it("supports deprecated globals.tags.tunnelPolicy alias with grouped config", async () => {
     let called = 0;
 
     const mw = taskMiddleware({

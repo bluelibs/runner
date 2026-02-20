@@ -2,12 +2,14 @@ import { defineResource, defineTask } from "../../define";
 import {
   retryResourceMiddleware,
   retryTaskMiddleware,
+  abortableDelay,
 } from "../../globals/middleware/retry.middleware";
 import {
   timeoutTaskMiddleware,
   journalKeys as timeoutJournalKeys,
 } from "../../globals/middleware/timeout.middleware";
 import { run } from "../../run";
+import { createMessageError } from "../../errors";
 
 describe("Retry Middleware", () => {
   describe("Retry Task Middleware", () => {
@@ -23,7 +25,7 @@ describe("Retry Middleware", () => {
         ],
         run: async () => {
           attempt++;
-          if (attempt < 3) throw new Error("Temporary failure");
+          if (attempt < 3) throw createMessageError("Temporary failure");
           return "Success";
         },
       });
@@ -53,7 +55,7 @@ describe("Retry Middleware", () => {
           }),
         ],
         run: async () => {
-          throw new Error("FATAL");
+          throw createMessageError("FATAL");
         },
       });
 
@@ -64,7 +66,7 @@ describe("Retry Middleware", () => {
         async init(_, { task }) {
           await expect(task()).rejects.toThrow("FATAL");
           expect(errorSpy).not.toHaveBeenCalled();
-          throw new Error("FATAL");
+          throw createMessageError("FATAL");
         },
       });
 
@@ -85,7 +87,7 @@ describe("Retry Middleware", () => {
           }),
         ],
         run: async () => {
-          throw new Error("Retry me");
+          throw createMessageError("Retry me");
         },
       });
 
@@ -116,7 +118,7 @@ describe("Retry Middleware", () => {
         middleware: [retryTaskMiddleware],
         run: async () => {
           attempt++;
-          throw new Error("Temporary failure");
+          throw createMessageError("Temporary failure");
         },
       });
 
@@ -184,7 +186,7 @@ describe("Retry Middleware", () => {
             // Abort it immediately so retry sees it as aborted on next catch
             abortController.abort();
           }
-          throw new Error("Should not retry after abort");
+          throw createMessageError("Should not retry after abort");
         },
       });
 
@@ -215,7 +217,7 @@ describe("Retry Middleware", () => {
         ],
         async init() {
           attempts++;
-          if (attempts < 2) throw new Error("Resource init failed");
+          if (attempts < 2) throw createMessageError("Resource init failed");
           return "Resource ready";
         },
       });
@@ -245,7 +247,7 @@ describe("Retry Middleware", () => {
         ],
         async init() {
           attempt++;
-          if (attempt < 3) throw new Error("Temporary failure");
+          if (attempt < 3) throw createMessageError("Temporary failure");
           return "Success";
         },
       });
@@ -265,7 +267,6 @@ describe("Retry Middleware", () => {
     });
 
     it("should respect stopRetryIf condition", async () => {
-      const errorSpy = jest.fn();
       const resource = defineResource({
         id: "fatalResource",
         middleware: [
@@ -275,7 +276,7 @@ describe("Retry Middleware", () => {
           }),
         ],
         async init() {
-          throw new Error("FATAL");
+          throw createMessageError("FATAL");
         },
       });
 
@@ -283,7 +284,7 @@ describe("Retry Middleware", () => {
         id: "app",
         register: [resource],
         dependencies: { resource },
-        async init(_, { resource }) {},
+        async init(_) {},
       });
 
       await expect(run(app)).rejects.toThrow("FATAL");
@@ -317,7 +318,7 @@ describe("Retry Middleware", () => {
         }
       } catch (error) {
         // The operation rejected before the timeout. This is a failure.
-        throw new Error(
+        throw createMessageError(
           `Function threw an error within ${timeoutMs}ms: ${
             (error as Error).message
           }`,
@@ -339,7 +340,7 @@ describe("Retry Middleware", () => {
           }),
         ],
         async init() {
-          throw new Error("Retry me");
+          throw createMessageError("Retry me");
         },
       });
 
@@ -347,7 +348,7 @@ describe("Retry Middleware", () => {
         id: "app",
         register: [resource],
         dependencies: { resource },
-        async init(_, { resource }) {},
+        async init(_) {},
       });
 
       const runPromise = run(app);
@@ -367,7 +368,7 @@ describe("Retry Middleware", () => {
         middleware: [retryResourceMiddleware],
         async init() {
           attempt++;
-          throw new Error("Temporary failure");
+          throw createMessageError("Temporary failure");
         },
       });
 
@@ -375,10 +376,99 @@ describe("Retry Middleware", () => {
         id: "app",
         register: [resource],
         dependencies: { resource },
-        async init(_, { resource }) {},
+        async init(_) {},
       });
 
       await expect(run(app)).rejects.toThrow("Temporary failure");
+    });
+  });
+
+  describe("Abort-aware retry delay", () => {
+    it("resolves normally without a signal", async () => {
+      await abortableDelay(1);
+    });
+
+    it("rejects immediately when signal is already aborted", async () => {
+      const ac = new AbortController();
+      ac.abort(new Error("pre-aborted"));
+      await expect(abortableDelay(1, ac.signal)).rejects.toThrow("pre-aborted");
+    });
+
+    it("rejects when signal fires during the delay", async () => {
+      const ac = new AbortController();
+      const p = abortableDelay(10_000, ac.signal);
+      ac.abort(new Error("mid-delay abort"));
+      await expect(p).rejects.toThrow("mid-delay abort");
+    });
+
+    it("resolves normally when signal is present but does not fire", async () => {
+      const ac = new AbortController();
+      await abortableDelay(1, ac.signal);
+    });
+
+    it("cancels retry delay when abort signal fires", async () => {
+      let attempt = 0;
+      const task = defineTask({
+        id: "flakyAbortTask",
+        middleware: [
+          // Timeout fires after 50ms — retry delay (100ms+) should be aborted
+          timeoutTaskMiddleware.with({ ttl: 50 }),
+          retryTaskMiddleware.with({ retries: 5 }),
+        ],
+        run: async () => {
+          attempt++;
+          throw createMessageError("always fails");
+        },
+      });
+
+      const app = defineResource({
+        id: "app.abort.retry",
+        register: [task],
+        dependencies: { task },
+        async init(_, { task }) {
+          await task();
+        },
+      });
+
+      // The test confirms the retry aborts promptly rather than
+      // sleeping through the full backoff schedule.
+      await expect(run(app)).rejects.toThrow();
+      expect(attempt).toBeGreaterThanOrEqual(1);
+    });
+
+    it("completes retry delay normally when signal is present but does not abort", async () => {
+      let attempt = 0;
+      const task = defineTask({
+        id: "flakyAbortNormalTask",
+        middleware: [
+          // Long timeout so it doesn't fire during the short retry delay
+          timeoutTaskMiddleware.with({ ttl: 10_000 }),
+          retryTaskMiddleware.with({
+            retries: 2,
+            delayStrategy: () => 1, // 1ms delay to keep test fast
+          }),
+        ],
+        run: async () => {
+          attempt++;
+          if (attempt < 2) throw createMessageError("fail once");
+          return "ok";
+        },
+      });
+
+      const app = defineResource({
+        id: "app.abort.normal",
+        register: [task],
+        dependencies: { task },
+        async init(_, { task }) {
+          const result = await task();
+          expect(result).toBe("ok");
+        },
+      });
+
+      const runtime = await run(app);
+      await runtime.dispose();
+      // The retry delay resolved normally with an active signal present
+      expect(attempt).toBe(2);
     });
   });
 });

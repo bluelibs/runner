@@ -13,11 +13,12 @@ import {
   dependencyNotFoundError,
   unknownItemTypeError,
   eventNotFoundError,
-  circularDependenciesError,
+  circularDependencyError,
   lockedError,
   storeAlreadyInitializedError,
   validationError,
   phantomTaskNotRoutedError,
+  createMessageError,
 } from "../../errors";
 
 describe("Errors", () => {
@@ -138,7 +139,7 @@ describe("Errors", () => {
     const errorTask = defineTask({
       id: "error.task",
       run: async () => {
-        throw new Error("Task error");
+        throw createMessageError("Task error");
       },
     });
 
@@ -159,7 +160,7 @@ describe("Errors", () => {
       id: "error.resource",
       init: async () => {
         if (true === true) {
-          throw new Error("Resource error");
+          throw createMessageError("Resource error");
         }
       },
     });
@@ -283,7 +284,7 @@ describe("Errors", () => {
     const task = defineTask({
       id: "test.task",
       dependencies: { offTheGrid },
-      run: async (_, deps) => {
+      run: async (_, _deps) => {
         throw "Should not even be here";
       },
     });
@@ -373,7 +374,7 @@ describe("Errors", () => {
         } catch (e: unknown) {
           return e as Error & { name: string; data?: any };
         }
-        throw new Error("expected throw");
+        throw createMessageError("expected throw");
       };
 
       const dup = capture(() =>
@@ -391,7 +392,7 @@ describe("Errors", () => {
       expect(unknownItemTypeError.is(unk)).toBe(true);
 
       const cyc = capture(() =>
-        circularDependenciesError.throw({ cycles: ["a->b->a"] }),
+        circularDependencyError.throw({ cycles: ["a->b->a"] }),
       );
       expect(cyc.message).toContain("Circular dependencies detected");
 

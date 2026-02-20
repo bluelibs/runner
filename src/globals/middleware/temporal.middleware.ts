@@ -1,34 +1,107 @@
 import { defineTaskMiddleware, defineResource } from "../../define";
 import { globalTags } from "../globalTags";
+import { middlewareTemporalDisposedError } from "../../errors";
 
 export interface TemporalMiddlewareConfig {
   ms: number;
 }
 
+type TimeoutHandle = ReturnType<typeof setTimeout>;
+
 export interface DebounceState {
-  timeoutId?: NodeJS.Timeout;
-  latestInput?: any;
-  resolveList: ((value: any) => void)[];
-  rejectList: ((error: any) => void)[];
+  timeoutId?: TimeoutHandle;
+  latestInput?: unknown;
+  resolveList: ((value: unknown) => void)[];
+  rejectList: ((error: unknown) => void)[];
 }
 
 export interface ThrottleState {
   lastExecution: number;
-  timeoutId?: NodeJS.Timeout;
-  latestInput?: any;
-  resolveList: ((value: any) => void)[];
-  rejectList: ((error: any) => void)[];
-  currentPromise?: Promise<any>;
+  timeoutId?: TimeoutHandle;
+  latestInput?: unknown;
+  resolveList: ((value: unknown) => void)[];
+  rejectList: ((error: unknown) => void)[];
+  currentPromise?: Promise<unknown>;
+}
+
+export interface TemporalResourceState {
+  debounceStates: WeakMap<TemporalMiddlewareConfig, DebounceState>;
+  throttleStates: WeakMap<TemporalMiddlewareConfig, ThrottleState>;
+  trackedDebounceStates: Set<DebounceState>;
+  trackedThrottleStates: Set<ThrottleState>;
+  isDisposed: boolean;
+}
+
+const TEMPORAL_DISPOSED_ERROR_MESSAGE =
+  "Temporal middleware resource has been disposed.";
+
+function createTemporalDisposedError() {
+  return middlewareTemporalDisposedError.create({
+    message: TEMPORAL_DISPOSED_ERROR_MESSAGE,
+  });
+}
+
+function rejectDebounceState(state: DebounceState, error: Error) {
+  if (state.timeoutId) {
+    clearTimeout(state.timeoutId);
+    state.timeoutId = undefined;
+  }
+
+  const { rejectList } = state;
+  state.resolveList = [];
+  state.rejectList = [];
+  state.latestInput = undefined;
+  rejectList.forEach((reject) => {
+    reject(error);
+  });
+}
+
+function rejectThrottleState(state: ThrottleState, error: Error) {
+  if (state.timeoutId) {
+    clearTimeout(state.timeoutId);
+    state.timeoutId = undefined;
+  }
+
+  const { rejectList } = state;
+  state.resolveList = [];
+  state.rejectList = [];
+  state.latestInput = undefined;
+  state.currentPromise = undefined;
+  rejectList.forEach((reject) => {
+    reject(error);
+  });
 }
 
 export const temporalResource = defineResource({
   id: "globals.resources.temporal",
   tags: [globalTags.system],
-  init: async () => {
+  init: async (): Promise<TemporalResourceState> => {
     return {
       debounceStates: new WeakMap<TemporalMiddlewareConfig, DebounceState>(),
       throttleStates: new WeakMap<TemporalMiddlewareConfig, ThrottleState>(),
+      trackedDebounceStates: new Set<DebounceState>(),
+      trackedThrottleStates: new Set<ThrottleState>(),
+      isDisposed: false,
     };
+  },
+  dispose: async (state: TemporalResourceState) => {
+    state.isDisposed = true;
+    const disposeError = createTemporalDisposedError();
+    const trackedDebounceStates =
+      state.trackedDebounceStates ?? new Set<DebounceState>();
+    const trackedThrottleStates =
+      state.trackedThrottleStates ?? new Set<ThrottleState>();
+
+    trackedDebounceStates.forEach((debounceState) => {
+      rejectDebounceState(debounceState, disposeError);
+    });
+
+    trackedThrottleStates.forEach((throttleState) => {
+      rejectThrottleState(throttleState, disposeError);
+    });
+
+    trackedDebounceStates.clear();
+    trackedThrottleStates.clear();
   },
 });
 
@@ -39,9 +112,17 @@ export const temporalResource = defineResource({
  */
 export const debounceTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.debounce",
+  throws: [middlewareTemporalDisposedError],
   dependencies: { state: temporalResource },
   async run({ task, next }, { state }, config: TemporalMiddlewareConfig) {
-    const { debounceStates } = state;
+    if (state.isDisposed === true) {
+      throw createTemporalDisposedError();
+    }
+
+    const debounceStates = state.debounceStates;
+    const trackedDebounceStates =
+      state.trackedDebounceStates ??
+      (state.trackedDebounceStates = new Set<DebounceState>());
     let debounceState = debounceStates.get(config);
     if (!debounceState) {
       debounceState = {
@@ -49,6 +130,7 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
         rejectList: [],
       };
       debounceStates.set(config, debounceState);
+      trackedDebounceStates.add(debounceState);
     }
 
     debounceState.latestInput = task.input;
@@ -69,11 +151,23 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
       debounceState!.rejectList = [];
       debounceState!.latestInput = undefined;
 
+      if (state.isDisposed === true) {
+        const disposeError = createTemporalDisposedError();
+        rejectList.forEach((reject) => {
+          reject(disposeError);
+        });
+        return;
+      }
+
       try {
         const result = await next(latestInput);
-        resolveList.forEach((resolve) => resolve(result));
+        resolveList.forEach((resolve) => {
+          resolve(result);
+        });
       } catch (error) {
-        rejectList.forEach((reject) => reject(error));
+        rejectList.forEach((reject) => {
+          reject(error);
+        });
       }
     }, config.ms);
 
@@ -87,9 +181,17 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
  */
 export const throttleTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.throttle",
+  throws: [middlewareTemporalDisposedError],
   dependencies: { state: temporalResource },
   async run({ task, next }, { state }, config: TemporalMiddlewareConfig) {
-    const { throttleStates } = state;
+    if (state.isDisposed === true) {
+      throw createTemporalDisposedError();
+    }
+
+    const throttleStates = state.throttleStates;
+    const trackedThrottleStates =
+      state.trackedThrottleStates ??
+      (state.trackedThrottleStates = new Set<ThrottleState>());
     let throttleState = throttleStates.get(config);
     if (!throttleState) {
       throttleState = {
@@ -98,14 +200,15 @@ export const throttleTaskMiddleware = defineTaskMiddleware({
         rejectList: [],
       };
       throttleStates.set(config, throttleState);
+      trackedThrottleStates.add(throttleState);
     }
 
     const now = Date.now();
     const remaining = config.ms - (now - throttleState.lastExecution);
 
     if (remaining <= 0) {
-      let pendingResolves: Array<(value: any) => void> = [];
-      let pendingRejects: Array<(error: any) => void> = [];
+      let pendingResolves: Array<(value: unknown) => void> = [];
+      let pendingRejects: Array<(error: unknown) => void> = [];
 
       if (throttleState.timeoutId) {
         // This can happen if a scheduled timeout from the previous window is
@@ -124,10 +227,14 @@ export const throttleTaskMiddleware = defineTaskMiddleware({
       throttleState.lastExecution = now;
       try {
         const result = await next(task.input);
-        pendingResolves.forEach((resolve) => resolve(result));
+        pendingResolves.forEach((resolve) => {
+          resolve(result);
+        });
         return result;
       } catch (error) {
-        pendingRejects.forEach((reject) => reject(error));
+        pendingRejects.forEach((reject) => {
+          reject(error);
+        });
         throw error;
       }
     } else {
@@ -145,12 +252,25 @@ export const throttleTaskMiddleware = defineTaskMiddleware({
           throttleState!.resolveList = [];
           throttleState!.rejectList = [];
           throttleState!.currentPromise = undefined;
+          throttleState!.latestInput = undefined;
+
+          if (state.isDisposed === true) {
+            const disposeError = createTemporalDisposedError();
+            rejectList.forEach((reject) => {
+              reject(disposeError);
+            });
+            return;
+          }
 
           try {
             const result = await next(latestInput);
-            resolveList.forEach((resolve) => resolve(result));
+            resolveList.forEach((resolve) => {
+              resolve(result);
+            });
           } catch (error) {
-            rejectList.forEach((reject) => reject(error));
+            rejectList.forEach((reject) => {
+              reject(error);
+            });
           }
         }, remaining);
       } else {

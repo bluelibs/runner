@@ -27,7 +27,7 @@ import {
   defineTaskMiddleware({
     id: "middleware",
     configSchema: z.object({ ttl: z.number().positive() }),
-    run: async ({ next }, deps, config) => {
+    run: async ({ next }, _deps, config) => {
       config.ttl;
       // @ts-expect-error
       config.ttl2;

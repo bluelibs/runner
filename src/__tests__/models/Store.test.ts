@@ -1,5 +1,4 @@
 import { Store } from "../../models/Store";
-import { EventManager } from "../../models/EventManager";
 import {
   defineResource,
   defineTask,
@@ -8,20 +7,22 @@ import {
   defineTaskMiddleware,
 } from "../../define";
 import { run } from "../../run";
-import { Logger, MiddlewareManager, OnUnhandledError } from "../../models";
+import { MiddlewareManager, RunResult, TaskRunner } from "../../models";
 import { RunnerMode } from "../../types/runner";
 import { createTestFixture } from "../test-utils";
+import { createMessageError } from "../../errors";
 
 describe("Store", () => {
-  let eventManager: EventManager;
   let store: Store;
-  let logger: Logger;
-  let onUnhandledError: OnUnhandledError;
+  let runtimeResult: RunResult<unknown>;
+  let taskRunner: TaskRunner;
 
   beforeEach(() => {
     const fixture = createTestFixture();
-    ({ eventManager, logger, onUnhandledError, store } = fixture);
-    store.setTaskRunner(fixture.createTaskRunner());
+    ({ store } = fixture);
+    taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+    runtimeResult = fixture.createRuntimeResult(taskRunner);
   });
 
   it("should expose some helpers", () => {
@@ -41,7 +42,7 @@ describe("Store", () => {
       init: async () => "Root Value",
     });
 
-    store.initializeStore(rootResource, {});
+    store.initializeStore(rootResource, {}, runtimeResult);
 
     expect(store.root.resource.id).toBe(rootResource.id);
     expect(store.root.resource).not.toBe(rootResource);
@@ -111,7 +112,7 @@ describe("Store", () => {
   });
 
   it("should dispose of resources correctly", async () => {
-    const disposeFn = jest.fn(async (...args: any[]) => {});
+    const disposeFn = jest.fn(async (..._args: any[]) => {});
     const testResource = defineResource({
       id: "test.resource",
       dispose: disposeFn,
@@ -216,6 +217,39 @@ describe("Store", () => {
     expect(callOrder).toEqual(["app", "dep"]);
   });
 
+  it("should ignore tracked init order when deterministic disposal is forced", async () => {
+    const callOrder: string[] = [];
+
+    const dependency = defineResource({
+      id: "dispose.parallel.dep",
+      dispose: async () => {
+        callOrder.push("dep");
+      },
+    });
+
+    const dependent = defineResource({
+      id: "dispose.parallel.dependent",
+      dependencies: { dependency },
+      dispose: async () => {
+        callOrder.push("dependent");
+      },
+    });
+
+    store.storeGenericItem(dependency);
+    store.storeGenericItem(dependent);
+
+    store.resources.get(dependency.id)!.isInitialized = true;
+    store.resources.get(dependent.id)!.isInitialized = true;
+
+    // Simulate non-deterministic init completion order under parallel startup.
+    store.recordResourceInitialized(dependent.id);
+    store.recordResourceInitialized(dependency.id);
+    store.setPreferInitOrderDisposal(false);
+
+    await store.dispose();
+    expect(callOrder).toEqual(["dependent", "dep"]);
+  });
+
   it("should ignore non-object dependencies when ordering disposal", async () => {
     const disposeFn = jest.fn();
     const weirdDepsResource = defineResource({
@@ -304,11 +338,11 @@ describe("Store", () => {
       init: async () => "Root Value",
     });
 
-    store.initializeStore(rootResource, {});
+    store.initializeStore(rootResource, {}, runtimeResult);
 
-    expect(() => store.initializeStore(rootResource, {})).toThrow(
-      /Store already initialized/i,
-    );
+    expect(() =>
+      store.initializeStore(rootResource, {}, runtimeResult),
+    ).toThrow(/Store already initialized/i);
   });
 
   it("should access overrides and overrideRequests getters", () => {
@@ -349,7 +383,7 @@ describe("Store", () => {
       init: async () => "Root Value",
     });
 
-    store.initializeStore(rootResource, {});
+    store.initializeStore(rootResource, {}, runtimeResult);
     const result = store.getTasksWithTag(tag);
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
@@ -376,7 +410,7 @@ describe("Store", () => {
       init: async () => "Root Value",
     });
 
-    store.initializeStore(rootResource, {});
+    store.initializeStore(rootResource, {}, runtimeResult);
     const result = store.getResourcesWithTag(tag);
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
@@ -407,7 +441,7 @@ describe("Store", () => {
       init: async () => "Root Value",
     });
 
-    store.initializeStore(rootResource, {});
+    store.initializeStore(rootResource, {}, runtimeResult);
 
     const tasks = store.getTasksWithTag(contractTag);
     const resources = store.getResourcesWithTag(contractTag);
@@ -418,7 +452,9 @@ describe("Store", () => {
     const firstTask = tasks[0]!;
     const firstResource = resources[0]!;
     if (!firstTask || !firstResource || !firstResource.init) {
-      throw new Error("Expected one tagged task and one tagged resource");
+      throw createMessageError(
+        "Expected one tagged task and one tagged resource",
+      );
     }
 
     await expect(

@@ -16,7 +16,9 @@ describe("Serializer Security Attacks", () => {
 
   describe("Malformed Payload Attacks", () => {
     it("should handle invalid JSON gracefully", () => {
-      expect(() => serializer.deserialize("{invalid json}")).toThrow();
+      expect(() => serializer.deserialize("{invalid json}")).toThrow(
+        /Invalid JSON payload/,
+      );
     });
 
     it("should handle missing graph root", () => {
@@ -72,6 +74,24 @@ describe("Serializer Security Attacks", () => {
 
       const result = serializer.deserialize<number>(payload);
       expect(result).toBe(42);
+    });
+
+    it("should reject object nodes with invalid non-object payloads", () => {
+      const payload = JSON.stringify({
+        __graph: true,
+        version: 1,
+        root: { __ref: "obj_1" },
+        nodes: {
+          obj_1: {
+            kind: "object",
+            value: 123,
+          },
+        },
+      });
+
+      expect(() => serializer.deserialize(payload)).toThrow(
+        /Invalid object node payload/,
+      );
     });
   });
 });

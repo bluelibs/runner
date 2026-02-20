@@ -6,6 +6,7 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { IValidationSchema } from "../../defs";
+import { createMessageError } from "../../errors";
 
 class MockValidationSchema<T> implements IValidationSchema<T> {
   constructor(private validator: (input: unknown) => T) {}
@@ -20,7 +21,7 @@ describe("Result Schema Validation", () => {
       const resultSchema = new MockValidationSchema((value: unknown) => {
         const v = value as { ok: boolean };
         if (!v || typeof v !== "object" || typeof v.ok !== "boolean") {
-          throw new Error("expected { ok: boolean }");
+          throw createMessageError("expected { ok: boolean }");
         }
         return v;
       });
@@ -56,16 +57,16 @@ describe("Result Schema Validation", () => {
           !("ok" in value) ||
           typeof (value as { ok: unknown }).ok !== "boolean"
         ) {
-          throw new Error("expected { ok: boolean }");
+          throw createMessageError("expected { ok: boolean }");
         }
         return value as { ok: boolean };
       });
 
       const t = defineTask({
         id: "tests.result.task.invalid",
-        resultSchema,
+        resultSchema: resultSchema as any,
         async run() {
-          return { nope: true } as unknown as { ok: boolean };
+          return { nope: true };
         },
       });
 
@@ -89,7 +90,7 @@ describe("Result Schema Validation", () => {
           !("ok" in value) ||
           typeof (value as { ok: unknown }).ok !== "boolean"
         ) {
-          throw new Error("expected { ok: boolean }");
+          throw createMessageError("expected { ok: boolean }");
         }
         return value as { ok: boolean };
       });
@@ -138,7 +139,7 @@ describe("Result Schema Validation", () => {
           !("connected" in value) ||
           typeof (value as { connected: unknown }).connected !== "boolean"
         ) {
-          throw new Error("expected { connected: boolean }");
+          throw createMessageError("expected { connected: boolean }");
         }
         return value as { connected: boolean };
       });
@@ -168,16 +169,16 @@ describe("Result Schema Validation", () => {
       const resultSchema = new MockValidationSchema((value: unknown) => {
         const v = value as { connected: boolean };
         if (!v || typeof v !== "object" || typeof v.connected !== "boolean") {
-          throw new Error("expected { connected: boolean }");
+          throw createMessageError("expected { connected: boolean }");
         }
         return v;
       });
 
       const r = defineResource({
         id: "tests.result.resource.invalid",
-        resultSchema,
+        resultSchema: resultSchema as any,
         async init() {
-          return { nope: true } as unknown as { connected: boolean };
+          return { nope: true };
         },
       });
 
@@ -188,7 +189,7 @@ describe("Result Schema Validation", () => {
       const resultSchema = new MockValidationSchema((value: unknown) => {
         const v = value as { connected: boolean };
         if (!v || typeof v !== "object" || typeof v.connected !== "boolean") {
-          throw new Error("expected { connected: boolean }");
+          throw createMessageError("expected { connected: boolean }");
         }
         return v;
       });
@@ -217,7 +218,7 @@ describe("Result Schema Validation", () => {
         dependencies: { r },
         async init(_, { r }) {
           // Should receive middleware-modified value without validation error
-          expect((r as unknown as { broken: boolean }).broken).toBe(true);
+          expect((r as any).broken).toBe(true);
           return r;
         },
       });

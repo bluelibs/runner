@@ -10,6 +10,7 @@ describe("tunnel protocol", () => {
   });
 
   test("assertOkEnvelope throws TunnelError on not ok", () => {
+    expect.assertions(3);
     try {
       assertOkEnvelope({ ok: false, error: { code: "X", message: "boom" } });
       fail("should throw");

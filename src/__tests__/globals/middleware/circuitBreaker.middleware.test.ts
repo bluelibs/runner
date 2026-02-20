@@ -1,9 +1,11 @@
 import { defineTask, defineResource } from "../../../define";
 import { run } from "../../../run";
 import {
+  circuitBreakerResource,
   circuitBreakerMiddleware,
   CircuitBreakerOpenError,
 } from "../../../globals/middleware/circuitBreaker.middleware";
+import { createMessageError } from "../../../errors";
 
 describe("Circuit Breaker Middleware", () => {
   beforeEach(() => {
@@ -44,7 +46,7 @@ describe("Circuit Breaker Middleware", () => {
       id: "task.tripping",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 2 })],
       run: async () => {
-        if (shouldFail) throw new Error("fail");
+        if (shouldFail) throw createMessageError("fail");
         return "ok";
       },
     });
@@ -77,7 +79,7 @@ describe("Circuit Breaker Middleware", () => {
         }),
       ],
       run: async () => {
-        if (shouldFail) throw new Error("fail");
+        if (shouldFail) throw createMessageError("fail");
         return "ok";
       },
     });
@@ -119,7 +121,7 @@ describe("Circuit Breaker Middleware", () => {
         }),
       ],
       run: async () => {
-        if (shouldFail) throw new Error("fail");
+        if (shouldFail) throw createMessageError("fail");
         return "ok";
       },
     });
@@ -147,12 +149,64 @@ describe("Circuit Breaker Middleware", () => {
     await run(app);
   });
 
+  it("should reject concurrent HALF_OPEN probes while one probe is in flight", async () => {
+    let mode: "fail" | "probe" | "closed" = "fail";
+    let resolveProbe: (() => void) | undefined;
+
+    const task = defineTask({
+      id: "task.halfOpenProbeGate",
+      middleware: [
+        circuitBreakerMiddleware.with({
+          failureThreshold: 1,
+          resetTimeout: 1000,
+        }),
+      ],
+      run: async () => {
+        if (mode === "fail") {
+          throw createMessageError("fail");
+        }
+        if (mode === "probe") {
+          await new Promise<void>((resolve) => {
+            resolveProbe = resolve;
+          });
+          return "probe-ok";
+        }
+        return "ok";
+      },
+    });
+
+    const app = defineResource({
+      id: "app.halfOpenProbeGate",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await expect(task()).rejects.toThrow("fail");
+        await expect(task()).rejects.toThrow(CircuitBreakerOpenError);
+
+        jest.advanceTimersByTime(1000);
+        mode = "probe";
+
+        const inFlightProbe = task();
+        await expect(task()).rejects.toThrow(
+          'Circuit is HALF_OPEN for task "task.halfOpenProbeGate" (probe in progress)',
+        );
+
+        mode = "closed";
+        resolveProbe?.();
+        await expect(inFlightProbe).resolves.toBe("probe-ok");
+        await expect(task()).resolves.toBe("ok");
+      },
+    });
+
+    await run(app);
+  });
+
   it("should isolate states between different tasks", async () => {
     const task1 = defineTask({
       id: "task.isolate1",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 1 })],
       run: async () => {
-        throw new Error("fail");
+        throw createMessageError("fail");
       },
     });
 
@@ -185,7 +239,7 @@ describe("Circuit Breaker Middleware", () => {
       id: "task.defaults",
       middleware: [circuitBreakerMiddleware],
       run: async () => {
-        throw new Error("fail");
+        throw createMessageError("fail");
       },
     });
 
@@ -203,5 +257,70 @@ describe("Circuit Breaker Middleware", () => {
     });
 
     await run(app);
+  });
+
+  it("should clear status map on runtime dispose", async () => {
+    const task = defineTask({
+      id: "task.dispose.status",
+      middleware: [circuitBreakerMiddleware.with({ failureThreshold: 2 })],
+      run: async () => {
+        throw createMessageError("boom");
+      },
+    });
+
+    let statusMapRef: Map<string, unknown> | undefined;
+    const app = defineResource({
+      id: "app.dispose.status",
+      register: [task],
+      dependencies: { task, state: circuitBreakerResource },
+      async init(_, { task, state }) {
+        await expect(task()).rejects.toThrow("boom");
+        statusMapRef = state.statusMap as Map<string, unknown>;
+        expect(statusMapRef.size).toBe(1);
+      },
+    });
+
+    const runtime = await run(app);
+    await runtime.dispose();
+
+    expect(statusMapRef?.size).toBe(0);
+  });
+
+  it("should evict stale CLOSED entries when statusMap exceeds safety cap", async () => {
+    const task = defineTask({
+      id: "task.eviction.target",
+      middleware: [circuitBreakerMiddleware.with({ failureThreshold: 5 })],
+      run: async () => "ok",
+    });
+
+    let statusMapRef: Map<string, unknown> | undefined;
+
+    const app = defineResource({
+      id: "app.eviction",
+      register: [task],
+      dependencies: { task, state: circuitBreakerResource },
+      async init(_, { task, state }) {
+        statusMapRef = state.statusMap as Map<string, unknown>;
+
+        // Pre-fill the map with stale CLOSED entries to exceed the 10_000 cap
+        for (let i = 0; i < 10_000; i++) {
+          statusMapRef.set(`stale-task-${i}`, {
+            state: "CLOSED",
+            failures: 0,
+            lastFailureTime: 0,
+            halfOpenProbeInFlight: false,
+          });
+        }
+
+        // Triggering the task should hit the eviction branch and clean up
+        await task();
+        // All 10k stale entries should be evicted, only "task.eviction.target" remains
+        expect(statusMapRef.size).toBe(1);
+        expect(statusMapRef.has("task.eviction.target")).toBe(true);
+      },
+    });
+
+    const runtime = await run(app);
+    await runtime.dispose();
   });
 });

@@ -42,6 +42,35 @@ export class ListenerRegistry {
     this.invalidateCache();
   }
 
+  removeListenerById(id: string): void {
+    const removedFromGlobal = this.removeFromListeners(
+      this.globalListeners,
+      id,
+    );
+    const affectedEventIds: string[] = [];
+
+    for (const [eventId, listeners] of this.listeners.entries()) {
+      const removed = this.removeFromListeners(listeners, id);
+      if (!removed) {
+        continue;
+      }
+
+      affectedEventIds.push(eventId);
+      if (listeners.length === 0) {
+        this.listeners.delete(eventId);
+      }
+    }
+
+    if (removedFromGlobal) {
+      this.invalidateCache();
+      return;
+    }
+
+    for (const eventId of affectedEventIds) {
+      this.invalidateCache(eventId);
+    }
+  }
+
   getListenersForEmit(eventDefinition: IEvent<any>): IListenerStorage[] {
     const excludeGlobal = this.isExcludedFromGlobal(eventDefinition);
     if (excludeGlobal) {
@@ -98,8 +127,9 @@ export class ListenerRegistry {
       }
       this.cachedMergedListeners.set(eventId, cached);
     }
-    // Return a shallow copy to ensure snapshot isolation.
-    return cached.slice();
+    // The cache is invalidated on mutation, so returning it directly is safe.
+    // Callers that mutate (e.g. parallel batching) must copy themselves.
+    return cached;
   }
 
   private invalidateCache(eventId?: string): void {
@@ -147,6 +177,29 @@ export class ListenerRegistry {
       }
     }
     listeners.splice(low, 0, newListener);
+  }
+
+  private removeFromListeners(
+    listeners: IListenerStorage[],
+    id: string,
+  ): boolean {
+    let removed = false;
+    let writeIndex = 0;
+
+    for (let readIndex = 0; readIndex < listeners.length; readIndex++) {
+      const listener = listeners[readIndex];
+      if (listener.id === id) {
+        removed = true;
+        continue;
+      }
+      listeners[writeIndex++] = listener;
+    }
+
+    if (removed) {
+      listeners.length = writeIndex;
+    }
+
+    return removed;
   }
 }
 

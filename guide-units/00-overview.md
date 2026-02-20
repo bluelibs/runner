@@ -12,17 +12,13 @@ import { z } from "zod";
 
 const logger = globals.resources.logger;
 
-// resources are singletons with lifecycle management
+// resources are singletons with lifecycle management and async construction
 const db = r
   .resource("app.db")
-  .init(async () => ({
-    users: {
-      insert: async (input: { name: string; email: string }) => ({
-        id: "user-1",
-        ...input,
-      }),
-    },
-  }))
+  .init(async () => {
+    const conn = await postgres.connect(process.env.DB_URL);
+    return conn;
+  })
   .build();
 
 const mailer = r
@@ -80,6 +76,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 **Benefits:**
 
 - **Explicit wiring** — Dependencies are declared in code, not discovered at runtime
+- **Architectural isolation** — Use resource `.exports([...])` to keep domain internals private and expose only stable contracts
 - **Type-driven** — TypeScript inference flows through tasks, resources, and middleware
 - **Testable by default** — Call `.run()` with mocks or run the full app, no special harnesses
 - **Traceable** — Stack traces and debug output stay aligned with your source

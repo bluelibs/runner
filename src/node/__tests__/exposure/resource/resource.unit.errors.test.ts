@@ -8,6 +8,7 @@ import {
   TOKEN,
 } from "./resource.unit.test.utils";
 import { createReqRes } from "./resource.test.utils";
+import { createMessageError } from "../../../../errors";
 
 const D = process.env.RUNNER_TEST_NET === "1" ? describe : describe.skip;
 
@@ -69,7 +70,8 @@ D("nodeExposure - unit errors", () => {
       proxyToTask.listen(0, "127.0.0.1", () => r()),
     );
     const addr = proxyToTask.address();
-    if (!addr || typeof addr === "string") throw new Error("No address");
+    if (!addr || typeof addr === "string")
+      throw createMessageError("No address");
     const url = `http://127.0.0.1:${addr.port}/__runner/task/${encodeURIComponent(testTask.id)}`;
     const h = { "x-runner-token": TOKEN };
     const r = await request({ method: "POST", url, headers: h, body: "{}" });
@@ -87,7 +89,8 @@ D("nodeExposure - unit errors", () => {
       proxyToTask.listen(0, "127.0.0.1", () => r()),
     );
     const addr = proxyToTask.address();
-    if (!addr || typeof addr === "string") throw new Error("No address");
+    if (!addr || typeof addr === "string")
+      throw createMessageError("No address");
     const url = `http://127.0.0.1:${addr.port}/__runner/task/${encodeURIComponent(noInputTask.id)}`;
     const h = { "x-runner-token": TOKEN };
     const result = await request({ method: "POST", url, headers: h });

@@ -1,14 +1,26 @@
 import { definitions, r, RunnerError } from "../..";
+import { builderIncompleteError, createMessageError } from "../../errors";
 
 describe("error builder", () => {
+  it("covers builderIncompleteError task label branch", () => {
+    expect(() =>
+      builderIncompleteError.throw({
+        type: "task",
+        builderId: "tests.errors.builderIncomplete.task",
+        missingFields: ["run"],
+      }),
+    ).toThrow(/Task "tests\.errors\.builderIncomplete\.task" is incomplete/);
+  });
+
   it("build() returns an ErrorHelper that can throw and type-narrow via is()", () => {
+    expect.assertions(4);
     const AppError = r
       .error<{ code: number; message: string }>("tests.errors.app")
       .dataSchema({
         parse(input: unknown) {
           const d = input as { code: number; message: string };
           if (typeof d?.code !== "number" || typeof d?.message !== "string") {
-            throw new Error("invalid");
+            throw createMessageError("invalid");
           }
           return d;
         },
@@ -26,7 +38,7 @@ describe("error builder", () => {
         throw err;
       }
       if (!(err instanceof Error)) {
-        throw new Error("Expected an Error instance");
+        throw createMessageError("Expected an Error instance");
       }
       // Name and message should reflect id and data.message
       expect(err.name).toBe("tests.errors.app");
@@ -37,7 +49,79 @@ describe("error builder", () => {
     }
   });
 
+  it("new() constructs a typed RunnerError without throwing", () => {
+    const AppError = r
+      .error<{ code: number; message: string }>("tests.errors.new")
+      .httpCode(409)
+      .format((d) => `[${d.code}] ${d.message}`)
+      .remediation((d) => `Resolve conflict for code ${d.code}.`)
+      .build();
+
+    const error = AppError.new({ code: 409, message: "Conflict" });
+
+    expect(error).toBeInstanceOf(RunnerError);
+    expect(error.name).toBe("tests.errors.new");
+    expect(error.id).toBe("tests.errors.new");
+    expect(error.httpCode).toBe(409);
+    expect(error.data).toEqual({ code: 409, message: "Conflict" });
+    expect(error.remediation).toBe("Resolve conflict for code 409.");
+    expect(error.message).toBe(
+      "[409] Conflict\n\nRemediation: Resolve conflict for code 409.",
+    );
+    expect(AppError.is(error)).toBe(true);
+    expect(r.error.is(error)).toBe(true);
+  });
+
+  it("create() is an alias for new()", () => {
+    const AppError = r
+      .error<{ code: number }>("tests.errors.create.alias")
+      .format((d) => `Code ${d.code}`)
+      .build();
+
+    const createdError = AppError.create({ code: 7 });
+
+    expect(createdError).toBeInstanceOf(RunnerError);
+    expect(createdError.id).toBe("tests.errors.create.alias");
+    expect(createdError.message).toBe("Code 7");
+    expect(AppError.is(createdError, { code: 7 })).toBe(true);
+  });
+
+  it("applies dataSchema.parse on new() and create()", () => {
+    const TypedError = r
+      .error<{ code: number; message: string }>("tests.errors.new.schema")
+      .dataSchema({
+        parse(input: unknown) {
+          const d = input as { code: number; message: string };
+          if (typeof d?.code !== "number" || typeof d?.message !== "string") {
+            throw createMessageError("invalid");
+          }
+          return d;
+        },
+      })
+      .build();
+
+    expect(() =>
+      TypedError.new({ code: "x" as any, message: 1 as any }),
+    ).toThrow("invalid");
+    expect(() =>
+      TypedError.create({ code: "x" as any, message: 1 as any }),
+    ).toThrow("invalid");
+  });
+
+  it("allows zero-arg new()/create() when data has no required keys", () => {
+    const OptionalError = r
+      .error<{ code?: number }>("tests.errors.new.optional")
+      .build();
+
+    const fromNew = OptionalError.new();
+    const fromCreate = OptionalError.create();
+
+    expect(fromNew.data).toEqual({});
+    expect(fromCreate.data).toEqual({});
+  });
+
   it("is() narrows unknown to a typed runner error shape", () => {
+    expect.assertions(2);
     const E = r
       .error<{ code: number }>("tests.errors.narrowing")
       .format((d) => `Code: ${d.code}`)
@@ -57,6 +141,35 @@ describe("error builder", () => {
     }
   });
 
+  it("supports shallow partial data matching in helper is(error, partialData)", () => {
+    const E = r
+      .error<{
+        type: string;
+        code: number;
+        nested: { level: number };
+      }>("tests.errors.partial.match")
+      .build();
+
+    let caught: unknown;
+
+    try {
+      E.throw({
+        type: "task",
+        code: 404,
+        nested: { level: 1 },
+      });
+      fail("Expected throw");
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(E.is(caught, { type: "task" })).toBe(true);
+    expect(E.is(caught, { code: 404 })).toBe(true);
+    expect(E.is(caught, { type: "resource" })).toBe(false);
+    expect(E.is(caught, { nested: { level: 1 } })).toBe(false);
+    expect(E.is(caught, {})).toBe(true);
+  });
+
   it("validates data via dataSchema.parse before throwing", () => {
     const TypedError = r
       .error<{ code: number; message: string }>("tests.errors.typed")
@@ -64,7 +177,7 @@ describe("error builder", () => {
         parse(input: unknown) {
           const d = input as { code: number; message: string };
           if (typeof d?.code !== "number" || typeof d?.message !== "string") {
-            throw new Error("invalid");
+            throw createMessageError("invalid");
           }
           return d;
         },
@@ -76,6 +189,7 @@ describe("error builder", () => {
   });
 
   it("accepts format in builder chain (smoke)", () => {
+    expect.assertions(1);
     const E = r
       .error<{ message: string }>("tests.errors.display")
       .format((d) => d.message)
@@ -88,6 +202,7 @@ describe("error builder", () => {
   });
 
   it("accepts meta in builder chain (smoke)", () => {
+    expect.assertions(1);
     const E = r
       .error<{ message: string }>("tests.errors.meta")
       .meta({ title: "Test Error", description: "A test error" })
@@ -111,6 +226,7 @@ describe("error builder", () => {
   });
 
   it("supports httpCode in builder and exposes it on helper and thrown error", () => {
+    expect.assertions(3);
     const E = r
       .error<{ reason: string }>("tests.errors.httpCode")
       .httpCode(404)
@@ -151,6 +267,7 @@ describe("error builder", () => {
 
   describe("remediation", () => {
     it("appends static remediation advice to message and toString()", () => {
+      expect.assertions(3);
       const E = r
         .error<{ code: number }>("tests.errors.remediation.static")
         .format((d) => `Error code ${d.code}`)
@@ -162,7 +279,7 @@ describe("error builder", () => {
         fail("Expected throw");
       } catch (err) {
         expect(E.is(err)).toBe(true);
-        if (!(err instanceof Error)) throw new Error("Expected Error");
+        if (!(err instanceof Error)) throw createMessageError("Expected Error");
         expect(err.message).toBe(
           "Error code 42\n\nRemediation: Try restarting the service.",
         );
@@ -173,6 +290,7 @@ describe("error builder", () => {
     });
 
     it("supports data-dependent remediation function", () => {
+      expect.assertions(2);
       const E = r
         .error<{ field: string }>("tests.errors.remediation.dynamic")
         .format((d) => `Missing field: ${d.field}`)
@@ -183,7 +301,7 @@ describe("error builder", () => {
         E.throw({ field: "email" });
         fail("Expected throw");
       } catch (err) {
-        if (!(err instanceof Error)) throw new Error("Expected Error");
+        if (!(err instanceof Error)) throw createMessageError("Expected Error");
         expect(err.message).toContain("Missing field: email");
         expect(err.message).toContain(
           'Remediation: Provide the "email" field in your input.',
@@ -192,6 +310,7 @@ describe("error builder", () => {
     });
 
     it("omits remediation from message when not provided", () => {
+      expect.assertions(2);
       const E = r
         .error<{ code: number }>("tests.errors.remediation.none")
         .format((d) => `Error ${d.code}`)
@@ -201,13 +320,14 @@ describe("error builder", () => {
         E.throw({ code: 1 });
         fail("Expected throw");
       } catch (err) {
-        if (!(err instanceof Error)) throw new Error("Expected Error");
+        if (!(err instanceof Error)) throw createMessageError("Expected Error");
         expect(err.message).toBe("Error 1");
         expect(err.message).not.toContain("Remediation");
       }
     });
 
     it("exposes remediation as a property on the thrown error", () => {
+      expect.assertions(1);
       const E = r
         .error<{ code: number }>("tests.errors.remediation.prop")
         .format((d) => `Error ${d.code}`)
@@ -223,6 +343,7 @@ describe("error builder", () => {
     });
 
     it("remediation property is undefined when not provided", () => {
+      expect.assertions(1);
       const E = r
         .error<{ code: number }>("tests.errors.remediation.undefined")
         .format((d) => `Error ${d.code}`)
@@ -237,6 +358,7 @@ describe("error builder", () => {
     });
 
     it("appends remediation label even when remediation is an empty string", () => {
+      expect.assertions(1);
       const E = r
         .error<{ code: number }>("tests.errors.remediation.empty")
         .format((d) => `Error ${d.code}`)
@@ -247,7 +369,7 @@ describe("error builder", () => {
         E.throw({ code: 5 });
         fail("Expected throw");
       } catch (err) {
-        if (!(err instanceof Error)) throw new Error("Expected Error");
+        if (!(err instanceof Error)) throw createMessageError("Expected Error");
         expect(err.message).toBe("Error 5\n\nRemediation: ");
       }
     });
@@ -308,7 +430,38 @@ describe("error builder", () => {
       expect(r.error.is({})).toBe(false);
     });
 
+    it("supports shallow partial data matching in static r.error.is(error, partialData)", () => {
+      const E = r
+        .error<{
+          type: string;
+          code: number;
+          nested: { level: number };
+        }>("tests.errors.static.is.partial")
+        .build();
+
+      let caught: unknown;
+
+      try {
+        E.throw({
+          type: "task",
+          code: 400,
+          nested: { level: 2 },
+        });
+        fail("Expected throw");
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(r.error.is(caught, { type: "task" })).toBe(true);
+      expect(r.error.is(caught, { code: 400 })).toBe(true);
+      expect(r.error.is(caught, { type: "hook" })).toBe(false);
+      expect(r.error.is(caught, { nested: { level: 2 } })).toBe(false);
+      expect(r.error.is(new Error("x"), { type: "task" })).toBe(false);
+      expect(r.error.is(caught, {})).toBe(true);
+    });
+
     it("narrows to RunnerError type with accessible properties", () => {
+      expect.assertions(6);
       const E = r
         .error<{ field: string }>("tests.errors.static.is.narrow")
         .httpCode(400)
@@ -335,6 +488,7 @@ describe("error builder", () => {
     });
 
     it("works with RunnerError class directly for instanceof checks", () => {
+      expect.assertions(2);
       const E = r
         .error<{ code: number }>("tests.errors.static.is.instanceof")
         .build();

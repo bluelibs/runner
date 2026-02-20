@@ -7,6 +7,7 @@ import type {
   IMiddlewareMeta,
   TagType,
 } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 
 export interface TaskMiddlewareFluentBuilder<
   C = any,
@@ -28,6 +29,14 @@ export interface TaskMiddlewareFluentBuilder<
   configSchema<TNew>(
     schema: IValidationSchema<TNew>,
   ): TaskMiddlewareFluentBuilder<TNew, In, Out, D>;
+
+  /**
+   * Alias for configSchema. Use this to define the middleware configuration validation contract.
+   */
+  schema<TNew>(
+    schema: IValidationSchema<TNew>,
+  ): TaskMiddlewareFluentBuilder<TNew, In, Out, D>;
+
   run(
     fn: ITaskMiddlewareDefinition<C, In, Out, D>["run"],
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
@@ -38,6 +47,8 @@ export interface TaskMiddlewareFluentBuilder<
     t: TNewTags,
     options?: { override?: boolean },
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
+  /** Declare which typed errors this middleware may throw (declarative only). */
+  throws(list: ThrowsList): TaskMiddlewareFluentBuilder<C, In, Out, D>;
   everywhere(
     flag: boolean | ((task: ITask<any, any, any, any>) => boolean),
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;

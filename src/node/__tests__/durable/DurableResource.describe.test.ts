@@ -1,5 +1,6 @@
 import { r, run } from "../../..";
 import { memoryDurableResource } from "../../durable/resources/memoryDurableResource";
+import { createMessageError } from "../../../errors";
 
 describe("durable: describe()", () => {
   it("describes a task using real non-durable deps and shimmed durable.use()", async () => {
@@ -18,12 +19,12 @@ describe("durable: describe()", () => {
       .run(async (_input: undefined, deps) => {
         // Access a non-"use" property to cover the proxy passthrough path.
         if (typeof (deps.durable as any).start !== "function") {
-          throw new Error("unexpected durable.start");
+          throw createMessageError("unexpected durable.start");
         }
 
         // This must work in describe mode; recorder uses real computed deps.
         if (deps.other.n !== 2) {
-          throw new Error("unexpected other.n");
+          throw createMessageError("unexpected other.n");
         }
 
         const ctx = deps.durable.use();

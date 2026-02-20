@@ -17,6 +17,7 @@ import { applyCorsActual } from "../cors";
 import { createAbortControllerForRequest } from "../utils";
 import { withUserContexts } from "./contextWrapper";
 import { ExposureErrorLogKey, handleRequestError } from "./errorHandlers";
+import { getRequestId } from "../requestIdentity";
 
 interface EventHandlerDeps {
   store: NodeExposureDeps["store"];
@@ -29,6 +30,7 @@ interface EventHandlerDeps {
   limits?: {
     json?: { maxSize?: number };
   };
+  allowAsyncContext?: (eventId: string) => boolean;
 }
 
 export const createEventHandler = (deps: EventHandlerDeps) => {
@@ -41,6 +43,7 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     cors,
     serializer,
     limits,
+    allowAsyncContext = () => true,
   } = deps;
 
   return async (
@@ -48,7 +51,10 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     res: ServerResponse,
     eventId: string,
   ): Promise<void> => {
+    const allowAsyncContextForEvent = allowAsyncContext(eventId);
+
     if (req.method !== "POST") {
+      applyCorsActual(req, res, cors);
       respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);
       return;
     }
@@ -63,7 +69,7 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     const allowError = allowList.ensureEvent(eventId);
     if (allowError) {
       applyCorsActual(req, res, cors);
-      respondJson(res, allowError);
+      respondJson(res, allowError, serializer);
       return;
     }
 
@@ -107,21 +113,26 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
 
       // Compose user contexts; events do not need exposure req context
       const runEmit = () =>
-        withUserContexts(req, { store, serializer }, async () => {
-          if (returnPayload) {
-            return await eventManager.emitWithResult(
+        withUserContexts(
+          req,
+          { store, serializer },
+          async () => {
+            if (returnPayload) {
+              return await eventManager.emitWithResult(
+                storeEvent.event,
+                body.value?.payload,
+                "exposure:http",
+              );
+            }
+            await eventManager.emit(
               storeEvent.event,
               body.value?.payload,
               "exposure:http",
             );
-          }
-          await eventManager.emit(
-            storeEvent.event,
-            body.value?.payload,
-            "exposure:http",
-          );
-          return undefined;
-        });
+            return undefined;
+          },
+          { allowAsyncContext: allowAsyncContextForEvent },
+        );
 
       const payload = await runEmit();
       applyCorsActual(req, res, cors);
@@ -151,6 +162,7 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
         cors,
         serializer,
         logKey: ExposureErrorLogKey.EventError,
+        requestId: getRequestId(req),
       });
     }
   };

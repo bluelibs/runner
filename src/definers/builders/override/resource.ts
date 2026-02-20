@@ -5,6 +5,7 @@ import type {
   IResourceMeta,
   IValidationSchema,
   OverridableElements,
+  RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   TagType,
@@ -90,7 +91,7 @@ function cloneResourceState<
   TNextMiddleware
 > {
   return Object.freeze({
-    ...(state as unknown as ResourceOverrideState<
+    ...(state as ResourceOverrideState<
       TNextConfig,
       TNextValue,
       TNextDeps,
@@ -169,7 +170,7 @@ function makeResourceOverrideBuilder<
           state.dependencies,
           deps,
           override,
-        ) as unknown as TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
+        ) as TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
       });
 
       return makeResourceOverrideBuilder(base, next);
@@ -227,10 +228,7 @@ function makeResourceOverrideBuilder<
         [...TTags, ...TNewTags],
         TMiddleware
       >(state, {
-        tags: mergeArray(state.tags, tags, override) as unknown as [
-          ...TTags,
-          ...TNewTags,
-        ],
+        tags: mergeArray(state.tags, tags, override) as [...TTags, ...TNewTags],
       });
       return makeResourceOverrideBuilder(base, next);
     },
@@ -287,6 +285,9 @@ function makeResourceOverrideBuilder<
         TTags,
         TMiddleware
       >(base, next);
+    },
+    schema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
+      return builder.configSchema(schema);
     },
     resultSchema<TResolved>(schema: IValidationSchema<TResolved>) {
       const next = cloneResourceState<
@@ -432,6 +433,21 @@ function makeResourceOverrideBuilder<
         TMiddleware
       >(base, next);
     },
+    exports(items: Array<RegisterableItems>, options?: { override?: boolean }) {
+      const override = options?.override ?? false;
+      const next = cloneResourceState(state, {
+        exports: mergeArray(state.exports ?? [], items, override),
+      });
+      return makeResourceOverrideBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(base, next);
+    },
     build() {
       const normalizedThrows = normalizeThrows(
         { kind: "resource", id: state.id },
@@ -487,6 +503,7 @@ export function resourceOverrideBuilder<
     meta: base.meta,
     overrides: base.overrides,
     throws: base.throws,
+    exports: base.exports,
   });
 
   return makeResourceOverrideBuilder(base, initial);

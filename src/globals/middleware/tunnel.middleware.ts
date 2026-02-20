@@ -14,7 +14,12 @@ import type {
   TunnelEventSelector,
 } from "../resources/tunnel/types";
 import { symbolTunneledBy } from "../../types/symbols";
-import { tunnelOwnershipConflictError } from "../../errors";
+import {
+  tunnelClientContractError,
+  tunnelEventNotFoundError,
+  tunnelOwnershipConflictError,
+  tunnelTaskNotFoundError,
+} from "../../errors";
 
 export const tunnelResourceMiddleware = defineResourceMiddleware<
   void,
@@ -23,38 +28,44 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
   DependencyMapType
 >({
   id: "globals.middleware.resource.tunnel",
+  throws: [
+    tunnelClientContractError,
+    tunnelTaskNotFoundError,
+    tunnelEventNotFoundError,
+    tunnelOwnershipConflictError,
+  ],
   dependencies: {
     store: globalResources.store,
     eventManager: globalResources.eventManager,
+    logger: globalResources.logger,
   },
   // Only applies to resources tagged with globals.tags.tunnel
   everywhere: (resource) => globalTags.tunnel.exists(resource),
-  run: async ({ resource, next }, { store, eventManager }) => {
+  run: async ({ resource, next }, { store, eventManager, logger }) => {
     // Initialize the resource and get its value (tunnel runner)
     const value = await next(resource.config);
 
     const mode = value.mode || "none";
     const delivery = value.eventDeliveryMode || "mirror";
     // Cast store to Store type for helper functions
-    const typedStore = store as unknown as Store;
+    const typedStore = store as Store;
     const tasks = value.tasks ? resolveTasks(typedStore, value.tasks) : [];
     const events = value.events
-      ? resolveEvents(
-          typedStore,
-          value.events as unknown as TunnelEventSelector,
-        )
+      ? resolveEvents(typedStore, value.events as TunnelEventSelector)
       : [];
 
     if (mode === "client" || mode === "both") {
       if (tasks.length > 0 && typeof value.run !== "function") {
-        throw new Error(
-          "Tunnel resource value must implement run(task, input) when tasks[] is configured.",
-        );
+        tunnelClientContractError.throw({
+          message:
+            "Tunnel resource value must implement run(task, input) when tasks[] is configured.",
+        });
       }
       if (events.length > 0 && typeof value.emit !== "function") {
-        throw new Error(
-          "Tunnel resource value must implement emit(event, payload) when events[] is configured.",
-        );
+        tunnelClientContractError.throw({
+          message:
+            "Tunnel resource value must implement emit(event, payload) when events[] is configured.",
+        });
       }
     }
 
@@ -69,7 +80,7 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
     for (const t of tasks) {
       const st = typedStore.tasks.get(t.id)!;
       // Enforce single-owner policy: a task can be tunneled by only one resource
-      const currentOwner = (st.task as any)[symbolTunneledBy];
+      const currentOwner = st.task[symbolTunneledBy];
       const resourceId = resource.definition.id;
       if (currentOwner && currentOwner !== resourceId) {
         tunnelOwnershipConflictError.throw({
@@ -82,11 +93,11 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
       st.task = {
         ...st.task,
         run: (async (input: unknown) => {
-          return value.run!(t as unknown as ITask, input);
-        }) as unknown as ITask["run"],
+          return value.run!(t as ITask, input);
+        }) as ITask["run"],
         isTunneled: true,
         [symbolTunneledBy]: resourceId,
-      } as any;
+      } as typeof st.task;
     }
 
     if (events.length > 0) {
@@ -117,7 +128,19 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
             try {
               const remotePayload = await value.emit!(emission);
               if (remotePayload !== undefined) emission.data = remotePayload;
-            } catch (_) {
+            } catch (error) {
+              try {
+                await logger.warn(
+                  "Tunnel remote-first delivery failed; falling back to local listeners.",
+                  {
+                    source: resource.definition.id,
+                    error,
+                    data: { eventId: emission.id },
+                  },
+                );
+              } catch {
+                // Ignore logger failures to preserve fallback semantics.
+              }
               // Remote failed; fall back to local
               return next(emission);
             }
@@ -155,20 +178,14 @@ function resolveTasks(store: Store, selector: TunnelTaskSelector): ITask[] {
   for (const item of selector) {
     if (typeof item === "string") {
       const st = store.tasks.get(item);
-      if (!st)
-        throw new Error(
-          `Task ${item} not found while trying to resolve tasks for tunnel.`,
-        );
-      out.push(st.task);
+      if (!st) tunnelTaskNotFoundError.throw({ taskId: item });
+      out.push(st!.task);
     } else if (item && typeof item === "object") {
       // Assume it's a task definition
       const st = store.tasks.get(item.id);
-      if (!st)
-        throw new Error(
-          `Task ${item} not found while trying to resolve tasks for tunnel.`,
-        );
+      if (!st) tunnelTaskNotFoundError.throw({ taskId: String(item) });
 
-      out.push(st.task);
+      out.push(st!.task);
     }
   }
 
@@ -196,11 +213,16 @@ function resolveEvents(store: Store, selector: TunnelEventSelector): IEvent[] {
       st = store.events.get(item.id);
     }
 
-    if (!st)
-      throw new Error(
-        `Event ${item} not found while trying to resolve events for tunnel.`,
-      );
-    out.push(st.event);
+    if (!st) {
+      const eventId =
+        typeof item === "string"
+          ? item
+          : typeof item === "object" && item
+            ? item.id
+            : String(item);
+      tunnelEventNotFoundError.throw({ eventId });
+    }
+    out.push(st!.event);
   }
 
   return out;

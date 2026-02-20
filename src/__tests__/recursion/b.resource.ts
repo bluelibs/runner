@@ -7,7 +7,6 @@ export const bResource = defineResource({
     c: cResource,
   },
   async init(_, { c }) {
-    const result: string = c;
     // @ts-expect-error
     const result2: number = c;
     return `B depends on ${c}`;
@@ -18,7 +17,7 @@ export const b1Resource = defineResource({
   dependencies: {
     c: cResource,
   },
-  async init(_, { c }) {
+  async init(_, { c: _c }) {
     return 123;
   },
 });
@@ -27,7 +26,7 @@ export const b2Resource = defineResource({
   dependencies: {
     c: cResource,
   },
-  async init(_, { c }) {
+  async init(_, { c: _c }) {
     return true;
   },
 });

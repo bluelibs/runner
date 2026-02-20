@@ -8,6 +8,7 @@ import { Store } from "./Store";
 import { ITaskMiddleware, IResourceMiddleware } from "../defs";
 import { isResourceMiddleware, isTaskMiddleware } from "../define";
 import { InterceptorRegistry } from "./middleware/InterceptorRegistry";
+import type { InterceptorOwnerSnapshot } from "./middleware/InterceptorRegistry";
 import { MiddlewareResolver } from "./middleware/MiddlewareResolver";
 import { TaskMiddlewareComposer } from "./middleware/TaskMiddlewareComposer";
 import { ResourceMiddlewareComposer } from "./middleware/ResourceMiddlewareComposer";
@@ -15,6 +16,7 @@ import {
   TaskMiddlewareInterceptor,
   ResourceMiddlewareInterceptor,
 } from "./middleware/types";
+import { unknownMiddlewareTypeError } from "../errors";
 
 // Re-export types for backwards compatibility
 export type { TaskMiddlewareInterceptor, ResourceMiddlewareInterceptor };
@@ -93,12 +95,43 @@ export class MiddlewareManager {
     interceptor: TaskMiddlewareInterceptor | ResourceMiddlewareInterceptor,
   ): void {
     if (kind === "task") {
+      this.interceptOwned("task", interceptor as TaskMiddlewareInterceptor);
+      return;
+    }
+    this.interceptOwned(
+      "resource",
+      interceptor as ResourceMiddlewareInterceptor,
+    );
+  }
+
+  /**
+   * @internal
+   * Same behavior as intercept(), but records owner metadata for tooling.
+   */
+  interceptOwned(
+    kind: "task",
+    interceptor: TaskMiddlewareInterceptor,
+    ownerResourceId?: string,
+  ): void;
+  interceptOwned(
+    kind: "resource",
+    interceptor: ResourceMiddlewareInterceptor,
+    ownerResourceId?: string,
+  ): void;
+  interceptOwned(
+    kind: "task" | "resource",
+    interceptor: TaskMiddlewareInterceptor | ResourceMiddlewareInterceptor,
+    ownerResourceId?: string,
+  ): void {
+    if (kind === "task") {
       this.interceptorRegistry.addGlobalTaskInterceptor(
         interceptor as TaskMiddlewareInterceptor,
+        ownerResourceId,
       );
     } else {
       this.interceptorRegistry.addGlobalResourceInterceptor(
         interceptor as ResourceMiddlewareInterceptor,
+        ownerResourceId,
       );
     }
   }
@@ -125,18 +158,66 @@ export class MiddlewareManager {
     interceptor: TaskMiddlewareInterceptor | ResourceMiddlewareInterceptor,
   ): void {
     if (isTaskMiddleware(middleware)) {
+      this.interceptMiddlewareOwned(
+        middleware,
+        interceptor as TaskMiddlewareInterceptor,
+      );
+      return;
+    }
+    if (isResourceMiddleware(middleware)) {
+      this.interceptMiddlewareOwned(
+        middleware,
+        interceptor as ResourceMiddlewareInterceptor,
+      );
+      return;
+    }
+    unknownMiddlewareTypeError.throw();
+  }
+
+  /**
+   * @internal
+   * Same behavior as interceptMiddleware(), but records owner metadata for tooling.
+   */
+  interceptMiddlewareOwned(
+    middleware: ITaskMiddleware<any, any, any, any>,
+    interceptor: TaskMiddlewareInterceptor,
+    ownerResourceId?: string,
+  ): void;
+  interceptMiddlewareOwned(
+    middleware: IResourceMiddleware<any, any, any, any>,
+    interceptor: ResourceMiddlewareInterceptor,
+    ownerResourceId?: string,
+  ): void;
+  interceptMiddlewareOwned(
+    middleware:
+      | ITaskMiddleware<any, any, any, any>
+      | IResourceMiddleware<any, any, any, any>,
+    interceptor: TaskMiddlewareInterceptor | ResourceMiddlewareInterceptor,
+    ownerResourceId?: string,
+  ): void {
+    if (isTaskMiddleware(middleware)) {
       this.interceptorRegistry.addTaskMiddlewareInterceptor(
         middleware.id,
         interceptor as TaskMiddlewareInterceptor,
+        ownerResourceId,
       );
     } else if (isResourceMiddleware(middleware)) {
       this.interceptorRegistry.addResourceMiddlewareInterceptor(
         middleware.id,
         interceptor as ResourceMiddlewareInterceptor,
+        ownerResourceId,
       );
     } else {
-      throw new Error("Unknown middleware type");
+      unknownMiddlewareTypeError.throw();
     }
+  }
+
+  /**
+   * @internal
+   * Snapshot of resource owners that registered middleware interceptors.
+   */
+  getInterceptorOwnerSnapshot(): InterceptorOwnerSnapshot {
+    return this.interceptorRegistry.getOwnerSnapshot();
   }
 
   /**

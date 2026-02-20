@@ -55,7 +55,6 @@ describe("globals.resources.debug.middlewareInterceptorResource (unit)", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const joined = messages.join("\n");
-    console.log(messages);
     expect(joined.includes("Middleware triggered for task tests.task")).toBe(
       true,
     );

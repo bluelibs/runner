@@ -1,3 +1,4 @@
+import { invalidPayloadError, unsupportedFeatureError } from "./errors";
 import type { TypeDefinition } from "./types";
 
 const hasOwn = Object.prototype.hasOwnProperty;
@@ -6,6 +7,19 @@ const errorReservedPropertyNames = new Set([
   "message",
   "stack",
   "cause",
+]);
+const errorMethodShadowingPropertyNames = new Set([
+  "toString",
+  "toLocaleString",
+  "valueOf",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
+  "toJSON",
 ]);
 
 interface RuntimeUrlConstructor {
@@ -51,13 +65,15 @@ const isUnsafePropertyName = (propertyName: string): boolean =>
   propertyName === "constructor" ||
   propertyName === "prototype";
 
+const shouldBlockErrorCustomField = (propertyName: string): boolean =>
+  isUnsafePropertyName(propertyName) ||
+  errorReservedPropertyNames.has(propertyName) ||
+  errorMethodShadowingPropertyNames.has(propertyName);
+
 const collectErrorCustomFields = (error: Error): Record<string, unknown> => {
   const customFields: Record<string, unknown> = {};
   for (const propertyName of Object.getOwnPropertyNames(error)) {
-    if (errorReservedPropertyNames.has(propertyName)) {
-      continue;
-    }
-    if (isUnsafePropertyName(propertyName)) {
+    if (shouldBlockErrorCustomField(propertyName)) {
       continue;
     }
 
@@ -73,24 +89,24 @@ const collectErrorCustomFields = (error: Error): Record<string, unknown> => {
 
 const assertSerializedErrorPayload = (value: unknown): ParsedErrorPayload => {
   if (!isRecord(value)) {
-    throw new Error("Invalid Error payload");
+    throw invalidPayloadError("Invalid Error payload");
   }
 
   const { name, message, stack, customFields } = value;
   if (typeof name !== "string" || typeof message !== "string") {
-    throw new Error("Invalid Error payload");
+    throw invalidPayloadError("Invalid Error payload");
   }
   if (stack !== undefined && typeof stack !== "string") {
-    throw new Error("Invalid Error payload");
+    throw invalidPayloadError("Invalid Error payload");
   }
   if (customFields !== undefined && !isRecord(customFields)) {
-    throw new Error("Invalid Error payload");
+    throw invalidPayloadError("Invalid Error payload");
   }
 
   const normalizedCustomFields: Record<string, unknown> = {};
   const customFieldEntries = Object.entries(customFields ?? {});
   for (const [propertyName, propertyValue] of customFieldEntries) {
-    if (isUnsafePropertyName(propertyName)) {
+    if (shouldBlockErrorCustomField(propertyName)) {
       continue;
     }
     normalizedCustomFields[propertyName] = propertyValue;
@@ -111,7 +127,7 @@ const getUrlConstructor = (): RuntimeUrlConstructor | null => {
   if (typeof value !== "function") {
     return null;
   }
-  return value as unknown as RuntimeUrlConstructor;
+  return value as RuntimeUrlConstructor;
 };
 
 const getUrlSearchParamsConstructor =
@@ -120,7 +136,7 @@ const getUrlSearchParamsConstructor =
     if (typeof value !== "function") {
       return null;
     }
-    return value as unknown as RuntimeUrlSearchParamsConstructor;
+    return value as RuntimeUrlSearchParamsConstructor;
   };
 
 export const ErrorType: TypeDefinition<Error, SerializedErrorPayload> = {
@@ -164,11 +180,12 @@ export const ErrorType: TypeDefinition<Error, SerializedErrorPayload> = {
     }
 
     for (const [propertyName, propertyValue] of Object.entries(customFields)) {
-      if (errorReservedPropertyNames.has(propertyName)) {
-        continue;
-      }
-      (restoredError as unknown as Record<string, unknown>)[propertyName] =
-        propertyValue;
+      Object.defineProperty(restoredError, propertyName, {
+        value: propertyValue,
+        writable: true,
+        configurable: true,
+        enumerable: true,
+      });
     }
 
     return restoredError;
@@ -187,11 +204,11 @@ export const URLType: TypeDefinition<URL, string> = {
   serialize: (value: URL): string => value.href,
   deserialize: (payload: string): URL => {
     if (typeof payload !== "string") {
-      throw new Error("Invalid URL payload");
+      throw invalidPayloadError("Invalid URL payload");
     }
     const runtimeUrlConstructor = getUrlConstructor();
     if (!runtimeUrlConstructor) {
-      throw new Error("URL is not available in this runtime");
+      throw unsupportedFeatureError("URL is not available in this runtime");
     }
     return new runtimeUrlConstructor(payload);
   },
@@ -210,11 +227,13 @@ export const URLSearchParamsType: TypeDefinition<URLSearchParams, string> = {
   serialize: (value: URLSearchParams): string => value.toString(),
   deserialize: (payload: string): URLSearchParams => {
     if (typeof payload !== "string") {
-      throw new Error("Invalid URLSearchParams payload");
+      throw invalidPayloadError("Invalid URLSearchParams payload");
     }
     const runtimeUrlSearchParamsConstructor = getUrlSearchParamsConstructor();
     if (!runtimeUrlSearchParamsConstructor) {
-      throw new Error("URLSearchParams is not available in this runtime");
+      throw unsupportedFeatureError(
+        "URLSearchParams is not available in this runtime",
+      );
     }
     return new runtimeUrlSearchParamsConstructor(payload);
   },

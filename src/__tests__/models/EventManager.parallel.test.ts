@@ -1,6 +1,7 @@
-import { IEvent } from "../../defs";
+import { EventEmissionFailureMode, IEvent } from "../../defs";
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
+import { createMessageError } from "../../errors";
 
 describe("EventManager Parallel Execution", () => {
   let eventManager: EventManager;
@@ -168,7 +169,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw new Error("Parallel Error");
+        throw createMessageError("Parallel Error");
       },
       { order: 0 },
     );
@@ -187,10 +188,11 @@ describe("EventManager Parallel Execution", () => {
   });
 
   it("should aggregate multiple errors in the same batch", async () => {
+    expect.assertions(4);
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw new Error("Error 1");
+        throw createMessageError("Error 1");
       },
       { order: 0 },
     );
@@ -198,7 +200,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw new Error("Error 2");
+        throw createMessageError("Error 2");
       },
       { order: 0 },
     );
@@ -206,7 +208,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw new Error("Error 3");
+        throw createMessageError("Error 3");
       },
       { order: 0 },
     );
@@ -348,7 +350,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw new Error("Batch 0 error");
+        throw createMessageError("Batch 0 error");
       },
       { order: 0 },
     );
@@ -367,5 +369,46 @@ describe("EventManager Parallel Execution", () => {
     ).rejects.toThrow("Batch 0 error");
 
     expect(results).not.toContain("batch1-should-not-run");
+  });
+
+  it("aggregate mode should continue later batches and report all failures", async () => {
+    const results: string[] = [];
+
+    eventManager.addListener(
+      parallelEvent,
+      async () => {
+        throw createMessageError("batch0-fail");
+      },
+      { order: 0, id: "b0" },
+    );
+    eventManager.addListener(
+      parallelEvent,
+      async () => {
+        results.push("batch1-ran");
+        throw createMessageError("batch1-fail");
+      },
+      { order: 1, id: "b1" },
+    );
+    eventManager.addListener(
+      parallelEvent,
+      async () => {
+        results.push("batch2-ran");
+      },
+      { order: 2, id: "b2" },
+    );
+
+    const report = await eventManager.emit(parallelEvent, "data", "test", {
+      report: true,
+      throwOnError: false,
+      failureMode: EventEmissionFailureMode.Aggregate,
+    });
+
+    expect(results).toEqual(["batch1-ran", "batch2-ran"]);
+    expect(report.failedListeners).toBe(2);
+    expect(report.errors).toHaveLength(2);
+    expect(report.errors.map((error) => error.listenerId)).toEqual([
+      "b0",
+      "b1",
+    ]);
   });
 });

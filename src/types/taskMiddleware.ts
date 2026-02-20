@@ -13,6 +13,7 @@ import {
   symbolTaskMiddleware,
 } from "./symbols";
 import { IContractable } from "./contracts";
+import type { ThrowsList } from "./error";
 
 export type { DependencyMapType, DependencyValuesType } from "./utilities";
 export type { TagType } from "./tag";
@@ -45,6 +46,11 @@ export interface ITaskMiddlewareDefinition<
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
   tags?: TagType[];
+  /**
+   * Declares which typed errors are part of this middleware's contract.
+   * Declarative only — does not imply DI or enforcement.
+   */
+  throws?: ThrowsList;
   everywhere?: boolean | ((task: ITask<any, any, any, any>) => boolean);
 }
 
@@ -66,6 +72,8 @@ export interface ITaskMiddleware<
   [symbolFilePath]: string;
   id: string;
   dependencies: TDependencies | ((config: TConfig) => TDependencies);
+  /** Normalized list of error ids declared via `throws`. */
+  throws?: readonly string[];
   /** Current configuration object (empty by default). */
   config: TConfig;
   /** Configure the middleware and return a marked, configured instance. */

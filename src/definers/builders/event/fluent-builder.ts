@@ -22,10 +22,14 @@ export function makeEventBuilder<TPayload>(
 
     payloadSchema<TNew>(schema: IValidationSchema<TNew>) {
       // Cast state to target type for widening, then assign the schema
-      const next = clone(state as unknown as BuilderState<TNew>, {
+      const next = clone(state as BuilderState<TNew>, {
         payloadSchema: schema,
       });
       return makeEventBuilder<TNew>(next);
+    },
+
+    schema<TNew>(schema: IValidationSchema<TNew>) {
+      return builder.payloadSchema(schema);
     },
 
     tags<TNewTags extends TagType[]>(
@@ -37,6 +41,11 @@ export function makeEventBuilder<TPayload>(
         tags: mergeArray(state.tags, t, override) as TagType[],
       });
       return makeEventBuilder<TPayload>(next);
+    },
+
+    throws(_list) {
+      // Throws is only for documentation on and Event, because events themselves don't throw.
+      return builder;
     },
 
     meta<TNewMeta extends IEventMeta>(m: TNewMeta) {
@@ -51,7 +60,7 @@ export function makeEventBuilder<TPayload>(
 
     build() {
       const event = defineEvent({
-        ...(state as unknown as IEventDefinition<TPayload>),
+        ...(state as IEventDefinition<TPayload>),
       });
       (event as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
       return event;

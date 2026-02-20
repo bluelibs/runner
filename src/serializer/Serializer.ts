@@ -11,8 +11,6 @@ import type {
   SerializerOptions,
   SerializedGraph,
   DeserializationContext,
-  SerializedValue,
-  SerializedNode,
 } from "./types";
 import { SymbolPolicy } from "./types";
 import { TypeRegistry } from "./type-registry";
@@ -20,7 +18,6 @@ import {
   isGraphPayload,
   toNodeRecord,
   isObjectReference,
-  isSerializedTypeRecord,
   DEFAULT_UNSAFE_KEYS,
 } from "./validation";
 import { serializeValue, type SerializeState } from "./graph-serializer";
@@ -28,23 +25,23 @@ import { serializeTreeValue } from "./tree-serializer";
 import {
   deserializeValue as deserializeValueFn,
   deserializeLegacy,
-  resolveReference as resolveReferenceFn,
-  mergePlaceholder as mergePlaceholderFn,
 } from "./deserializer";
 import {
   normalizeMaxDepth,
   normalizeMaxRegExpPatternLength,
 } from "./option-normalizers";
-import {
-  isBoundedQuantifier,
-  isQuantifierAt,
-  isQuantifierChar,
-  isRegExpPatternSafe,
-} from "./regexp-validator";
 
 const GRAPH_VERSION = 1;
 const DEFAULT_MAX_DEPTH = 1000;
 const DEFAULT_MAX_REGEXP_PATTERN_LENGTH = 1024;
+
+function parseJsonPayload(payload: string): unknown {
+  try {
+    return JSON.parse(payload);
+  } catch {
+    throw new SyntaxError("Invalid JSON payload.");
+  }
+}
 
 export class Serializer {
   /** Type registry for managing custom types */
@@ -152,7 +149,7 @@ export class Serializer {
    * Deserialize a JSON string back to its original value.
    */
   public deserialize<T = unknown>(payload: string): T {
-    const parsed = JSON.parse(payload);
+    const parsed = parseJsonPayload(payload);
 
     if (!isGraphPayload(parsed)) {
       return deserializeLegacy(parsed, 0, this.runtimeOptions) as T;
@@ -178,105 +175,8 @@ export class Serializer {
    */
   public addType<TInstance, TSerialized>(
     typeDef: TypeDefinition<TInstance, TSerialized>,
-  ): void;
-  public addType<TJson = unknown, TInstance = unknown>(
-    name: string,
-    factory: (json: TJson) => TInstance,
-  ): void;
-  public addType<TInstance, TSerialized>(
-    arg1: string | TypeDefinition<TInstance, TSerialized>,
-    arg2?: (json: unknown) => unknown,
   ): void {
-    if (typeof arg1 === "string") {
-      this.typeRegistry.addType(arg1, arg2!);
-    } else {
-      this.typeRegistry.addType(arg1);
-    }
-  }
-
-  /**
-   * @internal - Exposed for testing RegExp safety validation
-   */
-  public readonly isRegExpPatternSafe = (pattern: string): boolean => {
-    return isRegExpPatternSafe(pattern);
-  };
-
-  /**
-   * @internal - Exposed for testing quantifier detection
-   */
-  public readonly isQuantifierAt = (
-    pattern: string,
-    index: number,
-  ): boolean => {
-    return isQuantifierAt(pattern, index);
-  };
-
-  /**
-   * @internal - Exposed for testing quantifier character detection
-   */
-  public readonly isQuantifierChar = (
-    char: string,
-    pattern: string,
-    index: number,
-  ): boolean => {
-    return isQuantifierChar(char, pattern, index);
-  };
-
-  /**
-   * @internal - Exposed for testing bounded quantifier detection
-   */
-  public readonly isBoundedQuantifier = (
-    pattern: string,
-    index: number,
-  ): boolean => {
-    return isBoundedQuantifier(pattern, index);
-  };
-
-  /**
-   * @internal - Exposed for test compatibility
-   */
-  public toNodeRecord(
-    nodes: Record<string, SerializedNode>,
-  ): Record<string, SerializedNode> {
-    return toNodeRecord(nodes, this.unsafeKeys);
-  }
-
-  /**
-   * @internal - Exposed for test compatibility
-   */
-  public deserializeValue(
-    value: SerializedValue,
-    context: DeserializationContext,
-    depth: number = 0,
-  ): unknown {
-    return deserializeValueFn(value, context, depth, this.runtimeOptions);
-  }
-
-  /**
-   * @internal - Exposed for test compatibility
-   */
-  public resolveReference(
-    id: string,
-    context: DeserializationContext,
-    depth: number = 0,
-  ): unknown {
-    return resolveReferenceFn(id, context, depth, this.runtimeOptions);
-  }
-
-  /**
-   * @internal - Exposed for test compatibility
-   */
-  public mergePlaceholder(placeholder: unknown, result: unknown): unknown {
-    return mergePlaceholderFn(placeholder, result, this.unsafeKeys);
-  }
-
-  /**
-   * @internal - Exposed for test compatibility
-   */
-  public isSerializedTypeRecord(
-    value: unknown,
-  ): value is { __type: string; value: unknown } {
-    return isSerializedTypeRecord(value);
+    this.typeRegistry.addType(typeDef);
   }
 
   private jsonStringify(value: unknown): string {

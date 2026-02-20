@@ -6,6 +6,7 @@ import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
 import * as exposureFetchModule from "../../http-fetch-tunnel.resource";
 import { TunnelError } from "../../globals/resources/tunnel/protocol";
+import { createMessageError } from "../../errors";
 
 type ExposureFetchState = {
   lastCfg?: any;
@@ -115,7 +116,7 @@ describe("http-client (universal)", () => {
     const helper = {
       id: "tests.errors.evret",
       throw: (data: any) => {
-        throw new Error("typed-evret:" + String(data?.code));
+        throw createMessageError("typed-evret:" + String(data?.code));
       },
       is: () => false,
       toString: () => "",
@@ -139,7 +140,8 @@ describe("http-client (universal)", () => {
       blob,
       "F2",
     );
-    const calls: Array<{ url: string; headers: any; body: any }> = [];
+    const calls: Array<{ url: string; headers: any; body: any; init: any }> =
+      [];
     const fetchMock = jest.fn(async (url: any, init?: any) => {
       // Touch formdata to exercise code path (if available)
       const fd = init?.body as FormData;
@@ -149,6 +151,7 @@ describe("http-client (universal)", () => {
         url: String(url),
         headers: init?.headers ?? {},
         body: init?.body,
+        init,
       });
       const env = { ok: true, result: "UP" };
       return {
@@ -168,7 +171,7 @@ describe("http-client (universal)", () => {
           use: () => ({ a: 1 }),
           serialize: (v: any) => JSON.stringify(v),
           parse: (s: string) => JSON.parse(s),
-          provide: (v: any, fn: any) => fn(),
+          provide: (_v: any, fn: any) => fn(),
           require: () => ({}) as any,
         } as unknown as any,
       ],
@@ -179,6 +182,85 @@ describe("http-client (universal)", () => {
     expect(onRequest).toHaveBeenCalledTimes(1);
     expect(calls[0].headers["x-runner-token"]).toBe("tok");
     expect(typeof calls[0].headers["x-runner-context"]).toBe("string");
+    expect(calls[0].init.redirect).toBe("error");
+  });
+
+  it("browser multipart fails fast when context serialization fails", async () => {
+    const blob = new Blob([new Uint8Array(Buffer.from("abc"))], {
+      type: "text/plain",
+    });
+    const file = createWebFile(
+      { name: "bad.txt", type: "text/plain" },
+      blob,
+      "FBAD",
+    );
+    const fetchMock = jest.fn(async () => {
+      return {
+        text: async () =>
+          new Serializer().stringify({ ok: true, result: "UP" }),
+      } as unknown as Response;
+    });
+    const client = createHttpClient({
+      baseUrl,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      serializer: new Serializer(),
+      contexts: [
+        {
+          id: "ctx.bad",
+          use: () => {
+            throw "missing context";
+          },
+          serialize: (v: unknown) => JSON.stringify(v),
+          parse: (s: string) => JSON.parse(s),
+          provide: (_v: unknown, fn: () => unknown) => fn(),
+          require: () => ({}) as any,
+        } as unknown as any,
+      ],
+    });
+
+    await expect(client.task("t.upload.bad", { file })).rejects.toThrow(
+      /Failed to serialize async context "ctx.bad"/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("browser multipart preserves Error context failures", async () => {
+    const blob = new Blob([new Uint8Array(Buffer.from("abc"))], {
+      type: "text/plain",
+    });
+    const file = createWebFile(
+      { name: "bad-err.txt", type: "text/plain" },
+      blob,
+      "FBAD_ERR",
+    );
+    const fetchMock = jest.fn(async () => {
+      return {
+        text: async () =>
+          new Serializer().stringify({ ok: true, result: "UP" }),
+      } as unknown as Response;
+    });
+    const client = createHttpClient({
+      baseUrl,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      serializer: new Serializer(),
+      contexts: [
+        {
+          id: "ctx.bad.error",
+          use: () => {
+            throw createMessageError("missing context error");
+          },
+          serialize: (v: unknown) => JSON.stringify(v),
+          parse: (s: string) => JSON.parse(s),
+          provide: (_v: unknown, fn: () => unknown) => fn(),
+          require: () => ({}) as any,
+        } as unknown as any,
+      ],
+    });
+
+    await expect(client.task("t.upload.bad.error", { file })).rejects.toThrow(
+      /Failed to serialize async context "ctx.bad.error"/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("browser multipart uses default filename when meta.name missing", async () => {
@@ -188,7 +270,7 @@ describe("http-client (universal)", () => {
     // Intentionally pass meta without name to exercise default filename branch
     const file = createWebFile({} as any, blob, "FDEF");
     const fetchMock = jest.fn(
-      async (url: any, init?: any) =>
+      async (_url: any, _init?: any) =>
         ({
           text: async () =>
             new Serializer().stringify({ ok: true, result: "DEF" }),
@@ -212,7 +294,7 @@ describe("http-client (universal)", () => {
       "FERR",
     );
     const serializer = new Serializer();
-    const fetchMock = jest.fn(async (url: any, init?: any) => {
+    const fetchMock = jest.fn(async (_url: any, _init?: any) => {
       const env = {
         ok: false,
         error: {
@@ -227,7 +309,7 @@ describe("http-client (universal)", () => {
     const helper = {
       id: "tests.errors.web",
       throw: (data: any) => {
-        throw new Error("typed-web:" + String(data?.code));
+        throw createMessageError("typed-web:" + String(data?.code));
       },
       is: () => false,
       toString: () => "",
@@ -253,7 +335,7 @@ describe("http-client (universal)", () => {
     const helper = {
       id: "tests.errors.ev",
       throw: (data: any) => {
-        throw new Error("typed-ev:" + String(data?.code));
+        throw createMessageError("typed-ev:" + String(data?.code));
       },
       is: () => false,
       toString: () => "",
@@ -367,7 +449,7 @@ describe("http-client (universal)", () => {
     const helper = {
       id: "tests.errors.app",
       throw: (data: any) => {
-        throw new Error("typed:" + String(data?.code));
+        throw createMessageError("typed:" + String(data?.code));
       },
       is: () => false,
       toString: () => "",
@@ -380,5 +462,36 @@ describe("http-client (universal)", () => {
     await expect(client.task("t.json", { a: 1 } as any)).rejects.toThrow(
       /typed:5/,
     );
+  });
+
+  it("does not remap errors that are already typed by the same registry helper", async () => {
+    const alreadyTyped = Object.assign(new Error("already-typed"), {
+      id: "tests.errors.app",
+      name: "tests.errors.app",
+      data: { code: 99, message: "x" },
+    });
+    exposureState.task.mockImplementationOnce(async () => {
+      throw alreadyTyped;
+    });
+
+    const helper = {
+      id: "tests.errors.app",
+      throw: jest.fn((data: any) => {
+        throw createMessageError("should-not-remap:" + String(data?.code));
+      }),
+      is: () => false,
+      toString: () => "",
+    } as any;
+
+    const client = createHttpClient({
+      baseUrl,
+      serializer: new Serializer(),
+      errorRegistry: new Map([["tests.errors.app", helper]]),
+    });
+
+    await expect(client.task("t.json", { a: 1 } as any)).rejects.toBe(
+      alreadyTyped,
+    );
+    expect(helper.throw).not.toHaveBeenCalled();
   });
 });

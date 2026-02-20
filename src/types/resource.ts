@@ -125,7 +125,7 @@ export interface IResourceDefinition<
    * @returns Promise<void>
    */
   dispose?: (
-    this: any,
+    this: unknown,
     value: TValue extends Promise<infer U> ? U : TValue,
     config: TConfig,
     dependencies: ResourceDependencyValuesType<TDependencies>,
@@ -159,6 +159,13 @@ export interface IResourceDefinition<
    * Create a private, mutable context shared between `init` and `dispose`.
    */
   context?: () => TContext;
+  /**
+   * Declares which registered items are visible outside this resource's
+   * registration subtree. When present, only listed items (and items registered
+   * by child resources that also export them) are accessible from outside.
+   * Omitting `exports` means everything is public (default).
+   */
+  exports?: Array<RegisterableItems>;
   /**
    * This is optional and used from an index resource to get the correct caller.
    * This is the reason we allow it here as well.
@@ -240,6 +247,11 @@ export interface IResource<
   [symbolForkedFrom]?: ResourceForkInfo;
   /** Normalized list of error ids declared via `throws`. */
   throws?: readonly string[];
+  /**
+   * Items visible outside this resource's subtree. When set, only listed items
+   * can be referenced from outside.
+   */
+  exports?: Array<RegisterableItems>;
   /** Return an optional dependency wrapper for this resource. */
   optional: () => IOptionalDependency<
     IResource<

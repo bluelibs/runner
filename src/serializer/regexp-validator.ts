@@ -1,3 +1,5 @@
+import { invalidPayloadError, validationError } from "./errors";
+
 /**
  * RegExp pattern safety validation for ReDoS protection.
  * Extracted from Serializer.ts as a standalone module.
@@ -12,6 +14,19 @@ export interface RegExpValidatorOptions {
   maxPatternLength: number;
   allowUnsafe: boolean;
 }
+
+const ALLOWED_REGEXP_FLAGS = new Set(["d", "g", "i", "m", "s", "u", "v", "y"]);
+
+const assertRegExpFlags = (flags: string): string => {
+  const seen = new Set<string>();
+  for (const flag of flags) {
+    if (!ALLOWED_REGEXP_FLAGS.has(flag) || seen.has(flag)) {
+      throw invalidPayloadError("Invalid RegExp flags");
+    }
+    seen.add(flag);
+  }
+  return flags;
+};
 
 /**
  * Check if a character is a quantifier at the given position.
@@ -81,12 +96,112 @@ export const isBoundedQuantifier = (
   return false;
 };
 
+const stripGroupPrefix = (groupBody: string): string => {
+  if (!groupBody.startsWith("?")) {
+    return groupBody;
+  }
+  if (
+    groupBody.startsWith("?:") ||
+    groupBody.startsWith("?=") ||
+    groupBody.startsWith("?!") ||
+    groupBody.startsWith("?>")
+  ) {
+    return groupBody.slice(2);
+  }
+  if (groupBody.startsWith("?<=") || groupBody.startsWith("?<!")) {
+    return groupBody.slice(3);
+  }
+  if (groupBody.startsWith("?<")) {
+    const closeIndex = groupBody.indexOf(">");
+    if (closeIndex > 1) {
+      return groupBody.slice(closeIndex + 1);
+    }
+  }
+  return groupBody;
+};
+
+const splitTopLevelAlternation = (groupBody: string): string[] => {
+  const branches: string[] = [];
+  let escaped = false;
+  let inCharClass = false;
+  let nestedDepth = 0;
+  let branchStart = 0;
+  let hasAlternation = false;
+
+  for (let index = 0; index < groupBody.length; index += 1) {
+    const char = groupBody[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (inCharClass) {
+      if (char === "]") {
+        inCharClass = false;
+      }
+      continue;
+    }
+    if (char === "[") {
+      inCharClass = true;
+      continue;
+    }
+    if (char === "(") {
+      nestedDepth += 1;
+      continue;
+    }
+    if (char === ")") {
+      if (nestedDepth > 0) {
+        nestedDepth -= 1;
+      }
+      continue;
+    }
+    if (char === "|" && nestedDepth === 0) {
+      branches.push(groupBody.slice(branchStart, index));
+      branchStart = index + 1;
+      hasAlternation = true;
+    }
+  }
+
+  if (!hasAlternation) {
+    return [];
+  }
+
+  branches.push(groupBody.slice(branchStart));
+  return branches;
+};
+
+const hasOverlappingAlternationPrefix = (groupBody: string): boolean => {
+  const normalizedBody = stripGroupPrefix(groupBody);
+  const branches = splitTopLevelAlternation(normalizedBody);
+  if (branches.length < 2) {
+    return false;
+  }
+
+  for (let i = 0; i < branches.length; i += 1) {
+    for (let j = i + 1; j < branches.length; j += 1) {
+      const left = branches[i];
+      const right = branches[j];
+      if (left.length === 0 || right.length === 0) {
+        return true;
+      }
+      if (left.startsWith(right) || right.startsWith(left)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
 /**
  * Check if a RegExp pattern is safe from ReDoS attacks.
  * Detects nested quantifiers which are a common ReDoS vector.
  */
 export const isRegExpPatternSafe = (pattern: string): boolean => {
-  const groupStack: Array<{ hasQuantifier: boolean }> = [];
+  const groupStack: Array<{ hasQuantifier: boolean; startIndex: number }> = [];
   let escaped = false;
   let inCharClass = false;
 
@@ -111,18 +226,27 @@ export const isRegExpPatternSafe = (pattern: string): boolean => {
       continue;
     }
     if (char === "(") {
-      groupStack.push({ hasQuantifier: false });
-      if (pattern[index + 1] === "?") {
-        index += 1;
-      }
+      groupStack.push({ hasQuantifier: false, startIndex: index });
       continue;
     }
     if (char === ")") {
       const group = groupStack.pop();
-      if (group?.hasQuantifier && isQuantifierAt(pattern, index + 1)) {
-        return false;
+      if (!group) {
+        continue;
       }
-      if (group?.hasQuantifier && groupStack.length > 0) {
+
+      const isQuantifiedGroup = isQuantifierAt(pattern, index + 1);
+      if (isQuantifiedGroup) {
+        if (group.hasQuantifier) {
+          return false;
+        }
+        const groupBody = pattern.slice(group.startIndex + 1, index);
+        if (hasOverlappingAlternationPrefix(groupBody)) {
+          return false;
+        }
+      }
+
+      if (group.hasQuantifier && groupStack.length > 0) {
         groupStack[groupStack.length - 1].hasQuantifier = true;
       }
       continue;
@@ -146,19 +270,22 @@ export const assertRegExpPayload = (
   options: RegExpValidatorOptions,
 ): RegExpPayload => {
   if (!value || typeof value !== "object") {
-    throw new Error("Invalid RegExp payload");
+    throw invalidPayloadError("Invalid RegExp payload");
   }
   const record = value as Record<string, unknown>;
   if (typeof record.pattern !== "string" || typeof record.flags !== "string") {
-    throw new Error("Invalid RegExp payload");
+    throw invalidPayloadError("Invalid RegExp payload");
   }
   if (record.pattern.length > options.maxPatternLength) {
-    throw new Error(
+    throw validationError(
       `RegExp pattern exceeds limit (${options.maxPatternLength})`,
     );
   }
   if (!options.allowUnsafe && !isRegExpPatternSafe(record.pattern)) {
-    throw new Error("Unsafe RegExp pattern");
+    throw validationError("Unsafe RegExp pattern");
   }
-  return { pattern: record.pattern, flags: record.flags };
+  return {
+    pattern: record.pattern,
+    flags: assertRegExpFlags(record.flags),
+  };
 };

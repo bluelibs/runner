@@ -9,6 +9,7 @@ import type {
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
+import { builderIncompleteError } from "../../../errors";
 import { defineTask } from "../../defineTask";
 import type { TaskFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState, ResolveInput } from "./types";
@@ -62,7 +63,7 @@ export function makeTaskBuilder<
         TTags,
         TMiddleware
       >(state, {
-        dependencies: nextDependencies as unknown as TDeps & TNewDeps,
+        dependencies: nextDependencies as TDeps & TNewDeps,
       });
 
       return makeTaskBuilder(next);
@@ -141,6 +142,10 @@ export function makeTaskBuilder<
       >(next);
     },
 
+    schema<TNewInput>(schema: IValidationSchema<TNewInput>) {
+      return builder.inputSchema(schema);
+    },
+
     resultSchema<TResolved>(schema: IValidationSchema<TResolved>) {
       const next = clone<
         TInput,
@@ -181,7 +186,7 @@ export function makeTaskBuilder<
       const wrapped = (input: unknown, deps: unknown) =>
         fn(
           input as ResolveInput<TInput, TNewInput>,
-          deps as unknown as DependencyValuesType<TDeps>, // Dependencies are injected at runtime
+          deps as DependencyValuesType<TDeps>, // Dependencies are injected at runtime
         );
 
       const next = clone<
@@ -241,6 +246,16 @@ export function makeTaskBuilder<
     },
 
     build() {
+      // Fail-fast: task definitions require a run handler.
+      if (state.run === undefined) {
+        builderIncompleteError.throw({
+          type: "task",
+          builderId: state.id,
+          missingFields: ["run"],
+          message: `Task "${state.id}" is incomplete`,
+        });
+      }
+
       const definition: ITaskDefinition<
         TInput,
         TOutput,

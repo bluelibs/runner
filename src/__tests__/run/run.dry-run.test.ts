@@ -1,5 +1,6 @@
 import { defineResource, defineTask } from "../../define";
 import { run } from "../../run";
+import { createMessageError } from "../../errors";
 
 /**
  * Dry-run behaviour tests
@@ -40,7 +41,7 @@ describe("run (dry-run)", () => {
       id: "dry.bad",
       // Throw during registration so error surfaces during run() (dry run still executes registration)
       register: () => {
-        throw new Error("Registration failed");
+        throw createMessageError("Registration failed");
 
         return [inner];
       },

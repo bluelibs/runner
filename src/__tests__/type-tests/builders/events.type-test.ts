@@ -1,5 +1,6 @@
 import { r } from "../../../";
 import { isOneOf, onAnyOf } from "../../../types/event";
+import type { IEventEmitReport } from "../../../types/event";
 
 // Type-only tests for builder event and hook typing.
 
@@ -37,6 +38,38 @@ import { isOneOf, onAnyOf } from "../../../types/event";
       deps.task();
       // @ts-expect-error
       deps.task2x;
+    })
+    .build();
+}
+
+// Scenario: event dependency emitter infers report type from literal options.
+{
+  const ev = r
+    .event("events.type.infer.report")
+    .payloadSchema<{ id: string }>({ parse: (x: any) => x })
+    .build();
+
+  r.task("events.type.infer.report.task")
+    .dependencies({ ev })
+    .run(async (_input, deps) => {
+      const directReport = await deps.ev({ id: "1" }, { report: true });
+      const reportValue: IEventEmitReport = directReport;
+      reportValue.failedListeners;
+
+      const literalOptions = {
+        report: true as const,
+        throwOnError: false,
+      };
+      const literalReport = await deps.ev({ id: "2" }, literalOptions);
+      const literalReportValue: IEventEmitReport = literalReport;
+      literalReportValue.errors;
+
+      const dynamicOptions: { report?: boolean } = {};
+      const dynamicResult = await deps.ev({ id: "3" }, dynamicOptions);
+      // @ts-expect-error dynamic report flag yields union
+      const mustBeReport: IEventEmitReport = dynamicResult;
+
+      return "ok";
     })
     .build();
 }

@@ -2,6 +2,11 @@ import { getPlatform } from "../platform";
 import { EventManager } from "./EventManager";
 import { defineEvent } from "../definers/defineEvent";
 import { IEventDefinition, IEventEmission } from "../defs";
+import {
+  queueDisposedError,
+  queueDeadlockError,
+  cancellationError,
+} from "../errors";
 
 export type QueueEventType =
   | "enqueue"
@@ -37,6 +42,7 @@ export type QueueEvent = {
 export class Queue {
   private tail: Promise<unknown> = Promise.resolve();
   private disposed = false;
+  private pendingTaskCount = 0;
   private abortController = new AbortController();
   private readonly eventManager = new EventManager();
   private nextTaskId = 1;
@@ -56,24 +62,33 @@ export class Queue {
   public run<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T> {
     // 1. refuse new work if we've disposed
     if (this.disposed) {
-      return Promise.reject(new Error("Queue has been disposed"));
+      try {
+        queueDisposedError.throw();
+      } catch (e) {
+        return Promise.reject(e);
+      }
     }
 
     // 2. detect dead‑locks (a queued task adding another queued task)
     if (this.hasAsyncLocalStorage && this.executionContext.getStore()) {
-      return Promise.reject(
-        new Error(
-          "Dead‑lock detected: a queued task attempted to queue another task",
-        ),
-      );
+      try {
+        queueDeadlockError.throw();
+      } catch (e) {
+        return Promise.reject(e);
+      }
     }
 
     const { signal } = this.abortController;
     const taskId = this.nextTaskId++;
+    this.pendingTaskCount += 1;
     this.emit("enqueue", taskId);
 
     // 3. chain task after the current tail
     const result = this.tail.then(() => {
+      if (signal.aborted) {
+        this.emit("cancel", taskId);
+        cancellationError.throw({ reason: "Operation was aborted" });
+      }
       this.emit("start", taskId);
       return this.hasAsyncLocalStorage
         ? this.executionContext.run(true, () => task(signal))
@@ -83,11 +98,19 @@ export class Queue {
     // 4. preserve the chain even if the task rejects (swallow internally)
     this.tail = result
       .then((value) => {
+        this.pendingTaskCount -= 1;
         this.emit("finish", taskId);
         return value;
       })
       .catch((error) => {
+        this.pendingTaskCount -= 1;
         this.emit("error", taskId, error as Error);
+      })
+      .finally(() => {
+        if (this.pendingTaskCount === 0) {
+          // Break the settled chain so long-lived queues do not retain every historical task.
+          this.tail = Promise.resolve();
+        }
       });
 
     return result;
@@ -111,7 +134,9 @@ export class Queue {
 
     // wait for everything already chained to settle
     await this.tail.catch(() => {});
+    this.abortController = new AbortController();
 
+    this.activeListeners.clear();
     this.eventManager.dispose();
   }
 
@@ -119,6 +144,7 @@ export class Queue {
     const id = ++this.listenerId;
     this.activeListeners.add(id);
     const eventDef = QueueEvents[type];
+    const listenerId = `queue-listener-${id}`;
 
     this.eventManager.addListener(
       eventDef,
@@ -128,13 +154,14 @@ export class Queue {
         }
       },
       {
-        id: `queue-listener-${id}`,
+        id: listenerId,
         filter: () => this.activeListeners.has(id),
       },
     );
 
     return () => {
       this.activeListeners.delete(id);
+      this.eventManager.removeListenerById(listenerId);
     };
   }
 
@@ -142,24 +169,31 @@ export class Queue {
     const id = ++this.listenerId;
     this.activeListeners.add(id);
     const eventDef = QueueEvents[type];
+    const listenerId = `queue-listener-once-${id}`;
 
     this.eventManager.addListener(
       eventDef,
       (emission: IEventEmission<QueueEvent>) => {
         if (this.activeListeners.has(id)) {
           this.activeListeners.delete(id);
+          this.eventManager.removeListenerById(listenerId);
           handler(emission.data);
         }
       },
       {
-        id: `queue-listener-once-${id}`,
+        id: listenerId,
         filter: () => this.activeListeners.has(id),
       },
     );
 
     return () => {
       this.activeListeners.delete(id);
+      this.eventManager.removeListenerById(listenerId);
     };
+  }
+
+  isIdle(): boolean {
+    return this.pendingTaskCount === 0;
   }
 
   private emit(type: QueueEventType, taskId: number, error?: Error): void {

@@ -126,10 +126,10 @@ export class PlatformAdapter implements IPlatformAdapter {
   async init() {
     return this.inner.init();
   }
-  onUncaughtException(handler: (error: any) => void) {
+  onUncaughtException(handler: (error: unknown) => void) {
     return this.inner.onUncaughtException(handler);
   }
-  onUnhandledRejection(handler: (reason: any) => void) {
+  onUnhandledRejection(handler: (reason: unknown) => void) {
     return this.inner.onUnhandledRejection(handler);
   }
   onShutdownSignal(handler: () => void) {

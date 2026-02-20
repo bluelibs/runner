@@ -34,9 +34,11 @@ export function defineTag<
 ): ITag<TConfig, TEnforceInputContract, TEnforceOutputContract> {
   const id = definition.id;
   const filePath = getCallerFile();
+  const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
   const foundation = {
     id,
-    meta: definition.meta,
+    meta: definition.meta ?? {},
     config: definition.config,
     configSchema: definition.configSchema,
   } as ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>;
@@ -63,8 +65,8 @@ export function defineTag<
         }
       }
       let config: TConfig;
-      if (typeof tagConfig === "object") {
-        if (typeof foundation.config === "object") {
+      if (isPlainObject(tagConfig)) {
+        if (isPlainObject(foundation.config)) {
           config = {
             ...foundation.config,
             ...tagConfig,
@@ -91,12 +93,9 @@ export function defineTag<
      * @returns
      */
     exists(target: ITaggable | TagType[]): boolean {
-      let currentTags: TagType[] = [];
-      if (Array.isArray(target)) {
-        currentTags = target;
-      } else {
-        currentTags = target.tags;
-      }
+      const currentTags: TagType[] = Array.isArray(target)
+        ? target
+        : target.tags;
 
       for (const candidate of currentTags) {
         if (candidate.id === id) {
@@ -112,12 +111,9 @@ export function defineTag<
      * @returns
      */
     extract(target: ITaggable | TagType[]): TConfig | undefined {
-      let currentTags: TagType[] = [];
-      if (Array.isArray(target)) {
-        currentTags = target;
-      } else {
-        currentTags = target.tags || [];
-      }
+      const currentTags: TagType[] = Array.isArray(target)
+        ? target
+        : target.tags || [];
 
       for (const candidate of currentTags) {
         if (candidate.id === id) {

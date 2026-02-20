@@ -16,14 +16,14 @@ Scope:
 
 The serializer accepts the following options:
 
-| Option                   | Type       | Default | Description                                                        |
-| ------------------------ | ---------- | ------- | ------------------------------------------------------------------ |
-| `maxDepth`               | `number`   | `1000`  | Maximum recursion depth for serialization/deserialization          |
-| `maxRegExpPatternLength` | `number`   | `1024`  | Maximum allowed RegExp pattern length                              |
-| `allowUnsafeRegExp`      | `boolean`  | `false` | Allow patterns that fail the safety heuristic (nested quantifiers) |
-| `allowedTypes`           | `string[]` | `null`  | Whitelist of type IDs allowed during deserialization (null = all)  |
-| `symbolPolicy`           | `string`   | `AllowAll` | Symbol deserialization policy: `AllowAll`, `WellKnownOnly`, `Disabled` |
-| `pretty`                 | `boolean`  | `false` | Enable indented JSON output                                        |
+| Option                   | Type       | Default    | Description                                                            |
+| ------------------------ | ---------- | ---------- | ---------------------------------------------------------------------- |
+| `maxDepth`               | `number`   | `1000`     | Maximum recursion depth for serialization/deserialization              |
+| `maxRegExpPatternLength` | `number`   | `1024`     | Maximum allowed RegExp pattern length                                  |
+| `allowUnsafeRegExp`      | `boolean`  | `false`    | Allow patterns that fail the RegExp safety heuristic                   |
+| `allowedTypes`           | `string[]` | `null`     | Whitelist of type IDs allowed during deserialization (null = all)      |
+| `symbolPolicy`           | `string`   | `allow-all` | Symbol deserialization policy: `allow-all`, `well-known-only`, `disabled` |
+| `pretty`                 | `boolean`  | `false`    | Enable indented JSON output                                            |
 
 ---
 
@@ -31,22 +31,22 @@ The serializer accepts the following options:
 
 The serializer understands two payload shapes:
 
-1. **Legacy tree format** (plain JSON)
+1. **Tree format** (plain JSON, non-graph)
 2. **Graph format** (identity-preserving, supports cycles)
 
 The implementation chooses graph format when it needs to preserve identity or represent cycles; otherwise it may emit a plain JSON value.
 
 ---
 
-## Legacy tree format
+## Tree format
 
-Any JSON value is a valid legacy payload:
+Any JSON value is a valid tree payload:
 
 - primitives: `string | number | boolean | null`
 - arrays
 - objects
 
-### Typed values (legacy)
+### Typed values (tree format)
 
 Typed values are encoded as:
 
@@ -56,9 +56,15 @@ Typed values are encoded as:
 
 The type id is resolved via the internal type registry.
 
-### Safety rules (legacy)
+To avoid collisions with plain user objects in tree mode (`stringify`/`parse`),
+object keys named `__type` and `__graph` are escaped on serialization and
+unescaped during tree-format deserialization.
 
-When deserializing legacy objects, keys listed in the unsafe-key set are filtered out to prevent prototype pollution:
+- Escape prefix: `$runner.escape::`
+
+### Safety rules (all formats)
+
+When deserializing payload objects (tree or graph), keys listed in the unsafe-key set are filtered out to prevent prototype pollution:
 
 - `__proto__`
 - `constructor`
@@ -96,7 +102,10 @@ References are objects of the shape:
 
 During graph deserialization, references are resolved against `nodes`.
 
-Safety rule: unsafe reference ids (`__proto__`, `constructor`, `prototype`) are rejected.
+Safety rules:
+
+- reference objects must be canonical (`{ "__ref": "..." }` with no extra fields)
+- unsafe reference ids (`__proto__`, `constructor`, `prototype`) are rejected
 
 ### Node kinds
 
@@ -118,6 +127,7 @@ Each `nodes[id]` value is a node record with a `kind` discriminator:
 ```
 
 - `value` is an array of `SerializedValue`.
+- malformed array-node payloads (non-array `value`) fail fast.
 
 #### `type`
 
@@ -128,7 +138,7 @@ Each `nodes[id]` value is a node record with a `kind` discriminator:
 - `type` is the type id in the registry.
 - `value` is the serialized payload for that type, which is recursively deserialized.
 
-Typed values can also appear inline (outside `nodes`) using the legacy type-record shape:
+Typed values can also appear inline (outside `nodes`) using the tree type-record shape:
 
 ```json
 { "__type": "RegExp", "value": { "pattern": "test", "flags": "gi" } }
@@ -140,6 +150,114 @@ Custom types can use one of two serialization strategies:
 
 - **identity** (default): The type is stored as a graph node, preserving object identity across multiple references.
 - **value**: The type is serialized inline without identity tracking. Used for immutable/value-like types (e.g., `Date`, `RegExp`).
+
+### Type registration (`addType()`)
+
+Type registration controls how values are mapped to and from the wire shapes:
+
+- inline typed record: `{ "__type": "MyType", "value": ... }` (value strategy)
+- typed node in `nodes`: `{ kind: "type", type: "MyType", value: ... }` (identity strategy)
+
+Custom type registration is explicit: provide `id`, `is`, `serialize`, and
+`deserialize` via `addType({ ... })` (see `src/serializer/types.ts`).
+
+#### Recommended: explicit type definition
+
+Use an explicit `TypeDefinition` when you want the contract to be obvious and
+fully controlled (recommended for docs and library code).
+
+```ts
+import { Serializer } from "@bluelibs/runner";
+
+type DistanceUnit = "m" | "km";
+
+class Distance {
+  constructor(
+    public value: number,
+    public unit: DistanceUnit,
+  ) {}
+}
+
+const serializer = new Serializer();
+
+serializer.addType<Distance, { value: number; unit: DistanceUnit }>({
+  id: "Distance",
+  is: (value): value is Distance => value instanceof Distance,
+  serialize: (d) => ({ value: d.value, unit: d.unit }),
+  deserialize: (payload) => {
+    if (
+      typeof payload.value !== "number" ||
+      (payload.unit !== "m" && payload.unit !== "km")
+    ) {
+      throw new Error("Invalid Distance payload");
+    }
+    return new Distance(payload.value, payload.unit);
+  },
+  strategy: "value",
+});
+```
+
+Notes:
+
+- `is(...)` is a runtime predicate; it can use `instanceof`, duck-typing, or any other guard.
+- Prefer validating input payloads in `deserialize(...)` and failing fast on unexpected shapes.
+- Use `strategy: "ref"` (and optionally `create()`) when you need identity preservation across references/cycles.
+
+#### About `addType<...>` generics
+
+You often do not need to write generics explicitly, because TypeScript can infer
+them from your `serialize` and `deserialize` functions in the object form.
+
+```ts
+serializer.addType({
+  id: "Distance",
+  is: (value): value is Distance => value instanceof Distance,
+  serialize: (d) => ({ value: d.value, unit: d.unit }),
+  deserialize: (payload) => new Distance(payload.value, payload.unit),
+  strategy: "value",
+});
+```
+
+Explicit generics are still useful when you want stricter intent in docs or when
+inference becomes too broad in complex definitions.
+
+#### Non-class objects are supported
+
+`is(...)` is just a runtime predicate. It does not require classes or
+`instanceof`. You can use duck typing for plain objects.
+
+```ts
+type Money = {
+  kind: "money";
+  amount: number;
+  currency: "USD" | "EUR";
+};
+
+serializer.addType({
+  id: "Money",
+  is: (value): value is Money => {
+    if (!value || typeof value !== "object") return false;
+    const rec = value as Record<string, unknown>;
+    return (
+      rec.kind === "money" &&
+      typeof rec.amount === "number" &&
+      (rec.currency === "USD" || rec.currency === "EUR")
+    );
+  },
+  serialize: (m) => m,
+  deserialize: (payload) => {
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      (payload as Record<string, unknown>).kind !== "money"
+    ) {
+      throw new Error("Invalid Money payload");
+    }
+    return payload as Money;
+  },
+  strategy: "value",
+});
+```
 
 ### Circular reference handling
 
@@ -161,6 +279,7 @@ These rules are applied by both formats:
 - `undefined` is preserved via `{ "__type": "Undefined", "value": null }`.
 - non-finite numbers (`NaN`, `Infinity`, `-Infinity`) are preserved via `{ "__type": "NonFiniteNumber", "value": "NaN" | "Infinity" | "-Infinity" }`.
 - `bigint` is preserved via `{ "__type": "BigInt", "value": "123" }`.
+  - deserialization validates payload format as an integer string before calling `BigInt(...)`
 - `symbol` is supported for:
   - **Global symbols**: `Symbol.for(key)` is preserved via `{ "__type": "Symbol", "value": { "kind": "For", "key": "..." } }`.
   - **Well-known symbols**: Standard symbols (e.g. `Symbol.iterator`) are preserved via `{ "__type": "Symbol", "value": { "kind": "WellKnown", "key": "..." } }`.
@@ -182,14 +301,26 @@ Deserialization is guarded by a depth counter:
 RegExp payloads are validated:
 
 - `maxRegExpPatternLength` defaults to **1024**; `Infinity` disables length checking.
-- A safety heuristic rejects patterns with nested quantifiers (e.g., `(a+)+`) unless `allowUnsafeRegExp` is `true`.
+- A safety heuristic rejects patterns with nested quantifiers (e.g., `(a+)+`) and dangerous quantified overlapping alternations (e.g., `^(a|aa)+$`) unless `allowUnsafeRegExp` is `true`.
+- `flags` must use a supported unique subset of `dgimsuvy`.
 
 ### Security protections
 
 - **Prototype pollution**: Keys `__proto__`, `constructor`, `prototype` are filtered from all objects.
 - **Unknown types**: Type IDs must match registered types exactly; no dynamic resolution.
 - **Type whitelist**: When `allowedTypes` is set, only listed types are allowed during deserialization.
-- **Reference safety**: Reference IDs matching unsafe keys are rejected.
+- **Reference safety**: Reference objects must be canonical (`{ "__ref": "..." }`) and unsafe reference IDs are rejected.
+- **RegExp hardening**: Pattern length limits, safety heuristic checks, strict flag validation (`dgimsuvy` unique set), and fail-fast invalid payload errors.
+- **BigInt hardening**: Payload must be a valid integer string before `BigInt(...)` is evaluated.
+- **Error custom field hardening**: Reserved/prototype-pollution/method-shadowing keys are filtered from Error custom fields.
+- **Type registration hardening**: `addType()` validates `id`, `is`, `serialize`, and `deserialize` at runtime.
+
+### Security model (current behavior)
+
+1. `deserialize()` interprets objects matching the graph envelope shape (`__graph: true`, `root`, `nodes`) as protocol payloads.
+2. If payloads do not match protocol guards, deserialization falls back to tree-format handling.
+3. Tree-format object-key escaping for `__type` and `__graph` protects `stringify`/`parse` round-trips for plain user objects.
+4. Malformed protocol payloads in guarded paths fail fast with explicit errors (for example invalid refs, invalid array node payloads, invalid type payloads).
 
 ---
 

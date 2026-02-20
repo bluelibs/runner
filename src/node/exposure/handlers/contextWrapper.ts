@@ -10,6 +10,10 @@ export interface ExposureContextDeps {
   serializer: SerializerLike;
 }
 
+interface AsyncContextHydrationOptions {
+  allowAsyncContext?: boolean;
+}
+
 /**
  * Builds a composed provider: first user async contexts (if any), then exposure context
  */
@@ -19,9 +23,11 @@ export const withExposureContext = <T>(
   controller: AbortController,
   deps: ExposureContextDeps,
   fn: () => Promise<T>,
+  options?: AsyncContextHydrationOptions,
 ): Promise<T> => {
   const { store, router, serializer } = deps;
   const url = requestUrl(req);
+  const allowAsyncContext = options?.allowAsyncContext !== false;
 
   // Read context header if present
   const rawHeader = req.headers["x-runner-context"];
@@ -30,7 +36,7 @@ export const withExposureContext = <T>(
   else if (typeof rawHeader === "string") headerText = rawHeader;
 
   let userWrapped = fn;
-  if (headerText) {
+  if (allowAsyncContext && headerText) {
     try {
       const map = serializer.parse<Record<string, string>>(headerText);
       // Compose provides for known contexts present in the map
@@ -75,8 +81,10 @@ export const withUserContexts = <T>(
   req: IncomingMessage,
   deps: Pick<ExposureContextDeps, "store" | "serializer">,
   fn: () => Promise<T>,
+  options?: AsyncContextHydrationOptions,
 ): Promise<T> => {
   const { store, serializer } = deps;
+  const allowAsyncContext = options?.allowAsyncContext !== false;
 
   const rawHeader = req.headers["x-runner-context"];
   let headerText: string | undefined;
@@ -84,7 +92,7 @@ export const withUserContexts = <T>(
   else if (typeof rawHeader === "string") headerText = rawHeader;
 
   let userWrapped = fn;
-  if (headerText) {
+  if (allowAsyncContext && headerText) {
     try {
       const map = serializer.parse<Record<string, string>>(headerText);
       for (const [id, ctx] of store.asyncContexts.entries()) {

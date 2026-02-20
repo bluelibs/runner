@@ -28,9 +28,12 @@ export function clone<
   patch: Partial<BuilderState<TNextDeps, TNextOn, TNextMeta>>,
 ): BuilderState<TNextDeps, TNextOn, TNextMeta> {
   type NextState = BuilderState<TNextDeps, TNextOn, TNextMeta>;
-  return Object.freeze({
-    ...(s as unknown as NextState),
+  const next = {
+    ...s,
     ...patch,
+  };
+  return Object.freeze({
+    ...next,
   }) as NextState;
 }
 
@@ -53,7 +56,7 @@ export function mergeDependencies<
   type Result = (TExisting & TNew) | (() => TExisting & TNew);
 
   if (override || !existing) {
-    return addition as unknown as Result;
+    return addition as Result;
   }
 
   if (isFnExisting && isFnAddition) {

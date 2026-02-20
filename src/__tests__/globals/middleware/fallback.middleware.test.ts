@@ -1,6 +1,7 @@
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { fallbackTaskMiddleware } from "../../../globals/middleware/fallback.middleware";
+import { createMessageError } from "../../../errors";
 
 describe("Fallback Middleware", () => {
   it("should return fallback value when task fails", async () => {
@@ -8,7 +9,7 @@ describe("Fallback Middleware", () => {
       id: "fallback.value",
       middleware: [fallbackTaskMiddleware.with({ fallback: "fallback-value" })],
       run: async () => {
-        throw new Error("Original error");
+        throw createMessageError("Original error");
       },
     });
 
@@ -58,8 +59,8 @@ describe("Fallback Middleware", () => {
             `fixed:${err.message}:${input}`,
         }),
       ],
-      run: async (input: string) => {
-        throw new Error("fail");
+      run: async (_input: string) => {
+        throw createMessageError("fail");
       },
     });
 
@@ -86,8 +87,8 @@ describe("Fallback Middleware", () => {
     const task = defineTask({
       id: "fallback.task",
       middleware: [fallbackTaskMiddleware.with({ fallback: planB })],
-      run: async (input: string) => {
-        throw new Error("fail");
+      run: async (_input: string) => {
+        throw createMessageError("fail");
       },
     });
 

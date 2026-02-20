@@ -94,8 +94,8 @@ const audit = r.middleware
 const expensive = r
   .task("tenant.tasks.expensive")
   .middleware([
-    globals.middleware.retry.with({ retries: 2 }),
-    globals.middleware.timeout.with({ ttl: 5000 }),
+    globals.middleware.task.retry.with({ retries: 2 }),
+    globals.middleware.task.timeout.with({ ttl: 5000 }),
     audit,
   ])
   .run(async () => {

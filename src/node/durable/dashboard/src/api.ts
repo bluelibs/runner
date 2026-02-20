@@ -1,4 +1,5 @@
 import { getDashboardBasePath } from "./basePath";
+import { dashboardApiRequestError } from "../../../../errors";
 
 export const ExecutionStatus = {
   Pending: "pending",
@@ -90,9 +91,9 @@ export const api = {
 
       const res = await fetch(url);
       if (!res.ok) {
-        throw new Error(
-          await extractErrorMessage(res, "Failed to fetch executions"),
-        );
+        dashboardApiRequestError.throw({
+          message: await extractErrorMessage(res, "Failed to fetch executions"),
+        });
       }
       return res.json();
     },
@@ -100,9 +101,9 @@ export const api = {
       const apiBase = getApiBasePath();
       const res = await fetch(`${apiBase}/executions/${id}`);
       if (!res.ok) {
-        throw new Error(
-          await extractErrorMessage(res, "Failed to fetch execution"),
-        );
+        dashboardApiRequestError.throw({
+          message: await extractErrorMessage(res, "Failed to fetch execution"),
+        });
       }
       return res.json();
     },
@@ -116,9 +117,9 @@ export const api = {
         body: JSON.stringify({ executionId }),
       });
       if (!res.ok) {
-        throw new Error(
-          await extractErrorMessage(res, "Failed to retry rollback"),
-        );
+        dashboardApiRequestError.throw({
+          message: await extractErrorMessage(res, "Failed to retry rollback"),
+        });
       }
     },
     skipStep: async (executionId: string, stepId: string) => {
@@ -129,7 +130,9 @@ export const api = {
         body: JSON.stringify({ executionId, stepId }),
       });
       if (!res.ok) {
-        throw new Error(await extractErrorMessage(res, "Failed to skip step"));
+        dashboardApiRequestError.throw({
+          message: await extractErrorMessage(res, "Failed to skip step"),
+        });
       }
     },
     forceFail: async (executionId: string, reason: string) => {
@@ -140,7 +143,9 @@ export const api = {
         body: JSON.stringify({ executionId, reason }),
       });
       if (!res.ok) {
-        throw new Error(await extractErrorMessage(res, "Failed to force fail"));
+        dashboardApiRequestError.throw({
+          message: await extractErrorMessage(res, "Failed to force fail"),
+        });
       }
     },
     editState: async (
@@ -155,7 +160,9 @@ export const api = {
         body: JSON.stringify({ executionId, stepId, state: newState }),
       });
       if (!res.ok) {
-        throw new Error(await extractErrorMessage(res, "Failed to edit state"));
+        dashboardApiRequestError.throw({
+          message: await extractErrorMessage(res, "Failed to edit state"),
+        });
       }
     },
   },

@@ -1,9 +1,6 @@
 import { describe, it, expect } from "@jest/globals";
-import {
-  Serializer,
-  SymbolPolicy,
-  SymbolPolicyErrorMessage,
-} from "../../serializer/index";
+import { Serializer, SymbolPolicyErrorMessage } from "../../serializer/index";
+import type { SymbolPolicy } from "../../serializer/types";
 import { SpecialTypeId } from "../../serializer/special-values";
 import { SymbolPayloadKind } from "../../serializer/builtins";
 
@@ -17,9 +14,9 @@ describe("Serializer Symbol Policy", () => {
     );
   });
 
-  it("rejects global symbols when policy is WellKnownOnly", () => {
+  it("rejects global symbols when policy is well-known-only", () => {
     const serializer = new Serializer({
-      symbolPolicy: SymbolPolicy.WellKnownOnly,
+      symbolPolicy: "well-known-only",
     });
     const payload = JSON.stringify({
       __type: SpecialTypeId.Symbol,
@@ -31,9 +28,9 @@ describe("Serializer Symbol Policy", () => {
     );
   });
 
-  it("allows well-known symbols when policy is WellKnownOnly", () => {
+  it("allows well-known symbols when policy is well-known-only", () => {
     const serializer = new Serializer({
-      symbolPolicy: SymbolPolicy.WellKnownOnly,
+      symbolPolicy: "well-known-only",
     });
     const payload = JSON.stringify({
       __type: SpecialTypeId.Symbol,
@@ -43,9 +40,9 @@ describe("Serializer Symbol Policy", () => {
     expect(serializer.deserialize(payload)).toBe(Symbol.iterator);
   });
 
-  it("rejects all symbols when policy is Disabled", () => {
+  it("rejects all symbols when policy is disabled", () => {
     const serializer = new Serializer({
-      symbolPolicy: SymbolPolicy.Disabled,
+      symbolPolicy: "disabled",
     });
     const payload = JSON.stringify({
       __type: SpecialTypeId.Symbol,

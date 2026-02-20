@@ -6,6 +6,7 @@ import {
   ICacheInstance,
   journalKeys as cacheJournalKeys,
 } from "../../globals/middleware/cache.middleware";
+import { createMessageError } from "../../errors";
 
 enum CacheNoHasId {
   App = "cache.nohas.app",
@@ -79,7 +80,7 @@ describe("Caching System", () => {
 
       const customCacheFactoryTask = defineTask({
         id: "globals.tasks.cacheFactory",
-        run: async (options: any) => {
+        run: async (_options: any) => {
           return new CustomCache();
         },
       });
@@ -142,7 +143,7 @@ describe("Caching System", () => {
 
       const redisCacheFactoryTask = defineTask({
         id: "globals.tasks.cacheFactory",
-        run: async (options: any) => {
+        run: async (_options: any) => {
           return new RedisLikeCache();
         },
       });
@@ -250,6 +251,61 @@ describe("Caching System", () => {
           const second = await testTask();
 
           expect(first).toBe(second);
+          expect(callCount).toBe(1);
+        },
+      });
+
+      await run(app);
+    });
+
+    it("should await async has() implementations", async () => {
+      class AsyncHasCache implements ICacheInstance {
+        private store = new Map<string, number>();
+
+        get(key: string) {
+          return this.store.get(key);
+        }
+
+        set(key: string, value: number) {
+          this.store.set(key, value);
+        }
+
+        async has(key: string) {
+          await Promise.resolve();
+          return this.store.has(key);
+        }
+
+        clear() {
+          this.store.clear();
+        }
+      }
+
+      const cacheFactoryTask = defineTask({
+        id: "globals.tasks.cacheFactory",
+        run: async () => new AsyncHasCache(),
+      });
+
+      let callCount = 0;
+      const testTask = defineTask({
+        id: "cache.async-has.task",
+        middleware: [cacheMiddleware],
+        run: async () => {
+          callCount += 1;
+          return callCount;
+        },
+      });
+
+      const app = defineResource({
+        id: "cache.async-has.app",
+        register: [cacheResource, cacheMiddleware, testTask],
+        overrides: [cacheFactoryTask],
+        dependencies: { testTask },
+        async init(_, { testTask }) {
+          const first = await testTask();
+          const second = await testTask();
+
+          expect(first).toBe(1);
+          expect(second).toBe(1);
           expect(callCount).toBe(1);
         },
       });
@@ -378,7 +434,7 @@ describe("Caching System", () => {
         middleware: [cacheMiddleware],
         run: async () => {
           callCount++;
-          throw new Error("Failed");
+          throw createMessageError("Failed");
         },
       });
 
@@ -408,7 +464,7 @@ describe("Caching System", () => {
         ],
         run: async () => {
           callCount++;
-          throw new Error("Cached error");
+          throw createMessageError("Cached error");
         },
       });
 
@@ -420,6 +476,60 @@ describe("Caching System", () => {
           await expect(errorTask()).rejects.toThrow("Cached error");
           await expect(errorTask()).rejects.toThrow("Cached error");
           expect(callCount).toBe(2); // Called twice since errors aren't cached
+        },
+      });
+
+      await run(app);
+    });
+
+    it("should return task result even when cache set fails", async () => {
+      class SetFailingCache implements ICacheInstance {
+        private store = new Map<string, number>();
+
+        get(key: string) {
+          return this.store.get(key);
+        }
+
+        set(_key: string, _value: number) {
+          throw createMessageError("cache write failed");
+        }
+
+        has(key: string) {
+          return this.store.has(key);
+        }
+
+        clear() {
+          this.store.clear();
+        }
+      }
+
+      const cacheFactoryTask = defineTask({
+        id: "globals.tasks.cacheFactory",
+        run: async () => new SetFailingCache(),
+      });
+
+      let callCount = 0;
+      const task = defineTask({
+        id: "cache.set-fail-open.task",
+        middleware: [cacheMiddleware],
+        run: async () => {
+          callCount += 1;
+          return callCount;
+        },
+      });
+
+      const app = defineResource({
+        id: "cache.set-fail-open.app",
+        register: [cacheResource, cacheMiddleware, task],
+        overrides: [cacheFactoryTask],
+        dependencies: { task },
+        async init(_, { task }) {
+          const first = await task();
+          const second = await task();
+
+          expect(first).toBe(1);
+          expect(second).toBe(2);
+          expect(callCount).toBe(2);
         },
       });
 
@@ -481,7 +591,7 @@ describe("Caching System", () => {
 
     const asyncCacheFactoryTask = defineTask({
       id: "globals.tasks.cacheFactory",
-      run: async (options: any) => {
+      run: async (_options: any) => {
         return new AsyncMockCache();
       },
     });
@@ -545,6 +655,36 @@ describe("Caching System", () => {
 
           expect(result1).toBe(result2);
           expect(JSON.parse(result1)).toEqual(complexInput);
+        },
+      });
+
+      await run(app);
+    });
+
+    it("should cache circular and BigInt inputs with default keyBuilder", async () => {
+      type CircularBigIntInput = { id: bigint; self?: unknown };
+      const runSpy = jest.fn(async (_input: CircularBigIntInput) => "ok");
+
+      const testTask = defineTask({
+        id: "circular.bigint.task",
+        middleware: [cacheMiddleware],
+        run: async (input: CircularBigIntInput) => runSpy(input),
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [cacheResource, cacheMiddleware, testTask],
+        dependencies: { testTask },
+        async init(_, { testTask }) {
+          const input = { id: 1n } as CircularBigIntInput;
+          input.self = input;
+
+          const result1 = await testTask(input);
+          const result2 = await testTask(input);
+
+          expect(result1).toBe("ok");
+          expect(result2).toBe("ok");
+          expect(runSpy).toHaveBeenCalledTimes(1);
         },
       });
 
@@ -696,6 +836,53 @@ describe("Caching System", () => {
 
       await run(app);
     });
+
+    it("creates only one cache instance under concurrent first access", async () => {
+      class TestCache implements ICacheInstance {
+        private store = new Map<string, any>();
+        get(key: string) {
+          return this.store.get(key);
+        }
+        set(key: string, value: any) {
+          this.store.set(key, value);
+        }
+        clear() {
+          this.store.clear();
+        }
+      }
+
+      let factoryCalls = 0;
+      const slowFactoryTask = defineTask({
+        id: "globals.tasks.cacheFactory",
+        run: async () => {
+          factoryCalls += 1;
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return new TestCache();
+        },
+      });
+
+      const task = defineTask({
+        id: "concurrent.cache.instance.task",
+        middleware: [cacheMiddleware],
+        run: async (input: number) => input * 10,
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [cacheResource, cacheMiddleware, task],
+        overrides: [slowFactoryTask],
+        dependencies: { task, cache: cacheResource },
+        async init(_, { task, cache }) {
+          const [a, b] = await Promise.all([task(1), task(2)]);
+          expect(a).toBe(10);
+          expect(b).toBe(20);
+          expect(factoryCalls).toBe(1);
+          expect(cache.map.size).toBe(1);
+        },
+      });
+
+      await run(app);
+    });
   });
 
   describe("Memory and Disposal", () => {
@@ -705,12 +892,12 @@ describe("Caching System", () => {
         disposed = false;
 
         async get(key: string) {
-          if (this.disposed) throw new Error("Cache disposed");
+          if (this.disposed) throw createMessageError("Cache disposed");
           return this.store.get(key);
         }
 
         async set(key: string, value: any) {
-          if (this.disposed) throw new Error("Cache disposed");
+          if (this.disposed) throw createMessageError("Cache disposed");
           this.store.set(key, value);
         }
 
@@ -722,7 +909,7 @@ describe("Caching System", () => {
 
       const disposableCacheFactoryTask = defineTask({
         id: "globals.tasks.cacheFactory",
-        run: async (options: any) => {
+        run: async (_options: any) => {
           return new AsyncDisposableCache();
         },
       });
@@ -808,7 +995,7 @@ describe("Caching System", () => {
 
       const invalidCacheFactoryTask = defineTask({
         id: "globals.tasks.cacheFactory",
-        run: async (options: any) => {
+        run: async (_options: any) => {
           return new InvalidCache() as any;
         },
       });

@@ -12,6 +12,7 @@ import {
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
+import { normalizeThrows } from "../tools/throws";
 
 export function defineTaskMiddleware<
   TConfig = any,
@@ -39,6 +40,10 @@ export function defineTaskMiddleware<
     configSchema: middlewareDef.configSchema,
     ...middlewareDef,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
+    throws: normalizeThrows(
+      { kind: "task-middleware", id: middlewareDef.id },
+      middlewareDef.throws,
+    ),
   } as ITaskMiddleware<
     TConfig,
     TEnforceInputContract,
@@ -61,25 +66,54 @@ export function defineTaskMiddleware<
     TEnforceOutputContract,
     TDependencies
   > => {
+    const resolveCurrent = (
+      candidate: unknown,
+    ): ITaskMiddleware<
+      TConfig,
+      TEnforceInputContract,
+      TEnforceOutputContract,
+      TDependencies
+    > & {
+      [symbolMiddlewareConfigured]?: true;
+    } => {
+      if (
+        candidate &&
+        typeof candidate === "object" &&
+        symbolTaskMiddleware in candidate
+      ) {
+        return candidate as ITaskMiddleware<
+          TConfig,
+          TEnforceInputContract,
+          TEnforceOutputContract,
+          TDependencies
+        > & {
+          [symbolMiddlewareConfigured]?: true;
+        };
+      }
+      return obj;
+    };
+
     return {
       ...obj,
-      with: (config: TConfig) => {
-        if (obj.configSchema) {
+      with: function (config: TConfig) {
+        const current = resolveCurrent(this);
+
+        if (current.configSchema) {
           try {
-            config = obj.configSchema.parse(config);
+            config = current.configSchema.parse(config);
           } catch (error) {
             validationError.throw({
               subject: "Middleware config",
-              id: obj.id,
+              id: current.id,
               originalError:
                 error instanceof Error ? error : new Error(String(error)),
             });
           }
         }
         return wrap({
-          ...obj,
+          ...current,
           [symbolMiddlewareConfigured]: true,
-          config: mergeMiddlewareConfig(obj.config as TConfig, config),
+          config: mergeMiddlewareConfig(current.config as TConfig, config),
         } satisfies ITaskMiddlewareConfigured<
           TConfig,
           TEnforceInputContract,

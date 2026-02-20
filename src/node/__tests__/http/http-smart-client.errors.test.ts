@@ -4,6 +4,7 @@ import { createHttpSmartClient } from "../../http/http-smart-client.model";
 import { createHttpMixedClient } from "../../http/http-mixed-client";
 import { Serializer } from "../../../serializer";
 import { createNodeFile } from "../../files";
+import { createMessageError } from "../../../errors";
 
 function asIncoming(
   res: Readable,
@@ -34,7 +35,7 @@ describe("http smart/mixed client typed errors", () => {
   const helper = {
     id: "tests.errors.node",
     throw: (data: any) => {
-      throw new Error("typed:" + String(data?.code));
+      throw createMessageError("typed:" + String(data?.code));
     },
     is: () => false,
     toString: () => "",
@@ -47,7 +48,7 @@ describe("http smart/mixed client typed errors", () => {
   it("rethrows typed app error via errorRegistry on JSON path", async () => {
     const reqSpy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((_opts: any, cb: any) => {
         const env = {
           ok: false,
           error: {
@@ -78,7 +79,7 @@ describe("http smart/mixed client typed errors", () => {
   it("rethrows typed app error via errorRegistry on smart path (mixed client)", async () => {
     const reqSpy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((_opts: any, cb: any) => {
         const env = {
           ok: false,
           error: {
@@ -114,7 +115,7 @@ describe("http smart/mixed client typed errors", () => {
   it("rethrows typed app error via errorRegistry on event path", async () => {
     const reqSpy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((_opts: any, cb: any) => {
         const env = {
           ok: false,
           error: {

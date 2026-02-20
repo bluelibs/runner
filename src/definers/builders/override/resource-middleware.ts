@@ -9,6 +9,8 @@ import type {
 import { defineOverride } from "../../defineOverride";
 import type { ResourceMiddlewareFluentBuilder } from "../middleware/resource.interface";
 import { mergeArray, mergeDependencies } from "../middleware/utils";
+import type { ThrowsList } from "../../../types/error";
+import { normalizeThrows } from "../../../tools/throws";
 
 type AnyResourceMiddleware = IResourceMiddleware<any, any, any, any>;
 
@@ -17,7 +19,16 @@ type ResourceMiddlewareOverrideState<
   In,
   Out,
   D extends DependencyMapType,
-> = Readonly<IResourceMiddlewareDefinition<C, In, Out, D>>;
+> = Readonly<{
+  id: string;
+  dependencies: D | ((config: C) => D);
+  configSchema: IValidationSchema<C> | undefined;
+  run: IResourceMiddlewareDefinition<any, In, Out, any>["run"];
+  meta?: IMiddlewareMeta;
+  tags?: TagType[];
+  everywhere?: IResourceMiddlewareDefinition<C, In, Out, D>["everywhere"];
+  throws?: ThrowsList;
+}>;
 
 function cloneResourceMiddlewareState<
   C,
@@ -34,15 +45,16 @@ function cloneResourceMiddlewareState<
     ResourceMiddlewareOverrideState<TNextConfig, TNextIn, TNextOut, TNextDeps>
   >,
 ): ResourceMiddlewareOverrideState<TNextConfig, TNextIn, TNextOut, TNextDeps> {
-  return Object.freeze({
-    ...(state as unknown as ResourceMiddlewareOverrideState<
-      TNextConfig,
-      TNextIn,
-      TNextOut,
-      TNextDeps
-    >),
+  const next = {
+    ...state,
     ...patch,
-  });
+  } as ResourceMiddlewareOverrideState<
+    TNextConfig,
+    TNextIn,
+    TNextOut,
+    TNextDeps
+  >;
+  return Object.freeze(next);
 }
 
 function makeResourceMiddlewareOverrideBuilder<
@@ -68,22 +80,35 @@ function makeResourceMiddlewareOverrideBuilder<
         override,
       );
 
-      const next = cloneResourceMiddlewareState<C, In, Out, D & TNewDeps>(
-        state as unknown as ResourceMiddlewareOverrideState<
+      const next = cloneResourceMiddlewareState<
+        C,
+        In,
+        Out,
+        D,
+        C,
+        In,
+        Out,
+        D & TNewDeps
+      >(state, {
+        dependencies: nextDependencies as D & TNewDeps,
+      });
+
+      if (override) {
+        const overridden = cloneResourceMiddlewareState<
           C,
           In,
           Out,
-          D & TNewDeps
-        >,
-        {
-          dependencies: nextDependencies as unknown as D & TNewDeps,
-        },
-      );
-
-      if (override) {
+          D & TNewDeps,
+          C,
+          In,
+          Out,
+          TNewDeps
+        >(next, {
+          dependencies: nextDependencies as TNewDeps,
+        });
         return makeResourceMiddlewareOverrideBuilder<C, In, Out, TNewDeps>(
           base,
-          next as ResourceMiddlewareOverrideState<C, In, Out, TNewDeps>,
+          overridden,
         );
       }
       return makeResourceMiddlewareOverrideBuilder<C, In, Out, D & TNewDeps>(
@@ -93,14 +118,24 @@ function makeResourceMiddlewareOverrideBuilder<
     },
 
     configSchema<TNew>(schema: IValidationSchema<TNew>) {
-      const next = cloneResourceMiddlewareState<TNew, In, Out, D>(
-        state as unknown as ResourceMiddlewareOverrideState<TNew, In, Out, D>,
-        { configSchema: schema },
-      );
+      const next = cloneResourceMiddlewareState<
+        C,
+        In,
+        Out,
+        D,
+        TNew,
+        In,
+        Out,
+        D
+      >(state, { configSchema: schema });
       return makeResourceMiddlewareOverrideBuilder<TNew, In, Out, D>(
         base,
         next,
       );
+    },
+
+    schema<TNew>(schema: IValidationSchema<TNew>) {
+      return builder.configSchema(schema);
     },
 
     run(fn) {
@@ -129,10 +164,20 @@ function makeResourceMiddlewareOverrideBuilder<
       return makeResourceMiddlewareOverrideBuilder(base, next);
     },
 
+    throws(list: ThrowsList) {
+      const next = cloneResourceMiddlewareState(state, { throws: list });
+      return makeResourceMiddlewareOverrideBuilder(base, next);
+    },
+
     build() {
+      const normalizedThrows = normalizeThrows(
+        { kind: "resource-middleware", id: state.id },
+        state.throws,
+      );
       const { id: _id, ...patch } = state;
       return defineOverride<IResourceMiddleware<C, In, Out, D>>(base, {
         ...patch,
+        throws: normalizedThrows,
       });
     },
   };
@@ -157,6 +202,7 @@ export function resourceMiddlewareOverrideBuilder<
       meta: base.meta,
       tags: base.tags,
       everywhere: base.everywhere,
+      throws: base.throws,
     },
   );
 

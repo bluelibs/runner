@@ -10,6 +10,7 @@ import { debugResource } from "../../../globals/resources/debug/debug.resource";
 import { globalResources } from "../../../globals/globalResources";
 import { debug } from "../../../globals/debug";
 import { ILog } from "../../../models";
+import { createMessageError } from "../../../errors";
 
 const { verbose: levelVerbose } = debug.levels;
 
@@ -17,7 +18,7 @@ Error.stackTraceLimit = Infinity;
 
 describe("globals.resources.debug", () => {
   it("logs non-system events, non-lifecycle events via global event listener", async () => {
-    const logs: Array<{ level: string; message: string }> = [];
+    const logs: ILog[] = [];
 
     const collector = defineResource({
       id: "tests.collector",
@@ -59,7 +60,9 @@ describe("globals.resources.debug", () => {
 
     const infoLogs = logs.filter((l) => l.level === "info");
     expect(
-      infoLogs.some((l) => l.message.includes("Event tests.event emitted")),
+      infoLogs.some((l) =>
+        String(l.message).includes("Event tests.event emitted"),
+      ),
     ).toBe(true);
   });
 
@@ -71,7 +74,7 @@ describe("globals.resources.debug", () => {
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
-          messages.push(log.message);
+          messages.push(String(log.message));
         });
         return messages;
       },
@@ -109,7 +112,7 @@ describe("globals.resources.debug", () => {
         testTask,
       ],
       dependencies: { testTask, subResource },
-      async init(_, { testTask }) {
+      async init(_) {
         return "done";
       },
     });
@@ -127,7 +130,6 @@ describe("globals.resources.debug", () => {
     // Middleware observability messages
     // Allow for either ordering due to interleaving; just assert presence
     const joined = messages.join("\n");
-    console.log(messages);
     expect(joined.includes("Middleware triggered for task tests.task")).toBe(
       true,
     );
@@ -139,7 +141,7 @@ describe("globals.resources.debug", () => {
   });
 
   it("auto-registers debug via run(options.debug) and logs events", async () => {
-    const logs: Array<{ level: string; message: string }> = [];
+    const logs: ILog[] = [];
 
     const collector = defineResource({
       id: "tests.collector.options.debug",
@@ -224,9 +226,8 @@ describe("globals.resources.debug", () => {
 
     await run(app);
 
-    console.log(logs);
     const resourceLogs = logs.filter((l) =>
-      l.message.includes("Resource tests.resource.with.config"),
+      String(l.message).includes("Resource tests.resource.with.config"),
     );
     expect(resourceLogs).toHaveLength(2);
     expect(resourceLogs[0].data).toEqual({ config: { name: "test" } });
@@ -249,7 +250,7 @@ describe("globals.resources.debug", () => {
     const failingTask = defineTask({
       id: "tests.failing.task",
       async run() {
-        throw new Error("boom");
+        throw createMessageError("boom");
       },
     });
 
@@ -318,7 +319,7 @@ describe("globals.resources.debug", () => {
     const failingResource = defineResource({
       id: "tests.failing.resource",
       async init() {
-        throw new Error("resource-bad");
+        throw createMessageError("resource-bad");
       },
     });
 
@@ -335,12 +336,11 @@ describe("globals.resources.debug", () => {
     await expect(run(app)).rejects.toThrow("resource-bad");
 
     // Ensure error was logged by the middleware's resource error path
-    console.log(messages);
     expect(messages.some((m) => m.includes("Error: resource-bad"))).toBe(true);
   });
 
   it("should work for when we don't print result, input, or error", async () => {
-    const logs: Array<{ level: string; message: string }> = [];
+    const logs: ILog[] = [];
 
     const collector = defineResource({
       id: "tests.collector.options.debug",
@@ -376,7 +376,7 @@ describe("globals.resources.debug", () => {
 
     await rr.runTask(testTask);
 
-    const messages = logs.map((l) => l.message);
+    const messages = logs.map((l) => String(l.message));
     expect(messages.some((m) => m.includes(`Resource ${collector.id}`))).toBe(
       true,
     );
@@ -428,7 +428,7 @@ describe("globals.resources.debug", () => {
       id: "tests.app.flags",
       register: [collector.with({ value: "test" }), testEvent, testTask],
       dependencies: { testTask, collector },
-      async init(_c, { testTask }) {
+      async init(_c) {
         return "done";
       },
     });
@@ -485,5 +485,46 @@ describe("globals.resources.debug", () => {
       String(l.message).includes("Event tests.flags.event emitted"),
     );
     expect(eventLog?.data).toBeUndefined();
+  });
+
+  it("does not swallow the original task error if the logger throws an error", async () => {
+    const badLoggerResource = defineResource({
+      id: "tests.badLogger",
+      dependencies: { logger: globalResources.logger },
+      async init(_, { logger }) {
+        jest.spyOn(logger, "error").mockImplementationOnce(() => {
+          throw new Error("Logger crashed");
+        });
+      },
+    });
+
+    const failingTask = defineTask({
+      id: "tests.failing.task.swallow",
+      async run() {
+        throw createMessageError("Original Task Error");
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.swallow",
+      register: [debugResource.with("verbose"), badLoggerResource, failingTask],
+      dependencies: { badLoggerResource },
+      async init() {
+        return "ready";
+      },
+    });
+
+    const harness = defineResource({
+      id: "tests.harness.swallow",
+      register: [app],
+    });
+
+    const rr = await run(harness);
+
+    // Running the task should reject with the "Original Task Error"
+    // and NOT the "Logger crashed" error
+    await expect(rr.runTask(failingTask)).rejects.toThrow(
+      "Original Task Error",
+    );
   });
 });

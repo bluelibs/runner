@@ -51,7 +51,7 @@ export function clone<
     TNextMiddleware
   >;
   return Object.freeze({
-    ...(s as unknown as NextState),
+    ...(s as NextState),
     ...patch,
   }) as NextState;
 }
@@ -75,7 +75,7 @@ export function mergeDependencies<
   type Result = (TExisting & TNew) | (() => TExisting & TNew);
 
   if (override || !existing) {
-    return addition as unknown as Result;
+    return addition as Result;
   }
 
   if (isFnExisting && isFnAddition) {

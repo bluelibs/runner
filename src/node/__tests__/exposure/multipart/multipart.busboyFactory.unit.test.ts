@@ -44,4 +44,24 @@ describe("multipart busboy interop branches", () => {
     expect(factory).toHaveBeenCalledTimes(1);
     expect(out.ok).toBe(false);
   });
+
+  it("fails gracefully when Busboy export shape is invalid", async () => {
+    jest.resetModules();
+
+    jest.doMock("busboy", () => ({ default: 123 }));
+
+    const { parseMultipartInput } = require("../../../exposure/multipart");
+
+    const req = createReq();
+    const out = await parseMultipartInput(req, undefined, new Serializer());
+
+    expect(out.ok).toBe(false);
+    if (out.ok) {
+      throw new Error("Expected multipart parsing to fail");
+    }
+    expect(out.response.status).toBe(400);
+    expect((out.response.body as { error: { code: string } }).error.code).toBe(
+      "INVALID_MULTIPART",
+    );
+  });
 });

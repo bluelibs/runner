@@ -1,7 +1,17 @@
 export * from "./resources/debug/types";
 export * from "./resources/tunnel/types";
+export type {
+  CronResourceValue,
+  CronScheduledTask,
+  CronTagConfig,
+} from "./cron/types";
+export { CronOnError } from "./cron/types";
 export * from "./debug";
-export type { CacheResourceConfig } from "./middleware/cache.middleware";
+export type {
+  CacheResourceConfig,
+  ICacheInstance,
+} from "./middleware/cache.middleware";
+export type { CircuitBreakerOpenError } from "./middleware/circuitBreaker.middleware";
 export type {
   CircuitBreakerMiddlewareConfig,
   CircuitBreakerStatus,
@@ -16,6 +26,7 @@ export type {
   RateLimitMiddlewareConfig,
   RateLimitState,
 } from "./middleware/rateLimit.middleware";
+export type { RateLimitError } from "./middleware/rateLimit.middleware";
 export type { RequireContextMiddlewareConfig } from "./middleware/requireContext.middleware";
 export type { RetryMiddlewareConfig } from "./middleware/retry.middleware";
 export type {
@@ -24,6 +35,7 @@ export type {
   ThrottleState,
 } from "./middleware/temporal.middleware";
 export type { TimeoutMiddlewareConfig } from "./middleware/timeout.middleware";
+export type { TimeoutError } from "./middleware/timeout.middleware";
 export type {
   TunnelMiddlewareId,
   TunnelTaskMiddlewareSidePolicy,

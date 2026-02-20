@@ -1,4 +1,9 @@
-import { validationError } from "../../errors";
+import {
+  inputSchemaValidationError,
+  resultSchemaValidationError,
+} from "../../errors";
+import type { IValidationSchema } from "../../defs";
+import { normalizeError } from "../../globals/resources/tunnel/error-utils";
 
 /**
  * Centralized validation logic for inputs and results across tasks and resources.
@@ -10,21 +15,20 @@ export class ValidationHelper {
    * @throws ValidationError if validation fails
    */
   static validateInput<T>(
-    value: any,
-    schema: { parse: (v: any) => T } | undefined,
+    value: unknown,
+    schema: IValidationSchema<T> | undefined,
     id: string,
     type: "Task" | "Resource",
   ): T {
-    if (!schema) return value;
+    if (!schema) return value as T;
 
     try {
       return schema.parse(value);
     } catch (error) {
-      return validationError.throw({
+      return inputSchemaValidationError.throw({
         subject: `${type} input`,
         id,
-        originalError:
-          error instanceof Error ? error : new Error(String(error)),
+        originalError: normalizeError(error),
       });
     }
   }
@@ -34,21 +38,20 @@ export class ValidationHelper {
    * @throws ValidationError if validation fails
    */
   static validateResult<T>(
-    value: any,
-    schema: { parse: (v: any) => T } | undefined,
+    value: unknown,
+    schema: IValidationSchema<T> | undefined,
     id: string,
     type: "Task" | "Resource",
   ): T {
-    if (!schema) return value;
+    if (!schema) return value as T;
 
     try {
       return schema.parse(value);
     } catch (error) {
-      return validationError.throw({
+      return resultSchemaValidationError.throw({
         subject: `${type} result`,
         id,
-        originalError:
-          error instanceof Error ? error : new Error(String(error)),
+        originalError: normalizeError(error),
       });
     }
   }

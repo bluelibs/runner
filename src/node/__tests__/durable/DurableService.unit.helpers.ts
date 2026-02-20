@@ -9,6 +9,7 @@ import type { IDurableStore } from "../../durable/core/interfaces/store";
 import type { Execution } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { DurableService } from "../../durable/core/DurableService";
+import { createMessageError } from "../../../errors";
 
 // ---------------------------------------------------------------------------
 // Task executor
@@ -21,7 +22,7 @@ export function createTaskExecutor(
     run: async (task, input) => {
       const handler = handlers[task.id];
       if (!handler) {
-        throw new Error(`No task handler registered for: ${task.id}`);
+        throw createMessageError(`No task handler registered for: ${task.id}`);
       }
       return await handler(input);
     },

@@ -9,6 +9,8 @@ import type {
 import { defineOverride } from "../../defineOverride";
 import type { TaskMiddlewareFluentBuilder } from "../middleware/task.interface";
 import { mergeArray, mergeDependencies } from "../middleware/utils";
+import type { ThrowsList } from "../../../types/error";
+import { normalizeThrows } from "../../../tools/throws";
 
 type AnyTaskMiddleware = ITaskMiddleware<any, any, any, any>;
 
@@ -17,7 +19,16 @@ type TaskMiddlewareOverrideState<
   In,
   Out,
   D extends DependencyMapType,
-> = Readonly<ITaskMiddlewareDefinition<C, In, Out, D>>;
+> = Readonly<{
+  id: string;
+  dependencies: D | ((config: C) => D);
+  configSchema: IValidationSchema<C> | undefined;
+  run: ITaskMiddlewareDefinition<any, In, Out, any>["run"];
+  meta?: IMiddlewareMeta;
+  tags?: TagType[];
+  everywhere?: ITaskMiddlewareDefinition<C, In, Out, D>["everywhere"];
+  throws?: ThrowsList;
+}>;
 
 function cloneTaskMiddlewareState<
   C,
@@ -34,15 +45,11 @@ function cloneTaskMiddlewareState<
     TaskMiddlewareOverrideState<TNextConfig, TNextIn, TNextOut, TNextDeps>
   >,
 ): TaskMiddlewareOverrideState<TNextConfig, TNextIn, TNextOut, TNextDeps> {
-  return Object.freeze({
-    ...(state as unknown as TaskMiddlewareOverrideState<
-      TNextConfig,
-      TNextIn,
-      TNextOut,
-      TNextDeps
-    >),
+  const next = {
+    ...state,
     ...patch,
-  });
+  } as TaskMiddlewareOverrideState<TNextConfig, TNextIn, TNextOut, TNextDeps>;
+  return Object.freeze(next);
 }
 
 function makeTaskMiddlewareOverrideBuilder<
@@ -68,22 +75,35 @@ function makeTaskMiddlewareOverrideBuilder<
         override,
       );
 
-      const next = cloneTaskMiddlewareState<C, In, Out, D & TNewDeps>(
-        state as unknown as TaskMiddlewareOverrideState<
+      const next = cloneTaskMiddlewareState<
+        C,
+        In,
+        Out,
+        D,
+        C,
+        In,
+        Out,
+        D & TNewDeps
+      >(state, {
+        dependencies: nextDependencies as D & TNewDeps,
+      });
+
+      if (override) {
+        const overridden = cloneTaskMiddlewareState<
           C,
           In,
           Out,
-          D & TNewDeps
-        >,
-        {
-          dependencies: nextDependencies as unknown as D & TNewDeps,
-        },
-      );
-
-      if (override) {
+          D & TNewDeps,
+          C,
+          In,
+          Out,
+          TNewDeps
+        >(next, {
+          dependencies: nextDependencies as TNewDeps,
+        });
         return makeTaskMiddlewareOverrideBuilder<C, In, Out, TNewDeps>(
           base,
-          next as TaskMiddlewareOverrideState<C, In, Out, TNewDeps>,
+          overridden,
         );
       }
       return makeTaskMiddlewareOverrideBuilder<C, In, Out, D & TNewDeps>(
@@ -93,11 +113,15 @@ function makeTaskMiddlewareOverrideBuilder<
     },
 
     configSchema<TNew>(schema: IValidationSchema<TNew>) {
-      const next = cloneTaskMiddlewareState<TNew, In, Out, D>(
-        state as unknown as TaskMiddlewareOverrideState<TNew, In, Out, D>,
+      const next = cloneTaskMiddlewareState<C, In, Out, D, TNew, In, Out, D>(
+        state,
         { configSchema: schema },
       );
       return makeTaskMiddlewareOverrideBuilder<TNew, In, Out, D>(base, next);
+    },
+
+    schema<TNew>(schema: IValidationSchema<TNew>) {
+      return builder.configSchema(schema);
     },
 
     run(fn) {
@@ -126,9 +150,21 @@ function makeTaskMiddlewareOverrideBuilder<
       return makeTaskMiddlewareOverrideBuilder(base, next);
     },
 
+    throws(list: ThrowsList) {
+      const next = cloneTaskMiddlewareState(state, { throws: list });
+      return makeTaskMiddlewareOverrideBuilder(base, next);
+    },
+
     build() {
+      const normalizedThrows = normalizeThrows(
+        { kind: "task-middleware", id: state.id },
+        state.throws,
+      );
       const { id: _id, ...patch } = state;
-      return defineOverride<ITaskMiddleware<C, In, Out, D>>(base, { ...patch });
+      return defineOverride<ITaskMiddleware<C, In, Out, D>>(base, {
+        ...patch,
+        throws: normalizedThrows,
+      });
     },
   };
 
@@ -151,6 +187,7 @@ export function taskMiddlewareOverrideBuilder<
     meta: base.meta,
     tags: base.tags,
     everywhere: base.everywhere,
+    throws: base.throws,
   });
 
   return makeTaskMiddlewareOverrideBuilder(base, initial);

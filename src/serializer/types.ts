@@ -93,11 +93,13 @@ export interface SerializedGraph {
   nodes: Record<string, SerializedNode>;
 }
 
-export enum SymbolPolicy {
-  AllowAll = "AllowAll",
-  WellKnownOnly = "WellKnownOnly",
-  Disabled = "Disabled",
-}
+export const SymbolPolicy = {
+  AllowAll: "allow-all",
+  WellKnownOnly: "well-known-only",
+  Disabled: "disabled",
+} as const;
+
+export type SymbolPolicy = (typeof SymbolPolicy)[keyof typeof SymbolPolicy];
 
 export enum SymbolPolicyErrorMessage {
   GlobalSymbolsNotAllowed = "Global symbols are not allowed",
@@ -131,8 +133,7 @@ export interface SerializerOptions {
 export interface SerializerLike {
   stringify(value: unknown): string;
   parse<T = unknown>(text: string): T;
-  addType?<TJson = unknown, TInstance = unknown>(
-    name: string,
-    factory: (json: TJson) => TInstance,
+  addType?<TInstance, TSerialized>(
+    typeDef: TypeDefinition<TInstance, TSerialized>,
   ): void;
 }

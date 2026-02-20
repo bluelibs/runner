@@ -9,6 +9,7 @@ import {
 import { run } from "../../run";
 // error helpers migrated to message-based checks
 import z from "zod";
+import { createMessageError } from "../../errors";
 
 describe("Middleware", () => {
   it("should be able to register the middleware and execute it", async () => {
@@ -185,7 +186,7 @@ describe("Middleware", () => {
   it("Should work with resources", async () => {
     const mw = defineResourceMiddleware({
       id: "middleware",
-      run: async ({ resource, next }) => {
+      run: async ({ resource: _resource, next }) => {
         const result = await next();
         return `Middleware: ${result}`;
       },
@@ -207,7 +208,7 @@ describe("Middleware", () => {
     const mw = defineResourceMiddleware({
       id: "middleware",
       everywhere: true,
-      run: async ({ resource, next }) => {
+      run: async ({ resource: _resource, next }) => {
         const result = await next({});
         return `Middleware: ${result}`;
       },
@@ -239,7 +240,7 @@ describe("Middleware", () => {
     const mw: any = defineTaskMiddleware({
       id: "middleware",
       dependencies: (): any => ({ task }),
-      run: async (_: any, { task }: any) => {},
+      run: async (_: any, { task: _task }: any) => {},
     });
 
     const task: any = defineTask({
@@ -265,7 +266,7 @@ describe("Configurable Middleware (.with)", () => {
     let receivedConfig: any;
     const validate = defineTaskMiddleware({
       id: "validate",
-      run: async ({ next }, deps, config: { schema: string }) => {
+      run: async ({ next }, _deps, config: { schema: string }) => {
         receivedConfig = config;
         return next();
       },
@@ -293,7 +294,7 @@ describe("Configurable Middleware (.with)", () => {
     const calls: (string | undefined)[] = [];
     const validate = defineTaskMiddleware({
       id: "validate",
-      run: async ({ next }, deps, config: { schema: string }) => {
+      run: async ({ next }, _deps, config: { schema: string }) => {
         calls.push(config.schema);
         return next();
       },
@@ -335,7 +336,7 @@ describe("Configurable Middleware (.with)", () => {
     });
     const validate = defineTaskMiddleware({
       id: "validate",
-      run: async ({ next }, deps, config: { schema: string }) => {
+      run: async ({ next }, _deps, config: { schema: string }) => {
         expect(config).toBeDefined();
         calls.push(config!.schema);
         return next();
@@ -364,7 +365,7 @@ describe("Configurable Middleware (.with)", () => {
   it("should enforce type safety for config in .with()", () => {
     const validate = defineTaskMiddleware({
       id: "validate",
-      run: async ({ next }, deps, config: { schema: string }) => next(),
+      run: async ({ next }, _deps, _config: { schema: string }) => next(),
     });
 
     // Should error if config type is not correct
@@ -375,7 +376,7 @@ describe("Configurable Middleware (.with)", () => {
   it("should modify task outputs independently based on middleware configs", async () => {
     const prefixMiddleware = defineTaskMiddleware({
       id: "prefixer",
-      run: async ({ next }, deps, config: { prefix: string }) => {
+      run: async ({ next }, _deps, config: { prefix: string }) => {
         const result = await next();
         return `${config.prefix}: ${result}`;
       },
@@ -511,7 +512,7 @@ describe("Middleware behavior (no lifecycle)", () => {
     const mw = defineTaskMiddleware({
       id: "mw.error",
       run: async () => {
-        throw new Error("boom");
+        throw createMessageError("boom");
       },
     });
 
@@ -537,10 +538,10 @@ describe("Middleware behavior (no lifecycle)", () => {
   });
 
   it("global event hooks should not run middleware (no errors thrown)", async () => {
-    const mw = defineTaskMiddleware({
+    defineTaskMiddleware({
       id: "mw.error.global.listener",
       run: async () => {
-        throw new Error("boom-global");
+        throw createMessageError("boom-global");
       },
     });
 
@@ -838,7 +839,7 @@ describe("Middleware.everywhere()", () => {
       },
     });
 
-    const result = await run(app);
+    await run(app);
     // In the split model, we only assert task local precedence here
     expect(calls).toContain("task:task1:local-task");
     expect(calls).not.toContain("task:task1:global");
@@ -870,7 +871,6 @@ describe("Middleware.everywhere()", () => {
   });
 
   it("should work when a global middleware depends on a resource, which depends on another resource", async () => {
-    let called = false;
     const isolatedResource = defineResource({
       id: "isolated",
       async init() {
@@ -905,7 +905,6 @@ describe("Middleware.everywhere()", () => {
         resourceMid,
       },
       run: async ({ next, resource }) => {
-        called = true;
         return "Intercepted: " + (await next(resource.config));
       },
     });

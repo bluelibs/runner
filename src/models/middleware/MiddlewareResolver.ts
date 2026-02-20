@@ -70,13 +70,13 @@ export class MiddlewareResolver {
 
     // Tunneled tasks skip caller-side middleware by default.
     // Only explicitly allowlisted middleware runs locally.
-    if (!globalTags.tunnelPolicy.exists(tDef)) {
+    if (!globalTags.tunnelTaskPolicy.exists(tDef)) {
       return [];
     }
 
     // Use the Store definition to avoid relying on object-identity.
     // Consumers can pass a different task object with the same id.
-    const cfg = globalTags.tunnelPolicy.extract(tDef) as
+    const cfg = globalTags.tunnelTaskPolicy.extract(tDef) as
       | TunnelTaskMiddlewarePolicyConfig
       | undefined;
     const clientAllowList = getClientMiddlewareAllowList(cfg);
@@ -102,6 +102,9 @@ export class MiddlewareResolver {
   ): ITaskMiddleware[] {
     return Array.from(this.store.taskMiddlewares.values())
       .filter((x) => Boolean(x.middleware.everywhere))
+      .filter((x) =>
+        this.store.isItemVisibleToConsumer(x.middleware.id, task.id),
+      )
       .filter((x) => {
         if (typeof x.middleware.everywhere === "function") {
           return x.middleware.everywhere(task);
@@ -119,6 +122,9 @@ export class MiddlewareResolver {
   ): IResourceMiddleware[] {
     return Array.from(this.store.resourceMiddlewares.values())
       .filter((x) => Boolean(x.middleware.everywhere))
+      .filter((x) =>
+        this.store.isItemVisibleToConsumer(x.middleware.id, resource.id),
+      )
       .filter((x) => {
         if (typeof x.middleware.everywhere === "function") {
           return x.middleware.everywhere(resource);

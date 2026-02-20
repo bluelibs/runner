@@ -3,6 +3,7 @@ import { run } from "../../run";
 import { globalTags } from "../../globals/globalTags";
 import { event, hook, task, globals } from "../../index";
 import type { TunnelRunner } from "../../globals/resources/tunnel/types";
+import { createMessageError } from "../../errors";
 
 describe("Tunnel delivery modes", () => {
   const ev = event<{ v: number }>({ id: "unit.tunnel.ev" });
@@ -41,7 +42,8 @@ describe("Tunnel delivery modes", () => {
         events: [overrides.eventId],
         eventDeliveryMode: overrides.delivery,
         emit: async () => {
-          if (overrides.emitBehavior === "fail") throw new Error("RFAIL");
+          if (overrides.emitBehavior === "fail")
+            throw createMessageError("RFAIL");
         },
       }),
     });
@@ -131,6 +133,15 @@ describe("Tunnel delivery modes", () => {
     });
 
     const rr = await run(app);
+    const runtimeLogger = await rr.getResourceValue(
+      globals.resources.logger as any,
+    );
+    const warnMessages: string[] = [];
+    runtimeLogger.onLog((log: { level: string; message: unknown }) => {
+      if (log.level === "warn") {
+        warnMessages.push(String(log.message));
+      }
+    });
 
     await rr.emitEvent(mirrorEvent, { v: 1 });
     await rr.emitEvent(remoteOnlyEvent, { v: 2 });
@@ -141,6 +152,9 @@ describe("Tunnel delivery modes", () => {
     expect(captured.remoteOnly).toEqual([]);
     expect(captured.localOnly).toEqual([3]);
     expect(captured.remoteFirst).toEqual([4]);
+    expect(warnMessages).toContain(
+      "Tunnel remote-first delivery failed; falling back to local listeners.",
+    );
 
     await rr.dispose();
   });

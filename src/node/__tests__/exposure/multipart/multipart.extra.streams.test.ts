@@ -6,6 +6,7 @@ import {
   expectErrorCode,
   type FakeStream,
 } from "./multipart.mock.utils";
+import { createMessageError } from "../../../../errors";
 
 jest.mock("busboy", () => {
   class FakeBusboy {
@@ -95,7 +96,7 @@ describe("parseMultipartInput - streams extra branches", () => {
     const originalEnd = PassThrough.prototype.end;
     let ended = false;
     PassThrough.prototype.destroy = function () {
-      throw new Error("nope");
+      throw createMessageError("nope");
     };
     PassThrough.prototype.end = function (this: any, ...args: any[]) {
       ended = true;

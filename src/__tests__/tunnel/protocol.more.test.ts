@@ -14,7 +14,7 @@ describe("tunnel protocol - more branches", () => {
   });
 
   it("toTunnelError handles plain object with message only", () => {
-    const te = toTunnelError({ message: "M" } as unknown as Error);
+    const te = toTunnelError({ message: "M" });
     expect(te).toBeInstanceOf(TunnelError);
     expect(te.message).toBe("M");
     expect(te.code).toBe("UNKNOWN");
@@ -22,15 +22,16 @@ describe("tunnel protocol - more branches", () => {
 
   it("assertOkEnvelope uses fallback when error missing", () => {
     expect(() =>
-      assertOkEnvelope({ ok: false } as unknown as { ok: boolean }, {
+      assertOkEnvelope({ ok: false } as any, {
         fallbackMessage: "FB",
       }),
     ).toThrow(/FB/);
   });
 
   it("assertOkEnvelope invalid input uses fallback message when provided", () => {
+    expect.assertions(1);
     try {
-      assertOkEnvelope(undefined as unknown as { ok: boolean }, {
+      assertOkEnvelope(undefined, {
         fallbackMessage: "INVALID",
       });
       fail("should throw");
@@ -40,10 +41,7 @@ describe("tunnel protocol - more branches", () => {
   });
 
   it("toTunnelError prefers fallback when protocol error has empty message", () => {
-    const te = toTunnelError(
-      { code: "C", message: "" } as unknown as Error,
-      "FALLBACK",
-    );
+    const te = toTunnelError({ code: "C", message: "" }, "FALLBACK");
     expect(te).toBeInstanceOf(TunnelError);
     expect(te.code).toBe("C");
     expect(te.message).toBe("FALLBACK");

@@ -19,7 +19,7 @@ enum SecurityHeaderValue {
 describe("httpResponse helpers", () => {
   it("respondJson writes JSON when response not ended", () => {
     let status = 0;
-    let body = Buffer.alloc(0);
+    let body: Buffer<ArrayBufferLike> = Buffer.alloc(0);
     const headers: Record<string, string> = {};
     const res: any = {
       writableEnded: false,

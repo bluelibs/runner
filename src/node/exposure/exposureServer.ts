@@ -49,7 +49,12 @@ export async function createExposureServer(
   };
 
   const makeListener = (respondOnMiss: boolean) =>
-    makeRequestListener({ handler, respondOnMiss, logger });
+    makeRequestListener({
+      handler,
+      respondOnMiss,
+      logger,
+      cors: httpConfig?.cors,
+    });
 
   const attachExposure = (targetServer: http.Server) => {
     const listener = makeListener(false);

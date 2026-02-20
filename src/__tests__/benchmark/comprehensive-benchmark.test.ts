@@ -104,7 +104,7 @@ describe("Comprehensive Performance Benchmarks", () => {
         id: "benchmark.basic.app",
         register: [task],
         dependencies: { task },
-        async init(_, { task }) {},
+        async init(_, { task: _task }) {},
       });
 
       const { dispose, runTask } = await run(app);
@@ -489,7 +489,7 @@ describe("Comprehensive Performance Benchmarks", () => {
         ...resources.map((r, idx) => [`resource${idx}`, r]),
         ...tasks.map((t, idx) => [`task${idx}`, t]),
       ]),
-      async init(config, deps) {
+      async init(_config, deps) {
         const afterInitMemory = measureMemory();
 
         // Execute some tasks

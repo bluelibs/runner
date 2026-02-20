@@ -9,6 +9,7 @@ import {
   testEvent,
   TOKEN,
 } from "./resource.unit.test.utils";
+import { createMessageError } from "../../../../errors";
 
 const D = process.env.RUNNER_TEST_NET === "1" ? describe : describe.skip;
 
@@ -71,7 +72,7 @@ D("nodeExposure - unit core", () => {
     const a1 = proxyToEvent.address();
     const a2 = proxyToTask.address();
     if (!a1 || typeof a1 === "string" || !a2 || typeof a2 === "string")
-      throw new Error("No address");
+      throw createMessageError("No address");
 
     const h = { "x-runner-token": TOKEN };
     const r1 = await request({
@@ -114,7 +115,8 @@ D("nodeExposure - unit core", () => {
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
     const addr = handlers.server?.address();
-    if (!addr || typeof addr === "string") throw new Error("No server address");
+    if (!addr || typeof addr === "string")
+      throw createMessageError("No server address");
     const baseUrl = `http://127.0.0.1:${addr.port}${handlers.basePath}`;
     const r = await request({
       method: "POST",
@@ -141,7 +143,8 @@ D("nodeExposure - unit core", () => {
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
     const addr = handlers.server?.address();
-    if (!addr || typeof addr === "string") throw new Error("No server address");
+    if (!addr || typeof addr === "string")
+      throw createMessageError("No server address");
     const baseUrl = `http://127.0.0.1:${addr.port}${handlers.basePath}`;
 
     let r = await request({

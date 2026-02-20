@@ -27,7 +27,7 @@ describe("createHttpSmartClient (unit)", () => {
   it("JSON: posts JSON and parses ok envelope", async () => {
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: unknown, cb: unknown) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         // Fake response with JSON content type
         const env = { ok: true, result: 5 };
@@ -62,7 +62,7 @@ describe("createHttpSmartClient (unit)", () => {
     const onRequest = jest.fn();
     jest
       .spyOn(http, "request")
-      .mockImplementation((opts: unknown, cb: unknown) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: 1 };
         const body = Buffer.from(new Serializer().stringify(env), "utf8");
@@ -99,7 +99,7 @@ describe("createHttpSmartClient (unit)", () => {
   it("multipart: detects File sentinel and returns JSON result", async () => {
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: unknown, cb: unknown) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: "OK" };
         const body = Buffer.from(new Serializer().stringify(env), "utf8");
@@ -135,7 +135,7 @@ describe("createHttpSmartClient (unit)", () => {
   it("multipart (buffer): covers buffer branch in encoder", async () => {
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: unknown, cb: unknown) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: "BUF" };
         const body = Buffer.from(new Serializer().stringify(env), "utf8");
@@ -171,7 +171,7 @@ describe("createHttpSmartClient (unit)", () => {
   it("multipart (streaming response): returns Readable when server streams", async () => {
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: unknown, cb: unknown) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const res = new Readable({
           read() {
@@ -220,7 +220,7 @@ describe("createHttpSmartClient (unit)", () => {
   it("parseMaybeJsonResponse error path: rejects when JSON parsing fails", async () => {
     jest
       .spyOn(http, "request")
-      .mockImplementation((opts: unknown, cb: unknown) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const res = Readable.from([Buffer.from("not-json", "utf8")]);
         const im = asIncoming(res, { "content-type": "application/json" });
@@ -252,7 +252,7 @@ describe("createHttpSmartClient (unit)", () => {
   it("event(): posts JSON envelope and validates ok", async () => {
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: unknown, cb: unknown) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: undefined };
         const body = Buffer.from(new Serializer().stringify(env), "utf8");
@@ -280,7 +280,7 @@ describe("createHttpSmartClient (unit)", () => {
     const sent: Buffer[] = [];
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: unknown, cb: unknown) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: { x: 2 } };
         const body = Buffer.from(new Serializer().stringify(env), "utf8");
@@ -318,7 +318,7 @@ describe("createHttpSmartClient (unit)", () => {
   it("eventWithResult(): throws when server is ok but omits result", async () => {
     jest
       .spyOn(http, "request")
-      .mockImplementation((opts: unknown, cb: unknown) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true };
         const body = Buffer.from(new Serializer().stringify(env), "utf8");
@@ -364,9 +364,12 @@ describe("createHttpSmartClient (unit)", () => {
         sink.setTimeout = () => sink;
         sink.destroy = () => undefined;
         // verify header passed
-        expect(
-          String(((opts as http.RequestOptions).headers || {})["x-token"]),
-        ).toBe("secret");
+        const token = (
+          (opts as http.RequestOptions).headers as
+            | http.OutgoingHttpHeaders
+            | undefined
+        )?.["x-token"];
+        expect(String(token)).toBe("secret");
         return sink;
       }) as any;
     const c = createHttpSmartClient({
@@ -382,7 +385,7 @@ describe("createHttpSmartClient (unit)", () => {
   it("parseMaybeJsonResponse: rejects when response emits error", async () => {
     jest
       .spyOn(http, "request")
-      .mockImplementation((opts: unknown, cb: unknown) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const res = new Readable({
           read() {
@@ -425,7 +428,7 @@ describe("createHttpSmartClient (unit)", () => {
   it("octet-stream: when input is Readable, returns response stream", async () => {
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: unknown, cb: unknown) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const res = new Readable({
           read() {
@@ -496,7 +499,7 @@ describe("createHttpSmartClient (unit)", () => {
     // multipart path
     jest
       .spyOn(http, "request")
-      .mockImplementationOnce((opts: unknown, cb: unknown) => {
+      .mockImplementationOnce((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: "OK" };
         const body = Buffer.from(new Serializer().stringify(env), "utf8");
@@ -527,7 +530,7 @@ describe("createHttpSmartClient (unit)", () => {
     // octet-stream path
     jest
       .spyOn(http, "request")
-      .mockImplementationOnce((opts: unknown, cb: unknown) => {
+      .mockImplementationOnce((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const res = Readable.from([Buffer.from("x")]);
         callback(asIncoming(res, {}));

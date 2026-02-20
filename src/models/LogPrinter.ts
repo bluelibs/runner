@@ -19,15 +19,15 @@ export type LogLevels =
 export interface PrintableLog {
   level: LogLevels;
   source?: string;
-  message: any;
+  message: unknown;
   timestamp: Date;
   error?: {
     name: string;
     message: string;
     stack?: string;
   };
-  data?: Record<string, any>;
-  context?: Record<string, any>;
+  data?: Record<string, unknown>;
+  context?: Record<string, unknown>;
 }
 
 export type ColorTheme = {
@@ -151,9 +151,9 @@ export class LogPrinter {
     const toError =
       level === "warn" || level === "error" || level === "critical";
     if (toError && typeof LogPrinter.writers.error === "function") {
-      return (msg: any) => LogPrinter.writers.error!(msg);
+      return (msg: string) => LogPrinter.writers.error!(msg);
     }
-    return (msg: any) => LogPrinter.writers.log(msg);
+    return (msg: string) => LogPrinter.writers.log(msg);
   }
 
   private formatTime(timestamp: Date): string {
@@ -174,7 +174,7 @@ export class LogPrinter {
     return `${this.colors.cyan}${source}${this.colors.reset}`;
   }
 
-  private formatMessage(message: any): string {
+  private formatMessage(message: unknown): string {
     if (typeof message === "object" && message !== null) {
       return safeStringify(message, 2);
     }
@@ -202,7 +202,10 @@ export class LogPrinter {
     return lines;
   }
 
-  private formatData(data?: Record<string, any>, indentation = "  "): string[] {
+  private formatData(
+    data?: Record<string, unknown>,
+    indentation = "  ",
+  ): string[] {
     if (!data || Object.keys(data).length === 0) return [];
     const lines: string[] = [];
     const formatted = safeStringify(data, 2, { maxDepth: 3 }).split("\n");
@@ -217,7 +220,7 @@ export class LogPrinter {
   }
 
   private formatContext(
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
     indentation = "  ",
   ): string[] {
     if (!context) return [];
@@ -264,12 +267,12 @@ export class LogPrinter {
   } as const;
 
   private static readonly DEFAULT_WRITERS = {
-    log: (msg: any) => {
+    log: (msg: string) => {
       if (typeof console !== "undefined" && typeof console.log === "function") {
         console.log(msg);
       }
     },
-    error: (msg: any) => {
+    error: (msg: string) => {
       if (
         typeof console !== "undefined" &&
         typeof console.error === "function"
@@ -280,12 +283,15 @@ export class LogPrinter {
   };
 
   private static writers: {
-    log: (msg: any) => void;
-    error?: (msg: any) => void;
+    log: (msg: string) => void;
+    error?: (msg: string) => void;
   } = { ...LogPrinter.DEFAULT_WRITERS };
 
   public static setWriters(
-    writers: Partial<{ log: (msg: any) => void; error?: (msg: any) => void }>,
+    writers: Partial<{
+      log: (msg: string) => void;
+      error?: (msg: string) => void;
+    }>,
   ) {
     LogPrinter.writers = { ...LogPrinter.writers, ...writers };
   }

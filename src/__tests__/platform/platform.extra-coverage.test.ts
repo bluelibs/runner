@@ -73,7 +73,8 @@ describe("Platform extra coverage", () => {
     });
 
     storedListener?.("plain");
-    expect(received).toBe("plain");
+    expect(received).toBeInstanceOf(Error);
+    expect((received as Error).message).toBe("plain");
 
     cleanup();
     expect(removeSpy).toHaveBeenCalledWith("error", expect.any(Function));

@@ -2,6 +2,8 @@ import { cancellationError } from "../../public";
 
 describe("cancellationError.is", () => {
   it("returns true for CancellationError instance", () => {
+    expect.assertions(1);
+
     let inst: any;
     try {
       cancellationError.throw({});

@@ -1,4 +1,5 @@
 import { Semaphore } from "../..";
+import { createMessageError } from "../../errors";
 
 describe("Semaphore", () => {
   let semaphore: Semaphore;
@@ -32,6 +33,7 @@ describe("Semaphore", () => {
       expect(() => new Semaphore(-1)).toThrow(
         "maxPermits must be greater than 0",
       );
+      expect(() => new Semaphore(1.5)).toThrow("maxPermits must be an integer");
     });
   });
 
@@ -128,7 +130,7 @@ describe("Semaphore", () => {
       try {
         await semaphore.withPermit(async () => {
           expect(semaphore.getAvailablePermits()).toBe(1);
-          throw new Error("Test error");
+          throw createMessageError("Test error");
         });
       } catch (error) {
         expect(semaphore.getAvailablePermits()).toBe(2); // Permit still released
@@ -341,6 +343,31 @@ describe("Semaphore", () => {
       await expect(queuedOperation).rejects.toThrow("timeout");
 
       expect(semaphore.getWaitingCount()).toBe(0);
+    });
+
+    it("should not emit aborted after a timeout settled the operation", async () => {
+      await semaphore.acquire();
+      await semaphore.acquire();
+
+      let abortedEvents = 0;
+      semaphore.on("aborted", () => {
+        abortedEvents += 1;
+      });
+
+      const controller = new AbortController();
+      const queuedOperation = semaphore.acquire({
+        timeout: 10,
+        signal: controller.signal,
+      });
+
+      jest.advanceTimersByTime(20);
+      await Promise.resolve();
+      await expect(queuedOperation).rejects.toThrow("timeout");
+
+      controller.abort();
+      await Promise.resolve();
+
+      expect(abortedEvents).toBe(0);
     });
 
     it("should handle both timeout and cancellation", async () => {
@@ -861,6 +888,40 @@ describe("Semaphore", () => {
       await sem.acquire();
       sem.release();
       expect(seen).toEqual([]); // No events received because we unsubscribed
+    });
+
+    it("hard-removes on() listeners from EventManager storage when unsubscribed", () => {
+      const sem = new Semaphore(1);
+      const unsubscribe = sem.on("released", () => {});
+
+      const listeners = (
+        sem as unknown as {
+          eventManager: { registry: { listeners: Map<string, unknown[]> } };
+        }
+      ).eventManager.registry.listeners;
+      expect(listeners.get("semaphore.events.released")).toHaveLength(1);
+
+      unsubscribe();
+
+      expect(listeners.get("semaphore.events.released")).toBeUndefined();
+    });
+
+    it("hard-removes once() listeners from EventManager storage after first fire", async () => {
+      const sem = new Semaphore(1);
+      sem.once("released", () => {});
+
+      const listeners = (
+        sem as unknown as {
+          eventManager: { registry: { listeners: Map<string, unknown[]> } };
+        }
+      ).eventManager.registry.listeners;
+      expect(listeners.get("semaphore.events.released")).toHaveLength(1);
+
+      await sem.acquire();
+      sem.release();
+      await Promise.resolve();
+
+      expect(listeners.get("semaphore.events.released")).toBeUndefined();
     });
   });
 });

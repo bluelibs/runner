@@ -25,31 +25,45 @@ await result.dispose();
 
 ### What `run()` returns
 
-| Property                | Description                                                        |
-| ----------------------- | ------------------------------------------------------------------ |
-| `value`                 | Value returned by the `app` resource's `init()`                    |
-| `runTask(...)`          | Run a task by reference or string id                               |
-| `emitEvent(...)`        | Emit events                                                        |
-| `getResourceValue(...)` | Read a resource's value                                            |
-| `getResourceConfig(...)` | Read a resource's resolved config                                  |
-| `logger`                | Logger instance                                                    |
-| `store`                 | Runtime store with registered resources, tasks, middleware, events |
-| `dispose()`             | Gracefully dispose resources and unhook process listeners          |
+An object with the following properties and methods:
+
+| Property                    | Description                                                                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `value`                     | Value returned by the `app` resource's `init()`                                                                                               |
+| `runTask(...)`              | Run a task by reference or string id                                                                                                          |
+| `emitEvent(...)`            | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`)                                                    |
+| `getResourceValue(...)`     | Read a resource's value                                                                                                                       |
+| `getLazyResourceValue(...)` | Initialize/read a resource on demand. Available only when `run(..., { lazy: true })` is enabled.                                              |
+| `getResourceConfig(...)`    | Read a resource's resolved config                                                                                                             |
+| `getRootId()`               | Read the root resource id                                                                                                                     |
+| `getRootConfig()`           | Read the root resource config                                                                                                                 |
+| `getRootValue()`            | Read the initialized root resource value                                                                                                      |
+| `logger`                    | Logger instance                                                                                                                               |
+| `store`                     | Runtime store with registered resources, tasks, middleware, events, and introspection helpers (for example, `getAllThrows(task \| resource)`) |
+| `dispose()`                 | Gracefully dispose resources and unhook process listeners                                                                                     |
+
+Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.
+
+This object is your main interface to interact with the running application. Can also be injected as dependency via `globals.resources.runtime`.
+
+Important bootstrap note: when `runtime` is injected inside a resource `init()`, startup may still be in progress. You are guaranteed your current resource dependencies are ready, but not that all registered resources in the container are already initialized.
 
 ### RunOptions
 
 Pass as the second argument to `run(app, options)`.
 
-| Option                       | Type                                            | Description                                                                                                                                                                                                                   |
-| ---------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug`                      | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                          |
-| `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete. |
-| `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                        |
-| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners to call `dispose()` for graceful shutdown.                                                                                                                            |
-| `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                 |
-| `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                          |
-| `runtimeEventCycleDetection` | `boolean`                                       | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                  |
-| `mode`                       | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                             |
+| Option                       | Type                                            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug`                      | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                                                                                                                                                                                                                                                                                              |
+| `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                     |
+| `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                            |
+| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners to call `dispose()` for graceful shutdown.                                                                                                                                                                                                                                                                                                                                                                                                |
+| `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                                                                                                                                                                                     |
+| `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                              |
+| `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `initMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred. |
+| `initMode`                   | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup scheduling strategy. Use string values directly (for example `initMode: "parallel"`), no enum import required.                                                                                                                                                                                                                                                                                                                                         |
+| `runtimeEventCycleDetection` | `boolean`                                       | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                                                                                                                                                                                                                                                                                      |
+| `mode`                       | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).
 
@@ -86,6 +100,13 @@ await run(app, { debug: "verbose", logs: { printStrategy: "json-pretty" } });
 await run(app, { dryRun: true });
 ```
 
+- Lazy startup + explicit on-demand resource init:
+
+```ts
+const runtime = await run(app, { lazy: true, initMode: "parallel" });
+const db = await runtime.getLazyResourceValue("app.db");
+```
+
 - Custom process error routing:
 
 ```ts
@@ -94,54 +115,6 @@ await run(app, {
   onUnhandledError: ({ error }) => report(error),
 });
 ```
-
-## Task Interceptors
-
-_Resources can dynamically modify task behavior during initialization_
-
-Task interceptors (`task.intercept()`) are the modern replacement for component lifecycle events, allowing resources to dynamically modify task behavior without tight coupling.
-
-```typescript
-import { r, run } from "@bluelibs/runner";
-
-const calculatorTask = r
-  .task("app.tasks.calculator")
-  .run(async (input: { value: number }) => {
-    console.log("3. Task is running...");
-    return { result: input.value + 1 };
-  })
-  .build();
-
-const interceptorResource = r
-  .resource("app.interceptor")
-  .dependencies({ calculatorTask })
-  .init(async (_config, { calculatorTask }) => {
-    // Intercept the task to modify its behavior
-    calculatorTask.intercept(async (next, input) => {
-      console.log("1. Interceptor before task run");
-      const result = await next(input);
-      console.log("4. Interceptor after task run");
-      return { ...result, intercepted: true };
-    });
-  })
-  .build();
-
-const app = r
-  .resource("app")
-  .register([calculatorTask, interceptorResource])
-  .dependencies({ calculatorTask })
-  .init(async (_config, { calculatorTask }) => {
-    console.log("2. Calling the task...");
-    const result = await calculatorTask({ value: 10 });
-    console.log("5. Final result:", result);
-    // Final result: { result: 11, intercepted: true }
-  })
-  .build();
-
-await run(app);
-```
-
-> **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You're collapsing the waveform of a task at runtime and I'm Schrödinger's runtime, praying the cat hasn't overridden `run()` with `throw new Error('lol')`."
 
 ## Lifecycle Management
 

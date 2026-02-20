@@ -212,10 +212,7 @@ class FlowStepRecorder<T> implements IStepBuilder<T> {
     });
 
     const result = Promise.resolve(undefined as T);
-    return result.then(
-      onfulfilled ?? ((v) => v as unknown as TResult1),
-      onrejected,
-    );
+    return result.then(onfulfilled, onrejected) as Promise<TResult1 | TResult2>;
   }
 }
 

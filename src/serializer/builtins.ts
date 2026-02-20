@@ -2,6 +2,11 @@
  * Built-in type definitions for common JavaScript objects
  */
 
+import {
+  invalidPayloadError,
+  validationError,
+  unsupportedFeatureError,
+} from "./errors";
 import type { TypeDefinition } from "./types";
 import { binaryBuiltInTypes } from "./binary-builtins";
 import { errorAndUrlBuiltInTypes } from "./error-url-builtins";
@@ -45,10 +50,17 @@ export type SerializedSymbolPayload =
   | { kind: SymbolPayloadKind.For; key: string }
   | { kind: SymbolPayloadKind.WellKnown; key: WellKnownSymbolKey };
 
+const getRuntimeWellKnownSymbol = (
+  key: WellKnownSymbolKey,
+): symbol | undefined => {
+  const value = Reflect.get(Symbol, key);
+  return typeof value === "symbol" ? value : undefined;
+};
+
 const getWellKnownSymbolKey = (value: symbol): WellKnownSymbolKey | null => {
   for (const key of WELL_KNOWN_SYMBOL_KEYS) {
-    const sym = (Symbol as unknown as Record<WellKnownSymbolKey, unknown>)[key];
-    if (typeof sym === "symbol" && sym === value) {
+    const runtimeSymbol = getRuntimeWellKnownSymbol(key);
+    if (runtimeSymbol === value) {
       return key;
     }
   }
@@ -59,30 +71,30 @@ export const assertSymbolPayload = (
   payload: unknown,
 ): SerializedSymbolPayload => {
   if (!payload || typeof payload !== "object") {
-    throw new Error("Invalid symbol payload");
+    throw invalidPayloadError("Invalid symbol payload");
   }
   const rec = payload as Record<string, unknown>;
   if (rec.kind === SymbolPayloadKind.For) {
     if (typeof rec.key !== "string") {
-      throw new Error("Invalid symbol payload");
+      throw invalidPayloadError("Invalid symbol payload");
     }
     return { kind: SymbolPayloadKind.For, key: rec.key };
   }
   if (rec.kind === SymbolPayloadKind.WellKnown) {
     if (typeof rec.key !== "string") {
-      throw new Error("Invalid symbol payload");
+      throw invalidPayloadError("Invalid symbol payload");
     }
     if (
       (WELL_KNOWN_SYMBOL_KEYS as readonly string[]).includes(rec.key) === false
     ) {
-      throw new Error("Invalid symbol payload");
+      throw invalidPayloadError("Invalid symbol payload");
     }
     return {
       kind: SymbolPayloadKind.WellKnown,
       key: rec.key as WellKnownSymbolKey,
     };
   }
-  throw new Error("Invalid symbol payload");
+  throw invalidPayloadError("Invalid symbol payload");
 };
 
 /**
@@ -110,8 +122,13 @@ export const RegExpType: TypeDefinition<
     pattern: regex.source,
     flags: regex.flags,
   }),
-  deserialize: (data: { pattern: string; flags: string }) =>
-    new RegExp(data.pattern, data.flags),
+  deserialize: (data: { pattern: string; flags: string }) => {
+    try {
+      return new RegExp(data.pattern, data.flags);
+    } catch {
+      throw invalidPayloadError("Invalid RegExp payload");
+    }
+  },
   strategy: "value",
 };
 
@@ -156,7 +173,7 @@ export const NonFiniteNumberType: TypeDefinition<number, NonFiniteNumberTag> = {
   serialize: (value: number) => {
     const tag = getNonFiniteNumberTag(value);
     if (!tag) {
-      throw new Error("Expected non-finite number");
+      throw validationError("Expected non-finite number");
     }
     return tag;
   },
@@ -203,11 +220,11 @@ export const SymbolType: TypeDefinition<symbol, SerializedSymbolPayload> = {
     if (parsed.kind === SymbolPayloadKind.For) {
       return Symbol.for(parsed.key);
     }
-    const value = (Symbol as unknown as Record<WellKnownSymbolKey, unknown>)[
-      parsed.key
-    ];
-    if (typeof value !== "symbol") {
-      throw new Error(`Unsupported well-known symbol "${parsed.key}"`);
+    const value = getRuntimeWellKnownSymbol(parsed.key);
+    if (!value) {
+      throw unsupportedFeatureError(
+        `Unsupported well-known symbol "${parsed.key}"`,
+      );
     }
     return value;
   },

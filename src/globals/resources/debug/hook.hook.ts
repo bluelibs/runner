@@ -1,5 +1,6 @@
 import { defineResource } from "../../../define";
-import { globalResources } from "../../globalResources";
+import { loggerResource as logger } from "../logger.resource";
+import { eventManagerResource as eventManager } from "../eventManager.resource";
 import { globalTags } from "../../globalTags";
 import { hasSystemTag } from "./utils";
 import { debugConfig } from "./debugConfig.resource";
@@ -14,9 +15,9 @@ export const hookInterceptorResource = defineResource({
   },
   tags: [globalTags.system],
   dependencies: {
-    logger: globalResources.logger,
+    logger,
     debugConfig,
-    eventManager: globalResources.eventManager,
+    eventManager,
   },
   init: async (_event, deps) => {
     deps.eventManager.interceptHook(async (next, hook, event) => {

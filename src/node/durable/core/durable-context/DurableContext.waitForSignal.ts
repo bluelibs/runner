@@ -5,6 +5,10 @@ import type { IEventDefinition } from "../../../../types/event";
 import { DurableAuditEntryKind, type DurableAuditEntryInput } from "../audit";
 import { TimerStatus, TimerType } from "../types";
 import { isRecord, sleepMs } from "../utils";
+import {
+  durableExecutionInvariantError,
+  durableSignalTimeoutError,
+} from "../../../../errors";
 
 export type WaitForSignalOutcome<TPayload> =
   | { kind: "signal"; payload: TPayload }
@@ -77,16 +81,18 @@ async function withSignalLock<TPayload>(params: {
   }
 
   if (lockId === null) {
-    throw new Error(
-      `Failed to acquire signal lock for '${params.signalId}' on execution '${params.executionId}'`,
-    );
+    return durableExecutionInvariantError.throw({
+      message: `Failed to acquire signal lock for '${params.signalId}' on execution '${params.executionId}'`,
+    });
   }
+
+  const acquiredLockId = lockId;
 
   try {
     return await params.fn();
   } finally {
     try {
-      await params.store.releaseLock(lockResource, lockId);
+      await params.store.releaseLock(lockResource, acquiredLockId);
     } catch {
       // best-effort cleanup; ignore
     }
@@ -118,7 +124,7 @@ export async function waitForSignalDurably<TPayload>(params: {
 
   const resolveTimedOut = (): WaitForSignalOutcome<TPayload> => {
     if (!hasTimeout) {
-      throw new Error(`Signal '${signalId}' timed out`);
+      durableSignalTimeoutError.throw({ signalId });
     }
     return { kind: "timeout" };
   };
@@ -131,9 +137,10 @@ export async function waitForSignalDurably<TPayload>(params: {
       let stepId: string;
       if (params.options?.stepId) {
         if (!params.store.listStepResults) {
-          throw new Error(
-            "waitForSignal({ stepId }) requires a store that implements listStepResults()",
-          );
+          durableExecutionInvariantError.throw({
+            message:
+              "waitForSignal({ stepId }) requires a store that implements listStepResults()",
+          });
         }
         stepId = `__signal:${params.options.stepId}`;
       } else {
@@ -154,31 +161,35 @@ export async function waitForSignalDurably<TPayload>(params: {
       if (existing) {
         const state = parseSignalStepState(existing.result);
         if (!state) {
-          throw new Error(
-            `Invalid signal step state for '${signalId}' at '${stepId}'`,
-          );
+          return durableExecutionInvariantError.throw({
+            message: `Invalid signal step state for '${signalId}' at '${stepId}'`,
+          });
         }
-        if (state.state === "completed") {
-          const payload = state.payload as TPayload;
+        const parsedState = state;
+        if (parsedState.state === "completed") {
+          const payload = parsedState.payload as TPayload;
           return resolveCompleted(payload);
         }
-        if (state.state === "timed_out") {
+        if (parsedState.state === "timed_out") {
           return resolveTimedOut();
         }
-        if (state.state === "waiting") {
-          if (state.signalId !== undefined && state.signalId !== signalId) {
-            throw new Error(
-              `Invalid signal step state for '${signalId}' at '${stepId}'`,
-            );
+        if (parsedState.state === "waiting") {
+          if (
+            parsedState.signalId !== undefined &&
+            parsedState.signalId !== signalId
+          ) {
+            return durableExecutionInvariantError.throw({
+              message: `Invalid signal step state for '${signalId}' at '${stepId}'`,
+            });
           }
           if (params.options?.timeoutMs !== undefined) {
-            if ("timeoutAtMs" in state && "timerId" in state) {
+            if ("timeoutAtMs" in parsedState && "timerId" in parsedState) {
               await params.store.createTimer({
-                id: state.timerId,
+                id: parsedState.timerId,
                 executionId: params.executionId,
                 stepId,
                 type: TimerType.SignalTimeout,
-                fireAt: new Date(state.timeoutAtMs),
+                fireAt: new Date(parsedState.timeoutAtMs),
                 status: TimerStatus.Pending,
               });
             } else {

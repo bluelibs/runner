@@ -3,6 +3,7 @@
  * Extracted from Serializer.ts as a standalone module.
  */
 
+import { symbolPolicyError, typeRegistryError } from "./errors";
 import type { TypeDefinition } from "./types";
 import { SymbolPolicy, SymbolPolicyErrorMessage } from "./types";
 import {
@@ -69,54 +70,20 @@ export class TypeRegistry {
    */
   addType<TInstance, TSerialized>(
     typeDef: TypeDefinition<TInstance, TSerialized>,
-  ): void;
-  addType<TJson = unknown, TInstance = unknown>(
-    name: string,
-    factory: (json: TJson) => TInstance,
-  ): void;
-  addType<TInstance, TSerialized>(
-    arg1: string | TypeDefinition<TInstance, TSerialized>,
-    arg2?: (json: unknown) => unknown,
   ): void {
-    if (typeof arg1 === "string") {
-      const name = arg1;
-      const factory = arg2;
-      if (!factory) {
-        throw new Error(`addType("${name}", factory) requires a factory`);
-      }
-
-      type ValueTypeInstance = { typeName(): string; toJSONValue(): unknown };
-      const isValueTypeInstance = (obj: unknown): obj is ValueTypeInstance => {
-        if (!obj || typeof obj !== "object") return false;
-        const rec = obj as Record<string, unknown>;
-        return (
-          typeof rec.typeName === "function" &&
-          typeof rec.toJSONValue === "function"
-        );
-      };
-
-      this.addType({
-        id: name,
-        is: (obj: unknown): obj is ValueTypeInstance =>
-          isValueTypeInstance(obj) && obj.typeName() === name,
-        serialize: (obj: ValueTypeInstance) => obj.toJSONValue(),
-        deserialize: (data: unknown) => factory(data) as ValueTypeInstance,
-        strategy: "value",
-      });
-      return;
-    }
-
-    const typeDef = arg1;
     if (!typeDef || !typeDef.id) {
-      throw new Error("Invalid type definition: id is required");
+      throw typeRegistryError("Invalid type definition: id is required");
+    }
+    if (typeof typeDef.is !== "function") {
+      throw typeRegistryError("Invalid type definition: is is required");
     }
     if (!typeDef.serialize || !typeDef.deserialize) {
-      throw new Error(
+      throw typeRegistryError(
         "Invalid type definition: serialize and deserialize are required",
       );
     }
     if (this.typeRegistry.has(typeDef.id)) {
-      throw new Error(`Type with id "${typeDef.id}" already exists`);
+      throw typeRegistryError(`Type with id "${typeDef.id}" already exists`);
     }
 
     this.typeRegistry.set(
@@ -154,11 +121,11 @@ export class TypeRegistry {
    */
   getTypeDefinition(typeId: string): TypeDefinition<unknown, unknown> {
     if (this.allowedTypes && !this.allowedTypes.has(typeId)) {
-      throw new Error(`Type "${typeId}" is not allowed`);
+      throw typeRegistryError(`Type "${typeId}" is not allowed`);
     }
     const typeDef = this.typeMap.get(typeId);
     if (!typeDef) {
-      throw new Error(`Unknown type: ${typeId}`);
+      throw typeRegistryError(`Unknown type: ${typeId}`);
     }
     return typeDef;
   }
@@ -216,7 +183,7 @@ export class TypeRegistry {
 
   private assertSymbolPolicyValue(policy: SymbolPolicy): void {
     if (!Object.values(SymbolPolicy).includes(policy)) {
-      throw new Error(SymbolPolicyErrorMessage.UnsupportedSymbolPolicy);
+      throw symbolPolicyError(SymbolPolicyErrorMessage.UnsupportedSymbolPolicy);
     }
   }
 
@@ -226,11 +193,13 @@ export class TypeRegistry {
         return;
       case SymbolPolicy.WellKnownOnly:
         if (payload.kind === SymbolPayloadKind.For) {
-          throw new Error(SymbolPolicyErrorMessage.GlobalSymbolsNotAllowed);
+          throw symbolPolicyError(
+            SymbolPolicyErrorMessage.GlobalSymbolsNotAllowed,
+          );
         }
         return;
       case SymbolPolicy.Disabled:
-        throw new Error(SymbolPolicyErrorMessage.SymbolsNotAllowed);
+        throw symbolPolicyError(SymbolPolicyErrorMessage.SymbolsNotAllowed);
     }
   }
 }

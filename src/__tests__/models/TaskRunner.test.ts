@@ -1,21 +1,18 @@
 import { TaskRunner } from "../../models/TaskRunner";
 import { Store } from "../../models/Store";
-import { EventManager } from "../../models/EventManager";
 import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
-import { Logger } from "../../models";
+
 import { createTestFixture } from "../test-utils";
 
 describe("TaskRunner", () => {
   let store: Store;
-  let eventManager: EventManager;
   let taskRunner: TaskRunner;
-  let logger: Logger;
+  // no logger or onUnhandledError needed
 
   beforeEach(() => {
     const fixture = createTestFixture();
     store = fixture.store;
-    eventManager = fixture.eventManager;
-    logger = fixture.logger;
+
     taskRunner = fixture.createTaskRunner();
   });
 
@@ -83,6 +80,31 @@ describe("TaskRunner", () => {
     expect(result).toBe(21); // ((5 + 5) * 2) + 1
   });
 
+  it("should recompose task runner before store lock so new interceptors are applied", async () => {
+    const task = defineTask({
+      id: "taskRunner.recompose.beforeLock",
+      run: async (input: number) => input,
+    });
+
+    store.tasks.set(task.id, {
+      task,
+      computedDependencies: {},
+      isInitialized: true,
+    });
+
+    const firstResult = await taskRunner.run(task, 5);
+    expect(firstResult).toBe(5);
+
+    store
+      .getMiddlewareManager()
+      .intercept("task", async (_, executionInput) => {
+        return executionInput.next(executionInput.task.input + 1);
+      });
+
+    const secondResult = await taskRunner.run(task, 5);
+    expect(secondResult).toBe(6);
+  });
+
   // Lifecycle emissions removed
 
   it("should throw errors from task execution", async () => {
@@ -120,6 +142,27 @@ describe("TaskRunner", () => {
     });
 
     await expect(taskRunner.run(task, undefined)).rejects.toThrow(error);
+  });
+
+  it("does not route task execution errors to onUnhandledError", async () => {
+    const error = new Error("Business logic error");
+    const onUnhandledErrorSpy = jest.spyOn(store, "onUnhandledError");
+
+    const task = defineTask({
+      id: "testTask.unhandled",
+      run: async () => {
+        throw error;
+      },
+    });
+
+    store.tasks.set(task.id, {
+      task,
+      computedDependencies: {},
+      isInitialized: false,
+    });
+
+    await expect(taskRunner.run(task, undefined)).rejects.toThrow(error);
+    expect(onUnhandledErrorSpy).not.toHaveBeenCalled();
   });
 
   // Global lifecycle events removed

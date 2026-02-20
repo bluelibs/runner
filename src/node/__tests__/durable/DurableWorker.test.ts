@@ -5,6 +5,8 @@ import type {
 } from "../../durable/core/interfaces/queue";
 import type { IDurableExecutionProcessor } from "../../durable/core/interfaces/service";
 import { DurableWorker } from "../../durable/core/DurableWorker";
+import { createMessageError } from "../../../errors";
+import { Logger } from "../../../models/Logger";
 
 class TestQueue implements IDurableQueue {
   public handler: MessageHandler<unknown> | null = null;
@@ -42,7 +44,46 @@ function message(payload: unknown, type: QueueMessage["type"]): QueueMessage {
 }
 
 describe("durable: DurableWorker", () => {
+  function createSilentLogger(): Logger {
+    return new Logger({
+      printThreshold: null,
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
+  }
+
   it("acks successful execution messages", async () => {
+    const queue = new TestQueue();
+    const service: IDurableExecutionProcessor = {
+      processExecution: jest.fn(async () => {}),
+    };
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+
+    await queue.handler?.(message({ executionId: "e1" }, "execute"));
+
+    expect(service.processExecution).toHaveBeenCalledWith("e1");
+    expect(queue.ackCalls).toEqual(["m1"]);
+  });
+
+  it("nacks on handler errors", async () => {
+    const queue = new TestQueue();
+    const service: IDurableExecutionProcessor = {
+      processExecution: jest.fn(async () => {
+        throw createMessageError("boom");
+      }),
+    };
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+
+    await queue.handler?.(message({ executionId: "e1" }, "resume"));
+
+    expect(queue.nackCalls).toEqual([{ id: "m1", requeue: true }]);
+  });
+
+  it("uses a fallback logger when logger is omitted", async () => {
     const queue = new TestQueue();
     const service: IDurableExecutionProcessor = {
       processExecution: jest.fn(async () => {}),
@@ -57,29 +98,13 @@ describe("durable: DurableWorker", () => {
     expect(queue.ackCalls).toEqual(["m1"]);
   });
 
-  it("nacks on handler errors", async () => {
-    const queue = new TestQueue();
-    const service: IDurableExecutionProcessor = {
-      processExecution: jest.fn(async () => {
-        throw new Error("boom");
-      }),
-    };
-
-    const worker = new DurableWorker(service, queue);
-    await worker.start();
-
-    await queue.handler?.(message({ executionId: "e1" }, "resume"));
-
-    expect(queue.nackCalls).toEqual([{ id: "m1", requeue: true }]);
-  });
-
   it("ignores unknown payload shapes", async () => {
     const queue = new TestQueue();
     const service: IDurableExecutionProcessor = {
       processExecution: jest.fn(async () => {}),
     };
 
-    const worker = new DurableWorker(service, queue);
+    const worker = new DurableWorker(service, queue, createSilentLogger());
     await worker.start();
 
     await queue.handler?.(message("bad", "execute"));
@@ -94,7 +119,7 @@ describe("durable: DurableWorker", () => {
       processExecution: jest.fn(async () => {}),
     };
 
-    const worker = new DurableWorker(service, queue);
+    const worker = new DurableWorker(service, queue, createSilentLogger());
     await worker.start();
 
     await queue.handler?.(message({ executionId: "e1" }, "schedule"));

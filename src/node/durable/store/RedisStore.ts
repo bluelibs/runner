@@ -18,6 +18,7 @@ import {
   type DurableAuditEntry,
 } from "../core/audit";
 import { createIORedisClient } from "../optionalDeps/ioredis";
+import { durableStoreShapeError } from "../../../errors";
 
 const serializer = new Serializer();
 
@@ -124,10 +125,11 @@ export class RedisStore implements IDurableStore {
       );
       const parsed = this.parseScanResponse(scanned);
       if (!parsed) {
-        throw new Error("Unexpected Redis SCAN response shape");
+        durableStoreShapeError.throw({
+          message: "Unexpected Redis SCAN response shape",
+        });
       }
-
-      const [newCursor, scannedKeys] = parsed;
+      const [newCursor, scannedKeys] = parsed!;
       cursor = newCursor;
       keys.push(...scannedKeys);
     } while (cursor !== "0");
@@ -141,10 +143,11 @@ export class RedisStore implements IDurableStore {
       const scanned = await this.redis.sscan(setKey, cursor, "COUNT", 100);
       const parsed = this.parseScanResponse(scanned);
       if (!parsed) {
-        throw new Error("Unexpected Redis SSCAN response shape");
+        durableStoreShapeError.throw({
+          message: "Unexpected Redis SSCAN response shape",
+        });
       }
-
-      const [newCursor, scannedMembers] = parsed;
+      const [newCursor, scannedMembers] = parsed!;
       cursor = newCursor;
       members.push(...scannedMembers);
     } while (cursor !== "0");
@@ -439,15 +442,20 @@ export class RedisStore implements IDurableStore {
   }
 
   async createTimer(timer: Timer): Promise<void> {
-    await this.redis.hset(
+    const script = `
+      redis.call("hset", KEYS[1], ARGV[1], ARGV[2])
+      redis.call("zadd", KEYS[2], ARGV[3], ARGV[1])
+      return "OK"
+    `;
+
+    await this.redis.eval(
+      script,
+      2,
       this.k("timers"),
+      this.k("timers_schedule"),
       timer.id,
       serializer.stringify(timer),
-    );
-    await this.redis.zadd(
-      this.k("timers_schedule"),
       timer.fireAt.getTime(),
-      timer.id,
     );
   }
 
@@ -562,6 +570,24 @@ export class RedisStore implements IDurableStore {
       end
     `;
     await this.redis.eval(script, 1, key, lockId);
+  }
+
+  async renewLock(
+    resource: string,
+    lockId: string,
+    ttlMs: number,
+  ): Promise<boolean> {
+    const key = this.k(`lock:${resource}`);
+    const script = `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("pexpire", KEYS[1], ARGV[2])
+      else
+        return 0
+      end
+    `;
+
+    const result = await this.redis.eval(script, 1, key, lockId, `${ttlMs}`);
+    return Number(result) === 1;
   }
 
   async dispose(): Promise<void> {

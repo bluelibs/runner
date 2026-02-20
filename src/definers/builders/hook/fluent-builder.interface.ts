@@ -6,6 +6,7 @@ import type {
   ITaskMeta,
   TagType,
 } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 
 /** Valid event targets for hook's .on() method */
 export type ValidOnTarget =
@@ -41,6 +42,8 @@ export interface HookFluentBuilder<
   meta<TNewMeta extends ITaskMeta>(
     m: TNewMeta,
   ): HookFluentBuilder<TDeps, TOn, TNewMeta>;
+  /** Declare which typed errors this hook may throw (declarative only). */
+  throws(list: ThrowsList): HookFluentBuilder<TDeps, TOn, TMeta>;
   /** Set the hook's run handler. Required before build(). */
   run(
     fn: IHookDefinition<TDeps, ResolvedOn<TOn>, TMeta>["run"],

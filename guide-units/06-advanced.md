@@ -86,6 +86,96 @@ For tasks, prefer static dependencies (required or `.optional()`) and branch at 
 
 ---
 
+## Execution Journal (Advanced Coordination)
+
+When multiple middleware need to exchange execution-local state without polluting task input/output, use the **ExecutionJournal**.
+
+- Use typed keys via `journal.createKey<T>(...)`
+- `set()` is fail-fast by default (duplicate key writes throw)
+- Use `{ override: true }` only when mutation is intentional
+- Forward journal explicitly in nested task calls when you need shared trace/state continuity
+
+For the full API and patterns, see the Execution Journal section in [Core Concepts](#execution-journal).
+
+---
+
+## Task Interceptors
+
+_Resources can dynamically modify task behavior during initialization_
+
+Task interceptors (`task.intercept()`) are the modern replacement for component lifecycle events, allowing resources to dynamically modify task behavior without tight coupling.
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+
+const calculatorTask = r
+  .task("app.tasks.calculator")
+  .run(async (input: { value: number }) => {
+    console.log("3. Task is running...");
+    return { result: input.value + 1 };
+  })
+  .build();
+
+const interceptorResource = r
+  .resource("app.interceptor")
+  .dependencies({ calculatorTask })
+  .init(async (_config, { calculatorTask }) => {
+    // Intercept the task to modify its behavior
+    calculatorTask.intercept(async (next, input) => {
+      console.log("1. Interceptor before task run");
+      const result = await next(input);
+      console.log("4. Interceptor after task run");
+      return { ...result, intercepted: true };
+    });
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([calculatorTask, interceptorResource])
+  .dependencies({ calculatorTask })
+  .init(async (_config, { calculatorTask }) => {
+    console.log("2. Calling the task...");
+    const result = await calculatorTask({ value: 10 });
+    console.log("5. Final result:", result);
+    // Final result: { result: 11, intercepted: true }
+  })
+  .build();
+
+await run(app);
+```
+
+You can inspect which resources installed local interceptors through an injected task dependency:
+
+```typescript
+const inspector = r
+  .resource("app.inspector")
+  .dependencies({ calculatorTask })
+  .init(async (_config, { calculatorTask }) => {
+    const owners = calculatorTask.getInterceptingResourceIds();
+    // eg: ["app.interceptor"]
+    return { owners };
+  })
+  .build();
+```
+
+> **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You're collapsing the waveform of a task at runtime and I'm Schrödinger's runtime, praying the cat hasn't overridden `run()` with `throw new Error('lol')`."
+
+## Durable Workflows (Node-only)
+
+Durable workflows provide replay-safe, crash-recoverable orchestration primitives:
+
+- `ctx.step(...)` for deterministic checkpoints
+- `ctx.sleep(...)` for durable timers
+- `ctx.waitForSignal(...)` for durable external synchronization
+- `ctx.switch(...)` for replay-safe branching
+
+Use them when business processes must survive process restarts and resume correctly.
+
+See [Durable Workflows](../readmes/DURABLE_WORKFLOWS.md) for complete API and patterns.
+
+---
+
 ## Serialization
 
 Ever sent a `Date` over JSON and gotten `"2024-01-15T..."` back as a string? Runner's serializer preserves types across the wire.
@@ -93,14 +183,16 @@ It also supports object graphs that plain JSON cannot represent, including circu
 
 ### What it handles
 
-| Type          | JSON   | Runner Serializer |
-| ------------- | ------ | ----------------- |
-| `Date`        | String | Date object       |
-| `RegExp`      | Lost   | RegExp object     |
-| `Map`, `Set`  | Lost   | Preserved         |
-| `Uint8Array`  | Lost   | Preserved         |
-| Circular refs | Error  | Preserved         |
-| Self refs     | Error  | Preserved         |
+| Type          | JSON                         | Runner Serializer                                                                              |
+| ------------- | ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| `Date`        | String                       | Date object                                                                                    |
+| `RegExp`      | Lost                         | RegExp object                                                                                  |
+| `Map`, `Set`  | Lost                         | Preserved                                                                                      |
+| `Uint8Array`  | Lost                         | Preserved                                                                                      |
+| `bigint`      | Lost/unsafe numeric coercion | Preserved as `__type: "BigInt"` (decimal string payload)                                       |
+| `symbol`      | Lost                         | Supports `Symbol.for(key)` and well-known symbols (unique `Symbol("...")` values are rejected) |
+| Circular refs | Error                        | Preserved                                                                                      |
+| Self refs     | Error                        | Preserved                                                                                      |
 
 ### Two modes
 
@@ -126,6 +218,24 @@ const restored = serializer.deserialize(data);
 // restored.self === restored (self-reference preserved)
 ```
 
+### Safety configuration for untrusted payloads
+
+When you deserialize untrusted data, configure the serializer explicitly:
+
+```typescript
+import { Serializer } from "@bluelibs/runner";
+
+const serializer = new Serializer({
+  symbolPolicy: "well-known-only",
+  allowedTypes: ["Date", "RegExp", "Map", "Set", "Uint8Array", "BigInt"],
+  maxDepth: 64,
+  maxRegExpPatternLength: 2000,
+  allowUnsafeRegExp: false,
+});
+```
+
+`symbolPolicy` defaults to `"allow-all"`. Prefer `"well-known-only"` (or stricter) for untrusted input.
+
 ### Custom types
 
 Teach the serializer about your own classes:
@@ -136,18 +246,16 @@ class Money {
     public amount: number,
     public currency: string,
   ) {}
-
-  // Required methods for serialization
-  typeName() {
-    return "Money";
-  }
-  toJSONValue() {
-    return { amount: this.amount, currency: this.currency };
-  }
 }
 
 // Register the type
-serializer.addType("Money", (json) => new Money(json.amount, json.currency));
+serializer.addType({
+  id: "Money",
+  is: (obj): obj is Money => obj instanceof Money,
+  serialize: (money) => ({ amount: money.amount, currency: money.currency }),
+  deserialize: (json) => new Money(json.amount, json.currency),
+  strategy: "value",
+});
 
 // Now it round-trips correctly
 const price = new Money(99.99, "USD");
@@ -162,9 +270,11 @@ The serializer is hardened against common attacks:
 
 - **ReDoS protection**: Validates RegExp patterns against catastrophic backtracking
 - **Prototype pollution blocked**: Filters `__proto__`, `constructor`, `prototype` keys
-- **Depth limits**: Configurable max depth prevents stack overflow
+- **Depth limits**: `maxDepth` prevents stack overflows
+- **Type allow-listing**: `allowedTypes` narrows which runtime type ids are accepted
+- **Symbol registry safety**: `symbolPolicy` controls symbol deserialization behavior
 
-> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](./readmes/TUNNELS.md) for file upload patterns.
+> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](../readmes/TUNNELS.md) for file upload patterns.
 
 ### Tunnels: Bridging Runners
 
@@ -211,7 +321,17 @@ const remoteTasksTunnel = r
 
 This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
 
-For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./readmes/TUNNELS.md).
+For typed remote error hydration, pass an `errorRegistry` to the client:
+
+```typescript
+// Assuming: AppError = r.error<{ code: number }>("app.errors.AppError").build()
+const client = createClient({
+  url: "http://remote-runner:8080/__runner",
+  errorRegistry: new Map([[AppError.id, AppError]]),
+});
+```
+
+For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](../readmes/TUNNELS.md).
 
 ---
 
@@ -267,9 +387,22 @@ const resilientTask = r
 
 ## Meta
 
-_The structured way to describe what your components do and control their behavior_
+Think about generating API documentation automatically from your tasks, or building an admin dashboard that shows what each task does without reading code. Or you need to categorize tasks by feature for billing purposes. How do you attach descriptive information to components?
 
-Metadata in BlueLibs Runner provides a systematic way to document, categorize, and control the behavior of your tasks, resources, events, and middleware. Think of it as your component's passport - it tells you and your tools everything they need to know about what this component does and how it should be treated.
+**The problem**: You need to document what components do and categorize them, but there's no standard place to store this metadata.
+
+**The naive solution**: Use naming conventions or external documentation. But this gets out of sync easily and doesn't integrate with tooling.
+
+**The better solution**: Use Meta, a structured way to describe what your components do.
+
+### When to use Meta
+
+| Use case         | Why Meta helps                                 |
+| ---------------- | ---------------------------------------------- |
+| API docs         | Generate documentation from component metadata |
+| Admin dashboards | Display component descriptions                 |
+| Billing          | Categorize tasks by feature for metering       |
+| Discovery        | Search components by title/description         |
 
 ### Metadata Properties
 
@@ -378,25 +511,33 @@ Sometimes you need to replace a component entirely. Maybe you're doing integrati
 You can now use a dedicated helper `override()` or the fluent builder `r.override(...)` to safely override any property on tasks, resources, or middleware — except `id`. This ensures the identity is preserved, while allowing behavior changes.
 
 ```typescript
+import { override, r } from "@bluelibs/runner";
+
 const productionEmailer = r
   .resource("app.emailer")
   .init(async () => new SMTPEmailer())
   .build();
 
 // Option 1: Fluent override builder (Recommended)
-const testEmailer = r
+const fluentOverrideEmailer = r
   .override(productionEmailer)
   .init(async () => new MockEmailer())
   .build();
 
-// Option 2: Using override() helper to change behavior while preserving id
-const testEmailer = override(productionEmailer, {
+// Option 2: Typed shorthand for common behavior swaps
+const shorthandOverrideEmailer = r.override(
+  productionEmailer,
+  async () => new MockEmailer(),
+);
+
+// Option 3: Using override() helper to change behavior while preserving id
+const helperOverrideEmailer = override(productionEmailer, {
   init: async () => new MockEmailer(),
 });
 
-// Option 3: The system is really flexible, and override is just bringing in type safety, nothing else under the hood.
+// Option 4: The system is really flexible, and override is just bringing in type safety, nothing else under the hood.
 // Using spread operator works the same way but does not provide type-safety.
-const testEmailer = r
+const manualOverrideEmailer = r
   .resource("app.emailer")
   .init(async () => ({}))
   .build();
@@ -404,45 +545,116 @@ const testEmailer = r
 const app = r
   .resource("app")
   .register([productionEmailer])
-  .overrides([testEmailer]) // This replaces the production version
+  .overrides([fluentOverrideEmailer]) // This replaces the production version
   .build();
-
-import { override } from "@bluelibs/runner";
 
 // Tasks
 const originalTask = r
   .task("app.tasks.compute")
   .run(async () => 1)
   .build();
-const overriddenTask = override(originalTask, {
-  run: async () => 2,
-});
+const overriddenTask = r.override(originalTask, async () => 2);
 
 // Resources
 const originalResource = r
   .resource("app.db")
   .init(async () => "conn")
   .build();
-const overriddenResource = override(originalResource, {
-  init: async () => "mock-conn",
-});
+const overriddenResource = r.override(
+  originalResource,
+  async () => "mock-conn",
+);
 
 // Middleware
-const originalMiddleware = taskMiddleware({
-  id: "app.middleware.log",
-  run: async ({ next }) => next(),
-});
-const overriddenMiddleware = override(originalMiddleware, {
-  run: async ({ task, next }) => {
+const originalMiddleware = r.middleware
+  .task("app.middleware.log")
+  .run(async ({ next }) => next())
+  .build();
+const overriddenMiddleware = r.override(
+  originalMiddleware,
+  async ({ task, next }) => {
     const result = await next(task?.input);
     return { wrapped: result };
   },
-});
+);
 
 // Even hooks
 ```
 
-The override builder starts from the base definition and applies fluent mutations (dependencies/tags/middleware append by default; use `{ override: true }` to replace). Hook overrides keep the same `.on` target.
+`r.override(base, fn)` is a typed shorthand for behavior replacement (`run` for tasks/hooks/middleware, `init` for resources). The override builder starts from the base definition and applies fluent mutations (dependencies/tags/middleware append by default; use `{ override: true }` to replace). Hook overrides keep the same `.on` target.
+
+### `r.override(...)` vs `.overrides([...])` (Critical Distinction)
+
+These APIs solve different problems:
+
+| API                    | What it does                                                                                 | Applies replacement? |
+| ---------------------- | -------------------------------------------------------------------------------------------- | -------------------- |
+| `r.override(base)`     | Creates a new definition object with the same id (builder mode)                              | No (not by itself)   |
+| `r.override(base, fn)` | Creates a new definition object with replaced behavior (`init` or `run`)                     | No (not by itself)   |
+| `.overrides([...])`    | Registers override _application requests_ that Runner validates and applies during bootstrap | Yes                  |
+
+Think of `r.override(...)` as **"build replacement definition"** and `.overrides([...])` as **"apply replacement in this container"**.
+
+```ts
+const mockMailer = r.override(realMailer, async () => new MockMailer()); // definition only
+
+const app = r
+  .resource("app")
+  .register([realMailer])
+  .overrides([mockMailer]) // replacement is applied here
+  .build();
+```
+
+Direct registration of an override definition is also valid when you control the composition and only register one version for that id:
+
+```ts
+const customMailer = r.override(realMailer, async () => new MockMailer());
+
+const app = r
+  .resource("app")
+  .register([customMailer]) // works: this is just the definition registered for that id
+  .build();
+```
+
+### Common Pitfalls (and Fixes)
+
+1. Creating an override but never applying/registering it:
+
+```ts
+const mockMailer = r.override(realMailer, async () => new MockMailer());
+await run(app); // no effect if app doesn't include mockMailer
+```
+
+Fix: register it directly or include it in `.overrides([...])`.
+
+2. Registering both base and override in `.register([...])`:
+
+```ts
+.register([realMailer, r.override(realMailer, async () => new MockMailer())])
+```
+
+Fix: either register only one definition for that id, or keep base in `register` and place replacement in `.overrides([...])`.
+
+3. Using `.overrides([...])` when target id is not registered:
+
+```ts
+.overrides([r.override(remoteMailer, async () => new MockMailer())])
+```
+
+Fix: ensure the base target is in the resource graph first. If you wanted a separate resource, use `.fork("new.id")` and register that fork.
+
+4. Overriding the root app directly in tests when a wrapper is clearer:
+
+Fix: prefer:
+
+```ts
+r.resource("test")
+  .register([app])
+  .overrides([
+    /* mocks */
+  ])
+  .build();
+```
 
 Overrides can also extend behavior while reusing the base implementation:
 
@@ -462,7 +674,7 @@ const extendingEmailer = override(productionEmailer, {
 });
 ```
 
-Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the top) wins, because it's applied last. Conflicting overrides are allowed; overriding something that wasn't registered throws. Use override() to change behavior safely while preserving the original id.
+Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the top) wins, because it's applied last. Conflicting overrides are allowed; overriding something that wasn't registered throws a dedicated error with remediation (register the base first, or for resources use `.fork("new.id")` when you meant a separate instance). Use override() to change behavior safely while preserving the original id.
 
 > **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
 
@@ -534,7 +746,24 @@ const app = r
 
 ## Runtime Validation
 
-BlueLibs Runner includes a generic validation interface that works with any validation library, including [Zod](https://zod.dev/), [Yup](https://github.com/jquense/yup), [Joi](https://joi.dev/), and others. The framework provides runtime validation with excellent TypeScript inference while remaining library-agnostic.
+Here's the issue: TypeScript types only exist at compile time. When your API receives JSON from an HTTP request, or when data comes from a database, TypeScript can't help you validate it. Invalid data crashes your app or causes subtle bugs.
+
+**The problem**: You need to validate data at runtime (where TypeScript can't help), but you don't want to write validation logic twice.
+
+**The naive solution**: Use a separate validation library but manually map types. But this duplicates work and types can get out of sync.
+
+**The better solution**: Use runtime validation with libraries like Zod that infer types from validation schemas.
+
+### When to use Runtime Validation
+
+| Use case          | Why Runtime Validation helps |
+| ----------------- | ---------------------------- |
+| API input         | Validate HTTP request bodies |
+| Database data     | Validate data loaded from DB |
+| External services | Validate responses from APIs |
+| User input        | Validate form submissions    |
+
+BlueLibs Runner includes a generic validation interface that works with any validation library, including [Zod](https://zod.dev/), [Yup](https://github.com/jquense/yup), [Joi](https://joi.dev/), and others.
 
 The framework defines a simple `IValidationSchema<T>` interface that any validation library can implement:
 
@@ -880,9 +1109,22 @@ const createUser = r
 
 ## Type Contracts
 
-TypeScript is powerful, but sometimes you want to enforce that a component adheres to a specific contract in order to use it. For example, you might want to ensure that any Task that has the `@Authenticated` tag also accepts a `userId` in its input.
+Consider this: You have an authentication tag, and you want to ensure ALL tasks using it actually accept a `userId` in their input. TypeScript doesn't know about your tags—it can't enforce that every task using auth has the right input shape. How do you make this compile-time enforced?
 
-This is where Type Contracts come in. They allow you to define input/output contracts on **Tags** and **Middleware**, and the framework will enforce them on the Tasks/Resources that use them.
+**The problem**: You want to enforce that tasks using certain tags or middleware conform to specific input/output shapes, but plain TypeScript types can't express "any task with tag X must have property Y."
+
+**The naive solution**: Document the requirements and add runtime checks. But this is error-prone and bugs aren't caught until runtime.
+
+**The better solution**: Use Type Contracts, which allow Tags and Middleware to declare input/output contracts that are enforced at compile time.
+
+### When to use Type Contracts
+
+| Use case            | Why Type Contracts help                |
+| ------------------- | -------------------------------------- |
+| Authentication      | Ensure all auth tasks include userId   |
+| API standardization | Enforce consistent response shapes     |
+| Validation          | Guarantee tasks return required fields |
+| Documentation       | Make requirements self-enforcing       |
 
 ### Concept
 
@@ -891,11 +1133,11 @@ A **Tag** or **Middleware** can declare:
 - **Input Contract**: "Any task using me MUST accept at least specific properties in its input"
 - **Output Contract**: "Any task using me MUST return at least specific properties"
 
-The enforcement happens at **compile time**. If you try to attach an `@Authenticated` tag to a request that doesn't accept a `userId`, TypeScript will yell at you.
+The enforcement happens at **compile time**. If you try to use the `authorizedTag` on a task that doesn't accept a `userId`, TypeScript will yell at you.
 
 ### Example: Enforcing Authentication Identity
 
-Let's say we want to ensure that any task tagged with `@Authorized` receives a `userId`:
+Let's say we want to ensure that any task using the `authorizedTag` receives a `userId`:
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -950,7 +1192,7 @@ const productTask = r
   .build();
 ```
 
-> **runtime:** "Type Contracts: The pre-nup of code. 'If you want to wear my @Authenticated ring, you _will_ bring a userId to the table.' It's not controlling; it's just... strictly typed love."
+> **runtime:** "Type Contracts: The prenup of code. 'If you want to use my authorizedTag, you _will_ bring a userId to the table.' It's not controlling; it's just... strictly typed love."
 
 ### Resource Contracts
 
@@ -1003,18 +1245,28 @@ const invalidDb = r
 
 We expose the internal services for advanced use cases (but try not to use them unless you really need to):
 
+When you call `run(app)`, Runner creates an isolated runtime container for that specific run. During bootstrap, it registers built-in global resources for that container, including `globals.resources.runtime`.
+
+`globals.resources.runtime` resolves to the same runtime object returned by `run(app)`, scoped to that container only. This lets code running _inside_ the container inject `runtime` and perform runtime operations (`runTask`, `emitEvent`, `getResourceValue`, root helpers, etc.) without passing the outer runtime object around manually.
+
+Bootstrap timing note: inside resource `init()`, `runtime` is available early, but that does **not** mean every registered resource is initialized yet. Runner guarantees dependency readiness for the currently initializing resource; unrelated resources may still be pending (especially with `initMode: "parallel"` or `lazy: true`).
+
 ```typescript
 import { globals } from "@bluelibs/runner";
 
 const advancedTask = r
   .task("app.advanced")
   .dependencies({
+    // Available because run(app) injects this resource into the current container.
+    runtime: globals.resources.runtime,
     store: globals.resources.store,
     taskRunner: globals.resources.taskRunner,
     eventManager: globals.resources.eventManager,
   })
-  .run(async (_param, { store, taskRunner, eventManager }) => {
+  .run(async (_param, { runtime, store, taskRunner, eventManager }) => {
     // Direct access to the framework internals
+    // runtime gives a safe facade inside resources:
+    // runTask, emitEvent, getResourceValue/getResourceConfig, and root helpers.
     // (Use with caution!)
   })
   .build();
@@ -1070,52 +1322,52 @@ Sometimes you'll run into circular type dependencies because of your file struct
 
 ### The Problem
 
-Consider these resources that create a circular dependency:
+Consider this graph that creates a circular _type inference_ dependency:
 
 ```typescript
 // FILE: a.ts
-export const aResource = defineResource({
-  dependencies: { b: bResource },
-  // ... depends on B resource.
-});
-// For whatever reason, you decide to put the task in the same file.
-export const aTask = defineTask({
-  dependencies: { a: aResource },
-});
+export const aResource = r
+  .resource("a.resource")
+  .dependencies({ b: bResource })
+  .init(async () => "a")
+  .build();
+
+export const aTask = r
+  .task("a.tasks.run")
+  .dependencies({ a: aResource })
+  .run(async () => "ok")
+  .build();
 
 // FILE: b.ts
-export const bResource = defineResource({
-  id: "b.resource",
-  dependencies: { c: cResource },
-});
+export const bResource = r
+  .resource("b.resource")
+  .dependencies({ c: cResource })
+  .init(async () => "b")
+  .build();
 
 // FILE: c.ts
-export const cResource = defineResource({
-  id: "c.resource",
-  dependencies: { aTask }, // Creates circular **type** dependency! Cannot infer types properly, even if the runner boots because there's no circular dependency.
-  async init(_, { aTask }) {
-    return `C depends on aTask`;
-  },
-});
+export const cResource = r
+  .resource("c.resource")
+  .dependencies({ aTask }) // Creates circular type inference across files.
+  .init(async (_config, { aTask }) => `C depends on ${await aTask(undefined)}`)
+  .build();
 ```
 
-A depends B depends C depends ATask. No circular dependency, yet Typescript struggles with these, but there's a way to handle it gracefully.
+A depends on B, B depends on C, and C depends on A's task. Runtime can still boot, but TypeScript inference can get stuck in this cycle.
 
 ### The Solution
 
-The fix is to explicitly type the resource that completes the circle using a simple assertion `IResource<Config, ReturnType>`. This breaks the TypeScript inference chain while maintaining runtime functionality:
+The fix is to explicitly type the resource that completes the circle using `IResource<TConfig, Promise<TValue>, TDependencies>`. This breaks the inference chain while maintaining runtime behavior:
 
 ```typescript
 // c.resource.ts - The key change
-import { IResource } from "../../defs";
+import type { IResource } from "@bluelibs/runner";
 
-export const cResource = defineResource({
-  id: "c.resource",
-  dependencies: { a: aResource },
-  async init(_, { a }) {
-    return `C depends on ${a}`;
-  },
-}) as IResource<void, Promise<string>>; // void because it has no config, string because it returns a string
+export const cResource = r
+  .resource("c.resource")
+  .dependencies({ a: aResource })
+  .init(async (_config, { a }) => `C depends on ${a}`)
+  .build() as IResource<void, Promise<string>>;
 ```
 
 #### Why This Works
@@ -1127,7 +1379,7 @@ export const cResource = defineResource({
 #### Best Practices
 
 1. **Identify the "leaf" resource**: Choose the resource that logically should break the chain (often the one that doesn't need complex type inference)
-2. **Use explicit typing**: Add the `IResource<Dependencies, ReturnType>` type annotation
+2. **Use explicit typing**: Add `IResource<Config, Promise<Value>, Dependencies>` annotation
 3. **Document the decision**: Add a comment explaining why the explicit typing is needed
 4. **Consider refactoring**: If you have many circular dependencies, consider if your architecture could be simplified
 
@@ -1141,16 +1393,16 @@ type MyDependencies = {
   anotherResource: AnotherResourceType;
 };
 
-export const problematicResource = defineResource({
-  id: "problematic.resource",
-  dependencies: {
+export const problematicResource = r
+  .resource("problematic.resource")
+  .dependencies({
     /* ... */
-  },
-  async init(config, deps) {
+  })
+  .init(async (config, deps) => {
     // Your logic here
     return someComplexObject;
-  },
-}) as IResource<MyDependencies, ComplexReturnType>;
+  })
+  .build() as IResource<void, Promise<ComplexReturnType>, MyDependencies>;
 ```
 
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.

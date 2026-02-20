@@ -2,6 +2,7 @@ import { symbolError, symbolFilePath } from "./symbols";
 import type { IOptionalDependency } from "./utilities";
 import type { IValidationSchema } from "./utilities";
 import type { IErrorMeta } from "./meta";
+import type { TagType } from "./tag";
 
 export type ErrorReference = string | IErrorHelper<any>;
 export type ThrowsList = ReadonlyArray<ErrorReference>;
@@ -25,6 +26,7 @@ export interface IErrorDefinition<
    */
   dataSchema?: IValidationSchema<TData>;
   meta?: IErrorMeta;
+  tags?: TagType[];
 }
 
 export interface IErrorDefinitionFinal<
@@ -36,6 +38,11 @@ export interface IErrorDefinitionFinal<
 }
 
 export type DefaultErrorType = Record<string, unknown>;
+type RequiredKeys<T extends object> = {
+  [K in keyof T]-?: {} extends Pick<T, K> ? never : K;
+}[keyof T];
+export type ErrorThrowArgs<TData extends DefaultErrorType> =
+  RequiredKeys<TData> extends never ? [data?: TData] : [data: TData];
 
 /**
  * Runtime error shape thrown by r.error()/defineError() helpers.
@@ -61,10 +68,26 @@ export interface IErrorHelper<
   id: string;
   /** Optional HTTP status code associated with this error helper */
   httpCode?: number;
+  /** Metadata attached to this error */
+  meta: IErrorMeta;
+  /** Tags attached to this error */
+  tags: TagType[];
+  /** Construct a typed error with the given data without throwing it */
+  "new"(...args: ErrorThrowArgs<TData>): IRunnerError<TData>;
+  /** Alias for .new() */
+  create(...args: ErrorThrowArgs<TData>): IRunnerError<TData>;
   /** Throw a typed error with the given data */
-  throw(data: TData): never;
-  /** Type guard for checking if an unknown error is this error */
+  throw(...args: ErrorThrowArgs<TData>): never;
+  /**
+   * Type guard for checking if an unknown error is this error.
+   * Optionally provide a partial data object to require shallow strict matches.
+   */
   is(error: unknown): error is IRunnerError<TData>;
+  /**
+   * Type guard for checking if an unknown error is this error,
+   * with shallow strict matching (`===`) on provided data keys.
+   */
+  is(error: unknown, partialData: Partial<TData>): error is IRunnerError<TData>;
   /** Brand symbol for runtime detection */
   [symbolError]: true;
   /** Return an optional dependency wrapper for this error */

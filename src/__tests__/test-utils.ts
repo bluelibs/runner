@@ -1,4 +1,4 @@
-import { EventManager, Logger, Store, TaskRunner } from "../models";
+import { EventManager, Logger, RunResult, Store, TaskRunner } from "../models";
 import { RunnerMode } from "../defs";
 
 /**
@@ -26,5 +26,13 @@ export function createTestFixture() {
     onUnhandledError,
     store,
     createTaskRunner: () => new TaskRunner(store, eventManager, logger),
+    createRuntimeResult: (taskRunner?: TaskRunner) =>
+      new RunResult<unknown>(
+        logger,
+        store,
+        eventManager,
+        taskRunner ?? new TaskRunner(store, eventManager, logger),
+        async () => store.dispose(),
+      ),
   };
 }

@@ -1,4 +1,4 @@
-/* eslint-disable jest/valid-title */
+/* eslint-disable jest/valid-title -- Titles are centralized in enums for consistency across this suite. */
 import type { ITask } from "../../defs";
 import { r, run } from "../..";
 
@@ -83,6 +83,9 @@ enum TagId {
 enum ErrorId {
   Task = "tests.override.builder.error.task",
   Resource = "tests.override.builder.error.resource",
+  Hook = "tests.override.builder.error.hook",
+  TaskMiddleware = "tests.override.builder.error.task-middleware",
+  ResourceMiddleware = "tests.override.builder.error.resource-middleware",
 }
 
 enum MetaKey {
@@ -168,6 +171,7 @@ describe(SuiteName.OverrideBuilder, () => {
       .middleware([taskMiddleware], { override: true })
       .tags([tagPrimary])
       .tags([tagSecondary], { override: true })
+      .schema(inputSchema)
       .inputSchema(inputSchema)
       .resultSchema(resultSchema)
       .meta({ [MetaKey.Label]: TaskValue.Base } as Record<string, any>)
@@ -262,11 +266,14 @@ describe(SuiteName.OverrideBuilder, () => {
       .tags([tagPrimary])
       .tags([tagSecondary], { override: true })
       .context(() => ({ [MetaKey.Label]: ResourceValue.Override }))
+      .schema(configSchema)
       .configSchema(configSchema)
       .resultSchema(resultSchema)
       .init(async () => ResourceValue.Override)
       .dispose(async () => undefined)
       .meta({ [MetaKey.Label]: ResourceValue.Override } as Record<string, any>)
+      .exports([registerA])
+      .exports([registerB], { override: true })
       .overrides([overrideTask])
       .overrides([overrideTask], { override: true })
       .throws([errorHelper])
@@ -284,6 +291,7 @@ describe(SuiteName.OverrideBuilder, () => {
     expect(overrideResource.meta).toEqual({
       [MetaKey.Label]: ResourceValue.Override,
     });
+    expect(overrideResource.exports).toEqual([registerB]);
     expect(overrideResource.overrides).toEqual([overrideTask]);
     expect(overrideResource.throws).toEqual([ErrorId.Resource]);
   });
@@ -354,6 +362,25 @@ describe(SuiteName.OverrideBuilder, () => {
     expect(overrideHook.order).toBe(TaskValue.DepA);
   });
 
+  it("hook override builder supports throws", () => {
+    const event = r.event(EventId.Details).build();
+    const errorHelper = r.error(ErrorId.Hook).build();
+
+    const baseHook = r
+      .hook(HookId.Details)
+      .on(event)
+      .run(async () => undefined)
+      .build();
+
+    const overrideHook = r
+      .override(baseHook)
+      .throws([errorHelper])
+      .run(async () => undefined)
+      .build();
+
+    expect(overrideHook.throws).toEqual([ErrorId.Hook]);
+  });
+
   it(TestName.TaskMiddleware, async () => {
     const taskMiddleware = r.middleware
       .task(MiddlewareId.Task)
@@ -407,6 +434,7 @@ describe(SuiteName.OverrideBuilder, () => {
       .override(baseMiddleware)
       .dependencies({ depTask })
       .dependencies({ depTask }, { override: true })
+      .schema(configSchema)
       .configSchema(configSchema)
       .tags([tagPrimary])
       .tags([tagSecondary], { override: true })
@@ -422,6 +450,23 @@ describe(SuiteName.OverrideBuilder, () => {
       [MetaKey.Label]: TaskValue.Base,
     });
     expect(overrideMiddleware.everywhere).toBe(true);
+  });
+
+  it("task middleware override builder supports throws", () => {
+    const errorHelper = r.error(ErrorId.TaskMiddleware).build();
+
+    const baseMiddleware = r.middleware
+      .task(MiddlewareId.TaskDetails)
+      .run(async ({ next }) => next())
+      .build();
+
+    const overrideMiddleware = r
+      .override(baseMiddleware)
+      .throws([errorHelper])
+      .run(async ({ next }) => next())
+      .build();
+
+    expect(overrideMiddleware.throws).toEqual([ErrorId.TaskMiddleware]);
   });
 
   it(TestName.ResourceMiddleware, async () => {
@@ -477,6 +522,7 @@ describe(SuiteName.OverrideBuilder, () => {
       .override(baseMiddleware)
       .dependencies({ depTask })
       .dependencies({ depTask }, { override: true })
+      .schema(configSchema)
       .configSchema(configSchema)
       .tags([tagPrimary])
       .tags([tagSecondary], { override: true })
@@ -494,6 +540,23 @@ describe(SuiteName.OverrideBuilder, () => {
     expect(overrideMiddleware.everywhere).toBe(true);
   });
 
+  it("resource middleware override builder supports throws", () => {
+    const errorHelper = r.error(ErrorId.ResourceMiddleware).build();
+
+    const baseMiddleware = r.middleware
+      .resource(MiddlewareId.ResourceDetails)
+      .run(async ({ next }) => next())
+      .build();
+
+    const overrideMiddleware = r
+      .override(baseMiddleware)
+      .throws([errorHelper])
+      .run(async ({ next }) => next())
+      .build();
+
+    expect(overrideMiddleware.throws).toEqual([ErrorId.ResourceMiddleware]);
+  });
+
   it(TestName.HookOn, () => {
     const event = r.event(EventId.Base).build();
     const hook = r
@@ -502,10 +565,10 @@ describe(SuiteName.OverrideBuilder, () => {
       .run(async () => undefined)
       .build();
 
-    if (false) {
-      // @ts-expect-error hook overrides cannot change on()
-      r.override(hook).on(event);
-    }
+    const overridden = r.override(hook);
+    expect("on" in (overridden as unknown as Record<string, unknown>)).toBe(
+      false,
+    );
   });
 
   it(TestName.OverrideError, () => {

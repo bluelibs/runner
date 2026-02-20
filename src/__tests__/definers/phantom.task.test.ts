@@ -10,10 +10,15 @@ describe("Phantom tasks", () => {
     const ph = defineTask.phantom<{ v: string }, Promise<string>>({
       id: "app.tasks.phantom.1",
     });
+    const regularTask = defineTask({
+      id: "app.tasks.regular.1",
+      run: async () => "ok",
+    });
 
     // Basic branding checks
     expect(isTask(ph)).toBe(true);
     expect(isPhantomTask(ph)).toBe(true);
+    expect(isPhantomTask(regularTask)).toBe(false);
 
     const appDirect = defineResource({
       id: "app.phantom.basic",

@@ -8,8 +8,10 @@ import { createDurableRunnerAuditEmitter } from "../emitters/runnerAuditEmitter"
 import type { EventManager } from "../../../models/EventManager";
 import type { TaskRunner } from "../../../models/TaskRunner";
 import type { Store } from "../../../models/Store";
+import type { Logger } from "../../../models/Logger";
 import type { ITask } from "../../../types/task";
 import { initDurableWorker } from "./DurableWorker";
+import { durableExecutionInvariantError } from "../../../errors";
 
 export type RunnerDurableRuntimeConfig = Omit<
   DurableServiceConfig,
@@ -26,12 +28,17 @@ export interface RunnerDurableDeps {
   taskRunner: TaskRunner;
   eventManager: EventManager;
   runnerStore: Store;
+  logger: Logger;
 }
 
 export async function createRunnerDurableRuntime(
   config: RunnerDurableRuntimeConfig,
   deps: RunnerDurableDeps,
 ): Promise<DurableResource> {
+  const durableLogger = (config.logger ?? deps.logger).with({
+    source: "durable.runtime",
+  });
+
   const runnerEmitter = createDurableRunnerAuditEmitter({
     eventManager: deps.eventManager,
   });
@@ -58,6 +65,7 @@ export async function createRunnerDurableRuntime(
 
   const service = await initDurableService({
     ...config,
+    logger: durableLogger,
     audit: {
       ...config.audit,
       emitter: auditEmitter,
@@ -67,13 +75,13 @@ export async function createRunnerDurableRuntime(
         task: ITask<TInput, Promise<TResult>, any, any, any, any>,
         input?: TInput,
       ) => {
-        const outputPromise = await deps.taskRunner.run(task, input);
-        if (outputPromise === undefined) {
-          throw new Error(
-            `Durable task '${task.id}' completed without a result promise.`,
-          );
+        const output = await deps.taskRunner.run(task, input);
+        if (output === undefined) {
+          durableExecutionInvariantError.throw({
+            message: `Durable task '${task.id}' completed without a result promise.`,
+          });
         }
-        return await outputPromise;
+        return output as TResult;
       },
     },
     taskResolver: (taskId) => {
@@ -84,7 +92,11 @@ export async function createRunnerDurableRuntime(
   });
 
   if (config.worker === true && config.queue) {
-    await initDurableWorker(service, config.queue);
+    await initDurableWorker(
+      service,
+      config.queue,
+      durableLogger.with({ source: "durable.worker" }),
+    );
   }
 
   return new DurableResource(

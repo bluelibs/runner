@@ -7,6 +7,7 @@ import { Queue } from "../.."; // <-- adjust path if needed
 
 /** Flush native micro‑tasks once (Promise jobs / process.nextTick). */
 const flushMicroTasks = () => Promise.resolve();
+import { createMessageError } from "../../errors";
 
 /* ------------------------------------------------------------------ */
 /* Tests                                                              */
@@ -58,7 +59,7 @@ describe("Queue", () => {
 
     const deadlock = () => q.run(async () => "nested"); // <-- illegal
 
-    await expect(q.run(deadlock)).rejects.toThrow(/Dead‑lock/);
+    await expect(q.run(deadlock)).rejects.toThrow(/Deadlock/);
   });
 
   it("dispose() drains pending tasks and rejects new ones", async () => {
@@ -108,6 +109,33 @@ describe("Queue", () => {
     await expect(p).rejects.toThrow(/aborted/);
     await expect(disposeDone).resolves.toBeUndefined();
 
+    await expect(disposeDone).resolves.toBeUndefined();
+  });
+
+  it("dispose({ cancel: true }) skips queued tasks that did not start", async () => {
+    const q = new Queue();
+    let startedQueuedTask = false;
+
+    const running = q.run(
+      async (signal) =>
+        new Promise<void>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("aborted")), {
+            once: true,
+          });
+        }),
+    );
+
+    const queued = q.run(async () => {
+      startedQueuedTask = true;
+      return "should-not-run";
+    });
+
+    await flushMicroTasks();
+    const disposeDone = q.dispose({ cancel: true });
+
+    await expect(running).rejects.toThrow("aborted");
+    await expect(queued).rejects.toThrow("Operation was aborted");
+    expect(startedQueuedTask).toBe(false);
     await expect(disposeDone).resolves.toBeUndefined();
   });
 
@@ -174,7 +202,7 @@ describe("Queue", () => {
     const errorTask = async () => {
       jest.advanceTimersByTime(10);
       await Promise.resolve();
-      throw new Error("Task exception");
+      throw createMessageError("Task exception");
     };
 
     const successTask = async () => {
@@ -224,7 +252,7 @@ describe("Queue", () => {
     await q.run(async () => "ok");
     await expect(
       q.run(async () => {
-        throw new Error("boom");
+        throw createMessageError("boom");
       }),
     ).rejects.toThrow("boom");
 
@@ -281,5 +309,62 @@ describe("Queue", () => {
 
     await q.run(async () => "first");
     expect(seen).toEqual([]); // No events received because we unsubscribed
+  });
+
+  it("hard-removes on() listeners from EventManager storage when unsubscribed", () => {
+    const q = new Queue();
+    const unsubscribe = q.on("finish", () => {});
+
+    const listeners = (
+      q as unknown as {
+        eventManager: { registry: { listeners: Map<string, unknown[]> } };
+      }
+    ).eventManager.registry.listeners;
+    expect(listeners.get("queue.events.finish")).toHaveLength(1);
+
+    unsubscribe();
+
+    expect(listeners.get("queue.events.finish")).toBeUndefined();
+  });
+
+  it("hard-removes once() listeners from EventManager storage after first fire", async () => {
+    const q = new Queue();
+    q.once("finish", () => {});
+
+    const listeners = (
+      q as unknown as {
+        eventManager: { registry: { listeners: Map<string, unknown[]> } };
+      }
+    ).eventManager.registry.listeners;
+    expect(listeners.get("queue.events.finish")).toHaveLength(1);
+
+    await q.run(async () => "ok");
+    await flushMicroTasks();
+
+    expect(listeners.get("queue.events.finish")).toBeUndefined();
+  });
+
+  it("refreshes AbortController after dispose({ cancel: true })", async () => {
+    const q = new Queue();
+    const before = (q as unknown as { abortController: AbortController })
+      .abortController;
+
+    const running = q.run(
+      async (signal) =>
+        new Promise<void>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("aborted")), {
+            once: true,
+          });
+        }),
+    );
+
+    await flushMicroTasks();
+    await expect(q.dispose({ cancel: true })).resolves.toBeUndefined();
+    await expect(running).rejects.toThrow("aborted");
+
+    const after = (q as unknown as { abortController: AbortController })
+      .abortController;
+    expect(after).not.toBe(before);
+    expect(after.signal.aborted).toBe(false);
   });
 });

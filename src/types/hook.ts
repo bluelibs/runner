@@ -6,6 +6,7 @@ import {
 import { IEventDefinition, IEventEmission } from "./event";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
+import type { ThrowsList } from "./error";
 import { CommonPayload, symbolFilePath, symbolHook } from "./utilities";
 
 export type OnType =
@@ -24,6 +25,11 @@ export interface IHookDefinition<
   /** Listener execution order. Lower numbers run first. */
   order?: number;
   meta?: TMeta;
+  /**
+   * Declares which typed errors are part of this hook's contract.
+   * Declarative only — does not imply DI or enforcement.
+   */
+  throws?: ThrowsList;
   run: (
     event: IEventEmission<
       TOn extends "*"
@@ -46,5 +52,7 @@ export interface IHook<
   dependencies: TDependencies | (() => TDependencies);
   [symbolFilePath]: string;
   [symbolHook]: true;
+  /** Normalized list of error ids declared via `throws`. */
+  throws?: readonly string[];
   tags: TagType[];
 }

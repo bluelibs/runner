@@ -43,6 +43,7 @@ export interface ITag<
     : false;
 
   config?: TConfig;
+  meta: ITagMeta;
   /**
    * Checks if the tag exists in a taggable or a list of tags.
    */

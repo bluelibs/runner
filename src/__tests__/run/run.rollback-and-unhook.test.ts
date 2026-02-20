@@ -1,5 +1,6 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
+import { createMessageError } from "../../errors";
 
 describe("run.ts rollback and unhooking", () => {
   it("rolls back initialized resources on init error and skips uninitialized", async () => {
@@ -19,7 +20,7 @@ describe("run.ts rollback and unhooking", () => {
       id: "tests.rollback.bad",
       dependencies: { dep },
       async init() {
-        throw new Error("init failed");
+        throw createMessageError("init failed");
       },
       async dispose() {
         disposeCalls.push("bad");
@@ -48,8 +49,8 @@ describe("run.ts rollback and unhooking", () => {
       "init failed",
     );
 
-    // dep and bad should have been disposed; never was not initialized.
-    // Note: bad.isInitialized becomes true before init is attempted, so it will be disposed on rollback.
+    // Only successfully initialized resources are disposed during rollback.
+    // `bad` throws during init and `never` is not initialized.
     expect(disposeCalls.sort()).toEqual(["dep:dep"].sort());
   });
 
@@ -70,7 +71,7 @@ describe("run.ts rollback and unhooking", () => {
       (() => {}) as unknown as never;
 
     // First run: should react to SIGINT
-    const first = await run(app, {
+    await run(app, {
       shutdownHooks: true,
       errorBoundary: false,
     });

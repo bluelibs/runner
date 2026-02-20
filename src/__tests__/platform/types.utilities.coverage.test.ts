@@ -101,7 +101,7 @@ describe("platform/types utilities coverage", () => {
   });
 
   it("covers isUniversal false-positive cases", () => {
-    const op = (globalThis as any).process;
+    (globalThis as any).process;
     (globalThis as any).process = { versions: { node: "18.0.0" } };
     expect(isUniversal()).toBe(false);
     delete (globalThis as any).process;

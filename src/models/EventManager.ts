@@ -1,8 +1,11 @@
 import {
+  EventEmissionFailureMode,
   DependencyValuesType,
   EventHandlerType,
   IEvent,
   IEventEmission,
+  IEventEmitOptions,
+  IEventEmitReport,
 } from "../defs";
 import { lockedError, validationError } from "../errors";
 import { IHook } from "../types/hook";
@@ -11,7 +14,6 @@ import {
   HandlerOptionsDefaults,
   HookExecutionInterceptor,
   IEventHandlerOptions,
-  IListenerStorage,
 } from "./event/types";
 import { ListenerRegistry, createListener } from "./event/ListenerRegistry";
 import { composeInterceptors } from "./event/InterceptorPipeline";
@@ -27,11 +29,6 @@ import { CycleContext } from "./event/CycleContext";
  * Listeners are processed in order based on their priority.
  */
 export class EventManager {
-  // Core storage for event listeners (kept for backward-compatibility with tests)
-  private listeners: Map<string, IListenerStorage[]>;
-  private globalListeners: IListenerStorage[];
-  private cachedMergedListeners: Map<string, IListenerStorage[]>;
-
   // Interceptors storage (tests access these directly)
   private emissionInterceptors: EventEmissionInterceptor[] = [];
   private hookInterceptors: HookExecutionInterceptor[] = [];
@@ -50,11 +47,6 @@ export class EventManager {
       options?.runtimeEventCycleDetection ?? true;
     this.registry = new ListenerRegistry();
     this.cycleContext = new CycleContext(this.runtimeEventCycleDetection);
-
-    // expose registry collections for backward-compatibility (tests reach into these)
-    this.listeners = this.registry.listeners;
-    this.globalListeners = this.registry.globalListeners;
-    this.cachedMergedListeners = this.registry.cachedMergedListeners;
   }
 
   // ==================== PUBLIC API ====================
@@ -85,8 +77,34 @@ export class EventManager {
     eventDefinition: IEvent<TInput>,
     data: TInput,
     source: string,
-  ): Promise<void> {
-    await this.emitAndReturnEmission({ eventDefinition, data, source });
+  ): Promise<void>;
+  async emit<TInput>(
+    eventDefinition: IEvent<TInput>,
+    data: TInput,
+    source: string,
+    options: IEventEmitOptions & { report: true },
+  ): Promise<IEventEmitReport>;
+  async emit<TInput>(
+    eventDefinition: IEvent<TInput>,
+    data: TInput,
+    source: string,
+    options?: IEventEmitOptions,
+  ): Promise<void | IEventEmitReport>;
+  async emit<TInput>(
+    eventDefinition: IEvent<TInput>,
+    data: TInput,
+    source: string,
+    options?: IEventEmitOptions,
+  ): Promise<void | IEventEmitReport> {
+    const result = await this.emitAndReturnEmission({
+      eventDefinition,
+      data,
+      source,
+      options,
+    });
+    if (options?.report) {
+      return result.report;
+    }
   }
 
   /**
@@ -102,21 +120,30 @@ export class EventManager {
     data: TInput,
     source: string,
   ): Promise<TInput> {
-    const emission = await this.emitAndReturnEmission({
+    const result = await this.emitAndReturnEmission({
       eventDefinition,
       data,
       source,
     });
-    return emission.data as TInput;
+    return result.emission.data as TInput;
   }
 
   private async emitAndReturnEmission<TInput>(params: {
     eventDefinition: IEvent<TInput>;
     data: TInput;
     source: string;
-  }): Promise<IEventEmission<TInput>> {
+    options?: IEventEmitOptions;
+  }): Promise<{ emission: IEventEmission<TInput>; report: IEventEmitReport }> {
     const { eventDefinition, source } = params;
     let { data } = params;
+    const configuredFailureMode =
+      params.options?.failureMode ?? EventEmissionFailureMode.FailFast;
+    const shouldThrow = params.options?.throwOnError ?? true;
+    const failureMode =
+      !shouldThrow &&
+      configuredFailureMode === EventEmissionFailureMode.FailFast
+        ? EventEmissionFailureMode.Aggregate
+        : configuredFailureMode;
 
     // Validate payload with schema if provided
     if (eventDefinition.payloadSchema) {
@@ -133,7 +160,10 @@ export class EventManager {
     }
 
     const frame = { id: eventDefinition.id, source };
-    const processEmission = async (): Promise<IEventEmission<TInput>> => {
+    const processEmission = async (): Promise<{
+      emission: IEventEmission<TInput>;
+      report: IEventEmitReport;
+    }> => {
       const allListeners = this.registry.getListenersForEmit(eventDefinition);
 
       let propagationStopped = false;
@@ -154,21 +184,31 @@ export class EventManager {
       // Create the base emission function
       const baseEmit = async (
         eventToEmit: IEventEmission<any>,
-      ): Promise<void> => {
+      ): Promise<IEventEmitReport> => {
         if (allListeners.length === 0) {
-          return;
+          return {
+            totalListeners: 0,
+            attemptedListeners: 0,
+            skippedListeners: 0,
+            succeededListeners: 0,
+            failedListeners: 0,
+            propagationStopped: eventToEmit.isPropagationStopped(),
+            errors: [],
+          };
         }
 
         if (eventDefinition.parallel) {
-          await executeInParallel({
+          return executeInParallel({
             listeners: allListeners,
             event: eventToEmit,
+            failureMode,
           });
         } else {
-          await executeSequentially({
+          return executeSequentially({
             listeners: allListeners,
             event: eventToEmit,
             isPropagationStopped: () => propagationStopped,
+            failureMode,
           });
         }
       };
@@ -177,6 +217,16 @@ export class EventManager {
       // Track the deepest event object that was reached to extract the final payload.
       let deepestEvent: IEventEmission<any> = event as IEventEmission<any>;
 
+      let executionReport: IEventEmitReport = {
+        totalListeners: allListeners.length,
+        attemptedListeners: 0,
+        skippedListeners: 0,
+        succeededListeners: 0,
+        failedListeners: 0,
+        propagationStopped: false,
+        errors: [],
+      };
+
       const runInterceptor = async (
         index: number,
         eventToEmit: IEventEmission<any>,
@@ -184,7 +234,8 @@ export class EventManager {
         deepestEvent = eventToEmit;
         const interceptor = this.emissionInterceptors[index];
         if (!interceptor) {
-          return baseEmit(eventToEmit);
+          executionReport = await baseEmit(eventToEmit);
+          return;
         }
         return interceptor((nextEvent) => {
           this.assertPropagationMethodsUnchanged(
@@ -197,7 +248,27 @@ export class EventManager {
       };
 
       await runInterceptor(0, event as IEventEmission<any>);
-      return deepestEvent as IEventEmission<TInput>;
+      if (
+        shouldThrow &&
+        failureMode === EventEmissionFailureMode.Aggregate &&
+        executionReport.errors.length > 0
+      ) {
+        if (executionReport.errors.length === 1) {
+          throw executionReport.errors[0];
+        }
+        throw Object.assign(
+          new Error(`${executionReport.errors.length} listeners failed`),
+          {
+            name: "AggregateError",
+            errors: executionReport.errors,
+            cause: executionReport.errors[0],
+          },
+        );
+      }
+      return {
+        emission: deepestEvent as IEventEmission<TInput>,
+        report: executionReport,
+      };
     };
 
     return await this.cycleContext.runEmission(frame, source, processEmission);
@@ -253,6 +324,14 @@ export class EventManager {
       isGlobal: true,
     });
     this.registry.addGlobalListener(newListener);
+  }
+
+  /**
+   * Removes listeners registered with the provided listener id.
+   */
+  removeListenerById(id: string): void {
+    this.checkLock();
+    this.registry.removeListenerById(id);
   }
 
   /**
@@ -360,14 +439,6 @@ export class EventManager {
     this.registry.clear();
     this.emissionInterceptors.length = 0;
     this.hookInterceptors.length = 0;
-  }
-
-  /**
-   * Retrieves cached merged listeners for an event, or creates them if not cached.
-   * Kept for backward compatibility (tests spy on this).
-   */
-  private getCachedMergedListeners(eventId: string): IListenerStorage[] {
-    return this.registry.getCachedMergedListeners(eventId);
   }
 }
 

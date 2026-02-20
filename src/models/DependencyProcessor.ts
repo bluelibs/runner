@@ -1,50 +1,81 @@
 import {
   DependencyMapType,
   DependencyValuesType,
-  ITask,
-  IResource,
   IEvent,
   IEventEmission,
-  TaskLocalInterceptor,
+  IEventEmitOptions,
+  IResource,
+  ITask,
   ResourceDependencyValuesType,
-  TaskDependencyWithIntercept,
-  TaskCallOptions,
 } from "../defs";
 import { Store } from "./Store";
 import {
   ResourceStoreElementType,
   TaskStoreElementType,
+  HookStoreElementType,
   HookDependencyState,
 } from "../types/storeTypes";
-import * as utils from "../define";
 import { EventManager } from "./EventManager";
 import { ResourceInitializer } from "./ResourceInitializer";
 import { TaskRunner } from "./TaskRunner";
-import {
-  dependencyNotFoundError,
-  eventNotFoundError,
-  unknownItemTypeError,
-} from "../errors";
+import { eventNotFoundError } from "../errors";
 import { Logger } from "./Logger";
-import { findDependencyStrategy } from "./utils/dependencyStrategies";
+import { ResourceInitMode } from "../types/runner";
+import { DependencyExtractor } from "./dependency-processor/DependencyExtractor";
+import { HookEventBuffer } from "./dependency-processor/HookEventBuffer";
+import { ResourceScheduler } from "./dependency-processor/ResourceScheduler";
 
 /**
  * Resolves and caches computed dependencies for store items (resources, tasks, middleware, hooks).
  */
 export class DependencyProcessor {
   protected readonly resourceInitializer: ResourceInitializer;
+  protected readonly dependencyExtractor: DependencyExtractor;
+  protected readonly hookEventBuffer: HookEventBuffer;
+  protected readonly resourceScheduler: ResourceScheduler;
   protected readonly logger!: Logger;
+  protected readonly initMode: ResourceInitMode;
+  protected readonly lazy: boolean;
+  public readonly pendingHookEvents: Map<string, IEventEmission<any>[]>;
+  public readonly drainingHookIds: Set<string>;
+  private readonly inFlightResourceInitializations = new Map<
+    string,
+    Promise<void>
+  >();
+
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
     protected readonly taskRunner: TaskRunner,
     logger: Logger,
+    initMode: ResourceInitMode = ResourceInitMode.Sequential,
+    lazy = false,
+    runtimeEventCycleDetection = true,
   ) {
     this.logger = logger.with({ source: "dependencyProcessor" });
+    this.initMode = initMode;
+    this.lazy = lazy;
     this.resourceInitializer = new ResourceInitializer(
       store,
       eventManager,
       logger,
+    );
+    this.hookEventBuffer = new HookEventBuffer(
+      eventManager,
+      this.logger,
+      runtimeEventCycleDetection,
+    );
+    this.pendingHookEvents = this.hookEventBuffer.pendingHookEvents;
+    this.drainingHookIds = this.hookEventBuffer.drainingHookIds;
+    this.dependencyExtractor = new DependencyExtractor(
+      store,
+      eventManager,
+      taskRunner,
+      this.logger,
+      async (resource) => this.ensureResourceInitialized(resource),
+    );
+    this.resourceScheduler = new ResourceScheduler(store, async (resource) =>
+      this.ensureResourceInitialized(resource),
     );
   }
 
@@ -52,51 +83,45 @@ export class DependencyProcessor {
    * Computes and caches dependencies for all registered store items.
    */
   async computeAllDependencies() {
-    for (const middleware of this.store.resourceMiddlewares.values()) {
-      const computedDependencies = await this.extractDependencies(
-        middleware.middleware.dependencies,
-        middleware.middleware.id,
-      );
-
-      middleware.computedDependencies = computedDependencies;
-      middleware.isInitialized = true;
-    }
-
-    for (const middleware of this.store.taskMiddlewares.values()) {
-      const computedDependencies = await this.extractDependencies(
-        middleware.middleware.dependencies,
-        middleware.middleware.id,
-      );
-
-      middleware.computedDependencies = computedDependencies;
-      middleware.isInitialized = true;
-    }
+    await this.computeResourceMiddlewareDependencies();
+    await this.computeTaskMiddlewareDependencies();
 
     // Compute hook dependencies before traversing resource/task dependencies.
     // Resource/task dependency extraction can initialize resources that emit
     // events; hooks must be dependency-ready before that happens.
-    for (const hookStoreElement of this.store.hooks.values()) {
-      const hook = hookStoreElement.hook;
-      const deps = hook.dependencies as DependencyMapType;
-      hookStoreElement.dependencyState = HookDependencyState.Computing;
-      hookStoreElement.computedDependencies = await this.extractDependencies(
-        deps,
-        hook.id,
-      );
-      hookStoreElement.dependencyState = HookDependencyState.Ready;
-    }
+    await this.computeHookDependencies();
 
-    for (const resource of this.store.resources.values()) {
-      await this.processResourceDependencies(resource);
+    if (this.initMode === ResourceInitMode.Parallel && this.lazy) {
+      await this.initializeStartupRequiredResourcesParallel();
+    } else if (!this.lazy && this.initMode === ResourceInitMode.Parallel) {
+      await this.initializeUninitializedResourcesParallel();
+    } else if (!this.lazy) {
+      for (const resource of this.store.resources.values()) {
+        await this.processResourceDependencies(resource);
+      }
+      // leftovers that were registered but not depended upon, except root
+      // they should still be initialized as they might extend other
+      await this.initializeUninitializedResources();
     }
 
     for (const task of this.store.tasks.values()) {
       await this.computeTaskDependencies(task);
     }
 
-    // leftovers that were registered but not depended upon, except root
-    // they should still be initialized as they might extend other
-    await this.initializeUninitializedResources();
+    await this.processResourceDependencies(this.store.root);
+  }
+
+  private async initializeStartupRequiredResourcesParallel() {
+    const requiredResourceIds = this.collectStartupRequiredResourceIds();
+    if (requiredResourceIds.size === 0) {
+      return;
+    }
+
+    await this.initializeUninitializedResourcesParallel(requiredResourceIds);
+  }
+
+  private collectStartupRequiredResourceIds(): Set<string> {
+    return this.resourceScheduler.collectStartupRequiredResourceIds();
   }
 
   private async computeTaskDependencies(
@@ -124,23 +149,117 @@ export class DependencyProcessor {
         // The root is the last one to be initialized and is done in a separate process.
         resource.resource.id !== this.store.root.resource.id
       ) {
-        try {
-          await this.processResourceDependencies(resource);
-          const { value, context } =
-            await this.resourceInitializer.initializeResource(
-              resource.resource,
-              resource.config,
-              resource.computedDependencies!,
-            );
-          resource.context = context;
-          resource.value = value;
-          resource.isInitialized = true;
-          this.store.recordResourceInitialized(resource.resource.id);
-        } catch (error: unknown) {
-          this.rethrowResourceInitError(resource.resource.id, error);
-        }
+        await this.ensureResourceInitialized(resource);
       }
     }
+  }
+
+  private async computeResourceMiddlewareDependencies() {
+    await Promise.all(
+      Array.from(this.store.resourceMiddlewares.values()).map(
+        async (middleware) => {
+          const computedDependencies = await this.extractDependencies(
+            middleware.middleware.dependencies,
+            middleware.middleware.id,
+          );
+
+          middleware.computedDependencies = computedDependencies;
+          middleware.isInitialized = true;
+        },
+      ),
+    );
+  }
+
+  private async computeTaskMiddlewareDependencies() {
+    await Promise.all(
+      Array.from(this.store.taskMiddlewares.values()).map(
+        async (middleware) => {
+          const computedDependencies = await this.extractDependencies(
+            middleware.middleware.dependencies,
+            middleware.middleware.id,
+          );
+
+          middleware.computedDependencies = computedDependencies;
+          middleware.isInitialized = true;
+        },
+      ),
+    );
+  }
+
+  private async computeHookDependencies() {
+    await Promise.all(
+      Array.from(this.store.hooks.values()).map(async (hookStoreElement) => {
+        const hook = hookStoreElement.hook;
+        const deps = hook.dependencies as DependencyMapType;
+        hookStoreElement.dependencyState = HookDependencyState.Computing;
+        hookStoreElement.computedDependencies = await this.extractDependencies(
+          deps,
+          hook.id,
+        );
+        hookStoreElement.dependencyState = HookDependencyState.Ready;
+        await this.flushBufferedHookEvents(hookStoreElement);
+      }),
+    );
+  }
+
+  private async initializeUninitializedResourcesParallel(
+    targetResourceIds?: ReadonlySet<string>,
+  ) {
+    await this.resourceScheduler.initializeUninitializedResourcesParallel(
+      targetResourceIds,
+    );
+  }
+
+  private async ensureResourceInitialized(
+    resource: ResourceStoreElementType<any, any, any>,
+  ) {
+    if (resource.isInitialized) {
+      return;
+    }
+
+    const resourceId = resource.resource.id;
+    const existingInitialization =
+      this.inFlightResourceInitializations.get(resourceId);
+    if (existingInitialization) {
+      await existingInitialization;
+      return;
+    }
+
+    const initialization = (async () => {
+      try {
+        await this.processResourceDependencies(resource);
+        const { value, context } =
+          await this.resourceInitializer.initializeResource(
+            resource.resource,
+            resource.config,
+            resource.computedDependencies!,
+          );
+        resource.context = context;
+        resource.value = value;
+        resource.isInitialized = true;
+        this.store.recordResourceInitialized(resourceId);
+      } catch (error: unknown) {
+        this.resetResourceInitializationState(resource);
+        this.rethrowResourceInitError(resourceId, error);
+      }
+    })();
+
+    this.inFlightResourceInitializations.set(resourceId, initialization);
+
+    try {
+      await initialization;
+    } finally {
+      this.inFlightResourceInitializations.delete(resourceId);
+    }
+  }
+
+  private resetResourceInitializationState(
+    resource: ResourceStoreElementType<any, any, any>,
+  ): void {
+    resource.context = undefined;
+    resource.value = undefined;
+    resource.isInitialized = false;
+    resource.computedDependencies = undefined;
   }
 
   private rethrowResourceInitError(resourceId: string, error: unknown): never {
@@ -182,7 +301,7 @@ export class DependencyProcessor {
   protected async processResourceDependencies<TD extends DependencyMapType>(
     resource: ResourceStoreElementType<any, any, TD>,
   ) {
-    if (Object.keys(resource.computedDependencies || {}).length > 0) {
+    if (resource.computedDependencies !== undefined) {
       return;
     }
 
@@ -195,6 +314,7 @@ export class DependencyProcessor {
     resource.computedDependencies = this.wrapResourceDependencies<TD>(
       deps,
       extracted,
+      resource.resource.id,
     );
     // resource.isInitialized = true;
   }
@@ -202,69 +322,17 @@ export class DependencyProcessor {
   private wrapResourceDependencies<TD extends DependencyMapType>(
     deps: TD,
     extracted: DependencyValuesType<TD>,
+    ownerResourceId: string,
   ): ResourceDependencyValuesType<TD> {
-    const wrapped: Record<string, unknown> = {};
-    for (const key of Object.keys(deps) as Array<keyof TD>) {
-      const original = deps[key];
-      const value = (extracted as Record<string, unknown>)[key as string];
-      if (utils.isOptional(original)) {
-        const inner = (original as { inner: unknown }).inner;
-        if (utils.isTask(inner)) {
-          wrapped[key as string] = value
-            ? this.makeTaskWithIntercept(inner)
-            : undefined;
-        } else {
-          wrapped[key as string] = value as unknown;
-        }
-        continue;
-      }
-      if (utils.isTask(original)) {
-        wrapped[key as string] = this.makeTaskWithIntercept(original);
-      } else {
-        wrapped[key as string] = value as unknown;
-      }
-    }
-    return wrapped as unknown as ResourceDependencyValuesType<TD>;
-  }
-
-  private makeTaskWithIntercept<
-    I,
-    O extends Promise<any>,
-    D extends DependencyMapType,
-  >(original: ITask<I, O, D>): TaskDependencyWithIntercept<I, O> {
-    const taskId = original.id;
-    const fn: (input: I, options?: TaskCallOptions) => O = (input, options) => {
-      const storeTask = this.store.tasks.get(taskId)!;
-      const effective: ITask<I, O, D> = storeTask.task;
-
-      return this.taskRunner.run(effective, input, options) as O;
-    };
-    return Object.assign(fn, {
-      intercept: (middleware: TaskLocalInterceptor<I, O>) => {
-        this.store.checkLock();
-        const storeTask = this.store.tasks.get(taskId)!;
-
-        if (!storeTask.interceptors) storeTask.interceptors = [];
-        storeTask.interceptors.push(middleware);
-      },
-    }) as unknown as TaskDependencyWithIntercept<I, O>;
+    return this.dependencyExtractor.wrapResourceDependencies(
+      deps,
+      extracted,
+      ownerResourceId,
+    );
   }
 
   public async initializeRoot() {
-    const rootResource = this.store.root;
-
-    const { value, context } =
-      await this.resourceInitializer.initializeResource(
-        rootResource.resource,
-        rootResource.config,
-        // They are already computed
-        rootResource.computedDependencies!,
-      );
-
-    rootResource.context = context;
-    rootResource.value = value;
-    rootResource.isInitialized = true;
-    this.store.recordResourceInitialized(rootResource.resource.id);
+    await this.ensureResourceInitialized(this.store.root);
   }
 
   /**
@@ -282,8 +350,10 @@ export class DependencyProcessor {
             return;
           }
           if (hookStoreElement.dependencyState !== HookDependencyState.Ready) {
+            this.enqueueBufferedHookEvent(hook.id, receivedEvent);
             return;
           }
+          await this.flushBufferedHookEvents(hookStoreElement);
           return this.eventManager.executeHookWithInterceptors(
             hook,
             receivedEvent,
@@ -301,99 +371,43 @@ export class DependencyProcessor {
               eventNotFoundError.throw({ id: e.id });
             }
           }
-          this.eventManager.addListener(
-            eventDefinition as unknown as IEvent[],
-            handler,
-            {
-              order,
-            },
-          );
+          this.eventManager.addListener(eventDefinition as IEvent[], handler, {
+            order,
+          });
         } else {
           if (this.store.events.get(eventDefinition.id) === undefined) {
             eventNotFoundError.throw({ id: eventDefinition.id });
           }
-          this.eventManager.addListener(
-            eventDefinition as unknown as IEvent,
-            handler,
-            {
-              order,
-            },
-          );
+          this.eventManager.addListener(eventDefinition as IEvent, handler, {
+            order,
+          });
         }
       }
     }
+  }
+
+  private enqueueBufferedHookEvent(
+    hookId: string,
+    event: IEventEmission<any>,
+  ): void {
+    this.hookEventBuffer.enqueue(hookId, event);
+  }
+
+  private async flushBufferedHookEvents(
+    hookStoreElement: HookStoreElementType,
+  ): Promise<void> {
+    await this.hookEventBuffer.flush(hookStoreElement);
   }
 
   async extractDependencies<T extends DependencyMapType>(
     map: T,
     source: string,
   ): Promise<DependencyValuesType<T>> {
-    const object = {} as DependencyValuesType<T>;
-
-    for (const key in map) {
-      try {
-        object[key] = await this.extractDependency(map[key], source);
-        // Special handling, a little bit of magic and memory sacrifice for the sake of observability.
-        // Maybe later we can allow this to be opt-in to save 'memory' in the case of large tasks?
-        const val = object[key] as unknown;
-        if (val instanceof Logger) {
-          (object as Record<string, unknown>)[key] = val.with({ source });
-        }
-      } catch (e) {
-        const errorMessage = String(e);
-        this.logger.error(
-          `Failed to extract dependency from source: ${source} -> ${key} with error: ${errorMessage}`,
-        );
-
-        throw e;
-      }
-    }
-    this.logger.trace(`Finished computing dependencies for source: ${source}`);
-
-    return object;
+    return this.dependencyExtractor.extractDependencies(map, source);
   }
 
   async extractDependency(object: unknown, source: string) {
-    this.logger.trace(
-      `Extracting dependency -> ${source} -> ${(object as { id?: string })?.id}`,
-    );
-
-    let isOpt = false;
-    let item: unknown = object;
-
-    if (utils.isOptional(object)) {
-      isOpt = true;
-      item = object.inner;
-    }
-
-    const itemWithId = item as { id: string };
-    const strategy = findDependencyStrategy(item);
-    if (!strategy) {
-      return unknownItemTypeError.throw({ item });
-    }
-
-    // For optional deps, check existence first
-    if (isOpt) {
-      const exists = strategy.getStoreMap(this.store).has(itemWithId.id);
-      if (!exists) return undefined;
-    }
-
-    // Dispatch to the appropriate extraction method
-    if (utils.isResource(item)) return this.extractResourceDependency(item);
-    if (utils.isTask(item)) return this.extractTaskDependency(item);
-    if (utils.isEvent(item)) return this.extractEventDependency(item, source);
-
-    // Errors and async contexts are their own value
-    // For non-optional deps, verify they exist in the store
-    if (!isOpt) {
-      const exists = strategy.getStoreMap(this.store).has(itemWithId.id);
-      if (!exists) {
-        const label = utils.isError(item) ? "Error" : "AsyncContext";
-        dependencyNotFoundError.throw({ key: `${label} ${itemWithId.id}` });
-      }
-    }
-
-    return item;
+    return this.dependencyExtractor.extractDependency(object, source);
   }
 
   /**
@@ -402,76 +416,17 @@ export class DependencyProcessor {
    * @returns
    */
   extractEventDependency(object: IEvent<any>, source: string) {
-    return async (input: any) => {
-      return this.eventManager.emit(object, input, source);
-    };
+    return this.dependencyExtractor.extractEventDependency(object, source) as (
+      input: any,
+      options?: IEventEmitOptions,
+    ) => Promise<any>;
   }
 
   async extractTaskDependency(object: ITask<any, any, {}>) {
-    const storeTask = this.store.tasks.get(object.id);
-    if (storeTask === undefined) {
-      dependencyNotFoundError.throw({ key: `Task ${object.id}` });
-    }
-
-    const st = storeTask!;
-    if (!st.isInitialized) {
-      // it's sanitised
-      const dependencies = st.task.dependencies as DependencyMapType;
-
-      st.computedDependencies = await this.extractDependencies(
-        dependencies,
-        st.task.id,
-      );
-      st.isInitialized = true;
-    }
-
-    return (input: unknown, options?: TaskCallOptions) => {
-      return this.taskRunner.run(st.task, input, options);
-    };
+    return this.dependencyExtractor.extractTaskDependency(object);
   }
 
   async extractResourceDependency(object: IResource<any, any, any>) {
-    // check if it exists in the store with the value
-    const storeResource = this.store.resources.get(object.id);
-    if (storeResource === undefined) {
-      dependencyNotFoundError.throw({ key: `Resource ${object.id}` });
-    }
-
-    const sr = storeResource!;
-    const { resource, config } = sr;
-
-    if (!sr.isInitialized) {
-      const depMap = (resource.dependencies || {}) as DependencyMapType;
-
-      let wrapped =
-        sr.computedDependencies as ResourceDependencyValuesType<any>;
-
-      // If not already computed, compute and cache it!
-      if (!wrapped || Object.keys(wrapped).length === 0) {
-        const raw = await this.extractDependencies(depMap, resource.id);
-        wrapped = this.wrapResourceDependencies(depMap, raw);
-        sr.computedDependencies = wrapped;
-      }
-
-      try {
-        const { value, context } =
-          await this.resourceInitializer.initializeResource(
-            resource,
-            config,
-            wrapped,
-          );
-
-        sr.context = context;
-        sr.value = value;
-
-        // we need to initialize the resource
-        sr.isInitialized = true;
-        this.store.recordResourceInitialized(resource.id);
-      } catch (error: unknown) {
-        this.rethrowResourceInitError(resource.id, error);
-      }
-    }
-
-    return sr.value;
+    return this.dependencyExtractor.extractResourceDependency(object);
   }
 }

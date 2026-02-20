@@ -138,6 +138,21 @@ export interface ResourceFluentBuilder<
     TMiddleware
   >;
 
+  /**
+   * Alias for configSchema. Use this to define the resource configuration validation contract.
+   */
+  schema<TNewConfig>(
+    schema: IValidationSchema<TNewConfig>,
+  ): ResourceFluentBuilder<
+    TNewConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+
   resultSchema<TResolved>(
     schema: IValidationSchema<TResolved>,
   ): ResourceFluentBuilder<
@@ -208,6 +223,27 @@ export interface ResourceFluentBuilder<
 
   throws(
     list: ThrowsList,
+  ): ResourceFluentBuilder<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+
+  /**
+   * Declares which registered items are visible outside this resource's
+   * registration subtree. When present, only listed items can be referenced
+   * from outside. Omitting `.exports()` = everything is public.
+   *
+   * Follows standard composition rules: appends by default, replaces
+   * when `{ override: true }` is passed.
+   */
+  exports(
+    items: Array<RegisterableItems>,
+    options?: { override?: boolean },
   ): ResourceFluentBuilder<
     TConfig,
     TValue,

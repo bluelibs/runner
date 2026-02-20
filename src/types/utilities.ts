@@ -3,7 +3,12 @@ import { ITask } from "./task";
 import { ITaskMiddleware } from "./taskMiddleware";
 import { IResourceMiddleware } from "./resourceMiddleware";
 import { IHook } from "./hook";
-import { IEvent, IEventDefinition } from "./event";
+import {
+  IEvent,
+  IEventDefinition,
+  IEventEmitOptions,
+  IEventEmitReport,
+} from "./event";
 import { ITag } from "./tag";
 import { symbolOptionalDependency } from "./symbols";
 import { IErrorHelper } from "./error";
@@ -16,7 +21,7 @@ export * from "./symbols";
  * Generic validation schema interface that can be implemented by any validation library.
  * Compatible with Zod, Yup, Joi, and other validation libraries.
  */
-export interface IValidationSchema<T = any> {
+export interface IValidationSchema<T = unknown> {
   /**
    * Parse and validate the input data.
    * Should throw an error if validation fails.
@@ -155,9 +160,39 @@ export type ResourceDependency<V> = V;
  * Event dependencies resolve to an emitter function. If the payload type is
  * `void`, the function can be called with zero args (or an empty object).
  */
+type EventEmitVoidDependency = {
+  (): Promise<void>;
+  (input?: Record<string, never>): Promise<void>;
+  (
+    input: Record<string, never> | undefined,
+    options: IEventEmitOptions & { report: true },
+  ): Promise<IEventEmitReport>;
+  (
+    input: Record<string, never> | undefined,
+    options?: IEventEmitOptions & { report?: false | undefined },
+  ): Promise<void>;
+  (
+    input: Record<string, never> | undefined,
+    options?: IEventEmitOptions,
+  ): Promise<void | IEventEmitReport>;
+};
+
+type EventEmitPayloadDependency<P> = {
+  (input: P): Promise<void>;
+  (
+    input: P,
+    options: IEventEmitOptions & { report: true },
+  ): Promise<IEventEmitReport>;
+  (
+    input: P,
+    options?: IEventEmitOptions & { report?: false | undefined },
+  ): Promise<void>;
+  (input: P, options?: IEventEmitOptions): Promise<void | IEventEmitReport>;
+};
+
 export type EventDependency<P> = P extends void
-  ? (() => Promise<void>) & ((input?: Record<string, never>) => Promise<void>)
-  : (input: P) => Promise<void>;
+  ? EventEmitVoidDependency
+  : EventEmitPayloadDependency<P>;
 
 /**
  * Transforms a dependency definition into the usable shape inside `run`/`init`:
@@ -196,6 +231,7 @@ export type TaskDependencyWithIntercept<TInput, TOutput> = TaskDependency<
   TOutput
 > & {
   intercept: (middleware: TaskLocalInterceptor<TInput, TOutput>) => void;
+  getInterceptingResourceIds: () => readonly string[];
 };
 
 /** Resource-context dependency typing where tasks expose intercept() */

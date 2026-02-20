@@ -4,10 +4,17 @@
  */
 
 import { describe, it, expect } from "@jest/globals";
-import { isUnsafeKey, toNodeRecord } from "../../serializer/validation";
+import {
+  isObjectReference,
+  isUnsafeKey,
+  toNodeRecord,
+} from "../../serializer/validation";
+import {
+  escapeReservedMarkerKey,
+  unescapeReservedMarkerKey,
+} from "../../serializer/marker-key-escapes";
 import { TypeRegistry } from "../../serializer/type-registry";
 import { deserializeLegacy } from "../../serializer/deserializer";
-import { SymbolPolicy } from "../../serializer/types";
 
 describe("Serializer Module Coverage", () => {
   describe("validation.ts", () => {
@@ -26,6 +33,34 @@ describe("Serializer Module Coverage", () => {
       const result = toNodeRecord(nodes as any);
       expect(result.safe).toBeDefined();
     });
+
+    it("isObjectReference requires strict canonical reference shape", () => {
+      expect(isObjectReference({ __ref: "obj_1" })).toBe(true);
+      expect(isObjectReference({ __ref: "obj_1", extra: true })).toBe(false);
+
+      const withSymbol = { __ref: "obj_1" } as Record<PropertyKey, unknown>;
+      withSymbol[Symbol.for("meta")] = true;
+      expect(isObjectReference(withSymbol)).toBe(false);
+    });
+
+    it("escapes and unescapes reserved serializer marker keys", () => {
+      const escapedType = escapeReservedMarkerKey("__type");
+      const escapedGraph = escapeReservedMarkerKey("__graph");
+      const escapedPrefixed = escapeReservedMarkerKey("$runner.escape::__type");
+      const unchanged = escapeReservedMarkerKey("regular");
+
+      expect(escapedType).toBe("$runner.escape::__type");
+      expect(escapedGraph).toBe("$runner.escape::__graph");
+      expect(escapedPrefixed).toBe("$runner.escape::$runner.escape::__type");
+      expect(unchanged).toBe("regular");
+
+      expect(unescapeReservedMarkerKey(escapedType)).toBe("__type");
+      expect(unescapeReservedMarkerKey(escapedGraph)).toBe("__graph");
+      expect(unescapeReservedMarkerKey(escapedPrefixed)).toBe(
+        "$runner.escape::__type",
+      );
+      expect(unescapeReservedMarkerKey("regular")).toBe("regular");
+    });
   });
 
   describe("type-registry.ts", () => {
@@ -34,7 +69,7 @@ describe("Serializer Module Coverage", () => {
       const registry = new TypeRegistry({
         allowedTypes: null,
         regExpValidator: { maxPatternLength: 1024, allowUnsafe: false },
-        symbolPolicy: SymbolPolicy.AllowAll,
+        symbolPolicy: "allow-all",
       });
 
       const typeList = registry.getTypeList();
@@ -52,7 +87,7 @@ describe("Serializer Module Coverage", () => {
       const registry = new TypeRegistry({
         allowedTypes: null,
         regExpValidator: { maxPatternLength: 1024, allowUnsafe: false },
-        symbolPolicy: SymbolPolicy.AllowAll,
+        symbolPolicy: "allow-all",
       });
 
       const source = Object.create({ inherited: 1 }) as Record<string, unknown>;

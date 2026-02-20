@@ -1,4 +1,5 @@
 import { asyncContext as rawAsyncContextBuilder } from "../../definers/builders/asyncContext";
+import { createMessageError } from "../../errors";
 
 describe("asyncContext raw builder coverage", () => {
   it("exposes id and supports all fluent methods", () => {
@@ -12,7 +13,7 @@ describe("asyncContext raw builder coverage", () => {
       .configSchema({
         parse(input: unknown) {
           const d = input as T;
-          if (typeof d?.id !== "number") throw new Error("invalid");
+          if (typeof d?.id !== "number") throw createMessageError("invalid");
           return d;
         },
       });

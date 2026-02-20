@@ -4,7 +4,8 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import { IDurableService } from "../core/interfaces/service";
 import { DurableOperator } from "../core/DurableOperator";
-import type { ExecutionStatus } from "../core/types";
+import { ExecutionStatus } from "../core/types";
+import { normalizeError } from "../../../globals/resources/tunnel/error-utils";
 
 function findUp(startDir: string, filename: string): string | null {
   let current = startDir;
@@ -65,6 +66,8 @@ export type DashboardMiddlewareOptions = {
 
 enum DashboardErrorMessage {
   Forbidden = "Forbidden",
+  InvalidQuery = "Invalid query parameter",
+  InvalidBody = "Invalid request body",
 }
 
 export function createDashboardMiddleware(
@@ -74,41 +77,103 @@ export function createDashboardMiddleware(
 ): Router {
   const router = express.Router();
   const api = express.Router();
+  const executionStatuses = new Set<string>(Object.values(ExecutionStatus));
+
+  const parseStrictIntegerQuery = (
+    value: unknown,
+    options: { defaultValue: number; min: number; max: number },
+  ): number | null => {
+    if (value === undefined) return options.defaultValue;
+    if (Array.isArray(value)) return null;
+    if (typeof value !== "string") return null;
+    if (!/^\d+$/.test(value)) return null;
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isSafeInteger(parsed)) return null;
+    if (parsed < options.min || parsed > options.max) return null;
+    return parsed;
+  };
+
+  const parseStatusQuery = (
+    value: unknown,
+  ): string[] | undefined | null => {
+    if (value === undefined) return undefined;
+    if (Array.isArray(value)) return null;
+    if (typeof value !== "string") return null;
+    const statuses = value
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+    if (statuses.length === 0) return [];
+    if (statuses.some((status) => !executionStatuses.has(status))) return null;
+    return statuses;
+  };
+
+  const isNonEmptyString = (value: unknown): value is string =>
+    typeof value === "string" && value.trim().length > 0;
+  const getErrorMessage = (error: unknown): string =>
+    normalizeError(error).message;
 
   api.get("/executions", async (req, res) => {
     try {
-      const statusParam = req.query.status as string | undefined;
-      const status = statusParam
-        ? (statusParam.split(",") as ExecutionStatus[])
-        : undefined;
+      const status = parseStatusQuery(req.query.status);
+      if (status === null) {
+        return res.status(400).json({
+          error: `${DashboardErrorMessage.InvalidQuery}: status`,
+        });
+      }
 
-      const taskId = req.query.taskId as string | undefined;
-      const limit = req.query.limit
-        ? parseInt(req.query.limit as string, 10)
-        : 50;
-      const offset = req.query.offset
-        ? parseInt(req.query.offset as string, 10)
-        : 0;
+      const limit = parseStrictIntegerQuery(req.query.limit, {
+        defaultValue: 50,
+        min: 1,
+        max: 500,
+      });
+      if (limit === null) {
+        return res.status(400).json({
+          error: `${DashboardErrorMessage.InvalidQuery}: limit`,
+        });
+      }
+
+      const offset = parseStrictIntegerQuery(req.query.offset, {
+        defaultValue: 0,
+        min: 0,
+        max: 1_000_000,
+      });
+      if (offset === null) {
+        return res.status(400).json({
+          error: `${DashboardErrorMessage.InvalidQuery}: offset`,
+        });
+      }
+
+      const taskIdRaw = req.query.taskId;
+      if (
+        taskIdRaw !== undefined &&
+        (Array.isArray(taskIdRaw) || typeof taskIdRaw !== "string")
+      ) {
+        return res.status(400).json({
+          error: `${DashboardErrorMessage.InvalidQuery}: taskId`,
+        });
+      }
+      const taskId = taskIdRaw as string | undefined;
 
       const executions = await operator.listExecutions({
-        status,
+        status: status as ExecutionStatus[] | undefined,
         taskId,
         limit,
         offset,
       });
 
       res.json(executions);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ error: getErrorMessage(err) });
     }
   });
 
-  api.get("/executions-stuck", async (req, res) => {
+  api.get("/executions-stuck", async (_req, res) => {
     try {
       const executions = await operator.listStuckExecutions();
       res.json(executions);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ error: getErrorMessage(err) });
     }
   });
 
@@ -122,8 +187,8 @@ export function createDashboardMiddleware(
       }
 
       res.json({ ...execution, steps, audit });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ error: getErrorMessage(err) });
     }
   });
 
@@ -143,20 +208,41 @@ export function createDashboardMiddleware(
         return res.status(403).json({ error: DashboardErrorMessage.Forbidden });
       }
 
+      if (!isNonEmptyString(executionId)) {
+        return res.status(400).json({
+          error: `${DashboardErrorMessage.InvalidBody}: executionId`,
+        });
+      }
+
       switch (action) {
         case "retryRollback":
           await operator.retryRollback(executionId);
           break;
         case "skipStep":
+          if (!isNonEmptyString(stepId)) {
+            return res.status(400).json({
+              error: `${DashboardErrorMessage.InvalidBody}: stepId`,
+            });
+          }
           await operator.skipStep(executionId, stepId);
           break;
         case "forceFail":
           await operator.forceFail(
             executionId,
-            reason || "Operator forced fail",
+            isNonEmptyString(reason) ? reason : "Operator forced fail",
           );
           break;
         case "editState":
+          if (!isNonEmptyString(stepId)) {
+            return res.status(400).json({
+              error: `${DashboardErrorMessage.InvalidBody}: stepId`,
+            });
+          }
+          if (state === undefined) {
+            return res.status(400).json({
+              error: `${DashboardErrorMessage.InvalidBody}: state`,
+            });
+          }
           await operator.editState(executionId, stepId, state);
           break;
         default:
@@ -164,8 +250,8 @@ export function createDashboardMiddleware(
       }
 
       res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ error: getErrorMessage(err) });
     }
   });
 

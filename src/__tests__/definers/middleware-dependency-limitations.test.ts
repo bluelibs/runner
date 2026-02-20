@@ -373,6 +373,7 @@ describe("Middleware Dependency Limitations", () => {
 
   describe("Error Message Quality", () => {
     it("should provide clear error messages for middleware circular dependencies", async () => {
+      expect.assertions(3);
       const mwSelf: any = defineTaskMiddleware({
         id: "self.referencing.middleware",
         dependencies: (): any => ({ task }),

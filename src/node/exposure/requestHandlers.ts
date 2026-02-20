@@ -8,16 +8,31 @@ import {
 } from "./httpResponse";
 import type { SerializerLike } from "../../serializer";
 import { requestUrl, resolveTargetFromRequest } from "./router";
-import type { Authenticator, AllowListGuard, RequestHandler } from "./types";
+import type {
+  Authenticator,
+  AllowListGuard,
+  RequestHandler,
+  JsonResponse,
+} from "./types";
 import type { ExposureRouter } from "./router";
 import type {
   NodeExposureDeps,
   NodeExposureHttpCorsConfig,
 } from "./resourceTypes";
 import { applyCorsActual, handleCorsPreflight } from "./cors";
-import { computeAllowList } from "../tunnel/allowlist";
+import {
+  computeAllowList,
+  type AllowListSelectorErrorInfo,
+} from "../tunnel/allowlist";
 import { createTaskHandler } from "./handlers/taskHandler";
 import { createEventHandler } from "./handlers/eventHandler";
+import { safeLogWarn } from "./logging";
+import { ensureRequestId, getRequestId } from "./requestIdentity";
+import type { MultipartLimits } from "./multipart";
+
+enum ExposureAuditLogKey {
+  AuthFailure = "exposure.auth.failure",
+}
 
 export interface RequestProcessingDeps {
   store: NodeExposureDeps["store"];
@@ -31,8 +46,9 @@ export interface RequestProcessingDeps {
   serializer: SerializerLike;
   limits?: {
     json?: { maxSize?: number };
-    multipart?: any; // avoid circular or strict import if possible
+    multipart?: MultipartLimits;
   };
+  disableDiscovery?: boolean;
 }
 
 export interface NodeExposureRequestHandlers {
@@ -58,35 +74,95 @@ export function createRequestHandlers(
   const serializer = deps.serializer;
   const cors = deps.cors;
 
+  const extractErrorCode = (response: JsonResponse): string | undefined => {
+    if (!response.body || typeof response.body !== "object") return;
+    const error = (response.body as { error?: unknown }).error;
+    if (!error || typeof error !== "object") return;
+    const code = (error as { code?: unknown }).code;
+    return typeof code === "string" ? code : undefined;
+  };
+
+  const reportAllowListSelectorError = ({
+    selectorKind,
+    candidateId,
+    tunnelResourceId,
+    error,
+  }: AllowListSelectorErrorInfo) => {
+    safeLogWarn(
+      logger,
+      "[runner] Tunnel allow-list selector failed; item skipped.",
+      {
+        selectorKind,
+        candidateId,
+        tunnelResourceId,
+        error: error instanceof Error ? error : new Error(String(error)),
+      },
+    );
+  };
+
+  const auditedAuthenticator: Authenticator = async (req) => {
+    const authResult = await authenticator(req);
+    if (!authResult.ok) {
+      const path = requestUrl(req).pathname;
+      safeLogWarn(logger, ExposureAuditLogKey.AuthFailure, {
+        requestId: getRequestId(req),
+        method: req.method ?? "GET",
+        path,
+        status: authResult.response.status,
+        code: extractErrorCode(authResult.response),
+      });
+    }
+    return authResult;
+  };
+
+  const prepareRequest = (req: IncomingMessage, res: ServerResponse): void => {
+    ensureRequestId(req, res);
+  };
+
+  const resolveTaskAllowAsyncContext = (taskId: string): boolean => {
+    const list = computeAllowList(store, reportAllowListSelectorError);
+    const tunnelDecision = list.taskAcceptsAsyncContext.get(taskId);
+    return tunnelDecision ?? true;
+  };
+
+  const resolveEventAllowAsyncContext = (eventId: string): boolean => {
+    const list = computeAllowList(store, reportAllowListSelectorError);
+    const tunnelDecision = list.eventAcceptsAsyncContext.get(eventId);
+    return tunnelDecision ?? true;
+  };
+
   const processTaskRequest = createTaskHandler({
     store,
     taskRunner,
     logger,
-    authenticator,
+    authenticator: auditedAuthenticator,
     allowList,
     router,
     cors,
     serializer,
     limits,
+    allowAsyncContext: resolveTaskAllowAsyncContext,
   });
 
   const processEventRequest = createEventHandler({
     store,
     eventManager,
     logger,
-    authenticator,
+    authenticator: auditedAuthenticator,
     allowList,
     cors,
     serializer,
     limits,
+    allowAsyncContext: resolveEventAllowAsyncContext,
   });
 
   const handleTask = async (req: IncomingMessage, res: ServerResponse) => {
     if (handleCorsPreflight(req, res, cors)) return;
+    prepareRequest(req, res);
     const target = resolveTargetFromRequest(req, router, "task");
     if (!target.ok) {
       applyCorsActual(req, res, cors);
-      respondJson(res, target.response);
+      respondJson(res, target.response, serializer);
       return;
     }
     await processTaskRequest(req, res, target.id);
@@ -94,10 +170,11 @@ export function createRequestHandlers(
 
   const handleEvent = async (req: IncomingMessage, res: ServerResponse) => {
     if (handleCorsPreflight(req, res, cors)) return;
+    prepareRequest(req, res);
     const target = resolveTargetFromRequest(req, router, "event");
     if (!target.ok) {
       applyCorsActual(req, res, cors);
-      respondJson(res, target.response);
+      respondJson(res, target.response, serializer);
       return;
     }
     await processEventRequest(req, res, target.id);
@@ -107,18 +184,24 @@ export function createRequestHandlers(
     req: IncomingMessage,
     res: ServerResponse,
   ): Promise<void> => {
-    // Allow GET and POST for discovery
-    if (req.method !== "GET" && req.method !== "POST") {
+    prepareRequest(req, res);
+    if (deps.disableDiscovery) {
+      applyCorsActual(req, res, cors);
+      respondJson(res, NOT_FOUND_RESPONSE, serializer);
+      return;
+    }
+    if (req.method !== "GET") {
+      applyCorsActual(req, res, cors);
       respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);
       return;
     }
-    const auth = await authenticator(req);
+    const auth = await auditedAuthenticator(req);
     if (!auth.ok) {
       applyCorsActual(req, res, cors);
       respondJson(res, auth.response, serializer);
       return;
     }
-    const list = computeAllowList(store);
+    const list = computeAllowList(store, reportAllowListSelectorError);
     applyCorsActual(req, res, cors);
     respondJson(
       res,
@@ -143,19 +226,21 @@ export function createRequestHandlers(
         return false;
       }
       if (handleCorsPreflight(req, res, cors)) return true;
+      prepareRequest(req, res);
       applyCorsActual(req, res, cors);
       respondJson(res, NOT_FOUND_RESPONSE, serializer);
       return true;
     }
+    if (handleCorsPreflight(req, res, cors)) return true;
+    if (target.kind === "discovery") {
+      await handleDiscovery(req, res);
+      return true;
+    }
+    prepareRequest(req, res);
     if (target.kind === "task") {
-      if (handleCorsPreflight(req, res, cors)) return true;
       await processTaskRequest(req, res, target.id);
     } else if (target.kind === "event") {
-      if (handleCorsPreflight(req, res, cors)) return true;
       await processEventRequest(req, res, target.id);
-    } else if (target.kind === "discovery") {
-      if (handleCorsPreflight(req, res, cors)) return true;
-      await handleDiscovery(req, res);
     }
     return true;
   };

@@ -7,6 +7,47 @@ export type EventHandlerType<T = any> = (
   event: IEventEmission<T>,
 ) => any | Promise<any>;
 
+export const EventEmissionFailureMode = {
+  FailFast: "fail-fast",
+  Aggregate: "aggregate",
+} as const;
+
+export type EventEmissionFailureMode =
+  (typeof EventEmissionFailureMode)[keyof typeof EventEmissionFailureMode];
+
+export interface IEventListenerError extends Error {
+  listenerId?: string;
+  listenerOrder?: number;
+}
+
+export interface IEventEmitReport {
+  totalListeners: number;
+  attemptedListeners: number;
+  skippedListeners: number;
+  succeededListeners: number;
+  failedListeners: number;
+  propagationStopped: boolean;
+  errors: IEventListenerError[];
+}
+
+export interface IEventEmitOptions {
+  /**
+   * Controls error behavior during listener execution.
+   * - fail-fast (default): throw on first failure.
+   * - aggregate: continue execution and collect listener errors.
+   */
+  failureMode?: EventEmissionFailureMode;
+  /**
+   * When false, suppress throwing even if listener errors occurred.
+   * Defaults to true.
+   */
+  throwOnError?: boolean;
+  /**
+   * When true, `emit(...)`/dependency event emitter returns `IEventEmitReport`.
+   */
+  report?: boolean;
+}
+
 // Helper to keep tuple inference intact for multi-event hooks
 export function onAnyOf<T extends readonly IEventDefinition<any>[]>(
   ...defs: T

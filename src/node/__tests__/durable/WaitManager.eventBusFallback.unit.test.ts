@@ -2,6 +2,7 @@ import type { BusEvent, IEventBus } from "../../durable/core/interfaces/bus";
 import { WaitManager } from "../../durable/core/managers/WaitManager";
 import { ExecutionStatus } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { createMessageError } from "../../../errors";
 
 class SilentEventBus implements IEventBus {
   async publish(_channel: string, _event: BusEvent): Promise<void> {}
@@ -72,7 +73,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
 
     jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
       calls += 1;
-      if (calls === 3) {
+      if (calls === 4) {
         await block;
         return await originalGet(id);
       }
@@ -113,7 +114,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
     jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
       calls += 1;
       if (calls === 4) {
-        throw new Error("getExecution-failed");
+        throw createMessageError("getExecution-failed");
       }
       return await originalGet(id);
     });
@@ -159,5 +160,62 @@ describe("durable: WaitManager (event bus fallback)", () => {
         waitPollIntervalMs: 1_000,
       }),
     ).rejects.toMatchObject({ taskId: "unknown", attempt: 0 });
+  });
+
+  it("respects timeout budget spent before event-bus wiring", async () => {
+    jest.useFakeTimers();
+    const nowSpy = jest.spyOn(Date, "now");
+    const setTimeoutSpy = jest.spyOn(globalThis, "setTimeout");
+    try {
+      const store = new MemoryStore();
+      const bus = new SilentEventBus();
+      const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
+
+      const executionId = "e-timeout-elapsed-before-subscribe";
+      await store.saveExecution({
+        id: executionId,
+        taskId: "t",
+        input: undefined,
+        status: ExecutionStatus.Pending,
+        attempt: 1,
+        maxAttempts: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const originalGet = store.getExecution.bind(store);
+      let calls = 0;
+      let nowMs = 1_000;
+      nowSpy.mockImplementation(() => nowMs);
+      jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
+        calls += 1;
+        if (calls === 1) {
+          // Simulate time spent in initial check before event-bus mode starts.
+          nowMs += 50;
+        }
+        return await originalGet(id);
+      });
+
+      const waiting = manager.waitForResult<string>(executionId, {
+        timeout: 10,
+        waitPollIntervalMs: 1_000,
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const timeoutCalls = setTimeoutSpy.mock.calls.filter(
+        (_call) => _call[1] === 10,
+      );
+      expect(timeoutCalls).toHaveLength(0);
+
+      jest.advanceTimersByTime(1_000);
+      await Promise.resolve();
+      await expect(waiting).rejects.toThrow("Timeout waiting for execution");
+    } finally {
+      jest.useRealTimers();
+      setTimeoutSpy.mockRestore();
+      nowSpy.mockRestore();
+    }
   });
 });

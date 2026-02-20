@@ -5,10 +5,14 @@ import type {
 } from "../core/interfaces/bus";
 import { Serializer } from "../../../serializer";
 import { createIORedisClient } from "../optionalDeps/ioredis";
+import { durableExecutionInvariantError } from "../../../errors";
+import { Logger } from "../../../models/Logger";
 
 export interface RedisEventBusConfig {
   prefix?: string;
   redis?: RedisEventBusClient | string;
+  logger?: Logger;
+  onHandlerError?: (error: unknown) => void | Promise<void>;
 }
 
 export interface RedisEventBusClient {
@@ -31,17 +35,29 @@ export class RedisEventBus implements IEventBus {
   private prefix: string;
   private readonly channels = new Map<string, ChannelState>();
   private readonly serializer = new Serializer();
+  private readonly logger: Logger;
+  private readonly onHandlerError?: (error: unknown) => void | Promise<void>;
 
-  constructor(config: RedisEventBusConfig) {
+  constructor(config: RedisEventBusConfig = {}) {
     this.pub =
       typeof config.redis === "string" || config.redis === undefined
         ? (createIORedisClient(config.redis) as RedisEventBusClient)
         : config.redis;
+    const baseLogger =
+      config.logger ??
+      new Logger({
+        printThreshold: "error",
+        printStrategy: "pretty",
+        bufferLogs: false,
+      });
+    this.logger = baseLogger.with({ source: "durable.bus.redis" });
+    this.onHandlerError = config.onHandlerError;
 
     if (!this.pub.duplicate) {
-      throw new Error(
-        "RedisEventBus requires a redis client that supports duplicate()",
-      );
+      durableExecutionInvariantError.throw({
+        message:
+          "RedisEventBus requires a redis client that supports duplicate()",
+      });
     }
 
     this.sub = this.pub.duplicate();
@@ -54,10 +70,42 @@ export class RedisEventBus implements IEventBus {
       const event = this.deserializeEvent(message);
       if (!event) return;
 
-      state.handlers.forEach((h) =>
-        h(event).catch((error) => console.error(error)),
-      );
+      state.handlers.forEach((h) => {
+        void (async () => {
+          try {
+            await h(event);
+          } catch (error) {
+            await this.reportHandlerError(error, chan);
+          }
+        })();
+      });
     });
+  }
+
+  private async reportHandlerError(
+    error: unknown,
+    channel: string,
+  ): Promise<void> {
+    try {
+      if (this.onHandlerError) {
+        await this.onHandlerError(error);
+        return;
+      }
+
+      await this.logger.error("RedisEventBus handler failed.", {
+        error,
+        data: { channel },
+      });
+    } catch (callbackError) {
+      try {
+        await this.logger.error("RedisEventBus error callback failed.", {
+          error: callbackError,
+          data: { channel, originalError: error },
+        });
+      } catch {
+        // Logging must remain best-effort in event bus loops.
+      }
+    }
   }
 
   private k(channel: string): string {
@@ -147,8 +195,18 @@ export class RedisEventBus implements IEventBus {
     state.handlers.add(handler);
   }
 
-  async unsubscribe(channel: string): Promise<void> {
+  async unsubscribe(channel: string, handler?: BusEventHandler): Promise<void> {
     const fullChannel = this.k(channel);
+    const state = this.channels.get(fullChannel);
+    if (!state) return;
+
+    if (handler) {
+      state.handlers.delete(handler);
+      if (state.handlers.size > 0) {
+        return;
+      }
+    }
+
     await this.sub.unsubscribe(fullChannel);
     this.channels.delete(fullChannel);
   }

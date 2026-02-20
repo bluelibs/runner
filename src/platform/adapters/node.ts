@@ -12,8 +12,8 @@ export class NodePlatformAdapter implements IPlatformAdapter {
     >() => IAsyncLocalStorage<T>;
   }
 
-  onUncaughtException(handler: (error: Error) => void) {
-    const h = (error: Error) => handler(error);
+  onUncaughtException(handler: (error: unknown) => void) {
+    const h = (error: unknown) => handler(error);
     process.on("uncaughtException", h);
     return () => process.off("uncaughtException", h);
   }

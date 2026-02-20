@@ -6,11 +6,13 @@ import { MiddlewareManager } from "./MiddlewareManager";
 import type { ExecutionJournal } from "../types/executionJournal";
 import type { TaskCallOptions } from "../types/utilities";
 
+type CachedTaskRunner = (
+  input: unknown,
+  journal?: ExecutionJournal,
+) => Promise<unknown>;
+
 export class TaskRunner {
-  protected readonly runnerStore = new Map<
-    string | symbol,
-    (input: any, journal?: ExecutionJournal) => Promise<any>
-  >();
+  protected readonly runnerStore = new Map<string | symbol, CachedTaskRunner>();
 
   constructor(
     protected readonly store: Store,
@@ -40,26 +42,21 @@ export class TaskRunner {
     input?: TInput,
     options?: TaskCallOptions,
   ): Promise<TOutput | undefined> {
-    let runner = this.runnerStore.get(task.id);
+    const canUseCachedRunner = this.store.isLocked;
+    let runner = canUseCachedRunner
+      ? (this.runnerStore.get(task.id) as
+          | ((input: TInput, journal?: ExecutionJournal) => Promise<TOutput>)
+          | undefined)
+      : undefined;
     if (!runner) {
       runner = this.createRunnerWithMiddleware<TInput, TOutput, TDeps>(task);
-
-      this.runnerStore.set(task.id, runner);
+      if (canUseCachedRunner) {
+        this.runnerStore.set(task.id, runner as CachedTaskRunner);
+      }
     }
 
-    try {
-      // Pass journal if provided; composer will use it or create new
-      return await runner(input, options?.journal);
-    } catch (error) {
-      try {
-        await this.store.onUnhandledError({
-          error,
-          kind: "task",
-          source: task.id,
-        });
-      } catch (_) {}
-      throw error;
-    }
+    // Pass journal if provided; composer will use it or create new
+    return await runner(input as TInput, options?.journal);
   }
 
   /**

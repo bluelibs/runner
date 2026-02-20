@@ -16,6 +16,7 @@ import {
   serializeRecordEntries,
   serializeSymbolValue,
 } from "./serialize-utils";
+import { escapeReservedMarkerKey } from "./marker-key-escapes";
 
 export interface TreeSerializeContext {
   stack: WeakSet<object>;
@@ -86,49 +87,59 @@ export const serializeTreeValue = (
     throw new TypeError("Cannot serialize circular structure in tree mode");
   }
 
-  const shouldCheckTypes =
-    !Array.isArray(objectValue) &&
-    !context.serializingValueTypes.has(objectValue);
-
-  if (shouldCheckTypes) {
-    const typeDef = options.typeRegistry.findTypeDefinition(
-      objectValue,
-      context.excludedTypeIds,
-    );
-    if (typeDef) {
-      context.serializingValueTypes.add(objectValue);
-      const serializedPayload = typeDef.serialize(objectValue);
-      const shouldExcludeCurrentType =
-        options.typeRegistry.shouldExcludeTypeFromPayload(
-          typeDef,
-          serializedPayload,
-        );
-      try {
-        if (shouldExcludeCurrentType) {
-          context.excludedTypeIds.push(typeDef.id);
-        }
-        const payload = serializeTreeValue(
-          serializedPayload,
-          context,
-          depth + 1,
-          options,
-        );
-        return {
-          __type: typeDef.id,
-          value: payload,
-        };
-      } finally {
-        if (shouldExcludeCurrentType) {
-          context.excludedTypeIds.pop();
-        }
-        context.serializingValueTypes.delete(objectValue);
-      }
-    }
-  }
-
   context.stack.add(objectValue);
 
   try {
+    const shouldCheckTypes =
+      !Array.isArray(objectValue) &&
+      !context.serializingValueTypes.has(objectValue);
+
+    if (shouldCheckTypes) {
+      const typeDef = options.typeRegistry.findTypeDefinition(
+        objectValue,
+        context.excludedTypeIds,
+      );
+      if (typeDef) {
+        context.serializingValueTypes.add(objectValue);
+        let shouldExcludeCurrentType = false;
+        try {
+          const serializedPayload = typeDef.serialize(objectValue);
+          shouldExcludeCurrentType =
+            options.typeRegistry.shouldExcludeTypeFromPayload(
+              typeDef,
+              serializedPayload,
+            );
+          if (shouldExcludeCurrentType) {
+            context.excludedTypeIds.push(typeDef.id);
+          }
+          const payload =
+            serializedPayload === objectValue
+              ? serializeRecordEntries(
+                  objectValue as Record<string, unknown>,
+                  options.unsafeKeys,
+                  (nested) =>
+                    serializeTreeValue(nested, context, depth + 1, options),
+                  escapeReservedMarkerKey,
+                )
+              : serializeTreeValue(
+                  serializedPayload,
+                  context,
+                  depth + 1,
+                  options,
+                );
+          return {
+            __type: typeDef.id,
+            value: payload,
+          };
+        } finally {
+          if (shouldExcludeCurrentType) {
+            context.excludedTypeIds.pop();
+          }
+          context.serializingValueTypes.delete(objectValue);
+        }
+      }
+    }
+
     if (Array.isArray(objectValue)) {
       return serializeArrayItems(objectValue, (nested) =>
         serializeTreeValue(nested, context, depth + 1, options),
@@ -139,6 +150,7 @@ export const serializeTreeValue = (
       objectValue as Record<string, unknown>,
       options.unsafeKeys,
       (nested) => serializeTreeValue(nested, context, depth + 1, options),
+      escapeReservedMarkerKey,
     );
   } finally {
     context.stack.delete(objectValue);

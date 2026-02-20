@@ -33,6 +33,7 @@ import { IErrorHelper } from "../types/error";
 import type { IAsyncContext } from "../types/asyncContext";
 import { HookDependencyState } from "../types/storeTypes";
 import { LockableMap } from "../tools/LockableMap";
+import { VisibilityTracker } from "./VisibilityTracker";
 
 type StoringMode = "normal" | "override";
 export class StoreRegistry {
@@ -55,6 +56,7 @@ export class StoreRegistry {
     "asyncContexts",
   );
   public errors = new LockableMap<string, IErrorHelper<any>>("errors");
+  public readonly visibilityTracker = new VisibilityTracker();
 
   private validator: StoreValidator;
 
@@ -217,8 +219,15 @@ export class StoreRegistry {
     element.register = items;
 
     for (const item of items) {
+      // Track which resource owns each registered item
+      this.visibilityTracker.recordOwnership(element.id, item);
       // will call registration if it detects another resource.
       this.storeGenericItem<_C>(item);
+    }
+
+    // Record exports after all items are registered so ids are available
+    if (element.exports) {
+      this.visibilityTracker.recordExports(element.id, element.exports);
     }
   }
 
@@ -307,14 +316,14 @@ export class StoreRegistry {
    * Used to fetch the value cloned, and if we're dealing with an override, we need to extend the previous value.
    */
   private getFreshValue<
-    T extends { id: string; dependencies?: any; config?: any },
+    T extends { id: string; dependencies?: unknown; config?: unknown },
     MapType,
   >(
     item: T,
     collection: Map<string, MapType>,
     key: keyof MapType,
     overrideMode: StoringMode,
-    config?: any, // If provided config, takes precedence over config in item.
+    config?: unknown, // If provided config, takes precedence over config in item.
   ): T {
     let currentItem: T;
     if (overrideMode === "override") {
@@ -324,10 +333,15 @@ export class StoreRegistry {
       currentItem = { ...item };
     }
 
-    currentItem.dependencies =
-      typeof currentItem.dependencies === "function"
-        ? currentItem.dependencies(config || currentItem.config)
-        : currentItem.dependencies;
+    if (typeof currentItem.dependencies === "function") {
+      const dependencyFactory = currentItem.dependencies as (
+        cfg: unknown,
+      ) => unknown;
+      const effectiveConfig = config ?? currentItem.config;
+      currentItem.dependencies = dependencyFactory(
+        effectiveConfig,
+      ) as T["dependencies"];
+    }
 
     return currentItem;
   }

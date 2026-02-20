@@ -1,3 +1,4 @@
+import { invalidPayloadError, validationError } from "./errors";
 import type { SerializedValue } from "./types";
 
 export enum SpecialTypeId {
@@ -23,11 +24,17 @@ export type BigIntPayload = string;
 export const serializeBigIntPayload = (value: bigint): BigIntPayload =>
   value.toString(10);
 
+const BIGINT_PAYLOAD_PATTERN = /^[+-]?\d+$/;
+
 export const assertBigIntPayload = (value: unknown): BigIntPayload => {
-  if (typeof value === "string") {
-    return value;
+  if (typeof value !== "string") {
+    throw invalidPayloadError("Invalid bigint payload");
   }
-  throw new Error("Invalid bigint payload");
+  const normalized = value.trim();
+  if (!BIGINT_PAYLOAD_PATTERN.test(normalized)) {
+    throw invalidPayloadError("Invalid bigint payload");
+  }
+  return normalized;
 };
 
 export const serializeBigInt = (value: bigint): SerializedValue => ({
@@ -53,7 +60,7 @@ export const getNonFiniteNumberTag = (
 export const serializeNonFiniteNumber = (value: number): SerializedValue => {
   const tag = getNonFiniteNumberTag(value);
   if (!tag) {
-    throw new Error("Expected non-finite number");
+    throw validationError("Expected non-finite number");
   }
   return {
     __type: SpecialTypeId.NonFiniteNumber,
@@ -71,5 +78,5 @@ export const assertNonFiniteNumberTag = (
   ) {
     return value;
   }
-  throw new Error("Invalid non-finite number payload");
+  throw invalidPayloadError("Invalid non-finite number payload");
 };

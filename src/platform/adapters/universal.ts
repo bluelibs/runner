@@ -9,7 +9,7 @@ export function detectEnvironment(): PlatformId {
     return "browser";
   }
 
-  const global = globalThis as unknown as {
+  const global = globalThis as {
     process?: { versions?: { node?: string; bun?: string } };
     Deno?: unknown;
     Bun?: unknown;
@@ -63,7 +63,7 @@ export class UniversalPlatformAdapter implements IPlatformAdapter {
     if (this.inner) return;
 
     const kind = detectEnvironment();
-    const global = globalThis as unknown as {
+    const global = globalThis as {
       document?: unknown;
       addEventListener?: unknown;
       Deno?: unknown;
@@ -101,7 +101,7 @@ export class UniversalPlatformAdapter implements IPlatformAdapter {
     return this.inner!;
   }
 
-  onUncaughtException(handler: (error: Error) => void) {
+  onUncaughtException(handler: (error: unknown) => void) {
     return this.get().onUncaughtException(handler);
   }
   onUnhandledRejection(handler: (reason: unknown) => void) {

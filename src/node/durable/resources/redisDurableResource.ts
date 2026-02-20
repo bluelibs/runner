@@ -9,6 +9,7 @@ import { durableEventsArray } from "../events";
 import type { DurableResource } from "../core/DurableResource";
 import { deriveDurableIsolation } from "./isolation";
 import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
+import { Logger } from "../../../models/Logger";
 
 export type RedisDurableResourceConfig = Omit<
   RunnerDurableRuntimeConfig,
@@ -43,15 +44,25 @@ export const redisDurableResource = r
     taskRunner: globals.resources.taskRunner,
     eventManager: globals.resources.eventManager,
     runnerStore: globals.resources.store,
+    logger: globals.resources.logger,
   })
   .context<RedisDurableResourceContext>(() => ({ runtimeConfig: null }))
   .init(async function (
     this: { id: string },
     config,
-    { taskRunner, eventManager, runnerStore },
+    { taskRunner, eventManager, runnerStore, logger },
     ctx,
   ): Promise<DurableResource> {
     const namespace = config.namespace ?? this.id;
+    const baseLogger =
+      config.logger ??
+      logger ??
+      new Logger({
+        printThreshold: "error",
+        printStrategy: "pretty",
+        bufferLogs: false,
+      });
+    const durableLogger = baseLogger.with({ source: "durable.redis" });
 
     const isolation = deriveDurableIsolation({
       namespace,
@@ -78,6 +89,7 @@ export const redisDurableResource = r
 
     const runtimeConfig: RunnerDurableRuntimeConfig = {
       ...config,
+      logger: durableLogger,
       worker,
       store: new RedisStore({
         redis: config.redis.url,
@@ -86,6 +98,7 @@ export const redisDurableResource = r
       eventBus: new RedisEventBus({
         redis: config.redis.url,
         prefix: isolation.busPrefix,
+        logger: durableLogger.with({ source: "durable.bus.redis" }),
       }),
       queue,
     };
@@ -96,6 +109,7 @@ export const redisDurableResource = r
       taskRunner,
       eventManager,
       runnerStore,
+      logger: durableLogger,
     });
   })
   .dispose(async (durable, _config, _deps, ctx) => {

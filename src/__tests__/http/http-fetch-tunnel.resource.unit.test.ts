@@ -1,6 +1,7 @@
 import { createExposureFetch } from "../../http-fetch-tunnel.resource";
 import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
+import { createMessageError } from "../../errors";
 
 describe("http-fetch-tunnel.resource (unit)", () => {
   it("createExposureFetch: throws when baseUrl is empty or '/'", () => {
@@ -51,6 +52,8 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     expect(calls[0].init.method).toBe("POST");
     // AbortController branch should have attached a signal
     expect(calls[0].init.signal).toBeDefined();
+    // Redirects are blocked to avoid forwarding auth headers.
+    expect(calls[0].init.redirect).toBe("error");
     // Header name is defaulted to x-runner-token
     expect(calls[0].init.headers["x-runner-token"]).toBe("T");
   });
@@ -154,7 +157,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const helper = {
       id: "tests.errors.evr",
       throw: (data: any) => {
-        throw new Error("typed-evr:" + String(data?.code));
+        throw createMessageError("typed-evr:" + String(data?.code));
       },
       is: () => false,
       toString: () => "",
@@ -267,7 +270,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const parse = jest
       .spyOn(serializer, "parse")
       .mockImplementation((text: string) => JSON.parse(text).wrapped);
-    const addType = jest.spyOn(serializer, "addType");
+    jest.spyOn(serializer, "addType");
 
     const fetchImpl: typeof fetch = (async (_url: any, init: any) => {
       expect(init.body).toBe(

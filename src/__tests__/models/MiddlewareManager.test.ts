@@ -15,6 +15,9 @@ import { RunnerMode } from "../../types/runner";
 import { TaskStoreElementType } from "../../types/storeTypes";
 import { ITaskMiddleware, IResource } from "../../defs";
 import { globalTags } from "../../globals/globalTags";
+import { createMessageError } from "../../errors";
+import { run } from "../../run";
+import { globalResources } from "../../globals/globalResources";
 
 describe("MiddlewareManager", () => {
   let store: Store;
@@ -73,9 +76,11 @@ describe("MiddlewareManager", () => {
       computedDependencies: {},
       isInitialized: true,
       interceptors: [
-        async (next, input: number) => {
-          order.push("interceptor:run");
-          return next(input);
+        {
+          interceptor: async (next, input: number) => {
+            order.push("interceptor:run");
+            return next(input);
+          },
         },
       ],
     });
@@ -315,7 +320,7 @@ describe("MiddlewareManager", () => {
     const task = defineTask({
       id: "task.nonError",
       resultSchema: {
-        parse: (value: any) => {
+        parse: (_value: any) => {
           throw "string error"; // throw non-Error
         },
       },
@@ -342,7 +347,7 @@ describe("MiddlewareManager", () => {
     const task = defineTask({
       id: "task.tunneled",
       tags: [
-        globalTags.tunnelPolicy.with({
+        globalTags.tunnelTaskPolicy.with({
           client: { middlewareAllowList: [mw.id] },
         }),
       ],
@@ -392,6 +397,146 @@ describe("MiddlewareManager", () => {
       expect(() => {
         manager.intercept("resource", interceptor);
       }).not.toThrow();
+    });
+
+    it("captures owner ids for global interceptors when registered via resource context", () => {
+      manager.interceptOwned(
+        "task",
+        async (next: any, input: any) => next(input),
+        "tests.resources.owner.task",
+      );
+      manager.intercept("task", async (next: any, input: any) => next(input));
+      manager.interceptOwned(
+        "resource",
+        async (next: any, input: any) => next(input),
+        "tests.resources.owner.resource",
+      );
+
+      const snapshot = manager.getInterceptorOwnerSnapshot();
+      expect(snapshot.globalTaskInterceptorOwnerIds).toEqual([
+        "tests.resources.owner.task",
+      ]);
+      expect(snapshot.globalResourceInterceptorOwnerIds).toEqual([
+        "tests.resources.owner.resource",
+      ]);
+    });
+
+    it("captures owner ids for per-middleware interceptors when registered via resource context", () => {
+      const taskMiddleware = defineTaskMiddleware({
+        id: "tests.middleware.task.owner",
+        run: async ({ next, task }) => next(task.input),
+      });
+      const resourceMiddleware = defineResourceMiddleware({
+        id: "tests.middleware.resource.owner",
+        run: async ({ next }) => next(),
+      });
+
+      manager.interceptMiddlewareOwned(
+        taskMiddleware,
+        async (next: any, input: any) => next(input),
+        "tests.resources.owner.perTask",
+      );
+      manager.interceptMiddleware(
+        taskMiddleware,
+        async (next: any, input: any) => next(input),
+      );
+      manager.interceptMiddlewareOwned(
+        resourceMiddleware,
+        async (next: any, input: any) => next(input),
+        "tests.resources.owner.perResource",
+      );
+
+      const snapshot = manager.getInterceptorOwnerSnapshot();
+      expect(snapshot.perTaskMiddlewareInterceptorOwnerIds).toEqual({
+        "tests.middleware.task.owner": ["tests.resources.owner.perTask"],
+      });
+      expect(snapshot.perResourceMiddlewareInterceptorOwnerIds).toEqual({
+        "tests.middleware.resource.owner": [
+          "tests.resources.owner.perResource",
+        ],
+      });
+    });
+
+    it("omits middleware entries that have no owner ids", () => {
+      const taskMiddleware = defineTaskMiddleware({
+        id: "tests.middleware.task.no-owner",
+        run: async ({ next, task }) => next(task.input),
+      });
+
+      manager.interceptMiddleware(
+        taskMiddleware,
+        async (next: any, input: any) => next(input),
+      );
+
+      const snapshot = manager.getInterceptorOwnerSnapshot();
+      expect(snapshot.perTaskMiddlewareInterceptorOwnerIds).toEqual({});
+    });
+
+    it("tracks owners when middlewareManager is injected into a resource", async () => {
+      const taskMiddleware = defineTaskMiddleware({
+        id: "tests.middleware.task.via.resource",
+        run: async ({ next, task }) => next(task.input),
+      });
+      const resourceMiddleware = defineResourceMiddleware({
+        id: "tests.middleware.resource.via.resource",
+        run: async ({ next }) => next(),
+      });
+      const task = defineTask({
+        id: "tests.task.via.resource",
+        middleware: [taskMiddleware],
+        run: async () => "ok",
+      });
+
+      const ownerResource = defineResource({
+        id: "tests.resources.owner.via.resource",
+        register: [taskMiddleware, resourceMiddleware, task],
+        dependencies: {
+          middlewareManager: globalResources.middlewareManager,
+        },
+        async init(_config, deps) {
+          deps.middlewareManager.intercept("task", async (next, input) =>
+            next(input),
+          );
+          deps.middlewareManager.intercept("resource", async (next, input) =>
+            next(input),
+          );
+          deps.middlewareManager.interceptMiddleware(
+            taskMiddleware,
+            async (next, input) => next(input),
+          );
+          deps.middlewareManager.interceptMiddleware(
+            resourceMiddleware,
+            async (next, input) => next(input),
+          );
+          return {};
+        },
+      });
+
+      const app = defineResource({
+        id: "tests.app.middleware.owners",
+        register: [ownerResource],
+      });
+
+      const runtime = await run(app);
+      const middlewareManager = runtime.getResourceValue(
+        globalResources.middlewareManager,
+      ) as MiddlewareManager;
+      const snapshot = middlewareManager.getInterceptorOwnerSnapshot();
+
+      expect(snapshot.globalTaskInterceptorOwnerIds).toEqual([
+        ownerResource.id,
+      ]);
+      expect(snapshot.globalResourceInterceptorOwnerIds).toEqual([
+        ownerResource.id,
+      ]);
+      expect(snapshot.perTaskMiddlewareInterceptorOwnerIds).toEqual({
+        [taskMiddleware.id]: [ownerResource.id],
+      });
+      expect(snapshot.perResourceMiddlewareInterceptorOwnerIds).toEqual({
+        [resourceMiddleware.id]: [ownerResource.id],
+      });
+
+      await runtime.dispose();
     });
 
     it("should throw when adding interceptor while locked", () => {
@@ -454,7 +599,7 @@ describe("MiddlewareManager", () => {
       // Add global interceptor that uses executionInput.next
       manager.intercept(
         "task",
-        async (wrappedNext: any, executionInput: any) => {
+        async (_wrappedNext: any, executionInput: any) => {
           order.push("global-interceptor:before");
           // Verify journal is on executionInput
           expect(executionInput.journal).toBeDefined();
@@ -542,8 +687,8 @@ describe("MiddlewareManager", () => {
       );
       const manager = new MiddlewareManager(store, eventManager, logger);
 
-      manager.intercept("task", async (next: any, input: any) => {
-        throw new Error("interceptor error");
+      manager.intercept("task", async (_next: any, _input: any) => {
+        throw createMessageError("interceptor error");
       });
 
       const task = defineTask({
@@ -573,8 +718,8 @@ describe("MiddlewareManager", () => {
       );
       const manager = new MiddlewareManager(store, eventManager, logger);
 
-      manager.intercept("resource", async (next: any, input: any) => {
-        throw new Error("interceptor error");
+      manager.intercept("resource", async (_next: any, _input: any) => {
+        throw createMessageError("interceptor error");
       });
 
       const resource = defineResource<{ n: number }, Promise<number>>({
@@ -585,6 +730,73 @@ describe("MiddlewareManager", () => {
       await expect(
         manager.runResourceInit(resource, { n: 3 }, {}, {}),
       ).rejects.toThrow("interceptor error");
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toMatchObject({
+        kind: "resourceInit",
+        source: resource.id,
+      });
+    });
+
+    it("should report base resource init errors through onUnhandledError", async () => {
+      const errors: any[] = [];
+      const store = new Store(
+        eventManager,
+        logger,
+        (e) => {
+          errors.push(e);
+        },
+        RunnerMode.TEST,
+      );
+      const manager = new MiddlewareManager(store, eventManager, logger);
+
+      const resource = defineResource<{ n: number }, Promise<number>>({
+        id: "resource_with_init_error_reporting",
+        init: async () => {
+          throw createMessageError("resource init failed");
+        },
+      });
+
+      await expect(
+        manager.runResourceInit(resource, { n: 1 }, {}, {}),
+      ).rejects.toThrow("resource init failed");
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toMatchObject({
+        kind: "resourceInit",
+        source: resource.id,
+      });
+    });
+
+    it("should report global resource interceptor errors through onUnhandledError", async () => {
+      const errors: any[] = [];
+      const store = new Store(
+        eventManager,
+        logger,
+        (e) => {
+          errors.push(e);
+        },
+        RunnerMode.TEST,
+      );
+      const manager = new MiddlewareManager(store, eventManager, logger);
+
+      manager.intercept("resource", async () => {
+        throw createMessageError("global resource interceptor failed");
+      });
+
+      const resource = defineResource<{ n: number }, Promise<number>>({
+        id: "resource_with_global_interceptor_error",
+        init: async (cfg) => cfg.n * 2,
+      });
+
+      await expect(
+        manager.runResourceInit(resource, { n: 2 }, {}, {}),
+      ).rejects.toThrow("global resource interceptor failed");
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toMatchObject({
+        kind: "resourceInit",
+        source: resource.id,
+      });
     });
 
     it("should work without any interceptors", async () => {
@@ -674,7 +886,7 @@ describe("MiddlewareManager", () => {
       // This interceptor uses executionInput.next instead of the wrappedNext
       manager.interceptMiddleware(
         taskMiddleware,
-        async (wrappedNext: any, executionInput: any) => {
+        async (_wrappedNext: any, executionInput: any) => {
           order.push("interceptor:before");
           // Use executionInput.next directly to cover that code path
           const result = await executionInput.next(executionInput.task.input);
@@ -718,6 +930,71 @@ describe("MiddlewareManager", () => {
       ]);
     });
 
+    it("should apply per-task middleware interceptors in registration order", async () => {
+      const order: string[] = [];
+      const taskMiddleware = defineTaskMiddleware({
+        id: "test_task_middleware_ordering",
+        run: async ({ next, task }) => {
+          order.push("middleware:run");
+          return next(task?.input);
+        },
+      });
+
+      manager.interceptMiddleware(
+        taskMiddleware,
+        async (next: any, input: any) => {
+          order.push("task-interceptor1:before");
+          const result = await next(input);
+          order.push("task-interceptor1:after");
+          return result;
+        },
+      );
+
+      manager.interceptMiddleware(
+        taskMiddleware,
+        async (next: any, input: any) => {
+          order.push("task-interceptor2:before");
+          const result = await next(input);
+          order.push("task-interceptor2:after");
+          return result;
+        },
+      );
+
+      const task = defineTask({
+        id: "task_with_per_mw_interceptor_ordering",
+        middleware: [taskMiddleware],
+        run: async (input: number) => {
+          order.push("task:run");
+          return input + 1;
+        },
+      });
+
+      store.tasks.set(task.id, {
+        task,
+        computedDependencies: {},
+        isInitialized: true,
+      });
+
+      store.taskMiddlewares.set(taskMiddleware.id, {
+        middleware: taskMiddleware,
+        computedDependencies: {},
+        isInitialized: true,
+      });
+
+      const runner = manager.composeTaskRunner(task);
+      const result = await runner(5);
+
+      expect(result).toBe(6);
+      expect(order).toEqual([
+        "task-interceptor1:before",
+        "task-interceptor2:before",
+        "middleware:run",
+        "task:run",
+        "task-interceptor2:after",
+        "task-interceptor1:after",
+      ]);
+    });
+
     it("should use original input when executionInput.next is called with undefined", async () => {
       const order: string[] = [];
       const taskMiddleware = defineTaskMiddleware({
@@ -732,7 +1009,7 @@ describe("MiddlewareManager", () => {
       // This interceptor calls next with undefined, triggering the ?? fallback
       manager.interceptMiddleware(
         taskMiddleware,
-        async (wrappedNext: any, executionInput: any) => {
+        async (_wrappedNext: any, executionInput: any) => {
           order.push("interceptor:before");
           // Call with undefined to trigger ?? branch
           const result = await executionInput.next();
@@ -776,7 +1053,7 @@ describe("MiddlewareManager", () => {
       ]);
     });
 
-    it("should apply per-resource middleware interceptors in reverse order and modify result", async () => {
+    it("should apply per-resource middleware interceptors in registration order and modify result", async () => {
       const order: string[] = [];
 
       const resourceMiddleware = defineResourceMiddleware({
@@ -830,12 +1107,12 @@ describe("MiddlewareManager", () => {
       // init: 3*2=6, middleware adds +1 => 7
       expect(result).toBe(7);
       expect(order).toEqual([
-        "resource-interceptor2:before",
         "resource-interceptor1:before",
+        "resource-interceptor2:before",
         "resource-middleware:run",
         "resource:init",
-        "resource-interceptor1:after",
         "resource-interceptor2:after",
+        "resource-interceptor1:after",
       ]);
     });
 
@@ -848,6 +1125,19 @@ describe("MiddlewareManager", () => {
         manager.interceptMiddleware(
           bogusMiddleware,
           async (next: any, input: any) => next(input),
+        ),
+      ).toThrow("Unknown middleware type");
+    });
+
+    it("should throw when interceptMiddlewareOwned receives an unknown middleware type", () => {
+      const bogusMiddleware = {
+        id: "bogus-owned",
+      } as unknown as ITaskMiddleware<any, any>;
+      expect(() =>
+        manager.interceptMiddlewareOwned(
+          bogusMiddleware,
+          async (next: any, input: any) => next(input),
+          "tests.resources.owner.invalid",
         ),
       ).toThrow("Unknown middleware type");
     });

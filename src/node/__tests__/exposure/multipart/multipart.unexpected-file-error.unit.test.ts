@@ -1,6 +1,7 @@
 import type { IncomingHttpHeaders } from "http";
 
 import { Serializer } from "../../../../serializer";
+import { createMessageError } from "../../../../errors";
 
 enum MultipartHeaderName {
   ContentType = "content-type",
@@ -77,7 +78,7 @@ describe("parseMultipartInput - unexpected file handler errors", () => {
     jest.doMock("../../../files/inputFile.model", () => {
       class NodeInputFile {
         constructor() {
-          throw new Error(ErrorMessage.Boom);
+          throw createMessageError(ErrorMessage.Boom);
         }
       }
       return { NodeInputFile };

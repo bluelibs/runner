@@ -37,6 +37,8 @@ describe("durable: isolation derivation", () => {
   });
 
   it("fails fast when namespace is blank", () => {
+    expect.assertions(2);
+
     let captured: unknown;
     try {
       deriveDurableIsolation({ namespace: "   " });

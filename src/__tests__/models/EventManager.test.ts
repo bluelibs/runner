@@ -1,7 +1,13 @@
-import { IEvent, IEventEmission, IHook } from "../../defs";
+import {
+  EventEmissionFailureMode,
+  IEvent,
+  IEventEmission,
+  IHook,
+} from "../../defs";
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
+import { createMessageError } from "../../errors";
 
 describe("EventManager", () => {
   let eventManager: EventManager;
@@ -146,6 +152,40 @@ describe("EventManager", () => {
     }).toThrow("Cannot modify the EventManager when it is locked.");
   });
 
+  it("should remove listeners by id and stop future invocations", async () => {
+    const removedHandler = jest.fn();
+    const keptHandler = jest.fn();
+
+    eventManager.addListener(eventDefinition, removedHandler, {
+      id: "remove-me",
+    });
+    eventManager.addListener(eventDefinition, keptHandler, { id: "keep-me" });
+
+    await eventManager.emit(eventDefinition, "before", "test");
+    expect(removedHandler).toHaveBeenCalledTimes(1);
+    expect(keptHandler).toHaveBeenCalledTimes(1);
+
+    removedHandler.mockClear();
+    keptHandler.mockClear();
+
+    eventManager.removeListenerById("remove-me");
+    await eventManager.emit(eventDefinition, "after", "test");
+
+    expect(removedHandler).not.toHaveBeenCalled();
+    expect(keptHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it("removeListenerById should be a no-op for unknown ids", () => {
+    expect(() => eventManager.removeListenerById("missing-id")).not.toThrow();
+  });
+
+  it("should lock and prevent removing listeners by id", () => {
+    eventManager.lock();
+    expect(() => {
+      eventManager.removeListenerById("any");
+    }).toThrow("Cannot modify the EventManager when it is locked.");
+  });
+
   it("should handle multiple events", async () => {
     const eventDef1 = defineEvent<string>({ id: "event1" });
     const eventDef2 = defineEvent<string>({ id: "event2" });
@@ -181,8 +221,8 @@ describe("EventManager", () => {
     const handler1 = jest.fn();
     const handler2 = jest.fn();
 
-    eventManager.addListener(eventDefinition, handler1);
-    eventManager.addListener(eventDefinition, handler2);
+    eventManager.addListener(eventDefinition, handler1, { order: 1 });
+    eventManager.addListener(eventDefinition, handler2, { order: 2 });
 
     await eventManager.emit(eventDefinition, "testData", "test");
 
@@ -260,6 +300,7 @@ describe("EventManager", () => {
   });
 
   it("parallel listeners aggregate errors with listener ids", async () => {
+    expect.assertions(7);
     const parallelEvent = defineEvent<string>({
       id: "parallel",
       parallel: true,
@@ -277,7 +318,7 @@ describe("EventManager", () => {
     eventManager.addListener(
       parallelEvent,
       () => {
-        throw new Error("boom-1");
+        throw createMessageError("boom-1");
       },
       { order: 0, id: "l2" },
     );
@@ -285,7 +326,7 @@ describe("EventManager", () => {
     eventManager.addListener(
       parallelEvent,
       () => {
-        throw new Error("boom-2");
+        throw createMessageError("boom-2");
       },
       { order: 0, id: "l3" },
     );
@@ -325,6 +366,7 @@ describe("EventManager", () => {
   });
 
   it("single parallel error is annotated with listener id", async () => {
+    expect.assertions(3);
     const parallelEvent = defineEvent<string>({
       id: "parallel-single",
       parallel: true,
@@ -333,7 +375,7 @@ describe("EventManager", () => {
     eventManager.addListener(
       parallelEvent,
       () => {
-        throw new Error("solo-bang");
+        throw createMessageError("solo-bang");
       },
       { order: 0, id: "solo" },
     );
@@ -377,7 +419,7 @@ describe("EventManager", () => {
 
   it("should handle handler throwing an error", async () => {
     const handler = jest.fn().mockImplementation(() => {
-      throw new Error("Handler error");
+      throw createMessageError("Handler error");
     });
 
     eventManager.addListener(eventDefinition, handler);
@@ -387,21 +429,195 @@ describe("EventManager", () => {
     ).rejects.toThrow("Handler error");
   });
 
-  it("should continue calling other handlers if one fails", async () => {
+  it("should stop calling other handlers if one fails", async () => {
     const handler1 = jest.fn().mockImplementation(() => {
-      throw new Error("Handler error");
+      throw createMessageError("Handler error");
     });
     const handler2 = jest.fn();
 
-    eventManager.addListener(eventDefinition, handler1);
-    eventManager.addListener(eventDefinition, handler2);
+    eventManager.addListener(eventDefinition, handler1, { order: -10 });
+    eventManager.addListener(eventDefinition, handler2, { order: 10 });
 
     await expect(
       eventManager.emit(eventDefinition, "testData", "test"),
     ).rejects.toThrow("Handler error");
 
-    // The second handler should have been called despite the error in the first
-    expect(handler2).toHaveBeenCalledTimes(1);
+    expect(handler2).toHaveBeenCalledTimes(0);
+  });
+
+  it("should stop sequential handlers when the first-by-order fails", async () => {
+    const first = jest.fn().mockImplementation(() => {
+      throw createMessageError("first failed");
+    });
+    const second = jest.fn();
+
+    eventManager.addListener(eventDefinition, first, { order: -10 });
+    eventManager.addListener(eventDefinition, second, { order: 10 });
+
+    await expect(
+      eventManager.emit(eventDefinition, "testData", "test"),
+    ).rejects.toThrow("first failed");
+
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(0);
+  });
+
+  it("returns emission report when report=true", async () => {
+    const ok = jest.fn();
+    const fail = jest.fn(() => {
+      throw createMessageError("bad");
+    });
+
+    eventManager.addListener(eventDefinition, ok, { order: 0, id: "ok" });
+    eventManager.addListener(eventDefinition, fail, { order: 1, id: "fail" });
+
+    const report = await eventManager.emit(
+      eventDefinition,
+      "testData",
+      "test",
+      {
+        report: true,
+        throwOnError: false,
+      },
+    );
+
+    expect(report.totalListeners).toBe(2);
+    expect(report.attemptedListeners).toBe(2);
+    expect(report.succeededListeners).toBe(1);
+    expect(report.failedListeners).toBe(1);
+    expect(report.errors).toHaveLength(1);
+    expect(report.errors[0].listenerId).toBe("fail");
+    expect(report.errors[0].listenerOrder).toBe(1);
+    expect(ok).toHaveBeenCalledTimes(1);
+    expect(fail).toHaveBeenCalledTimes(1);
+  });
+
+  it("aggregate mode continues sequential listeners and throws aggregate by default", async () => {
+    const calls: string[] = [];
+
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        calls.push("first");
+        throw createMessageError("first-failure");
+      },
+      { order: 0, id: "first" },
+    );
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        calls.push("second");
+      },
+      { order: 1, id: "second" },
+    );
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        calls.push("third");
+        throw createMessageError("third-failure");
+      },
+      { order: 2, id: "third" },
+    );
+
+    await expect(
+      eventManager.emit(eventDefinition, "testData", "test", {
+        failureMode: EventEmissionFailureMode.Aggregate,
+      }),
+    ).rejects.toMatchObject({ name: "AggregateError" });
+    expect(calls).toEqual(["first", "second", "third"]);
+  });
+
+  it("aggregate mode with report=true and throwOnError=false returns all listener errors", async () => {
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        throw createMessageError("e1");
+      },
+      { order: 0, id: "l1" },
+    );
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        throw createMessageError("e2");
+      },
+      { order: 1, id: "l2" },
+    );
+
+    const report = await eventManager.emit(
+      eventDefinition,
+      "testData",
+      "test",
+      {
+        report: true,
+        throwOnError: false,
+        failureMode: EventEmissionFailureMode.Aggregate,
+      },
+    );
+
+    expect(report.failedListeners).toBe(2);
+    expect(report.errors).toHaveLength(2);
+    expect(report.errors.map((error) => error.listenerId)).toEqual([
+      "l1",
+      "l2",
+    ]);
+  });
+
+  it("aggregate mode throws original error when exactly one listener fails", async () => {
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        throw createMessageError("single-aggregate-error");
+      },
+      { order: 0, id: "only" },
+    );
+
+    await expect(
+      eventManager.emit(eventDefinition, "testData", "test", {
+        failureMode: EventEmissionFailureMode.Aggregate,
+      }),
+    ).rejects.toThrow("single-aggregate-error");
+  });
+
+  it("throws first sequential listener failure and stops execution", async () => {
+    const first = jest.fn().mockImplementation(() => {
+      throw createMessageError("first failed");
+    });
+    const second = jest.fn().mockImplementation(() => {
+      throw createMessageError("second failed");
+    });
+
+    eventManager.addListener(eventDefinition, first, { order: 1, id: "first" });
+    eventManager.addListener(eventDefinition, second, {
+      order: 2,
+      id: "second",
+    });
+
+    await expect(
+      eventManager.emit(eventDefinition, "testData", "test"),
+    ).rejects.toMatchObject({
+      message: "first failed",
+      listenerId: "first",
+      listenerOrder: 1,
+    });
+    expect(second).toHaveBeenCalledTimes(0);
+  });
+
+  it("annotates primitive sequential errors with listener metadata", async () => {
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        throw "seq-primitive-error";
+      },
+      { id: "seq-primitive", order: 3 },
+    );
+
+    await expect(
+      eventManager.emit(eventDefinition, "testData", "test"),
+    ).rejects.toMatchObject({
+      message: "seq-primitive-error",
+      listenerId: "seq-primitive",
+      listenerOrder: 3,
+    });
   });
 
   it("should not allow modification after lock", () => {
@@ -579,10 +795,10 @@ describe("EventManager", () => {
       const emptyEventDef = defineEvent<string>({ id: "emptyEvent" });
 
       // Should return immediately without creating event object
-      await eventManager.emit(emptyEventDef, "test", "source");
+      const result = await eventManager.emit(emptyEventDef, "test", "source");
 
       // No errors should occur
-      expect(true).toBe(true);
+      expect(result).toBeUndefined();
     });
 
     it("should handle high-frequency emissions efficiently", async () => {
@@ -711,7 +927,7 @@ describe("EventManager", () => {
       payloadSchema: {
         parse: (data: any) => {
           if (!data || typeof data.x !== "number") {
-            throw new Error("Invalid");
+            throw createMessageError("Invalid");
           }
           return data;
         },
@@ -751,27 +967,30 @@ describe("EventManager", () => {
   it("hasListeners returns true when only global listeners exist and event has empty array", () => {
     const handler = jest.fn();
     eventManager.addGlobalListener(handler);
-    (eventManager as unknown as { listeners: Map<any, any> }).listeners.set(
-      eventDefinition.id,
-      [],
-    );
+    (
+      eventManager as unknown as {
+        registry: { listeners: Map<any, any> };
+      }
+    ).registry.listeners.set(eventDefinition.id, []);
     expect(eventManager.hasListeners(eventDefinition)).toBe(true);
   });
 
   describe("interceptEmission", () => {
-    it("should add emission interceptors", () => {
+    it("should add emission interceptors", async () => {
       const interceptor1 = jest.fn(async (next, event) => next(event));
       const interceptor2 = jest.fn(async (next, event) => next(event));
 
       eventManager.intercept(interceptor1);
       eventManager.intercept(interceptor2);
 
-      const interceptors = (
-        eventManager as unknown as { emissionInterceptors: any[] }
-      ).emissionInterceptors;
-      expect(interceptors).toHaveLength(2);
-      expect(interceptors[0]).toBe(interceptor1);
-      expect(interceptors[1]).toBe(interceptor2);
+      const handler = jest.fn();
+      eventManager.addListener(eventDefinition, handler);
+
+      await eventManager.emit(eventDefinition, "data", "source");
+
+      expect(interceptor1).toHaveBeenCalledTimes(1);
+      expect(interceptor2).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledTimes(1);
     });
 
     it("should throw error when adding interceptors after lock", () => {
@@ -832,7 +1051,7 @@ describe("EventManager", () => {
     });
 
     it("should allow interceptors to prevent emission", async () => {
-      const interceptor = jest.fn(async (next, event) => {
+      const interceptor = jest.fn(async (_next, _event) => {
         // Don't call next, preventing emission
         return Promise.resolve();
       });
@@ -853,7 +1072,7 @@ describe("EventManager", () => {
         // Call next but interceptor2 will prevent emission
         return next(event);
       });
-      const interceptor2 = jest.fn(async (next, event) => {
+      const interceptor2 = jest.fn(async (_next, _event) => {
         // Don't call next, preventing emission
         return Promise.resolve();
       });
@@ -913,7 +1132,7 @@ describe("EventManager", () => {
   });
 
   describe("interceptHook", () => {
-    it("should add hook interceptors", () => {
+    it("should add hook interceptors", async () => {
       const interceptor1 = jest.fn(async (next, hook, event) =>
         next(hook, event),
       );
@@ -924,12 +1143,26 @@ describe("EventManager", () => {
       eventManager.interceptHook(interceptor1);
       eventManager.interceptHook(interceptor2);
 
-      const intercepts = (
-        eventManager as unknown as { hookInterceptors: any[] }
-      ).hookInterceptors;
-      expect(intercepts).toHaveLength(2);
-      expect(intercepts[0]).toBe(interceptor1);
-      expect(intercepts[1]).toBe(interceptor2);
+      const mockHook = {
+        id: "hook.add.interceptor",
+        run: jest.fn().mockResolvedValue(undefined),
+      };
+      const mockEvent = {
+        id: "event.add.interceptor",
+        data: "data",
+        timestamp: new Date(),
+        source: "source",
+        tags: [],
+      };
+      await eventManager.executeHookWithInterceptors(
+        mockHook as unknown as IHook<any, any>,
+        mockEvent as unknown as IEventEmission<any>,
+        {},
+      );
+
+      expect(interceptor1).toHaveBeenCalledTimes(1);
+      expect(interceptor2).toHaveBeenCalledTimes(1);
+      expect(mockHook.run).toHaveBeenCalledTimes(1);
     });
 
     it("should throw error when adding hook interceptors after lock", () => {
@@ -1048,7 +1281,7 @@ describe("EventManager", () => {
     });
 
     it("should allow hook interceptors to prevent hook execution", async () => {
-      const interceptor = jest.fn(async (next, hook, event) => {
+      const interceptor = jest.fn(async (_next, _hook, _event) => {
         // Don't call next, preventing hook execution
         return "interceptorResult";
       });
@@ -1169,8 +1402,8 @@ describe("EventManager", () => {
     });
 
     it("should handle interceptors that throw errors", async () => {
-      const interceptor = jest.fn(async (next, event) => {
-        throw new Error("Interceptor error");
+      const interceptor = jest.fn(async (_next, _event) => {
+        throw createMessageError("Interceptor error");
       });
 
       eventManager.intercept(interceptor);
@@ -1185,8 +1418,8 @@ describe("EventManager", () => {
     });
 
     it("should handle hook interceptors that throw errors", async () => {
-      const interceptor = jest.fn(async (next, hook, event) => {
-        throw new Error("Hook interceptor error");
+      const interceptor = jest.fn(async (_next, _hook, _event) => {
+        throw createMessageError("Hook interceptor error");
       });
 
       eventManager.interceptHook(interceptor);
@@ -1283,7 +1516,7 @@ describe("EventManager", () => {
 
   it("uses only event-specific listeners when excludeFromGlobal is set (avoids merging)", async () => {
     const spy = jest.spyOn(
-      eventManager as unknown as { getCachedMergedListeners: any },
+      (eventManager as unknown as { registry: any }).registry,
       "getCachedMergedListeners",
     );
 
@@ -1307,14 +1540,12 @@ describe("EventManager", () => {
     spy.mockRestore();
   });
 
-  it("exposes getCachedMergedListeners for backward compatibility", () => {
+  it("delegates getCachedMergedListeners to registry", () => {
     const manager = new EventManager();
     const registry = (manager as unknown as { registry: any }).registry;
     const spy = jest.spyOn(registry, "getCachedMergedListeners");
 
-    (
-      manager as unknown as { getCachedMergedListeners: any }
-    ).getCachedMergedListeners("evt-bc");
+    registry.getCachedMergedListeners("evt-bc");
 
     expect(spy).toHaveBeenCalledWith("evt-bc");
   });

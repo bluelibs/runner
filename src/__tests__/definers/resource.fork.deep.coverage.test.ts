@@ -1,4 +1,6 @@
 import { r, run } from "../../index";
+import { resolveForkedRegisterAndDependencies } from "../../definers/resourceFork";
+import { createMessageError } from "../../errors";
 
 describe("IResource.fork() (deep) coverage", () => {
   it("deep-forks nested resources registered by a deep-forked resource (register fn + configs)", async () => {
@@ -56,7 +58,7 @@ describe("IResource.fork() (deep) coverage", () => {
     });
 
     if (typeof forked.dependencies !== "function") {
-      throw new Error("Expected forked.dependencies to be a function");
+      throw createMessageError("Expected forked.dependencies to be a function");
     }
     expect(forked.dependencies(undefined).child.id).toBe(
       "forked.test.deep.depsfn.child",
@@ -71,5 +73,19 @@ describe("IResource.fork() (deep) coverage", () => {
 
     expect(Array.isArray(forked.register)).toBe(true);
     expect(forked.register).toHaveLength(0);
+  });
+
+  it("deep mode returns early when register is undefined", () => {
+    const dep = r.resource("test.deep.undefined-register.dep").build();
+    const dependencies = { dep };
+    const result = resolveForkedRegisterAndDependencies({
+      register: undefined as unknown as [],
+      dependencies,
+      forkId: "test.deep.undefined-register",
+      options: { register: "deep" },
+    });
+
+    expect(result.register).toBeUndefined();
+    expect(result.dependencies).toBe(dependencies);
   });
 });

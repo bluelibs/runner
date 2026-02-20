@@ -1,5 +1,9 @@
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import {
+  optionalDependencyInvalidExportError,
+  optionalDependencyMissingError,
+} from "../../../errors";
 
 type RedisConstructor = new (...args: unknown[]) => unknown;
 
@@ -18,16 +22,20 @@ function getRedisConstructor(): RedisConstructor {
         : mod;
 
     if (typeof candidate !== "function") {
-      throw new Error("Invalid 'ioredis' export");
+      optionalDependencyInvalidExportError.throw({
+        dependency: "ioredis",
+        details: "",
+      });
     }
 
     cachedRedisConstructor = candidate as RedisConstructor;
     return cachedRedisConstructor;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Missing optional dependency 'ioredis'. Install it or pass an explicit redis client instance. Original error: ${message}`,
-    );
+    return optionalDependencyMissingError.throw({
+      dependency: "ioredis",
+      details: ` Install it or pass an explicit redis client instance. Original error: ${message}`,
+    });
   }
 }
 

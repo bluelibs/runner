@@ -1,4 +1,5 @@
 import { r, run, definitions, resource } from "../..";
+import { createMessageError } from "../../errors";
 
 describe("task/event/hook/middleware builders", () => {
   it("task builder infers input type from run signature", async () => {
@@ -64,6 +65,57 @@ describe("task/event/hook/middleware builders", () => {
     const rr = await run(app);
     await rr.emitEvent(ev, undefined);
     expect(calls).toEqual([ev.id]);
+    await rr.dispose();
+  });
+
+  it("event dependency supports explicit undefined payload with report mode for void payload events", async () => {
+    const ev = r.event("tests.builder.event.dep.report").build();
+    const emitFromTask = r
+      .task("tests.builder.event.dep.report.emitter")
+      .dependencies({ ev })
+      .run(async (_input, deps) => {
+        const report = await deps.ev(undefined, {
+          report: true,
+          throwOnError: false,
+          failureMode: definitions.EventEmissionFailureMode.Aggregate,
+        });
+        if (!report) {
+          throw createMessageError("Expected event emission report");
+        }
+        return report;
+      })
+      .build();
+
+    const failingHookA = r
+      .hook("tests.builder.event.dep.report.hook.a")
+      .on(ev)
+      .run(async () => {
+        throw createMessageError("hook-a");
+      })
+      .build();
+
+    const failingHookB = r
+      .hook("tests.builder.event.dep.report.hook.b")
+      .on(ev)
+      .run(async () => {
+        throw createMessageError("hook-b");
+      })
+      .build();
+
+    const app = resource({
+      id: "tests.builder.event.dep.report.app",
+      register: [ev, emitFromTask, failingHookA, failingHookB],
+    });
+
+    const rr = await run(app);
+    const report = await rr.runTask(emitFromTask);
+    if (!report) {
+      throw createMessageError(
+        "Expected task to return an event emission report",
+      );
+    }
+    expect(report.failedListeners).toBe(2);
+    expect(report.errors).toHaveLength(2);
     await rr.dispose();
   });
 
@@ -274,6 +326,79 @@ describe("task/event/hook/middleware builders", () => {
         .task("tests.builder.task.throws.invalid")
         .throws([{} as unknown as string])
         .run(async () => Promise.resolve("ok"))
+        .build(),
+    ).toThrow(/Invalid throws entry/);
+  });
+
+  it("hook builder supports throws contracts", () => {
+    const errA = r.error("tests.builder.hook.throws.errA").build();
+    const errB = r.error("tests.builder.hook.throws.errB").build();
+    const ev = r.event("tests.builder.hook.throws.ev").build();
+
+    const h = r
+      .hook("tests.builder.hook.throws")
+      .on(ev)
+      .throws([errA, errB.id, errA])
+      .run(async () => {})
+      .build();
+
+    expect(h.throws).toEqual([errA.id, errB.id]);
+  });
+
+  it("hook builder throws on invalid throws entries", () => {
+    const ev = r.event("tests.builder.hook.throws.invalid.ev").build();
+    expect(() =>
+      r
+        .hook("tests.builder.hook.throws.invalid")
+        .on(ev)
+        .throws([{} as unknown as string])
+        .run(async () => {})
+        .build(),
+    ).toThrow(/Invalid throws entry/);
+  });
+
+  it("task middleware builder supports throws contracts", () => {
+    const errA = r.error("tests.builder.tmw.throws.errA").build();
+    const errB = r.error("tests.builder.tmw.throws.errB").build();
+
+    const mw = r.middleware
+      .task("tests.builder.tmw.throws")
+      .throws([errA, errB.id, errA])
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+
+    expect(mw.throws).toEqual([errA.id, errB.id]);
+  });
+
+  it("task middleware builder throws on invalid throws entries", () => {
+    expect(() =>
+      r.middleware
+        .task("tests.builder.tmw.throws.invalid")
+        .throws([{} as unknown as string])
+        .run(async ({ next, task }) => next(task.input))
+        .build(),
+    ).toThrow(/Invalid throws entry/);
+  });
+
+  it("resource middleware builder supports throws contracts", () => {
+    const errA = r.error("tests.builder.rmw.throws.errA").build();
+    const errB = r.error("tests.builder.rmw.throws.errB").build();
+
+    const mw = r.middleware
+      .resource("tests.builder.rmw.throws")
+      .throws([errA, errB.id, errA])
+      .run(async ({ next }) => next())
+      .build();
+
+    expect(mw.throws).toEqual([errA.id, errB.id]);
+  });
+
+  it("resource middleware builder throws on invalid throws entries", () => {
+    expect(() =>
+      r.middleware
+        .resource("tests.builder.rmw.throws.invalid")
+        .throws([{} as unknown as string])
+        .run(async ({ next }) => next())
         .build(),
     ).toThrow(/Invalid throws entry/);
   });
@@ -721,6 +846,39 @@ describe("task/event/hook/middleware builders", () => {
         .run(async () => {})
         .build();
       expect(hook.on).toBe("*");
+    });
+  });
+
+  describe("task builder validation", () => {
+    it("covers explicit override=false branches for task tags and middleware", () => {
+      const tagA = r.tag("tests.builder.task.coverage.tagA").build();
+      const tagB = r.tag("tests.builder.task.coverage.tagB").build();
+      const mwA = r.middleware
+        .task("tests.builder.task.coverage.mwA")
+        .run(async ({ next, task }) => next(task.input))
+        .build();
+      const mwB = r.middleware
+        .task("tests.builder.task.coverage.mwB")
+        .run(async ({ next, task }) => next(task.input))
+        .build();
+
+      const task = r
+        .task("tests.builder.task.coverage")
+        .tags([tagA], { override: false })
+        .tags([tagB])
+        .middleware([mwA], { override: false })
+        .middleware([mwB])
+        .run(async () => "ok")
+        .build();
+
+      expect(task.tags).toEqual([tagA, tagB]);
+      expect(task.middleware).toEqual([mwA, mwB]);
+    });
+
+    it("throws when building task without run()", () => {
+      expect(() => r.task("tests.builder.task.no-run").build()).toThrow(
+        /Task.*Missing required.*run/,
+      );
     });
   });
 

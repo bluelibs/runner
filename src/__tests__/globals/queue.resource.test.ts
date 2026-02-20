@@ -1,6 +1,7 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
 import { queueResource } from "../../globals/resources/queue.resource";
+import { createMessageError } from "../../errors";
 
 describe("Queue Resource", () => {
   it("should provide queue functionality with proper isolation and disposal", async () => {
@@ -74,7 +75,7 @@ describe("Queue Resource", () => {
 
         // Test 6: Handle errors in tasks without breaking the queue
         const errorTask = async () => {
-          throw new Error("Task failed");
+          throw createMessageError("Task failed");
         };
 
         const successTask = async () => {
@@ -101,7 +102,7 @@ describe("Queue Resource", () => {
 
     await result.dispose();
 
-    // Try to run a task on a disposed queue - should reject
+    // Try to run a task on a disposed queue resource - should reject
     await expect(
       result.value.run("test-queue", async () => "test"),
     ).rejects.toThrow(/disposed/);
@@ -114,7 +115,7 @@ describe("Queue Resource", () => {
       async init(_, { queue }) {
         // Test that exceptions from tasks are properly propagated
         const errorTask = async () => {
-          throw new Error("Queue resource task error");
+          throw createMessageError("Queue resource task error");
         };
 
         const successTask = async () => "success";
@@ -137,5 +138,58 @@ describe("Queue Resource", () => {
     });
 
     await run(app);
+  });
+
+  it("evicts idle queues after inactivity timeout", async () => {
+    jest.useFakeTimers();
+
+    try {
+      const app = defineResource({
+        id: "queue-idle-eviction-app",
+        dependencies: { queue: queueResource },
+        async init(_, { queue }) {
+          await queue.run("idle-queue", async () => "ok");
+          expect(queue.map.has("idle-queue")).toBe(true);
+          return queue;
+        },
+      });
+
+      const runtime = await run(app);
+
+      jest.advanceTimersByTime(60_000);
+      await Promise.resolve();
+
+      expect(runtime.value.map.has("idle-queue")).toBe(false);
+
+      await runtime.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("handles idle cleanup timer when queue entry was removed manually", async () => {
+    jest.useFakeTimers();
+
+    try {
+      const app = defineResource({
+        id: "queue-manual-removal-app",
+        dependencies: { queue: queueResource },
+        async init(_, { queue }) {
+          await queue.run("manual-remove", async () => "ok");
+          return queue;
+        },
+      });
+
+      const runtime = await run(app);
+      runtime.value.map.delete("manual-remove");
+
+      jest.advanceTimersByTime(60_000);
+      await Promise.resolve();
+
+      expect(runtime.value.map.has("manual-remove")).toBe(false);
+      await runtime.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

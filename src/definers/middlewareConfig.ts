@@ -21,8 +21,8 @@ export function mergeMiddlewareConfig<TConfig>(
 
   if (baseIsPlainObject && nextIsPlainObject) {
     return {
-      ...(base as unknown as Record<string, unknown>),
-      ...(next as unknown as Record<string, unknown>),
+      ...(base as Record<string, unknown>),
+      ...(next as Record<string, unknown>),
     } as TConfig;
   }
 

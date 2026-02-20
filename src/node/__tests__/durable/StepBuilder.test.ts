@@ -1,6 +1,7 @@
 import { DurableContext } from "../../durable/core/DurableContext";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { createMessageError } from "../../../errors";
 
 describe("durable: StepBuilder", () => {
   it("throws if awaited without up()", async () => {
@@ -32,7 +33,7 @@ describe("durable: StepBuilder", () => {
       1,
     );
     const builder = ctx.step("s1").up(async () => {
-      throw new Error("boom");
+      throw createMessageError("boom");
     });
     await expect(builder.then()).rejects.toThrow("boom");
   });

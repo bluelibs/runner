@@ -1,5 +1,7 @@
 import { clearTimeout, setTimeout } from "node:timers";
 import * as crypto from "node:crypto";
+import { RunnerError } from "../../../definers/defineError";
+import { durableExecutionError, RunnerErrorId } from "../../../errors";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -66,7 +68,13 @@ export function parseSignalState(value: unknown): {
  * task errors by carrying execution metadata and a (serialized) cause payload.
  * `WaitManager` is the primary producer of this error.
  */
-export class DurableExecutionError extends Error {
+export class DurableExecutionError extends RunnerError<{
+  message: string;
+  executionId: string;
+  taskId: string;
+  attempt: number;
+  causeInfo?: { message: string; stack?: string };
+}> {
   constructor(
     message: string,
     public readonly executionId: string,
@@ -74,7 +82,17 @@ export class DurableExecutionError extends Error {
     public readonly attempt: number,
     public readonly causeInfo?: { message: string; stack?: string },
   ) {
-    super(message);
-    this.name = "DurableExecutionError";
+    super(
+      RunnerErrorId.DurableExecutionError,
+      message,
+      {
+        message,
+        executionId,
+        taskId,
+        attempt,
+        causeInfo,
+      },
+      durableExecutionError.httpCode,
+    );
   }
 }

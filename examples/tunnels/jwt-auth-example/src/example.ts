@@ -61,7 +61,7 @@ const jwtGuard = r.middleware
     );
     if (missingScopes.length > 0)
       return deny(`Missing scopes: ${missingScopes.join(", ")}`);
-    (req as unknown as JwtAugmentedRequest).jwtClaims = claims;
+    (req as JwtAugmentedRequest).jwtClaims = claims;
     return context.next(nextInput);
   })
   .build();
@@ -128,7 +128,7 @@ function getClaimsFromContext(): JwtClaims {
   // Fall back to a local identity so direct calls work without JWT.
   try {
     const { req } = useExposureContext();
-    const claims = (req as unknown as JwtAugmentedRequest).jwtClaims;
+    const claims = (req as JwtAugmentedRequest).jwtClaims;
     if (!claims) throw new Error("JWT claims missing in request context");
     return claims;
   } catch {
@@ -187,3 +187,4 @@ function verifyJwt(token: string, secret: string): JwtVerifyResult {
     return { ok: false, reason: message };
   }
 }
+

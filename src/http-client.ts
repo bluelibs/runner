@@ -5,6 +5,12 @@ import { createExposureFetch } from "./http-fetch-tunnel.resource";
 import { buildUniversalManifest } from "./tools/buildUniversalManifest";
 import type { IAsyncContext } from "./types/asyncContext";
 import type { IErrorHelper } from "./types/error";
+import {
+  httpBaseUrlRequiredError,
+  httpClientInputUnsupportedError,
+  httpContextSerializationError,
+  httpEventWithResultUnavailableError,
+} from "./errors";
 
 export interface HttpClientAuth {
   header?: string;
@@ -38,6 +44,30 @@ function toHeaders(auth?: HttpClientAuth): Record<string, string> {
   return headers;
 }
 
+function buildContextHeaderOrThrow(
+  serializer: SerializerLike,
+  contexts?: Array<IAsyncContext<unknown>>,
+): string | undefined {
+  if (!contexts || contexts.length === 0) return undefined;
+
+  const map: Record<string, string> = {};
+  for (const ctx of contexts) {
+    try {
+      const value = ctx.use();
+      map[ctx.id] = ctx.serialize(value);
+    } catch (error) {
+      const normalizedError =
+        error instanceof Error ? error : new Error(String(error));
+      httpContextSerializationError.throw({
+        contextId: ctx.id,
+        reason: normalizedError.message,
+      });
+    }
+  }
+
+  return serializer.stringify(map);
+}
+
 /**
  * Re-throws the caught error. When an error registry is configured,
  * checks for a matching typed-error helper and re-throws via that helper first.
@@ -46,9 +76,15 @@ function rethrowWithRegistry(
   e: unknown,
   errorRegistry: Map<string, IErrorHelper<any>> | undefined,
 ): never {
-  const te = e as { id?: unknown; data?: unknown };
+  const te = e as { id?: unknown; data?: unknown; name?: unknown };
   if (errorRegistry && te.id && te.data) {
-    const helper = errorRegistry.get(String(te.id));
+    const id = String(te.id);
+    // Idempotency: if the error already looks like a typed Runner error
+    // from this registry, do not remap it again.
+    if (te.name === id && errorRegistry.has(id)) {
+      throw e;
+    }
+    const helper = errorRegistry.get(id);
     if (helper) helper.throw(te.data);
   }
   throw e;
@@ -56,7 +92,9 @@ function rethrowWithRegistry(
 
 export function createHttpClient(cfg: HttpClientConfig): HttpClient {
   const baseUrl = cfg.baseUrl.replace(/\/$/, "");
-  if (!baseUrl) throw new Error("createHttpClient requires baseUrl");
+  if (!baseUrl) {
+    httpBaseUrlRequiredError.throw({ clientFactory: "createHttpClient" });
+  }
 
   const isNodeReadable = (
     value: unknown,
@@ -83,24 +121,23 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     fd.append("__manifest", manifestText);
     for (const f of files) {
       const filename = f.meta?.name ?? "upload";
-      fd.append(`file:${f.id}`, f.blob as unknown as Blob, filename);
+      fd.append(`file:${f.id}`, f.blob, filename);
     }
     const headers = toHeaders(cfg.auth);
-    if (cfg.contexts && cfg.contexts.length > 0) {
-      const map: Record<string, string> = {};
-      for (const ctx of cfg.contexts) {
-        try {
-          const v = ctx.use();
-          map[ctx.id] = ctx.serialize(v);
-        } catch {}
-      }
-      if (Object.keys(map).length > 0) {
-        headers["x-runner-context"] = cfg.serializer.stringify(map);
-      }
-    }
+    const contextHeader = buildContextHeaderOrThrow(
+      cfg.serializer,
+      cfg.contexts,
+    );
+    if (contextHeader) headers["x-runner-context"] = contextHeader;
     if (cfg.onRequest) await cfg.onRequest({ url, headers });
     const fetchImpl = cfg.fetchImpl ?? (globalThis.fetch as typeof fetch);
-    const res = await fetchImpl(url, { method: "POST", body: fd, headers });
+    const res = await fetchImpl(url, {
+      method: "POST",
+      body: fd,
+      headers,
+      // Security: prevent automatic redirects from forwarding tunnel auth headers.
+      redirect: "error",
+    });
     const text = await res.text();
     const json = text ? cfg.serializer.parse(text) : undefined;
     return json as ProtocolEnvelope<any>;
@@ -112,9 +149,10 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
 
       // Guard: raw Node Readable-like inputs are not supported in universal client
       if (isNodeReadable(input)) {
-        throw new Error(
-          "createHttpClient (universal) cannot send a Node stream. Use @bluelibs/runner/node createHttpSmartClient or createHttpMixedClient for duplex/streaming.",
-        );
+        httpClientInputUnsupportedError.throw({
+          message:
+            "createHttpClient (universal) cannot send a Node stream. Use @bluelibs/runner/node createHttpSmartClient or createHttpMixedClient for duplex/streaming.",
+        });
       }
 
       // Multipart path: browser files only (FormData). Node files are not supported here.
@@ -139,9 +177,10 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
 
       // If Node files were detected, instruct user to use Node clients
       if (manifest.nodeFiles.length > 0) {
-        throw new Error(
-          "createHttpClient (universal) detected Node file input. Use @bluelibs/runner/node createHttpSmartClient or createHttpMixedClient for Node streaming/multipart.",
-        );
+        httpClientInputUnsupportedError.throw({
+          message:
+            "createHttpClient (universal) detected Node file input. Use @bluelibs/runner/node createHttpSmartClient or createHttpMixedClient for Node streaming/multipart.",
+        });
       }
 
       // JSON fallback
@@ -163,11 +202,11 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     async eventWithResult<P>(id: string, payload?: P): Promise<P> {
       try {
         if (!fetchClient.eventWithResult) {
-          throw new Error(
-            "createHttpClient: eventWithResult not available on underlying tunnel client.",
-          );
+          httpEventWithResultUnavailableError.throw({
+            clientFactory: "createHttpClient",
+          });
         }
-        return await fetchClient.eventWithResult<P>(id, payload);
+        return await fetchClient.eventWithResult!<P>(id, payload);
       } catch (e) {
         rethrowWithRegistry(e, cfg.errorRegistry);
       }

@@ -8,6 +8,7 @@ import type {
   ExposureFetchConfig,
   ExposureFetchClient,
 } from "./globals/resources/tunnel/types";
+import { httpBaseUrlRequiredError, httpFetchUnavailableError } from "./errors";
 export { normalizeError } from "./globals/resources/tunnel/error-utils";
 export type {
   ExposureFetchAuthConfig,
@@ -58,11 +59,68 @@ async function postSerialized<T = any>(options: {
       headers: reqHeaders,
       body: serializer.stringify(body),
       signal: controller?.signal,
+      // Security: prevent automatic redirects from forwarding tunnel auth headers.
+      redirect: "error",
     });
 
     const text = await res.text();
-    const json = text ? serializer.parse<T>(text) : (undefined as unknown as T);
-    return json;
+    const status =
+      typeof (res as { status?: unknown }).status === "number"
+        ? (res as { status: number }).status
+        : 200;
+    const statusText =
+      typeof (res as { statusText?: unknown }).statusText === "string"
+        ? (res as { statusText: string }).statusText
+        : "";
+    const ok =
+      typeof (res as { ok?: unknown }).ok === "boolean"
+        ? (res as { ok: boolean }).ok
+        : status >= 200 && status < 300;
+    const contentType =
+      typeof (res as { headers?: { get?: (name: string) => string | null } })
+        .headers?.get === "function"
+        ? ((
+            res as { headers: { get: (name: string) => string | null } }
+          ).headers.get("content-type") ?? undefined)
+        : undefined;
+
+    if (!text) {
+      if (!ok) {
+        throw new TunnelError(
+          "HTTP_ERROR",
+          statusText
+            ? `Tunnel HTTP ${status} ${statusText}`
+            : `Tunnel HTTP ${status}`,
+          { statusCode: status, statusText, contentType },
+          { httpCode: status },
+        );
+      }
+      // The endpoint returned an empty 2xx body — no payload to parse.
+      // Callers that expect void/undefined return are safe; typed return T requires the cast.
+      return undefined as T;
+    }
+
+    try {
+      const json = serializer.parse<T>(text);
+      return json;
+    } catch (error) {
+      if (!ok) {
+        throw new TunnelError(
+          "HTTP_ERROR",
+          statusText
+            ? `Tunnel HTTP ${status} ${statusText}`
+            : `Tunnel HTTP ${status}`,
+          {
+            statusCode: status,
+            statusText,
+            contentType,
+            bodyPreview: text.slice(0, 512),
+          },
+          { httpCode: status },
+        );
+      }
+      throw error;
+    }
   } finally {
     if (timeout) clearTimeout(timeout);
   }
@@ -79,7 +137,9 @@ export function createExposureFetch(
   cfg: ExposureFetchConfig,
 ): ExposureFetchClient {
   const baseUrl = cfg?.baseUrl?.replace(/\/$/, "");
-  if (!baseUrl) throw new Error("createExposureFetch requires baseUrl");
+  if (!baseUrl) {
+    httpBaseUrlRequiredError.throw({ clientFactory: "createExposureFetch" });
+  }
 
   const headerName = (cfg?.auth?.header ?? "x-runner-token").toLowerCase();
   const buildHeaders = () => {
@@ -90,9 +150,7 @@ export function createExposureFetch(
 
   const fetchImpl = cfg.fetchImpl ?? (globalThis.fetch as typeof fetch);
   if (typeof fetchImpl !== "function") {
-    throw new Error(
-      "global fetch is not available; provide fetchImpl in config",
-    );
+    httpFetchUnavailableError.throw({ clientFactory: "createExposureFetch" });
   }
 
   const buildContextHeader = () => {

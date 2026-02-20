@@ -3,6 +3,11 @@
  * Extracted from Serializer.ts as a standalone module.
  */
 
+import {
+  invalidPayloadError,
+  referenceResolutionError,
+  validationError,
+} from "./errors";
 import type { SerializedValue, DeserializationContext } from "./types";
 import {
   isObjectReference,
@@ -11,6 +16,7 @@ import {
   assertDepth,
 } from "./validation";
 import type { TypeRegistry } from "./type-registry";
+import { unescapeReservedMarkerKey } from "./marker-key-escapes";
 
 const hasOwn = Object.prototype.hasOwnProperty;
 
@@ -55,7 +61,7 @@ const mergeTypePlaceholderWithoutFactory = (
 
   if (result === null || typeof result !== "object") {
     if (hasCircularReference) {
-      throw new Error(
+      throw validationError(
         "Cannot preserve circular references for a type without create() that deserializes to a non-object value",
       );
     }
@@ -72,7 +78,7 @@ const mergeTypePlaceholderWithoutFactory = (
     result instanceof RegExp
   ) {
     if (hasCircularReference) {
-      throw new Error(
+      throw validationError(
         "Cannot preserve circular references for a type without create(); provide create() for identity-safe placeholders",
       );
     }
@@ -119,7 +125,10 @@ export const deserializeValue = (
     return result;
   }
 
-  if (isObjectReference(value)) {
+  if (hasOwn.call(value, "__ref")) {
+    if (!isObjectReference(value)) {
+      throw invalidPayloadError("Invalid object reference payload");
+    }
     return resolveReference(value.__ref, context, depth + 1, options);
   }
 
@@ -159,7 +168,7 @@ export const resolveReference = (
 ): unknown => {
   assertDepth(depth, options.maxDepth);
   if (isUnsafeKey(id, options.unsafeKeys)) {
-    throw new Error(`Unresolved reference id "${id}"`);
+    throw referenceResolutionError(`Unresolved reference id "${id}"`);
   }
   if (context.resolved.has(id)) {
     if (context.resolving.has(id)) {
@@ -170,12 +179,15 @@ export const resolveReference = (
 
   const node = context.nodes[id];
   if (!node) {
-    throw new Error(`Unresolved reference id "${id}"`);
+    throw referenceResolutionError(`Unresolved reference id "${id}"`);
   }
 
   switch (node.kind) {
     case "array": {
       const values = node.value;
+      if (!Array.isArray(values)) {
+        throw invalidPayloadError("Invalid array node payload");
+      }
       const arr: unknown[] = new Array(values.length);
       context.resolved.set(id, arr);
       for (let index = 0; index < values.length; index += 1) {
@@ -190,9 +202,13 @@ export const resolveReference = (
     }
 
     case "object": {
+      const source = node.value;
+      if (!source || typeof source !== "object" || Array.isArray(source)) {
+        throw invalidPayloadError("Invalid object node payload");
+      }
+
       const target: Record<string, unknown> = {};
       context.resolved.set(id, target);
-      const source = node.value;
       for (const key in source) {
         if (!hasOwn.call(source, key)) {
           continue;
@@ -249,7 +265,7 @@ export const resolveReference = (
     }
 
     default: {
-      throw new Error("Unsupported node kind");
+      throw validationError("Unsupported node kind");
     }
   }
 };
@@ -338,14 +354,15 @@ export const deserializeLegacy = (
 
   const obj: Record<string, unknown> = {};
   const source = value as Record<string, unknown>;
-  for (const key in source) {
-    if (!hasOwn.call(source, key)) {
+  for (const rawKey in source) {
+    if (!hasOwn.call(source, rawKey)) {
       continue;
     }
+    const key = unescapeReservedMarkerKey(rawKey);
     if (isUnsafeKey(key, options.unsafeKeys)) {
       continue;
     }
-    obj[key] = deserializeLegacy(source[key], depth + 1, options);
+    obj[key] = deserializeLegacy(source[rawKey], depth + 1, options);
   }
   return obj;
 };

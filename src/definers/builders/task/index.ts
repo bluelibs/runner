@@ -19,10 +19,10 @@ export * from "./types";
 /**
  * Entry point for creating a task builder.
  */
-export function taskBuilder(
+export function taskBuilder<TInput = undefined>(
   id: string,
 ): TaskFluentBuilder<
-  undefined,
+  TInput,
   Promise<any>,
   {},
   ITaskMeta,
@@ -31,7 +31,7 @@ export function taskBuilder(
 > {
   const filePath = getCallerFile();
   const initial: BuilderState<
-    undefined,
+    TInput,
     Promise<any>,
     {},
     ITaskMeta,
@@ -83,10 +83,10 @@ export function phantomTaskBuilder<TInput = undefined, TResolved = any>(
 }
 
 export interface TaskBuilderWithPhantom {
-  (
+  <TInput = undefined>(
     id: string,
   ): TaskFluentBuilder<
-    undefined,
+    TInput,
     Promise<any>,
     {},
     ITaskMeta,

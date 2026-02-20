@@ -1,9 +1,12 @@
 import {
   DefaultErrorType,
+  ErrorThrowArgs,
   IErrorDefinition,
   IErrorHelper,
   IErrorDefinitionFinal,
 } from "../types/error";
+import type { IErrorMeta } from "../types/meta";
+import type { TagType } from "../types/tag";
 import {
   symbolError,
   symbolFilePath,
@@ -16,11 +19,35 @@ const isValidHttpCode = (value: number): boolean =>
 
 const assertHttpCode = (value: number): void => {
   if (!isValidHttpCode(value)) {
-    throw new Error(
+    throw new RunnerError(
+      "runner.errors.error.invalidHttpCode",
       `Error httpCode must be an integer between 100 and 599. Received: ${value}`,
+      { value },
     );
   }
 };
+
+export const matchesRunnerErrorData = <
+  TData extends DefaultErrorType = DefaultErrorType,
+>(
+  data: TData,
+  partialData?: Partial<TData>,
+): boolean => {
+  if (partialData === undefined) {
+    return true;
+  }
+
+  for (const [key, value] of Object.entries(partialData)) {
+    if (data[key] !== value) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object";
 
 export class RunnerError<
   TData extends DefaultErrorType = DefaultErrorType,
@@ -64,7 +91,14 @@ export class ErrorHelper<
   get httpCode(): number | undefined {
     return this.definition.httpCode;
   }
-  throw(data: TData): never {
+  get tags(): TagType[] {
+    return this.definition.tags ?? [];
+  }
+  get meta(): IErrorMeta {
+    return this.definition.meta ?? {};
+  }
+  private buildRunnerError(...args: ErrorThrowArgs<TData>): RunnerError<TData> {
+    const data = (args[0] ?? ({} as TData)) as TData;
     const parsed = this.definition.dataSchema
       ? this.definition.dataSchema.parse(data)
       : data;
@@ -74,7 +108,7 @@ export class ErrorHelper<
       typeof this.definition.remediation === "function"
         ? this.definition.remediation(parsed)
         : this.definition.remediation;
-    throw new RunnerError(
+    return new RunnerError(
       this.definition.id,
       message,
       parsed,
@@ -82,12 +116,32 @@ export class ErrorHelper<
       remediation,
     );
   }
-  is(error: unknown): error is RunnerError<TData> {
-    return error instanceof RunnerError && error.name === this.definition.id;
+  ["new"](...args: ErrorThrowArgs<TData>): RunnerError<TData> {
+    return this.buildRunnerError(...args);
+  }
+  /** @deprecated use .new() or .throw() for better DX */
+  create(...args: ErrorThrowArgs<TData>): RunnerError<TData> {
+    return this["new"](...args);
+  }
+  throw(...args: ErrorThrowArgs<TData>): never {
+    throw this.buildRunnerError(...args);
+  }
+  is(error: unknown): error is RunnerError<TData>;
+  is(error: unknown, partialData: Partial<TData>): error is RunnerError<TData>;
+  is(error: unknown, partialData?: unknown): error is RunnerError<TData> {
+    const safePartialData = isObjectRecord(partialData)
+      ? (partialData as Partial<TData>)
+      : undefined;
+
+    return (
+      error instanceof RunnerError &&
+      error.name === this.definition.id &&
+      matchesRunnerErrorData(error.data, safePartialData)
+    );
   }
   optional() {
     return {
-      inner: this as unknown as IErrorHelper<TData>,
+      inner: this as IErrorHelper<TData>,
       [symbolOptionalDependency]: true,
     } as const;
   }

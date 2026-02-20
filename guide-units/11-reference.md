@@ -55,26 +55,68 @@ const myHook = r
   .on(myEvent)
   .run(async (event) => console.log(event.data))
   .build();
+
+// Error Helper
+const appError = r
+  .error<{ code: number; message: string }>("app.errors.AppError")
+  .build();
+
+// Tag
+const auditTag = r.tag("app.tags.audit").build();
+
+// Async Context (Node-only)
+const requestContext = r
+  .asyncContext<{ requestId: string }>("app.ctx.request")
+  .build();
 ```
 
 ### Running Your App
 
 ```typescript
 // Basic
-const { runTask, dispose } = await run(app);
+const basicRuntime = await run(app);
+const { runTask, dispose } = basicRuntime;
 
 // With options
-const { runTask, dispose } = await run(app, {
-  debug: "verbose", // "normal" | "verbose"
+const configuredRuntime = await run(app, {
+  debug: "verbose", // "normal" | "verbose" | Partial<DebugConfig>
+  logs: {
+    printThreshold: "info",
+    printStrategy: "pretty",
+    bufferLogs: false,
+  },
+  errorBoundary: true,
+  shutdownHooks: true,
   onUnhandledError: ({ error }) => console.error(error),
+  dryRun: false,
+  lazy: false,
+  initMode: "sequential", // "sequential" | "parallel"
+  runtimeEventCycleDetection: true,
+  mode: "prod", // "dev" | "prod" | "test"
 });
+const { runTask: runTaskWithOptions, dispose: disposeWithOptions } =
+  configuredRuntime;
 
 // Execute tasks
 const result = await runTask(myTask, input);
 
 // Cleanup
 await dispose();
+await disposeWithOptions();
 ```
+
+| Run Option                    | Purpose                                                                 |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| `debug`                      | Enable Runner debug logging                                             |
+| `logs`                       | Configure logger strategy/threshold/buffering                           |
+| `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
+| `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with `dispose()`                            |
+| `onUnhandledError`           | Custom handler for normalized unhandled errors                          |
+| `dryRun`                     | Validate graph without running resource `init()`                        |
+| `lazy`                       | Defer startup-unused resources until on-demand access                   |
+| `initMode`                   | Choose startup scheduler strategy (`sequential` or `parallel`)          |
+| `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                            |
+| `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)           |
 
 ### Testing Patterns
 
@@ -87,6 +129,43 @@ const { runTask, dispose } = await run(testApp);
 const result = await runTask(myTask, input);
 await dispose();
 ```
+
+### Override Patterns
+
+```typescript
+import { override, r } from "@bluelibs/runner";
+
+const realMailer = r
+  .resource("app.mailer")
+  .init(async () => new SMTPEmailer())
+  .build();
+
+// Fluent override builder
+const mockMailer = r
+  .override(realMailer)
+  .init(async () => new MockMailer())
+  .build();
+
+// Typed shorthand
+const shorthandMockMailer = r.override(realMailer, async () => new MockMailer());
+
+// Helper override
+const helperMockMailer = override(realMailer, {
+  init: async () => new MockMailer(),
+});
+
+const app = r
+  .resource("app")
+  .register([realMailer])
+  .overrides([mockMailer])
+  .build();
+```
+
+Quick rule:
+- `r.override(...)` builds the replacement definition.
+- `.overrides([...])` applies replacement during bootstrap.
+- Registering only the replacement definition is valid.
+- Registering both base and replacement in `.register([...])` causes duplicate-id errors.
 
 ### Built-in Middleware
 
@@ -139,6 +218,16 @@ const app = r.resource("app")
 // Emit events
 await myEvent({ data: "value" });
 
+// Emit with options
+const emitReport = await myEvent(
+  { data: "value" },
+  { failureMode: "aggregate", throwOnError: false, report: true },
+);
+
+// Runtime emit helper supports the same options
+const runtime = await run(app);
+await runtime.emitEvent(myEvent, { data: "value" }, { report: true });
+
 // Global logging
 const task = r.task("id")
   .dependencies({ logger: globals.resources.logger })
@@ -147,6 +236,34 @@ const task = r.task("id")
   })
   .build();
 ```
+
+### Resource Isolation (`.exports`)
+
+```typescript
+const internalTask = r.task("billing.tasks.internal").run(async () => 1).build();
+const publicTask = r.task("billing.tasks.public").run(async () => 2).build();
+
+const billing = r
+  .resource("billing")
+  .register([internalTask, publicTask])
+  .exports([publicTask]) // only this is visible outside billing
+  .build();
+```
+
+Quick rules:
+- No `.exports()` means everything public (backward compatible)
+- `.exports([])` means everything private outside that subtree
+- Visibility is enforced at `run(app)` bootstrap
+- Private `.everywhere()` middleware applies only inside its resource subtree
+- Duplicate ids still fail globally, even for private items
+
+### Event Emission Options
+
+| Option         | Type                              | Default      | Purpose                                      |
+| -------------- | --------------------------------- | ------------ | -------------------------------------------- |
+| `failureMode`  | `"fail-fast" \| "aggregate"`      | `fail-fast`  | Stop on first listener error or aggregate all |
+| `throwOnError` | `boolean`                         | `true`       | Throw after listener failure(s)               |
+| `report`       | `boolean`                         | `false`      | Return `IEventEmitReport` for listener outcomes |
 
 ### Type Helpers
 

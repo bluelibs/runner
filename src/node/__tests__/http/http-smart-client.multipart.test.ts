@@ -3,6 +3,7 @@ import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../../http/http-smart-client.model";
 import { createNodeFile } from "../../files";
 import { Serializer } from "../../../serializer";
+import { createMessageError } from "../../../errors";
 
 function asIncoming(
   res: Readable,
@@ -90,7 +91,7 @@ describe("createHttpSmartClient - multipart", () => {
     let capturedBody = Buffer.alloc(0);
     const reqSpy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((_opts: any, cb: any) => {
         const env = { ok: true, result: "OK" };
         const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
@@ -226,7 +227,7 @@ describe("createHttpSmartClient - multipart", () => {
           use: () => 1,
           serialize: (v: any) => String(v),
           parse: (s: string) => s,
-          provide: (v: any, fn: any) => fn(),
+          provide: (_v: any, fn: any) => fn(),
           require: () => ({}) as any,
         } as any,
       ],
@@ -238,5 +239,38 @@ describe("createHttpSmartClient - multipart", () => {
     );
     await client.task("upload.ctx2", { file } as any);
     expect(reqSpy).toHaveBeenCalled();
+  });
+
+  it("fails fast when multipart context serialization fails", async () => {
+    const reqSpy = jest.spyOn(http, "request").mockImplementation(() => {
+      throw createMessageError("request should not run");
+    }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: new Serializer(),
+      contexts: [
+        {
+          id: "ctx.bad",
+          use: () => {
+            throw createMessageError("missing context");
+          },
+          serialize: (v: unknown) => JSON.stringify(v),
+          parse: (s: string) => JSON.parse(s),
+          provide: (_v: unknown, fn: () => unknown) => fn(),
+          require: () => ({}) as any,
+        } as any,
+      ],
+    });
+    const file = createNodeFile(
+      { name: "x" },
+      { stream: Readable.from("A") },
+      "FX_BAD",
+    );
+
+    await expect(client.task("upload.bad", { file } as any)).rejects.toThrow(
+      /Failed to serialize async context "ctx.bad"/,
+    );
+    expect(reqSpy).not.toHaveBeenCalled();
   });
 });

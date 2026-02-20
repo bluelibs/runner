@@ -58,6 +58,7 @@ export type BuilderState<
   meta?: TMeta;
   overrides?: Array<any>;
   throws?: ThrowsList;
+  exports?: Array<RegisterableItems>;
 }>;
 
 /**

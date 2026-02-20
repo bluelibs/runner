@@ -16,4 +16,10 @@ describe("durable: CronParser", () => {
     const next = CronParser.getNextRun("*/5 * * * *");
     expect(next).toBeInstanceOf(Date);
   });
+
+  it("throws a durable config error for invalid expressions", () => {
+    expect(() => CronParser.getNextRun("not-a-cron")).toThrow(
+      /invalid cron expression/i,
+    );
+  });
 });
