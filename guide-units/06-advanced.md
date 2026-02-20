@@ -145,6 +145,20 @@ const app = r
 await run(app);
 ```
 
+You can inspect which resources installed local interceptors through an injected task dependency:
+
+```typescript
+const inspector = r
+  .resource("app.inspector")
+  .dependencies({ calculatorTask })
+  .init(async (_config, { calculatorTask }) => {
+    const owners = calculatorTask.getInterceptingResourceIds();
+    // eg: ["app.interceptor"]
+    return { owners };
+  })
+  .build();
+```
+
 > **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You're collapsing the waveform of a task at runtime and I'm Schrödinger's runtime, praying the cat hasn't overridden `run()` with `throw new Error('lol')`."
 
 ## Durable Workflows (Node-only)

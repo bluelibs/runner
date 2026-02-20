@@ -1,6 +1,6 @@
-// Node-only entry point
-// Export a focused Node surface (no blanket root re-exports).
-export { run, globals } from "../public";
+// Node entry point
+// Re-export the full public API so Node consumers get the same base surface.
+export * from "../public";
 
 export { nodeExposure } from "./exposure";
 export {

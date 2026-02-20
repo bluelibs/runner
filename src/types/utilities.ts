@@ -231,6 +231,7 @@ export type TaskDependencyWithIntercept<TInput, TOutput> = TaskDependency<
   TOutput
 > & {
   intercept: (middleware: TaskLocalInterceptor<TInput, TOutput>) => void;
+  getInterceptingResourceIds: () => readonly string[];
 };
 
 /** Resource-context dependency typing where tasks expose intercept() */

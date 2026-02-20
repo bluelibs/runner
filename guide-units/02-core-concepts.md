@@ -785,6 +785,7 @@ For advanced scenarios, you can intercept framework execution without relying on
 - Resource middleware execution: `middlewareManager.intercept("resource", (next, input) => Promise<any>)`
 - Per-middleware interception: `middlewareManager.interceptMiddleware(mw, interceptor)`
 - Per-task execution (local): inside a resource `init`, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task.
+  Inspect local interceptor ownership with `deps.someTask.getInterceptingResourceIds()` (unique ids in registration order).
 
 Per-task interceptors must be registered during resource initialization (before the system is locked). They are a good fit when you want a specific task to be adjusted by a specific resource (for example: feature toggles, input shaping, or internal routing) without making it global middleware.
 

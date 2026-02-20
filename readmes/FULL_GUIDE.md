@@ -78,9 +78,9 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](./AI.md)                                                                                         | Docs    | Compact summary (<5000 tokens)      |
-| [Full Guide](./FULL_GUIDE.md)                                                                                       | Docs    | Complete documentation (composed)   |
-| [Support & Release Policy](./ENTERPRISE.md)                                                                         | Docs    | Support windows and deprecation     |
+| [AI-Friendly Docs](./AI.md)                                                                                 | Docs    | Compact summary (<5000 tokens)      |
+| [Full Guide](./FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
+| [Support & Release Policy](./ENTERPRISE.md)                                                                 | Docs    | Support windows and deprecation     |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
@@ -128,7 +128,6 @@ Use these minimums before starting:
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
-
 ## Why Runner?
 
 Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
@@ -304,7 +303,6 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Under the Hood](#under-the-hood) - Architecture deep dive
 - [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
-
 ## What Is This Thing?
 
 BlueLibs Runner is a TypeScript-first dependency injection framework built around **tasks** (functions) and **resources** (singletons). It's explicit and composition-first: you write normal async functions; Runner wires dependencies, middleware, events/hooks, and lifecycle.
@@ -898,7 +896,6 @@ Now that you know the patterns, here's your learning path:
 > **runtime:** "Seven patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
 
 ---
-
 ## Quick Wins: Copy-Paste Solutions
 
 Production-ready patterns you can use today. Each example is complete and tested.
@@ -1112,7 +1109,6 @@ Each pattern here is runnable as-is. They rely only on Runner's built-ins, so yo
 > **runtime:** "Six production problems, six one-liners. You bolted middleware onto tasks like Lego bricks and called it architecture. I respect the pragmatism. Ship it."
 
 ---
-
 ## The Big Five
 
 The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using Runner effectively.
@@ -1146,13 +1142,14 @@ Here's a complete example showing you everything:
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
-// Assuming: emailService is defined elsewhere
+// Assuming: emailService and logger resources are defined elsewhere
 // 1. Define your task - it's just a function with a name and dependencies
 const sendEmail = r
   .task("app.tasks.sendEmail")
-  .dependencies({ emailService }) // What does this task need?
-  .run(async (input, { emailService }) => {
+  .dependencies({ emailService, logger }) // What does this task need?
+  .run(async (input, { emailService, logger }) => {
     // Your business logic here
+    await logger.info(`Sending email to ${input.to}`);
     return emailService.send(input);
   })
   .build();
@@ -1899,6 +1896,7 @@ For advanced scenarios, you can intercept framework execution without relying on
 - Resource middleware execution: `middlewareManager.intercept("resource", (next, input) => Promise<any>)`
 - Per-middleware interception: `middlewareManager.interceptMiddleware(mw, interceptor)`
 - Per-task execution (local): inside a resource `init`, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task.
+  Inspect local interceptor ownership with `deps.someTask.getInterceptingResourceIds()` (unique ids in registration order).
 
 Per-task interceptors must be registered during resource initialization (before the system is locked). They are a good fit when you want a specific task to be adjusted by a specific resource (for example: feature toggles, input shaping, or internal routing) without making it global middleware.
 
@@ -2490,7 +2488,6 @@ The core concepts above cover most use cases. For specialized features:
 - **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](../readmes/SERIALIZER_PROTOCOL.md).
 
 ---
-
 ## run() and RunOptions
 
 The `run()` function is your application's entry point. It initializes all resources, wires up dependencies, and returns handles for interacting with your system.
@@ -2807,7 +2804,6 @@ await run(app, {
 - Stop accepting new work before cleaning up
 
 > **runtime:** "An error boundary: a trampoline under your tightrope. I'm the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
-
 ## Caching
 
 Avoid recomputing expensive work by caching task results with TTL-based eviction:
@@ -3635,7 +3631,6 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 ```
 
 > **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
-
 ## Observability Strategy (Logs, Metrics, and Traces)
 
 Runner gives you primitives for all three observability signals:
@@ -4135,7 +4130,6 @@ await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
 > **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it's off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
-
 ## Advanced Patterns
 
 This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.
@@ -4281,6 +4275,20 @@ const app = r
   .build();
 
 await run(app);
+```
+
+You can inspect which resources installed local interceptors through an injected task dependency:
+
+```typescript
+const inspector = r
+  .resource("app.inspector")
+  .dependencies({ calculatorTask })
+  .init(async (_config, { calculatorTask }) => {
+    const owners = calculatorTask.getInterceptingResourceIds();
+    // eg: ["app.interceptor"]
+    return { owners };
+  })
+  .build();
 ```
 
 > **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You're collapsing the waveform of a task at runtime and I'm Schrödinger's runtime, praying the cat hasn't overridden `run()` with `throw new Error('lol')`."
@@ -5532,7 +5540,6 @@ export const problematicResource = r
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
 > **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
-
 ## Async Context
 
 Ever needed to pass a request ID, user session, or trace ID through your entire call stack without threading it through every function parameter? That's what Async Context does.
@@ -5622,7 +5629,6 @@ const sessionContext = r
 ```
 
 > **runtime:** "Async Context: your data playing hide-and-seek across the event loop. One forgotten `.provide()` and the 'Context not available' error will find you at 3am, exactly where your stack trace is least helpful."
-
 ## Fluent Builders (`r.*`)
 
 The `r` namespace gives you a chainable, discoverable way to build Runner components. Instead of memorizing object shapes, you get autocomplete that guides you through the options.
@@ -5757,7 +5763,6 @@ Every builder follows the same rhythm:
 For the complete API reference, see the [Fluent Builders documentation](../readmes/FLUENT_BUILDERS.md).
 
 > **runtime:** "Fluent builders: method chaining dressed up for a job interview. You type a dot and I whisper possibilities. It's the same definition either way—I just appreciate the ceremony."
-
 ## Type Helpers
 
 When you need to reference a task's input type in another function, or pass a resource's value type to a generic, these utility types save you from re-declaring the same shapes.
@@ -5922,7 +5927,6 @@ const app = r
 When running, open `http://localhost:1337` for the visual DevTools.
 
 > **Note:** Runner Dev Tools is intended for development and controlled environments. Treat it as privileged operational access.
-
 ## Real-World Example: The Complete Package
 
 This example shows everything working together in a realistic Express application:
@@ -6121,7 +6125,6 @@ process.on("SIGTERM", async () => {
 ```
 
 > **runtime:** "Real-World Example: the happy path. In production you'll add validation, auth, observability, and a few weird edge cases. The wiring pattern stays the same."
-
 ## Testing
 
 Runner's explicit dependency injection makes testing straightforward. Call `.run()` on a task with plain mocks for fast unit tests, or spin up the full runtime when you need middleware and lifecycle behavior.
@@ -6187,7 +6190,6 @@ describe("registerUser task", () => {
 Use `run()` to start the full app with middleware, events, and lifecycle. Swap infrastructure with `override()`.
 
 Important:
-
 - `r.override(base, fn)` (or `override(base, patch)`) creates a replacement definition.
 - `.overrides([...])` is what applies replacements in the running container.
 - If you place both base and replacement in `.register([...])`, you'll get duplicate-id registration errors.
@@ -6266,7 +6268,6 @@ await run(app, { debug: "verbose" });
 ```
 
 > **runtime:** "Testing: an elaborate puppet show where every string behaves. Then production walks in, kicks the stage, and asks for pagination. Still — nice coverage badge."
-
 ## Troubleshooting
 
 When things go sideways, this is your field manual. No fluff, just fixes.
@@ -6727,7 +6728,6 @@ npm ls @bluelibs/runner
 4. **Open an issue**: [New Issue](https://github.com/bluelibs/runner/issues/new)
 
 ---
-
 ## Under the Hood
 
 For developers who want to understand how Runner actually works—not just how to use it.
@@ -7710,7 +7710,6 @@ const paymentTask = r
 > **runtime:** "Integration recipes: the cookbook for making me play nice with everyone else's code. Redis, Kubernetes, OpenTelemetry—I've been to all their parties. Just remember: every integration is a new failure mode. I'll be here, logging everything."
 
 ---
-
 ## Quick Reference: Cheat Sheet
 
 **Bookmark this section for quick lookups!**
@@ -7818,18 +7817,18 @@ await dispose();
 await disposeWithOptions();
 ```
 
-| Run Option                   | Purpose                                                        |
-| ---------------------------- | -------------------------------------------------------------- |
-| `debug`                      | Enable Runner debug logging                                    |
-| `logs`                       | Configure logger strategy/threshold/buffering                  |
-| `errorBoundary`              | Catch process-level unhandled exceptions/rejections            |
-| `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with `dispose()`                    |
-| `onUnhandledError`           | Custom handler for normalized unhandled errors                 |
-| `dryRun`                     | Validate graph without running resource `init()`               |
-| `lazy`                       | Defer startup-unused resources until on-demand access          |
-| `initMode`                   | Choose startup scheduler strategy (`sequential` or `parallel`) |
-| `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                   |
-| `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)  |
+| Run Option                    | Purpose                                                                 |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| `debug`                      | Enable Runner debug logging                                             |
+| `logs`                       | Configure logger strategy/threshold/buffering                           |
+| `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
+| `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with `dispose()`                            |
+| `onUnhandledError`           | Custom handler for normalized unhandled errors                          |
+| `dryRun`                     | Validate graph without running resource `init()`                        |
+| `lazy`                       | Defer startup-unused resources until on-demand access                   |
+| `initMode`                   | Choose startup scheduler strategy (`sequential` or `parallel`)          |
+| `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                            |
+| `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)           |
 
 ### Testing Patterns
 
@@ -7860,10 +7859,7 @@ const mockMailer = r
   .build();
 
 // Typed shorthand
-const shorthandMockMailer = r.override(
-  realMailer,
-  async () => new MockMailer(),
-);
+const shorthandMockMailer = r.override(realMailer, async () => new MockMailer());
 
 // Helper override
 const helperMockMailer = override(realMailer, {
@@ -7878,7 +7874,6 @@ const app = r
 ```
 
 Quick rule:
-
 - `r.override(...)` builds the replacement definition.
 - `.overrides([...])` applies replacement during bootstrap.
 - Registering only the replacement definition is valid.
@@ -7957,14 +7952,8 @@ const task = r.task("id")
 ### Resource Isolation (`.exports`)
 
 ```typescript
-const internalTask = r
-  .task("billing.tasks.internal")
-  .run(async () => 1)
-  .build();
-const publicTask = r
-  .task("billing.tasks.public")
-  .run(async () => 2)
-  .build();
+const internalTask = r.task("billing.tasks.internal").run(async () => 1).build();
+const publicTask = r.task("billing.tasks.public").run(async () => 2).build();
 
 const billing = r
   .resource("billing")
@@ -7974,7 +7963,6 @@ const billing = r
 ```
 
 Quick rules:
-
 - No `.exports()` means everything public (backward compatible)
 - `.exports([])` means everything private outside that subtree
 - Visibility is enforced at `run(app)` bootstrap
@@ -7983,11 +7971,11 @@ Quick rules:
 
 ### Event Emission Options
 
-| Option         | Type                         | Default     | Purpose                                         |
-| -------------- | ---------------------------- | ----------- | ----------------------------------------------- |
-| `failureMode`  | `"fail-fast" \| "aggregate"` | `fail-fast` | Stop on first listener error or aggregate all   |
-| `throwOnError` | `boolean`                    | `true`      | Throw after listener failure(s)                 |
-| `report`       | `boolean`                    | `false`     | Return `IEventEmitReport` for listener outcomes |
+| Option         | Type                              | Default      | Purpose                                      |
+| -------------- | --------------------------------- | ------------ | -------------------------------------------- |
+| `failureMode`  | `"fail-fast" \| "aggregate"`      | `fail-fast`  | Stop on first listener error or aggregate all |
+| `throwOnError` | `boolean`                         | `true`       | Throw after listener failure(s)               |
+| `report`       | `boolean`                         | `false`      | Return `IEventEmitReport` for listener outcomes |
 
 ### Type Helpers
 
@@ -8124,11 +8112,11 @@ Current support channels:
 
 When a public API is deprecated, use this lifecycle:
 
-| Stage         | What Happens                                                        | Removal |
-| ------------- | ------------------------------------------------------------------- | ------- |
-| **Announced** | Release note entry + docs note with replacement path                | No      |
-| **Warned**    | Deprecated marker in docs/types and migration recommendation        | No      |
-| **Removed**   | Removed in next allowed major with migration notes in release notes | Yes     |
+| Stage             | What Happens                                                        | Removal |
+| ----------------- | ------------------------------------------------------------------- | ------- |
+| **Announced**     | Release note entry + docs note with replacement path                | No      |
+| **Warned**        | Deprecated marker in docs/types and migration recommendation        | No      |
+| **Removed**       | Removed in next allowed major with migration notes in release notes | Yes     |
 
 If a behavior changes without breaking types (for example default values), document it in your release notes.
 
@@ -8172,14 +8160,14 @@ Use this list before promoting a Runner app to production:
 
 Node-only entrypoint: `@bluelibs/runner/node`.
 
-| Export                                                | Purpose                                                         |
-| ----------------------------------------------------- | --------------------------------------------------------------- |
-| `nodeExposure`                                        | Expose tasks/events over HTTP                                   |
-| `createHttpMixedClient`, `createHttpSmartClient`      | Node tunnel clients (JSON + multipart + streaming modes)        |
-| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart tunnel calls               |
-| `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path |
-| `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution        |
-| `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                   |
+| Export                                                | Purpose                                                                 |
+| ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| `nodeExposure`                                        | Expose tasks/events over HTTP                                           |
+| `createHttpMixedClient`, `createHttpSmartClient`      | Node tunnel clients (JSON + multipart + streaming modes)                |
+| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart tunnel calls                       |
+| `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path         |
+| `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                |
+| `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                           |
 
 See also:
 

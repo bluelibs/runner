@@ -3,7 +3,9 @@ import {
   DependencyValuesType,
   IEvent,
   IEventEmitOptions,
+  IResourceMiddleware,
   IResource,
+  ITaskMiddleware,
   ITask,
   ResourceDependencyValuesType,
   TaskCallOptions,
@@ -17,10 +19,18 @@ import { Store } from "../Store";
 import { TaskRunner } from "../TaskRunner";
 import {
   ResourceStoreElementType,
+  TaskLocalInterceptorRecord,
   TaskStoreElementType,
 } from "../../types/storeTypes";
 import * as utils from "../../define";
 import { findDependencyStrategy } from "../utils/dependencyStrategies";
+import type { MiddlewareManager } from "../MiddlewareManager";
+import type {
+  ResourceMiddlewareInterceptor,
+  TaskMiddlewareInterceptor,
+} from "../middleware/types";
+
+const MIDDLEWARE_MANAGER_RESOURCE_ID = "globals.resources.middlewareManager";
 
 export class DependencyExtractor {
   constructor(
@@ -36,6 +46,7 @@ export class DependencyExtractor {
   wrapResourceDependencies<TD extends DependencyMapType>(
     deps: TD,
     extracted: DependencyValuesType<TD>,
+    ownerResourceId: string,
   ): ResourceDependencyValuesType<TD> {
     const wrapped: Record<string, unknown> = {};
     for (const key of Object.keys(deps) as Array<keyof TD>) {
@@ -45,15 +56,34 @@ export class DependencyExtractor {
         const inner = (original as { inner: unknown }).inner;
         if (utils.isTask(inner)) {
           wrapped[key as string] = value
-            ? this.makeTaskWithIntercept(inner)
+            ? this.makeTaskWithIntercept(inner, ownerResourceId)
             : undefined;
+        } else if (
+          utils.isResource(inner) &&
+          inner.id === MIDDLEWARE_MANAGER_RESOURCE_ID
+        ) {
+          wrapped[key as string] = this.makeOwnerAwareMiddlewareManager(
+            value,
+            ownerResourceId,
+          );
         } else {
           wrapped[key as string] = value as unknown;
         }
         continue;
       }
       if (utils.isTask(original)) {
-        wrapped[key as string] = this.makeTaskWithIntercept(original);
+        wrapped[key as string] = this.makeTaskWithIntercept(
+          original,
+          ownerResourceId,
+        );
+      } else if (
+        utils.isResource(original) &&
+        original.id === MIDDLEWARE_MANAGER_RESOURCE_ID
+      ) {
+        wrapped[key as string] = this.makeOwnerAwareMiddlewareManager(
+          value,
+          ownerResourceId,
+        );
       } else {
         wrapped[key as string] = value as unknown;
       }
@@ -176,7 +206,10 @@ export class DependencyExtractor {
     I,
     O extends Promise<any>,
     D extends DependencyMapType,
-  >(original: ITask<I, O, D>): TaskDependencyWithIntercept<I, O> {
+  >(
+    original: ITask<I, O, D>,
+    ownerResourceId: string,
+  ): TaskDependencyWithIntercept<I, O> {
     const taskId = original.id;
     const fn: (input: I, options?: TaskCallOptions) => O = (input, options) => {
       const storeTask = this.getStoreTaskOrThrow(taskId);
@@ -190,9 +223,102 @@ export class DependencyExtractor {
         const storeTask = this.getStoreTaskOrThrow(taskId);
 
         if (!storeTask.interceptors) storeTask.interceptors = [];
-        storeTask.interceptors.push(middleware);
+        storeTask.interceptors.push({
+          interceptor: middleware,
+          ownerResourceId,
+        } satisfies TaskLocalInterceptorRecord<I, O>);
+      },
+      getInterceptingResourceIds: () => {
+        const storeTask = this.getStoreTaskOrThrow(taskId);
+        const interceptors = storeTask.interceptors ?? [];
+        const ownerIds = new Set<string>();
+        for (const interceptor of interceptors) {
+          if (interceptor.ownerResourceId) {
+            ownerIds.add(interceptor.ownerResourceId);
+          }
+        }
+        return Object.freeze(Array.from(ownerIds));
       },
     }) as TaskDependencyWithIntercept<I, O>;
+  }
+
+  private makeOwnerAwareMiddlewareManager(
+    value: unknown,
+    ownerResourceId: string,
+  ): unknown {
+    if (!value || typeof value !== "object") {
+      return value;
+    }
+
+    const middlewareManager = value as MiddlewareManager;
+    if (
+      typeof middlewareManager.interceptOwned !== "function" ||
+      typeof middlewareManager.interceptMiddlewareOwned !== "function"
+    ) {
+      return value;
+    }
+
+    return new Proxy(middlewareManager, {
+      get(target, prop, receiver) {
+        if (prop === "intercept") {
+          return (
+            kind: "task" | "resource",
+            interceptor:
+              | TaskMiddlewareInterceptor
+              | ResourceMiddlewareInterceptor,
+          ) => {
+            if (kind === "task") {
+              target.interceptOwned(
+                "task",
+                interceptor as TaskMiddlewareInterceptor,
+                ownerResourceId,
+              );
+              return;
+            }
+
+            target.interceptOwned(
+              "resource",
+              interceptor as ResourceMiddlewareInterceptor,
+              ownerResourceId,
+            );
+          };
+        }
+
+        if (prop === "interceptMiddleware") {
+          return (
+            middleware:
+              | ITaskMiddleware<any, any, any, any>
+              | IResourceMiddleware<any, any, any, any>,
+            interceptor:
+              | TaskMiddlewareInterceptor
+              | ResourceMiddlewareInterceptor,
+          ) => {
+            if (utils.isTaskMiddleware(middleware)) {
+              target.interceptMiddlewareOwned(
+                middleware,
+                interceptor as TaskMiddlewareInterceptor,
+                ownerResourceId,
+              );
+              return;
+            }
+
+            if (utils.isResourceMiddleware(middleware)) {
+              target.interceptMiddlewareOwned(
+                middleware,
+                interceptor as ResourceMiddlewareInterceptor,
+                ownerResourceId,
+              );
+            }
+          };
+        }
+
+        const originalValue = Reflect.get(target, prop, receiver);
+        if (typeof originalValue === "function") {
+          return originalValue.bind(target);
+        }
+        return originalValue;
+      },
+    });
   }
 
   private getStoreTaskOrThrow(

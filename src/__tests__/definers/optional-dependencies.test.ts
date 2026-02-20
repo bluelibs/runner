@@ -59,6 +59,20 @@ describe("Optional dependencies", () => {
           typeof (deps.maybeTask as unknown as { intercept: unknown })
             .intercept,
         ).toBe("function");
+        expect(
+          typeof (
+            deps.maybeTask as unknown as {
+              getInterceptingResourceIds: unknown;
+            }
+          ).getInterceptingResourceIds,
+        ).toBe("function");
+        expect(
+          (
+            deps.maybeTask as unknown as {
+              getInterceptingResourceIds: () => readonly string[];
+            }
+          ).getInterceptingResourceIds(),
+        ).toEqual([]);
         const out = await (
           deps.maybeTask as unknown as () => Promise<string>
         )();

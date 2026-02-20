@@ -122,7 +122,7 @@ export class TaskMiddlewareComposer {
 
     let wrapped = runner;
     for (let i = storeTask.interceptors.length - 1; i >= 0; i--) {
-      const interceptor = storeTask.interceptors[i];
+      const interceptor = storeTask.interceptors[i].interceptor;
       const nextFunction = wrapped;
       wrapped = (async (input: TInput, journal: ExecutionJournal) =>
         interceptor((inp) => nextFunction(inp, journal), input)) as (

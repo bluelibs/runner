@@ -40,7 +40,12 @@ export type TaskStoreElementType<
   task: ITask<Input, Output, D>;
   computedDependencies: DependencyValuesType<D>;
   isInitialized: boolean;
-  interceptors?: Array<TaskLocalInterceptor<any, any>>;
+  interceptors?: Array<TaskLocalInterceptorRecord<any, any>>;
+};
+
+export type TaskLocalInterceptorRecord<TInput = any, TOutput = any> = {
+  interceptor: TaskLocalInterceptor<TInput, TOutput>;
+  ownerResourceId?: string;
 };
 
 export type HookStoreElementType<

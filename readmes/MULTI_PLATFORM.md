@@ -289,7 +289,7 @@ Our package.json shows the full strategy:
 }
 ```
 
-**Result:** Node.js bundlers automatically get the Node-optimized bundle (and its Node-only type declarations) even when you import from `@bluelibs/runner`. Consumers that explicitly target `@bluelibs/runner/node` hit the same runtime + declarations, while browsers and universal runtimes continue to receive the appropriate builds with runtime detection fallback.
+**Result:** Node.js bundlers automatically get the Node-optimized bundle (and its Node-only type declarations) even when you import from `@bluelibs/runner`. The Node bundle re-exports the full public API and adds Node-only APIs, so `@bluelibs/runner` and `@bluelibs/runner/node` stay behaviorally aligned in Node runtimes. Browsers and universal runtimes continue to receive the appropriate builds with runtime detection fallback.
 
 ## Backwards Compatibility
 

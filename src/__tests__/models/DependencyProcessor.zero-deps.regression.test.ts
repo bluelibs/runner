@@ -1,7 +1,9 @@
 import { defineResource, defineTask } from "../../define";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
+import { DependencyExtractor } from "../../models/dependency-processor/DependencyExtractor";
 import { ResourceStoreElementType } from "../../types/storeTypes";
 import { createTestFixture } from "../test-utils";
+import { globalResources } from "../../globals/globalResources";
 
 class TestDependencyProcessor extends DependencyProcessor {
   public processResourceDependenciesForTest(
@@ -80,6 +82,7 @@ describe("DependencyProcessor zero-dependency caching", () => {
               input: number | undefined,
             ) => Promise<number> | number,
           ) => void;
+          getInterceptingResourceIds: () => readonly string[];
         };
       }
     ).dependencyTask;
@@ -92,6 +95,9 @@ describe("DependencyProcessor zero-dependency caching", () => {
     expect(() =>
       wrappedTaskDependency.intercept(async (_next, input) => input ?? 0),
     ).toThrow(
+      /Dependency Task dependency\.processor\.missing\.task\.dep not found/,
+    );
+    expect(() => wrappedTaskDependency.getInterceptingResourceIds()).toThrow(
       /Dependency Task dependency\.processor\.missing\.task\.dep not found/,
     );
   });
@@ -129,5 +135,93 @@ describe("DependencyProcessor zero-dependency caching", () => {
     expect(v1).toBe("ready");
     expect(v2).toBe("ready");
     expect(initSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("wraps optional middlewareManager dependencies with owner-aware intercept registration", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const extractor = new DependencyExtractor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+      async () => undefined,
+    );
+
+    const middlewareManager = store.getMiddlewareManager();
+    const wrapped = extractor.wrapResourceDependencies(
+      {
+        maybeMiddlewareManager: globalResources.middlewareManager.optional(),
+      },
+      {
+        maybeMiddlewareManager: middlewareManager,
+      },
+      "tests.resources.owner.optionalMiddlewareManager",
+    ) as {
+      maybeMiddlewareManager: {
+        intercept: (
+          kind: "task" | "resource",
+          interceptor: (
+            next: (input: unknown) => Promise<unknown>,
+            input: unknown,
+          ) => Promise<unknown>,
+        ) => void;
+        getInterceptorOwnerSnapshot: () => {
+          globalTaskInterceptorOwnerIds: readonly string[];
+        };
+        isLocked: boolean;
+      };
+    };
+
+    expect(wrapped.maybeMiddlewareManager.isLocked).toBe(false);
+    wrapped.maybeMiddlewareManager.intercept("task", async (next, input) =>
+      next(input),
+    );
+    expect(
+      wrapped.maybeMiddlewareManager.getInterceptorOwnerSnapshot()
+        .globalTaskInterceptorOwnerIds,
+    ).toEqual(["tests.resources.owner.optionalMiddlewareManager"]);
+  });
+
+  it("returns original value when owner-aware middleware wrapping is not possible", () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const extractor = new DependencyExtractor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+      async () => undefined,
+    ) as unknown as {
+      makeOwnerAwareMiddlewareManager: (
+        value: unknown,
+        ownerResourceId: string,
+      ) => unknown;
+    };
+
+    const primitiveValue = "not-an-object";
+    expect(
+      extractor.makeOwnerAwareMiddlewareManager(
+        primitiveValue,
+        "tests.resources.owner.primitive",
+      ),
+    ).toBe(primitiveValue);
+
+    const plainObject = {
+      intercept: () => undefined,
+      interceptMiddleware: () => undefined,
+    };
+    expect(
+      extractor.makeOwnerAwareMiddlewareManager(
+        plainObject,
+        "tests.resources.owner.plainObject",
+      ),
+    ).toBe(plainObject);
   });
 });

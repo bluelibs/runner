@@ -314,6 +314,7 @@ export class DependencyProcessor {
     resource.computedDependencies = this.wrapResourceDependencies<TD>(
       deps,
       extracted,
+      resource.resource.id,
     );
     // resource.isInitialized = true;
   }
@@ -321,8 +322,13 @@ export class DependencyProcessor {
   private wrapResourceDependencies<TD extends DependencyMapType>(
     deps: TD,
     extracted: DependencyValuesType<TD>,
+    ownerResourceId: string,
   ): ResourceDependencyValuesType<TD> {
-    return this.dependencyExtractor.wrapResourceDependencies(deps, extracted);
+    return this.dependencyExtractor.wrapResourceDependencies(
+      deps,
+      extracted,
+      ownerResourceId,
+    );
   }
 
   public async initializeRoot() {
