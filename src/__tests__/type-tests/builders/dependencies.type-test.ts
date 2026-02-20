@@ -39,6 +39,19 @@ import { r } from "../../../";
     })
     .build();
 
+  const middlewareWithExplicitContracts = r.middleware
+    .task<MiddlewareConfig, { message: string }, { ok: true }>(
+      "middleware.explicit.contracts",
+    )
+    .run(async ({ next, task }, _deps, config) => {
+      config.message;
+      task.input.message;
+      const result = await next(task.input);
+      result.ok;
+      return result;
+    })
+    .build();
+
   const event = r
     .event("event")
     .payloadSchema<{ message: string }>({ parse: (x: any) => x })
@@ -112,6 +125,7 @@ import { r } from "../../../";
       middlewareTaskOnly,
       middlewareWithConfig,
       middlewareWithOptionalConfig,
+      middlewareWithExplicitContracts,
       middlewareWithOptionalConfig.with({ message: "Hello, World!" }),
       middlewareWithConfig.with({ message: "Hello, World!" }),
       // @ts-expect-error

@@ -2,6 +2,75 @@ import { r } from "../../../";
 
 // Type-only tests for fluent `.schema()` aliases.
 
+// Scenario: task entry generic should seed input typing.
+{
+  r.task<{ id: string }>("types.schema.task.entry-generic")
+    .run(async (input) => {
+      input.id;
+      // @ts-expect-error property does not exist on entry-generic input
+      input.missing;
+      return { ok: true as const };
+    })
+    .build();
+}
+
+// Scenario: later schema typing should override earlier entry generic typing.
+{
+  r.task<{ seeded: number }>("types.schema.task.entry-precedence")
+    .schema<{ fromSchema: string }>({ parse: (x: any) => x })
+    .run(async (input) => {
+      input.fromSchema;
+      // @ts-expect-error schema typing should replace seeded typing
+      input.seeded;
+      return input.fromSchema;
+    })
+    .build();
+}
+
+// Scenario: resource entry generic should type config usage even without init.
+{
+  const child = r.resource("types.schema.resource.entry-generic.child").build();
+
+  r.resource<{ enabled: boolean }>("types.schema.resource.entry-generic")
+    .register((config) => {
+      config.enabled;
+      // @ts-expect-error property does not exist on entry-generic config
+      config.unknown;
+      return config.enabled ? [child] : [];
+    })
+    .build();
+}
+
+// Scenario: task middleware single generic should seed input contract typing.
+{
+  r.middleware
+    .task<{ user: { id: string } }>(
+      "types.schema.middleware.task.entry-generic",
+    )
+    .run(async ({ next, task }) => {
+      task.input.user.id;
+      // @ts-expect-error property does not exist on middleware input contract
+      task.input.user.missing;
+      return next(task.input);
+    })
+    .build();
+}
+
+// Scenario: resource middleware entry generic should type middleware config.
+{
+  r.middleware
+    .resource<{ retries: number }>(
+      "types.schema.middleware.resource.entry-generic",
+    )
+    .run(async ({ next }, _deps, config) => {
+      config.retries;
+      // @ts-expect-error property does not exist on middleware config
+      config.missing;
+      return next();
+    })
+    .build();
+}
+
 // Scenario: task.schema should map to task input schema typing.
 {
   r.task("types.schema.task")

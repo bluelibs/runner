@@ -14,7 +14,6 @@ export * from "./types";
 
 /**
  * Creates a new resource builder with the given id.
- * Overload allows callers to seed the config type at the entry point for convenience.
  */
 export function resourceBuilder<TConfig = void>(
   id: string,
@@ -26,22 +25,10 @@ export function resourceBuilder<TConfig = void>(
   IResourceMeta,
   TagType[],
   ResourceMiddlewareAttachmentType[]
->;
-
-export function resourceBuilder(
-  id: string,
-): ResourceFluentBuilder<
-  void,
-  Promise<any>,
-  {},
-  any,
-  IResourceMeta,
-  TagType[],
-  ResourceMiddlewareAttachmentType[]
 > {
   const filePath = getCallerFile();
   const initial: BuilderState<
-    void,
+    TConfig,
     Promise<any>,
     {},
     any,

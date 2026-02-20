@@ -6,7 +6,9 @@ describe("schema aliases coverage", () => {
     let resourceParsed = false;
 
     const taskMiddleware = r.middleware
-      .task<{ enabled: boolean }>("tests.alias.schema.task-mw")
+      .task<{ enabled: boolean }, { value: number }>(
+        "tests.alias.schema.task-mw",
+      )
       .schema<{ enabled: boolean }>({
         parse: (input: unknown) => input as { enabled: boolean },
       })

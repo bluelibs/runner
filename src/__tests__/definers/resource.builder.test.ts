@@ -75,6 +75,26 @@ describe("resource builder", () => {
     }
   });
 
+  it("supports config-driven register without init", () => {
+    const enabled = resource({
+      id: "tests.builder.config-only.enabled",
+      init: async () => true,
+    });
+
+    const configOnly = r
+      .resource<{ enabled: boolean }>("tests.builder.config-only")
+      .register((config) => (config.enabled ? [enabled] : []))
+      .build();
+
+    expect(typeof configOnly.register).toBe("function");
+    if (typeof configOnly.register === "function") {
+      expect(
+        configOnly.register({ enabled: true }).map((item) => item.id),
+      ).toEqual([enabled.id]);
+      expect(configOnly.register({ enabled: false })).toEqual([]);
+    }
+  });
+
   it("register merges array base with lazy callbacks", () => {
     const alpha = resource({
       id: "tests.builder.fnfn.alpha",
