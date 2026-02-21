@@ -6,6 +6,7 @@ import type {
   TagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { builderIncompleteError } from "../../../errors";
 import { defineTaskMiddleware } from "../../defineTaskMiddleware";
@@ -118,7 +119,7 @@ export function makeTaskMiddlewareBuilder<
       });
       (middleware as { [symbolFilePath]?: string })[symbolFilePath] =
         state.filePath;
-      return middleware;
+      return deepFreeze(middleware);
     },
   };
 

@@ -14,6 +14,7 @@ import {
 } from "../defs";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { freezeIfLineageLocked } from "../tools/deepFreeze";
 
 /**
  * Create a tag definition.
@@ -81,7 +82,7 @@ export function defineTag<
       } else {
         config = tagConfig;
       }
-      return {
+      const configured = {
         ...this,
         [symbolTagConfigured]: true,
         config,
@@ -90,14 +91,16 @@ export function defineTag<
         TEnforceInputContract,
         TEnforceOutputContract
       >;
+      return freezeIfLineageLocked(this, configured);
     },
     optional() {
-      return {
+      const wrapper = {
         inner: this,
         [symbolOptionalDependency]: true,
       } as IOptionalDependency<
         ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
       >;
+      return freezeIfLineageLocked(this, wrapper);
     },
     beforeInit() {
       const wrapper: ITagBeforeInitDependency<
@@ -106,14 +109,15 @@ export function defineTag<
         tag: this,
         [symbolTagBeforeInitDependency]: true,
         optional() {
-          return {
+          const optionalWrapper = {
             inner: wrapper,
             [symbolOptionalDependency]: true,
           } as IOptionalDependency<typeof wrapper>;
+          return freezeIfLineageLocked(wrapper, optionalWrapper);
         },
       };
 
-      return wrapper;
+      return freezeIfLineageLocked(this, wrapper);
     },
     /**
      * Checks if the tag exists in a taggable or a list of tags.

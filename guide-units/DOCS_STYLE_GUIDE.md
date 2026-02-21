@@ -12,22 +12,22 @@ This guide ensures consistency across all documentation. Every contributor shoul
 
 Use these terms consistently throughout all documentation:
 
-| Term                 | Definition                                                                                                        | Usage Example                                                      |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| **Task**             | A function with dependency injection, middleware support, and observability. The primary unit for business logic. | `const createUser = r.task("users.create")...`                     |
-| **Resource**         | A singleton with lifecycle management (init/dispose). Represents shared services, connections, or state.          | `const database = r.resource("app.db")...`                         |
-| **Event**            | A typed signal for decoupling components. Enables pub/sub patterns.                                               | `const userCreated = r.event("users.created")...`                  |
-| **Hook**             | A lightweight function subscribed to an event.                                                                    | `const onUserCreated = r.hook("onUserCreated").on(userCreated)...` |
-| **Middleware**       | A wrapper that adds cross-cutting concerns to tasks or resources (caching, retry, timeouts, logging).             | `.middleware([cache.with({ ttl: 60000 })])`                        |
-| **ExecutionJournal** | A per-execution registry enabling middleware and tasks to share typed state.                                      | `journal.set(key, value)`                                          |
-| **Tag**              | Metadata attached to components for discovery, filtering, or configuration.                                       | `.tags([globals.tags.debug])`                                      |
-| **App**              | The root resource that composes all other components. Always named `app`.                                         | `const app = r.resource("app")...`                                 |
-| **Runtime**          | The object returned by `run()` containing `runTask`, `emitEvent`, `dispose`, etc.                                 | `const { runTask, dispose } = await run(app)`                      |
-| **Dispose**          | The cleanup function that gracefully shuts down all resources.                                                    | `await dispose()`                                                  |
-| **Config**           | The generic type parameter for resources, passed during initialization.                                           | `r.resource<{ port: number }>("server")`                           |
-| **Input**            | The data passed to a task when executed.                                                                          | `await runTask(createUser, { name: "Alice" })`                     |
-| **Output**           | The return value of a task.                                                                                       | `const user = await runTask(createUser, input)`                    |
-| **Fluent Builder**   | The chainable API pattern using `r.task()`, `r.resource()`, etc.                                                  | `r.task("id").dependencies({}).run(...).build()`                   |
+| Term                         | Definition                                                                                                        | Usage Example                                                      |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Task**                     | A function with dependency injection, middleware support, and observability. The primary unit for business logic. | `const createUser = r.task("users.create")...`                     |
+| **Resource**                 | A singleton with lifecycle management (init/dispose). Represents shared services, connections, or state.          | `const database = r.resource("app.db")...`                         |
+| **Event**                    | A typed signal for decoupling components. Enables pub/sub patterns.                                               | `const userCreated = r.event("users.created")...`                  |
+| **Hook**                     | A lightweight function subscribed to an event.                                                                    | `const onUserCreated = r.hook("onUserCreated").on(userCreated)...` |
+| **Middleware**               | A wrapper that adds cross-cutting concerns to tasks or resources (caching, retry, timeouts, logging).             | `.middleware([cache.with({ ttl: 60000 })])`                        |
+| **ExecutionJournal**         | A per-execution registry enabling middleware and tasks to share typed state.                                      | `journal.set(key, value)`                                          |
+| **Tag**                      | Metadata attached to components for discovery, filtering, or configuration.                                       | `.tags([globals.tags.debug])`                                      |
+| **App**                      | The root resource that composes all other components. Always named `app`.                                         | `const app = r.resource("app")...`                                 |
+| **Runtime**                  | The object returned by `run()` containing `runTask`, `emitEvent`, `dispose`, etc.                                 | `const { runTask, dispose } = await run(app)`                      |
+| **Dispose**                  | The cleanup function that gracefully shuts down all resources.                                                    | `await dispose()`                                                  |
+| **Config**                   | The generic type parameter for resources, passed during initialization.                                           | `r.resource<{ port: number }>("server")`                           |
+| **Input**                    | The data passed to a task when executed.                                                                          | `await runTask(createUser, { name: "Alice" })`                     |
+| **Output**                   | The return value of a task.                                                                                       | `const user = await runTask(createUser, input)`                    |
+| **Fluent Builder**           | The chainable API pattern using `r.task()`, `r.resource()`, etc.                                                  | `r.task("id").dependencies({}).run(...).build()`                   |
 
 ### Terms to Avoid
 

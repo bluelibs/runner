@@ -4,7 +4,7 @@
 // as immutable and prefer tags/overrides at definition time.
 import { defineEvent, defineHook, defineResource } from "../../define";
 import { run } from "../../run";
-import { globals } from "../../index";
+import { globals, r } from "../../index";
 
 describe("Security: Mutation footgun (documented)", () => {
   it("mutating event.tags toggles global inclusion for later emissions", async () => {
@@ -40,5 +40,20 @@ describe("Security: Mutation footgun (documented)", () => {
     expect(count).toBe(1); // didn't increase after adding exclusion tag
 
     await rr.dispose();
+  });
+
+  it("fluent-built events are immutable and prevent the same mutation footgun", () => {
+    const internal = r.event<{ x: number }>("sec.mut.fluent.internal").build();
+    const previousTags = internal.tags;
+
+    expect(Object.isFrozen(internal)).toBe(true);
+    try {
+      (internal as { tags: unknown }).tags = [
+        globals.tags.excludeFromGlobalHooks,
+      ];
+    } catch (_error) {
+      // Mutation may throw in strict mode; either way the object must remain unchanged.
+    }
+    expect(internal.tags).toBe(previousTags);
   });
 });

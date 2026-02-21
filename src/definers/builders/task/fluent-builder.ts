@@ -8,6 +8,7 @@ import type {
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { builderIncompleteError } from "../../../errors";
 import { defineTask } from "../../defineTask";
@@ -286,7 +287,7 @@ export function makeTaskBuilder<
 
       const task = defineTask(definition);
       (task as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
-      return task;
+      return deepFreeze(task);
     },
   };
   return builder;

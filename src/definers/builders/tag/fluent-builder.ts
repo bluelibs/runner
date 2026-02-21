@@ -1,5 +1,6 @@
 import type { ITagMeta, IValidationSchema } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineTag } from "../../defineTag";
 import type { TagFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
@@ -47,7 +48,7 @@ export function makeTagBuilder<TConfig, TEnforceIn, TEnforceOut>(
         config: state.config as TConfig,
       });
       (tag as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
-      return tag;
+      return deepFreeze(tag);
     },
   };
 

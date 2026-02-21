@@ -86,6 +86,8 @@ await runtime.runTask(createUser, { name: "Ada" });
 ```
 
 - `.with(config)` exists on configurable built definitions (for example resources, task/resource middleware, and tags). Fluent builders use chained methods plus `.build()`.
+- Fluent `.build()` outputs are deep-frozen (immutable). Objects derived from a locked fluent definition (for example `.with(config)`, `.fork(...)`, and fluent override builder `.build()` outputs) are also immutable.
+- Migration note: runtime mutation of fluent-built definitions is unsupported. Use builder chaining, `.with(config)`, `.fork(...)`, and `r.override(...)` to make changes.
 - Entry generics are supported for convenience: `r.resource<Config>(id)` seeds config typing even before `.schema()`/`.configSchema()`/`.init(...)`; config-only resources can omit `.init()` when they only orchestrate `.register((config) => ...)`.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` creates a new resource with a different id but the same definition. Use `register: "drop"` to avoid re-registering nested items, or `register: "deep"` to deep-fork **registered resources** with new ids via `reId` (other registerables are not kept; resource dependencies pointing to deep-forked resources are remapped to those forks). Export forked resources to use as dependencies.
 - Resource boundaries can be narrowed with `.exports([...])` (on object definitions or fluent builders) to enforce encapsulation:
@@ -94,6 +96,10 @@ await runtime.runTask(createUser, { name: "Ada" });
   - **Scoping**: Provides safer refactors as internal items cannot be referenced from outside. It also scopes `.everywhere()` middleware: non-exported middleware only applies inside its own registration subtree.
   - **Transitive Visibility**: If a resource exports a child resource, that child's own exported surface is visible transitively, but each intermediate boundary must allow the path (e.g., `A -> B -> C` is blocked if `B.exports([])`).
   - **Validation**: Visibility is validated at `run(...)` init time. IDs remain globally unique even for private items.
+- Dependency access can be restricted with `.dependencyAccessPolicy({ deny: [...] })` on resources:
+  - `deny` accepts ids or definitions (including tags); rules apply to that resource subtree.
+  - Denials are additive across parent/child resources and cannot be relaxed by children.
+  - Runner fails fast at bootstrap for invalid/unknown deny entries and for denied dependency references.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
 

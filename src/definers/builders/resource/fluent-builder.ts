@@ -11,6 +11,7 @@ import type {
   TagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { defineResource } from "../../defineResource";
 import type { ResourceFluentBuilder } from "./fluent-builder.interface";
@@ -412,7 +413,7 @@ export function makeResourceBuilder<
       const resource = defineResource(definition);
       (resource as { [symbolFilePath]?: string })[symbolFilePath] =
         state.filePath;
-      return resource;
+      return deepFreeze(resource);
     },
   };
   return builder;

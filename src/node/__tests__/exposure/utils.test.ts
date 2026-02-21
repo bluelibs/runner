@@ -47,7 +47,17 @@ describe("node exposure utils", () => {
 
     Object.assign(globalThis, { AbortController: ThrowingAbortController });
 
-    jest.spyOn(cancellationError, "throw").mockImplementation(() => {
+    const errorHelperPrototype = Object.getPrototypeOf(cancellationError) as {
+      throw: (...args: any[]) => never;
+    };
+    const originalThrow = errorHelperPrototype.throw;
+    jest.spyOn(errorHelperPrototype, "throw").mockImplementation(function (
+      this: unknown,
+      ...args: any[]
+    ) {
+      if (this !== cancellationError) {
+        return originalThrow.call(this, ...args);
+      }
       throw "cancel failed";
     });
     const req = new EventEmitter();

@@ -11,6 +11,7 @@ import {
 } from "../types/symbols";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { freezeIfLineageLocked } from "../tools/deepFreeze";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { normalizeThrows } from "../tools/throws";
 
@@ -110,7 +111,7 @@ export function defineTaskMiddleware<
             });
           }
         }
-        return wrap({
+        const configured = wrap({
           ...current,
           [symbolMiddlewareConfigured]: true,
           config: mergeMiddlewareConfig(current.config as TConfig, config),
@@ -120,6 +121,7 @@ export function defineTaskMiddleware<
           TEnforceOutputContract,
           TDependencies
         >);
+        return freezeIfLineageLocked(current, configured);
       },
     } as ITaskMiddleware<
       TConfig,

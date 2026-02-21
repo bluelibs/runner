@@ -13,6 +13,7 @@ import {
   symbolOptionalDependency,
 } from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
+import { freezeIfLineageLocked } from "../tools/deepFreeze";
 
 const isValidHttpCode = (value: number): boolean =>
   Number.isInteger(value) && value >= 100 && value <= 599;
@@ -140,10 +141,11 @@ export class ErrorHelper<
     );
   }
   optional() {
-    return {
+    const wrapper = {
       inner: this as IErrorHelper<TData>,
       [symbolOptionalDependency]: true,
     } as const;
+    return freezeIfLineageLocked(this, wrapper);
   }
 }
 

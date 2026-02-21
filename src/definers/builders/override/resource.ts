@@ -13,6 +13,7 @@ import type {
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 import { normalizeThrows } from "../../../tools/throws";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineOverride } from "../../defineOverride";
 import type { ResourceFluentBuilder } from "../resource/fluent-builder.interface";
 import type { ResolveConfig } from "../resource/types";
@@ -472,9 +473,11 @@ function makeResourceOverrideBuilder<
         state.throws,
       );
       const { id: _id, ...patch } = state;
-      return defineOverride<
-        IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>
-      >(base, { ...patch, throws: normalizedThrows });
+      return deepFreeze(
+        defineOverride<
+          IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>
+        >(base, { ...patch, throws: normalizedThrows }),
+      );
     },
   };
   return builder;

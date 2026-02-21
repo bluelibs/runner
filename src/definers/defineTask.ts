@@ -16,6 +16,7 @@ import {
 } from "../types/symbols";
 import { phantomTaskNotRoutedError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 
 /**
@@ -60,12 +61,13 @@ export function defineTask<
     throws: normalizeThrows({ kind: "task", id }, taskConfig.throws),
     // autorun,
     optional() {
-      return {
+      const wrapper = {
         inner: this,
         [symbolOptionalDependency]: true,
       } as IOptionalDependency<
         ITask<Input, Output, Deps, TMeta, TTags, TMiddleware>
       >;
+      return freezeIfLineageLocked(this, wrapper);
     },
   };
 }

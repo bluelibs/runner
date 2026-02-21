@@ -7,6 +7,7 @@ import type {
   TagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { builderIncompleteError } from "../../../errors";
 import { defineHook } from "../../defineHook";
@@ -129,7 +130,7 @@ export function makeHookBuilder<
       });
       (hook as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
       // Runtime validation guarantees TOn is valid
-      return hook as IHook<TDeps, any, TMeta>;
+      return deepFreeze(hook as IHook<TDeps, any, TMeta>);
     },
   };
 

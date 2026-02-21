@@ -10,6 +10,7 @@ import { defineOverride } from "../../defineOverride";
 import { mergeArray, mergeDependencies } from "../hook/utils";
 import type { ThrowsList } from "../../../types/error";
 import { normalizeThrows } from "../../../tools/throws";
+import { deepFreeze } from "../../../tools/deepFreeze";
 
 export type HookOn =
   | "*"
@@ -147,10 +148,12 @@ function makeHookOverrideBuilder<
         state.throws,
       );
       const { id: _id, on: _on, ...patch } = state;
-      return defineOverride<IHook<TDeps, TOn, TMeta>>(base, {
-        ...patch,
-        throws: normalizedThrows,
-      });
+      return deepFreeze(
+        defineOverride<IHook<TDeps, TOn, TMeta>>(base, {
+          ...patch,
+          throws: normalizedThrows,
+        }),
+      );
     },
   };
 

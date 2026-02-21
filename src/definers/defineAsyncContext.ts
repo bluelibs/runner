@@ -11,6 +11,7 @@ import {
   symbolOptionalDependency,
 } from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
+import { freezeIfLineageLocked } from "../tools/deepFreeze";
 
 export { contextError as ContextError };
 
@@ -89,10 +90,11 @@ export function defineAsyncContext<T>(
     /* istanbul ignore next */
     parse: def.parse || ((data: string) => serializer.parse(data)),
     optional() {
-      return {
+      const wrapper = {
         inner: api as IAsyncContext<T>,
         [symbolOptionalDependency]: true,
       } as const;
+      return freezeIfLineageLocked(api, wrapper);
     },
   };
 
