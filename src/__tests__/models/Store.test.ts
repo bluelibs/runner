@@ -3,9 +3,12 @@ import {
   defineResource,
   defineTask,
   defineEvent,
+  defineHook,
+  defineResourceMiddleware,
   defineTag,
   defineTaskMiddleware,
 } from "../../define";
+import { defineError } from "../../definers/defineError";
 import { run } from "../../run";
 import { MiddlewareManager, RunResult, TaskRunner } from "../../models";
 import { RunnerMode } from "../../types/runner";
@@ -452,6 +455,237 @@ describe("Store", () => {
 
     expect(withoutSelf.tasks).toHaveLength(0);
     expect(withSelf.tasks).toHaveLength(1);
+  });
+
+  it("should harden tag accessor lookups against malformed tag arrays", () => {
+    const tag = defineTag({
+      id: "tags.accessor.hardened",
+    });
+
+    const taggedTask = defineTask({
+      id: "task.accessor.hardened",
+      tags: [tag],
+      run: async () => "ok",
+    });
+
+    const rootResource = defineResource({
+      id: "root.accessor.hardened",
+      register: [tag, taggedTask],
+      init: async () => "Root Value",
+    });
+
+    store.initializeStore(rootResource, {}, runtimeResult);
+
+    const storeTask = store.tasks.get(taggedTask.id)!;
+    (storeTask.task as { tags?: unknown }).tags = undefined;
+
+    expect(() => store.getTagAccessor(tag)).not.toThrow();
+    expect(store.getTagAccessor(tag).tasks).toHaveLength(0);
+  });
+
+  it("should tolerate stale tag index entries across all accessor categories", () => {
+    const tag = defineTag({
+      id: "tags.accessor.stale.index",
+    });
+
+    const event = defineEvent({
+      id: "events.accessor.stale.index",
+      tags: [tag],
+    });
+
+    const hook = defineHook({
+      id: "hooks.accessor.stale.index",
+      on: event,
+      tags: [tag],
+      run: async () => undefined,
+    });
+
+    const taskMiddleware = defineTaskMiddleware({
+      id: "middleware.task.accessor.stale.index",
+      tags: [tag],
+      run: async ({ next, task }) => next(task.input),
+    });
+
+    const resourceMiddleware = defineResourceMiddleware({
+      id: "middleware.resource.accessor.stale.index",
+      tags: [tag],
+      run: async ({ next }) => next(),
+    });
+
+    const task = defineTask({
+      id: "tasks.accessor.stale.index",
+      tags: [tag],
+      run: async () => "ok",
+    });
+
+    const resource = defineResource({
+      id: "resources.accessor.stale.index",
+      tags: [tag],
+      init: async () => "resource-value",
+    });
+
+    const taggedError = defineError({
+      id: "errors.accessor.stale.index",
+      tags: [tag],
+      format: () => "boom",
+    });
+
+    const rootResource = defineResource({
+      id: "root.accessor.stale.index",
+      register: [
+        tag,
+        event,
+        hook,
+        taskMiddleware,
+        resourceMiddleware,
+        task,
+        resource,
+        taggedError,
+      ],
+      init: async () => "Root Value",
+    });
+
+    store.initializeStore(rootResource, {}, runtimeResult);
+
+    const registry = (store as unknown as { registry: any }).registry;
+    const staleBucket = registry.tagIndex.get(tag.id);
+    staleBucket.tasks.add("missing.task");
+    staleBucket.resources.add("missing.resource");
+    staleBucket.events.add("missing.event");
+    staleBucket.hooks.add("missing.hook");
+    staleBucket.taskMiddlewares.add("missing.task.middleware");
+    staleBucket.resourceMiddlewares.add("missing.resource.middleware");
+    staleBucket.errors.add("missing.error");
+
+    const untaggedTask = defineTask({
+      id: "tasks.accessor.stale.index.untagged",
+      run: async () => "untagged",
+    });
+    const untaggedResource = defineResource({
+      id: "resources.accessor.stale.index.untagged",
+      init: async () => "untagged",
+    });
+    const untaggedEvent = defineEvent({
+      id: "events.accessor.stale.index.untagged",
+    });
+    const untaggedHook = defineHook({
+      id: "hooks.accessor.stale.index.untagged",
+      on: untaggedEvent,
+      run: async () => undefined,
+    });
+    const untaggedTaskMiddleware = defineTaskMiddleware({
+      id: "middleware.task.accessor.stale.index.untagged",
+      run: async ({ next, task }) => next(task.input),
+    });
+    const untaggedResourceMiddleware = defineResourceMiddleware({
+      id: "middleware.resource.accessor.stale.index.untagged",
+      run: async ({ next }) => next(),
+    });
+    const untaggedError = defineError({
+      id: "errors.accessor.stale.index.untagged",
+      format: () => "untagged",
+    });
+
+    store.storeGenericItem(untaggedTask);
+    store.storeGenericItem(untaggedResource);
+    store.storeGenericItem(untaggedEvent);
+    store.storeGenericItem(untaggedHook);
+    store.storeGenericItem(untaggedTaskMiddleware);
+    store.storeGenericItem(untaggedResourceMiddleware);
+    store.storeGenericItem(untaggedError);
+
+    staleBucket.tasks.add(untaggedTask.id);
+    staleBucket.resources.add(untaggedResource.id);
+    staleBucket.events.add(untaggedEvent.id);
+    staleBucket.hooks.add(untaggedHook.id);
+    staleBucket.taskMiddlewares.add(untaggedTaskMiddleware.id);
+    staleBucket.resourceMiddlewares.add(untaggedResourceMiddleware.id);
+    staleBucket.errors.add(untaggedError.id);
+
+    const selfExcluded = store.getTagAccessor(tag, {
+      consumerId: resource.id,
+      includeSelf: false,
+    });
+    expect(
+      selfExcluded.resources.some(
+        (entry) => entry.definition.id === resource.id,
+      ),
+    ).toBe(false);
+
+    const eventExcluded = store.getTagAccessor(tag, {
+      consumerId: event.id,
+      includeSelf: false,
+    });
+    expect(
+      eventExcluded.events.some((entry) => entry.definition.id === event.id),
+    ).toBe(false);
+
+    const accessor = store.getTagAccessor(tag);
+    expect(accessor.tasks).toHaveLength(1);
+    expect(accessor.resources).toHaveLength(1);
+    expect(accessor.events).toHaveLength(1);
+    expect(accessor.hooks).toHaveLength(1);
+    expect(accessor.taskMiddlewares).toHaveLength(1);
+    expect(accessor.resourceMiddlewares).toHaveLength(1);
+    expect(accessor.errors).toHaveLength(1);
+
+    const resourceMatch = accessor.resources[0]!;
+    expect(resourceMatch.value).toBeUndefined();
+    const storeResource = store.resources.get(resource.id)!;
+    storeResource.isInitialized = true;
+    storeResource.value = "resource-value";
+    expect(resourceMatch.value).toBe("resource-value");
+  });
+
+  it("should reindex tag memberships when overriding tagged definitions", () => {
+    const tagA = defineTag({ id: "tags.reindex.a" });
+    const tagB = defineTag({ id: "tags.reindex.b" });
+    store.storeGenericItem(tagA);
+    store.storeGenericItem(tagB);
+
+    const firstTask = defineTask({
+      id: "tasks.reindex.first",
+      tags: [tagA],
+      run: async () => "first",
+    });
+    const secondTask = defineTask({
+      id: "tasks.reindex.second",
+      tags: [tagA],
+      run: async () => "second",
+    });
+    const orphanTask = defineTask({
+      id: "tasks.reindex.orphan",
+      tags: [tagB],
+      run: async () => "orphan",
+    });
+
+    store.storeGenericItem(firstTask);
+    store.storeGenericItem(secondTask);
+    store.storeGenericItem(orphanTask);
+
+    const registry = (store as unknown as { registry: any }).registry;
+
+    const firstTaskNoTags = defineTask({
+      id: firstTask.id,
+      run: async () => "first-no-tags",
+    });
+    registry.storeTask(firstTaskNoTags, "override");
+    expect(store.getTagAccessor(tagA).tasks).toHaveLength(1);
+
+    registry.tagIndex.delete(tagB.id);
+    const orphanTaskNoTags = defineTask({
+      id: orphanTask.id,
+      run: async () => "orphan-no-tags",
+    });
+    registry.storeTask(orphanTaskNoTags, "override");
+    expect(store.getTagAccessor(tagB).tasks).toHaveLength(0);
+
+    const secondTaskNoTags = defineTask({
+      id: secondTask.id,
+      run: async () => "second-no-tags",
+    });
+    registry.storeTask(secondTaskNoTags, "override");
+    expect(store.getTagAccessor(tagA).tasks).toHaveLength(0);
   });
 
   it("should discover tasks and resources by a contract tag at runtime", async () => {

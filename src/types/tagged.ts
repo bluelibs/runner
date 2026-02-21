@@ -12,6 +12,13 @@ import type { IResourceMiddleware } from "./resourceMiddleware";
 import type { ITask } from "./task";
 import type { ITaskMiddleware } from "./taskMiddleware";
 import type { ITag } from "./tag";
+import type {
+  ExtractResourceValue,
+  ExtractTaskInput,
+  ExtractTaskOutput,
+  ResourceDependency,
+  TaskDependency,
+} from "./utilities";
 
 type TagInputContract<TTag extends ITag<any, any, any>> =
   HasInputContracts<[TTag]> extends true
@@ -63,9 +70,26 @@ export interface TagDependencyMatch<
   config: TagConfig<TTag> | undefined;
 }
 
+export interface TagDependencyTaskMatch<
+  TTag extends ITag<any, any, any>,
+> extends TagDependencyMatch<TaggedTask<TTag>, TTag> {
+  run?: TaskDependency<
+    ExtractTaskInput<TaggedTask<TTag>>,
+    ExtractTaskOutput<TaggedTask<TTag>>
+  >;
+}
+
+export interface TagDependencyResourceMatch<
+  TTag extends ITag<any, any, any>,
+> extends TagDependencyMatch<TaggedResource<TTag>, TTag> {
+  value:
+    | ResourceDependency<ExtractResourceValue<TaggedResource<TTag>>>
+    | undefined;
+}
+
 export interface TagDependencyAccessor<TTag extends ITag<any, any, any>> {
-  tasks: ReadonlyArray<TagDependencyMatch<TaggedTask<TTag>, TTag>>;
-  resources: ReadonlyArray<TagDependencyMatch<TaggedResource<TTag>, TTag>>;
+  tasks: ReadonlyArray<TagDependencyTaskMatch<TTag>>;
+  resources: ReadonlyArray<TagDependencyResourceMatch<TTag>>;
   events: ReadonlyArray<TagDependencyMatch<IEvent<any>, TTag>>;
   hooks: ReadonlyArray<TagDependencyMatch<IHook<any, any, any>, TTag>>;
   taskMiddlewares: ReadonlyArray<

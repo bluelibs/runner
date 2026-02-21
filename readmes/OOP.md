@@ -375,16 +375,22 @@ const smsNotificationService = r
 // Use polymorphically
 const notificationProcessor = resource({
   id: "app.services.notificationProcessor",
-  dependencies: { store: globals.resources.store },
-  init: async (_, { store }) => {
+  dependencies: {
+    notificationServiceContract,
+    runtime: globals.resources.runtime,
+  },
+  init: async (_, { notificationServiceContract, runtime }) => {
     return {
       async sendToAll(message: string, recipients: Array<{ type: string; address: string }>) {
-        const services = store.getResourcesWithTag(notificationServiceContract);
+        const services = notificationServiceContract.resources;
 
         for (const recipient of recipients) {
-          const service = services.find(s => s.id.includes(recipient.type));
-          if (service) {
-            await service.value.send(message, recipient.address);
+          const serviceDef = services.find((entry) =>
+            entry.definition.id.includes(recipient.type),
+          );
+          if (serviceDef) {
+            const service = await runtime.getResourceValue(serviceDef.definition);
+            await service.send(message, recipient.address);
           }
         }
       }
@@ -1307,7 +1313,7 @@ class PaymentService {
 ### Use Tags for Discoverability
 
 ```ts
-import { tag } from "@bluelibs/runner";
+import { tag, globals } from "@bluelibs/runner";
 
 const healthCheckContract = tag<
   void,
@@ -1331,13 +1337,19 @@ const databaseService = resource({
 // Automatic health check aggregation
 const healthChecker = resource({
   id: "app.healthChecker",
-  dependencies: { store: globals.resources.store },
-  init: async (_, { store }) => {
+  dependencies: {
+    healthCheckContract,
+    runtime: globals.resources.runtime,
+  },
+  init: async (_, { healthCheckContract, runtime }) => {
     return {
       async checkAll() {
-        const services = store.getResourcesWithTag(healthCheckContract);
+        const services = healthCheckContract.resources;
+        const serviceValues = await Promise.all(
+          services.map((entry) => runtime.getResourceValue(entry.definition)),
+        );
         const results = await Promise.allSettled(
-          services.map((s) => s.value.health()),
+          serviceValues.map((service) => service.health()),
         );
 
         return {
@@ -1347,7 +1359,7 @@ const healthChecker = resource({
             ? "healthy"
             : "unhealthy",
           services: results.map((r, i) => ({
-            service: services[i].id,
+            service: services[i].definition.id,
             result:
               r.status === "fulfilled"
                 ? r.value

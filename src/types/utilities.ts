@@ -11,7 +11,10 @@ import {
 } from "./event";
 import { ITag } from "./tag";
 import type { TagDependencyAccessor } from "./tagged";
-import { symbolOptionalDependency } from "./symbols";
+import {
+  symbolOptionalDependency,
+  symbolTagBeforeInitDependency,
+} from "./symbols";
 import { IErrorHelper } from "./error";
 import type { IAsyncContext } from "./asyncContext";
 import type { ExecutionJournal } from "./executionJournal";
@@ -84,6 +87,8 @@ export type DependencyMapType = Record<
   | IOptionalDependency<IResource<any, any, any, any, any, any, any>>
   | IOptionalDependency<IEvent<any>>
   | IOptionalDependency<ITag<any, any, any>>
+  | ITagBeforeInitDependency<ITag<any, any, any>>
+  | IOptionalDependency<ITagBeforeInitDependency<ITag<any, any, any>>>
   | IOptionalDependency<IErrorHelper<any>>
   | IOptionalDependency<IAsyncContext<any>>
 >;
@@ -94,6 +99,16 @@ export interface IOptionalDependency<T> {
   inner: T;
   /** Brand symbol for optional dependency */
   [symbolOptionalDependency]: true;
+}
+
+/** Wrapper type marking a tag dependency as a before-init dependency */
+export interface ITagBeforeInitDependency<TTag extends ITag<any, any, any>> {
+  /** Wrapped tag definition */
+  tag: TTag;
+  /** Optional wrapper helper */
+  optional: () => IOptionalDependency<ITagBeforeInitDependency<TTag>>;
+  /** Brand symbol for before-init tag dependency */
+  [symbolTagBeforeInitDependency]: true;
 }
 
 // Helper Types for Extracting Generics
@@ -214,11 +229,13 @@ export type DependencyValueType<T> =
           ? T
           : T extends ITag<any, any, any>
             ? TagDependencyAccessor<T>
-            : T extends IEventDefinition<any>
-              ? EventDependency<ExtractEventPayload<T>>
-              : T extends IOptionalDependency<infer U>
-                ? DependencyValueType<U> | undefined
-                : never;
+            : T extends ITagBeforeInitDependency<infer TTag>
+              ? TagDependencyAccessor<TTag>
+              : T extends IEventDefinition<any>
+                ? EventDependency<ExtractEventPayload<T>>
+                : T extends IOptionalDependency<infer U>
+                  ? DependencyValueType<U> | undefined
+                  : never;
 
 export type DependencyValuesType<T extends DependencyMapType> = {
   [K in keyof T]: DependencyValueType<T[K]>;
@@ -251,11 +268,13 @@ export type ResourceDependencyValueType<T> =
           ? T
           : T extends ITag<any, any, any>
             ? TagDependencyAccessor<T>
-            : T extends IEventDefinition<any>
-              ? EventDependency<ExtractEventPayload<T>>
-              : T extends IOptionalDependency<infer U>
-                ? ResourceDependencyValueType<U> | undefined
-                : never;
+            : T extends ITagBeforeInitDependency<infer TTag>
+              ? TagDependencyAccessor<TTag>
+              : T extends IEventDefinition<any>
+                ? EventDependency<ExtractEventPayload<T>>
+                : T extends IOptionalDependency<infer U>
+                  ? ResourceDependencyValueType<U> | undefined
+                  : never;
 
 export type ResourceDependencyValuesType<T extends DependencyMapType> = {
   [K in keyof T]: ResourceDependencyValueType<T[K]>;

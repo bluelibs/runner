@@ -9,9 +9,12 @@ import {
   IEvent,
   ITag,
   IHook,
+  TagType,
   TaggedTask,
   TaggedResource,
   TagDependencyAccessor,
+  TagDependencyTaskMatch,
+  TagDependencyResourceMatch,
   TagDependencyMatch,
   AnyResource,
 } from "../defs";
@@ -38,6 +41,37 @@ import { LockableMap } from "../tools/LockableMap";
 import { VisibilityTracker } from "./VisibilityTracker";
 
 type StoringMode = "normal" | "override";
+type IndexedTagCategory =
+  | "tasks"
+  | "resources"
+  | "events"
+  | "hooks"
+  | "taskMiddlewares"
+  | "resourceMiddlewares"
+  | "errors";
+
+type TagIndexBucket = Record<IndexedTagCategory, Set<string>>;
+
+const indexedTagCategories: readonly IndexedTagCategory[] = [
+  "tasks",
+  "resources",
+  "events",
+  "hooks",
+  "taskMiddlewares",
+  "resourceMiddlewares",
+  "errors",
+];
+
+const createTagIndexBucket = (): TagIndexBucket => ({
+  tasks: new Set<string>(),
+  resources: new Set<string>(),
+  events: new Set<string>(),
+  hooks: new Set<string>(),
+  taskMiddlewares: new Set<string>(),
+  resourceMiddlewares: new Set<string>(),
+  errors: new Set<string>(),
+});
+
 export class StoreRegistry {
   public tasks = new LockableMap<string, TaskStoreElementType>("tasks");
   public resources = new LockableMap<string, ResourceStoreElementType>(
@@ -59,6 +93,20 @@ export class StoreRegistry {
   );
   public errors = new LockableMap<string, IErrorHelper<any>>("errors");
   public readonly visibilityTracker = new VisibilityTracker();
+
+  private readonly tagIndex = new Map<string, TagIndexBucket>();
+  private readonly tagMembershipByCategory: Record<
+    IndexedTagCategory,
+    Map<string, Set<string>>
+  > = {
+    tasks: new Map<string, Set<string>>(),
+    resources: new Map<string, Set<string>>(),
+    events: new Map<string, Set<string>>(),
+    hooks: new Map<string, Set<string>>(),
+    taskMiddlewares: new Map<string, Set<string>>(),
+    resourceMiddlewares: new Map<string, Set<string>>(),
+    errors: new Map<string, Set<string>>(),
+  };
 
   private validator: StoreValidator;
 
@@ -112,6 +160,11 @@ export class StoreRegistry {
   storeError<_C>(item: IErrorHelper<any>) {
     this.validator.checkIfIDExists(item.id);
     this.errors.set(item.id, item);
+    this.reindexDefinitionTags(
+      "errors",
+      item.id,
+      this.normalizeTags(item.tags),
+    );
   }
 
   storeAsyncContext<_C>(item: IAsyncContext<any>) {
@@ -135,6 +188,7 @@ export class StoreRegistry {
       computedDependencies: {},
       dependencyState: HookDependencyState.Pending,
     });
+    this.reindexDefinitionTags("hooks", hook.id, this.normalizeTags(hook.tags));
   }
 
   storeTaskMiddleware<_C>(
@@ -155,6 +209,11 @@ export class StoreRegistry {
       computedDependencies: {},
       isInitialized: false,
     });
+    this.reindexDefinitionTags(
+      "taskMiddlewares",
+      middleware.id,
+      this.normalizeTags(middleware.tags),
+    );
   }
 
   storeResourceMiddleware<_C>(
@@ -174,11 +233,21 @@ export class StoreRegistry {
       computedDependencies: {},
       isInitialized: false,
     });
+    this.reindexDefinitionTags(
+      "resourceMiddlewares",
+      middleware.id,
+      this.normalizeTags(middleware.tags),
+    );
   }
 
   storeEvent<_C>(item: IEvent<void>) {
     this.validator.checkIfIDExists(item.id);
     this.events.set(item.id, { event: item });
+    this.reindexDefinitionTags(
+      "events",
+      item.id,
+      this.normalizeTags(item.tags),
+    );
   }
 
   storeResourceWithConfig<_C>(
@@ -203,6 +272,11 @@ export class StoreRegistry {
       isInitialized: false,
       context: undefined,
     });
+    this.reindexDefinitionTags(
+      "resources",
+      prepared.id,
+      this.normalizeTags(prepared.tags),
+    );
 
     this.computeRegistrationDeeply(prepared, item.config);
     return prepared;
@@ -253,6 +327,11 @@ export class StoreRegistry {
       isInitialized: false,
       context: undefined,
     });
+    this.reindexDefinitionTags(
+      "resources",
+      prepared.id,
+      this.normalizeTags(prepared.tags),
+    );
 
     this.computeRegistrationDeeply(prepared, {});
     return prepared;
@@ -271,6 +350,7 @@ export class StoreRegistry {
       computedDependencies: {},
       isInitialized: false,
     });
+    this.reindexDefinitionTags("tasks", task.id, this.normalizeTags(task.tags));
   }
 
   // Feels like a dependencyProcessor task?
@@ -302,86 +382,180 @@ export class StoreRegistry {
       return this.visibilityTracker.isAccessible(definitionId, consumerId);
     };
 
-    const mapToMatch = <TDefinition>(
-      list: ReadonlyArray<{
-        definition: TDefinition;
-        tags: ReadonlyArray<{ id: string; config?: unknown }>;
-      }>,
-    ): ReadonlyArray<TagDependencyMatch<TDefinition, TTag>> => {
-      return list
-        .filter((item) => {
-          const definitionWithId = item.definition as { id: string };
-          return (
-            item.tags.some((candidate) => candidate.id === tag.id) &&
-            isIncluded(definitionWithId.id)
-          );
-        })
-        .map((item) => {
-          return {
-            definition: item.definition,
-            config: tag.extract(item.tags as unknown as ITag[]),
-          };
-        });
+    const bucket = this.tagIndex.get(tag.id);
+
+    let tasksCache: TagDependencyAccessor<TTag>["tasks"] | undefined;
+    let resourcesCache: TagDependencyAccessor<TTag>["resources"] | undefined;
+    let eventsCache: TagDependencyAccessor<TTag>["events"] | undefined;
+    let hooksCache: TagDependencyAccessor<TTag>["hooks"] | undefined;
+    let taskMiddlewaresCache:
+      | TagDependencyAccessor<TTag>["taskMiddlewares"]
+      | undefined;
+    let resourceMiddlewaresCache:
+      | TagDependencyAccessor<TTag>["resourceMiddlewares"]
+      | undefined;
+    let errorsCache: TagDependencyAccessor<TTag>["errors"] | undefined;
+
+    const readTasks = (): TagDependencyAccessor<TTag>["tasks"] => {
+      if (!tasksCache) {
+        tasksCache = Object.freeze(
+          this.collectTaggedTaskMatches(tag, bucket?.tasks, isIncluded),
+        );
+      }
+      return tasksCache;
     };
 
-    const tasks = mapToMatch(
-      Array.from(this.tasks.values()).map((item) => ({
-        definition: item.task,
-        tags: item.task.tags,
-      })),
-    ) as TagDependencyAccessor<TTag>["tasks"];
+    const readResources = (): TagDependencyAccessor<TTag>["resources"] => {
+      if (!resourcesCache) {
+        resourcesCache = Object.freeze(
+          this.collectTaggedResourceMatches(tag, bucket?.resources, isIncluded),
+        );
+      }
+      return resourcesCache;
+    };
 
-    const resources = mapToMatch(
-      Array.from(this.resources.values()).map((item) => ({
-        definition: item.resource,
-        tags: item.resource.tags,
-      })),
-    ) as TagDependencyAccessor<TTag>["resources"];
+    const readEvents = (): TagDependencyAccessor<TTag>["events"] => {
+      if (!eventsCache) {
+        eventsCache = Object.freeze(
+          this.collectGenericTaggedMatches(
+            tag,
+            bucket?.events,
+            (id) => {
+              const entry = this.events.get(id);
+              if (!entry) {
+                return undefined;
+              }
+              return {
+                definition: entry.event,
+                tags: this.normalizeTags(entry.event.tags),
+              };
+            },
+            isIncluded,
+          ),
+        );
+      }
+      return eventsCache;
+    };
 
-    const events = mapToMatch(
-      Array.from(this.events.values()).map((item) => ({
-        definition: item.event,
-        tags: item.event.tags,
-      })),
-    ) as TagDependencyAccessor<TTag>["events"];
+    const readHooks = (): TagDependencyAccessor<TTag>["hooks"] => {
+      if (!hooksCache) {
+        hooksCache = Object.freeze(
+          this.collectGenericTaggedMatches(
+            tag,
+            bucket?.hooks,
+            (id) => {
+              const entry = this.hooks.get(id);
+              if (!entry) {
+                return undefined;
+              }
+              return {
+                definition: entry.hook,
+                tags: this.normalizeTags(entry.hook.tags),
+              };
+            },
+            isIncluded,
+          ),
+        );
+      }
+      return hooksCache;
+    };
 
-    const hooks = mapToMatch(
-      Array.from(this.hooks.values()).map((item) => ({
-        definition: item.hook,
-        tags: item.hook.tags,
-      })),
-    ) as TagDependencyAccessor<TTag>["hooks"];
+    const readTaskMiddlewares =
+      (): TagDependencyAccessor<TTag>["taskMiddlewares"] => {
+        if (!taskMiddlewaresCache) {
+          taskMiddlewaresCache = Object.freeze(
+            this.collectGenericTaggedMatches(
+              tag,
+              bucket?.taskMiddlewares,
+              (id) => {
+                const entry = this.taskMiddlewares.get(id);
+                if (!entry) {
+                  return undefined;
+                }
+                return {
+                  definition: entry.middleware,
+                  tags: this.normalizeTags(entry.middleware.tags),
+                };
+              },
+              isIncluded,
+            ),
+          );
+        }
+        return taskMiddlewaresCache;
+      };
 
-    const taskMiddlewares = mapToMatch(
-      Array.from(this.taskMiddlewares.values()).map((item) => ({
-        definition: item.middleware,
-        tags: item.middleware.tags ?? [],
-      })),
-    ) as TagDependencyAccessor<TTag>["taskMiddlewares"];
+    const readResourceMiddlewares =
+      (): TagDependencyAccessor<TTag>["resourceMiddlewares"] => {
+        if (!resourceMiddlewaresCache) {
+          resourceMiddlewaresCache = Object.freeze(
+            this.collectGenericTaggedMatches(
+              tag,
+              bucket?.resourceMiddlewares,
+              (id) => {
+                const entry = this.resourceMiddlewares.get(id);
+                if (!entry) {
+                  return undefined;
+                }
+                return {
+                  definition: entry.middleware,
+                  tags: this.normalizeTags(entry.middleware.tags),
+                };
+              },
+              isIncluded,
+            ),
+          );
+        }
+        return resourceMiddlewaresCache;
+      };
 
-    const resourceMiddlewares = mapToMatch(
-      Array.from(this.resourceMiddlewares.values()).map((item) => ({
-        definition: item.middleware,
-        tags: item.middleware.tags ?? [],
-      })),
-    ) as TagDependencyAccessor<TTag>["resourceMiddlewares"];
+    const readErrors = (): TagDependencyAccessor<TTag>["errors"] => {
+      if (!errorsCache) {
+        errorsCache = Object.freeze(
+          this.collectGenericTaggedMatches(
+            tag,
+            bucket?.errors,
+            (id) => {
+              const entry = this.errors.get(id);
+              if (!entry) {
+                return undefined;
+              }
+              return {
+                definition: entry,
+                tags: this.normalizeTags(entry.tags),
+              };
+            },
+            isIncluded,
+          ),
+        );
+      }
+      return errorsCache;
+    };
 
-    const errors = mapToMatch(
-      Array.from(this.errors.values()).map((item) => ({
-        definition: item,
-        tags: item.tags,
-      })),
-    ) as TagDependencyAccessor<TTag>["errors"];
+    const accessor: TagDependencyAccessor<TTag> = {
+      get tasks() {
+        return readTasks();
+      },
+      get resources() {
+        return readResources();
+      },
+      get events() {
+        return readEvents();
+      },
+      get hooks() {
+        return readHooks();
+      },
+      get taskMiddlewares() {
+        return readTaskMiddlewares();
+      },
+      get resourceMiddlewares() {
+        return readResourceMiddlewares();
+      },
+      get errors() {
+        return readErrors();
+      },
+    };
 
-    return Object.freeze({
-      tasks: Object.freeze(tasks),
-      resources: Object.freeze(resources),
-      events: Object.freeze(events),
-      hooks: Object.freeze(hooks),
-      taskMiddlewares: Object.freeze(taskMiddlewares),
-      resourceMiddlewares: Object.freeze(resourceMiddlewares),
-      errors: Object.freeze(errors),
-    });
+    return Object.freeze(accessor);
   }
 
   /**
@@ -434,6 +608,205 @@ export class StoreRegistry {
     }
 
     return this.getTagAccessor(tag).resources.map((item) => item.definition);
+  }
+
+  private collectTaggedTaskMatches<TTag extends ITag<any, any, any>>(
+    tag: TTag,
+    definitionIds: ReadonlySet<string> | undefined,
+    isIncluded: (definitionId: string) => boolean,
+  ): TagDependencyAccessor<TTag>["tasks"] {
+    if (!definitionIds || definitionIds.size === 0) {
+      return [];
+    }
+
+    const matches: TagDependencyTaskMatch<TTag>[] = [];
+    for (const definitionId of definitionIds) {
+      const storeEntry = this.tasks.get(definitionId);
+      if (!storeEntry) {
+        continue;
+      }
+      if (!isIncluded(storeEntry.task.id)) {
+        continue;
+      }
+
+      const tags = this.normalizeTags(storeEntry.task.tags);
+      if (!this.hasTagId(tags, tag.id)) {
+        continue;
+      }
+
+      matches.push({
+        definition: storeEntry.task as TaggedTask<TTag>,
+        config: this.readTagConfig(tag, tags),
+      });
+    }
+
+    return matches;
+  }
+
+  private collectTaggedResourceMatches<TTag extends ITag<any, any, any>>(
+    tag: TTag,
+    definitionIds: ReadonlySet<string> | undefined,
+    isIncluded: (definitionId: string) => boolean,
+  ): TagDependencyAccessor<TTag>["resources"] {
+    if (!definitionIds || definitionIds.size === 0) {
+      return [];
+    }
+
+    const matches: TagDependencyResourceMatch<TTag>[] = [];
+    for (const definitionId of definitionIds) {
+      const storeEntry = this.resources.get(definitionId);
+      if (!storeEntry) {
+        continue;
+      }
+      if (!isIncluded(storeEntry.resource.id)) {
+        continue;
+      }
+
+      const tags = this.normalizeTags(storeEntry.resource.tags);
+      if (!this.hasTagId(tags, tag.id)) {
+        continue;
+      }
+
+      const resourceId = storeEntry.resource.id;
+      const resourcesMap = this.resources;
+      matches.push({
+        definition: storeEntry.resource as TaggedResource<TTag>,
+        config: this.readTagConfig(tag, tags),
+        get value() {
+          const runtimeEntry = resourcesMap.get(resourceId);
+          if (!runtimeEntry || !runtimeEntry.isInitialized) {
+            return undefined;
+          }
+
+          return runtimeEntry.value as TagDependencyResourceMatch<TTag>["value"];
+        },
+      });
+    }
+
+    return matches;
+  }
+
+  private collectGenericTaggedMatches<
+    TTag extends ITag<any, any, any>,
+    TDefinition extends { id: string },
+  >(
+    tag: TTag,
+    definitionIds: ReadonlySet<string> | undefined,
+    resolve: (definitionId: string) =>
+      | {
+          definition: TDefinition;
+          tags: TagType[];
+        }
+      | undefined,
+    isIncluded: (definitionId: string) => boolean,
+  ): ReadonlyArray<TagDependencyMatch<TDefinition, TTag>> {
+    if (!definitionIds || definitionIds.size === 0) {
+      return [];
+    }
+
+    const matches: Array<TagDependencyMatch<TDefinition, TTag>> = [];
+    for (const definitionId of definitionIds) {
+      const resolved = resolve(definitionId);
+      if (!resolved) {
+        continue;
+      }
+      if (!isIncluded(resolved.definition.id)) {
+        continue;
+      }
+      if (!this.hasTagId(resolved.tags, tag.id)) {
+        continue;
+      }
+
+      matches.push({
+        definition: resolved.definition,
+        config: this.readTagConfig(tag, resolved.tags),
+      });
+    }
+
+    return matches;
+  }
+
+  private hasTagId(tags: ReadonlyArray<TagType>, tagId: string): boolean {
+    return tags.some((candidate) => candidate.id === tagId);
+  }
+
+  private readTagConfig<TTag extends ITag<any, any, any>>(
+    tag: TTag,
+    tags: TagType[],
+  ) {
+    return tag.extract(tags);
+  }
+
+  private normalizeTags(tags: unknown): TagType[] {
+    if (!Array.isArray(tags) || tags.length === 0) {
+      return [];
+    }
+
+    const normalized: TagType[] = [];
+    for (const candidate of tags) {
+      if (utils.isTag(candidate)) {
+        normalized.push(candidate);
+      }
+    }
+    return normalized;
+  }
+
+  private reindexDefinitionTags(
+    category: IndexedTagCategory,
+    definitionId: string,
+    tags: ReadonlyArray<TagType>,
+  ): void {
+    const membershipByDefinition = this.tagMembershipByCategory[category];
+    const previousTagIds = membershipByDefinition.get(definitionId);
+    if (previousTagIds) {
+      for (const tagId of previousTagIds) {
+        const bucket = this.tagIndex.get(tagId);
+        if (!bucket) {
+          continue;
+        }
+
+        bucket[category].delete(definitionId);
+        if (this.isTagBucketEmpty(bucket)) {
+          this.tagIndex.delete(tagId);
+        }
+      }
+    }
+
+    const nextTagIds = new Set<string>();
+    for (const tag of tags) {
+      nextTagIds.add(tag.id);
+    }
+
+    if (nextTagIds.size === 0) {
+      membershipByDefinition.delete(definitionId);
+      return;
+    }
+
+    membershipByDefinition.set(definitionId, nextTagIds);
+    for (const tagId of nextTagIds) {
+      const bucket = this.getOrCreateTagBucket(tagId);
+      bucket[category].add(definitionId);
+    }
+  }
+
+  private getOrCreateTagBucket(tagId: string): TagIndexBucket {
+    const existing = this.tagIndex.get(tagId);
+    if (existing) {
+      return existing;
+    }
+
+    const created = createTagIndexBucket();
+    this.tagIndex.set(tagId, created);
+    return created;
+  }
+
+  private isTagBucketEmpty(bucket: TagIndexBucket): boolean {
+    for (const category of indexedTagCategories) {
+      if (bucket[category].size > 0) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

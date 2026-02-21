@@ -20,7 +20,9 @@ import { r } from "../../../";
     .register([featureTag, taggedTask])
     .dependencies({
       featureTag,
+      featureTagBeforeInit: featureTag.beforeInit(),
       maybeFeatureTag: featureTag,
+      maybeFeatureTagBeforeInit: featureTag.beforeInit().optional(),
     })
     .init(async (_config, deps) => {
       const task = deps.featureTag.tasks[0];
@@ -32,6 +34,23 @@ import { r } from "../../../";
 
       if (deps.maybeFeatureTag) {
         deps.maybeFeatureTag.tasks;
+      }
+
+      deps.featureTagBeforeInit.tasks;
+      if (deps.maybeFeatureTagBeforeInit) {
+        deps.maybeFeatureTagBeforeInit.resources;
+      }
+
+      const taggedTaskMatch = deps.featureTag.tasks[0];
+      if (taggedTaskMatch?.run) {
+        taggedTaskMatch.run({ tenantId: "acme" }, {} as any);
+      }
+
+      const taggedResourceMatch = deps.featureTag.resources[0];
+      if (taggedResourceMatch) {
+        const maybeValue: { ok: boolean } | undefined =
+          taggedResourceMatch.value;
+        void maybeValue;
       }
     })
     .build();

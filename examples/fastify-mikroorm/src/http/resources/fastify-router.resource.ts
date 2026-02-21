@@ -22,16 +22,18 @@ export const fastifyRouter = r
       "Automatically registers HTTP routes from tasks tagged with httpRoute configuration",
   })
   .dependencies({
-    store: globals.resources.store,
+    httpRoute: httpRoute.beforeInit(),
     taskRunner: globals.resources.taskRunner,
     fastify,
     logger: globals.resources.logger,
     auth: authResource,
     db,
   })
-  .init(async (_config, { store, taskRunner, fastify, logger, auth, db }) => {
-    store.getTasksWithTag(httpRoute).forEach((task) => {
-      const config = httpRoute.extract(task)!;
+  .init(async (_config, { httpRoute, taskRunner, fastify, logger, auth, db }) => {
+    httpRoute.tasks.forEach(({ definition: task, config }) => {
+      if (!config) {
+        return;
+      }
       const schema = buildRouteSchema(task as TaskWithSchemas, config);
 
       fastify.route({

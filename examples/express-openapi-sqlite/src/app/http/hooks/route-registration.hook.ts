@@ -12,17 +12,15 @@ export const routeRegistrationHook = r
   .hook("app.hooks.routeRegistration")
   .on(globals.events.ready)
   .dependencies({
-    store: globals.resources.store,
+    httpTag: httpTag.beforeInit(),
     taskRunner: globals.resources.taskRunner,
     expressServer: expressServerResource,
     logger: globals.resources.logger,
   })
-  .run(async (_, { store, taskRunner, expressServer, logger }) => {
+  .run(async (_, { httpTag, taskRunner, expressServer, logger }) => {
     const { app, port } = expressServer;
     const paths: Record<string, any> = {};
 
-    // Existing: register handlers
-    const allTasks = Array.from(store.tasks.values());
     let routesRegistered = 0;
 
     const createRouteHandler =
@@ -52,9 +50,9 @@ export const routeRegistrationHook = r
         }
       };
 
-    allTasks.forEach((taskElement) => {
-      const task = taskElement.task;
-      const config = httpTag.extract(task);
+    httpTag.tasks.forEach((entry) => {
+      const task = entry.definition;
+      const config = entry.config;
       if (!config) return;
 
       const {

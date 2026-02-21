@@ -1,4 +1,4 @@
-import { defineResource, defineTask } from "../../define";
+import { defineResource, defineTag, defineTask } from "../../define";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { DependencyExtractor } from "../../models/dependency-processor/DependencyExtractor";
 import { ResourceStoreElementType } from "../../types/storeTypes";
@@ -223,5 +223,44 @@ describe("DependencyProcessor zero-dependency caching", () => {
         "tests.resources.owner.plainObject",
       ),
     ).toBe(plainObject);
+  });
+
+  it("returns undefined for tagged resource value before initialization and updates after init", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const tag = defineTag({
+      id: "dependency.extractor.tag.resource.value",
+    });
+    const taggedResource = defineResource({
+      id: "dependency.extractor.tag.resource.value.resource",
+      tags: [tag],
+      init: async () => "ready",
+    });
+
+    store.storeGenericItem(tag);
+    store.storeGenericItem(taggedResource);
+
+    const extractor = new DependencyExtractor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+      async () => undefined,
+    );
+
+    const accessor = await extractor.extractTagDependency(
+      tag,
+      "dependency.extractor.tag.resource.value.consumer",
+    );
+    const match = accessor.resources[0]!;
+    expect(match.value).toBeUndefined();
+
+    const storeEntry = store.resources.get(taggedResource.id)!;
+    storeEntry.isInitialized = true;
+    storeEntry.value = "ready";
+    expect(match.value).toBe("ready");
   });
 });

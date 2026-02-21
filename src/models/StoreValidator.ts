@@ -6,7 +6,7 @@ import {
   tagNotFoundError,
 } from "../errors";
 import { ITaggable } from "../defs";
-import { isOptional, isTag } from "../define";
+import { isOptional, isTag, isTagBeforeInit } from "../define";
 import { StoreRegistry } from "./StoreRegistry";
 
 type SanityCheckTaggable = ITaggable & {
@@ -197,19 +197,22 @@ export class StoreValidator {
         const maybeDependency = isOptional(dependency)
           ? (dependency as { inner: unknown }).inner
           : dependency;
+        const maybeTag = isTagBeforeInit(maybeDependency)
+          ? maybeDependency.tag
+          : maybeDependency;
 
-        if (!isTag(maybeDependency)) {
+        if (!isTag(maybeTag)) {
           continue;
         }
 
-        if (!ownTagIds.has(maybeDependency.id)) {
+        if (!ownTagIds.has(maybeTag.id)) {
           continue;
         }
 
         tagSelfDependencyError.throw({
           definitionType: entry.definitionType,
           definitionId: entry.definitionId,
-          tagId: maybeDependency.id,
+          tagId: maybeTag.id,
         });
       }
     }

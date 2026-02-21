@@ -1107,7 +1107,11 @@ import { r, globals } from "@bluelibs/runner";
 const routeRegistration = r
   .hook("app.hooks.registerRoutes")
   .on(globals.events.ready)
-  .dependencies({ server: expressServer, httpTag, cacheableTag })
+  .dependencies({
+    server: expressServer,
+    httpTag: httpTag.beforeInit(), // ensures that this runs before any item containing the tag is initialized
+    cacheableTag,
+  })
   .run(async (_event, { server, httpTag, cacheableTag }) => {
     // Find all tasks with HTTP tags
     httpTag.tasks.forEach((entry) => {
@@ -1128,6 +1132,13 @@ const routeRegistration = r
 
 Tag accessors expose all tagged definition categories:
 `tasks`, `resources`, `events`, `hooks`, `taskMiddlewares`, `resourceMiddlewares`, and `errors`.
+
+Accessor match helpers:
+
+- `tasks[]` entries expose `definition`, `config`, and runtime `run(...)`.
+- `resources[]` entries expose `definition`, `config`, and runtime `value` (available after that resource is initialized).
+
+Use `tag.beforeInit()` when startup ordering matters (for example route registration). It injects the same typed accessor while making the dependency intent explicit.
 
 Deprecated API note: `store.getTasksWithTag(...)` and `store.getResourcesWithTag(...)` are deprecated in favor of tag dependencies.
 

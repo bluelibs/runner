@@ -5,10 +5,12 @@ import {
   TagType,
   IOptionalDependency,
   ITagConfigured,
+  ITagBeforeInitDependency,
   symbolTag,
   symbolFilePath,
   symbolTagConfigured,
   symbolOptionalDependency,
+  symbolTagBeforeInitDependency,
 } from "../defs";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
@@ -96,6 +98,22 @@ export function defineTag<
       } as IOptionalDependency<
         ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
       >;
+    },
+    beforeInit() {
+      const wrapper: ITagBeforeInitDependency<
+        ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
+      > = {
+        tag: this,
+        [symbolTagBeforeInitDependency]: true,
+        optional() {
+          return {
+            inner: wrapper,
+            [symbolOptionalDependency]: true,
+          } as IOptionalDependency<typeof wrapper>;
+        },
+      };
+
+      return wrapper;
     },
     /**
      * Checks if the tag exists in a taggable or a list of tags.

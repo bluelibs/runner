@@ -338,6 +338,12 @@ const inspectRoutes = r
   .build();
 ```
 
+Use `tag.beforeInit()` when startup ordering matters. It injects the same accessor type while explicitly stating that initialization should wait on resources reachable through that tag.
+
+Accessor match helpers:
+- `tasks[]` entries expose `definition`, `config`, and runtime `run(...)`.
+- `resources[]` entries expose `definition`, `config`, and runtime `value` (available after that resource is initialized).
+
 Deprecated API note: `store.getTasksWithTag(...)` / `store.getResourcesWithTag(...)` remain available for compatibility but are deprecated in favor of tag dependencies. Runner also fails fast during store sanity checks when a tagged definition depends on the same tag.
 
 **Node durable workflows must be tagged** with `durableWorkflowTag` from `@bluelibs/runner/node` to be discoverable via `durable.getWorkflows()` at runtime. This tag is required, not optional. Workflow execution is explicit via the durable API (`durable.start(...)` / `durable.startAndWait(...)`) and these are the current, non-deprecated methods. The legacy aliases `durable.startExecution(...)`, `durable.execute(...)`, and `durable.executeStrict(...)` remain available as deprecated compatibility methods (`startExecution` -> `start`, `execute` -> `startAndWait(...).data`, `executeStrict` -> `startAndWait`). The tag is discovery metadata only; `startAndWait(...)` provides the unified result envelope `{ durable: { executionId }, data }`.

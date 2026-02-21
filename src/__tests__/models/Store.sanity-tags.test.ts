@@ -92,4 +92,27 @@ describe("Store sanity checks (tags)", () => {
     );
     expect(rootInit).not.toHaveBeenCalled();
   });
+
+  it("fails when a definition depends on beforeInit() wrapper of its own tag", async () => {
+    const rootInit = jest.fn(async () => "ok");
+    const tag = defineTag({ id: "app.tags.self.dep.beforeInit" });
+
+    const task = defineTask({
+      id: "app.tasks.self.dep.beforeInit",
+      tags: [tag],
+      dependencies: { tag: tag.beforeInit() },
+      run: async () => undefined,
+    });
+
+    const app = defineResource({
+      id: "app.root.self.dep.beforeInit",
+      register: [tag, task],
+      init: rootInit,
+    });
+
+    await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
+      /cannot depend on tag "app\.tags\.self\.dep\.beforeInit" because it already carries the same tag/i,
+    );
+    expect(rootInit).not.toHaveBeenCalled();
+  });
 });

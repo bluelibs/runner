@@ -190,6 +190,31 @@ describe("Tag dependencies", () => {
     await runtime.dispose();
   });
 
+  it("resolves optional missing beforeInit tag dependencies to undefined", async () => {
+    const missingTag = defineTag({
+      id: "tests.tags.beforeInit.missing.optional",
+    });
+
+    const checkTask = defineTask({
+      id: "tests.tasks.beforeInit.missing.optional",
+      dependencies: {
+        maybeMissingTag: missingTag.beforeInit().optional(),
+      },
+      run: async (_input, deps) => deps.maybeMissingTag === undefined,
+    });
+
+    const app = defineResource({
+      id: "tests.resources.beforeInit.missing.optional.app",
+      register: [checkTask],
+      dependencies: { checkTask },
+      init: async (_config, { checkTask }) => checkTask(),
+    });
+
+    const runtime = await run(app);
+    expect(runtime.value).toBe(true);
+    await runtime.dispose();
+  });
+
   it("throws for non-optional missing tag dependencies", async () => {
     const missingTag = defineTag({
       id: "tests.tags.missing.required",
@@ -213,6 +238,90 @@ describe("Tag dependencies", () => {
     );
   });
 
+  it("injects tag accessor when using beforeInit() wrapper", async () => {
+    const featureTag = defineTag<{ kind: string }>({
+      id: "tests.tags.beforeInit.accessor",
+    });
+
+    const taggedTask = defineTask({
+      id: "tests.tasks.beforeInit.accessor.tagged",
+      tags: [featureTag.with({ kind: "route" })],
+      run: async () => "ok",
+    });
+
+    const consumerTask = defineTask({
+      id: "tests.tasks.beforeInit.accessor.consumer",
+      dependencies: { featureTag: featureTag.beforeInit() },
+      run: async (_input, deps) =>
+        deps.featureTag.tasks.map((entry) => ({
+          id: entry.definition.id,
+          kind: entry.config?.kind,
+        })),
+    });
+
+    const app = defineResource({
+      id: "tests.resources.beforeInit.accessor.app",
+      register: [featureTag, taggedTask, consumerTask],
+      dependencies: { consumerTask },
+      init: async (_config, { consumerTask }) => consumerTask(),
+    });
+
+    const runtime = await run(app);
+    expect(runtime.value).toEqual([
+      { id: "tests.tasks.beforeInit.accessor.tagged", kind: "route" },
+    ]);
+    await runtime.dispose();
+  });
+
+  it("exposes runtime helpers on tag accessor task/resource matches", async () => {
+    const featureTag = defineTag({
+      id: "tests.tags.runtime.accessor",
+    });
+
+    const taggedTask = defineTask({
+      id: "tests.tasks.runtime.accessor.tagged",
+      tags: [featureTag],
+      run: async () => "task-result",
+    });
+
+    const taggedResource = defineResource({
+      id: "tests.resources.runtime.accessor.tagged",
+      tags: [featureTag],
+      init: async () => "resource-value",
+    });
+
+    const inspectorTask = defineTask({
+      id: "tests.tasks.runtime.accessor.inspector",
+      dependencies: { featureTag },
+      run: async (_input, deps) => {
+        const taskEntry = deps.featureTag.tasks[0];
+        const resourceEntry = deps.featureTag.resources[0];
+        if (!taskEntry || !resourceEntry || !taskEntry.run) {
+          return null;
+        }
+
+        return {
+          taskRunResult: await taskEntry.run(undefined),
+          resourceValue: resourceEntry.value,
+        };
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.resources.runtime.accessor.app",
+      register: [featureTag, taggedTask, taggedResource, inspectorTask],
+      dependencies: { inspectorTask, taggedResource },
+      init: async (_config, { inspectorTask }) => inspectorTask(),
+    });
+
+    const runtime = await run(app);
+    expect(runtime.value).toEqual({
+      taskRunResult: "task-result",
+      resourceValue: "resource-value",
+    });
+    await runtime.dispose();
+  });
+
   it("expands tag dependencies into cycle detection edges", async () => {
     const httpTag = defineTag({
       id: "tests.tags.http.routes",
@@ -233,6 +342,32 @@ describe("Tag dependencies", () => {
 
     const app = defineResource({
       id: "tests.resources.http.routes.app",
+      register: [httpTag, registerHttpRoutes, userRoute],
+    });
+
+    await expect(run(app)).rejects.toThrow(/Circular dependencies detected/i);
+  });
+
+  it("expands beforeInit() tag dependencies into cycle detection edges", async () => {
+    const httpTag = defineTag({
+      id: "tests.tags.http.routes.beforeInit",
+    });
+
+    const registerHttpRoutes = defineTask({
+      id: "tests.tasks.registerHttpRoutes.beforeInit",
+      dependencies: { httpTag: httpTag.beforeInit() },
+      run: async () => undefined,
+    });
+
+    const userRoute = defineTask({
+      id: "tests.tasks.httpRoute.user.beforeInit",
+      tags: [httpTag],
+      dependencies: { registerHttpRoutes },
+      run: async () => undefined,
+    });
+
+    const app = defineResource({
+      id: "tests.resources.http.routes.beforeInit.app",
       register: [httpTag, registerHttpRoutes, userRoute],
     });
 

@@ -20,7 +20,9 @@ import {
   IOptionalDependency,
   symbolOptionalDependency,
   symbolTag,
+  symbolTagBeforeInitDependency,
   ITag,
+  ITagBeforeInitDependency,
   IPhantomTask,
 } from "../defs";
 import { IErrorHelper } from "../types/error";
@@ -111,6 +113,13 @@ export function isResourceMiddleware(
  */
 export function isTag(definition: unknown): definition is ITag {
   return hasBrand(definition, symbolTag);
+}
+
+/** Type guard: checks if a dependency is a before-init tag wrapper. */
+export function isTagBeforeInit(
+  definition: unknown,
+): definition is ITagBeforeInitDependency<ITag<any, any, any>> {
+  return hasBrand(definition, symbolTagBeforeInitDependency);
 }
 
 /** Type guard: checks if a definition is an Optional Dependency wrapper. */

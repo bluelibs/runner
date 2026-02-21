@@ -289,16 +289,22 @@ const creditCardStrategy = r
   }))
   .build();
 
-// 3. Use the strategies via the store
+// 3. Discover strategy resources via tag dependency
 const paymentProcessor = r
   .resource("app.payment.processor")
-  .dependencies({ store: globals.resources.store })
-  .init(async (_config, { store }) => ({
+  .dependencies({
+    paymentStrategyContract,
+    runtime: globals.resources.runtime,
+  })
+  .init(async (_config, { paymentStrategyContract, runtime }) => ({
     async process(amount: number, method: string) {
-      const strategies = store.getResourcesWithTag(paymentStrategyContract);
-      const strategy = strategies.find((s) => s.id.includes(method));
-      if (!strategy) throw new Error("Strategy not found");
-      return strategy.value.process(amount);
+      const match = paymentStrategyContract.resources.find((entry) =>
+        entry.definition.id.includes(method),
+      );
+      if (!match) throw new Error("Strategy not found");
+
+      const strategy = await runtime.getResourceValue(match.definition);
+      return strategy.process(amount);
     },
   }))
   .build();
