@@ -241,6 +241,62 @@ export const tagSelfDependencyError = error<
   )
   .build();
 
+export const dependencyAccessPolicyInvalidEntryError = error<
+  {
+    policyResourceId: string;
+    entry: unknown;
+  } & DefaultErrorType
+>("runner.errors.dependencyAccessPolicyInvalidEntry")
+  .format(
+    ({ policyResourceId }) =>
+      `Resource "${policyResourceId}" declares an invalid dependencyAccessPolicy deny entry.`,
+  )
+  .remediation(
+    ({ policyResourceId }) =>
+      `Use .dependencyAccessPolicy({ deny: [...] }) with string ids or Runner definitions only. Review "${policyResourceId}" and remove malformed entries.`,
+  )
+  .build();
+
+export const dependencyAccessPolicyUnknownTargetError = error<
+  {
+    policyResourceId: string;
+    targetId: string;
+  } & DefaultErrorType
+>("runner.errors.dependencyAccessPolicyUnknownTarget")
+  .format(
+    ({ policyResourceId, targetId }) =>
+      `Resource "${policyResourceId}" denies unknown target "${targetId}" in dependencyAccessPolicy.`,
+  )
+  .remediation(
+    ({ targetId }) =>
+      `Register "${targetId}" in the same runtime graph or remove it from deny. Policy targets must exist at bootstrap.`,
+  )
+  .build();
+
+export const dependencyAccessPolicyViolationError = error<
+  {
+    targetId: string;
+    targetType: string;
+    consumerId: string;
+    consumerType: string;
+    policyResourceId: string;
+    matchedRuleType: "id" | "tag";
+    matchedRuleId: string;
+  } & DefaultErrorType
+>("runner.errors.dependencyAccessPolicyViolation")
+  .format(
+    ({ targetId, targetType, consumerId, consumerType, policyResourceId }) =>
+      `${targetType} "${targetId}" is denied by dependencyAccessPolicy on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`,
+  )
+  .remediation(({ policyResourceId, matchedRuleType, matchedRuleId }) => {
+    const rule =
+      matchedRuleType === "tag"
+        ? `Denied tag rule "${matchedRuleId}".`
+        : `Denied id rule "${matchedRuleId}".`;
+    return `${rule} Remove or narrow the deny rule on "${policyResourceId}", or move the consumer outside that resource subtree.`;
+  })
+  .build();
+
 // Locked
 export const lockedError = error<{ what: string } & DefaultErrorType>(
   "runner.errors.locked",

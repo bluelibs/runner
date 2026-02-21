@@ -220,6 +220,13 @@ export class Store {
       context: {},
     };
 
+    this.registry.visibilityTracker.recordResource(root.id);
+    this.registry.visibilityTracker.recordDefinitionTags(root.id, root.tags);
+    this.registry.visibilityTracker.recordDependencyAccessPolicy(
+      root.id,
+      root.dependencyAccessPolicy,
+    );
+
     this.registry.computeRegistrationDeeply(root, config);
     this.registry.resources.set(root.id, this.root);
   }

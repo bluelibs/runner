@@ -255,6 +255,27 @@ describe("resource builder", () => {
     expect(res.throws).toEqual([err.id, "tests.builder.resource.throws.other"]);
   });
 
+  it("dependencyAccessPolicy is additive across repeated calls", () => {
+    const denyTaskA = r
+      .task("tests.builder.policy.task.a")
+      .run(async () => 1)
+      .build();
+    const denyTaskB = r
+      .task("tests.builder.policy.task.b")
+      .run(async () => 2)
+      .build();
+
+    const resourceWithPolicy = r
+      .resource("tests.builder.policy.resource")
+      .dependencyAccessPolicy({ deny: [denyTaskA] })
+      .dependencyAccessPolicy({ deny: [denyTaskB.id] })
+      .build();
+
+    expect(resourceWithPolicy.dependencyAccessPolicy).toEqual({
+      deny: [denyTaskA, denyTaskB.id],
+    });
+  });
+
   it("throws on invalid throws entries", () => {
     expect(() =>
       r

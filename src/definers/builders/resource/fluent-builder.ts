@@ -1,4 +1,5 @@
 import type {
+  DependencyAccessPolicy,
   DependencyMapType,
   IResourceDefinition,
   IResourceMeta,
@@ -363,6 +364,23 @@ export function makeResourceBuilder<
         TMiddleware
       >(next);
     },
+    dependencyAccessPolicy(policy: DependencyAccessPolicy) {
+      const existing = state.dependencyAccessPolicy?.deny ?? [];
+      const next = clone(state, {
+        dependencyAccessPolicy: {
+          deny: [...existing, ...policy.deny],
+        },
+      });
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(next);
+    },
     build() {
       const definition: IResourceDefinition<
         TConfig,
@@ -389,6 +407,7 @@ export function makeResourceBuilder<
         overrides: state.overrides,
         throws: state.throws,
         exports: state.exports,
+        dependencyAccessPolicy: state.dependencyAccessPolicy,
       };
       const resource = defineResource(definition);
       (resource as { [symbolFilePath]?: string })[symbolFilePath] =

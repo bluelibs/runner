@@ -1,4 +1,5 @@
 import type {
+  DependencyAccessPolicy,
   DependencyMapType,
   IResourceDefinition,
   IResourceMeta,
@@ -59,6 +60,7 @@ export type BuilderState<
   overrides?: Array<any>;
   throws?: ThrowsList;
   exports?: Array<RegisterableItems>;
+  dependencyAccessPolicy?: DependencyAccessPolicy;
 }>;
 
 /**

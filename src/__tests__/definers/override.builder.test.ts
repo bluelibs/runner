@@ -239,6 +239,10 @@ describe(SuiteName.OverrideBuilder, () => {
       .resource(MiddlewareId.Resource)
       .run(async ({ next }) => next())
       .build();
+    const denyTask = r
+      .task("tests.override.builder.policy.task")
+      .run(async () => TaskValue.Base)
+      .build();
     const configSchema = {
       parse: (value: unknown) => value,
     };
@@ -274,6 +278,8 @@ describe(SuiteName.OverrideBuilder, () => {
       .meta({ [MetaKey.Label]: ResourceValue.Override } as Record<string, any>)
       .exports([registerA])
       .exports([registerB], { override: true })
+      .dependencyAccessPolicy({ deny: [denyTask] })
+      .dependencyAccessPolicy({ deny: [registerB.id] })
       .overrides([overrideTask])
       .overrides([overrideTask], { override: true })
       .throws([errorHelper])
@@ -292,6 +298,9 @@ describe(SuiteName.OverrideBuilder, () => {
       [MetaKey.Label]: ResourceValue.Override,
     });
     expect(overrideResource.exports).toEqual([registerB]);
+    expect(overrideResource.dependencyAccessPolicy).toEqual({
+      deny: [denyTask, registerB.id],
+    });
     expect(overrideResource.overrides).toEqual([overrideTask]);
     expect(overrideResource.throws).toEqual([ErrorId.Resource]);
   });

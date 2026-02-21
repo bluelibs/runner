@@ -79,6 +79,7 @@ export function defineResource<
     meta: (constConfig.meta || {}) as TMeta,
     middleware: constConfig.middleware ?? [],
     exports: constConfig.exports,
+    dependencyAccessPolicy: constConfig.dependencyAccessPolicy,
   } as IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>;
 
   const resolveCurrent = (
@@ -137,6 +138,7 @@ export function defineResource<
     dispose: current.dispose,
     meta: current.meta,
     exports: current.exports,
+    dependencyAccessPolicy: current.dependencyAccessPolicy,
   });
 
   base.with = function (config: TConfig) {

@@ -1,4 +1,5 @@
 import type {
+  DependencyAccessPolicy,
   DependencyMapType,
   IResource,
   IResourceDefinition,
@@ -244,6 +245,22 @@ export interface ResourceFluentBuilder<
   exports(
     items: Array<RegisterableItems>,
     options?: { override?: boolean },
+  ): ResourceFluentBuilder<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+
+  /**
+   * Restricts dependency access for this resource boundary.
+   * Multiple calls are additive.
+   */
+  dependencyAccessPolicy(
+    policy: DependencyAccessPolicy,
   ): ResourceFluentBuilder<
     TConfig,
     TValue,

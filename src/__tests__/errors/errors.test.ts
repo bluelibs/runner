@@ -11,6 +11,9 @@ import { run } from "../../run";
 import {
   duplicateRegistrationError,
   dependencyNotFoundError,
+  dependencyAccessPolicyInvalidEntryError,
+  dependencyAccessPolicyUnknownTargetError,
+  dependencyAccessPolicyViolationError,
   unknownItemTypeError,
   eventNotFoundError,
   circularDependencyError,
@@ -433,6 +436,41 @@ describe("Errors", () => {
       expect(phantom.message).toContain('Phantom task "my.phantom.task"');
       expect(phantom.message).toContain("not routed through any tunnel");
       expect(phantomTaskNotRoutedError.is(phantom)).toBe(true);
+
+      const policyInvalid = capture(() =>
+        dependencyAccessPolicyInvalidEntryError.throw({
+          policyResourceId: "app.resource",
+          entry: {},
+        }),
+      );
+      expect(policyInvalid.message).toContain(
+        'Resource "app.resource" declares an invalid dependencyAccessPolicy deny entry.',
+      );
+
+      const policyUnknown = capture(() =>
+        dependencyAccessPolicyUnknownTargetError.throw({
+          policyResourceId: "app.resource",
+          targetId: "missing.target",
+        }),
+      );
+      expect(policyUnknown.message).toContain(
+        'Resource "app.resource" denies unknown target "missing.target"',
+      );
+
+      const policyViolation = capture(() =>
+        dependencyAccessPolicyViolationError.throw({
+          targetId: "tasks.secret",
+          targetType: "Task",
+          consumerId: "tasks.consumer",
+          consumerType: "Task",
+          policyResourceId: "resources.boundary",
+          matchedRuleType: "tag",
+          matchedRuleId: "tags.secret",
+        }),
+      );
+      expect(policyViolation.message).toContain(
+        'Task "tasks.secret" is denied by dependencyAccessPolicy on resource "resources.boundary"',
+      );
     });
   });
 });

@@ -81,11 +81,13 @@ export class StoreRegistryWriter {
   storeError<_C>(item: IErrorHelper<any>) {
     this.validator.checkIfIDExists(item.id);
     this.collections.errors.set(item.id, item);
+    const tags = this.normalizeTags(item.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Errors,
       item.id,
-      this.normalizeTags(item.tags),
+      tags,
     );
+    this.visibilityTracker.recordDefinitionTags(item.id, tags);
   }
 
   storeAsyncContext<_C>(item: IAsyncContext<any>) {
@@ -113,11 +115,13 @@ export class StoreRegistryWriter {
       computedDependencies: {},
       dependencyState: HookDependencyState.Pending,
     });
+    const tags = this.normalizeTags(hook.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Hooks,
       hook.id,
-      this.normalizeTags(hook.tags),
+      tags,
     );
+    this.visibilityTracker.recordDefinitionTags(hook.id, tags);
   }
 
   storeTaskMiddleware<_C>(
@@ -138,11 +142,13 @@ export class StoreRegistryWriter {
       computedDependencies: {},
       isInitialized: false,
     });
+    const tags = this.normalizeTags(middleware.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.TaskMiddlewares,
       middleware.id,
-      this.normalizeTags(middleware.tags),
+      tags,
     );
+    this.visibilityTracker.recordDefinitionTags(middleware.id, tags);
   }
 
   storeResourceMiddleware<_C>(
@@ -162,21 +168,25 @@ export class StoreRegistryWriter {
       computedDependencies: {},
       isInitialized: false,
     });
+    const tags = this.normalizeTags(middleware.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.ResourceMiddlewares,
       middleware.id,
-      this.normalizeTags(middleware.tags),
+      tags,
     );
+    this.visibilityTracker.recordDefinitionTags(middleware.id, tags);
   }
 
   storeEvent<_C>(item: IEvent<void>) {
     this.validator.checkIfIDExists(item.id);
     this.collections.events.set(item.id, { event: item });
+    const tags = this.normalizeTags(item.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Events,
       item.id,
-      this.normalizeTags(item.tags),
+      tags,
     );
+    this.visibilityTracker.recordDefinitionTags(item.id, tags);
   }
 
   storeResourceWithConfig<_C>(
@@ -201,11 +211,18 @@ export class StoreRegistryWriter {
       isInitialized: false,
       context: undefined,
     });
+    this.visibilityTracker.recordResource(prepared.id);
+    this.visibilityTracker.recordDependencyAccessPolicy(
+      prepared.id,
+      prepared.dependencyAccessPolicy,
+    );
+    const tags = this.normalizeTags(prepared.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Resources,
       prepared.id,
-      this.normalizeTags(prepared.tags),
+      tags,
     );
+    this.visibilityTracker.recordDefinitionTags(prepared.id, tags);
 
     this.computeRegistrationDeeply(prepared, item.config);
     return prepared;
@@ -253,11 +270,18 @@ export class StoreRegistryWriter {
       isInitialized: false,
       context: undefined,
     });
+    this.visibilityTracker.recordResource(prepared.id);
+    this.visibilityTracker.recordDependencyAccessPolicy(
+      prepared.id,
+      prepared.dependencyAccessPolicy,
+    );
+    const tags = this.normalizeTags(prepared.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Resources,
       prepared.id,
-      this.normalizeTags(prepared.tags),
+      tags,
     );
+    this.visibilityTracker.recordDefinitionTags(prepared.id, tags);
 
     this.computeRegistrationDeeply(prepared, {});
     return prepared as AnyResource;
@@ -281,11 +305,13 @@ export class StoreRegistryWriter {
       computedDependencies: {},
       isInitialized: false,
     });
+    const tags = this.normalizeTags(task.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Tasks,
       task.id,
-      this.normalizeTags(task.tags),
+      tags,
     );
+    this.visibilityTracker.recordDefinitionTags(task.id, tags);
   }
 
   private normalizeTags(tags: unknown): TagType[] {

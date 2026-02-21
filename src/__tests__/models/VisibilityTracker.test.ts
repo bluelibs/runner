@@ -1,4 +1,4 @@
-import { defineTask, defineResource } from "../../define";
+import { defineTag, defineTask, defineResource } from "../../define";
 import { VisibilityTracker } from "../../models/VisibilityTracker";
 
 describe("VisibilityTracker", () => {
@@ -278,6 +278,81 @@ describe("VisibilityTracker", () => {
         "tracker.guard.owner.none",
       ) as Set<string>;
       expect(gatingSet.size).toBe(0);
+    });
+  });
+
+  describe("dependencyAccessPolicy", () => {
+    it("denies by id for resources in policy scope", () => {
+      const owner = defineResource({
+        id: "tracker.policy.owner",
+      });
+      const blockedTask = defineTask({
+        id: "tracker.policy.task.blocked",
+        run: async () => "blocked",
+      });
+      const consumerTask = defineTask({
+        id: "tracker.policy.task.consumer",
+        run: async () => "consumer",
+      });
+
+      tracker.recordResource(owner.id);
+      tracker.recordOwnership(owner.id, blockedTask);
+      tracker.recordOwnership(owner.id, consumerTask);
+      tracker.recordDependencyAccessPolicy(owner.id, {
+        deny: [blockedTask.id],
+      });
+
+      expect(tracker.isAccessible(blockedTask.id, consumerTask.id)).toBeFalsy();
+    });
+
+    it("denies by tag for tagged targets and tag dependencies", () => {
+      const owner = defineResource({
+        id: "tracker.policy.tag.owner",
+      });
+      const denyTag = defineTag({
+        id: "tracker.policy.tag.deny",
+      });
+      const blockedTask = defineTask({
+        id: "tracker.policy.tag.task",
+        run: async () => "blocked",
+      });
+      const consumerTask = defineTask({
+        id: "tracker.policy.tag.consumer",
+        run: async () => "consumer",
+      });
+
+      tracker.recordResource(owner.id);
+      tracker.recordOwnership(owner.id, blockedTask);
+      tracker.recordOwnership(owner.id, consumerTask);
+      tracker.recordDefinitionTags(blockedTask.id, [denyTag]);
+      tracker.recordDependencyAccessPolicy(owner.id, {
+        deny: [denyTag],
+      });
+
+      expect(tracker.isAccessible(blockedTask.id, consumerTask.id)).toBeFalsy();
+      expect(tracker.isAccessible(denyTag.id, consumerTask.id)).toBeFalsy();
+    });
+
+    it("removes policy when deny list is empty", () => {
+      const owner = defineResource({
+        id: "tracker.policy.clear.owner",
+      });
+      const task = defineTask({
+        id: "tracker.policy.clear.task",
+        run: async () => "ok",
+      });
+      const consumer = defineTask({
+        id: "tracker.policy.clear.consumer",
+        run: async () => "ok",
+      });
+
+      tracker.recordResource(owner.id);
+      tracker.recordOwnership(owner.id, task);
+      tracker.recordOwnership(owner.id, consumer);
+      tracker.recordDependencyAccessPolicy(owner.id, { deny: [task] });
+      tracker.recordDependencyAccessPolicy(owner.id, { deny: [] });
+
+      expect(tracker.isAccessible(task.id, consumer.id)).toBe(true);
     });
   });
 });

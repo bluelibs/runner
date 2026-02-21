@@ -1,4 +1,6 @@
 import {
+  dependencyAccessPolicyInvalidEntryError,
+  dependencyAccessPolicyUnknownTargetError,
   duplicateTagIdOnDefinitionError,
   duplicateRegistrationError,
   middlewareNotRegisteredError,
@@ -6,7 +8,12 @@ import {
   tagNotFoundError,
 } from "../errors";
 import { ITaggable } from "../defs";
-import { isOptional, isTag, isTagBeforeInit } from "../define";
+import {
+  isOptional,
+  isResourceWithConfig,
+  isTag,
+  isTagBeforeInit,
+} from "../define";
 import { StoreRegistry } from "./StoreRegistry";
 
 type SanityCheckTaggable = ITaggable & {
@@ -82,6 +89,7 @@ export class StoreValidator {
     this.ensureTagIdsAreUniquePerDefinition();
     this.ensureAllTagsUsedAreRegistered();
     this.ensureNoSelfTagDependencies();
+    this.ensureDependencyAccessPoliciesAreValid();
 
     // Validate module boundary visibility after all items are registered
     this.registry.visibilityTracker.validateVisibility(this.registry);
@@ -216,5 +224,71 @@ export class StoreValidator {
         });
       }
     }
+  }
+
+  private ensureDependencyAccessPoliciesAreValid() {
+    for (const { resource } of this.registry.resources.values()) {
+      const policy = resource.dependencyAccessPolicy;
+      if (!policy) {
+        continue;
+      }
+
+      if (!Array.isArray(policy.deny)) {
+        dependencyAccessPolicyInvalidEntryError.throw({
+          policyResourceId: resource.id,
+          entry: policy,
+        });
+      }
+
+      for (const entry of policy.deny) {
+        const resolvedId = this.resolveDependencyAccessPolicyTargetId(entry);
+        if (!resolvedId) {
+          dependencyAccessPolicyInvalidEntryError.throw({
+            policyResourceId: resource.id,
+            entry,
+          });
+        } else if (!this.hasRegisteredId(resolvedId)) {
+          dependencyAccessPolicyUnknownTargetError.throw({
+            policyResourceId: resource.id,
+            targetId: resolvedId,
+          });
+        }
+      }
+    }
+  }
+
+  private resolveDependencyAccessPolicyTargetId(entry: unknown): string | null {
+    if (typeof entry === "string") {
+      return entry.length > 0 ? entry : null;
+    }
+
+    if (!entry || typeof entry !== "object") {
+      return null;
+    }
+
+    if (isResourceWithConfig(entry)) {
+      return entry.resource.id;
+    }
+
+    if (!("id" in entry)) {
+      return null;
+    }
+
+    const id = (entry as { id?: unknown }).id;
+    return typeof id === "string" && id.length > 0 ? id : null;
+  }
+
+  private hasRegisteredId(id: string): boolean {
+    return (
+      this.registry.tasks.has(id) ||
+      this.registry.resources.has(id) ||
+      this.registry.events.has(id) ||
+      this.registry.errors.has(id) ||
+      this.registry.asyncContexts.has(id) ||
+      this.registry.taskMiddlewares.has(id) ||
+      this.registry.resourceMiddlewares.has(id) ||
+      this.registry.tags.has(id) ||
+      this.registry.hooks.has(id)
+    );
   }
 }

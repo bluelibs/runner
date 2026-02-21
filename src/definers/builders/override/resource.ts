@@ -1,4 +1,5 @@
 import type {
+  DependencyAccessPolicy,
   DependencyMapType,
   IResource,
   IResourceDefinition,
@@ -448,6 +449,23 @@ function makeResourceOverrideBuilder<
         TMiddleware
       >(base, next);
     },
+    dependencyAccessPolicy(policy: DependencyAccessPolicy) {
+      const existing = state.dependencyAccessPolicy?.deny ?? [];
+      const next = cloneResourceState(state, {
+        dependencyAccessPolicy: {
+          deny: [...existing, ...policy.deny],
+        },
+      });
+      return makeResourceOverrideBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(base, next);
+    },
     build() {
       const normalizedThrows = normalizeThrows(
         { kind: "resource", id: state.id },
@@ -504,6 +522,7 @@ export function resourceOverrideBuilder<
     overrides: base.overrides,
     throws: base.throws,
     exports: base.exports,
+    dependencyAccessPolicy: base.dependencyAccessPolicy,
   });
 
   return makeResourceOverrideBuilder(base, initial);
