@@ -5,6 +5,7 @@ import {
   AnyTask,
   TaggedTask,
   TaggedResource,
+  TagDependencyAccessor,
   AnyResource,
 } from "../defs";
 import { findCircularDependencies } from "./utils/findCircularDependencies";
@@ -345,15 +346,25 @@ export class Store {
     return this.registry.storeGenericItem<C>(item);
   }
 
+  public getTagAccessor<TTag extends ITag<any, any, any>>(
+    tag: TTag,
+    options?: { consumerId?: string; includeSelf?: boolean },
+  ): TagDependencyAccessor<TTag> {
+    return this.registry.getTagAccessor(tag, options);
+  }
+
   /**
    * Returns all tasks with the given tag.
    * @param tag - The tag to filter by.
    * @returns The tasks with the given tag.
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
    */
   public getTasksWithTag<TTag extends ITag<any, any, any>>(
     tag: TTag,
   ): TaggedTask<TTag>[];
+  /** @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor. */
   public getTasksWithTag(tag: string): AnyTask[];
+  /** @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor. */
   public getTasksWithTag(tag: string | ITag<any, any, any>): AnyTask[] {
     return typeof tag === "string"
       ? this.registry.getTasksWithTag(tag)
@@ -364,11 +375,14 @@ export class Store {
    * Returns all resources with the given tag.
    * @param tag - The tag to filter by.
    * @returns The resources with the given tag.
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
    */
   public getResourcesWithTag<TTag extends ITag<any, any, any>>(
     tag: TTag,
   ): TaggedResource<TTag>[];
+  /** @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor. */
   public getResourcesWithTag(tag: string): AnyResource[];
+  /** @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor. */
   public getResourcesWithTag(tag: string | ITag<any, any, any>): AnyResource[] {
     return typeof tag === "string"
       ? this.registry.getResourcesWithTag(tag)

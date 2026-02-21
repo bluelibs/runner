@@ -2,9 +2,11 @@ import {
   duplicateTagIdOnDefinitionError,
   duplicateRegistrationError,
   middlewareNotRegisteredError,
+  tagSelfDependencyError,
   tagNotFoundError,
 } from "../errors";
 import { ITaggable } from "../defs";
+import { isOptional, isTag } from "../define";
 import { StoreRegistry } from "./StoreRegistry";
 
 type SanityCheckTaggable = ITaggable & {
@@ -79,6 +81,7 @@ export class StoreValidator {
 
     this.ensureTagIdsAreUniquePerDefinition();
     this.ensureAllTagsUsedAreRegistered();
+    this.ensureNoSelfTagDependencies();
 
     // Validate module boundary visibility after all items are registered
     this.registry.visibilityTracker.validateVisibility(this.registry);
@@ -137,6 +140,77 @@ export class StoreValidator {
         if (!this.registry.tags.has(tag.id)) {
           tagNotFoundError.throw({ id: tag.id });
         }
+      }
+    }
+  }
+
+  private ensureNoSelfTagDependencies() {
+    const entries: Array<{
+      definitionType: string;
+      definitionId: string;
+      tags: ITaggable["tags"];
+      dependencies: unknown;
+    }> = [
+      ...Array.from(this.registry.tasks.values()).map((x) => ({
+        definitionType: "Task",
+        definitionId: x.task.id,
+        tags: x.task.tags,
+        dependencies: x.task.dependencies,
+      })),
+      ...Array.from(this.registry.resources.values()).map((x) => ({
+        definitionType: "Resource",
+        definitionId: x.resource.id,
+        tags: x.resource.tags,
+        dependencies: x.resource.dependencies,
+      })),
+      ...Array.from(this.registry.hooks.values()).map((x) => ({
+        definitionType: "Hook",
+        definitionId: x.hook.id,
+        tags: x.hook.tags,
+        dependencies: x.hook.dependencies,
+      })),
+      ...Array.from(this.registry.taskMiddlewares.values()).map((x) => ({
+        definitionType: "Task middleware",
+        definitionId: x.middleware.id,
+        tags: x.middleware.tags,
+        dependencies: x.middleware.dependencies,
+      })),
+      ...Array.from(this.registry.resourceMiddlewares.values()).map((x) => ({
+        definitionType: "Resource middleware",
+        definitionId: x.middleware.id,
+        tags: x.middleware.tags,
+        dependencies: x.middleware.dependencies,
+      })),
+    ];
+
+    for (const entry of entries) {
+      if (!entry.dependencies || typeof entry.dependencies !== "object") {
+        continue;
+      }
+
+      const ownTagIds = new Set(
+        (Array.isArray(entry.tags) ? entry.tags : []).map((tag) => tag.id),
+      );
+      for (const dependency of Object.values(
+        entry.dependencies as Record<string, unknown>,
+      )) {
+        const maybeDependency = isOptional(dependency)
+          ? (dependency as { inner: unknown }).inner
+          : dependency;
+
+        if (!isTag(maybeDependency)) {
+          continue;
+        }
+
+        if (!ownTagIds.has(maybeDependency.id)) {
+          continue;
+        }
+
+        tagSelfDependencyError.throw({
+          definitionType: entry.definitionType,
+          definitionId: entry.definitionId,
+          tagId: maybeDependency.id,
+        });
       }
     }
   }

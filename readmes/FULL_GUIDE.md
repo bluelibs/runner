@@ -2208,7 +2208,7 @@ const taskWithTags = r
 
 #### Discovering Components by Tags
 
-The core power of tags is runtime discovery. Use `store.getTasksWithTag()` to find components:
+The core power of tags is runtime discovery. Depend on tags directly and Runner injects a typed accessor:
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -2218,27 +2218,31 @@ import { r, globals } from "@bluelibs/runner";
 const routeRegistration = r
   .hook("app.hooks.registerRoutes")
   .on(globals.events.ready)
-  .dependencies({ store: globals.resources.store, server: expressServer })
-  .run(async (_event, { store, server }) => {
+  .dependencies({ server: expressServer, httpTag, cacheableTag })
+  .run(async (_event, { server, httpTag, cacheableTag }) => {
     // Find all tasks with HTTP tags
-    const apiTasks = store.getTasksWithTag(httpTag);
-
-    apiTasks.forEach((taskDef) => {
-      const config = httpTag.extract(taskDef);
+    httpTag.tasks.forEach((entry) => {
+      const config = entry.config;
       if (!config) return;
 
       const { method, path } = config;
       server.app[method.toLowerCase()](path, async (req, res) => {
-        const result = await taskDef({ ...req.params, ...req.body });
+        const result = await entry.definition({ ...req.params, ...req.body });
         res.json(result);
       });
     });
 
-    const cacheableTasks = store.getTasksWithTag(cacheableTag);
-    console.log(`Found ${cacheableTasks.length} cacheable tasks`);
+    console.log(`Found ${cacheableTag.tasks.length} cacheable tasks`);
   })
   .build();
 ```
+
+Tag accessors expose all tagged definition categories:
+`tasks`, `resources`, `events`, `hooks`, `taskMiddlewares`, `resourceMiddlewares`, and `errors`.
+
+Deprecated API note: `store.getTasksWithTag(...)` and `store.getResourcesWithTag(...)` are deprecated in favor of tag dependencies.
+
+Fail-fast rule: if a tagged item depends on the same tag, Runner throws during store sanity checks.
 
 #### Tag Extraction and Processing
 

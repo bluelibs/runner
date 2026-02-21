@@ -323,7 +323,22 @@ const getHealth = r
   .build();
 ```
 
-Retrieve tagged items by using `globals.resources.store` inside a hook or resource and calling `store.getTasksWithTag(tag)`.
+Retrieve tagged items by depending on the tag directly. Runner injects a typed accessor with `tasks`, `resources`, `events`, `hooks`, `taskMiddlewares`, `resourceMiddlewares`, and `errors`.
+
+```ts
+const inspectRoutes = r
+  .task("app.tasks.inspectRoutes")
+  .dependencies({ httpRouteTag })
+  .run(async (_input, { httpRouteTag }) => {
+    return httpRouteTag.tasks.map((entry) => ({
+      id: entry.definition.id,
+      config: entry.config,
+    }));
+  })
+  .build();
+```
+
+Deprecated API note: `store.getTasksWithTag(...)` / `store.getResourcesWithTag(...)` remain available for compatibility but are deprecated in favor of tag dependencies. Runner also fails fast during store sanity checks when a tagged definition depends on the same tag.
 
 **Node durable workflows must be tagged** with `durableWorkflowTag` from `@bluelibs/runner/node` to be discoverable via `durable.getWorkflows()` at runtime. This tag is required, not optional. Workflow execution is explicit via the durable API (`durable.start(...)` / `durable.startAndWait(...)`) and these are the current, non-deprecated methods. The legacy aliases `durable.startExecution(...)`, `durable.execute(...)`, and `durable.executeStrict(...)` remain available as deprecated compatibility methods (`startExecution` -> `start`, `execute` -> `startAndWait(...).data`, `executeStrict` -> `startAndWait`). The tag is discovery metadata only; `startAndWait(...)` provides the unified result envelope `{ durable: { executionId }, data }`.
 

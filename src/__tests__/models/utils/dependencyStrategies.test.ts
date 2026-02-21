@@ -2,7 +2,12 @@ import {
   dependencyStrategies,
   findDependencyStrategy,
 } from "../../../models/utils/dependencyStrategies";
-import { defineResource, defineTask, defineEvent } from "../../../define";
+import {
+  defineResource,
+  defineTask,
+  defineEvent,
+  defineTag,
+} from "../../../define";
 import { defineError } from "../../../definers/defineError";
 import { defineAsyncContext } from "../../../definers/defineAsyncContext";
 
@@ -10,6 +15,7 @@ import { defineAsyncContext } from "../../../definers/defineAsyncContext";
 const resource = defineResource({ id: "test.resource", init: async () => 42 });
 const task = defineTask({ id: "test.task", run: async () => "ok" });
 const event = defineEvent<string>({ id: "test.event" });
+const tag = defineTag({ id: "test.tag" });
 const errorHelper = defineError({
   id: "test.error",
   format: () => "boom",
@@ -18,8 +24,8 @@ const asyncCtx = defineAsyncContext<number>({ id: "test.asyncCtx" });
 
 describe("dependencyStrategies", () => {
   describe("strategies list", () => {
-    it("contains exactly 5 strategies (resource, task, event, error, asyncContext)", () => {
-      expect(dependencyStrategies).toHaveLength(5);
+    it("contains exactly 6 strategies (resource, task, event, tag, error, asyncContext)", () => {
+      expect(dependencyStrategies).toHaveLength(6);
     });
 
     it("each strategy has matches and getStoreMap", () => {
@@ -47,6 +53,12 @@ describe("dependencyStrategies", () => {
       const strategy = findDependencyStrategy(event);
       expect(strategy).toBeDefined();
       expect(strategy!.matches(event)).toBe(true);
+    });
+
+    it("returns the tag strategy for a tag definition", () => {
+      const strategy = findDependencyStrategy(tag);
+      expect(strategy).toBeDefined();
+      expect(strategy!.matches(tag)).toBe(true);
     });
 
     it("returns the error strategy for an error helper", () => {
@@ -81,6 +93,7 @@ describe("dependencyStrategies", () => {
         resources: new Map([["r1", "val1"]]),
         tasks: new Map([["t1", "val2"]]),
         events: new Map([["e1", "val3"]]),
+        tags: new Map([["tg1", "valTag"]]),
         errors: new Map([["err1", "val4"]]),
         asyncContexts: new Map([["ac1", "val5"]]),
       } as any;
@@ -96,6 +109,9 @@ describe("dependencyStrategies", () => {
 
       const eventStrategy = findDependencyStrategy(event)!;
       expect(eventStrategy.getStoreMap(mockStore).has("e1")).toBe(true);
+
+      const tagStrategy = findDependencyStrategy(tag)!;
+      expect(tagStrategy.getStoreMap(mockStore).has("tg1")).toBe(true);
 
       const errorStrategy = findDependencyStrategy(errorHelper)!;
       expect(errorStrategy.getStoreMap(mockStore).has("err1")).toBe(true);

@@ -3,10 +3,12 @@ import {
   ITagDefinition,
   ITaggable,
   TagType,
+  IOptionalDependency,
   ITagConfigured,
   symbolTag,
   symbolFilePath,
   symbolTagConfigured,
+  symbolOptionalDependency,
 } from "../defs";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
@@ -78,13 +80,21 @@ export function defineTag<
         config = tagConfig;
       }
       return {
-        ...foundation,
+        ...this,
         [symbolTagConfigured]: true,
         config,
       } as ITagConfigured<
         TConfig,
         TEnforceInputContract,
         TEnforceOutputContract
+      >;
+    },
+    optional() {
+      return {
+        inner: this,
+        [symbolOptionalDependency]: true,
+      } as IOptionalDependency<
+        ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
       >;
     },
     /**

@@ -11,6 +11,8 @@ import {
   IHook,
   TaggedTask,
   TaggedResource,
+  TagDependencyAccessor,
+  TagDependencyMatch,
   AnyResource,
 } from "../defs";
 import * as utils from "../define";
@@ -284,32 +286,154 @@ export class StoreRegistry {
     return buildEmissionGraph(this);
   }
 
+  getTagAccessor<TTag extends ITag<any, any, any>>(
+    tag: TTag,
+    options?: { consumerId?: string; includeSelf?: boolean },
+  ): TagDependencyAccessor<TTag> {
+    const consumerId = options?.consumerId;
+    const includeSelf = options?.includeSelf ?? true;
+    const isIncluded = (definitionId: string): boolean => {
+      if (!includeSelf && consumerId && definitionId === consumerId) {
+        return false;
+      }
+      if (!consumerId) {
+        return true;
+      }
+      return this.visibilityTracker.isAccessible(definitionId, consumerId);
+    };
+
+    const mapToMatch = <TDefinition>(
+      list: ReadonlyArray<{
+        definition: TDefinition;
+        tags: ReadonlyArray<{ id: string; config?: unknown }>;
+      }>,
+    ): ReadonlyArray<TagDependencyMatch<TDefinition, TTag>> => {
+      return list
+        .filter((item) => {
+          const definitionWithId = item.definition as { id: string };
+          return (
+            item.tags.some((candidate) => candidate.id === tag.id) &&
+            isIncluded(definitionWithId.id)
+          );
+        })
+        .map((item) => {
+          return {
+            definition: item.definition,
+            config: tag.extract(item.tags as unknown as ITag[]),
+          };
+        });
+    };
+
+    const tasks = mapToMatch(
+      Array.from(this.tasks.values()).map((item) => ({
+        definition: item.task,
+        tags: item.task.tags,
+      })),
+    ) as TagDependencyAccessor<TTag>["tasks"];
+
+    const resources = mapToMatch(
+      Array.from(this.resources.values()).map((item) => ({
+        definition: item.resource,
+        tags: item.resource.tags,
+      })),
+    ) as TagDependencyAccessor<TTag>["resources"];
+
+    const events = mapToMatch(
+      Array.from(this.events.values()).map((item) => ({
+        definition: item.event,
+        tags: item.event.tags,
+      })),
+    ) as TagDependencyAccessor<TTag>["events"];
+
+    const hooks = mapToMatch(
+      Array.from(this.hooks.values()).map((item) => ({
+        definition: item.hook,
+        tags: item.hook.tags,
+      })),
+    ) as TagDependencyAccessor<TTag>["hooks"];
+
+    const taskMiddlewares = mapToMatch(
+      Array.from(this.taskMiddlewares.values()).map((item) => ({
+        definition: item.middleware,
+        tags: item.middleware.tags ?? [],
+      })),
+    ) as TagDependencyAccessor<TTag>["taskMiddlewares"];
+
+    const resourceMiddlewares = mapToMatch(
+      Array.from(this.resourceMiddlewares.values()).map((item) => ({
+        definition: item.middleware,
+        tags: item.middleware.tags ?? [],
+      })),
+    ) as TagDependencyAccessor<TTag>["resourceMiddlewares"];
+
+    const errors = mapToMatch(
+      Array.from(this.errors.values()).map((item) => ({
+        definition: item,
+        tags: item.tags,
+      })),
+    ) as TagDependencyAccessor<TTag>["errors"];
+
+    return Object.freeze({
+      tasks: Object.freeze(tasks),
+      resources: Object.freeze(resources),
+      events: Object.freeze(events),
+      hooks: Object.freeze(hooks),
+      taskMiddlewares: Object.freeze(taskMiddlewares),
+      resourceMiddlewares: Object.freeze(resourceMiddlewares),
+      errors: Object.freeze(errors),
+    });
+  }
+
+  /**
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
+   */
   getTasksWithTag<TTag extends ITag<any, any, any>>(
     tag: TTag,
   ): TaggedTask<TTag>[];
+  /**
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
+   */
   getTasksWithTag(tag: string): AnyTask[];
+  /**
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
+   */
   getTasksWithTag(tag: string | ITag<any, any, any>): AnyTask[] {
-    const tagId = typeof tag === "string" ? tag : tag.id;
+    if (typeof tag === "string") {
+      const found = this.tags.get(tag);
+      if (!found) {
+        return [];
+      }
+      return this.getTagAccessor(found).tasks.map((item) => item.definition);
+    }
 
-    return Array.from(this.tasks.values())
-      .filter((x) => {
-        return x.task.tags.some((t) => t.id === tagId);
-      })
-      .map((x) => x.task);
+    return this.getTagAccessor(tag).tasks.map((item) => item.definition);
   }
 
+  /**
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
+   */
   getResourcesWithTag<TTag extends ITag<any, any, any>>(
     tag: TTag,
   ): TaggedResource<TTag>[];
+  /**
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
+   */
   getResourcesWithTag(tag: string): AnyResource[];
+  /**
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
+   */
   getResourcesWithTag(tag: string | ITag<any, any, any>): AnyResource[] {
-    const tagId = typeof tag === "string" ? tag : tag.id;
+    if (typeof tag === "string") {
+      const found = this.tags.get(tag);
+      if (!found) {
+        return [];
+      }
+      return this.getTagAccessor(found).resources.map(
+        (item) => item.definition,
+      );
+    }
 
-    return Array.from(this.resources.values())
-      .filter((x) => {
-        return x.resource.tags.some((t) => t.id === tagId);
-      })
-      .map((x) => x.resource);
+    return this.getTagAccessor(tag).resources.map((item) => item.definition);
   }
 
   /**

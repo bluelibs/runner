@@ -224,6 +224,23 @@ export const duplicateTagIdOnDefinitionError = error<
   )
   .build();
 
+export const tagSelfDependencyError = error<
+  {
+    definitionType: string;
+    definitionId: string;
+    tagId: string;
+  } & DefaultErrorType
+>("runner.errors.tagSelfDependency")
+  .format(
+    ({ definitionType, definitionId, tagId }) =>
+      `${definitionType} "${definitionId}" cannot depend on tag "${tagId}" because it already carries the same tag.`,
+  )
+  .remediation(
+    ({ definitionId, tagId }) =>
+      `Remove "${tagId}" from "${definitionId}" tags, or stop declaring it as a dependency. Self tag dependencies are forbidden to prevent ambiguous graph coupling.`,
+  )
+  .build();
+
 // Locked
 export const lockedError = error<{ what: string } & DefaultErrorType>(
   "runner.errors.locked",

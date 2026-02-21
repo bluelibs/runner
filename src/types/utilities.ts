@@ -10,6 +10,7 @@ import {
   IEventEmitReport,
 } from "./event";
 import { ITag } from "./tag";
+import type { TagDependencyAccessor } from "./tagged";
 import { symbolOptionalDependency } from "./symbols";
 import { IErrorHelper } from "./error";
 import type { IAsyncContext } from "./asyncContext";
@@ -76,11 +77,13 @@ export type DependencyMapType = Record<
   | ITask<any, any, any, any, any, any>
   | IResource<any, any, any, any, any, any, any>
   | IEvent<any>
+  | ITag<any, any, any>
   | IErrorHelper<any>
   | IAsyncContext<any>
   | IOptionalDependency<ITask<any, any, any, any, any, any>>
   | IOptionalDependency<IResource<any, any, any, any, any, any, any>>
   | IOptionalDependency<IEvent<any>>
+  | IOptionalDependency<ITag<any, any, any>>
   | IOptionalDependency<IErrorHelper<any>>
   | IOptionalDependency<IAsyncContext<any>>
 >;
@@ -209,11 +212,13 @@ export type DependencyValueType<T> =
         ? T
         : T extends IAsyncContext<any>
           ? T
-          : T extends IEventDefinition<any>
-            ? EventDependency<ExtractEventPayload<T>>
-            : T extends IOptionalDependency<infer U>
-              ? DependencyValueType<U> | undefined
-              : never;
+          : T extends ITag<any, any, any>
+            ? TagDependencyAccessor<T>
+            : T extends IEventDefinition<any>
+              ? EventDependency<ExtractEventPayload<T>>
+              : T extends IOptionalDependency<infer U>
+                ? DependencyValueType<U> | undefined
+                : never;
 
 export type DependencyValuesType<T extends DependencyMapType> = {
   [K in keyof T]: DependencyValueType<T[K]>;
@@ -244,11 +249,13 @@ export type ResourceDependencyValueType<T> =
         ? T
         : T extends IAsyncContext<any>
           ? T
-          : T extends IEventDefinition<any>
-            ? EventDependency<ExtractEventPayload<T>>
-            : T extends IOptionalDependency<infer U>
-              ? ResourceDependencyValueType<U> | undefined
-              : never;
+          : T extends ITag<any, any, any>
+            ? TagDependencyAccessor<T>
+            : T extends IEventDefinition<any>
+              ? EventDependency<ExtractEventPayload<T>>
+              : T extends IOptionalDependency<infer U>
+                ? ResourceDependencyValueType<U> | undefined
+                : never;
 
 export type ResourceDependencyValuesType<T extends DependencyMapType> = {
   [K in keyof T]: ResourceDependencyValueType<T[K]>;

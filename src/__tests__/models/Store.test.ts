@@ -389,6 +389,8 @@ describe("Store", () => {
     expect(result).toHaveLength(1);
     const result2 = store.getTasksWithTag("tags.test");
     expect(result2).toHaveLength(1);
+    const result3 = store.getTasksWithTag("tags.unknown");
+    expect(result3).toHaveLength(0);
   });
 
   it("should call getResourcesWithTag method", () => {
@@ -416,6 +418,40 @@ describe("Store", () => {
     expect(result).toHaveLength(1);
     const result2 = store.getResourcesWithTag("tags.test");
     expect(result2).toHaveLength(1);
+    const result3 = store.getResourcesWithTag("tags.unknown");
+    expect(result3).toHaveLength(0);
+  });
+
+  it("should support tag accessors with includeSelf=false", () => {
+    const tag = defineTag({
+      id: "tags.accessor.self",
+    });
+
+    const taggedTask = defineTask({
+      id: "task.accessor.self",
+      tags: [tag],
+      run: async () => "ok",
+    });
+
+    const rootResource = defineResource({
+      id: "root.accessor.self",
+      register: [tag, taggedTask],
+      init: async () => "Root Value",
+    });
+
+    store.initializeStore(rootResource, {}, runtimeResult);
+
+    const withoutSelf = store.getTagAccessor(tag, {
+      consumerId: taggedTask.id,
+      includeSelf: false,
+    });
+    const withSelf = store.getTagAccessor(tag, {
+      consumerId: taggedTask.id,
+      includeSelf: true,
+    });
+
+    expect(withoutSelf.tasks).toHaveLength(0);
+    expect(withSelf.tasks).toHaveLength(1);
   });
 
   it("should discover tasks and resources by a contract tag at runtime", async () => {

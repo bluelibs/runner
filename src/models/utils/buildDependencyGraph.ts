@@ -1,7 +1,7 @@
 import type { StoreRegistry } from "../StoreRegistry";
 import type { IDependentNode } from "./findCircularDependencies";
 import type { IEvent } from "../../defs";
-import { isOptional, isEvent } from "../../define";
+import { isOptional, isEvent, isTag } from "../../define";
 
 const readStringId = (value: unknown): string | undefined => {
   if (!value || typeof value !== "object") {
@@ -18,6 +18,100 @@ const getDependencyId = (dependency: unknown): string | undefined =>
       ? (dependency as { inner: unknown }).inner
       : dependency,
   );
+
+const getTagDependencyId = (dependency: unknown): string | undefined => {
+  const raw = isOptional(dependency)
+    ? (dependency as { inner: unknown }).inner
+    : dependency;
+
+  if (!isTag(raw)) {
+    return undefined;
+  }
+
+  return raw.id;
+};
+
+function resolveTagDependencyNodes(
+  registry: StoreRegistry,
+  nodeMap: Map<string, IDependentNode>,
+  consumerId: string,
+  tagId: string,
+): IDependentNode[] {
+  const matches: IDependentNode[] = [];
+  const pushIfMatch = (definition: {
+    id: string;
+    tags?: Array<{ id: string }>;
+  }): void => {
+    if (definition.id === consumerId) {
+      return;
+    }
+
+    if (!definition.tags?.some((tag) => tag.id === tagId)) {
+      return;
+    }
+
+    if (!registry.visibilityTracker.isAccessible(definition.id, consumerId)) {
+      return;
+    }
+
+    const node = nodeMap.get(definition.id)!;
+    matches.push(node);
+  };
+
+  for (const task of registry.tasks.values()) {
+    pushIfMatch(task.task);
+  }
+
+  for (const resource of registry.resources.values()) {
+    pushIfMatch(resource.resource);
+  }
+
+  for (const hook of registry.hooks.values()) {
+    pushIfMatch(hook.hook);
+  }
+
+  for (const middleware of registry.taskMiddlewares.values()) {
+    pushIfMatch(middleware.middleware);
+  }
+
+  for (const middleware of registry.resourceMiddlewares.values()) {
+    pushIfMatch(middleware.middleware);
+  }
+
+  return matches;
+}
+
+function attachDependency(
+  node: IDependentNode,
+  key: string,
+  value: unknown,
+  registry: StoreRegistry,
+  nodeMap: Map<string, IDependentNode>,
+): void {
+  const tagId = getTagDependencyId(value);
+  if (tagId) {
+    const tagNodes = resolveTagDependencyNodes(
+      registry,
+      nodeMap,
+      node.id,
+      tagId,
+    );
+    for (const tagNode of tagNodes) {
+      node.dependencies[`tag:${tagId}:${tagNode.id}`] = tagNode;
+    }
+    return;
+  }
+
+  const depId = getDependencyId(value);
+  if (!depId) {
+    return;
+  }
+
+  const depNode = nodeMap.get(depId);
+  if (depNode) {
+    node.dependencies[key] = depNode;
+  }
+}
 
 /**
  * Creates blank dependency nodes for every registered task, middleware, resource,
@@ -97,14 +191,7 @@ export function buildDependencyGraph(
     // Add task dependencies
     if (task.task.dependencies) {
       for (const [depKey, depItem] of Object.entries(task.task.dependencies)) {
-        const depId = getDependencyId(depItem);
-        if (!depId) {
-          continue;
-        }
-        const depNode = nodeMap.get(depId);
-        if (depNode) {
-          node.dependencies[depKey] = depNode;
-        }
+        attachDependency(node, depKey, depItem, registry, nodeMap);
       }
     }
 
@@ -125,14 +212,7 @@ export function buildDependencyGraph(
 
     if (middleware.dependencies) {
       for (const [depKey, depItem] of Object.entries(middleware.dependencies)) {
-        const depId = getDependencyId(depItem);
-        if (!depId) {
-          continue;
-        }
-        const depNode = nodeMap.get(depId);
-        if (depNode) {
-          node.dependencies[depKey] = depNode;
-        }
+        attachDependency(node, depKey, depItem, registry, nodeMap);
       }
     }
 
@@ -158,14 +238,7 @@ export function buildDependencyGraph(
     const { middleware } = storeResourceMiddleware;
     if (middleware.dependencies) {
       for (const [depKey, depItem] of Object.entries(middleware.dependencies)) {
-        const depId = getDependencyId(depItem);
-        if (!depId) {
-          continue;
-        }
-        const depNode = nodeMap.get(depId);
-        if (depNode) {
-          node.dependencies[depKey] = depNode;
-        }
+        attachDependency(node, depKey, depItem, registry, nodeMap);
       }
     }
 
@@ -194,14 +267,7 @@ export function buildDependencyGraph(
       for (const [depKey, depItem] of Object.entries(
         resource.resource.dependencies,
       )) {
-        const depId = getDependencyId(depItem);
-        if (!depId) {
-          continue;
-        }
-        const depNode = nodeMap.get(depId);
-        if (depNode) {
-          node.dependencies[depKey] = depNode;
-        }
+        attachDependency(node, depKey, depItem, registry, nodeMap);
       }
     }
 
@@ -218,15 +284,7 @@ export function buildDependencyGraph(
     const node = nodeMap.get(hook.hook.id)!;
     if (hook.hook.dependencies) {
       for (const [depKey, depItem] of Object.entries(hook.hook.dependencies)) {
-        const depId = getDependencyId(depItem);
-        if (!depId) {
-          continue;
-        }
-        const depNode = nodeMap.get(depId);
-
-        if (depNode) {
-          node.dependencies[depKey] = depNode;
-        }
+        attachDependency(node, depKey, depItem, registry, nodeMap);
       }
     }
   }

@@ -3,10 +3,12 @@ import {
   DependencyValuesType,
   IEvent,
   IEventEmitOptions,
+  ITag,
   IResourceMiddleware,
   IResource,
   ITaskMiddleware,
   ITask,
+  TagDependencyAccessor,
   ResourceDependencyValuesType,
   TaskCallOptions,
   TaskDependencyWithIntercept,
@@ -150,6 +152,7 @@ export class DependencyExtractor {
     if (utils.isResource(item)) return this.extractResourceDependency(item);
     if (utils.isTask(item)) return this.extractTaskDependency(item);
     if (utils.isEvent(item)) return this.extractEventDependency(item, source);
+    if (utils.isTag(item)) return this.extractTagDependency(item, source);
 
     if (!isOpt) {
       const exists = strategy.getStoreMap(this.store).has(itemWithId.id);
@@ -200,6 +203,20 @@ export class DependencyExtractor {
     await this.ensureResourceInitialized(sr);
 
     return sr.value;
+  }
+
+  extractTagDependency<TTag extends ITag<any, any, any>>(
+    tag: TTag,
+    source: string,
+  ): TagDependencyAccessor<TTag> {
+    if (!this.store.tags.has(tag.id)) {
+      dependencyNotFoundError.throw({ key: `Tag ${tag.id}` });
+    }
+
+    return this.store.getTagAccessor(tag, {
+      consumerId: source,
+      includeSelf: false,
+    });
   }
 
   private makeTaskWithIntercept<
