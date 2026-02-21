@@ -87,8 +87,8 @@ export type DependencyMapType = Record<
   | IOptionalDependency<IResource<any, any, any, any, any, any, any>>
   | IOptionalDependency<IEvent<any>>
   | IOptionalDependency<ITag<any, any, any>>
-  | ITagBeforeInitDependency<ITag<any, any, any>>
-  | IOptionalDependency<ITagBeforeInitDependency<ITag<any, any, any>>>
+  | ITagStartupDependency<ITag<any, any, any>>
+  | IOptionalDependency<ITagStartupDependency<ITag<any, any, any>>>
   | IOptionalDependency<IErrorHelper<any>>
   | IOptionalDependency<IAsyncContext<any>>
 >;
@@ -102,11 +102,11 @@ export interface IOptionalDependency<T> {
 }
 
 /** Wrapper type marking a tag dependency as a before-init dependency */
-export interface ITagBeforeInitDependency<TTag extends ITag<any, any, any>> {
+export interface ITagStartupDependency<TTag extends ITag<any, any, any>> {
   /** Wrapped tag definition */
   tag: TTag;
   /** Optional wrapper helper */
-  optional: () => IOptionalDependency<ITagBeforeInitDependency<TTag>>;
+  optional: () => IOptionalDependency<ITagStartupDependency<TTag>>;
   /** Brand symbol for before-init tag dependency */
   [symbolTagBeforeInitDependency]: true;
 }
@@ -229,7 +229,7 @@ export type DependencyValueType<T> =
           ? T
           : T extends ITag<any, any, any>
             ? TagDependencyAccessor<T>
-            : T extends ITagBeforeInitDependency<infer TTag>
+            : T extends ITagStartupDependency<infer TTag>
               ? TagDependencyAccessor<TTag>
               : T extends IEventDefinition<any>
                 ? EventDependency<ExtractEventPayload<T>>
@@ -268,7 +268,7 @@ export type ResourceDependencyValueType<T> =
           ? T
           : T extends ITag<any, any, any>
             ? TagDependencyAccessor<T>
-            : T extends ITagBeforeInitDependency<infer TTag>
+            : T extends ITagStartupDependency<infer TTag>
               ? TagDependencyAccessor<TTag>
               : T extends IEventDefinition<any>
                 ? EventDependency<ExtractEventPayload<T>>

@@ -365,7 +365,7 @@ describe("DependencyProcessor parallel init internals", () => {
     ).toBe(true);
   });
 
-  it("treats beforeInit() tag dependencies as readiness prerequisites in parallel mode", () => {
+  it("treats startup() tag dependencies as readiness prerequisites in parallel mode", () => {
     const fixture = createTestFixture();
     const { store, eventManager, logger } = fixture;
     const taskRunner = fixture.createTaskRunner();
@@ -386,7 +386,7 @@ describe("DependencyProcessor parallel init internals", () => {
     const consumer = defineResource({
       id: "parallel.wave.tag.beforeInit.prereq.consumer",
       dependencies: {
-        aggregateTag: aggregateTag.beforeInit(),
+        aggregateTag: aggregateTag.startup(),
       },
       async init() {
         return "consumer";

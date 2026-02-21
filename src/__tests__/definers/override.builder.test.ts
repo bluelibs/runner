@@ -278,8 +278,8 @@ describe(SuiteName.OverrideBuilder, () => {
       .meta({ [MetaKey.Label]: ResourceValue.Override } as Record<string, any>)
       .exports([registerA])
       .exports([registerB], { override: true })
-      .dependencyAccessPolicy({ deny: [denyTask] })
-      .dependencyAccessPolicy({ deny: [registerB.id] })
+      .wiringAccessPolicy({ deny: [denyTask] })
+      .wiringAccessPolicy({ deny: [registerB.id] })
       .overrides([overrideTask])
       .overrides([overrideTask], { override: true })
       .throws([errorHelper])
@@ -298,7 +298,7 @@ describe(SuiteName.OverrideBuilder, () => {
       [MetaKey.Label]: ResourceValue.Override,
     });
     expect(overrideResource.exports).toEqual([registerB]);
-    expect(overrideResource.dependencyAccessPolicy).toEqual({
+    expect(overrideResource.wiringAccessPolicy).toEqual({
       deny: [denyTask, registerB.id],
     });
     expect(overrideResource.overrides).toEqual([overrideTask]);

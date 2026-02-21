@@ -18,6 +18,7 @@ import type {
   ExtractTaskOutput,
   ResourceDependency,
   TaskDependency,
+  TaskLocalInterceptor,
 } from "./utilities";
 
 type TagInputContract<TTag extends ITag<any, any, any>> =
@@ -77,6 +78,13 @@ export interface TagDependencyTaskMatch<
     ExtractTaskInput<TaggedTask<TTag>>,
     ExtractTaskOutput<TaggedTask<TTag>>
   >;
+  intercept?: (
+    middleware: TaskLocalInterceptor<
+      ExtractTaskInput<TaggedTask<TTag>>,
+      ExtractTaskOutput<TaggedTask<TTag>>
+    >,
+  ) => void;
+  getInterceptingResourceIds?: () => readonly string[];
 }
 
 export interface TagDependencyResourceMatch<

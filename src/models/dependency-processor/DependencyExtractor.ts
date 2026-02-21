@@ -142,7 +142,7 @@ export class DependencyExtractor {
       item = object.inner;
     }
 
-    if (utils.isTagBeforeInit(item)) {
+    if (utils.isTagStartup(item)) {
       item = item.tag;
     }
 
@@ -225,6 +225,9 @@ export class DependencyExtractor {
       consumerId: source,
       includeSelf: false,
     });
+    const ownerResourceId = this.store.resources.has(source)
+      ? source
+      : undefined;
 
     let tasksCache: TagDependencyAccessor<TTag>["tasks"] | undefined;
     let resourcesCache: TagDependencyAccessor<TTag>["resources"] | undefined;
@@ -236,6 +239,12 @@ export class DependencyExtractor {
             definition: entry.definition,
             config: entry.config,
             run: this.createTaggedTaskRunner(entry.definition),
+            ...(ownerResourceId
+              ? this.createTaggedTaskInterceptHelpers(
+                  entry.definition,
+                  ownerResourceId,
+                )
+              : {}),
           })),
         );
       }
@@ -309,6 +318,24 @@ export class DependencyExtractor {
       const runner = await ensureRunner();
       return runner(input, options);
     }) as TaskDependency<ExtractTaskInput<TTask>, ExtractTaskOutput<TTask>>;
+  }
+
+  private createTaggedTaskInterceptHelpers<TTask extends TaggedTask<any>>(
+    task: TTask,
+    ownerResourceId: string,
+  ): Pick<
+    TagDependencyAccessor<ITag<any, any, any>>["tasks"][number],
+    "intercept" | "getInterceptingResourceIds"
+  > {
+    const withIntercept = this.makeTaskWithIntercept(
+      task as unknown as ITask<any, any, any>,
+      ownerResourceId,
+    );
+
+    return {
+      intercept: withIntercept.intercept,
+      getInterceptingResourceIds: withIntercept.getInterceptingResourceIds,
+    };
   }
 
   private createRuntimeTaggedResourceMatch<TTag extends ITag<any, any, any>>(

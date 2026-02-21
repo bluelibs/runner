@@ -9,11 +9,10 @@ import {
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
 
-const POLICY_VIOLATION_ID = "runner.errors.dependencyAccessPolicyViolation";
+const POLICY_VIOLATION_ID = "runner.errors.wiringAccessPolicyViolation";
 const POLICY_UNKNOWN_TARGET_ID =
-  "runner.errors.dependencyAccessPolicyUnknownTarget";
-const POLICY_INVALID_ENTRY_ID =
-  "runner.errors.dependencyAccessPolicyInvalidEntry";
+  "runner.errors.wiringAccessPolicyUnknownTarget";
+const POLICY_INVALID_ENTRY_ID = "runner.errors.wiringAccessPolicyInvalidEntry";
 
 async function expectRunnerErrorId(
   promise: Promise<unknown>,
@@ -29,7 +28,7 @@ async function expectRunnerErrorId(
   }
 }
 
-describe("run.dependencyAccessPolicy", () => {
+describe("run.wiringAccessPolicy", () => {
   it("fails when a denied id is used as a dependency", async () => {
     const deniedTask = defineTask({
       id: "policy.id.denied",
@@ -45,7 +44,7 @@ describe("run.dependencyAccessPolicy", () => {
     const guarded = defineResource({
       id: "policy.id.resource",
       register: [deniedTask, consumer],
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: [deniedTask.id],
       },
     });
@@ -75,7 +74,7 @@ describe("run.dependencyAccessPolicy", () => {
     const child = defineResource({
       id: "policy.compound.child",
       register: [consumer],
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: [consumer.id],
       },
     });
@@ -83,7 +82,7 @@ describe("run.dependencyAccessPolicy", () => {
     const parent = defineResource({
       id: "policy.compound.parent",
       register: [deniedTask, child],
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: [deniedTask],
       },
     });
@@ -111,7 +110,7 @@ describe("run.dependencyAccessPolicy", () => {
     const guarded = defineResource({
       id: "policy.hook.resource",
       register: [deniedEvent, hook],
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: [deniedEvent],
       },
     });
@@ -139,7 +138,7 @@ describe("run.dependencyAccessPolicy", () => {
     const guarded = defineResource({
       id: "policy.middleware.resource",
       register: [deniedMiddleware, task],
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: [deniedMiddleware],
       },
     });
@@ -176,7 +175,7 @@ describe("run.dependencyAccessPolicy", () => {
     const guarded = defineResource({
       id: "policy.tag.resource",
       register: [deniedTag, deniedTask, deniedTaskConsumer, deniedTagConsumer],
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: [deniedTag],
       },
     });
@@ -215,7 +214,7 @@ describe("run.dependencyAccessPolicy", () => {
     const guarded = defineResource({
       id: "policy.filter.resource",
       register: [denyTag, queryTag, hiddenTask, visibleTask, inspect],
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: [denyTag],
       },
     });
@@ -235,7 +234,7 @@ describe("run.dependencyAccessPolicy", () => {
 
     const guarded = defineResource({
       id: "policy.unknown.resource",
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: ["policy.unknown.missing"],
       },
     });
@@ -253,7 +252,7 @@ describe("run.dependencyAccessPolicy", () => {
   it("fails fast when a deny entry is invalid", async () => {
     const guarded = defineResource({
       id: "policy.invalid.resource",
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: [{} as any],
       },
     });
@@ -269,7 +268,7 @@ describe("run.dependencyAccessPolicy", () => {
   it("fails fast when deny is not an array", async () => {
     const guarded = defineResource({
       id: "policy.invalid.shape.resource",
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: "not-an-array" as any,
       },
     });
@@ -285,7 +284,7 @@ describe("run.dependencyAccessPolicy", () => {
   it("fails fast when deny contains a non-object primitive", async () => {
     const guarded = defineResource({
       id: "policy.invalid.primitive.resource",
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: [123 as any],
       },
     });
@@ -301,7 +300,7 @@ describe("run.dependencyAccessPolicy", () => {
   it("fails fast when deny contains an empty string id", async () => {
     const guarded = defineResource({
       id: "policy.invalid.empty-string.resource",
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: [""],
       },
     });
@@ -317,7 +316,7 @@ describe("run.dependencyAccessPolicy", () => {
   it("fails fast when deny object id is not a non-empty string", async () => {
     const guarded = defineResource({
       id: "policy.invalid.object-id.resource",
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: [{ id: 123 } as any],
       },
     });
@@ -345,7 +344,7 @@ describe("run.dependencyAccessPolicy", () => {
     const guarded = defineResource({
       id: "policy.with.resource",
       register: [deniedResource.with({ label: "x" }), consumer],
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: [deniedResource.with({ label: "y" })],
       },
     });
@@ -361,7 +360,7 @@ describe("run.dependencyAccessPolicy", () => {
   it("ignores internal __runner dependency keys for policy enforcement", async () => {
     const app = defineResource({
       id: "policy.internal.app",
-      dependencyAccessPolicy: {
+      wiringAccessPolicy: {
         deny: [globalResources.cron.id],
       },
       init: async () => "ok",

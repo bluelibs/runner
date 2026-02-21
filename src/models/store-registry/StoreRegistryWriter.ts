@@ -9,7 +9,6 @@ import {
   ITask,
   ITaskMiddleware,
   RegisterableItems,
-  TagType,
   EventStoreElementType,
   HookStoreElementType,
   ResourceMiddlewareStoreElementType,
@@ -25,7 +24,7 @@ import { HookDependencyState } from "../../types/storeTypes";
 import { VisibilityTracker } from "../VisibilityTracker";
 import { StoreRegistryDefinitionPreparer } from "./StoreRegistryDefinitionPreparer";
 import { StoreRegistryTagIndex } from "./StoreRegistryTagIndex";
-import { IndexedTagCategory, StoringMode } from "./types";
+import { IndexedTagCategory, normalizeTags, StoringMode } from "./types";
 
 type StoreRegistryCollections = {
   tasks: Map<string, TaskStoreElementType>;
@@ -81,7 +80,7 @@ export class StoreRegistryWriter {
   storeError<_C>(item: IErrorHelper<any>) {
     this.validator.checkIfIDExists(item.id);
     this.collections.errors.set(item.id, item);
-    const tags = this.normalizeTags(item.tags);
+    const tags = normalizeTags(item.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Errors,
       item.id,
@@ -115,7 +114,7 @@ export class StoreRegistryWriter {
       computedDependencies: {},
       dependencyState: HookDependencyState.Pending,
     });
-    const tags = this.normalizeTags(hook.tags);
+    const tags = normalizeTags(hook.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Hooks,
       hook.id,
@@ -142,7 +141,7 @@ export class StoreRegistryWriter {
       computedDependencies: {},
       isInitialized: false,
     });
-    const tags = this.normalizeTags(middleware.tags);
+    const tags = normalizeTags(middleware.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.TaskMiddlewares,
       middleware.id,
@@ -168,7 +167,7 @@ export class StoreRegistryWriter {
       computedDependencies: {},
       isInitialized: false,
     });
-    const tags = this.normalizeTags(middleware.tags);
+    const tags = normalizeTags(middleware.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.ResourceMiddlewares,
       middleware.id,
@@ -180,7 +179,7 @@ export class StoreRegistryWriter {
   storeEvent<_C>(item: IEvent<void>) {
     this.validator.checkIfIDExists(item.id);
     this.collections.events.set(item.id, { event: item });
-    const tags = this.normalizeTags(item.tags);
+    const tags = normalizeTags(item.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Events,
       item.id,
@@ -212,11 +211,11 @@ export class StoreRegistryWriter {
       context: undefined,
     });
     this.visibilityTracker.recordResource(prepared.id);
-    this.visibilityTracker.recordDependencyAccessPolicy(
+    this.visibilityTracker.recordWiringAccessPolicy(
       prepared.id,
-      prepared.dependencyAccessPolicy,
+      prepared.wiringAccessPolicy,
     );
-    const tags = this.normalizeTags(prepared.tags);
+    const tags = normalizeTags(prepared.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Resources,
       prepared.id,
@@ -271,11 +270,11 @@ export class StoreRegistryWriter {
       context: undefined,
     });
     this.visibilityTracker.recordResource(prepared.id);
-    this.visibilityTracker.recordDependencyAccessPolicy(
+    this.visibilityTracker.recordWiringAccessPolicy(
       prepared.id,
-      prepared.dependencyAccessPolicy,
+      prepared.wiringAccessPolicy,
     );
-    const tags = this.normalizeTags(prepared.tags);
+    const tags = normalizeTags(prepared.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Resources,
       prepared.id,
@@ -305,27 +304,12 @@ export class StoreRegistryWriter {
       computedDependencies: {},
       isInitialized: false,
     });
-    const tags = this.normalizeTags(task.tags);
+    const tags = normalizeTags(task.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Tasks,
       task.id,
       tags,
     );
     this.visibilityTracker.recordDefinitionTags(task.id, tags);
-  }
-
-  private normalizeTags(tags: unknown): TagType[] {
-    if (!Array.isArray(tags) || tags.length === 0) {
-      return [];
-    }
-
-    const normalized: TagType[] = [];
-    for (const candidate of tags) {
-      if (utils.isTag(candidate)) {
-        normalized.push(candidate);
-      }
-    }
-
-    return normalized;
   }
 }

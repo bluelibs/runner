@@ -1,5 +1,4 @@
 import type {
-  DependencyAccessPolicy,
   DependencyMapType,
   IResource,
   IResourceDefinition,
@@ -10,6 +9,7 @@ import type {
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   TagType,
+  WiringAccessPolicy,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 import type { ResolveConfig } from "./types";
@@ -256,11 +256,11 @@ export interface ResourceFluentBuilder<
   >;
 
   /**
-   * Restricts dependency access for this resource boundary.
+   * Restricts wiring access for this resource boundary.
    * Multiple calls are additive.
    */
-  dependencyAccessPolicy(
-    policy: DependencyAccessPolicy,
+  wiringAccessPolicy(
+    policy: WiringAccessPolicy,
   ): ResourceFluentBuilder<
     TConfig,
     TValue,

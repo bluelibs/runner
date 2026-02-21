@@ -96,7 +96,7 @@ await runtime.runTask(createUser, { name: "Ada" });
   - **Scoping**: Provides safer refactors as internal items cannot be referenced from outside. It also scopes `.everywhere()` middleware: non-exported middleware only applies inside its own registration subtree.
   - **Transitive Visibility**: If a resource exports a child resource, that child's own exported surface is visible transitively, but each intermediate boundary must allow the path (e.g., `A -> B -> C` is blocked if `B.exports([])`).
   - **Validation**: Visibility is validated at `run(...)` init time. IDs remain globally unique even for private items.
-- Dependency access can be restricted with `.dependencyAccessPolicy({ deny: [...] })` on resources:
+- Dependency access can be restricted with `.wiringAccessPolicy({ deny: [...] })` on resources:
   - `deny` accepts ids or definitions (including tags); rules apply to that resource subtree.
   - Denials are additive across parent/child resources and cannot be relaxed by children.
   - Runner fails fast at bootstrap for invalid/unknown deny entries and for denied dependency references.
@@ -344,10 +344,10 @@ const inspectRoutes = r
   .build();
 ```
 
-Use `tag.beforeInit()` when startup ordering matters. It injects the same accessor type while explicitly stating that initialization should wait on resources reachable through that tag.
+Use `tag.startup()` when startup ordering matters. It injects the same accessor type while explicitly stating that initialization should wait on resources reachable through that tag.
 
 Accessor match helpers:
-- `tasks[]` entries expose `definition`, `config`, and runtime `run(...)`.
+- `tasks[]` entries expose `definition`, `config`, and runtime `run(...)` (plus runtime `intercept(...)` when consumed from a resource dependency context).
 - `resources[]` entries expose `definition`, `config`, and runtime `value` (available after that resource is initialized).
 
 Deprecated API note: `store.getTasksWithTag(...)` / `store.getResourcesWithTag(...)` remain available for compatibility but are deprecated in favor of tag dependencies. Runner also fails fast during store sanity checks when a tagged definition depends on the same tag.

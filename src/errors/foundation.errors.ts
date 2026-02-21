@@ -241,31 +241,31 @@ export const tagSelfDependencyError = error<
   )
   .build();
 
-export const dependencyAccessPolicyInvalidEntryError = error<
+export const wiringAccessPolicyInvalidEntryError = error<
   {
     policyResourceId: string;
     entry: unknown;
   } & DefaultErrorType
->("runner.errors.dependencyAccessPolicyInvalidEntry")
+>("runner.errors.wiringAccessPolicyInvalidEntry")
   .format(
     ({ policyResourceId }) =>
-      `Resource "${policyResourceId}" declares an invalid dependencyAccessPolicy deny entry.`,
+      `Resource "${policyResourceId}" declares an invalid wiringAccessPolicy deny entry.`,
   )
   .remediation(
     ({ policyResourceId }) =>
-      `Use .dependencyAccessPolicy({ deny: [...] }) with string ids or Runner definitions only. Review "${policyResourceId}" and remove malformed entries.`,
+      `Use .wiringAccessPolicy({ deny: [...] }) with string ids or Runner definitions only. Review "${policyResourceId}" and remove malformed entries.`,
   )
   .build();
 
-export const dependencyAccessPolicyUnknownTargetError = error<
+export const wiringAccessPolicyUnknownTargetError = error<
   {
     policyResourceId: string;
     targetId: string;
   } & DefaultErrorType
->("runner.errors.dependencyAccessPolicyUnknownTarget")
+>("runner.errors.wiringAccessPolicyUnknownTarget")
   .format(
     ({ policyResourceId, targetId }) =>
-      `Resource "${policyResourceId}" denies unknown target "${targetId}" in dependencyAccessPolicy.`,
+      `Resource "${policyResourceId}" denies unknown target "${targetId}" in wiringAccessPolicy.`,
   )
   .remediation(
     ({ targetId }) =>
@@ -273,7 +273,7 @@ export const dependencyAccessPolicyUnknownTargetError = error<
   )
   .build();
 
-export const dependencyAccessPolicyViolationError = error<
+export const wiringAccessPolicyViolationError = error<
   {
     targetId: string;
     targetType: string;
@@ -283,10 +283,10 @@ export const dependencyAccessPolicyViolationError = error<
     matchedRuleType: "id" | "tag";
     matchedRuleId: string;
   } & DefaultErrorType
->("runner.errors.dependencyAccessPolicyViolation")
+>("runner.errors.wiringAccessPolicyViolation")
   .format(
     ({ targetId, targetType, consumerId, consumerType, policyResourceId }) =>
-      `${targetType} "${targetId}" is denied by dependencyAccessPolicy on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`,
+      `${targetType} "${targetId}" is denied by wiringAccessPolicy on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`,
   )
   .remediation(({ policyResourceId, matchedRuleType, matchedRuleId }) => {
     const rule =

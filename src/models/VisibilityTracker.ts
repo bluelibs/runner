@@ -1,18 +1,18 @@
 import {
-  DependencyAccessPolicy,
   RegisterableItems,
   IResourceWithConfig,
+  WiringAccessPolicy,
 } from "../defs";
 import * as utils from "../define";
 import {
-  dependencyAccessPolicyViolationError,
+  wiringAccessPolicyViolationError,
   visibilityViolationError,
 } from "../errors";
 import { StoreRegistry } from "./StoreRegistry";
 
 const INTERNAL_DEPENDENCY_PREFIX = "__runner";
 
-type CompiledDependencyAccessPolicy = {
+type CompiledWiringAccessPolicy = {
   denyIds: Set<string>;
   denyTagIds: Set<string>;
 };
@@ -24,7 +24,7 @@ type AccessViolation =
       exportedIds: string[];
     }
   | {
-      kind: "dependencyAccessPolicy";
+      kind: "wiringAccessPolicy";
       policyResourceId: string;
       matchedRuleType: "id" | "tag";
       matchedRuleId: string;
@@ -89,11 +89,11 @@ export class VisibilityTracker {
   private readonly knownResources = new Set<string>();
 
   /**
-   * Resource id -> compiled additive dependency access policy.
+   * Resource id -> compiled additive wiring access policy.
    */
   private readonly dependencyAccessPolicies = new Map<
     string,
-    CompiledDependencyAccessPolicy
+    CompiledWiringAccessPolicy
   >();
 
   /**
@@ -117,9 +117,9 @@ export class VisibilityTracker {
     this.definitionTagIds.set(definitionId, new Set(tags.map((tag) => tag.id)));
   }
 
-  recordDependencyAccessPolicy(
+  recordWiringAccessPolicy(
     resourceId: string,
-    policy?: DependencyAccessPolicy,
+    policy?: WiringAccessPolicy,
   ): void {
     this.knownResources.add(resourceId);
 
@@ -232,7 +232,7 @@ export class VisibilityTracker {
       }
     }
 
-    return this.findDependencyAccessPolicyViolation(targetId, consumerId);
+    return this.findWiringAccessPolicyViolation(targetId, consumerId);
   }
 
   private isAccessibleFromOwnerChain(
@@ -491,10 +491,10 @@ export class VisibilityTracker {
     }
   }
 
-  private findDependencyAccessPolicyViolation(
+  private findWiringAccessPolicyViolation(
     targetId: string,
     consumerId: string,
-  ): Extract<AccessViolation, { kind: "dependencyAccessPolicy" }> | null {
+  ): Extract<AccessViolation, { kind: "wiringAccessPolicy" }> | null {
     const chain = this.getConsumerResourceChain(consumerId);
     if (chain.length === 0) {
       return null;
@@ -510,7 +510,7 @@ export class VisibilityTracker {
 
       if (policy.denyIds.has(targetId)) {
         return {
-          kind: "dependencyAccessPolicy",
+          kind: "wiringAccessPolicy",
           policyResourceId,
           matchedRuleType: "id",
           matchedRuleId: targetId,
@@ -519,7 +519,7 @@ export class VisibilityTracker {
 
       if (policy.denyTagIds.has(targetId)) {
         return {
-          kind: "dependencyAccessPolicy",
+          kind: "wiringAccessPolicy",
           policyResourceId,
           matchedRuleType: "tag",
           matchedRuleId: targetId,
@@ -536,7 +536,7 @@ export class VisibilityTracker {
         }
 
         return {
-          kind: "dependencyAccessPolicy",
+          kind: "wiringAccessPolicy",
           policyResourceId,
           matchedRuleType: "tag",
           matchedRuleId: tagId,
@@ -583,7 +583,7 @@ export class VisibilityTracker {
         exportedIds: violation.exportedIds,
       });
     } else {
-      dependencyAccessPolicyViolationError.throw({
+      wiringAccessPolicyViolationError.throw({
         targetId,
         targetType,
         consumerId,

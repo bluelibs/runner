@@ -1454,14 +1454,17 @@ const billing = r
 - Explicit hook event references are visibility-checked
 - Wildcard hooks (`.on("*")`) are global by design; use explicit events when you need strict boundary enforcement
 
-#### Dependency Access Policy
+#### Wiring Access Policy
 
-Use `.dependencyAccessPolicy({ deny: [...] })` when a resource subtree must not depend on specific ids (or anything carrying a specific tag), even if visibility would otherwise allow it.
+Use `.wiringAccessPolicy({ deny: [...] })` when a resource subtree must not depend on specific ids (or anything carrying a specific tag), even if visibility would otherwise allow it.
 
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const internalDb = r.resource("billing.db.internal").init(async () => ({})).build();
+const internalDb = r
+  .resource("billing.db.internal")
+  .init(async () => ({}))
+  .build();
 const internalOnlyTag = r.tag("billing.tags.internalOnly").build();
 
 const unsafeTask = r
@@ -1473,19 +1476,20 @@ const unsafeTask = r
 const billing = r
   .resource("billing")
   .register([internalDb, internalOnlyTag, unsafeTask])
-  .dependencyAccessPolicy({
-    deny: [internalDb, internalOnlyTag], // deny by id and by tag
+  .wiringAccessPolicy({
+    deny: [internalDb, internalOnlyTag], // deny by string id or definition
   })
   .build();
 ```
 
 **Semantics:**
 
-- Policy shape is `.dependencyAccessPolicy({ deny: [...] })` (no options object)
+- Policy shape is `.wiringAccessPolicy({ deny: [...] })` (no options object)
 - `deny` accepts ids or definitions (tasks/resources/events/hooks/middleware/tags/errors/async contexts)
 - Rules are validated at bootstrap; unknown or malformed entries fail fast
 - Parent and child policies are additive; children cannot relax parent denials
 - Denied references fail during `run(app)` sanity checks with a policy violation error
+- Deny container access by restricting: `globals.resources.store` and `globals.resources.runtime`
 
 #### Optional Dependencies
 
@@ -2255,8 +2259,8 @@ const routeRegistration = r
   .on(globals.events.ready)
   .dependencies({
     server: expressServer,
-    httpTag: httpTag.beforeInit(), // ensures that this runs before any item containing the tag is initialized
-    cacheableTag,
+    httpTag: httpTag.startup(), // ensures that this runs before any item containing the tag is initialized
+    cacheableTag, // ensures that this runs after all items containing the tag are initialized
   })
   .run(async (_event, { server, httpTag, cacheableTag }) => {
     // Find all tasks with HTTP tags
@@ -2281,10 +2285,10 @@ Tag accessors expose all tagged definition categories:
 
 Accessor match helpers:
 
-- `tasks[]` entries expose `definition`, `config`, and runtime `run(...)`.
+- `tasks[]` entries expose `definition`, `config`, and runtime `run(...)` (plus runtime `intercept(...)` when consumed from a resource dependency context).
 - `resources[]` entries expose `definition`, `config`, and runtime `value` (available after that resource is initialized).
 
-Use `tag.beforeInit()` when startup ordering matters (for example route registration). It injects the same typed accessor while making the dependency intent explicit.
+Use `tag.startup()` when startup ordering matters (for example route registration). It injects the same typed accessor while making the dependency intent explicit.
 
 Deprecated API note: `store.getTasksWithTag(...)` and `store.getResourcesWithTag(...)` are deprecated in favor of tag dependencies.
 

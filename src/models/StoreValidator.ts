@@ -1,6 +1,6 @@
 import {
-  dependencyAccessPolicyInvalidEntryError,
-  dependencyAccessPolicyUnknownTargetError,
+  wiringAccessPolicyInvalidEntryError,
+  wiringAccessPolicyUnknownTargetError,
   duplicateTagIdOnDefinitionError,
   duplicateRegistrationError,
   middlewareNotRegisteredError,
@@ -12,7 +12,7 @@ import {
   isOptional,
   isResourceWithConfig,
   isTag,
-  isTagBeforeInit,
+  isTagStartup,
 } from "../define";
 import { StoreRegistry } from "./StoreRegistry";
 
@@ -89,7 +89,7 @@ export class StoreValidator {
     this.ensureTagIdsAreUniquePerDefinition();
     this.ensureAllTagsUsedAreRegistered();
     this.ensureNoSelfTagDependencies();
-    this.ensureDependencyAccessPoliciesAreValid();
+    this.ensureWiringAccessPoliciesAreValid();
 
     // Validate module boundary visibility after all items are registered
     this.registry.visibilityTracker.validateVisibility(this.registry);
@@ -205,7 +205,7 @@ export class StoreValidator {
         const maybeDependency = isOptional(dependency)
           ? (dependency as { inner: unknown }).inner
           : dependency;
-        const maybeTag = isTagBeforeInit(maybeDependency)
+        const maybeTag = isTagStartup(maybeDependency)
           ? maybeDependency.tag
           : maybeDependency;
 
@@ -226,29 +226,29 @@ export class StoreValidator {
     }
   }
 
-  private ensureDependencyAccessPoliciesAreValid() {
+  private ensureWiringAccessPoliciesAreValid() {
     for (const { resource } of this.registry.resources.values()) {
-      const policy = resource.dependencyAccessPolicy;
+      const policy = resource.wiringAccessPolicy;
       if (!policy) {
         continue;
       }
 
       if (!Array.isArray(policy.deny)) {
-        dependencyAccessPolicyInvalidEntryError.throw({
+        wiringAccessPolicyInvalidEntryError.throw({
           policyResourceId: resource.id,
           entry: policy,
         });
       }
 
       for (const entry of policy.deny) {
-        const resolvedId = this.resolveDependencyAccessPolicyTargetId(entry);
+        const resolvedId = this.resolveWiringAccessPolicyTargetId(entry);
         if (!resolvedId) {
-          dependencyAccessPolicyInvalidEntryError.throw({
+          wiringAccessPolicyInvalidEntryError.throw({
             policyResourceId: resource.id,
             entry,
           });
         } else if (!this.hasRegisteredId(resolvedId)) {
-          dependencyAccessPolicyUnknownTargetError.throw({
+          wiringAccessPolicyUnknownTargetError.throw({
             policyResourceId: resource.id,
             targetId: resolvedId,
           });
@@ -257,7 +257,7 @@ export class StoreValidator {
     }
   }
 
-  private resolveDependencyAccessPolicyTargetId(entry: unknown): string | null {
+  private resolveWiringAccessPolicyTargetId(entry: unknown): string | null {
     if (typeof entry === "string") {
       return entry.length > 0 ? entry : null;
     }

@@ -19,7 +19,7 @@ export {
   isTaskMiddleware,
   isResourceMiddleware,
   isTag,
-  isTagBeforeInit,
+  isTagStartup,
   isOptional,
   isError,
   isAsyncContext,

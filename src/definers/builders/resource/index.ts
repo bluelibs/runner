@@ -49,7 +49,7 @@ export function resourceBuilder<TConfig = void>(
     resultSchema: undefined,
     meta: undefined,
     overrides: undefined,
-    dependencyAccessPolicy: undefined,
+    wiringAccessPolicy: undefined,
   });
   return makeResourceBuilder(initial);
 }

@@ -281,7 +281,7 @@ describe("VisibilityTracker", () => {
     });
   });
 
-  describe("dependencyAccessPolicy", () => {
+  describe("wiringAccessPolicy", () => {
     it("denies by id for resources in policy scope", () => {
       const owner = defineResource({
         id: "tracker.policy.owner",
@@ -298,7 +298,7 @@ describe("VisibilityTracker", () => {
       tracker.recordResource(owner.id);
       tracker.recordOwnership(owner.id, blockedTask);
       tracker.recordOwnership(owner.id, consumerTask);
-      tracker.recordDependencyAccessPolicy(owner.id, {
+      tracker.recordWiringAccessPolicy(owner.id, {
         deny: [blockedTask.id],
       });
 
@@ -325,7 +325,7 @@ describe("VisibilityTracker", () => {
       tracker.recordOwnership(owner.id, blockedTask);
       tracker.recordOwnership(owner.id, consumerTask);
       tracker.recordDefinitionTags(blockedTask.id, [denyTag]);
-      tracker.recordDependencyAccessPolicy(owner.id, {
+      tracker.recordWiringAccessPolicy(owner.id, {
         deny: [denyTag],
       });
 
@@ -349,8 +349,8 @@ describe("VisibilityTracker", () => {
       tracker.recordResource(owner.id);
       tracker.recordOwnership(owner.id, task);
       tracker.recordOwnership(owner.id, consumer);
-      tracker.recordDependencyAccessPolicy(owner.id, { deny: [task] });
-      tracker.recordDependencyAccessPolicy(owner.id, { deny: [] });
+      tracker.recordWiringAccessPolicy(owner.id, { deny: [task] });
+      tracker.recordWiringAccessPolicy(owner.id, { deny: [] });
 
       expect(tracker.isAccessible(task.id, consumer.id)).toBe(true);
     });

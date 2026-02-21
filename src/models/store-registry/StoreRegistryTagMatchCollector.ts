@@ -1,18 +1,21 @@
 import {
   ITag,
+  TagType,
   TagDependencyAccessor,
   TagDependencyMatch,
   TagDependencyResourceMatch,
   TagDependencyTaskMatch,
   TaggedResource,
   TaggedTask,
-  TagType,
 } from "../../defs";
-import * as utils from "../../define";
-import { TagIndexedCollections } from "./StoreRegistryTagContracts";
+import { normalizeTags, TagIndexedCollections } from "./types";
 
 export class StoreRegistryTagMatchCollector {
   constructor(private readonly collections: TagIndexedCollections) {}
+
+  normalizeTags(tags: unknown): TagType[] {
+    return normalizeTags(tags);
+  }
 
   collectTaggedTaskMatches<TTag extends ITag<any, any, any>>(
     tag: TTag,
@@ -128,20 +131,6 @@ export class StoreRegistryTagMatchCollector {
     }
 
     return matches;
-  }
-
-  normalizeTags(tags: unknown): TagType[] {
-    if (!Array.isArray(tags) || tags.length === 0) {
-      return [];
-    }
-
-    const normalized: TagType[] = [];
-    for (const candidate of tags) {
-      if (utils.isTag(candidate)) {
-        normalized.push(candidate);
-      }
-    }
-    return normalized;
   }
 
   private hasTagId(tags: ReadonlyArray<TagType>, tagId: string): boolean {

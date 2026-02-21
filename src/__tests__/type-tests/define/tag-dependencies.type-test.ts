@@ -75,8 +75,8 @@ import { defineError } from "../../../definers/defineError";
     ],
     dependencies: {
       featureTag,
-      featureTagBeforeInit: featureTag.beforeInit(),
-      maybeFeatureTagBeforeInit: featureTag.beforeInit().optional(),
+      featureTagBeforeInit: featureTag.startup(),
+      maybeFeatureTagBeforeInit: featureTag.startup().optional(),
       maybeFeatureTag: featureTag.optional(),
     },
     init: async (_config, deps) => {
@@ -133,6 +133,9 @@ import { defineError } from "../../../definers/defineError";
       const taggedTaskMatch = deps.featureTag.tasks[0];
       if (taggedTaskMatch?.run) {
         taggedTaskMatch.run({ tenantId: "acme" }, {} as any);
+      }
+      if (taggedTaskMatch?.intercept) {
+        taggedTaskMatch.intercept(async (next, input) => next(input));
       }
 
       const taggedResourceMatch = deps.featureTag.resources[0];

@@ -1,5 +1,4 @@
 import type {
-  DependencyAccessPolicy,
   DependencyMapType,
   IResource,
   IResourceDefinition,
@@ -10,6 +9,7 @@ import type {
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   TagType,
+  WiringAccessPolicy,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 import { normalizeThrows } from "../../../tools/throws";
@@ -450,10 +450,10 @@ function makeResourceOverrideBuilder<
         TMiddleware
       >(base, next);
     },
-    dependencyAccessPolicy(policy: DependencyAccessPolicy) {
-      const existing = state.dependencyAccessPolicy?.deny ?? [];
+    wiringAccessPolicy(policy: WiringAccessPolicy) {
+      const existing = state.wiringAccessPolicy?.deny ?? [];
       const next = cloneResourceState(state, {
-        dependencyAccessPolicy: {
+        wiringAccessPolicy: {
           deny: [...existing, ...policy.deny],
         },
       });
@@ -525,7 +525,7 @@ export function resourceOverrideBuilder<
     overrides: base.overrides,
     throws: base.throws,
     exports: base.exports,
-    dependencyAccessPolicy: base.dependencyAccessPolicy,
+    wiringAccessPolicy: base.wiringAccessPolicy,
   });
 
   return makeResourceOverrideBuilder(base, initial);

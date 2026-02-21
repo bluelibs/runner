@@ -1,7 +1,7 @@
 import type { StoreRegistry } from "../StoreRegistry";
 import type { IDependentNode } from "./findCircularDependencies";
 import type { IEvent } from "../../defs";
-import { isOptional, isEvent, isTag, isTagBeforeInit } from "../../define";
+import { isOptional, isEvent, isTag, isTagStartup } from "../../define";
 
 const readStringId = (value: unknown): string | undefined => {
   if (!value || typeof value !== "object") {
@@ -23,7 +23,7 @@ const getTagDependencyId = (dependency: unknown): string | undefined => {
   const raw = isOptional(dependency)
     ? (dependency as { inner: unknown }).inner
     : dependency;
-  const tagValue = isTagBeforeInit(raw)
+  const tagValue = isTagStartup(raw)
     ? (raw as { tag: { id: string } }).tag
     : raw;
 

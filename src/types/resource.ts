@@ -61,14 +61,14 @@ export interface ResourceForkInfo {
   readonly fromId: string;
 }
 
-export type DependencyAccessPolicyDenyTarget = RegisterableItems | string;
+export type WiringAccessPolicyDenyTarget = RegisterableItems | string;
 
-export interface DependencyAccessPolicy {
+export interface WiringAccessPolicy {
   /**
    * Denied targets for this resource boundary.
    * Denials are additive across nested resources.
    */
-  deny: ReadonlyArray<DependencyAccessPolicyDenyTarget>;
+  deny: ReadonlyArray<WiringAccessPolicyDenyTarget>;
 }
 
 // Helper to detect `any` so we can treat it as "unspecified"
@@ -177,10 +177,10 @@ export interface IResourceDefinition<
    */
   exports?: Array<RegisterableItems>;
   /**
-   * Declares dependency access restrictions for this resource and its subtree.
+   * Declares wiring access restrictions for this resource and its subtree.
    * Denials are additive across nested resources and cannot be relaxed by children.
    */
-  dependencyAccessPolicy?: DependencyAccessPolicy;
+  wiringAccessPolicy?: WiringAccessPolicy;
   /**
    * This is optional and used from an index resource to get the correct caller.
    * This is the reason we allow it here as well.
@@ -268,9 +268,9 @@ export interface IResource<
    */
   exports?: Array<RegisterableItems>;
   /**
-   * Dependency access restrictions for this resource and its subtree.
+   * Wiring access restrictions for this resource and its subtree.
    */
-  dependencyAccessPolicy?: DependencyAccessPolicy;
+  wiringAccessPolicy?: WiringAccessPolicy;
   /** Return an optional dependency wrapper for this resource. */
   optional: () => IOptionalDependency<
     IResource<

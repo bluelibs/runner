@@ -93,14 +93,14 @@ describe("Store sanity checks (tags)", () => {
     expect(rootInit).not.toHaveBeenCalled();
   });
 
-  it("fails when a definition depends on beforeInit() wrapper of its own tag", async () => {
+  it("fails when a definition depends on startup() wrapper of its own tag", async () => {
     const rootInit = jest.fn(async () => "ok");
     const tag = defineTag({ id: "app.tags.self.dep.beforeInit" });
 
     const task = defineTask({
       id: "app.tasks.self.dep.beforeInit",
       tags: [tag],
-      dependencies: { tag: tag.beforeInit() },
+      dependencies: { tag: tag.startup() },
       run: async () => undefined,
     });
 

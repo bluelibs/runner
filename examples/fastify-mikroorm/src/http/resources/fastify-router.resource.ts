@@ -22,7 +22,7 @@ export const fastifyRouter = r
       "Automatically registers HTTP routes from tasks tagged with httpRoute configuration",
   })
   .dependencies({
-    httpRoute: httpRoute.beforeInit(),
+    httpRoute: httpRoute.startup(),
     taskRunner: globals.resources.taskRunner,
     fastify,
     logger: globals.resources.logger,

@@ -7,7 +7,7 @@ import {
   isResource,
   isResourceMiddleware,
   isTag,
-  isTagBeforeInit,
+  isTagStartup,
   isTask,
   isTaskMiddleware,
 } from "../../define";
@@ -211,7 +211,7 @@ export class ResourceScheduler {
       return;
     }
 
-    if (isTagBeforeInit(rawDependency)) {
+    if (isTagStartup(rawDependency)) {
       this.expandTagDependency(rawDependency.tag, consumerId, state);
       return;
     }

@@ -22,7 +22,7 @@ import {
   symbolTag,
   symbolTagBeforeInitDependency,
   ITag,
-  ITagBeforeInitDependency,
+  ITagStartupDependency,
   IPhantomTask,
 } from "../defs";
 import { IErrorHelper } from "../types/error";
@@ -116,9 +116,9 @@ export function isTag(definition: unknown): definition is ITag {
 }
 
 /** Type guard: checks if a dependency is a before-init tag wrapper. */
-export function isTagBeforeInit(
+export function isTagStartup(
   definition: unknown,
-): definition is ITagBeforeInitDependency<ITag<any, any, any>> {
+): definition is ITagStartupDependency<ITag<any, any, any>> {
   return hasBrand(definition, symbolTagBeforeInitDependency);
 }
 

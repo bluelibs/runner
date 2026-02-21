@@ -5,7 +5,7 @@ import {
   TagType,
   IOptionalDependency,
   ITagConfigured,
-  ITagBeforeInitDependency,
+  ITagStartupDependency,
   symbolTag,
   symbolFilePath,
   symbolTagConfigured,
@@ -102,8 +102,8 @@ export function defineTag<
       >;
       return freezeIfLineageLocked(this, wrapper);
     },
-    beforeInit() {
-      const wrapper: ITagBeforeInitDependency<
+    startup() {
+      const wrapper: ITagStartupDependency<
         ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
       > = {
         tag: this,

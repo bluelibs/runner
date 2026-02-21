@@ -12,7 +12,7 @@ export const routeRegistrationHook = r
   .hook("app.hooks.routeRegistration")
   .on(globals.events.ready)
   .dependencies({
-    httpTag: httpTag.beforeInit(),
+    httpTag: httpTag.startup(),
     taskRunner: globals.resources.taskRunner,
     expressServer: expressServerResource,
     logger: globals.resources.logger,

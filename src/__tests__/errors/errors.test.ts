@@ -11,9 +11,9 @@ import { run } from "../../run";
 import {
   duplicateRegistrationError,
   dependencyNotFoundError,
-  dependencyAccessPolicyInvalidEntryError,
-  dependencyAccessPolicyUnknownTargetError,
-  dependencyAccessPolicyViolationError,
+  wiringAccessPolicyInvalidEntryError,
+  wiringAccessPolicyUnknownTargetError,
+  wiringAccessPolicyViolationError,
   unknownItemTypeError,
   eventNotFoundError,
   circularDependencyError,
@@ -438,17 +438,17 @@ describe("Errors", () => {
       expect(phantomTaskNotRoutedError.is(phantom)).toBe(true);
 
       const policyInvalid = capture(() =>
-        dependencyAccessPolicyInvalidEntryError.throw({
+        wiringAccessPolicyInvalidEntryError.throw({
           policyResourceId: "app.resource",
           entry: {},
         }),
       );
       expect(policyInvalid.message).toContain(
-        'Resource "app.resource" declares an invalid dependencyAccessPolicy deny entry.',
+        'Resource "app.resource" declares an invalid wiringAccessPolicy deny entry.',
       );
 
       const policyUnknown = capture(() =>
-        dependencyAccessPolicyUnknownTargetError.throw({
+        wiringAccessPolicyUnknownTargetError.throw({
           policyResourceId: "app.resource",
           targetId: "missing.target",
         }),
@@ -458,7 +458,7 @@ describe("Errors", () => {
       );
 
       const policyViolation = capture(() =>
-        dependencyAccessPolicyViolationError.throw({
+        wiringAccessPolicyViolationError.throw({
           targetId: "tasks.secret",
           targetType: "Task",
           consumerId: "tasks.consumer",
@@ -469,7 +469,7 @@ describe("Errors", () => {
         }),
       );
       expect(policyViolation.message).toContain(
-        'Task "tasks.secret" is denied by dependencyAccessPolicy on resource "resources.boundary"',
+        'Task "tasks.secret" is denied by wiringAccessPolicy on resource "resources.boundary"',
       );
     });
   });

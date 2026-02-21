@@ -1,5 +1,4 @@
 import type {
-  DependencyAccessPolicy,
   DependencyMapType,
   IResourceDefinition,
   IResourceMeta,
@@ -9,6 +8,7 @@ import type {
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   TagType,
+  WiringAccessPolicy,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
@@ -365,10 +365,10 @@ export function makeResourceBuilder<
         TMiddleware
       >(next);
     },
-    dependencyAccessPolicy(policy: DependencyAccessPolicy) {
-      const existing = state.dependencyAccessPolicy?.deny ?? [];
+    wiringAccessPolicy(policy: WiringAccessPolicy) {
+      const existing = state.wiringAccessPolicy?.deny ?? [];
       const next = clone(state, {
-        dependencyAccessPolicy: {
+        wiringAccessPolicy: {
           deny: [...existing, ...policy.deny],
         },
       });
@@ -408,7 +408,7 @@ export function makeResourceBuilder<
         overrides: state.overrides,
         throws: state.throws,
         exports: state.exports,
-        dependencyAccessPolicy: state.dependencyAccessPolicy,
+        wiringAccessPolicy: state.wiringAccessPolicy,
       };
       const resource = defineResource(definition);
       (resource as { [symbolFilePath]?: string })[symbolFilePath] =

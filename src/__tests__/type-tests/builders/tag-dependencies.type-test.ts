@@ -20,9 +20,9 @@ import { r } from "../../../";
     .register([featureTag, taggedTask])
     .dependencies({
       featureTag,
-      featureTagBeforeInit: featureTag.beforeInit(),
+      featureTagBeforeInit: featureTag.startup(),
       maybeFeatureTag: featureTag,
-      maybeFeatureTagBeforeInit: featureTag.beforeInit().optional(),
+      maybeFeatureTagBeforeInit: featureTag.startup().optional(),
     })
     .init(async (_config, deps) => {
       const task = deps.featureTag.tasks[0];
@@ -44,6 +44,9 @@ import { r } from "../../../";
       const taggedTaskMatch = deps.featureTag.tasks[0];
       if (taggedTaskMatch?.run) {
         taggedTaskMatch.run({ tenantId: "acme" }, {} as any);
+      }
+      if (taggedTaskMatch?.intercept) {
+        taggedTaskMatch.intercept(async (next, input) => next(input));
       }
 
       const taggedResourceMatch = deps.featureTag.resources[0];

@@ -1,7 +1,7 @@
 import { IContractable } from "./contracts";
 import { ITagMeta } from "./meta";
 import {
-  ITagBeforeInitDependency,
+  ITagStartupDependency,
   IOptionalDependency,
   IValidationSchema,
   RequiredKeys,
@@ -64,8 +64,8 @@ export interface ITag<
   optional: () => IOptionalDependency<
     ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
   >;
-  /** Return a before-init dependency wrapper for this tag. */
-  beforeInit: () => ITagBeforeInitDependency<
+  /** Return a startup dependency wrapper for this tag. */
+  startup: () => ITagStartupDependency<
     ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
   >;
   [symbolFilePath]: string;

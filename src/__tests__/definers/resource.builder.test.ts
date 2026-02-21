@@ -255,7 +255,7 @@ describe("resource builder", () => {
     expect(res.throws).toEqual([err.id, "tests.builder.resource.throws.other"]);
   });
 
-  it("dependencyAccessPolicy is additive across repeated calls", () => {
+  it("wiringAccessPolicy is additive across repeated calls", () => {
     const denyTaskA = r
       .task("tests.builder.policy.task.a")
       .run(async () => 1)
@@ -267,11 +267,11 @@ describe("resource builder", () => {
 
     const resourceWithPolicy = r
       .resource("tests.builder.policy.resource")
-      .dependencyAccessPolicy({ deny: [denyTaskA] })
-      .dependencyAccessPolicy({ deny: [denyTaskB.id] })
+      .wiringAccessPolicy({ deny: [denyTaskA] })
+      .wiringAccessPolicy({ deny: [denyTaskB.id] })
       .build();
 
-    expect(resourceWithPolicy.dependencyAccessPolicy).toEqual({
+    expect(resourceWithPolicy.wiringAccessPolicy).toEqual({
       deny: [denyTaskA, denyTaskB.id],
     });
   });
