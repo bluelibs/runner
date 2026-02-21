@@ -2220,7 +2220,7 @@ const routeRegistration = r
   .on(globals.events.ready)
   .dependencies({
     server: expressServer,
-    httpTag: httpTag.beforeInit(), // runs before any item containing the tag is initialized
+    httpTag: httpTag.beforeInit(), // ensures that this runs before any item containing the tag is initialized
     cacheableTag,
   })
   .run(async (_event, { server, httpTag, cacheableTag }) => {
@@ -2245,6 +2245,7 @@ Tag accessors expose all tagged definition categories:
 `tasks`, `resources`, `events`, `hooks`, `taskMiddlewares`, `resourceMiddlewares`, and `errors`.
 
 Accessor match helpers:
+
 - `tasks[]` entries expose `definition`, `config`, and runtime `run(...)`.
 - `resources[]` entries expose `definition`, `config`, and runtime `value` (available after that resource is initialized).
 
