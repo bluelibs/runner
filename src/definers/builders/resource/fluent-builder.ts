@@ -366,12 +366,18 @@ export function makeResourceBuilder<
       >(next);
     },
     wiringAccessPolicy(policy: WiringAccessPolicy) {
-      const existing = state.wiringAccessPolicy?.deny ?? [];
-      const next = clone(state, {
-        wiringAccessPolicy: {
-          deny: [...existing, ...policy.deny],
-        },
-      });
+      // Merging rules: deny merges with deny, only merges with only.
+      // Mixing deny and only on the same resource is caught by StoreValidator at bootstrap.
+      const existingDeny = state.wiringAccessPolicy?.deny ?? [];
+      const existingOnly = state.wiringAccessPolicy?.only ?? [];
+      const merged: WiringAccessPolicy = {};
+      if (existingDeny.length > 0 || policy.deny) {
+        merged.deny = [...existingDeny, ...(policy.deny ?? [])];
+      }
+      if (existingOnly.length > 0 || policy.only) {
+        merged.only = [...existingOnly, ...(policy.only ?? [])];
+      }
+      const next = clone(state, { wiringAccessPolicy: merged });
       return makeResourceBuilder<
         TConfig,
         TValue,

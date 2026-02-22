@@ -451,12 +451,17 @@ function makeResourceOverrideBuilder<
       >(base, next);
     },
     wiringAccessPolicy(policy: WiringAccessPolicy) {
-      const existing = state.wiringAccessPolicy?.deny ?? [];
-      const next = cloneResourceState(state, {
-        wiringAccessPolicy: {
-          deny: [...existing, ...policy.deny],
-        },
-      });
+      // Mirror the fluent builder: deny merges with deny, only merges with only.
+      const existingDeny = state.wiringAccessPolicy?.deny ?? [];
+      const existingOnly = state.wiringAccessPolicy?.only ?? [];
+      const merged: WiringAccessPolicy = {};
+      if (existingDeny.length > 0 || policy.deny) {
+        merged.deny = [...existingDeny, ...(policy.deny ?? [])];
+      }
+      if (existingOnly.length > 0 || policy.only) {
+        merged.only = [...existingOnly, ...(policy.only ?? [])];
+      }
+      const next = cloneResourceState(state, { wiringAccessPolicy: merged });
       return makeResourceOverrideBuilder<
         TConfig,
         TValue,

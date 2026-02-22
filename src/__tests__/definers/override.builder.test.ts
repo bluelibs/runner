@@ -339,6 +339,33 @@ describe(SuiteName.OverrideBuilder, () => {
     await runtime.dispose();
   });
 
+  it("merges override resource wiringAccessPolicy only rules and keeps them on no-op calls", () => {
+    const base = r.resource("tests.override.builder.policy.base").build();
+    const onlyTag = r.tag("tests.override.builder.policy.only.tag").build();
+    const onlyTask = r
+      .task("tests.override.builder.policy.only.task")
+      .run(async () => 1)
+      .build();
+    const denyTask = r
+      .task("tests.override.builder.policy.deny.task")
+      .run(async () => 2)
+      .build();
+
+    const overrideResource = r
+      .override(base)
+      .wiringAccessPolicy({ only: [onlyTag] })
+      .wiringAccessPolicy({})
+      .wiringAccessPolicy({ only: [onlyTask.id] })
+      .wiringAccessPolicy({ deny: [denyTask.id] })
+      .wiringAccessPolicy({})
+      .build();
+
+    expect(overrideResource.wiringAccessPolicy).toEqual({
+      deny: [denyTask.id],
+      only: [onlyTag, onlyTask.id],
+    });
+  });
+
   it(TestName.HookDetails, () => {
     const event = r.event(EventId.Details).build();
     const depTask = r

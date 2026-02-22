@@ -61,14 +61,19 @@ export interface ResourceForkInfo {
   readonly fromId: string;
 }
 
-export type WiringAccessPolicyDenyTarget = RegisterableItems | string;
+export type WiringAccessPolicyTarget = RegisterableItems | string;
 
 export interface WiringAccessPolicy {
   /**
    * Denied targets for this resource boundary.
    * Denials are additive across nested resources.
    */
-  deny: ReadonlyArray<WiringAccessPolicyDenyTarget>;
+  deny?: ReadonlyArray<WiringAccessPolicyTarget>;
+  /**
+   * Allowed targets for this resource boundary.
+   * When provided, only these targets (and internal items) can be referenced.
+   */
+  only?: ReadonlyArray<WiringAccessPolicyTarget>;
 }
 
 // Helper to detect `any` so we can treat it as "unspecified"

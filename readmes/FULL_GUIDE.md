@@ -1456,40 +1456,52 @@ const billing = r
 
 #### Wiring Access Policy
 
-Use `.wiringAccessPolicy({ deny: [...] })` when a resource subtree must not depend on specific ids (or anything carrying a specific tag), even if visibility would otherwise allow it.
+Use `.wiringAccessPolicy({ deny: [...] })` (blocklist) or `.wiringAccessPolicy({ only: [...] })` (allowlist) when a resource subtree must have restricted dependency access, even if visibility would otherwise allow it.
 
 ```typescript
 import { r } from "@bluelibs/runner";
 
+// --- deny: block specific ids or tagged items ---
 const internalDb = r
   .resource("billing.db.internal")
   .init(async () => ({}))
   .build();
 const internalOnlyTag = r.tag("billing.tags.internalOnly").build();
 
-const unsafeTask = r
-  .task("billing.tasks.unsafeTask")
-  .tags([internalOnlyTag])
-  .run(async () => "ok")
-  .build();
-
 const billing = r
   .resource("billing")
-  .register([internalDb, internalOnlyTag, unsafeTask])
+  .register([internalDb, internalOnlyTag])
   .wiringAccessPolicy({
-    deny: [internalDb, internalOnlyTag], // deny by string id or definition
+    deny: [internalDb, internalOnlyTag], // block by id or definition (tags match all carriers)
+  })
+  .build();
+
+// --- only: allow nothing external except listed items ---
+const allowedService = r
+  .resource("payments.allowed")
+  .init(async () => ({}))
+  .build();
+
+const payments = r
+  .resource("payments")
+  .register([allowedService])
+  .wiringAccessPolicy({
+    only: [allowedService], // nothing else from outside is reachable
   })
   .build();
 ```
 
 **Semantics:**
 
-- Policy shape is `.wiringAccessPolicy({ deny: [...] })` (no options object)
-- `deny` accepts ids or definitions (tasks/resources/events/hooks/middleware/tags/errors/async contexts)
-- Rules are validated at bootstrap; unknown or malformed entries fail fast
-- Parent and child policies are additive; children cannot relax parent denials
-- Denied references fail during `run(app)` sanity checks with a policy violation error
-- Deny container access by restricting: `globals.resources.store` and `globals.resources.runtime`
+- A resource uses **either** `deny` **or** `only` — providing both (even `deny: []` alongside `only`) throws `wiringAccessPolicyConflictError` at bootstrap.
+- `deny` / `only` accept string ids, definitions (tasks/resources/events/hooks/middleware/tags/errors/async contexts), or tag definitions; tags match any item carrying that tag.
+- **`only` automatically exempts internal items**: anything registered by the resource or its children is always accessible without being listed. `only: []` blocks all external dependencies while keeping internal ones reachable.
+- Rules are validated at bootstrap; unknown or malformed entries fail fast.
+- **Parent and child policies compose additively**; children cannot relax parent restrictions:
+  - Parent `deny: [A]` + child `deny: [B]` → neither A nor B accessible inside child.
+  - Parent `only: [A]` + child `only: [A, B]` → only A accessible (parent blocks B).
+  - Parent `only: [A]` + child `deny: [B]` → only A accessible and B additionally blocked.
+- Denied references fail during `run(app)` sanity checks with a `wiringAccessPolicyViolationError`.
 
 #### Optional Dependencies
 

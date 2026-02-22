@@ -1,6 +1,7 @@
 import {
   wiringAccessPolicyInvalidEntryError,
   wiringAccessPolicyUnknownTargetError,
+  wiringAccessPolicyConflictError,
   duplicateTagIdOnDefinitionError,
   duplicateRegistrationError,
   middlewareNotRegisteredError,
@@ -180,14 +181,38 @@ export class StoreValidator {
         continue;
       }
 
-      if (!Array.isArray(policy.deny)) {
+      // When deny/only is provided it must be an array (guard against accidental misuse).
+      const denyPresent = "deny" in policy && policy.deny !== undefined;
+      const onlyPresent = "only" in policy && policy.only !== undefined;
+
+      if (denyPresent && !Array.isArray(policy.deny)) {
         wiringAccessPolicyInvalidEntryError.throw({
           policyResourceId: resource.id,
-          entry: policy,
+          entry: policy.deny,
         });
       }
 
-      for (const entry of policy.deny) {
+      if (onlyPresent && !Array.isArray(policy.only)) {
+        wiringAccessPolicyInvalidEntryError.throw({
+          policyResourceId: resource.id,
+          entry: policy.only,
+        });
+      }
+
+      const hasDeny = Array.isArray(policy.deny) && policy.deny.length > 0;
+      const hasOnly = Array.isArray(policy.only) && policy.only.length > 0;
+
+      // Conflict is determined by field presence, not emptiness.
+      // deny: [] alongside only: [A] is still an ambiguous declaration.
+      if (denyPresent && onlyPresent) {
+        wiringAccessPolicyConflictError.throw({
+          policyResourceId: resource.id,
+        });
+      }
+
+      const entries = hasDeny ? policy.deny! : hasOnly ? policy.only! : [];
+
+      for (const entry of entries) {
         const resolvedId = this.resolveWiringAccessPolicyTargetId(entry);
         if (!resolvedId) {
           wiringAccessPolicyInvalidEntryError.throw({

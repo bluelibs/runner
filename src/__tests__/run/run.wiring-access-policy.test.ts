@@ -13,6 +13,7 @@ const POLICY_VIOLATION_ID = "runner.errors.wiringAccessPolicyViolation";
 const POLICY_UNKNOWN_TARGET_ID =
   "runner.errors.wiringAccessPolicyUnknownTarget";
 const POLICY_INVALID_ENTRY_ID = "runner.errors.wiringAccessPolicyInvalidEntry";
+const POLICY_CONFLICT_ID = "runner.errors.wiringAccessPolicyConflict";
 
 async function expectRunnerErrorId(
   promise: Promise<unknown>,
@@ -369,5 +370,228 @@ describe("run.wiringAccessPolicy", () => {
     const runtime = await run(app);
     expect(runtime.value).toBe("ok");
     await runtime.dispose();
+  });
+});
+
+describe("run.wiringAccessPolicy (only mode)", () => {
+  it("allows a dependency that is in the only list", async () => {
+    const allowed = defineTask({
+      id: "only.allowed.task",
+      run: async () => 42,
+    });
+
+    const consumer = defineTask({
+      id: "only.allowed.consumer",
+      dependencies: { allowed },
+      run: async (_input, deps) => deps.allowed(),
+    });
+
+    const guarded = defineResource({
+      id: "only.allowed.resource",
+      register: [allowed, consumer],
+      wiringAccessPolicy: { only: [allowed] },
+    });
+
+    const app = defineResource({ id: "only.allowed.app", register: [guarded] });
+    const runtime = await run(app);
+    await runtime.dispose();
+  });
+
+  it("blocks a dependency that is not in the only list", async () => {
+    const forbidden = defineTask({
+      id: "only.blocked.forbidden",
+      run: async () => "secret",
+    });
+
+    const consumer = defineTask({
+      id: "only.blocked.consumer",
+      dependencies: { forbidden },
+      run: async (_input, deps) => deps.forbidden(),
+    });
+
+    const guarded = defineResource({
+      id: "only.blocked.resource",
+      register: [consumer],
+      wiringAccessPolicy: { only: [] },
+    });
+
+    const app = defineResource({
+      id: "only.blocked.app",
+      register: [forbidden, guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
+  });
+
+  it("allows internal items without listing them in only", async () => {
+    const internal = defineTask({
+      id: "only.internal.task",
+      run: async () => "internal",
+    });
+
+    const consumer = defineTask({
+      id: "only.internal.consumer",
+      dependencies: { internal },
+      run: async (_input, deps) => deps.internal(),
+    });
+
+    const guarded = defineResource({
+      id: "only.internal.resource",
+      // internal and consumer are registered here — they are internal and always allowed.
+      register: [internal, consumer],
+      wiringAccessPolicy: { only: [] },
+    });
+
+    const app = defineResource({
+      id: "only.internal.app",
+      register: [guarded],
+    });
+    const runtime = await run(app);
+    await runtime.dispose();
+  });
+
+  it("allows only-listed tag members and blocks others", async () => {
+    const safeTag = defineTag({ id: "only.tag.safe" });
+    const dangerTag = defineTag({ id: "only.tag.danger" });
+
+    const safeTask = defineTask({
+      id: "only.tag.safeTask",
+      tags: [safeTag],
+      run: async () => "safe",
+    });
+
+    const dangerTask = defineTask({
+      id: "only.tag.dangerTask",
+      tags: [dangerTag],
+      run: async () => "danger",
+    });
+
+    const consumer = defineTask({
+      id: "only.tag.consumer",
+      dependencies: { dangerTask },
+      run: async (_input, deps) => deps.dangerTask(),
+    });
+
+    const guarded = defineResource({
+      id: "only.tag.resource",
+      register: [safeTask, consumer],
+      // only tasks tagged with safeTag are allowed externally
+      wiringAccessPolicy: { only: [safeTag] },
+    });
+
+    const app = defineResource({
+      id: "only.tag.app",
+      register: [dangerTag, safeTag, dangerTask, guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
+  });
+
+  it("fails fast when both deny and only are provided", async () => {
+    const someTask = defineTask({ id: "conflict.task", run: async () => {} });
+
+    const guarded = defineResource({
+      id: "conflict.resource",
+      register: [someTask],
+      wiringAccessPolicy: {
+        deny: [someTask.id],
+        only: [someTask.id],
+      } as any,
+    });
+
+    const app = defineResource({ id: "conflict.app", register: [guarded] });
+    await expectRunnerErrorId(run(app), POLICY_CONFLICT_ID);
+  });
+
+  it("fails fast when deny is empty array alongside only (field presence, not length)", async () => {
+    const someTask = defineTask({
+      id: "conflict.empty-deny.task",
+      run: async () => {},
+    });
+
+    const guarded = defineResource({
+      id: "conflict.empty-deny.resource",
+      register: [someTask],
+      // deny: [] is a no-op semantically, but mixing both fields is still ambiguous.
+      wiringAccessPolicy: {
+        deny: [],
+        only: [someTask.id],
+      } as any,
+    });
+
+    const app = defineResource({
+      id: "conflict.empty-deny.app",
+      register: [guarded],
+    });
+    await expectRunnerErrorId(run(app), POLICY_CONFLICT_ID);
+  });
+
+  it("fails fast when only contains an unknown target", async () => {
+    const guarded = defineResource({
+      id: "only.unknown.resource",
+      wiringAccessPolicy: { only: ["does.not.exist"] },
+    });
+
+    const app = defineResource({ id: "only.unknown.app", register: [guarded] });
+    await expectRunnerErrorId(run(app), POLICY_UNKNOWN_TARGET_ID);
+  });
+
+  it("fails fast when only contains an invalid entry", async () => {
+    const guarded = defineResource({
+      id: "only.invalid.resource",
+      wiringAccessPolicy: { only: [123 as any] },
+    });
+
+    const app = defineResource({ id: "only.invalid.app", register: [guarded] });
+    await expectRunnerErrorId(run(app), POLICY_INVALID_ENTRY_ID);
+  });
+
+  it("fails fast when only is not an array", async () => {
+    const guarded = defineResource({
+      id: "only.invalid-shape.resource",
+      wiringAccessPolicy: { only: "not-an-array" as any },
+    });
+
+    const app = defineResource({
+      id: "only.invalid-shape.app",
+      register: [guarded],
+    });
+    await expectRunnerErrorId(run(app), POLICY_INVALID_ENTRY_ID);
+  });
+
+  it("only is inherited by child resource items", async () => {
+    const allowed = defineTask({
+      id: "only.child.allowed",
+      run: async () => "allowed",
+    });
+
+    const blocked = defineTask({
+      id: "only.child.blocked",
+      run: async () => "blocked",
+    });
+
+    const consumer = defineTask({
+      id: "only.child.consumer",
+      dependencies: { blocked },
+      run: async (_input, deps) => deps.blocked(),
+    });
+
+    const child = defineResource({
+      id: "only.child.child",
+      register: [consumer],
+    });
+
+    const guarded = defineResource({
+      id: "only.child.guarded",
+      register: [child],
+      wiringAccessPolicy: { only: [allowed] },
+    });
+
+    const app = defineResource({
+      id: "only.child.app",
+      register: [allowed, blocked, guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
   });
 });

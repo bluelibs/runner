@@ -15,6 +15,11 @@ const INTERNAL_DEPENDENCY_PREFIX = "__runner";
 type CompiledWiringAccessPolicy = {
   denyIds: Set<string>;
   denyTagIds: Set<string>;
+  // onlyMode=true means the policy uses "only" semantics (allowlist).
+  // When true, external deps not in onlyIds/onlyTagIds are blocked.
+  onlyMode: boolean;
+  onlyIds: Set<string>;
+  onlyTagIds: Set<string>;
 };
 
 type AccessViolation =
@@ -26,7 +31,7 @@ type AccessViolation =
   | {
       kind: "wiringAccessPolicy";
       policyResourceId: string;
-      matchedRuleType: "id" | "tag";
+      matchedRuleType: "id" | "tag" | "only";
       matchedRuleId: string;
     };
 
@@ -123,33 +128,57 @@ export class VisibilityTracker {
   ): void {
     this.knownResources.add(resourceId);
 
-    if (!policy || !Array.isArray(policy.deny) || policy.deny.length === 0) {
+    const hasDeny = Array.isArray(policy?.deny) && policy!.deny!.length > 0;
+    // "only mode" is active whenever the only field is an array, even if empty.
+    const onlyPresent = policy !== undefined && Array.isArray(policy.only);
+
+    if (!hasDeny && !onlyPresent) {
       this.dependencyAccessPolicies.delete(resourceId);
       return;
     }
 
     const denyIds = new Set<string>();
     const denyTagIds = new Set<string>();
+    const onlyIds = new Set<string>();
+    const onlyTagIds = new Set<string>();
 
-    for (const entry of policy.deny) {
+    const resolveEntry = (
+      entry: unknown,
+      ids: Set<string>,
+      tagIds: Set<string>,
+    ) => {
       if (typeof entry === "string") {
-        denyIds.add(entry);
-        continue;
+        ids.add(entry);
+        return;
       }
-
       const maybeId = getItemId(entry as RegisterableItems);
-      if (!maybeId) {
-        continue;
-      }
-
+      if (!maybeId) return;
       if (utils.isTag(entry)) {
-        denyTagIds.add(maybeId);
+        tagIds.add(maybeId);
       } else {
-        denyIds.add(maybeId);
+        ids.add(maybeId);
+      }
+    };
+
+    if (hasDeny) {
+      for (const entry of policy!.deny!) {
+        resolveEntry(entry, denyIds, denyTagIds);
       }
     }
 
-    this.dependencyAccessPolicies.set(resourceId, { denyIds, denyTagIds });
+    if (onlyPresent) {
+      for (const entry of policy!.only!) {
+        resolveEntry(entry, onlyIds, onlyTagIds);
+      }
+    }
+
+    this.dependencyAccessPolicies.set(resourceId, {
+      denyIds,
+      denyTagIds,
+      onlyMode: onlyPresent,
+      onlyIds,
+      onlyTagIds,
+    });
   }
 
   /**
@@ -508,6 +537,7 @@ export class VisibilityTracker {
         continue;
       }
 
+      // --- deny rules ---
       if (policy.denyIds.has(targetId)) {
         return {
           kind: "wiringAccessPolicy",
@@ -526,20 +556,47 @@ export class VisibilityTracker {
         };
       }
 
-      if (!targetTags) {
+      if (targetTags) {
+        for (const tagId of targetTags) {
+          if (!policy.denyTagIds.has(tagId)) {
+            continue;
+          }
+
+          return {
+            kind: "wiringAccessPolicy",
+            policyResourceId,
+            matchedRuleType: "tag",
+            matchedRuleId: tagId,
+          };
+        }
+      }
+
+      // --- only rules: internal items (within the policy resource's subtree) are always allowed ---
+      if (!policy.onlyMode) {
         continue;
       }
 
-      for (const tagId of targetTags) {
-        if (!policy.denyTagIds.has(tagId)) {
-          continue;
-        }
+      const policySubtree = this.subtrees.get(policyResourceId);
+      const isInternal =
+        targetId === policyResourceId || policySubtree?.has(targetId) === true;
 
+      if (isInternal) {
+        continue;
+      }
+
+      // External target must match the only list (by id or by tag).
+      const matchedByOnlyId = policy.onlyIds.has(targetId);
+      const matchedByOnlyTag =
+        policy.onlyTagIds.has(targetId) ||
+        (targetTags !== undefined &&
+          [...targetTags].some((tagId) => policy.onlyTagIds.has(tagId)));
+
+      if (!matchedByOnlyId && !matchedByOnlyTag) {
         return {
           kind: "wiringAccessPolicy",
           policyResourceId,
-          matchedRuleType: "tag",
-          matchedRuleId: tagId,
+          matchedRuleType: "only",
+          matchedRuleId: targetId,
         };
       }
     }

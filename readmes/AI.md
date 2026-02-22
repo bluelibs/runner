@@ -96,10 +96,13 @@ await runtime.runTask(createUser, { name: "Ada" });
   - **Scoping**: Provides safer refactors as internal items cannot be referenced from outside. It also scopes `.everywhere()` middleware: non-exported middleware only applies inside its own registration subtree.
   - **Transitive Visibility**: If a resource exports a child resource, that child's own exported surface is visible transitively, but each intermediate boundary must allow the path (e.g., `A -> B -> C` is blocked if `B.exports([])`).
   - **Validation**: Visibility is validated at `run(...)` init time. IDs remain globally unique even for private items.
-- Dependency access can be restricted with `.wiringAccessPolicy({ deny: [...] })` on resources:
-  - `deny` accepts ids or definitions (including tags); rules apply to that resource subtree.
-  - Denials are additive across parent/child resources and cannot be relaxed by children.
-  - Runner fails fast at bootstrap for invalid/unknown deny entries and for denied dependency references.
+- Dependency access can be restricted with `.wiringAccessPolicy({ deny: [...] })` or `.wiringAccessPolicy({ only: [...] })` on resources:
+  - `deny` accepts ids or definitions (including tags); anything matching the list is blocked for that resource subtree.
+  - `only` is the allowlist form: only listed ids/tags (and items **internal** to that resource — registered by it or its children) can be referenced. `only: []` allows nothing external.
+  - A resource cannot have both `deny` and `only` in the same policy (even if one is empty) — Runner throws a conflict error at bootstrap.
+  - Both modes accept ids, definitions, or tag definitions as entries; tags match any item carrying that tag.
+  - Policies are **additive** across the ancestor chain: every parent policy applies to all descendants and cannot be relaxed by children. A child with `only: [A, B]` nested inside a parent with `only: [A]` still cannot access B.
+  - Runner fails fast at bootstrap for invalid/unknown entries, conflicts, and for denied dependency references.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
 

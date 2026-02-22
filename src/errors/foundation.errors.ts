@@ -241,6 +241,21 @@ export const tagSelfDependencyError = error<
   )
   .build();
 
+export const wiringAccessPolicyConflictError = error<
+  {
+    policyResourceId: string;
+  } & DefaultErrorType
+>("runner.errors.wiringAccessPolicyConflict")
+  .format(
+    ({ policyResourceId }) =>
+      `Resource "${policyResourceId}" declares both "deny" and "only" in its wiringAccessPolicy.`,
+  )
+  .remediation(
+    ({ policyResourceId }) =>
+      `A wiringAccessPolicy can have either "deny" or "only", but not both. Review "${policyResourceId}" and remove one of them.`,
+  )
+  .build();
+
 export const wiringAccessPolicyInvalidEntryError = error<
   {
     policyResourceId: string;
@@ -249,11 +264,11 @@ export const wiringAccessPolicyInvalidEntryError = error<
 >("runner.errors.wiringAccessPolicyInvalidEntry")
   .format(
     ({ policyResourceId }) =>
-      `Resource "${policyResourceId}" declares an invalid wiringAccessPolicy deny entry.`,
+      `Resource "${policyResourceId}" declares an invalid wiringAccessPolicy entry.`,
   )
   .remediation(
     ({ policyResourceId }) =>
-      `Use .wiringAccessPolicy({ deny: [...] }) with string ids or Runner definitions only. Review "${policyResourceId}" and remove malformed entries.`,
+      `Use .wiringAccessPolicy({ deny: [...] }) or .wiringAccessPolicy({ only: [...] }) with string ids or Runner definitions only. Review "${policyResourceId}" and remove malformed entries.`,
   )
   .build();
 
@@ -265,11 +280,11 @@ export const wiringAccessPolicyUnknownTargetError = error<
 >("runner.errors.wiringAccessPolicyUnknownTarget")
   .format(
     ({ policyResourceId, targetId }) =>
-      `Resource "${policyResourceId}" denies unknown target "${targetId}" in wiringAccessPolicy.`,
+      `Resource "${policyResourceId}" references unknown target "${targetId}" in wiringAccessPolicy.`,
   )
   .remediation(
     ({ targetId }) =>
-      `Register "${targetId}" in the same runtime graph or remove it from deny. Policy targets must exist at bootstrap.`,
+      `Register "${targetId}" in the same runtime graph or remove it from the policy. Policy targets must exist at bootstrap.`,
   )
   .build();
 
@@ -280,15 +295,27 @@ export const wiringAccessPolicyViolationError = error<
     consumerId: string;
     consumerType: string;
     policyResourceId: string;
-    matchedRuleType: "id" | "tag";
+    matchedRuleType: "id" | "tag" | "only";
     matchedRuleId: string;
   } & DefaultErrorType
 >("runner.errors.wiringAccessPolicyViolation")
   .format(
-    ({ targetId, targetType, consumerId, consumerType, policyResourceId }) =>
-      `${targetType} "${targetId}" is denied by wiringAccessPolicy on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`,
+    ({
+      targetId,
+      targetType,
+      consumerId,
+      consumerType,
+      policyResourceId,
+      matchedRuleType,
+    }) =>
+      matchedRuleType === "only"
+        ? `${targetType} "${targetId}" is not allowed by wiringAccessPolicy "only" rule on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`
+        : `${targetType} "${targetId}" is denied by wiringAccessPolicy on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`,
   )
   .remediation(({ policyResourceId, matchedRuleType, matchedRuleId }) => {
+    if (matchedRuleType === "only") {
+      return `Target is not in the "only" list. Add it to the "only" list on "${policyResourceId}", or move the consumer outside that resource subtree.`;
+    }
     const rule =
       matchedRuleType === "tag"
         ? `Denied tag rule "${matchedRuleId}".`
