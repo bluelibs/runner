@@ -9,6 +9,7 @@ module.exports = {
       "ts-jest",
       {
         tsconfig: "<rootDir>/config/ts/tsconfig.jest.json",
+        diagnostics: false,
       },
     ],
   },
@@ -28,6 +29,7 @@ module.exports = {
     "!src/node/durable/dashboard/**",
   ],
   setupFilesAfterEnv: ["<rootDir>/src/__tests__/jest.setup.ts"],
+  coverageProvider: "babel",
   coverageDirectory: "coverage",
   coverageReporters: ["text", "json-summary"],
   coverageThreshold: {

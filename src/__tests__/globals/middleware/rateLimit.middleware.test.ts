@@ -2,8 +2,6 @@ import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.middleware";
 
-const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
-
 describe("Rate Limit Middleware", () => {
   it("should allow requests within limit", async () => {
     let callCount = 0;
@@ -52,6 +50,7 @@ describe("Rate Limit Middleware", () => {
   });
 
   it("should reset after window expires", async () => {
+    jest.useFakeTimers();
     let callCount = 0;
     const config = { windowMs: 100, max: 1 };
     const task = defineTask({
@@ -70,13 +69,18 @@ describe("Rate Limit Middleware", () => {
       async init(_, { task }) {
         await task();
         await expect(task()).rejects.toThrow(/Rate limit exceeded/i);
-        await sleep(150);
+        jest.advanceTimersByTime(150);
+        await Promise.resolve();
         await task();
       },
     });
 
-    await run(app);
-    expect(callCount).toBe(2);
+    try {
+      await run(app);
+      expect(callCount).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("should reset exactly at window boundary", async () => {

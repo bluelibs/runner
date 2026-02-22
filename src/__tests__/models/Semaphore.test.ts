@@ -923,5 +923,95 @@ describe("Semaphore", () => {
 
       expect(listeners.get("semaphore.events.released")).toBeUndefined();
     });
+
+    it("ignores stale semaphore listener callbacks when listener id is inactive", async () => {
+      const sem = new Semaphore(1);
+      const seen: string[] = [];
+
+      sem.on("released", () => seen.push("released"));
+
+      const internals = sem as unknown as {
+        activeListeners: Set<string>;
+        eventManager: { registry: { listeners: Map<string, Array<any>> } };
+      };
+      const listeners = internals.eventManager.registry.listeners.get(
+        "semaphore.events.released",
+      );
+      if (!listeners?.[0]) {
+        throw new Error(
+          "Expected semaphore released listener to be registered",
+        );
+      }
+
+      const firstListener = listeners[0] as {
+        handler: (event: {
+          data: { type: string };
+          source: string | undefined;
+          isPropagationStopped: () => boolean;
+          stopPropagation: () => void;
+        }) => unknown;
+      };
+      const emission = {
+        data: { type: "released" },
+        source: undefined,
+        isPropagationStopped: () => false,
+        stopPropagation: () => undefined,
+      };
+
+      const listenerRunner = firstListener.handler(emission);
+      if (listenerRunner instanceof Promise) {
+        await listenerRunner;
+      }
+      expect(seen).toEqual(["released"]);
+
+      internals.activeListeners.clear();
+      const staleRunner = firstListener.handler(emission);
+      if (staleRunner instanceof Promise) {
+        await staleRunner;
+      }
+      expect(seen).toEqual(["released"]);
+    });
+
+    it("ignores stale semaphore once-listener callbacks when listener id is inactive", async () => {
+      const sem = new Semaphore(1);
+      const seen: string[] = [];
+
+      sem.once("released", () => seen.push("released"));
+
+      const internals = sem as unknown as {
+        activeListeners: Set<string>;
+        eventManager: { registry: { listeners: Map<string, Array<any>> } };
+      };
+      const listeners = internals.eventManager.registry.listeners.get(
+        "semaphore.events.released",
+      );
+      if (!listeners?.[0]) {
+        throw new Error(
+          "Expected semaphore released listener to be registered",
+        );
+      }
+
+      internals.activeListeners.clear();
+      const result = (
+        listeners[0] as {
+          handler: (event: {
+            data: { type: string };
+            source: string | undefined;
+            isPropagationStopped: () => boolean;
+            stopPropagation: () => void;
+          }) => unknown;
+        }
+      ).handler({
+        data: { type: "released" },
+        source: undefined,
+        isPropagationStopped: () => false,
+        stopPropagation: () => undefined,
+      });
+      if (result instanceof Promise) {
+        await result;
+      }
+
+      expect(seen).toEqual([]);
+    });
   });
 });

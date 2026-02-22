@@ -118,7 +118,7 @@ export class OverrideManager {
   processOverrides() {
     // If we are trying to use override on something that wasn't previously registered, we throw an error.
     for (const override of this.overrides.values()) {
-      let hasAnyItem = false;
+      let hasAnyItem: boolean;
       if (utils.isTask(override)) {
         hasAnyItem = this.registry.tasks.has(override.id);
       } else if (utils.isResource(override)) {
@@ -129,7 +129,7 @@ export class OverrideManager {
         hasAnyItem = this.registry.resourceMiddlewares.has(override.id);
       } else if (utils.isResourceWithConfig(override)) {
         hasAnyItem = this.registry.resources.has(override.resource.id);
-      } else if (utils.isHook(override)) {
+      } else {
         hasAnyItem = this.registry.hooks.has(override.id);
       }
 
@@ -154,7 +154,7 @@ export class OverrideManager {
         this.registry.storeResourceMiddleware(override, "override");
       } else if (utils.isResourceWithConfig(override)) {
         this.registry.storeResourceWithConfig(override, "override");
-      } else if (utils.isHook(override)) {
+      } else {
         this.registry.storeHook(override, "override");
       }
     }

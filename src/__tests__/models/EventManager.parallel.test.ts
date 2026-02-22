@@ -17,13 +17,12 @@ describe("EventManager Parallel Execution", () => {
 
   it("should execute listeners with the same order in parallel", async () => {
     const results: string[] = [];
-    const delay = (ms: number) =>
-      new Promise((resolve) => setTimeout(resolve, ms));
+    const nextTick = async () => Promise.resolve();
 
     eventManager.addListener(
       parallelEvent,
       async () => {
-        await delay(50);
+        await nextTick();
         results.push("slow");
       },
       { order: 1 },
@@ -45,14 +44,13 @@ describe("EventManager Parallel Execution", () => {
 
   it("should execute batches sequentially", async () => {
     const results: string[] = [];
-    const delay = (ms: number) =>
-      new Promise((resolve) => setTimeout(resolve, ms));
+    const nextTick = async () => Promise.resolve();
 
     // Batch 1 (Order 0)
     eventManager.addListener(
       parallelEvent,
       async () => {
-        await delay(50);
+        await nextTick();
         results.push("batch1-slow");
       },
       { order: 0 },

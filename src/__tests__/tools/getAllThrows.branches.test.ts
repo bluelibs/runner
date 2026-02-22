@@ -182,4 +182,59 @@ describe("getAllThrows branch coverage", () => {
       getAllThrows(registry as any, resourceWithMiddleware as any),
     ).toEqual(["cov.local.resource.throw"]);
   });
+
+  it("returns empty for non-task/non-resource targets and ignores unrelated hooks", () => {
+    const registry = {
+      taskMiddlewares: new Map(),
+      resourceMiddlewares: new Map(),
+      hooks: new Map([
+        [
+          "cov.hook.unrelated",
+          {
+            hook: {
+              on: [{ id: "cov.event.other" }],
+              throws: ["cov.unrelated.throw"],
+            },
+          },
+        ],
+      ]),
+    };
+
+    expect(getAllThrows(registry as any, { id: "cov.other" } as any)).toEqual(
+      [],
+    );
+  });
+
+  it("does not collect hook throws when task emits unrelated events", () => {
+    const event = {
+      id: "cov.getAllThrows.event.unrelated.source",
+      [symbolEvent]: true,
+    };
+
+    const task = {
+      id: "cov.getAllThrows.task.unrelated.hook",
+      [symbolTask]: true,
+      throws: [],
+      middleware: [],
+      dependencies: { event },
+    };
+
+    const registry = {
+      taskMiddlewares: new Map(),
+      resourceMiddlewares: new Map(),
+      hooks: new Map([
+        [
+          "cov.hook.unrelated.array",
+          {
+            hook: {
+              on: [{ id: "cov.getAllThrows.event.other" }],
+              throws: ["cov.should.not.collect"],
+            },
+          },
+        ],
+      ]),
+    };
+
+    expect(getAllThrows(registry as any, task as any)).toEqual([]);
+  });
 });

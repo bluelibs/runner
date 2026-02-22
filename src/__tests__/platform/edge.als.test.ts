@@ -74,4 +74,25 @@ describe("EdgePlatformAdapter ALS support", () => {
     expect(typeof dispose).toBe("function");
     dispose(); // should not throw
   });
+
+  it("keeps ALS unsupported when node:async_hooks has no AsyncLocalStorage export", async () => {
+    jest.doMock("node:async_hooks", () => ({}), { virtual: false });
+
+    await jest.isolateModulesAsync(async () => {
+      const g = globalThis as unknown as Record<string, unknown>;
+      const original = g.AsyncLocalStorage;
+      delete g.AsyncLocalStorage;
+
+      try {
+        const mod = await import("../../platform/adapters/edge");
+        const adapter = new mod.EdgePlatformAdapter();
+        await adapter.init();
+        expect(adapter.hasAsyncLocalStorage()).toBe(false);
+      } finally {
+        g.AsyncLocalStorage = original;
+      }
+    });
+
+    jest.dontMock("node:async_hooks");
+  });
 });

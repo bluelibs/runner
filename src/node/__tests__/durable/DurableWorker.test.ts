@@ -126,4 +126,20 @@ describe("durable: DurableWorker", () => {
     expect(service.processExecution).toHaveBeenCalledWith("e1");
     expect(queue.ackCalls).toEqual(["m1"]);
   });
+
+  it("acks unsupported message types without processing executions", async () => {
+    const queue = new TestQueue();
+    const service: IDurableExecutionProcessor = {
+      processExecution: jest.fn(async () => {}),
+    };
+
+    const worker = new DurableWorker(service, queue, createSilentLogger());
+    await worker.start();
+
+    const unknown = { ...message({ executionId: "e1" }, "execute"), type: "x" };
+    await queue.handler?.(unknown as QueueMessage);
+
+    expect(service.processExecution).not.toHaveBeenCalled();
+    expect(queue.ackCalls).toEqual(["m1"]);
+  });
 });

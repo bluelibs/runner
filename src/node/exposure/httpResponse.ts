@@ -120,7 +120,11 @@ export function respondStream(
   };
 
   const safeEnd = () => {
-    (res as { end?: () => unknown }).end?.();
+    try {
+      (res as { end?: () => unknown }).end?.();
+    } catch {
+      // Best-effort finalization for already-ended or partial test doubles.
+    }
   };
 
   const handleData = (chunk: unknown) => {
@@ -154,7 +158,7 @@ export function respondStream(
 
   const handleError = () => {
     removeDataListener();
-    if (!res.writableEnded) safeEnd();
+    safeEnd();
   };
 
   const read = (stream as { read?: (size?: number) => unknown }).read?.bind(
@@ -172,7 +176,7 @@ export function respondStream(
       (stream as { readableEnded?: unknown }).readableEnded || state?.ended,
     );
     if (ended) {
-      if (!res.writableEnded) safeEnd();
+      safeEnd();
       return;
     }
   }

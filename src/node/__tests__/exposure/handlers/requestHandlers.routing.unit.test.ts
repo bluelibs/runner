@@ -104,6 +104,35 @@ describe("requestHandlers - routing and dispatching", () => {
       expect(json?.error?.code).toBe("NOT_FOUND");
     });
 
+    it("handleRequest returns true for unknown extracted target kinds without dispatch", async () => {
+      const deps: any = {
+        store: {
+          tasks: new Map(),
+          events: new Map(),
+          asyncContexts: new Map(),
+        },
+        taskRunner: {} as any,
+        eventManager: {} as any,
+        logger: { info: () => {}, warn: () => {}, error: () => {} },
+        authenticator: async () => ({ ok: true }),
+        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "other", id: "x" }),
+          isUnderBase: () => true,
+        },
+        cors: undefined,
+        serializer,
+      };
+      const { handleRequest } = createRequestHandlers(deps);
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/other/x",
+      });
+      await expect(handleRequest(req, res)).resolves.toBe(true);
+      expect(res._status).toBeUndefined();
+    });
+
     it("returns 404 when task id missing from store", async () => {
       const deps: any = {
         store: {

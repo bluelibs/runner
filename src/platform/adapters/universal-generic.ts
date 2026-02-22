@@ -14,7 +14,8 @@ interface GenericEventTarget extends Record<string, unknown> {
 // A generic, non-detecting adapter that uses globalThis listeners and no Node APIs.
 export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   readonly id = "universal" as const;
-  private alsClass: (new <T>() => IAsyncLocalStorage<T>) | null = null;
+  private alsClass: (new <T>() => IAsyncLocalStorage<T>) | null | undefined =
+    null;
   private alsProbed = false;
 
   async init() {}
@@ -38,9 +39,7 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
       const mod = require("node:async_hooks") as {
         AsyncLocalStorage?: new <T>() => IAsyncLocalStorage<T>;
       };
-      if (mod?.AsyncLocalStorage) {
-        this.alsClass = mod.AsyncLocalStorage;
-      }
+      this.alsClass = mod.AsyncLocalStorage;
     } catch {
       // Unsupported in this runtime; fallback remains unsupported.
     }
@@ -103,9 +102,10 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
       }
 
       return () => {
-        if (handlers.before) {
-          tgt.removeEventListener?.("beforeunload", handlers.before);
-        }
+        tgt.removeEventListener?.(
+          "beforeunload",
+          handlers.before as (event: unknown) => void,
+        );
         if (handlers.visibility)
           tgt.removeEventListener?.("visibilitychange", handlers.visibility);
       };
@@ -135,7 +135,7 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
 
   hasAsyncLocalStorage(): boolean {
     this.probeAsyncLocalStorage();
-    return this.alsClass !== null;
+    return typeof this.alsClass === "function";
   }
 
   createAsyncLocalStorage<T>(): IAsyncLocalStorage<T> {

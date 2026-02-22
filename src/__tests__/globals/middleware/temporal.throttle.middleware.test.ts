@@ -3,10 +3,9 @@ import { run } from "../../../run";
 import { throttleTaskMiddleware } from "../../../globals/middleware/temporal.middleware";
 import { createMessageError } from "../../../errors";
 
-const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
-
 describe("Temporal Middleware: Throttle", () => {
   it("should throttle task executions", async () => {
+    jest.useFakeTimers();
     let callCount = 0;
     const task = defineTask({
       id: "throttle.task",
@@ -29,19 +28,25 @@ describe("Temporal Middleware: Throttle", () => {
         // Third one updates the scheduled input
         const p3 = task("c");
 
+        jest.advanceTimersByTime(100);
+        await Promise.resolve();
         return await Promise.all([p1, p2, p3]);
       },
     });
 
-    const results = (await run(app)).value;
-
-    expect(callCount).toBe(2);
-    expect(results[0]).toBe("a");
-    expect(results[1]).toBe("c");
-    expect(results[2]).toBe("c");
+    try {
+      const results = (await run(app)).value;
+      expect(callCount).toBe(2);
+      expect(results[0]).toBe("a");
+      expect(results[1]).toBe("c");
+      expect(results[2]).toBe("c");
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("should execute immediately if enough time has passed", async () => {
+    jest.useFakeTimers();
     let callCount = 0;
     const task = defineTask({
       id: "throttle.immediate",
@@ -58,13 +63,18 @@ describe("Temporal Middleware: Throttle", () => {
       dependencies: { task },
       async init(_, { task }) {
         await task("a");
-        await sleep(100);
+        jest.advanceTimersByTime(100);
+        await Promise.resolve();
         await task("b");
       },
     });
 
-    await run(app);
-    expect(callCount).toBe(2);
+    try {
+      await run(app);
+      expect(callCount).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("should handle errors in throttled task", async () => {

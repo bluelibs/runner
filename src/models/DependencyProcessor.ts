@@ -191,13 +191,16 @@ export class DependencyProcessor {
       Array.from(this.store.hooks.values()).map(async (hookStoreElement) => {
         const hook = hookStoreElement.hook;
         const deps = hook.dependencies as DependencyMapType;
-        hookStoreElement.dependencyState = HookDependencyState.Computing;
-        hookStoreElement.computedDependencies = await this.extractDependencies(
-          deps,
-          hook.id,
-        );
-        hookStoreElement.dependencyState = HookDependencyState.Ready;
-        await this.flushBufferedHookEvents(hookStoreElement);
+        try {
+          hookStoreElement.dependencyState = HookDependencyState.Computing;
+          hookStoreElement.computedDependencies =
+            await this.extractDependencies(deps, hook.id);
+          hookStoreElement.dependencyState = HookDependencyState.Ready;
+          await this.flushBufferedHookEvents(hookStoreElement);
+        } catch (e) {
+          hookStoreElement.dependencyState = HookDependencyState.Error;
+          throw e;
+        }
       }),
     );
   }

@@ -121,4 +121,24 @@ describe("tunnel.middleware coverage", () => {
       "Event cov.tunnel.missing.event not found while trying to resolve events for tunnel.",
     );
   });
+
+  it("skips unsupported primitive task selector entries without throwing", async () => {
+    const tunnel = defineResource({
+      id: "cov.tunnel.res.invalid-task-selector",
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        tasks: [123 as unknown as string],
+        run: async () => undefined,
+      }),
+    });
+
+    const app = defineResource({
+      id: "cov.tunnel.app.invalid-task-selector",
+      register: [tunnel],
+      init: async () => undefined,
+    });
+
+    await expect(run(app)).resolves.toBeDefined();
+  });
 });

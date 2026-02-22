@@ -89,10 +89,10 @@ describe("run lazy init mode behavior", () => {
     await runtime.dispose();
   });
 
-  it("keeps startup initialization sequential in lazy mode when initMode is sequential", async () => {
-    let releaseFirstInit!: () => void;
-    const firstInitGate = new Promise<void>((resolve) => {
-      releaseFirstInit = resolve;
+  it("initializes startup-required resources eagerly in lazy mode when initMode is sequential", async () => {
+    let releaseInit!: () => void;
+    const initGate = new Promise<void>((resolve) => {
+      releaseInit = resolve;
     });
     let firstStarted = false;
     let secondStarted = false;
@@ -101,7 +101,7 @@ describe("run lazy init mode behavior", () => {
       id: "init.mode.lazy.sequential.first",
       async init() {
         firstStarted = true;
-        await firstInitGate;
+        await initGate;
         return "first";
       },
     });
@@ -110,6 +110,7 @@ describe("run lazy init mode behavior", () => {
       id: "init.mode.lazy.sequential.second",
       async init() {
         secondStarted = true;
+        await initGate;
         return "second";
       },
     });
@@ -123,13 +124,21 @@ describe("run lazy init mode behavior", () => {
       },
     });
 
-    const runtimePromise = run(app, { lazy: true, shutdownHooks: false });
-    const firstHasStarted = await waitFor(() => firstStarted, 120);
+    const runtimePromise = run(app, {
+      lazy: true,
+      initMode: ResourceInitMode.Sequential,
+      shutdownHooks: false,
+    });
+    const oneHasStarted = await waitFor(
+      () => firstStarted || secondStarted,
+      120,
+    );
+    const bothStartedBeforeRelease = firstStarted && secondStarted;
 
-    expect(firstHasStarted).toBe(true);
-    expect(secondStarted).toBe(false);
+    expect(oneHasStarted).toBe(true);
+    expect(bothStartedBeforeRelease).toBe(true);
 
-    releaseFirstInit();
+    releaseInit();
     const runtime = await runtimePromise;
     await runtime.dispose();
   });

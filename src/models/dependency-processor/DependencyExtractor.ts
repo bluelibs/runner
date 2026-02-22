@@ -39,6 +39,11 @@ import type {
 const MIDDLEWARE_MANAGER_RESOURCE_ID = "globals.resources.middlewareManager";
 
 export class DependencyExtractor {
+  private readonly inFlightTaskInitializations = new Map<
+    string,
+    Promise<void>
+  >();
+
   constructor(
     private readonly store: Store,
     private readonly eventManager: EventManager,
@@ -103,27 +108,29 @@ export class DependencyExtractor {
   ): Promise<DependencyValuesType<T>> {
     const object = {} as DependencyValuesType<T>;
 
-    for (const key in map) {
-      const dependency = map[key];
-      if (dependency === undefined) {
-        continue;
-      }
-
-      try {
-        object[key] = await this.extractDependency(dependency, source);
-        const val = object[key] as unknown;
-        if (val instanceof Logger) {
-          (object as Record<string, unknown>)[key] = val.with({ source });
+    await Promise.all(
+      Object.entries(map).map(async ([key, dependency]) => {
+        if (dependency === undefined) {
+          return;
         }
-      } catch (e) {
-        const errorMessage = String(e);
-        this.logger.error(
-          `Failed to extract dependency from source: ${source} -> ${key} with error: ${errorMessage}`,
-        );
 
-        throw e;
-      }
-    }
+        try {
+          const extracted = await this.extractDependency(dependency, source);
+          object[key as keyof T] = extracted as any;
+          const val = extracted as unknown;
+          if (val instanceof Logger) {
+            (object as Record<string, unknown>)[key] = val.with({ source });
+          }
+        } catch (e) {
+          const errorMessage = String(e);
+          this.logger.error(
+            `Failed to extract dependency from source: ${source} -> ${key} with error: ${errorMessage}`,
+          );
+
+          throw e;
+        }
+      }),
+    );
     this.logger.trace(`Finished computing dependencies for source: ${source}`);
 
     return object;
@@ -187,13 +194,19 @@ export class DependencyExtractor {
 
     const st = storeTask!;
     if (!st.isInitialized) {
-      const dependencies = st.task.dependencies as DependencyMapType;
-
-      st.computedDependencies = await this.extractDependencies(
-        dependencies,
-        st.task.id,
-      );
-      st.isInitialized = true;
+      let initPromise = this.inFlightTaskInitializations.get(st.task.id);
+      if (!initPromise) {
+        initPromise = (async () => {
+          const dependencies = st.task.dependencies as DependencyMapType;
+          st.computedDependencies = await this.extractDependencies(
+            dependencies,
+            st.task.id,
+          );
+          st.isInitialized = true;
+        })();
+        this.inFlightTaskInitializations.set(st.task.id, initPromise);
+      }
+      await initPromise;
     }
 
     return (input: unknown, options?: TaskCallOptions) => {

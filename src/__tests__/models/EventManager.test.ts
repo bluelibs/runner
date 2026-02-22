@@ -280,7 +280,7 @@ describe("EventManager", () => {
     eventManager.addListener(
       eventDefinition,
       async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await Promise.resolve();
         results.push(1);
       },
       { order: 1 },

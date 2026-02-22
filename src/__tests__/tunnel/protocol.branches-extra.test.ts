@@ -44,4 +44,15 @@ describe("tunnel protocol - branches extra", () => {
     expect(te).toBeInstanceOf(TunnelError);
     expect(te.message).toBe("Tunnel error");
   });
+
+  it("toTunnelError falls back when protocol message is not a string", () => {
+    const te = toTunnelError({ code: "E", message: 123 } as any, "fallback");
+    expect(te.message).toBe("fallback");
+  });
+
+  it("toTunnelError reads generic object message when no protocol code is present", () => {
+    const te = toTunnelError({ message: "generic-object-error" });
+    expect(te.code).toBe("UNKNOWN");
+    expect(te.message).toBe("generic-object-error");
+  });
 });

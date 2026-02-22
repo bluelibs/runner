@@ -152,6 +152,18 @@ describe("Serializer platform built-ins coverage", () => {
     expect(restored.name).toBe("Error");
   });
 
+  it("omits non-string stack values when serializing Error", () => {
+    const original = new Error("x");
+    Object.defineProperty(original, "stack", {
+      value: 123,
+      writable: true,
+      configurable: true,
+    });
+
+    const payload = ErrorType.serialize(original);
+    expect("stack" in payload).toBe(false);
+  });
+
   it("handles URL and URLSearchParams constructor guards and payload checks", () => {
     expect(() => URLType.deserialize(12 as never)).toThrow(
       "Invalid URL payload",

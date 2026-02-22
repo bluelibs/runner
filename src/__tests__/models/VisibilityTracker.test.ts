@@ -95,6 +95,20 @@ describe("VisibilityTracker", () => {
       expect(exportSet).toBeDefined();
       expect(exportSet!.size).toBe(0);
     });
+
+    it("should skip items without extractable id", () => {
+      const task = defineTask({
+        id: "tracker.export.valid",
+        run: async () => "ok",
+      });
+
+      // A bare function has no id — getItemId returns undefined
+      tracker.recordExports("resource.id", [task, (() => {}) as any]);
+      const exportSet = tracker.getExportSets().get("resource.id");
+      expect(exportSet).toBeDefined();
+      expect(exportSet!.size).toBe(1);
+      expect(exportSet!.has("tracker.export.valid")).toBe(true);
+    });
   });
 
   describe("isAccessible", () => {

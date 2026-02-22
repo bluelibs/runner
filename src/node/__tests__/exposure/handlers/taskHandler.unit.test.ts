@@ -6,6 +6,7 @@ import * as multipartModule from "../../../exposure/multipart";
 import * as requestBodyModule from "../../../exposure/requestBody";
 import * as errorHandlers from "../../../exposure/handlers/errorHandlers";
 import { createMessageError } from "../../../../errors";
+import { cancellationError } from "../../../../errors";
 
 enum TaskId {
   T = "t",
@@ -171,5 +172,87 @@ describe("taskHandler", () => {
 
     expect(res.endCalls).toBe(1);
     expect(res.statusCode).toBe(201);
+  });
+
+  it("skips multipart finalize error response when task already ended the response", async () => {
+    const serializer = new Serializer();
+    jest.spyOn(multipartModule, "isMultipart").mockReturnValue(true);
+    jest.spyOn(multipartModule, "parseMultipartInput").mockResolvedValue({
+      ok: true,
+      value: { input: 1 },
+      finalize: Promise.resolve({
+        ok: false,
+        response: {
+          status: 500,
+          body: { ok: false, error: { message: "finalize" } },
+        },
+      }),
+    } as any);
+
+    const res = createRes();
+    const taskRunner = {
+      run: async () => {
+        res.end("custom");
+        return undefined;
+      },
+    };
+
+    const handler = createTaskHandler({
+      store: {
+        tasks: new Map([[TaskId.T, { task: { id: TaskId.T } }]]),
+        errors: new Map(),
+      } as any,
+      taskRunner: taskRunner as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
+      authenticator: async () => ({ ok: true as const }),
+      allowList: { ensureTask: () => null } as any,
+      router: { basePath: RouterBasePath.X },
+      cors: undefined,
+      serializer,
+      limits: undefined,
+    });
+
+    await handler(createReq(ContentType.Multipart), res, TaskId.T);
+    expect(res.endCalls).toBe(1);
+    expect(res.body?.toString("utf8")).toBe(CustomResponseBody.Custom);
+  });
+
+  it("skips cancellation response write when response is already sent", async () => {
+    const serializer = new Serializer();
+    jest
+      .spyOn(requestBodyModule, "readJsonBody")
+      .mockRejectedValue(
+        cancellationError.create({ reason: "Client Closed Request" }),
+      );
+
+    const res = createRes();
+    res.writableEnded = true;
+    res.headersSent = true;
+
+    const handler = createTaskHandler({
+      store: {
+        tasks: new Map([[TaskId.T, { task: { id: TaskId.T } }]]),
+        errors: new Map(),
+      } as any,
+      taskRunner: { run: async () => undefined } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
+      authenticator: async () => ({ ok: true as const }),
+      allowList: { ensureTask: () => null } as any,
+      router: { basePath: RouterBasePath.X },
+      cors: undefined,
+      serializer,
+      limits: undefined,
+    });
+
+    await handler(createReq(ContentType.Json), res, TaskId.T);
+    expect(res.endCalls).toBe(0);
   });
 });

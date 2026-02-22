@@ -96,7 +96,8 @@ export async function createExposureServer(
     if (closed) return;
     if (closing) {
       // Another caller is already closing; await completion
-      if (closePromise) await closePromise;
+      // `closing` is only set immediately before `closePromise` assignment in the same tick.
+      await closePromise!;
       return;
     }
     closing = true;

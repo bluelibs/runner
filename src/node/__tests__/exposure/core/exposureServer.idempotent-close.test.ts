@@ -86,4 +86,35 @@ describe("createExposureServer - idempotent close", () => {
 
     await controls.close();
   });
+
+  it("tolerates undefined detach entries during close cleanup", async () => {
+    const external: any = {
+      on() {},
+      off() {},
+    };
+
+    const controls = await createExposureServer({
+      httpConfig: { server: external },
+      handler,
+      logger,
+      basePath: "/x",
+    });
+
+    const originalPop = Array.prototype.pop;
+    let injected = false;
+    Array.prototype.pop = function <T>(this: T[]) {
+      const value = originalPop.call(this);
+      if (!injected && Array.isArray(this) && typeof value === "function") {
+        injected = true;
+        return undefined as T;
+      }
+      return value;
+    };
+
+    try {
+      await expect(controls.close()).resolves.toBeUndefined();
+    } finally {
+      Array.prototype.pop = originalPop;
+    }
+  });
 });

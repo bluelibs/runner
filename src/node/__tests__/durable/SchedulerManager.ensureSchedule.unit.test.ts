@@ -163,4 +163,30 @@ describe("ensureSchedule()", () => {
     ).resolves.toBe("s1");
     expect((await store.getSchedule("s1"))?.taskId).toBe(task.id);
   });
+
+  it("does not re-arm when the updated schedule cannot be reloaded", async () => {
+    class FlakyStore extends MemoryStore {
+      private getCalls = 0;
+
+      override async getSchedule(id: string) {
+        this.getCalls += 1;
+        if (id === "s1" && this.getCalls >= 3) {
+          return null;
+        }
+        return await super.getSchedule(id);
+      }
+    }
+
+    const store = new FlakyStore();
+    const service = new DurableService({ store, tasks: [] });
+    const task = r
+      .task("t.ensure.flaky")
+      .run(async () => "ok")
+      .build();
+
+    await service.ensureSchedule(task, undefined, { id: "s1", interval: 1000 });
+    await expect(
+      service.ensureSchedule(task, undefined, { id: "s1", interval: 2000 }),
+    ).resolves.toBe("s1");
+  });
 });

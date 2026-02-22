@@ -370,4 +370,59 @@ describe("computeAllowList (server-mode http tunnels)", () => {
     expect(list.eventAcceptsAsyncContext.get(e.id)).toBe(false);
     await rr.dispose();
   });
+
+  it("handles object selectors in arrays and skips invalid array entries", () => {
+    const store = {
+      resources: new Map([
+        [
+          "srv",
+          {
+            resource: { id: "srv", tags: [globalTags.tunnel] },
+            value: {
+              mode: "server",
+              transport: "http",
+              tasks: [{ id: "allow.obj.task" }, null, { nope: true }] as any,
+              events: [{ id: "allow.obj.event" }, 0, { nope: true }] as any,
+            } satisfies TunnelRunner,
+          },
+        ],
+      ]),
+      tasks: new Map([["allow.obj.task", { task: { id: "allow.obj.task" } }]]),
+      events: new Map([
+        ["allow.obj.event", { event: { id: "allow.obj.event" } }],
+      ]),
+    } as unknown as Store;
+
+    const list = computeAllowList(store);
+    expect(list.taskIds.has("allow.obj.task")).toBe(true);
+    expect(list.eventIds.has("allow.obj.event")).toBe(true);
+    expect(list.taskIds.size).toBe(1);
+    expect(list.eventIds.size).toBe(1);
+  });
+
+  it("ignores truthy non-array/non-function selector values", () => {
+    const store = {
+      resources: new Map([
+        [
+          "srv",
+          {
+            resource: { id: "srv", tags: [globalTags.tunnel] },
+            value: {
+              mode: "server",
+              transport: "http",
+              tasks: { not: "supported" } as any,
+              events: 123 as any,
+            } satisfies TunnelRunner,
+          },
+        ],
+      ]),
+      tasks: new Map([["t", { task: { id: "t" } }]]),
+      events: new Map([["e", { event: { id: "e" } }]]),
+    } as unknown as Store;
+
+    const list = computeAllowList(store);
+    expect(list.enabled).toBe(true);
+    expect(list.taskIds.size).toBe(0);
+    expect(list.eventIds.size).toBe(0);
+  });
 });

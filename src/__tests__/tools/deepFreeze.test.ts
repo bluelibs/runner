@@ -47,6 +47,30 @@ describe("deepFreeze", () => {
     expect(frozen.box.value).toBe(10);
   });
 
+  it("handles getter-only accessor descriptors (no set)", () => {
+    const obj: Record<string, unknown> = {};
+    Object.defineProperty(obj, "getterOnly", {
+      configurable: true,
+      get() {
+        return 42;
+      },
+    });
+    const frozen = deepFreeze(obj);
+    expect(Object.isFrozen(frozen)).toBe(true);
+  });
+
+  it("handles setter-only accessor descriptors (no get)", () => {
+    const obj: Record<string, unknown> = {};
+    Object.defineProperty(obj, "setterOnly", {
+      configurable: true,
+      set(_v: unknown) {
+        /* noop */
+      },
+    });
+    const frozen = deepFreeze(obj);
+    expect(Object.isFrozen(frozen)).toBe(true);
+  });
+
   it("walks accessor descriptors and tolerates missing descriptors", () => {
     const target: Record<string, unknown> = { ghost: "gone-later" };
     Object.defineProperty(target, "computed", {
