@@ -355,8 +355,10 @@ describe("MiddlewareManager", () => {
       run: async () => 0,
     });
 
-    // Mark task as tunneled
-    task.isTunneled = true;
+    const tunneledTask = {
+      ...task,
+      isTunneled: true,
+    };
 
     store.taskMiddlewares.set(mw.id, {
       middleware: mw,
@@ -365,8 +367,7 @@ describe("MiddlewareManager", () => {
     });
 
     // Create a copy of the task for the store and mark it as tunneled too
-    const storeTask = { ...task };
-    storeTask.isTunneled = true;
+    const storeTask = { ...tunneledTask };
 
     store.tasks.set(task.id, {
       task: storeTask,
@@ -374,7 +375,7 @@ describe("MiddlewareManager", () => {
       isInitialized: true,
     });
 
-    const runner = manager.composeTaskRunner(task);
+    const runner = manager.composeTaskRunner(tunneledTask as typeof task);
     expect(runner).toBeDefined();
   });
 

@@ -18,7 +18,16 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
   });
 
   test("applies object-style client middleware allow list", () => {
-    const task: any = { id: "registered", middleware: [], isTunneled: true };
+    const task: any = {
+      id: "registered",
+      middleware: [],
+      isTunneled: true,
+      tags: [
+        globalTags.tunnelTaskPolicy.with({
+          client: { middlewareAllowList: ["mw.a"] },
+        }),
+      ],
+    };
     const store: any = {
       tasks: new Map([["registered", { task }]]),
       taskMiddlewares: new Map(),
@@ -27,23 +36,9 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
     const resolver = new MiddlewareResolver(store);
     const middlewares = [{ id: "mw.a" }, { id: "mw.b" }] as any[];
 
-    const existsSpy = jest
-      .spyOn(globalTags.tunnelTaskPolicy, "exists")
-      .mockReturnValue(true);
-    const extractSpy = jest
-      .spyOn(globalTags.tunnelTaskPolicy, "extract")
-      .mockReturnValue({
-        client: { middlewareAllowList: ["mw.a"] },
-      } as any);
-
-    try {
-      expect(resolver.applyTunnelPolicyFilter(task, middlewares)).toEqual([
-        { id: "mw.a" },
-      ]);
-    } finally {
-      existsSpy.mockRestore();
-      extractSpy.mockRestore();
-    }
+    expect(resolver.applyTunnelPolicyFilter(task, middlewares)).toEqual([
+      { id: "mw.a" },
+    ]);
   });
 
   test("falls back to grouped allow list when client object has no middlewareAllowList", () => {
@@ -51,6 +46,12 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
       id: "registered.grouped",
       middleware: [],
       isTunneled: true,
+      tags: [
+        globalTags.tunnelTaskPolicy.with({
+          client: {},
+          middlewareAllowList: { client: ["mw.keep"] },
+        }),
+      ],
     };
     const store: any = {
       tasks: new Map([["registered.grouped", { task }]]),
@@ -60,23 +61,8 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
     const resolver = new MiddlewareResolver(store);
     const middlewares = [{ id: "mw.keep" }, { id: "mw.drop" }] as any[];
 
-    const existsSpy = jest
-      .spyOn(globalTags.tunnelTaskPolicy, "exists")
-      .mockReturnValue(true);
-    const extractSpy = jest
-      .spyOn(globalTags.tunnelTaskPolicy, "extract")
-      .mockReturnValue({
-        client: {},
-        middlewareAllowList: { client: ["mw.keep"] },
-      } as any);
-
-    try {
-      expect(resolver.applyTunnelPolicyFilter(task, middlewares)).toEqual([
-        { id: "mw.keep" },
-      ]);
-    } finally {
-      existsSpy.mockRestore();
-      extractSpy.mockRestore();
-    }
+    expect(resolver.applyTunnelPolicyFilter(task, middlewares)).toEqual([
+      { id: "mw.keep" },
+    ]);
   });
 });

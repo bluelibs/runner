@@ -13,7 +13,7 @@ import {
   symbolOptionalDependency,
 } from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
-import { freezeIfLineageLocked } from "../tools/deepFreeze";
+import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 
 const isValidHttpCode = (value: number): boolean =>
   Number.isInteger(value) && value >= 100 && value <= 599;
@@ -168,8 +168,10 @@ export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
 
   const resolvedFilePath = filePath ?? getCallerFile();
 
-  return new ErrorHelper<TData>(
-    definition as IErrorDefinitionFinal<TData>,
-    resolvedFilePath,
+  return deepFreeze(
+    new ErrorHelper<TData>(
+      definition as IErrorDefinitionFinal<TData>,
+      resolvedFilePath,
+    ),
   );
 }

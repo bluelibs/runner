@@ -60,7 +60,7 @@ const result = await runTask(sendEmail, {
 });
 ```
 
-> **Lockdown note:** Fluent `.build()` returns a deep-frozen definition. Treat built definitions as immutable and use builder chaining, `.with()`, `.fork()`, or `r.override(...)` for changes.
+> **Lockdown note:** Direct `define*()` outputs and fluent `.build()` outputs are deep-frozen definitions. Treat definitions as immutable and use builder chaining, `.with()`, `.fork()`, `intercept()`, or `r.override(...)` for changes.
 
 **The Two Ways to Call Tasks:**
 

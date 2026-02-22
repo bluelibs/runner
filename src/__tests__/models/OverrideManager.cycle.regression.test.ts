@@ -10,17 +10,20 @@ describe("OverrideManager override graph recursion", () => {
     store.setTaskRunner(taskRunner);
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
-    const first = defineResource({
+    const firstBase = defineResource({
       id: "override.cycle.first",
       overrides: [],
     });
 
     const second = defineResource({
       id: "override.cycle.second",
-      overrides: [first],
+      overrides: [firstBase],
     });
 
-    first.overrides = [second];
+    const first = {
+      ...firstBase,
+      overrides: [second],
+    } as typeof firstBase;
 
     const root = defineResource({
       id: "override.cycle.root",

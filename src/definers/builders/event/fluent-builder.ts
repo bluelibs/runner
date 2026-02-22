@@ -63,8 +63,10 @@ export function makeEventBuilder<TPayload>(
       const event = defineEvent({
         ...(state as IEventDefinition<TPayload>),
       });
-      (event as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
-      return deepFreeze(event);
+      return deepFreeze({
+        ...event,
+        [symbolFilePath]: state.filePath,
+      });
     },
   };
 

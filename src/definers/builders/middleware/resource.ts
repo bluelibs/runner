@@ -117,9 +117,10 @@ export function makeResourceMiddlewareBuilder<
       const middleware = defineResourceMiddleware({
         ...(state as IResourceMiddlewareDefinition<C, In, Out, D>),
       });
-      (middleware as { [symbolFilePath]?: string })[symbolFilePath] =
-        state.filePath;
-      return deepFreeze(middleware);
+      return deepFreeze({
+        ...middleware,
+        [symbolFilePath]: state.filePath,
+      });
     },
   };
 

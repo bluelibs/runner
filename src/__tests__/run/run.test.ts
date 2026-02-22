@@ -295,8 +295,6 @@ describe("run", () => {
         init: async () => "Resource 2",
       });
 
-      task1.dependencies.task2 = task2;
-
       const app = defineResource({
         id: "app",
         register: [resource1, resource2],

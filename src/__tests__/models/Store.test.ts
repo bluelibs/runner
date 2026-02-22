@@ -297,14 +297,14 @@ describe("Store", () => {
     const bDeps: any = {};
     const a = defineResource({
       id: "dispose.order.cycle.a",
-      dependencies: aDeps,
+      dependencies: () => aDeps,
       dispose: async () => {
         callOrder.push("a");
       },
     });
     const b = defineResource({
       id: "dispose.order.cycle.b",
-      dependencies: bDeps,
+      dependencies: () => bDeps,
       dispose: async () => {
         callOrder.push("b");
       },
@@ -477,7 +477,13 @@ describe("Store", () => {
     store.initializeStore(rootResource, {}, runtimeResult);
 
     const storeTask = store.tasks.get(taggedTask.id)!;
-    (storeTask.task as { tags?: unknown }).tags = undefined;
+    store.tasks.set(taggedTask.id, {
+      ...storeTask,
+      task: {
+        ...storeTask.task,
+        tags: undefined,
+      } as unknown as typeof storeTask.task,
+    });
 
     expect(() => store.getTagAccessor(tag)).not.toThrow();
     expect(store.getTagAccessor(tag).tasks).toHaveLength(0);

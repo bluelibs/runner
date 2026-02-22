@@ -11,7 +11,7 @@ import {
   symbolOptionalDependency,
 } from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
-import { freezeIfLineageLocked } from "../tools/deepFreeze";
+import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 
 export { contextError as ContextError };
 
@@ -98,7 +98,7 @@ export function defineAsyncContext<T>(
     },
   };
 
-  return api;
+  return deepFreeze(api);
 }
 
 export type { IAsyncContext } from "../types/asyncContext";

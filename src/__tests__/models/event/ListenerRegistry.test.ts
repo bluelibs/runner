@@ -14,7 +14,10 @@ const createTestEvent = (
   id: string,
   exclude: boolean,
 ): TestEvent & ReturnType<typeof defineEvent> => {
-  return Object.assign(defineEvent({ id }), { exclude });
+  return {
+    ...defineEvent({ id }),
+    exclude,
+  };
 };
 
 describe("ListenerRegistry", () => {

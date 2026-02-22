@@ -128,9 +128,11 @@ export function makeHookBuilder<
       const hook = defineHook({
         ...(state as IHookDefinition<TDeps, any, TMeta>),
       });
-      (hook as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
       // Runtime validation guarantees TOn is valid
-      return deepFreeze(hook as IHook<TDeps, any, TMeta>);
+      return deepFreeze({
+        ...(hook as IHook<TDeps, any, TMeta>),
+        [symbolFilePath]: state.filePath,
+      });
     },
   };
 

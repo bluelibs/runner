@@ -279,17 +279,17 @@ export function makePhantomTaskBuilder<
         tags: state.tags,
       });
 
-      (built as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
-      return deepFreeze(
-        built as IPhantomTask<
+      return deepFreeze({
+        ...(built as IPhantomTask<
           TInput,
           TResolved,
           TDeps,
           TMeta,
           TTags,
           TMiddleware
-        >,
-      );
+        >),
+        [symbolFilePath]: state.filePath,
+      });
     },
   };
   return builder;

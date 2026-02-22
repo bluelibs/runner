@@ -1,6 +1,9 @@
 import { r } from "../..";
+import { defineAsyncContext } from "../../definers/defineAsyncContext";
+import { defineError } from "../../definers/defineError";
 import {
   defineEvent,
+  defineHook,
   defineResource,
   defineResourceMiddleware,
   defineTag,
@@ -173,7 +176,7 @@ describe("Build lockdown", () => {
     expectDeepFrozen(lockOverrideBuilder);
   });
 
-  it("keeps direct define outputs mutable for compatibility", () => {
+  it("deep-freezes direct define outputs and their derived helpers", () => {
     const directTag = defineTag<{ mode?: string }>({
       id: "tests.lock.direct.tag",
       config: {},
@@ -186,6 +189,11 @@ describe("Build lockdown", () => {
       id: "tests.lock.direct.event",
       tags: [],
     });
+    const directHook = defineHook({
+      id: "tests.lock.direct.hook",
+      on: directEvent,
+      run: async () => undefined,
+    });
     const directResource = defineResource({
       id: "tests.lock.direct.resource",
     });
@@ -196,6 +204,13 @@ describe("Build lockdown", () => {
     const directResourceMiddleware = defineResourceMiddleware({
       id: "tests.lock.direct.rmw",
       run: async (input: any) => input.next(),
+    });
+    const directError = defineError<{ code: string }>({
+      id: "tests.lock.direct.error",
+      format: (data) => data.code,
+    });
+    const directContext = defineAsyncContext<{ requestId: string }>({
+      id: "tests.lock.direct.context",
     });
 
     const directTagUsage = directTag.with({ mode: "legacy" });
@@ -208,30 +223,37 @@ describe("Build lockdown", () => {
     );
     const directTaskMiddlewareUsage = directTaskMiddleware.with({});
     const directResourceMiddlewareUsage = directResourceMiddleware.with({});
+    const directErrorOptional = directError.optional();
+    const directContextOptional = directContext.optional();
     const directOverrideShorthand = r.override(
       directTask,
       async () => "patched",
     );
 
-    expect(Object.isFrozen(directTag)).toBe(false);
-    expect(Object.isFrozen(directTask)).toBe(false);
-    expect(Object.isFrozen(directEvent)).toBe(false);
-    expect(Object.isFrozen(directResource)).toBe(false);
-    expect(Object.isFrozen(directTaskMiddleware)).toBe(false);
-    expect(Object.isFrozen(directResourceMiddleware)).toBe(false);
+    expectDeepFrozen(directTag);
+    expectDeepFrozen(directTask);
+    expectDeepFrozen(directEvent);
+    expectDeepFrozen(directHook);
+    expectDeepFrozen(directResource);
+    expectDeepFrozen(directTaskMiddleware);
+    expectDeepFrozen(directResourceMiddleware);
+    expectDeepFrozen(directError);
+    expectDeepFrozen(directContext);
 
-    expect(Object.isFrozen(directTagUsage)).toBe(false);
-    expect(Object.isFrozen(directTaskOptional)).toBe(false);
-    expect(Object.isFrozen(directEventOptional)).toBe(false);
-    expect(Object.isFrozen(directResourceUsage)).toBe(false);
-    expect(Object.isFrozen(directResourceOptional)).toBe(false);
-    expect(Object.isFrozen(directResourceFork)).toBe(false);
-    expect(Object.isFrozen(directTaskMiddlewareUsage)).toBe(false);
-    expect(Object.isFrozen(directResourceMiddlewareUsage)).toBe(false);
-    expect(Object.isFrozen(directOverrideShorthand)).toBe(false);
+    expectDeepFrozen(directTagUsage);
+    expectDeepFrozen(directTaskOptional);
+    expectDeepFrozen(directEventOptional);
+    expectDeepFrozen(directResourceUsage);
+    expectDeepFrozen(directResourceOptional);
+    expectDeepFrozen(directResourceFork);
+    expectDeepFrozen(directTaskMiddlewareUsage);
+    expectDeepFrozen(directResourceMiddlewareUsage);
+    expectDeepFrozen(directErrorOptional);
+    expectDeepFrozen(directContextOptional);
+    expectDeepFrozen(directOverrideShorthand);
   });
 
-  it("always freezes fluent override builder outputs, even with mutable base", () => {
+  it("always freezes fluent override builder outputs", () => {
     const directTask = defineTask({
       id: "tests.lock.override.builder.base",
       run: async () => "base",

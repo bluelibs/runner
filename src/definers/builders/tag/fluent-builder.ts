@@ -47,8 +47,10 @@ export function makeTagBuilder<TConfig, TEnforceIn, TEnforceOut>(
         configSchema: state.configSchema as IValidationSchema<TConfig>,
         config: state.config as TConfig,
       });
-      (tag as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
-      return deepFreeze(tag);
+      return deepFreeze({
+        ...tag,
+        [symbolFilePath]: state.filePath,
+      });
     },
   };
 

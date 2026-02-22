@@ -117,9 +117,10 @@ export function makeTaskMiddlewareBuilder<
       const middleware = defineTaskMiddleware({
         ...(state as ITaskMiddlewareDefinition<C, In, Out, D>),
       });
-      (middleware as { [symbolFilePath]?: string })[symbolFilePath] =
-        state.filePath;
-      return deepFreeze(middleware);
+      return deepFreeze({
+        ...middleware,
+        [symbolFilePath]: state.filePath,
+      });
     },
   };
 

@@ -16,7 +16,7 @@ import {
 } from "../types/symbols";
 import { phantomTaskNotRoutedError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
-import { freezeIfLineageLocked } from "../tools/deepFreeze";
+import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 
 /**
@@ -45,7 +45,7 @@ export function defineTask<
 ): ITask<Input, Output, Deps, TMeta, TTags, TMiddleware> {
   const filePath = getCallerFile();
   const id = taskConfig.id;
-  return {
+  return deepFreeze({
     [symbolTask]: true,
     [symbolFilePath]: filePath,
     id,
@@ -69,7 +69,7 @@ export function defineTask<
       >;
       return freezeIfLineageLocked(this, wrapper);
     },
-  };
+  });
 }
 
 defineTask.phantom = <Input = undefined, Output extends Promise<any> = any>(
@@ -84,7 +84,17 @@ defineTask.phantom = <Input = undefined, Output extends Promise<any> = any>(
     run: phantomRun,
   });
 
-  taskDef[symbolPhantomTask] = true;
+  const phantomTask = {
+    ...taskDef,
+    [symbolPhantomTask]: true as const,
+  };
 
-  return taskDef as IPhantomTask<Input, Output, any, any, any, any>;
+  return deepFreeze(phantomTask) as IPhantomTask<
+    Input,
+    Output,
+    any,
+    any,
+    any,
+    any
+  >;
 };

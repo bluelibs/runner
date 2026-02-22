@@ -18,7 +18,7 @@ import {
 } from "../types/symbols";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
-import { freezeIfLineageLocked } from "../tools/deepFreeze";
+import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 import { resolveForkedRegisterAndDependencies } from "./resourceFork";
 
@@ -204,11 +204,14 @@ export function defineResource<
       dependencies: forkedParts.dependencies,
       [symbolFilePath]: forkCallerFilePath,
     });
-    forked[symbolForkedFrom] = {
-      fromId: current.id,
+    const forkedWithMeta = {
+      ...forked,
+      [symbolForkedFrom]: {
+        fromId: current.id,
+      },
     };
-    return freezeIfLineageLocked(current, forked);
+    return freezeIfLineageLocked(current, forkedWithMeta);
   };
 
-  return base;
+  return deepFreeze(base);
 }

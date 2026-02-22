@@ -286,8 +286,10 @@ export function makeTaskBuilder<
       };
 
       const task = defineTask(definition);
-      (task as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
-      return deepFreeze(task);
+      return deepFreeze({
+        ...task,
+        [symbolFilePath]: state.filePath,
+      });
     },
   };
   return builder;

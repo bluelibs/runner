@@ -14,7 +14,7 @@ import {
 } from "../defs";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
-import { freezeIfLineageLocked } from "../tools/deepFreeze";
+import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 
 /**
  * Create a tag definition.
@@ -48,7 +48,7 @@ export function defineTag<
     configSchema: definition.configSchema,
   } as ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>;
 
-  return {
+  return deepFreeze({
     ...foundation,
     [symbolTag]: true,
     [symbolFilePath]: filePath,
@@ -155,5 +155,5 @@ export function defineTag<
 
       return;
     },
-  } satisfies ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>;
+  } satisfies ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>);
 }

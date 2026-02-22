@@ -417,9 +417,10 @@ export function makeResourceBuilder<
         wiringAccessPolicy: state.wiringAccessPolicy,
       };
       const resource = defineResource(definition);
-      (resource as { [symbolFilePath]?: string })[symbolFilePath] =
-        state.filePath;
-      return deepFreeze(resource);
+      return deepFreeze({
+        ...resource,
+        [symbolFilePath]: state.filePath,
+      });
     },
   };
   return builder;

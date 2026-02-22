@@ -8,6 +8,7 @@ import {
   symbolFilePath,
 } from "../defs";
 import { getCallerFile } from "../tools/getCallerFile";
+import { deepFreeze } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 
 /**
@@ -21,7 +22,7 @@ export function defineHook<
   TMeta extends ITaskMeta = any,
 >(hookDef: IHookDefinition<D, TOn, TMeta>): IHook<D, TOn, TMeta> {
   const filePath = getCallerFile();
-  return {
+  return deepFreeze({
     [symbolHook]: true,
     [symbolFilePath]: filePath,
     id: hookDef.id,
@@ -32,5 +33,5 @@ export function defineHook<
     meta: hookDef.meta || ({} as TMeta),
     tags: hookDef.tags || [],
     throws: normalizeThrows({ kind: "hook", id: hookDef.id }, hookDef.throws),
-  } as IHook<D, TOn, TMeta>;
+  } as IHook<D, TOn, TMeta>);
 }

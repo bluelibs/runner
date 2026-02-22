@@ -9,7 +9,7 @@ import {
 } from "../defs";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
-import { freezeIfLineageLocked } from "../tools/deepFreeze";
+import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { normalizeThrows } from "../tools/throws";
 
@@ -129,5 +129,5 @@ export function defineResourceMiddleware<
     >;
   };
 
-  return wrap(base);
+  return deepFreeze(wrap(base));
 }

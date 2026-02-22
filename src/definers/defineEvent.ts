@@ -7,14 +7,14 @@ import {
   IOptionalDependency,
 } from "../defs";
 import { getCallerFile } from "../tools/getCallerFile";
-import { freezeIfLineageLocked } from "../tools/deepFreeze";
+import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 
 export function defineEvent<TPayload = void>(
   config: IEventDefinition<TPayload>,
 ): IEvent<TPayload> {
   const callerFilePath = getCallerFile();
   const eventConfig = config;
-  return {
+  return deepFreeze({
     ...eventConfig,
     id: eventConfig.id,
     [symbolFilePath]: callerFilePath,
@@ -28,5 +28,5 @@ export function defineEvent<TPayload = void>(
       } as IOptionalDependency<IEvent<TPayload>>;
       return freezeIfLineageLocked(this, wrapper);
     },
-  };
+  });
 }
