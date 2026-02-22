@@ -345,7 +345,7 @@ const billing = r
 
 #### Wiring Access Policy
 
-Use `.wiringAccessPolicy({ deny: [...] })` (blocklist) or `.wiringAccessPolicy({ only: [...] })` (allowlist) when a resource subtree must have restricted dependency access, even if visibility would otherwise allow it.
+Use `.wiringAccessPolicy({ deny: [...] })` (blocklist) or `.wiringAccessPolicy({ only: [...] })` (boundary-scoped external allowlist) when a resource subtree must have restricted dependency access, even if visibility would otherwise allow it.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -385,11 +385,13 @@ const payments = r
 - A resource uses **either** `deny` **or** `only` — providing both (even `deny: []` alongside `only`) throws `wiringAccessPolicyConflictError` at bootstrap.
 - `deny` / `only` accept string ids, definitions (tasks/resources/events/hooks/middleware/tags/errors/async contexts), or tag definitions; tags match any item carrying that tag.
 - **`only` automatically exempts internal items**: anything registered by the resource or its children is always accessible without being listed. `only: []` blocks all external dependencies while keeping internal ones reachable.
+- **`only` is checked at every ancestor boundary** for the consumer. For external dependencies, effective access behaves like the intersection of ancestor `only` lists (with the internal-subtree exemption still applied at each boundary).
 - Rules are validated at bootstrap; unknown or malformed entries fail fast.
 - **Parent and child policies compose additively**; children cannot relax parent restrictions:
   - Parent `deny: [A]` + child `deny: [B]` → neither A nor B accessible inside child.
   - Parent `only: [A]` + child `only: [A, B]` → only A accessible (parent blocks B).
   - Parent `only: [A]` + child `deny: [B]` → only A accessible and B additionally blocked.
+  - Parent `only: [A1, A2, A3]` + child `only: [A1, A4]` + grandchild consumer -> external access collapses to `A1` only (assuming all are external to both parent and child boundaries).
 - Denied references fail during `run(app)` sanity checks with a `wiringAccessPolicyViolationError`.
 
 #### Optional Dependencies

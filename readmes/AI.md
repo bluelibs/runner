@@ -62,7 +62,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 - `r.resource<Config>(id)` / `r.task<Input>(id)` seed typing before explicit schema; config-only resources can omit `.init()`.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` clones a resource under a new id with a separate runtime instance. `"drop"` clears nested items; `"deep"` deep-forks the resource tree and remaps dependencies.
 - `.exports([...])` narrows visibility: omit = everything public; `.exports([])` = nothing public (private subtree, including `.everywhere()` scope).
-- `.wiringAccessPolicy({ deny: [...] })` blocks listed ids/tags; `{ only: [...] }` is the allowlist form. Policies are additive across ancestors; Runner fails fast on violations at bootstrap.
+- `.wiringAccessPolicy({ deny: [...] })` blocks listed ids/tags; `{ only: [...] }` is a boundary-scoped external allowlist (internal subtree items remain reachable). Policies are additive across ancestors (effective external access is the intersection of ancestor `only` lists); Runner fails fast on violations at bootstrap.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
 
