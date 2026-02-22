@@ -11,6 +11,10 @@ import { run } from "../../run";
 import {
   duplicateRegistrationError,
   dependencyNotFoundError,
+  wiringAccessPolicyInvalidEntryError,
+  wiringAccessPolicyUnknownTargetError,
+  wiringAccessPolicyViolationError,
+  wiringAccessPolicyConflictError,
   unknownItemTypeError,
   eventNotFoundError,
   circularDependencyError,
@@ -433,6 +437,65 @@ describe("Errors", () => {
       expect(phantom.message).toContain('Phantom task "my.phantom.task"');
       expect(phantom.message).toContain("not routed through any tunnel");
       expect(phantomTaskNotRoutedError.is(phantom)).toBe(true);
+
+      const policyInvalid = capture(() =>
+        wiringAccessPolicyInvalidEntryError.throw({
+          policyResourceId: "app.resource",
+          entry: {},
+        }),
+      );
+      expect(policyInvalid.message).toContain(
+        'Resource "app.resource" declares an invalid wiringAccessPolicy entry.',
+      );
+
+      const policyUnknown = capture(() =>
+        wiringAccessPolicyUnknownTargetError.throw({
+          policyResourceId: "app.resource",
+          targetId: "missing.target",
+        }),
+      );
+      expect(policyUnknown.message).toContain(
+        'Resource "app.resource" references unknown target "missing.target"',
+      );
+
+      const policyConflict = capture(() =>
+        wiringAccessPolicyConflictError.throw({
+          policyResourceId: "app.resource",
+        }),
+      );
+      expect(policyConflict.message).toContain(
+        'Resource "app.resource" declares both "deny" and "only"',
+      );
+
+      const policyViolation = capture(() =>
+        wiringAccessPolicyViolationError.throw({
+          targetId: "tasks.secret",
+          targetType: "Task",
+          consumerId: "tasks.consumer",
+          consumerType: "Task",
+          policyResourceId: "resources.boundary",
+          matchedRuleType: "tag",
+          matchedRuleId: "tags.secret",
+        }),
+      );
+      expect(policyViolation.message).toContain(
+        'Task "tasks.secret" is denied by wiringAccessPolicy on resource "resources.boundary"',
+      );
+
+      const policyOnlyViolation = capture(() =>
+        wiringAccessPolicyViolationError.throw({
+          targetId: "tasks.secret",
+          targetType: "Task",
+          consumerId: "tasks.consumer",
+          consumerType: "Task",
+          policyResourceId: "resources.boundary",
+          matchedRuleType: "only",
+          matchedRuleId: "tasks.secret",
+        }),
+      );
+      expect(policyOnlyViolation.message).toContain(
+        'not allowed by wiringAccessPolicy "only" rule on resource "resources.boundary"',
+      );
     });
   });
 });

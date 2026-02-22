@@ -9,9 +9,11 @@ import type {
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   TagType,
+  WiringAccessPolicy,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 import { normalizeThrows } from "../../../tools/throws";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineOverride } from "../../defineOverride";
 import type { ResourceFluentBuilder } from "../resource/fluent-builder.interface";
 import type { ResolveConfig } from "../resource/types";
@@ -448,15 +450,39 @@ function makeResourceOverrideBuilder<
         TMiddleware
       >(base, next);
     },
+    wiringAccessPolicy(policy: WiringAccessPolicy) {
+      // Mirror the fluent builder: deny merges with deny, only merges with only.
+      const existingDeny = state.wiringAccessPolicy?.deny ?? [];
+      const existingOnly = state.wiringAccessPolicy?.only ?? [];
+      const merged: WiringAccessPolicy = {};
+      if (existingDeny.length > 0 || policy.deny) {
+        merged.deny = [...existingDeny, ...(policy.deny ?? [])];
+      }
+      if (existingOnly.length > 0 || policy.only) {
+        merged.only = [...existingOnly, ...(policy.only ?? [])];
+      }
+      const next = cloneResourceState(state, { wiringAccessPolicy: merged });
+      return makeResourceOverrideBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(base, next);
+    },
     build() {
       const normalizedThrows = normalizeThrows(
         { kind: "resource", id: state.id },
         state.throws,
       );
       const { id: _id, ...patch } = state;
-      return defineOverride<
-        IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>
-      >(base, { ...patch, throws: normalizedThrows });
+      return deepFreeze(
+        defineOverride<
+          IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>
+        >(base, { ...patch, throws: normalizedThrows }),
+      );
     },
   };
   return builder;
@@ -504,6 +530,7 @@ export function resourceOverrideBuilder<
     overrides: base.overrides,
     throws: base.throws,
     exports: base.exports,
+    wiringAccessPolicy: base.wiringAccessPolicy,
   });
 
   return makeResourceOverrideBuilder(base, initial);

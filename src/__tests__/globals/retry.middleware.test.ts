@@ -111,6 +111,35 @@ describe("Retry Middleware", () => {
       jest.useRealTimers();
     });
 
+    it("skips sleeping when custom delay strategy returns zero", async () => {
+      let attempts = 0;
+      const task = defineTask({
+        id: "zeroDelayRetryTask",
+        middleware: [
+          retryTaskMiddleware.with({
+            retries: 1,
+            delayStrategy: () => 0,
+          }),
+        ],
+        run: async () => {
+          attempts += 1;
+          throw createMessageError("retry-now");
+        },
+      });
+
+      const app = defineResource({
+        id: "app.zeroDelayRetryTask",
+        register: [task],
+        dependencies: { task },
+        async init(_, { task }) {
+          await expect(task()).rejects.toThrow("retry-now");
+        },
+      });
+
+      await run(app);
+      expect(attempts).toBe(2);
+    });
+
     it("Should default to 3 retries", async () => {
       let attempt = 0;
       const task = defineTask({
@@ -359,6 +388,31 @@ describe("Retry Middleware", () => {
 
       // It should eventually throw after all retries are exhausted.
       await expect(runPromise).rejects.toThrow("Retry me");
+    });
+
+    it("skips resource retry sleep when delay strategy returns zero", async () => {
+      let attempts = 0;
+      const resource = defineResource({
+        id: "zeroDelayRetryResource",
+        middleware: [
+          retryResourceMiddleware.with({
+            retries: 1,
+            delayStrategy: () => 0,
+          }),
+        ],
+        async init() {
+          attempts += 1;
+          throw createMessageError("retry-now-resource");
+        },
+      });
+
+      const app = defineResource({
+        id: "app.zeroDelayRetryResource",
+        register: [resource],
+      });
+
+      await expect(run(app)).rejects.toThrow("retry-now-resource");
+      expect(attempts).toBe(2);
     });
 
     it("Should default to 3 retries", async () => {

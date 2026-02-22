@@ -1,5 +1,6 @@
 import { defineResource } from "../../define";
 import { globalResources } from "../../globals/globalResources";
+import { globalTags } from "../../globals/globalTags";
 
 import { createNodeExposure } from "./createNodeExposure";
 import type { NodeExposureConfig } from "./resourceTypes";
@@ -15,6 +16,7 @@ export const nodeExposure = defineResource({
   },
   dependencies: {
     store: globalResources.store,
+    authValidators: globalTags.authValidator,
     taskRunner: globalResources.taskRunner,
     eventManager: globalResources.eventManager,
     logger: globalResources.logger,

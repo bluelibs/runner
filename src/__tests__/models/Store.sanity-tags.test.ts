@@ -46,4 +46,73 @@ describe("Store sanity checks (tags)", () => {
     expect(rootInit).toHaveBeenCalledTimes(1);
     await runtime.dispose();
   });
+
+  it("fails when a definition depends on a tag it also carries", async () => {
+    const rootInit = jest.fn(async () => "ok");
+    const tag = defineTag({ id: "app.tags.self.dep" });
+
+    const task = defineTask({
+      id: "app.tasks.self.dep",
+      tags: [tag],
+      dependencies: { tag },
+      run: async () => undefined,
+    });
+
+    const app = defineResource({
+      id: "app.root.self.dep",
+      register: [tag, task],
+      init: rootInit,
+    });
+
+    await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
+      /cannot depend on tag "app\.tags\.self\.dep" because it already carries the same tag/i,
+    );
+    expect(rootInit).not.toHaveBeenCalled();
+  });
+
+  it("fails when a definition depends on an optional wrapper of its own tag", async () => {
+    const rootInit = jest.fn(async () => "ok");
+    const tag = defineTag({ id: "app.tags.self.dep.optional" });
+
+    const task = defineTask({
+      id: "app.tasks.self.dep.optional",
+      tags: [tag],
+      dependencies: { maybeTag: tag.optional() },
+      run: async () => undefined,
+    });
+
+    const app = defineResource({
+      id: "app.root.self.dep.optional",
+      register: [tag, task],
+      init: rootInit,
+    });
+
+    await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
+      /cannot depend on tag "app\.tags\.self\.dep\.optional" because it already carries the same tag/i,
+    );
+    expect(rootInit).not.toHaveBeenCalled();
+  });
+
+  it("fails when a definition depends on startup() wrapper of its own tag", async () => {
+    const rootInit = jest.fn(async () => "ok");
+    const tag = defineTag({ id: "app.tags.self.dep.beforeInit" });
+
+    const task = defineTask({
+      id: "app.tasks.self.dep.beforeInit",
+      tags: [tag],
+      dependencies: { tag: tag.startup() },
+      run: async () => undefined,
+    });
+
+    const app = defineResource({
+      id: "app.root.self.dep.beforeInit",
+      register: [tag, task],
+      init: rootInit,
+    });
+
+    await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
+      /cannot depend on tag "app\.tags\.self\.dep\.beforeInit" because it already carries the same tag/i,
+    );
+    expect(rootInit).not.toHaveBeenCalled();
+  });
 });

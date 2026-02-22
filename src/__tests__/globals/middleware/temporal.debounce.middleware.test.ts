@@ -3,10 +3,9 @@ import { run } from "../../../run";
 import { debounceTaskMiddleware } from "../../../globals/middleware/temporal.middleware";
 import { createMessageError } from "../../../errors";
 
-const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
-
 describe("Temporal Middleware: Debounce", () => {
   it("should debounce task executions", async () => {
+    jest.useFakeTimers();
     let callCount = 0;
     const task = defineTask({
       id: "debounce.task",
@@ -22,18 +21,24 @@ describe("Temporal Middleware: Debounce", () => {
       register: [task],
       dependencies: { task },
       async init(_, { task }) {
-        const results = await Promise.all([task("a"), task("b"), task("c")]);
-        return results;
+        const pending = Promise.all([task("a"), task("b"), task("c")]);
+        jest.advanceTimersByTime(50);
+        await Promise.resolve();
+        return pending;
       },
     });
 
-    const results = (await run(app)).value;
-
-    expect(callCount).toBe(1);
-    expect(results).toEqual(["c", "c", "c"]);
+    try {
+      const results = (await run(app)).value;
+      expect(callCount).toBe(1);
+      expect(results).toEqual(["c", "c", "c"]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("should handle multiple debounce cycles", async () => {
+    jest.useFakeTimers();
     let callCount = 0;
     const task = defineTask({
       id: "debounce.cycles",
@@ -49,20 +54,33 @@ describe("Temporal Middleware: Debounce", () => {
       register: [task],
       dependencies: { task },
       async init(_, { task }) {
-        const r1 = await Promise.all([task("a"), task("b")]);
-        await sleep(100);
-        const r2 = await Promise.all([task("c"), task("d")]);
+        const firstCycle = Promise.all([task("a"), task("b")]);
+        jest.advanceTimersByTime(50);
+        await Promise.resolve();
+        const r1 = await firstCycle;
+
+        jest.advanceTimersByTime(100);
+        await Promise.resolve();
+
+        const secondCycle = Promise.all([task("c"), task("d")]);
+        jest.advanceTimersByTime(50);
+        await Promise.resolve();
+        const r2 = await secondCycle;
         return [...r1, ...r2];
       },
     });
 
-    const results = (await run(app)).value;
-
-    expect(callCount).toBe(2);
-    expect(results).toEqual(["b", "b", "d", "d"]);
+    try {
+      const results = (await run(app)).value;
+      expect(callCount).toBe(2);
+      expect(results).toEqual(["b", "b", "d", "d"]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("should handle errors in debounced task", async () => {
+    jest.useFakeTimers();
     let callCount = 0;
     const task = defineTask({
       id: "debounce.error",
@@ -78,14 +96,21 @@ describe("Temporal Middleware: Debounce", () => {
       register: [task],
       dependencies: { task },
       async init(_, { task }) {
-        await Promise.all([
+        const pending = Promise.all([
           task().catch((e) => e.message),
           task().catch((e) => e.message),
         ]);
+        jest.advanceTimersByTime(50);
+        await Promise.resolve();
+        await pending;
       },
     });
 
-    await run(app);
-    expect(callCount).toBe(1);
+    try {
+      await run(app);
+      expect(callCount).toBe(1);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

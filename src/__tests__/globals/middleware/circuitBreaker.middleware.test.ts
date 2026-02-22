@@ -323,4 +323,43 @@ describe("Circuit Breaker Middleware", () => {
     const runtime = await run(app);
     await runtime.dispose();
   });
+
+  it("does not evict non-stale entries during safety-cap cleanup and keeps circuit closed below threshold", async () => {
+    const task = defineTask({
+      id: "task.eviction.nonstale",
+      middleware: [circuitBreakerMiddleware.with({ failureThreshold: 2 })],
+      run: async () => {
+        throw createMessageError("boom");
+      },
+    });
+
+    let statusMapRef!: Map<string, any>;
+    const app = defineResource({
+      id: "app.eviction.nonstale",
+      register: [task],
+      dependencies: { task, state: circuitBreakerResource },
+      async init(_, { task, state }) {
+        statusMapRef = state.statusMap as Map<string, any>;
+        for (let i = 0; i < 10_000; i++) {
+          statusMapRef.set(`keep-${i}`, {
+            state: i % 2 === 0 ? "OPEN" : "CLOSED",
+            failures: i % 2 === 0 ? 1 : 2,
+            lastFailureTime: 0,
+            halfOpenProbeInFlight: false,
+          });
+        }
+
+        await expect(task()).rejects.toThrow("boom");
+        // Below threshold after first failure, so task should remain CLOSED and be callable again.
+        await expect(task()).rejects.toThrow("boom");
+        await expect(task()).rejects.toThrow(CircuitBreakerOpenError);
+
+        expect(statusMapRef.has("keep-0")).toBe(true);
+        expect(statusMapRef.has("keep-1")).toBe(true);
+      },
+    });
+
+    const runtime = await run(app);
+    await runtime.dispose();
+  });
 });

@@ -50,8 +50,8 @@ describe("run.ts rollback and unhooking", () => {
     );
 
     // Only successfully initialized resources are disposed during rollback.
-    // `bad` throws during init and `never` is not initialized.
-    expect(disposeCalls.sort()).toEqual(["dep:dep"].sort());
+    // `bad` throws during init and is not disposed.
+    expect(disposeCalls.sort()).toEqual(["dep:dep", "never"].sort());
   });
 
   it("unhooks shutdown listeners on dispose() (global dispatcher)", async () => {

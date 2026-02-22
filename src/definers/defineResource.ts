@@ -18,6 +18,7 @@ import {
 } from "../types/symbols";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 import { resolveForkedRegisterAndDependencies } from "./resourceFork";
 
@@ -79,6 +80,7 @@ export function defineResource<
     meta: (constConfig.meta || {}) as TMeta,
     middleware: constConfig.middleware ?? [],
     exports: constConfig.exports,
+    wiringAccessPolicy: constConfig.wiringAccessPolicy,
   } as IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>;
 
   const resolveCurrent = (
@@ -137,6 +139,7 @@ export function defineResource<
     dispose: current.dispose,
     meta: current.meta,
     exports: current.exports,
+    wiringAccessPolicy: current.wiringAccessPolicy,
   });
 
   base.with = function (config: TConfig) {
@@ -157,7 +160,7 @@ export function defineResource<
       }
     }
 
-    return {
+    const configured = {
       [symbolResourceWithConfig]: true,
       id: currentId,
       resource: current,
@@ -171,16 +174,18 @@ export function defineResource<
       TTags,
       TMiddleware
     >;
+    return freezeIfLineageLocked(current, configured);
   };
 
   base.optional = function () {
     const current = resolveCurrent(this);
-    return {
+    const wrapper = {
       inner: current,
       [symbolOptionalDependency]: true,
     } as IOptionalDependency<
       IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>
     >;
+    return freezeIfLineageLocked(current, wrapper);
   };
 
   base.fork = function (newId: string, options?: ResourceForkOptions) {
@@ -202,7 +207,7 @@ export function defineResource<
     forked[symbolForkedFrom] = {
       fromId: current.id,
     };
-    return forked;
+    return freezeIfLineageLocked(current, forked);
   };
 
   return base;

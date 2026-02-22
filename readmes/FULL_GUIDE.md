@@ -1171,6 +1171,8 @@ const result = await runTask(sendEmail, {
 });
 ```
 
+> **Lockdown note:** Fluent `.build()` returns a deep-frozen definition. Treat built definitions as immutable and use builder chaining, `.with()`, `.fork()`, or `r.override(...)` for changes.
+
 **The Two Ways to Call Tasks:**
 
 1. **In production/integration**: `runTask(task, input)` - Gets full DI, middleware, events, the works
@@ -1451,6 +1453,55 @@ const billing = r
 
 - Explicit hook event references are visibility-checked
 - Wildcard hooks (`.on("*")`) are global by design; use explicit events when you need strict boundary enforcement
+
+#### Wiring Access Policy
+
+Use `.wiringAccessPolicy({ deny: [...] })` (blocklist) or `.wiringAccessPolicy({ only: [...] })` (allowlist) when a resource subtree must have restricted dependency access, even if visibility would otherwise allow it.
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+// --- deny: block specific ids or tagged items ---
+const internalDb = r
+  .resource("billing.db.internal")
+  .init(async () => ({}))
+  .build();
+const internalOnlyTag = r.tag("billing.tags.internalOnly").build();
+
+const billing = r
+  .resource("billing")
+  .register([internalDb, internalOnlyTag])
+  .wiringAccessPolicy({
+    deny: [internalDb, internalOnlyTag], // block by id or definition (tags match all carriers)
+  })
+  .build();
+
+// --- only: allow nothing external except listed items ---
+const allowedService = r
+  .resource("payments.allowed")
+  .init(async () => ({}))
+  .build();
+
+const payments = r
+  .resource("payments")
+  .register([allowedService])
+  .wiringAccessPolicy({
+    only: [allowedService], // nothing else from outside is reachable
+  })
+  .build();
+```
+
+**Semantics:**
+
+- A resource uses **either** `deny` **or** `only` — providing both (even `deny: []` alongside `only`) throws `wiringAccessPolicyConflictError` at bootstrap.
+- `deny` / `only` accept string ids, definitions (tasks/resources/events/hooks/middleware/tags/errors/async contexts), or tag definitions; tags match any item carrying that tag.
+- **`only` automatically exempts internal items**: anything registered by the resource or its children is always accessible without being listed. `only: []` blocks all external dependencies while keeping internal ones reachable.
+- Rules are validated at bootstrap; unknown or malformed entries fail fast.
+- **Parent and child policies compose additively**; children cannot relax parent restrictions:
+  - Parent `deny: [A]` + child `deny: [B]` → neither A nor B accessible inside child.
+  - Parent `only: [A]` + child `only: [A, B]` → only A accessible (parent blocks B).
+  - Parent `only: [A]` + child `deny: [B]` → only A accessible and B additionally blocked.
+- Denied references fail during `run(app)` sanity checks with a `wiringAccessPolicyViolationError`.
 
 #### Optional Dependencies
 
@@ -2162,7 +2213,7 @@ Imagine you want to automatically register all your HTTP routes without manually
 
 **The better solution**: Use Tags—metadata that can be queried at runtime to build dynamic functionality.
 
-### When to use Tags
+#### When to use Tags
 
 | Use case       | Why Tags help                               |
 | -------------- | ------------------------------------------- |
@@ -2171,7 +2222,7 @@ Imagine you want to automatically register all your HTTP routes without manually
 | Access control | Tag tasks requiring authorization           |
 | Monitoring     | Group tasks by feature for metrics          |
 
-### Tags Code Example
+#### Tags Code Example
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -2208,7 +2259,7 @@ const taskWithTags = r
 
 #### Discovering Components by Tags
 
-The core power of tags is runtime discovery. Use `store.getTasksWithTag()` to find components:
+The core power of tags is runtime discovery. Depend on tags directly and Runner injects a typed accessor:
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -2218,27 +2269,77 @@ import { r, globals } from "@bluelibs/runner";
 const routeRegistration = r
   .hook("app.hooks.registerRoutes")
   .on(globals.events.ready)
-  .dependencies({ store: globals.resources.store, server: expressServer })
-  .run(async (_event, { store, server }) => {
+  .dependencies({
+    server: expressServer,
+    httpTag, // use the runtime accessor because we execute matched tasks via entry.run(...)
+    cacheableTag, // ensures that this runs after all items containing the tag are initialized
+  })
+  .run(async (_event, { server, httpTag, cacheableTag }) => {
     // Find all tasks with HTTP tags
-    const apiTasks = store.getTasksWithTag(httpTag);
-
-    apiTasks.forEach((taskDef) => {
-      const config = httpTag.extract(taskDef);
+    httpTag.tasks.forEach((entry) => {
+      const config = entry.config;
       if (!config) return;
 
       const { method, path } = config;
       server.app[method.toLowerCase()](path, async (req, res) => {
-        const result = await taskDef({ ...req.params, ...req.body });
+        const result = await entry.run({ ...req.params, ...req.body });
         res.json(result);
       });
     });
 
-    const cacheableTasks = store.getTasksWithTag(cacheableTag);
-    console.log(`Found ${cacheableTasks.length} cacheable tasks`);
+    console.log(`Found ${cacheableTag.tasks.length} cacheable tasks`);
   })
   .build();
 ```
+
+Tag accessors expose all tagged definition categories:
+`tasks`, `resources`, `events`, `hooks`, `taskMiddlewares`, `resourceMiddlewares`, and `errors`.
+
+Accessor match helpers:
+
+- `tasks[]` entries expose `definition`, `config`, and runtime `run(...)` (plus runtime `intercept(...)` when consumed from a resource dependency context).
+- `resources[]` entries expose `definition`, `config`, and runtime `value` (available after that resource is initialized).
+
+#### Runtime Helpers on Tag Matches
+
+Tag dependency matches are not just metadata snapshots. For task and resource matches, Runner also exposes runtime helpers so you can execute or wire behavior directly from discovery results.
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+// Assuming: routeTag is defined and tasks/resources carrying it are registered
+const installRoutes = r
+  .resource("app.routes.installer")
+  .dependencies({ routeTag })
+  .init(async (_config, { routeTag }) => {
+    for (const taskEntry of routeTag.tasks) {
+      // taskEntry.run executes through runtime wiring (validation + middleware)
+      await taskEntry.run(undefined);
+
+      // taskEntry.intercept is available in resource dependency context
+      taskEntry.intercept(async (next, input) => next(input));
+    }
+
+    for (const resourceEntry of routeTag.resources) {
+      // value is the initialized runtime resource value (when available)
+      console.log(resourceEntry.definition.id, resourceEntry.value);
+    }
+  })
+  .build();
+```
+
+**Important details:**
+
+- With a normal tag dependency (not `tag.startup()`), `tasks[].run` is the runtime task callable (same execution pipeline as normal task dependencies).
+- `tasks[].intercept` is available when the tag accessor is injected in a resource dependency context.
+- `resources[].value` is the resolved runtime resource value for that matched resource (it may be `undefined` when using `tag.startup()` or before that resource is available).
+- Use `tag.startup()` as dependency when you need startup ordering/discovery and treat the accessor as metadata-first (don't assume runtime helpers like `run()` are available there).
+
+Use `tag.startup()` when startup ordering matters (for example route registration). It injects the same typed accessor while making the dependency intent explicit.
+
+Deprecated API note: `store.getTasksWithTag(...)` and `store.getResourcesWithTag(...)` are deprecated in favor of tag dependencies.
+
+Fail-fast rule: if a tagged item depends on the same tag, Runner throws during store sanity checks.
 
 #### Tag Extraction and Processing
 
@@ -3137,6 +3238,63 @@ const myTask = r
 
 ---
 
+## Require Context (Async Context Guard)
+
+Fail fast when a task must run inside a specific async context. This middleware is useful for request-scoped metadata (request id, tenant id, auth claims) where continuing without context would produce incorrect behavior.
+
+```typescript
+import { defineAsyncContext, r } from "@bluelibs/runner";
+
+const RequestContext = defineAsyncContext<{ requestId: string }>({
+  id: "app.ctx.request",
+});
+
+const getAuditTrail = r
+  .task("app.tasks.getAuditTrail")
+  // Shortcut: creates globals.middleware.task.requireContext with this context
+  .middleware([RequestContext.require()])
+  .run(async () => {
+    const { requestId } = RequestContext.use();
+    return { requestId, entries: [] };
+  })
+  .build();
+```
+
+If you prefer the explicit middleware form (useful in documentation and composition helpers):
+
+```typescript
+import { defineAsyncContext, globals, r } from "@bluelibs/runner";
+
+const TenantContext = defineAsyncContext<{ tenantId: string }>({
+  id: "app.ctx.tenant",
+});
+
+const listProjects = r
+  .task("app.tasks.listProjects")
+  .middleware([
+    globals.middleware.task.requireContext.with({ context: TenantContext }),
+  ])
+  .run(async () => {
+    const { tenantId } = TenantContext.use();
+    return await projectRepo.findByTenant(tenantId);
+  })
+  .build();
+```
+
+**What it protects you from:**
+
+- Running tenant-sensitive logic without tenant context.
+- Logging/auditing tasks that silently lose request correlation ids.
+- Hidden bugs where context is only present in some call paths.
+
+> **Platform Note:** Async context requires `AsyncLocalStorage`, which is **Node.js-only**. In browsers and edge runtimes, async context APIs are not available.
+
+**What you just learned**: `requireContext` turns missing async context into an immediate, explicit failure instead of a delayed business-logic bug.
+
+> **runtime:** "If your task needs request context and you forgot to bring it, we stop at the door. Better a loud crash now than a forensic investigation later."
+
+---
+
 ## Retrying Failed Operations
 
 For when things go wrong, but you know they'll probably work if you just try again. The built-in retry middleware makes your tasks and resources more resilient to transient failures.
@@ -3167,6 +3325,28 @@ The retry middleware can be configured with:
 - `retries`: The maximum number of retry attempts (default: 3).
 - `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
+
+It also works on resources, which is especially useful for startup initialization:
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const database = r
+  .resource<{ connectionString: string }>("app.db")
+  .middleware([
+    globals.middleware.resource.retry.with({
+      retries: 4,
+      delayStrategy: (attempt) => 250 * Math.pow(2, attempt),
+    }),
+  ])
+  .init(async ({ connectionString }) => {
+    return await connectToDatabase(connectionString);
+  })
+  .dispose(async (value) => {
+    await value.close();
+  })
+  .build();
+```
 
 **Why would you need this?** For logging—you want to log which attempt succeeded or what errors occurred during retries.
 
@@ -3248,6 +3428,26 @@ Best practices:
 - Use longer timeouts for resource initialization than task execution
 - Consider network conditions when setting API call timeouts
 
+Resource timeouts help prevent startup hangs when a dependency never becomes ready:
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const messageBroker = r
+  .resource("app.broker")
+  .middleware([
+    globals.middleware.resource.timeout.with({ ttl: 15000 }),
+    globals.middleware.resource.retry.with({ retries: 2 }),
+  ])
+  .init(async () => {
+    return await connectBroker();
+  })
+  .dispose(async (value) => {
+    await value.close();
+  })
+  .build();
+```
+
 > **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It's not me, it's your molasses‑flavored endpoint. I just blow the whistle."
 
 ---
@@ -3294,6 +3494,17 @@ Operational notes:
 - One cron tag per task is supported. If you need multiple schedules, fork the task and tag each fork.
 - Scheduler uses `setTimeout` chaining, which keeps it portable across supported runtimes.
 - Startup and execution lifecycle messages are emitted via `globals.resources.logger`.
+
+Best practices:
+
+- Keep cron task logic idempotent (retries, restarts, and manual reruns happen).
+- Use `timezone` explicitly for business schedules to avoid DST surprises.
+- Use `onError: "stop"` only when repeated failure should disable the schedule.
+- Keep cron tasks thin; delegate heavy logic to regular tasks for reuse/testing.
+
+> **runtime:** "Cron: because 'I'll remember to run it every morning' is how scripts become folklore. I set the timer, you make the task idempotent, and we both sleep better."
+
+---
 
 ## Concurrency Utilities
 
@@ -5759,6 +5970,22 @@ Every builder follows the same rhythm:
 2. **Configure** with `.dependencies()`, `.middleware()`, `.tags()`, etc.
 3. **Implement** with `.run()` or `.init()`
 4. **Finish** with `.build()`
+
+### Builder Chaining Semantics (Append vs Replace)
+
+Repeated calls are part of the design, but not every method composes the same way.
+
+- **Replace (last call wins):** Scalar/single-value setters like `.run()`, `.init()`, `.schema()`, `.inputSchema()`, `.resultSchema()`, `.meta()`, `.order()`, `.parallel()`, `.context()`, `.dispose()`, `.httpCode()`, `.format()`, and `.remediation()`.
+- **Append by default, replace with `{ override: true }`:** List-like methods such as `.tags()`, `.middleware()`, and (resources) `.register()`, `.overrides()`, `.exports()`.
+- **Shallow-merge by default, replace with `{ override: true }`:** `.dependencies()`.
+- **Additive-only merge (no override flag):** Resource `.wiringAccessPolicy()` accumulates `deny`/`only` entries across calls.
+
+Two important exceptions:
+
+- Repeated `.throws()` calls currently **replace** the previous declaration (last call wins). We keep this behavior for compatibility.
+- `event.throws()` is documentation-only (events themselves don't throw during emit), so it does not behave like task/resource `.throws()`.
+
+The same chaining rules apply when using `r.override(base)` fluent override builders.
 
 For the complete API reference, see the [Fluent Builders documentation](../readmes/FLUENT_BUILDERS.md).
 

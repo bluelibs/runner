@@ -7,6 +7,7 @@ import type {
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { defineTask } from "../../defineTask";
 import type { PhantomTaskFluentBuilder } from "./phantom-builder.interface";
@@ -279,14 +280,16 @@ export function makePhantomTaskBuilder<
       });
 
       (built as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
-      return built as IPhantomTask<
-        TInput,
-        TResolved,
-        TDeps,
-        TMeta,
-        TTags,
-        TMiddleware
-      >;
+      return deepFreeze(
+        built as IPhantomTask<
+          TInput,
+          TResolved,
+          TDeps,
+          TMeta,
+          TTags,
+          TMiddleware
+        >,
+      );
     },
   };
   return builder;

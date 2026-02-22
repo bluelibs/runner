@@ -9,6 +9,7 @@ import {
 } from "../defs";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { freezeIfLineageLocked } from "../tools/deepFreeze";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { normalizeThrows } from "../tools/throws";
 
@@ -108,7 +109,7 @@ export function defineResourceMiddleware<
             });
           }
         }
-        return wrap({
+        const configured = wrap({
           ...current,
           [symbolMiddlewareConfigured]: true,
           config: mergeMiddlewareConfig(current.config as TConfig, config),
@@ -118,6 +119,7 @@ export function defineResourceMiddleware<
           TEnforceOutputContract,
           TDependencies
         >);
+        return freezeIfLineageLocked(current, configured);
       },
     } as IResourceMiddleware<
       TConfig,

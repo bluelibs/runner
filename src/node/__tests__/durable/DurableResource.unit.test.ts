@@ -120,11 +120,12 @@ describe("durable: DurableResource", () => {
       .build();
 
     const runnerStore = {
-      getTasksWithTag: jest
-        .fn()
-        .mockImplementation((tag) =>
-          tag.id === durableWorkflowTag.id ? [taggedTask] : [untaggedTask],
-        ),
+      getTagAccessor: jest.fn().mockImplementation((tag) => ({
+        tasks:
+          tag.id === durableWorkflowTag.id
+            ? [{ definition: taggedTask }]
+            : [{ definition: untaggedTask }],
+      })),
     } as any;
 
     const durable = new DurableResource(
@@ -135,9 +136,7 @@ describe("durable: DurableResource", () => {
     );
 
     expect(durable.getWorkflows()).toEqual([taggedTask]);
-    expect(runnerStore.getTasksWithTag).toHaveBeenCalledWith(
-      durableWorkflowTag,
-    );
+    expect(runnerStore.getTagAccessor).toHaveBeenCalledWith(durableWorkflowTag);
   });
 
   it("throws when describe() is called and dependencies are missing in runner store", async () => {

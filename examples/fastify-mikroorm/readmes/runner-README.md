@@ -611,37 +611,36 @@ const getUserTask = task({
 
 #### Discovering Components by Tags
 
-The core power of tags is runtime discovery. Use `store.getTasksWithTag()` to find components:
+The core power of tags is runtime discovery. Depend on tags directly to get typed accessors:
 
 ```typescript
-import { hook, globals } from "@bluelibs/runner";
+import { hook, globals, tag } from "@bluelibs/runner";
 
 // Auto-register HTTP routes based on tags
+const cacheableTag = tag<void>({ id: "cacheable" });
+
 const routeRegistration = hook({
   id: "app.hooks.registerRoutes",
   on: globals.events.ready,
   dependencies: {
-    store: globals.resources.store,
     server: expressServer,
+    httpTag,
+    cacheableTag,
   },
-  run: async (_, { store, server }) => {
+  run: async (_, { server, httpTag, cacheableTag }) => {
     // Find all tasks with HTTP tags
-    const apiTasks = store.getTasksWithTag(httpTag);
-
-    apiTasks.forEach((taskDef) => {
-      const config = httpTag.extract(taskDef);
+    httpTag.tasks.forEach((entry) => {
+      const config = entry.config;
       if (!config) return;
 
       const { method, path } = config;
       server.app[method.toLowerCase()](path, async (req, res) => {
-        const result = await taskDef({ ...req.params, ...req.body });
+        const result = await entry.definition({ ...req.params, ...req.body });
         res.json(result);
       });
     });
 
-    // Also find by string tags
-    const cacheableTasks = store.getTasksWithTag("cacheable");
-    console.log(`Found ${cacheableTasks.length} cacheable tasks`);
+    console.log(`Found ${cacheableTag.tasks.length} cacheable tasks`);
   },
 });
 ```

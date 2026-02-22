@@ -144,6 +144,29 @@ describe("BrowserPlatformAdapter - Additional Coverage", () => {
       expect(handler).toHaveBeenCalled();
     });
 
+    it("should not call handler when document visibility is not hidden", () => {
+      const mockWindow = {
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+      };
+      const mockDocument = {
+        visibilityState: "visible",
+      };
+
+      (globalThis as any).window = mockWindow;
+      (globalThis as any).document = mockDocument;
+
+      const handler = jest.fn();
+      adapter.onShutdownSignal(handler);
+
+      const visibilityHandler = mockWindow.addEventListener.mock.calls.find(
+        (call) => call[0] === "visibilitychange",
+      )?.[1];
+      visibilityHandler?.();
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
     it("should use globalThis when window is undefined", () => {
       delete (globalThis as any).window;
       const globalAddEventListener = jest.fn();

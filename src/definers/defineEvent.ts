@@ -7,6 +7,7 @@ import {
   IOptionalDependency,
 } from "../defs";
 import { getCallerFile } from "../tools/getCallerFile";
+import { freezeIfLineageLocked } from "../tools/deepFreeze";
 
 export function defineEvent<TPayload = void>(
   config: IEventDefinition<TPayload>,
@@ -21,10 +22,11 @@ export function defineEvent<TPayload = void>(
     tags: eventConfig.tags || [],
     parallel: eventConfig.parallel,
     optional() {
-      return {
+      const wrapper = {
         inner: this,
         [symbolOptionalDependency]: true,
       } as IOptionalDependency<IEvent<TPayload>>;
+      return freezeIfLineageLocked(this, wrapper);
     },
   };
 }

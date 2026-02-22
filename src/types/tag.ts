@@ -1,6 +1,8 @@
 import { IContractable } from "./contracts";
 import { ITagMeta } from "./meta";
 import {
+  ITagStartupDependency,
+  IOptionalDependency,
   IValidationSchema,
   RequiredKeys,
   symbolFilePath,
@@ -58,6 +60,14 @@ export interface ITag<
    * Extracts the configuration of the tag from a taggable or a list of tags.
    */
   extract(target: ITaggable | TagType[]): TConfig | undefined;
+  /** Return an optional dependency wrapper for this tag. */
+  optional: () => IOptionalDependency<
+    ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
+  >;
+  /** Return a startup dependency wrapper for this tag. */
+  startup: () => ITagStartupDependency<
+    ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
+  >;
   [symbolFilePath]: string;
   [symbolTag]: true;
 }

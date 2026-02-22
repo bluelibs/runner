@@ -61,6 +61,19 @@ describe("LogPrinter", () => {
     expect(logs[0].includes("\n")).toBe(true);
   });
 
+  it("skips message line rendering when message is empty", () => {
+    const p = new LogPrinter({ strategy: "pretty", useColors: false });
+    p.print({ ...baseLog, message: "" });
+    expect(logs.join("\n")).not.toContain("hello");
+  });
+
+  it("keeps string messages unchanged in json normalization", () => {
+    const p = new LogPrinter({ strategy: "json", useColors: false });
+    p.print({ ...baseLog, message: "plain-text" });
+    const payload = JSON.parse(logs[0]);
+    expect(payload.message).toBe("plain-text");
+  });
+
   it("plain prints like pretty without ANSI even when useColors is true", () => {
     const p = new LogPrinter({ strategy: "plain", useColors: true });
     p.print({ ...baseLog });

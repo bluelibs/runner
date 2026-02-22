@@ -52,4 +52,20 @@ describe("buildUniversalManifest", () => {
       (out.input as unknown as Record<string, Record<string, unknown>>).wf._web,
     ).toBeUndefined();
   });
+
+  it("keeps placeholder when file sidecars are absent", () => {
+    const pseudoFile = {
+      $runnerFile: "File",
+      id: "NONE",
+      meta: { name: "none.bin" },
+    };
+    const out = buildUniversalManifest({ pseudoFile });
+    expect(out.nodeFiles).toEqual([]);
+    expect(out.webFiles).toEqual([]);
+    expect((out.input as any).pseudoFile).toEqual({
+      $runnerFile: "File",
+      id: "NONE",
+      meta: { name: "none.bin" },
+    });
+  });
 });

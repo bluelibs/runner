@@ -5,6 +5,7 @@ import type {
   TagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineEvent } from "../../defineEvent";
 import type { EventFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
@@ -63,7 +64,7 @@ export function makeEventBuilder<TPayload>(
         ...(state as IEventDefinition<TPayload>),
       });
       (event as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
-      return event;
+      return deepFreeze(event);
     },
   };
 

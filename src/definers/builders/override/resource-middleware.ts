@@ -10,6 +10,7 @@ import { defineOverride } from "../../defineOverride";
 import type { ResourceMiddlewareFluentBuilder } from "../middleware/resource.interface";
 import { mergeArray, mergeDependencies } from "../middleware/utils";
 import type { ThrowsList } from "../../../types/error";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import { normalizeThrows } from "../../../tools/throws";
 
 type AnyResourceMiddleware = IResourceMiddleware<any, any, any, any>;
@@ -175,10 +176,12 @@ function makeResourceMiddlewareOverrideBuilder<
         state.throws,
       );
       const { id: _id, ...patch } = state;
-      return defineOverride<IResourceMiddleware<C, In, Out, D>>(base, {
-        ...patch,
-        throws: normalizedThrows,
-      });
+      return deepFreeze(
+        defineOverride<IResourceMiddleware<C, In, Out, D>>(base, {
+          ...patch,
+          throws: normalizedThrows,
+        }),
+      );
     },
   };
 

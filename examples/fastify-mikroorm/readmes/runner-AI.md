@@ -556,11 +556,10 @@ const apiTag = tag<void>({ id: "api" });
 const addTracingToApiTasks = hook({
   id: "app.hooks.traceApis",
   on: globals.events.ready,
-  dependencies: { store: globals.resources.store },
-  run: async (_, { store }) => {
-    const apiTasks = store.getTasksWithTag(apiTag); // tag object or string id
-    apiTasks.forEach((taskDef) => {
-      taskDef.intercept(async (next, input) => {
+  dependencies: { apiTag },
+  run: async (_, { apiTag }) => {
+    apiTag.tasks.forEach((entry) => {
+      entry.definition.intercept(async (next, input) => {
         // ...
       });
     });
@@ -579,16 +578,19 @@ import { expressServer } from "./expressServer"; // resource that returns { app,
 const registerRoutes = hook({
   id: "app.hooks.registerRoutes",
   on: globals.events.ready,
-  dependencies: { store: globals.resources.store, server: expressServer },
-  run: async (_, { store, server }) => {
-    const tasks = store.getTasksWithTag(httpTag);
-    tasks.forEach((t) => {
-      const cfg = httpTag.extract(t.meta?.tags || []);
-      if (!cfg?.config) return;
-      const { method, path } = cfg.config;
+  dependencies: { server: expressServer, httpTag },
+  run: async (_, { server, httpTag }) => {
+    httpTag.tasks.forEach((entry) => {
+      const cfg = entry.config;
+      if (!cfg) return;
+      const { method, path } = cfg;
       if (!method || !path) return;
       (server.app as any)[method.toLowerCase()](path, async (req, res) => {
-        const result = await t({ ...req.body, ...req.query, ...req.params });
+        const result = await entry.definition({
+          ...req.body,
+          ...req.query,
+          ...req.params,
+        });
         res.json(result);
       });
     });

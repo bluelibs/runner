@@ -16,6 +16,7 @@ export enum HookDependencyState {
   Pending = "pending",
   Computing = "computing",
   Ready = "ready",
+  Error = "error",
 }
 
 export type ResourceStoreElementType<

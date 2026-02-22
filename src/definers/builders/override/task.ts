@@ -10,6 +10,7 @@ import type {
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 import { normalizeThrows } from "../../../tools/throws";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineOverride } from "../../defineOverride";
 import type { TaskFluentBuilder } from "../task/fluent-builder.interface";
 import type { ResolveInput } from "../task/types";
@@ -313,9 +314,11 @@ function makeTaskOverrideBuilder<
         state.throws,
       );
       const { id: _id, ...patch } = state;
-      return defineOverride<
-        ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>
-      >(base, { ...patch, throws: normalizedThrows });
+      return deepFreeze(
+        defineOverride<
+          ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>
+        >(base, { ...patch, throws: normalizedThrows }),
+      );
     },
   };
 

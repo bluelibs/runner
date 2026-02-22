@@ -1,23 +1,20 @@
 import {
-  IResource,
-  ITask,
-  AnyTask,
-  IResourceWithConfig,
-  RegisterableItems,
-  ITaskMiddleware,
-  IResourceMiddleware,
-  IEvent,
-  ITag,
-  IHook,
-  TaggedTask,
-  TaggedResource,
   AnyResource,
-} from "../defs";
-import * as utils from "../define";
-import { unknownItemTypeError } from "../errors";
-import {
-  TaskStoreElementType,
+  AnyTask,
+  IEvent,
+  IHook,
+  IResource,
+  IResourceMiddleware,
+  IResourceWithConfig,
+  ITag,
+  ITask,
+  ITaskMiddleware,
+  RegisterableItems,
+  TagDependencyAccessor,
+  TaggedResource,
+  TaggedTask,
   TaskMiddlewareStoreElementType,
+  TaskStoreElementType,
   ResourceMiddlewareStoreElementType,
   ResourceStoreElementType,
   EventStoreElementType,
@@ -31,11 +28,13 @@ import {
 } from "./utils/buildDependencyGraph";
 import { IErrorHelper } from "../types/error";
 import type { IAsyncContext } from "../types/asyncContext";
-import { HookDependencyState } from "../types/storeTypes";
 import { LockableMap } from "../tools/LockableMap";
 import { VisibilityTracker } from "./VisibilityTracker";
+import { StoreRegistryDefinitionPreparer } from "./store-registry/StoreRegistryDefinitionPreparer";
+import { StoreRegistryTagIndex } from "./store-registry/StoreRegistryTagIndex";
+import { StoreRegistryWriter } from "./store-registry/StoreRegistryWriter";
+import { StoringMode, TagIndexBucket } from "./store-registry/types";
 
-type StoringMode = "normal" | "override";
 export class StoreRegistry {
   public tasks = new LockableMap<string, TaskStoreElementType>("tasks");
   public resources = new LockableMap<string, ResourceStoreElementType>(
@@ -58,10 +57,48 @@ export class StoreRegistry {
   public errors = new LockableMap<string, IErrorHelper<any>>("errors");
   public readonly visibilityTracker = new VisibilityTracker();
 
-  private validator: StoreValidator;
+  // Kept on the registry for backward compatibility in tests/tools.
+  public readonly tagIndex: Map<string, TagIndexBucket>;
+
+  private readonly validator: StoreValidator;
+  private readonly tagIndexer: StoreRegistryTagIndex;
+  private readonly writer: StoreRegistryWriter;
 
   constructor(protected readonly store: Store) {
     this.validator = new StoreValidator(this);
+
+    this.tagIndexer = new StoreRegistryTagIndex(
+      {
+        tasks: this.tasks,
+        resources: this.resources,
+        events: this.events,
+        hooks: this.hooks,
+        taskMiddlewares: this.taskMiddlewares,
+        resourceMiddlewares: this.resourceMiddlewares,
+        errors: this.errors,
+        tags: this.tags,
+      },
+      this.visibilityTracker,
+    );
+    this.tagIndex = this.tagIndexer.index;
+
+    this.writer = new StoreRegistryWriter(
+      {
+        tasks: this.tasks,
+        resources: this.resources,
+        events: this.events,
+        taskMiddlewares: this.taskMiddlewares,
+        resourceMiddlewares: this.resourceMiddlewares,
+        hooks: this.hooks,
+        tags: this.tags,
+        asyncContexts: this.asyncContexts,
+        errors: this.errors,
+      },
+      this.validator,
+      this.visibilityTracker,
+      this.tagIndexer,
+      new StoreRegistryDefinitionPreparer(),
+    );
   }
 
   getValidator(): StoreValidator {
@@ -82,196 +119,68 @@ export class StoreRegistry {
   }
 
   storeGenericItem<_C>(item: RegisterableItems) {
-    if (utils.isTask(item)) {
-      this.storeTask<_C>(item);
-    } else if (utils.isError(item)) {
-      this.storeError<_C>(item as IErrorHelper<any>);
-    } else if (utils.isHook && utils.isHook(item)) {
-      this.storeHook<_C>(item as IHook);
-    } else if (utils.isResource(item)) {
-      this.storeResource<_C>(item);
-    } else if (utils.isEvent(item)) {
-      this.storeEvent<_C>(item);
-    } else if (utils.isAsyncContext(item)) {
-      this.storeAsyncContext<_C>(item as IAsyncContext<any>);
-    } else if (utils.isTaskMiddleware(item)) {
-      this.storeTaskMiddleware<_C>(item as ITaskMiddleware<any>);
-    } else if (utils.isResourceMiddleware(item)) {
-      this.storeResourceMiddleware<_C>(item as IResourceMiddleware<any>);
-    } else if (utils.isResourceWithConfig(item)) {
-      this.storeResourceWithConfig<_C>(item);
-    } else if (utils.isTag(item)) {
-      this.storeTag(item);
-    } else {
-      unknownItemTypeError.throw({ item });
-    }
+    return this.writer.storeGenericItem<_C>(item);
   }
 
   storeError<_C>(item: IErrorHelper<any>) {
-    this.validator.checkIfIDExists(item.id);
-    this.errors.set(item.id, item);
+    return this.writer.storeError<_C>(item);
   }
 
   storeAsyncContext<_C>(item: IAsyncContext<any>) {
-    this.validator.checkIfIDExists(item.id);
-    this.asyncContexts.set(item.id, item);
+    return this.writer.storeAsyncContext<_C>(item);
   }
 
   storeTag(item: ITag<any, any, any>) {
-    this.validator.checkIfIDExists(item.id);
-    this.tags.set(item.id, item);
+    return this.writer.storeTag(item);
   }
 
   storeHook<_C>(item: IHook<any, any>, overrideMode: StoringMode = "normal") {
-    overrideMode === "normal" && this.validator.checkIfIDExists(item.id);
-
-    const hook = this.getFreshValue(item, this.hooks, "hook", overrideMode);
-
-    // store separately
-    this.hooks.set(hook.id, {
-      hook,
-      computedDependencies: {},
-      dependencyState: HookDependencyState.Pending,
-    });
+    return this.writer.storeHook<_C>(item, overrideMode);
   }
 
   storeTaskMiddleware<_C>(
     item: ITaskMiddleware<any>,
     storingMode: StoringMode = "normal",
   ) {
-    storingMode === "normal" && this.validator.checkIfIDExists(item.id);
-
-    const middleware = this.getFreshValue(
-      item,
-      this.taskMiddlewares,
-      "middleware",
-      storingMode,
-    );
-
-    this.taskMiddlewares.set(item.id, {
-      middleware,
-      computedDependencies: {},
-      isInitialized: false,
-    });
+    return this.writer.storeTaskMiddleware<_C>(item, storingMode);
   }
 
   storeResourceMiddleware<_C>(
     item: IResourceMiddleware<any>,
     overrideMode: StoringMode = "normal",
   ) {
-    overrideMode === "normal" && this.validator.checkIfIDExists(item.id);
-    const middleware = this.getFreshValue(
-      item,
-      this.resourceMiddlewares,
-      "middleware",
-      overrideMode,
-    );
-
-    this.resourceMiddlewares.set(item.id, {
-      middleware,
-      computedDependencies: {},
-      isInitialized: false,
-    });
+    return this.writer.storeResourceMiddleware<_C>(item, overrideMode);
   }
 
   storeEvent<_C>(item: IEvent<void>) {
-    this.validator.checkIfIDExists(item.id);
-    this.events.set(item.id, { event: item });
+    return this.writer.storeEvent<_C>(item);
   }
 
   storeResourceWithConfig<_C>(
     item: IResourceWithConfig<any, any, any>,
     storingMode: StoringMode = "normal",
   ) {
-    storingMode === "normal" &&
-      this.validator.checkIfIDExists(item.resource.id);
-
-    const prepared = this.getFreshValue(
-      item.resource,
-      this.resources,
-      "resource",
-      storingMode,
-      item.config,
-    );
-
-    this.resources.set(prepared.id, {
-      resource: prepared,
-      config: item.config,
-      value: undefined,
-      isInitialized: false,
-      context: undefined,
-    });
-
-    this.computeRegistrationDeeply(prepared, item.config);
-    return prepared;
+    return this.writer.storeResourceWithConfig<_C>(item, storingMode);
   }
 
   computeRegistrationDeeply<_C>(element: IResource<_C>, config?: _C) {
-    let items =
-      typeof element.register === "function"
-        ? element.register(config as _C)
-        : element.register;
-
-    if (!items) {
-      items = [];
-    }
-
-    element.register = items;
-
-    for (const item of items) {
-      // Track which resource owns each registered item
-      this.visibilityTracker.recordOwnership(element.id, item);
-      // will call registration if it detects another resource.
-      this.storeGenericItem<_C>(item);
-    }
-
-    // Record exports after all items are registered so ids are available
-    if (element.exports) {
-      this.visibilityTracker.recordExports(element.id, element.exports);
-    }
+    return this.writer.computeRegistrationDeeply(element, config);
   }
 
   storeResource<_C>(
     item: IResource<any, any, any>,
     overrideMode: StoringMode = "normal",
   ) {
-    overrideMode === "normal" && this.validator.checkIfIDExists(item.id);
-
-    const prepared = this.getFreshValue(
-      item,
-      this.resources,
-      "resource",
-      overrideMode,
-    );
-
-    this.resources.set(prepared.id, {
-      resource: prepared,
-      config: {},
-      value: undefined,
-      isInitialized: false,
-      context: undefined,
-    });
-
-    this.computeRegistrationDeeply(prepared, {});
-    return prepared;
+    return this.writer.storeResource<_C>(item, overrideMode);
   }
 
   storeTask<_C>(
     item: ITask<any, any, {}>,
     storingMode: StoringMode = "normal",
   ) {
-    storingMode === "normal" && this.validator.checkIfIDExists(item.id);
-
-    const task = this.getFreshValue(item, this.tasks, "task", storingMode);
-
-    this.tasks.set(task.id, {
-      task,
-      computedDependencies: {},
-      isInitialized: false,
-    });
+    return this.writer.storeTask<_C>(item, storingMode);
   }
 
-  // Feels like a dependencyProcessor task?
   getDependentNodes() {
     return buildDependencyGraph(this);
   }
@@ -284,65 +193,48 @@ export class StoreRegistry {
     return buildEmissionGraph(this);
   }
 
-  getTasksWithTag<TTag extends ITag<any, any, any>>(
+  getTagAccessor<TTag extends ITag<any, any, any>>(
     tag: TTag,
-  ): TaggedTask<TTag>[];
-  getTasksWithTag(tag: string): AnyTask[];
-  getTasksWithTag(tag: string | ITag<any, any, any>): AnyTask[] {
-    const tagId = typeof tag === "string" ? tag : tag.id;
-
-    return Array.from(this.tasks.values())
-      .filter((x) => {
-        return x.task.tags.some((t) => t.id === tagId);
-      })
-      .map((x) => x.task);
-  }
-
-  getResourcesWithTag<TTag extends ITag<any, any, any>>(
-    tag: TTag,
-  ): TaggedResource<TTag>[];
-  getResourcesWithTag(tag: string): AnyResource[];
-  getResourcesWithTag(tag: string | ITag<any, any, any>): AnyResource[] {
-    const tagId = typeof tag === "string" ? tag : tag.id;
-
-    return Array.from(this.resources.values())
-      .filter((x) => {
-        return x.resource.tags.some((t) => t.id === tagId);
-      })
-      .map((x) => x.resource);
+    options?: { consumerId?: string; includeSelf?: boolean },
+  ): TagDependencyAccessor<TTag> {
+    return this.tagIndexer.getTagAccessor(tag, options);
   }
 
   /**
-   * Used to fetch the value cloned, and if we're dealing with an override, we need to extend the previous value.
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
    */
-  private getFreshValue<
-    T extends { id: string; dependencies?: unknown; config?: unknown },
-    MapType,
-  >(
-    item: T,
-    collection: Map<string, MapType>,
-    key: keyof MapType,
-    overrideMode: StoringMode,
-    config?: unknown, // If provided config, takes precedence over config in item.
-  ): T {
-    let currentItem: T;
-    if (overrideMode === "override") {
-      const existing = collection.get(item.id)![key];
-      currentItem = { ...existing, ...item };
-    } else {
-      currentItem = { ...item };
-    }
+  getTasksWithTag<TTag extends ITag<any, any, any>>(
+    tag: TTag,
+  ): TaggedTask<TTag>[];
+  /**
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
+   */
+  getTasksWithTag(tag: string): AnyTask[];
+  /**
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
+   */
+  getTasksWithTag(tag: string | ITag<any, any, any>): AnyTask[] {
+    return typeof tag === "string"
+      ? this.tagIndexer.getTasksWithTag(tag)
+      : this.tagIndexer.getTasksWithTag(tag);
+  }
 
-    if (typeof currentItem.dependencies === "function") {
-      const dependencyFactory = currentItem.dependencies as (
-        cfg: unknown,
-      ) => unknown;
-      const effectiveConfig = config ?? currentItem.config;
-      currentItem.dependencies = dependencyFactory(
-        effectiveConfig,
-      ) as T["dependencies"];
-    }
-
-    return currentItem;
+  /**
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
+   */
+  getResourcesWithTag<TTag extends ITag<any, any, any>>(
+    tag: TTag,
+  ): TaggedResource<TTag>[];
+  /**
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
+   */
+  getResourcesWithTag(tag: string): AnyResource[];
+  /**
+   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
+   */
+  getResourcesWithTag(tag: string | ITag<any, any, any>): AnyResource[] {
+    return typeof tag === "string"
+      ? this.tagIndexer.getResourcesWithTag(tag)
+      : this.tagIndexer.getResourcesWithTag(tag);
   }
 }

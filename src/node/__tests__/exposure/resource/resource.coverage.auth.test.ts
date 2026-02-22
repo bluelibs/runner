@@ -1,6 +1,7 @@
 import * as http from "http";
-import { defineEvent, defineResource } from "../../../../define";
+import { defineEvent, defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
+import { globalTags } from "../../../../globals/globalTags";
 import { nodeExposure } from "../../../exposure/resource";
 import { createReqRes } from "./resource.test.utils";
 
@@ -65,6 +66,40 @@ describe("nodeExposure Coverage - Auth", () => {
       body: "{}",
     });
     req.headers["x-runner-token"] = ["ARR"];
+
+    await handlers.handleEvent(req, res);
+    expect(res.statusCode).toBe(200);
+
+    await rr.dispose();
+  });
+
+  it("discovers auth validator tasks via tag dependencies", async () => {
+    const evt = defineEvent<void>({ id: "coverage.auth.validator.discovery" });
+    const validatorTask = defineTask({
+      id: "coverage.auth.validator.task",
+      tags: [globalTags.authValidator],
+      run: async () => ({ ok: true }),
+    });
+    const exposure = nodeExposure.with({
+      http: {
+        dangerouslyAllowOpenExposure: true,
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: {},
+      },
+    });
+    const app = defineResource({
+      id: "coverage.auth.validator.app",
+      register: [evt, validatorTask, exposure],
+    });
+    const rr = await run(app);
+    const handlers = await rr.getResourceValue(exposure.resource as any);
+
+    const { req, res } = createReqRes({
+      url: `/__runner/event/${encodeURIComponent(evt.id)}`,
+      headers: {},
+      body: "{}",
+    });
 
     await handlers.handleEvent(req, res);
     expect(res.statusCode).toBe(200);

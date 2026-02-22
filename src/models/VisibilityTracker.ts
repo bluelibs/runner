@@ -1,7 +1,39 @@
-import { RegisterableItems, IResourceWithConfig } from "../defs";
+import {
+  RegisterableItems,
+  IResourceWithConfig,
+  WiringAccessPolicy,
+} from "../defs";
 import * as utils from "../define";
-import { visibilityViolationError } from "../errors";
+import {
+  wiringAccessPolicyViolationError,
+  visibilityViolationError,
+} from "../errors";
 import { StoreRegistry } from "./StoreRegistry";
+
+const INTERNAL_DEPENDENCY_PREFIX = "__runner";
+
+type CompiledWiringAccessPolicy = {
+  denyIds: Set<string>;
+  denyTagIds: Set<string>;
+  // onlyMode=true means the policy uses "only" semantics (allowlist).
+  // When true, external deps not in onlyIds/onlyTagIds are blocked.
+  onlyMode: boolean;
+  onlyIds: Set<string>;
+  onlyTagIds: Set<string>;
+};
+
+type AccessViolation =
+  | {
+      kind: "visibility";
+      targetOwnerResourceId: string;
+      exportedIds: string[];
+    }
+  | {
+      kind: "wiringAccessPolicy";
+      policyResourceId: string;
+      matchedRuleType: "id" | "tag" | "only";
+      matchedRuleId: string;
+    };
 
 /**
  * Extracts the string id from any registerable item.
@@ -56,6 +88,100 @@ export class VisibilityTracker {
   private readonly subtrees = new Map<string, Set<string>>();
 
   /**
+   * Registered resource ids. Used to detect consumer resource boundaries
+   * (including root resources with no owner).
+   */
+  private readonly knownResources = new Set<string>();
+
+  /**
+   * Resource id -> compiled additive wiring access policy.
+   */
+  private readonly dependencyAccessPolicies = new Map<
+    string,
+    CompiledWiringAccessPolicy
+  >();
+
+  /**
+   * Definition id -> tag ids carried by that definition.
+   */
+  private readonly definitionTagIds = new Map<string, Set<string>>();
+
+  recordResource(resourceId: string): void {
+    this.knownResources.add(resourceId);
+  }
+
+  recordDefinitionTags(
+    definitionId: string,
+    tags: ReadonlyArray<{ id: string }>,
+  ): void {
+    if (!tags || tags.length === 0) {
+      this.definitionTagIds.delete(definitionId);
+      return;
+    }
+
+    this.definitionTagIds.set(definitionId, new Set(tags.map((tag) => tag.id)));
+  }
+
+  recordWiringAccessPolicy(
+    resourceId: string,
+    policy?: WiringAccessPolicy,
+  ): void {
+    this.knownResources.add(resourceId);
+
+    const hasDeny = Array.isArray(policy?.deny) && policy!.deny!.length > 0;
+    // "only mode" is active whenever the only field is an array, even if empty.
+    const onlyPresent = policy !== undefined && Array.isArray(policy.only);
+
+    if (!hasDeny && !onlyPresent) {
+      this.dependencyAccessPolicies.delete(resourceId);
+      return;
+    }
+
+    const denyIds = new Set<string>();
+    const denyTagIds = new Set<string>();
+    const onlyIds = new Set<string>();
+    const onlyTagIds = new Set<string>();
+
+    const resolveEntry = (
+      entry: unknown,
+      ids: Set<string>,
+      tagIds: Set<string>,
+    ) => {
+      if (typeof entry === "string") {
+        ids.add(entry);
+        return;
+      }
+      const maybeId = getItemId(entry as RegisterableItems);
+      if (!maybeId) return;
+      if (utils.isTag(entry)) {
+        tagIds.add(maybeId);
+      } else {
+        ids.add(maybeId);
+      }
+    };
+
+    if (hasDeny) {
+      for (const entry of policy!.deny!) {
+        resolveEntry(entry, denyIds, denyTagIds);
+      }
+    }
+
+    if (onlyPresent) {
+      for (const entry of policy!.only!) {
+        resolveEntry(entry, onlyIds, onlyTagIds);
+      }
+    }
+
+    this.dependencyAccessPolicies.set(resourceId, {
+      denyIds,
+      denyTagIds,
+      onlyMode: onlyPresent,
+      onlyIds,
+      onlyTagIds,
+    });
+  }
+
+  /**
    * Records ownership when a resource registers an item.
    */
   recordOwnership(ownerResourceId: string, item: RegisterableItems): void {
@@ -100,6 +226,26 @@ export class VisibilityTracker {
   }
 
   /**
+   * Checks whether a target id is visible through the root resource's export
+   * surface for runtime API calls (runTask, emitEvent, getResourceValue, etc.).
+   *
+   * When the root has no `.exports()` declaration the surface is fully open
+   * (backward compatible). Otherwise only explicitly listed ids are reachable.
+   *
+   * Returns both the accessibility result and the current exported id list so
+   * callers can produce a useful remediation message without a second lookup.
+   */
+  getRootAccessInfo(
+    targetId: string,
+    rootId: string,
+  ): { accessible: boolean; exportedIds: string[] } {
+    const exportSet = this.exportSets.get(rootId);
+    // No export declaration on root → fully open (backward compat)
+    if (exportSet === undefined) return { accessible: true, exportedIds: [] };
+    return { accessible: exportSet.has(targetId), exportedIds: [...exportSet] };
+  }
+
+  /**
    * Checks whether `consumerId` can access `targetId`.
    *
    * An item is accessible if:
@@ -108,17 +254,34 @@ export class VisibilityTracker {
    * 3. The target is in the owner resource's export set (transitively up).
    */
   isAccessible(targetId: string, consumerId: string): boolean {
-    const targetOwner = this.ownership.get(targetId);
-    // Items not tracked (global builtins) are always accessible
-    if (targetOwner === undefined) return true;
+    return this.getAccessViolation(targetId, consumerId) === null;
+  }
 
-    return this.isAccessibleFromOwnerChain(
-      targetId,
-      consumerId,
-      targetOwner,
-      undefined,
-      new Set<string>(),
-    );
+  getAccessViolation(
+    targetId: string,
+    consumerId: string,
+  ): AccessViolation | null {
+    const targetOwner = this.ownership.get(targetId);
+
+    if (targetOwner !== undefined) {
+      const visibilityAllowed = this.isAccessibleFromOwnerChain(
+        targetId,
+        consumerId,
+        targetOwner,
+        undefined,
+        new Set<string>(),
+      );
+
+      if (!visibilityAllowed) {
+        return {
+          kind: "visibility",
+          targetOwnerResourceId: targetOwner,
+          exportedIds: [...this.findGatingExportSet(targetId, targetOwner)],
+        };
+      }
+    }
+
+    return this.findWiringAccessPolicyViolation(targetId, consumerId);
   }
 
   private isAccessibleFromOwnerChain(
@@ -272,9 +435,13 @@ export class VisibilityTracker {
     for (const { consumerId, consumerType, dependencies } of entries) {
       if (!dependencies || typeof dependencies !== "object") continue;
 
-      for (const depDef of Object.values(
+      for (const [depKey, depDef] of Object.entries(
         dependencies as Record<string, unknown>,
       )) {
+        if (depKey.startsWith(INTERNAL_DEPENDENCY_PREFIX)) {
+          continue;
+        }
+
         const dep = utils.isOptional(depDef)
           ? (depDef as { inner: unknown }).inner
           : depDef;
@@ -285,18 +452,18 @@ export class VisibilityTracker {
             : undefined;
 
         if (!depId) continue;
-        if (this.isAccessible(depId, consumerId)) continue;
 
-        const targetOwner = this.ownership.get(depId)!;
-        const exportSet = this.findGatingExportSet(depId, targetOwner);
+        const violation = this.getAccessViolation(depId, consumerId);
+        if (!violation) {
+          continue;
+        }
 
-        visibilityViolationError.throw({
+        this.throwAccessViolation({
+          violation,
           targetId: depId,
           targetType: getItemTypeLabel(registry, depId),
-          ownerResourceId: targetOwner,
           consumerId,
           consumerType,
-          exportedIds: [...exportSet],
         });
       }
     }
@@ -312,18 +479,17 @@ export class VisibilityTracker {
       const events = Array.isArray(hook.on) ? hook.on : [hook.on];
       for (const event of events) {
         const eventId = event.id;
-        if (this.isAccessible(eventId, hook.id)) continue;
+        const violation = this.getAccessViolation(eventId, hook.id);
+        if (!violation) {
+          continue;
+        }
 
-        const targetOwner = this.ownership.get(eventId)!;
-        const exportSet = this.findGatingExportSet(eventId, targetOwner);
-
-        visibilityViolationError.throw({
+        this.throwAccessViolation({
+          violation,
           targetId: eventId,
           targetType: "Event",
-          ownerResourceId: targetOwner,
           consumerId: hook.id,
           consumerType: "Hook",
-          exportedIds: [...exportSet],
         });
       }
     }
@@ -335,44 +501,174 @@ export class VisibilityTracker {
   private validateMiddlewareVisibility(registry: StoreRegistry): void {
     for (const { task } of registry.tasks.values()) {
       for (const middlewareAttachment of task.middleware) {
-        if (this.isAccessible(middlewareAttachment.id, task.id)) continue;
-
-        const targetOwner = this.ownership.get(middlewareAttachment.id)!;
-        const exportSet = this.findGatingExportSet(
+        const violation = this.getAccessViolation(
           middlewareAttachment.id,
-          targetOwner,
+          task.id,
         );
+        if (!violation) {
+          continue;
+        }
 
-        visibilityViolationError.throw({
+        this.throwAccessViolation({
+          violation,
           targetId: middlewareAttachment.id,
           targetType: "Task middleware",
-          ownerResourceId: targetOwner,
           consumerId: task.id,
           consumerType: "Task",
-          exportedIds: [...exportSet],
         });
       }
     }
 
     for (const { resource } of registry.resources.values()) {
       for (const middlewareAttachment of resource.middleware) {
-        if (this.isAccessible(middlewareAttachment.id, resource.id)) continue;
-
-        const targetOwner = this.ownership.get(middlewareAttachment.id)!;
-        const exportSet = this.findGatingExportSet(
+        const violation = this.getAccessViolation(
           middlewareAttachment.id,
-          targetOwner,
+          resource.id,
         );
+        if (!violation) {
+          continue;
+        }
 
-        visibilityViolationError.throw({
+        this.throwAccessViolation({
+          violation,
           targetId: middlewareAttachment.id,
           targetType: "Resource middleware",
-          ownerResourceId: targetOwner,
           consumerId: resource.id,
           consumerType: "Resource",
-          exportedIds: [...exportSet],
         });
       }
+    }
+  }
+
+  private findWiringAccessPolicyViolation(
+    targetId: string,
+    consumerId: string,
+  ): Extract<AccessViolation, { kind: "wiringAccessPolicy" }> | null {
+    const chain = this.getConsumerResourceChain(consumerId);
+    if (chain.length === 0) {
+      return null;
+    }
+
+    const targetTags = this.definitionTagIds.get(targetId);
+
+    for (const policyResourceId of chain) {
+      const policy = this.dependencyAccessPolicies.get(policyResourceId);
+      if (!policy) {
+        continue;
+      }
+
+      // --- deny rules ---
+      if (policy.denyIds.has(targetId)) {
+        return {
+          kind: "wiringAccessPolicy",
+          policyResourceId,
+          matchedRuleType: "id",
+          matchedRuleId: targetId,
+        };
+      }
+
+      if (policy.denyTagIds.has(targetId)) {
+        return {
+          kind: "wiringAccessPolicy",
+          policyResourceId,
+          matchedRuleType: "tag",
+          matchedRuleId: targetId,
+        };
+      }
+
+      if (targetTags) {
+        for (const tagId of targetTags) {
+          if (!policy.denyTagIds.has(tagId)) {
+            continue;
+          }
+
+          return {
+            kind: "wiringAccessPolicy",
+            policyResourceId,
+            matchedRuleType: "tag",
+            matchedRuleId: tagId,
+          };
+        }
+      }
+
+      // --- only rules: internal items (within the policy resource's subtree) are always allowed ---
+      if (!policy.onlyMode) {
+        continue;
+      }
+
+      const policySubtree = this.subtrees.get(policyResourceId);
+      const isInternal =
+        targetId === policyResourceId || policySubtree?.has(targetId) === true;
+
+      if (isInternal) {
+        continue;
+      }
+
+      // External target must match the only list (by id or by tag).
+      const matchedByOnlyId = policy.onlyIds.has(targetId);
+      const matchedByOnlyTag =
+        policy.onlyTagIds.has(targetId) ||
+        (targetTags !== undefined &&
+          [...targetTags].some((tagId) => policy.onlyTagIds.has(tagId)));
+
+      if (!matchedByOnlyId && !matchedByOnlyTag) {
+        return {
+          kind: "wiringAccessPolicy",
+          policyResourceId,
+          matchedRuleType: "only",
+          matchedRuleId: targetId,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  private getConsumerResourceChain(consumerId: string): string[] {
+    const chain: string[] = [];
+    const seen = new Set<string>();
+
+    let current: string | undefined = this.knownResources.has(consumerId)
+      ? consumerId
+      : this.ownership.get(consumerId);
+
+    while (current !== undefined && !seen.has(current)) {
+      seen.add(current);
+      chain.push(current);
+      current = this.ownership.get(current);
+    }
+
+    return chain;
+  }
+
+  private throwAccessViolation(data: {
+    violation: AccessViolation;
+    targetId: string;
+    targetType: string;
+    consumerId: string;
+    consumerType: string;
+  }): void {
+    const { violation, targetId, targetType, consumerId, consumerType } = data;
+
+    if (violation.kind === "visibility") {
+      visibilityViolationError.throw({
+        targetId,
+        targetType,
+        ownerResourceId: violation.targetOwnerResourceId,
+        consumerId,
+        consumerType,
+        exportedIds: violation.exportedIds,
+      });
+    } else {
+      wiringAccessPolicyViolationError.throw({
+        targetId,
+        targetType,
+        consumerId,
+        consumerType,
+        policyResourceId: violation.policyResourceId,
+        matchedRuleType: violation.matchedRuleType,
+        matchedRuleId: violation.matchedRuleId,
+      });
     }
   }
 

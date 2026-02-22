@@ -142,4 +142,69 @@ describe("http smart/mixed client typed errors", () => {
     );
     expect(reqSpy).toHaveBeenCalled();
   });
+
+  it("rethrows original TunnelError when typed id exists but data is missing", async () => {
+    jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
+      const env = {
+        ok: false,
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "boom",
+          id: helper.id,
+        },
+      };
+      const body = serializer.stringify(env);
+      cb(
+        asIncoming(Readable.from([body]), {
+          "content-type": "application/json",
+        }),
+      );
+      return makeSink();
+    }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer,
+      errorRegistry: new Map([[helper.id, helper]]),
+    });
+
+    await expect(client.task("t.json", { a: 1 } as any)).rejects.toMatchObject({
+      name: "TunnelError",
+      id: helper.id,
+      data: undefined,
+    });
+  });
+
+  it("rethrows original TunnelError when errorRegistry has no matching helper", async () => {
+    jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
+      const env = {
+        ok: false,
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "boom",
+          id: "unknown.helper",
+          data: { code: 32 },
+        },
+      };
+      const body = serializer.stringify(env);
+      cb(
+        asIncoming(Readable.from([body]), {
+          "content-type": "application/json",
+        }),
+      );
+      return makeSink();
+    }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer,
+      errorRegistry: new Map([[helper.id, helper]]),
+    });
+
+    await expect(client.task("t.json", { a: 1 } as any)).rejects.toMatchObject({
+      name: "TunnelError",
+      id: "unknown.helper",
+      data: { code: 32 },
+    });
+  });
 });

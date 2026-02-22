@@ -1,4 +1,4 @@
-import { defineTask, defineResource } from "../../define";
+import { defineTag, defineTask, defineResource } from "../../define";
 import { VisibilityTracker } from "../../models/VisibilityTracker";
 
 describe("VisibilityTracker", () => {
@@ -94,6 +94,20 @@ describe("VisibilityTracker", () => {
       const exportSet = exportSets.get("resource.id");
       expect(exportSet).toBeDefined();
       expect(exportSet!.size).toBe(0);
+    });
+
+    it("should skip items without extractable id", () => {
+      const task = defineTask({
+        id: "tracker.export.valid",
+        run: async () => "ok",
+      });
+
+      // A bare function has no id — getItemId returns undefined
+      tracker.recordExports("resource.id", [task, (() => {}) as any]);
+      const exportSet = tracker.getExportSets().get("resource.id");
+      expect(exportSet).toBeDefined();
+      expect(exportSet!.size).toBe(1);
+      expect(exportSet!.has("tracker.export.valid")).toBe(true);
     });
   });
 
@@ -278,6 +292,185 @@ describe("VisibilityTracker", () => {
         "tracker.guard.owner.none",
       ) as Set<string>;
       expect(gatingSet.size).toBe(0);
+    });
+  });
+
+  describe("wiringAccessPolicy", () => {
+    it("denies by id for resources in policy scope", () => {
+      const owner = defineResource({
+        id: "tracker.policy.owner",
+      });
+      const blockedTask = defineTask({
+        id: "tracker.policy.task.blocked",
+        run: async () => "blocked",
+      });
+      const consumerTask = defineTask({
+        id: "tracker.policy.task.consumer",
+        run: async () => "consumer",
+      });
+
+      tracker.recordResource(owner.id);
+      tracker.recordOwnership(owner.id, blockedTask);
+      tracker.recordOwnership(owner.id, consumerTask);
+      tracker.recordWiringAccessPolicy(owner.id, {
+        deny: [blockedTask.id],
+      });
+
+      expect(tracker.isAccessible(blockedTask.id, consumerTask.id)).toBeFalsy();
+    });
+
+    it("denies by tag for tagged targets and tag dependencies", () => {
+      const owner = defineResource({
+        id: "tracker.policy.tag.owner",
+      });
+      const denyTag = defineTag({
+        id: "tracker.policy.tag.deny",
+      });
+      const blockedTask = defineTask({
+        id: "tracker.policy.tag.task",
+        run: async () => "blocked",
+      });
+      const consumerTask = defineTask({
+        id: "tracker.policy.tag.consumer",
+        run: async () => "consumer",
+      });
+
+      tracker.recordResource(owner.id);
+      tracker.recordOwnership(owner.id, blockedTask);
+      tracker.recordOwnership(owner.id, consumerTask);
+      tracker.recordDefinitionTags(blockedTask.id, [denyTag]);
+      tracker.recordWiringAccessPolicy(owner.id, {
+        deny: [denyTag],
+      });
+
+      expect(tracker.isAccessible(blockedTask.id, consumerTask.id)).toBeFalsy();
+      expect(tracker.isAccessible(denyTag.id, consumerTask.id)).toBeFalsy();
+    });
+
+    it("removes policy when deny list is empty", () => {
+      const owner = defineResource({
+        id: "tracker.policy.clear.owner",
+      });
+      const task = defineTask({
+        id: "tracker.policy.clear.task",
+        run: async () => "ok",
+      });
+      const consumer = defineTask({
+        id: "tracker.policy.clear.consumer",
+        run: async () => "ok",
+      });
+
+      tracker.recordResource(owner.id);
+      tracker.recordOwnership(owner.id, task);
+      tracker.recordOwnership(owner.id, consumer);
+      tracker.recordWiringAccessPolicy(owner.id, { deny: [task] });
+      tracker.recordWiringAccessPolicy(owner.id, { deny: [] });
+
+      expect(tracker.isAccessible(task.id, consumer.id)).toBe(true);
+    });
+  });
+
+  describe("wiringAccessPolicy (only mode)", () => {
+    it("allows a target that is in the only list", () => {
+      const owner = defineResource({ id: "tracker.only.allow.owner" });
+      const allowed = defineTask({
+        id: "tracker.only.allow.task",
+        run: async () => {},
+      });
+      const consumer = defineTask({
+        id: "tracker.only.allow.consumer",
+        run: async () => {},
+      });
+
+      tracker.recordResource(owner.id);
+      tracker.recordOwnership(owner.id, consumer);
+      tracker.recordWiringAccessPolicy(owner.id, { only: [allowed.id] });
+
+      expect(tracker.isAccessible(allowed.id, consumer.id)).toBe(true);
+    });
+
+    it("blocks a target that is not in the only list", () => {
+      const owner = defineResource({ id: "tracker.only.block.owner" });
+      const forbidden = defineTask({
+        id: "tracker.only.block.task",
+        run: async () => {},
+      });
+      const consumer = defineTask({
+        id: "tracker.only.block.consumer",
+        run: async () => {},
+      });
+
+      tracker.recordResource(owner.id);
+      tracker.recordOwnership(owner.id, consumer);
+      // Empty only list means no external deps allowed.
+      tracker.recordWiringAccessPolicy(owner.id, { only: [] });
+
+      expect(tracker.isAccessible(forbidden.id, consumer.id)).toBe(false);
+    });
+
+    it("allows internal items even when they are not in the only list", () => {
+      const owner = defineResource({ id: "tracker.only.internal.owner" });
+      const internal = defineTask({
+        id: "tracker.only.internal.task",
+        run: async () => {},
+      });
+      const consumer = defineTask({
+        id: "tracker.only.internal.consumer",
+        run: async () => {},
+      });
+
+      tracker.recordResource(owner.id);
+      // Both registered under owner — they are internal.
+      tracker.recordOwnership(owner.id, internal);
+      tracker.recordOwnership(owner.id, consumer);
+      // Only list is empty, but internal items still pass.
+      tracker.recordWiringAccessPolicy(owner.id, { only: [] });
+
+      expect(tracker.isAccessible(internal.id, consumer.id)).toBe(true);
+    });
+
+    it("allows an only-listed tag and targets carrying that tag", () => {
+      const owner = defineResource({ id: "tracker.only.tag.owner" });
+      const allowedTag = defineTag({ id: "tracker.only.tag.allowed" });
+      const taggedTask = defineTask({
+        id: "tracker.only.tag.task",
+        run: async () => {},
+      });
+      const consumer = defineTask({
+        id: "tracker.only.tag.consumer",
+        run: async () => {},
+      });
+
+      tracker.recordResource(owner.id);
+      tracker.recordOwnership(owner.id, consumer);
+      tracker.recordDefinitionTags(taggedTask.id, [allowedTag]);
+      tracker.recordWiringAccessPolicy(owner.id, { only: [allowedTag] });
+
+      // The tag itself is allowed.
+      expect(tracker.isAccessible(allowedTag.id, consumer.id)).toBe(true);
+      // A task tagged with the allowed tag is also allowed.
+      expect(tracker.isAccessible(taggedTask.id, consumer.id)).toBe(true);
+    });
+
+    it("blocks a task whose tag is not in the only list", () => {
+      const owner = defineResource({ id: "tracker.only.tag.block.owner" });
+      const allowedTag = defineTag({ id: "tracker.only.tag.block.allowed" });
+      const notAllowedTag = defineTag({ id: "tracker.only.tag.block.denied" });
+      const blockedTask = defineTask({
+        id: "tracker.only.tag.block.task",
+        run: async () => {},
+      });
+      const consumer = defineTask({
+        id: "tracker.only.tag.block.consumer",
+        run: async () => {},
+      });
+
+      tracker.recordResource(owner.id);
+      tracker.recordOwnership(owner.id, consumer);
+      tracker.recordDefinitionTags(blockedTask.id, [notAllowedTag]);
+      tracker.recordWiringAccessPolicy(owner.id, { only: [allowedTag] });
+
+      expect(tracker.isAccessible(blockedTask.id, consumer.id)).toBe(false);
     });
   });
 });

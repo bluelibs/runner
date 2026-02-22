@@ -107,9 +107,11 @@ function createDeepForkContext(
     const cached = forkedResourceByBaseId.get(base.id);
     if (cached) return cached;
 
-    // Create the fork without any register changes, then patch register+deps
-    // using the shared deep-fork context (so sibling dependencies can be remapped).
-    const forked = base.fork(reId(base.id), { register: "drop" });
+    // Create a baseline fork, then clone it so deep-fork internals can patch
+    // register/dependencies before final lineage freezing happens upstream.
+    const forked = {
+      ...base.fork(reId(base.id), { register: "drop" }),
+    } as AnyResource;
     forkedResourceByBaseId.set(base.id, forked);
 
     const baseRegister = base.register;

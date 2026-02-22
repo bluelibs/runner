@@ -239,6 +239,10 @@ describe(SuiteName.OverrideBuilder, () => {
       .resource(MiddlewareId.Resource)
       .run(async ({ next }) => next())
       .build();
+    const denyTask = r
+      .task("tests.override.builder.policy.task")
+      .run(async () => TaskValue.Base)
+      .build();
     const configSchema = {
       parse: (value: unknown) => value,
     };
@@ -274,6 +278,8 @@ describe(SuiteName.OverrideBuilder, () => {
       .meta({ [MetaKey.Label]: ResourceValue.Override } as Record<string, any>)
       .exports([registerA])
       .exports([registerB], { override: true })
+      .wiringAccessPolicy({ deny: [denyTask] })
+      .wiringAccessPolicy({ deny: [registerB.id] })
       .overrides([overrideTask])
       .overrides([overrideTask], { override: true })
       .throws([errorHelper])
@@ -292,6 +298,9 @@ describe(SuiteName.OverrideBuilder, () => {
       [MetaKey.Label]: ResourceValue.Override,
     });
     expect(overrideResource.exports).toEqual([registerB]);
+    expect(overrideResource.wiringAccessPolicy).toEqual({
+      deny: [denyTask, registerB.id],
+    });
     expect(overrideResource.overrides).toEqual([overrideTask]);
     expect(overrideResource.throws).toEqual([ErrorId.Resource]);
   });
@@ -328,6 +337,33 @@ describe(SuiteName.OverrideBuilder, () => {
     const runtime = await run(app);
     expect(value).toBe(ResourceValue.Override);
     await runtime.dispose();
+  });
+
+  it("merges override resource wiringAccessPolicy only rules and keeps them on no-op calls", () => {
+    const base = r.resource("tests.override.builder.policy.base").build();
+    const onlyTag = r.tag("tests.override.builder.policy.only.tag").build();
+    const onlyTask = r
+      .task("tests.override.builder.policy.only.task")
+      .run(async () => 1)
+      .build();
+    const denyTask = r
+      .task("tests.override.builder.policy.deny.task")
+      .run(async () => 2)
+      .build();
+
+    const overrideResource = r
+      .override(base)
+      .wiringAccessPolicy({ only: [onlyTag] })
+      .wiringAccessPolicy({})
+      .wiringAccessPolicy({ only: [onlyTask.id] })
+      .wiringAccessPolicy({ deny: [denyTask.id] })
+      .wiringAccessPolicy({})
+      .build();
+
+    expect(overrideResource.wiringAccessPolicy).toEqual({
+      deny: [denyTask.id],
+      only: [onlyTag, onlyTask.id],
+    });
   });
 
   it(TestName.HookDetails, () => {

@@ -10,6 +10,7 @@ import { defineOverride } from "../../defineOverride";
 import type { TaskMiddlewareFluentBuilder } from "../middleware/task.interface";
 import { mergeArray, mergeDependencies } from "../middleware/utils";
 import type { ThrowsList } from "../../../types/error";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import { normalizeThrows } from "../../../tools/throws";
 
 type AnyTaskMiddleware = ITaskMiddleware<any, any, any, any>;
@@ -161,10 +162,12 @@ function makeTaskMiddlewareOverrideBuilder<
         state.throws,
       );
       const { id: _id, ...patch } = state;
-      return defineOverride<ITaskMiddleware<C, In, Out, D>>(base, {
-        ...patch,
-        throws: normalizedThrows,
-      });
+      return deepFreeze(
+        defineOverride<ITaskMiddleware<C, In, Out, D>>(base, {
+          ...patch,
+          throws: normalizedThrows,
+        }),
+      );
     },
   };
 

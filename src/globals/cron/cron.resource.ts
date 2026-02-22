@@ -1,7 +1,6 @@
 import { defineResource } from "../../define";
 import type { AnyTask, DependencyMapType } from "../../defs";
 import { loggerResource } from "../resources/logger.resource";
-import { storeResource } from "../resources/store.resource";
 import { taskRunnerResource } from "../resources/taskRunner.resource";
 import { globalTags } from "../globalTags";
 import { CronParser } from "./cron-parser";
@@ -25,7 +24,7 @@ interface CronTaskState {
 }
 
 type CronResourceDependencies = DependencyMapType & {
-  store: typeof storeResource;
+  cron: typeof cronTag;
   logger: typeof loggerResource;
   taskRunner: typeof taskRunnerResource;
 };
@@ -37,7 +36,7 @@ export const cronResource = defineResource<
 >({
   id: "globals.resources.cron",
   dependencies: {
-    store: storeResource,
+    cron: cronTag,
     logger: loggerResource,
     taskRunner: taskRunnerResource,
   },
@@ -45,9 +44,9 @@ export const cronResource = defineResource<
     disposed: false,
     stateByTaskId: new Map<string, CronTaskState>(),
   }),
-  init: async (_config, { store, logger, taskRunner }, context) => {
+  init: async (_config, { cron, logger, taskRunner }, context) => {
     const scopedLogger = logger.with({ source: "globals.resources.cron" });
-    const scheduledTasks = store.getTasksWithTag(cronTag);
+    const scheduledTasks = cron.tasks;
 
     const isSilent = (config: CronTagConfig): boolean => config.silent === true;
 
@@ -137,8 +136,9 @@ export const cronResource = defineResource<
       scheduleNext(taskState, new Date());
     };
 
-    for (const task of scheduledTasks) {
-      const config = getCronConfig(task);
+    for (const scheduledTask of scheduledTasks) {
+      const task = scheduledTask.definition;
+      const config = getCronConfig(task, scheduledTask.config);
       if (config.enabled === false) {
         if (!isSilent(config)) {
           await scopedLogger.info(
@@ -238,8 +238,11 @@ export const cronResource = defineResource<
   },
 });
 
-function getCronConfig(task: AnyTask): CronTagConfig {
-  const config = cronTag.extract(task);
+function getCronConfig(
+  task: AnyTask,
+  configFromDependency: CronTagConfig | undefined,
+): CronTagConfig {
+  const config = configFromDependency ?? cronTag.extract(task);
   if (!config) {
     return cronExecutionError.throw({
       taskId: task.id,

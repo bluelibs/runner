@@ -6,6 +6,7 @@ import {
   IEventEmission,
   IEventEmitOptions,
   IEventEmitReport,
+  TagType,
 } from "../defs";
 import { lockedError, validationError } from "../errors";
 import { IHook } from "../types/hook";
@@ -22,6 +23,101 @@ import {
   executeSequentially,
 } from "./event/EmissionExecutor";
 import { CycleContext } from "./event/CycleContext";
+
+class EventEmissionImpl<TInput> implements IEventEmission<TInput> {
+  private propagationStopped = false;
+
+  constructor(
+    public readonly id: string,
+    public readonly data: TInput,
+    public readonly timestamp: Date,
+    public readonly source: string,
+    public readonly meta: Record<string, any>,
+    public readonly tags: TagType[],
+  ) {}
+
+  stopPropagation = () => {
+    this.propagationStopped = true;
+  };
+
+  isPropagationStopped = () => {
+    return this.propagationStopped;
+  };
+}
+
+class EmissionContext<TInput> {
+  public deepestEvent: IEventEmission<any>;
+  public executionReport: IEventEmitReport;
+
+  constructor(
+    private readonly eventManager: EventManager,
+    private readonly eventDefinition: IEvent<TInput>,
+    private readonly allListeners: any[],
+    private readonly failureMode: EventEmissionFailureMode,
+    private readonly emissionInterceptors: EventEmissionInterceptor[],
+    initialEvent: IEventEmission<TInput>,
+  ) {
+    this.deepestEvent = initialEvent;
+    this.executionReport = {
+      totalListeners: allListeners.length,
+      attemptedListeners: 0,
+      skippedListeners: 0,
+      succeededListeners: 0,
+      failedListeners: 0,
+      propagationStopped: false,
+      errors: [],
+    };
+  }
+
+  async baseEmit(eventToEmit: IEventEmission<any>): Promise<IEventEmitReport> {
+    if (this.allListeners.length === 0) {
+      return {
+        totalListeners: 0,
+        attemptedListeners: 0,
+        skippedListeners: 0,
+        succeededListeners: 0,
+        failedListeners: 0,
+        propagationStopped: eventToEmit.isPropagationStopped(),
+        errors: [],
+      };
+    }
+
+    if (this.eventDefinition.parallel) {
+      return executeInParallel({
+        listeners: this.allListeners,
+        event: eventToEmit,
+        failureMode: this.failureMode,
+      });
+    } else {
+      return executeSequentially({
+        listeners: this.allListeners,
+        event: eventToEmit,
+        isPropagationStopped: eventToEmit.isPropagationStopped,
+        failureMode: this.failureMode,
+      });
+    }
+  }
+
+  async runInterceptor(
+    index: number,
+    eventToEmit: IEventEmission<any>,
+  ): Promise<void> {
+    this.deepestEvent = eventToEmit;
+    const interceptor = this.emissionInterceptors[index];
+    if (!interceptor) {
+      this.executionReport = await this.baseEmit(eventToEmit);
+      return;
+    }
+    return interceptor((nextEvent) => {
+      this.eventManager.assertPropagationMethodsUnchanged(
+        this.eventDefinition.id,
+        eventToEmit,
+        nextEvent,
+      );
+      return this.runInterceptor(index + 1, nextEvent);
+    }, eventToEmit);
+  }
+}
 
 /**
  * EventManager handles event emission, listener registration, and event processing.
@@ -166,88 +262,29 @@ export class EventManager {
     }> => {
       const allListeners = this.registry.getListenersForEmit(eventDefinition);
 
-      let propagationStopped = false;
-
-      const event: IEventEmission<TInput> = {
-        id: eventDefinition.id,
+      const event = new EventEmissionImpl<TInput>(
+        eventDefinition.id,
         data,
-        timestamp: new Date(),
+        new Date(),
         source,
-        meta: { ...(eventDefinition.meta || {}) },
-        stopPropagation: () => {
-          propagationStopped = true;
-        },
-        isPropagationStopped: () => propagationStopped,
-        tags: [...eventDefinition.tags],
-      };
+        { ...(eventDefinition.meta || {}) },
+        [...eventDefinition.tags],
+      );
 
-      // Create the base emission function
-      const baseEmit = async (
-        eventToEmit: IEventEmission<any>,
-      ): Promise<IEventEmitReport> => {
-        if (allListeners.length === 0) {
-          return {
-            totalListeners: 0,
-            attemptedListeners: 0,
-            skippedListeners: 0,
-            succeededListeners: 0,
-            failedListeners: 0,
-            propagationStopped: eventToEmit.isPropagationStopped(),
-            errors: [],
-          };
-        }
+      const context = new EmissionContext<TInput>(
+        this,
+        eventDefinition,
+        allListeners,
+        failureMode,
+        this.emissionInterceptors,
+        event,
+      );
 
-        if (eventDefinition.parallel) {
-          return executeInParallel({
-            listeners: allListeners,
-            event: eventToEmit,
-            failureMode,
-          });
-        } else {
-          return executeSequentially({
-            listeners: allListeners,
-            event: eventToEmit,
-            isPropagationStopped: () => propagationStopped,
-            failureMode,
-          });
-        }
-      };
+      await context.runInterceptor(0, event);
 
-      // Interceptors can replace the event object and/or short-circuit emission.
-      // Track the deepest event object that was reached to extract the final payload.
-      let deepestEvent: IEventEmission<any> = event as IEventEmission<any>;
+      const executionReport = context.executionReport;
+      const deepestEvent = context.deepestEvent;
 
-      let executionReport: IEventEmitReport = {
-        totalListeners: allListeners.length,
-        attemptedListeners: 0,
-        skippedListeners: 0,
-        succeededListeners: 0,
-        failedListeners: 0,
-        propagationStopped: false,
-        errors: [],
-      };
-
-      const runInterceptor = async (
-        index: number,
-        eventToEmit: IEventEmission<any>,
-      ): Promise<void> => {
-        deepestEvent = eventToEmit;
-        const interceptor = this.emissionInterceptors[index];
-        if (!interceptor) {
-          executionReport = await baseEmit(eventToEmit);
-          return;
-        }
-        return interceptor((nextEvent) => {
-          this.assertPropagationMethodsUnchanged(
-            eventDefinition.id,
-            eventToEmit,
-            nextEvent,
-          );
-          return runInterceptor(index + 1, nextEvent);
-        }, eventToEmit);
-      };
-
-      await runInterceptor(0, event as IEventEmission<any>);
       if (
         shouldThrow &&
         failureMode === EventEmissionFailureMode.Aggregate &&
@@ -413,7 +450,7 @@ export class EventManager {
     }
   }
 
-  private assertPropagationMethodsUnchanged(
+  public assertPropagationMethodsUnchanged(
     eventId: string,
     currentEvent: IEventEmission<any>,
     nextEvent: IEventEmission<any>,

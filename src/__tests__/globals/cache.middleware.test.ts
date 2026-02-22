@@ -112,6 +112,7 @@ describe("Caching System", () => {
     });
 
     it("should allow Redis-like cache factory task", async () => {
+      jest.useFakeTimers();
       class RedisLikeCache implements ICacheInstance {
         private store = new Map<string, { value: any; expiry?: number }>();
 
@@ -170,8 +171,9 @@ describe("Caching System", () => {
           expect(result1).toBe(result2);
           expect(callCount).toBe(1);
 
-          // Wait for Redis-like TTL to expire
-          await new Promise((resolve) => setTimeout(resolve, 1100));
+          // Advance virtual time for Redis-like TTL expiration.
+          jest.advanceTimersByTime(1100);
+          await Promise.resolve();
 
           const result3 = await testTask(); // Should be new result
           expect(result3).not.toBe(result1);
@@ -179,7 +181,11 @@ describe("Caching System", () => {
         },
       });
 
-      await run(app);
+      try {
+        await run(app);
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 
@@ -315,9 +321,10 @@ describe("Caching System", () => {
 
     it("should respect TTL configuration", async () => {
       let callCount = 0;
+      const ttlMs = 25;
       const testTask = defineTask({
         id: "ttl.task",
-        middleware: [cacheMiddleware.with({ ttl: 100, ttlAutopurge: true })], // Short TTL
+        middleware: [cacheMiddleware.with({ ttl: ttlMs, ttlAutopurge: true })],
         run: async () => {
           callCount++;
           return `result-${callCount}`;
@@ -332,8 +339,8 @@ describe("Caching System", () => {
           const firstRun = await testTask();
           const secondRun = await testTask(); // Should be cached
 
-          // Wait for TTL to expire
-          await new Promise((resolve) => setTimeout(resolve, 150));
+          // Use a buffer above TTL so coverage/instrumentation overhead does not make this flaky.
+          await new Promise((resolve) => setTimeout(resolve, ttlMs + 20));
 
           const thirdRun = await testTask(); // Should be a new result
 

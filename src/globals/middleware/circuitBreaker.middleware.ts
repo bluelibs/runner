@@ -177,11 +177,10 @@ export const circuitBreakerMiddleware = defineTaskMiddleware({
       } else {
         status.failures++;
         status.lastFailureTime = Date.now();
-
-        if (status.state === CircuitBreakerState.CLOSED) {
-          if (status.failures >= failureThreshold) {
-            status.state = CircuitBreakerState.OPEN;
-          }
+        // At this point the request path can only be CLOSED (HALF_OPEN handled above,
+        // OPEN throws before entering the try/catch execution path).
+        if (status.failures >= failureThreshold) {
+          status.state = CircuitBreakerState.OPEN;
         }
       }
 

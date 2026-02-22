@@ -331,6 +331,63 @@ const myTask = r
 
 ---
 
+## Require Context (Async Context Guard)
+
+Fail fast when a task must run inside a specific async context. This middleware is useful for request-scoped metadata (request id, tenant id, auth claims) where continuing without context would produce incorrect behavior.
+
+```typescript
+import { defineAsyncContext, r } from "@bluelibs/runner";
+
+const RequestContext = defineAsyncContext<{ requestId: string }>({
+  id: "app.ctx.request",
+});
+
+const getAuditTrail = r
+  .task("app.tasks.getAuditTrail")
+  // Shortcut: creates globals.middleware.task.requireContext with this context
+  .middleware([RequestContext.require()])
+  .run(async () => {
+    const { requestId } = RequestContext.use();
+    return { requestId, entries: [] };
+  })
+  .build();
+```
+
+If you prefer the explicit middleware form (useful in documentation and composition helpers):
+
+```typescript
+import { defineAsyncContext, globals, r } from "@bluelibs/runner";
+
+const TenantContext = defineAsyncContext<{ tenantId: string }>({
+  id: "app.ctx.tenant",
+});
+
+const listProjects = r
+  .task("app.tasks.listProjects")
+  .middleware([
+    globals.middleware.task.requireContext.with({ context: TenantContext }),
+  ])
+  .run(async () => {
+    const { tenantId } = TenantContext.use();
+    return await projectRepo.findByTenant(tenantId);
+  })
+  .build();
+```
+
+**What it protects you from:**
+
+- Running tenant-sensitive logic without tenant context.
+- Logging/auditing tasks that silently lose request correlation ids.
+- Hidden bugs where context is only present in some call paths.
+
+> **Platform Note:** Async context requires `AsyncLocalStorage`, which is **Node.js-only**. In browsers and edge runtimes, async context APIs are not available.
+
+**What you just learned**: `requireContext` turns missing async context into an immediate, explicit failure instead of a delayed business-logic bug.
+
+> **runtime:** "If your task needs request context and you forgot to bring it, we stop at the door. Better a loud crash now than a forensic investigation later."
+
+---
+
 ## Retrying Failed Operations
 
 For when things go wrong, but you know they'll probably work if you just try again. The built-in retry middleware makes your tasks and resources more resilient to transient failures.
@@ -361,6 +418,28 @@ The retry middleware can be configured with:
 - `retries`: The maximum number of retry attempts (default: 3).
 - `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
+
+It also works on resources, which is especially useful for startup initialization:
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const database = r
+  .resource<{ connectionString: string }>("app.db")
+  .middleware([
+    globals.middleware.resource.retry.with({
+      retries: 4,
+      delayStrategy: (attempt) => 250 * Math.pow(2, attempt),
+    }),
+  ])
+  .init(async ({ connectionString }) => {
+    return await connectToDatabase(connectionString);
+  })
+  .dispose(async (value) => {
+    await value.close();
+  })
+  .build();
+```
 
 **Why would you need this?** For logging—you want to log which attempt succeeded or what errors occurred during retries.
 
@@ -442,6 +521,26 @@ Best practices:
 - Use longer timeouts for resource initialization than task execution
 - Consider network conditions when setting API call timeouts
 
+Resource timeouts help prevent startup hangs when a dependency never becomes ready:
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const messageBroker = r
+  .resource("app.broker")
+  .middleware([
+    globals.middleware.resource.timeout.with({ ttl: 15000 }),
+    globals.middleware.resource.retry.with({ retries: 2 }),
+  ])
+  .init(async () => {
+    return await connectBroker();
+  })
+  .dispose(async (value) => {
+    await value.close();
+  })
+  .build();
+```
+
 > **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It's not me, it's your molasses‑flavored endpoint. I just blow the whistle."
 
 ---
@@ -488,6 +587,17 @@ Operational notes:
 - One cron tag per task is supported. If you need multiple schedules, fork the task and tag each fork.
 - Scheduler uses `setTimeout` chaining, which keeps it portable across supported runtimes.
 - Startup and execution lifecycle messages are emitted via `globals.resources.logger`.
+
+Best practices:
+
+- Keep cron task logic idempotent (retries, restarts, and manual reruns happen).
+- Use `timezone` explicitly for business schedules to avoid DST surprises.
+- Use `onError: "stop"` only when repeated failure should disable the schedule.
+- Keep cron tasks thin; delegate heavy logic to regular tasks for reuse/testing.
+
+> **runtime:** "Cron: because 'I'll remember to run it every morning' is how scripts become folklore. I set the timer, you make the task idempotent, and we both sleep better."
+
+---
 
 ## Concurrency Utilities
 

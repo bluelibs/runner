@@ -3,13 +3,18 @@ import {
   ITagDefinition,
   ITaggable,
   TagType,
+  IOptionalDependency,
   ITagConfigured,
+  ITagStartupDependency,
   symbolTag,
   symbolFilePath,
   symbolTagConfigured,
+  symbolOptionalDependency,
+  symbolTagBeforeInitDependency,
 } from "../defs";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { freezeIfLineageLocked } from "../tools/deepFreeze";
 
 /**
  * Create a tag definition.
@@ -77,8 +82,8 @@ export function defineTag<
       } else {
         config = tagConfig;
       }
-      return {
-        ...foundation,
+      const configured = {
+        ...this,
         [symbolTagConfigured]: true,
         config,
       } as ITagConfigured<
@@ -86,6 +91,33 @@ export function defineTag<
         TEnforceInputContract,
         TEnforceOutputContract
       >;
+      return freezeIfLineageLocked(this, configured);
+    },
+    optional() {
+      const wrapper = {
+        inner: this,
+        [symbolOptionalDependency]: true,
+      } as IOptionalDependency<
+        ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
+      >;
+      return freezeIfLineageLocked(this, wrapper);
+    },
+    startup() {
+      const wrapper: ITagStartupDependency<
+        ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
+      > = {
+        tag: this,
+        [symbolTagBeforeInitDependency]: true,
+        optional() {
+          const optionalWrapper = {
+            inner: wrapper,
+            [symbolOptionalDependency]: true,
+          } as IOptionalDependency<typeof wrapper>;
+          return freezeIfLineageLocked(wrapper, optionalWrapper);
+        },
+      };
+
+      return freezeIfLineageLocked(this, wrapper);
     },
     /**
      * Checks if the tag exists in a taggable or a list of tags.

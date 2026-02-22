@@ -115,4 +115,41 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
     const e3 = normalizeError(undefined);
     expect(e3.message).toBe("undefined");
   });
+
+  it("keeps original tunnel error when error registry has no matching helper", async () => {
+    const envelope = serializer.stringify({
+      ok: false,
+      error: {
+        code: "APP_ERROR",
+        message: "boom",
+        id: "tests.unmapped.error",
+        data: { x: 1 },
+      },
+    });
+    const fetchMock = async () => ({ text: async () => envelope }) as any;
+    const client = createExposureFetch({
+      baseUrl: "http://example.test/__runner",
+      fetchImpl: fetchMock as any,
+      serializer,
+      errorRegistry: new Map(),
+    });
+
+    await expect(client.task("task.unmapped", {})).rejects.toMatchObject({
+      name: "TunnelError",
+      id: "tests.unmapped.error",
+      data: { x: 1 },
+    });
+    await expect(client.event("event.unmapped", {})).rejects.toMatchObject({
+      name: "TunnelError",
+      id: "tests.unmapped.error",
+      data: { x: 1 },
+    });
+    await expect(
+      client.eventWithResult?.("event.unmapped.result", {}),
+    ).rejects.toMatchObject({
+      name: "TunnelError",
+      id: "tests.unmapped.error",
+      data: { x: 1 },
+    });
+  });
 });

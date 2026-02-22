@@ -9,6 +9,7 @@ import type {
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   TagType,
+  WiringAccessPolicy,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 import type { ResolveConfig } from "./types";
@@ -244,6 +245,22 @@ export interface ResourceFluentBuilder<
   exports(
     items: Array<RegisterableItems>,
     options?: { override?: boolean },
+  ): ResourceFluentBuilder<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+
+  /**
+   * Restricts wiring access for this resource boundary.
+   * Multiple calls are additive.
+   */
+  wiringAccessPolicy(
+    policy: WiringAccessPolicy,
   ): ResourceFluentBuilder<
     TConfig,
     TValue,

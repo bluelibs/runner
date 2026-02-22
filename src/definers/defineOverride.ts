@@ -5,6 +5,7 @@ import {
   IResourceMiddleware,
   IHook,
 } from "../defs";
+import { freezeIfLineageLocked } from "../tools/deepFreeze";
 
 /**
  * Override helper that preserves the original `id` and returns the same type.
@@ -39,5 +40,5 @@ export function defineOverride<
     (overridden as IHook<any, any, any>).on = (base as IHook<any, any, any>).on;
   }
 
-  return overridden;
+  return freezeIfLineageLocked(base, overridden);
 }

@@ -88,9 +88,16 @@ describe("requestBody branches", () => {
 
   it("coerces non-Error values thrown during abort handling", async () => {
     const req = createReqStub();
+    const errorHelperPrototype = Object.getPrototypeOf(cancellationError) as {
+      throw: (...args: any[]) => never;
+    };
+    const originalThrow = errorHelperPrototype.throw;
     const spy = jest
-      .spyOn(cancellationError, "throw")
-      .mockImplementation(() => {
+      .spyOn(errorHelperPrototype, "throw")
+      .mockImplementation(function (this: unknown, ...args: any[]) {
+        if (this !== cancellationError) {
+          return originalThrow.call(this, ...args);
+        }
         throw "boom";
       });
 

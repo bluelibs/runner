@@ -131,6 +131,15 @@ export class Logger {
     message: unknown,
     logInfo: ILogInfo = {},
   ): Promise<void> {
+    const root = this.rootLogger ?? this;
+    const shouldPrint = root.canPrint(level);
+    const hasListeners = root.localListeners.length > 0;
+
+    // Avoid building log payloads when they would be dropped.
+    if (!root.bufferLogs && !shouldPrint && !hasListeners) {
+      return;
+    }
+
     const { source, error, data, ...context } = logInfo;
 
     const log: ILog = {
@@ -143,8 +152,6 @@ export class Logger {
       context: { ...this.boundContext, ...context },
     };
 
-    const root = this.rootLogger ?? this;
-
     if (root.bufferLogs) {
       root.buffer.push(log);
       return;
@@ -152,7 +159,7 @@ export class Logger {
 
     await root.triggerLogListeners(log);
 
-    if (root.canPrint(level)) {
+    if (shouldPrint) {
       root.printer.print(log);
     }
   }

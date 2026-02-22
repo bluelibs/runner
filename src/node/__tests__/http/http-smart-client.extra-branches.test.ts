@@ -283,4 +283,72 @@ describe("createHttpSmartClient - extra branches", () => {
     expect(out).toBe(77);
     expect(reqSpy).toHaveBeenCalled();
   });
+
+  it("octet error responses resume the response stream before rejecting", async () => {
+    const resumeSpy = jest.fn();
+    jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
+      const res = new Readable({ read() {} }) as Readable & {
+        statusCode?: number;
+        statusMessage?: string;
+        resume: () => void;
+      };
+      res.statusCode = 503;
+      res.statusMessage = "Service Unavailable";
+      res.resume = resumeSpy;
+      cb(asIncoming(res, { "content-type": "text/plain" }));
+      const sink = new Writable({
+        write(_c, _e, n) {
+          n();
+        },
+        final(n) {
+          n();
+        },
+      }) as any;
+      sink.on = (_: any, __: any) => sink;
+      sink.setTimeout = () => sink;
+      sink.destroy = () => undefined;
+      return sink;
+    }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: new Serializer(),
+    });
+
+    await expect(
+      client.task("duplex", Readable.from("hi")),
+    ).rejects.toMatchObject({ code: "HTTP_ERROR", httpCode: 503 });
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("octet error responses reject even when response stream has no resume()", async () => {
+    jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
+      const res = new Readable({ read() {} }) as any;
+      res.statusCode = 500;
+      res.statusMessage = "Internal Server Error";
+      res.resume = undefined;
+      cb(asIncoming(res, { "content-type": "text/plain" }));
+      const sink = new Writable({
+        write(_c, _e, n) {
+          n();
+        },
+        final(n) {
+          n();
+        },
+      }) as any;
+      sink.on = (_: any, __: any) => sink;
+      sink.setTimeout = () => sink;
+      sink.destroy = () => undefined;
+      return sink;
+    }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: new Serializer(),
+    });
+
+    await expect(
+      client.task("duplex", Readable.from("hi")),
+    ).rejects.toMatchObject({ code: "HTTP_ERROR", httpCode: 500 });
+  });
 });

@@ -178,6 +178,23 @@ describe("GenericUniversalPlatformAdapter", () => {
         expect.any(Function),
       );
     });
+
+    it("does not invoke handler when visibility state is not hidden", () => {
+      const addSpy = jest.fn();
+      testGlobal.addEventListener = addSpy;
+      testGlobal.removeEventListener = jest.fn();
+      testGlobal.document = { visibilityState: "visible" };
+
+      const handler = jest.fn();
+      adapter.onShutdownSignal(handler);
+
+      const visibilityListener = addSpy.mock.calls.find(
+        (call) => call[0] === "visibilitychange",
+      )?.[1] as (() => void) | undefined;
+      expect(visibilityListener).toBeDefined();
+      visibilityListener?.();
+      expect(handler).not.toHaveBeenCalled();
+    });
   });
 
   describe("exit", () => {
@@ -254,13 +271,41 @@ describe("GenericUniversalPlatformAdapter", () => {
       const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
 
       testGlobal.Deno = {};
-      delete testGlobal.AsyncLocalStorage;
+      (testGlobal as { AsyncLocalStorage?: unknown }).AsyncLocalStorage =
+        undefined;
 
       const denoAdapter = new GenericUniversalPlatformAdapter();
       expect(denoAdapter.hasAsyncLocalStorage()).toBe(true);
       // second call covers the already-probed fast path
       expect(denoAdapter.hasAsyncLocalStorage()).toBe(true);
 
+      testGlobal.Deno = originalDeno;
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
+    });
+
+    it("uses mocked node:async_hooks fallback when global ALS is absent in Deno", () => {
+      const originalDeno = testGlobal.Deno;
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+
+      testGlobal.Deno = {};
+      (testGlobal as { AsyncLocalStorage?: unknown }).AsyncLocalStorage =
+        undefined;
+
+      jest.doMock("node:async_hooks", () => ({
+        AsyncLocalStorage: class MockALS<T> {
+          getStore(): T | undefined {
+            return undefined;
+          }
+          run<R>(_store: T, callback: () => R): R {
+            return callback();
+          }
+        },
+      }));
+
+      const denoAdapter = new GenericUniversalPlatformAdapter();
+      expect(denoAdapter.hasAsyncLocalStorage()).toBe(true);
+
+      jest.dontMock("node:async_hooks");
       testGlobal.Deno = originalDeno;
       testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
     });

@@ -7,6 +7,7 @@ import type {
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   TagType,
+  WiringAccessPolicy,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -59,6 +60,7 @@ export type BuilderState<
   overrides?: Array<any>;
   throws?: ThrowsList;
   exports?: Array<RegisterableItems>;
+  wiringAccessPolicy?: WiringAccessPolicy;
 }>;
 
 /**

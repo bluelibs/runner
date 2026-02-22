@@ -8,8 +8,10 @@ import type {
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   TagType,
+  WiringAccessPolicy,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { defineResource } from "../../defineResource";
 import type { ResourceFluentBuilder } from "./fluent-builder.interface";
@@ -363,6 +365,29 @@ export function makeResourceBuilder<
         TMiddleware
       >(next);
     },
+    wiringAccessPolicy(policy: WiringAccessPolicy) {
+      // Merging rules: deny merges with deny, only merges with only.
+      // Mixing deny and only on the same resource is caught by StoreValidator at bootstrap.
+      const existingDeny = state.wiringAccessPolicy?.deny ?? [];
+      const existingOnly = state.wiringAccessPolicy?.only ?? [];
+      const merged: WiringAccessPolicy = {};
+      if (existingDeny.length > 0 || policy.deny) {
+        merged.deny = [...existingDeny, ...(policy.deny ?? [])];
+      }
+      if (existingOnly.length > 0 || policy.only) {
+        merged.only = [...existingOnly, ...(policy.only ?? [])];
+      }
+      const next = clone(state, { wiringAccessPolicy: merged });
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(next);
+    },
     build() {
       const definition: IResourceDefinition<
         TConfig,
@@ -389,11 +414,12 @@ export function makeResourceBuilder<
         overrides: state.overrides,
         throws: state.throws,
         exports: state.exports,
+        wiringAccessPolicy: state.wiringAccessPolicy,
       };
       const resource = defineResource(definition);
       (resource as { [symbolFilePath]?: string })[symbolFilePath] =
         state.filePath;
-      return resource;
+      return deepFreeze(resource);
     },
   };
   return builder;

@@ -224,6 +224,106 @@ export const duplicateTagIdOnDefinitionError = error<
   )
   .build();
 
+export const tagSelfDependencyError = error<
+  {
+    definitionType: string;
+    definitionId: string;
+    tagId: string;
+  } & DefaultErrorType
+>("runner.errors.tagSelfDependency")
+  .format(
+    ({ definitionType, definitionId, tagId }) =>
+      `${definitionType} "${definitionId}" cannot depend on tag "${tagId}" because it already carries the same tag.`,
+  )
+  .remediation(
+    ({ definitionId, tagId }) =>
+      `Remove "${tagId}" from "${definitionId}" tags, or stop declaring it as a dependency. Self tag dependencies are forbidden to prevent ambiguous graph coupling.`,
+  )
+  .build();
+
+export const wiringAccessPolicyConflictError = error<
+  {
+    policyResourceId: string;
+  } & DefaultErrorType
+>("runner.errors.wiringAccessPolicyConflict")
+  .format(
+    ({ policyResourceId }) =>
+      `Resource "${policyResourceId}" declares both "deny" and "only" in its wiringAccessPolicy.`,
+  )
+  .remediation(
+    ({ policyResourceId }) =>
+      `A wiringAccessPolicy can have either "deny" or "only", but not both. Review "${policyResourceId}" and remove one of them.`,
+  )
+  .build();
+
+export const wiringAccessPolicyInvalidEntryError = error<
+  {
+    policyResourceId: string;
+    entry: unknown;
+  } & DefaultErrorType
+>("runner.errors.wiringAccessPolicyInvalidEntry")
+  .format(
+    ({ policyResourceId }) =>
+      `Resource "${policyResourceId}" declares an invalid wiringAccessPolicy entry.`,
+  )
+  .remediation(
+    ({ policyResourceId }) =>
+      `Use .wiringAccessPolicy({ deny: [...] }) or .wiringAccessPolicy({ only: [...] }) with string ids or Runner definitions only. Review "${policyResourceId}" and remove malformed entries.`,
+  )
+  .build();
+
+export const wiringAccessPolicyUnknownTargetError = error<
+  {
+    policyResourceId: string;
+    targetId: string;
+  } & DefaultErrorType
+>("runner.errors.wiringAccessPolicyUnknownTarget")
+  .format(
+    ({ policyResourceId, targetId }) =>
+      `Resource "${policyResourceId}" references unknown target "${targetId}" in wiringAccessPolicy.`,
+  )
+  .remediation(
+    ({ targetId }) =>
+      `Register "${targetId}" in the same runtime graph or remove it from the policy. Policy targets must exist at bootstrap.`,
+  )
+  .build();
+
+export const wiringAccessPolicyViolationError = error<
+  {
+    targetId: string;
+    targetType: string;
+    consumerId: string;
+    consumerType: string;
+    policyResourceId: string;
+    matchedRuleType: "id" | "tag" | "only";
+    matchedRuleId: string;
+  } & DefaultErrorType
+>("runner.errors.wiringAccessPolicyViolation")
+  .format(
+    ({
+      targetId,
+      targetType,
+      consumerId,
+      consumerType,
+      policyResourceId,
+      matchedRuleType,
+    }) =>
+      matchedRuleType === "only"
+        ? `${targetType} "${targetId}" is not allowed by wiringAccessPolicy "only" rule on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`
+        : `${targetType} "${targetId}" is denied by wiringAccessPolicy on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`,
+  )
+  .remediation(({ policyResourceId, matchedRuleType, matchedRuleId }) => {
+    if (matchedRuleType === "only") {
+      return `Target is not in the "only" list. Add it to the "only" list on "${policyResourceId}", or move the consumer outside that resource subtree.`;
+    }
+    const rule =
+      matchedRuleType === "tag"
+        ? `Denied tag rule "${matchedRuleId}".`
+        : `Denied id rule "${matchedRuleId}".`;
+    return `${rule} Remove or narrow the deny rule on "${policyResourceId}", or move the consumer outside that resource subtree.`;
+  })
+  .build();
+
 // Locked
 export const lockedError = error<{ what: string } & DefaultErrorType>(
   "runner.errors.locked",
@@ -455,6 +555,28 @@ export const runtimeElementNotFoundError = error<
     ({ type, elementId }) =>
       `Register ${type.toString()} "${elementId.toString()}" in the root resource tree before requesting it from the runtime.`,
   )
+  .build();
+
+// Runtime API access blocked — target is not in the root resource's exported set
+export const runtimeAccessViolationError = error<
+  {
+    targetId: string;
+    targetType: "Task" | "Event" | "Resource";
+    rootId: string;
+    exportedIds: string[];
+  } & DefaultErrorType
+>("runner.errors.runtimeAccessViolation")
+  .format(
+    ({ targetId, rootId }) =>
+      `"${targetId}" is not exported by root resource "${rootId}" and cannot be accessed via the runtime API.`,
+  )
+  .remediation(({ targetId, rootId, exportedIds }) => {
+    const exported =
+      exportedIds.length > 0
+        ? `Root "${rootId}" currently exports: [${exportedIds.join(", ")}].`
+        : `Root "${rootId}" has no exports declared.`;
+    return `${exported} Add "${targetId}" to the root's .exports([...]) to allow runtime API access.`;
+  })
   .build();
 
 /** Builder types that require validation before build() */

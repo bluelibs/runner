@@ -111,13 +111,8 @@ const stripGroupPrefix = (groupBody: string): string => {
   if (groupBody.startsWith("?<=") || groupBody.startsWith("?<!")) {
     return groupBody.slice(3);
   }
-  if (groupBody.startsWith("?<")) {
-    const closeIndex = groupBody.indexOf(">");
-    if (closeIndex > 1) {
-      return groupBody.slice(closeIndex + 1);
-    }
-  }
-  return groupBody;
+  // Named captures strip their `?<name>` prefix; malformed groups are left unchanged.
+  return groupBody.replace(/^\?<[^>]+>/, "");
 };
 
 const splitTopLevelAlternation = (groupBody: string): string[] => {
@@ -153,9 +148,7 @@ const splitTopLevelAlternation = (groupBody: string): string[] => {
       continue;
     }
     if (char === ")") {
-      if (nestedDepth > 0) {
-        nestedDepth -= 1;
-      }
+      nestedDepth = Math.max(0, nestedDepth - 1);
       continue;
     }
     if (char === "|" && nestedDepth === 0) {

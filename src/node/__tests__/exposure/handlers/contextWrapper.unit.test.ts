@@ -90,4 +90,58 @@ describe("contextWrapper", () => {
     expect(parseSpy).not.toHaveBeenCalled();
     expect(provideSpy).not.toHaveBeenCalled();
   });
+
+  it("ignores non-string context values during hydration for both wrappers", async () => {
+    const parseSpy = jest.fn((value: string) => JSON.parse(value));
+    const provideSpy = jest.fn(
+      async (_value: unknown, fn: () => Promise<string>) => fn(),
+    );
+    const ctx = {
+      id: "ctx.non-string",
+      parse: parseSpy,
+      provide: provideSpy,
+    };
+
+    const serializer = { parse: (text: string) => JSON.parse(text) } as any;
+
+    const reqA = {
+      headers: {
+        "x-runner-context": JSON.stringify({ [ctx.id]: { not: "a string" } }),
+      },
+      method: "POST",
+      url: "/x",
+    } as any;
+    const resA = {} as any;
+    const controller = new AbortController();
+
+    await withExposureContext(
+      reqA,
+      resA,
+      controller,
+      {
+        store: { asyncContexts: new Map([[ctx.id, ctx]]) } as any,
+        router: { basePath: "/__runner" },
+        serializer,
+      },
+      async () => "ok-a",
+    );
+
+    const reqB = {
+      headers: {
+        "x-runner-context": JSON.stringify({ [ctx.id]: 123 }),
+      },
+    } as any;
+    const out = await withUserContexts(
+      reqB,
+      {
+        store: { asyncContexts: new Map([[ctx.id, ctx]]) } as any,
+        serializer,
+      },
+      async () => "ok-b",
+    );
+
+    expect(out).toBe("ok-b");
+    expect(parseSpy).not.toHaveBeenCalled();
+    expect(provideSpy).not.toHaveBeenCalled();
+  });
 });

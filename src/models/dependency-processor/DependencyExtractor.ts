@@ -1,16 +1,22 @@
 import {
   DependencyMapType,
   DependencyValuesType,
+  ExtractTaskInput,
+  ExtractTaskOutput,
   IEvent,
   IEventEmitOptions,
+  ITag,
   IResourceMiddleware,
   IResource,
   ITaskMiddleware,
   ITask,
+  TagDependencyAccessor,
   ResourceDependencyValuesType,
   TaskCallOptions,
+  TaskDependency,
   TaskDependencyWithIntercept,
   TaskLocalInterceptor,
+  TaggedTask,
 } from "../../defs";
 import { dependencyNotFoundError, unknownItemTypeError } from "../../errors";
 import { EventManager } from "../EventManager";
@@ -33,6 +39,11 @@ import type {
 const MIDDLEWARE_MANAGER_RESOURCE_ID = "globals.resources.middlewareManager";
 
 export class DependencyExtractor {
+  private readonly inFlightTaskInitializations = new Map<
+    string,
+    Promise<void>
+  >();
+
   constructor(
     private readonly store: Store,
     private readonly eventManager: EventManager,
@@ -97,27 +108,29 @@ export class DependencyExtractor {
   ): Promise<DependencyValuesType<T>> {
     const object = {} as DependencyValuesType<T>;
 
-    for (const key in map) {
-      const dependency = map[key];
-      if (dependency === undefined) {
-        continue;
-      }
-
-      try {
-        object[key] = await this.extractDependency(dependency, source);
-        const val = object[key] as unknown;
-        if (val instanceof Logger) {
-          (object as Record<string, unknown>)[key] = val.with({ source });
+    await Promise.all(
+      Object.entries(map).map(async ([key, dependency]) => {
+        if (dependency === undefined) {
+          return;
         }
-      } catch (e) {
-        const errorMessage = String(e);
-        this.logger.error(
-          `Failed to extract dependency from source: ${source} -> ${key} with error: ${errorMessage}`,
-        );
 
-        throw e;
-      }
-    }
+        try {
+          const extracted = await this.extractDependency(dependency, source);
+          object[key as keyof T] = extracted as any;
+          const val = extracted as unknown;
+          if (val instanceof Logger) {
+            (object as Record<string, unknown>)[key] = val.with({ source });
+          }
+        } catch (e) {
+          const errorMessage = String(e);
+          this.logger.error(
+            `Failed to extract dependency from source: ${source} -> ${key} with error: ${errorMessage}`,
+          );
+
+          throw e;
+        }
+      }),
+    );
     this.logger.trace(`Finished computing dependencies for source: ${source}`);
 
     return object;
@@ -136,6 +149,10 @@ export class DependencyExtractor {
       item = object.inner;
     }
 
+    if (utils.isTagStartup(item)) {
+      item = item.tag;
+    }
+
     const itemWithId = item as { id: string };
     const strategy = findDependencyStrategy(item);
     if (!strategy) {
@@ -150,6 +167,7 @@ export class DependencyExtractor {
     if (utils.isResource(item)) return this.extractResourceDependency(item);
     if (utils.isTask(item)) return this.extractTaskDependency(item);
     if (utils.isEvent(item)) return this.extractEventDependency(item, source);
+    if (utils.isTag(item)) return this.extractTagDependency(item, source);
 
     if (!isOpt) {
       const exists = strategy.getStoreMap(this.store).has(itemWithId.id);
@@ -176,13 +194,19 @@ export class DependencyExtractor {
 
     const st = storeTask!;
     if (!st.isInitialized) {
-      const dependencies = st.task.dependencies as DependencyMapType;
-
-      st.computedDependencies = await this.extractDependencies(
-        dependencies,
-        st.task.id,
-      );
-      st.isInitialized = true;
+      let initPromise = this.inFlightTaskInitializations.get(st.task.id);
+      if (!initPromise) {
+        initPromise = (async () => {
+          const dependencies = st.task.dependencies as DependencyMapType;
+          st.computedDependencies = await this.extractDependencies(
+            dependencies,
+            st.task.id,
+          );
+          st.isInitialized = true;
+        })();
+        this.inFlightTaskInitializations.set(st.task.id, initPromise);
+      }
+      await initPromise;
     }
 
     return (input: unknown, options?: TaskCallOptions) => {
@@ -200,6 +224,150 @@ export class DependencyExtractor {
     await this.ensureResourceInitialized(sr);
 
     return sr.value;
+  }
+
+  async extractTagDependency<TTag extends ITag<any, any, any>>(
+    tag: TTag,
+    source: string,
+  ): Promise<TagDependencyAccessor<TTag>> {
+    if (!this.store.tags.has(tag.id)) {
+      dependencyNotFoundError.throw({ key: `Tag ${tag.id}` });
+    }
+
+    const baseAccessor = this.store.getTagAccessor(tag, {
+      consumerId: source,
+      includeSelf: false,
+    });
+    const ownerResourceId = this.store.resources.has(source)
+      ? source
+      : undefined;
+
+    let tasksCache: TagDependencyAccessor<TTag>["tasks"] | undefined;
+    let resourcesCache: TagDependencyAccessor<TTag>["resources"] | undefined;
+
+    const readTasks = (): TagDependencyAccessor<TTag>["tasks"] => {
+      if (!tasksCache) {
+        tasksCache = Object.freeze(
+          baseAccessor.tasks.map((entry) => ({
+            definition: entry.definition,
+            config: entry.config,
+            run: this.createTaggedTaskRunner(entry.definition),
+            ...(ownerResourceId
+              ? this.createTaggedTaskInterceptHelpers(
+                  entry.definition,
+                  ownerResourceId,
+                )
+              : {}),
+          })),
+        );
+      }
+      return tasksCache;
+    };
+
+    const readResources = (): TagDependencyAccessor<TTag>["resources"] => {
+      if (!resourcesCache) {
+        resourcesCache = Object.freeze(
+          baseAccessor.resources.map((entry) =>
+            this.createRuntimeTaggedResourceMatch(entry),
+          ),
+        );
+      }
+      return resourcesCache;
+    };
+
+    const accessor: TagDependencyAccessor<TTag> = {
+      get tasks() {
+        return readTasks();
+      },
+      get resources() {
+        return readResources();
+      },
+      get events() {
+        return baseAccessor.events;
+      },
+      get hooks() {
+        return baseAccessor.hooks;
+      },
+      get taskMiddlewares() {
+        return baseAccessor.taskMiddlewares;
+      },
+      get resourceMiddlewares() {
+        return baseAccessor.resourceMiddlewares;
+      },
+      get errors() {
+        return baseAccessor.errors;
+      },
+    };
+
+    return Object.freeze(accessor);
+  }
+
+  private createTaggedTaskRunner<TTask extends TaggedTask<any>>(
+    task: TTask,
+  ): TaskDependency<ExtractTaskInput<TTask>, ExtractTaskOutput<TTask>> {
+    let cachedRunner:
+      | ((
+          input: ExtractTaskInput<TTask>,
+          options?: TaskCallOptions,
+        ) => ExtractTaskOutput<TTask>)
+      | undefined;
+
+    const ensureRunner = async () => {
+      if (!cachedRunner) {
+        cachedRunner = (await this.extractTaskDependency(
+          task as ITask<any, any, {}>,
+        )) as (
+          input: ExtractTaskInput<TTask>,
+          options?: TaskCallOptions,
+        ) => ExtractTaskOutput<TTask>;
+      }
+      return cachedRunner;
+    };
+
+    return (async (
+      input: ExtractTaskInput<TTask>,
+      options?: TaskCallOptions,
+    ) => {
+      const runner = await ensureRunner();
+      return runner(input, options);
+    }) as TaskDependency<ExtractTaskInput<TTask>, ExtractTaskOutput<TTask>>;
+  }
+
+  private createTaggedTaskInterceptHelpers<TTask extends TaggedTask<any>>(
+    task: TTask,
+    ownerResourceId: string,
+  ): Pick<
+    TagDependencyAccessor<ITag<any, any, any>>["tasks"][number],
+    "intercept" | "getInterceptingResourceIds"
+  > {
+    const withIntercept = this.makeTaskWithIntercept(
+      task as unknown as ITask<any, any, any>,
+      ownerResourceId,
+    );
+
+    return {
+      intercept: withIntercept.intercept,
+      getInterceptingResourceIds: withIntercept.getInterceptingResourceIds,
+    };
+  }
+
+  private createRuntimeTaggedResourceMatch<TTag extends ITag<any, any, any>>(
+    entry: TagDependencyAccessor<TTag>["resources"][number],
+  ): TagDependencyAccessor<TTag>["resources"][number] {
+    const resourceId = entry.definition.id;
+    const store = this.store;
+    return {
+      definition: entry.definition,
+      config: entry.config,
+      get value() {
+        const storeResource = store.resources.get(resourceId);
+        if (!storeResource || !storeResource.isInitialized) {
+          return undefined;
+        }
+
+        return storeResource.value as TagDependencyAccessor<TTag>["resources"][number]["value"];
+      },
+    };
   }
 
   private makeTaskWithIntercept<

@@ -1,4 +1,5 @@
 import { r, run } from "../..";
+import { override } from "../../definers/builders/override";
 
 describe("r.override shorthand", () => {
   it("can register a shorthand-overridden resource directly without using .overrides()", async () => {
@@ -165,5 +166,12 @@ describe("r.override shorthand", () => {
     const runtime = await run(app);
     expect(runtime.value).toBe("override:ok");
     await runtime.dispose();
+  });
+
+  it("throws when fn shorthand is provided with an unrecognized base type", () => {
+    // Bypass the type system to pass an object that doesn't match any known type.
+    // This exercises the isResourceMiddleware(base) false branch within the fn block.
+    const unknownBase = { id: "unknown", __type: "alien" } as any;
+    expect(() => override(unknownBase, async () => "noop")).toThrow(/override/);
   });
 });
