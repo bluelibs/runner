@@ -226,6 +226,26 @@ export class VisibilityTracker {
   }
 
   /**
+   * Checks whether a target id is visible through the root resource's export
+   * surface for runtime API calls (runTask, emitEvent, getResourceValue, etc.).
+   *
+   * When the root has no `.exports()` declaration the surface is fully open
+   * (backward compatible). Otherwise only explicitly listed ids are reachable.
+   *
+   * Returns both the accessibility result and the current exported id list so
+   * callers can produce a useful remediation message without a second lookup.
+   */
+  getRootAccessInfo(
+    targetId: string,
+    rootId: string,
+  ): { accessible: boolean; exportedIds: string[] } {
+    const exportSet = this.exportSets.get(rootId);
+    // No export declaration on root → fully open (backward compat)
+    if (exportSet === undefined) return { accessible: true, exportedIds: [] };
+    return { accessible: exportSet.has(targetId), exportedIds: [...exportSet] };
+  }
+
+  /**
    * Checks whether `consumerId` can access `targetId`.
    *
    * An item is accessible if:

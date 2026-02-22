@@ -557,6 +557,28 @@ export const runtimeElementNotFoundError = error<
   )
   .build();
 
+// Runtime API access blocked — target is not in the root resource's exported set
+export const runtimeAccessViolationError = error<
+  {
+    targetId: string;
+    targetType: "Task" | "Event" | "Resource";
+    rootId: string;
+    exportedIds: string[];
+  } & DefaultErrorType
+>("runner.errors.runtimeAccessViolation")
+  .format(
+    ({ targetId, rootId }) =>
+      `"${targetId}" is not exported by root resource "${rootId}" and cannot be accessed via the runtime API.`,
+  )
+  .remediation(({ targetId, rootId, exportedIds }) => {
+    const exported =
+      exportedIds.length > 0
+        ? `Root "${rootId}" currently exports: [${exportedIds.join(", ")}].`
+        : `Root "${rootId}" has no exports declared.`;
+    return `${exported} Add "${targetId}" to the root's .exports([...]) to allow runtime API access.`;
+  })
+  .build();
+
 /** Builder types that require validation before build() */
 export type BuilderType =
   | "task"

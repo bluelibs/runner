@@ -5826,6 +5826,22 @@ Every builder follows the same rhythm:
 3. **Implement** with `.run()` or `.init()`
 4. **Finish** with `.build()`
 
+### Builder Chaining Semantics (Append vs Replace)
+
+Repeated calls are part of the design, but not every method composes the same way.
+
+- **Replace (last call wins):** Scalar/single-value setters like `.run()`, `.init()`, `.schema()`, `.inputSchema()`, `.resultSchema()`, `.meta()`, `.order()`, `.parallel()`, `.context()`, `.dispose()`, `.httpCode()`, `.format()`, and `.remediation()`.
+- **Append by default, replace with `{ override: true }`:** List-like methods such as `.tags()`, `.middleware()`, and (resources) `.register()`, `.overrides()`, `.exports()`.
+- **Shallow-merge by default, replace with `{ override: true }`:** `.dependencies()`.
+- **Additive-only merge (no override flag):** Resource `.wiringAccessPolicy()` accumulates `deny`/`only` entries across calls.
+
+Two important exceptions:
+
+- Repeated `.throws()` calls currently **replace** the previous declaration (last call wins). We keep this behavior for compatibility.
+- `event.throws()` is documentation-only (events themselves don't throw during emit), so it does not behave like task/resource `.throws()`.
+
+The same chaining rules apply when using `r.override(base)` fluent override builders.
+
 For the complete API reference, see the [Fluent Builders documentation](../readmes/FLUENT_BUILDERS.md).
 
 > **runtime:** "Fluent builders: method chaining dressed up for a job interview. You type a dot and I whisper possibilities. It's the same definition either way—I just appreciate the ceremony."

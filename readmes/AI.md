@@ -140,10 +140,13 @@ const sendEmail = r
 - `.dependencies()` accepts a literal map or function `(config) => deps`; appends (shallow-merge) by default
 - `.middleware()` appends by default
 - `.tags()` appends by default
+- Resource `.register()`, `.overrides()`, and `.exports()` append by default
 - `.schema()` is a unified alias for `inputSchema`, `configSchema`, `payloadSchema`, and `dataSchema` (errors).
 - For tasks, `.schema()` maps to `inputSchema` only; keep output validation explicit with `.resultSchema()`.
 - Entry generic is supported for convenience: `r.task<Input>(id)` seeds input typing. Later explicit typing in `.schema()`/`.inputSchema()`/`.run((input: ...))` still has priority.
-- Pass `{ override: true }` to any of these methods to replace instead of append
+- Pass `{ override: true }` to list/merge methods above to replace instead of append/merge
+- Repeated `.throws()` calls currently replace (last call wins); `event.throws()` is documentation-only
+- Resource `.wiringAccessPolicy()` is additive across calls (no `{ override: true }`)
 - Provide result validation with `.resultSchema()` when the function returns structured data
 - All builders support `.meta({ ... })` for documentation and tooling metadata.
 
@@ -350,12 +353,9 @@ const inspectRoutes = r
 Use `tag.startup()` when startup ordering matters. It injects the same accessor type while explicitly stating that initialization should wait on resources reachable through that tag.
 
 Accessor match helpers:
+
 - `tasks[]` entries expose `definition`, `config`, and runtime `run(...)` (plus runtime `intercept(...)` when consumed from a resource dependency context).
 - `resources[]` entries expose `definition`, `config`, and runtime `value` (available after that resource is initialized).
-
-Deprecated API note: `store.getTasksWithTag(...)` / `store.getResourcesWithTag(...)` remain available for compatibility but are deprecated in favor of tag dependencies. Runner also fails fast during store sanity checks when a tagged definition depends on the same tag.
-
-**Node durable workflows must be tagged** with `durableWorkflowTag` from `@bluelibs/runner/node` to be discoverable via `durable.getWorkflows()` at runtime. This tag is required, not optional. Workflow execution is explicit via the durable API (`durable.start(...)` / `durable.startAndWait(...)`) and these are the current, non-deprecated methods. The legacy aliases `durable.startExecution(...)`, `durable.execute(...)`, and `durable.executeStrict(...)` remain available as deprecated compatibility methods (`startExecution` -> `start`, `execute` -> `startAndWait(...).data`, `executeStrict` -> `startAndWait`). The tag is discovery metadata only; `startAndWait(...)` provides the unified result envelope `{ durable: { executionId }, data }`.
 
 - Contract tags (a "smart tag"): define type contracts for task input/output (or resource config/value) via `r.tag<TConfig, TInputContract, TOutputContract>(id)`. They don't change runtime behavior; they shape the inferred types and compose with contract middleware.
 - Smart tags: built-in tags like `globals.tags.system`, `globals.tags.debug`, and `globals.tags.excludeFromGlobalHooks` change framework behavior; use them for per-component debug or to opt out of global hooks.
@@ -593,6 +593,7 @@ const app = r
 
 - `run(root, options)` wires dependencies, initializes resources, and returns the runtime object: `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, `store`, `logger`, and `dispose`. `getLazyResourceValue` is available only when `run(..., { lazy: true })` is enabled.
 - `emitEvent(event, payload, options?)` accepts the same emission options (`failureMode`, `throwOnError`, `report`) as dependency emitters.
+- **Root export surface**: when the root resource declares `.exports([...])`, `runTask`, `emitEvent`, `getResourceValue`, and `getLazyResourceValue` are restricted to that exported set. Calling any of them with a non-exported id throws `runtimeAccessViolationError` (`runner.errors.runtimeAccessViolation`). When no `.exports()` is declared on the root, the full runtime surface remains open (backward compatible).
 - Run options highlights: `debug` (normal/verbose or custom config), `logs` (printThreshold/strategy/buffer), `errorBoundary` and `onUnhandledError`, `shutdownHooks`, `dryRun`, `lazy`, and `initMode` (`"sequential"` or `"parallel"`; string literal values work without importing enums).
 - `lazy` + `initMode: "parallel"`: startup still parallelizes resources that are actually needed during bootstrap (respecting dependency readiness); only startup-unused resources stay deferred for `getLazyResourceValue(...)`.
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime (runs inside middleware; won't run if middleware short-circuits). Use `deps.someTask.getInterceptingResourceIds()` to inspect which resources registered local interceptors (unique ids, registration order).

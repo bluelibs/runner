@@ -17,6 +17,7 @@ import {
   lazyResourceSyncAccessError,
   runResultDisposeDuringBootstrapError,
   runResultDisposedError,
+  runtimeAccessViolationError,
   runtimeElementNotFoundError,
   runtimeRootNotAvailableError,
   runtimeRootNotInitializedError,
@@ -156,6 +157,41 @@ export class RunResult<V> implements IRuntime<V> {
   }
 
   /**
+   * Enforces the root resource's exported API surface for runtime callers.
+   *
+   * When the root resource declares `.exports([...])`, only those items may be
+   * reached through the IRuntime API. This prevents external callers from
+   * bypassing encapsulation boundaries that were intentionally declared at
+   * the resource composition layer.
+   *
+   * When no `.exports()` is declared on the root, everything remains open
+   * (backward compatible).
+   * @internal
+   */
+  private assertRuntimeAccess(
+    targetId: string,
+    targetType: "Task" | "Event" | "Resource",
+  ): void {
+    const rootId = this.store.root?.resource.id;
+    // Root not yet wired (early access during bootstrap) — let other guards handle it
+    if (!rootId) return;
+
+    const { accessible, exportedIds } = this.store.getRootAccessInfo(
+      targetId,
+      rootId,
+    );
+
+    if (!accessible) {
+      runtimeAccessViolationError.throw({
+        targetId,
+        targetType,
+        rootId,
+        exportedIds,
+      });
+    }
+  }
+
+  /**
    * Retrieves the root resource from the store.
    * Throws if the root hasn't been set (e.g., during early access).
    * @internal
@@ -224,6 +260,16 @@ export class RunResult<V> implements IRuntime<V> {
       resolvedTask = task;
     }
 
+    // Violations return a rejected Promise rather than throwing synchronously
+    // so callers can always use .catch() / await idioms on the returned Promise.
+    try {
+      this.assertRuntimeAccess(resolvedTask.id, "Task");
+    } catch (e) {
+      return Promise.reject(e) as TTask extends ITask<any, infer O, any>
+        ? O
+        : Promise<any>;
+    }
+
     return this.taskRunner.run(
       resolvedTask,
       input,
@@ -269,6 +315,15 @@ export class RunResult<V> implements IRuntime<V> {
       }
       event = this.store.events.get(eventId)!.event;
     }
+
+    // Violations return a rejected Promise rather than throwing synchronously
+    // so callers can always use .catch() / await idioms on the returned Promise.
+    try {
+      this.assertRuntimeAccess((event as IEvent<P>).id, "Event");
+    } catch (e) {
+      return Promise.reject(e);
+    }
+
     return this.eventManager.emit(event, payload, "outside", options);
   }) as {
     <P>(
@@ -319,6 +374,9 @@ export class RunResult<V> implements IRuntime<V> {
         elementId: resourceId,
       });
     }
+
+    this.assertRuntimeAccess(resourceId, "Resource");
+
     if (
       this.lazyOptions.lazyMode &&
       this.lazyOptions.startupUnusedResourceIds?.has(resourceId)
@@ -365,6 +423,8 @@ export class RunResult<V> implements IRuntime<V> {
         elementId: resourceId,
       });
     }
+
+    this.assertRuntimeAccess(resourceId, "Resource");
 
     if (!this.lazyOptions.lazyResourceLoader) {
       return this.store.resources.get(resourceId)!.value;

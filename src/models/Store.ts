@@ -131,6 +131,18 @@ export class Store {
     return this.registry.visibilityTracker.isAccessible(targetId, consumerId);
   }
 
+  /**
+   * Returns accessibility info for a target id against the root's export surface.
+   * Used by the runtime API (runTask, emitEvent, getResourceValue, etc.) to enforce
+   * that callers can only reach items the root resource has explicitly exported.
+   */
+  public getRootAccessInfo(
+    targetId: string,
+    rootId: string,
+  ): { accessible: boolean; exportedIds: string[] } {
+    return this.registry.visibilityTracker.getRootAccessInfo(targetId, rootId);
+  }
+
   get isLocked() {
     return this.#isLocked;
   }
