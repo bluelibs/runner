@@ -2,7 +2,7 @@ import { symbolError, symbolFilePath } from "./symbols";
 import type { IOptionalDependency } from "./utilities";
 import type { IValidationSchema } from "./utilities";
 import type { IErrorMeta } from "./meta";
-import type { TagType } from "./tag";
+import type { ErrorTagType } from "./tag";
 
 export type ErrorReference = string | IErrorHelper<any>;
 export type ThrowsList = ReadonlyArray<ErrorReference>;
@@ -26,7 +26,7 @@ export interface IErrorDefinition<
    */
   dataSchema?: IValidationSchema<TData>;
   meta?: IErrorMeta;
-  tags?: TagType[];
+  tags?: ErrorTagType[];
 }
 
 export interface IErrorDefinitionFinal<
@@ -71,7 +71,7 @@ export interface IErrorHelper<
   /** Metadata attached to this error */
   meta: IErrorMeta;
   /** Tags attached to this error */
-  tags: TagType[];
+  tags: ErrorTagType[];
   /** Construct a typed error with the given data without throwing it */
   "new"(...args: ErrorThrowArgs<TData>): IRunnerError<TData>;
   /** Alias for .new() */

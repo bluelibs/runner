@@ -2,7 +2,7 @@ import type {
   DependencyMapType,
   ITaskMeta,
   IValidationSchema,
-  TagType,
+  TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
@@ -27,7 +27,7 @@ export type BuilderState<
   _TOutput,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
-  TTags extends TagType[],
+  TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
 > = Readonly<{
   id: string;
@@ -50,7 +50,7 @@ export type PhantomBuilderState<
   _TResolved,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
-  TTags extends TagType[],
+  TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
 > = Readonly<{
   id: string;

@@ -4,7 +4,7 @@ import type {
   ITaskDefinition,
   ITaskMeta,
   IValidationSchema,
-  TagType,
+  TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
@@ -25,7 +25,7 @@ export function makeTaskBuilder<
   TOutput extends Promise<any>,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
-  TTags extends TagType[],
+  TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
 >(
   state: BuilderState<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>,
@@ -94,7 +94,7 @@ export function makeTaskBuilder<
       return makeTaskBuilder(next);
     },
 
-    tags<TNewTags extends TagType[]>(
+    tags<TNewTags extends TaskTagType[]>(
       t: TNewTags,
       options?: { override?: boolean },
     ) {

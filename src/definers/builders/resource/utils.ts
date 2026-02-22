@@ -3,7 +3,7 @@ import type {
   IResourceMeta,
   RegisterableItems,
   ResourceMiddlewareAttachmentType,
-  TagType,
+  ResourceTagType,
 } from "../../../defs";
 import type { BuilderState, RegisterInput, RegisterState } from "./types";
 
@@ -16,14 +16,14 @@ export function clone<
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
   TNextConfig = TConfig,
   TNextValue extends Promise<any> = TValue,
   TNextDeps extends DependencyMapType = TDeps,
   TNextContext = TContext,
   TNextMeta extends IResourceMeta = TMeta,
-  TNextTags extends TagType[] = TTags,
+  TNextTags extends ResourceTagType[] = TTags,
   TNextMiddleware extends ResourceMiddlewareAttachmentType[] = TMiddleware,
 >(
   s: BuilderState<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>,

@@ -3,7 +3,7 @@ import type {
   IErrorMeta,
   IValidationSchema,
   IErrorHelper,
-  TagType,
+  ErrorTagType,
 } from "../../../defs";
 
 export interface ErrorFluentBuilder<
@@ -20,7 +20,7 @@ export interface ErrorFluentBuilder<
    */
   schema(schema: IValidationSchema<TData>): ErrorFluentBuilder<TData>;
 
-  tags<TNewTags extends TagType[]>(
+  tags<TNewTags extends ErrorTagType[]>(
     t: TNewTags,
     options?: { override?: boolean },
   ): ErrorFluentBuilder<TData>;

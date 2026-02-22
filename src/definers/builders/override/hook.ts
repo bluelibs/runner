@@ -3,8 +3,8 @@ import type {
   IEventDefinition,
   IHook,
   IHookDefinition,
+  HookTagType,
   ITaskMeta,
-  TagType,
 } from "../../../defs";
 import { defineOverride } from "../../defineOverride";
 import { mergeArray, mergeDependencies } from "../hook/utils";
@@ -35,7 +35,7 @@ export interface HookOverrideBuilder<
     TOn,
     TMeta
   >;
-  tags<TNewTags extends TagType[]>(
+  tags<TNewTags extends HookTagType[]>(
     t: TNewTags,
     options?: { override?: boolean },
   ): HookOverrideBuilder<TDeps, TOn, TMeta>;
@@ -111,13 +111,13 @@ function makeHookOverrideBuilder<
       return makeHookOverrideBuilder<NextDeps, TOn, TMeta>(base, next);
     },
 
-    tags<TNewTags extends TagType[]>(
+    tags<TNewTags extends HookTagType[]>(
       t: TNewTags,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
       const next = cloneHookState(state, {
-        tags: mergeArray(state.tags, t, override) as TagType[],
+        tags: mergeArray(state.tags, t, override) as HookTagType[],
       });
       return makeHookOverrideBuilder(base, next);
     },

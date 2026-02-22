@@ -4,11 +4,12 @@ import type {
   IResource,
   IResourceMeta,
   IResourceMiddleware,
+  ResourceTagType,
   ITask,
   ITaskMeta,
   ITaskMiddleware,
+  TaskTagType,
   ResourceMiddlewareAttachmentType,
-  TagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import {
@@ -47,7 +48,7 @@ export function override<
   TOutput extends Promise<any>,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
-  TTags extends TagType[],
+  TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
 >(
   base: ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>,
@@ -57,7 +58,7 @@ export function override<
   TOutput extends Promise<any>,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
-  TTags extends TagType[],
+  TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
 >(
   base: ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>,
@@ -69,7 +70,7 @@ export function override<
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 >(
   base: IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>,
@@ -88,7 +89,7 @@ export function override<
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 >(
   base: IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>,

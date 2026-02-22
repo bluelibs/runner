@@ -1,4 +1,4 @@
-import type { TagType } from "../../../defs";
+import type { EventTagType } from "../../../defs";
 import { getCallerFile } from "../../../tools/getCallerFile";
 import { makeEventBuilder } from "./fluent-builder";
 import type { EventFluentBuilder } from "./fluent-builder.interface";
@@ -21,7 +21,7 @@ export function eventBuilder<TPayload = void>(
     filePath,
     meta: {} as BuilderState<TPayload>["meta"],
     payloadSchema: undefined,
-    tags: [] as TagType[],
+    tags: [] as EventTagType[],
     parallel: undefined,
   });
 

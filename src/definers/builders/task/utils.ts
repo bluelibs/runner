@@ -1,7 +1,7 @@
 import type {
   DependencyMapType,
   ITaskMeta,
-  TagType,
+  TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import type { BuilderState } from "./types";
@@ -14,13 +14,13 @@ export function clone<
   TOutput,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
-  TTags extends TagType[],
+  TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
   TNextInput = TInput,
   TNextOutput = TOutput,
   TNextDeps extends DependencyMapType = TDeps,
   TNextMeta extends ITaskMeta = TMeta,
-  TNextTags extends TagType[] = TTags,
+  TNextTags extends TaskTagType[] = TTags,
   TNextMiddleware extends TaskMiddlewareAttachmentType[] = TMiddleware,
 >(
   s: BuilderState<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>,

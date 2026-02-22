@@ -1,8 +1,8 @@
 import type {
+  EventTagType,
   IEvent,
   IEventMeta,
   IValidationSchema,
-  TagType,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -17,7 +17,7 @@ export interface EventFluentBuilder<TPayload = void> {
    */
   schema<TNew>(schema: IValidationSchema<TNew>): EventFluentBuilder<TNew>;
 
-  tags<TNewTags extends TagType[]>(
+  tags<TNewTags extends EventTagType[]>(
     t: TNewTags,
     options?: { override?: boolean },
   ): EventFluentBuilder<TPayload>;

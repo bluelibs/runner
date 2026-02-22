@@ -8,12 +8,14 @@ import {
 } from "../defs";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
+import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 
 export function defineEvent<TPayload = void>(
   config: IEventDefinition<TPayload>,
 ): IEvent<TPayload> {
   const callerFilePath = getCallerFile();
   const eventConfig = config;
+  assertTagTargetsApplicableTo("events", "Event", eventConfig.id, eventConfig.tags);
   return deepFreeze({
     ...eventConfig,
     id: eventConfig.id,

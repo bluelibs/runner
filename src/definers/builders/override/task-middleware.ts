@@ -4,7 +4,7 @@ import type {
   ITaskMiddleware,
   ITaskMiddlewareDefinition,
   IValidationSchema,
-  TagType,
+  TaskMiddlewareTagType,
 } from "../../../defs";
 import { defineOverride } from "../../defineOverride";
 import type { TaskMiddlewareFluentBuilder } from "../middleware/task.interface";
@@ -26,7 +26,7 @@ type TaskMiddlewareOverrideState<
   configSchema: IValidationSchema<C> | undefined;
   run: ITaskMiddlewareDefinition<any, In, Out, any>["run"];
   meta?: IMiddlewareMeta;
-  tags?: TagType[];
+  tags?: TaskMiddlewareTagType[];
   everywhere?: ITaskMiddlewareDefinition<C, In, Out, D>["everywhere"];
   throws?: ThrowsList;
 }>;
@@ -135,13 +135,13 @@ function makeTaskMiddlewareOverrideBuilder<
       return makeTaskMiddlewareOverrideBuilder(base, next);
     },
 
-    tags<TNewTags extends TagType[]>(
+    tags<TNewTags extends TaskMiddlewareTagType[]>(
       t: TNewTags,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
       const next = cloneTaskMiddlewareState(state, {
-        tags: mergeArray(state.tags, t, override) as TagType[],
+        tags: mergeArray(state.tags, t, override) as TaskMiddlewareTagType[],
       });
       return makeTaskMiddlewareOverrideBuilder(base, next);
     },

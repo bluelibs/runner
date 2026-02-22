@@ -1,7 +1,8 @@
 import type {
   DependencyMapType,
   IMiddlewareMeta,
-  TagType,
+  ResourceMiddlewareTagType,
+  TaskMiddlewareTagType,
 } from "../../../defs";
 import { getCallerFile } from "../../../tools/getCallerFile";
 import { makeTaskMiddlewareBuilder } from "./task";
@@ -45,7 +46,7 @@ export function taskMiddlewareBuilder<
     configSchema: undefined,
     run: undefined,
     meta: {} as IMiddlewareMeta,
-    tags: [] as TagType[],
+    tags: [] as TaskMiddlewareTagType[],
     everywhere: undefined,
     throws: undefined,
   });
@@ -81,7 +82,7 @@ export function resourceMiddlewareBuilder<
     configSchema: undefined,
     run: undefined,
     meta: {} as IMiddlewareMeta,
-    tags: [] as TagType[],
+    tags: [] as ResourceMiddlewareTagType[],
     everywhere: undefined,
     throws: undefined,
   });

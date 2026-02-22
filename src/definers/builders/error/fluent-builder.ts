@@ -1,4 +1,8 @@
-import type { DefaultErrorType, IErrorMeta, TagType } from "../../../defs";
+import type {
+  DefaultErrorType,
+  ErrorTagType,
+  IErrorMeta,
+} from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineError } from "../../defineError";
 import type { ErrorFluentBuilder } from "./fluent-builder.interface";
@@ -49,7 +53,7 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
       return builder.dataSchema(schema);
     },
 
-    tags<TNewTags extends TagType[]>(
+    tags<TNewTags extends ErrorTagType[]>(
       t: TNewTags,
       options?: { override?: boolean },
     ) {

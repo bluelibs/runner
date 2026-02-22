@@ -244,6 +244,7 @@ import { r, globals } from "@bluelibs/runner";
 
 const httpRouteTag = r
   .tag("app.tags.httpRoute")
+  .for(["tasks"]) // optional: restrict where this tag can be attached
   .configSchema<{ method: "GET" | "POST"; path: string }>({
     parse: (value) => value,
   })
@@ -273,6 +274,7 @@ const inspectRoutes = r
 
 Use `tag.startup()` when startup ordering matters; treat that accessor as metadata-first (runtime helpers like `tasks[].run` may be unavailable there).
 
+- Scope tags with `.for([...])` to specific definition kinds (`"tasks"`, `"resources"`, `"events"`, `"hooks"`, `"taskMiddlewares"`, `"resourceMiddlewares"`, `"errors"`). Wrong usage is rejected by TypeScript in `.tags([...])` and also fails fast at runtime (useful when `any`/casts bypass TS).
 - Contract tags (a "smart tag"): define type contracts for task input/output (or resource config/value) via `r.tag<TConfig, TInputContract, TOutputContract>(id)`. They don't change runtime behavior; they shape the inferred types and compose with contract middleware.
 - Smart tags: built-in tags like `globals.tags.system`, `globals.tags.debug`, and `globals.tags.excludeFromGlobalHooks` change framework behavior; use them for per-component debug or to opt out of global hooks.
 

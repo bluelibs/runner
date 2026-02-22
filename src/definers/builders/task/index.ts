@@ -1,6 +1,6 @@
 import type {
   ITaskMeta,
-  TagType,
+  TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import { getCallerFile } from "../../../tools/getCallerFile";
@@ -26,7 +26,7 @@ export function taskBuilder<TInput = undefined>(
   Promise<any>,
   {},
   ITaskMeta,
-  TagType[],
+  TaskTagType[],
   TaskMiddlewareAttachmentType[]
 > {
   const filePath = getCallerFile();
@@ -35,7 +35,7 @@ export function taskBuilder<TInput = undefined>(
     Promise<any>,
     {},
     ITaskMeta,
-    TagType[],
+    TaskTagType[],
     TaskMiddlewareAttachmentType[]
   > = Object.freeze({
     id,
@@ -43,7 +43,7 @@ export function taskBuilder<TInput = undefined>(
     dependencies: {} as {},
     middleware: [] as TaskMiddlewareAttachmentType[],
     meta: {} as ITaskMeta,
-    tags: [] as TagType[],
+    tags: [] as TaskTagType[],
   });
 
   return makeTaskBuilder(initial);
@@ -59,7 +59,7 @@ export function phantomTaskBuilder<TInput = undefined, TResolved = any>(
   TResolved,
   {},
   ITaskMeta,
-  TagType[],
+  TaskTagType[],
   TaskMiddlewareAttachmentType[]
 > {
   const filePath = getCallerFile();
@@ -68,7 +68,7 @@ export function phantomTaskBuilder<TInput = undefined, TResolved = any>(
     TResolved,
     {},
     ITaskMeta,
-    TagType[],
+    TaskTagType[],
     TaskMiddlewareAttachmentType[]
   > = Object.freeze({
     id,
@@ -76,7 +76,7 @@ export function phantomTaskBuilder<TInput = undefined, TResolved = any>(
     dependencies: {} as {},
     middleware: [] as TaskMiddlewareAttachmentType[],
     meta: {} as ITaskMeta,
-    tags: [] as TagType[],
+    tags: [] as TaskTagType[],
   });
 
   return makePhantomTaskBuilder(initial);
@@ -90,7 +90,7 @@ export interface TaskBuilderWithPhantom {
     Promise<any>,
     {},
     ITaskMeta,
-    TagType[],
+    TaskTagType[],
     TaskMiddlewareAttachmentType[]
   >;
   phantom: typeof phantomTaskBuilder;

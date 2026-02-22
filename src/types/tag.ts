@@ -14,10 +14,20 @@ export interface ITaggable {
   tags: TagType[];
 }
 
+export type TagTarget =
+  | "tasks"
+  | "resources"
+  | "events"
+  | "hooks"
+  | "taskMiddlewares"
+  | "resourceMiddlewares"
+  | "errors";
+
 export interface ITagDefinition<
   TConfig = void,
   _TEnforceInputContract = void,
   _TEnforceOutputContract = void,
+  _TAllowedTargets extends TagTarget | void = void,
 > {
   id: string;
   meta?: ITagMeta;
@@ -26,15 +36,26 @@ export interface ITagDefinition<
    * Utilizing config at definition level stores its defaults
    */
   config?: TConfig;
+  /**
+   * Restricts where this tag can be attached. Omit to allow any taggable
+   * definition kind.
+   */
+  targets?: readonly TagTarget[];
 }
 
 export interface ITag<
   TConfig = void,
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
+  TAllowedTargets extends TagTarget | void = void,
 >
   extends
-    ITagDefinition<TConfig, TEnforceInputContract, TEnforceOutputContract>,
+    ITagDefinition<
+      TConfig,
+      TEnforceInputContract,
+      TEnforceOutputContract,
+      TAllowedTargets
+    >,
     IContractable<TConfig, TEnforceInputContract, TEnforceOutputContract> {
   /**
    * A special validation property.
@@ -55,18 +76,33 @@ export interface ITag<
    */
   with(
     config: TConfig,
-  ): ITagConfigured<TConfig, TEnforceInputContract, TEnforceOutputContract>;
+  ): ITagConfigured<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TAllowedTargets
+  >;
   /**
    * Extracts the configuration of the tag from a taggable or a list of tags.
    */
   extract(target: ITaggable | TagType[]): TConfig | undefined;
   /** Return an optional dependency wrapper for this tag. */
   optional: () => IOptionalDependency<
-    ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
+    ITag<
+      TConfig,
+      TEnforceInputContract,
+      TEnforceOutputContract,
+      TAllowedTargets
+    >
   >;
   /** Return a startup dependency wrapper for this tag. */
   startup: () => ITagStartupDependency<
-    ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
+    ITag<
+      TConfig,
+      TEnforceInputContract,
+      TEnforceOutputContract,
+      TAllowedTargets
+    >
   >;
   [symbolFilePath]: string;
   [symbolTag]: true;
@@ -76,7 +112,13 @@ export type ITagWithOptionalConfig<
   _TValue,
   TEnforceInputContract,
   TEnforceOutputContract,
-> = ITag<any, TEnforceInputContract, TEnforceOutputContract> & {
+  TAllowedTargets extends TagTarget | void = void,
+> = ITag<
+  any,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TAllowedTargets
+> & {
   readonly __configHasOnlyOptionalKeys: true;
 };
 
@@ -84,12 +126,42 @@ export interface ITagConfigured<
   TConfig = void,
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
-> extends ITag<TConfig, TEnforceInputContract, TEnforceOutputContract> {
+  TAllowedTargets extends TagTarget | void = void,
+> extends ITag<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TAllowedTargets
+  > {
   [symbolTagConfigured]: true;
   config: TConfig;
 }
 
 export type TagType =
-  | ITag<void, any, any>
-  | ITagWithOptionalConfig<any, any, any>
-  | ITagConfigured<any, any, any>;
+  | ITag<void, any, any, any>
+  | ITagWithOptionalConfig<any, any, any, any>
+  | ITagConfigured<any, any, any, any>;
+
+type FilterTagByTarget<
+  TCandidate,
+  TTarget extends TagTarget,
+> = TCandidate extends ITag<any, any, any, infer TAllowedTargets>
+  ? [TAllowedTargets] extends [void]
+    ? TCandidate
+    : TTarget extends TAllowedTargets
+      ? TCandidate
+      : never
+  : never;
+
+export type TagTypeFor<TTarget extends TagTarget> = FilterTagByTarget<
+  TagType,
+  TTarget
+>;
+
+export type TaskTagType = TagTypeFor<"tasks">;
+export type ResourceTagType = TagTypeFor<"resources">;
+export type EventTagType = TagTypeFor<"events">;
+export type HookTagType = TagTypeFor<"hooks">;
+export type TaskMiddlewareTagType = TagTypeFor<"taskMiddlewares">;
+export type ResourceMiddlewareTagType = TagTypeFor<"resourceMiddlewares">;
+export type ErrorTagType = TagTypeFor<"errors">;

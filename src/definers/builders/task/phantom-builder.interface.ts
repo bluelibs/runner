@@ -3,7 +3,7 @@ import type {
   IPhantomTask,
   ITaskMeta,
   IValidationSchema,
-  TagType,
+  TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
@@ -16,7 +16,7 @@ export interface PhantomTaskFluentBuilder<
   TResolved = any,
   TDeps extends DependencyMapType = {},
   TMeta extends ITaskMeta = ITaskMeta,
-  TTags extends TagType[] = TagType[],
+  TTags extends TaskTagType[] = TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[] =
     TaskMiddlewareAttachmentType[],
 > {
@@ -52,7 +52,7 @@ export interface PhantomTaskFluentBuilder<
   ): PhantomTaskFluentBuilder<TInput, TResolved, TDeps, TMeta, TTags, TNewMw>;
 
   // Append signature (default)
-  tags<TNewTags extends TagType[]>(
+  tags<TNewTags extends TaskTagType[]>(
     t: TNewTags,
     options?: { override?: false },
   ): PhantomTaskFluentBuilder<
@@ -65,7 +65,7 @@ export interface PhantomTaskFluentBuilder<
   >;
 
   // Override signature (replace)
-  tags<TNewTags extends TagType[]>(
+  tags<TNewTags extends TaskTagType[]>(
     t: TNewTags,
     options: { override: true },
   ): PhantomTaskFluentBuilder<

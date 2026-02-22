@@ -5,7 +5,7 @@ import type {
   ITaskMiddlewareDefinition,
   IValidationSchema,
   IMiddlewareMeta,
-  TagType,
+  TaskMiddlewareTagType,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -43,7 +43,7 @@ export interface TaskMiddlewareFluentBuilder<
   meta<TNewMeta extends IMiddlewareMeta>(
     m: TNewMeta,
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
-  tags<TNewTags extends TagType[]>(
+  tags<TNewTags extends TaskMiddlewareTagType[]>(
     t: TNewTags,
     options?: { override?: boolean },
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;

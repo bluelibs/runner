@@ -1,5 +1,5 @@
 import { IOptionalDependency, IValidationSchema } from "./utilities";
-import { TagType } from "./tag";
+import { EventTagType } from "./tag";
 import { IEventMeta } from "./meta";
 import { CommonPayload, symbolEvent, symbolFilePath } from "./utilities";
 
@@ -74,7 +74,7 @@ export interface IEventDefinition<TPayload = void> {
    * When provided, event payload will be validated when emitted.
    */
   payloadSchema?: IValidationSchema<TPayload>;
-  tags?: TagType[];
+  tags?: EventTagType[];
   /**
    * If true, listeners with the same priority run concurrently within a batch.
    * Batches (grouped by order) still execute sequentially in priority order.
@@ -95,7 +95,7 @@ export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
   [symbolFilePath]: string;
   /** Return an optional dependency wrapper for this event. */
   optional: () => IOptionalDependency<IEvent<TPayload>>;
-  tags: TagType[];
+  tags: EventTagType[];
 }
 
 /**
@@ -134,5 +134,5 @@ export interface IEventEmission<TPayload = any> {
   /**
    * The tags that the event carries.
    */
-  tags: TagType[];
+  tags: EventTagType[];
 }

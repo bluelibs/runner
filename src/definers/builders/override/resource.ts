@@ -8,7 +8,7 @@ import type {
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
-  TagType,
+  ResourceTagType,
   WiringAccessPolicy,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
@@ -31,7 +31,7 @@ type ResourceOverrideState<
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 > = Readonly<
   IResourceDefinition<
@@ -53,14 +53,14 @@ function cloneResourceState<
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
   TNextConfig = TConfig,
   TNextValue extends Promise<any> = TValue,
   TNextDeps extends DependencyMapType = TDeps,
   TNextContext = TContext,
   TNextMeta extends IResourceMeta = TMeta,
-  TNextTags extends TagType[] = TTags,
+  TNextTags extends ResourceTagType[] = TTags,
   TNextMiddleware extends ResourceMiddlewareAttachmentType[] = TMiddleware,
 >(
   state: ResourceOverrideState<
@@ -112,7 +112,7 @@ function makeResourceOverrideBuilder<
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 >(
   base: AnyResource,
@@ -209,7 +209,7 @@ function makeResourceOverrideBuilder<
       });
       return makeResourceOverrideBuilder(base, next);
     },
-    tags<TNewTags extends TagType[]>(
+    tags<TNewTags extends ResourceTagType[]>(
       tags: TNewTags,
       options?: { override?: boolean },
     ) {
@@ -494,7 +494,7 @@ export function resourceOverrideBuilder<
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 >(
   base: IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>,

@@ -10,7 +10,7 @@ import {
   IResourceMiddleware,
   ResourceMiddlewareAttachmentType,
 } from "./resourceMiddleware";
-import { TagType } from "./tag";
+import { ResourceTagType } from "./tag";
 import { IResourceMeta } from "./meta";
 import type { ThrowsList } from "./error";
 import {
@@ -36,7 +36,7 @@ export type {
   ResourceDependencyValuesType,
 } from "./utilities";
 export type { ResourceMiddlewareAttachmentType } from "./resourceMiddleware";
-export type { TagType } from "./tag";
+export type { ResourceTagType, TagType } from "./tag";
 export type { IResourceMeta } from "./meta";
 
 export type ResourceForkRegisterMode = "keep" | "drop" | "deep";
@@ -94,7 +94,7 @@ export interface IResourceDefinition<
   _THooks = any,
   _TRegisterableItems = any,
   TMeta extends IResourceMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends ResourceTagType[] = ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[] =
     ResourceMiddlewareAttachmentType[],
 > {
@@ -204,7 +204,7 @@ export type ResourceInitFn<
   TDependencies extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 > = NonNullable<
   IResourceDefinition<
@@ -226,7 +226,7 @@ export interface IResource<
   TDependencies extends DependencyMapType = any,
   TContext = any,
   TMeta extends IResourceMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends ResourceTagType[] = ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[] =
     ResourceMiddlewareAttachmentType[],
 > extends IResourceDefinition<
@@ -314,7 +314,7 @@ export interface IResourceWithConfig<
   TDependencies extends DependencyMapType = any,
   TContext = any,
   TMeta extends IResourceMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends ResourceTagType[] = ResourceTagType[],
   TMiddleware extends IResourceMiddleware<any, any, any, any>[] =
     IResourceMiddleware[],
 > {

@@ -1,8 +1,8 @@
 import type {
+  EventTagType,
   IEventDefinition,
   IEventMeta,
   IValidationSchema,
-  TagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
@@ -33,13 +33,13 @@ export function makeEventBuilder<TPayload>(
       return builder.payloadSchema(schema);
     },
 
-    tags<TNewTags extends TagType[]>(
+    tags<TNewTags extends EventTagType[]>(
       t: TNewTags,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
       const next = clone(state, {
-        tags: mergeArray(state.tags, t, override) as TagType[],
+        tags: mergeArray(state.tags, t, override) as EventTagType[],
       });
       return makeEventBuilder<TPayload>(next);
     },

@@ -5,7 +5,7 @@ import type {
   ITaskDefinition,
   ITaskMeta,
   IValidationSchema,
-  TagType,
+  TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
@@ -23,7 +23,7 @@ type TaskOverrideState<
   TOutput extends Promise<any>,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
-  TTags extends TagType[],
+  TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
 > = Readonly<
   ITaskDefinition<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>
@@ -34,13 +34,13 @@ function cloneTaskState<
   TOutput extends Promise<any>,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
-  TTags extends TagType[],
+  TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
   TNextInput = TInput,
   TNextOutput extends Promise<any> = TOutput,
   TNextDeps extends DependencyMapType = TDeps,
   TNextMeta extends ITaskMeta = TMeta,
-  TNextTags extends TagType[] = TTags,
+  TNextTags extends TaskTagType[] = TTags,
   TNextMiddleware extends TaskMiddlewareAttachmentType[] = TMiddleware,
 >(
   state: TaskOverrideState<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>,
@@ -81,7 +81,7 @@ function makeTaskOverrideBuilder<
   TOutput extends Promise<any>,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
-  TTags extends TagType[],
+  TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
 >(
   base: AnyTask,
@@ -151,7 +151,7 @@ function makeTaskOverrideBuilder<
       return makeTaskOverrideBuilder(base, next);
     },
 
-    tags<TNewTags extends TagType[]>(
+    tags<TNewTags extends TaskTagType[]>(
       t: TNewTags,
       options?: { override?: boolean },
     ) {
@@ -330,7 +330,7 @@ export function taskOverrideBuilder<
   TOutput extends Promise<any>,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
-  TTags extends TagType[],
+  TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
 >(
   base: ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>,

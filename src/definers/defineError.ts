@@ -14,6 +14,7 @@ import {
 } from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
+import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 
 const isValidHttpCode = (value: number): boolean =>
   Number.isInteger(value) && value >= 100 && value <= 599;
@@ -167,6 +168,7 @@ export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
   }
 
   const resolvedFilePath = filePath ?? getCallerFile();
+  assertTagTargetsApplicableTo("errors", "Error", definition.id, definition.tags);
 
   return deepFreeze(
     new ErrorHelper<TData>(

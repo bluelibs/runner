@@ -3,7 +3,7 @@ import type {
   IPhantomTask,
   ITaskMeta,
   IValidationSchema,
-  TagType,
+  TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
@@ -23,7 +23,7 @@ export function makePhantomTaskBuilder<
   TResolved,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
-  TTags extends TagType[],
+  TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
 >(
   state: PhantomBuilderState<
@@ -143,7 +143,7 @@ export function makePhantomTaskBuilder<
       >(next);
     },
 
-    tags<TNewTags extends TagType[]>(
+    tags<TNewTags extends TaskTagType[]>(
       t: TNewTags,
       options?: { override?: boolean },
     ) {

@@ -80,15 +80,15 @@ export type DependencyMapType = Record<
   | ITask<any, any, any, any, any, any>
   | IResource<any, any, any, any, any, any, any>
   | IEvent<any>
-  | ITag<any, any, any>
+  | ITag<any, any, any, any>
   | IErrorHelper<any>
   | IAsyncContext<any>
   | IOptionalDependency<ITask<any, any, any, any, any, any>>
   | IOptionalDependency<IResource<any, any, any, any, any, any, any>>
   | IOptionalDependency<IEvent<any>>
-  | IOptionalDependency<ITag<any, any, any>>
-  | ITagStartupDependency<ITag<any, any, any>>
-  | IOptionalDependency<ITagStartupDependency<ITag<any, any, any>>>
+  | IOptionalDependency<ITag<any, any, any, any>>
+  | ITagStartupDependency<ITag<any, any, any, any>>
+  | IOptionalDependency<ITagStartupDependency<ITag<any, any, any, any>>>
   | IOptionalDependency<IErrorHelper<any>>
   | IOptionalDependency<IAsyncContext<any>>
 >;
@@ -102,7 +102,7 @@ export interface IOptionalDependency<T> {
 }
 
 /** Wrapper type marking a tag dependency as a before-init dependency */
-export interface ITagStartupDependency<TTag extends ITag<any, any, any>> {
+export interface ITagStartupDependency<TTag extends ITag<any, any, any, any>> {
   /** Wrapped tag definition */
   tag: TTag;
   /** Optional wrapper helper */
@@ -227,7 +227,7 @@ export type DependencyValueType<T> =
         ? T
         : T extends IAsyncContext<any>
           ? T
-          : T extends ITag<any, any, any>
+          : T extends ITag<any, any, any, any>
             ? TagDependencyAccessor<T>
             : T extends ITagStartupDependency<infer TTag>
               ? TagDependencyAccessor<TTag>
@@ -266,7 +266,7 @@ export type ResourceDependencyValueType<T> =
         ? T
         : T extends IAsyncContext<any>
           ? T
-          : T extends ITag<any, any, any>
+          : T extends ITag<any, any, any, any>
             ? TagDependencyAccessor<T>
             : T extends ITagStartupDependency<infer TTag>
               ? TagDependencyAccessor<TTag>
@@ -300,4 +300,4 @@ export type RegisterableItems =
   | IEvent<any>
   | IAsyncContext<any>
   | IErrorHelper<any>
-  | ITag<any, any, any>;
+  | ITag<any, any, any, any>;

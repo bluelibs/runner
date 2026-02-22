@@ -3,7 +3,7 @@ import type {
   IResourceDefinition,
   DependencyMapType,
   IResourceMeta,
-  TagType,
+  ResourceTagType,
   IOptionalDependency,
   ResourceMiddlewareAttachmentType,
   IResourceWithConfig,
@@ -21,6 +21,7 @@ import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 import { resolveForkedRegisterAndDependencies } from "./resourceFork";
+import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 
 export function defineResource<
   TConfig = void,
@@ -28,7 +29,7 @@ export function defineResource<
   TDeps extends DependencyMapType = {},
   TPrivate = any,
   TMeta extends IResourceMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends ResourceTagType[] = ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[] =
     ResourceMiddlewareAttachmentType[],
 >(
@@ -62,6 +63,7 @@ export function defineResource<
    */
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
   const id = constConfig.id;
+  assertTagTargetsApplicableTo("resources", "Resource", id, constConfig.tags);
 
   const base = {
     [symbolResource]: true,

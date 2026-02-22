@@ -4,7 +4,7 @@ import {
   IValidationSchema,
 } from "./utilities";
 import type { IResource } from "./resource";
-import { TagType } from "./tag";
+import { ResourceMiddlewareTagType } from "./tag";
 import { IMiddlewareMeta } from "./meta";
 import {
   symbolFilePath,
@@ -40,7 +40,7 @@ export interface IResourceMiddlewareDefinition<
     config: TConfig,
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
-  tags?: TagType[];
+  tags?: ResourceMiddlewareTagType[];
   /**
    * Declares which typed errors are part of this middleware's contract.
    * Declarative only — does not imply DI or enforcement.
@@ -83,7 +83,7 @@ export interface IResourceMiddleware<
     TDependencies
   >;
   [symbolFilePath]: string;
-  tags: TagType[];
+  tags: ResourceMiddlewareTagType[];
 }
 
 export interface IResourceMiddlewareConfigured<

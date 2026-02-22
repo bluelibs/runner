@@ -4,7 +4,7 @@ import type {
   IHook,
   IHookDefinition,
   ITaskMeta,
-  TagType,
+  HookTagType,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -35,7 +35,7 @@ export interface HookFluentBuilder<
     deps: TNewDeps | (() => TNewDeps),
     options: { override: true },
   ): HookFluentBuilder<TNewDeps, TOn, TMeta>;
-  tags<TNewTags extends TagType[]>(
+  tags<TNewTags extends HookTagType[]>(
     t: TNewTags,
     options?: { override?: boolean },
   ): HookFluentBuilder<TDeps, TOn, TMeta>;

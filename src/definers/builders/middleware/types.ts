@@ -2,7 +2,8 @@ import type {
   DependencyMapType,
   IValidationSchema,
   IMiddlewareMeta,
-  TagType,
+  ResourceMiddlewareTagType,
+  TaskMiddlewareTagType,
   ITaskMiddlewareDefinition,
   IResourceMiddlewareDefinition,
 } from "../../../defs";
@@ -17,7 +18,7 @@ export type TaskMwState<C, In, Out, D extends DependencyMapType> = Readonly<{
   configSchema: IValidationSchema<C> | undefined;
   run: ITaskMiddlewareDefinition<any, In, Out, any>["run"] | undefined;
   meta: IMiddlewareMeta;
-  tags: TagType[];
+  tags: TaskMiddlewareTagType[];
   everywhere: ITaskMiddlewareDefinition<C, In, Out, D>["everywhere"];
   filePath: string;
   /** Declarative error contract. */
@@ -33,7 +34,7 @@ export type ResMwState<C, In, Out, D extends DependencyMapType> = Readonly<{
   configSchema: IValidationSchema<C> | undefined;
   run: IResourceMiddlewareDefinition<any, In, Out, any>["run"] | undefined;
   meta: IMiddlewareMeta;
-  tags: TagType[];
+  tags: ResourceMiddlewareTagType[];
   everywhere: IResourceMiddlewareDefinition<C, In, Out, D>["everywhere"];
   filePath: string;
   /** Declarative error contract. */

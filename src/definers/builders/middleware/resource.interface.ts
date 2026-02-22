@@ -5,7 +5,7 @@ import type {
   IResourceMiddlewareDefinition,
   IValidationSchema,
   IMiddlewareMeta,
-  TagType,
+  ResourceMiddlewareTagType,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -43,7 +43,7 @@ export interface ResourceMiddlewareFluentBuilder<
   meta<TNewMeta extends IMiddlewareMeta>(
     m: TNewMeta,
   ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
-  tags<TNewTags extends TagType[]>(
+  tags<TNewTags extends ResourceMiddlewareTagType[]>(
     t: TNewTags,
     options?: { override?: boolean },
   ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;

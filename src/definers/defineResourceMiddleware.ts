@@ -12,6 +12,7 @@ import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { normalizeThrows } from "../tools/throws";
+import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 
 export function defineResourceMiddleware<
   TConfig = any,
@@ -32,6 +33,12 @@ export function defineResourceMiddleware<
   TDependencies
 > {
   const filePath = getCallerFile();
+  assertTagTargetsApplicableTo(
+    "resourceMiddlewares",
+    "Resource middleware",
+    middlewareDef.id,
+    middlewareDef.tags,
+  );
   const base = {
     [symbolFilePath]: filePath,
     [symbolResourceMiddleware]: true,

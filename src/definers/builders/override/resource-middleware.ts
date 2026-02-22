@@ -4,7 +4,7 @@ import type {
   IResourceMiddleware,
   IResourceMiddlewareDefinition,
   IValidationSchema,
-  TagType,
+  ResourceMiddlewareTagType,
 } from "../../../defs";
 import { defineOverride } from "../../defineOverride";
 import type { ResourceMiddlewareFluentBuilder } from "../middleware/resource.interface";
@@ -26,7 +26,7 @@ type ResourceMiddlewareOverrideState<
   configSchema: IValidationSchema<C> | undefined;
   run: IResourceMiddlewareDefinition<any, In, Out, any>["run"];
   meta?: IMiddlewareMeta;
-  tags?: TagType[];
+  tags?: ResourceMiddlewareTagType[];
   everywhere?: IResourceMiddlewareDefinition<C, In, Out, D>["everywhere"];
   throws?: ThrowsList;
 }>;
@@ -149,13 +149,13 @@ function makeResourceMiddlewareOverrideBuilder<
       return makeResourceMiddlewareOverrideBuilder(base, next);
     },
 
-    tags<TNewTags extends TagType[]>(
+    tags<TNewTags extends ResourceMiddlewareTagType[]>(
       t: TNewTags,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
       const next = cloneResourceMiddlewareState(state, {
-        tags: mergeArray(state.tags, t, override) as TagType[],
+        tags: mergeArray(state.tags, t, override) as ResourceMiddlewareTagType[],
       });
       return makeResourceMiddlewareOverrideBuilder(base, next);
     },

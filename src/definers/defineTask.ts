@@ -3,7 +3,7 @@ import type {
   ITaskDefinition,
   DependencyMapType,
   ITaskMeta,
-  TagType,
+  TaskTagType,
   IOptionalDependency,
   TaskMiddlewareAttachmentType,
   IPhantomTask,
@@ -18,6 +18,7 @@ import { phantomTaskNotRoutedError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
+import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 
 /**
  * Define a task.
@@ -37,7 +38,7 @@ export function defineTask<
   Output extends Promise<any> = any,
   Deps extends DependencyMapType = any,
   TMeta extends ITaskMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends TaskTagType[] = TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[] =
     TaskMiddlewareAttachmentType[],
 >(
@@ -45,6 +46,7 @@ export function defineTask<
 ): ITask<Input, Output, Deps, TMeta, TTags, TMiddleware> {
   const filePath = getCallerFile();
   const id = taskConfig.id;
+  assertTagTargetsApplicableTo("tasks", "Task", id, taskConfig.tags);
   return deepFreeze({
     [symbolTask]: true,
     [symbolFilePath]: filePath,
@@ -57,7 +59,7 @@ export function defineTask<
     inputSchema: taskConfig.inputSchema,
     resultSchema: taskConfig.resultSchema,
     meta: taskConfig.meta || ({} as TMeta),
-    tags: taskConfig.tags || ([] as TagType[] as TTags),
+    tags: taskConfig.tags || ([] as TaskTagType[] as TTags),
     throws: normalizeThrows({ kind: "task", id }, taskConfig.throws),
     // autorun,
     optional() {

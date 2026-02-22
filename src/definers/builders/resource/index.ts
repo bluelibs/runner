@@ -1,7 +1,7 @@
 import type {
   IResourceMeta,
+  ResourceTagType,
   ResourceMiddlewareAttachmentType,
-  TagType,
 } from "../../../defs";
 import { getCallerFile } from "../../../tools/getCallerFile";
 import type { ResourceFluentBuilder } from "./fluent-builder.interface";
@@ -23,7 +23,7 @@ export function resourceBuilder<TConfig = void>(
   {},
   any,
   IResourceMeta,
-  TagType[],
+  ResourceTagType[],
   ResourceMiddlewareAttachmentType[]
 > {
   const filePath = getCallerFile();
@@ -33,7 +33,7 @@ export function resourceBuilder<TConfig = void>(
     {},
     any,
     IResourceMeta,
-    TagType[],
+    ResourceTagType[],
     ResourceMiddlewareAttachmentType[]
   > = Object.freeze({
     id,

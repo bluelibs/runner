@@ -3,7 +3,7 @@ import type {
   ITaskMiddlewareDefinition,
   IValidationSchema,
   IMiddlewareMeta,
-  TagType,
+  TaskMiddlewareTagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
@@ -82,13 +82,13 @@ export function makeTaskMiddlewareBuilder<
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
     },
 
-    tags<TNewTags extends TagType[]>(
+    tags<TNewTags extends TaskMiddlewareTagType[]>(
       t: TNewTags,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
       const next = cloneTask(state, {
-        tags: mergeArray(state.tags, t, override) as TagType[],
+        tags: mergeArray(state.tags, t, override) as TaskMiddlewareTagType[],
       });
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
     },

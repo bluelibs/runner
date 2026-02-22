@@ -6,7 +6,7 @@ import type {
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
-  TagType,
+  ResourceTagType,
   WiringAccessPolicy,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
@@ -20,7 +20,7 @@ export type BuilderState<
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 > = Readonly<{
   id: string;

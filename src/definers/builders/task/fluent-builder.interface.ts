@@ -4,7 +4,7 @@ import type {
   ITaskDefinition,
   ITaskMeta,
   IValidationSchema,
-  TagType,
+  TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
@@ -18,7 +18,7 @@ export interface TaskFluentBuilder<
   TOutput extends Promise<any> = Promise<any>,
   TDeps extends DependencyMapType = {},
   TMeta extends ITaskMeta = ITaskMeta,
-  TTags extends TagType[] = TagType[],
+  TTags extends TaskTagType[] = TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[] =
     TaskMiddlewareAttachmentType[],
 > {
@@ -49,7 +49,7 @@ export interface TaskFluentBuilder<
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TTags, TNewMw>;
 
   // Append signature (default)
-  tags<TNewTags extends TagType[]>(
+  tags<TNewTags extends TaskTagType[]>(
     t: TNewTags,
     options?: { override?: false },
   ): TaskFluentBuilder<
@@ -62,7 +62,7 @@ export interface TaskFluentBuilder<
   >;
 
   // Override signature (replace)
-  tags<TNewTags extends TagType[]>(
+  tags<TNewTags extends TaskTagType[]>(
     t: TNewTags,
     options: { override: true },
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TNewTags, TMiddleware>;

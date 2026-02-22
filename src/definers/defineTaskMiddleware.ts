@@ -14,6 +14,7 @@ import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { normalizeThrows } from "../tools/throws";
+import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 
 export function defineTaskMiddleware<
   TConfig = any,
@@ -34,6 +35,12 @@ export function defineTaskMiddleware<
   TDependencies
 > {
   const filePath = getCallerFile();
+  assertTagTargetsApplicableTo(
+    "taskMiddlewares",
+    "Task middleware",
+    middlewareDef.id,
+    middlewareDef.tags,
+  );
   const base = {
     [symbolFilePath]: filePath,
     [symbolTaskMiddleware]: true,

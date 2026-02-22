@@ -1,4 +1,4 @@
-import type { ITaskMeta, TagType } from "../../../defs";
+import type { HookTagType, ITaskMeta } from "../../../defs";
 import { getCallerFile } from "../../../tools/getCallerFile";
 import { makeHookBuilder } from "./fluent-builder";
 import type { HookFluentBuilder } from "./fluent-builder.interface";
@@ -25,7 +25,7 @@ export function hookBuilder(
     order: 0,
     meta: {} as ITaskMeta,
     run: undefined,
-    tags: [] as TagType[],
+    tags: [] as HookTagType[],
     throws: undefined,
   });
 

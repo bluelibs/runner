@@ -5,7 +5,7 @@ import {
   IValidationSchema,
 } from "./utilities";
 import { TaskMiddlewareAttachmentType } from "./taskMiddleware";
-import { TagType } from "./tag";
+import { TaskTagType } from "./tag";
 import { ITaskMeta } from "./meta";
 import type { ThrowsList } from "./error";
 import type { ExecutionJournal } from "./executionJournal";
@@ -29,7 +29,7 @@ export type {
   IOptionalDependency,
 } from "./utilities";
 export type { TaskMiddlewareAttachmentType } from "./taskMiddleware";
-export type { TagType } from "./tag";
+export type { TagType, TaskTagType } from "./tag";
 export type { ITaskMeta } from "./meta";
 
 export interface ITaskDefinition<
@@ -37,7 +37,7 @@ export interface ITaskDefinition<
   TOutput extends Promise<unknown> = Promise<unknown>,
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends TaskTagType[] = TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[] =
     TaskMiddlewareAttachmentType[],
 > {
@@ -96,7 +96,7 @@ export interface ITask<
   TOutput extends Promise<unknown> = Promise<unknown>,
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends TaskTagType[] = TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[] =
     TaskMiddlewareAttachmentType[],
 > extends ITaskDefinition<
@@ -136,7 +136,7 @@ export type IPhantomTask<
   TResolved = any,
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends TaskTagType[] = TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[] =
     TaskMiddlewareAttachmentType[],
 > = ITask<

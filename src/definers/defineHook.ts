@@ -10,6 +10,7 @@ import {
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
+import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 
 /**
  * Define a hook (event listeners).
@@ -22,6 +23,7 @@ export function defineHook<
   TMeta extends ITaskMeta = any,
 >(hookDef: IHookDefinition<D, TOn, TMeta>): IHook<D, TOn, TMeta> {
   const filePath = getCallerFile();
+  assertTagTargetsApplicableTo("hooks", "Hook", hookDef.id, hookDef.tags);
   return deepFreeze({
     [symbolHook]: true,
     [symbolFilePath]: filePath,

@@ -8,7 +8,7 @@ import type {
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
-  TagType,
+  ResourceTagType,
   WiringAccessPolicy,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
@@ -24,7 +24,7 @@ export interface ResourceFluentBuilder<
   TDeps extends DependencyMapType = {},
   TContext = any,
   TMeta extends IResourceMeta = IResourceMeta,
-  TTags extends TagType[] = TagType[],
+  TTags extends ResourceTagType[] = ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[] =
     ResourceMiddlewareAttachmentType[],
 > {
@@ -88,7 +88,7 @@ export interface ResourceFluentBuilder<
   >;
 
   // Append signature (default)
-  tags<TNewTags extends TagType[]>(
+  tags<TNewTags extends ResourceTagType[]>(
     tags: TNewTags,
     options?: { override?: false },
   ): ResourceFluentBuilder<
@@ -102,7 +102,7 @@ export interface ResourceFluentBuilder<
   >;
 
   // Override signature (replace)
-  tags<TNewTags extends TagType[]>(
+  tags<TNewTags extends ResourceTagType[]>(
     tags: TNewTags,
     options: { override: true },
   ): ResourceFluentBuilder<

@@ -6,6 +6,7 @@ import {
   IOptionalDependency,
   ITagConfigured,
   ITagStartupDependency,
+  TagTarget,
   symbolTag,
   symbolFilePath,
   symbolTagConfigured,
@@ -30,13 +31,20 @@ export function defineTag<
   TConfig = void,
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
+  TAllowedTargets extends TagTarget | void = void,
 >(
   definition: ITagDefinition<
     TConfig,
     TEnforceInputContract,
-    TEnforceOutputContract
+    TEnforceOutputContract,
+    TAllowedTargets
   >,
-): ITag<TConfig, TEnforceInputContract, TEnforceOutputContract> {
+): ITag<
+  TConfig,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TAllowedTargets
+> {
   const id = definition.id;
   const filePath = getCallerFile();
   const isPlainObject = (value: unknown): value is Record<string, unknown> =>
@@ -46,7 +54,13 @@ export function defineTag<
     meta: definition.meta ?? {},
     config: definition.config,
     configSchema: definition.configSchema,
-  } as ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>;
+    targets: definition.targets,
+  } as ITag<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TAllowedTargets
+  >;
 
   return deepFreeze({
     ...foundation,
@@ -89,7 +103,8 @@ export function defineTag<
       } as ITagConfigured<
         TConfig,
         TEnforceInputContract,
-        TEnforceOutputContract
+        TEnforceOutputContract,
+        TAllowedTargets
       >;
       return freezeIfLineageLocked(this, configured);
     },
@@ -98,13 +113,23 @@ export function defineTag<
         inner: this,
         [symbolOptionalDependency]: true,
       } as IOptionalDependency<
-        ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
+        ITag<
+          TConfig,
+          TEnforceInputContract,
+          TEnforceOutputContract,
+          TAllowedTargets
+        >
       >;
       return freezeIfLineageLocked(this, wrapper);
     },
     startup() {
       const wrapper: ITagStartupDependency<
-        ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>
+        ITag<
+          TConfig,
+          TEnforceInputContract,
+          TEnforceOutputContract,
+          TAllowedTargets
+        >
       > = {
         tag: this,
         [symbolTagBeforeInitDependency]: true,
@@ -155,5 +180,10 @@ export function defineTag<
 
       return;
     },
-  } satisfies ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>);
+  } satisfies ITag<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TAllowedTargets
+  >);
 }

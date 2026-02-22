@@ -1,8 +1,8 @@
 import type {
   DefaultErrorType,
+  ErrorTagType,
   IErrorMeta,
   IValidationSchema,
-  TagType,
 } from "../../../defs";
 
 /**
@@ -19,5 +19,5 @@ export type BuilderState<TData extends DefaultErrorType> = Readonly<{
   parse?: (raw: string) => TData;
   dataSchema?: IValidationSchema<TData>;
   meta?: IErrorMeta;
-  tags?: TagType[];
+  tags?: ErrorTagType[];
 }>;

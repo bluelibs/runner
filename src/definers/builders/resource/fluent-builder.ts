@@ -7,7 +7,7 @@ import type {
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
-  TagType,
+  ResourceTagType,
   WiringAccessPolicy,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
@@ -28,7 +28,7 @@ export function makeResourceBuilder<
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 >(
   state: BuilderState<
@@ -124,7 +124,7 @@ export function makeResourceBuilder<
       });
       return makeResourceBuilder(next);
     },
-    tags<TNewTags extends TagType[]>(
+    tags<TNewTags extends ResourceTagType[]>(
       tags: TNewTags,
       options?: { override?: boolean },
     ) {

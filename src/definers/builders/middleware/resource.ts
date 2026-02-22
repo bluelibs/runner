@@ -3,7 +3,7 @@ import type {
   IResourceMiddlewareDefinition,
   IValidationSchema,
   IMiddlewareMeta,
-  TagType,
+  ResourceMiddlewareTagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
@@ -82,13 +82,13 @@ export function makeResourceMiddlewareBuilder<
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },
 
-    tags<TNewTags extends TagType[]>(
+    tags<TNewTags extends ResourceMiddlewareTagType[]>(
       t: TNewTags,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
       const next = cloneRes(state, {
-        tags: mergeArray(state.tags, t, override) as TagType[],
+        tags: mergeArray(state.tags, t, override) as ResourceMiddlewareTagType[],
       });
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },

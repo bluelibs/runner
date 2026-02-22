@@ -241,6 +241,31 @@ export const tagSelfDependencyError = error<
   )
   .build();
 
+export const tagTargetNotAllowedError = error<
+  {
+    definitionType: string;
+    definitionId: string;
+    tagId: string;
+    attemptedTarget: string;
+    allowedTargets: string[];
+  } & DefaultErrorType
+>("runner.errors.tagTargetNotAllowed")
+  .format(
+    ({
+      definitionType,
+      definitionId,
+      tagId,
+      attemptedTarget,
+      allowedTargets,
+    }) =>
+      `${definitionType} "${definitionId}" cannot use tag "${tagId}" on "${attemptedTarget}". Allowed targets: ${allowedTargets.join(", ")}.`,
+  )
+  .remediation(
+    ({ tagId, attemptedTarget }) =>
+      `Remove "${tagId}" from the ${attemptedTarget} definition, or expand the tag with .for([...]) to include "${attemptedTarget}".`,
+  )
+  .build();
+
 export const wiringAccessPolicyConflictError = error<
   {
     policyResourceId: string;

@@ -5,7 +5,7 @@ import {
 } from "./utilities";
 import type { ITask } from "./task";
 import type { ExecutionJournal } from "./executionJournal";
-import { TagType } from "./tag";
+import { TaskMiddlewareTagType } from "./tag";
 import { IMiddlewareMeta } from "./meta";
 import {
   symbolFilePath,
@@ -16,7 +16,7 @@ import { IContractable } from "./contracts";
 import type { ThrowsList } from "./error";
 
 export type { DependencyMapType, DependencyValuesType } from "./utilities";
-export type { TagType } from "./tag";
+export type { TagType, TaskMiddlewareTagType } from "./tag";
 export type { IMiddlewareMeta } from "./meta";
 
 export interface ITaskMiddlewareDefinition<
@@ -45,7 +45,7 @@ export interface ITaskMiddlewareDefinition<
     config: TConfig,
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
-  tags?: TagType[];
+  tags?: TaskMiddlewareTagType[];
   /**
    * Declares which typed errors are part of this middleware's contract.
    * Declarative only — does not imply DI or enforcement.
@@ -85,7 +85,7 @@ export interface ITaskMiddleware<
     TEnforceOutputContract,
     TDependencies
   >;
-  tags: TagType[];
+  tags: TaskMiddlewareTagType[];
 }
 
 export interface ITaskMiddlewareConfigured<
