@@ -348,7 +348,7 @@ const auditHook = r
 3. **Resource wrappers** — compose resources for reusable patterns
 4. **Event interception** — use `eventManager.intercept()` for audit/logging
 
-> **Note:** `.everywhere()` is visibility-gated (it does not bypass `.exports()` or `.wiringAccessPolicy()`).
+> **Note:** `.everywhere()` is visibility-gated (it does not bypass `.exports()` or `.isolate()`).
 
 **Creating reusable modules:**
 

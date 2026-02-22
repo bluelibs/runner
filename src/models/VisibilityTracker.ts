@@ -1,18 +1,15 @@
 import {
   RegisterableItems,
   IResourceWithConfig,
-  WiringAccessPolicy,
+  IsolationPolicy,
 } from "../defs";
 import * as utils from "../define";
-import {
-  wiringAccessPolicyViolationError,
-  visibilityViolationError,
-} from "../errors";
+import { isolateViolationError, visibilityViolationError } from "../errors";
 import { StoreRegistry } from "./StoreRegistry";
 
 const INTERNAL_DEPENDENCY_PREFIX = "__runner";
 
-type CompiledWiringAccessPolicy = {
+type CompiledIsolationPolicy = {
   denyIds: Set<string>;
   denyTagIds: Set<string>;
   // onlyMode=true means the policy uses "only" semantics (allowlist).
@@ -29,7 +26,7 @@ type AccessViolation =
       exportedIds: string[];
     }
   | {
-      kind: "wiringAccessPolicy";
+      kind: "isolate";
       policyResourceId: string;
       matchedRuleType: "id" | "tag" | "only";
       matchedRuleId: string;
@@ -94,11 +91,11 @@ export class VisibilityTracker {
   private readonly knownResources = new Set<string>();
 
   /**
-   * Resource id -> compiled additive wiring access policy.
+   * Resource id -> compiled additive isolation policy.
    */
-  private readonly dependencyAccessPolicies = new Map<
+  private readonly isolationPolicies = new Map<
     string,
-    CompiledWiringAccessPolicy
+    CompiledIsolationPolicy
   >();
 
   /**
@@ -122,10 +119,7 @@ export class VisibilityTracker {
     this.definitionTagIds.set(definitionId, new Set(tags.map((tag) => tag.id)));
   }
 
-  recordWiringAccessPolicy(
-    resourceId: string,
-    policy?: WiringAccessPolicy,
-  ): void {
+  recordIsolation(resourceId: string, policy?: IsolationPolicy): void {
     this.knownResources.add(resourceId);
 
     const hasDeny = Array.isArray(policy?.deny) && policy!.deny!.length > 0;
@@ -133,7 +127,7 @@ export class VisibilityTracker {
     const onlyPresent = policy !== undefined && Array.isArray(policy.only);
 
     if (!hasDeny && !onlyPresent) {
-      this.dependencyAccessPolicies.delete(resourceId);
+      this.isolationPolicies.delete(resourceId);
       return;
     }
 
@@ -172,7 +166,7 @@ export class VisibilityTracker {
       }
     }
 
-    this.dependencyAccessPolicies.set(resourceId, {
+    this.isolationPolicies.set(resourceId, {
       denyIds,
       denyTagIds,
       onlyMode: onlyPresent,
@@ -281,7 +275,7 @@ export class VisibilityTracker {
       }
     }
 
-    return this.findWiringAccessPolicyViolation(targetId, consumerId);
+    return this.findIsolationViolation(targetId, consumerId);
   }
 
   private isAccessibleFromOwnerChain(
@@ -540,10 +534,10 @@ export class VisibilityTracker {
     }
   }
 
-  private findWiringAccessPolicyViolation(
+  private findIsolationViolation(
     targetId: string,
     consumerId: string,
-  ): Extract<AccessViolation, { kind: "wiringAccessPolicy" }> | null {
+  ): Extract<AccessViolation, { kind: "isolate" }> | null {
     const chain = this.getConsumerResourceChain(consumerId);
     if (chain.length === 0) {
       return null;
@@ -552,7 +546,7 @@ export class VisibilityTracker {
     const targetTags = this.definitionTagIds.get(targetId);
 
     for (const policyResourceId of chain) {
-      const policy = this.dependencyAccessPolicies.get(policyResourceId);
+      const policy = this.isolationPolicies.get(policyResourceId);
       if (!policy) {
         continue;
       }
@@ -560,7 +554,7 @@ export class VisibilityTracker {
       // --- deny rules ---
       if (policy.denyIds.has(targetId)) {
         return {
-          kind: "wiringAccessPolicy",
+          kind: "isolate",
           policyResourceId,
           matchedRuleType: "id",
           matchedRuleId: targetId,
@@ -569,7 +563,7 @@ export class VisibilityTracker {
 
       if (policy.denyTagIds.has(targetId)) {
         return {
-          kind: "wiringAccessPolicy",
+          kind: "isolate",
           policyResourceId,
           matchedRuleType: "tag",
           matchedRuleId: targetId,
@@ -583,7 +577,7 @@ export class VisibilityTracker {
           }
 
           return {
-            kind: "wiringAccessPolicy",
+            kind: "isolate",
             policyResourceId,
             matchedRuleType: "tag",
             matchedRuleId: tagId,
@@ -613,7 +607,7 @@ export class VisibilityTracker {
 
       if (!matchedByOnlyId && !matchedByOnlyTag) {
         return {
-          kind: "wiringAccessPolicy",
+          kind: "isolate",
           policyResourceId,
           matchedRuleType: "only",
           matchedRuleId: targetId,
@@ -660,7 +654,7 @@ export class VisibilityTracker {
         exportedIds: violation.exportedIds,
       });
     } else {
-      wiringAccessPolicyViolationError.throw({
+      isolateViolationError.throw({
         targetId,
         targetType,
         consumerId,

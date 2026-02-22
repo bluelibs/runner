@@ -4,13 +4,13 @@ import type {
   IResourceDefinition,
   IResourceMeta,
   IValidationSchema,
+  IsolationPolicy,
   OverridableElements,
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   ResourceTagType,
   TagType,
-  WiringAccessPolicy,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
@@ -367,19 +367,19 @@ export function makeResourceBuilder<
         TMiddleware
       >(next);
     },
-    wiringAccessPolicy(policy: WiringAccessPolicy) {
+    isolate(policy: IsolationPolicy) {
       // Merging rules: deny merges with deny, only merges with only.
       // Mixing deny and only on the same resource is caught by StoreValidator at bootstrap.
-      const existingDeny = state.wiringAccessPolicy?.deny ?? [];
-      const existingOnly = state.wiringAccessPolicy?.only ?? [];
-      const merged: WiringAccessPolicy = {};
+      const existingDeny = state.isolate?.deny ?? [];
+      const existingOnly = state.isolate?.only ?? [];
+      const merged: IsolationPolicy = {};
       if (existingDeny.length > 0 || policy.deny) {
         merged.deny = [...existingDeny, ...(policy.deny ?? [])];
       }
       if (existingOnly.length > 0 || policy.only) {
         merged.only = [...existingOnly, ...(policy.only ?? [])];
       }
-      const next = clone(state, { wiringAccessPolicy: merged });
+      const next = clone(state, { isolate: merged });
       return makeResourceBuilder<
         TConfig,
         TValue,
@@ -416,7 +416,7 @@ export function makeResourceBuilder<
         overrides: state.overrides,
         throws: state.throws,
         exports: state.exports,
-        wiringAccessPolicy: state.wiringAccessPolicy,
+        isolate: state.isolate,
       };
       const resource = defineResource(definition);
       return deepFreeze({

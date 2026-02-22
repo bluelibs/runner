@@ -5,13 +5,13 @@ import type {
   IResourceDefinition,
   IResourceMeta,
   IValidationSchema,
+  IsolationPolicy,
   OverridableElements,
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   ResourceTagType,
   TagType,
-  WiringAccessPolicy,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 import type { ResolveConfig } from "./types";
@@ -261,8 +261,8 @@ export interface ResourceFluentBuilder<
    * Restricts wiring access for this resource boundary.
    * Multiple calls are additive.
    */
-  wiringAccessPolicy(
-    policy: WiringAccessPolicy,
+  isolate(
+    policy: IsolationPolicy,
   ): ResourceFluentBuilder<
     TConfig,
     TValue,

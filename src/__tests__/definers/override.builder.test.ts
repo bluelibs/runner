@@ -278,8 +278,8 @@ describe(SuiteName.OverrideBuilder, () => {
       .meta({ [MetaKey.Label]: ResourceValue.Override } as Record<string, any>)
       .exports([registerA])
       .exports([registerB], { override: true })
-      .wiringAccessPolicy({ deny: [denyTask] })
-      .wiringAccessPolicy({ deny: [registerB.id] })
+      .isolate({ deny: [denyTask] })
+      .isolate({ deny: [registerB.id] })
       .overrides([overrideTask])
       .overrides([overrideTask], { override: true })
       .throws([errorHelper])
@@ -298,7 +298,7 @@ describe(SuiteName.OverrideBuilder, () => {
       [MetaKey.Label]: ResourceValue.Override,
     });
     expect(overrideResource.exports).toEqual([registerB]);
-    expect(overrideResource.wiringAccessPolicy).toEqual({
+    expect(overrideResource.isolate).toEqual({
       deny: [denyTask, registerB.id],
     });
     expect(overrideResource.overrides).toEqual([overrideTask]);
@@ -339,7 +339,7 @@ describe(SuiteName.OverrideBuilder, () => {
     await runtime.dispose();
   });
 
-  it("merges override resource wiringAccessPolicy only rules and keeps them on no-op calls", () => {
+  it("merges override resource isolate only rules and keeps them on no-op calls", () => {
     const base = r.resource("tests.override.builder.policy.base").build();
     const onlyTag = r.tag("tests.override.builder.policy.only.tag").build();
     const onlyTask = r
@@ -353,14 +353,14 @@ describe(SuiteName.OverrideBuilder, () => {
 
     const overrideResource = r
       .override(base)
-      .wiringAccessPolicy({ only: [onlyTag] })
-      .wiringAccessPolicy({})
-      .wiringAccessPolicy({ only: [onlyTask.id] })
-      .wiringAccessPolicy({ deny: [denyTask.id] })
-      .wiringAccessPolicy({})
+      .isolate({ only: [onlyTag] })
+      .isolate({})
+      .isolate({ only: [onlyTask.id] })
+      .isolate({ deny: [denyTask.id] })
+      .isolate({})
       .build();
 
-    expect(overrideResource.wiringAccessPolicy).toEqual({
+    expect(overrideResource.isolate).toEqual({
       deny: [denyTask.id],
       only: [onlyTag, onlyTask.id],
     });

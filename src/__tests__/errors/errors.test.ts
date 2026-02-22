@@ -11,10 +11,10 @@ import { run } from "../../run";
 import {
   duplicateRegistrationError,
   dependencyNotFoundError,
-  wiringAccessPolicyInvalidEntryError,
-  wiringAccessPolicyUnknownTargetError,
-  wiringAccessPolicyViolationError,
-  wiringAccessPolicyConflictError,
+  isolateInvalidEntryError,
+  isolateUnknownTargetError,
+  isolateViolationError,
+  isolateConflictError,
   unknownItemTypeError,
   eventNotFoundError,
   circularDependencyError,
@@ -439,17 +439,17 @@ describe("Errors", () => {
       expect(phantomTaskNotRoutedError.is(phantom)).toBe(true);
 
       const policyInvalid = capture(() =>
-        wiringAccessPolicyInvalidEntryError.throw({
+        isolateInvalidEntryError.throw({
           policyResourceId: "app.resource",
           entry: {},
         }),
       );
       expect(policyInvalid.message).toContain(
-        'Resource "app.resource" declares an invalid wiringAccessPolicy entry.',
+        'Resource "app.resource" declares an invalid isolate policy entry.',
       );
 
       const policyUnknown = capture(() =>
-        wiringAccessPolicyUnknownTargetError.throw({
+        isolateUnknownTargetError.throw({
           policyResourceId: "app.resource",
           targetId: "missing.target",
         }),
@@ -459,7 +459,7 @@ describe("Errors", () => {
       );
 
       const policyConflict = capture(() =>
-        wiringAccessPolicyConflictError.throw({
+        isolateConflictError.throw({
           policyResourceId: "app.resource",
         }),
       );
@@ -468,7 +468,7 @@ describe("Errors", () => {
       );
 
       const policyViolation = capture(() =>
-        wiringAccessPolicyViolationError.throw({
+        isolateViolationError.throw({
           targetId: "tasks.secret",
           targetType: "Task",
           consumerId: "tasks.consumer",
@@ -479,11 +479,11 @@ describe("Errors", () => {
         }),
       );
       expect(policyViolation.message).toContain(
-        'Task "tasks.secret" is denied by wiringAccessPolicy on resource "resources.boundary"',
+        'Task "tasks.secret" is denied by isolate policy on resource "resources.boundary"',
       );
 
       const policyOnlyViolation = capture(() =>
-        wiringAccessPolicyViolationError.throw({
+        isolateViolationError.throw({
           targetId: "tasks.secret",
           targetType: "Task",
           consumerId: "tasks.consumer",
@@ -494,7 +494,7 @@ describe("Errors", () => {
         }),
       );
       expect(policyOnlyViolation.message).toContain(
-        'not allowed by wiringAccessPolicy "only" rule on resource "resources.boundary"',
+        'not allowed by isolate "only" rule on resource "resources.boundary"',
       );
     });
   });

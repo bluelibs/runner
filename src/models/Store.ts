@@ -234,10 +234,7 @@ export class Store {
 
     this.registry.visibilityTracker.recordResource(root.id);
     this.registry.visibilityTracker.recordDefinitionTags(root.id, root.tags);
-    this.registry.visibilityTracker.recordWiringAccessPolicy(
-      root.id,
-      root.wiringAccessPolicy,
-    );
+    this.registry.visibilityTracker.recordIsolation(root.id, root.isolate);
 
     this.registry.computeRegistrationDeeply(root, config);
     this.registry.resources.set(root.id, this.root);

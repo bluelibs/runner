@@ -295,7 +295,7 @@ describe("VisibilityTracker", () => {
     });
   });
 
-  describe("wiringAccessPolicy", () => {
+  describe("isolate", () => {
     it("denies by id for resources in policy scope", () => {
       const owner = defineResource({
         id: "tracker.policy.owner",
@@ -312,7 +312,7 @@ describe("VisibilityTracker", () => {
       tracker.recordResource(owner.id);
       tracker.recordOwnership(owner.id, blockedTask);
       tracker.recordOwnership(owner.id, consumerTask);
-      tracker.recordWiringAccessPolicy(owner.id, {
+      tracker.recordIsolation(owner.id, {
         deny: [blockedTask.id],
       });
 
@@ -339,7 +339,7 @@ describe("VisibilityTracker", () => {
       tracker.recordOwnership(owner.id, blockedTask);
       tracker.recordOwnership(owner.id, consumerTask);
       tracker.recordDefinitionTags(blockedTask.id, [denyTag]);
-      tracker.recordWiringAccessPolicy(owner.id, {
+      tracker.recordIsolation(owner.id, {
         deny: [denyTag],
       });
 
@@ -363,14 +363,14 @@ describe("VisibilityTracker", () => {
       tracker.recordResource(owner.id);
       tracker.recordOwnership(owner.id, task);
       tracker.recordOwnership(owner.id, consumer);
-      tracker.recordWiringAccessPolicy(owner.id, { deny: [task] });
-      tracker.recordWiringAccessPolicy(owner.id, { deny: [] });
+      tracker.recordIsolation(owner.id, { deny: [task] });
+      tracker.recordIsolation(owner.id, { deny: [] });
 
       expect(tracker.isAccessible(task.id, consumer.id)).toBe(true);
     });
   });
 
-  describe("wiringAccessPolicy (only mode)", () => {
+  describe("isolate (only mode)", () => {
     it("allows a target that is in the only list", () => {
       const owner = defineResource({ id: "tracker.only.allow.owner" });
       const allowed = defineTask({
@@ -384,7 +384,7 @@ describe("VisibilityTracker", () => {
 
       tracker.recordResource(owner.id);
       tracker.recordOwnership(owner.id, consumer);
-      tracker.recordWiringAccessPolicy(owner.id, { only: [allowed.id] });
+      tracker.recordIsolation(owner.id, { only: [allowed.id] });
 
       expect(tracker.isAccessible(allowed.id, consumer.id)).toBe(true);
     });
@@ -403,7 +403,7 @@ describe("VisibilityTracker", () => {
       tracker.recordResource(owner.id);
       tracker.recordOwnership(owner.id, consumer);
       // Empty only list means no external deps allowed.
-      tracker.recordWiringAccessPolicy(owner.id, { only: [] });
+      tracker.recordIsolation(owner.id, { only: [] });
 
       expect(tracker.isAccessible(forbidden.id, consumer.id)).toBe(false);
     });
@@ -424,7 +424,7 @@ describe("VisibilityTracker", () => {
       tracker.recordOwnership(owner.id, internal);
       tracker.recordOwnership(owner.id, consumer);
       // Only list is empty, but internal items still pass.
-      tracker.recordWiringAccessPolicy(owner.id, { only: [] });
+      tracker.recordIsolation(owner.id, { only: [] });
 
       expect(tracker.isAccessible(internal.id, consumer.id)).toBe(true);
     });
@@ -444,7 +444,7 @@ describe("VisibilityTracker", () => {
       tracker.recordResource(owner.id);
       tracker.recordOwnership(owner.id, consumer);
       tracker.recordDefinitionTags(taggedTask.id, [allowedTag]);
-      tracker.recordWiringAccessPolicy(owner.id, { only: [allowedTag] });
+      tracker.recordIsolation(owner.id, { only: [allowedTag] });
 
       // The tag itself is allowed.
       expect(tracker.isAccessible(allowedTag.id, consumer.id)).toBe(true);
@@ -468,7 +468,7 @@ describe("VisibilityTracker", () => {
       tracker.recordResource(owner.id);
       tracker.recordOwnership(owner.id, consumer);
       tracker.recordDefinitionTags(blockedTask.id, [notAllowedTag]);
-      tracker.recordWiringAccessPolicy(owner.id, { only: [allowedTag] });
+      tracker.recordIsolation(owner.id, { only: [allowedTag] });
 
       expect(tracker.isAccessible(blockedTask.id, consumer.id)).toBe(false);
     });

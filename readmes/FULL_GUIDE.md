@@ -1456,7 +1456,7 @@ const billing = r
 
 #### Wiring Access Policy
 
-Use `.wiringAccessPolicy({ deny: [...] })` (blocklist) or `.wiringAccessPolicy({ only: [...] })` (boundary-scoped external allowlist) when a resource subtree must have restricted dependency access, even if visibility would otherwise allow it.
+Use `.isolate({ deny: [...] })` (blocklist) or `.isolate({ only: [...] })` (boundary-scoped external allowlist) when a resource subtree must have restricted dependency access, even if visibility would otherwise allow it.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -1471,7 +1471,7 @@ const internalOnlyTag = r.tag("billing.tags.internalOnly").build();
 const billing = r
   .resource("billing")
   .register([internalDb, internalOnlyTag])
-  .wiringAccessPolicy({
+  .isolate({
     deny: [internalDb, internalOnlyTag], // block by id or definition (tags match all carriers)
   })
   .build();
@@ -1485,7 +1485,7 @@ const allowedService = r
 const payments = r
   .resource("payments")
   .register([allowedService])
-  .wiringAccessPolicy({
+  .isolate({
     only: [allowedService], // nothing else from outside is reachable
   })
   .build();
@@ -1493,7 +1493,7 @@ const payments = r
 
 **Semantics:**
 
-- A resource uses **either** `deny` **or** `only` — providing both (even `deny: []` alongside `only`) throws `wiringAccessPolicyConflictError` at bootstrap.
+- A resource uses **either** `deny` **or** `only` — providing both (even `deny: []` alongside `only`) throws `isolateConflictError` at bootstrap.
 - `deny` / `only` accept string ids, definitions (tasks/resources/events/hooks/middleware/tags/errors/async contexts), or tag definitions; tags match any item carrying that tag.
 - **`only` automatically exempts internal items**: anything registered by the resource or its children is always accessible without being listed. `only: []` blocks all external dependencies while keeping internal ones reachable.
 - **`only` is checked at every ancestor boundary** for the consumer. For external dependencies, effective access behaves like the intersection of ancestor `only` lists (with the internal-subtree exemption still applied at each boundary).
@@ -1503,7 +1503,7 @@ const payments = r
   - Parent `only: [A]` + child `only: [A, B]` → only A accessible (parent blocks B).
   - Parent `only: [A]` + child `deny: [B]` → only A accessible and B additionally blocked.
   - Parent `only: [A1, A2, A3]` + child `only: [A1, A4]` + grandchild consumer -> external access collapses to `A1` only (assuming all are external to both parent and child boundaries).
-- Denied references fail during `run(app)` sanity checks with a `wiringAccessPolicyViolationError`.
+- Denied references fail during `run(app)` sanity checks with a `isolateViolationError`.
 
 #### Optional Dependencies
 
@@ -1937,7 +1937,7 @@ const logTaskMiddleware = r.middleware
   .build();
 ```
 
-> **Note:** `.everywhere()` means "auto-apply to all visible targets", not "bypass visibility". A middleware only applies where it is visible under `.exports()` and allowed by `.wiringAccessPolicy()`.
+> **Note:** `.everywhere()` means "auto-apply to all visible targets", not "bypass visibility". A middleware only applies where it is visible under `.exports()` and allowed by `.isolate()`.
 
 > **Tip:** If a global middleware depends on a task or resource, exclude that same target in the `.everywhere(...)` predicate (otherwise you can create a circular dependency that fails at `run(app)` bootstrap).
 
@@ -2234,13 +2234,43 @@ Imagine you want to automatically register all your HTTP routes without manually
 import { r } from "@bluelibs/runner";
 
 // Structured tags with configuration
-const httpTag = r.tag<{ method: string; path: string }>("http.route").build();
+const httpTag = r
+  .tag<{ method: string; path: string }>("http.route")
+  .for("tasks") // shorthand for the common "single target" case
+  .build();
 
 const getUserTask = r
   .task("app.tasks.getUser")
   .tags([httpTag.with({ method: "GET", path: "/users/:id" })])
   .run(async (input) => getUserFromDatabase(input.id))
   .build();
+```
+
+#### Scoped Tags (`.for(...)`)
+
+You can restrict where a tag is allowed to be attached:
+
+- Single target (most common): `.for("tasks")`
+- Multiple targets: `.for(["tasks", "resources"])`
+
+Accepted targets are:
+`"tasks"`, `"resources"`, `"events"`, `"hooks"`, `"taskMiddlewares"`, `"resourceMiddlewares"`, and `"errors"`.
+
+Why this is useful:
+
+- Better intent: a tag documents where it belongs
+- Type safety: `.tags([...])` rejects invalid usage in TypeScript for common literal-array calls
+- Fail-fast runtime checks: invalid usage still throws if someone bypasses TS with `any`/casts
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const routeTag = r
+  .tag<{ method: string; path: string }>("app.tags.route")
+  .for("tasks")
+  .build();
+
+const docsTag = r.tag("app.tags.docs").for(["tasks", "resources"]).build();
 ```
 
 #### Tag Composition Behavior
@@ -5984,7 +6014,7 @@ Repeated calls are part of the design, but not every method composes the same wa
 - **Replace (last call wins):** Scalar/single-value setters like `.run()`, `.init()`, `.schema()`, `.inputSchema()`, `.resultSchema()`, `.meta()`, `.order()`, `.parallel()`, `.context()`, `.dispose()`, `.httpCode()`, `.format()`, and `.remediation()`.
 - **Append by default, replace with `{ override: true }`:** List-like methods such as `.tags()`, `.middleware()`, and (resources) `.register()`, `.overrides()`, `.exports()`.
 - **Shallow-merge by default, replace with `{ override: true }`:** `.dependencies()`.
-- **Additive-only merge (no override flag):** Resource `.wiringAccessPolicy()` accumulates `deny`/`only` entries across calls.
+- **Additive-only merge (no override flag):** Resource `.isolate()` accumulates `deny`/`only` entries across calls.
 
 Two important exceptions:
 
@@ -7311,7 +7341,7 @@ const auditHook = r
 3. **Resource wrappers** — compose resources for reusable patterns
 4. **Event interception** — use `eventManager.intercept()` for audit/logging
 
-> **Note:** `.everywhere()` is visibility-gated (it does not bypass `.exports()` or `.wiringAccessPolicy()`).
+> **Note:** `.everywhere()` is visibility-gated (it does not bypass `.exports()` or `.isolate()`).
 
 **Creating reusable modules:**
 
@@ -8008,8 +8038,14 @@ const appError = r
   .error<{ code: number; message: string }>("app.errors.AppError")
   .build();
 
-// Tag
-const auditTag = r.tag("app.tags.audit").build();
+// Tag (scoped to one kind - shorthand)
+const auditTag = r.tag("app.tags.audit").for("tasks").build();
+
+// Tag (scoped to multiple kinds)
+const discoverableTag = r
+  .tag("app.tags.discoverable")
+  .for(["tasks", "resources"])
+  .build();
 
 // Async Context (Node-only)
 const requestContext = r
@@ -8201,7 +8237,7 @@ Quick rules:
 - No `.exports()` means everything public (backward compatible)
 - `.exports([])` means everything private outside that subtree
 - Visibility is enforced at `run(app)` bootstrap
-- `.everywhere()` middleware is auto-applied only to visible targets (respects `.exports()` and `.wiringAccessPolicy()`); private middleware stays inside its resource subtree
+- `.everywhere()` middleware is auto-applied only to visible targets (respects `.exports()` and `.isolate()`); private middleware stays inside its resource subtree
 - Duplicate ids still fail globally, even for private items
 
 ### Event Emission Options

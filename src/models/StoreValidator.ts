@@ -1,7 +1,7 @@
 import {
-  wiringAccessPolicyInvalidEntryError,
-  wiringAccessPolicyUnknownTargetError,
-  wiringAccessPolicyConflictError,
+  isolateInvalidEntryError,
+  isolateUnknownTargetError,
+  isolateConflictError,
   duplicateTagIdOnDefinitionError,
   duplicateRegistrationError,
   middlewareNotRegisteredError,
@@ -104,7 +104,7 @@ export class StoreValidator {
     this.ensureTagIdsAreUniquePerDefinition();
     this.ensureAllTagsUsedAreRegistered();
     this.ensureNoSelfTagDependencies();
-    this.ensureWiringAccessPoliciesAreValid();
+    this.ensureIsolationPoliciesAreValid();
 
     // Validate module boundary visibility after all items are registered
     this.registry.visibilityTracker.validateVisibility(this.registry);
@@ -174,9 +174,9 @@ export class StoreValidator {
     });
   }
 
-  private ensureWiringAccessPoliciesAreValid() {
+  private ensureIsolationPoliciesAreValid() {
     for (const { resource } of this.registry.resources.values()) {
-      const policy = resource.wiringAccessPolicy;
+      const policy = resource.isolate;
       if (!policy) {
         continue;
       }
@@ -186,14 +186,14 @@ export class StoreValidator {
       const onlyPresent = "only" in policy && policy.only !== undefined;
 
       if (denyPresent && !Array.isArray(policy.deny)) {
-        wiringAccessPolicyInvalidEntryError.throw({
+        isolateInvalidEntryError.throw({
           policyResourceId: resource.id,
           entry: policy.deny,
         });
       }
 
       if (onlyPresent && !Array.isArray(policy.only)) {
-        wiringAccessPolicyInvalidEntryError.throw({
+        isolateInvalidEntryError.throw({
           policyResourceId: resource.id,
           entry: policy.only,
         });
@@ -205,7 +205,7 @@ export class StoreValidator {
       // Conflict is determined by field presence, not emptiness.
       // deny: [] alongside only: [A] is still an ambiguous declaration.
       if (denyPresent && onlyPresent) {
-        wiringAccessPolicyConflictError.throw({
+        isolateConflictError.throw({
           policyResourceId: resource.id,
         });
       }
@@ -213,14 +213,14 @@ export class StoreValidator {
       const entries = hasDeny ? policy.deny! : hasOnly ? policy.only! : [];
 
       for (const entry of entries) {
-        const resolvedId = this.resolveWiringAccessPolicyTargetId(entry);
+        const resolvedId = this.resolveIsolationTargetId(entry);
         if (!resolvedId) {
-          wiringAccessPolicyInvalidEntryError.throw({
+          isolateInvalidEntryError.throw({
             policyResourceId: resource.id,
             entry,
           });
         } else if (!this.hasRegisteredId(resolvedId)) {
-          wiringAccessPolicyUnknownTargetError.throw({
+          isolateUnknownTargetError.throw({
             policyResourceId: resource.id,
             targetId: resolvedId,
           });
@@ -229,7 +229,7 @@ export class StoreValidator {
     }
   }
 
-  private resolveWiringAccessPolicyTargetId(entry: unknown): string | null {
+  private resolveIsolationTargetId(entry: unknown): string | null {
     if (typeof entry === "string") {
       return entry.length > 0 ? entry : null;
     }

@@ -255,7 +255,7 @@ describe("resource builder", () => {
     expect(res.throws).toEqual([err.id, "tests.builder.resource.throws.other"]);
   });
 
-  it("wiringAccessPolicy is additive across repeated calls", () => {
+  it("isolate is additive across repeated calls", () => {
     const denyTaskA = r
       .task("tests.builder.policy.task.a")
       .run(async () => 1)
@@ -267,16 +267,16 @@ describe("resource builder", () => {
 
     const resourceWithPolicy = r
       .resource("tests.builder.policy.resource")
-      .wiringAccessPolicy({ deny: [denyTaskA] })
-      .wiringAccessPolicy({ deny: [denyTaskB.id] })
+      .isolate({ deny: [denyTaskA] })
+      .isolate({ deny: [denyTaskB.id] })
       .build();
 
-    expect(resourceWithPolicy.wiringAccessPolicy).toEqual({
+    expect(resourceWithPolicy.isolate).toEqual({
       deny: [denyTaskA, denyTaskB.id],
     });
   });
 
-  it("wiringAccessPolicy preserves and merges only rules across calls", () => {
+  it("isolate preserves and merges only rules across calls", () => {
     const onlyTag = r.tag("tests.builder.policy.only.tag").build();
     const onlyTask = r
       .task("tests.builder.policy.only.task")
@@ -289,14 +289,14 @@ describe("resource builder", () => {
 
     const resourceWithPolicy = r
       .resource("tests.builder.policy.only.resource")
-      .wiringAccessPolicy({ only: [onlyTag] })
-      .wiringAccessPolicy({})
-      .wiringAccessPolicy({ only: [onlyTask.id] })
-      .wiringAccessPolicy({ deny: [denyTask.id] })
-      .wiringAccessPolicy({})
+      .isolate({ only: [onlyTag] })
+      .isolate({})
+      .isolate({ only: [onlyTask.id] })
+      .isolate({ deny: [denyTask.id] })
+      .isolate({})
       .build();
 
-    expect(resourceWithPolicy.wiringAccessPolicy).toEqual({
+    expect(resourceWithPolicy.isolate).toEqual({
       deny: [denyTask.id],
       only: [onlyTag, onlyTask.id],
     });

@@ -225,7 +225,7 @@ Repeated calls are part of the design, but not every method composes the same wa
 - **Replace (last call wins):** Scalar/single-value setters like `.run()`, `.init()`, `.schema()`, `.inputSchema()`, `.resultSchema()`, `.meta()`, `.order()`, `.parallel()`, `.context()`, `.dispose()`, `.httpCode()`, `.format()`, and `.remediation()`.
 - **Append by default, replace with `{ override: true }`:** List-like methods such as `.tags()`, `.middleware()`, and (resources) `.register()`, `.overrides()`, `.exports()`.
 - **Shallow-merge by default, replace with `{ override: true }`:** `.dependencies()`.
-- **Additive-only merge (no override flag):** Resource `.wiringAccessPolicy()` accumulates `deny`/`only` entries across calls.
+- **Additive-only merge (no override flag):** Resource `.isolate()` accumulates `deny`/`only` entries across calls.
 
 Two important exceptions:
 

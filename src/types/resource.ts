@@ -61,19 +61,19 @@ export interface ResourceForkInfo {
   readonly fromId: string;
 }
 
-export type WiringAccessPolicyTarget = RegisterableItems | string;
+export type IsolationTarget = RegisterableItems | string;
 
-export interface WiringAccessPolicy {
+export interface IsolationPolicy {
   /**
    * Denied targets for this resource boundary.
    * Denials are additive across nested resources.
    */
-  deny?: ReadonlyArray<WiringAccessPolicyTarget>;
+  deny?: ReadonlyArray<IsolationTarget>;
   /**
    * Allowed targets for this resource boundary.
    * When provided, only these targets (and internal items) can be referenced.
    */
-  only?: ReadonlyArray<WiringAccessPolicyTarget>;
+  only?: ReadonlyArray<IsolationTarget>;
 }
 
 // Helper to detect `any` so we can treat it as "unspecified"
@@ -182,10 +182,13 @@ export interface IResourceDefinition<
    */
   exports?: Array<RegisterableItems>;
   /**
-   * Declares wiring access restrictions for this resource and its subtree.
-   * Denials are additive across nested resources and cannot be relaxed by children.
+   * Isolates this resource boundary, restricting which external definitions can
+   * be referenced by this resource and its subtree.
+   *
+   * Why: this provides a fail-fast dependency boundary that prevents accidental
+   * cross-module wiring, even when visibility rules would otherwise allow it.
    */
-  wiringAccessPolicy?: WiringAccessPolicy;
+  isolate?: IsolationPolicy;
   /**
    * This is optional and used from an index resource to get the correct caller.
    * This is the reason we allow it here as well.
@@ -273,9 +276,9 @@ export interface IResource<
    */
   exports?: Array<RegisterableItems>;
   /**
-   * Wiring access restrictions for this resource and its subtree.
+   * Wiring isolation policy for this resource and its subtree.
    */
-  wiringAccessPolicy?: WiringAccessPolicy;
+  isolate?: IsolationPolicy;
   /** Return an optional dependency wrapper for this resource. */
   optional: () => IOptionalDependency<
     IResource<

@@ -266,22 +266,22 @@ export const tagTargetNotAllowedError = error<
   )
   .build();
 
-export const wiringAccessPolicyConflictError = error<
+export const isolateConflictError = error<
   {
     policyResourceId: string;
   } & DefaultErrorType
 >("runner.errors.wiringAccessPolicyConflict")
   .format(
     ({ policyResourceId }) =>
-      `Resource "${policyResourceId}" declares both "deny" and "only" in its wiringAccessPolicy.`,
+      `Resource "${policyResourceId}" declares both "deny" and "only" in its isolate policy.`,
   )
   .remediation(
     ({ policyResourceId }) =>
-      `A wiringAccessPolicy can have either "deny" or "only", but not both. Review "${policyResourceId}" and remove one of them.`,
+      `An isolate policy can have either "deny" or "only", but not both. Review "${policyResourceId}" and remove one of them.`,
   )
   .build();
 
-export const wiringAccessPolicyInvalidEntryError = error<
+export const isolateInvalidEntryError = error<
   {
     policyResourceId: string;
     entry: unknown;
@@ -289,15 +289,15 @@ export const wiringAccessPolicyInvalidEntryError = error<
 >("runner.errors.wiringAccessPolicyInvalidEntry")
   .format(
     ({ policyResourceId }) =>
-      `Resource "${policyResourceId}" declares an invalid wiringAccessPolicy entry.`,
+      `Resource "${policyResourceId}" declares an invalid isolate policy entry.`,
   )
   .remediation(
     ({ policyResourceId }) =>
-      `Use .wiringAccessPolicy({ deny: [...] }) or .wiringAccessPolicy({ only: [...] }) with string ids or Runner definitions only. Review "${policyResourceId}" and remove malformed entries.`,
+      `Use .isolate({ deny: [...] }) or .isolate({ only: [...] }) with string ids or Runner definitions only. Review "${policyResourceId}" and remove malformed entries.`,
   )
   .build();
 
-export const wiringAccessPolicyUnknownTargetError = error<
+export const isolateUnknownTargetError = error<
   {
     policyResourceId: string;
     targetId: string;
@@ -305,7 +305,7 @@ export const wiringAccessPolicyUnknownTargetError = error<
 >("runner.errors.wiringAccessPolicyUnknownTarget")
   .format(
     ({ policyResourceId, targetId }) =>
-      `Resource "${policyResourceId}" references unknown target "${targetId}" in wiringAccessPolicy.`,
+      `Resource "${policyResourceId}" references unknown target "${targetId}" in its isolate policy.`,
   )
   .remediation(
     ({ targetId }) =>
@@ -313,7 +313,7 @@ export const wiringAccessPolicyUnknownTargetError = error<
   )
   .build();
 
-export const wiringAccessPolicyViolationError = error<
+export const isolateViolationError = error<
   {
     targetId: string;
     targetType: string;
@@ -334,8 +334,8 @@ export const wiringAccessPolicyViolationError = error<
       matchedRuleType,
     }) =>
       matchedRuleType === "only"
-        ? `${targetType} "${targetId}" is not allowed by wiringAccessPolicy "only" rule on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`
-        : `${targetType} "${targetId}" is denied by wiringAccessPolicy on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`,
+        ? `${targetType} "${targetId}" is not allowed by isolate "only" rule on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`
+        : `${targetType} "${targetId}" is denied by isolate policy on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`,
   )
   .remediation(({ policyResourceId, matchedRuleType, matchedRuleId }) => {
     if (matchedRuleType === "only") {

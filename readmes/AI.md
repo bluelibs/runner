@@ -62,7 +62,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 - `r.resource<Config>(id)` / `r.task<Input>(id)` seed typing before explicit schema; config-only resources can omit `.init()`.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` clones a resource under a new id with a separate runtime instance. `"drop"` clears nested items; `"deep"` deep-forks the resource tree and remaps dependencies.
 - `.exports([...])` narrows visibility: omit = everything public; `.exports([])` = nothing public (private subtree, including `.everywhere()` scope).
-- `.wiringAccessPolicy({ deny: [...] })` blocks listed ids/tags; `{ only: [...] }` is a boundary-scoped external allowlist (internal subtree items remain reachable). Policies are additive across ancestors (effective external access is the intersection of ancestor `only` lists); Runner fails fast on violations at bootstrap.
+- `.isolate({ deny: [...] })` blocks listed ids/tags; `{ only: [...] }` is a boundary-scoped external allowlist (internal subtree items remain reachable). Policies are additive across ancestors (effective external access is the intersection of ancestor `only` lists); Runner fails fast on violations at bootstrap.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
 
@@ -182,7 +182,7 @@ const cacheResources = r.middleware
 
 Attach middleware using `.middleware([auditTasks])` on the definition that owns it, and register the middleware alongside the target resource or task at the root.
 
-- `.everywhere(true | fn)` marks middleware as auto-applied to visible targets (still gated by `.exports()` / `.wiringAccessPolicy()`).
+- `.everywhere(true | fn)` marks middleware as auto-applied to visible targets (still gated by `.exports()` / `.isolate()`).
 - Contract middleware: middleware can declare `Config`, `Input`, `Output` generics; tasks using it must conform (contracts intersect across `.middleware([...])` and `.tags([...])`). Collisions surface as `InputContractViolationError` / `OutputContractViolationError` in TypeScript; if you add `.inputSchema()`, ensure the schema's inferred type includes the contract shape.
 - Entry generic convenience is available for middleware too: `r.middleware.task<Input>(id)` seeds task input contract typing and `r.middleware.resource<Config>(id)` seeds middleware config typing. The explicit multi-generic form (`<Config, Input, Output>`) remains available.
 

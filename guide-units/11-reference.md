@@ -61,8 +61,14 @@ const appError = r
   .error<{ code: number; message: string }>("app.errors.AppError")
   .build();
 
-// Tag
-const auditTag = r.tag("app.tags.audit").build();
+// Tag (scoped to one kind - shorthand)
+const auditTag = r.tag("app.tags.audit").for("tasks").build();
+
+// Tag (scoped to multiple kinds)
+const discoverableTag = r
+  .tag("app.tags.discoverable")
+  .for(["tasks", "resources"])
+  .build();
 
 // Async Context (Node-only)
 const requestContext = r
@@ -254,7 +260,7 @@ Quick rules:
 - No `.exports()` means everything public (backward compatible)
 - `.exports([])` means everything private outside that subtree
 - Visibility is enforced at `run(app)` bootstrap
-- `.everywhere()` middleware is auto-applied only to visible targets (respects `.exports()` and `.wiringAccessPolicy()`); private middleware stays inside its resource subtree
+- `.everywhere()` middleware is auto-applied only to visible targets (respects `.exports()` and `.isolate()`); private middleware stays inside its resource subtree
 - Duplicate ids still fail globally, even for private items
 
 ### Event Emission Options

@@ -29,7 +29,7 @@ async function expectRunnerErrorId(
   }
 }
 
-describe("run.wiringAccessPolicy", () => {
+describe("run.isolate", () => {
   it("fails when a denied id is used as a dependency", async () => {
     const deniedTask = defineTask({
       id: "policy.id.denied",
@@ -45,7 +45,7 @@ describe("run.wiringAccessPolicy", () => {
     const guarded = defineResource({
       id: "policy.id.resource",
       register: [deniedTask, consumer],
-      wiringAccessPolicy: {
+      isolate: {
         deny: [deniedTask.id],
       },
     });
@@ -75,7 +75,7 @@ describe("run.wiringAccessPolicy", () => {
     const child = defineResource({
       id: "policy.compound.child",
       register: [consumer],
-      wiringAccessPolicy: {
+      isolate: {
         deny: [consumer.id],
       },
     });
@@ -83,7 +83,7 @@ describe("run.wiringAccessPolicy", () => {
     const parent = defineResource({
       id: "policy.compound.parent",
       register: [deniedTask, child],
-      wiringAccessPolicy: {
+      isolate: {
         deny: [deniedTask],
       },
     });
@@ -111,7 +111,7 @@ describe("run.wiringAccessPolicy", () => {
     const guarded = defineResource({
       id: "policy.hook.resource",
       register: [deniedEvent, hook],
-      wiringAccessPolicy: {
+      isolate: {
         deny: [deniedEvent],
       },
     });
@@ -139,7 +139,7 @@ describe("run.wiringAccessPolicy", () => {
     const guarded = defineResource({
       id: "policy.middleware.resource",
       register: [deniedMiddleware, task],
-      wiringAccessPolicy: {
+      isolate: {
         deny: [deniedMiddleware],
       },
     });
@@ -176,7 +176,7 @@ describe("run.wiringAccessPolicy", () => {
     const guarded = defineResource({
       id: "policy.tag.resource",
       register: [deniedTag, deniedTask, deniedTaskConsumer, deniedTagConsumer],
-      wiringAccessPolicy: {
+      isolate: {
         deny: [deniedTag],
       },
     });
@@ -215,7 +215,7 @@ describe("run.wiringAccessPolicy", () => {
     const guarded = defineResource({
       id: "policy.filter.resource",
       register: [denyTag, queryTag, hiddenTask, visibleTask, inspect],
-      wiringAccessPolicy: {
+      isolate: {
         deny: [denyTag],
       },
     });
@@ -235,7 +235,7 @@ describe("run.wiringAccessPolicy", () => {
 
     const guarded = defineResource({
       id: "policy.unknown.resource",
-      wiringAccessPolicy: {
+      isolate: {
         deny: ["policy.unknown.missing"],
       },
     });
@@ -253,7 +253,7 @@ describe("run.wiringAccessPolicy", () => {
   it("fails fast when a deny entry is invalid", async () => {
     const guarded = defineResource({
       id: "policy.invalid.resource",
-      wiringAccessPolicy: {
+      isolate: {
         deny: [{} as any],
       },
     });
@@ -269,7 +269,7 @@ describe("run.wiringAccessPolicy", () => {
   it("fails fast when deny is not an array", async () => {
     const guarded = defineResource({
       id: "policy.invalid.shape.resource",
-      wiringAccessPolicy: {
+      isolate: {
         deny: "not-an-array" as any,
       },
     });
@@ -285,7 +285,7 @@ describe("run.wiringAccessPolicy", () => {
   it("fails fast when deny contains a non-object primitive", async () => {
     const guarded = defineResource({
       id: "policy.invalid.primitive.resource",
-      wiringAccessPolicy: {
+      isolate: {
         deny: [123 as any],
       },
     });
@@ -301,7 +301,7 @@ describe("run.wiringAccessPolicy", () => {
   it("fails fast when deny contains an empty string id", async () => {
     const guarded = defineResource({
       id: "policy.invalid.empty-string.resource",
-      wiringAccessPolicy: {
+      isolate: {
         deny: [""],
       },
     });
@@ -317,7 +317,7 @@ describe("run.wiringAccessPolicy", () => {
   it("fails fast when deny object id is not a non-empty string", async () => {
     const guarded = defineResource({
       id: "policy.invalid.object-id.resource",
-      wiringAccessPolicy: {
+      isolate: {
         deny: [{ id: 123 } as any],
       },
     });
@@ -345,7 +345,7 @@ describe("run.wiringAccessPolicy", () => {
     const guarded = defineResource({
       id: "policy.with.resource",
       register: [deniedResource.with({ label: "x" }), consumer],
-      wiringAccessPolicy: {
+      isolate: {
         deny: [deniedResource.with({ label: "y" })],
       },
     });
@@ -361,7 +361,7 @@ describe("run.wiringAccessPolicy", () => {
   it("ignores internal __runner dependency keys for policy enforcement", async () => {
     const app = defineResource({
       id: "policy.internal.app",
-      wiringAccessPolicy: {
+      isolate: {
         deny: [globalResources.cron.id],
       },
       init: async () => "ok",
@@ -373,7 +373,7 @@ describe("run.wiringAccessPolicy", () => {
   });
 });
 
-describe("run.wiringAccessPolicy (only mode)", () => {
+describe("run.isolate (only mode)", () => {
   it("allows a dependency that is in the only list", async () => {
     const allowed = defineTask({
       id: "only.allowed.task",
@@ -389,7 +389,7 @@ describe("run.wiringAccessPolicy (only mode)", () => {
     const guarded = defineResource({
       id: "only.allowed.resource",
       register: [allowed, consumer],
-      wiringAccessPolicy: { only: [allowed] },
+      isolate: { only: [allowed] },
     });
 
     const app = defineResource({ id: "only.allowed.app", register: [guarded] });
@@ -412,7 +412,7 @@ describe("run.wiringAccessPolicy (only mode)", () => {
     const guarded = defineResource({
       id: "only.blocked.resource",
       register: [consumer],
-      wiringAccessPolicy: { only: [] },
+      isolate: { only: [] },
     });
 
     const app = defineResource({
@@ -439,7 +439,7 @@ describe("run.wiringAccessPolicy (only mode)", () => {
       id: "only.internal.resource",
       // internal and consumer are registered here — they are internal and always allowed.
       register: [internal, consumer],
-      wiringAccessPolicy: { only: [] },
+      isolate: { only: [] },
     });
 
     const app = defineResource({
@@ -476,7 +476,7 @@ describe("run.wiringAccessPolicy (only mode)", () => {
       id: "only.tag.resource",
       register: [safeTask, consumer],
       // only tasks tagged with safeTag are allowed externally
-      wiringAccessPolicy: { only: [safeTag] },
+      isolate: { only: [safeTag] },
     });
 
     const app = defineResource({
@@ -493,7 +493,7 @@ describe("run.wiringAccessPolicy (only mode)", () => {
     const guarded = defineResource({
       id: "conflict.resource",
       register: [someTask],
-      wiringAccessPolicy: {
+      isolate: {
         deny: [someTask.id],
         only: [someTask.id],
       } as any,
@@ -513,7 +513,7 @@ describe("run.wiringAccessPolicy (only mode)", () => {
       id: "conflict.empty-deny.resource",
       register: [someTask],
       // deny: [] is a no-op semantically, but mixing both fields is still ambiguous.
-      wiringAccessPolicy: {
+      isolate: {
         deny: [],
         only: [someTask.id],
       } as any,
@@ -529,7 +529,7 @@ describe("run.wiringAccessPolicy (only mode)", () => {
   it("fails fast when only contains an unknown target", async () => {
     const guarded = defineResource({
       id: "only.unknown.resource",
-      wiringAccessPolicy: { only: ["does.not.exist"] },
+      isolate: { only: ["does.not.exist"] },
     });
 
     const app = defineResource({ id: "only.unknown.app", register: [guarded] });
@@ -539,7 +539,7 @@ describe("run.wiringAccessPolicy (only mode)", () => {
   it("fails fast when only contains an invalid entry", async () => {
     const guarded = defineResource({
       id: "only.invalid.resource",
-      wiringAccessPolicy: { only: [123 as any] },
+      isolate: { only: [123 as any] },
     });
 
     const app = defineResource({ id: "only.invalid.app", register: [guarded] });
@@ -549,7 +549,7 @@ describe("run.wiringAccessPolicy (only mode)", () => {
   it("fails fast when only is not an array", async () => {
     const guarded = defineResource({
       id: "only.invalid-shape.resource",
-      wiringAccessPolicy: { only: "not-an-array" as any },
+      isolate: { only: "not-an-array" as any },
     });
 
     const app = defineResource({
@@ -584,7 +584,7 @@ describe("run.wiringAccessPolicy (only mode)", () => {
     const guarded = defineResource({
       id: "only.child.guarded",
       register: [child],
-      wiringAccessPolicy: { only: [allowed] },
+      isolate: { only: [allowed] },
     });
 
     const app = defineResource({

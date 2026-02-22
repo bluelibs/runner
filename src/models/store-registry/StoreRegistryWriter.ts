@@ -308,10 +308,7 @@ export class StoreRegistryWriter {
     });
     this.validator.trackRegisteredId(prepared.id);
     this.visibilityTracker.recordResource(prepared.id);
-    this.visibilityTracker.recordWiringAccessPolicy(
-      prepared.id,
-      prepared.wiringAccessPolicy,
-    );
+    this.visibilityTracker.recordIsolation(prepared.id, prepared.isolate);
     const tags = normalizeTags(prepared.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Resources,
@@ -368,10 +365,7 @@ export class StoreRegistryWriter {
     });
     this.validator.trackRegisteredId(prepared.id);
     this.visibilityTracker.recordResource(prepared.id);
-    this.visibilityTracker.recordWiringAccessPolicy(
-      prepared.id,
-      prepared.wiringAccessPolicy,
-    );
+    this.visibilityTracker.recordIsolation(prepared.id, prepared.isolate);
     const tags = normalizeTags(prepared.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Resources,

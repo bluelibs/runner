@@ -5,12 +5,12 @@ import type {
   IResourceDefinition,
   IResourceMeta,
   IValidationSchema,
+  IsolationPolicy,
   OverridableElements,
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   ResourceTagType,
-  WiringAccessPolicy,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 import { normalizeThrows } from "../../../tools/throws";
@@ -451,18 +451,18 @@ function makeResourceOverrideBuilder<
         TMiddleware
       >(base, next);
     },
-    wiringAccessPolicy(policy: WiringAccessPolicy) {
+    isolate(policy: IsolationPolicy) {
       // Mirror the fluent builder: deny merges with deny, only merges with only.
-      const existingDeny = state.wiringAccessPolicy?.deny ?? [];
-      const existingOnly = state.wiringAccessPolicy?.only ?? [];
-      const merged: WiringAccessPolicy = {};
+      const existingDeny = state.isolate?.deny ?? [];
+      const existingOnly = state.isolate?.only ?? [];
+      const merged: IsolationPolicy = {};
       if (existingDeny.length > 0 || policy.deny) {
         merged.deny = [...existingDeny, ...(policy.deny ?? [])];
       }
       if (existingOnly.length > 0 || policy.only) {
         merged.only = [...existingOnly, ...(policy.only ?? [])];
       }
-      const next = cloneResourceState(state, { wiringAccessPolicy: merged });
+      const next = cloneResourceState(state, { isolate: merged });
       return makeResourceOverrideBuilder<
         TConfig,
         TValue,
@@ -531,7 +531,7 @@ export function resourceOverrideBuilder<
     overrides: base.overrides,
     throws: base.throws,
     exports: base.exports,
-    wiringAccessPolicy: base.wiringAccessPolicy,
+    isolate: base.isolate,
   });
 
   return makeResourceOverrideBuilder(base, initial);
