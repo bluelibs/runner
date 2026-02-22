@@ -321,9 +321,10 @@ describe("Caching System", () => {
 
     it("should respect TTL configuration", async () => {
       let callCount = 0;
+      const ttlMs = 25;
       const testTask = defineTask({
         id: "ttl.task",
-        middleware: [cacheMiddleware.with({ ttl: 1, ttlAutopurge: true })], // Very short TTL
+        middleware: [cacheMiddleware.with({ ttl: ttlMs, ttlAutopurge: true })],
         run: async () => {
           callCount++;
           return `result-${callCount}`;
@@ -338,8 +339,8 @@ describe("Caching System", () => {
           const firstRun = await testTask();
           const secondRun = await testTask(); // Should be cached
 
-          // Allow TTL to expire with minimal real delay.
-          await new Promise((resolve) => setTimeout(resolve, 5));
+          // Use a buffer above TTL so coverage/instrumentation overhead does not make this flaky.
+          await new Promise((resolve) => setTimeout(resolve, ttlMs + 20));
 
           const thirdRun = await testTask(); // Should be a new result
 
