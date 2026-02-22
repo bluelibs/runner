@@ -173,7 +173,9 @@ export class RunResult<V> implements IRuntime<V> {
     targetType: "Task" | "Event" | "Resource",
   ): void {
     const rootId = this.store.root?.resource.id;
-    // Root not yet wired (early access during bootstrap) — let other guards handle it
+    // Root not yet wired in unit-test mocks or rare early-bootstrap injection
+    // via globals.resources.runtime — skip the check; other guards apply.
+    /* istanbul ignore next */
     if (!rootId) return;
 
     const { accessible, exportedIds } = this.store.getRootAccessInfo(
