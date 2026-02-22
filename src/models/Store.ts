@@ -132,6 +132,27 @@ export class Store {
   }
 
   /**
+   * Returns the owner resource id that directly registered the given item.
+   */
+  public getOwnerResourceId(itemId: string): string | undefined {
+    return this.registry.visibilityTracker.getOwnerResourceId(itemId);
+  }
+
+  /**
+   * Checks whether an item belongs to a resource registration subtree (or is
+   * the resource itself).
+   */
+  public isItemWithinResourceSubtree(
+    resourceId: string,
+    itemId: string,
+  ): boolean {
+    return this.registry.visibilityTracker.isWithinResourceSubtree(
+      resourceId,
+      itemId,
+    );
+  }
+
+  /**
    * Returns accessibility info for a target id against the root's export surface.
    * Used by the runtime API (runTask, emitEvent, getResourceValue, etc.) to enforce
    * that callers can only reach items the root resource has explicitly exported.
@@ -407,7 +428,7 @@ export class Store {
 
   /**
    * Returns all error ids declared across a task or resource and its full
-   * dependency chain: own throws, middleware throws (local + everywhere),
+   * dependency chain: own throws, middleware throws (local + auto-applied),
    * resource dependency throws, and — for tasks — hook throws on events
    * the task can emit. Deduplicated.
    */

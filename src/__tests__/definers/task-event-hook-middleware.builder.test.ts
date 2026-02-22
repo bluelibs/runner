@@ -771,14 +771,14 @@ describe("task/event/hook/middleware builders", () => {
     await rr.dispose();
   });
 
-  it("task middleware builder supports configSchema, tags, meta, everywhere", () => {
+  it("task middleware builder supports configSchema, tags, meta, applyTo", () => {
     const tmw = r.middleware
       .task("tests.builder.tm.full")
       .dependencies({})
       .configSchema<{ retry: number }>({ parse: (x: any) => x })
       .tags([])
       .meta({ title: "TM" } as unknown as any)
-      .everywhere(() => true)
+      .applyTo("where-visible", () => true)
       .run(async ({ next, task }) => next(task.input))
       .build();
     expect(
@@ -786,16 +786,17 @@ describe("task/event/hook/middleware builders", () => {
         definitions.symbolTaskMiddleware
       ],
     ).toBe(true);
+    expect(tmw.applyTo?.scope).toBe("where-visible");
   });
 
-  it("resource middleware builder supports configSchema, tags, meta, everywhere", () => {
+  it("resource middleware builder supports configSchema, tags, meta, applyTo", () => {
     const rmw = r.middleware
       .resource("tests.builder.rm.full")
       .dependencies({})
       .configSchema<{ timeout: number }>({ parse: (x: any) => x })
       .tags([])
       .meta({ title: "RM" } as unknown as any)
-      .everywhere(() => true)
+      .applyTo("subtree", () => true)
       .run(async ({ next, resource }) => next(resource.config))
       .build();
     expect(
@@ -803,6 +804,54 @@ describe("task/event/hook/middleware builders", () => {
         definitions.symbolResourceMiddleware
       ],
     ).toBe(true);
+    expect(rmw.applyTo?.scope).toBe("subtree");
+  });
+
+  it("task middleware builder keeps everywhere as a deprecated alias", () => {
+    const tmw = r.middleware
+      .task("tests.builder.tm.everywhere.alias")
+      .everywhere(() => true)
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+
+    expect(typeof tmw.everywhere).toBe("function");
+    expect(tmw.applyTo?.scope).toBe("where-visible");
+  });
+
+  it("task middleware builder supports deprecated everywhere(false)", () => {
+    const tmw = r.middleware
+      .task("tests.builder.tm.everywhere.false")
+      .everywhere(false)
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+
+    expect(tmw.everywhere).toBe(false);
+    expect(tmw.applyTo).toBeUndefined();
+  });
+
+  it("resource middleware builder supports deprecated everywhere(false)", () => {
+    const rmw = r.middleware
+      .resource("tests.builder.rm.everywhere.false")
+      .everywhere(false)
+      .run(async ({ next }) => next())
+      .build();
+
+    expect(rmw.everywhere).toBe(false);
+    expect(rmw.applyTo).toBeUndefined();
+  });
+
+  it("resource middleware builder supports deprecated everywhere(true)", () => {
+    const rmw = r.middleware
+      .resource("tests.builder.rm.everywhere.true")
+      .everywhere(true)
+      .run(async ({ next }) => next())
+      .build();
+
+    expect(rmw.everywhere).toBe(true);
+    expect(rmw.applyTo).toEqual({
+      scope: "where-visible",
+      when: undefined,
+    });
   });
 
   describe("hook builder validation", () => {

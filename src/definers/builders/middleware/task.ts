@@ -94,8 +94,26 @@ export function makeTaskMiddlewareBuilder<
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
     },
 
+    applyTo(scope, when) {
+      const next = cloneTask(state, {
+        applyTo: {
+          scope,
+          when,
+        },
+        everywhere: undefined,
+      });
+      return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
+    },
+
+    /** @deprecated Use applyTo(scope, when?) instead. */
     everywhere(flag) {
-      const next = cloneTask(state, { everywhere: flag });
+      const next =
+        flag === false
+          ? cloneTask(state, { everywhere: false, applyTo: undefined })
+          : cloneTask(state, {
+              everywhere: flag,
+              applyTo: undefined,
+            });
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
     },
 

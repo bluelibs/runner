@@ -75,11 +75,11 @@ describe("getAllThrows()", () => {
     });
   });
 
-  it("collects throws from everywhere task middleware", async () => {
+  it("collects throws from applyTo where-visible task middleware", async () => {
     const globalMw = r.middleware
       .task("tests.getAllThrows.tmwEverywhere")
       .throws([errD])
-      .everywhere(true)
+      .applyTo("where-visible")
       .run(async ({ next, task }) => next(task.input))
       .build();
 
@@ -233,11 +233,11 @@ describe("getAllThrows()", () => {
     });
   });
 
-  it("collects throws from everywhere resource middleware", async () => {
+  it("collects throws from applyTo where-visible resource middleware", async () => {
     const globalRmw = r.middleware
       .resource("tests.getAllThrows.rmwEverywhere")
       .throws([errD])
-      .everywhere(true)
+      .applyTo("where-visible")
       .run(async ({ next }) => next())
       .build();
 
@@ -344,11 +344,13 @@ describe("getAllThrows()", () => {
 
   // ── Everywhere middleware as function ──────────────────────────────────
 
-  it("collects throws from everywhere task middleware (function form)", async () => {
+  it("collects throws from applyTo where-visible task middleware (function form)", async () => {
     const funcMw = r.middleware
       .task("tests.getAllThrows.tmwEverywhereFunc")
       .throws([errE])
-      .everywhere((task) => task.id.startsWith("tests.getAllThrows.funcTarget"))
+      .applyTo("where-visible", (task) =>
+        task.id.startsWith("tests.getAllThrows.funcTarget"),
+      )
       .run(async ({ next, task }) => next(task.input))
       .build();
 
@@ -377,11 +379,11 @@ describe("getAllThrows()", () => {
     });
   });
 
-  it("collects throws from everywhere resource middleware (function form)", async () => {
+  it("collects throws from applyTo where-visible resource middleware (function form)", async () => {
     const funcRmw = r.middleware
       .resource("tests.getAllThrows.rmwEverywhereFunc")
       .throws([errF])
-      .everywhere((res) => res.id.includes("funcResTarget"))
+      .applyTo("where-visible", (res) => res.id.includes("funcResTarget"))
       .run(async ({ next }) => next())
       .build();
 
@@ -400,6 +402,81 @@ describe("getAllThrows()", () => {
       const result = store.getAllThrows(res);
       expect(result).toContain(errA.id);
       expect(result).toContain(errF.id);
+    });
+  });
+
+  it("collects throws from applyTo subtree middleware only for owner subtree", async () => {
+    const subtreeMw = r.middleware
+      .task("tests.getAllThrows.subtreeMw")
+      .throws([errD])
+      .applyTo("subtree")
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+
+    const scopedTask = r
+      .task("tests.getAllThrows.subtreeScopedTask")
+      .run(async () => "ok")
+      .build();
+
+    const externalTask = r
+      .task("tests.getAllThrows.subtreeExternalTask")
+      .run(async () => "ok")
+      .build();
+
+    const scopedResource = r
+      .resource("tests.getAllThrows.subtreeResource")
+      .register([subtreeMw, scopedTask])
+      .build();
+
+    const app = r
+      .resource("tests.getAllThrows.subtreeApp")
+      .register([scopedResource, externalTask])
+      .build();
+
+    await withRuntime(app, (store) => {
+      const inside = store.getAllThrows(scopedTask);
+      expect(inside).toContain(errD.id);
+
+      const outside = store.getAllThrows(externalTask);
+      expect(outside).not.toContain(errD.id);
+    });
+  });
+
+  it("collects throws from applyTo subtree resource middleware for owner subtree", async () => {
+    const subtreeRmw = r.middleware
+      .resource("tests.getAllThrows.subtreeRmw")
+      .throws([errE])
+      .applyTo("subtree")
+      .run(async ({ next }) => next())
+      .build();
+
+    const scopedResource = r
+      .resource("tests.getAllThrows.subtreeScopedResource")
+      .register([subtreeRmw])
+      .init(async () => "scoped")
+      .build();
+
+    const nestedResource = r
+      .resource("tests.getAllThrows.subtreeNestedResource")
+      .init(async () => "nested")
+      .build();
+
+    const externalResource = r
+      .resource("tests.getAllThrows.subtreeExternalResource")
+      .init(async () => "external")
+      .build();
+
+    const app = r
+      .resource("tests.getAllThrows.subtreeResourceApp")
+      .register([scopedResource, nestedResource, externalResource])
+      .build();
+
+    await withRuntime(app, (store) => {
+      const inside = store.getAllThrows(scopedResource);
+      expect(inside).toContain(errE.id);
+
+      const outside = store.getAllThrows(externalResource);
+      expect(outside).not.toContain(errE.id);
     });
   });
 

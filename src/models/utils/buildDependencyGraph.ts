@@ -2,6 +2,7 @@ import type { StoreRegistry } from "../StoreRegistry";
 import type { IDependentNode } from "./findCircularDependencies";
 import type { IEvent } from "../../defs";
 import { isOptional, isEvent, isTag, isTagStartup } from "../../define";
+import { isMiddlewareAutoAppliedToTarget } from "../../tools/middlewareAutoApply";
 
 const readStringId = (value: unknown): string | undefined => {
   if (!value || typeof value !== "object") {
@@ -33,6 +34,19 @@ const getTagDependencyId = (dependency: unknown): string | undefined => {
 
   return tagValue.id;
 };
+
+function isInSubtreeScope(
+  registry: StoreRegistry,
+  middlewareId: string,
+  targetId: string,
+): boolean {
+  const ownerId = registry.visibilityTracker.getOwnerResourceId(middlewareId);
+  if (!ownerId) {
+    return false;
+  }
+
+  return registry.visibilityTracker.isWithinResourceSubtree(ownerId, targetId);
+}
 
 function resolveTagDependencyNodes(
   registry: StoreRegistry,
@@ -219,18 +233,17 @@ export function buildDependencyGraph(
       }
     }
 
-    if (middleware.everywhere) {
-      const filter =
-        typeof middleware.everywhere === "function"
-          ? middleware.everywhere
-          : () => true;
-
-      for (const task of registry.tasks.values()) {
-        if (filter(task.task)) {
-          const taskNode = nodeMap.get(task.task.id)!;
-          // node.dependencies[task.task.id] = taskNode;
-          taskNode.dependencies[`__middleware.${middleware.id}`] = node;
-        }
+    for (const task of registry.tasks.values()) {
+      if (
+        isMiddlewareAutoAppliedToTarget(middleware, task.task, {
+          isVisibleToTarget: (middlewareId, targetId) =>
+            registry.visibilityTracker.isAccessible(middlewareId, targetId),
+          isInSubtreeScope: (middlewareId, targetId) =>
+            isInSubtreeScope(registry, middlewareId, targetId),
+        })
+      ) {
+        const taskNode = nodeMap.get(task.task.id)!;
+        taskNode.dependencies[`__middleware.${middleware.id}`] = node;
       }
     }
   }
@@ -245,18 +258,17 @@ export function buildDependencyGraph(
       }
     }
 
-    if (middleware.everywhere) {
-      const filter =
-        typeof middleware.everywhere === "function"
-          ? middleware.everywhere
-          : () => true;
-
-      for (const resource of registry.resources.values()) {
-        if (filter(resource.resource)) {
-          const resourceNode = nodeMap.get(resource.resource.id)!;
-          // node.dependencies[resource.resource.id] = resourceNode;
-          resourceNode.dependencies[`__middleware.${middleware.id}`] = node;
-        }
+    for (const resource of registry.resources.values()) {
+      if (
+        isMiddlewareAutoAppliedToTarget(middleware, resource.resource, {
+          isVisibleToTarget: (middlewareId, targetId) =>
+            registry.visibilityTracker.isAccessible(middlewareId, targetId),
+          isInSubtreeScope: (middlewareId, targetId) =>
+            isInSubtreeScope(registry, middlewareId, targetId),
+        })
+      ) {
+        const resourceNode = nodeMap.get(resource.resource.id)!;
+        resourceNode.dependencies[`__middleware.${middleware.id}`] = node;
       }
     }
   }

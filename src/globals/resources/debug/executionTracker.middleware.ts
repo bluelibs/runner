@@ -10,7 +10,10 @@ import { getConfig } from "./types";
 
 export const tasksTrackerMiddleware = defineTaskMiddleware({
   id: "globals.debug.middleware.task.executionTracker",
-  everywhere: (task) => !globalTags.system.exists(task),
+  applyTo: {
+    scope: "where-visible",
+    when: (task) => !globalTags.system.exists(task),
+  },
   dependencies: {
     logger,
     debugConfig,
@@ -65,7 +68,10 @@ export const resourcesTrackerMiddleware = defineResourceMiddleware({
     debugConfig,
     store,
   },
-  everywhere: (resource) => !globalTags.system.exists(resource),
+  applyTo: {
+    scope: "where-visible",
+    when: (resource) => !globalTags.system.exists(resource),
+  },
   run: async ({ resource, next }, { logger, debugConfig, store: _store }) => {
     const start = Date.now();
     logger = logger.with({

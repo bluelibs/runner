@@ -6,6 +6,7 @@ import {
 import type { IResource } from "./resource";
 import { ResourceMiddlewareTagType } from "./tag";
 import { IMiddlewareMeta } from "./meta";
+import type { ResourceMiddlewareApplyTo } from "./middlewareApplyTo";
 import {
   symbolFilePath,
   symbolMiddlewareConfigured,
@@ -46,6 +47,8 @@ export interface IResourceMiddlewareDefinition<
    * Declarative only — does not imply DI or enforcement.
    */
   throws?: ThrowsList;
+  applyTo?: ResourceMiddlewareApplyTo;
+  /** @deprecated Use applyTo instead. */
   everywhere?:
     | boolean
     | ((resource: IResource<any, any, any, any, any>) => boolean);

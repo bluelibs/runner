@@ -47,6 +47,7 @@ export function taskMiddlewareBuilder<
     run: undefined,
     meta: {} as IMiddlewareMeta,
     tags: [] as TaskMiddlewareTagType[],
+    applyTo: undefined,
     everywhere: undefined,
     throws: undefined,
   });
@@ -83,6 +84,7 @@ export function resourceMiddlewareBuilder<
     run: undefined,
     meta: {} as IMiddlewareMeta,
     tags: [] as ResourceMiddlewareTagType[],
+    applyTo: undefined,
     everywhere: undefined,
     throws: undefined,
   });

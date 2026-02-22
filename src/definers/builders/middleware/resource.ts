@@ -98,8 +98,26 @@ export function makeResourceMiddlewareBuilder<
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },
 
+    applyTo(scope, when) {
+      const next = cloneRes(state, {
+        applyTo: {
+          scope,
+          when,
+        },
+        everywhere: undefined,
+      });
+      return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
+    },
+
+    /** @deprecated Use applyTo(scope, when?) instead. */
     everywhere(flag) {
-      const next = cloneRes(state, { everywhere: flag });
+      const next =
+        flag === false
+          ? cloneRes(state, { everywhere: false, applyTo: undefined })
+          : cloneRes(state, {
+              everywhere: flag,
+              applyTo: undefined,
+            });
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },
 

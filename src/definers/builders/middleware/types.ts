@@ -19,6 +19,8 @@ export type TaskMwState<C, In, Out, D extends DependencyMapType> = Readonly<{
   run: ITaskMiddlewareDefinition<any, In, Out, any>["run"] | undefined;
   meta: IMiddlewareMeta;
   tags: TaskMiddlewareTagType[];
+  applyTo: ITaskMiddlewareDefinition<C, In, Out, D>["applyTo"];
+  /** @deprecated Use applyTo instead. */
   everywhere: ITaskMiddlewareDefinition<C, In, Out, D>["everywhere"];
   filePath: string;
   /** Declarative error contract. */
@@ -35,6 +37,8 @@ export type ResMwState<C, In, Out, D extends DependencyMapType> = Readonly<{
   run: IResourceMiddlewareDefinition<any, In, Out, any>["run"] | undefined;
   meta: IMiddlewareMeta;
   tags: ResourceMiddlewareTagType[];
+  applyTo: IResourceMiddlewareDefinition<C, In, Out, D>["applyTo"];
+  /** @deprecated Use applyTo instead. */
   everywhere: IResourceMiddlewareDefinition<C, In, Out, D>["everywhere"];
   filePath: string;
   /** Declarative error contract. */

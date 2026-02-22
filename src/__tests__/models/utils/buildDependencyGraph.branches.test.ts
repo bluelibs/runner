@@ -133,6 +133,16 @@ describe("buildDependencyGraph branch coverage", () => {
             },
           },
         ],
+        [
+          "graph.branch.defensive.task.subtree-mw",
+          {
+            middleware: {
+              id: "graph.branch.defensive.task.subtree-mw",
+              dependencies: undefined,
+              applyTo: { scope: "subtree" as const },
+            },
+          },
+        ],
       ]),
       resourceMiddlewares: new Map([
         [
@@ -191,6 +201,8 @@ describe("buildDependencyGraph branch coverage", () => {
       ]),
       visibilityTracker: {
         isAccessible: () => true,
+        getOwnerResourceId: () => undefined,
+        isWithinResourceSubtree: () => false,
       },
     };
 

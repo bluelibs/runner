@@ -2,6 +2,8 @@ import type {
   DependencyMapType,
   EnsureTagsForTarget,
   ITask,
+  MiddlewareApplyToScopeType,
+  TaskMiddlewareApplyToWhen,
   ITaskMiddleware,
   ITaskMiddlewareDefinition,
   IValidationSchema,
@@ -50,6 +52,11 @@ export interface TaskMiddlewareFluentBuilder<
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
   /** Declare which typed errors this middleware may throw (declarative only). */
   throws(list: ThrowsList): TaskMiddlewareFluentBuilder<C, In, Out, D>;
+  applyTo(
+    scope: MiddlewareApplyToScopeType,
+    when?: TaskMiddlewareApplyToWhen,
+  ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
+  /** @deprecated Use applyTo(scope, when?) instead. */
   everywhere(
     flag: boolean | ((task: ITask<any, any, any, any>) => boolean),
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;

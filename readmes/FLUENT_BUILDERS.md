@@ -225,7 +225,7 @@ const tmw = r.middleware
   .configSchema<{ level: "info" | "warn" | "error" }>({ parse: (x: any) => x })
   .tags([])
   .meta({ title: "TaskLogger" } as any)
-  .everywhere(() => true)
+  .applyTo("where-visible", () => true)
   .run(async ({ next, task }, _deps, config) => {
     return next(task.input);
   })
@@ -241,7 +241,7 @@ const rmw = r.middleware
   .configSchema<{ ttl?: number }>({ parse: (x: any) => x })
   .tags([])
   .meta({ title: "ResourceWrapper" } as any)
-  .everywhere(() => true)
+  .applyTo("where-visible", () => true)
   .run(async ({ next }) => next())
   .build();
 ```

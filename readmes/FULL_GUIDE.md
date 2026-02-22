@@ -1408,7 +1408,7 @@ Think of this as an **architectural boundary** for wiring, not a sandbox:
 - **Safer refactors**: internal tasks/events/hooks/middleware can change without breaking outside consumers
 - **Clear ownership**: each resource exposes a deliberate contract instead of ambient access
 - **Fail-fast architecture checks**: invalid cross-boundary references fail during `run(app)` bootstrap
-- **Predictable cross-cutting behavior**: private `.everywhere()` middleware stays inside its resource subtree
+- **Predictable cross-cutting behavior**: private `.applyTo("where-visible")` middleware stays inside its resource subtree
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -1438,7 +1438,7 @@ const billing = r
 - No `.exports()` means backward-compatible behavior: everything remains public
 - `.exports([])` means nothing from that resource is public outside its registration subtree
 - Visibility checks cover dependency references, hook `.on(event)` subscriptions, and middleware attachment
-- `.everywhere()` middleware follows visibility; non-exported middleware applies only inside its subtree
+- `.applyTo("where-visible")` middleware follows visibility; non-exported middleware applies only inside its subtree
 - If a resource exports a child resource, that child's own exported surface is visible transitively
 - Validation happens at `run(app)` initialization, not at declaration time
 - IDs remain globally unique even for private items; visibility does not bypass duplicate-id checks
@@ -1926,7 +1926,7 @@ import { r, globals } from "@bluelibs/runner";
 
 const logTaskMiddleware = r.middleware
   .task("app.middleware.log.task")
-  .everywhere(() => true)
+  .applyTo("where-visible", () => true)
   .dependencies({ logger: globals.resources.logger })
   .run(async ({ task, next }, { logger }) => {
     logger.info(`Executing: ${String(task!.definition.id)}`);
@@ -1937,11 +1937,13 @@ const logTaskMiddleware = r.middleware
   .build();
 ```
 
-> **Note:** `.everywhere()` means "auto-apply to all visible targets", not "bypass visibility". A middleware only applies where it is visible under `.exports()` and allowed by `.isolate()`.
+> **Note:** `.applyTo("where-visible")` means "auto-apply to all visible targets", not "bypass visibility". A middleware only applies where it is visible under `.exports()` and allowed by `.isolate()`.
 
-> **Tip:** If a global middleware depends on a task or resource, exclude that same target in the `.everywhere(...)` predicate (otherwise you can create a circular dependency that fails at `run(app)` bootstrap).
+> **Tip:** If a global middleware depends on a task or resource, exclude that same target in the `.applyTo("where-visible", ...)` predicate (otherwise you can create a circular dependency that fails at `run(app)` bootstrap).
 
-> **Note:** `.everywhere()` middleware is resolved before local `.middleware([...])`. If the same middleware id is attached locally, the global one is skipped so the local configuration wins.
+> **Note:** `.applyTo("where-visible")` middleware is resolved before local `.middleware([...])`. If the same middleware id is attached locally, the global one is skipped so the local configuration wins.
+
+> **Scope:** `.applyTo("subtree")` applies to the declaring resource and everything in its registration subtree (including nested descendants and private items).
 
 #### Interception (advanced)
 
@@ -7336,12 +7338,12 @@ const auditHook = r
 
 **Plugin patterns:**
 
-1. **Global middleware** — use `.everywhere()` for cross-cutting concerns
+1. **Global middleware** — use `.applyTo("where-visible")` for cross-cutting concerns
 2. **Tag-based behavior** — use tags for declarative configuration
 3. **Resource wrappers** — compose resources for reusable patterns
 4. **Event interception** — use `eventManager.intercept()` for audit/logging
 
-> **Note:** `.everywhere()` is visibility-gated (it does not bypass `.exports()` or `.isolate()`).
+> **Note:** `.applyTo("where-visible")` is visibility-gated (it does not bypass `.exports()` or `.isolate()`).
 
 **Creating reusable modules:**
 
@@ -7616,7 +7618,7 @@ const tracer = trace.getTracer("runner-app");
 // Global tracing middleware
 const tracingMiddleware = r.middleware
   .task("app.middleware.tracing")
-  .everywhere(() => true) // Apply to all tasks
+  .applyTo("where-visible", () => true) // Apply to all visible tasks
   .run(async ({ task, next }) => {
     const span = tracer.startSpan(`task.${task.definition.id}`, {
       attributes: {
@@ -8237,7 +8239,8 @@ Quick rules:
 - No `.exports()` means everything public (backward compatible)
 - `.exports([])` means everything private outside that subtree
 - Visibility is enforced at `run(app)` bootstrap
-- `.everywhere()` middleware is auto-applied only to visible targets (respects `.exports()` and `.isolate()`); private middleware stays inside its resource subtree
+- `.applyTo("where-visible")` middleware is auto-applied only to visible targets (respects `.exports()` and `.isolate()`)
+- `.applyTo("subtree")` middleware is auto-applied to the declaring resource and everything in its registration subtree
 - Duplicate ids still fail globally, even for private items
 
 ### Event Emission Options

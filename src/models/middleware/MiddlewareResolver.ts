@@ -11,13 +11,23 @@ import type {
   TunnelMiddlewareId,
   TunnelTaskMiddlewarePolicyConfig,
 } from "../../globals/resources/tunnel/tunnel.policy.tag";
+import { isMiddlewareAutoAppliedToTarget } from "../../tools/middlewareAutoApply";
 
 /**
  * Resolves which middlewares should be applied to tasks and resources.
- * Handles global "everywhere" middlewares, local middlewares, and tunnel policies.
+ * Handles auto-applied middlewares, local middlewares, and tunnel policies.
  */
 export class MiddlewareResolver {
   constructor(private readonly store: Store) {}
+
+  private isInSubtreeScope(middlewareId: string, targetId: string): boolean {
+    const ownerId = this.store.getOwnerResourceId(middlewareId);
+    if (!ownerId) {
+      return false;
+    }
+
+    return this.store.isItemWithinResourceSubtree(ownerId, targetId);
+  }
 
   /**
    * Gets all applicable middlewares for a task (global + local, deduplicated)
@@ -30,7 +40,8 @@ export class MiddlewareResolver {
     const globalFiltered = globalMiddlewares.filter((m) => !localIds.has(m.id));
 
     // Global middlewares run FIRST, then local ones.
-    // This allows global "everywhere" policies (like logging, tracing) to wrap business-specific local middleware.
+    // This allows cross-cutting policies (like logging, tracing) to wrap
+    // business-specific local middleware.
     return [...globalFiltered, ...local];
   }
 
@@ -95,41 +106,39 @@ export class MiddlewareResolver {
   }
 
   /**
-   * Gets all "everywhere" middlewares that apply to the given task
+   * Gets all auto-applied middlewares that apply to the given task.
+   * Kept under the legacy method name for backward compatibility.
    */
   public getEverywhereTaskMiddlewares(
     task: ITask<any, any, any>,
   ): ITaskMiddleware[] {
     return Array.from(this.store.taskMiddlewares.values())
-      .filter((x) => Boolean(x.middleware.everywhere))
-      .filter((x) =>
-        this.store.isItemVisibleToConsumer(x.middleware.id, task.id),
-      )
       .filter((x) => {
-        if (typeof x.middleware.everywhere === "function") {
-          return x.middleware.everywhere(task);
-        }
-        return true;
+        return isMiddlewareAutoAppliedToTarget(x.middleware, task, {
+          isVisibleToTarget: (middlewareId, targetId) =>
+            this.store.isItemVisibleToConsumer(middlewareId, targetId),
+          isInSubtreeScope: (middlewareId, targetId) =>
+            this.isInSubtreeScope(middlewareId, targetId),
+        });
       })
       .map((x) => x.middleware);
   }
 
   /**
-   * Gets all "everywhere" middlewares that apply to the given resource
+   * Gets all auto-applied middlewares that apply to the given resource.
+   * Kept under the legacy method name for backward compatibility.
    */
   public getEverywhereResourceMiddlewares(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
     return Array.from(this.store.resourceMiddlewares.values())
-      .filter((x) => Boolean(x.middleware.everywhere))
-      .filter((x) =>
-        this.store.isItemVisibleToConsumer(x.middleware.id, resource.id),
-      )
       .filter((x) => {
-        if (typeof x.middleware.everywhere === "function") {
-          return x.middleware.everywhere(resource);
-        }
-        return true;
+        return isMiddlewareAutoAppliedToTarget(x.middleware, resource, {
+          isVisibleToTarget: (middlewareId, targetId) =>
+            this.store.isItemVisibleToConsumer(middlewareId, targetId),
+          isInSubtreeScope: (middlewareId, targetId) =>
+            this.isInSubtreeScope(middlewareId, targetId),
+        });
       })
       .map((x) => x.middleware);
   }

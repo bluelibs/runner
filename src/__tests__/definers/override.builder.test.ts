@@ -475,7 +475,7 @@ describe(SuiteName.OverrideBuilder, () => {
       .tags([tagPrimary])
       .tags([tagSecondary], { override: true })
       .meta({ [MetaKey.Label]: TaskValue.Base } as Record<string, any>)
-      .everywhere(true)
+      .applyTo("where-visible")
       .run(async ({ next }) => next())
       .build();
 
@@ -485,7 +485,11 @@ describe(SuiteName.OverrideBuilder, () => {
     expect(overrideMiddleware.meta).toEqual({
       [MetaKey.Label]: TaskValue.Base,
     });
-    expect(overrideMiddleware.everywhere).toBe(true);
+    expect(overrideMiddleware.applyTo).toEqual({
+      scope: "where-visible",
+      when: undefined,
+    });
+    expect(overrideMiddleware.everywhere).toBeUndefined();
   });
 
   it("task middleware override builder supports throws", () => {
@@ -503,6 +507,38 @@ describe(SuiteName.OverrideBuilder, () => {
       .build();
 
     expect(overrideMiddleware.throws).toEqual([ErrorId.TaskMiddleware]);
+  });
+
+  it("task middleware override builder supports deprecated everywhere(false)", () => {
+    const baseMiddleware = r.middleware
+      .task("tests.override.taskMiddleware.everywhere.false")
+      .run(async ({ next }) => next())
+      .build();
+
+    const overrideMiddleware = r
+      .override(baseMiddleware)
+      .everywhere(false)
+      .run(async ({ next }) => next())
+      .build();
+
+    expect(overrideMiddleware.everywhere).toBe(false);
+    expect(overrideMiddleware.applyTo).toBeUndefined();
+  });
+
+  it("task middleware override builder supports deprecated everywhere(true)", () => {
+    const baseMiddleware = r.middleware
+      .task("tests.override.taskMiddleware.everywhere.true")
+      .run(async ({ next }) => next())
+      .build();
+
+    const overrideMiddleware = r
+      .override(baseMiddleware)
+      .everywhere(true)
+      .run(async ({ next }) => next())
+      .build();
+
+    expect(overrideMiddleware.everywhere).toBe(true);
+    expect(overrideMiddleware.applyTo).toBeUndefined();
   });
 
   it(TestName.ResourceMiddleware, async () => {
@@ -563,7 +599,7 @@ describe(SuiteName.OverrideBuilder, () => {
       .tags([tagPrimary])
       .tags([tagSecondary], { override: true })
       .meta({ [MetaKey.Label]: ResourceValue.Base } as Record<string, any>)
-      .everywhere(true)
+      .applyTo("subtree")
       .run(async ({ next }) => next())
       .build();
 
@@ -573,7 +609,11 @@ describe(SuiteName.OverrideBuilder, () => {
     expect(overrideMiddleware.meta).toEqual({
       [MetaKey.Label]: ResourceValue.Base,
     });
-    expect(overrideMiddleware.everywhere).toBe(true);
+    expect(overrideMiddleware.applyTo).toEqual({
+      scope: "subtree",
+      when: undefined,
+    });
+    expect(overrideMiddleware.everywhere).toBeUndefined();
   });
 
   it("resource middleware override builder supports throws", () => {
@@ -591,6 +631,38 @@ describe(SuiteName.OverrideBuilder, () => {
       .build();
 
     expect(overrideMiddleware.throws).toEqual([ErrorId.ResourceMiddleware]);
+  });
+
+  it("resource middleware override builder supports deprecated everywhere(false)", () => {
+    const baseMiddleware = r.middleware
+      .resource("tests.override.resourceMiddleware.everywhere.false")
+      .run(async ({ next }) => next())
+      .build();
+
+    const overrideMiddleware = r
+      .override(baseMiddleware)
+      .everywhere(false)
+      .run(async ({ next }) => next())
+      .build();
+
+    expect(overrideMiddleware.everywhere).toBe(false);
+    expect(overrideMiddleware.applyTo).toBeUndefined();
+  });
+
+  it("resource middleware override builder supports deprecated everywhere(true)", () => {
+    const baseMiddleware = r.middleware
+      .resource("tests.override.resourceMiddleware.everywhere.true")
+      .run(async ({ next }) => next())
+      .build();
+
+    const overrideMiddleware = r
+      .override(baseMiddleware)
+      .everywhere(true)
+      .run(async ({ next }) => next())
+      .build();
+
+    expect(overrideMiddleware.everywhere).toBe(true);
+    expect(overrideMiddleware.applyTo).toBeUndefined();
   });
 
   it(TestName.HookOn, () => {

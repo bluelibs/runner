@@ -61,7 +61,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 - Direct `define*()` outputs and fluent `.build()` outputs are deep-frozen (immutable); so are `.with(config)` and `.fork(...)` outputs.
 - `r.resource<Config>(id)` / `r.task<Input>(id)` seed typing before explicit schema; config-only resources can omit `.init()`.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` clones a resource under a new id with a separate runtime instance. `"drop"` clears nested items; `"deep"` deep-forks the resource tree and remaps dependencies.
-- `.exports([...])` narrows visibility: omit = everything public; `.exports([])` = nothing public (private subtree, including `.everywhere()` scope).
+- `.exports([...])` narrows visibility: omit = everything public; `.exports([])` = nothing public (private subtree, including `.applyTo("subtree")` middleware scope).
 - `.isolate({ deny: [...] })` blocks listed ids/tags; `{ only: [...] }` is a boundary-scoped external allowlist (internal subtree items remain reachable). Policies are additive across ancestors (effective external access is the intersection of ancestor `only` lists); Runner fails fast on violations at bootstrap.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
@@ -156,7 +156,7 @@ import { globals } from "@bluelibs/runner";
 const auditTasks = r.middleware
   .task("app.middleware.audit")
   .dependencies({ logger: globals.resources.logger })
-  .everywhere((task) => !task.id.startsWith("admin."))
+  .applyTo("where-visible", (task) => !task.id.startsWith("admin."))
   .run(async ({ task, next }, { logger }) => {
     logger.info(`→ ${task.definition.id}`);
     const result = await next(task.input);
@@ -182,7 +182,8 @@ const cacheResources = r.middleware
 
 Attach middleware using `.middleware([auditTasks])` on the definition that owns it, and register the middleware alongside the target resource or task at the root.
 
-- `.everywhere(true | fn)` marks middleware as auto-applied to visible targets (still gated by `.exports()` / `.isolate()`).
+- `.applyTo("where-visible", fn?)` marks middleware as auto-applied to visible targets (still gated by `.exports()` / `.isolate()`).
+- `.applyTo("subtree", fn?)` auto-applies only inside the declaring resource subtree (declaring resource + descendants).
 - Contract middleware: middleware can declare `Config`, `Input`, `Output` generics; tasks using it must conform (contracts intersect across `.middleware([...])` and `.tags([...])`). Collisions surface as `InputContractViolationError` / `OutputContractViolationError` in TypeScript; if you add `.inputSchema()`, ensure the schema's inferred type includes the contract shape.
 - Entry generic convenience is available for middleware too: `r.middleware.task<Input>(id)` seeds task input contract typing and `r.middleware.resource<Config>(id)` seeds middleware config typing. The explicit multi-generic form (`<Config, Input, Output>`) remains available.
 

@@ -28,6 +28,8 @@ type ResourceMiddlewareOverrideState<
   run: IResourceMiddlewareDefinition<any, In, Out, any>["run"];
   meta?: IMiddlewareMeta;
   tags?: ResourceMiddlewareTagType[];
+  applyTo?: IResourceMiddlewareDefinition<C, In, Out, D>["applyTo"];
+  /** @deprecated Use applyTo instead. */
   everywhere?: IResourceMiddlewareDefinition<C, In, Out, D>["everywhere"];
   throws?: ThrowsList;
 }>;
@@ -165,8 +167,26 @@ function makeResourceMiddlewareOverrideBuilder<
       return makeResourceMiddlewareOverrideBuilder(base, next);
     },
 
+    applyTo(scope, when) {
+      const next = cloneResourceMiddlewareState(state, {
+        applyTo: { scope, when },
+        everywhere: undefined,
+      });
+      return makeResourceMiddlewareOverrideBuilder(base, next);
+    },
+
+    /** @deprecated Use applyTo(scope, when?) instead. */
     everywhere(flag) {
-      const next = cloneResourceMiddlewareState(state, { everywhere: flag });
+      const next =
+        flag === false
+          ? cloneResourceMiddlewareState(state, {
+              everywhere: false,
+              applyTo: undefined,
+            })
+          : cloneResourceMiddlewareState(state, {
+              everywhere: flag,
+              applyTo: undefined,
+            });
       return makeResourceMiddlewareOverrideBuilder(base, next);
     },
 
@@ -209,6 +229,7 @@ export function resourceMiddlewareOverrideBuilder<
       run: base.run,
       meta: base.meta,
       tags: base.tags,
+      applyTo: base.applyTo,
       everywhere: base.everywhere,
       throws: base.throws,
     },

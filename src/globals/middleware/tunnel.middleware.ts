@@ -40,7 +40,10 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
     logger: globalResources.logger,
   },
   // Only applies to resources tagged with globals.tags.tunnel
-  everywhere: (resource) => globalTags.tunnel.exists(resource),
+  applyTo: {
+    scope: "where-visible",
+    when: (resource) => globalTags.tunnel.exists(resource),
+  },
   run: async ({ resource, next }, { store, eventManager, logger }) => {
     // Initialize the resource and get its value (tunnel runner)
     const value = await next(resource.config);

@@ -103,7 +103,7 @@ export const circularDependencyError = error<
 
     if (hasMiddleware) {
       guidance +=
-        "\n  - For middleware: you can filter out tasks/resources using everywhere(fn)";
+        '\n  - For middleware: you can filter out tasks/resources using applyTo("where-visible", fn)';
       guidance +=
         "\n  - Consider using events for communication instead of direct dependencies";
     }

@@ -7,6 +7,7 @@ import type { ITask } from "./task";
 import type { ExecutionJournal } from "./executionJournal";
 import { TaskMiddlewareTagType } from "./tag";
 import { IMiddlewareMeta } from "./meta";
+import type { TaskMiddlewareApplyTo } from "./middlewareApplyTo";
 import {
   symbolFilePath,
   symbolMiddlewareConfigured,
@@ -51,6 +52,8 @@ export interface ITaskMiddlewareDefinition<
    * Declarative only — does not imply DI or enforcement.
    */
   throws?: ThrowsList;
+  applyTo?: TaskMiddlewareApplyTo;
+  /** @deprecated Use applyTo instead. */
   everywhere?: boolean | ((task: ITask<any, any, any, any>) => boolean);
 }
 

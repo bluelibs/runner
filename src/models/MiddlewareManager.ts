@@ -255,7 +255,8 @@ export class MiddlewareManager {
   }
 
   /**
-   * Gets all "everywhere" middlewares that apply to the given task
+   * Gets all auto-applied middlewares that apply to the given task.
+   * Legacy method name kept for backward compatibility.
    * @deprecated Internal method exposed for testing - may be removed in future versions
    */
   getEverywhereMiddlewareForTasks(
@@ -265,7 +266,8 @@ export class MiddlewareManager {
   }
 
   /**
-   * Gets all "everywhere" middlewares that apply to the given resource
+   * Gets all auto-applied middlewares that apply to the given resource.
+   * Legacy method name kept for backward compatibility.
    * @deprecated Internal method exposed for testing - may be removed in future versions
    */
   getEverywhereMiddlewareForResources(

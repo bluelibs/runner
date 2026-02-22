@@ -23,6 +23,7 @@ export * from "./types/event";
 export * from "./types/task";
 export * from "./types/taskMiddleware";
 export * from "./types/resourceMiddleware";
+export * from "./types/middlewareApplyTo";
 export * from "./types/meta";
 export * from "./types/runner";
 export * from "./types/asyncContext";

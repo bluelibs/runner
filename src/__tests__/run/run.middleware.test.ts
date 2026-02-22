@@ -757,6 +757,112 @@ describe("Middleware.everywhere()", () => {
     expect(calls).not.toContain("task:test.task2");
   });
 
+  it("supports applyTo subtree scope for task middleware", async () => {
+    const calls: string[] = [];
+
+    const subtreeMiddleware = defineTaskMiddleware({
+      id: "applyTo.subtree.task.middleware",
+      applyTo: { scope: "subtree" },
+      run: async ({ next, task }) => {
+        calls.push(task.definition.id);
+        return next(task.input);
+      },
+    });
+
+    const rootTask = defineTask({
+      id: "applyTo.subtree.task.root",
+      run: async () => "root",
+    });
+
+    const nestedTask = defineTask({
+      id: "applyTo.subtree.task.nested",
+      run: async () => "nested",
+    });
+
+    const deepTask = defineTask({
+      id: "applyTo.subtree.task.deep",
+      run: async () => "deep",
+    });
+
+    const deep = defineResource({
+      id: "applyTo.subtree.deep.resource",
+      register: [deepTask],
+      dependencies: { deepTask },
+      async init(_, { deepTask }) {
+        await deepTask();
+      },
+    });
+
+    const scoped = defineResource({
+      id: "applyTo.subtree.scoped.resource",
+      register: [subtreeMiddleware, nestedTask, deep],
+      dependencies: { nestedTask },
+      async init(_, { nestedTask }) {
+        await nestedTask();
+      },
+    });
+
+    const app = defineResource({
+      id: "applyTo.subtree.app",
+      register: [rootTask, scoped],
+      dependencies: { rootTask },
+      async init(_, { rootTask }) {
+        await rootTask();
+      },
+    });
+
+    await run(app);
+
+    expect(calls).toContain("applyTo.subtree.task.nested");
+    expect(calls).toContain("applyTo.subtree.task.deep");
+    expect(calls).not.toContain("applyTo.subtree.task.root");
+  });
+
+  it("supports applyTo subtree scope for resource middleware", async () => {
+    const subtreeMiddleware = defineResourceMiddleware({
+      id: "applyTo.subtree.resource.middleware",
+      applyTo: { scope: "subtree" },
+      run: async ({ next }) => `Intercepted: ${await next()}`,
+    });
+
+    const nestedResource = defineResource({
+      id: "applyTo.subtree.resource.nested",
+      async init() {
+        return "Nested";
+      },
+    });
+
+    const siblingResource = defineResource({
+      id: "applyTo.subtree.resource.sibling",
+      async init() {
+        return "Sibling";
+      },
+    });
+
+    const scopedResource = defineResource({
+      id: "applyTo.subtree.resource.scoped",
+      register: [subtreeMiddleware, nestedResource],
+      async init() {
+        return "Scoped";
+      },
+    });
+
+    const app = defineResource({
+      id: "applyTo.subtree.resource.app",
+      register: [scopedResource, siblingResource],
+    });
+
+    const runtime = await run(app);
+    expect(runtime.getResourceValue(scopedResource)).toBe(
+      "Intercepted: Scoped",
+    );
+    expect(runtime.getResourceValue(nestedResource)).toBe(
+      "Intercepted: Nested",
+    );
+    expect(runtime.getResourceValue(siblingResource)).toBe("Sibling");
+    await runtime.dispose();
+  });
+
   it("should throw if there is another middleware with the same id", async () => {
     const mw = defineTaskMiddleware({
       id: "everywhere.middleware",
@@ -867,6 +973,31 @@ describe("Middleware.everywhere()", () => {
       expect(() => mwt.with({ name: 123 })).toThrow();
       // @ts-expect-error
       expect(() => mwr.with({ name: 123 })).toThrow();
+    });
+
+    it("fails when both applyTo and everywhere are provided", () => {
+      expect(() =>
+        defineTaskMiddleware({
+          id: "tests.middleware.applyTo.conflict",
+          applyTo: { scope: "where-visible" },
+          everywhere: true,
+          run: async ({ next }) => next(),
+        }),
+      ).toThrow(
+        /Middleware applyTo validation failed for tests\.middleware\.applyTo\.conflict/,
+      );
+    });
+
+    it("fails when applyTo scope is invalid", () => {
+      expect(() =>
+        defineResourceMiddleware({
+          id: "tests.middleware.applyTo.invalid.scope",
+          applyTo: { scope: "invalid" as "where-visible" },
+          run: async ({ next }) => next(),
+        }),
+      ).toThrow(
+        /Middleware applyTo validation failed for tests\.middleware\.applyTo\.invalid\.scope/,
+      );
     });
   });
 

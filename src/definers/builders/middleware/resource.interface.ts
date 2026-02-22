@@ -2,6 +2,8 @@ import type {
   DependencyMapType,
   EnsureTagsForTarget,
   IResource,
+  MiddlewareApplyToScopeType,
+  ResourceMiddlewareApplyToWhen,
   IResourceMiddleware,
   IResourceMiddlewareDefinition,
   IValidationSchema,
@@ -50,6 +52,11 @@ export interface ResourceMiddlewareFluentBuilder<
   ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
   /** Declare which typed errors this middleware may throw (declarative only). */
   throws(list: ThrowsList): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
+  applyTo(
+    scope: MiddlewareApplyToScopeType,
+    when?: ResourceMiddlewareApplyToWhen,
+  ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
+  /** @deprecated Use applyTo(scope, when?) instead. */
   everywhere(
     flag: boolean | ((resource: IResource<any, any, any, any, any>) => boolean),
   ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;

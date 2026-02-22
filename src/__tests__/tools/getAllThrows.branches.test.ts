@@ -6,6 +6,12 @@ import {
 } from "../../defs";
 import { getAllThrows } from "../../tools/getAllThrows";
 
+const visibilityTracker = {
+  isAccessible: () => true,
+  getOwnerResourceId: () => "cov.owner.resource",
+  isWithinResourceSubtree: () => true,
+};
+
 describe("getAllThrows branch coverage", () => {
   it("covers dependency function/optional traversal and middleware predicates", () => {
     const depResource = {
@@ -78,6 +84,7 @@ describe("getAllThrows branch coverage", () => {
           },
         ],
       ]),
+      visibilityTracker,
     };
 
     const result = getAllThrows(registry as any, targetTask as any);
@@ -113,6 +120,7 @@ describe("getAllThrows branch coverage", () => {
         ],
       ]),
       hooks: new Map(),
+      visibilityTracker,
     };
 
     const result = getAllThrows(registry as any, targetResource as any);
@@ -124,6 +132,7 @@ describe("getAllThrows branch coverage", () => {
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
       hooks: new Map(),
+      visibilityTracker,
     };
 
     const taskWithEmptyMiddleware = {
@@ -154,6 +163,7 @@ describe("getAllThrows branch coverage", () => {
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
       hooks: new Map(),
+      visibilityTracker,
     };
 
     const taskWithMiddleware = {
@@ -198,6 +208,7 @@ describe("getAllThrows branch coverage", () => {
           },
         ],
       ]),
+      visibilityTracker,
     };
 
     expect(getAllThrows(registry as any, { id: "cov.other" } as any)).toEqual(
@@ -233,8 +244,77 @@ describe("getAllThrows branch coverage", () => {
           },
         ],
       ]),
+      visibilityTracker,
     };
 
     expect(getAllThrows(registry as any, task as any)).toEqual([]);
+  });
+
+  it("covers subtree middleware branch when owner is missing", () => {
+    const task = {
+      id: "cov.getAllThrows.task.subtree.owner-missing",
+      [symbolTask]: true,
+      throws: [],
+      middleware: [],
+      dependencies: {},
+    };
+
+    const registry = {
+      taskMiddlewares: new Map([
+        [
+          "cov.subtree.task.middleware",
+          {
+            middleware: {
+              id: "cov.subtree.task.middleware",
+              applyTo: { scope: "subtree" as const },
+              throws: ["cov.subtree.task.throw"],
+            },
+          },
+        ],
+      ]),
+      resourceMiddlewares: new Map(),
+      hooks: new Map(),
+      visibilityTracker: {
+        isAccessible: () => true,
+        getOwnerResourceId: () => undefined,
+        isWithinResourceSubtree: () => false,
+      },
+    };
+
+    expect(getAllThrows(registry as any, task as any)).toEqual([]);
+  });
+
+  it("covers subtree resource middleware branch when owner is missing", () => {
+    const resource = {
+      id: "cov.getAllThrows.resource.subtree.owner-missing",
+      [symbolResource]: true,
+      throws: [],
+      middleware: [],
+      dependencies: undefined,
+    };
+
+    const registry = {
+      taskMiddlewares: new Map(),
+      resourceMiddlewares: new Map([
+        [
+          "cov.subtree.resource.middleware",
+          {
+            middleware: {
+              id: "cov.subtree.resource.middleware",
+              applyTo: { scope: "subtree" as const },
+              throws: ["cov.subtree.resource.throw"],
+            },
+          },
+        ],
+      ]),
+      hooks: new Map(),
+      visibilityTracker: {
+        isAccessible: () => true,
+        getOwnerResourceId: () => undefined,
+        isWithinResourceSubtree: () => false,
+      },
+    };
+
+    expect(getAllThrows(registry as any, resource as any)).toEqual([]);
   });
 });

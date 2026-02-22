@@ -65,4 +65,26 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
       { id: "mw.keep" },
     ]);
   });
+
+  test("does not auto-apply subtree middleware when owner cannot be resolved", () => {
+    const middleware = {
+      id: "tests.middleware.subtree.owner-missing",
+      applyTo: { scope: "subtree" as const },
+      run: async ({ next }: any) => next(),
+    };
+
+    const store: any = {
+      tasks: new Map(),
+      taskMiddlewares: new Map([[middleware.id, { middleware }]]),
+      resourceMiddlewares: new Map(),
+      getOwnerResourceId: () => undefined,
+      isItemWithinResourceSubtree: () => false,
+      isItemVisibleToConsumer: () => true,
+    };
+
+    const resolver = new MiddlewareResolver(store);
+    const task = { id: "tests.task.target", middleware: [] } as any;
+
+    expect(resolver.getEverywhereTaskMiddlewares(task)).toEqual([]);
+  });
 });

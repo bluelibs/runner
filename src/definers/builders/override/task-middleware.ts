@@ -28,6 +28,8 @@ type TaskMiddlewareOverrideState<
   run: ITaskMiddlewareDefinition<any, In, Out, any>["run"];
   meta?: IMiddlewareMeta;
   tags?: TaskMiddlewareTagType[];
+  applyTo?: ITaskMiddlewareDefinition<C, In, Out, D>["applyTo"];
+  /** @deprecated Use applyTo instead. */
   everywhere?: ITaskMiddlewareDefinition<C, In, Out, D>["everywhere"];
   throws?: ThrowsList;
 }>;
@@ -147,8 +149,26 @@ function makeTaskMiddlewareOverrideBuilder<
       return makeTaskMiddlewareOverrideBuilder(base, next);
     },
 
+    applyTo(scope, when) {
+      const next = cloneTaskMiddlewareState(state, {
+        applyTo: { scope, when },
+        everywhere: undefined,
+      });
+      return makeTaskMiddlewareOverrideBuilder(base, next);
+    },
+
+    /** @deprecated Use applyTo(scope, when?) instead. */
     everywhere(flag) {
-      const next = cloneTaskMiddlewareState(state, { everywhere: flag });
+      const next =
+        flag === false
+          ? cloneTaskMiddlewareState(state, {
+              everywhere: false,
+              applyTo: undefined,
+            })
+          : cloneTaskMiddlewareState(state, {
+              everywhere: flag,
+              applyTo: undefined,
+            });
       return makeTaskMiddlewareOverrideBuilder(base, next);
     },
 
@@ -190,6 +210,7 @@ export function taskMiddlewareOverrideBuilder<
     run: base.run,
     meta: base.meta,
     tags: base.tags,
+    applyTo: base.applyTo,
     everywhere: base.everywhere,
     throws: base.throws,
   });

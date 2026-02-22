@@ -343,12 +343,12 @@ const auditHook = r
 
 **Plugin patterns:**
 
-1. **Global middleware** — use `.everywhere()` for cross-cutting concerns
+1. **Global middleware** — use `.applyTo("where-visible")` for cross-cutting concerns
 2. **Tag-based behavior** — use tags for declarative configuration
 3. **Resource wrappers** — compose resources for reusable patterns
 4. **Event interception** — use `eventManager.intercept()` for audit/logging
 
-> **Note:** `.everywhere()` is visibility-gated (it does not bypass `.exports()` or `.isolate()`).
+> **Note:** `.applyTo("where-visible")` is visibility-gated (it does not bypass `.exports()` or `.isolate()`).
 
 **Creating reusable modules:**
 
@@ -623,7 +623,7 @@ const tracer = trace.getTracer("runner-app");
 // Global tracing middleware
 const tracingMiddleware = r.middleware
   .task("app.middleware.tracing")
-  .everywhere(() => true) // Apply to all tasks
+  .applyTo("where-visible", () => true) // Apply to all visible tasks
   .run(async ({ task, next }) => {
     const span = tracer.startSpan(`task.${task.definition.id}`, {
       attributes: {

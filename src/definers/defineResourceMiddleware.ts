@@ -13,6 +13,7 @@ import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { normalizeThrows } from "../tools/throws";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import { normalizeMiddlewareApplyTo } from "./middlewareApplyTo";
 
 export function defineResourceMiddleware<
   TConfig = any,
@@ -39,12 +40,19 @@ export function defineResourceMiddleware<
     middlewareDef.id,
     middlewareDef.tags,
   );
+  const normalizedApplyTo = normalizeMiddlewareApplyTo(
+    middlewareDef.id,
+    middlewareDef.applyTo,
+    middlewareDef.everywhere,
+  );
+
   const base = {
     [symbolFilePath]: filePath,
     [symbolResourceMiddleware]: true,
     config: {} as TConfig,
     configSchema: middlewareDef.configSchema,
     ...middlewareDef,
+    ...normalizedApplyTo,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
     throws: normalizeThrows(
       { kind: "resource-middleware", id: middlewareDef.id },

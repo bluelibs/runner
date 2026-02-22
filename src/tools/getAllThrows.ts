@@ -3,10 +3,11 @@ import type { IResource } from "../types/resource";
 import type { StoreRegistry } from "../models/StoreRegistry";
 import { isTask, isResource, isEvent, isOptional } from "../definers/tools";
 import type { DependencyMapType } from "../types/utilities";
+import { isMiddlewareAutoAppliedToTarget } from "./middlewareAutoApply";
 
 /**
  * Collects all declared error ids from a task or resource definition and its
- * entire dependency chain: own throws, middleware throws (local + everywhere),
+ * entire dependency chain: own throws, middleware throws (local + auto-applied),
  * resource dependency throws (with their middleware), and — for tasks — hook
  * throws on events the task can emit.
  *
@@ -54,7 +55,7 @@ function collectTaskThrows(
   // 2. Local middleware attached to the task
   collectMiddlewareThrows(task.middleware, collect);
 
-  // 3. Global ("everywhere") task middleware that applies to this task
+  // 3. Auto-applied task middleware that applies to this task
   collectEverywhereTaskMiddlewareThrows(registry, task, collect);
 
   // 4. Resource dependencies — collect their throws + resource middleware
@@ -78,7 +79,7 @@ function collectResourceThrows(
   // 2. Local middleware attached to the resource
   collectMiddlewareThrows(resource.middleware, collect);
 
-  // 3. Global ("everywhere") resource middleware that applies to this resource
+  // 3. Auto-applied resource middleware that applies to this resource
   collectEverywhereResourceMiddlewareThrows(registry, resource, collect);
 
   // 4. Resource dependencies — collect their throws + resource middleware
@@ -113,11 +114,23 @@ function collectEverywhereTaskMiddlewareThrows(
   for (const entry of registry.taskMiddlewares.values()) {
     if (localIds.has(entry.middleware.id)) continue;
 
-    const flag = entry.middleware.everywhere;
-    if (!flag) continue;
-
-    const applies = typeof flag === "function" ? flag(task) : flag === true;
-    if (applies) {
+    if (
+      isMiddlewareAutoAppliedToTarget(entry.middleware, task, {
+        isVisibleToTarget: (middlewareId, targetId) =>
+          registry.visibilityTracker.isAccessible(middlewareId, targetId),
+        isInSubtreeScope: (middlewareId, targetId) => {
+          const ownerId =
+            registry.visibilityTracker.getOwnerResourceId(middlewareId);
+          if (!ownerId) {
+            return false;
+          }
+          return registry.visibilityTracker.isWithinResourceSubtree(
+            ownerId,
+            targetId,
+          );
+        },
+      })
+    ) {
       collect(entry.middleware.throws);
     }
   }
@@ -135,11 +148,23 @@ function collectEverywhereResourceMiddlewareThrows(
   for (const entry of registry.resourceMiddlewares.values()) {
     if (localIds.has(entry.middleware.id)) continue;
 
-    const flag = entry.middleware.everywhere;
-    if (!flag) continue;
-
-    const applies = typeof flag === "function" ? flag(resource) : flag === true;
-    if (applies) {
+    if (
+      isMiddlewareAutoAppliedToTarget(entry.middleware, resource, {
+        isVisibleToTarget: (middlewareId, targetId) =>
+          registry.visibilityTracker.isAccessible(middlewareId, targetId),
+        isInSubtreeScope: (middlewareId, targetId) => {
+          const ownerId =
+            registry.visibilityTracker.getOwnerResourceId(middlewareId);
+          if (!ownerId) {
+            return false;
+          }
+          return registry.visibilityTracker.isWithinResourceSubtree(
+            ownerId,
+            targetId,
+          );
+        },
+      })
+    ) {
       collect(entry.middleware.throws);
     }
   }

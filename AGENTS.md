@@ -35,9 +35,10 @@
 
 <new_feature>
 
+- Prefer to use type strings instead of enums
 - When building new features/enhancements/changes, must be implemented with care without affecting the system and not over-polute files.
 - Code retain 100% test coverage.
-- Ensure readmes/AI.md (minimal version of README)
+- Ensure readmes/AI.md (minimal version of README) and that the guide-units with the full guide are updated accordingly.
 - Document 'why' in comments, not 'what' or 'how', as the code should be self-descriptive enough to explain those.
 - Use runner errors instead of 'throw new Error()' for better error handling and consistency.
 - Read guide-units/DOCS_STYLE_GUIDE.md to understand how we compose the main documentation.

@@ -691,4 +691,22 @@ export class VisibilityTracker {
   getExportSets(): ReadonlyMap<string, ReadonlySet<string>> {
     return this.exportSets;
   }
+
+  /**
+   * Returns the owner resource id for an item id.
+   */
+  getOwnerResourceId(itemId: string): string | undefined {
+    return this.ownership.get(itemId);
+  }
+
+  /**
+   * Returns true when `itemId` is the same resource or is registered inside
+   * the resource's registration subtree.
+   */
+  isWithinResourceSubtree(resourceId: string, itemId: string): boolean {
+    if (resourceId === itemId) {
+      return true;
+    }
+    return this.subtrees.get(resourceId)?.has(itemId) === true;
+  }
 }
