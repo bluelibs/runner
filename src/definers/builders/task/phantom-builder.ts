@@ -1,8 +1,10 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   IPhantomTask,
   ITaskMeta,
   IValidationSchema,
+  TagType,
   TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
@@ -143,8 +145,8 @@ export function makePhantomTaskBuilder<
       >(next);
     },
 
-    tags<TNewTags extends TaskTagType[]>(
-      t: TNewTags,
+    tags<const TNewTags extends TagType[]>(
+      t: EnsureTagsForTarget<"tasks", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;

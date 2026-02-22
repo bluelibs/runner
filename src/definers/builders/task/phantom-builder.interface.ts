@@ -1,8 +1,10 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   IPhantomTask,
   ITaskMeta,
   IValidationSchema,
+  TagType,
   TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
@@ -52,8 +54,8 @@ export interface PhantomTaskFluentBuilder<
   ): PhantomTaskFluentBuilder<TInput, TResolved, TDeps, TMeta, TTags, TNewMw>;
 
   // Append signature (default)
-  tags<TNewTags extends TaskTagType[]>(
-    t: TNewTags,
+  tags<const TNewTags extends TagType[]>(
+    t: EnsureTagsForTarget<"tasks", TNewTags>,
     options?: { override?: false },
   ): PhantomTaskFluentBuilder<
     TInput,
@@ -65,8 +67,8 @@ export interface PhantomTaskFluentBuilder<
   >;
 
   // Override signature (replace)
-  tags<TNewTags extends TaskTagType[]>(
-    t: TNewTags,
+  tags<const TNewTags extends TagType[]>(
+    t: EnsureTagsForTarget<"tasks", TNewTags>,
     options: { override: true },
   ): PhantomTaskFluentBuilder<
     TInput,

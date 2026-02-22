@@ -64,6 +64,11 @@ export interface ITag<
   readonly __configHasOnlyOptionalKeys: RequiredKeys<TConfig> extends never
     ? true
     : false;
+  /**
+   * Type-only phantom used to filter tags by allowed target in builder APIs.
+   * Optional so it has zero runtime requirements.
+   */
+  readonly __allowedTagTargets?: TAllowedTargets;
 
   config?: TConfig;
   meta: ITagMeta;
@@ -128,11 +133,11 @@ export interface ITagConfigured<
   TEnforceOutputContract = void,
   TAllowedTargets extends TagTarget | void = void,
 > extends ITag<
-    TConfig,
-    TEnforceInputContract,
-    TEnforceOutputContract,
-    TAllowedTargets
-  > {
+  TConfig,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TAllowedTargets
+> {
   [symbolTagConfigured]: true;
   config: TConfig;
 }
@@ -145,7 +150,7 @@ export type TagType =
 type FilterTagByTarget<
   TCandidate,
   TTarget extends TagTarget,
-> = TCandidate extends ITag<any, any, any, infer TAllowedTargets>
+> = TCandidate extends { readonly __allowedTagTargets?: infer TAllowedTargets }
   ? [TAllowedTargets] extends [void]
     ? TCandidate
     : TTarget extends TAllowedTargets
@@ -157,6 +162,16 @@ export type TagTypeFor<TTarget extends TagTarget> = FilterTagByTarget<
   TagType,
   TTarget
 >;
+
+export type EnsureTagsForTarget<
+  TTarget extends TagTarget,
+  TTags extends readonly TagType[],
+> = TTags & {
+  readonly [K in Exclude<keyof TTags, keyof any[]>]: FilterTagByTarget<
+    TTags[K],
+    TTarget
+  >;
+};
 
 export type TaskTagType = TagTypeFor<"tasks">;
 export type ResourceTagType = TagTypeFor<"resources">;

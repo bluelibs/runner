@@ -1,5 +1,6 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   IResource,
   IResourceDefinition,
   IResourceMeta,
@@ -210,7 +211,7 @@ function makeResourceOverrideBuilder<
       return makeResourceOverrideBuilder(base, next);
     },
     tags<TNewTags extends ResourceTagType[]>(
-      tags: TNewTags,
+      tags: EnsureTagsForTarget<"resources", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;

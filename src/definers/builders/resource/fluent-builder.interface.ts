@@ -1,5 +1,6 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   IResource,
   IResourceDefinition,
   IResourceMeta,
@@ -9,6 +10,7 @@ import type {
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   ResourceTagType,
+  TagType,
   WiringAccessPolicy,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
@@ -88,8 +90,8 @@ export interface ResourceFluentBuilder<
   >;
 
   // Append signature (default)
-  tags<TNewTags extends ResourceTagType[]>(
-    tags: TNewTags,
+  tags<const TNewTags extends TagType[]>(
+    tags: EnsureTagsForTarget<"resources", TNewTags>,
     options?: { override?: false },
   ): ResourceFluentBuilder<
     TConfig,
@@ -102,8 +104,8 @@ export interface ResourceFluentBuilder<
   >;
 
   // Override signature (replace)
-  tags<TNewTags extends ResourceTagType[]>(
-    tags: TNewTags,
+  tags<const TNewTags extends TagType[]>(
+    tags: EnsureTagsForTarget<"resources", TNewTags>,
     options: { override: true },
   ): ResourceFluentBuilder<
     TConfig,

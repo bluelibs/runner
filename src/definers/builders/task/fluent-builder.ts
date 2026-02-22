@@ -1,9 +1,11 @@
 import type {
   DependencyMapType,
   DependencyValuesType,
+  EnsureTagsForTarget,
   ITaskDefinition,
   ITaskMeta,
   IValidationSchema,
+  TagType,
   TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
@@ -94,8 +96,8 @@ export function makeTaskBuilder<
       return makeTaskBuilder(next);
     },
 
-    tags<TNewTags extends TaskTagType[]>(
-      t: TNewTags,
+    tags<const TNewTags extends TagType[]>(
+      t: EnsureTagsForTarget<"tasks", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;

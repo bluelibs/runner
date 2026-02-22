@@ -1,5 +1,6 @@
 import type {
   DefaultErrorType,
+  EnsureTagsForTarget,
   IErrorMeta,
   IValidationSchema,
   IErrorHelper,
@@ -21,7 +22,7 @@ export interface ErrorFluentBuilder<
   schema(schema: IValidationSchema<TData>): ErrorFluentBuilder<TData>;
 
   tags<TNewTags extends ErrorTagType[]>(
-    t: TNewTags,
+    t: EnsureTagsForTarget<"errors", TNewTags>,
     options?: { override?: boolean },
   ): ErrorFluentBuilder<TData>;
 

@@ -1,5 +1,6 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   ITaskMiddlewareDefinition,
   IValidationSchema,
   IMiddlewareMeta,
@@ -83,7 +84,7 @@ export function makeTaskMiddlewareBuilder<
     },
 
     tags<TNewTags extends TaskMiddlewareTagType[]>(
-      t: TNewTags,
+      t: EnsureTagsForTarget<"taskMiddlewares", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;

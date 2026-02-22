@@ -1,5 +1,6 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   IEventDefinition,
   IHook,
   IHookDefinition,
@@ -36,7 +37,7 @@ export interface HookOverrideBuilder<
     TMeta
   >;
   tags<TNewTags extends HookTagType[]>(
-    t: TNewTags,
+    t: EnsureTagsForTarget<"hooks", TNewTags>,
     options?: { override?: boolean },
   ): HookOverrideBuilder<TDeps, TOn, TMeta>;
   meta<TNewMeta extends ITaskMeta>(
@@ -112,7 +113,7 @@ function makeHookOverrideBuilder<
     },
 
     tags<TNewTags extends HookTagType[]>(
-      t: TNewTags,
+      t: EnsureTagsForTarget<"hooks", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;

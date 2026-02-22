@@ -1,4 +1,4 @@
-import { defineTag, r } from "../..";
+import { tag as defineTag, r } from "../..";
 import {
   assertTagTargetsApplicable,
   assertTagTargetsApplicableTo,
@@ -11,9 +11,15 @@ describe("tag target scopes", () => {
       .tag<{ label: string }>("tests.tag.targets.taskOnly")
       .for(["tasks"])
       .build();
+    const resourceTag = r
+      .tag("tests.tag.targets.resourceOnly")
+      .for("resources")
+      .build();
 
     expect(taskTag.targets).toEqual(["tasks"]);
     expect(Object.isFrozen(taskTag.targets)).toBe(true);
+    expect(resourceTag.targets).toEqual(["resources"]);
+    expect(Object.isFrozen(resourceTag.targets)).toBe(true);
 
     const configured = taskTag.with({ label: "x" });
     expect(configured.targets).toEqual(["tasks"]);

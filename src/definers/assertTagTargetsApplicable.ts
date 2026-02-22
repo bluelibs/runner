@@ -34,7 +34,9 @@ export function assertTagTargetsApplicable({
     }
 
     const allowedTargets = Array.isArray(tag.targets)
-      ? tag.targets.filter((value): value is string => typeof value === "string")
+      ? tag.targets.filter(
+          (value): value is string => typeof value === "string",
+        )
       : [];
 
     if (allowedTargets.includes(target)) {

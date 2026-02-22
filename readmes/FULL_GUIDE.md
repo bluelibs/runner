@@ -1937,7 +1937,11 @@ const logTaskMiddleware = r.middleware
   .build();
 ```
 
-**Note:** A global middleware can depend on resources or tasks. However, any such resources or tasks will be excluded from the dependency tree (Task -> Middleware), and the middleware will not run for those specific tasks or resources. This approach gives middleware true flexibility and control.
+> **Note:** `.everywhere()` means "auto-apply to all visible targets", not "bypass visibility". A middleware only applies where it is visible under `.exports()` and allowed by `.wiringAccessPolicy()`.
+
+> **Tip:** If a global middleware depends on a task or resource, exclude that same target in the `.everywhere(...)` predicate (otherwise you can create a circular dependency that fails at `run(app)` bootstrap).
+
+> **Note:** `.everywhere()` middleware is resolved before local `.middleware([...])`. If the same middleware id is attached locally, the global one is skipped so the local configuration wins.
 
 #### Interception (advanced)
 
@@ -7307,6 +7311,8 @@ const auditHook = r
 3. **Resource wrappers** — compose resources for reusable patterns
 4. **Event interception** — use `eventManager.intercept()` for audit/logging
 
+> **Note:** `.everywhere()` is visibility-gated (it does not bypass `.exports()` or `.wiringAccessPolicy()`).
+
 **Creating reusable modules:**
 
 ```typescript
@@ -8195,7 +8201,7 @@ Quick rules:
 - No `.exports()` means everything public (backward compatible)
 - `.exports([])` means everything private outside that subtree
 - Visibility is enforced at `run(app)` bootstrap
-- Private `.everywhere()` middleware applies only inside its resource subtree
+- `.everywhere()` middleware is auto-applied only to visible targets (respects `.exports()` and `.wiringAccessPolicy()`); private middleware stays inside its resource subtree
 - Duplicate ids still fail globally, even for private items
 
 ### Event Emission Options

@@ -21,31 +21,39 @@ export function tagBuilder<
   id: string,
 ): TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets> {
   const filePath = getCallerFile();
-  const initial: BuilderState<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets> =
-    Object.freeze({
-      id,
-      filePath,
-      meta:
-        {} as BuilderState<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets>["meta"],
-      configSchema: undefined as BuilderState<
-        TConfig,
-        TEnforceIn,
-        TEnforceOut,
-        TAllowedTargets
-      >["configSchema"],
-      config: undefined as BuilderState<
-        TConfig,
-        TEnforceIn,
-        TEnforceOut,
-        TAllowedTargets
-      >["config"],
-      targets: undefined as BuilderState<
-        TConfig,
-        TEnforceIn,
-        TEnforceOut,
-        TAllowedTargets
-      >["targets"],
-    });
+  const initial: BuilderState<
+    TConfig,
+    TEnforceIn,
+    TEnforceOut,
+    TAllowedTargets
+  > = Object.freeze({
+    id,
+    filePath,
+    meta: {} as BuilderState<
+      TConfig,
+      TEnforceIn,
+      TEnforceOut,
+      TAllowedTargets
+    >["meta"],
+    configSchema: undefined as BuilderState<
+      TConfig,
+      TEnforceIn,
+      TEnforceOut,
+      TAllowedTargets
+    >["configSchema"],
+    config: undefined as BuilderState<
+      TConfig,
+      TEnforceIn,
+      TEnforceOut,
+      TAllowedTargets
+    >["config"],
+    targets: undefined as BuilderState<
+      TConfig,
+      TEnforceIn,
+      TEnforceOut,
+      TAllowedTargets
+    >["targets"],
+  });
 
   return makeTagBuilder(initial);
 }

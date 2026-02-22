@@ -1,5 +1,6 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   IResourceDefinition,
   IResourceMeta,
   IValidationSchema,
@@ -8,6 +9,7 @@ import type {
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   ResourceTagType,
+  TagType,
   WiringAccessPolicy,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
@@ -124,8 +126,8 @@ export function makeResourceBuilder<
       });
       return makeResourceBuilder(next);
     },
-    tags<TNewTags extends ResourceTagType[]>(
-      tags: TNewTags,
+    tags<const TNewTags extends TagType[]>(
+      tags: EnsureTagsForTarget<"resources", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;

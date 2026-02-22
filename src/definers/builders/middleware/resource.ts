@@ -1,5 +1,6 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   IResourceMiddlewareDefinition,
   IValidationSchema,
   IMiddlewareMeta,
@@ -83,12 +84,16 @@ export function makeResourceMiddlewareBuilder<
     },
 
     tags<TNewTags extends ResourceMiddlewareTagType[]>(
-      t: TNewTags,
+      t: EnsureTagsForTarget<"resourceMiddlewares", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
       const next = cloneRes(state, {
-        tags: mergeArray(state.tags, t, override) as ResourceMiddlewareTagType[],
+        tags: mergeArray(
+          state.tags,
+          t,
+          override,
+        ) as ResourceMiddlewareTagType[],
       });
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },

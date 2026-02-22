@@ -1,5 +1,6 @@
 import type {
   DefaultErrorType,
+  EnsureTagsForTarget,
   ErrorTagType,
   IErrorMeta,
 } from "../../../defs";
@@ -54,7 +55,7 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
     },
 
     tags<TNewTags extends ErrorTagType[]>(
-      t: TNewTags,
+      t: EnsureTagsForTarget<"errors", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;

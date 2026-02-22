@@ -13,7 +13,9 @@ export function clone<
   TNextTargets extends TagTarget | void = TTargets,
 >(
   s: BuilderState<TConfig, TEnforceIn, TEnforceOut, TTargets>,
-  patch: Partial<BuilderState<TNextConfig, TEnforceIn, TEnforceOut, TNextTargets>>,
+  patch: Partial<
+    BuilderState<TNextConfig, TEnforceIn, TEnforceOut, TNextTargets>
+  >,
 ): BuilderState<TNextConfig, TEnforceIn, TEnforceOut, TNextTargets> {
   return Object.freeze({
     ...(s as BuilderState<TNextConfig, TEnforceIn, TEnforceOut, TNextTargets>),

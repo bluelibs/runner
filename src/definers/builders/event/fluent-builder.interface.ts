@@ -1,4 +1,5 @@
 import type {
+  EnsureTagsForTarget,
   EventTagType,
   IEvent,
   IEventMeta,
@@ -18,7 +19,7 @@ export interface EventFluentBuilder<TPayload = void> {
   schema<TNew>(schema: IValidationSchema<TNew>): EventFluentBuilder<TNew>;
 
   tags<TNewTags extends EventTagType[]>(
-    t: TNewTags,
+    t: EnsureTagsForTarget<"events", TNewTags>,
     options?: { override?: boolean },
   ): EventFluentBuilder<TPayload>;
 

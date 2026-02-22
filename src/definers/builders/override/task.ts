@@ -1,6 +1,7 @@
 import type {
   DependencyMapType,
   DependencyValuesType,
+  EnsureTagsForTarget,
   ITask,
   ITaskDefinition,
   ITaskMeta,
@@ -152,7 +153,7 @@ function makeTaskOverrideBuilder<
     },
 
     tags<TNewTags extends TaskTagType[]>(
-      t: TNewTags,
+      t: EnsureTagsForTarget<"tasks", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;

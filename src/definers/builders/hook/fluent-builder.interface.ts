@@ -1,5 +1,6 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   IEventDefinition,
   IHook,
   IHookDefinition,
@@ -36,7 +37,7 @@ export interface HookFluentBuilder<
     options: { override: true },
   ): HookFluentBuilder<TNewDeps, TOn, TMeta>;
   tags<TNewTags extends HookTagType[]>(
-    t: TNewTags,
+    t: EnsureTagsForTarget<"hooks", TNewTags>,
     options?: { override?: boolean },
   ): HookFluentBuilder<TDeps, TOn, TMeta>;
   meta<TNewMeta extends ITaskMeta>(

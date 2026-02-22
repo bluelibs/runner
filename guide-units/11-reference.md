@@ -254,7 +254,7 @@ Quick rules:
 - No `.exports()` means everything public (backward compatible)
 - `.exports([])` means everything private outside that subtree
 - Visibility is enforced at `run(app)` bootstrap
-- Private `.everywhere()` middleware applies only inside its resource subtree
+- `.everywhere()` middleware is auto-applied only to visible targets (respects `.exports()` and `.wiringAccessPolicy()`); private middleware stays inside its resource subtree
 - Duplicate ids still fail globally, even for private items
 
 ### Event Emission Options

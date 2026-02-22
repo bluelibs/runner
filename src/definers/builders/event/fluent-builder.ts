@@ -1,4 +1,5 @@
 import type {
+  EnsureTagsForTarget,
   EventTagType,
   IEventDefinition,
   IEventMeta,
@@ -34,7 +35,7 @@ export function makeEventBuilder<TPayload>(
     },
 
     tags<TNewTags extends EventTagType[]>(
-      t: TNewTags,
+      t: EnsureTagsForTarget<"events", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;

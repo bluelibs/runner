@@ -1,5 +1,6 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   ITask,
   ITaskMiddleware,
   ITaskMiddlewareDefinition,
@@ -44,7 +45,7 @@ export interface TaskMiddlewareFluentBuilder<
     m: TNewMeta,
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
   tags<TNewTags extends TaskMiddlewareTagType[]>(
-    t: TNewTags,
+    t: EnsureTagsForTarget<"taskMiddlewares", TNewTags>,
     options?: { override?: boolean },
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
   /** Declare which typed errors this middleware may throw (declarative only). */

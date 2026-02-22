@@ -51,21 +51,34 @@ export function makeTagBuilder<
       return makeTagBuilder(next);
     },
 
-    for<const TNewTargets extends readonly [TagTarget, ...TagTarget[]]>(
-      targets: TNewTargets,
-    ) {
+    for<
+      TNewTargetOrTargets extends
+        | TagTarget
+        | readonly [TagTarget, ...TagTarget[]],
+    >(targetOrTargets: TNewTargetOrTargets) {
+      type NextAllowedTargets = TNewTargetOrTargets extends readonly TagTarget[]
+        ? TNewTargetOrTargets[number]
+        : TNewTargetOrTargets;
+      const normalizedTargets = Array.isArray(targetOrTargets)
+        ? targetOrTargets
+        : [targetOrTargets];
       const next = clone<
         TConfig,
         TEnforceIn,
         TEnforceOut,
         TAllowedTargets,
         TConfig,
-        TNewTargets[number]
+        NextAllowedTargets
       >(state, {
         // Store a frozen copy so configured tags inherit an immutable contract.
-        targets: Object.freeze([...targets]),
+        targets: Object.freeze([...normalizedTargets]),
       });
-      return makeTagBuilder(next);
+      return makeTagBuilder(next) as TagFluentBuilder<
+        TConfig,
+        TEnforceIn,
+        TEnforceOut,
+        NextAllowedTargets
+      >;
     },
 
     build() {

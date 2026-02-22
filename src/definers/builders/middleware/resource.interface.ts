@@ -1,5 +1,6 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   IResource,
   IResourceMiddleware,
   IResourceMiddlewareDefinition,
@@ -44,7 +45,7 @@ export interface ResourceMiddlewareFluentBuilder<
     m: TNewMeta,
   ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
   tags<TNewTags extends ResourceMiddlewareTagType[]>(
-    t: TNewTags,
+    t: EnsureTagsForTarget<"resourceMiddlewares", TNewTags>,
     options?: { override?: boolean },
   ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
   /** Declare which typed errors this middleware may throw (declarative only). */

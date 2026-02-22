@@ -1,9 +1,11 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   ITask,
   ITaskDefinition,
   ITaskMeta,
   IValidationSchema,
+  TagType,
   TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
@@ -49,8 +51,8 @@ export interface TaskFluentBuilder<
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TTags, TNewMw>;
 
   // Append signature (default)
-  tags<TNewTags extends TaskTagType[]>(
-    t: TNewTags,
+  tags<const TNewTags extends TagType[]>(
+    t: EnsureTagsForTarget<"tasks", TNewTags>,
     options?: { override?: false },
   ): TaskFluentBuilder<
     TInput,
@@ -62,8 +64,8 @@ export interface TaskFluentBuilder<
   >;
 
   // Override signature (replace)
-  tags<TNewTags extends TaskTagType[]>(
-    t: TNewTags,
+  tags<const TNewTags extends TagType[]>(
+    t: EnsureTagsForTarget<"tasks", TNewTags>,
     options: { override: true },
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TNewTags, TMiddleware>;
 

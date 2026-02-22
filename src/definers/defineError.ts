@@ -168,7 +168,12 @@ export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
   }
 
   const resolvedFilePath = filePath ?? getCallerFile();
-  assertTagTargetsApplicableTo("errors", "Error", definition.id, definition.tags);
+  assertTagTargetsApplicableTo(
+    "errors",
+    "Error",
+    definition.id,
+    definition.tags,
+  );
 
   return deepFreeze(
     new ErrorHelper<TData>(

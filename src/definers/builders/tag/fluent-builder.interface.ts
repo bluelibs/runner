@@ -1,4 +1,9 @@
-import type { ITag, ITagMeta, IValidationSchema, TagTarget } from "../../../defs";
+import type {
+  ITag,
+  ITagMeta,
+  IValidationSchema,
+  TagTarget,
+} from "../../../defs";
 
 export interface TagFluentBuilder<
   TConfig = void,
@@ -26,13 +31,11 @@ export interface TagFluentBuilder<
     config: TNewConfig,
   ): TagFluentBuilder<TNewConfig, TEnforceIn, TEnforceOut, TAllowedTargets>;
 
+  for<TNewTarget extends TagTarget>(
+    target: TNewTarget,
+  ): TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut, TNewTarget>;
   for<const TNewTargets extends readonly [TagTarget, ...TagTarget[]]>(
     targets: TNewTargets,
-  ): TagFluentBuilder<
-    TConfig,
-    TEnforceIn,
-    TEnforceOut,
-    TNewTargets[number]
-  >;
+  ): TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut, TNewTargets[number]>;
   build(): ITag<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets>;
 }
