@@ -4,29 +4,6 @@
 
 For the landing overview, see [README.md](../README.md). For the complete guide, see [FULL_GUIDE.md](./FULL_GUIDE.md).
 
-**Durable Workflows (Node-only):** For persistence and crash recovery, see `DURABLE_WORKFLOWS.md`. Includes `ctx.switch()` (replay-safe branching), `durable.describe()` (DI-accurate flow shape export), and `durableWorkflowTag.defaults` (default input for `describe(task)` when omitted) — see `DURABLE_WORKFLOWS_AI.md` for quick reference.
-
-## Serializer Safety
-
-When deserializing untrusted payloads, configure the serializer to restrict
-symbol handling so payloads cannot grow the global Symbol registry.
-
-```ts
-import { Serializer } from "@bluelibs/runner";
-
-const serializer = new Serializer({
-  symbolPolicy: "well-known-only",
-});
-```
-
-`Serializer` also supports hardening knobs:
-
-- `allowedTypes` to allow-list runtime type ids during deserialize
-- `maxDepth` to cap recursion depth
-- `maxRegExpPatternLength` and `allowUnsafeRegExp` to guard RegExp payloads
-
-Default behavior note: `symbolPolicy` defaults to `"allow-all"`; use `"well-known-only"` (or stricter) for untrusted inputs.
-
 ## Resources
 
 ```ts
@@ -91,7 +68,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 - Entry generics are supported for convenience: `r.resource<Config>(id)` seeds config typing even before `.schema()`/`.configSchema()`/`.init(...)`; config-only resources can omit `.init()` when they only orchestrate `.register((config) => ...)`.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` creates a new resource with a different id but the same definition. Use `register: "drop"` to avoid re-registering nested items, or `register: "deep"` to deep-fork **registered resources** with new ids via `reId` (other registerables are not kept; resource dependencies pointing to deep-forked resources are remapped to those forks). Export forked resources to use as dependencies.
 - Resource boundaries can be narrowed with `.exports([...])` (on object definitions or fluent builders) to enforce encapsulation:
-  - **Omit `.exports()`**: Everything remains public (backward compatible).
+  - **Omit `.exports()`**: Everything remains public.
   - **`.exports([])`**: Nothing is public. Everything else in that resource subtree is private across boundaries (tasks, hooks, middleware, etc.).
   - **Scoping**: Provides safer refactors as internal items cannot be referenced from outside. It also scopes `.everywhere()` middleware: non-exported middleware only applies inside its own registration subtree.
   - **Transitive Visibility**: If a resource exports a child resource, that child's own exported surface is visible transitively, but each intermediate boundary must allow the path (e.g., `A -> B -> C` is blocked if `B.exports([])`).
@@ -356,6 +333,29 @@ Accessor match helpers:
 
 - `tasks[]` entries expose `definition`, `config`, and runtime `run(...)` (plus runtime `intercept(...)` when consumed from a resource dependency context).
 - `resources[]` entries expose `definition`, `config`, and runtime `value` (available after that resource is initialized).
+- Quick usage pattern:
+  - With a normal tag dependency (not `tag.startup()`), `entry.run(input)` executes the matched task through runtime wiring (validation + middleware).
+  - `entry.intercept(...)` is available when the tag accessor is injected into a resource (local task interception).
+  - `resourceEntry.value` gives the initialized resource value for that matched resource.
+
+```ts
+const installer = r
+  .resource("app.routes")
+  .dependencies({ httpRouteTag })
+  .init(async (_config, { httpRouteTag }) => {
+    for (const taskEntry of httpRouteTag.tasks) {
+      taskEntry.intercept(async (next, input) => next(input));
+      await taskEntry.run(undefined);
+    }
+
+    for (const resourceEntry of httpRouteTag.resources) {
+      console.log(resourceEntry.value);
+    }
+  })
+  .build();
+```
+
+Use `tag.startup()` when startup ordering/discovery matters; treat that accessor as metadata-first (runtime helpers like `tasks[].run` may be unavailable there).
 
 - Contract tags (a "smart tag"): define type contracts for task input/output (or resource config/value) via `r.tag<TConfig, TInputContract, TOutputContract>(id)`. They don't change runtime behavior; they shape the inferred types and compose with contract middleware.
 - Smart tags: built-in tags like `globals.tags.system`, `globals.tags.debug`, and `globals.tags.excludeFromGlobalHooks` change framework behavior; use them for per-component debug or to opt out of global hooks.
@@ -533,29 +533,12 @@ throw error;
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
 - `.throws()` is also available on hooks, task middleware, and resource middleware builders — same semantics.
 - `.throws([...])` accepts error helpers or string ids, normalizes to ids, and deduplicates repeated declarations.
-- `store.getAllThrows(task | resource)` aggregates all declared error ids from a task or resource and its full dependency chain: own throws, local + everywhere middleware throws, resource dependency throws (with their middleware), and — for tasks — hook throws for events the task can emit. Returns a deduplicated `readonly string[]`.
 - Use `r.error.is(err)` to check if an error is _any_ Runner error (not just a specific one). This type guard narrows to `RunnerError` with `id`, `data`, `httpCode`, and `remediation` properties. Useful in catch blocks or error filters:
   ```ts
   if (r.error.is(err, { code: 400 })) {
     console.error(`Runner error: ${err.id} (${err.httpCode || "N/A"})`);
   }
   ```
-- For HTTP/tunnel clients, you can pass an `errorRegistry` to rethrow remote errors as your typed helpers (optional):
-
-  ```ts
-  import { createHttpClient, Serializer } from "@bluelibs/runner";
-
-  const client = createHttpClient({
-    baseUrl: "http://localhost:3000/__runner",
-    serializer: new Serializer(),
-    errorRegistry: new Map([[AppError.id, AppError]]),
-  });
-  ```
-
-  Notes:
-  - `errorRegistry` is optional. If omitted, typed errors remain `TunnelError` instances.
-  - `serializer` is required for `createHttpClient`, but it is fully customizable (any `SerializerLike` works). If you use `globals.resources.httpClientFactory`, the serializer, error registry, and async contexts are auto-injected, so you can omit them from your own config.
-  - Other supported options on the same config object: `auth`, `timeoutMs`, `fetchImpl`, `onRequest`, and `contexts`.
 
 ## Overrides
 
@@ -648,22 +631,9 @@ const app = r
 
 Tunnels let you call Runner tasks/events across a process boundary over a small HTTP surface (Node-only exposure via `nodeExposure`), while preserving task ids, middleware, validation, typed errors, and async context.
 
-Important boundary: tunnels are for inter-runner/service-to-service communication, not for exposing a public browser-facing API directly.
-
-For "no call-site changes", register a client-mode tunnel resource tagged with `globals.tags.tunnel` plus phantom tasks for the remote ids; the tunnel middleware auto-routes selected tasks/events to an HTTP client. For explicit boundaries, create a client once and call `client.task(id, input)` / `client.event(id, payload)` directly. Full guide: `readmes/TUNNELS.md`.
-
-Node client note: prefer `createHttpMixedClient` (it uses the serialized-JSON path via Runner `Serializer` + `fetch` when possible and switches to the streaming-capable Smart path when needed). If a task may return a stream even for plain JSON inputs (ex: downloads), set `forceSmart` on Mixed (or use `createHttpSmartClient` directly).
-
-Node exposure hardening: use `x-runner-request-id` for request correlation, set `allowAsyncContext: false` on server tunnel resources unless context propagation is required, and enforce rate limiting at the edge/proxy layer.
-
 ## Serialization
 
-Runner ships with a serializer that round-trips Dates, RegExp, binary, and custom shapes across Node and web.
-
-It also supports:
-
-- `bigint` (encoded as a decimal string under `__type: "BigInt"`)
-- `symbol` for `Symbol.for(key)` and well-known symbols like `Symbol.iterator` (unique `Symbol("...")` values are rejected because identity cannot be preserved)
+Runner ships with a serializer that round-trips Dates, RegExp, binary, and custom shapes across Node and web. Supports circular references.
 
 ```ts
 import { r, globals } from "@bluelibs/runner";
@@ -689,10 +659,6 @@ const serializerSetup = r
   })
   .build();
 ```
-
-Use `new Serializer()` when you need a standalone instance outside DI.
-
-Note on files: The "File" you see in tunnels is not a custom serializer type. Runner uses a dedicated `$runnerFile: "File"` sentinel in inputs which the tunnel client/server convert to multipart streams via a manifest. File handling is performed by the tunnel layer (manifest hydration and multipart), not by the serializer. Keep using `createWebFile`/`createNodeFile` for uploads.
 
 ## Testing
 
@@ -721,7 +687,6 @@ test("sends welcome email", async () => {
 - Hooks and tasks emit metadata through `globals.resources.store`. Query it for dashboards or editor plugins.
 - Use middleware for tracing (`r.middleware.task("...").run(...)`) to wrap every task call.
 - Global infra resources are split into dedicated modules under `src/globals/resources/*.resource.ts` (for example `store.resource.ts`, `logger.resource.ts`, `eventManager.resource.ts`), while public consumption remains `globals.resources.*`.
-- `Semaphore` and `Queue` publish local lifecycle events through isolated `EventManager` instances (`on/once`). These are separate from the global EventManager used for business-level application events. Event names: semaphore → `queued/acquired/released/timeout/aborted/disposed`; queue → `enqueue/start/finish/error/cancel/disposed`.
 
 ## Metadata & Namespacing
 

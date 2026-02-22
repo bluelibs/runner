@@ -2213,7 +2213,7 @@ Imagine you want to automatically register all your HTTP routes without manually
 
 **The better solution**: Use Tags—metadata that can be queried at runtime to build dynamic functionality.
 
-### When to use Tags
+#### When to use Tags
 
 | Use case       | Why Tags help                               |
 | -------------- | ------------------------------------------- |
@@ -2222,7 +2222,7 @@ Imagine you want to automatically register all your HTTP routes without manually
 | Access control | Tag tasks requiring authorization           |
 | Monitoring     | Group tasks by feature for metrics          |
 
-### Tags Code Example
+#### Tags Code Example
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -2271,7 +2271,7 @@ const routeRegistration = r
   .on(globals.events.ready)
   .dependencies({
     server: expressServer,
-    httpTag: httpTag.startup(), // ensures that this runs before any item containing the tag is initialized
+    httpTag, // use the runtime accessor because we execute matched tasks via entry.run(...)
     cacheableTag, // ensures that this runs after all items containing the tag are initialized
   })
   .run(async (_event, { server, httpTag, cacheableTag }) => {
@@ -2282,7 +2282,7 @@ const routeRegistration = r
 
       const { method, path } = config;
       server.app[method.toLowerCase()](path, async (req, res) => {
-        const result = await entry.definition({ ...req.params, ...req.body });
+        const result = await entry.run({ ...req.params, ...req.body });
         res.json(result);
       });
     });
@@ -2299,6 +2299,41 @@ Accessor match helpers:
 
 - `tasks[]` entries expose `definition`, `config`, and runtime `run(...)` (plus runtime `intercept(...)` when consumed from a resource dependency context).
 - `resources[]` entries expose `definition`, `config`, and runtime `value` (available after that resource is initialized).
+
+#### Runtime Helpers on Tag Matches
+
+Tag dependency matches are not just metadata snapshots. For task and resource matches, Runner also exposes runtime helpers so you can execute or wire behavior directly from discovery results.
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+// Assuming: routeTag is defined and tasks/resources carrying it are registered
+const installRoutes = r
+  .resource("app.routes.installer")
+  .dependencies({ routeTag })
+  .init(async (_config, { routeTag }) => {
+    for (const taskEntry of routeTag.tasks) {
+      // taskEntry.run executes through runtime wiring (validation + middleware)
+      await taskEntry.run(undefined);
+
+      // taskEntry.intercept is available in resource dependency context
+      taskEntry.intercept(async (next, input) => next(input));
+    }
+
+    for (const resourceEntry of routeTag.resources) {
+      // value is the initialized runtime resource value (when available)
+      console.log(resourceEntry.definition.id, resourceEntry.value);
+    }
+  })
+  .build();
+```
+
+**Important details:**
+
+- With a normal tag dependency (not `tag.startup()`), `tasks[].run` is the runtime task callable (same execution pipeline as normal task dependencies).
+- `tasks[].intercept` is available when the tag accessor is injected in a resource dependency context.
+- `resources[].value` is the resolved runtime resource value for that matched resource (it may be `undefined` when using `tag.startup()` or before that resource is available).
+- Use `tag.startup()` when you need startup ordering/discovery and treat the accessor as metadata-first (don't assume runtime helpers like `run()` are available there).
 
 Use `tag.startup()` when startup ordering matters (for example route registration). It injects the same typed accessor while making the dependency intent explicit.
 
