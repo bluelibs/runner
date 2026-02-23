@@ -102,19 +102,21 @@ describe("createExposureServer - idempotent close", () => {
 
     const originalPop = Array.prototype.pop;
     let injected = false;
-    Array.prototype.pop = function <T>(this: T[]) {
-      const value = originalPop.call(this);
-      if (!injected && Array.isArray(this) && typeof value === "function") {
-        injected = true;
-        return undefined as T;
-      }
-      return value;
-    };
+    const popSpy = jest
+      .spyOn(Array.prototype, "pop")
+      .mockImplementation(function <T>(this: T[]) {
+        const value = originalPop.call(this);
+        if (!injected && typeof value === "function" && this.length === 0) {
+          injected = true;
+          return undefined as T;
+        }
+        return value;
+      });
 
     try {
       await expect(controls.close()).resolves.toBeUndefined();
     } finally {
-      Array.prototype.pop = originalPop;
+      popSpy.mockRestore();
     }
   });
 });

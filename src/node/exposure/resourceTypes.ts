@@ -2,7 +2,7 @@ import type * as http from "http";
 import type { IncomingMessage, ServerResponse } from "http";
 
 import { globalResources } from "../../globals/globalResources";
-import { globalTags } from "../../globals/globalTags";
+import type { globalTags } from "../../globals/globalTags";
 import type { ResourceDependencyValuesType } from "../../defs";
 import type { NodeExposureHttpAuthConfig } from "./authenticator";
 import type { MultipartLimits } from "./multipart";

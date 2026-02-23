@@ -1,14 +1,23 @@
-import type {
-  EventStoreElementType,
-  HookStoreElementType,
-  ITag,
-  ResourceMiddlewareStoreElementType,
-  ResourceStoreElementType,
-  TagType,
-  TaskMiddlewareStoreElementType,
-  TaskStoreElementType,
+import {
+  symbolTag,
+  type EventStoreElementType,
+  type HookStoreElementType,
+  type ITag,
+  type ResourceMiddlewareStoreElementType,
+  type ResourceStoreElementType,
+  type TagType,
+  type TaskMiddlewareStoreElementType,
+  type TaskStoreElementType,
 } from "../../defs";
 import type { IErrorHelper } from "../../types/error";
+
+function isTagLike(value: unknown): value is TagType {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as Record<string | symbol, unknown>;
+  return record[symbolTag] === true && typeof record.id === "string";
+}
 
 export type StoringMode = "normal" | "override";
 
@@ -62,13 +71,8 @@ export function normalizeTags(tags: unknown): TagType[] {
 
   const normalized: TagType[] = [];
   for (const candidate of tags) {
-    if (
-      candidate &&
-      typeof candidate === "object" &&
-      "id" in candidate &&
-      typeof (candidate as { id?: unknown }).id === "string"
-    ) {
-      normalized.push(candidate as TagType);
+    if (isTagLike(candidate)) {
+      normalized.push(candidate);
     }
   }
 

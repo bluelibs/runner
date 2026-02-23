@@ -206,7 +206,7 @@ describe("run.runtime-exports", () => {
       const runtime = await run(root, { shutdownHooks: false });
       await expect(
         runtime.emitEvent(exportedEvt, undefined),
-      ).resolves.not.toThrow();
+      ).resolves.toBeUndefined();
       await runtime.dispose();
     });
 
@@ -227,7 +227,7 @@ describe("run.runtime-exports", () => {
       const runtime = await run(root, { shutdownHooks: false });
       await expect(
         runtime.emitEvent(publicEvt, undefined),
-      ).resolves.not.toThrow();
+      ).resolves.toBeUndefined();
       await expect(
         runtime.emitEvent(privateEvt, undefined),
       ).rejects.toMatchObject({ id: "runner.errors.runtimeAccessViolation" });

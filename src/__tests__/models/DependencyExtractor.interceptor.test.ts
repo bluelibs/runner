@@ -145,4 +145,28 @@ describe("DependencyExtractor interceptor branches", () => {
 
     expect(extractDependenciesSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("treats an empty object argument as task call options for void-like task dependencies", async () => {
+    const dependencyTask = defineTask({
+      id: "extractor.options.empty-object.dependency",
+      run: async (input) => (input === undefined ? "no-input" : "has-input"),
+    });
+
+    const consumerTask = defineTask({
+      id: "extractor.options.empty-object.consumer",
+      dependencies: { dependencyTask },
+      run: async (_input, { dependencyTask }) => dependencyTask({} as any),
+    });
+
+    const app = defineResource({
+      id: "extractor.options.empty-object.app",
+      register: [dependencyTask, consumerTask],
+      dependencies: { consumerTask },
+      init: async (_config, { consumerTask }) => consumerTask(),
+    });
+
+    const runtime = await run(app);
+    expect(runtime.value).toBe("no-input");
+    await runtime.dispose();
+  });
 });

@@ -202,15 +202,17 @@ describe("defineTag.extract", () => {
 });
 
 describe("normalizeTags", () => {
-  it("filters out invalid candidate entries", () => {
+  it("filters out unbranded candidate entries", () => {
+    const validTag = defineTag({ id: "valid" });
     const result = normalizeTags([
       null,
       42,
       { noId: true },
       { id: 123 },
       { id: "valid" },
+      validTag,
     ]);
-    expect(result).toEqual([{ id: "valid" }]);
+    expect(result).toEqual([validTag]);
   });
 
   it("returns empty for empty or non-array input", () => {

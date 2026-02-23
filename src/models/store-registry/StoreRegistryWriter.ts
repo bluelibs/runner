@@ -199,6 +199,7 @@ export class StoreRegistryWriter {
       collection: this.collections.hooks,
       key: "hook",
       mode: overrideMode,
+      overrideTargetType: "Hook",
     });
 
     this.collections.hooks.set(hook.id, {
@@ -227,9 +228,10 @@ export class StoreRegistryWriter {
       collection: this.collections.taskMiddlewares,
       key: "middleware",
       mode: storingMode,
+      overrideTargetType: "Task middleware",
     });
 
-    this.collections.taskMiddlewares.set(item.id, {
+    this.collections.taskMiddlewares.set(middleware.id, {
       middleware,
       computedDependencies: {},
       isInitialized: false,
@@ -254,9 +256,10 @@ export class StoreRegistryWriter {
       collection: this.collections.resourceMiddlewares,
       key: "middleware",
       mode: overrideMode,
+      overrideTargetType: "Resource middleware",
     });
 
-    this.collections.resourceMiddlewares.set(item.id, {
+    this.collections.resourceMiddlewares.set(middleware.id, {
       middleware,
       computedDependencies: {},
       isInitialized: false,
@@ -297,6 +300,7 @@ export class StoreRegistryWriter {
       key: "resource",
       mode: storingMode,
       config: item.config,
+      overrideTargetType: "Resource",
     });
 
     this.collections.resources.set(prepared.id, {
@@ -354,6 +358,7 @@ export class StoreRegistryWriter {
       collection: this.collections.resources,
       key: "resource",
       mode: overrideMode,
+      overrideTargetType: "Resource",
     });
 
     this.collections.resources.set(prepared.id, {
@@ -389,6 +394,7 @@ export class StoreRegistryWriter {
       collection: this.collections.tasks,
       key: "task",
       mode: storingMode,
+      overrideTargetType: "Task",
     });
 
     this.collections.tasks.set(task.id, {

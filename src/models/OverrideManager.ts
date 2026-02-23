@@ -8,7 +8,10 @@ import {
   IHook,
 } from "../defs";
 import * as utils from "../define";
-import { overrideTargetNotRegisteredError } from "../errors";
+import {
+  overrideTargetNotRegisteredError,
+  unknownItemTypeError,
+} from "../errors";
 import { StoreRegistry } from "./StoreRegistry";
 
 type OverrideTargetType =
@@ -118,7 +121,7 @@ export class OverrideManager {
   processOverrides() {
     // If we are trying to use override on something that wasn't previously registered, we throw an error.
     for (const override of this.overrides.values()) {
-      let hasAnyItem: boolean;
+      let hasAnyItem = false;
       if (utils.isTask(override)) {
         hasAnyItem = this.registry.tasks.has(override.id);
       } else if (utils.isResource(override)) {
@@ -129,8 +132,10 @@ export class OverrideManager {
         hasAnyItem = this.registry.resourceMiddlewares.has(override.id);
       } else if (utils.isResourceWithConfig(override)) {
         hasAnyItem = this.registry.resources.has(override.resource.id);
-      } else {
+      } else if (utils.isHook(override)) {
         hasAnyItem = this.registry.hooks.has(override.id);
+      } else {
+        unknownItemTypeError.throw({ item: override });
       }
 
       if (!hasAnyItem) {
@@ -154,8 +159,10 @@ export class OverrideManager {
         this.registry.storeResourceMiddleware(override, "override");
       } else if (utils.isResourceWithConfig(override)) {
         this.registry.storeResourceWithConfig(override, "override");
-      } else {
+      } else if (utils.isHook(override)) {
         this.registry.storeHook(override, "override");
+      } else {
+        unknownItemTypeError.throw({ item: override });
       }
     }
   }

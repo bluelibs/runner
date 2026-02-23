@@ -203,13 +203,19 @@ export class DependencyExtractor {
             st.task.id,
           );
           st.isInitialized = true;
-        })();
+        })().finally(() => {
+          this.inFlightTaskInitializations.delete(st.task.id);
+        });
         this.inFlightTaskInitializations.set(st.task.id, initPromise);
       }
       await initPromise;
     }
 
-    return (input: unknown, options?: TaskCallOptions) => {
+    return (inputOrOptions?: unknown, maybeOptions?: TaskCallOptions) => {
+      const { input, options } = this.normalizeTaskDependencyArgs(
+        inputOrOptions,
+        maybeOptions,
+      );
       return this.taskRunner.run(st.task, input, options);
     };
   }
@@ -325,12 +331,51 @@ export class DependencyExtractor {
     };
 
     return (async (
-      input: ExtractTaskInput<TTask>,
-      options?: TaskCallOptions,
+      inputOrOptions?: ExtractTaskInput<TTask> | TaskCallOptions,
+      maybeOptions?: TaskCallOptions,
     ) => {
       const runner = await ensureRunner();
-      return runner(input, options);
+      const { input, options } = this.normalizeTaskDependencyArgs<
+        ExtractTaskInput<TTask>
+      >(inputOrOptions, maybeOptions);
+      return runner(input as ExtractTaskInput<TTask>, options);
     }) as TaskDependency<ExtractTaskInput<TTask>, ExtractTaskOutput<TTask>>;
+  }
+
+  private normalizeTaskDependencyArgs<TInput>(
+    inputOrOptions?: unknown,
+    maybeOptions?: TaskCallOptions,
+  ): {
+    input: TInput | undefined;
+    options: TaskCallOptions | undefined;
+  } {
+    if (maybeOptions !== undefined) {
+      return {
+        input: inputOrOptions as TInput,
+        options: maybeOptions,
+      };
+    }
+
+    if (this.looksLikeTaskCallOptions(inputOrOptions)) {
+      return {
+        input: undefined,
+        options: inputOrOptions,
+      };
+    }
+
+    return {
+      input: inputOrOptions as TInput,
+      options: undefined,
+    };
+  }
+
+  private looksLikeTaskCallOptions(value: unknown): value is TaskCallOptions {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return false;
+    }
+
+    const keys = Object.keys(value as Record<string, unknown>);
+    return keys.length === 0 || (keys.length === 1 && keys[0] === "journal");
   }
 
   private createTaggedTaskInterceptHelpers<TTask extends TaggedTask<any>>(

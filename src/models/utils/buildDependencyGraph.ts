@@ -14,19 +14,11 @@ const readStringId = (value: unknown): string | undefined => {
 };
 
 const getDependencyId = (dependency: unknown): string | undefined =>
-  readStringId(
-    isOptional(dependency)
-      ? (dependency as { inner: unknown }).inner
-      : dependency,
-  );
+  readStringId(isOptional(dependency) ? dependency.inner : dependency);
 
 const getTagDependencyId = (dependency: unknown): string | undefined => {
-  const raw = isOptional(dependency)
-    ? (dependency as { inner: unknown }).inner
-    : dependency;
-  const tagValue = isTagStartup(raw)
-    ? (raw as { tag: { id: string } }).tag
-    : raw;
+  const raw: unknown = isOptional(dependency) ? dependency.inner : dependency;
+  const tagValue: unknown = isTagStartup(raw) ? raw.tag : raw;
 
   if (!isTag(tagValue)) {
     return undefined;
@@ -193,13 +185,13 @@ function setupBlankNodes(
 export function buildDependencyGraph(
   registry: StoreRegistry,
 ): IDependentNode[] {
-  const depenedants: IDependentNode[] = [];
+  const dependents: IDependentNode[] = [];
 
   // First, create all nodes
   const nodeMap = new Map<string, IDependentNode>();
 
   // Create nodes for tasks
-  setupBlankNodes(registry, nodeMap, depenedants);
+  setupBlankNodes(registry, nodeMap, dependents);
 
   // Now, populate dependencies with references to actual nodes
   for (const task of registry.tasks.values()) {
@@ -304,7 +296,7 @@ export function buildDependencyGraph(
     }
   }
 
-  return depenedants;
+  return dependents;
 }
 
 /**
@@ -336,9 +328,7 @@ export function buildEventEmissionGraph(
     if (deps) {
       for (const value of Object.values(deps)) {
         // For optional wrappers, extract the inner value
-        const candidate: { id?: string } = isOptional(value)
-          ? (value as { inner: { id?: string } }).inner
-          : (value as { id?: string });
+        const candidate = isOptional(value) ? value.inner : value;
         if (candidate && isEvent(candidate)) {
           depEvents.push(candidate.id);
         }

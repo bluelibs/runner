@@ -144,8 +144,9 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
       id: "tests.unmapped.error",
       data: { x: 1 },
     });
+    expect(client.eventWithResult).toBeDefined();
     await expect(
-      client.eventWithResult?.("event.unmapped.result", {}),
+      client.eventWithResult!("event.unmapped.result", {}),
     ).rejects.toMatchObject({
       name: "TunnelError",
       id: "tests.unmapped.error",

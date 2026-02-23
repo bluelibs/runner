@@ -1,41 +1,76 @@
+import { defineHook } from "../../../define";
 import { globalTags } from "../../../globals/globalTags";
+import { allFalse } from "../../../globals/resources/debug/types";
 import { hookInterceptorResource } from "../../../globals/resources/debug/hook.hook";
+import { Logger } from "../../../models/Logger";
+
+type HookInterceptorInit = NonNullable<typeof hookInterceptorResource.init>;
+type HookInterceptorDeps = Parameters<HookInterceptorInit>[1];
+type HookExecutionInterceptor = Parameters<
+  HookInterceptorDeps["eventManager"]["interceptHook"]
+>[0];
+type HookExecutionEvent = Parameters<HookExecutionInterceptor>[2];
+
+function createEmission(id: string): HookExecutionEvent {
+  let propagationStopped = false;
+  return {
+    id,
+    data: undefined,
+    timestamp: new Date(),
+    source: "tests",
+    meta: {},
+    stopPropagation() {
+      propagationStopped = true;
+    },
+    isPropagationStopped() {
+      return propagationStopped;
+    },
+    tags: [],
+  };
+}
 
 describe("globals.resources.debug.hookInterceptorResource (unit)", () => {
   it("logs hook start and completion when enabled", async () => {
     const messages: string[] = [];
-    const logger = {
-      info: async (message: string) => {
-        messages.push(message);
-      },
-    };
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
+    jest.spyOn(logger, "info").mockImplementation(async (message: unknown) => {
+      messages.push(String(message));
+    });
 
     let nextCalls = 0;
     let interceptionDone: Promise<void> | undefined;
+    const hook = defineHook({
+      id: "tests.hook.unit",
+      on: "*",
+      run: async () => undefined,
+    });
     const eventManager = {
-      interceptHook: (interceptor: Function) => {
+      interceptHook: (interceptor: HookExecutionInterceptor) => {
         interceptionDone = interceptor(
           async () => {
             nextCalls += 1;
           },
-          { id: "tests.hook.unit" },
-          { id: "tests.event.unit" },
+          hook,
+          createEmission("tests.event.unit"),
         );
       },
     };
+    const deps = {
+      logger,
+      eventManager:
+        eventManager as unknown as HookInterceptorDeps["eventManager"],
+      debugConfig: {
+        ...allFalse,
+        logHookTriggered: true,
+        logHookCompleted: true,
+      },
+    } satisfies HookInterceptorDeps;
 
-    await hookInterceptorResource.init?.(
-      undefined as never,
-      {
-        logger,
-        eventManager,
-        debugConfig: {
-          logHookTriggered: true,
-          logHookCompleted: true,
-        },
-      } as never,
-      undefined as never,
-    );
+    await hookInterceptorResource.init?.(undefined, deps, undefined);
     await interceptionDone;
 
     expect(nextCalls).toBe(1);
@@ -49,48 +84,61 @@ describe("globals.resources.debug.hookInterceptorResource (unit)", () => {
 
   it("skips logging for system hooks and for disabled flags", async () => {
     const messages: string[] = [];
-    const logger = {
-      info: async (message: string) => {
-        messages.push(message);
-      },
-    };
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
+    jest.spyOn(logger, "info").mockImplementation(async (message: unknown) => {
+      messages.push(String(message));
+    });
 
     let nextCalls = 0;
     let interceptionDone: Promise<void> | undefined;
+    const systemHook = defineHook({
+      id: "tests.hook.system",
+      on: "*",
+      run: async () => undefined,
+      tags: [globalTags.system],
+    });
+    const disabledHook = defineHook({
+      id: "tests.hook.disabled",
+      on: "*",
+      run: async () => undefined,
+    });
     const eventManager = {
-      interceptHook: (interceptor: Function) => {
+      interceptHook: (interceptor: HookExecutionInterceptor) => {
         interceptionDone = (async () => {
           await interceptor(
             async () => {
               nextCalls += 1;
             },
-            { id: "tests.hook.system", tags: [globalTags.system] },
-            { id: "tests.event.system" },
+            systemHook,
+            createEmission("tests.event.system"),
           );
 
           await interceptor(
             async () => {
               nextCalls += 1;
             },
-            { id: "tests.hook.disabled" },
-            { id: "tests.event.disabled" },
+            disabledHook,
+            createEmission("tests.event.disabled"),
           );
         })();
       },
     };
+    const deps = {
+      logger,
+      eventManager:
+        eventManager as unknown as HookInterceptorDeps["eventManager"],
+      debugConfig: {
+        ...allFalse,
+        logHookTriggered: false,
+        logHookCompleted: false,
+      },
+    } satisfies HookInterceptorDeps;
 
-    await hookInterceptorResource.init?.(
-      undefined as never,
-      {
-        logger,
-        eventManager,
-        debugConfig: {
-          logHookTriggered: false,
-          logHookCompleted: false,
-        },
-      } as never,
-      undefined as never,
-    );
+    await hookInterceptorResource.init?.(undefined, deps, undefined);
     await interceptionDone;
 
     expect(nextCalls).toBe(2);

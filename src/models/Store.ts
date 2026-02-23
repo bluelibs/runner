@@ -259,6 +259,7 @@ export class Store {
 
     this.registry.computeRegistrationDeeply(root, config);
     this.registry.resources.set(root.id, this.root);
+    this.validator.trackRegisteredId(root.id);
   }
 
   public validateDependencyGraph() {

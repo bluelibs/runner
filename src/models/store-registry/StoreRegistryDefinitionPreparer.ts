@@ -1,4 +1,12 @@
 import { StoringMode } from "./types";
+import { overrideTargetNotRegisteredError } from "../../errors";
+
+type OverrideTargetType =
+  | "Task"
+  | "Resource"
+  | "Task middleware"
+  | "Resource middleware"
+  | "Hook";
 
 type PreparedDefinition = {
   id: string;
@@ -12,6 +20,7 @@ type PrepareFreshValueInput<T extends PreparedDefinition, TMapValue> = {
   key: keyof TMapValue;
   mode: StoringMode;
   config?: unknown;
+  overrideTargetType?: OverrideTargetType;
 };
 
 export class StoreRegistryDefinitionPreparer {
@@ -21,10 +30,18 @@ export class StoreRegistryDefinitionPreparer {
     key,
     mode,
     config,
+    overrideTargetType,
   }: PrepareFreshValueInput<T, TMapValue>): T {
     let currentItem: T;
     if (mode === "override") {
-      const existing = collection.get(item.id)![key] as T;
+      const existingEntry = collection.get(item.id);
+      if (!existingEntry) {
+        overrideTargetNotRegisteredError.throw({
+          targetId: item.id,
+          targetType: overrideTargetType ?? "Resource",
+        });
+      }
+      const existing = existingEntry![key] as T;
       currentItem = { ...existing, ...item };
     } else {
       currentItem = { ...item };
