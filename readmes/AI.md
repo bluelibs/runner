@@ -63,6 +63,8 @@ await runtime.runTask(createUser, { name: "Ada" });
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` clones a resource under a new id with a separate runtime instance. `"drop"` clears nested items; `"deep"` deep-forks the resource tree and remaps dependencies.
 - `.isolate({ exports: [...] })` narrows visibility: omit = everything public; `exports: []` / `exports: "none"` = nothing public (private subtree, including `.applyTo("subtree")` middleware scope). String entries support id selectors with segment wildcard `*` (for example: `app.resources.*`) and must match at least one id at bootstrap.
 - `.isolate({ deny: [...] })` blocks listed ids/tags; `{ only: [...] }` is a boundary-scoped external allowlist (internal subtree items remain reachable). String entries support id selectors with segment wildcard `*` (for example: `app.resources.*.test`). Policies are additive across ancestors (effective external access is the intersection of ancestor `only` lists); Runner fails fast on violations or unmatched selectors at bootstrap.
+- Tag object entries and tag-id string entries are intentionally different: `deny: [myTag]` / `only: [myTag]` match the tag dependency and all tagged carriers; `deny: [myTag.id]` / `only: [myTag.id]` match only the exact id string.
+- Isolation/visibility enforcement covers dependency wiring plus hook event subscriptions and middleware attachments (task + resource middleware), so the same rules apply to events and middleware too.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
 
@@ -278,7 +280,7 @@ Use `tag.startup()` when startup ordering matters; treat that accessor as metada
 
 - Scope tags with `.for([...])` to specific definition kinds (`"tasks"`, `"resources"`, `"events"`, `"hooks"`, `"taskMiddlewares"`, `"resourceMiddlewares"`, `"errors"`). Wrong usage is rejected by TypeScript in `.tags([...])` and also fails fast at runtime (useful when `any`/casts bypass TS).
 - Contract tags (a "smart tag"): define type contracts for task input/output (or resource config/value) via `r.tag<TConfig, TInputContract, TOutputContract>(id)`. They don't change runtime behavior; they shape the inferred types and compose with contract middleware.
-- Smart tags: built-in tags like `globals.tags.system`, `globals.tags.debug`, and `globals.tags.excludeFromGlobalHooks` change framework behavior; use them for per-component debug or to opt out of global hooks.
+- Smart tags: built-in tags like `globals.tags.system`, `globals.tags.debug`, `globals.tags.excludeFromGlobalHooks`, and `globals.tags.containerInternals` change framework behavior; use them for debug/scoping and for denying privileged container resources (`store`, `taskRunner`, `runtime`) via `.isolate({ deny: [globals.tags.containerInternals] })` (use the tag definition, not the string id, when you want to block all carriers).
 
 ```ts
 type Input = { id: string };

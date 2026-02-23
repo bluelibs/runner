@@ -25,6 +25,16 @@ const globalTagsBase = {
         "Marks events that should not be dispatched to global hooks (on: '*').",
     },
   }),
+  containerInternals: defineTag<{
+    metadata?: Record<string, any>;
+  }>({
+    id: "globals.tags.containerInternals",
+    meta: {
+      title: "Container Internals",
+      description:
+        "Marks privileged container resources (store, taskRunner, runtime) so isolation boundaries can deny access by tag.",
+    },
+  }),
   debug: debugTag,
   cron: cronTag,
   tunnel: tunnelTag,

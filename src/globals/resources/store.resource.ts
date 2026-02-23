@@ -9,5 +9,5 @@ export const storeResource = defineResource<void, Promise<Store>>({
     description:
       "A global store that can be used to store and retrieve tasks, resources, events and middleware",
   },
-  tags: [globalTags.system],
+  tags: [globalTags.system, globalTags.containerInternals],
 });

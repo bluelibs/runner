@@ -255,7 +255,10 @@ Quick rules:
 - `isolate: { exports: [] }` / `isolate: { exports: "none" }` means everything private outside that subtree
 - `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
 - The same selector semantics apply to `isolate({ deny: [...] })` and `isolate({ only: [...] })`
+- Tag definition vs string id is intentional in `deny`/`only`: `deny: [someTag]` blocks tag carriers, while `deny: [someTag.id]` blocks only the exact id
+- Use `isolate({ deny: [globals.tags.containerInternals] })` to block privileged container resources (`globals.resources.store`, `globals.resources.taskRunner`, `globals.resources.runtime`) inside a boundary
 - Visibility is enforced at `run(app)` bootstrap
+- Wiring checks include dependencies, hook event subscriptions, and middleware attachments (task + resource middleware)
 - `.applyTo("where-visible")` middleware is auto-applied only to visible targets (respects isolate `exports` and `.isolate()`)
 - `.applyTo("subtree")` middleware is auto-applied to the declaring resource and everything in its registration subtree
 - Duplicate ids still fail globally, even for private items

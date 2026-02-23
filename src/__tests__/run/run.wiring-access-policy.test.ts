@@ -8,6 +8,7 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
+import { globalTags } from "../../globals/globalTags";
 
 const POLICY_VIOLATION_ID = "runner.errors.isolationViolation";
 const POLICY_UNKNOWN_TARGET_ID = "runner.errors.isolationUnknownTarget";
@@ -459,6 +460,30 @@ describe("run.isolate", () => {
     const runtime = await run(app);
     expect(runtime.value).toBe("ok");
     await runtime.dispose();
+  });
+
+  it("supports denying container internals via globals.tags.containerInternals", async () => {
+    const consumer = defineTask({
+      id: "policy.container-internals.consumer",
+      dependencies: { store: globalResources.store },
+      run: async (_input, deps) => deps.store,
+    });
+
+    const guarded = defineResource({
+      id: "policy.container-internals.guarded",
+      register: [consumer],
+      isolate: {
+        deny: [globalTags.containerInternals],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy.container-internals.app",
+      register: [guarded],
+    });
+
+    const error = await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
+    expect(error.message).toContain(`"${globalResources.store.id}"`);
   });
 });
 

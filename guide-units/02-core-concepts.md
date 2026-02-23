@@ -388,15 +388,44 @@ const payments = r
 - A resource uses **either** `deny` **or** `only` — providing both (even `deny: []` alongside `only`) throws `isolateConflictError` at bootstrap.
 - `deny` / `only` accept string ids, string id selectors (`*` matches one dot-segment), definitions (tasks/resources/events/hooks/middleware/tags/errors/async contexts), or tag definitions; tags match any item carrying that tag.
 - String selectors match **definition ids only** (they do not expand tag rules to tagged carriers).
+- Tag definition entries and tag-id string entries are intentionally different:
+  - `deny: [internalOnlyTag]` / `only: [internalOnlyTag]` apply tag semantics (tag dependency itself + all definitions carrying that tag).
+  - `deny: [internalOnlyTag.id]` / `only: [internalOnlyTag.id]` are exact-id matches only (no carrier expansion).
 - **`only` automatically exempts internal items**: anything registered by the resource or its children is always accessible without being listed. `only: []` blocks all external dependencies while keeping internal ones reachable.
 - **`only` is checked at every ancestor boundary** for the consumer. For external dependencies, effective access behaves like the intersection of ancestor `only` lists (with the internal-subtree exemption still applied at each boundary).
 - Rules are validated at bootstrap; unknown, malformed, or unmatched wildcard selectors fail fast.
+- Enforcement scope includes dependency wiring, hook `.on(event)` subscriptions, and middleware attachments, so the same policy semantics apply when targets are events or middleware definitions.
 - **Parent and child policies compose additively**; children cannot relax parent restrictions:
   - Parent `deny: [A]` + child `deny: [B]` → neither A nor B accessible inside child.
   - Parent `only: [A]` + child `only: [A, B]` → only A accessible (parent blocks B).
   - Parent `only: [A]` + child `deny: [B]` → only A accessible and B additionally blocked.
   - Parent `only: [A1, A2, A3]` + child `only: [A1, A4]` + grandchild consumer -> external access collapses to `A1` only (assuming all are external to both parent and child boundaries).
 - Denied references fail during `run(app)` sanity checks with a `isolateViolationError`.
+
+**Events and middleware follow the same rules:**
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const internalBoundaryTag = r.tag("app.tags.internalBoundary").build();
+
+const internalEvent = r
+  .event("app.events.internalAudit")
+  .tags([internalBoundaryTag])
+  .build();
+
+const internalTaskMiddleware = r.middleware
+  .task("app.middleware.internalAudit")
+  .tags([internalBoundaryTag])
+  .run(async ({ task, next }) => next(task.input))
+  .build();
+
+const secureModule = r
+  .resource("app.secure")
+  .register([internalBoundaryTag, internalEvent, internalTaskMiddleware])
+  .isolate({ deny: [internalBoundaryTag] }) // blocks both tagged definitions
+  .build();
+```
 
 #### Optional Dependencies
 
@@ -1331,6 +1360,12 @@ const internalTask = r
 const internalEvent = r
   .event("app.events.internal")
   .tags([globals.tags.excludeFromGlobalHooks]) // Won't trigger wildcard hooks
+  .build();
+
+// Deny privileged container resources inside a boundary
+const secureModule = r
+  .resource("app.secure")
+  .isolate({ deny: [globals.tags.containerInternals] })
   .build();
 ```
 
