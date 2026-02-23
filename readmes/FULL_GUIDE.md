@@ -1437,6 +1437,7 @@ const billing = r
 
 - No isolate `exports` means backward-compatible behavior: everything remains public
 - `isolate: { exports: [] }` / `isolate: { exports: "none" }` means nothing from that resource is public outside its registration subtree
+- `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
 - Visibility checks cover dependency references, hook `.on(event)` subscriptions, and middleware attachment
 - `.applyTo("where-visible")` middleware follows visibility; non-exported middleware applies only inside its subtree
 - If a resource exports a child resource, that child's own exported surface is visible transitively
@@ -1473,6 +1474,7 @@ const billing = r
   .register([internalDb, internalOnlyTag])
   .isolate({
     deny: [internalDb, internalOnlyTag], // block by id or definition (tags match all carriers)
+    // deny: ["billing.resources.*.test"] // string id selector (segment wildcard)
   })
   .build();
 
@@ -1487,6 +1489,7 @@ const payments = r
   .register([allowedService])
   .isolate({
     only: [allowedService], // nothing else from outside is reachable
+    // only: ["payments.public.*"] // string id selector (segment wildcard)
   })
   .build();
 ```
@@ -1494,10 +1497,11 @@ const payments = r
 **Semantics:**
 
 - A resource uses **either** `deny` **or** `only` — providing both (even `deny: []` alongside `only`) throws `isolateConflictError` at bootstrap.
-- `deny` / `only` accept string ids, definitions (tasks/resources/events/hooks/middleware/tags/errors/async contexts), or tag definitions; tags match any item carrying that tag.
+- `deny` / `only` accept string ids, string id selectors (`*` matches one dot-segment), definitions (tasks/resources/events/hooks/middleware/tags/errors/async contexts), or tag definitions; tags match any item carrying that tag.
+- String selectors match **definition ids only** (they do not expand tag rules to tagged carriers).
 - **`only` automatically exempts internal items**: anything registered by the resource or its children is always accessible without being listed. `only: []` blocks all external dependencies while keeping internal ones reachable.
 - **`only` is checked at every ancestor boundary** for the consumer. For external dependencies, effective access behaves like the intersection of ancestor `only` lists (with the internal-subtree exemption still applied at each boundary).
-- Rules are validated at bootstrap; unknown or malformed entries fail fast.
+- Rules are validated at bootstrap; unknown, malformed, or unmatched wildcard selectors fail fast.
 - **Parent and child policies compose additively**; children cannot relax parent restrictions:
   - Parent `deny: [A]` + child `deny: [B]` → neither A nor B accessible inside child.
   - Parent `only: [A]` + child `only: [A, B]` → only A accessible (parent blocks B).
@@ -8218,6 +8222,8 @@ const billing = r
 Quick rules:
 - No isolate `exports` means everything public (backward compatible)
 - `isolate: { exports: [] }` / `isolate: { exports: "none" }` means everything private outside that subtree
+- `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
+- The same selector semantics apply to `isolate({ deny: [...] })` and `isolate({ only: [...] })`
 - Visibility is enforced at `run(app)` bootstrap
 - `.applyTo("where-visible")` middleware is auto-applied only to visible targets (respects isolate `exports` and `.isolate()`)
 - `.applyTo("subtree")` middleware is auto-applied to the declaring resource and everything in its registration subtree

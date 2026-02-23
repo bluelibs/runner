@@ -210,9 +210,17 @@ export class VisibilityTracker {
   /**
    * Records the export set for a resource that declares isolate exports.
    */
-  recordExports(resourceId: string, exports: Array<RegisterableItems>): void {
+  recordExports(
+    resourceId: string,
+    exports: Array<RegisterableItems | string>,
+  ): void {
     const ids = new Set<string>();
     for (const item of exports) {
+      if (typeof item === "string") {
+        ids.add(item);
+        continue;
+      }
+
       const id = getItemId(item);
       if (id) ids.add(id);
     }

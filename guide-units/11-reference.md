@@ -253,6 +253,8 @@ const billing = r
 Quick rules:
 - No isolate `exports` means everything public (backward compatible)
 - `isolate: { exports: [] }` / `isolate: { exports: "none" }` means everything private outside that subtree
+- `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
+- The same selector semantics apply to `isolate({ deny: [...] })` and `isolate({ only: [...] })`
 - Visibility is enforced at `run(app)` bootstrap
 - `.applyTo("where-visible")` middleware is auto-applied only to visible targets (respects isolate `exports` and `.isolate()`)
 - `.applyTo("subtree")` middleware is auto-applied to the declaring resource and everything in its registration subtree

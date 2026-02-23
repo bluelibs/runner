@@ -109,6 +109,13 @@ describe("VisibilityTracker", () => {
       expect(exportSet!.size).toBe(1);
       expect(exportSet!.has("tracker.export.valid")).toBe(true);
     });
+
+    it("stores string export ids directly", () => {
+      tracker.recordExports("resource.id", ["tracker.export.direct"]);
+      const exportSet = tracker.getExportSets().get("resource.id");
+      expect(exportSet).toBeDefined();
+      expect(exportSet!.has("tracker.export.direct")).toBe(true);
+    });
   });
 
   describe("isAccessible", () => {

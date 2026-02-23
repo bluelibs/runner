@@ -61,25 +61,32 @@ export interface ResourceForkInfo {
   readonly fromId: string;
 }
 
-export type IsolationTarget = RegisterableItems | string;
+export type IsolationSelector = string;
+export type IsolationTarget = RegisterableItems | IsolationSelector;
+export type IsolationExportsTarget = RegisterableItems | IsolationSelector;
 
-export type IsolationExportsConfig = ReadonlyArray<RegisterableItems> | "none";
+export type IsolationExportsConfig =
+  | ReadonlyArray<IsolationExportsTarget>
+  | "none";
 
 export interface IsolationPolicy {
   /**
    * Denied targets for this resource boundary.
    * Denials are additive across nested resources.
+   * String targets may be exact ids or wildcard selectors (`*` per dot-segment).
    */
   deny?: ReadonlyArray<IsolationTarget>;
   /**
    * Allowed targets for this resource boundary.
    * When provided, only these targets (and internal items) can be referenced.
+   * String targets may be exact ids or wildcard selectors (`*` per dot-segment).
    */
   only?: ReadonlyArray<IsolationTarget>;
   /**
    * Declares which registered items are visible outside this resource's
    * registration subtree.
    *
+   * String targets may be exact ids or wildcard selectors (`*` per dot-segment).
    * - Omit `exports` => everything is public (default)
    * - `exports: []` or `exports: "none"` => nothing is public
    */
@@ -192,7 +199,7 @@ export interface IResourceDefinition<
    *
    * @deprecated Use `isolate: { exports: [...] }` instead.
    */
-  exports?: Array<RegisterableItems>;
+  exports?: Array<IsolationExportsTarget>;
   /**
    * Isolates this resource boundary, restricting which external definitions can
    * be referenced by this resource and its subtree.
@@ -288,7 +295,7 @@ export interface IResource<
    *
    * @deprecated Use `isolate: { exports: ... }` instead.
    */
-  exports?: Array<RegisterableItems>;
+  exports?: Array<IsolationExportsTarget>;
   /**
    * Wiring isolation policy for this resource and its subtree.
    */

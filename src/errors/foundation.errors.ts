@@ -293,7 +293,7 @@ export const isolateInvalidEntryError = error<
   )
   .remediation(
     ({ policyResourceId }) =>
-      `Use .isolate({ deny: [...] }) or .isolate({ only: [...] }) with string ids or Runner definitions only. Review "${policyResourceId}" and remove malformed entries.`,
+      `Use .isolate({ deny: [...] }) or .isolate({ only: [...] }) with string ids/selectors or Runner definitions only. Review "${policyResourceId}" and remove malformed entries.`,
   )
   .build();
 
@@ -309,7 +309,7 @@ export const isolateUnknownTargetError = error<
   )
   .remediation(
     ({ targetId }) =>
-      `Register "${targetId}" in the same runtime graph or remove it from the policy. Policy targets must exist at bootstrap.`,
+      `Register "${targetId}" in the same runtime graph, or if it is a wildcard selector ensure it matches at least one id at bootstrap.`,
   )
   .build();
 
@@ -340,7 +340,7 @@ export const isolateInvalidExportsError = error<
   )
   .remediation(
     ({ policyResourceId }) =>
-      `Use .isolate({ exports: [...] }) or .isolate({ exports: "none" }) on "${policyResourceId}".`,
+      `Use .isolate({ exports: [...] }) or .isolate({ exports: "none" }) on "${policyResourceId}". Export entries must be Runner definitions or string ids/selectors.`,
   )
   .build();
 
@@ -356,7 +356,7 @@ export const isolateExportsUnknownTargetError = error<
   )
   .remediation(
     ({ targetId }) =>
-      `Register "${targetId}" in the same runtime graph or remove it from exports. Exported targets must exist at bootstrap.`,
+      `Register "${targetId}" in the same runtime graph, or if it is a wildcard selector ensure it matches at least one id at bootstrap.`,
   )
   .build();
 

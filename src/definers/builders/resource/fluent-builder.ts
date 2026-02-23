@@ -4,9 +4,9 @@ import type {
   IResourceDefinition,
   IResourceMeta,
   IValidationSchema,
+  IsolationExportsTarget,
   IsolationPolicy,
   OverridableElements,
-  RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   ResourceTagType,
@@ -353,7 +353,10 @@ export function makeResourceBuilder<
       >(next);
     },
     /** @deprecated Use `.isolate({ exports: ... })` instead. */
-    exports(items: Array<RegisterableItems>, options?: { override?: boolean }) {
+    exports(
+      items: Array<IsolationExportsTarget>,
+      options?: { override?: boolean },
+    ) {
       return this.isolate({ exports: items }, options);
     },
     isolate(policy: IsolationPolicy, options?: { override?: boolean }) {

@@ -118,4 +118,15 @@ describe("resource builder: isolate.exports", () => {
 
     expect(res.isolate).toEqual({ exports: [a] });
   });
+
+  it("deprecated .exports() accepts wildcard string selectors", () => {
+    const res = r
+      .resource("tests.isolate.exports.deprecated.selector.resource")
+      .exports(["tests.isolate.exports.deprecated.selector.*"])
+      .build();
+
+    expect(res.isolate).toEqual({
+      exports: ["tests.isolate.exports.deprecated.selector.*"],
+    });
+  });
 });

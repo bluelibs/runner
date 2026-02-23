@@ -249,6 +249,96 @@ describe("run.isolate", () => {
     expect(rootInit).not.toHaveBeenCalled();
   });
 
+  it("supports deny wildcard selectors", async () => {
+    const deniedTask = defineTask({
+      id: "policy.wildcard.deny.target",
+      run: async () => "denied",
+    });
+
+    const consumer = defineTask({
+      id: "policy.wildcard.deny.consumer",
+      dependencies: { deniedTask },
+      run: async (_input, deps) => deps.deniedTask(),
+    });
+
+    const guarded = defineResource({
+      id: "policy.wildcard.deny.resource",
+      register: [deniedTask, consumer],
+      isolate: {
+        deny: ["policy.wildcard.deny.*"],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy.wildcard.deny.app",
+      register: [guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
+  });
+
+  it("fails fast when deny wildcard matches no ids", async () => {
+    const task = defineTask({
+      id: "policy.wildcard.deny.safe.task",
+      run: async () => "ok",
+    });
+
+    const consumer = defineTask({
+      id: "policy.wildcard.deny.safe.consumer",
+      dependencies: { task },
+      run: async (_input, deps) => deps.task(),
+    });
+
+    const guarded = defineResource({
+      id: "policy.wildcard.deny.safe.resource",
+      register: [task, consumer],
+      isolate: {
+        deny: ["policy.wildcard.deny.no-match.*"],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy.wildcard.deny.safe.app",
+      register: [guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_UNKNOWN_TARGET_ID);
+  });
+
+  it("deny wildcard matches ids only and does not expand to tag carriers", async () => {
+    const denyTag = defineTag({
+      id: "policy.wildcard.scope.tag-id",
+    });
+
+    const taggedTask = defineTask({
+      id: "policy.wildcard.scope.task-id",
+      tags: [denyTag],
+      run: async () => "ok",
+    });
+
+    const consumer = defineTask({
+      id: "policy.wildcard.scope.consumer",
+      dependencies: { taggedTask },
+      run: async (_input, deps) => deps.taggedTask(),
+    });
+
+    const guarded = defineResource({
+      id: "policy.wildcard.scope.resource",
+      register: [denyTag, taggedTask, consumer],
+      isolate: {
+        deny: ["policy.wildcard.scope.tag-*"],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy.wildcard.scope.app",
+      register: [guarded],
+    });
+
+    const runtime = await run(app);
+    await runtime.dispose();
+  });
+
   it("fails fast when a deny entry is invalid", async () => {
     const guarded = defineResource({
       id: "policy.invalid.resource",
@@ -535,6 +625,110 @@ describe("run.isolate (only mode)", () => {
     await expectRunnerErrorId(run(app), POLICY_UNKNOWN_TARGET_ID);
   });
 
+  it("supports only wildcard selectors for external dependencies", async () => {
+    const allowed = defineTask({
+      id: "only.wildcard.allowed.task",
+      run: async () => "ok",
+    });
+
+    const consumer = defineTask({
+      id: "only.wildcard.allowed.consumer",
+      dependencies: { allowed },
+      run: async (_input, deps) => deps.allowed(),
+    });
+
+    const guarded = defineResource({
+      id: "only.wildcard.allowed.resource",
+      register: [consumer],
+      isolate: { only: ["only.wildcard.allowed.*"] },
+    });
+
+    const app = defineResource({
+      id: "only.wildcard.allowed.app",
+      register: [allowed, guarded],
+    });
+
+    const runtime = await run(app);
+    await runtime.dispose();
+  });
+
+  it("only wildcard still blocks non-matching external dependencies", async () => {
+    const allowed = defineTask({
+      id: "only.wildcard.allowed.anchor",
+      run: async () => "allowed",
+    });
+
+    const blocked = defineTask({
+      id: "only.wildcard.blocked.external",
+      run: async () => "nope",
+    });
+
+    const consumer = defineTask({
+      id: "only.wildcard.blocked.consumer",
+      dependencies: { blocked },
+      run: async (_input, deps) => deps.blocked(),
+    });
+
+    const guarded = defineResource({
+      id: "only.wildcard.blocked.resource",
+      register: [consumer],
+      isolate: { only: ["only.wildcard.allowed.*"] },
+    });
+
+    const app = defineResource({
+      id: "only.wildcard.blocked.app",
+      register: [allowed, blocked, guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
+  });
+
+  it("only wildcard still exempts internal subtree items", async () => {
+    const allowed = defineTask({
+      id: "only.wildcard.allowed.anchor-internal",
+      run: async () => "allowed",
+    });
+
+    const internal = defineTask({
+      id: "only.wildcard.internal.task",
+      run: async () => "internal",
+    });
+
+    const consumer = defineTask({
+      id: "only.wildcard.internal.consumer",
+      dependencies: { internal },
+      run: async (_input, deps) => deps.internal(),
+    });
+
+    const guarded = defineResource({
+      id: "only.wildcard.internal.resource",
+      register: [internal, consumer],
+      isolate: { only: ["only.wildcard.allowed.*"] },
+    });
+
+    const app = defineResource({
+      id: "only.wildcard.internal.app",
+      register: [allowed, guarded],
+    });
+
+    const runtime = await run(app);
+    await runtime.dispose();
+  });
+
+  it("fails fast when only wildcard matches nothing", async () => {
+    const guarded = defineResource({
+      id: "only.wildcard.unknown.resource",
+      isolate: { only: ["only.wildcard.missing.*"] },
+    });
+
+    const app = defineResource({
+      id: "only.wildcard.unknown.app",
+      register: [guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_UNKNOWN_TARGET_ID);
+  });
+
   it("fails fast when only contains an invalid entry", async () => {
     const guarded = defineResource({
       id: "only.invalid.resource",
@@ -543,6 +737,19 @@ describe("run.isolate (only mode)", () => {
 
     const app = defineResource({ id: "only.invalid.app", register: [guarded] });
     await expectRunnerErrorId(run(app), POLICY_INVALID_ENTRY_ID);
+  });
+
+  it("fails fast when only contains an unknown object id target", async () => {
+    const guarded = defineResource({
+      id: "only.unknown.object.resource",
+      isolate: { only: [{ id: "only.unknown.object.missing" } as any] },
+    });
+
+    const app = defineResource({
+      id: "only.unknown.object.app",
+      register: [guarded],
+    });
+    await expectRunnerErrorId(run(app), POLICY_UNKNOWN_TARGET_ID);
   });
 
   it("fails fast when only is not an array", async () => {
@@ -592,5 +799,68 @@ describe("run.isolate (only mode)", () => {
     });
 
     await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
+  });
+
+  it("compounds parent and child only selectors by intersection", async () => {
+    const alpha = defineTask({
+      id: "only.wildcard.intersection.alpha",
+      run: async () => "alpha",
+    });
+    const beta = defineTask({
+      id: "only.wildcard.intersection.beta",
+      run: async () => "beta",
+    });
+
+    const consumer = defineTask({
+      id: "only.wildcard.intersection.consumer",
+      dependencies: { beta },
+      run: async (_input, deps) => deps.beta(),
+    });
+
+    const child = defineResource({
+      id: "only.wildcard.intersection.child",
+      register: [consumer],
+      isolate: { only: ["only.wildcard.intersection.alpha"] },
+    });
+
+    const parent = defineResource({
+      id: "only.wildcard.intersection.parent",
+      register: [child],
+      isolate: { only: ["only.wildcard.intersection.*"] },
+    });
+
+    const app = defineResource({
+      id: "only.wildcard.intersection.app",
+      register: [alpha, beta, parent],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
+  });
+
+  it("deduplicates overlapping only selectors after wildcard expansion", async () => {
+    const allowed = defineTask({
+      id: "only.dedupe.allowed",
+      run: async () => "allowed",
+    });
+
+    const consumer = defineTask({
+      id: "only.dedupe.consumer",
+      dependencies: { allowed },
+      run: async (_input, deps) => deps.allowed(),
+    });
+
+    const guarded = defineResource({
+      id: "only.dedupe.resource",
+      register: [consumer],
+      isolate: { only: ["only.dedupe.*", "only.dedupe.allowed"] },
+    });
+
+    const app = defineResource({
+      id: "only.dedupe.app",
+      register: [allowed, guarded],
+    });
+
+    const runtime = await run(app);
+    await runtime.dispose();
   });
 });

@@ -10,7 +10,12 @@ import {
   tagSelfDependencyError,
   tagNotFoundError,
 } from "../errors";
-import { ITaggable } from "../defs";
+import type {
+  ITaggable,
+  IsolationExportsTarget,
+  IsolationPolicy,
+  IsolationTarget,
+} from "../defs";
 import {
   isOptional,
   isResourceWithConfig,
@@ -18,6 +23,7 @@ import {
   isTagStartup,
 } from "../define";
 import { StoreRegistry } from "./StoreRegistry";
+import { resolveIsolationSelector } from "./utils/isolationSelectors";
 
 type SanityCheckTaggable = ITaggable & {
   id: string;
@@ -215,6 +221,11 @@ export class StoreValidator {
         });
       }
 
+      const normalizedPolicy: IsolationPolicy = {
+        ...(denyPresent ? { deny: policy.deny } : {}),
+        ...(onlyPresent ? { only: policy.only } : {}),
+      };
+
       if (
         exportsPresent &&
         policy.exports !== "none" &&
@@ -227,46 +238,111 @@ export class StoreValidator {
       }
 
       if (Array.isArray(policy.exports)) {
-        for (const entry of policy.exports) {
-          const resolvedId = this.resolveIsolationTargetId(entry);
-          if (!resolvedId) {
-            isolateInvalidExportsError.throw({
-              policyResourceId: resource.id,
-              entry,
-            });
-          } else if (!this.hasRegisteredId(resolvedId)) {
-            isolateExportsUnknownTargetError.throw({
-              policyResourceId: resource.id,
-              targetId: resolvedId,
-            });
-          }
-        }
+        normalizedPolicy.exports =
+          this.normalizeIsolationEntries<IsolationExportsTarget>({
+            entries: policy.exports,
+            onInvalidEntry: (entry) =>
+              isolateInvalidExportsError.throw({
+                policyResourceId: resource.id,
+                entry,
+              }),
+            onUnknownTarget: (targetId) =>
+              isolateExportsUnknownTargetError.throw({
+                policyResourceId: resource.id,
+                targetId,
+              }),
+          });
+      } else if (policy.exports === "none") {
+        normalizedPolicy.exports = "none";
       }
 
       const entries = hasDeny ? policy.deny! : hasOnly ? policy.only! : [];
 
-      for (const entry of entries) {
-        const resolvedId = this.resolveIsolationTargetId(entry);
-        if (!resolvedId) {
-          isolateInvalidEntryError.throw({
-            policyResourceId: resource.id,
-            entry,
+      if (entries.length > 0) {
+        const normalizedEntries =
+          this.normalizeIsolationEntries<IsolationTarget>({
+            entries,
+            onInvalidEntry: (entry) =>
+              isolateInvalidEntryError.throw({
+                policyResourceId: resource.id,
+                entry,
+              }),
+            onUnknownTarget: (targetId) =>
+              isolateUnknownTargetError.throw({
+                policyResourceId: resource.id,
+                targetId,
+              }),
           });
-        } else if (!this.hasRegisteredId(resolvedId)) {
-          isolateUnknownTargetError.throw({
-            policyResourceId: resource.id,
-            targetId: resolvedId,
-          });
+
+        if (hasDeny) {
+          normalizedPolicy.deny = normalizedEntries;
+        } else {
+          normalizedPolicy.only = normalizedEntries;
         }
+      }
+
+      resource.isolate = normalizedPolicy;
+      this.registry.visibilityTracker.recordIsolation(
+        resource.id,
+        normalizedPolicy,
+      );
+
+      if (Array.isArray(normalizedPolicy.exports)) {
+        this.registry.visibilityTracker.recordExports(
+          resource.id,
+          normalizedPolicy.exports,
+        );
       }
     }
   }
 
-  private resolveIsolationTargetId(entry: unknown): string | null {
-    if (typeof entry === "string") {
-      return entry.length > 0 ? entry : null;
+  private normalizeIsolationEntries<TEntry extends string | object>(input: {
+    entries: ReadonlyArray<unknown>;
+    onInvalidEntry: (entry: unknown) => never;
+    onUnknownTarget: (targetId: string) => never;
+  }): Array<TEntry> {
+    const normalizedEntries: Array<TEntry> = [];
+    const seenStringTargets = new Set<string>();
+
+    const addStringTarget = (id: string) => {
+      if (seenStringTargets.has(id)) {
+        return;
+      }
+      seenStringTargets.add(id);
+      normalizedEntries.push(id as TEntry);
+    };
+
+    for (const entry of input.entries) {
+      if (typeof entry === "string") {
+        if (entry.length === 0) {
+          input.onInvalidEntry(entry);
+        }
+
+        const resolvedIds = resolveIsolationSelector(entry, this.registeredIds);
+        if (resolvedIds.length === 0) {
+          input.onUnknownTarget(entry);
+        }
+
+        for (const resolvedId of resolvedIds) {
+          addStringTarget(resolvedId);
+        }
+        continue;
+      }
+
+      const resolvedId = this.resolveIsolationTargetId(entry);
+      if (!resolvedId) {
+        input.onInvalidEntry(entry);
+      } else if (!this.hasRegisteredId(resolvedId)) {
+        input.onUnknownTarget(resolvedId);
+      }
+
+      normalizedEntries.push(entry as TEntry);
     }
 
+    return normalizedEntries;
+  }
+
+  private resolveIsolationTargetId(entry: unknown): string | null {
     if (!entry || typeof entry !== "object") {
       return null;
     }

@@ -99,6 +99,30 @@ describe("run.runtime-exports", () => {
       await runtime.dispose();
     });
 
+    it("allows running tasks exported through wildcard selectors", async () => {
+      const exported = defineTask({
+        id: "runtime.exports.runTask.selector.api.task",
+        run: async () => "selector-result",
+      });
+      const hidden = defineTask({
+        id: "runtime.exports.runTask.selector.internal.task",
+        run: async () => "hidden-result",
+      });
+
+      const root = defineResource({
+        id: "runtime.exports.runTask.selector.root",
+        register: [exported, hidden],
+        isolate: { exports: ["runtime.exports.runTask.selector.api.*"] },
+      });
+
+      const runtime = await run(root, { shutdownHooks: false });
+      await expect(runtime.runTask(exported)).resolves.toBe("selector-result");
+      await expect(runtime.runTask(hidden)).rejects.toMatchObject({
+        id: "runner.errors.runtimeAccessViolation",
+      });
+      await runtime.dispose();
+    });
+
     it("blocks running a non-exported task", async () => {
       const internal = defineTask({
         id: "runtime.exports.runTask.blocked.internal",
@@ -186,6 +210,30 @@ describe("run.runtime-exports", () => {
       await runtime.dispose();
     });
 
+    it("allows emitting events exported through wildcard selectors", async () => {
+      const publicEvt = defineEvent<undefined>({
+        id: "runtime.exports.emit.selector.public.event",
+      });
+      const privateEvt = defineEvent<undefined>({
+        id: "runtime.exports.emit.selector.private.event",
+      });
+
+      const root = defineResource({
+        id: "runtime.exports.emit.selector.root",
+        register: [publicEvt, privateEvt],
+        isolate: { exports: ["runtime.exports.emit.selector.public.*"] },
+      });
+
+      const runtime = await run(root, { shutdownHooks: false });
+      await expect(
+        runtime.emitEvent(publicEvt, undefined),
+      ).resolves.not.toThrow();
+      await expect(
+        runtime.emitEvent(privateEvt, undefined),
+      ).rejects.toMatchObject({ id: "runner.errors.runtimeAccessViolation" });
+      await runtime.dispose();
+    });
+
     it("blocks emitting a non-exported event", async () => {
       const privateEvt = defineEvent<undefined>({
         id: "runtime.exports.emit.private",
@@ -239,6 +287,33 @@ describe("run.runtime-exports", () => {
 
       const runtime = await run(root, { shutdownHooks: false });
       expect(runtime.getResourceValue(inner)).toBe("exported-val");
+      await runtime.dispose();
+    });
+
+    it("allows resources exported through wildcard selectors", async () => {
+      const exported = defineResource({
+        id: "runtime.exports.getRes.selector.group.public",
+        async init() {
+          return "public";
+        },
+      });
+      const hidden = defineResource({
+        id: "runtime.exports.getRes.selector.private",
+        async init() {
+          return "private";
+        },
+      });
+      const root = defineResource({
+        id: "runtime.exports.getRes.selector.root",
+        register: [exported, hidden],
+        isolate: { exports: ["runtime.exports.getRes.selector.group.*"] },
+      });
+
+      const runtime = await run(root, { shutdownHooks: false });
+      expect(runtime.getResourceValue(exported)).toBe("public");
+      expect(() => runtime.getResourceValue(hidden)).toThrow(
+        expect.objectContaining({ id: "runner.errors.runtimeAccessViolation" }),
+      );
       await runtime.dispose();
     });
 
@@ -305,6 +380,35 @@ describe("run.runtime-exports", () => {
       await expect(runtime.getLazyResourceValue(inner)).resolves.toBe(
         "lazy-val",
       );
+      await runtime.dispose();
+    });
+
+    it("allows lazy access through wildcard exported resources only", async () => {
+      const exported = defineResource({
+        id: "runtime.exports.lazy.selector.group.public",
+        async init() {
+          return "public";
+        },
+      });
+      const hidden = defineResource({
+        id: "runtime.exports.lazy.selector.private",
+        async init() {
+          return "private";
+        },
+      });
+      const root = defineResource({
+        id: "runtime.exports.lazy.selector.root",
+        register: [exported, hidden],
+        isolate: { exports: ["runtime.exports.lazy.selector.group.*"] },
+      });
+
+      const runtime = await run(root, { lazy: true, shutdownHooks: false });
+      await expect(runtime.getLazyResourceValue(exported)).resolves.toBe(
+        "public",
+      );
+      await expect(runtime.getLazyResourceValue(hidden)).rejects.toMatchObject({
+        id: "runner.errors.runtimeAccessViolation",
+      });
       await runtime.dispose();
     });
 

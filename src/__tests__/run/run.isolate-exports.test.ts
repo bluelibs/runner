@@ -34,6 +34,22 @@ describe("run.isolate exports", () => {
     });
   });
 
+  it("fails fast when isolate.exports wildcard matches no ids", async () => {
+    const child = defineResource({
+      id: "isolate.exports.unknown-selector.child",
+      isolate: { exports: ["isolate.exports.unknown-selector.missing.*"] },
+    });
+
+    const app = defineResource({
+      id: "isolate.exports.unknown-selector.app",
+      register: [child],
+    });
+
+    await expect(run(app)).rejects.toMatchObject({
+      id: "runner.errors.isolateExportsUnknownTarget",
+    });
+  });
+
   it("fails fast when isolate.exports contains an invalid entry", async () => {
     const child = defineResource({
       id: "isolate.exports.invalid-entry.child",
@@ -71,6 +87,62 @@ describe("run.isolate exports", () => {
     await expect(run(app)).rejects.toMatchObject({
       id: "runner.errors.visibilityViolation",
     });
+  });
+
+  it("supports legacy exports selectors (deprecated) by mapping to isolate.exports", async () => {
+    const publicTask = defineTask({
+      id: "isolate.exports.legacy-selector.api.public",
+      run: async () => "ok",
+    });
+    const privateTask = defineTask({
+      id: "isolate.exports.legacy-selector.internal.private",
+      run: async () => "secret",
+    });
+
+    const boundary = defineResource({
+      id: "isolate.exports.legacy-selector.boundary",
+      register: [publicTask, privateTask],
+      exports: ["isolate.exports.legacy-selector.api.*"],
+    });
+
+    const app = defineResource({
+      id: "isolate.exports.legacy-selector.app",
+      register: [boundary],
+      dependencies: { publicTask },
+      init: async (_cfg, deps) => deps.publicTask(),
+    });
+
+    const runtime = await run(app);
+    expect(runtime.value).toBe("ok");
+    await runtime.dispose();
+  });
+
+  it("supports isolate.exports wildcard selectors", async () => {
+    const publicTask = defineTask({
+      id: "isolate.exports.selector.api.public",
+      run: async () => "ok",
+    });
+    const privateTask = defineTask({
+      id: "isolate.exports.selector.internal.private",
+      run: async () => "secret",
+    });
+
+    const child = defineResource({
+      id: "isolate.exports.selector.child",
+      register: [publicTask, privateTask],
+      isolate: { exports: ["isolate.exports.selector.api.*"] },
+    });
+
+    const app = defineResource({
+      id: "isolate.exports.selector.app",
+      register: [child],
+      dependencies: { publicTask },
+      init: async (_config, deps) => deps.publicTask(),
+    });
+
+    const runtime = await run(app);
+    expect(runtime.value).toBe("ok");
+    await runtime.dispose();
   });
 
   it("supports legacy exports alongside isolate deny/only in a single definition", async () => {
