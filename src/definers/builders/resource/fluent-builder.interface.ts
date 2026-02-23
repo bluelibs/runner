@@ -243,6 +243,8 @@ export interface ResourceFluentBuilder<
    *
    * Follows standard composition rules: appends by default, replaces
    * when `{ override: true }` is passed.
+   *
+   * @deprecated Use `.isolate({ exports: [...] })` instead (or `exports: "none"`).
    */
   exports(
     items: Array<RegisterableItems>,
@@ -263,6 +265,7 @@ export interface ResourceFluentBuilder<
    */
   isolate(
     policy: IsolationPolicy,
+    options?: { override?: boolean },
   ): ResourceFluentBuilder<
     TConfig,
     TValue,

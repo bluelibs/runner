@@ -61,7 +61,7 @@ function getItemTypeLabel(registry: StoreRegistry, id: string): string {
  * Ownership is established during registration: when resource R calls
  * `.register([item])`, item is "owned" by R.
  *
- * When R declares `.exports([subset])`, only those items are visible
+ * When R declares isolate exports, only those items are visible
  * to items outside R's registration subtree.
  */
 export class VisibilityTracker {
@@ -73,7 +73,7 @@ export class VisibilityTracker {
 
   /**
    * For each resource that declares exports: resource id → Set of
-   * exported item ids. Resources without `.exports()` are absent
+   * exported item ids. Resources without isolate exports are absent
    * from this map (meaning "everything is public").
    */
   private readonly exportSets = new Map<string, Set<string>>();
@@ -208,7 +208,7 @@ export class VisibilityTracker {
   }
 
   /**
-   * Records the export set for a resource that declares `.exports()`.
+   * Records the export set for a resource that declares isolate exports.
    */
   recordExports(resourceId: string, exports: Array<RegisterableItems>): void {
     const ids = new Set<string>();
@@ -223,7 +223,7 @@ export class VisibilityTracker {
    * Checks whether a target id is visible through the root resource's export
    * surface for runtime API calls (runTask, emitEvent, getResourceValue, etc.).
    *
-   * When the root has no `.exports()` declaration the surface is fully open
+   * When the root has no isolate exports declaration the surface is fully open
    * (backward compatible). Otherwise only explicitly listed ids are reachable.
    *
    * Returns both the accessibility result and the current exported id list so

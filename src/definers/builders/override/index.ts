@@ -1,6 +1,7 @@
 import type {
   DependencyMapType,
   IHook,
+  OnType,
   IResource,
   IResourceMeta,
   IResourceMiddleware,
@@ -20,21 +21,14 @@ import {
   isTaskMiddleware,
 } from "../../tools";
 import { defineOverride } from "../../defineOverride";
-import type { ResourceFluentBuilder } from "../resource/fluent-builder.interface";
-import type { TaskFluentBuilder } from "../task/fluent-builder.interface";
-import type { ResourceMiddlewareFluentBuilder } from "../middleware/resource.interface";
-import type { TaskMiddlewareFluentBuilder } from "../middleware/task.interface";
-import type { HookOn, HookOverrideBuilder } from "./hook";
-import { hookOverrideBuilder } from "./hook";
-import { resourceOverrideBuilder } from "./resource";
-import { resourceMiddlewareOverrideBuilder } from "./resource-middleware";
-import { taskOverrideBuilder } from "./task";
-import { taskMiddlewareOverrideBuilder } from "./task-middleware";
 import { overrideUnsupportedBaseError } from "../../../errors";
 
-enum OverrideBuilderErrorMessage {
-  UnsupportedBase = "r.override() supports tasks, resources, hooks, and middleware only.",
-}
+const overrideUnsupportedBaseMessage =
+  "r.override() supports tasks, resources, hooks, and middleware only.";
+const overrideMissingImplementationMessage =
+  "r.override() requires an implementation function as the second argument.";
+const overrideInvalidImplementationMessage =
+  "r.override() second argument must be a function (task/hook/middleware run or resource init).";
 
 type OverrideBuilderBase =
   | ITask<any, any, any, any, any, any>
@@ -52,37 +46,8 @@ export function override<
   TMiddleware extends TaskMiddlewareAttachmentType[],
 >(
   base: ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>,
-): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
-export function override<
-  TInput,
-  TOutput extends Promise<any>,
-  TDeps extends DependencyMapType,
-  TMeta extends ITaskMeta,
-  TTags extends TaskTagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[],
->(
-  base: ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>,
   run: ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>["run"],
 ): ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
-export function override<
-  TConfig,
-  TValue extends Promise<any>,
-  TDeps extends DependencyMapType,
-  TContext,
-  TMeta extends IResourceMeta,
-  TTags extends ResourceTagType[],
-  TMiddleware extends ResourceMiddlewareAttachmentType[],
->(
-  base: IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>,
-): ResourceFluentBuilder<
-  TConfig,
-  TValue,
-  TDeps,
-  TContext,
-  TMeta,
-  TTags,
-  TMiddleware
->;
 export function override<
   TConfig,
   TValue extends Promise<any>,
@@ -107,12 +72,7 @@ export function override<
 ): IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>;
 export function override<
   TDeps extends DependencyMapType,
-  TOn extends HookOn,
-  TMeta extends ITaskMeta,
->(base: IHook<TDeps, TOn, TMeta>): HookOverrideBuilder<TDeps, TOn, TMeta>;
-export function override<
-  TDeps extends DependencyMapType,
-  TOn extends HookOn,
+  TOn extends OnType,
   TMeta extends ITaskMeta,
 >(
   base: IHook<TDeps, TOn, TMeta>,
@@ -120,63 +80,50 @@ export function override<
 ): IHook<TDeps, TOn, TMeta>;
 export function override<C, In, Out, D extends DependencyMapType>(
   base: ITaskMiddleware<C, In, Out, D>,
-): TaskMiddlewareFluentBuilder<C, In, Out, D>;
-export function override<C, In, Out, D extends DependencyMapType>(
-  base: ITaskMiddleware<C, In, Out, D>,
   run: ITaskMiddleware<C, In, Out, D>["run"],
 ): ITaskMiddleware<C, In, Out, D>;
-export function override<C, In, Out, D extends DependencyMapType>(
-  base: IResourceMiddleware<C, In, Out, D>,
-): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
 export function override<C, In, Out, D extends DependencyMapType>(
   base: IResourceMiddleware<C, In, Out, D>,
   run: IResourceMiddleware<C, In, Out, D>["run"],
 ): IResourceMiddleware<C, In, Out, D>;
 export function override(base: OverrideBuilderBase, fn?: unknown) {
-  if (fn !== undefined) {
-    if (isTask(base)) {
-      return defineOverride(base, {
-        run: fn as typeof base.run,
-      });
-    }
-    if (isResource(base)) {
-      return defineOverride(base, {
-        init: fn as NonNullable<typeof base.init>,
-      });
-    }
-    if (isHook(base)) {
-      return defineOverride(base, {
-        run: fn as typeof base.run,
-      });
-    }
-    if (isTaskMiddleware(base)) {
-      return defineOverride(base, {
-        run: fn as typeof base.run,
-      });
-    }
-    if (isResourceMiddleware(base)) {
-      return defineOverride(base, {
-        run: fn as typeof base.run,
-      });
-    }
+  if (fn === undefined) {
+    overrideUnsupportedBaseError.throw({
+      message: overrideMissingImplementationMessage,
+    });
+  }
+  if (typeof fn !== "function") {
+    overrideUnsupportedBaseError.throw({
+      message: overrideInvalidImplementationMessage,
+    });
   }
 
   if (isTask(base)) {
-    return taskOverrideBuilder(base);
+    return defineOverride(base, {
+      run: fn as typeof base.run,
+    });
   }
   if (isResource(base)) {
-    return resourceOverrideBuilder(base);
+    return defineOverride(base, {
+      init: fn as NonNullable<typeof base.init>,
+    });
   }
   if (isHook(base)) {
-    return hookOverrideBuilder(base);
+    return defineOverride(base, {
+      run: fn as typeof base.run,
+    });
   }
   if (isTaskMiddleware(base)) {
-    return taskMiddlewareOverrideBuilder(base);
+    return defineOverride(base, {
+      run: fn as typeof base.run,
+    });
   }
   if (isResourceMiddleware(base)) {
-    return resourceMiddlewareOverrideBuilder(base);
+    return defineOverride(base, {
+      run: fn as typeof base.run,
+    });
   }
   overrideUnsupportedBaseError.throw({
-    message: OverrideBuilderErrorMessage.UnsupportedBase,
+    message: overrideUnsupportedBaseMessage,
   });
 }

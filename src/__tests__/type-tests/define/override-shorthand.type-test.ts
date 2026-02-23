@@ -7,6 +7,9 @@ import { r } from "../../..";
     .run(async (input: { value: number }) => input.value)
     .build();
 
+  // @ts-expect-error
+  r.override(baseTask);
+
   r.override(baseTask, async (input) => input.value + 1);
 
   // @ts-expect-error

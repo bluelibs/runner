@@ -37,10 +37,6 @@ export type {
 } from "./definers/builders/middleware";
 
 export type { TagFluentBuilder } from "./definers/builders/tag";
-export type {
-  HookOverrideBuilder,
-  HookOn,
-} from "./definers/builders/override/hook";
 
 export type {
   TypeDefinition,

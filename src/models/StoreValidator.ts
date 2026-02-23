@@ -2,6 +2,8 @@ import {
   isolateInvalidEntryError,
   isolateUnknownTargetError,
   isolateConflictError,
+  isolateExportsUnknownTargetError,
+  isolateInvalidExportsError,
   duplicateTagIdOnDefinitionError,
   duplicateRegistrationError,
   middlewareNotRegisteredError,
@@ -202,12 +204,43 @@ export class StoreValidator {
       const hasDeny = Array.isArray(policy.deny) && policy.deny.length > 0;
       const hasOnly = Array.isArray(policy.only) && policy.only.length > 0;
 
+      const exportsPresent =
+        "exports" in policy && policy.exports !== undefined;
+
       // Conflict is determined by field presence, not emptiness.
       // deny: [] alongside only: [A] is still an ambiguous declaration.
       if (denyPresent && onlyPresent) {
         isolateConflictError.throw({
           policyResourceId: resource.id,
         });
+      }
+
+      if (
+        exportsPresent &&
+        policy.exports !== "none" &&
+        !Array.isArray(policy.exports)
+      ) {
+        isolateInvalidExportsError.throw({
+          policyResourceId: resource.id,
+          entry: policy.exports,
+        });
+      }
+
+      if (Array.isArray(policy.exports)) {
+        for (const entry of policy.exports) {
+          const resolvedId = this.resolveIsolationTargetId(entry);
+          if (!resolvedId) {
+            isolateInvalidExportsError.throw({
+              policyResourceId: resource.id,
+              entry,
+            });
+          } else if (!this.hasRegisteredId(resolvedId)) {
+            isolateExportsUnknownTargetError.throw({
+              policyResourceId: resource.id,
+              targetId: resolvedId,
+            });
+          }
+        }
       }
 
       const entries = hasDeny ? policy.deny! : hasOnly ? policy.only! : [];

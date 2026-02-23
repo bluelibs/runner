@@ -15,13 +15,13 @@ describe("run.exports-visibility direct export chain", () => {
     const a = defineResource({
       id: "exports.sibling.invalid-export.a",
       register: [b],
-      exports: [d],
+      isolate: { exports: [d] },
     });
 
     const c = defineResource({
       id: "exports.sibling.invalid-export.c",
       register: [d],
-      exports: [],
+      isolate: { exports: "none" },
     });
 
     const e = defineResource({
@@ -49,13 +49,13 @@ describe("run.exports-visibility direct export chain", () => {
     const middle = defineResource({
       id: "exports.direct-chain.double-export.middle",
       register: [deepTask],
-      exports: [deepTask],
+      isolate: { exports: [deepTask] },
     });
 
     const outer = defineResource({
       id: "exports.direct-chain.double-export.outer",
       register: [middle],
-      exports: [deepTask],
+      isolate: { exports: [deepTask] },
     });
 
     const root = defineResource({
@@ -86,7 +86,7 @@ describe("run.exports-visibility direct export chain", () => {
     const outer = defineResource({
       id: "exports.direct-chain.allowed.outer",
       register: [middle],
-      exports: [deepTask],
+      isolate: { exports: [deepTask] },
     });
 
     const root = defineResource({
@@ -112,13 +112,13 @@ describe("run.exports-visibility direct export chain", () => {
     const middle = defineResource({
       id: "exports.direct-chain.blocked.middle",
       register: [deepTask],
-      exports: [],
+      isolate: { exports: "none" },
     });
 
     const outer = defineResource({
       id: "exports.direct-chain.blocked.outer",
       register: [middle],
-      exports: [deepTask],
+      isolate: { exports: [deepTask] },
     });
 
     const root = defineResource({
@@ -142,13 +142,13 @@ describe("run.exports-visibility direct export chain", () => {
       const middle = defineResource({
         id: "exports.direct-chain.declare-vs-run.middle",
         register: [deepTask],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const outer = defineResource({
         id: "exports.direct-chain.declare-vs-run.outer",
         register: [middle],
-        exports: [deepTask],
+        isolate: { exports: [deepTask] },
       });
 
       return defineResource({

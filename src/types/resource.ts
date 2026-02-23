@@ -63,6 +63,15 @@ export interface ResourceForkInfo {
 
 export type IsolationTarget = RegisterableItems | string;
 
+export enum IsolationExportsMode {
+  None = "none",
+}
+
+export type IsolationExportsConfig =
+  | ReadonlyArray<RegisterableItems>
+  | IsolationExportsMode
+  | "none";
+
 export interface IsolationPolicy {
   /**
    * Denied targets for this resource boundary.
@@ -74,6 +83,14 @@ export interface IsolationPolicy {
    * When provided, only these targets (and internal items) can be referenced.
    */
   only?: ReadonlyArray<IsolationTarget>;
+  /**
+   * Declares which registered items are visible outside this resource's
+   * registration subtree.
+   *
+   * - Omit `exports` => everything is public (default)
+   * - `exports: []` or `exports: "none"` => nothing is public
+   */
+  exports?: IsolationExportsConfig;
 }
 
 // Helper to detect `any` so we can treat it as "unspecified"
@@ -179,6 +196,8 @@ export interface IResourceDefinition<
    * registration subtree. When present, only listed items (and items registered
    * by child resources that also export them) are accessible from outside.
    * Omitting `exports` means everything is public (default).
+   *
+   * @deprecated Use `isolate: { exports: [...] }` instead.
    */
   exports?: Array<RegisterableItems>;
   /**
@@ -273,6 +292,8 @@ export interface IResource<
   /**
    * Items visible outside this resource's subtree. When set, only listed items
    * can be referenced from outside.
+   *
+   * @deprecated Use `isolate: { exports: ... }` instead.
    */
   exports?: Array<RegisterableItems>;
   /**

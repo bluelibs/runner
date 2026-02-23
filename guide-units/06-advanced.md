@@ -508,7 +508,7 @@ Metadata transforms your components from anonymous functions into self-documenti
 
 Sometimes you need to replace a component entirely. Maybe you're doing integration testing or you want to override a library from an external package.
 
-You can now use a dedicated helper `override()` or the fluent builder `r.override(...)` to safely override any property on tasks, resources, or middleware — except `id`. This ensures the identity is preserved, while allowing behavior changes.
+Use shorthand `r.override(base, fn)` for behavior swaps and `override(base, patch)` for full patch control, while preserving `id`.
 
 ```typescript
 import { override, r } from "@bluelibs/runner";
@@ -518,34 +518,23 @@ const productionEmailer = r
   .init(async () => new SMTPEmailer())
   .build();
 
-// Option 1: Fluent override builder (Recommended)
-const fluentOverrideEmailer = r
-  .override(productionEmailer)
-  .init(async () => new MockEmailer())
-  .build();
 
-// Option 2: Typed shorthand for common behavior swaps
+// Option 1: Typed shorthand for common behavior swaps
 const shorthandOverrideEmailer = r.override(
   productionEmailer,
   async () => new MockEmailer(),
 );
 
-// Option 3: Using override() helper to change behavior while preserving id
+// Option 2: Using override() helper to change behavior while preserving id
 const helperOverrideEmailer = override(productionEmailer, {
   init: async () => new MockEmailer(),
 });
 
-// Option 4: The system is really flexible, and override is just bringing in type safety, nothing else under the hood.
-// Using spread operator works the same way but does not provide type-safety.
-const manualOverrideEmailer = r
-  .resource("app.emailer")
-  .init(async () => ({}))
-  .build();
 
 const app = r
   .resource("app")
   .register([productionEmailer])
-  .overrides([fluentOverrideEmailer]) // This replaces the production version
+  .overrides([shorthandOverrideEmailer, helperOverrideEmailer])
   .build();
 
 // Tasks
@@ -581,7 +570,7 @@ const overriddenMiddleware = r.override(
 // Even hooks
 ```
 
-`r.override(base, fn)` is a typed shorthand for behavior replacement (`run` for tasks/hooks/middleware, `init` for resources). The override builder starts from the base definition and applies fluent mutations (dependencies/tags/middleware append by default; use `{ override: true }` to replace). Hook overrides keep the same `.on` target.
+`r.override(base, fn)` is a typed shorthand for behavior replacement (`run` for tasks/hooks/middleware, `init` for resources). Hook overrides keep the same `.on` target. For full patch control (metadata/dependencies/etc.), use `override(base, patch)`. Boundary/topology changes belong to `.fork("new.id")`.
 
 ### `r.override(...)` vs `.overrides([...])` (Critical Distinction)
 
@@ -589,7 +578,6 @@ These APIs solve different problems:
 
 | API                    | What it does                                                                                 | Applies replacement? |
 | ---------------------- | -------------------------------------------------------------------------------------------- | -------------------- |
-| `r.override(base)`     | Creates a new definition object with the same id (builder mode)                              | No (not by itself)   |
 | `r.override(base, fn)` | Creates a new definition object with replaced behavior (`init` or `run`)                     | No (not by itself)   |
 | `.overrides([...])`    | Registers override _application requests_ that Runner validates and applies during bootstrap | Yes                  |
 

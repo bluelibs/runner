@@ -8,7 +8,7 @@ import { run } from "../../run";
 
 /**
  * Verifies that runtime.runTask / emitEvent / getResourceValue /
- * getLazyResourceValue respect the root resource's .exports([...]) surface.
+ * getLazyResourceValue respect the root resource's .isolate({ exports: [...] }) surface.
  *
  * Why: the export visibility model already guards dependency wiring at
  * bootstrap. This coverage ensures the runtime API surface honours the
@@ -91,7 +91,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.runTask.root",
         register: [exported, internal],
-        exports: [exported],
+        isolate: { exports: [exported] },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -107,7 +107,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.runTask.blocked.root",
         register: [internal],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -125,7 +125,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.runTask.str.root",
         register: [internal],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -149,7 +149,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.runTask.err.root",
         register: [taskA, taskB],
-        exports: [taskA],
+        isolate: { exports: [taskA] },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -176,7 +176,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.emit.root",
         register: [exportedEvt],
-        exports: [exportedEvt],
+        isolate: { exports: [exportedEvt] },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -193,7 +193,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.emit.blocked.root",
         register: [privateEvt],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -210,7 +210,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.emit.str.root",
         register: [privateEvt],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -234,7 +234,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.getRes.root",
         register: [inner],
-        exports: [inner],
+        isolate: { exports: [inner] },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -252,7 +252,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.getRes.blocked.root",
         register: [inner],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -272,7 +272,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.getRes.str.root",
         register: [inner],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -298,7 +298,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.lazy.root",
         register: [inner],
-        exports: [inner],
+        isolate: { exports: [inner] },
       });
 
       const runtime = await run(root, { lazy: true, shutdownHooks: false });
@@ -318,7 +318,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.lazy.blocked.root",
         register: [inner],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const runtime = await run(root, { lazy: true, shutdownHooks: false });
@@ -350,7 +350,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.empty.root",
         register: [task, evt, res],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const runtime = await run(root, { lazy: true, shutdownHooks: false });

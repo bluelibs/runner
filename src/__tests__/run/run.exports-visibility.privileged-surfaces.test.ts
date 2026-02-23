@@ -16,7 +16,7 @@ describe("run.exports-visibility privileged surfaces", () => {
     const child = defineResource({
       id: "exports.privileged.runtime.child",
       register: [privateTask],
-      exports: [],
+      isolate: { exports: "none" },
     });
 
     const root = defineResource({
@@ -50,7 +50,7 @@ describe("run.exports-visibility privileged surfaces", () => {
     const child = defineResource({
       id: "exports.privileged.wildcard.child",
       register: [privateEvent],
-      exports: [],
+      isolate: { exports: "none" },
       dependencies: { privateEvent },
       async init(_, deps) {
         await deps.privateEvent({ value: "x" });

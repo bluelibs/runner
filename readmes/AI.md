@@ -61,7 +61,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 - Direct `define*()` outputs and fluent `.build()` outputs are deep-frozen (immutable); so are `.with(config)` and `.fork(...)` outputs.
 - `r.resource<Config>(id)` / `r.task<Input>(id)` seed typing before explicit schema; config-only resources can omit `.init()`.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` clones a resource under a new id with a separate runtime instance. `"drop"` clears nested items; `"deep"` deep-forks the resource tree and remaps dependencies.
-- `.exports([...])` narrows visibility: omit = everything public; `.exports([])` = nothing public (private subtree, including `.applyTo("subtree")` middleware scope).
+- `.isolate({ exports: [...] })` narrows visibility: omit = everything public; `exports: []` / `exports: "none"` = nothing public (private subtree, including `.applyTo("subtree")` middleware scope).
 - `.isolate({ deny: [...] })` blocks listed ids/tags; `{ only: [...] }` is a boundary-scoped external allowlist (internal subtree items remain reachable). Policies are additive across ancestors (effective external access is the intersection of ancestor `only` lists); Runner fails fast on violations at bootstrap.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
@@ -182,7 +182,7 @@ const cacheResources = r.middleware
 
 Attach middleware using `.middleware([auditTasks])` on the definition that owns it, and register the middleware alongside the target resource or task at the root.
 
-- `.applyTo("where-visible", fn?)` marks middleware as auto-applied to visible targets (still gated by `.exports()` / `.isolate()`).
+- `.applyTo("where-visible", fn?)` marks middleware as auto-applied to visible targets (still gated by `.isolate({ exports: ... })` / `.isolate()`).
 - `.applyTo("subtree", fn?)` auto-applies only inside the declaring resource subtree (declaring resource + descendants).
 - Contract middleware: middleware can declare `Config`, `Input`, `Output` generics; tasks using it must conform (contracts intersect across `.middleware([...])` and `.tags([...])`). Collisions surface as `InputContractViolationError` / `OutputContractViolationError` in TypeScript; if you add `.inputSchema()`, ensure the schema's inferred type includes the contract shape.
 - Entry generic convenience is available for middleware too: `r.middleware.task<Input>(id)` seeds task input contract typing and `r.middleware.resource<Config>(id)` seeds middleware config typing. The explicit multi-generic form (`<Config, Input, Output>`) remains available.
@@ -451,40 +451,32 @@ throw error;
 
 ## Overrides
 
-Override a task/resource/hook/middleware while preserving `id`. Use the helper or the fluent override builder:
+Override a task/resource/hook/middleware while preserving `id`. Use shorthand for behavior swaps, or `override(base, patch)` for full patch control:
 
 ```ts
 const mockMailer = r.override(realMailer, async () => new MockMailer());
 
-const tracedMailer = r
-  .override(realMailer)
-  .init(async (config, deps) => {
-    const base = await realMailer.init(config, deps);
-    return { ...base, trace: true };
-  })
-  .build();
-
 const app = r
   .resource("app")
   .register([realMailer])
-  .overrides([mockMailer, tracedMailer])
+  .overrides([mockMailer])
   .build();
 ```
 
 - `r.override(base, fn)` is a typed shorthand for common behavior swaps:
   - task/hook/task-middleware/resource-middleware: replaces `run`
   - resource: replaces `init`
-- `r.override(base)` starts from the base definition and applies fluent mutations using the same composition rules as the base builder.
 - `r.override(...)` creates replacement definitions; `.overrides([...])` applies them in a specific container during bootstrap.
 - Registering only the replacement definition is valid; registering both base and replacement in `.register([...])` causes duplicate-id errors.
 - `.overrides([...])` requires the target id to already be present in the graph; if you wanted a second resource instance instead of replacement, use `.fork("new.id")`.
-- Hook overrides keep the same `.on` target; only behavior/metadata is overridable.
+- Hook overrides keep the same `.on` target; shorthand only replaces `run`.
+- Boundary/topology changes are not override concerns; use `.fork("new.id")` for separate instances.
 
 ## Runtime & Lifecycle
 
 - `run(root, options)` wires dependencies, initializes resources, and returns the runtime object: `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, `store`, `logger`, and `dispose`. `getLazyResourceValue` is available only when `run(..., { lazy: true })` is enabled.
 - `emitEvent(event, payload, options?)` accepts the same emission options (`failureMode`, `throwOnError`, `report`) as dependency emitters.
-- `.exports([...])` on the root restricts `runTask`, `emitEvent`, `getResourceValue` to exported ids; omit for full open surface.
+- `.isolate({ exports: [...] })` on the root restricts `runTask`, `emitEvent`, `getResourceValue` to exported ids; omit for full open surface.
 - Run options highlights: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `dryRun`, `lazy`, `initMode` (`"sequential"` or `"parallel"`).
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime.
 

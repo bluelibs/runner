@@ -313,6 +313,53 @@ export const isolateUnknownTargetError = error<
   )
   .build();
 
+export const isolateExportsConflictError = error<
+  {
+    resourceId: string;
+  } & DefaultErrorType
+>("runner.errors.isolateExportsConflict")
+  .format(
+    ({ resourceId }) =>
+      `Resource "${resourceId}" declares exports in both .exports(...) and .isolate({ exports: ... }).`,
+  )
+  .remediation(
+    ({ resourceId }) =>
+      `Remove the legacy "exports" declaration from "${resourceId}" and keep exports only under .isolate({ exports: ... }).`,
+  )
+  .build();
+
+export const isolateInvalidExportsError = error<
+  {
+    policyResourceId: string;
+    entry: unknown;
+  } & DefaultErrorType
+>("runner.errors.isolateInvalidExports")
+  .format(
+    ({ policyResourceId }) =>
+      `Resource "${policyResourceId}" declares an invalid isolate exports value.`,
+  )
+  .remediation(
+    ({ policyResourceId }) =>
+      `Use .isolate({ exports: [...] }) or .isolate({ exports: "none" }) on "${policyResourceId}".`,
+  )
+  .build();
+
+export const isolateExportsUnknownTargetError = error<
+  {
+    policyResourceId: string;
+    targetId: string;
+  } & DefaultErrorType
+>("runner.errors.isolateExportsUnknownTarget")
+  .format(
+    ({ policyResourceId, targetId }) =>
+      `Resource "${policyResourceId}" exports unknown target "${targetId}" in its isolate policy.`,
+  )
+  .remediation(
+    ({ targetId }) =>
+      `Register "${targetId}" in the same runtime graph or remove it from exports. Exported targets must exist at bootstrap.`,
+  )
+  .build();
+
 export const isolateViolationError = error<
   {
     targetId: string;
@@ -521,7 +568,7 @@ export const visibilityViolationError = error<
       exportedIds.length > 0
         ? `Resource "${ownerResourceId}" exports: [${exportedIds.join(", ")}].`
         : `Resource "${ownerResourceId}" has no exports.`;
-    return `${exported} Either add "${targetId}" to ${ownerResourceId}'s .exports([...]), or restructure to use an exported item instead.`;
+    return `${exported} Either add "${targetId}" to ${ownerResourceId}'s .isolate({ exports: [...] }), or restructure to use an exported item instead.`;
   })
   .build();
 
@@ -600,7 +647,7 @@ export const runtimeAccessViolationError = error<
       exportedIds.length > 0
         ? `Root "${rootId}" currently exports: [${exportedIds.join(", ")}].`
         : `Root "${rootId}" has no exports declared.`;
-    return `${exported} Add "${targetId}" to the root's .exports([...]) to allow runtime API access.`;
+    return `${exported} Add "${targetId}" to the root's .isolate({ exports: [...] }) to allow runtime API access.`;
   })
   .build();
 

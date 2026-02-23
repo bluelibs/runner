@@ -18,7 +18,7 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       const child = defineResource({
         id: "exports.strict.events.child",
         register: [secretEvent],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const hook = defineHook({
@@ -46,7 +46,7 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       const child = defineResource({
         id: "exports.strict.events-ok.child",
         register: [secretEvent],
-        exports: [secretEvent],
+        isolate: { exports: [secretEvent] },
       });
 
       const hook = defineHook({
@@ -92,7 +92,7 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       const child = defineResource({
         id: "exports.strict.taskmw.child",
         register: [internalMiddleware],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const task = defineTask({
@@ -120,7 +120,7 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       const child = defineResource({
         id: "exports.strict.taskmw-ok.child",
         register: [internalMiddleware],
-        exports: [internalMiddleware],
+        isolate: { exports: [internalMiddleware] },
       });
 
       const task = defineTask({
@@ -152,7 +152,7 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       const child = defineResource({
         id: "exports.strict.resmw.child",
         register: [internalResourceMiddleware],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const consumer = defineResource({
@@ -195,7 +195,7 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       const child = defineResource({
         id: "exports.strict.everywhere.task.child",
         register: [internalEverywhere, internalTask],
-        exports: [],
+        isolate: { exports: "none" },
         dependencies: { internalTask },
         async init(_, deps) {
           return await deps.internalTask();
@@ -250,7 +250,7 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       const child = defineResource({
         id: "exports.strict.everywhere.resource.child",
         register: [internalEverywhere, internalResource],
-        exports: [],
+        isolate: { exports: "none" },
         dependencies: { internalResource },
         async init(_, deps) {
           return deps.internalResource;
@@ -292,7 +292,7 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       const child = defineResource({
         id: "exports.strict.hookdep.child",
         register: [privateTask],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const hook = defineHook({

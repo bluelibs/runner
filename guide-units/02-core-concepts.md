@@ -284,7 +284,7 @@ const app = r.resource("app").register([base, forked]).build();
 
 #### Resource Exports and Isolation Boundaries
 
-As your app grows, isolation keeps domain internals from leaking across resource boundaries. Use `.exports([...])` to define a small public surface and keep everything else private.
+As your app grows, isolation keeps domain internals from leaking across resource boundaries. Use `.isolate({ exports: [...] })` to define a small public surface and keep everything else private.
 
 Think of this as an **architectural boundary** for wiring, not a sandbox:
 
@@ -318,14 +318,14 @@ const createInvoice = r
 const billing = r
   .resource("billing")
   .register([calculateTax, createInvoice])
-  .exports([createInvoice]) // public surface
+  .isolate({ exports: [createInvoice] }) // public surface
   .build();
 ```
 
 **Semantics:**
 
-- No `.exports()` means backward-compatible behavior: everything remains public
-- `.exports([])` means nothing from that resource is public outside its registration subtree
+- No isolate `exports` means backward-compatible behavior: everything remains public
+- `isolate: { exports: [] }` / `isolate: { exports: "none" }` means nothing from that resource is public outside its registration subtree
 - Visibility checks cover dependency references, hook `.on(event)` subscriptions, and middleware attachment
 - `.applyTo("where-visible")` middleware follows visibility; non-exported middleware applies only inside its subtree
 - If a resource exports a child resource, that child's own exported surface is visible transitively
@@ -335,8 +335,8 @@ const billing = r
 
 **Nested export chain rule (`A -> B -> C`):**
 
-- `A.exports([c])` works only if every boundary in between allows it
-- If `B.exports([])` is present, `A` cannot expose `c` from inside `B` to external consumers
+- `A.isolate({ exports: [c] })` works only if every boundary in between allows it
+- If `B.isolate({ exports: "none" })` is present, `A` cannot expose `c` from inside `B` to external consumers
 
 **Wildcard hooks note:**
 
@@ -826,7 +826,7 @@ const logTaskMiddleware = r.middleware
   .build();
 ```
 
-> **Note:** `.applyTo("where-visible")` means "auto-apply to all visible targets", not "bypass visibility". A middleware only applies where it is visible under `.exports()` and allowed by `.isolate()`.
+> **Note:** `.applyTo("where-visible")` means "auto-apply to all visible targets", not "bypass visibility". A middleware only applies where it is visible under isolate `exports` and allowed by `.isolate()`.
 
 > **Tip:** If a global middleware depends on a task or resource, exclude that same target in the `.applyTo("where-visible", ...)` predicate (otherwise you can create a circular dependency that fails at `run(app)` bootstrap).
 

@@ -159,12 +159,12 @@ export class RunResult<V> implements IRuntime<V> {
   /**
    * Enforces the root resource's exported API surface for runtime callers.
    *
-   * When the root resource declares `.exports([...])`, only those items may be
+   * When the root resource declares `.isolate({ exports: [...] })`, only those items may be
    * reached through the IRuntime API. This prevents external callers from
    * bypassing encapsulation boundaries that were intentionally declared at
    * the resource composition layer.
    *
-   * When no `.exports()` is declared on the root, everything remains open
+   * When no isolate exports are declared on the root, everything remains open
    * (backward compatible).
    * @internal
    */

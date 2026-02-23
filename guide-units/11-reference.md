@@ -146,12 +146,6 @@ const realMailer = r
   .init(async () => new SMTPEmailer())
   .build();
 
-// Fluent override builder
-const mockMailer = r
-  .override(realMailer)
-  .init(async () => new MockMailer())
-  .build();
-
 // Typed shorthand
 const shorthandMockMailer = r.override(realMailer, async () => new MockMailer());
 
@@ -163,7 +157,7 @@ const helperMockMailer = override(realMailer, {
 const app = r
   .resource("app")
   .register([realMailer])
-  .overrides([mockMailer])
+  .overrides([shorthandMockMailer, helperMockMailer])
   .build();
 ```
 
@@ -252,15 +246,15 @@ const publicTask = r.task("billing.tasks.public").run(async () => 2).build();
 const billing = r
   .resource("billing")
   .register([internalTask, publicTask])
-  .exports([publicTask]) // only this is visible outside billing
+  .isolate({ exports: [publicTask] }) // only this is visible outside billing
   .build();
 ```
 
 Quick rules:
-- No `.exports()` means everything public (backward compatible)
-- `.exports([])` means everything private outside that subtree
+- No isolate `exports` means everything public (backward compatible)
+- `isolate: { exports: [] }` / `isolate: { exports: "none" }` means everything private outside that subtree
 - Visibility is enforced at `run(app)` bootstrap
-- `.applyTo("where-visible")` middleware is auto-applied only to visible targets (respects `.exports()` and `.isolate()`)
+- `.applyTo("where-visible")` middleware is auto-applied only to visible targets (respects isolate `exports` and `.isolate()`)
 - `.applyTo("subtree")` middleware is auto-applied to the declaring resource and everything in its registration subtree
 - Duplicate ids still fail globally, even for private items
 

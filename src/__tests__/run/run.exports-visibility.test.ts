@@ -44,7 +44,7 @@ describe("run.exports-visibility", () => {
       const child = defineResource({
         id: "exports.basic.child",
         register: [publicTask, privateTask],
-        exports: [publicTask],
+        isolate: { exports: [publicTask] },
       });
 
       const root = defineResource({
@@ -74,7 +74,7 @@ describe("run.exports-visibility", () => {
       const child = defineResource({
         id: "exports.block.child",
         register: [publicTask, privateTask],
-        exports: [publicTask],
+        isolate: { exports: [publicTask] },
       });
 
       const root = defineResource({
@@ -103,7 +103,7 @@ describe("run.exports-visibility", () => {
       const child = defineResource({
         id: "exports.error.child",
         register: [publicTask, privateTask],
-        exports: [publicTask],
+        isolate: { exports: [publicTask] },
       });
 
       const root = defineResource({
@@ -128,7 +128,7 @@ describe("run.exports-visibility", () => {
           'Resource "exports.error.child" exports: [exports.error.public].',
         );
         expect(e.remediation).toContain(
-          'Either add "exports.error.private" to exports.error.child\'s .exports([...])',
+          'Either add "exports.error.private" to exports.error.child\'s .isolate({ exports: [...] })',
         );
         expect(e.remediation).toContain(
           "or restructure to use an exported item instead.",
@@ -147,7 +147,7 @@ describe("run.exports-visibility", () => {
       const child = defineResource({
         id: "exports.block-res.child",
         register: [innerResource],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const root = defineResource({
@@ -172,7 +172,7 @@ describe("run.exports-visibility", () => {
       const child = defineResource({
         id: "exports.owner-scope.child",
         register: [internalTask],
-        exports: [],
+        isolate: { exports: "none" },
         dependencies: { internalTask },
         async init(_, deps) {
           return await deps.internalTask();
@@ -207,7 +207,7 @@ describe("run.exports-visibility", () => {
       const child = defineResource({
         id: "exports.subtree.child",
         register: [sharedTask, internalConsumer],
-        exports: [internalConsumer],
+        isolate: { exports: [internalConsumer] },
       });
 
       const root = defineResource({
@@ -233,13 +233,13 @@ describe("run.exports-visibility", () => {
       const middle = defineResource({
         id: "exports.transitive-resource.middle",
         register: [deepTask],
-        exports: [deepTask],
+        isolate: { exports: [deepTask] },
       });
 
       const outer = defineResource({
         id: "exports.transitive-resource.outer",
         register: [middle],
-        exports: [middle],
+        isolate: { exports: [middle] },
       });
 
       const root = defineResource({
@@ -265,13 +265,13 @@ describe("run.exports-visibility", () => {
       const middle = defineResource({
         id: "exports.no-reexport.middle",
         register: [deepTask],
-        exports: [deepTask],
+        isolate: { exports: [deepTask] },
       });
 
       const outer = defineResource({
         id: "exports.no-reexport.outer",
         register: [middle],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const root = defineResource({
@@ -294,13 +294,13 @@ describe("run.exports-visibility", () => {
       const middle = defineResource({
         id: "exports.transitive-block.middle",
         register: [deepTask],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const outer = defineResource({
         id: "exports.transitive-block.outer",
         register: [middle],
-        exports: [middle],
+        isolate: { exports: [middle] },
       });
 
       const root = defineResource({
@@ -316,7 +316,7 @@ describe("run.exports-visibility", () => {
   });
 
   describe("builder and fork integration", () => {
-    it("supports fluent .exports()", async () => {
+    it("supports isolate exports in fluent builder", async () => {
       const publicTask = defineTask({
         id: "exports.fluent.public",
         run: async () => "fluent-public",
@@ -329,7 +329,7 @@ describe("run.exports-visibility", () => {
       const child = r
         .resource("exports.fluent.child")
         .register([publicTask, privateTask])
-        .exports([publicTask])
+        .isolate({ exports: [publicTask] })
         .build();
 
       const root = defineResource({
@@ -343,7 +343,7 @@ describe("run.exports-visibility", () => {
       );
     });
 
-    it("supports fluent .exports() override mode", async () => {
+    it("supports isolate exports override mode in fluent builder", async () => {
       const task1 = defineTask({
         id: "exports.fluent-override.t1",
         run: async () => "t1",
@@ -356,8 +356,8 @@ describe("run.exports-visibility", () => {
       const child = r
         .resource("exports.fluent-override.child")
         .register([task1, task2])
-        .exports([task1])
-        .exports([task2], { override: true })
+        .isolate({ exports: [task1] })
+        .isolate({ exports: [task2] }, { override: true })
         .build();
 
       const root = defineResource({
@@ -384,7 +384,7 @@ describe("run.exports-visibility", () => {
       const base = defineResource({
         id: "exports.fork.base",
         register: [publicTask, privateTask],
-        exports: [publicTask],
+        isolate: { exports: [publicTask] },
       });
       const forked = base.fork("exports.fork.forked");
 
@@ -408,7 +408,7 @@ describe("run.exports-visibility", () => {
       const child = defineResource({
         id: "exports.empty.child",
         register: [task],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const root = defineResource({

@@ -206,7 +206,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 **Benefits:**
 
 - **Explicit wiring** — Dependencies are declared in code, not discovered at runtime
-- **Architectural isolation** — Use resource `.exports([...])` to keep domain internals private and expose only stable contracts
+- **Architectural isolation** — Use resource `.isolate({ exports: [...] })` to keep domain internals private and expose only stable contracts
 - **Type-driven** — TypeScript inference flows through tasks, resources, and middleware
 - **Testable by default** — Call `.run()` with mocks or run the full app, no special harnesses
 - **Traceable** — Stack traces and debug output stay aligned with your source
@@ -1395,7 +1395,7 @@ const app = r.resource("app").register([base, forked]).build();
 
 #### Resource Exports and Isolation Boundaries
 
-As your app grows, isolation keeps domain internals from leaking across resource boundaries. Use `.exports([...])` to define a small public surface and keep everything else private.
+As your app grows, isolation keeps domain internals from leaking across resource boundaries. Use `.isolate({ exports: [...] })` to define a small public surface and keep everything else private.
 
 Think of this as an **architectural boundary** for wiring, not a sandbox:
 
@@ -1429,14 +1429,14 @@ const createInvoice = r
 const billing = r
   .resource("billing")
   .register([calculateTax, createInvoice])
-  .exports([createInvoice]) // public surface
+  .isolate({ exports: [createInvoice] }) // public surface
   .build();
 ```
 
 **Semantics:**
 
-- No `.exports()` means backward-compatible behavior: everything remains public
-- `.exports([])` means nothing from that resource is public outside its registration subtree
+- No isolate `exports` means backward-compatible behavior: everything remains public
+- `isolate: { exports: [] }` / `isolate: { exports: "none" }` means nothing from that resource is public outside its registration subtree
 - Visibility checks cover dependency references, hook `.on(event)` subscriptions, and middleware attachment
 - `.applyTo("where-visible")` middleware follows visibility; non-exported middleware applies only inside its subtree
 - If a resource exports a child resource, that child's own exported surface is visible transitively
@@ -1446,8 +1446,8 @@ const billing = r
 
 **Nested export chain rule (`A -> B -> C`):**
 
-- `A.exports([c])` works only if every boundary in between allows it
-- If `B.exports([])` is present, `A` cannot expose `c` from inside `B` to external consumers
+- `A.isolate({ exports: [c] })` works only if every boundary in between allows it
+- If `B.isolate({ exports: "none" })` is present, `A` cannot expose `c` from inside `B` to external consumers
 
 **Wildcard hooks note:**
 
@@ -1937,7 +1937,7 @@ const logTaskMiddleware = r.middleware
   .build();
 ```
 
-> **Note:** `.applyTo("where-visible")` means "auto-apply to all visible targets", not "bypass visibility". A middleware only applies where it is visible under `.exports()` and allowed by `.isolate()`.
+> **Note:** `.applyTo("where-visible")` means "auto-apply to all visible targets", not "bypass visibility". A middleware only applies where it is visible under isolate `exports` and allowed by `.isolate()`.
 
 > **Tip:** If a global middleware depends on a task or resource, exclude that same target in the `.applyTo("where-visible", ...)` predicate (otherwise you can create a circular dependency that fails at `run(app)` bootstrap).
 
@@ -4889,7 +4889,7 @@ Metadata transforms your components from anonymous functions into self-documenti
 
 Sometimes you need to replace a component entirely. Maybe you're doing integration testing or you want to override a library from an external package.
 
-You can now use a dedicated helper `override()` or the fluent builder `r.override(...)` to safely override any property on tasks, resources, or middleware — except `id`. This ensures the identity is preserved, while allowing behavior changes.
+Use shorthand `r.override(base, fn)` for behavior swaps and `override(base, patch)` for full patch control, while preserving `id`.
 
 ```typescript
 import { override, r } from "@bluelibs/runner";
@@ -4899,34 +4899,23 @@ const productionEmailer = r
   .init(async () => new SMTPEmailer())
   .build();
 
-// Option 1: Fluent override builder (Recommended)
-const fluentOverrideEmailer = r
-  .override(productionEmailer)
-  .init(async () => new MockEmailer())
-  .build();
 
-// Option 2: Typed shorthand for common behavior swaps
+// Option 1: Typed shorthand for common behavior swaps
 const shorthandOverrideEmailer = r.override(
   productionEmailer,
   async () => new MockEmailer(),
 );
 
-// Option 3: Using override() helper to change behavior while preserving id
+// Option 2: Using override() helper to change behavior while preserving id
 const helperOverrideEmailer = override(productionEmailer, {
   init: async () => new MockEmailer(),
 });
 
-// Option 4: The system is really flexible, and override is just bringing in type safety, nothing else under the hood.
-// Using spread operator works the same way but does not provide type-safety.
-const manualOverrideEmailer = r
-  .resource("app.emailer")
-  .init(async () => ({}))
-  .build();
 
 const app = r
   .resource("app")
   .register([productionEmailer])
-  .overrides([fluentOverrideEmailer]) // This replaces the production version
+  .overrides([shorthandOverrideEmailer, helperOverrideEmailer])
   .build();
 
 // Tasks
@@ -4962,7 +4951,7 @@ const overriddenMiddleware = r.override(
 // Even hooks
 ```
 
-`r.override(base, fn)` is a typed shorthand for behavior replacement (`run` for tasks/hooks/middleware, `init` for resources). The override builder starts from the base definition and applies fluent mutations (dependencies/tags/middleware append by default; use `{ override: true }` to replace). Hook overrides keep the same `.on` target.
+`r.override(base, fn)` is a typed shorthand for behavior replacement (`run` for tasks/hooks/middleware, `init` for resources). Hook overrides keep the same `.on` target. For full patch control (metadata/dependencies/etc.), use `override(base, patch)`. Boundary/topology changes belong to `.fork("new.id")`.
 
 ### `r.override(...)` vs `.overrides([...])` (Critical Distinction)
 
@@ -4970,7 +4959,6 @@ These APIs solve different problems:
 
 | API                    | What it does                                                                                 | Applies replacement? |
 | ---------------------- | -------------------------------------------------------------------------------------------- | -------------------- |
-| `r.override(base)`     | Creates a new definition object with the same id (builder mode)                              | No (not by itself)   |
 | `r.override(base, fn)` | Creates a new definition object with replaced behavior (`init` or `run`)                     | No (not by itself)   |
 | `.overrides([...])`    | Registers override _application requests_ that Runner validates and applies during bootstrap | Yes                  |
 
@@ -6014,7 +6002,7 @@ Every builder follows the same rhythm:
 Repeated calls are part of the design, but not every method composes the same way.
 
 - **Replace (last call wins):** Scalar/single-value setters like `.run()`, `.init()`, `.schema()`, `.inputSchema()`, `.resultSchema()`, `.meta()`, `.order()`, `.parallel()`, `.context()`, `.dispose()`, `.httpCode()`, `.format()`, and `.remediation()`.
-- **Append by default, replace with `{ override: true }`:** List-like methods such as `.tags()`, `.middleware()`, and (resources) `.register()`, `.overrides()`, `.exports()`.
+- **Append by default, replace with `{ override: true }`:** List-like methods such as `.tags()`, `.middleware()`, and (resources) `.register()`, `.overrides()`, `.isolate({ exports: [...] })`.
 - **Shallow-merge by default, replace with `{ override: true }`:** `.dependencies()`.
 - **Additive-only merge (no override flag):** Resource `.isolate()` accumulates `deny`/`only` entries across calls.
 
@@ -6022,8 +6010,6 @@ Two important exceptions:
 
 - Repeated `.throws()` calls currently **replace** the previous declaration (last call wins). We keep this behavior for compatibility.
 - `event.throws()` is documentation-only (events themselves don't throw during emit), so it does not behave like task/resource `.throws()`.
-
-The same chaining rules apply when using `r.override(base)` fluent override builders.
 
 For the complete API reference, see the [Fluent Builders documentation](../readmes/FLUENT_BUILDERS.md).
 
@@ -6550,7 +6536,7 @@ The quick-reference table for "I've seen this error, what do I do?"
 | `TypeError: X is not a function`                                                               | Task call fails at runtime          | Forgot `.build()` on task/resource definition        | Add `.build()` at the end of your fluent chain                                   |
 | `Resource "X" not found`                                                                       | Runtime crash during initialization | Component not registered                             | Add to `.register([...])` in parent resource                                     |
 | `Config validation failed for X`                                                               | Startup crash before app runs       | Missing `.with()` config for resource                | Provide required config: `resource.with({ ... })`                                |
-| `"X" is internal to resource "Y" and cannot be referenced by ...` (`visibilityViolationError`) | `run(app)` fails during bootstrap   | Cross-resource reference to a non-exported item      | Export the item with `.exports([...])` or depend on an already exported contract |
+| `"X" is internal to resource "Y" and cannot be referenced by ...` (`visibilityViolationError`) | `run(app)` fails during bootstrap   | Cross-resource reference to a non-exported item      | Export the item with `.isolate({ exports: [...] })` or depend on an already exported contract |
 | `Circular dependencies detected: ...` (`circularDependencyError`)                              | `run(app)` fails before startup     | Actual runtime dependency graph cycle                | Break the dependency loop across tasks/resources/middleware/hooks                |
 | `Circular dependency detected` (type inference)                                                | TypeScript inference fails          | Import cycle between files                           | Use explicit type annotation: `as IResource<Config, Value>`                      |
 | `TimeoutError`                                                                                 | Task hangs then throws              | Operation exceeded timeout TTL                       | Increase TTL or investigate underlying slow operation                            |
@@ -6645,11 +6631,11 @@ await dispose();
 
 **Symptom**: Dependencies undefined, middleware not applied, chaos.
 
-### Visibility Boundaries with `.exports()`
+### Visibility Boundaries with `isolate.exports`
 
 **Symptom**: `run(app)` fails with `runner.errors.visibilityViolation`.
 
-This usually means a task/resource/hook/middleware is referencing an item that is internal to a resource that declared `.exports(...)`.
+This usually means a task/resource/hook/middleware is referencing an item that is internal to a resource that declared `isolate: { exports: ... }`.
 
 ```typescript
 const internalTask = r
@@ -6660,7 +6646,7 @@ const internalTask = r
 const billing = r
   .resource("billing")
   .register([internalTask])
-  .exports([]) // everything private outside billing subtree
+  .isolate({ exports: "none" }) // everything private outside billing subtree
   .build();
 
 const app = r
@@ -6674,14 +6660,14 @@ const app = r
 
 **Fix paths:**
 
-1. Export the item from the owning resource: `.exports([internalTask])`
+1. Export the item from the owning resource: `.isolate({ exports: [internalTask] })`
 2. Depend on a different already-exported item
 3. Move the consumer inside the same resource registration subtree
 
 **Important notes:**
 
 - Checks run at `run(app)` init time, not definition time
-- `.exports([])` means "nothing public"
+- `isolate: { exports: [] }` / `isolate: { exports: "none" }` means "nothing public"
 - Private items still participate in global id uniqueness; duplicate ids still fail registration
 
 ---
@@ -7343,7 +7329,7 @@ const auditHook = r
 3. **Resource wrappers** — compose resources for reusable patterns
 4. **Event interception** — use `eventManager.intercept()` for audit/logging
 
-> **Note:** `.applyTo("where-visible")` is visibility-gated (it does not bypass `.exports()` or `.isolate()`).
+> **Note:** `.applyTo("where-visible")` is visibility-gated (it does not bypass isolate `exports` or `.isolate()`).
 
 **Creating reusable modules:**
 
@@ -8125,12 +8111,6 @@ const realMailer = r
   .init(async () => new SMTPEmailer())
   .build();
 
-// Fluent override builder
-const mockMailer = r
-  .override(realMailer)
-  .init(async () => new MockMailer())
-  .build();
-
 // Typed shorthand
 const shorthandMockMailer = r.override(realMailer, async () => new MockMailer());
 
@@ -8142,7 +8122,7 @@ const helperMockMailer = override(realMailer, {
 const app = r
   .resource("app")
   .register([realMailer])
-  .overrides([mockMailer])
+  .overrides([shorthandMockMailer, helperMockMailer])
   .build();
 ```
 
@@ -8231,15 +8211,15 @@ const publicTask = r.task("billing.tasks.public").run(async () => 2).build();
 const billing = r
   .resource("billing")
   .register([internalTask, publicTask])
-  .exports([publicTask]) // only this is visible outside billing
+  .isolate({ exports: [publicTask] }) // only this is visible outside billing
   .build();
 ```
 
 Quick rules:
-- No `.exports()` means everything public (backward compatible)
-- `.exports([])` means everything private outside that subtree
+- No isolate `exports` means everything public (backward compatible)
+- `isolate: { exports: [] }` / `isolate: { exports: "none" }` means everything private outside that subtree
 - Visibility is enforced at `run(app)` bootstrap
-- `.applyTo("where-visible")` middleware is auto-applied only to visible targets (respects `.exports()` and `.isolate()`)
+- `.applyTo("where-visible")` middleware is auto-applied only to visible targets (respects isolate `exports` and `.isolate()`)
 - `.applyTo("subtree")` middleware is auto-applied to the declaring resource and everything in its registration subtree
 - Duplicate ids still fail globally, even for private items
 

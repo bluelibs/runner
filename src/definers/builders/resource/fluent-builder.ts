@@ -1,3 +1,4 @@
+import { IsolationExportsMode } from "../../../defs";
 import type {
   DependencyMapType,
   EnsureTagsForTarget,
@@ -352,26 +353,16 @@ export function makeResourceBuilder<
         TMiddleware
       >(next);
     },
+    /** @deprecated Use `.isolate({ exports: ... })` instead. */
     exports(items: Array<RegisterableItems>, options?: { override?: boolean }) {
-      const override = options?.override ?? false;
-      const next = clone(state, {
-        exports: mergeArray(state.exports, items, override),
-      });
-      return makeResourceBuilder<
-        TConfig,
-        TValue,
-        TDeps,
-        TContext,
-        TMeta,
-        TTags,
-        TMiddleware
-      >(next);
+      return this.isolate({ exports: items }, options);
     },
-    isolate(policy: IsolationPolicy) {
+    isolate(policy: IsolationPolicy, options?: { override?: boolean }) {
       // Merging rules: deny merges with deny, only merges with only.
       // Mixing deny and only on the same resource is caught by StoreValidator at bootstrap.
       const existingDeny = state.isolate?.deny ?? [];
       const existingOnly = state.isolate?.only ?? [];
+      const existingExports = state.isolate?.exports;
       const merged: IsolationPolicy = {};
       if (existingDeny.length > 0 || policy.deny) {
         merged.deny = [...existingDeny, ...(policy.deny ?? [])];
@@ -379,6 +370,33 @@ export function makeResourceBuilder<
       if (existingOnly.length > 0 || policy.only) {
         merged.only = [...existingOnly, ...(policy.only ?? [])];
       }
+
+      if (policy.exports !== undefined) {
+        if (
+          policy.exports === IsolationExportsMode.None ||
+          (policy.exports as unknown) === "none"
+        ) {
+          merged.exports = IsolationExportsMode.None;
+        } else if (Array.isArray(policy.exports)) {
+          const override = options?.override === true;
+          if (
+            override ||
+            existingExports === undefined ||
+            existingExports === IsolationExportsMode.None
+          ) {
+            merged.exports = [...policy.exports];
+          } else if (Array.isArray(existingExports)) {
+            merged.exports = [...existingExports, ...policy.exports];
+          } else {
+            merged.exports = [...policy.exports];
+          }
+        } else {
+          merged.exports = policy.exports;
+        }
+      } else if (existingExports !== undefined) {
+        merged.exports = existingExports;
+      }
+
       const next = clone(state, { isolate: merged });
       return makeResourceBuilder<
         TConfig,
@@ -415,7 +433,6 @@ export function makeResourceBuilder<
         meta: state.meta,
         overrides: state.overrides,
         throws: state.throws,
-        exports: state.exports,
         isolate: state.isolate,
       };
       const resource = defineResource(definition);

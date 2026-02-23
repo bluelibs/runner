@@ -1,3 +1,4 @@
+import { IsolationExportsMode } from "../types/resource";
 import type {
   IResource,
   IResourceDefinition,
@@ -16,7 +17,7 @@ import {
   symbolOptionalDependency,
   symbolResourceWithConfig,
 } from "../types/symbols";
-import { validationError } from "../errors";
+import { isolateExportsConflictError, validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
@@ -65,6 +66,36 @@ export function defineResource<
   const id = constConfig.id;
   assertTagTargetsApplicableTo("resources", "Resource", id, constConfig.tags);
 
+  const isolate = (() => {
+    const legacyExports = constConfig.exports;
+    const candidate = constConfig.isolate;
+
+    if (legacyExports === undefined) {
+      return candidate;
+    }
+
+    if (!candidate) {
+      return { exports: legacyExports };
+    }
+
+    if (candidate.exports !== undefined) {
+      isolateExportsConflictError.throw({ resourceId: id });
+    }
+
+    return { ...candidate, exports: legacyExports };
+  })();
+
+  const exports = (() => {
+    const cfg = isolate?.exports;
+    if (cfg === undefined) {
+      return constConfig.exports;
+    }
+    if (cfg === IsolationExportsMode.None || (cfg as unknown) === "none") {
+      return [];
+    }
+    return Array.isArray(cfg) ? [...cfg] : constConfig.exports;
+  })();
+
   const base = {
     [symbolResource]: true,
     [symbolFilePath]: filePath,
@@ -81,8 +112,8 @@ export function defineResource<
     throws: normalizeThrows({ kind: "resource", id }, constConfig.throws),
     meta: (constConfig.meta || {}) as TMeta,
     middleware: constConfig.middleware ?? [],
-    exports: constConfig.exports,
-    isolate: constConfig.isolate,
+    exports,
+    isolate,
   } as IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>;
 
   const resolveCurrent = (
@@ -140,7 +171,6 @@ export function defineResource<
     middleware: current.middleware,
     dispose: current.dispose,
     meta: current.meta,
-    exports: current.exports,
     isolate: current.isolate,
   });
 

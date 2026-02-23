@@ -157,10 +157,6 @@ describe("Build lockdown", () => {
     const lockContextOptional = lockContext.optional();
 
     const lockOverrideShorthand = r.override(lockTask, async () => "override");
-    const lockOverrideBuilder = r
-      .override(lockTask)
-      .run(async () => "override-builder")
-      .build();
 
     expectDeepFrozen(lockTagUsage);
     expectDeepFrozen(lockTaskOptional);
@@ -173,7 +169,6 @@ describe("Build lockdown", () => {
     expectDeepFrozen(lockErrorOptional);
     expectDeepFrozen(lockContextOptional);
     expectDeepFrozen(lockOverrideShorthand);
-    expectDeepFrozen(lockOverrideBuilder);
   });
 
   it("deep-freezes direct define outputs and their derived helpers", () => {
@@ -253,17 +248,13 @@ describe("Build lockdown", () => {
     expectDeepFrozen(directOverrideShorthand);
   });
 
-  it("always freezes fluent override builder outputs", () => {
+  it("always freezes shorthand override outputs", () => {
     const directTask = defineTask({
-      id: "tests.lock.override.builder.base",
+      id: "tests.lock.override.shorthand.base",
       run: async () => "base",
     });
 
-    const builtOverride = r
-      .override(directTask)
-      .run(async () => "override")
-      .build();
-
-    expectDeepFrozen(builtOverride);
+    const shorthandOverride = r.override(directTask, async () => "override");
+    expectDeepFrozen(shorthandOverride);
   });
 });

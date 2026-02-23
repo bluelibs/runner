@@ -2,6 +2,36 @@ import { r, run } from "../..";
 import { override } from "../../definers/builders/override";
 
 describe("r.override shorthand", () => {
+  it("throws when implementation function is missing", () => {
+    const baseTask = r
+      .task("tests.override.shorthand.missing-implementation")
+      .run(async () => 1)
+      .build();
+
+    const runtimeOverride = override as unknown as (
+      base: unknown,
+      fn?: unknown,
+    ) => unknown;
+    expect(() => runtimeOverride(baseTask)).toThrow(
+      /requires an implementation function/,
+    );
+  });
+
+  it("throws when implementation is not a function", () => {
+    const baseTask = r
+      .task("tests.override.shorthand.invalid-implementation")
+      .run(async () => 1)
+      .build();
+
+    const runtimeOverride = override as unknown as (
+      base: unknown,
+      fn?: unknown,
+    ) => unknown;
+    expect(() => runtimeOverride(baseTask, "not-a-function")).toThrow(
+      /second argument must be a function/,
+    );
+  });
+
   it("can register a shorthand-overridden resource directly without using .overrides()", async () => {
     const suffixTask = r
       .task("tests.override.shorthand.resource.direct-register.suffix")

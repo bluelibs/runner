@@ -145,7 +145,7 @@ describe("Tag dependencies", () => {
     const moduleBoundary = defineResource({
       id: "tests.resources.module.visibility",
       register: [privateTask],
-      exports: [],
+      isolate: { exports: "none" },
     });
 
     const consumerTask = defineTask({
