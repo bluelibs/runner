@@ -9,11 +9,10 @@ import {
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
 
-const POLICY_VIOLATION_ID = "runner.errors.wiringAccessPolicyViolation";
-const POLICY_UNKNOWN_TARGET_ID =
-  "runner.errors.wiringAccessPolicyUnknownTarget";
-const POLICY_INVALID_ENTRY_ID = "runner.errors.wiringAccessPolicyInvalidEntry";
-const POLICY_CONFLICT_ID = "runner.errors.wiringAccessPolicyConflict";
+const POLICY_VIOLATION_ID = "runner.errors.isolationViolation";
+const POLICY_UNKNOWN_TARGET_ID = "runner.errors.isolationUnknownTarget";
+const POLICY_INVALID_ENTRY_ID = "runner.errors.isolationInvalidEntry";
+const POLICY_CONFLICT_ID = "runner.errors.isolationConflict";
 
 async function expectRunnerErrorId(
   promise: Promise<unknown>,

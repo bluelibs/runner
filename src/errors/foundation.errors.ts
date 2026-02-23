@@ -270,7 +270,7 @@ export const isolateConflictError = error<
   {
     policyResourceId: string;
   } & DefaultErrorType
->("runner.errors.wiringAccessPolicyConflict")
+>("runner.errors.isolationConflict")
   .format(
     ({ policyResourceId }) =>
       `Resource "${policyResourceId}" declares both "deny" and "only" in its isolate policy.`,
@@ -286,7 +286,7 @@ export const isolateInvalidEntryError = error<
     policyResourceId: string;
     entry: unknown;
   } & DefaultErrorType
->("runner.errors.wiringAccessPolicyInvalidEntry")
+>("runner.errors.isolationInvalidEntry")
   .format(
     ({ policyResourceId }) =>
       `Resource "${policyResourceId}" declares an invalid isolate policy entry.`,
@@ -302,7 +302,7 @@ export const isolateUnknownTargetError = error<
     policyResourceId: string;
     targetId: string;
   } & DefaultErrorType
->("runner.errors.wiringAccessPolicyUnknownTarget")
+>("runner.errors.isolationUnknownTarget")
   .format(
     ({ policyResourceId, targetId }) =>
       `Resource "${policyResourceId}" references unknown target "${targetId}" in its isolate policy.`,
@@ -370,7 +370,7 @@ export const isolateViolationError = error<
     matchedRuleType: "id" | "tag" | "only";
     matchedRuleId: string;
   } & DefaultErrorType
->("runner.errors.wiringAccessPolicyViolation")
+>("runner.errors.isolationViolation")
   .format(
     ({
       targetId,
