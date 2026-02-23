@@ -63,14 +63,7 @@ export interface ResourceForkInfo {
 
 export type IsolationTarget = RegisterableItems | string;
 
-export enum IsolationExportsMode {
-  None = "none",
-}
-
-export type IsolationExportsConfig =
-  | ReadonlyArray<RegisterableItems>
-  | IsolationExportsMode
-  | "none";
+export type IsolationExportsConfig = ReadonlyArray<RegisterableItems> | "none";
 
 export interface IsolationPolicy {
   /**

@@ -1,4 +1,3 @@
-import { IsolationExportsMode } from "../../../defs";
 import type {
   DependencyMapType,
   EnsureTagsForTarget,
@@ -372,17 +371,14 @@ export function makeResourceBuilder<
       }
 
       if (policy.exports !== undefined) {
-        if (
-          policy.exports === IsolationExportsMode.None ||
-          (policy.exports as unknown) === "none"
-        ) {
-          merged.exports = IsolationExportsMode.None;
+        if (policy.exports === "none") {
+          merged.exports = "none";
         } else if (Array.isArray(policy.exports)) {
           const override = options?.override === true;
           if (
             override ||
             existingExports === undefined ||
-            existingExports === IsolationExportsMode.None
+            existingExports === "none"
           ) {
             merged.exports = [...policy.exports];
           } else if (Array.isArray(existingExports)) {

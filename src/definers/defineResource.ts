@@ -1,4 +1,3 @@
-import { IsolationExportsMode } from "../types/resource";
 import type {
   IResource,
   IResourceDefinition,
@@ -90,7 +89,7 @@ export function defineResource<
     if (cfg === undefined) {
       return constConfig.exports;
     }
-    if (cfg === IsolationExportsMode.None || (cfg as unknown) === "none") {
+    if (cfg === "none") {
       return [];
     }
     return Array.isArray(cfg) ? [...cfg] : constConfig.exports;
