@@ -1367,6 +1367,7 @@ const secureModule = r
   .resource("app.secure")
   .isolate({ deny: [globals.tags.containerInternals] })
   .build();
+// If you're using runner-dev, which uses containerInternals, make sure it's a sibling of your app. root -> app, runner-dev
 ```
 
 #### Contract Tags
