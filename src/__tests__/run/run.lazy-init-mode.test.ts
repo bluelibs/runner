@@ -6,7 +6,7 @@ import {
   defineTaskMiddleware,
 } from "../../define";
 import { run } from "../../run";
-import { ResourceInitMode } from "../../types/runner";
+import { ResourceLifecycleMode } from "../../types/runner";
 
 describe("run lazy init mode behavior", () => {
   const waitFor = async (
@@ -68,7 +68,7 @@ describe("run lazy init mode behavior", () => {
 
     const runtimePromise = run(app, {
       lazy: true,
-      initMode: ResourceInitMode.Parallel,
+      lifecycleMode: ResourceLifecycleMode.Parallel,
       shutdownHooks: false,
     });
 
@@ -89,7 +89,7 @@ describe("run lazy init mode behavior", () => {
     await runtime.dispose();
   });
 
-  it("initializes startup-required resources eagerly in lazy mode when initMode is sequential", async () => {
+  it("initializes startup-required resources eagerly in lazy mode when lifecycleMode is sequential", async () => {
     let releaseInit!: () => void;
     const initGate = new Promise<void>((resolve) => {
       releaseInit = resolve;
@@ -126,7 +126,7 @@ describe("run lazy init mode behavior", () => {
 
     const runtimePromise = run(app, {
       lazy: true,
-      initMode: ResourceInitMode.Sequential,
+      lifecycleMode: ResourceLifecycleMode.Sequential,
       shutdownHooks: false,
     });
     const oneHasStarted = await waitFor(
@@ -223,7 +223,7 @@ describe("run lazy init mode behavior", () => {
 
     const runtime = await run(app, {
       lazy: true,
-      initMode: ResourceInitMode.Parallel,
+      lifecycleMode: ResourceLifecycleMode.Parallel,
       shutdownHooks: false,
     });
 
@@ -266,7 +266,7 @@ describe("run lazy init mode behavior", () => {
 
     const runtime = await run(app, {
       lazy: true,
-      initMode: ResourceInitMode.Parallel,
+      lifecycleMode: ResourceLifecycleMode.Parallel,
       shutdownHooks: false,
     });
 

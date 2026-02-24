@@ -67,7 +67,9 @@ export function registerStoreBuiltins(registry: StoreRegistry): void {
   const builtInResourceMiddlewares = [
     retryResourceMiddleware,
     timeoutResourceMiddleware,
-    tunnelResourceMiddleware,
+    tunnelResourceMiddleware.applyTo("where-visible", (resource) =>
+      globalTags.tunnel.exists(resource),
+    ),
   ];
   builtInResourceMiddlewares.forEach((middleware) => {
     registry.storeGenericItem(middleware);

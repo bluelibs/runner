@@ -217,7 +217,7 @@ export function buildDependencyGraph(
   // Populate task middleware dependencies
   for (const storeTaskMiddleware of registry.taskMiddlewares.values()) {
     const node = nodeMap.get(storeTaskMiddleware.middleware.id)!;
-    const { middleware } = storeTaskMiddleware;
+    const { middleware, applyTo } = storeTaskMiddleware;
 
     if (middleware.dependencies) {
       for (const [depKey, depItem] of Object.entries(middleware.dependencies)) {
@@ -227,12 +227,16 @@ export function buildDependencyGraph(
 
     for (const task of registry.tasks.values()) {
       if (
-        isMiddlewareAutoAppliedToTarget(middleware, task.task, {
-          isVisibleToTarget: (middlewareId, targetId) =>
-            registry.visibilityTracker.isAccessible(middlewareId, targetId),
-          isInSubtreeScope: (middlewareId, targetId) =>
-            isInSubtreeScope(registry, middlewareId, targetId),
-        })
+        isMiddlewareAutoAppliedToTarget(
+          { id: middleware.id, applyTo },
+          task.task,
+          {
+            isVisibleToTarget: (middlewareId, targetId) =>
+              registry.visibilityTracker.isAccessible(middlewareId, targetId),
+            isInSubtreeScope: (middlewareId, targetId) =>
+              isInSubtreeScope(registry, middlewareId, targetId),
+          },
+        )
       ) {
         const taskNode = nodeMap.get(task.task.id)!;
         taskNode.dependencies[`__middleware.${middleware.id}`] = node;
@@ -243,7 +247,7 @@ export function buildDependencyGraph(
   // Populate resource middleware dependencies
   for (const storeResourceMiddleware of registry.resourceMiddlewares.values()) {
     const node = nodeMap.get(storeResourceMiddleware.middleware.id)!;
-    const { middleware } = storeResourceMiddleware;
+    const { middleware, applyTo } = storeResourceMiddleware;
     if (middleware.dependencies) {
       for (const [depKey, depItem] of Object.entries(middleware.dependencies)) {
         attachDependency(node, depKey, depItem, registry, nodeMap);
@@ -252,12 +256,16 @@ export function buildDependencyGraph(
 
     for (const resource of registry.resources.values()) {
       if (
-        isMiddlewareAutoAppliedToTarget(middleware, resource.resource, {
-          isVisibleToTarget: (middlewareId, targetId) =>
-            registry.visibilityTracker.isAccessible(middlewareId, targetId),
-          isInSubtreeScope: (middlewareId, targetId) =>
-            isInSubtreeScope(registry, middlewareId, targetId),
-        })
+        isMiddlewareAutoAppliedToTarget(
+          { id: middleware.id, applyTo },
+          resource.resource,
+          {
+            isVisibleToTarget: (middlewareId, targetId) =>
+              registry.visibilityTracker.isAccessible(middlewareId, targetId),
+            isInSubtreeScope: (middlewareId, targetId) =>
+              isInSubtreeScope(registry, middlewareId, targetId),
+          },
+        )
       ) {
         const resourceNode = nodeMap.get(resource.resource.id)!;
         resourceNode.dependencies[`__middleware.${middleware.id}`] = node;

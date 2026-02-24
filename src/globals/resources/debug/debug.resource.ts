@@ -18,8 +18,14 @@ export const debugResource = defineResource({
       globalEventListener,
       middlewareInterceptorResource,
       hookInterceptorResource,
-      tasksTrackerMiddleware,
-      resourcesTrackerMiddleware,
+      tasksTrackerMiddleware.applyTo(
+        "where-visible",
+        (task) => !globalTags.system.exists(task),
+      ),
+      resourcesTrackerMiddleware.applyTo(
+        "where-visible",
+        (resource) => !globalTags.system.exists(resource),
+      ),
     ];
   },
   meta: {

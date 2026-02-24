@@ -1,9 +1,6 @@
 import type {
   DependencyMapType,
   EnsureTagsForTarget,
-  ITask,
-  MiddlewareApplyToScopeType,
-  TaskMiddlewareApplyToWhen,
   ITaskMiddleware,
   ITaskMiddlewareDefinition,
   IValidationSchema,
@@ -12,7 +9,7 @@ import type {
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
-export interface TaskMiddlewareFluentBuilder<
+export interface TaskMiddlewareFluentBuilderBeforeRun<
   C = any,
   In = void,
   Out = void,
@@ -23,42 +20,58 @@ export interface TaskMiddlewareFluentBuilder<
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | ((config: C) => TNewDeps),
     options?: { override?: false },
-  ): TaskMiddlewareFluentBuilder<C, In, Out, D & TNewDeps>;
+  ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D & TNewDeps>;
   // Override signature (replace)
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | ((config: C) => TNewDeps),
     options: { override: true },
-  ): TaskMiddlewareFluentBuilder<C, In, Out, TNewDeps>;
+  ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, TNewDeps>;
   configSchema<TNew>(
     schema: IValidationSchema<TNew>,
-  ): TaskMiddlewareFluentBuilder<TNew, In, Out, D>;
+  ): TaskMiddlewareFluentBuilderBeforeRun<TNew, In, Out, D>;
 
   /**
    * Alias for configSchema. Use this to define the middleware configuration validation contract.
    */
   schema<TNew>(
     schema: IValidationSchema<TNew>,
-  ): TaskMiddlewareFluentBuilder<TNew, In, Out, D>;
+  ): TaskMiddlewareFluentBuilderBeforeRun<TNew, In, Out, D>;
 
   run(
     fn: ITaskMiddlewareDefinition<C, In, Out, D>["run"],
-  ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
-  meta<TNewMeta extends IMiddlewareMeta>(
-    m: TNewMeta,
-  ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
+  ): TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
   tags<TNewTags extends TaskMiddlewareTagType[]>(
     t: EnsureTagsForTarget<"taskMiddlewares", TNewTags>,
     options?: { override?: boolean },
-  ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
+  ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
+  meta<TNewMeta extends IMiddlewareMeta>(
+    m: TNewMeta,
+  ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
   /** Declare which typed errors this middleware may throw (declarative only). */
-  throws(list: ThrowsList): TaskMiddlewareFluentBuilder<C, In, Out, D>;
-  applyTo(
-    scope: MiddlewareApplyToScopeType,
-    when?: TaskMiddlewareApplyToWhen,
-  ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
-  /** @deprecated Use applyTo(scope, when?) instead. */
-  everywhere(
-    flag: boolean | ((task: ITask<any, any, any, any>) => boolean),
-  ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
+  throws(list: ThrowsList): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
+}
+
+export interface TaskMiddlewareFluentBuilderAfterRun<
+  C = any,
+  In = void,
+  Out = void,
+  D extends DependencyMapType = {},
+> {
+  id: string;
+  meta<TNewMeta extends IMiddlewareMeta>(
+    m: TNewMeta,
+  ): TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
+  /** Declare which typed errors this middleware may throw (declarative only). */
+  throws(list: ThrowsList): TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
   build(): ITaskMiddleware<C, In, Out, D>;
 }
+
+export type TaskMiddlewareFluentBuilder<
+  C = any,
+  In = void,
+  Out = void,
+  D extends DependencyMapType = {},
+  THasRun extends boolean = false,
+> = THasRun extends true
+  ? TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D>
+  : TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;

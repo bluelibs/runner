@@ -20,7 +20,7 @@ import { ResourceInitializer } from "./ResourceInitializer";
 import { TaskRunner } from "./TaskRunner";
 import { eventNotFoundError } from "../errors";
 import { Logger } from "./Logger";
-import { ResourceInitMode } from "../types/runner";
+import { ResourceLifecycleMode, ResourceInitMode } from "../types/runner";
 import { DependencyExtractor } from "./dependency-processor/DependencyExtractor";
 import { HookEventBuffer } from "./dependency-processor/HookEventBuffer";
 import { ResourceScheduler } from "./dependency-processor/ResourceScheduler";
@@ -34,7 +34,7 @@ export class DependencyProcessor {
   protected readonly hookEventBuffer: HookEventBuffer;
   protected readonly resourceScheduler: ResourceScheduler;
   protected readonly logger!: Logger;
-  protected readonly initMode: ResourceInitMode;
+  protected readonly lifecycleMode: ResourceLifecycleMode;
   protected readonly lazy: boolean;
   public readonly pendingHookEvents: Map<string, IEventEmission<any>[]>;
   public readonly drainingHookIds: Set<string>;
@@ -48,12 +48,18 @@ export class DependencyProcessor {
     protected readonly eventManager: EventManager,
     protected readonly taskRunner: TaskRunner,
     logger: Logger,
-    initMode: ResourceInitMode = ResourceInitMode.Sequential,
+    lifecycleMode:
+      | ResourceLifecycleMode
+      | ResourceInitMode = ResourceLifecycleMode.Sequential,
     lazy = false,
     runtimeEventCycleDetection = true,
   ) {
     this.logger = logger.with({ source: "dependencyProcessor" });
-    this.initMode = initMode;
+    this.lifecycleMode =
+      lifecycleMode === ResourceLifecycleMode.Parallel ||
+      lifecycleMode === ResourceInitMode.Parallel
+        ? ResourceLifecycleMode.Parallel
+        : ResourceLifecycleMode.Sequential;
     this.lazy = lazy;
     this.resourceInitializer = new ResourceInitializer(
       store,
@@ -74,8 +80,10 @@ export class DependencyProcessor {
       this.logger,
       async (resource) => this.ensureResourceInitialized(resource),
     );
-    this.resourceScheduler = new ResourceScheduler(store, async (resource) =>
-      this.ensureResourceInitialized(resource),
+    this.resourceScheduler = new ResourceScheduler(
+      store,
+      async (resource, options) =>
+        this.ensureResourceInitialized(resource, options),
     );
   }
 
@@ -91,9 +99,12 @@ export class DependencyProcessor {
     // events; hooks must be dependency-ready before that happens.
     await this.computeHookDependencies();
 
-    if (this.initMode === ResourceInitMode.Parallel && this.lazy) {
+    if (this.lifecycleMode === ResourceLifecycleMode.Parallel && this.lazy) {
       await this.initializeStartupRequiredResourcesParallel();
-    } else if (!this.lazy && this.initMode === ResourceInitMode.Parallel) {
+    } else if (
+      !this.lazy &&
+      this.lifecycleMode === ResourceLifecycleMode.Parallel
+    ) {
       await this.initializeUninitializedResourcesParallel();
     } else if (!this.lazy) {
       for (const resource of this.store.resources.values()) {
@@ -215,6 +226,7 @@ export class DependencyProcessor {
 
   private async ensureResourceInitialized(
     resource: ResourceStoreElementType<any, any, any>,
+    options?: { trackInitCompletion?: boolean },
   ) {
     if (resource.isInitialized) {
       return;
@@ -240,7 +252,9 @@ export class DependencyProcessor {
         resource.context = context;
         resource.value = value;
         resource.isInitialized = true;
-        this.store.recordResourceInitialized(resourceId);
+        if (options?.trackInitCompletion !== false) {
+          this.store.recordResourceInitialized(resourceId);
+        }
       } catch (error: unknown) {
         this.resetResourceInitializationState(resource);
         this.rethrowResourceInitError(resourceId, error);

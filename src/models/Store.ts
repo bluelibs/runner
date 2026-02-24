@@ -25,6 +25,8 @@ import {
   ResourceStoreElementType,
   TaskStoreElementType,
   EventStoreElementType,
+  DisposeWave,
+  InitWave,
 } from "../types/storeTypes";
 import { TaskRunner } from "./TaskRunner";
 import { globalResources } from "../globals/globalResources";
@@ -33,7 +35,7 @@ import { MiddlewareManager } from "./MiddlewareManager";
 import { RunnerMode } from "../types/runner";
 import { detectRunnerMode } from "../tools/detectRunnerMode";
 import { Serializer } from "../serializer";
-import { getResourcesInDisposeOrder as computeDisposeOrder } from "./utils/disposeOrder";
+import { getResourcesInDisposeWaves as computeDisposeWaves } from "./utils/disposeOrder";
 import { RunResult } from "./RunResult";
 import { getAllThrows } from "../tools/getAllThrows";
 import type { ITask } from "../types/task";
@@ -46,6 +48,8 @@ export type {
   ResourceStoreElementType,
   TaskStoreElementType,
   EventStoreElementType,
+  InitWave,
+  DisposeWave,
 };
 
 /**
@@ -58,8 +62,8 @@ export class Store {
   private validator: StoreValidator;
   private taskRunner?: TaskRunner;
   private middlewareManager!: MiddlewareManager;
-  private readonly initializedResourceIds: string[] = [];
-  private preferInitOrderDisposal = true;
+  private readonly initWaves: InitWave[] = [];
+  private readonly initializedResourceIds = new Set<string>();
 
   #isLocked = false;
   #isInitialized = false;
@@ -183,8 +187,8 @@ export class Store {
 
   public async waitForInFlightOperations() {
     await Promise.all([
-      this.eventManager.waitForIdle(),
-      this.taskRunner?.waitForIdle(),
+      this.eventManager.waitForIdle({ allowCurrentContext: true }),
+      this.taskRunner?.waitForIdle({ allowCurrentContext: true }),
     ]);
   }
 
@@ -233,10 +237,6 @@ export class Store {
 
   public setTaskRunner(taskRunner: TaskRunner) {
     this.taskRunner = taskRunner;
-  }
-
-  public setPreferInitOrderDisposal(prefer: boolean) {
-    this.preferInitOrderDisposal = prefer;
   }
 
   private setupRootResource(rootDefinition: IResource<any>, config: unknown) {
@@ -322,21 +322,9 @@ export class Store {
   public async dispose() {
     const disposalErrors: Error[] = [];
 
-    for (const resource of this.getResourcesInDisposeOrder()) {
-      try {
-        if (resource.isInitialized && resource.resource.dispose) {
-          await resource.resource.dispose(
-            resource.value,
-            resource.config,
-            resource.computedDependencies ?? {},
-            resource.context,
-          );
-        }
-      } catch (error) {
-        disposalErrors.push(
-          error instanceof Error ? error : new Error(String(error)),
-        );
-      }
+    for (const wave of this.getResourcesInDisposeWaves()) {
+      const waveErrors = await this.disposeWave(wave);
+      disposalErrors.push(...waveErrors);
     }
 
     this.clearRuntimeStateAfterDispose();
@@ -359,22 +347,36 @@ export class Store {
   }
 
   public recordResourceInitialized(resourceId: string) {
-    if (
-      this.initializedResourceIds[this.initializedResourceIds.length - 1] ===
-      resourceId
-    ) {
+    if (this.initializedResourceIds.has(resourceId)) {
       return;
     }
-    if (this.initializedResourceIds.includes(resourceId)) {
-      return;
-    }
-    this.initializedResourceIds.push(resourceId);
+    this.initializedResourceIds.add(resourceId);
+    this.initWaves.push({
+      resourceIds: [resourceId],
+      parallel: false,
+    });
   }
 
-  private getResourcesInDisposeOrder(): ResourceStoreElementType[] {
-    return computeDisposeOrder(this.resources, this.initializedResourceIds, {
-      preferInitOrderFastPath: this.preferInitOrderDisposal,
+  public recordInitWave(resourceIds: readonly string[]) {
+    const uniqueResourceIds = Array.from(
+      new Set(resourceIds.filter((id) => !this.initializedResourceIds.has(id))),
+    );
+    if (uniqueResourceIds.length === 0) {
+      return;
+    }
+
+    for (const resourceId of uniqueResourceIds) {
+      this.initializedResourceIds.add(resourceId);
+    }
+
+    this.initWaves.push({
+      resourceIds: uniqueResourceIds,
+      parallel: uniqueResourceIds.length > 1,
     });
+  }
+
+  private getResourcesInDisposeWaves(): DisposeWave[] {
+    return computeDisposeWaves(this.resources, this.initWaves);
   }
 
   private clearRuntimeStateAfterDispose() {
@@ -385,8 +387,55 @@ export class Store {
       resource.isInitialized = false;
     }
 
-    this.initializedResourceIds.length = 0;
+    this.initWaves.length = 0;
+    this.initializedResourceIds.clear();
     this.#shutdownLockdown = false;
+  }
+
+  private async disposeWave(wave: DisposeWave): Promise<Error[]> {
+    const normalizeError = (error: unknown): Error =>
+      error instanceof Error ? error : new Error(String(error));
+    const collectWaveErrors = (
+      results: readonly PromiseSettledResult<void>[],
+    ): Error[] =>
+      results
+        .filter(
+          (result): result is PromiseRejectedResult =>
+            result.status === "rejected",
+        )
+        .map((result) => normalizeError(result.reason));
+
+    if (wave.parallel) {
+      const results = await Promise.allSettled(
+        wave.resources.map((resource) => this.disposeResource(resource)),
+      );
+      return collectWaveErrors(results);
+    }
+
+    const errors: Error[] = [];
+    for (const resource of wave.resources) {
+      try {
+        await this.disposeResource(resource);
+      } catch (error) {
+        errors.push(normalizeError(error));
+      }
+    }
+    return errors;
+  }
+
+  private async disposeResource(
+    resource: ResourceStoreElementType,
+  ): Promise<void> {
+    if (!resource.isInitialized || !resource.resource.dispose) {
+      return;
+    }
+
+    await resource.resource.dispose(
+      resource.value,
+      resource.config,
+      resource.computedDependencies ?? {},
+      resource.context,
+    );
   }
 
   /**

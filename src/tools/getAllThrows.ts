@@ -115,21 +115,25 @@ function collectEverywhereTaskMiddlewareThrows(
     if (localIds.has(entry.middleware.id)) continue;
 
     if (
-      isMiddlewareAutoAppliedToTarget(entry.middleware, task, {
-        isVisibleToTarget: (middlewareId, targetId) =>
-          registry.visibilityTracker.isAccessible(middlewareId, targetId),
-        isInSubtreeScope: (middlewareId, targetId) => {
-          const ownerId =
-            registry.visibilityTracker.getOwnerResourceId(middlewareId);
-          if (!ownerId) {
-            return false;
-          }
-          return registry.visibilityTracker.isWithinResourceSubtree(
-            ownerId,
-            targetId,
-          );
+      isMiddlewareAutoAppliedToTarget(
+        { id: entry.middleware.id, applyTo: entry.applyTo },
+        task,
+        {
+          isVisibleToTarget: (middlewareId, targetId) =>
+            registry.visibilityTracker.isAccessible(middlewareId, targetId),
+          isInSubtreeScope: (middlewareId, targetId) => {
+            const ownerId =
+              registry.visibilityTracker.getOwnerResourceId(middlewareId);
+            if (!ownerId) {
+              return false;
+            }
+            return registry.visibilityTracker.isWithinResourceSubtree(
+              ownerId,
+              targetId,
+            );
+          },
         },
-      })
+      )
     ) {
       collect(entry.middleware.throws);
     }
@@ -149,21 +153,25 @@ function collectEverywhereResourceMiddlewareThrows(
     if (localIds.has(entry.middleware.id)) continue;
 
     if (
-      isMiddlewareAutoAppliedToTarget(entry.middleware, resource, {
-        isVisibleToTarget: (middlewareId, targetId) =>
-          registry.visibilityTracker.isAccessible(middlewareId, targetId),
-        isInSubtreeScope: (middlewareId, targetId) => {
-          const ownerId =
-            registry.visibilityTracker.getOwnerResourceId(middlewareId);
-          if (!ownerId) {
-            return false;
-          }
-          return registry.visibilityTracker.isWithinResourceSubtree(
-            ownerId,
-            targetId,
-          );
+      isMiddlewareAutoAppliedToTarget(
+        { id: entry.middleware.id, applyTo: entry.applyTo },
+        resource,
+        {
+          isVisibleToTarget: (middlewareId, targetId) =>
+            registry.visibilityTracker.isAccessible(middlewareId, targetId),
+          isInSubtreeScope: (middlewareId, targetId) => {
+            const ownerId =
+              registry.visibilityTracker.getOwnerResourceId(middlewareId);
+            if (!ownerId) {
+              return false;
+            }
+            return registry.visibilityTracker.isWithinResourceSubtree(
+              ownerId,
+              targetId,
+            );
+          },
         },
-      })
+      )
     ) {
       collect(entry.middleware.throws);
     }

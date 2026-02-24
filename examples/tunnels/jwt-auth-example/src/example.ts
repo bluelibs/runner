@@ -35,7 +35,6 @@ const jwtGuard = r.middleware
   .configSchema<JwtMiddlewareConfig>({
     parse: (value) => value as JwtMiddlewareConfig,
   })
-  .everywhere((t) => t.id.startsWith("examples.tunnels.jwt."))
   .run(async (context, _deps, config: JwtMiddlewareConfig) => {
     const nextInput = context.task?.input;
     let requestContext: ReturnType<typeof useExposureContext>;
@@ -102,7 +101,14 @@ const callHelloDirect = r
 
 const app = r
   .resource("examples.tunnels.jwt.app")
-  .register([jwtGuard, helloTask, exposure, callHelloDirect])
+  .register([
+    jwtGuard.applyTo("where-visible", (t) =>
+      t.id.startsWith("examples.tunnels.jwt."),
+    ),
+    helloTask,
+    exposure,
+    callHelloDirect,
+  ])
   .build();
 
 export async function runJwtAuthExample(): Promise<void> {
@@ -187,4 +193,3 @@ function verifyJwt(token: string, secret: string): JwtVerifyResult {
     return { ok: false, reason: message };
   }
 }
-

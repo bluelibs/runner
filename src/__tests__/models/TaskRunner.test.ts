@@ -1,6 +1,8 @@
 import { TaskRunner } from "../../models/TaskRunner";
 import { Store } from "../../models/Store";
 import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
+import { getPlatform } from "../../platform";
+import { createMessageError } from "../../errors";
 
 import { createTestFixture } from "../test-utils";
 
@@ -144,6 +146,26 @@ describe("TaskRunner", () => {
     await expect(taskRunner.run(task, undefined)).rejects.toThrow(error);
   });
 
+  it("allows waitForIdle with allowCurrentContext from inside a running task", async () => {
+    const task = defineTask({
+      id: "testTask.waitForIdle.currentContext",
+      run: async () => {
+        await expect(
+          taskRunner.waitForIdle({ allowCurrentContext: true }),
+        ).resolves.toBeUndefined();
+        return "ok";
+      },
+    });
+
+    store.tasks.set(task.id, {
+      task,
+      computedDependencies: {},
+      isInitialized: false,
+    });
+
+    await expect(taskRunner.run(task, undefined)).resolves.toBe("ok");
+  });
+
   it("does not route task execution errors to onUnhandledError", async () => {
     const error = new Error("Business logic error");
     const onUnhandledErrorSpy = jest.spyOn(store, "onUnhandledError");
@@ -163,6 +185,106 @@ describe("TaskRunner", () => {
 
     await expect(taskRunner.run(task, undefined)).rejects.toThrow(error);
     expect(onUnhandledErrorSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects new task runs when shutdown lockdown is active", async () => {
+    const task = defineTask({
+      id: "testTask.lockdown",
+      run: async () => "ok",
+    });
+
+    store.tasks.set(task.id, {
+      task,
+      computedDependencies: {},
+      isInitialized: false,
+    });
+
+    store.enterShutdownLockdown();
+
+    await expect(taskRunner.run(task)).rejects.toThrow(
+      "Runtime is shutting down and no new task runs or event emissions are accepted.",
+    );
+  });
+
+  it("runs without async local storage support", async () => {
+    const platform = getPlatform();
+    const hasAsyncLocalStorageSpy = jest
+      .spyOn(platform, "hasAsyncLocalStorage")
+      .mockReturnValue(false);
+
+    try {
+      const fixture = createTestFixture();
+      const localTaskRunner = fixture.createTaskRunner();
+
+      const task = defineTask({
+        id: "testTask.no-als",
+        run: async (input: number) => input + 1,
+      });
+
+      fixture.store.tasks.set(task.id, {
+        task,
+        computedDependencies: {},
+        isInitialized: false,
+      });
+
+      await expect(localTaskRunner.run(task, 2)).resolves.toBe(3);
+    } finally {
+      hasAsyncLocalStorageSpy.mockRestore();
+    }
+  });
+
+  it("keeps waitForIdle pending until all in-flight task runs complete", async () => {
+    let releaseFirst: (() => void) | undefined;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    let releaseSecond: (() => void) | undefined;
+    const secondGate = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+
+    let runCount = 0;
+    const task = defineTask({
+      id: "testTask.waitForIdle.pending",
+      run: async () => {
+        runCount += 1;
+        if (runCount === 1) {
+          await firstGate;
+          return "first";
+        }
+        await secondGate;
+        return "second";
+      },
+    });
+
+    store.tasks.set(task.id, {
+      task,
+      computedDependencies: {},
+      isInitialized: false,
+    });
+
+    const firstRun = taskRunner.run(task);
+    const secondRun = taskRunner.run(task);
+
+    let idleResolved = false;
+    const idlePromise = taskRunner.waitForIdle().then(() => {
+      idleResolved = true;
+    });
+
+    if (!releaseFirst || !releaseSecond) {
+      throw createMessageError("Expected task gates to be initialized");
+    }
+
+    releaseFirst();
+    await firstRun;
+    await Promise.resolve();
+    expect(idleResolved).toBe(false);
+
+    releaseSecond();
+    await secondRun;
+    await idlePromise;
+    expect(idleResolved).toBe(true);
   });
 
   // Global lifecycle events removed

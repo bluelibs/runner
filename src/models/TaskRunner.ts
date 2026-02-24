@@ -4,8 +4,10 @@ import { Store } from "./Store";
 import { Logger } from "./Logger";
 import { MiddlewareManager } from "./MiddlewareManager";
 import { shutdownLockdownError } from "../errors";
+import { getPlatform } from "../platform";
 import type { ExecutionJournal } from "../types/executionJournal";
 import type { TaskCallOptions } from "../types/utilities";
+import { InFlightTracker } from "./utils/inFlightTracker";
 
 type CachedTaskRunner = (
   input: unknown,
@@ -14,8 +16,12 @@ type CachedTaskRunner = (
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<string | symbol, CachedTaskRunner>();
-  private inFlightTaskRuns = 0;
-  private readonly idleWaiters = new Set<() => void>();
+  private readonly executionContext = getPlatform().hasAsyncLocalStorage()
+    ? getPlatform().createAsyncLocalStorage<boolean>()
+    : null;
+  private readonly inFlightTracker = new InFlightTracker(() =>
+    Boolean(this.executionContext?.getStore()),
+  );
 
   constructor(
     protected readonly store: Store,
@@ -66,28 +72,22 @@ export class TaskRunner {
       }
     }
 
-    this.inFlightTaskRuns += 1;
+    this.inFlightTracker.start();
     try {
+      const executeTask = () => runner(input as TInput, options?.journal);
       // Pass journal if provided; composer will use it or create new
-      return await runner(input as TInput, options?.journal);
+      return this.executionContext
+        ? await this.executionContext.run(true, executeTask)
+        : await executeTask();
     } finally {
-      this.inFlightTaskRuns -= 1;
-      if (this.inFlightTaskRuns === 0) {
-        for (const resolve of this.idleWaiters) {
-          resolve();
-        }
-        this.idleWaiters.clear();
-      }
+      this.inFlightTracker.end();
     }
   }
 
-  public waitForIdle(): Promise<void> {
-    if (this.inFlightTaskRuns === 0) {
-      return Promise.resolve();
-    }
-    return new Promise<void>((resolve) => {
-      this.idleWaiters.add(resolve);
-    });
+  public waitForIdle(options?: {
+    allowCurrentContext?: boolean;
+  }): Promise<void> {
+    return this.inFlightTracker.waitForIdle(options);
   }
 
   /**

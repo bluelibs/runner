@@ -1,19 +1,24 @@
-import {
+import type {
   IResourceMiddleware,
-  IResourceMiddlewareDefinition,
-  DependencyMapType,
-  symbolFilePath,
-  symbolResourceMiddleware,
-  symbolMiddlewareConfigured,
   IResourceMiddlewareConfigured,
-} from "../defs";
+  IResourceMiddlewareDefinition,
+  IResourceMiddlewareRegistration,
+  ResourceMiddlewareApplyToWhen,
+} from "../types/resourceMiddleware";
+import type { DependencyMapType } from "../types/utilities";
+import {
+  symbolFilePath,
+  symbolMiddlewareConfigured,
+  symbolResourceMiddleware,
+  symbolResourceMiddlewareRegistration,
+} from "../types/symbols";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
+import { normalizeMiddlewareApplyTo } from "./middlewareApplyTo";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { normalizeThrows } from "../tools/throws";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
-import { normalizeMiddlewareApplyTo } from "./middlewareApplyTo";
 
 export function defineResourceMiddleware<
   TConfig = any,
@@ -40,11 +45,6 @@ export function defineResourceMiddleware<
     middlewareDef.id,
     middlewareDef.tags,
   );
-  const normalizedApplyTo = normalizeMiddlewareApplyTo(
-    middlewareDef.id,
-    middlewareDef.applyTo,
-    middlewareDef.everywhere,
-  );
 
   const base = {
     [symbolFilePath]: filePath,
@@ -52,7 +52,6 @@ export function defineResourceMiddleware<
     config: {} as TConfig,
     configSchema: middlewareDef.configSchema,
     ...middlewareDef,
-    ...normalizedApplyTo,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
     throws: normalizeThrows(
       { kind: "resource-middleware", id: middlewareDef.id },
@@ -135,6 +134,28 @@ export function defineResourceMiddleware<
           TDependencies
         >);
         return freezeIfLineageLocked(current, configured);
+      },
+      applyTo: function (
+        scope: "where-visible" | "subtree",
+        when?: ResourceMiddlewareApplyToWhen,
+      ) {
+        const current = resolveCurrent(this);
+        const applyTo = normalizeMiddlewareApplyTo(current.id, {
+          scope,
+          when,
+        });
+        const registration = {
+          [symbolResourceMiddlewareRegistration]: true,
+          id: current.id,
+          middleware: current,
+          applyTo,
+        } as IResourceMiddlewareRegistration<
+          TConfig,
+          TEnforceInputContract,
+          TEnforceOutputContract,
+          TDependencies
+        >;
+        return freezeIfLineageLocked(current, deepFreeze(registration));
       },
     } as IResourceMiddleware<
       TConfig,

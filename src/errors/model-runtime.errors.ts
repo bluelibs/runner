@@ -119,6 +119,6 @@ export const parallelInitSchedulingError = error<DefaultErrorType>(
       "Could not schedule pending resources for initialization in parallel mode.",
   )
   .remediation(
-    "This indicates a dependency ordering issue in parallel initialization mode. Ensure all resources have their dependencies properly declared, or switch to sequential initialization mode via run(app, { initMode: 'sequential' }).",
+    "This indicates a dependency ordering issue in parallel initialization mode. Ensure all resources have their dependencies properly declared, or switch to sequential lifecycle mode via run(app, { lifecycleMode: 'sequential' }).",
   )
   .build();

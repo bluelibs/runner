@@ -176,7 +176,6 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
     it("scopes private everywhere task middleware to its subtree", async () => {
       const internalEverywhere = defineTaskMiddleware({
         id: "exports.strict.everywhere.task.internal",
-        everywhere: true,
         run: async ({ next }) => {
           const result = await next();
           return `mw:${result}`;
@@ -194,7 +193,7 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
 
       const child = defineResource({
         id: "exports.strict.everywhere.task.child",
-        register: [internalEverywhere, internalTask],
+        register: [internalEverywhere.applyTo("where-visible"), internalTask],
         isolate: { exports: "none" },
         dependencies: { internalTask },
         async init(_, deps) {
@@ -225,9 +224,6 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
     it("scopes private everywhere resource middleware to its subtree", async () => {
       const internalEverywhere = defineResourceMiddleware({
         id: "exports.strict.everywhere.resource.internal",
-        everywhere: (resource) =>
-          resource.id ===
-          "exports.strict.everywhere.resource.internal-resource",
         run: async ({ next }) => {
           const result = await next();
           return `mw:${result}`;
@@ -249,7 +245,15 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
 
       const child = defineResource({
         id: "exports.strict.everywhere.resource.child",
-        register: [internalEverywhere, internalResource],
+        register: [
+          internalEverywhere.applyTo(
+            "where-visible",
+            (resource) =>
+              resource.id ===
+              "exports.strict.everywhere.resource.internal-resource",
+          ),
+          internalResource,
+        ],
         isolate: { exports: "none" },
         dependencies: { internalResource },
         async init(_, deps) {

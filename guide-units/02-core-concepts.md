@@ -297,7 +297,7 @@ Think of this as an **architectural boundary** for wiring, not a sandbox:
 - **Safer refactors**: internal tasks/events/hooks/middleware can change without breaking outside consumers
 - **Clear ownership**: each resource exposes a deliberate contract instead of ambient access
 - **Fail-fast architecture checks**: invalid cross-boundary references fail during `run(app)` bootstrap
-- **Predictable cross-cutting behavior**: private `.applyTo("where-visible")` middleware stays inside its resource subtree
+- **Predictable cross-cutting behavior**: private middleware registrations created with `.applyTo("where-visible")` stay inside their resource subtree
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -328,7 +328,7 @@ const billing = r
 - `isolate: { exports: [] }` / `isolate: { exports: "none" }` means nothing from that resource is public outside its registration subtree
 - `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
 - Visibility checks cover dependency references, hook `.on(event)` subscriptions, and middleware attachment
-- `.applyTo("where-visible")` middleware follows visibility; non-exported middleware applies only inside its subtree
+- Middleware registrations created with `.applyTo("where-visible")` follow visibility; non-exported middleware applies only inside their subtree
 - If a resource exports a child resource, that child's own exported surface is visible transitively
 - Validation happens at `run(app)` initialization, not at declaration time
 - IDs remain globally unique even for private items; visibility does not bypass duplicate-id checks
@@ -723,9 +723,12 @@ const systemReadyHook = r
   .build();
 ```
 
-Available system event:
+Available system events:
 
 - `globals.events.ready` - System has completed initialization
+- `globals.events.disposing` - Disposal started (before lockdown/drain)
+- `globals.events.drained` - In-flight task/event work drained (before resource disposers)
+- `globals.events.shutdown` - Process shutdown hook signal received (before disposal starts)
   // Note: use run({ onUnhandledError }) for unhandled error handling
 
 #### stopPropagation()
@@ -848,7 +851,6 @@ import { r, globals } from "@bluelibs/runner";
 
 const logTaskMiddleware = r.middleware
   .task("app.middleware.log.task")
-  .applyTo("where-visible", () => true)
   .dependencies({ logger: globals.resources.logger })
   .run(async ({ task, next }, { logger }) => {
     logger.info(`Executing: ${String(task!.definition.id)}`);
@@ -857,6 +859,11 @@ const logTaskMiddleware = r.middleware
     return result;
   })
   .build();
+
+const logTaskMiddlewareRegistration = logTaskMiddleware.applyTo(
+  "where-visible",
+  () => true,
+);
 ```
 
 > **Note:** `.applyTo("where-visible")` means "auto-apply to all visible targets", not "bypass visibility". A middleware only applies where it is visible under isolate `exports` and allowed by `.isolate()`.

@@ -1,31 +1,49 @@
 import { defineResource } from "../../define";
-import { getResourcesInDisposeOrder } from "../../models/utils/disposeOrder";
+import { getResourcesInDisposeWaves } from "../../models/utils/disposeOrder";
+import { InitWave } from "../../types/storeTypes";
 import { createTestFixture } from "../test-utils";
 
-describe("disposeOrder options", () => {
-  it("uses default options when omitted", () => {
+describe("disposeOrder waves", () => {
+  it("reverses recorded init waves and preserves parallel waves", () => {
     const fixture = createTestFixture();
     const { store } = fixture;
 
-    const resource = defineResource({ id: "dispose.options.default" });
-    store.storeGenericItem(resource);
-    store.resources.get(resource.id)!.isInitialized = true;
-    store.recordResourceInitialized(resource.id);
+    const first = defineResource({ id: "dispose.waves.first" });
+    const second = defineResource({ id: "dispose.waves.second" });
+    const third = defineResource({ id: "dispose.waves.third" });
+    const fourth = defineResource({ id: "dispose.waves.fourth" });
 
-    const result = getResourcesInDisposeOrder(store.resources, [
-      resource.id,
-    ]).map((entry) => entry.resource.id);
+    for (const resource of [first, second, third, fourth]) {
+      store.storeGenericItem(resource);
+      store.resources.get(resource.id)!.isInitialized = true;
+    }
 
-    expect(result).toEqual([resource.id]);
+    const waves: InitWave[] = [
+      { resourceIds: [first.id], parallel: false },
+      { resourceIds: [second.id, third.id], parallel: true },
+      { resourceIds: [fourth.id], parallel: false },
+    ];
+
+    const result = getResourcesInDisposeWaves(store.resources, waves);
+    expect(
+      result.map((wave) => ({
+        resourceIds: wave.resources.map((resource) => resource.resource.id),
+        parallel: wave.parallel,
+      })),
+    ).toEqual([
+      { resourceIds: [fourth.id], parallel: false },
+      { resourceIds: [second.id, third.id], parallel: true },
+      { resourceIds: [first.id], parallel: false },
+    ]);
   });
 
-  it("supports explicit disable of init-order fast path", () => {
+  it("falls back to sequential graph-based waves when recorded waves are incomplete", () => {
     const fixture = createTestFixture();
     const { store } = fixture;
 
-    const dep = defineResource({ id: "dispose.options.dep" });
+    const dep = defineResource({ id: "dispose.waves.fallback.dep" });
     const app = defineResource({
-      id: "dispose.options.app",
+      id: "dispose.waves.fallback.app",
       dependencies: { dep },
     });
 
@@ -34,12 +52,53 @@ describe("disposeOrder options", () => {
     store.resources.get(dep.id)!.isInitialized = true;
     store.resources.get(app.id)!.isInitialized = true;
 
-    const result = getResourcesInDisposeOrder(
-      store.resources,
-      [app.id, dep.id],
-      { preferInitOrderFastPath: false },
-    ).map((entry) => entry.resource.id);
+    const result = getResourcesInDisposeWaves(store.resources, [
+      { resourceIds: [app.id], parallel: false },
+    ]);
 
-    expect(result).toEqual([app.id, dep.id]);
+    expect(
+      result.map((wave) => ({
+        resourceIds: wave.resources.map((resource) => resource.resource.id),
+        parallel: wave.parallel,
+      })),
+    ).toEqual([
+      { resourceIds: [app.id], parallel: false },
+      { resourceIds: [dep.id], parallel: false },
+    ]);
+  });
+
+  it("uses insertion-order LIFO sequential waves when a graph cycle is detected", () => {
+    const fixture = createTestFixture();
+    const { store } = fixture;
+
+    const aDeps: any = {};
+    const bDeps: any = {};
+    const a = defineResource({
+      id: "dispose.waves.cycle.a",
+      dependencies: () => aDeps,
+    });
+    const b = defineResource({
+      id: "dispose.waves.cycle.b",
+      dependencies: () => bDeps,
+    });
+
+    aDeps.b = b;
+    bDeps.a = a;
+
+    store.storeGenericItem(a);
+    store.storeGenericItem(b);
+    store.resources.get(a.id)!.isInitialized = true;
+    store.resources.get(b.id)!.isInitialized = true;
+
+    const result = getResourcesInDisposeWaves(store.resources, []);
+    expect(
+      result.map((wave) => ({
+        resourceIds: wave.resources.map((resource) => resource.resource.id),
+        parallel: wave.parallel,
+      })),
+    ).toEqual([
+      { resourceIds: [b.id], parallel: false },
+      { resourceIds: [a.id], parallel: false },
+    ]);
   });
 });

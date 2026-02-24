@@ -6,14 +6,20 @@ import {
 import type { IResource } from "./resource";
 import { ResourceMiddlewareTagType } from "./tag";
 import { IMiddlewareMeta } from "./meta";
-import type { ResourceMiddlewareApplyTo } from "./middlewareApplyTo";
+import type {
+  ResourceMiddlewareApplyTo,
+  ResourceMiddlewareApplyToWhen,
+} from "./middlewareApplyTo";
 import {
   symbolFilePath,
   symbolMiddlewareConfigured,
+  symbolResourceMiddlewareRegistration,
   symbolResourceMiddleware,
 } from "./symbols";
 import { IContractable } from "./contracts";
 import type { ThrowsList } from "./error";
+
+export type { ResourceMiddlewareApplyTo, ResourceMiddlewareApplyToWhen };
 
 export interface IResourceMiddlewareDefinition<
   TConfig = any,
@@ -47,11 +53,6 @@ export interface IResourceMiddlewareDefinition<
    * Declarative only — does not imply DI or enforcement.
    */
   throws?: ThrowsList;
-  applyTo?: ResourceMiddlewareApplyTo;
-  /** @deprecated Use applyTo instead. */
-  everywhere?:
-    | boolean
-    | ((resource: IResource<any, any, any, any, any>) => boolean);
 }
 
 export interface IResourceMiddleware<
@@ -85,8 +86,39 @@ export interface IResourceMiddleware<
     TEnforceOutputContract,
     TDependencies
   >;
+  /**
+   * Binds an auto-apply policy at registration level.
+   * Use this on the value you pass into `resource.register([...])`.
+   */
+  applyTo: (
+    scope: ResourceMiddlewareApplyTo["scope"],
+    when?: ResourceMiddlewareApplyToWhen,
+  ) => IResourceMiddlewareRegistration<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies
+  >;
   [symbolFilePath]: string;
   tags: ResourceMiddlewareTagType[];
+}
+
+export interface IResourceMiddlewareRegistration<
+  TConfig = any,
+  TEnforceInputContract = void,
+  TEnforceOutputContract = void,
+  TDependencies extends DependencyMapType = any,
+> {
+  [symbolResourceMiddlewareRegistration]: true;
+  /** Stable middleware id for ownership and visibility tracking. */
+  id: string;
+  middleware: IResourceMiddleware<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies
+  >;
+  applyTo: ResourceMiddlewareApplyTo;
 }
 
 export interface IResourceMiddlewareConfigured<

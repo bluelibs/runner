@@ -79,9 +79,9 @@ describe("getAllThrows()", () => {
     const globalMw = r.middleware
       .task("tests.getAllThrows.tmwEverywhere")
       .throws([errD])
-      .applyTo("where-visible")
       .run(async ({ next, task }) => next(task.input))
       .build();
+    const globalMwRegistration = globalMw.applyTo("where-visible");
 
     const task = r
       .task("tests.getAllThrows.taskMwEverywhere")
@@ -91,7 +91,7 @@ describe("getAllThrows()", () => {
 
     const app = r
       .resource("tests.getAllThrows.taskMwEverywhere.app")
-      .register([task, globalMw])
+      .register([task, globalMwRegistration])
       .build();
 
     await withRuntime(app, (store) => {
@@ -237,9 +237,9 @@ describe("getAllThrows()", () => {
     const globalRmw = r.middleware
       .resource("tests.getAllThrows.rmwEverywhere")
       .throws([errD])
-      .applyTo("where-visible")
       .run(async ({ next }) => next())
       .build();
+    const globalRmwRegistration = globalRmw.applyTo("where-visible");
 
     const res = r
       .resource("tests.getAllThrows.resMwEverywhere")
@@ -249,7 +249,7 @@ describe("getAllThrows()", () => {
 
     const app = r
       .resource("tests.getAllThrows.resMwEverywhere.app")
-      .register([res, globalRmw])
+      .register([res, globalRmwRegistration])
       .build();
 
     await withRuntime(app, (store) => {
@@ -348,11 +348,11 @@ describe("getAllThrows()", () => {
     const funcMw = r.middleware
       .task("tests.getAllThrows.tmwEverywhereFunc")
       .throws([errE])
-      .applyTo("where-visible", (task) =>
-        task.id.startsWith("tests.getAllThrows.funcTarget"),
-      )
       .run(async ({ next, task }) => next(task.input))
       .build();
+    const funcMwRegistration = funcMw.applyTo("where-visible", (task) =>
+      task.id.startsWith("tests.getAllThrows.funcTarget"),
+    );
 
     const matchingTask = r
       .task("tests.getAllThrows.funcTarget")
@@ -367,7 +367,7 @@ describe("getAllThrows()", () => {
 
     const app = r
       .resource("tests.getAllThrows.funcTargetApp")
-      .register([funcMw, matchingTask, nonMatchingTask])
+      .register([funcMwRegistration, matchingTask, nonMatchingTask])
       .build();
 
     await withRuntime(app, (store) => {
@@ -383,9 +383,11 @@ describe("getAllThrows()", () => {
     const funcRmw = r.middleware
       .resource("tests.getAllThrows.rmwEverywhereFunc")
       .throws([errF])
-      .applyTo("where-visible", (res) => res.id.includes("funcResTarget"))
       .run(async ({ next }) => next())
       .build();
+    const funcRmwRegistration = funcRmw.applyTo("where-visible", (res) =>
+      res.id.includes("funcResTarget"),
+    );
 
     const res = r
       .resource("tests.getAllThrows.funcResTarget")
@@ -395,7 +397,7 @@ describe("getAllThrows()", () => {
 
     const app = r
       .resource("tests.getAllThrows.funcResTargetApp")
-      .register([funcRmw, res])
+      .register([funcRmwRegistration, res])
       .build();
 
     await withRuntime(app, (store) => {
@@ -409,9 +411,9 @@ describe("getAllThrows()", () => {
     const subtreeMw = r.middleware
       .task("tests.getAllThrows.subtreeMw")
       .throws([errD])
-      .applyTo("subtree")
       .run(async ({ next, task }) => next(task.input))
       .build();
+    const subtreeMwRegistration = subtreeMw.applyTo("subtree");
 
     const scopedTask = r
       .task("tests.getAllThrows.subtreeScopedTask")
@@ -425,7 +427,7 @@ describe("getAllThrows()", () => {
 
     const scopedResource = r
       .resource("tests.getAllThrows.subtreeResource")
-      .register([subtreeMw, scopedTask])
+      .register([subtreeMwRegistration, scopedTask])
       .build();
 
     const app = r
@@ -446,13 +448,13 @@ describe("getAllThrows()", () => {
     const subtreeRmw = r.middleware
       .resource("tests.getAllThrows.subtreeRmw")
       .throws([errE])
-      .applyTo("subtree")
       .run(async ({ next }) => next())
       .build();
+    const subtreeRmwRegistration = subtreeRmw.applyTo("subtree");
 
     const scopedResource = r
       .resource("tests.getAllThrows.subtreeScopedResource")
-      .register([subtreeRmw])
+      .register([subtreeRmwRegistration])
       .init(async () => "scoped")
       .build();
 

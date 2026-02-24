@@ -36,6 +36,29 @@ Quick rules of thumb:
 - For resources, repeated `.overrides()` calls append by default; pass `{ override: true }` to replace.
 - For resources, tasks, hooks and middleware, repeated `.dependencies()` calls append (shallow merge) by default; pass `{ override: true }` to replace. Mixed function/object deps are supported and merged consistently.
 
+## Strict Chain Constraints (v1)
+
+Runner enforces compile-time chain phases for `r.task`, `r.hook`, `r.resource`, and middleware builders.
+
+- `task`: after `.run()`, these are locked: `.dependencies()`, `.inputSchema()`/`.schema()`, `.resultSchema()`, `.middleware()`, `.tags()`. `.meta()`, `.throws()`, `.build()` remain valid.
+- `hook`: `.run()` requires `.on(...)` first. After `.run()`, these are locked: `.on()`, `.dependencies()`, `.tags()`. `.build()` requires both `.on()` and `.run()`.
+- `middleware` (`task` and `resource`): after `.run()`, these are locked: `.dependencies()`, `.configSchema()`/`.schema()`, `.tags()`. `.build()` requires `.run()`.
+- `resource`: after `.init()`, these are locked: `.dependencies()`, `.configSchema()`/`.schema()`, `.resultSchema()`, `.middleware()`, `.tags()`, `.context()`. `.init()` stays optional.
+
+Examples:
+
+```ts
+r.task("ok")
+  .run(async () => "ok")
+  .meta({ title: "x" })
+  .throws([])
+  .build(); // valid
+
+r.task("nope")
+  .run(async () => "ok")
+  .tags([]); // TypeScript error
+```
+
 ---
 
 ## Resources
@@ -225,11 +248,12 @@ const tmw = r.middleware
   .configSchema<{ level: "info" | "warn" | "error" }>({ parse: (x: any) => x })
   .tags([])
   .meta({ title: "TaskLogger" } as any)
-  .applyTo("where-visible", () => true)
   .run(async ({ next, task }, _deps, config) => {
     return next(task.input);
   })
   .build();
+
+const tmwGlobalRegistration = tmw.applyTo("where-visible", () => true);
 ```
 
 Resource middleware:
@@ -241,12 +265,13 @@ const rmw = r.middleware
   .configSchema<{ ttl?: number }>({ parse: (x: any) => x })
   .tags([])
   .meta({ title: "ResourceWrapper" } as any)
-  .applyTo("where-visible", () => true)
   .run(async ({ next }) => next())
   .build();
+
+const rmwGlobalRegistration = rmw.applyTo("where-visible", () => true);
 ```
 
-Attach to resources or tasks via `.middleware([mw])` and ensure they're registered in a parent resource.
+Attach to resources or tasks via `.middleware([mw])`. For global auto-application, register `mw.applyTo(...)` in a parent resource.
 
 Note on `.init()`:
 

@@ -1,7 +1,10 @@
 import { IResource, IResourceWithConfig } from "./resource";
 import { ITask } from "./task";
-import { ITaskMiddleware } from "./taskMiddleware";
-import { IResourceMiddleware } from "./resourceMiddleware";
+import { ITaskMiddleware, ITaskMiddlewareRegistration } from "./taskMiddleware";
+import {
+  IResourceMiddleware,
+  IResourceMiddlewareRegistration,
+} from "./resourceMiddleware";
 import { IHook } from "./hook";
 import {
   IEvent,
@@ -296,7 +299,9 @@ export type RegisterableItems =
   | ITask<any, any, any, any, any, any>
   | IHook<any, any>
   | ITaskMiddleware<any, any, any, any>
+  | ITaskMiddlewareRegistration<any, any, any, any>
   | IResourceMiddleware<any, any, any, any>
+  | IResourceMiddlewareRegistration<any, any, any, any>
   | IEvent<any>
   | IAsyncContext<any>
   | IErrorHelper<any>

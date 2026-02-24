@@ -13,7 +13,7 @@ import type { ThrowsList } from "../../../types/error";
 import type { ResolveInput } from "./types";
 
 /**
- * Fluent builder interface for constructing tasks.
+ * Fluent builder interface for constructing tasks before `.run(...)`.
  */
 export interface TaskFluentBuilder<
   TInput = undefined,
@@ -91,6 +91,10 @@ export interface TaskFluentBuilder<
     TMiddleware
   >;
 
+  meta<TNewMeta extends ITaskMeta>(
+    m: TNewMeta,
+  ): TaskFluentBuilder<TInput, TOutput, TDeps, TNewMeta, TTags, TMiddleware>;
+
   run<TNewInput = TInput, TNewOutput extends Promise<any> = TOutput>(
     fn: NonNullable<
       ITaskDefinition<
@@ -102,7 +106,7 @@ export interface TaskFluentBuilder<
         TMiddleware
       >["run"]
     >,
-  ): TaskFluentBuilder<
+  ): TaskFluentBuilderAfterRun<
     ResolveInput<TInput, TNewInput>,
     TNewOutput,
     TDeps,
@@ -114,10 +118,53 @@ export interface TaskFluentBuilder<
   throws(
     list: ThrowsList,
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
+}
 
+/**
+ * Fluent builder interface for tasks after `.run(...)`.
+ * Shape-changing methods are intentionally unavailable.
+ */
+export interface TaskFluentBuilderAfterRun<
+  TInput = undefined,
+  TOutput extends Promise<any> = Promise<any>,
+  TDeps extends DependencyMapType = {},
+  TMeta extends ITaskMeta = ITaskMeta,
+  TTags extends TaskTagType[] = TaskTagType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] =
+    TaskMiddlewareAttachmentType[],
+> {
+  id: string;
+  throws(
+    list: ThrowsList,
+  ): TaskFluentBuilderAfterRun<
+    TInput,
+    TOutput,
+    TDeps,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
   meta<TNewMeta extends ITaskMeta>(
     m: TNewMeta,
-  ): TaskFluentBuilder<TInput, TOutput, TDeps, TNewMeta, TTags, TMiddleware>;
-
+  ): TaskFluentBuilderAfterRun<
+    TInput,
+    TOutput,
+    TDeps,
+    TNewMeta,
+    TTags,
+    TMiddleware
+  >;
   build(): ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
 }
+
+export type TaskFluentBuilderPhase<
+  TInput,
+  TOutput extends Promise<any>,
+  TDeps extends DependencyMapType,
+  TMeta extends ITaskMeta,
+  TTags extends TaskTagType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[],
+  THasRun extends boolean,
+> = THasRun extends true
+  ? TaskFluentBuilderAfterRun<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>
+  : TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;

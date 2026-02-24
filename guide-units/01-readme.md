@@ -70,7 +70,7 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
 
 - [Express + OpenAPI + SQLite](./examples/express-openapi-sqlite/README.md)
 - [Fastify + MikroORM + PostgreSQL](./examples/fastify-mikroorm/README.md)
-- [Runner-X Capability Graph](./examples/runner-x/README.md)
+- [Runner-X Toolkit (Tags + MikroORM)](./examples/runner-x/README.md)
 
 ---
 

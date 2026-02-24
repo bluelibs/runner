@@ -19,7 +19,7 @@ const createTemporalState = (
 });
 
 describe("Temporal Middleware: Dispose", () => {
-  it("rejects pending debounce callers when runtime is disposed", async () => {
+  it("drains pending debounce callers when runtime is disposed", async () => {
     let callCount = 0;
     const task = defineTask({
       id: "debounce.dispose.task",
@@ -40,13 +40,11 @@ describe("Temporal Middleware: Dispose", () => {
 
     await runtime.dispose();
 
-    await expect(pending).rejects.toThrow(
-      "Temporal middleware resource has been disposed.",
-    );
-    expect(callCount).toBe(0);
+    await expect(pending).resolves.toBe("a");
+    expect(callCount).toBe(1);
   });
 
-  it("rejects pending throttle callers when runtime is disposed", async () => {
+  it("drains pending throttle callers when runtime is disposed", async () => {
     let callCount = 0;
     const task = defineTask({
       id: "throttle.dispose.task",
@@ -68,10 +66,8 @@ describe("Temporal Middleware: Dispose", () => {
 
     await runtime.dispose();
 
-    await expect(pending).rejects.toThrow(
-      "Temporal middleware resource has been disposed.",
-    );
-    expect(callCount).toBe(1);
+    await expect(pending).resolves.toBe("b");
+    expect(callCount).toBe(2);
   });
 
   it("throws immediately when debounce middleware state is already disposed", async () => {
@@ -231,6 +227,47 @@ describe("Temporal Middleware: Dispose", () => {
         {} as TemporalDisposeArgs[3],
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it("rejects tracked debounce/throttle states during resource disposal", async () => {
+    const debounceReject = jest.fn();
+    const throttleReject = jest.fn();
+
+    const debounceState = {
+      resolveList: [],
+      rejectList: [debounceReject],
+      latestInput: "debounce-input",
+      timeoutId: setTimeout(() => undefined, 1_000),
+    };
+
+    const throttleState = {
+      lastExecution: 0,
+      resolveList: [],
+      rejectList: [throttleReject],
+      latestInput: "throttle-input",
+      timeoutId: setTimeout(() => undefined, 1_000),
+      currentPromise: Promise.resolve("pending"),
+    };
+
+    type TemporalDispose = NonNullable<typeof temporalResource.dispose>;
+    type TemporalDisposeArgs = Parameters<TemporalDispose>;
+
+    const state: TemporalDisposeArgs[0] = createTemporalState({
+      trackedDebounceStates: new Set([debounceState]),
+      trackedThrottleStates: new Set([throttleState]),
+    });
+
+    await expect(
+      temporalResource.dispose?.(
+        state,
+        undefined as TemporalDisposeArgs[1],
+        {} as TemporalDisposeArgs[2],
+        {} as TemporalDisposeArgs[3],
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(debounceReject).toHaveBeenCalledTimes(1);
+    expect(throttleReject).toHaveBeenCalledTimes(1);
   });
 
   it("recreates tracked debounce state set when missing", async () => {

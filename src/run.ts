@@ -12,13 +12,18 @@ import {
   registerShutdownHook,
   waitForShutdownGracePeriod,
 } from "./tools/processShutdownHooks";
+import { cancellationError } from "./errors";
 import {
   OnUnhandledError,
   createDefaultUnhandledError,
   bindProcessErrorHandler,
 } from "./models/UnhandledError";
 import { RunResult } from "./models/RunResult";
-import { ResourceInitMode, RunOptions } from "./types/runner";
+import {
+  ResourceLifecycleMode,
+  ResourceInitMode,
+  RunOptions,
+} from "./types/runner";
 import { getPlatform } from "./platform";
 
 const activeRunResults = new Set<RunResult<any>>();
@@ -62,9 +67,13 @@ export async function run<C, V extends Promise<any>>(
     lazy = false,
     onUnhandledError: onUnhandledErrorOpt,
     runtimeEventCycleDetection = true,
-    initMode = ResourceInitMode.Sequential,
+    lifecycleMode,
+    initMode,
   } = options || {};
-  const normalizedInitMode = normalizeResourceInitMode(initMode);
+  const normalizedLifecycleMode = normalizeResourceLifecycleMode(
+    lifecycleMode,
+    initMode,
+  );
 
   const {
     printThreshold = getPlatform().getEnv("NODE_ENV") === "test"
@@ -109,17 +118,34 @@ export async function run<C, V extends Promise<any>>(
     eventManager,
     taskRunner,
     logger,
-    normalizedInitMode,
+    normalizedLifecycleMode,
     lazy,
     runtimeEventCycleDetection,
   );
 
-  store.setPreferInitOrderDisposal(
-    normalizedInitMode === ResourceInitMode.Sequential,
-  );
-
   // We may install shutdown hooks; capture unhook function to remove them on dispose
   let unhookShutdown: (() => void) | undefined;
+  let bootstrapShutdownRequested = false;
+  let disposeRequestedByShutdownSignal = false;
+  let bootstrapCompleted = false;
+  let bootstrapSucceeded = false;
+  let resolveBootstrapCompletion!: () => void;
+  const bootstrapCompletion = new Promise<void>((resolve) => {
+    resolveBootstrapCompletion = resolve;
+  });
+
+  const requestBootstrapShutdown = () => {
+    bootstrapShutdownRequested = true;
+  };
+
+  const throwIfBootstrapShutdownRequested = (phase: string) => {
+    if (!bootstrapShutdownRequested) {
+      return;
+    }
+    cancellationError.throw({
+      reason: `Operation cancelled: shutdown requested during bootstrap (${phase}).`,
+    });
+  };
 
   // Helper dispose that always unhooks process listeners first
   const disposeAll = async () => {
@@ -137,13 +163,60 @@ export async function run<C, V extends Promise<any>>(
       await store.dispose();
     }
   };
+  // Ensure every runtime disposal path enters lockdown and drains in-flight
+  // work before tearing down resource values.
+  const emitLifecycleEvent = async (
+    event: (typeof globalEvents)[keyof typeof globalEvents],
+  ) => {
+    await eventManager.emit(event, undefined, "run", {
+      throwOnError: false,
+      failureMode: "aggregate",
+    });
+  };
+
+  const disposeAfterDraining = async () => {
+    try {
+      if (disposeRequestedByShutdownSignal) {
+        await emitLifecycleEvent(globalEvents.shutdown);
+      }
+
+      await emitLifecycleEvent(globalEvents.disposing);
+      const drained = await waitForShutdownGracePeriod(
+        store,
+        shutdownGracePeriodMs,
+      );
+      if (drained) {
+        await emitLifecycleEvent(globalEvents.drained);
+      }
+
+      await disposeAll();
+    } finally {
+      disposeRequestedByShutdownSignal = false;
+    }
+  };
   const runtimeResult = new RunResult<any>(
     logger,
     store,
     eventManager,
     taskRunner,
-    disposeAll,
+    disposeAfterDraining,
   );
+
+  if (shutdownHooks) {
+    unhookShutdown = registerShutdownHook(async () => {
+      disposeRequestedByShutdownSignal = true;
+      if (!bootstrapCompleted) {
+        requestBootstrapShutdown();
+        await bootstrapCompletion;
+        if (bootstrapSucceeded) {
+          await runtimeResult.dispose();
+        }
+        return;
+      }
+
+      await runtimeResult.dispose();
+    });
+  }
 
   try {
     if (debug) {
@@ -152,9 +225,11 @@ export async function run<C, V extends Promise<any>>(
 
     // In the registration phase we register deeply all the resources, tasks, middleware and events
     store.initializeStore(resource, config, runtimeResult);
+    throwIfBootstrapShutdownRequested("store initialization");
 
     // the overrides that were registered now will override the other registered resources
     await store.processOverrides();
+    throwIfBootstrapShutdownRequested("override processing");
 
     store.validateDependencyGraph();
     // Compile-time event emission cycle detection (cheap, graph-based)
@@ -170,8 +245,10 @@ export async function run<C, V extends Promise<any>>(
     // Beginning initialization
     await boundedLogger.debug("Events stored. Attaching listeners...");
     await processor.attachListeners();
+    throwIfBootstrapShutdownRequested("listener attachment");
     await boundedLogger.debug("Listeners attached. Computing dependencies...");
     await processor.computeAllDependencies();
+    throwIfBootstrapShutdownRequested("dependency computation");
     // After this stage, logger print policy could have been set.
     await boundedLogger.debug(
       "Dependencies computed. Proceeding with initialization...",
@@ -182,6 +259,7 @@ export async function run<C, V extends Promise<any>>(
 
     // Now we can initialise the root resource
     await processor.initializeRoot();
+    throwIfBootstrapShutdownRequested("root initialization");
 
     const startupUnusedResourceIds = new Set<string>(
       Array.from(store.resources.values())
@@ -208,20 +286,21 @@ export async function run<C, V extends Promise<any>>(
     });
     runtimeResult.setValue(store.root.value);
 
-    if (shutdownHooks) {
-      unhookShutdown = registerShutdownHook(async () => {
-        await waitForShutdownGracePeriod(store, shutdownGracePeriodMs);
-        await runtimeResult.dispose();
-      });
-    }
-
     activeRunResults.add(runtimeResult);
+    bootstrapSucceeded = true;
 
     return runtimeResult;
   } catch (err) {
     // Rollback initialized resources
-    await disposeAll();
+    if (bootstrapShutdownRequested) {
+      await disposeAfterDraining();
+    } else {
+      await disposeAll();
+    }
     throw err;
+  } finally {
+    bootstrapCompleted = true;
+    resolveBootstrapCompletion();
   }
 }
 
@@ -271,11 +350,26 @@ function extractResourceAndConfig<C, V extends Promise<any>>(
   return { resource, config };
 }
 
-function normalizeResourceInitMode(
-  mode: ResourceInitMode | "sequential" | "parallel",
-): ResourceInitMode {
-  if (mode === ResourceInitMode.Parallel) {
-    return ResourceInitMode.Parallel;
+function normalizeResourceLifecycleMode(
+  lifecycleMode:
+    | ResourceLifecycleMode
+    | ResourceInitMode
+    | "sequential"
+    | "parallel"
+    | undefined,
+  initMode:
+    | ResourceLifecycleMode
+    | ResourceInitMode
+    | "sequential"
+    | "parallel"
+    | undefined,
+): ResourceLifecycleMode {
+  const normalized = lifecycleMode ?? initMode;
+  if (
+    normalized === ResourceLifecycleMode.Parallel ||
+    normalized === ResourceInitMode.Parallel
+  ) {
+    return ResourceLifecycleMode.Parallel;
   }
-  return ResourceInitMode.Sequential;
+  return ResourceLifecycleMode.Sequential;
 }

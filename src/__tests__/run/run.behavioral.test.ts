@@ -1,6 +1,6 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
-import { ResourceInitMode } from "../../types/runner";
+import { ResourceInitMode, ResourceLifecycleMode } from "../../types/runner";
 import { createMessageError } from "../../errors";
 
 describe("run behavioral scenarios", () => {
@@ -155,7 +155,7 @@ describe("run behavioral scenarios", () => {
     await runtime.dispose();
   });
 
-  it("can initialize independent resources in parallel when initMode is parallel", async () => {
+  it("can initialize independent resources in parallel when lifecycleMode is parallel", async () => {
     let releaseParallelInits!: () => void;
     const gate = new Promise<void>((resolve) => {
       releaseParallelInits = resolve;
@@ -190,7 +190,7 @@ describe("run behavioral scenarios", () => {
     });
 
     const runtimePromise = run(app, {
-      initMode: ResourceInitMode.Parallel,
+      lifecycleMode: ResourceLifecycleMode.Parallel,
       shutdownHooks: false,
     });
     const bothStarted = await waitFor(() => firstStarted && secondStarted, 100);
@@ -201,7 +201,7 @@ describe("run behavioral scenarios", () => {
     await runtime.dispose();
   });
 
-  it("aggregates parallel resource initialization failures", async () => {
+  it("aggregates parallel resource initialization failures when using deprecated initMode alias", async () => {
     expect.assertions(3);
 
     const first = defineResource({

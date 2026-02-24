@@ -225,26 +225,28 @@ describe("MiddlewareManager", () => {
     expect(Array.isArray(result)).toBe(true);
   });
 
-  it("getEverywhereMiddlewareForResources includes middleware with everywhere: true", () => {
+  it("getEverywhereMiddlewareForResources includes middleware with applyTo where-visible", () => {
     const r = defineResource({ id: "r.test" });
     const mw = defineResourceMiddleware({
       id: "mw.everywhere.true",
-      everywhere: true,
       run: async ({ next }) => next(),
     });
-    store.storeGenericItem(mw);
+    store.storeGenericItem(mw.applyTo("where-visible"));
     const result = manager.getEverywhereMiddlewareForResources(r);
     expect(result.some((m) => m.id === "mw.everywhere.true")).toBe(true);
   });
 
-  it("getEverywhereMiddlewareForResources filters with everywhere function", () => {
+  it("getEverywhereMiddlewareForResources filters with applyTo predicate", () => {
     const r = defineResource({ id: "r.test.func" });
     const mw = defineResourceMiddleware({
       id: "mw.everywhere.func",
-      everywhere: (resource) => resource.id.startsWith("r.test"),
       run: async ({ next }) => next(),
     });
-    store.storeGenericItem(mw);
+    store.storeGenericItem(
+      mw.applyTo("where-visible", (resource) =>
+        resource.id.startsWith("r.test"),
+      ),
+    );
     const result = manager.getEverywhereMiddlewareForResources(r);
     expect(result.some((m) => m.id === "mw.everywhere.func")).toBe(true);
   });
@@ -278,14 +280,13 @@ describe("MiddlewareManager", () => {
     expect(taskInterceptorsAfterMutationAttempt).toHaveLength(1);
   });
 
-  it("getEverywhereMiddlewareForTasks includes middleware with everywhere: true", () => {
+  it("getEverywhereMiddlewareForTasks includes middleware with applyTo where-visible", () => {
     const task = defineTask({ id: "task.true", run: async () => 0 });
     const mw = defineTaskMiddleware({
       id: "mw.task.everywhere.true",
-      everywhere: true,
       run: async ({ next, task }) => next(task?.input),
     });
-    store.storeGenericItem(mw);
+    store.storeGenericItem(mw.applyTo("where-visible"));
     const res = manager.getEverywhereMiddlewareForTasks(task);
     expect(res.some((m) => m.id === "mw.task.everywhere.true")).toBe(true);
   });
@@ -296,12 +297,11 @@ describe("MiddlewareManager", () => {
       id: "mw",
       dependencies: { t: task },
       run: async ({ next, task }) => next(task?.input),
-      everywhere(task) {
-        return task.id !== task.id;
-      },
     });
     // register via public API to ensure types are respected
-    store.storeGenericItem(mw);
+    store.storeGenericItem(
+      mw.applyTo("where-visible", (targetTask) => targetTask.id !== task.id),
+    );
     const res = manager.getEverywhereMiddlewareForTasks(task);
     expect(res).toHaveLength(0);
   });

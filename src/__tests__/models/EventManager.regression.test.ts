@@ -1,6 +1,8 @@
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
 import { EventManager } from "../../models/EventManager";
+import { createMessageError } from "../../errors";
+import { getPlatform } from "../../platform";
 
 describe("EventManager regressions", () => {
   it("dispose clears listeners and interceptors even after lock", async () => {
@@ -27,6 +29,169 @@ describe("EventManager regressions", () => {
       (eventManager as unknown as { hookInterceptors: unknown[] })
         .hookInterceptors,
     ).toHaveLength(0);
+  });
+
+  it("keeps using interceptor snapshot when dispose happens mid-emission", async () => {
+    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const event = defineEvent<string>({ id: "reg.dispose.snapshot" });
+    const executionOrder: string[] = [];
+
+    let releaseFirstInterceptor: (() => void) | undefined;
+    const firstInterceptorGate = new Promise<void>((resolve) => {
+      releaseFirstInterceptor = resolve;
+    });
+
+    eventManager.intercept(async (next, e) => {
+      executionOrder.push("interceptor-1-start");
+      await firstInterceptorGate;
+      executionOrder.push("interceptor-1-next");
+      await next(e);
+      executionOrder.push("interceptor-1-end");
+    });
+
+    eventManager.intercept(async (next, e) => {
+      executionOrder.push("interceptor-2");
+      await next(e);
+    });
+
+    eventManager.addListener(event, () => {
+      executionOrder.push("listener");
+    });
+
+    const emitPromise = eventManager.emit(event, "data", "src");
+    await Promise.resolve();
+    eventManager.dispose();
+    if (!releaseFirstInterceptor) {
+      throw createMessageError(
+        "Expected first interceptor gate to be initialized",
+      );
+    }
+    releaseFirstInterceptor();
+    await emitPromise;
+
+    expect(executionOrder).toEqual([
+      "interceptor-1-start",
+      "interceptor-1-next",
+      "interceptor-2",
+      "listener",
+      "interceptor-1-end",
+    ]);
+  });
+
+  it("does not underflow in-flight emission counter when dispose happens mid-emission", async () => {
+    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const event = defineEvent<string>({ id: "reg.dispose.in-flight-counter" });
+
+    let releaseListener: (() => void) | undefined;
+    const listenerGate = new Promise<void>((resolve) => {
+      releaseListener = resolve;
+    });
+
+    eventManager.addListener(event, async () => {
+      await listenerGate;
+    });
+
+    const emitPromise = eventManager.emit(event, "data", "src");
+    await Promise.resolve();
+    eventManager.dispose();
+    if (!releaseListener) {
+      throw createMessageError("Expected listener gate to be initialized");
+    }
+    releaseListener();
+    await emitPromise;
+
+    expect(
+      (
+        eventManager as unknown as {
+          inFlightEmissions: number;
+        }
+      ).inFlightEmissions,
+    ).toBe(0);
+  });
+
+  it("allows waitForIdle with allowCurrentContext from inside a running emission", async () => {
+    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const event = defineEvent<string>({ id: "reg.wait-for-idle.current" });
+
+    eventManager.addListener(event, async () => {
+      await expect(
+        eventManager.waitForIdle({ allowCurrentContext: true }),
+      ).resolves.toBeUndefined();
+    });
+
+    await expect(
+      eventManager.emit(event, "data", "src"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects new emissions when shutdown lockdown is active", async () => {
+    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const event = defineEvent<string>({ id: "reg.shutdown-lockdown" });
+
+    eventManager.enterShutdownLockdown();
+
+    await expect(eventManager.emit(event, "data", "src")).rejects.toThrow(
+      "Runtime is shutting down and no new task runs or event emissions are accepted.",
+    );
+  });
+
+  it("emits events without async local storage support", async () => {
+    const platform = getPlatform();
+    const hasAsyncLocalStorageSpy = jest
+      .spyOn(platform, "hasAsyncLocalStorage")
+      .mockReturnValue(false);
+
+    try {
+      const eventManager = new EventManager({
+        runtimeEventCycleDetection: false,
+      });
+      const event = defineEvent<string>({ id: "reg.no-als.emit" });
+      const handler = jest.fn();
+      eventManager.addListener(event, handler);
+
+      await eventManager.emit(event, "data", "src");
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    } finally {
+      hasAsyncLocalStorageSpy.mockRestore();
+    }
+  });
+
+  it("keeps waitForIdle pending until all in-flight emissions complete", async () => {
+    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const event = defineEvent<string>({ id: "reg.wait-for-idle.pending" });
+    const releaseQueue: Array<() => void> = [];
+
+    eventManager.addListener(event, async () => {
+      await new Promise<void>((resolve) => {
+        releaseQueue.push(resolve);
+      });
+    });
+
+    const firstEmit = eventManager.emit(event, "a", "src");
+    const secondEmit = eventManager.emit(event, "b", "src");
+    await Promise.resolve();
+
+    let idleResolved = false;
+    const idlePromise = eventManager.waitForIdle().then(() => {
+      idleResolved = true;
+    });
+
+    const firstRelease = releaseQueue.shift();
+    const secondRelease = releaseQueue.shift();
+    if (!firstRelease || !secondRelease) {
+      throw createMessageError("Expected emission gates to be initialized");
+    }
+
+    firstRelease();
+    await firstEmit;
+    await Promise.resolve();
+    expect(idleResolved).toBe(false);
+
+    secondRelease();
+    await secondEmit;
+    await idlePromise;
+    expect(idleResolved).toBe(true);
   });
 
   it("emission snapshots meta and tags to avoid mutating event definition", async () => {

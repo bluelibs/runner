@@ -145,9 +145,6 @@ describe("Optional dependencies", () => {
 
     const mw = defineTaskMiddleware({
       id: "tests.optional.middleware",
-      everywhere(resource) {
-        return resource.id !== target.id;
-      },
       dependencies: {
         target: target.optional(),
       },
@@ -158,7 +155,10 @@ describe("Optional dependencies", () => {
 
     const app = resource({
       id: "tests.optional.middleware.app",
-      register: [target, mw],
+      register: [
+        target,
+        mw.applyTo("where-visible", (task) => task.id !== target.id),
+      ],
       async init() {
         // Running the task should not apply the middleware because it depends on the same task
         const harness = resource({
@@ -299,11 +299,6 @@ describe("Optional dependencies", () => {
 
     const mw = defineTaskMiddleware({
       id: "everywhere.middleware",
-      everywhere(task) {
-        return ![registeredTask, nonRegisteredTask].some(
-          (t) => t.id === task.id,
-        );
-      },
       dependencies: {
         registeredResource,
         registeredTask,
@@ -326,7 +321,16 @@ describe("Optional dependencies", () => {
 
     const app = defineResource({
       id: "app",
-      register: [mw, registeredTask, registeredResource, middlewarableTask],
+      register: [
+        mw.applyTo(
+          "where-visible",
+          (task) =>
+            ![registeredTask, nonRegisteredTask].some((t) => t.id === task.id),
+        ),
+        registeredTask,
+        registeredResource,
+        middlewarableTask,
+      ],
     });
 
     const r = await run(app);
@@ -355,11 +359,6 @@ describe("Optional dependencies", () => {
 
     const mw = defineResourceMiddleware({
       id: "everywhere.middleware",
-      everywhere(task) {
-        return ![registeredResource, nonRegisteredResource].some(
-          (t) => t.id === task.id,
-        );
-      },
       dependencies: {
         registeredResource,
         registeredTask,
@@ -382,7 +381,18 @@ describe("Optional dependencies", () => {
 
     const app = defineResource({
       id: "app",
-      register: [mw, registeredTask, registeredResource, middlewarableResource],
+      register: [
+        mw.applyTo(
+          "where-visible",
+          (resource) =>
+            ![registeredResource, nonRegisteredResource].some(
+              (r) => r.id === resource.id,
+            ),
+        ),
+        registeredTask,
+        registeredResource,
+        middlewarableResource,
+      ],
     });
 
     const r = await run(app);

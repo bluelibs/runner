@@ -48,17 +48,17 @@ describe("getAllThrows branch coverage", () => {
     const registry = {
       taskMiddlewares: new Map([
         [
-          "cov.mw.skipNoEverywhere",
-          { middleware: { id: "cov.mw.skipNoEverywhere", throws: ["x"] } },
+          "cov.mw.skipNoApplyTo",
+          { middleware: { id: "cov.mw.skipNoApplyTo", throws: ["x"] } },
         ],
         [
           "cov.mw.skipFalse",
           {
             middleware: {
               id: "cov.mw.skipFalse",
-              everywhere: () => false,
               throws: ["x"],
             },
+            applyTo: { scope: "where-visible" as const, when: () => false },
           },
         ],
         [
@@ -66,9 +66,9 @@ describe("getAllThrows branch coverage", () => {
           {
             middleware: {
               id: "cov.mw.collectTrue",
-              everywhere: () => true,
               throws: ["cov.task.mw.throw"],
             },
+            applyTo: { scope: "where-visible" as const, when: () => true },
           },
         ],
       ]),
@@ -113,9 +113,9 @@ describe("getAllThrows branch coverage", () => {
           {
             middleware: {
               id: "cov.res.mw.local",
-              everywhere: true,
               throws: ["cov.res.global.duplicate"],
             },
+            applyTo: { scope: "where-visible" as const },
           },
         ],
       ]),
@@ -266,9 +266,9 @@ describe("getAllThrows branch coverage", () => {
           {
             middleware: {
               id: "cov.subtree.task.middleware",
-              applyTo: { scope: "subtree" as const },
               throws: ["cov.subtree.task.throw"],
             },
+            applyTo: { scope: "subtree" as const },
           },
         ],
       ]),
@@ -301,9 +301,9 @@ describe("getAllThrows branch coverage", () => {
           {
             middleware: {
               id: "cov.subtree.resource.middleware",
-              applyTo: { scope: "subtree" as const },
               throws: ["cov.subtree.resource.throw"],
             },
+            applyTo: { scope: "subtree" as const },
           },
         ],
       ]),

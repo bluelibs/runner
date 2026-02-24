@@ -40,7 +40,7 @@ An object with the following properties and methods:
 | `getRootValue()`            | Read the initialized root resource value                                                                                                      |
 | `logger`                    | Logger instance                                                                                                                               |
 | `store`                     | Runtime store with registered resources, tasks, middleware, events, and introspection helpers (for example, `getAllThrows(task \| resource)`) |
-| `dispose()`                 | Gracefully dispose resources and unhook process listeners                                                                                     |
+| `dispose()`                 | Emits `globals.events.disposing` (awaited), enters shutdown lockdown, drains in-flight task/event work (up to `shutdownGracePeriodMs`), emits `globals.events.drained` when drain finishes in time (awaited), then disposes resources and unhooks listeners |
 
 Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.
 
@@ -57,12 +57,12 @@ Pass as the second argument to `run(app, options)`.
 | `debug`                      | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                                                                                                                                                                                                                                                                                              |
 | `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                     |
 | `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                            |
-| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners to call `dispose()` for graceful shutdown.                                                                                                                                                                                                                                                                                                                                                                                                |
-| `shutdownGracePeriodMs`      | `number`                                        | (default: `30000`) On shutdown signals, Runner enters lockdown (rejects new task runs/event emissions) and waits up to this duration for in-flight task/event work before proceeding with dispose.                                                                                                                                                                                                                                                                                               |
+| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners for graceful shutdown. If a signal arrives during bootstrap, startup is cancelled and initialized resources are rolled back.                                                                                                                                                                                                                                                                                                           |
+| `shutdownGracePeriodMs`      | `number`                                        | (default: `30000`) During shutdown, Runner waits up to this duration for in-flight task/event work before resource disposal continues. If draining finishes in time, `globals.events.drained` is emitted; otherwise disposal continues after timeout.                                                                                                                                                                                                                                          |
 | `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                                                                                                                                                                                     |
 | `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                              |
-| `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `initMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred. |
-| `initMode`                   | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup scheduling strategy. Use string values directly (for example `initMode: "parallel"`), no enum import required.                                                                                                                                                                                                                                                                                                                                         |
+| `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `lifecycleMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred. |
+| `lifecycleMode`              | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup/disposal scheduling strategy. Use string values directly (for example `lifecycleMode: "parallel"`), no enum import required. `initMode` is kept as a deprecated alias for backward compatibility.                                                                                                                                                                                                                                                     |
 | `runtimeEventCycleDetection` | `boolean`                                       | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                                                                                                                                                                                                                                                                                      |
 | `mode`                       | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                                                                                                                                                                                                                                                                                                 |
 
@@ -104,7 +104,7 @@ await run(app, { dryRun: true });
 - Lazy startup + explicit on-demand resource init:
 
 ```ts
-const runtime = await run(app, { lazy: true, initMode: "parallel" });
+const runtime = await run(app, { lazy: true, lifecycleMode: "parallel" });
 const db = await runtime.getLazyResourceValue("app.db");
 ```
 
@@ -227,9 +227,14 @@ await dispose();
 By default, Runner installs handlers for `SIGTERM` and `SIGINT`.
 When a signal arrives, Runner:
 
-1. Enters shutdown lockdown (no new `runTask`/`emitEvent` admissions)
-2. Waits for in-flight task/event work up to `shutdownGracePeriodMs` (default 30s)
-3. Disposes resources in reverse dependency order
+1. Emits `globals.events.shutdown` (awaited) for signal-origin teardown hooks
+2. Emits `globals.events.disposing` (awaited)
+3. Enters shutdown lockdown (no new `runTask`/`emitEvent` admissions)
+4. Waits for in-flight task/event work up to `shutdownGracePeriodMs` (default 30s)
+5. Emits `globals.events.drained` if draining completed in time (awaited)
+6. Disposes resources in reverse dependency order
+
+If a signal arrives while `run(...)` is still bootstrapping, Runner cancels startup and performs the same graceful teardown path.
 
 ```typescript
 await run(app, {
@@ -249,6 +254,16 @@ process.on("SIGTERM", async () => {
   process.exit(0);
 });
 ```
+
+### Disposal lifecycle events
+
+Manual `runtime.dispose()` and signal-based shutdown both emit:
+
+1. `globals.events.disposing` (awaited)
+2. drain phase (lockdown + in-flight wait, not an event)
+3. `globals.events.drained` (awaited, only when drain completes before timeout)
+
+Additionally, signal-based shutdown emits `globals.events.shutdown` first.
 
 ### Error Boundary Integration
 

@@ -8,31 +8,12 @@ type ApplyToConfig<TTarget> = Readonly<{
 type AutoApplyConfig<TTarget> = Readonly<{
   id: string;
   applyTo?: ApplyToConfig<TTarget>;
-  everywhere?: boolean | ((target: TTarget) => boolean);
 }>;
 
 type AutoApplyMatcherOptions = Readonly<{
   isVisibleToTarget: (middlewareId: string, targetId: string) => boolean;
   isInSubtreeScope: (middlewareId: string, targetId: string) => boolean;
 }>;
-
-function getNormalizedApplyTo<TTarget>(
-  middleware: AutoApplyConfig<TTarget>,
-): ApplyToConfig<TTarget> | undefined {
-  if (middleware.applyTo) {
-    return middleware.applyTo;
-  }
-
-  const legacy = middleware.everywhere;
-  if (!legacy) {
-    return undefined;
-  }
-
-  return {
-    scope: "where-visible",
-    when: typeof legacy === "function" ? legacy : undefined,
-  };
-}
 
 export function isMiddlewareAutoAppliedToTarget<
   TTarget extends {
@@ -43,7 +24,7 @@ export function isMiddlewareAutoAppliedToTarget<
   target: TTarget,
   options: AutoApplyMatcherOptions,
 ): boolean {
-  const applyTo = getNormalizedApplyTo(middleware);
+  const applyTo = middleware.applyTo;
   if (!applyTo) {
     return false;
   }

@@ -874,13 +874,13 @@ describe("run", () => {
     });
   });
 
-  describe("system ready event", () => {
-    it("should allow listeners to hook into globalEvents.ready and be called when the system is ready", async () => {
-      const handler = jest.fn();
+  describe("system ready events", () => {
+    it("emits ready when the system is ready", async () => {
+      const readyHandler = jest.fn();
       const readyListener = defineHook({
         id: "ready.listener",
         on: globalEvents.ready,
-        run: async (event) => handler(event),
+        run: async (event) => readyHandler(event),
       });
       const app = defineResource({
         id: "app",
@@ -891,7 +891,7 @@ describe("run", () => {
       });
       const result = await run(app);
       await result.dispose();
-      expect(handler).toHaveBeenCalled();
+      expect(readyHandler).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -904,7 +904,6 @@ describe("run", () => {
 
     const middleware = defineResourceMiddleware({
       id: "middleware",
-      everywhere: true,
       run: async ({ next }) => {
         return next();
       },
@@ -929,7 +928,11 @@ describe("run", () => {
 
     const app = defineResource({
       id: "app",
-      register: [r2, frequentlyUsedResource, middleware],
+      register: [
+        r2,
+        frequentlyUsedResource,
+        middleware.applyTo("where-visible"),
+      ],
       dependencies: { r2 },
       async init(_, { r2 }) {
         return r2;

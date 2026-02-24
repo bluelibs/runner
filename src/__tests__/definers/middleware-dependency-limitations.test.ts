@@ -22,7 +22,6 @@ describe("Middleware Dependency Limitations", () => {
 
       const globalTaskMw = defineTaskMiddleware({
         id: "global.defineTaskMiddleware",
-        everywhere: true,
         dependencies: { logger },
         run: async ({ task, next }: any) => {
           if (task) calls.push(`task:${String(task.definition.id)}`);
@@ -33,7 +32,6 @@ describe("Middleware Dependency Limitations", () => {
 
       const globalResMw = defineResourceMiddleware({
         id: "global.middleware.res",
-        everywhere: (r) => r.id !== logger.id,
         dependencies: { logger },
         run: async ({ resource, next }) => {
           if (resource)
@@ -50,7 +48,13 @@ describe("Middleware Dependency Limitations", () => {
 
       const app = defineResource({
         id: "app",
-        register: [logger, globalTaskMw, globalResMw, otherResource, testTask],
+        register: [
+          logger,
+          globalTaskMw.applyTo("where-visible"),
+          globalResMw.applyTo("where-visible", (r) => r.id !== logger.id),
+          otherResource,
+          testTask,
+        ],
         dependencies: { testTask, logger },
         init: async (_, { testTask }) => {
           return await testTask();
@@ -72,7 +76,6 @@ describe("Middleware Dependency Limitations", () => {
 
       const globalTaskOnlyMiddleware = defineTaskMiddleware({
         id: "global.middleware",
-        everywhere: (r) => r.id !== testTask.id,
         dependencies: { testTask },
         run: async ({ task, next }, { testTask }) => {
           await testTask();
@@ -88,7 +91,14 @@ describe("Middleware Dependency Limitations", () => {
 
       const app = defineResource({
         id: "app",
-        register: [testTask, testTask2, globalTaskOnlyMiddleware],
+        register: [
+          testTask,
+          testTask2,
+          globalTaskOnlyMiddleware.applyTo(
+            "where-visible",
+            (r) => r.id !== testTask.id,
+          ),
+        ],
         dependencies: { testTask, testTask2 },
         init: async (_, { testTask, testTask2 }) => {
           const r1 = await testTask();
@@ -147,7 +157,6 @@ describe("Middleware Dependency Limitations", () => {
         run: async ({ next }, { sharedService }) => {
           return `Middleware[${sharedService}]: ${await next()}`;
         },
-        everywhere: (r) => r.id !== sharedService.id,
       });
 
       const noopTaskMw = defineTaskMiddleware({
@@ -163,7 +172,12 @@ describe("Middleware Dependency Limitations", () => {
 
       const app = defineResource({
         id: "app",
-        register: [sharedService, mw, noopTaskMw, task],
+        register: [
+          sharedService,
+          mw.applyTo("where-visible", (r) => r.id !== sharedService.id),
+          noopTaskMw,
+          task,
+        ],
         dependencies: { task },
       });
 

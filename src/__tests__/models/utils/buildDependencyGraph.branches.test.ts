@@ -139,8 +139,8 @@ describe("buildDependencyGraph branch coverage", () => {
             middleware: {
               id: "graph.branch.defensive.task.subtree-mw",
               dependencies: undefined,
-              applyTo: { scope: "subtree" as const },
             },
+            applyTo: { scope: "subtree" as const },
           },
         ],
       ]),

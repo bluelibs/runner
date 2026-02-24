@@ -114,12 +114,16 @@ export class MiddlewareResolver {
   ): ITaskMiddleware[] {
     return Array.from(this.store.taskMiddlewares.values())
       .filter((x) => {
-        return isMiddlewareAutoAppliedToTarget(x.middleware, task, {
-          isVisibleToTarget: (middlewareId, targetId) =>
-            this.store.isItemVisibleToConsumer(middlewareId, targetId),
-          isInSubtreeScope: (middlewareId, targetId) =>
-            this.isInSubtreeScope(middlewareId, targetId),
-        });
+        return isMiddlewareAutoAppliedToTarget(
+          { id: x.middleware.id, applyTo: x.applyTo },
+          task,
+          {
+            isVisibleToTarget: (middlewareId, targetId) =>
+              this.store.isItemVisibleToConsumer(middlewareId, targetId),
+            isInSubtreeScope: (middlewareId, targetId) =>
+              this.isInSubtreeScope(middlewareId, targetId),
+          },
+        );
       })
       .map((x) => x.middleware);
   }
@@ -133,12 +137,16 @@ export class MiddlewareResolver {
   ): IResourceMiddleware[] {
     return Array.from(this.store.resourceMiddlewares.values())
       .filter((x) => {
-        return isMiddlewareAutoAppliedToTarget(x.middleware, resource, {
-          isVisibleToTarget: (middlewareId, targetId) =>
-            this.store.isItemVisibleToConsumer(middlewareId, targetId),
-          isInSubtreeScope: (middlewareId, targetId) =>
-            this.isInSubtreeScope(middlewareId, targetId),
-        });
+        return isMiddlewareAutoAppliedToTarget(
+          { id: x.middleware.id, applyTo: x.applyTo },
+          resource,
+          {
+            isVisibleToTarget: (middlewareId, targetId) =>
+              this.store.isItemVisibleToConsumer(middlewareId, targetId),
+            isInSubtreeScope: (middlewareId, targetId) =>
+              this.isInSubtreeScope(middlewareId, targetId),
+          },
+        );
       })
       .map((x) => x.middleware);
   }

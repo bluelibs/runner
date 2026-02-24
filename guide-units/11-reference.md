@@ -97,7 +97,7 @@ const configuredRuntime = await run(app, {
   onUnhandledError: ({ error }) => console.error(error),
   dryRun: false,
   lazy: false,
-  initMode: "sequential", // "sequential" | "parallel"
+  lifecycleMode: "sequential", // "sequential" | "parallel"
   runtimeEventCycleDetection: true,
   mode: "prod", // "dev" | "prod" | "test"
 });
@@ -117,12 +117,12 @@ await disposeWithOptions();
 | `debug`                      | Enable Runner debug logging                                             |
 | `logs`                       | Configure logger strategy/threshold/buffering                           |
 | `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
-| `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with `dispose()`                            |
+| `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with graceful shutdown (also during bootstrap) |
 | `shutdownGracePeriodMs`      | Lockdown + max wait for in-flight task/event work before dispose        |
 | `onUnhandledError`           | Custom handler for normalized unhandled errors                          |
 | `dryRun`                     | Validate graph without running resource `init()`                        |
 | `lazy`                       | Defer startup-unused resources until on-demand access                   |
-| `initMode`                   | Choose startup scheduler strategy (`sequential` or `parallel`)          |
+| `lifecycleMode`              | Choose startup/dispose scheduler strategy (`sequential` or `parallel`) |
 | `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                            |
 | `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)           |
 
@@ -261,8 +261,8 @@ Quick rules:
 - Use `isolate({ deny: [globals.tags.containerInternals] })` to block privileged container resources (`globals.resources.store`, `globals.resources.taskRunner`, `globals.resources.runtime`) inside a boundary
 - Visibility is enforced at `run(app)` bootstrap
 - Wiring checks include dependencies, hook event subscriptions, and middleware attachments (task + resource middleware)
-- `.applyTo("where-visible")` middleware is auto-applied only to visible targets (respects isolate `exports` and `.isolate()`)
-- `.applyTo("subtree")` middleware is auto-applied to the declaring resource and everything in its registration subtree
+- Middleware registrations created via `.applyTo("where-visible")` are auto-applied only to visible targets (respects isolate `exports` and `.isolate()`)
+- Middleware registrations created via `.applyTo("subtree")` are auto-applied to the declaring resource and everything in its registration subtree
 - Duplicate ids still fail globally, even for private items
 
 ### Event Emission Options

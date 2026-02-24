@@ -31,6 +31,7 @@ export class ResourceScheduler {
     private readonly store: Store,
     private readonly ensureResourceInitialized: (
       resource: ResourceStoreElementType<any, any, any>,
+      options?: { trackInitCompletion?: boolean },
     ) => Promise<void>,
   ) {}
 
@@ -104,7 +105,11 @@ export class ResourceScheduler {
       }
 
       const results = await Promise.allSettled(
-        readyWave.map((resource) => this.ensureResourceInitialized(resource)),
+        readyWave.map((resource) =>
+          this.ensureResourceInitialized(resource, {
+            trackInitCompletion: false,
+          }),
+        ),
       );
       const failures = results
         .filter(
@@ -133,6 +138,10 @@ export class ResourceScheduler {
           },
         );
       }
+
+      this.store.recordInitWave(
+        readyWave.map((resource) => resource.resource.id),
+      );
     }
   }
 

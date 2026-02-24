@@ -11,7 +11,11 @@ import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { builderIncompleteError } from "../../../errors";
 import { defineResourceMiddleware } from "../../defineResourceMiddleware";
-import type { ResourceMiddlewareFluentBuilder } from "./resource.interface";
+import type {
+  ResourceMiddlewareFluentBuilder,
+  ResourceMiddlewareFluentBuilderAfterRun,
+  ResourceMiddlewareFluentBuilderBeforeRun,
+} from "./resource.interface";
 import type { ResMwState } from "./types";
 import { cloneRes, mergeArray, mergeDependencies } from "./utils";
 
@@ -23,10 +27,11 @@ export function makeResourceMiddlewareBuilder<
   In,
   Out,
   D extends DependencyMapType,
+  THasRun extends boolean = false,
 >(
   state: ResMwState<C, In, Out, D>,
-): ResourceMiddlewareFluentBuilder<C, In, Out, D> {
-  const builder: ResourceMiddlewareFluentBuilder<C, In, Out, D> = {
+): ResourceMiddlewareFluentBuilder<C, In, Out, D, THasRun> {
+  const builder = {
     id: state.id,
 
     dependencies<TNewDeps extends DependencyMapType>(
@@ -57,30 +62,34 @@ export function makeResourceMiddlewareBuilder<
         >(next, {
           dependencies: nextDependencies as TNewDeps,
         });
-        return makeResourceMiddlewareBuilder<C, In, Out, TNewDeps>(overridden);
+        return makeResourceMiddlewareBuilder<C, In, Out, TNewDeps, false>(
+          overridden,
+        );
       }
-      return makeResourceMiddlewareBuilder<C, In, Out, D & TNewDeps>(next);
+      return makeResourceMiddlewareBuilder<C, In, Out, D & TNewDeps, false>(
+        next,
+      );
     },
 
     configSchema<TNew>(schema: IValidationSchema<TNew>) {
       const next = cloneRes<C, In, Out, D, TNew, In, Out, D>(state, {
         configSchema: schema,
       });
-      return makeResourceMiddlewareBuilder<TNew, In, Out, D>(next);
+      return makeResourceMiddlewareBuilder<TNew, In, Out, D, false>(next);
     },
 
     schema<TNew>(schema: IValidationSchema<TNew>) {
       return builder.configSchema(schema);
     },
 
-    run(fn) {
+    run(fn: IResourceMiddlewareDefinition<C, In, Out, D>["run"]) {
       const next = cloneRes(state, { run: fn as typeof state.run });
-      return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
+      return makeResourceMiddlewareBuilder<C, In, Out, D, true>(next);
     },
 
     meta<TNewMeta extends IMiddlewareMeta>(m: TNewMeta) {
       const next = cloneRes(state, { meta: m as IMiddlewareMeta });
-      return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
+      return makeResourceMiddlewareBuilder<C, In, Out, D, THasRun>(next);
     },
 
     tags<TNewTags extends ResourceMiddlewareTagType[]>(
@@ -95,35 +104,12 @@ export function makeResourceMiddlewareBuilder<
           override,
         ) as ResourceMiddlewareTagType[],
       });
-      return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
-    },
-
-    applyTo(scope, when) {
-      const next = cloneRes(state, {
-        applyTo: {
-          scope,
-          when,
-        },
-        everywhere: undefined,
-      });
-      return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
-    },
-
-    /** @deprecated Use applyTo(scope, when?) instead. */
-    everywhere(flag) {
-      const next =
-        flag === false
-          ? cloneRes(state, { everywhere: false, applyTo: undefined })
-          : cloneRes(state, {
-              everywhere: flag,
-              applyTo: undefined,
-            });
-      return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
+      return makeResourceMiddlewareBuilder<C, In, Out, D, false>(next);
     },
 
     throws(list: ThrowsList) {
       const next = cloneRes(state, { throws: list });
-      return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
+      return makeResourceMiddlewareBuilder<C, In, Out, D, THasRun>(next);
     },
 
     build() {
@@ -147,5 +133,7 @@ export function makeResourceMiddlewareBuilder<
     },
   };
 
-  return builder;
+  return builder as ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D> &
+    ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D> &
+    ResourceMiddlewareFluentBuilder<C, In, Out, D, THasRun>;
 }

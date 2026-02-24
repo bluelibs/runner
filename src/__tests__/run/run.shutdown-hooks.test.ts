@@ -4,6 +4,7 @@ import {
   defineResource,
   defineTask,
 } from "../../define";
+import { globalEvents } from "../../globals/globalEvents";
 import { run } from "../../run";
 import { createMessageError } from "../../errors";
 
@@ -111,6 +112,95 @@ describe("run.ts shutdown hooks & error boundary", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(disposed).toContain(String(value));
+    expect(capturedExitCalls[0]).toBe(0);
+    await runtime.dispose();
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
+  it("cancels bootstrap and disposes initialized resources when SIGTERM arrives mid-startup", async () => {
+    expect.assertions(3);
+
+    const disposed: string[] = [];
+    let releaseChildInit: (() => void) | undefined;
+    const childInitGate = new Promise<void>((resolve) => {
+      releaseChildInit = resolve;
+    });
+
+    const slowChild = defineResource({
+      id: "tests.app.shutdown.bootstrap.child",
+      async init() {
+        await childInitGate;
+        return "child";
+      },
+      async dispose(value) {
+        disposed.push(String(value));
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.shutdown.bootstrap",
+      register: [slowChild],
+      async init() {
+        return "root";
+      },
+    });
+
+    const runtimePromise = run(app, {
+      errorBoundary: false,
+      shutdownHooks: true,
+      shutdownGracePeriodMs: 50,
+    });
+
+    await new Promise((r) => setTimeout(r, 0));
+    process.emit("SIGTERM");
+    await new Promise((r) => setTimeout(r, 0));
+
+    if (!releaseChildInit) {
+      throw createMessageError(
+        "Expected child resource initialization to start",
+      );
+    }
+    releaseChildInit();
+
+    await expect(runtimePromise).rejects.toThrow(
+      /shutdown requested during bootstrap/,
+    );
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(disposed).toContain("child");
+    expect(capturedExitCalls[0]).toBe(0);
+  });
+
+  it("disposes runtime when SIGTERM arrives late in bootstrap after cancellation checkpoints", async () => {
+    expect.assertions(2);
+
+    let disposed = false;
+    const emitShutdownOnInit = defineHook({
+      id: "tests.app.shutdown.bootstrap.late-signal.hook",
+      on: globalEvents.ready,
+      async run() {
+        process.emit("SIGTERM");
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.shutdown.bootstrap.late-signal",
+      register: [emitShutdownOnInit],
+      async init() {
+        return "ok";
+      },
+      async dispose() {
+        disposed = true;
+      },
+    });
+
+    const runtime = await run(app, {
+      errorBoundary: false,
+      shutdownHooks: true,
+    });
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(disposed).toBe(true);
     expect(capturedExitCalls[0]).toBe(0);
     await runtime.dispose();
     await new Promise((r) => setTimeout(r, 0));
@@ -266,5 +356,234 @@ describe("run.ts shutdown hooks & error boundary", () => {
     ).rejects.toThrow(/(disposed|shutting down)/i);
     await runtime.dispose();
     await new Promise((r) => setTimeout(r, 0));
+  });
+
+  it("manual dispose enters lockdown and waits for in-flight task/event work", async () => {
+    let releaseTask: (() => void) | undefined;
+    const taskGate = new Promise<void>((resolve) => {
+      releaseTask = resolve;
+    });
+
+    let releaseEvent: (() => void) | undefined;
+    const eventGate = new Promise<void>((resolve) => {
+      releaseEvent = resolve;
+    });
+
+    const slowTask = defineTask({
+      id: "tests.app.manual-dispose.lockdown.task",
+      async run() {
+        await taskGate;
+        return "done";
+      },
+    });
+
+    const slowEvent = defineEvent({
+      id: "tests.app.manual-dispose.lockdown.event",
+    });
+
+    const slowHook = defineHook({
+      id: "tests.app.manual-dispose.lockdown.hook",
+      on: slowEvent,
+      async run() {
+        await eventGate;
+      },
+    });
+
+    let disposed = false;
+    const app = defineResource({
+      id: "tests.app.manual-dispose.lockdown",
+      register: [slowTask, slowEvent, slowHook],
+      async init() {
+        return "ok" as const;
+      },
+      async dispose() {
+        disposed = true;
+      },
+    });
+
+    const runtime = await run(app, {
+      errorBoundary: false,
+      shutdownHooks: false,
+      shutdownGracePeriodMs: 150,
+    });
+
+    const inFlightTask = runtime.runTask(slowTask);
+    const inFlightEvent = runtime.emitEvent(slowEvent, undefined);
+
+    const disposePromise = runtime.dispose();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(disposed).toBe(false);
+    expect(() => runtime.runTask(slowTask)).toThrow(/disposed/i);
+    expect(() => runtime.emitEvent(slowEvent)).toThrow(/disposed/i);
+
+    if (!releaseTask || !releaseEvent) {
+      throw createMessageError(
+        "Expected manual dispose gates to be initialized",
+      );
+    }
+
+    releaseTask();
+    releaseEvent();
+
+    await inFlightTask;
+    await inFlightEvent;
+    await disposePromise;
+
+    expect(disposed).toBe(true);
+  });
+
+  it("manual dispose proceeds after grace period expires", async () => {
+    const neverTask = defineTask({
+      id: "tests.app.manual-dispose.timeout.task",
+      async run() {
+        return new Promise<never>(() => undefined);
+      },
+    });
+
+    let disposed = false;
+    const app = defineResource({
+      id: "tests.app.manual-dispose.timeout",
+      register: [neverTask],
+      async init() {
+        return "ok" as const;
+      },
+      async dispose() {
+        disposed = true;
+      },
+    });
+
+    const runtime = await run(app, {
+      errorBoundary: false,
+      shutdownHooks: false,
+      shutdownGracePeriodMs: 20,
+    });
+
+    void runtime.runTask(neverTask);
+    const disposePromise = runtime.dispose();
+    await new Promise((r) => setTimeout(r, 60));
+
+    expect(disposed).toBe(true);
+    await expect(disposePromise).resolves.toBeUndefined();
+    expect(() => runtime.runTask(neverTask)).toThrow(/disposed/i);
+  });
+
+  it("emits shutdown before lockdown on process signal so shutdown hooks can trigger their own drain logic", async () => {
+    const postShutdownEvent = defineEvent({
+      id: "tests.app.shutdown.pre-lockdown.event",
+    });
+
+    const postShutdownHandler = jest.fn();
+    const postShutdownHook = defineHook({
+      id: "tests.app.shutdown.pre-lockdown.handler",
+      on: postShutdownEvent,
+      async run() {
+        postShutdownHandler();
+      },
+    });
+
+    const shutdownHook = defineHook({
+      id: "tests.app.shutdown.pre-lockdown.shutdown-hook",
+      on: globalEvents.shutdown,
+      dependencies: {
+        emitPostShutdownEvent: postShutdownEvent,
+      },
+      async run(_event, { emitPostShutdownEvent }) {
+        await emitPostShutdownEvent(undefined);
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.shutdown.pre-lockdown",
+      register: [postShutdownEvent, postShutdownHook, shutdownHook],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: true,
+      errorBoundary: false,
+    });
+
+    process.emit("SIGTERM");
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(postShutdownHandler).toHaveBeenCalledTimes(1);
+    await runtime.dispose();
+  });
+
+  it("manual dispose emits disposing then drained then resource dispose, and does not emit shutdown", async () => {
+    const lifecycleOrder: string[] = [];
+    const postDisposingEvent = defineEvent({
+      id: "tests.app.dispose.lifecycle.post-disposing.event",
+    });
+
+    const postDisposingHandler = defineHook({
+      id: "tests.app.dispose.lifecycle.post-disposing.handler",
+      on: postDisposingEvent,
+      async run() {
+        lifecycleOrder.push("post-disposing-event");
+      },
+    });
+
+    const disposingHook = defineHook({
+      id: "tests.app.dispose.lifecycle.disposing-hook",
+      on: globalEvents.disposing,
+      dependencies: {
+        emitPostDisposingEvent: postDisposingEvent,
+      },
+      async run(_event, { emitPostDisposingEvent }) {
+        lifecycleOrder.push("disposing");
+        await emitPostDisposingEvent(undefined);
+      },
+    });
+
+    const drainedHook = defineHook({
+      id: "tests.app.dispose.lifecycle.drained-hook",
+      on: globalEvents.drained,
+      async run() {
+        lifecycleOrder.push("drained");
+      },
+    });
+
+    const shutdownHook = defineHook({
+      id: "tests.app.dispose.lifecycle.shutdown-hook",
+      on: globalEvents.shutdown,
+      async run() {
+        lifecycleOrder.push("shutdown");
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.dispose.lifecycle",
+      register: [
+        postDisposingEvent,
+        postDisposingHandler,
+        disposingHook,
+        drainedHook,
+        shutdownHook,
+      ],
+      async init() {
+        return "ok";
+      },
+      async dispose() {
+        lifecycleOrder.push("resource-dispose");
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+    });
+
+    await runtime.dispose();
+
+    expect(lifecycleOrder).toEqual([
+      "disposing",
+      "post-disposing-event",
+      "drained",
+      "resource-dispose",
+    ]);
   });
 });

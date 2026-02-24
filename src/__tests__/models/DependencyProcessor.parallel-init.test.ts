@@ -12,6 +12,64 @@ import { ResourceInitMode } from "../../types/runner";
 import { createTestFixture } from "../test-utils";
 
 describe("DependencyProcessor parallel init internals", () => {
+  it("records successful parallel initialization as waves", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const depA = defineResource({
+      id: "parallel.wave.record.dep.a",
+      async init() {
+        return "dep-a";
+      },
+    });
+    const depB = defineResource({
+      id: "parallel.wave.record.dep.b",
+      async init() {
+        return "dep-b";
+      },
+    });
+    const consumer = defineResource({
+      id: "parallel.wave.record.consumer",
+      dependencies: {
+        depA,
+        depB,
+      },
+      async init() {
+        return "consumer";
+      },
+    });
+
+    store.storeGenericItem(depA);
+    store.storeGenericItem(depB);
+    store.storeGenericItem(consumer);
+    store.root = {
+      resource: defineResource({ id: "parallel.wave.record.root" }),
+      config: undefined,
+      value: undefined,
+      context: {},
+      isInitialized: false,
+    } as any;
+
+    const recordInitWaveSpy = jest.spyOn(store, "recordInitWave");
+    const processor = new DependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+      ResourceInitMode.Parallel,
+    ) as any;
+
+    await processor.initializeUninitializedResourcesParallel();
+
+    expect(recordInitWaveSpy).toHaveBeenCalledTimes(2);
+    expect(recordInitWaveSpy.mock.calls[0]?.[0]).toEqual(
+      expect.arrayContaining([depA.id, depB.id]),
+    );
+    expect(recordInitWaveSpy.mock.calls[1]?.[0]).toEqual([consumer.id]);
+  });
+
   it("throws when no pending resource is ready for a parallel wave", async () => {
     const fixture = createTestFixture();
     const { store, eventManager, logger } = fixture;

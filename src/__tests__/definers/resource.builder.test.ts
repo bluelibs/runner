@@ -128,12 +128,12 @@ describe("resource builder", () => {
       .tags([])
       .middleware([])
       .context(() => ({ c: 0 }))
-      .meta({ title: "X" } as unknown as IResourceMeta)
       .overrides([])
       .init(async (_cfg, deps, ctx) => {
         ctx.c++;
         return Promise.resolve(deps.a + deps.b + ctx.c);
       })
+      .meta({ title: "X" } as unknown as IResourceMeta)
       .dispose(async () => {})
       .build();
 
@@ -237,8 +237,8 @@ describe("resource builder", () => {
         parse: (x: unknown) => x as { foo: number },
       })
       .resultSchema<number>({ parse: (x: unknown) => x as number })
-      .meta({ title: "Configured" } as unknown as IResourceMeta)
       .init(async () => Promise.resolve(42))
+      .meta({ title: "Configured" } as unknown as IResourceMeta)
       .build();
 
     expect(res.id).toBe("tests.builder.r3");

@@ -56,39 +56,6 @@ describe("middleware auto-apply matcher", () => {
     expect(visible).not.toHaveBeenCalled();
   });
 
-  it("supports legacy everywhere fallback", () => {
-    const result = isMiddlewareAutoAppliedToTarget(
-      {
-        id: "tests.autoApply.legacy",
-        everywhere: (target) => target.id.includes("legacy"),
-      },
-      { id: "tests.target.legacy" },
-      {
-        isVisibleToTarget: visible,
-        isInSubtreeScope: subtree,
-      },
-    );
-
-    expect(result).toBe(true);
-    expect(visible).toHaveBeenCalled();
-  });
-
-  it("supports legacy everywhere(true) fallback", () => {
-    const result = isMiddlewareAutoAppliedToTarget(
-      {
-        id: "tests.autoApply.legacy.true",
-        everywhere: true,
-      },
-      { id: "tests.target.legacy.true" },
-      {
-        isVisibleToTarget: visible,
-        isInSubtreeScope: subtree,
-      },
-    );
-
-    expect(result).toBe(true);
-  });
-
   it("returns false for invalid scope values", () => {
     const result = isMiddlewareAutoAppliedToTarget(
       {

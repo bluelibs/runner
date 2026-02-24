@@ -67,7 +67,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 - Isolation/visibility enforcement covers dependency wiring plus hook event subscriptions and middleware attachments (task + resource middleware), so the same rules apply to events and middleware too.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
-- For a capability-graph backend blueprint (HTTP + auth + tenancy + migrations + entities), see `examples/runner-x/README.md`.
+- For a tag-driven backend toolkit example (HTTP + auth + tenancy + MikroORM migrations), see `examples/runner-x/README.md`.
 
 ## Tasks
 
@@ -97,6 +97,11 @@ const sendEmail = r
 - `.schema()` is a unified alias for `inputSchema`, `configSchema`, `payloadSchema`, and `dataSchema` (errors). For tasks, maps to `inputSchema` only; use `.resultSchema()` for output validation.
 - Entry generic `r.task<Input>(id)` / `r.resource<Config>(id)` seeds typing before explicit schema declarations.
 - All builders support `.meta({ ... })` for documentation and tooling metadata.
+- Strict chain constraints are enforced on `r.*` builders:
+  - `task`: after `.run()`, you cannot call `dependencies`, `inputSchema/schema`, `resultSchema`, `middleware`, or `tags`. `.meta()`, `.throws()`, `.build()` remain valid.
+  - `hook`: `.run()` is available only after `.on(...)`; after `.run()`, `on`, `dependencies`, and `tags` are locked. `.build()` requires both `.on()` and `.run()`.
+  - `task/resource middleware`: after `.run()`, `dependencies`, `configSchema/schema`, and `tags` are locked. `.build()` requires `.run()`.
+  - `resource`: after `.init()`, `dependencies`, `configSchema/schema`, `resultSchema`, `middleware`, `tags`, and `context` are locked. `.init()` is optional, and `.build()` remains available.
 
 ## Events and Hooks
 
@@ -159,7 +164,6 @@ import { globals } from "@bluelibs/runner";
 const auditTasks = r.middleware
   .task("app.middleware.audit")
   .dependencies({ logger: globals.resources.logger })
-  .applyTo("where-visible", (task) => !task.id.startsWith("admin."))
   .run(async ({ task, next }, { logger }) => {
     logger.info(`→ ${task.definition.id}`);
     const result = await next(task.input);
@@ -167,6 +171,11 @@ const auditTasks = r.middleware
     return result;
   })
   .build();
+
+const auditTasksGlobalRegistration = auditTasks.applyTo(
+  "where-visible",
+  (task) => !task.id.startsWith("admin."),
+);
 
 const cacheResources = r.middleware
   .resource("app.middleware.cache")
@@ -183,10 +192,10 @@ const cacheResources = r.middleware
   .build();
 ```
 
-Attach middleware using `.middleware([auditTasks])` on the definition that owns it, and register the middleware alongside the target resource or task at the root.
+Attach middleware using `.middleware([auditTasks])` on the definition that owns it. For global auto-application, register `auditTasks.applyTo(...)` in a resource `.register([...])` list.
 
-- `.applyTo("where-visible", fn?)` marks middleware as auto-applied to visible targets (still gated by `.isolate({ exports: ... })` / `.isolate()`).
-- `.applyTo("subtree", fn?)` auto-applies only inside the declaring resource subtree (declaring resource + descendants).
+- `.applyTo("where-visible", fn?)` creates a middleware registration that auto-applies to visible targets (still gated by `.isolate({ exports: ... })` / `.isolate()`).
+- `.applyTo("subtree", fn?)` creates a middleware registration that auto-applies only inside the declaring resource subtree (declaring resource + descendants).
 - Contract middleware: middleware can declare `Config`, `Input`, `Output` generics; tasks using it must conform (contracts intersect across `.middleware([...])` and `.tags([...])`). Collisions surface as `InputContractViolationError` / `OutputContractViolationError` in TypeScript; if you add `.inputSchema()`, ensure the schema's inferred type includes the contract shape.
 - Entry generic convenience is available for middleware too: `r.middleware.task<Input>(id)` seeds task input contract typing and `r.middleware.resource<Config>(id)` seeds middleware config typing. The explicit multi-generic form (`<Config, Input, Output>`) remains available.
 
@@ -480,8 +489,9 @@ const app = r
 - `run(root, options)` wires dependencies, initializes resources, and returns the runtime object: `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, `store`, `logger`, and `dispose`. `getLazyResourceValue` is available only when `run(..., { lazy: true })` is enabled.
 - `emitEvent(event, payload, options?)` accepts the same emission options (`failureMode`, `throwOnError`, `report`) as dependency emitters.
 - `.isolate({ exports: [...] })` on the root restricts `runTask`, `emitEvent`, `getResourceValue` to exported ids; omit for full open surface.
-- Run options highlights: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `shutdownGracePeriodMs` (default `30_000`), `dryRun`, `lazy`, `initMode` (`"sequential"` or `"parallel"`).
-- Shutdown behavior: on shutdown signal, Runner enters lockdown (no new task runs or event emissions), waits for in-flight task/event work to drain until `shutdownGracePeriodMs`, then disposes resources.
+- Run options highlights: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `shutdownGracePeriodMs` (default `30_000`), `dryRun`, `lazy`, `lifecycleMode` (`"sequential"` or `"parallel"`). `initMode` is a deprecated alias.
+- Shutdown behavior: on manual `runtime.dispose()`, Runner emits `globals.events.disposing`, enters lockdown (no new task runs or event emissions), waits for in-flight task/event work to drain until `shutdownGracePeriodMs`, emits `globals.events.drained` if draining completed in time, then disposes resources. Signals received during bootstrap cancel startup and roll back initialized resources.
+- Global lifecycle events: use `globals.events.ready` for post-boot orchestration, `globals.events.disposing` / `globals.events.drained` for disposal lifecycle, and `globals.events.shutdown` for shutdown-hook signal handling (SIGINT/SIGTERM) before disposal starts.
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime.
 
 ## Reliability & Performance

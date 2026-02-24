@@ -275,10 +275,10 @@ describe("task/event/hook/middleware builders", () => {
       .order(5)
       .dependencies({ svc })
       .tags([])
-      .meta({ title: "H" } as unknown as any)
       .run(async (em) => {
         calls.push(em.id);
       })
+      .meta({ title: "H" } as unknown as any)
       .build();
     const app = resource({
       id: "tests.app.hook.full",
@@ -297,8 +297,8 @@ describe("task/event/hook/middleware builders", () => {
       .tags([])
       .middleware([])
       .resultSchema<number>({ parse: (x: any) => x })
-      .meta({ title: "T" } as unknown as any)
       .run(async (input: number) => Promise.resolve(input + 1))
+      .meta({ title: "T" } as unknown as any)
       .build();
     const app = resource({ id: "tests.app.task.more", register: [task] });
     const rr = await run(app);
@@ -771,85 +771,77 @@ describe("task/event/hook/middleware builders", () => {
     await rr.dispose();
   });
 
-  it("task middleware builder supports configSchema, tags, meta, applyTo", () => {
+  it("task middleware builder supports configSchema, tags, meta and registration applyTo", () => {
     const tmw = r.middleware
       .task("tests.builder.tm.full")
       .dependencies({})
       .configSchema<{ retry: number }>({ parse: (x: any) => x })
       .tags([])
-      .meta({ title: "TM" } as unknown as any)
-      .applyTo("where-visible", () => true)
       .run(async ({ next, task }) => next(task.input))
+      .meta({ title: "TM" } as unknown as any)
       .build();
+    const registration = tmw.applyTo("where-visible", () => true);
+
     expect(
       (tmw as unknown as { [definitions.symbolTaskMiddleware]: boolean })[
         definitions.symbolTaskMiddleware
       ],
     ).toBe(true);
-    expect(tmw.applyTo?.scope).toBe("where-visible");
+    expect(
+      (
+        registration as unknown as {
+          [definitions.symbolTaskMiddlewareRegistration]: boolean;
+        }
+      )[definitions.symbolTaskMiddlewareRegistration],
+    ).toBe(true);
+    expect(registration.applyTo.scope).toBe("where-visible");
   });
 
-  it("resource middleware builder supports configSchema, tags, meta, applyTo", () => {
+  it("resource middleware builder supports configSchema, tags, meta and registration applyTo", () => {
     const rmw = r.middleware
       .resource("tests.builder.rm.full")
       .dependencies({})
       .configSchema<{ timeout: number }>({ parse: (x: any) => x })
       .tags([])
-      .meta({ title: "RM" } as unknown as any)
-      .applyTo("subtree", () => true)
       .run(async ({ next, resource }) => next(resource.config))
+      .meta({ title: "RM" } as unknown as any)
       .build();
+    const registration = rmw.applyTo("subtree", () => true);
+
     expect(
       (rmw as unknown as { [definitions.symbolResourceMiddleware]: boolean })[
         definitions.symbolResourceMiddleware
       ],
     ).toBe(true);
-    expect(rmw.applyTo?.scope).toBe("subtree");
+    expect(
+      (
+        registration as unknown as {
+          [definitions.symbolResourceMiddlewareRegistration]: boolean;
+        }
+      )[definitions.symbolResourceMiddlewareRegistration],
+    ).toBe(true);
+    expect(registration.applyTo.scope).toBe("subtree");
   });
 
-  it("task middleware builder keeps everywhere as a deprecated alias", () => {
+  it("task and resource middleware expose scoped registration without everywhere alias", () => {
     const tmw = r.middleware
-      .task("tests.builder.tm.everywhere.alias")
-      .everywhere(() => true)
+      .task("tests.builder.tm.applyTo.only")
       .run(async ({ next, task }) => next(task.input))
       .build();
-
-    expect(typeof tmw.everywhere).toBe("function");
-    expect(tmw.applyTo?.scope).toBe("where-visible");
-  });
-
-  it("task middleware builder supports deprecated everywhere(false)", () => {
-    const tmw = r.middleware
-      .task("tests.builder.tm.everywhere.false")
-      .everywhere(false)
-      .run(async ({ next, task }) => next(task.input))
-      .build();
-
-    expect(tmw.everywhere).toBe(false);
-    expect(tmw.applyTo).toBeUndefined();
-  });
-
-  it("resource middleware builder supports deprecated everywhere(false)", () => {
     const rmw = r.middleware
-      .resource("tests.builder.rm.everywhere.false")
-      .everywhere(false)
+      .resource("tests.builder.rm.applyTo.only")
       .run(async ({ next }) => next())
       .build();
 
-    expect(rmw.everywhere).toBe(false);
-    expect(rmw.applyTo).toBeUndefined();
-  });
+    const taskRegistration = tmw.applyTo("where-visible");
+    const resourceRegistration = rmw.applyTo("subtree");
 
-  it("resource middleware builder supports deprecated everywhere(true)", () => {
-    const rmw = r.middleware
-      .resource("tests.builder.rm.everywhere.true")
-      .everywhere(true)
-      .run(async ({ next }) => next())
-      .build();
-
-    expect(rmw.everywhere).toBe(true);
-    expect(rmw.applyTo).toEqual({
+    expect(taskRegistration.applyTo).toEqual({
       scope: "where-visible",
+      when: undefined,
+    });
+    expect(resourceRegistration.applyTo).toEqual({
+      scope: "subtree",
       when: undefined,
     });
   });
@@ -857,24 +849,21 @@ describe("task/event/hook/middleware builders", () => {
   describe("hook builder validation", () => {
     it("throws when building hook without on()", () => {
       expect(() =>
-        r
-          .hook("tests.builder.hook.no-on")
-          .run(async () => {})
-          .build(),
+        (r.hook("tests.builder.hook.no-on") as any).run(async () => {}).build(),
       ).toThrow(/Missing required.*on/);
     });
 
     it("throws when building hook without run()", () => {
       const ev = r.event("tests.builder.hook.no-run.ev").build();
-      expect(() => r.hook("tests.builder.hook.no-run").on(ev).build()).toThrow(
-        /Missing required.*run/,
-      );
+      expect(() =>
+        (r.hook("tests.builder.hook.no-run").on(ev) as any).build(),
+      ).toThrow(/Missing required.*run/);
     });
 
     it("throws when building hook without both on() and run()", () => {
-      expect(() => r.hook("tests.builder.hook.no-both").build()).toThrow(
-        /Missing required.*on.*run/,
-      );
+      expect(() =>
+        (r.hook("tests.builder.hook.no-both") as any).build(),
+      ).toThrow(/Missing required.*on.*run/);
     });
 
     it("succeeds when both on() and run() are provided", () => {
@@ -925,22 +914,22 @@ describe("task/event/hook/middleware builders", () => {
     });
 
     it("throws when building task without run()", () => {
-      expect(() => r.task("tests.builder.task.no-run").build()).toThrow(
-        /Task.*Missing required.*run/,
-      );
+      expect(() =>
+        (r.task("tests.builder.task.no-run") as any).build(),
+      ).toThrow(/Task.*Missing required.*run/);
     });
   });
 
   describe("middleware builder validation", () => {
     it("throws when building task middleware without run()", () => {
       expect(() =>
-        r.middleware.task("tests.builder.tmw.no-run").build(),
+        (r.middleware.task("tests.builder.tmw.no-run") as any).build(),
       ).toThrow(/Task middleware.*Missing required.*run/);
     });
 
     it("throws when building resource middleware without run()", () => {
       expect(() =>
-        r.middleware.resource("tests.builder.rmw.no-run").build(),
+        (r.middleware.resource("tests.builder.rmw.no-run") as any).build(),
       ).toThrow(/Resource middleware.*Missing required.*run/);
     });
 

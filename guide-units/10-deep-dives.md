@@ -80,7 +80,7 @@ flowchart TD
 
 1. **Leaf resources first** — resources with no dependencies initialize first
 2. **Dependent resources after** — each resource waits for its dependencies
-3. **Initialization strategy** — sequential by default, or parallel for dependency-ready branches when using `run(app, { initMode: "parallel" })` (string literal is supported)
+3. **Initialization strategy** — sequential by default, or parallel for dependency-ready branches when using `run(app, { lifecycleMode: "parallel" })` (string literal is supported, `initMode` is deprecated alias)
 4. **Lazy startup (optional)** — with `run(app, { lazy: true })`, startup skips resources that are unused during bootstrap; initialize them on-demand with `await runtime.getLazyResourceValue(...)`
 5. **Middleware registration** — happens after resources are available
 6. **Ready event** — signals all initialization complete
@@ -97,7 +97,7 @@ app
     └── database ← already initialized, skipped
 ```
 
-Initialization order: `config` → `database` → `server`, `userService` (if `initMode: "parallel"`, `server` and `userService` can initialize in the same wave)
+Initialization order: `config` → `database` → `server`, `userService` (if `lifecycleMode: "parallel"`, `server` and `userService` can initialize in the same wave)
 
 ---
 
@@ -343,7 +343,7 @@ const auditHook = r
 
 **Plugin patterns:**
 
-1. **Global middleware** — use `.applyTo("where-visible")` for cross-cutting concerns
+1. **Global middleware** — register built middleware with `.applyTo("where-visible")` for cross-cutting concerns
 2. **Tag-based behavior** — use tags for declarative configuration
 3. **Resource wrappers** — compose resources for reusable patterns
 4. **Event interception** — use `eventManager.intercept()` for audit/logging
@@ -624,7 +624,6 @@ const tracer = trace.getTracer("runner-app");
 // Global tracing middleware
 const tracingMiddleware = r.middleware
   .task("app.middleware.tracing")
-  .applyTo("where-visible", () => true) // Apply to all visible tasks
   .run(async ({ task, next }) => {
     const span = tracer.startSpan(`task.${task.definition.id}`, {
       attributes: {
@@ -652,6 +651,11 @@ const tracingMiddleware = r.middleware
     }
   })
   .build();
+
+const tracingMiddlewareRegistration = tracingMiddleware.applyTo(
+  "where-visible",
+  () => true,
+); // Apply to all visible tasks
 
 // OpenTelemetry setup (separate file: instrumentation.ts)
 import { NodeSDK } from "@opentelemetry/sdk-node";

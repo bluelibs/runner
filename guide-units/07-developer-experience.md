@@ -218,6 +218,17 @@ Every builder follows the same rhythm:
 3. **Implement** with `.run()` or `.init()`
 4. **Finish** with `.build()`
 
+### Strict order constraints
+
+For `task`, `hook`, `resource`, and middleware builders, Runner enforces phase-aware chaining in TypeScript:
+
+- `task`: after `.run()`, you cannot call `.dependencies()`, `.schema()`/`.inputSchema()`, `.resultSchema()`, `.middleware()`, or `.tags()`. `.meta()`, `.throws()`, `.build()` remain valid.
+- `hook`: `.run()` is only available after `.on(...)`. After `.run()`, `.on()`, `.dependencies()`, and `.tags()` are locked. `.build()` requires `.on()` and `.run()`.
+- `middleware` (`task` and `resource`): after `.run()`, `.dependencies()`, `.configSchema()`/`.schema()`, and `.tags()` are locked. `.build()` requires `.run()`.
+- `resource`: after `.init()`, `.dependencies()`, `.configSchema()`/`.schema()`, `.resultSchema()`, `.middleware()`, `.tags()`, and `.context()` are locked. `.init()` remains optional.
+
+This keeps shape-affecting methods before the implementation boundary while preserving ergonomic post-implementation chaining for non-shape methods.
+
 ### Builder Chaining Semantics (Append vs Replace)
 
 Repeated calls are part of the design, but not every method composes the same way.

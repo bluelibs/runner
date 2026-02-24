@@ -7,6 +7,7 @@ import type {
   IsolationExportsTarget,
   IsolationPolicy,
   OverridableElements,
+  RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   ResourceTagType,
@@ -16,7 +17,11 @@ import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { defineResource } from "../../defineResource";
-import type { ResourceFluentBuilder } from "./fluent-builder.interface";
+import type {
+  ResourceFluentBuilder,
+  ResourceFluentBuilderAfterInit,
+  ResourceFluentBuilderBeforeInit,
+} from "./fluent-builder.interface";
 import type { BuilderState, ResolveConfig } from "./types";
 import { clone, mergeArray, mergeDependencies, mergeRegister } from "./utils";
 import { isolateConflictError } from "../../../errors";
@@ -33,6 +38,7 @@ export function makeResourceBuilder<
   TMeta extends IResourceMeta,
   TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
+  THasInit extends boolean = false,
 >(
   state: BuilderState<
     TConfig,
@@ -50,17 +56,10 @@ export function makeResourceBuilder<
   TContext,
   TMeta,
   TTags,
-  TMiddleware
+  TMiddleware,
+  THasInit
 > {
-  const builder: ResourceFluentBuilder<
-    TConfig,
-    TValue,
-    TDeps,
-    TContext,
-    TMeta,
-    TTags,
-    TMiddleware
-  > = {
+  const builder = {
     id: state.id,
     dependencies<
       TNewDeps extends DependencyMapType,
@@ -93,14 +92,38 @@ export function makeResourceBuilder<
         ) as TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
       });
 
-      return makeResourceBuilder(next);
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        false
+      >(next);
     },
-    register(items, options) {
+    register(
+      items:
+        | RegisterableItems
+        | Array<RegisterableItems>
+        | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>),
+      options?: { override?: boolean },
+    ) {
       const override = options?.override ?? false;
       const next = clone(state, {
         register: mergeRegister(state.register, items, override),
       });
-      return makeResourceBuilder(next);
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        THasInit
+      >(next);
     },
     middleware<TNewMw extends ResourceMiddlewareAttachmentType[]>(
       mw: TNewMw,
@@ -125,7 +148,16 @@ export function makeResourceBuilder<
       >(state, {
         middleware: mergeArray(state.middleware, mw, override) as TNewMw,
       });
-      return makeResourceBuilder(next);
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TNewMw,
+        false
+      >(next);
     },
     tags<const TNewTags extends TagType[]>(
       tags: EnsureTagsForTarget<"resources", TNewTags>,
@@ -150,7 +182,16 @@ export function makeResourceBuilder<
       >(state, {
         tags: mergeArray(state.tags, tags, override) as [...TTags, ...TNewTags],
       });
-      return makeResourceBuilder(next);
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        [...TTags, ...TNewTags],
+        TMiddleware,
+        false
+      >(next);
     },
     context<TNewCtx>(factory: () => TNewCtx) {
       const next = clone<
@@ -176,7 +217,8 @@ export function makeResourceBuilder<
         TNewCtx,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        false
       >(next);
     },
     configSchema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
@@ -203,7 +245,8 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        false
       >(next);
     },
     schema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
@@ -233,7 +276,8 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        false
       >(next);
     },
     init<TNewConfig = TConfig, TNewValue extends Promise<any> = TValue>(
@@ -270,7 +314,8 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        true
       >(next);
     },
     dispose(
@@ -296,7 +341,8 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        THasInit
       >(next);
     },
     meta<TNewMeta extends IResourceMeta>(m: TNewMeta) {
@@ -323,7 +369,8 @@ export function makeResourceBuilder<
         TContext,
         TNewMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        THasInit
       >(next);
     },
     overrides(o: Array<OverridableElements>, options?: { override?: boolean }) {
@@ -338,7 +385,8 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        THasInit
       >(next);
     },
     throws(list: ThrowsList) {
@@ -350,7 +398,8 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        THasInit
       >(next);
     },
     /** @deprecated Use `.isolate({ exports: ... })` instead. */
@@ -413,7 +462,8 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        THasInit
       >(next);
     },
     build() {
@@ -450,5 +500,32 @@ export function makeResourceBuilder<
       });
     },
   };
-  return builder;
+  return builder as ResourceFluentBuilderBeforeInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  > &
+    ResourceFluentBuilderAfterInit<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      TMeta,
+      TTags,
+      TMiddleware
+    > &
+    ResourceFluentBuilder<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      TMeta,
+      TTags,
+      TMiddleware,
+      THasInit
+    >;
 }

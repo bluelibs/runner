@@ -108,7 +108,7 @@ export function registerShutdownHook(disposeOnce: () => Promise<void>) {
 export async function waitForShutdownGracePeriod(
   target: ShutdownDrainTarget,
   shutdownGracePeriodMs: number,
-): Promise<void> {
+): Promise<boolean> {
   target.enterShutdownLockdown();
 
   const drainPromise = target.waitForInFlightOperations();
@@ -124,7 +124,11 @@ export async function waitForShutdownGracePeriod(
   });
 
   try {
-    await Promise.race([drainPromise, timeoutPromise]);
+    const result = await Promise.race([
+      drainPromise.then(() => true),
+      timeoutPromise.then(() => false),
+    ]);
+    return result;
   } finally {
     platform.clearTimeout(timeout);
   }

@@ -7,10 +7,14 @@ import type { ITask } from "./task";
 import type { ExecutionJournal } from "./executionJournal";
 import { TaskMiddlewareTagType } from "./tag";
 import { IMiddlewareMeta } from "./meta";
-import type { TaskMiddlewareApplyTo } from "./middlewareApplyTo";
+import type {
+  TaskMiddlewareApplyTo,
+  TaskMiddlewareApplyToWhen,
+} from "./middlewareApplyTo";
 import {
   symbolFilePath,
   symbolMiddlewareConfigured,
+  symbolTaskMiddlewareRegistration,
   symbolTaskMiddleware,
 } from "./symbols";
 import { IContractable } from "./contracts";
@@ -19,6 +23,7 @@ import type { ThrowsList } from "./error";
 export type { DependencyMapType, DependencyValuesType } from "./utilities";
 export type { TagType, TaskMiddlewareTagType } from "./tag";
 export type { IMiddlewareMeta } from "./meta";
+export type { TaskMiddlewareApplyTo, TaskMiddlewareApplyToWhen };
 
 export interface ITaskMiddlewareDefinition<
   TConfig = any,
@@ -52,9 +57,6 @@ export interface ITaskMiddlewareDefinition<
    * Declarative only — does not imply DI or enforcement.
    */
   throws?: ThrowsList;
-  applyTo?: TaskMiddlewareApplyTo;
-  /** @deprecated Use applyTo instead. */
-  everywhere?: boolean | ((task: ITask<any, any, any, any>) => boolean);
 }
 
 export interface ITaskMiddleware<
@@ -88,7 +90,38 @@ export interface ITaskMiddleware<
     TEnforceOutputContract,
     TDependencies
   >;
+  /**
+   * Binds an auto-apply policy at registration level.
+   * Use this on the value you pass into `resource.register([...])`.
+   */
+  applyTo: (
+    scope: TaskMiddlewareApplyTo["scope"],
+    when?: TaskMiddlewareApplyToWhen,
+  ) => ITaskMiddlewareRegistration<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies
+  >;
   tags: TaskMiddlewareTagType[];
+}
+
+export interface ITaskMiddlewareRegistration<
+  TConfig = any,
+  TEnforceInputContract = void,
+  TEnforceOutputContract = void,
+  TDependencies extends DependencyMapType = any,
+> {
+  [symbolTaskMiddlewareRegistration]: true;
+  /** Stable middleware id for ownership and visibility tracking. */
+  id: string;
+  middleware: ITaskMiddleware<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies
+  >;
+  applyTo: TaskMiddlewareApplyTo;
 }
 
 export interface ITaskMiddlewareConfigured<

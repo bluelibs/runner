@@ -1,47 +1,57 @@
-import { ResourceStoreElementType } from "../../types/storeTypes";
+import {
+  DisposeWave,
+  InitWave,
+  ResourceStoreElementType,
+} from "../../types/storeTypes";
 import { getResourceDependencyIds } from "./resourceDependencyIds";
 
-type DisposeOrderOptions = {
-  preferInitOrderFastPath?: boolean;
-};
-
 /**
- * Returns initialized resources sorted in dispose order (dependents first).
- * Uses the recorded init-order when complete, otherwise falls back to a
- * topological sort derived from the resource dependency graph.
+ * Returns initialized resources grouped into disposal waves (dependents first).
+ * Uses the recorded init waves when complete; otherwise falls back to a
+ * topological order converted to sequential single-resource waves.
  */
-export function getResourcesInDisposeOrder(
+export function getResourcesInDisposeWaves(
   resources: Map<string, ResourceStoreElementType>,
-  initializedResourceIds: readonly string[],
-  options: DisposeOrderOptions = {},
-): ResourceStoreElementType[] {
-  const { preferInitOrderFastPath = true } = options;
+  initWaves: readonly InitWave[],
+): DisposeWave[] {
   const initializedResources = Array.from(resources.values()).filter(
     (r) => r.isInitialized,
   );
 
-  // Fast path: if the store tracked a complete init order, reverse it for disposal.
-  // This is correct because initialization happens dependency-first, so dependents
-  // always appear after their dependencies in the init sequence.
-  const initOrderHasAllInitialized =
-    initializedResourceIds.length === initializedResources.length &&
-    initializedResources.every((r) =>
-      initializedResourceIds.includes(r.resource.id),
-    );
-  if (preferInitOrderFastPath && initOrderHasAllInitialized) {
+  // Fast path: reverse fully-tracked initialization waves for disposal.
+  // This preserves the original dependency-ready parallel grouping.
+  const initWaveIds = initWaves.flatMap((wave) => wave.resourceIds);
+  const initializedIdSet = new Set(
+    initializedResources.map((resource) => resource.resource.id),
+  );
+  const initWavesCoverAllInitialized =
+    initWaveIds.length === initializedResources.length &&
+    initWaveIds.every((id) => initializedIdSet.has(id));
+
+  if (initWavesCoverAllInitialized) {
     const byId = new Map(
       initializedResources.map((r) => [r.resource.id, r] as const),
     );
-    return initializedResourceIds
+    return initWaves
       .slice()
       .reverse()
-      .map((id) => byId.get(id))
-      .filter((r): r is ResourceStoreElementType => Boolean(r));
+      .map((wave) => {
+        const waveResources = wave.resourceIds
+          .map((id) => byId.get(id))
+          .filter((resource): resource is ResourceStoreElementType =>
+            Boolean(resource),
+          );
+
+        return {
+          resources: waveResources,
+          parallel: wave.parallel && waveResources.length > 1,
+        };
+      })
+      .filter((wave) => wave.resources.length > 0);
   }
 
-  // Dispose order should be dependents-first (reverse init order).
-  // We derive it from the resource dependency graph to make it stable
-  // regardless of registration/insertion order.
+  // Fallback: derive a deterministic dependents-first order from the graph and
+  // model it as sequential waves.
   const visitState = new Map<string, "visiting" | "visited">();
   const initOrder: ResourceStoreElementType[] = [];
   let cycleDetected = false;
@@ -72,8 +82,17 @@ export function getResourcesInDisposeOrder(
   // If a cycle sneaks in despite validation (or disposal is called on a
   // partially-initialized store), fall back to insertion order LIFO.
   if (cycleDetected) {
-    return initializedResources.slice().reverse();
+    return initializedResources
+      .slice()
+      .reverse()
+      .map((resource) => ({
+        resources: [resource],
+        parallel: false,
+      }));
   }
 
-  return initOrder.reverse();
+  return initOrder.reverse().map((resource) => ({
+    resources: [resource],
+    parallel: false,
+  }));
 }

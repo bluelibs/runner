@@ -43,7 +43,6 @@ describe("Middleware", () => {
   it("should work with global middleware", async () => {
     const globalMiddleware = defineTaskMiddleware({
       id: "global.middleware",
-      everywhere: true,
       run: async ({ next }) => {
         const result = await next();
         return `global.middleware: ${result}`;
@@ -66,7 +65,11 @@ describe("Middleware", () => {
 
     const app = defineResource({
       id: "app",
-      register: [globalMiddleware, testMiddleware, testTask],
+      register: [
+        globalMiddleware.applyTo("where-visible"),
+        testMiddleware,
+        testTask,
+      ],
       dependencies: { testTask },
       async init(_, { testTask }) {
         const result = await testTask();
@@ -81,7 +84,6 @@ describe("Middleware", () => {
     const createMiddleware = (id: string) =>
       defineTaskMiddleware({
         id: "middleware",
-        everywhere: true,
         run: async ({ next }) => {
           const result = await next();
           return `${id}: ${result}`;
@@ -105,7 +107,11 @@ describe("Middleware", () => {
 
     const app = defineResource({
       id: "app",
-      register: [globalMiddleware, testMiddleware, testTask],
+      register: [
+        globalMiddleware.applyTo("where-visible"),
+        testMiddleware,
+        testTask,
+      ],
       dependencies: { testTask },
       async init(_, { testTask }) {
         const result = await testTask();
@@ -207,7 +213,6 @@ describe("Middleware", () => {
   it("Should work with global middleware", async () => {
     const mw = defineResourceMiddleware({
       id: "middleware",
-      everywhere: true,
       run: async ({ resource: _resource, next }) => {
         const result = await next({});
         return `Middleware: ${result}`;
@@ -223,7 +228,7 @@ describe("Middleware", () => {
 
     const app = defineResource({
       id: "app",
-      register: [mw, sub],
+      register: [mw.applyTo("where-visible"), sub],
       dependencies: { sub },
       async init(_, { sub }) {
         return sub;
@@ -328,7 +333,6 @@ describe("Configurable Middleware (.with)", () => {
     const calls: string[] = [];
     const logMw = defineTaskMiddleware({
       id: "log",
-      everywhere: true,
       run: async ({ next }) => {
         calls.push("global");
         return next();
@@ -350,7 +354,7 @@ describe("Configurable Middleware (.with)", () => {
     });
     const app = defineResource({
       id: "app",
-      register: [logMw, validate, task],
+      register: [logMw.applyTo("where-visible"), validate, task],
       dependencies: { task },
       async init(_, { task }) {
         const result = await task();
@@ -414,7 +418,6 @@ describe("Configurable Middleware (.with)", () => {
     const calls: string[] = [];
     const validate = defineTaskMiddleware<{ schema: string }>({
       id: "validate.global.tasks",
-      everywhere: true,
       run: async ({ next }, _deps, config) => {
         calls.push(`global:${config.schema}`);
         return next();
@@ -428,7 +431,10 @@ describe("Configurable Middleware (.with)", () => {
 
     const app = defineResource({
       id: "app.global.tasks",
-      register: [validate.with({ schema: "user" }), task],
+      register: [
+        validate.with({ schema: "user" }).applyTo("where-visible"),
+        task,
+      ],
       dependencies: { task },
       async init(_, { task }) {
         const result = await task();
@@ -444,7 +450,6 @@ describe("Configurable Middleware (.with)", () => {
     const calls: string[] = [];
     const m = defineResourceMiddleware<{ flag: string }>({
       id: "validate.global.resources",
-      everywhere: true,
       run: async ({ next, resource }, _deps, config) => {
         if (resource) {
           calls.push(`${String(resource.definition.id)}:${config.flag}`);
@@ -462,7 +467,7 @@ describe("Configurable Middleware (.with)", () => {
 
     const app = defineResource({
       id: "res.app",
-      register: [m.with({ flag: "X" }), sub],
+      register: [m.with({ flag: "X" }).applyTo("where-visible"), sub],
       dependencies: { sub },
       async init(_, { sub }) {
         return sub;
@@ -580,11 +585,10 @@ describe("Middleware behavior (no lifecycle)", () => {
   });
 });
 
-describe("Middleware.everywhere()", () => {
+describe("Middleware.applyTo()", () => {
   it("should work with { tasks: true, resources: true }", async () => {
     const calls: string[] = [];
     const everywhereMiddlewareTask = defineTaskMiddleware({
-      everywhere: true,
       id: "everywhere.defineTaskMiddleware",
       run: async ({ next, task }) => {
         if (task) {
@@ -595,7 +599,6 @@ describe("Middleware.everywhere()", () => {
     });
     const everywhereMiddlewareRes = defineResourceMiddleware({
       id: "everywhere.defineResourceMiddleware",
-      everywhere: true,
       run: async ({ next, resource }) => {
         if (resource) {
           calls.push(`resource:${String(resource.definition.id)}`);
@@ -618,8 +621,8 @@ describe("Middleware.everywhere()", () => {
     const app = defineResource({
       id: "app",
       register: [
-        everywhereMiddlewareTask,
-        everywhereMiddlewareRes,
+        everywhereMiddlewareTask.applyTo("where-visible"),
+        everywhereMiddlewareRes.applyTo("where-visible"),
         testTask,
         testResource,
       ],
@@ -640,7 +643,6 @@ describe("Middleware.everywhere()", () => {
   it("should work with { tasks: true, resources: false }", async () => {
     const calls: string[] = [];
     const everywhereMiddlewareTask = defineTaskMiddleware({
-      everywhere: true,
       id: "everywhere.defineTaskMiddleware",
       run: async ({ next, task }) => {
         if (task) {
@@ -663,7 +665,11 @@ describe("Middleware.everywhere()", () => {
 
     const app = defineResource({
       id: "app",
-      register: [everywhereMiddlewareTask, testTask, testResource],
+      register: [
+        everywhereMiddlewareTask.applyTo("where-visible"),
+        testTask,
+        testResource,
+      ],
       dependencies: { testTask, testResource },
       async init(_, { testTask, testResource }) {
         await testTask();
@@ -681,7 +687,6 @@ describe("Middleware.everywhere()", () => {
   it("should work with { tasks: false, resources: true }", async () => {
     const calls: string[] = [];
     const everywhereMiddlewareRes = defineResourceMiddleware({
-      everywhere: true,
       id: "everywhere.defineResourceMiddleware",
       run: async ({ next, resource }) => {
         if (resource) {
@@ -704,7 +709,11 @@ describe("Middleware.everywhere()", () => {
 
     const app = defineResource({
       id: "app",
-      register: [everywhereMiddlewareRes, testTask, testResource],
+      register: [
+        everywhereMiddlewareRes.applyTo("where-visible"),
+        testTask,
+        testResource,
+      ],
       dependencies: { testTask, testResource },
       async init(_, { testTask, testResource }) {
         await testTask();
@@ -723,7 +732,6 @@ describe("Middleware.everywhere()", () => {
     const calls: string[] = [];
     const everywhereMiddleware = defineTaskMiddleware({
       id: "everywhere.middleware",
-      everywhere: (task) => task.id === "test.task",
       run: async ({ next, task }) => {
         if (task) {
           calls.push(`task:${String(task.definition.id)}`);
@@ -743,7 +751,14 @@ describe("Middleware.everywhere()", () => {
 
     const app = defineResource({
       id: "app",
-      register: [everywhereMiddleware, testTask, testTask2],
+      register: [
+        everywhereMiddleware.applyTo(
+          "where-visible",
+          (task) => task.id === "test.task",
+        ),
+        testTask,
+        testTask2,
+      ],
       dependencies: { testTask, testTask2 },
       async init(_, { testTask, testTask2 }) {
         await testTask();
@@ -762,7 +777,6 @@ describe("Middleware.everywhere()", () => {
 
     const subtreeMiddleware = defineTaskMiddleware({
       id: "applyTo.subtree.task.middleware",
-      applyTo: { scope: "subtree" },
       run: async ({ next, task }) => {
         calls.push(task.definition.id);
         return next(task.input);
@@ -795,7 +809,7 @@ describe("Middleware.everywhere()", () => {
 
     const scoped = defineResource({
       id: "applyTo.subtree.scoped.resource",
-      register: [subtreeMiddleware, nestedTask, deep],
+      register: [subtreeMiddleware.applyTo("subtree"), nestedTask, deep],
       dependencies: { nestedTask },
       async init(_, { nestedTask }) {
         await nestedTask();
@@ -821,7 +835,6 @@ describe("Middleware.everywhere()", () => {
   it("supports applyTo subtree scope for resource middleware", async () => {
     const subtreeMiddleware = defineResourceMiddleware({
       id: "applyTo.subtree.resource.middleware",
-      applyTo: { scope: "subtree" },
       run: async ({ next }) => `Intercepted: ${await next()}`,
     });
 
@@ -841,7 +854,7 @@ describe("Middleware.everywhere()", () => {
 
     const scopedResource = defineResource({
       id: "applyTo.subtree.resource.scoped",
-      register: [subtreeMiddleware, nestedResource],
+      register: [subtreeMiddleware.applyTo("subtree"), nestedResource],
       async init() {
         return "Scoped";
       },
@@ -902,7 +915,6 @@ describe("Middleware.everywhere()", () => {
     const calls: string[] = [];
     const mw = defineTaskMiddleware<{ flag: string }>({
       id: "everywhere.middleware",
-      everywhere: true,
       run: async ({ task, next }, _deps, config) => {
         if (task) {
           calls.push(`task:${task.definition.id}:${config.flag}`);
@@ -933,7 +945,7 @@ describe("Middleware.everywhere()", () => {
     const app = defineResource({
       id: "app",
       register: [
-        mw.with({ flag: "global" }),
+        mw.with({ flag: "global" }).applyTo("where-visible"),
         mwr,
         // mwr,
         resource1,
@@ -975,26 +987,12 @@ describe("Middleware.everywhere()", () => {
       expect(() => mwr.with({ name: 123 })).toThrow();
     });
 
-    it("fails when both applyTo and everywhere are provided", () => {
-      expect(() =>
-        defineTaskMiddleware({
-          id: "tests.middleware.applyTo.conflict",
-          applyTo: { scope: "where-visible" },
-          everywhere: true,
-          run: async ({ next }) => next(),
-        }),
-      ).toThrow(
-        /Middleware applyTo validation failed for tests\.middleware\.applyTo\.conflict/,
-      );
-    });
-
     it("fails when applyTo scope is invalid", () => {
       expect(() =>
         defineResourceMiddleware({
           id: "tests.middleware.applyTo.invalid.scope",
-          applyTo: { scope: "invalid" as "where-visible" },
           run: async ({ next }) => next(),
-        }),
+        }).applyTo("invalid" as "where-visible"),
       ).toThrow(
         /Middleware applyTo validation failed for tests\.middleware\.applyTo\.invalid\.scope/,
       );
@@ -1027,11 +1025,6 @@ describe("Middleware.everywhere()", () => {
 
     const globalMiddleware = defineResourceMiddleware({
       id: "global.middleware",
-      everywhere(resource) {
-        return (
-          resource.id !== resourceMid.id && resource.id !== resourceLeaf.id
-        );
-      },
       dependencies: {
         resourceMid,
       },
@@ -1042,7 +1035,16 @@ describe("Middleware.everywhere()", () => {
 
     const app = defineResource({
       id: "app",
-      register: [globalMiddleware, resourceLeaf, resourceMid, isolatedResource],
+      register: [
+        globalMiddleware.applyTo(
+          "where-visible",
+          (resource) =>
+            resource.id !== resourceMid.id && resource.id !== resourceLeaf.id,
+        ),
+        resourceLeaf,
+        resourceMid,
+        isolatedResource,
+      ],
     });
 
     const r = await run(app);

@@ -55,6 +55,14 @@ describe("Store", () => {
     store.recordResourceInitialized("dup");
   });
 
+  it("should ignore init waves when all resource ids were already tracked", () => {
+    store.recordResourceInitialized("wave.dup");
+    store.recordInitWave(["wave.dup", "wave.dup"]);
+
+    const initWaves = (store as unknown as { initWaves: unknown[] }).initWaves;
+    expect(initWaves).toHaveLength(1);
+  });
+
   it("should initialize the store with a root resource", () => {
     const rootResource = defineResource({
       id: "root",
@@ -236,7 +244,7 @@ describe("Store", () => {
     expect(callOrder).toEqual(["app", "dep"]);
   });
 
-  it("should ignore tracked init order when deterministic disposal is forced", async () => {
+  it("should fall back to dependency-safe disposal when tracked waves are incomplete", async () => {
     const callOrder: string[] = [];
 
     const dependency = defineResource({
@@ -260,10 +268,8 @@ describe("Store", () => {
     store.resources.get(dependency.id)!.isInitialized = true;
     store.resources.get(dependent.id)!.isInitialized = true;
 
-    // Simulate non-deterministic init completion order under parallel startup.
+    // Intentionally track only one initialized resource to force fallback logic.
     store.recordResourceInitialized(dependent.id);
-    store.recordResourceInitialized(dependency.id);
-    store.setPreferInitOrderDisposal(false);
 
     await store.dispose();
     expect(callOrder).toEqual(["dependent", "dep"]);

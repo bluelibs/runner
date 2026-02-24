@@ -14,7 +14,11 @@ import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { builderIncompleteError } from "../../../errors";
 import { defineTask } from "../../defineTask";
-import type { TaskFluentBuilder } from "./fluent-builder.interface";
+import type {
+  TaskFluentBuilder,
+  TaskFluentBuilderAfterRun,
+  TaskFluentBuilderPhase,
+} from "./fluent-builder.interface";
 import type { BuilderState, ResolveInput } from "./types";
 import { clone, mergeArray, mergeDependencies } from "./utils";
 
@@ -29,17 +33,19 @@ export function makeTaskBuilder<
   TMeta extends ITaskMeta,
   TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
+  THasRun extends boolean = false,
 >(
   state: BuilderState<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>,
-): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware> {
-  const builder: TaskFluentBuilder<
-    TInput,
-    TOutput,
-    TDeps,
-    TMeta,
-    TTags,
-    TMiddleware
-  > = {
+): TaskFluentBuilderPhase<
+  TInput,
+  TOutput,
+  TDeps,
+  TMeta,
+  TTags,
+  TMiddleware,
+  THasRun
+> {
+  const builder = {
     id: state.id,
     dependencies<TNewDeps extends DependencyMapType>(
       deps: TNewDeps | (() => TNewDeps),
@@ -69,7 +75,15 @@ export function makeTaskBuilder<
         dependencies: nextDependencies as TDeps & TNewDeps,
       });
 
-      return makeTaskBuilder(next);
+      return makeTaskBuilder<
+        TInput,
+        TOutput,
+        TDeps & TNewDeps,
+        TMeta,
+        TTags,
+        TMiddleware,
+        false
+      >(next);
     },
 
     middleware<TNewMw extends TaskMiddlewareAttachmentType[]>(
@@ -93,7 +107,15 @@ export function makeTaskBuilder<
       >(state, {
         middleware: mergeArray(state.middleware, mw, override) as TNewMw,
       });
-      return makeTaskBuilder(next);
+      return makeTaskBuilder<
+        TInput,
+        TOutput,
+        TDeps,
+        TMeta,
+        TTags,
+        TNewMw,
+        false
+      >(next);
     },
 
     tags<const TNewTags extends TagType[]>(
@@ -117,7 +139,15 @@ export function makeTaskBuilder<
       >(state, {
         tags: mergeArray(state.tags, t, override) as [...TTags, ...TNewTags],
       });
-      return makeTaskBuilder(next);
+      return makeTaskBuilder<
+        TInput,
+        TOutput,
+        TDeps,
+        TMeta,
+        [...TTags, ...TNewTags],
+        TMiddleware,
+        false
+      >(next);
     },
 
     inputSchema<TNewInput>(schema: IValidationSchema<TNewInput>) {
@@ -141,7 +171,8 @@ export function makeTaskBuilder<
         TDeps,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        false
       >(next);
     },
 
@@ -170,7 +201,8 @@ export function makeTaskBuilder<
         TDeps,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        false
       >(next);
     },
 
@@ -212,7 +244,8 @@ export function makeTaskBuilder<
         TDeps,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        true
       >(next);
     },
 
@@ -237,15 +270,22 @@ export function makeTaskBuilder<
         TDeps,
         TNewMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        THasRun
       >(next);
     },
 
     throws(list: ThrowsList) {
       const next = clone(state, { throws: list });
-      return makeTaskBuilder<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>(
-        next,
-      );
+      return makeTaskBuilder<
+        TInput,
+        TOutput,
+        TDeps,
+        TMeta,
+        TTags,
+        TMiddleware,
+        THasRun
+      >(next);
     },
 
     build() {
@@ -294,5 +334,29 @@ export function makeTaskBuilder<
       });
     },
   };
-  return builder;
+  return builder as TaskFluentBuilder<
+    TInput,
+    TOutput,
+    TDeps,
+    TMeta,
+    TTags,
+    TMiddleware
+  > &
+    TaskFluentBuilderAfterRun<
+      TInput,
+      TOutput,
+      TDeps,
+      TMeta,
+      TTags,
+      TMiddleware
+    > &
+    TaskFluentBuilderPhase<
+      TInput,
+      TOutput,
+      TDeps,
+      TMeta,
+      TTags,
+      TMiddleware,
+      THasRun
+    >;
 }

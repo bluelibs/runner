@@ -11,7 +11,11 @@ import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { builderIncompleteError } from "../../../errors";
 import { defineTaskMiddleware } from "../../defineTaskMiddleware";
-import type { TaskMiddlewareFluentBuilder } from "./task.interface";
+import type {
+  TaskMiddlewareFluentBuilder,
+  TaskMiddlewareFluentBuilderAfterRun,
+  TaskMiddlewareFluentBuilderBeforeRun,
+} from "./task.interface";
 import type { TaskMwState } from "./types";
 import { cloneTask, mergeArray, mergeDependencies } from "./utils";
 
@@ -23,10 +27,11 @@ export function makeTaskMiddlewareBuilder<
   In,
   Out,
   D extends DependencyMapType,
+  THasRun extends boolean = false,
 >(
   state: TaskMwState<C, In, Out, D>,
-): TaskMiddlewareFluentBuilder<C, In, Out, D> {
-  const builder: TaskMiddlewareFluentBuilder<C, In, Out, D> = {
+): TaskMiddlewareFluentBuilder<C, In, Out, D, THasRun> {
+  const builder = {
     id: state.id,
 
     dependencies<TNewDeps extends DependencyMapType>(
@@ -57,30 +62,32 @@ export function makeTaskMiddlewareBuilder<
         >(next, {
           dependencies: nextDependencies as TNewDeps,
         });
-        return makeTaskMiddlewareBuilder<C, In, Out, TNewDeps>(overridden);
+        return makeTaskMiddlewareBuilder<C, In, Out, TNewDeps, false>(
+          overridden,
+        );
       }
-      return makeTaskMiddlewareBuilder<C, In, Out, D & TNewDeps>(next);
+      return makeTaskMiddlewareBuilder<C, In, Out, D & TNewDeps, false>(next);
     },
 
     configSchema<TNew>(schema: IValidationSchema<TNew>) {
       const next = cloneTask<C, In, Out, D, TNew, In, Out, D>(state, {
         configSchema: schema,
       });
-      return makeTaskMiddlewareBuilder<TNew, In, Out, D>(next);
+      return makeTaskMiddlewareBuilder<TNew, In, Out, D, false>(next);
     },
 
     schema<TNew>(schema: IValidationSchema<TNew>) {
       return builder.configSchema(schema);
     },
 
-    run(fn) {
+    run(fn: ITaskMiddlewareDefinition<C, In, Out, D>["run"]) {
       const next = cloneTask(state, { run: fn as typeof state.run });
-      return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
+      return makeTaskMiddlewareBuilder<C, In, Out, D, true>(next);
     },
 
     meta<TNewMeta extends IMiddlewareMeta>(m: TNewMeta) {
       const next = cloneTask(state, { meta: m as IMiddlewareMeta });
-      return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
+      return makeTaskMiddlewareBuilder<C, In, Out, D, THasRun>(next);
     },
 
     tags<TNewTags extends TaskMiddlewareTagType[]>(
@@ -91,35 +98,12 @@ export function makeTaskMiddlewareBuilder<
       const next = cloneTask(state, {
         tags: mergeArray(state.tags, t, override) as TaskMiddlewareTagType[],
       });
-      return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
-    },
-
-    applyTo(scope, when) {
-      const next = cloneTask(state, {
-        applyTo: {
-          scope,
-          when,
-        },
-        everywhere: undefined,
-      });
-      return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
-    },
-
-    /** @deprecated Use applyTo(scope, when?) instead. */
-    everywhere(flag) {
-      const next =
-        flag === false
-          ? cloneTask(state, { everywhere: false, applyTo: undefined })
-          : cloneTask(state, {
-              everywhere: flag,
-              applyTo: undefined,
-            });
-      return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
+      return makeTaskMiddlewareBuilder<C, In, Out, D, false>(next);
     },
 
     throws(list: ThrowsList) {
       const next = cloneTask(state, { throws: list });
-      return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
+      return makeTaskMiddlewareBuilder<C, In, Out, D, THasRun>(next);
     },
 
     build() {
@@ -143,5 +127,7 @@ export function makeTaskMiddlewareBuilder<
     },
   };
 
-  return builder;
+  return builder as TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, D> &
+    TaskMiddlewareFluentBuilderAfterRun<C, In, Out, D> &
+    TaskMiddlewareFluentBuilder<C, In, Out, D, THasRun>;
 }
