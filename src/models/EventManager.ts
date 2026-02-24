@@ -6,7 +6,6 @@ import {
   IEventEmission,
   IEventEmitOptions,
   IEventEmitReport,
-  TagType,
 } from "../defs";
 import { lockedError, validationError } from "../errors";
 import { IHook } from "../types/hook";
@@ -18,106 +17,8 @@ import {
 } from "./event/types";
 import { ListenerRegistry, createListener } from "./event/ListenerRegistry";
 import { composeInterceptors } from "./event/InterceptorPipeline";
-import {
-  executeInParallel,
-  executeSequentially,
-} from "./event/EmissionExecutor";
 import { CycleContext } from "./event/CycleContext";
-
-class EventEmissionImpl<TInput> implements IEventEmission<TInput> {
-  private propagationStopped = false;
-
-  constructor(
-    public readonly id: string,
-    public readonly data: TInput,
-    public readonly timestamp: Date,
-    public readonly source: string,
-    public readonly meta: Record<string, any>,
-    public readonly tags: TagType[],
-  ) {}
-
-  stopPropagation = () => {
-    this.propagationStopped = true;
-  };
-
-  isPropagationStopped = () => {
-    return this.propagationStopped;
-  };
-}
-
-class EmissionContext<TInput> {
-  public deepestEvent: IEventEmission<any>;
-  public executionReport: IEventEmitReport;
-
-  constructor(
-    private readonly eventManager: EventManager,
-    private readonly eventDefinition: IEvent<TInput>,
-    private readonly allListeners: any[],
-    private readonly failureMode: EventEmissionFailureMode,
-    private readonly emissionInterceptors: EventEmissionInterceptor[],
-    initialEvent: IEventEmission<TInput>,
-  ) {
-    this.deepestEvent = initialEvent;
-    this.executionReport = {
-      totalListeners: allListeners.length,
-      attemptedListeners: 0,
-      skippedListeners: 0,
-      succeededListeners: 0,
-      failedListeners: 0,
-      propagationStopped: false,
-      errors: [],
-    };
-  }
-
-  async baseEmit(eventToEmit: IEventEmission<any>): Promise<IEventEmitReport> {
-    if (this.allListeners.length === 0) {
-      return {
-        totalListeners: 0,
-        attemptedListeners: 0,
-        skippedListeners: 0,
-        succeededListeners: 0,
-        failedListeners: 0,
-        propagationStopped: eventToEmit.isPropagationStopped(),
-        errors: [],
-      };
-    }
-
-    if (this.eventDefinition.parallel) {
-      return executeInParallel({
-        listeners: this.allListeners,
-        event: eventToEmit,
-        failureMode: this.failureMode,
-      });
-    } else {
-      return executeSequentially({
-        listeners: this.allListeners,
-        event: eventToEmit,
-        isPropagationStopped: eventToEmit.isPropagationStopped,
-        failureMode: this.failureMode,
-      });
-    }
-  }
-
-  async runInterceptor(
-    index: number,
-    eventToEmit: IEventEmission<any>,
-  ): Promise<void> {
-    this.deepestEvent = eventToEmit;
-    const interceptor = this.emissionInterceptors[index];
-    if (!interceptor) {
-      this.executionReport = await this.baseEmit(eventToEmit);
-      return;
-    }
-    return interceptor((nextEvent) => {
-      this.eventManager.assertPropagationMethodsUnchanged(
-        this.eventDefinition.id,
-        eventToEmit,
-        nextEvent,
-      );
-      return this.runInterceptor(index + 1, nextEvent);
-    }, eventToEmit);
-  }
-}
+import { EmissionContext, EventEmissionImpl } from "./event/EmissionContext";
 
 /**
  * EventManager handles event emission, listener registration, and event processing.
@@ -272,7 +173,6 @@ export class EventManager {
       );
 
       const context = new EmissionContext<TInput>(
-        this,
         eventDefinition,
         allListeners,
         failureMode,
@@ -447,25 +347,6 @@ export class EventManager {
   private checkLock() {
     if (this.#isLocked) {
       lockedError.throw({ what: "EventManager" });
-    }
-  }
-
-  public assertPropagationMethodsUnchanged(
-    eventId: string,
-    currentEvent: IEventEmission<any>,
-    nextEvent: IEventEmission<any>,
-  ): void {
-    if (
-      nextEvent.stopPropagation !== currentEvent.stopPropagation ||
-      nextEvent.isPropagationStopped !== currentEvent.isPropagationStopped
-    ) {
-      validationError.throw({
-        subject: "Event interceptor",
-        id: eventId,
-        originalError: new Error(
-          "Interceptors cannot override stopPropagation/isPropagationStopped",
-        ),
-      });
     }
   }
 

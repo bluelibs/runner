@@ -282,24 +282,48 @@ describe("resource builder", () => {
       .task("tests.builder.policy.only.task")
       .run(async () => 1)
       .build();
-    const denyTask = r
-      .task("tests.builder.policy.only.deny")
-      .run(async () => 2)
-      .build();
 
     const resourceWithPolicy = r
       .resource("tests.builder.policy.only.resource")
       .isolate({ only: [onlyTag] })
       .isolate({})
       .isolate({ only: [onlyTask.id] })
-      .isolate({ deny: [denyTask.id] })
       .isolate({})
       .build();
 
     expect(resourceWithPolicy.isolate).toEqual({
-      deny: [denyTask.id],
       only: [onlyTag, onlyTask.id],
     });
+  });
+
+  it("isolate throws immediately when deny and only would coexist (fail-fast)", () => {
+    const onlyTask = r
+      .task("tests.builder.policy.conflict.only")
+      .run(async () => 1)
+      .build();
+    const denyTask = r
+      .task("tests.builder.policy.conflict.deny")
+      .run(async () => 2)
+      .build();
+
+    // deny+only in the same .isolate() call
+    expect(() => {
+      r.resource("tests.builder.policy.conflict.resource").isolate({
+        only: [onlyTask.id],
+        deny: [denyTask.id],
+      });
+    }).toThrow(
+      expect.objectContaining({ id: "runner.errors.isolationConflict" }),
+    );
+
+    // deny+only via separate chained calls
+    expect(() => {
+      r.resource("tests.builder.policy.conflict.chained.resource")
+        .isolate({ only: [onlyTask.id] })
+        .isolate({ deny: [denyTask.id] });
+    }).toThrow(
+      expect.objectContaining({ id: "runner.errors.isolationConflict" }),
+    );
   });
 
   it("throws on invalid throws entries", () => {

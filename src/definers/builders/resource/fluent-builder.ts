@@ -19,6 +19,7 @@ import { defineResource } from "../../defineResource";
 import type { ResourceFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState, ResolveConfig } from "./types";
 import { clone, mergeArray, mergeDependencies, mergeRegister } from "./utils";
+import { isolateConflictError } from "../../../errors";
 
 /**
  * Creates a ResourceFluentBuilder from the given state.
@@ -361,7 +362,9 @@ export function makeResourceBuilder<
     },
     isolate(policy: IsolationPolicy, options?: { override?: boolean }) {
       // Merging rules: deny merges with deny, only merges with only.
-      // Mixing deny and only on the same resource is caught by StoreValidator at bootstrap.
+      // Fail fast here rather than deferring to bootstrap — mixing deny+only
+      // is always a programming error and catching it at the call-site gives a
+      // clearer stack trace and earlier feedback.
       const existingDeny = state.isolate?.deny ?? [];
       const existingOnly = state.isolate?.only ?? [];
       const existingExports = state.isolate?.exports;
@@ -371,6 +374,12 @@ export function makeResourceBuilder<
       }
       if (existingOnly.length > 0 || policy.only) {
         merged.only = [...existingOnly, ...(policy.only ?? [])];
+      }
+
+      // Both fields being set — even via separate chained .isolate() calls — is
+      // an invalid combination; throw immediately instead of waiting for bootstrap.
+      if (merged.deny !== undefined && merged.only !== undefined) {
+        isolateConflictError.throw({ policyResourceId: state.id });
       }
 
       if (policy.exports !== undefined) {
