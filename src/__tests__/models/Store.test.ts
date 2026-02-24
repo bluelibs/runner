@@ -32,6 +32,22 @@ describe("Store", () => {
     expect(store.getMiddlewareManager()).toBeInstanceOf(MiddlewareManager);
   });
 
+  it("should enter shutdown lockdown once and keep it idempotent", () => {
+    const eventManager = (
+      store as unknown as {
+        eventManager: { enterShutdownLockdown: () => void };
+      }
+    ).eventManager;
+    const eventManagerSpy = jest.spyOn(eventManager, "enterShutdownLockdown");
+
+    expect(store.isInShutdownLockdown()).toBe(false);
+    store.enterShutdownLockdown();
+    store.enterShutdownLockdown();
+
+    expect(store.isInShutdownLockdown()).toBe(true);
+    expect(eventManagerSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("should ignore duplicate calls to recordResourceInitialized", () => {
     store.recordResourceInitialized("dup");
     store.recordResourceInitialized("dup");

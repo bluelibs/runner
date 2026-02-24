@@ -582,6 +582,18 @@ export const runResultDisposedError = error<DefaultErrorType>(
   )
   .build();
 
+export const shutdownLockdownError = error<DefaultErrorType>(
+  "runner.errors.shutdownLockdown",
+)
+  .format(
+    () =>
+      "Runtime is shutting down and no new task runs or event emissions are accepted.",
+  )
+  .remediation(
+    "Wait for shutdown to complete before submitting new work, or start a new runtime via run(...).",
+  )
+  .build();
+
 export const runtimeRootNotAvailableError = error<DefaultErrorType>(
   "runner.errors.runtimeRootNotAvailable",
 )

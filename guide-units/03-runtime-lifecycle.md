@@ -58,6 +58,7 @@ Pass as the second argument to `run(app, options)`.
 | `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                     |
 | `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                            |
 | `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners to call `dispose()` for graceful shutdown.                                                                                                                                                                                                                                                                                                                                                                                                |
+| `shutdownGracePeriodMs`      | `number`                                        | (default: `30000`) On shutdown signals, Runner enters lockdown (rejects new task runs/event emissions) and waits up to this duration for in-flight task/event work before proceeding with dispose.                                                                                                                                                                                                                                                                                               |
 | `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                                                                                                                                                                                     |
 | `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                              |
 | `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `initMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred. |
@@ -223,15 +224,18 @@ await dispose();
 
 ### Automatic signal handling
 
-By default, Runner installs handlers for `SIGTERM` and `SIGINT`:
+By default, Runner installs handlers for `SIGTERM` and `SIGINT`.
+When a signal arrives, Runner:
+
+1. Enters shutdown lockdown (no new `runTask`/`emitEvent` admissions)
+2. Waits for in-flight task/event work up to `shutdownGracePeriodMs` (default 30s)
+3. Disposes resources in reverse dependency order
 
 ```typescript
 await run(app, {
   shutdownHooks: true, // default: true
+  shutdownGracePeriodMs: 30_000, // default: 30 seconds
 });
-
-// Now Ctrl+C or `kill <pid>` triggers graceful shutdown
-// No manual signal handling needed!
 ```
 
 To handle signals yourself:

@@ -10,6 +10,7 @@ import { debugResource } from "./globals/resources/debug";
 import {
   registerProcessLevelSafetyNets,
   registerShutdownHook,
+  waitForShutdownGracePeriod,
 } from "./tools/processShutdownHooks";
 import {
   OnUnhandledError,
@@ -56,6 +57,7 @@ export async function run<C, V extends Promise<any>>(
     logs = {},
     errorBoundary = true,
     shutdownHooks = true,
+    shutdownGracePeriodMs = 30_000,
     dryRun = false,
     lazy = false,
     onUnhandledError: onUnhandledErrorOpt,
@@ -196,10 +198,6 @@ export async function run<C, V extends Promise<any>>(
 
     await boundedLogger.info("Runner online. Awaiting tasks and events.");
 
-    if (shutdownHooks) {
-      unhookShutdown = registerShutdownHook(() => store.dispose());
-    }
-
     runtimeResult.setLazyOptions({
       lazyMode: lazy,
       startupUnusedResourceIds,
@@ -209,6 +207,14 @@ export async function run<C, V extends Promise<any>>(
       },
     });
     runtimeResult.setValue(store.root.value);
+
+    if (shutdownHooks) {
+      unhookShutdown = registerShutdownHook(async () => {
+        await waitForShutdownGracePeriod(store, shutdownGracePeriodMs);
+        await runtimeResult.dispose();
+      });
+    }
+
     activeRunResults.add(runtimeResult);
 
     return runtimeResult;

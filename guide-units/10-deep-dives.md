@@ -529,6 +529,7 @@ const app = r
 
 const { dispose, logger } = await run(app, {
   shutdownHooks: true, // Handles SIGTERM/SIGINT automatically
+  shutdownGracePeriodMs: 30_000, // default: 30 seconds
   errorBoundary: true,
   onUnhandledError: async ({ error, kind }) => {
     await logger.error("Unhandled error", { error, data: { kind } });

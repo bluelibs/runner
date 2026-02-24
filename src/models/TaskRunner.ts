@@ -3,6 +3,7 @@ import { EventManager } from "./EventManager";
 import { Store } from "./Store";
 import { Logger } from "./Logger";
 import { MiddlewareManager } from "./MiddlewareManager";
+import { shutdownLockdownError } from "../errors";
 import type { ExecutionJournal } from "../types/executionJournal";
 import type { TaskCallOptions } from "../types/utilities";
 
@@ -13,6 +14,8 @@ type CachedTaskRunner = (
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<string | symbol, CachedTaskRunner>();
+  private inFlightTaskRuns = 0;
+  private readonly idleWaiters = new Set<() => void>();
 
   constructor(
     protected readonly store: Store,
@@ -42,6 +45,14 @@ export class TaskRunner {
     input?: TInput,
     options?: TaskCallOptions,
   ): Promise<TOutput | undefined> {
+    if (this.store.isInShutdownLockdown()) {
+      try {
+        shutdownLockdownError.throw();
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+
     const canUseCachedRunner = this.store.isLocked;
     let runner = canUseCachedRunner
       ? (this.runnerStore.get(task.id) as
@@ -55,8 +66,28 @@ export class TaskRunner {
       }
     }
 
-    // Pass journal if provided; composer will use it or create new
-    return await runner(input as TInput, options?.journal);
+    this.inFlightTaskRuns += 1;
+    try {
+      // Pass journal if provided; composer will use it or create new
+      return await runner(input as TInput, options?.journal);
+    } finally {
+      this.inFlightTaskRuns -= 1;
+      if (this.inFlightTaskRuns === 0) {
+        for (const resolve of this.idleWaiters) {
+          resolve();
+        }
+        this.idleWaiters.clear();
+      }
+    }
+  }
+
+  public waitForIdle(): Promise<void> {
+    if (this.inFlightTaskRuns === 0) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      this.idleWaiters.add(resolve);
+    });
   }
 
   /**

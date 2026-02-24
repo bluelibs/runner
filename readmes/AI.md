@@ -67,6 +67,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 - Isolation/visibility enforcement covers dependency wiring plus hook event subscriptions and middleware attachments (task + resource middleware), so the same rules apply to events and middleware too.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
+- For a capability-graph backend blueprint (HTTP + auth + tenancy + migrations + entities), see `examples/runner-x/README.md`.
 
 ## Tasks
 
@@ -479,7 +480,8 @@ const app = r
 - `run(root, options)` wires dependencies, initializes resources, and returns the runtime object: `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, `store`, `logger`, and `dispose`. `getLazyResourceValue` is available only when `run(..., { lazy: true })` is enabled.
 - `emitEvent(event, payload, options?)` accepts the same emission options (`failureMode`, `throwOnError`, `report`) as dependency emitters.
 - `.isolate({ exports: [...] })` on the root restricts `runTask`, `emitEvent`, `getResourceValue` to exported ids; omit for full open surface.
-- Run options highlights: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `dryRun`, `lazy`, `initMode` (`"sequential"` or `"parallel"`).
+- Run options highlights: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `shutdownGracePeriodMs` (default `30_000`), `dryRun`, `lazy`, `initMode` (`"sequential"` or `"parallel"`).
+- Shutdown behavior: on shutdown signal, Runner enters lockdown (no new task runs or event emissions), waits for in-flight task/event work to drain until `shutdownGracePeriodMs`, then disposes resources.
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime.
 
 ## Reliability & Performance

@@ -3,6 +3,11 @@ import { normalizeError } from "../globals/resources/tunnel/error-utils";
 
 const platform = getPlatform();
 
+type ShutdownDrainTarget = {
+  enterShutdownLockdown(): void;
+  waitForInFlightOperations(): Promise<void>;
+};
+
 // Global registry of active error handlers for process-level safety nets
 const activeErrorHandlers = new Set<
   (
@@ -81,7 +86,12 @@ function installGlobalShutdownHooksOnce() {
         }
       }
     } finally {
-      platform.exit(disposalErrors.length === 0 ? 0 : 1);
+      const exitCode = disposalErrors.length === 0 ? 0 : 1;
+      try {
+        platform.exit(exitCode);
+      } catch {
+        // Jest guards process.exit by throwing. Ignore to keep tests deterministic.
+      }
     }
   };
   platform.onShutdownSignal(handler);
@@ -93,4 +103,29 @@ export function registerShutdownHook(disposeOnce: () => Promise<void>) {
   return () => {
     activeDisposers.delete(disposeOnce);
   };
+}
+
+export async function waitForShutdownGracePeriod(
+  target: ShutdownDrainTarget,
+  shutdownGracePeriodMs: number,
+): Promise<void> {
+  target.enterShutdownLockdown();
+
+  const drainPromise = target.waitForInFlightOperations();
+  const timeoutSymbol = Symbol("shutdown-grace-period-timeout");
+
+  let timeout!: ReturnType<typeof platform.setTimeout>;
+  const timeoutPromise = new Promise<symbol>((resolve) => {
+    timeout = platform.setTimeout(
+      () => resolve(timeoutSymbol),
+      shutdownGracePeriodMs,
+    );
+    (timeout as { unref?: () => void }).unref?.();
+  });
+
+  try {
+    await Promise.race([drainPromise, timeoutPromise]);
+  } finally {
+    platform.clearTimeout(timeout);
+  }
 }

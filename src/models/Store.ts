@@ -63,6 +63,7 @@ export class Store {
 
   #isLocked = false;
   #isInitialized = false;
+  #shutdownLockdown = false;
   public mode: RunnerMode;
 
   constructor(
@@ -166,6 +167,25 @@ export class Store {
 
   get isLocked() {
     return this.#isLocked;
+  }
+
+  public isInShutdownLockdown() {
+    return this.#shutdownLockdown;
+  }
+
+  public enterShutdownLockdown() {
+    if (this.#shutdownLockdown) {
+      return;
+    }
+    this.#shutdownLockdown = true;
+    this.eventManager.enterShutdownLockdown();
+  }
+
+  public async waitForInFlightOperations() {
+    await Promise.all([
+      this.eventManager.waitForIdle(),
+      this.taskRunner?.waitForIdle(),
+    ]);
   }
 
   lock() {
@@ -366,6 +386,7 @@ export class Store {
     }
 
     this.initializedResourceIds.length = 0;
+    this.#shutdownLockdown = false;
   }
 
   /**

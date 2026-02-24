@@ -93,6 +93,7 @@ const configuredRuntime = await run(app, {
   },
   errorBoundary: true,
   shutdownHooks: true,
+  shutdownGracePeriodMs: 30_000,
   onUnhandledError: ({ error }) => console.error(error),
   dryRun: false,
   lazy: false,
@@ -117,6 +118,7 @@ await disposeWithOptions();
 | `logs`                       | Configure logger strategy/threshold/buffering                           |
 | `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
 | `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with `dispose()`                            |
+| `shutdownGracePeriodMs`      | Lockdown + max wait for in-flight task/event work before dispose        |
 | `onUnhandledError`           | Custom handler for normalized unhandled errors                          |
 | `dryRun`                     | Validate graph without running resource `init()`                        |
 | `lazy`                       | Defer startup-unused resources until on-demand access                   |

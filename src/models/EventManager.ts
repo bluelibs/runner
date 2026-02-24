@@ -7,7 +7,7 @@ import {
   IEventEmitOptions,
   IEventEmitReport,
 } from "../defs";
-import { lockedError, validationError } from "../errors";
+import { lockedError, shutdownLockdownError, validationError } from "../errors";
 import { IHook } from "../types/hook";
 import {
   EventEmissionInterceptor,
@@ -32,6 +32,9 @@ export class EventManager {
 
   private readonly registry: ListenerRegistry;
   private readonly cycleContext: CycleContext;
+  private inFlightEmissions = 0;
+  private readonly idleWaiters = new Set<() => void>();
+  private shutdownLockdown = false;
 
   // Locking mechanism to prevent modifications after initialization
   #isLocked = false;
@@ -53,6 +56,19 @@ export class EventManager {
    */
   get isLocked() {
     return this.#isLocked;
+  }
+
+  public enterShutdownLockdown() {
+    this.shutdownLockdown = true;
+  }
+
+  public waitForIdle(): Promise<void> {
+    if (this.inFlightEmissions === 0) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      this.idleWaiters.add(resolve);
+    });
   }
 
   /**
@@ -131,84 +147,103 @@ export class EventManager {
     source: string;
     options?: IEventEmitOptions;
   }): Promise<{ emission: IEventEmission<TInput>; report: IEventEmitReport }> {
-    const { eventDefinition, source } = params;
-    let { data } = params;
-    const configuredFailureMode =
-      params.options?.failureMode ?? EventEmissionFailureMode.FailFast;
-    const shouldThrow = params.options?.throwOnError ?? true;
-    const failureMode =
-      !shouldThrow &&
-      configuredFailureMode === EventEmissionFailureMode.FailFast
-        ? EventEmissionFailureMode.Aggregate
-        : configuredFailureMode;
-
-    // Validate payload with schema if provided
-    if (eventDefinition.payloadSchema) {
-      try {
-        data = eventDefinition.payloadSchema.parse(data);
-      } catch (error) {
-        validationError.throw({
-          subject: "Event payload",
-          id: eventDefinition.id,
-          originalError:
-            error instanceof Error ? error : new Error(String(error)),
-        });
-      }
+    if (this.shutdownLockdown) {
+      shutdownLockdownError.throw();
     }
 
-    const frame = { id: eventDefinition.id, source };
-    const processEmission = async (): Promise<{
-      emission: IEventEmission<TInput>;
-      report: IEventEmitReport;
-    }> => {
-      const allListeners = this.registry.getListenersForEmit(eventDefinition);
+    this.inFlightEmissions += 1;
+    try {
+      const { eventDefinition, source } = params;
+      let { data } = params;
+      const configuredFailureMode =
+        params.options?.failureMode ?? EventEmissionFailureMode.FailFast;
+      const shouldThrow = params.options?.throwOnError ?? true;
+      const failureMode =
+        !shouldThrow &&
+        configuredFailureMode === EventEmissionFailureMode.FailFast
+          ? EventEmissionFailureMode.Aggregate
+          : configuredFailureMode;
 
-      const event = new EventEmissionImpl<TInput>(
-        eventDefinition.id,
-        data,
-        new Date(),
-        source,
-        { ...(eventDefinition.meta || {}) },
-        [...eventDefinition.tags],
-      );
-
-      const context = new EmissionContext<TInput>(
-        eventDefinition,
-        allListeners,
-        failureMode,
-        this.emissionInterceptors,
-        event,
-      );
-
-      await context.runInterceptor(0, event);
-
-      const executionReport = context.executionReport;
-      const deepestEvent = context.deepestEvent;
-
-      if (
-        shouldThrow &&
-        failureMode === EventEmissionFailureMode.Aggregate &&
-        executionReport.errors.length > 0
-      ) {
-        if (executionReport.errors.length === 1) {
-          throw executionReport.errors[0];
+      // Validate payload with schema if provided
+      if (eventDefinition.payloadSchema) {
+        try {
+          data = eventDefinition.payloadSchema.parse(data);
+        } catch (error) {
+          validationError.throw({
+            subject: "Event payload",
+            id: eventDefinition.id,
+            originalError:
+              error instanceof Error ? error : new Error(String(error)),
+          });
         }
-        throw Object.assign(
-          new Error(`${executionReport.errors.length} listeners failed`),
-          {
-            name: "AggregateError",
-            errors: executionReport.errors,
-            cause: executionReport.errors[0],
-          },
-        );
       }
-      return {
-        emission: deepestEvent as IEventEmission<TInput>,
-        report: executionReport,
-      };
-    };
 
-    return await this.cycleContext.runEmission(frame, source, processEmission);
+      const frame = { id: eventDefinition.id, source };
+      const processEmission = async (): Promise<{
+        emission: IEventEmission<TInput>;
+        report: IEventEmitReport;
+      }> => {
+        const allListeners = this.registry.getListenersForEmit(eventDefinition);
+
+        const event = new EventEmissionImpl<TInput>(
+          eventDefinition.id,
+          data,
+          new Date(),
+          source,
+          { ...(eventDefinition.meta || {}) },
+          [...eventDefinition.tags],
+        );
+
+        const context = new EmissionContext<TInput>(
+          eventDefinition,
+          allListeners,
+          failureMode,
+          this.emissionInterceptors,
+          event,
+        );
+
+        await context.runInterceptor(0, event);
+
+        const executionReport = context.executionReport;
+        const deepestEvent = context.deepestEvent;
+
+        if (
+          shouldThrow &&
+          failureMode === EventEmissionFailureMode.Aggregate &&
+          executionReport.errors.length > 0
+        ) {
+          if (executionReport.errors.length === 1) {
+            throw executionReport.errors[0];
+          }
+          throw Object.assign(
+            new Error(`${executionReport.errors.length} listeners failed`),
+            {
+              name: "AggregateError",
+              errors: executionReport.errors,
+              cause: executionReport.errors[0],
+            },
+          );
+        }
+        return {
+          emission: deepestEvent as IEventEmission<TInput>,
+          report: executionReport,
+        };
+      };
+
+      return await this.cycleContext.runEmission(
+        frame,
+        source,
+        processEmission,
+      );
+    } finally {
+      this.inFlightEmissions -= 1;
+      if (this.inFlightEmissions === 0) {
+        for (const resolve of this.idleWaiters) {
+          resolve();
+        }
+        this.idleWaiters.clear();
+      }
+    }
   }
 
   /**
@@ -354,6 +389,9 @@ export class EventManager {
    * Disposes the EventManager, releasing all listeners and interceptors.
    */
   dispose(): void {
+    this.shutdownLockdown = false;
+    this.inFlightEmissions = 0;
+    this.idleWaiters.clear();
     this.registry.clear();
     this.emissionInterceptors.length = 0;
     this.hookInterceptors.length = 0;

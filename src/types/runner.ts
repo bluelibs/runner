@@ -97,6 +97,11 @@ export type RunOptions = {
    */
   shutdownHooks?: boolean;
   /**
+   * Grace window used during shutdown to let in-flight tasks/events finish before disposal proceeds.
+   * Defaults to 30 seconds.
+   */
+  shutdownGracePeriodMs?: number;
+  /**
    * Custom handler for any unhandled error caught by Runner. Defaults to logging via the created logger.
    */
   onUnhandledError?: OnUnhandledError;
