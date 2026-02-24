@@ -21,9 +21,9 @@ export * from "./utils";
 /**
  * Entry point for creating a task middleware builder.
  */
-export function taskMiddlewareBuilder<In = void>(
+export function taskMiddlewareBuilder<C = void>(
   id: string,
-): TaskMiddlewareFluentBuilder<void, In, void, {}>;
+): TaskMiddlewareFluentBuilder<C, void, void, {}>;
 
 export function taskMiddlewareBuilder<
   C,

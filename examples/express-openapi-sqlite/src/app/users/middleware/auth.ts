@@ -25,7 +25,7 @@ export const authMiddleware = r.middleware
     }
 
     // Extract token from Authorization header
-    const authHeader = request.headers.authorization;
+    const authHeader = request.headers?.authorization;
     const token =
       authHeader && authHeader.startsWith("Bearer ")
         ? authHeader.substring(7)

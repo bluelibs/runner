@@ -222,7 +222,7 @@ Attach middleware using `.middleware([auditTasks])` on the definition that owns 
 - Use `taskRunner.intercept(interceptor, { when? })` for cross-cutting catch-all task interception.
 - Use `resource.subtree({ ... })` for subtree-scoped middleware and governance validation.
 - Contract middleware: middleware can declare `Config`, `Input`, `Output` generics; tasks using it must conform (contracts intersect across `.middleware([...])` and `.tags([...])`). Collisions surface as `InputContractViolationError` / `OutputContractViolationError` in TypeScript; if you add `.inputSchema()`, ensure the schema's inferred type includes the contract shape.
-- Entry generic convenience is available for middleware too: `r.middleware.task<Input>(id)` seeds task input contract typing and `r.middleware.resource<Config>(id)` seeds middleware config typing. The explicit multi-generic form (`<Config, Input, Output>`) remains available.
+- Entry generic convenience is available for middleware too: `r.middleware.task<Config>(id)` seeds middleware config typing and `r.middleware.resource<Config>(id)` seeds middleware config typing. Use the explicit multi-generic form (`<Config, Input, Output>`) when you need task input/output contracts.
 
 ```ts
 type AuthConfig = { requiredRole: string };

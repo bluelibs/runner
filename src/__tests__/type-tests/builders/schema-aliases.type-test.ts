@@ -41,13 +41,33 @@ import { r } from "../../../";
     .build();
 }
 
-// Scenario: task middleware single generic should seed input contract typing.
+// Scenario: task middleware single generic should seed config typing.
 {
-  r.middleware
-    .task<{ user: { id: string } }>(
+  const mw = r.middleware
+    .task<{ requiresAuth: boolean }>(
       "types.schema.middleware.task.entry-generic",
     )
-    .run(async ({ next, task }) => {
+    .run(async ({ next, task }, _deps, config) => {
+      config.requiresAuth;
+      // @ts-expect-error property does not exist on middleware config
+      config.missing;
+      return next(task.input);
+    })
+    .build();
+
+  mw.with({ requiresAuth: true });
+  // @ts-expect-error config type must remain strict for .with()
+  mw.with({ requiresAuth: "yes" });
+}
+
+// Scenario: task middleware explicit second generic should seed input contract typing.
+{
+  r.middleware
+    .task<{ requiresAuth: boolean }, { user: { id: string } }>(
+      "types.schema.middleware.task.entry-generic.input-contract",
+    )
+    .run(async ({ next, task }, _deps, config) => {
+      config.requiresAuth;
       task.input.user.id;
       // @ts-expect-error property does not exist on middleware input contract
       task.input.user.missing;
