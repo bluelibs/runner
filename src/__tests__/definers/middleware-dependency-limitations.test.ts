@@ -8,8 +8,7 @@ import { run } from "../../run";
 
 describe("Middleware Dependency Limitations", () => {
   describe("Global Middleware with Dependencies", () => {
-    it("should allow global middleware to depend on resources", async () => {
-      const calls: string[] = [];
+    it("fails fast when subtree middleware depends on a resource inside its own scope", async () => {
       const logger = defineResource({
         id: "logger",
         init: async () => ({ log: (msg: string) => `LOG: ${msg}` }),
@@ -23,8 +22,7 @@ describe("Middleware Dependency Limitations", () => {
       const globalTaskMw = defineTaskMiddleware({
         id: "global.defineTaskMiddleware",
         dependencies: { logger },
-        run: async ({ task, next }: any) => {
-          if (task) calls.push(`task:${String(task.definition.id)}`);
+        run: async ({ next }: any) => {
           const result = await next();
           return `Global Task: ${result}`;
         },
@@ -34,8 +32,9 @@ describe("Middleware Dependency Limitations", () => {
         id: "global.middleware.res",
         dependencies: { logger },
         run: async ({ resource, next }) => {
-          if (resource)
-            calls.push(`resource:${String(resource.definition.id)}`);
+          if (resource?.definition.id === logger.id) {
+            return next();
+          }
           const result = await next();
           return `Global Resource: ${result}`;
         },
@@ -48,27 +47,25 @@ describe("Middleware Dependency Limitations", () => {
 
       const app = defineResource({
         id: "app",
-        register: [
-          logger,
-          globalTaskMw.applyTo("where-visible"),
-          globalResMw.applyTo("where-visible", (r) => r.id !== logger.id),
-          otherResource,
-          testTask,
-        ],
+        subtree: {
+          tasks: {
+            middleware: [globalTaskMw],
+          },
+          resources: {
+            middleware: [globalResMw],
+          },
+        },
+        register: [logger, globalTaskMw, globalResMw, otherResource, testTask],
         dependencies: { testTask, logger },
         init: async (_, { testTask }) => {
           return await testTask();
         },
       });
 
-      const result = await run(app);
-      // one resource layer and one task layer
-      expect(result.value).toBe("Global Resource: Global Task: Task result");
+      await expect(run(app)).rejects.toThrow(/Circular dependencies detected/);
     });
 
-    it("should allow global middleware to depend on tasks", async () => {
-      const calls: string[] = [];
-
+    it("fails fast when subtree middleware depends on a task inside its own scope", async () => {
       const testTask = defineTask({
         id: "test.task",
         run: async () => "Task result",
@@ -78,8 +75,10 @@ describe("Middleware Dependency Limitations", () => {
         id: "global.middleware",
         dependencies: { testTask },
         run: async ({ task, next }, { testTask }) => {
+          if (task?.definition.id === "test.task") {
+            return next();
+          }
           await testTask();
-          if (task) calls.push(`task:${String(task.definition.id)}`);
           const result = await next();
           return `Global: ${result}`;
         },
@@ -91,14 +90,12 @@ describe("Middleware Dependency Limitations", () => {
 
       const app = defineResource({
         id: "app",
-        register: [
-          testTask,
-          testTask2,
-          globalTaskOnlyMiddleware.applyTo(
-            "where-visible",
-            (r) => r.id !== testTask.id,
-          ),
-        ],
+        subtree: {
+          tasks: {
+            middleware: [globalTaskOnlyMiddleware],
+          },
+        },
+        register: [testTask, testTask2, globalTaskOnlyMiddleware],
         dependencies: { testTask, testTask2 },
         init: async (_, { testTask, testTask2 }) => {
           const r1 = await testTask();
@@ -107,11 +104,7 @@ describe("Middleware Dependency Limitations", () => {
         },
       });
 
-      const result = await run(app);
-      expect(calls).toContain("task:test.task2");
-      expect(calls).not.toContain("task:test.task");
-      expect(calls).not.toContain("resource:app");
-      expect(result.value).toBe("Task result||Global: Task result");
+      await expect(run(app)).rejects.toThrow(/Circular dependencies detected/);
     });
 
     it("should detect circular dependencies when global middleware depends on resource that uses the same middleware", async () => {
@@ -145,7 +138,7 @@ describe("Middleware Dependency Limitations", () => {
   });
 
   describe("Shared Dependencies Creating Indirect Cycles", () => {
-    it("should detect when middleware and its target share the same dependency", async () => {
+    it("detects cycles when subtree middleware depends on a resource within the same subtree", async () => {
       const sharedService = defineResource({
         id: "shared.service",
         init: async () => "Shared service",
@@ -154,7 +147,10 @@ describe("Middleware Dependency Limitations", () => {
       const mw = defineResourceMiddleware({
         id: "middleware",
         dependencies: { sharedService },
-        run: async ({ next }, { sharedService }) => {
+        run: async ({ resource, next }, { sharedService }) => {
+          if (resource?.definition.id === "shared.service") {
+            return next();
+          }
           return `Middleware[${sharedService}]: ${await next()}`;
         },
       });
@@ -172,19 +168,16 @@ describe("Middleware Dependency Limitations", () => {
 
       const app = defineResource({
         id: "app",
-        register: [
-          sharedService,
-          mw.applyTo("where-visible", (r) => r.id !== sharedService.id),
-          noopTaskMw,
-          task,
-        ],
+        subtree: {
+          resources: {
+            middleware: [mw],
+          },
+        },
+        register: [sharedService, mw, noopTaskMw, task],
         dependencies: { task },
       });
 
-      // This should work - shared dependencies are OK
-      const result = await run(app);
-      const value = result.getResourceValue(sharedService);
-      expect(value).toBe("Shared service"); // Middleware could not run for it since the middleware actually depended on it.
+      await expect(run(app)).rejects.toThrow(/Circular dependencies detected/);
     });
 
     it("should detect complex circular dependencies in middleware chains", async () => {

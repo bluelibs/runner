@@ -193,7 +193,12 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
 
       const child = defineResource({
         id: "exports.strict.everywhere.task.child",
-        register: [internalEverywhere.applyTo("where-visible"), internalTask],
+        subtree: {
+          tasks: {
+            middleware: [internalEverywhere],
+          },
+        },
+        register: [internalEverywhere, internalTask],
         isolate: { exports: "none" },
         dependencies: { internalTask },
         async init(_, deps) {
@@ -224,7 +229,13 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
     it("scopes private everywhere resource middleware to its subtree", async () => {
       const internalEverywhere = defineResourceMiddleware({
         id: "exports.strict.everywhere.resource.internal",
-        run: async ({ next }) => {
+        run: async ({ resource, next }) => {
+          if (
+            resource.definition.id !==
+            "exports.strict.everywhere.resource.internal-resource"
+          ) {
+            return next();
+          }
           const result = await next();
           return `mw:${result}`;
         },
@@ -245,15 +256,12 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
 
       const child = defineResource({
         id: "exports.strict.everywhere.resource.child",
-        register: [
-          internalEverywhere.applyTo(
-            "where-visible",
-            (resource) =>
-              resource.id ===
-              "exports.strict.everywhere.resource.internal-resource",
-          ),
-          internalResource,
-        ],
+        subtree: {
+          resources: {
+            middleware: [internalEverywhere],
+          },
+        },
+        register: [internalEverywhere, internalResource],
         isolate: { exports: "none" },
         dependencies: { internalResource },
         async init(_, deps) {

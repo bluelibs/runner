@@ -485,6 +485,34 @@ describe("run.isolate", () => {
     const error = await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
     expect(error.message).toContain(`"${globalResources.store.id}"`);
   });
+
+  it("denies middlewareManager when containerInternals is blocked", async () => {
+    const consumer = defineTask({
+      id: "policy.container-internals.middleware-manager.consumer",
+      dependencies: {
+        middlewareManager: globalResources.middlewareManager,
+      },
+      run: async (_input, deps) => deps.middlewareManager,
+    });
+
+    const guarded = defineResource({
+      id: "policy.container-internals.middleware-manager.guarded",
+      register: [consumer],
+      isolate: {
+        deny: [globalTags.containerInternals],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy.container-internals.middleware-manager.app",
+      register: [guarded],
+    });
+
+    const error = await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
+    expect(error.message).toContain(
+      `"${globalResources.middlewareManager.id}"`,
+    );
+  });
 });
 
 describe("run.isolate (only mode)", () => {

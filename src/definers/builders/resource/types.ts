@@ -8,6 +8,7 @@ import type {
   ResourceMiddlewareAttachmentType,
   ResourceTagType,
   IsolationPolicy,
+  NormalizedResourceSubtreePolicy,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -60,6 +61,7 @@ export type BuilderState<
   overrides?: Array<any>;
   throws?: ThrowsList;
   isolate?: IsolationPolicy;
+  subtree?: NormalizedResourceSubtreePolicy;
 }>;
 
 /**

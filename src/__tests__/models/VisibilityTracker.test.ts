@@ -1,4 +1,10 @@
-import { defineTag, defineTask, defineResource } from "../../define";
+import {
+  defineTag,
+  defineTask,
+  defineResource,
+  defineTaskMiddleware,
+  defineResourceMiddleware,
+} from "../../define";
 import { VisibilityTracker } from "../../models/VisibilityTracker";
 
 describe("VisibilityTracker", () => {
@@ -479,5 +485,117 @@ describe("VisibilityTracker", () => {
 
       expect(tracker.isAccessible(blockedTask.id, consumer.id)).toBe(false);
     });
+  });
+
+  describe("subtree middleware visibility checks", () => {
+    it("throws when subtree task middleware is not visible to the policy owner", () => {
+      const hiddenOwner = defineResource({
+        id: "tracker.subtree.hidden.owner.task",
+      });
+      const policyOwner = defineResource({
+        id: "tracker.subtree.policy.owner.task",
+      });
+      const hiddenTaskMiddleware = defineTaskMiddleware({
+        id: "tracker.subtree.hidden.task.middleware",
+        run: async ({ next, task }) => next(task.input),
+      });
+
+      tracker.recordResource("root");
+      tracker.recordOwnership("root", hiddenOwner);
+      tracker.recordOwnership("root", policyOwner);
+      tracker.recordOwnership(hiddenOwner.id, hiddenTaskMiddleware);
+      tracker.recordExports(hiddenOwner.id, []);
+
+      const registry = {
+        tasks: new Map(),
+        hooks: new Map(),
+        taskMiddlewares: new Map([
+          [hiddenTaskMiddleware.id, { middleware: hiddenTaskMiddleware }],
+        ]),
+        resourceMiddlewares: new Map(),
+        resources: new Map([
+          [hiddenOwner.id, { resource: hiddenOwner }],
+          [
+            policyOwner.id,
+            {
+              resource: {
+                ...policyOwner,
+                subtree: {
+                  tasks: {
+                    middleware: [hiddenTaskMiddleware],
+                    validate: [],
+                  },
+                },
+              },
+            },
+          ],
+        ]),
+      };
+
+      expect(() => tracker.validateVisibility(registry as any)).toThrow(
+        /internal to resource/,
+      );
+    });
+
+    it("throws when subtree resource middleware is not visible to the policy owner", () => {
+      const hiddenOwner = defineResource({
+        id: "tracker.subtree.hidden.owner.resource",
+      });
+      const policyOwner = defineResource({
+        id: "tracker.subtree.policy.owner.resource",
+      });
+      const hiddenResourceMiddleware = defineResourceMiddleware({
+        id: "tracker.subtree.hidden.resource.middleware",
+        run: async ({ next }) => next(),
+      });
+
+      tracker.recordResource("root");
+      tracker.recordOwnership("root", hiddenOwner);
+      tracker.recordOwnership("root", policyOwner);
+      tracker.recordOwnership(hiddenOwner.id, hiddenResourceMiddleware);
+      tracker.recordExports(hiddenOwner.id, []);
+
+      const registry = {
+        tasks: new Map(),
+        hooks: new Map(),
+        taskMiddlewares: new Map(),
+        resourceMiddlewares: new Map([
+          [
+            hiddenResourceMiddleware.id,
+            { middleware: hiddenResourceMiddleware },
+          ],
+        ]),
+        resources: new Map([
+          [hiddenOwner.id, { resource: hiddenOwner }],
+          [
+            policyOwner.id,
+            {
+              resource: {
+                ...policyOwner,
+                subtree: {
+                  resources: {
+                    middleware: [hiddenResourceMiddleware],
+                    validate: [],
+                  },
+                },
+              },
+            },
+          ],
+        ]),
+      };
+
+      expect(() => tracker.validateVisibility(registry as any)).toThrow(
+        /internal to resource/,
+      );
+    });
+  });
+
+  it("treats a resource as inside its own subtree", () => {
+    expect(
+      tracker.isWithinResourceSubtree(
+        "tracker.subtree.self",
+        "tracker.subtree.self",
+      ),
+    ).toBe(true);
   });
 });

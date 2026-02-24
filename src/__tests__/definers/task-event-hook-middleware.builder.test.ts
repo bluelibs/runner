@@ -771,7 +771,7 @@ describe("task/event/hook/middleware builders", () => {
     await rr.dispose();
   });
 
-  it("task middleware builder supports configSchema, tags, meta and registration applyTo", () => {
+  it("task middleware builder supports configSchema, tags, and meta", () => {
     const tmw = r.middleware
       .task("tests.builder.tm.full")
       .dependencies({})
@@ -780,24 +780,18 @@ describe("task/event/hook/middleware builders", () => {
       .run(async ({ next, task }) => next(task.input))
       .meta({ title: "TM" } as unknown as any)
       .build();
-    const registration = tmw.applyTo("where-visible", () => true);
 
     expect(
       (tmw as unknown as { [definitions.symbolTaskMiddleware]: boolean })[
         definitions.symbolTaskMiddleware
       ],
     ).toBe(true);
-    expect(
-      (
-        registration as unknown as {
-          [definitions.symbolTaskMiddlewareRegistration]: boolean;
-        }
-      )[definitions.symbolTaskMiddlewareRegistration],
-    ).toBe(true);
-    expect(registration.applyTo.scope).toBe("where-visible");
+    expect("applyTo" in (tmw as unknown as Record<string, unknown>)).toBe(
+      false,
+    );
   });
 
-  it("resource middleware builder supports configSchema, tags, meta and registration applyTo", () => {
+  it("resource middleware builder supports configSchema, tags, and meta", () => {
     const rmw = r.middleware
       .resource("tests.builder.rm.full")
       .dependencies({})
@@ -806,24 +800,18 @@ describe("task/event/hook/middleware builders", () => {
       .run(async ({ next, resource }) => next(resource.config))
       .meta({ title: "RM" } as unknown as any)
       .build();
-    const registration = rmw.applyTo("subtree", () => true);
 
     expect(
       (rmw as unknown as { [definitions.symbolResourceMiddleware]: boolean })[
         definitions.symbolResourceMiddleware
       ],
     ).toBe(true);
-    expect(
-      (
-        registration as unknown as {
-          [definitions.symbolResourceMiddlewareRegistration]: boolean;
-        }
-      )[definitions.symbolResourceMiddlewareRegistration],
-    ).toBe(true);
-    expect(registration.applyTo.scope).toBe("subtree");
+    expect("applyTo" in (rmw as unknown as Record<string, unknown>)).toBe(
+      false,
+    );
   });
 
-  it("task and resource middleware expose scoped registration without everywhere alias", () => {
+  it("task and resource middleware do not expose registration wrappers", () => {
     const tmw = r.middleware
       .task("tests.builder.tm.applyTo.only")
       .run(async ({ next, task }) => next(task.input))
@@ -833,17 +821,12 @@ describe("task/event/hook/middleware builders", () => {
       .run(async ({ next }) => next())
       .build();
 
-    const taskRegistration = tmw.applyTo("where-visible");
-    const resourceRegistration = rmw.applyTo("subtree");
-
-    expect(taskRegistration.applyTo).toEqual({
-      scope: "where-visible",
-      when: undefined,
-    });
-    expect(resourceRegistration.applyTo).toEqual({
-      scope: "subtree",
-      when: undefined,
-    });
+    expect("applyTo" in (tmw as unknown as Record<string, unknown>)).toBe(
+      false,
+    );
+    expect("applyTo" in (rmw as unknown as Record<string, unknown>)).toBe(
+      false,
+    );
   });
 
   describe("hook builder validation", () => {

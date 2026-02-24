@@ -258,12 +258,24 @@ Quick rules:
 - `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
 - The same selector semantics apply to `isolate({ deny: [...] })` and `isolate({ only: [...] })`
 - Tag definition vs string id is intentional in `deny`/`only`: `deny: [someTag]` blocks tag carriers, while `deny: [someTag.id]` blocks only the exact id
-- Use `isolate({ deny: [globals.tags.containerInternals] })` to block privileged container resources (`globals.resources.store`, `globals.resources.taskRunner`, `globals.resources.runtime`) inside a boundary
+- Use `isolate({ deny: [globals.tags.containerInternals] })` to block privileged container resources (`globals.resources.store`, `globals.resources.taskRunner`, `globals.resources.middlewareManager`, `globals.resources.runtime`) inside a boundary
 - Visibility is enforced at `run(app)` bootstrap
 - Wiring checks include dependencies, hook event subscriptions, and middleware attachments (task + resource middleware)
-- Middleware registrations created via `.applyTo("where-visible")` are auto-applied only to visible targets (respects isolate `exports` and `.isolate()`)
-- Middleware registrations created via `.applyTo("subtree")` are auto-applied to the declaring resource and everything in its registration subtree
+- Subtree middleware (`resource.subtree({ tasks/resources: { middleware: [...] } })`) applies to the declaring resource subtree only
+- Subtree validators are return-based: `validate(definition)` must return `SubtreeViolation[]` (do not throw for normal policy failures)
+- Runner aggregates subtree validation violations and throws a single `subtreeValidationFailedError` at bootstrap
+- If a subtree validator throws or returns a non-array, Runner records an `invalid-definition` violation and still throws the aggregated subtree error
+- For catch-all task interception, use `taskRunner.intercept(...)` from resource dependencies
 - Duplicate ids still fail globally, even for private items
+
+`SubtreeViolation` shape:
+
+```typescript
+type SubtreeViolation = {
+  code: string;
+  message: string;
+};
+```
 
 ### Event Emission Options
 

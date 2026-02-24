@@ -6,6 +6,10 @@ import { MiddlewareManager } from "./MiddlewareManager";
 import { shutdownLockdownError } from "../errors";
 import { getPlatform } from "../platform";
 import type { ExecutionJournal } from "../types/executionJournal";
+import type {
+  TaskRunnerInterceptOptions,
+  TaskRunnerInterceptor,
+} from "../types/taskRunner";
 import type { TaskCallOptions } from "../types/utilities";
 import { InFlightTracker } from "./utils/inFlightTracker";
 
@@ -82,6 +86,28 @@ export class TaskRunner {
     } finally {
       this.inFlightTracker.end();
     }
+  }
+
+  /**
+   * Registers a global task execution interceptor.
+   * Interceptors are evaluated outermost around task middleware.
+   */
+  public intercept(
+    interceptor: TaskRunnerInterceptor,
+    options?: TaskRunnerInterceptOptions,
+  ): void {
+    const conditionalInterceptor: TaskRunnerInterceptor = async (
+      next,
+      input,
+    ) => {
+      if (options?.when && !options.when(input.task.definition)) {
+        return next(input);
+      }
+
+      return interceptor(next, input);
+    };
+
+    this.middlewareManager.intercept("task", conditionalInterceptor);
   }
 
   public waitForIdle(options?: {

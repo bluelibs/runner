@@ -50,6 +50,7 @@ export function resourceBuilder<TConfig = void>(
     meta: undefined,
     overrides: undefined,
     isolate: undefined,
+    subtree: undefined,
   });
   return makeResourceBuilder(initial);
 }

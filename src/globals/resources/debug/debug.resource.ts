@@ -2,13 +2,10 @@ import { defineResource } from "../../../define";
 import { debugConfig } from "./debugConfig.resource";
 import { DebugFriendlyConfig } from "./types";
 import { globalEventListener } from "./globalEvent.hook";
-import {
-  tasksTrackerMiddleware,
-  resourcesTrackerMiddleware,
-} from "./executionTracker.middleware";
 import { globalTags } from "../../globalTags";
 import { middlewareInterceptorResource } from "./middleware.hook";
 import { hookInterceptorResource } from "./hook.hook";
+import { executionTrackerResource } from "./executionTracker.resource";
 
 export const debugResource = defineResource({
   id: "globals.resources.debug",
@@ -18,14 +15,7 @@ export const debugResource = defineResource({
       globalEventListener,
       middlewareInterceptorResource,
       hookInterceptorResource,
-      tasksTrackerMiddleware.applyTo(
-        "where-visible",
-        (task) => !globalTags.system.exists(task),
-      ),
-      resourcesTrackerMiddleware.applyTo(
-        "where-visible",
-        (resource) => !globalTags.system.exists(resource),
-      ),
+      executionTrackerResource,
     ];
   },
   meta: {

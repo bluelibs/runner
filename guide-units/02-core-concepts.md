@@ -297,7 +297,7 @@ Think of this as an **architectural boundary** for wiring, not a sandbox:
 - **Safer refactors**: internal tasks/events/hooks/middleware can change without breaking outside consumers
 - **Clear ownership**: each resource exposes a deliberate contract instead of ambient access
 - **Fail-fast architecture checks**: invalid cross-boundary references fail during `run(app)` bootstrap
-- **Predictable cross-cutting behavior**: private middleware registrations created with `.applyTo("where-visible")` stay inside their resource subtree
+- **Predictable cross-cutting behavior**: subtree policies stay inside their owner subtree, while `taskRunner.intercept()` is the explicit global catch-all
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -328,7 +328,7 @@ const billing = r
 - `isolate: { exports: [] }` / `isolate: { exports: "none" }` means nothing from that resource is public outside its registration subtree
 - `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
 - Visibility checks cover dependency references, hook `.on(event)` subscriptions, and middleware attachment
-- Middleware registrations created with `.applyTo("where-visible")` follow visibility; non-exported middleware applies only inside their subtree
+- Subtree middleware follows owner subtree boundaries; non-exported middleware still cannot cross isolate visibility
 - If a resource exports a child resource, that child's own exported surface is visible transitively
 - Validation happens at `run(app)` initialization, not at declaration time
 - IDs remain globally unique even for private items; visibility does not bypass duplicate-id checks
@@ -842,9 +842,9 @@ const adminTask = r
   .build();
 ```
 
-#### Global Middleware
+#### Cross-Cutting Middleware
 
-Want to add logging to everything? Authentication to all tasks? Global middleware has your back:
+Want logging or auth across a whole subtree? Attach middleware at the owning resource:
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -860,63 +860,57 @@ const logTaskMiddleware = r.middleware
   })
   .build();
 
-const logTaskMiddlewareRegistration = logTaskMiddleware.applyTo(
-  "where-visible",
-  () => true,
-);
+const app = r
+  .resource("app")
+  .register([logTaskMiddleware])
+  .subtree({
+    tasks: {
+      middleware: [logTaskMiddleware],
+    },
+  })
+  .build();
 ```
 
-> **Note:** `.applyTo("where-visible")` means "auto-apply to all visible targets", not "bypass visibility". A middleware only applies where it is visible under isolate `exports` and allowed by `.isolate()`.
+> **Scope:** `.subtree({ tasks/resources: { middleware: [...] } })` applies to the declaring resource subtree only (additive through ancestors).
 
-> **Tip:** If a global middleware depends on a task or resource, exclude that same target in the `.applyTo("where-visible", ...)` predicate (otherwise you can create a circular dependency that fails at `run(app)` bootstrap).
+> **Ordering:** Subtree middleware resolves before local `.middleware([...])`. If the same middleware id is attached locally, local wins.
 
-> **Note:** `.applyTo("where-visible")` middleware is resolved before local `.middleware([...])`. If the same middleware id is attached locally, the global one is skipped so the local configuration wins.
+> **Validation behavior:** subtree `validate(definition)` callbacks are return-based. Return `SubtreeViolation[]` for policy failures. Runner aggregates all violations and throws one `subtreeValidationFailedError` during bootstrap.
 
-> **Scope:** `.applyTo("subtree")` applies to the declaring resource and everything in its registration subtree (including nested descendants and private items).
-
-#### Interception (advanced)
-
-For advanced scenarios, you can intercept framework execution without relying on events:
-
-- Event emissions: `eventManager.intercept((next, event) => Promise<void>)`
-- Hook execution: `eventManager.interceptHook((next, hook, event) => Promise<any>)`
-- Task middleware execution: `middlewareManager.intercept("task", (next, input) => Promise<any>)`
-- Resource middleware execution: `middlewareManager.intercept("resource", (next, input) => Promise<any>)`
-- Per-middleware interception: `middlewareManager.interceptMiddleware(mw, interceptor)`
-- Per-task execution (local): inside a resource `init`, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task.
-  Inspect local interceptor ownership with `deps.someTask.getInterceptingResourceIds()` (unique ids in registration order).
-
-Per-task interceptors must be registered during resource initialization (before the system is locked). They are a good fit when you want a specific task to be adjusted by a specific resource (for example: feature toggles, input shaping, or internal routing) without making it global middleware.
-
-Note that per-task interceptors run _inside_ task middleware. If a middleware short-circuits and never calls `next()`, the task (and its per-task interceptors) will not execute.
+> **Fail-safe normalization:** if a validator throws or returns a non-array, Runner records an `invalid-definition` violation and still throws the aggregated subtree validation error.
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
-const adder = r
-  .task("app.tasks.adder")
-  .run(
-    async (input: { value: number }) => ({ value: input.value + 1 }) as const,
-  )
-  .build();
+type SubtreeViolation = {
+  code: string;
+  message: string;
+};
 
-const installer = r
-  .resource("app.resources.installer")
-  .register([adder])
-  .dependencies({ adder })
-  .init(async (_config, { adder }) => {
-    adder.intercept(async (next, input) => next({ value: input.value * 2 }));
-    return {};
+const app = r
+  .resource("app")
+  .subtree({
+    tasks: {
+      validate: (taskDefinition): SubtreeViolation[] => {
+        if (taskDefinition.meta?.title) {
+          return [];
+        }
+        return [
+          {
+            code: "missing-meta-title",
+            message: `Task "${taskDefinition.id}" must define meta.title`,
+          },
+        ];
+      },
+    },
   })
   .build();
 
-const app = r.resource("app").register([installer]).build();
-const runtime = await run(app);
-await runtime.runTask(adder, { value: 10 }); // => { value: 21 }
-await runtime.dispose();
+await run(app); // throws subtreeValidationFailedError if violations exist
 ```
 
-Access `eventManager` via `globals.resources.eventManager` if needed.
+For true catch-all task behavior, use `taskRunner.intercept(...)` during resource init.
+See [Advanced Patterns](#advanced-patterns) for the full interception APIs and ordering semantics.
 
 #### Middleware Type Contracts
 

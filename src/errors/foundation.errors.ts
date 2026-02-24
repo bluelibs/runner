@@ -103,7 +103,9 @@ export const circularDependencyError = error<
 
     if (hasMiddleware) {
       guidance +=
-        '\n  - For middleware: you can filter out tasks/resources using applyTo("where-visible", fn)';
+        "\n  - For cross-cutting task behavior: use taskRunner.intercept(..., { when })";
+      guidance +=
+        "\n  - For subtree-scoped middleware: use resource.subtree({ tasks/resources: { middleware: [...] } })";
       guidance +=
         "\n  - Consider using events for communication instead of direct dependencies";
     }
@@ -394,6 +396,37 @@ export const isolateViolationError = error<
         : `Denied id rule "${matchedRuleId}".`;
     return `${rule} Remove or narrow the deny rule on "${policyResourceId}", or move the consumer outside that resource subtree.`;
   })
+  .build();
+
+export const subtreeValidationFailedError = error<
+  {
+    violations: Array<{
+      ownerResourceId: string;
+      targetType:
+        | "task"
+        | "resource"
+        | "hook"
+        | "task-middleware"
+        | "resource-middleware"
+        | "event"
+        | "tag";
+      targetId: string;
+      code: string;
+      message: string;
+    }>;
+  } & DefaultErrorType
+>("runner.errors.subtreeValidationFailed")
+  .format(({ violations }) => {
+    const lines = violations.map(
+      (violation) =>
+        `  - owner=${violation.ownerResourceId} target=${violation.targetType}:${violation.targetId} code=${violation.code} message=${violation.message}`,
+    );
+
+    return `Subtree policy validation failed with ${violations.length} violation(s):\n${lines.join("\n")}`;
+  })
+  .remediation(
+    "Fix subtree validators/middleware policy declarations in your resource tree before bootstrapping the runtime.",
+  )
   .build();
 
 // Locked

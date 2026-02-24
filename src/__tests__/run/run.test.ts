@@ -928,11 +928,12 @@ describe("run", () => {
 
     const app = defineResource({
       id: "app",
-      register: [
-        r2,
-        frequentlyUsedResource,
-        middleware.applyTo("where-visible"),
-      ],
+      subtree: {
+        resources: {
+          middleware: [middleware],
+        },
+      },
+      register: [r2, frequentlyUsedResource, middleware],
       dependencies: { r2 },
       async init(_, { r2 }) {
         return r2;

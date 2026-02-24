@@ -101,10 +101,13 @@ const callHelloDirect = r
 
 const app = r
   .resource("examples.tunnels.jwt.app")
+  .subtree({
+    tasks: {
+      middleware: [jwtGuard],
+    },
+  })
   .register([
-    jwtGuard.applyTo("where-visible", (t) =>
-      t.id.startsWith("examples.tunnels.jwt."),
-    ),
+    jwtGuard,
     helloTask,
     exposure,
     callHelloDirect,

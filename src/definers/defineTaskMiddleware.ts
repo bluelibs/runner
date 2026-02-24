@@ -2,20 +2,16 @@ import type {
   ITaskMiddleware,
   ITaskMiddlewareConfigured,
   ITaskMiddlewareDefinition,
-  ITaskMiddlewareRegistration,
-  TaskMiddlewareApplyToWhen,
   DependencyMapType,
 } from "../types/taskMiddleware";
 import {
   symbolFilePath,
   symbolMiddlewareConfigured,
   symbolTaskMiddleware,
-  symbolTaskMiddlewareRegistration,
 } from "../types/symbols";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
-import { normalizeMiddlewareApplyTo } from "./middlewareApplyTo";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { normalizeThrows } from "../tools/throws";
@@ -134,28 +130,6 @@ export function defineTaskMiddleware<
           TDependencies
         >);
         return freezeIfLineageLocked(current, configured);
-      },
-      applyTo: function (
-        scope: "where-visible" | "subtree",
-        when?: TaskMiddlewareApplyToWhen,
-      ) {
-        const current = resolveCurrent(this);
-        const applyTo = normalizeMiddlewareApplyTo(current.id, {
-          scope,
-          when,
-        });
-        const registration = {
-          [symbolTaskMiddlewareRegistration]: true,
-          id: current.id,
-          middleware: current,
-          applyTo,
-        } as ITaskMiddlewareRegistration<
-          TConfig,
-          TEnforceInputContract,
-          TEnforceOutputContract,
-          TDependencies
-        >;
-        return freezeIfLineageLocked(current, deepFreeze(registration));
       },
     } as ITaskMiddleware<
       TConfig,

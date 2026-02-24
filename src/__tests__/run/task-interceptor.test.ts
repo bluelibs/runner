@@ -1,4 +1,5 @@
 import { defineResource, defineTask } from "../../define";
+import { globalResources } from "../../globals/globalResources";
 import { run } from "../../run";
 
 describe("Per-task interceptors inside resources", () => {
@@ -87,5 +88,85 @@ describe("Per-task interceptors inside resources", () => {
     expect(result).toEqual({ value: 24 }); // ((10 * 2) + 3) + 1
 
     await rr.dispose();
+  });
+});
+
+describe("taskRunner.intercept()", () => {
+  it("applies globally even when registered from a private resource subtree", async () => {
+    const outsideTask = defineTask({
+      id: "tests.taskRunnerIntercept.global.outsideTask",
+      run: async () => "outside",
+    });
+
+    const privateInstaller = defineResource({
+      id: "tests.taskRunnerIntercept.global.privateInstaller",
+      isolate: { exports: "none" },
+      dependencies: { taskRunner: globalResources.taskRunner },
+      async init(_, deps) {
+        deps.taskRunner.intercept(async (next, input) => {
+          const result = await next(input);
+          return `intercepted:${result}`;
+        });
+        return undefined;
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.taskRunnerIntercept.global.app",
+      register: [privateInstaller, outsideTask],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app);
+    await expect(runtime.runTask(outsideTask)).resolves.toBe(
+      "intercepted:outside",
+    );
+    await runtime.dispose();
+  });
+
+  it("supports optional when() filtering", async () => {
+    const matchedTask = defineTask({
+      id: "tests.taskRunnerIntercept.when.matchedTask",
+      run: async () => "matched",
+    });
+
+    const untouchedTask = defineTask({
+      id: "tests.taskRunnerIntercept.when.untouchedTask",
+      run: async () => "untouched",
+    });
+
+    const installer = defineResource({
+      id: "tests.taskRunnerIntercept.when.installer",
+      dependencies: { taskRunner: globalResources.taskRunner },
+      async init(_, deps) {
+        deps.taskRunner.intercept(
+          async (next, input) => {
+            const result = await next(input);
+            return `filtered:${result}`;
+          },
+          {
+            when: (taskDefinition) => taskDefinition.id === matchedTask.id,
+          },
+        );
+        return undefined;
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.taskRunnerIntercept.when.app",
+      register: [installer, matchedTask, untouchedTask],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app);
+    await expect(runtime.runTask(matchedTask)).resolves.toBe(
+      "filtered:matched",
+    );
+    await expect(runtime.runTask(untouchedTask)).resolves.toBe("untouched");
+    await runtime.dispose();
   });
 });

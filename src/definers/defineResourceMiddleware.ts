@@ -2,20 +2,16 @@ import type {
   IResourceMiddleware,
   IResourceMiddlewareConfigured,
   IResourceMiddlewareDefinition,
-  IResourceMiddlewareRegistration,
-  ResourceMiddlewareApplyToWhen,
 } from "../types/resourceMiddleware";
 import type { DependencyMapType } from "../types/utilities";
 import {
   symbolFilePath,
   symbolMiddlewareConfigured,
   symbolResourceMiddleware,
-  symbolResourceMiddlewareRegistration,
 } from "../types/symbols";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
-import { normalizeMiddlewareApplyTo } from "./middlewareApplyTo";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { normalizeThrows } from "../tools/throws";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
@@ -134,28 +130,6 @@ export function defineResourceMiddleware<
           TDependencies
         >);
         return freezeIfLineageLocked(current, configured);
-      },
-      applyTo: function (
-        scope: "where-visible" | "subtree",
-        when?: ResourceMiddlewareApplyToWhen,
-      ) {
-        const current = resolveCurrent(this);
-        const applyTo = normalizeMiddlewareApplyTo(current.id, {
-          scope,
-          when,
-        });
-        const registration = {
-          [symbolResourceMiddlewareRegistration]: true,
-          id: current.id,
-          middleware: current,
-          applyTo,
-        } as IResourceMiddlewareRegistration<
-          TConfig,
-          TEnforceInputContract,
-          TEnforceOutputContract,
-          TDependencies
-        >;
-        return freezeIfLineageLocked(current, deepFreeze(registration));
       },
     } as IResourceMiddleware<
       TConfig,

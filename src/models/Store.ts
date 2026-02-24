@@ -40,6 +40,8 @@ import { RunResult } from "./RunResult";
 import { getAllThrows } from "../tools/getAllThrows";
 import type { ITask } from "../types/task";
 import { registerStoreBuiltins } from "./BuiltinsRegistry";
+import { mergeResourceSubtreePolicy } from "../definers/subtreePolicy";
+import { tunnelResourceMiddleware } from "../globals/middleware/tunnel.middleware";
 
 const INTERNAL_ROOT_CRON_DEPENDENCY_KEY = "__runnerCron";
 
@@ -256,12 +258,22 @@ export class Store {
         dependenciesObject[INTERNAL_ROOT_CRON_DEPENDENCY_KEY] ||
         globalResources.cron,
     };
+    const hasTunnelResourceMiddleware = this.resourceMiddlewares.has(
+      tunnelResourceMiddleware.id,
+    );
 
     // Clone the root definition so per-run dependency/register resolution
     // never mutates the reusable user definition object.
     const root: IResource<any> = {
       ...rootDefinition,
       dependencies: rootDependencies,
+      subtree: hasTunnelResourceMiddleware
+        ? mergeResourceSubtreePolicy(rootDefinition.subtree, {
+            resources: {
+              middleware: [tunnelResourceMiddleware],
+            },
+          })
+        : rootDefinition.subtree,
     };
 
     this.root = {

@@ -10,6 +10,7 @@ import type {
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
+  ResourceSubtreePolicy,
   ResourceTagType,
   TagType,
 } from "../../../defs";
@@ -25,6 +26,7 @@ import type {
 import type { BuilderState, ResolveConfig } from "./types";
 import { clone, mergeArray, mergeDependencies, mergeRegister } from "./utils";
 import { isolateConflictError } from "../../../errors";
+import { mergeResourceSubtreePolicy } from "../../subtreePolicy";
 
 /**
  * Creates a ResourceFluentBuilder from the given state.
@@ -466,6 +468,21 @@ export function makeResourceBuilder<
         THasInit
       >(next);
     },
+    subtree(policy: ResourceSubtreePolicy, options?: { override?: boolean }) {
+      const next = clone(state, {
+        subtree: mergeResourceSubtreePolicy(state.subtree, policy, options),
+      });
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        THasInit
+      >(next);
+    },
     build() {
       const definition: IResourceDefinition<
         TConfig,
@@ -492,6 +509,7 @@ export function makeResourceBuilder<
         overrides: state.overrides,
         throws: state.throws,
         isolate: state.isolate,
+        subtree: state.subtree,
       };
       const resource = defineResource(definition);
       return deepFreeze({

@@ -140,7 +140,6 @@ describe("buildDependencyGraph branch coverage", () => {
               id: "graph.branch.defensive.task.subtree-mw",
               dependencies: undefined,
             },
-            applyTo: { scope: "subtree" as const },
           },
         ],
       ]),
@@ -217,6 +216,99 @@ describe("buildDependencyGraph branch coverage", () => {
     );
     expect(graph.find((node) => node.id === eventA.id)?.dependencies).toEqual(
       {},
+    );
+  });
+
+  it("covers subtree middleware dedupe and missing-node guards", () => {
+    const taskSubtreeDuplicate = { id: "graph.subtree.task.duplicate" };
+    const taskSubtreeMissing = { id: "graph.subtree.task.missing" };
+    const resourceSubtreeDuplicate = { id: "graph.subtree.resource.duplicate" };
+    const resourceSubtreeMissing = { id: "graph.subtree.resource.missing" };
+
+    const ownerResource = {
+      id: "graph.subtree.owner",
+      middleware: [],
+      dependencies: undefined,
+      subtree: {
+        tasks: {
+          middleware: [taskSubtreeDuplicate, taskSubtreeMissing],
+          validate: [],
+        },
+        resources: {
+          middleware: [resourceSubtreeDuplicate, resourceSubtreeMissing],
+          validate: [],
+        },
+      },
+    };
+
+    const fakeRegistry = {
+      tasks: new Map([
+        [
+          "graph.subtree.task",
+          {
+            task: {
+              id: "graph.subtree.task",
+              dependencies: undefined,
+              middleware: [taskSubtreeDuplicate],
+            },
+          },
+        ],
+      ]),
+      taskMiddlewares: new Map([
+        [
+          taskSubtreeDuplicate.id,
+          {
+            middleware: {
+              id: taskSubtreeDuplicate.id,
+              dependencies: undefined,
+            },
+          },
+        ],
+      ]),
+      resourceMiddlewares: new Map([
+        [
+          resourceSubtreeDuplicate.id,
+          {
+            middleware: {
+              id: resourceSubtreeDuplicate.id,
+              dependencies: undefined,
+            },
+          },
+        ],
+      ]),
+      resources: new Map([
+        [ownerResource.id, { resource: ownerResource }],
+        [
+          "graph.subtree.resource",
+          {
+            resource: {
+              id: "graph.subtree.resource",
+              dependencies: undefined,
+              middleware: [resourceSubtreeDuplicate],
+            },
+          },
+        ],
+      ]),
+      hooks: new Map(),
+      events: new Map(),
+      visibilityTracker: {
+        isAccessible: () => true,
+        getOwnerResourceId: (itemId: string) => {
+          if (
+            itemId === "graph.subtree.task" ||
+            itemId === "graph.subtree.resource"
+          ) {
+            return ownerResource.id;
+          }
+          return undefined;
+        },
+      },
+    };
+
+    const result = buildDependencyGraph(fakeRegistry as any);
+    expect(result.some((node) => node.id === "graph.subtree.task")).toBe(true);
+    expect(result.some((node) => node.id === "graph.subtree.resource")).toBe(
+      true,
     );
   });
 });

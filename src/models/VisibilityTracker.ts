@@ -540,6 +540,52 @@ export class VisibilityTracker {
         });
       }
     }
+
+    for (const { resource } of registry.resources.values()) {
+      const ownerId = resource.id;
+      const subtreePolicy = resource.subtree;
+      if (!subtreePolicy) {
+        continue;
+      }
+
+      for (const middlewareAttachment of subtreePolicy.tasks?.middleware ??
+        []) {
+        const violation = this.getAccessViolation(
+          middlewareAttachment.id,
+          ownerId,
+        );
+        if (!violation) {
+          continue;
+        }
+
+        this.throwAccessViolation({
+          violation,
+          targetId: middlewareAttachment.id,
+          targetType: "Task middleware",
+          consumerId: ownerId,
+          consumerType: "Resource",
+        });
+      }
+
+      for (const middlewareAttachment of subtreePolicy.resources?.middleware ??
+        []) {
+        const violation = this.getAccessViolation(
+          middlewareAttachment.id,
+          ownerId,
+        );
+        if (!violation) {
+          continue;
+        }
+
+        this.throwAccessViolation({
+          violation,
+          targetId: middlewareAttachment.id,
+          targetType: "Resource middleware",
+          consumerId: ownerId,
+          consumerType: "Resource",
+        });
+      }
+    }
   }
 
   private findIsolationViolation(

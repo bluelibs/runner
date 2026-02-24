@@ -225,30 +225,56 @@ describe("MiddlewareManager", () => {
     expect(Array.isArray(result)).toBe(true);
   });
 
-  it("getEverywhereMiddlewareForResources includes middleware with applyTo where-visible", () => {
+  it("getEverywhereMiddlewareForResources includes subtree middleware", () => {
     const r = defineResource({ id: "r.test" });
     const mw = defineResourceMiddleware({
       id: "mw.everywhere.true",
       run: async ({ next }) => next(),
     });
-    store.storeGenericItem(mw.applyTo("where-visible"));
+    const owner = defineResource({
+      id: "owner.resource.middleware",
+      subtree: {
+        resources: {
+          middleware: [mw],
+        },
+      },
+      register: [mw, r],
+    });
+    store.storeGenericItem(owner);
     const result = manager.getEverywhereMiddlewareForResources(r);
     expect(result.some((m) => m.id === "mw.everywhere.true")).toBe(true);
   });
 
-  it("getEverywhereMiddlewareForResources filters with applyTo predicate", () => {
+  it("getEverywhereMiddlewareForResources prefers nearest owner for duplicate ids", () => {
     const r = defineResource({ id: "r.test.func" });
-    const mw = defineResourceMiddleware({
+    const baseMw = defineResourceMiddleware({
       id: "mw.everywhere.func",
       run: async ({ next }) => next(),
     });
-    store.storeGenericItem(
-      mw.applyTo("where-visible", (resource) =>
-        resource.id.startsWith("r.test"),
-      ),
-    );
+    const childMw = baseMw.with({ source: "child" });
+    const child = defineResource({
+      id: "owner.resource.child",
+      subtree: {
+        resources: {
+          middleware: [childMw],
+        },
+      },
+      register: [r],
+    });
+    const owner = defineResource({
+      id: "owner.resource.parent",
+      subtree: {
+        resources: {
+          middleware: [baseMw],
+        },
+      },
+      register: [baseMw, child],
+    });
+    store.storeGenericItem(owner);
     const result = manager.getEverywhereMiddlewareForResources(r);
-    expect(result.some((m) => m.id === "mw.everywhere.func")).toBe(true);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("mw.everywhere.func");
+    expect(result[0]).toBe(childMw);
   });
 
   it("should access resourceMiddlewareInterceptors getter", () => {
@@ -280,30 +306,56 @@ describe("MiddlewareManager", () => {
     expect(taskInterceptorsAfterMutationAttempt).toHaveLength(1);
   });
 
-  it("getEverywhereMiddlewareForTasks includes middleware with applyTo where-visible", () => {
+  it("getEverywhereMiddlewareForTasks includes subtree middleware", () => {
     const task = defineTask({ id: "task.true", run: async () => 0 });
     const mw = defineTaskMiddleware({
       id: "mw.task.everywhere.true",
       run: async ({ next, task }) => next(task?.input),
     });
-    store.storeGenericItem(mw.applyTo("where-visible"));
+    const owner = defineResource({
+      id: "owner.task.middleware",
+      subtree: {
+        tasks: {
+          middleware: [mw],
+        },
+      },
+      register: [mw, task],
+    });
+    store.storeGenericItem(owner);
     const res = manager.getEverywhereMiddlewareForTasks(task);
     expect(res.some((m) => m.id === "mw.task.everywhere.true")).toBe(true);
   });
 
-  it("getEverywhereMiddlewareForTasks excludes middleware that depends on the task", () => {
+  it("getEverywhereMiddlewareForTasks resolves nearest subtree owner for duplicate ids", () => {
     const task = defineTask({ id: "task.dep", run: async () => 0 });
-    const mw = defineTaskMiddleware({
+    const baseMw = defineTaskMiddleware({
       id: "mw",
       dependencies: { t: task },
       run: async ({ next, task }) => next(task?.input),
     });
-    // register via public API to ensure types are respected
-    store.storeGenericItem(
-      mw.applyTo("where-visible", (targetTask) => targetTask.id !== task.id),
-    );
+    const childMw = baseMw.with({ source: "child" });
+    const child = defineResource({
+      id: "owner.task.child",
+      subtree: {
+        tasks: {
+          middleware: [childMw],
+        },
+      },
+      register: [task],
+    });
+    const owner = defineResource({
+      id: "owner.task.parent",
+      subtree: {
+        tasks: {
+          middleware: [baseMw],
+        },
+      },
+      register: [baseMw, child],
+    });
+    store.storeGenericItem(owner);
     const res = manager.getEverywhereMiddlewareForTasks(task);
-    expect(res).toHaveLength(0);
+    expect(res).toHaveLength(1);
+    expect(res[0]).toBe(childMw);
   });
 
   it("should export middleware classes from barrel file", () => {

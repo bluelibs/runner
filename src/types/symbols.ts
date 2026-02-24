@@ -26,12 +26,6 @@ export const symbolTaskMiddleware: unique symbol = Symbol.for(
 export const symbolResourceMiddleware: unique symbol = Symbol.for(
   "runner.resourceMiddleware",
 );
-export const symbolTaskMiddlewareRegistration: unique symbol = Symbol.for(
-  "runner.taskMiddlewareRegistration",
-);
-export const symbolResourceMiddlewareRegistration: unique symbol = Symbol.for(
-  "runner.resourceMiddlewareRegistration",
-);
 export const symbolMiddlewareConfigured: unique symbol = Symbol.for(
   "runner.middlewareConfigured",
 );

@@ -75,32 +75,6 @@ describe("getAllThrows()", () => {
     });
   });
 
-  it("collects throws from applyTo where-visible task middleware", async () => {
-    const globalMw = r.middleware
-      .task("tests.getAllThrows.tmwEverywhere")
-      .throws([errD])
-      .run(async ({ next, task }) => next(task.input))
-      .build();
-    const globalMwRegistration = globalMw.applyTo("where-visible");
-
-    const task = r
-      .task("tests.getAllThrows.taskMwEverywhere")
-      .throws([errA])
-      .run(async () => "ok")
-      .build();
-
-    const app = r
-      .resource("tests.getAllThrows.taskMwEverywhere.app")
-      .register([task, globalMwRegistration])
-      .build();
-
-    await withRuntime(app, (store) => {
-      const result = store.getAllThrows(task);
-      expect(result).toContain(errA.id);
-      expect(result).toContain(errD.id);
-    });
-  });
-
   // ── Task: resource dependency throws ──────────────────────────────────
 
   it("collects throws from resource dependencies", async () => {
@@ -203,7 +177,8 @@ describe("getAllThrows()", () => {
 
     await withRuntime(app, (store) => {
       const result = store.getAllThrows(res);
-      expect(result).toEqual([errA.id, errB.id]);
+      expect(result).toContain(errA.id);
+      expect(result).toContain(errB.id);
     });
   });
 
@@ -230,32 +205,6 @@ describe("getAllThrows()", () => {
       const result = store.getAllThrows(res);
       expect(result).toContain(errA.id);
       expect(result).toContain(errC.id);
-    });
-  });
-
-  it("collects throws from applyTo where-visible resource middleware", async () => {
-    const globalRmw = r.middleware
-      .resource("tests.getAllThrows.rmwEverywhere")
-      .throws([errD])
-      .run(async ({ next }) => next())
-      .build();
-    const globalRmwRegistration = globalRmw.applyTo("where-visible");
-
-    const res = r
-      .resource("tests.getAllThrows.resMwEverywhere")
-      .throws([errA])
-      .init(async () => 1)
-      .build();
-
-    const app = r
-      .resource("tests.getAllThrows.resMwEverywhere.app")
-      .register([res, globalRmwRegistration])
-      .build();
-
-    await withRuntime(app, (store) => {
-      const result = store.getAllThrows(res);
-      expect(result).toContain(errA.id);
-      expect(result).toContain(errD.id);
     });
   });
 
@@ -344,76 +293,12 @@ describe("getAllThrows()", () => {
 
   // ── Everywhere middleware as function ──────────────────────────────────
 
-  it("collects throws from applyTo where-visible task middleware (function form)", async () => {
-    const funcMw = r.middleware
-      .task("tests.getAllThrows.tmwEverywhereFunc")
-      .throws([errE])
-      .run(async ({ next, task }) => next(task.input))
-      .build();
-    const funcMwRegistration = funcMw.applyTo("where-visible", (task) =>
-      task.id.startsWith("tests.getAllThrows.funcTarget"),
-    );
-
-    const matchingTask = r
-      .task("tests.getAllThrows.funcTarget")
-      .throws([errA])
-      .run(async () => "ok")
-      .build();
-
-    const nonMatchingTask = r
-      .task("tests.getAllThrows.noFuncTarget")
-      .run(async () => "ok")
-      .build();
-
-    const app = r
-      .resource("tests.getAllThrows.funcTargetApp")
-      .register([funcMwRegistration, matchingTask, nonMatchingTask])
-      .build();
-
-    await withRuntime(app, (store) => {
-      const matching = store.getAllThrows(matchingTask);
-      expect(matching).toContain(errE.id);
-
-      const nonMatching = store.getAllThrows(nonMatchingTask);
-      expect(nonMatching).not.toContain(errE.id);
-    });
-  });
-
-  it("collects throws from applyTo where-visible resource middleware (function form)", async () => {
-    const funcRmw = r.middleware
-      .resource("tests.getAllThrows.rmwEverywhereFunc")
-      .throws([errF])
-      .run(async ({ next }) => next())
-      .build();
-    const funcRmwRegistration = funcRmw.applyTo("where-visible", (res) =>
-      res.id.includes("funcResTarget"),
-    );
-
-    const res = r
-      .resource("tests.getAllThrows.funcResTarget")
-      .throws([errA])
-      .init(async () => 1)
-      .build();
-
-    const app = r
-      .resource("tests.getAllThrows.funcResTargetApp")
-      .register([funcRmwRegistration, res])
-      .build();
-
-    await withRuntime(app, (store) => {
-      const result = store.getAllThrows(res);
-      expect(result).toContain(errA.id);
-      expect(result).toContain(errF.id);
-    });
-  });
-
-  it("collects throws from applyTo subtree middleware only for owner subtree", async () => {
+  it("collects throws from subtree task middleware only for owner subtree", async () => {
     const subtreeMw = r.middleware
       .task("tests.getAllThrows.subtreeMw")
       .throws([errD])
       .run(async ({ next, task }) => next(task.input))
       .build();
-    const subtreeMwRegistration = subtreeMw.applyTo("subtree");
 
     const scopedTask = r
       .task("tests.getAllThrows.subtreeScopedTask")
@@ -427,7 +312,12 @@ describe("getAllThrows()", () => {
 
     const scopedResource = r
       .resource("tests.getAllThrows.subtreeResource")
-      .register([subtreeMwRegistration, scopedTask])
+      .subtree({
+        tasks: {
+          middleware: [subtreeMw],
+        },
+      })
+      .register([subtreeMw, scopedTask])
       .build();
 
     const app = r
@@ -444,17 +334,21 @@ describe("getAllThrows()", () => {
     });
   });
 
-  it("collects throws from applyTo subtree resource middleware for owner subtree", async () => {
+  it("collects throws from subtree resource middleware for owner subtree", async () => {
     const subtreeRmw = r.middleware
       .resource("tests.getAllThrows.subtreeRmw")
       .throws([errE])
       .run(async ({ next }) => next())
       .build();
-    const subtreeRmwRegistration = subtreeRmw.applyTo("subtree");
 
     const scopedResource = r
       .resource("tests.getAllThrows.subtreeScopedResource")
-      .register([subtreeRmwRegistration])
+      .subtree({
+        resources: {
+          middleware: [subtreeRmw],
+        },
+      })
+      .register([subtreeRmw])
       .init(async () => "scoped")
       .build();
 

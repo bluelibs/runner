@@ -98,5 +98,35 @@ describe("middleware .with(config)", () => {
       const configured = detachedWith.call(undefined, { value: 7 });
       expect(configured.config).toEqual({ value: 7 });
     });
+
+    it("normalizes non-Error schema failures into validation errors", () => {
+      const mw = defineResourceMiddleware<{ value: number }>({
+        id: "tests.mw.resource.schema.non-error",
+        configSchema: {
+          parse() {
+            throw "schema exploded";
+          },
+        },
+        run: async ({ next }) => next(),
+      });
+
+      expect(() => mw.with({ value: 7 })).toThrow(
+        /Middleware config validation failed/,
+      );
+    });
+
+    it("supports Error-based schema failures in validation errors", () => {
+      const mw = defineResourceMiddleware<{ value: number }>({
+        id: "tests.mw.resource.schema.error",
+        configSchema: {
+          parse() {
+            throw new Error("schema failed");
+          },
+        },
+        run: async ({ next }) => next(),
+      });
+
+      expect(() => mw.with({ value: 9 })).toThrow(/schema failed/);
+    });
   });
 });

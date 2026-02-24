@@ -71,7 +71,7 @@ import { r } from "../../../";
     .meta({ title: "TMW" })
     .throws([]);
 
-  taskMwAfterRun.build().applyTo("where-visible");
+  taskMwAfterRun.build();
 
   // @ts-expect-error dependencies are locked after run()
   taskMwAfterRun.dependencies({});
@@ -94,7 +94,7 @@ import { r } from "../../../";
     .meta({ title: "RMW" })
     .throws([]);
 
-  resourceMwAfterRun.build().applyTo("subtree");
+  resourceMwAfterRun.build();
 
   // @ts-expect-error dependencies are locked after run()
   resourceMwAfterRun.dependencies({});

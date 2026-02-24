@@ -1408,7 +1408,7 @@ Think of this as an **architectural boundary** for wiring, not a sandbox:
 - **Safer refactors**: internal tasks/events/hooks/middleware can change without breaking outside consumers
 - **Clear ownership**: each resource exposes a deliberate contract instead of ambient access
 - **Fail-fast architecture checks**: invalid cross-boundary references fail during `run(app)` bootstrap
-- **Predictable cross-cutting behavior**: private middleware registrations created with `.applyTo("where-visible")` stay inside their resource subtree
+- **Predictable cross-cutting behavior**: subtree policies stay inside their owner subtree, while `taskRunner.intercept()` is the explicit global catch-all
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -1439,7 +1439,7 @@ const billing = r
 - `isolate: { exports: [] }` / `isolate: { exports: "none" }` means nothing from that resource is public outside its registration subtree
 - `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
 - Visibility checks cover dependency references, hook `.on(event)` subscriptions, and middleware attachment
-- Middleware registrations created with `.applyTo("where-visible")` follow visibility; non-exported middleware applies only inside their subtree
+- Subtree middleware follows owner subtree boundaries; non-exported middleware still cannot cross isolate visibility
 - If a resource exports a child resource, that child's own exported surface is visible transitively
 - Validation happens at `run(app)` initialization, not at declaration time
 - IDs remain globally unique even for private items; visibility does not bypass duplicate-id checks
@@ -1953,9 +1953,9 @@ const adminTask = r
   .build();
 ```
 
-#### Global Middleware
+#### Cross-Cutting Middleware
 
-Want to add logging to everything? Authentication to all tasks? Global middleware has your back:
+Want logging or auth across a whole subtree? Attach middleware at the owning resource:
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -1971,63 +1971,57 @@ const logTaskMiddleware = r.middleware
   })
   .build();
 
-const logTaskMiddlewareRegistration = logTaskMiddleware.applyTo(
-  "where-visible",
-  () => true,
-);
+const app = r
+  .resource("app")
+  .register([logTaskMiddleware])
+  .subtree({
+    tasks: {
+      middleware: [logTaskMiddleware],
+    },
+  })
+  .build();
 ```
 
-> **Note:** `.applyTo("where-visible")` means "auto-apply to all visible targets", not "bypass visibility". A middleware only applies where it is visible under isolate `exports` and allowed by `.isolate()`.
+> **Scope:** `.subtree({ tasks/resources: { middleware: [...] } })` applies to the declaring resource subtree only (additive through ancestors).
 
-> **Tip:** If a global middleware depends on a task or resource, exclude that same target in the `.applyTo("where-visible", ...)` predicate (otherwise you can create a circular dependency that fails at `run(app)` bootstrap).
+> **Ordering:** Subtree middleware resolves before local `.middleware([...])`. If the same middleware id is attached locally, local wins.
 
-> **Note:** `.applyTo("where-visible")` middleware is resolved before local `.middleware([...])`. If the same middleware id is attached locally, the global one is skipped so the local configuration wins.
+> **Validation behavior:** subtree `validate(definition)` callbacks are return-based. Return `SubtreeViolation[]` for policy failures. Runner aggregates all violations and throws one `subtreeValidationFailedError` during bootstrap.
 
-> **Scope:** `.applyTo("subtree")` applies to the declaring resource and everything in its registration subtree (including nested descendants and private items).
-
-#### Interception (advanced)
-
-For advanced scenarios, you can intercept framework execution without relying on events:
-
-- Event emissions: `eventManager.intercept((next, event) => Promise<void>)`
-- Hook execution: `eventManager.interceptHook((next, hook, event) => Promise<any>)`
-- Task middleware execution: `middlewareManager.intercept("task", (next, input) => Promise<any>)`
-- Resource middleware execution: `middlewareManager.intercept("resource", (next, input) => Promise<any>)`
-- Per-middleware interception: `middlewareManager.interceptMiddleware(mw, interceptor)`
-- Per-task execution (local): inside a resource `init`, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task.
-  Inspect local interceptor ownership with `deps.someTask.getInterceptingResourceIds()` (unique ids in registration order).
-
-Per-task interceptors must be registered during resource initialization (before the system is locked). They are a good fit when you want a specific task to be adjusted by a specific resource (for example: feature toggles, input shaping, or internal routing) without making it global middleware.
-
-Note that per-task interceptors run _inside_ task middleware. If a middleware short-circuits and never calls `next()`, the task (and its per-task interceptors) will not execute.
+> **Fail-safe normalization:** if a validator throws or returns a non-array, Runner records an `invalid-definition` violation and still throws the aggregated subtree validation error.
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
-const adder = r
-  .task("app.tasks.adder")
-  .run(
-    async (input: { value: number }) => ({ value: input.value + 1 }) as const,
-  )
-  .build();
+type SubtreeViolation = {
+  code: string;
+  message: string;
+};
 
-const installer = r
-  .resource("app.resources.installer")
-  .register([adder])
-  .dependencies({ adder })
-  .init(async (_config, { adder }) => {
-    adder.intercept(async (next, input) => next({ value: input.value * 2 }));
-    return {};
+const app = r
+  .resource("app")
+  .subtree({
+    tasks: {
+      validate: (taskDefinition): SubtreeViolation[] => {
+        if (taskDefinition.meta?.title) {
+          return [];
+        }
+        return [
+          {
+            code: "missing-meta-title",
+            message: `Task "${taskDefinition.id}" must define meta.title`,
+          },
+        ];
+      },
+    },
   })
   .build();
 
-const app = r.resource("app").register([installer]).build();
-const runtime = await run(app);
-await runtime.runTask(adder, { value: 10 }); // => { value: 21 }
-await runtime.dispose();
+await run(app); // throws subtreeValidationFailedError if violations exist
 ```
 
-Access `eventManager` via `globals.resources.eventManager` if needed.
+For true catch-all task behavior, use `taskRunner.intercept(...)` during resource init.
+See [Advanced Patterns](#advanced-patterns) for the full interception APIs and ordering semantics.
 
 #### Middleware Type Contracts
 
@@ -2703,19 +2697,19 @@ await result.dispose();
 
 An object with the following properties and methods:
 
-| Property                    | Description                                                                                                                                   |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `value`                     | Value returned by the `app` resource's `init()`                                                                                               |
-| `runTask(...)`              | Run a task by reference or string id                                                                                                          |
-| `emitEvent(...)`            | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`)                                                    |
-| `getResourceValue(...)`     | Read a resource's value                                                                                                                       |
-| `getLazyResourceValue(...)` | Initialize/read a resource on demand. Available only when `run(..., { lazy: true })` is enabled.                                              |
-| `getResourceConfig(...)`    | Read a resource's resolved config                                                                                                             |
-| `getRootId()`               | Read the root resource id                                                                                                                     |
-| `getRootConfig()`           | Read the root resource config                                                                                                                 |
-| `getRootValue()`            | Read the initialized root resource value                                                                                                      |
-| `logger`                    | Logger instance                                                                                                                               |
-| `store`                     | Runtime store with registered resources, tasks, middleware, events, and introspection helpers (for example, `getAllThrows(task \| resource)`) |
+| Property                    | Description                                                                                                                                                                                                                                                 |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `value`                     | Value returned by the `app` resource's `init()`                                                                                                                                                                                                             |
+| `runTask(...)`              | Run a task by reference or string id                                                                                                                                                                                                                        |
+| `emitEvent(...)`            | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`)                                                                                                                                                                  |
+| `getResourceValue(...)`     | Read a resource's value                                                                                                                                                                                                                                     |
+| `getLazyResourceValue(...)` | Initialize/read a resource on demand. Available only when `run(..., { lazy: true })` is enabled.                                                                                                                                                            |
+| `getResourceConfig(...)`    | Read a resource's resolved config                                                                                                                                                                                                                           |
+| `getRootId()`               | Read the root resource id                                                                                                                                                                                                                                   |
+| `getRootConfig()`           | Read the root resource config                                                                                                                                                                                                                               |
+| `getRootValue()`            | Read the initialized root resource value                                                                                                                                                                                                                    |
+| `logger`                    | Logger instance                                                                                                                                                                                                                                             |
+| `store`                     | Runtime store with registered resources, tasks, middleware, events, and introspection helpers (for example, `getAllThrows(task \| resource)`)                                                                                                               |
 | `dispose()`                 | Emits `globals.events.disposing` (awaited), enters shutdown lockdown, drains in-flight task/event work (up to `shutdownGracePeriodMs`), emits `globals.events.drained` when drain finishes in time (awaited), then disposes resources and unhooks listeners |
 
 Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.
@@ -2728,19 +2722,19 @@ Important bootstrap note: when `runtime` is injected inside a resource `init()`,
 
 Pass as the second argument to `run(app, options)`.
 
-| Option                       | Type                                            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ---------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug`                      | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                                                                                                                                                                                                                                                                                              |
-| `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                     |
-| `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                            |
-| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners for graceful shutdown. If a signal arrives during bootstrap, startup is cancelled and initialized resources are rolled back.                                                                                                                                                                                                                                                                                                           |
-| `shutdownGracePeriodMs`      | `number`                                        | (default: `30000`) During shutdown, Runner waits up to this duration for in-flight task/event work before resource disposal continues. If draining finishes in time, `globals.events.drained` is emitted; otherwise disposal continues after timeout.                                                                                                                                                                                                                                          |
-| `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                                                                                                                                                                                     |
-| `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                              |
+| Option                       | Type                                            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `debug`                      | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                                                                                                                                                                                                                                                                                                   |
+| `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                          |
+| `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                                 |
+| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners for graceful shutdown. If a signal arrives during bootstrap, startup is cancelled and initialized resources are rolled back.                                                                                                                                                                                                                                                                                                                   |
+| `shutdownGracePeriodMs`      | `number`                                        | (default: `30000`) During shutdown, Runner waits up to this duration for in-flight task/event work before resource disposal continues. If draining finishes in time, `globals.events.drained` is emitted; otherwise disposal continues after timeout.                                                                                                                                                                                                                                                  |
+| `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                                                                                                                                                                                          |
+| `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                                   |
 | `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `lifecycleMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred. |
-| `lifecycleMode`              | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup/disposal scheduling strategy. Use string values directly (for example `lifecycleMode: "parallel"`), no enum import required. `initMode` is kept as a deprecated alias for backward compatibility.                                                                                                                                                                                                                                                     |
-| `runtimeEventCycleDetection` | `boolean`                                       | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                                                                                                                                                                                                                                                                                      |
-| `mode`                       | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `lifecycleMode`              | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup/disposal scheduling strategy. Use string values directly (for example `lifecycleMode: "parallel"`), no enum import required. `initMode` is kept as a deprecated alias for backward compatibility.                                                                                                                                                                                                                                                           |
+| `runtimeEventCycleDetection` | `boolean`                                       | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                                                                                                                                                                                                                                                                                           |
+| `mode`                       | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).
 
@@ -2906,7 +2900,7 @@ When a signal arrives, Runner:
 1. Emits `globals.events.shutdown` (awaited) for signal-origin teardown hooks
 2. Emits `globals.events.disposing` (awaited)
 3. Enters shutdown lockdown (no new `runTask`/`emitEvent` admissions)
-4. Waits for in-flight task/event work up to `shutdownGracePeriodMs` (default 30s)
+4. Waits for in-flight task/event listeners work up to `shutdownGracePeriodMs` (default 30s)
 5. Emits `globals.events.drained` if draining completed in time (awaited)
 6. Disposes resources in reverse dependency order
 
@@ -4543,6 +4537,59 @@ When multiple middleware need to exchange execution-local state without pollutin
 - Forward journal explicitly in nested task calls when you need shared trace/state continuity
 
 For the full API and patterns, see the Execution Journal section in [Core Concepts](#execution-journal).
+
+---
+
+## Execution Interception APIs
+
+Use interception when behavior must wrap execution globally or at runtime wiring boundaries.
+
+Available APIs:
+
+- Task catch-all: `taskRunner.intercept((next, input) => Promise<any>, { when? })`
+- Task middleware layer: `middlewareManager.intercept("task", (next, input) => Promise<any>)`
+- Resource middleware layer: `middlewareManager.intercept("resource", (next, input) => Promise<any>)`
+- Per-middleware: `middlewareManager.interceptMiddleware(middleware, interceptor)`
+- Event emission: `eventManager.intercept((next, event) => Promise<void>)`
+- Hook execution: `eventManager.interceptHook((next, hook, event) => Promise<any>)`
+- Local task interception: `deps.someTask.intercept((next, input) => Promise<any>)`
+
+`taskRunner.intercept(...)` is the replacement for old middleware catch-all behavior:
+
+```typescript
+import { globals, r } from "@bluelibs/runner";
+
+const telemetryInstaller = r
+  .resource("app.telemetry")
+  .dependencies({
+    taskRunner: globals.resources.taskRunner,
+    logger: globals.resources.logger,
+  })
+  .init(async (_config, { taskRunner, logger }) => {
+    taskRunner.intercept(
+      async (next, input) => {
+        const startedAt = Date.now();
+        try {
+          return await next(input);
+        } finally {
+          await logger.info(
+            `Task ${input.task.definition.id} took ${Date.now() - startedAt}ms`,
+          );
+        }
+      },
+      {
+        when: (taskDefinition) => !taskDefinition.id.startsWith("internal."),
+      },
+    );
+  })
+  .build();
+```
+
+Notes:
+
+- Register interceptors during resource `init` before the runtime locks.
+- `taskRunner.intercept(...)` runs outermost around the task middleware pipeline.
+- `deps.someTask.intercept(...)` runs inside task middleware and only for that task.
 
 ---
 
@@ -7401,12 +7448,12 @@ const auditHook = r
 
 **Plugin patterns:**
 
-1. **Global middleware** — register built middleware with `.applyTo("where-visible")` for cross-cutting concerns
+1. **Subtree middleware** — attach middleware via `.subtree({ tasks/resources: { middleware: [...] } })` for scoped cross-cutting concerns
 2. **Tag-based behavior** — use tags for declarative configuration
 3. **Resource wrappers** — compose resources for reusable patterns
 4. **Event interception** — use `eventManager.intercept()` for audit/logging
 
-> **Note:** `.applyTo("where-visible")` is visibility-gated (it does not bypass isolate `exports` or `.isolate()`).
+> **Note:** For catch-all task behavior across the runtime, use `taskRunner.intercept(...)`.
 
 **Creating reusable modules:**
 
@@ -7710,10 +7757,15 @@ const tracingMiddleware = r.middleware
   })
   .build();
 
-const tracingMiddlewareRegistration = tracingMiddleware.applyTo(
-  "where-visible",
-  () => true,
-); // Apply to all visible tasks
+const tracingInstaller = r
+  .resource("app.tracing")
+  .register([tracingMiddleware])
+  .subtree({
+    tasks: {
+      middleware: [tracingMiddleware],
+    },
+  })
+  .build(); // Apply to this subtree
 
 // OpenTelemetry setup (separate file: instrumentation.ts)
 import { NodeSDK } from "@opentelemetry/sdk-node";
@@ -8305,12 +8357,24 @@ Quick rules:
 - `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
 - The same selector semantics apply to `isolate({ deny: [...] })` and `isolate({ only: [...] })`
 - Tag definition vs string id is intentional in `deny`/`only`: `deny: [someTag]` blocks tag carriers, while `deny: [someTag.id]` blocks only the exact id
-- Use `isolate({ deny: [globals.tags.containerInternals] })` to block privileged container resources (`globals.resources.store`, `globals.resources.taskRunner`, `globals.resources.runtime`) inside a boundary
+- Use `isolate({ deny: [globals.tags.containerInternals] })` to block privileged container resources (`globals.resources.store`, `globals.resources.taskRunner`, `globals.resources.middlewareManager`, `globals.resources.runtime`) inside a boundary
 - Visibility is enforced at `run(app)` bootstrap
 - Wiring checks include dependencies, hook event subscriptions, and middleware attachments (task + resource middleware)
-- Middleware registrations created via `.applyTo("where-visible")` are auto-applied only to visible targets (respects isolate `exports` and `.isolate()`)
-- Middleware registrations created via `.applyTo("subtree")` are auto-applied to the declaring resource and everything in its registration subtree
+- Subtree middleware (`resource.subtree({ tasks/resources: { middleware: [...] } })`) applies to the declaring resource subtree only
+- Subtree validators are return-based: `validate(definition)` must return `SubtreeViolation[]` (do not throw for normal policy failures)
+- Runner aggregates subtree validation violations and throws a single `subtreeValidationFailedError` at bootstrap
+- If a subtree validator throws or returns a non-array, Runner records an `invalid-definition` violation and still throws the aggregated subtree error
+- For catch-all task interception, use `taskRunner.intercept(...)` from resource dependencies
 - Duplicate ids still fail globally, even for private items
+
+`SubtreeViolation` shape:
+
+```typescript
+type SubtreeViolation = {
+  code: string;
+  message: string;
+};
+```
 
 ### Event Emission Options
 

@@ -74,9 +74,7 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
 
     const store: any = {
       tasks: new Map(),
-      taskMiddlewares: new Map([
-        [middleware.id, { middleware, applyTo: { scope: "subtree" as const } }],
-      ]),
+      taskMiddlewares: new Map([[middleware.id, { middleware }]]),
       resourceMiddlewares: new Map(),
       getOwnerResourceId: () => undefined,
       isItemWithinResourceSubtree: () => false,
@@ -87,5 +85,51 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
     const task = { id: "tests.task.target", middleware: [] } as any;
 
     expect(resolver.getEverywhereTaskMiddlewares(task)).toEqual([]);
+  });
+
+  test("resolves owner from visibilityTracker fallback when store helper is absent", () => {
+    const middleware = {
+      id: "tests.middleware.subtree.visibility-fallback",
+      run: async ({ next }: any) => next(),
+    };
+
+    const ownerResource = {
+      id: "tests.middleware.subtree.visibility-fallback.owner",
+      middleware: [],
+      subtree: {
+        tasks: {
+          middleware: [middleware],
+          validate: [],
+        },
+      },
+    };
+
+    const store: any = {
+      tasks: new Map([
+        [
+          "tests.task.target.visibility-fallback",
+          {
+            task: {
+              id: "tests.task.target.visibility-fallback",
+              middleware: [],
+            },
+          },
+        ],
+      ]),
+      taskMiddlewares: new Map([[middleware.id, { middleware }]]),
+      resourceMiddlewares: new Map(),
+      resources: new Map([[ownerResource.id, { resource: ownerResource }]]),
+      visibilityTracker: {
+        getOwnerResourceId: () => ownerResource.id,
+      },
+    };
+
+    const resolver = new MiddlewareResolver(store);
+    const task = {
+      id: "tests.task.target.visibility-fallback",
+      middleware: [],
+    } as any;
+
+    expect(resolver.getEverywhereTaskMiddlewares(task)).toEqual([middleware]);
   });
 });

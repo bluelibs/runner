@@ -22,6 +22,7 @@ import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 import { resolveForkedRegisterAndDependencies } from "./resourceFork";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import { normalizeResourceSubtreePolicy } from "./subtreePolicy";
 
 export function defineResource<
   TConfig = void,
@@ -95,6 +96,8 @@ export function defineResource<
     return Array.isArray(cfg) ? [...cfg] : constConfig.exports;
   })();
 
+  const subtree = normalizeResourceSubtreePolicy(constConfig.subtree);
+
   const base = {
     [symbolResource]: true,
     [symbolFilePath]: filePath,
@@ -113,6 +116,7 @@ export function defineResource<
     middleware: constConfig.middleware ?? [],
     exports,
     isolate,
+    subtree,
   } as IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>;
 
   const resolveCurrent = (
@@ -171,6 +175,7 @@ export function defineResource<
     dispose: current.dispose,
     meta: current.meta,
     isolate: current.isolate,
+    subtree: current.subtree,
   });
 
   base.with = function (config: TConfig) {

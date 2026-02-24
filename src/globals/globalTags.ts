@@ -32,7 +32,7 @@ const globalTagsBase = {
     meta: {
       title: "Container Internals",
       description:
-        "Marks privileged container resources (store, taskRunner, runtime) so isolation boundaries can deny access by tag.",
+        "Marks privileged container resources (store, taskRunner, middlewareManager, runtime) so isolation boundaries can deny access by tag.",
     },
   }),
   debug: debugTag,

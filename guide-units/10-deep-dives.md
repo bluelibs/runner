@@ -343,12 +343,12 @@ const auditHook = r
 
 **Plugin patterns:**
 
-1. **Global middleware** — register built middleware with `.applyTo("where-visible")` for cross-cutting concerns
+1. **Subtree middleware** — attach middleware via `.subtree({ tasks/resources: { middleware: [...] } })` for scoped cross-cutting concerns
 2. **Tag-based behavior** — use tags for declarative configuration
 3. **Resource wrappers** — compose resources for reusable patterns
 4. **Event interception** — use `eventManager.intercept()` for audit/logging
 
-> **Note:** `.applyTo("where-visible")` is visibility-gated (it does not bypass isolate `exports` or `.isolate()`).
+> **Note:** For catch-all task behavior across the runtime, use `taskRunner.intercept(...)`.
 
 **Creating reusable modules:**
 
@@ -652,10 +652,15 @@ const tracingMiddleware = r.middleware
   })
   .build();
 
-const tracingMiddlewareRegistration = tracingMiddleware.applyTo(
-  "where-visible",
-  () => true,
-); // Apply to all visible tasks
+const tracingInstaller = r
+  .resource("app.tracing")
+  .register([tracingMiddleware])
+  .subtree({
+    tasks: {
+      middleware: [tracingMiddleware],
+    },
+  })
+  .build(); // Apply to this subtree
 
 // OpenTelemetry setup (separate file: instrumentation.ts)
 import { NodeSDK } from "@opentelemetry/sdk-node";

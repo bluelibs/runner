@@ -11,7 +11,9 @@ import type {
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
+  ResourceSubtreePolicy,
   ResourceTagType,
+  SubtreePolicyOptions,
   TagType,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
@@ -273,6 +275,19 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  subtree(
+    policy: ResourceSubtreePolicy,
+    options?: SubtreePolicyOptions,
+  ): ResourceFluentBuilderBeforeInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+
   overrides(
     o: Array<OverridableElements>,
     options?: { override?: boolean },
@@ -390,6 +405,18 @@ export interface ResourceFluentBuilderAfterInit<
   isolate(
     policy: IsolationPolicy,
     options?: { override?: boolean },
+  ): ResourceFluentBuilderAfterInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  subtree(
+    policy: ResourceSubtreePolicy,
+    options?: SubtreePolicyOptions,
   ): ResourceFluentBuilderAfterInit<
     TConfig,
     TValue,

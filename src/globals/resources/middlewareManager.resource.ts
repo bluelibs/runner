@@ -11,5 +11,5 @@ export const middlewareManagerResource = defineResource<
     title: "Middleware Manager",
     description: "Manages all middleware and middleware interceptors.",
   },
-  tags: [globalTags.system],
+  tags: [globalTags.system, globalTags.containerInternals],
 });

@@ -2,7 +2,10 @@ import type { StoreRegistry } from "../StoreRegistry";
 import type { IDependentNode } from "./findCircularDependencies";
 import type { IEvent } from "../../defs";
 import { isOptional, isEvent, isTag, isTagStartup } from "../../define";
-import { isMiddlewareAutoAppliedToTarget } from "../../tools/middlewareAutoApply";
+import {
+  resolveApplicableSubtreeResourceMiddlewares,
+  resolveApplicableSubtreeTaskMiddlewares,
+} from "../../tools/subtreeMiddleware";
 
 const readStringId = (value: unknown): string | undefined => {
   if (!value || typeof value !== "object") {
@@ -26,19 +29,6 @@ const getTagDependencyId = (dependency: unknown): string | undefined => {
 
   return tagValue.id;
 };
-
-function isInSubtreeScope(
-  registry: StoreRegistry,
-  middlewareId: string,
-  targetId: string,
-): boolean {
-  const ownerId = registry.visibilityTracker.getOwnerResourceId(middlewareId);
-  if (!ownerId) {
-    return false;
-  }
-
-  return registry.visibilityTracker.isWithinResourceSubtree(ownerId, targetId);
-}
 
 function resolveTagDependencyNodes(
   registry: StoreRegistry,
@@ -194,6 +184,13 @@ export function buildDependencyGraph(
   setupBlankNodes(registry, nodeMap, dependents);
 
   // Now, populate dependencies with references to actual nodes
+  const subtreeLookup = {
+    getOwnerResourceId: (itemId: string) =>
+      registry.visibilityTracker.getOwnerResourceId(itemId),
+    getResource: (resourceId: string) =>
+      registry.resources.get(resourceId)?.resource,
+  };
+
   for (const task of registry.tasks.values()) {
     const node = nodeMap.get(task.task.id)!;
 
@@ -212,34 +209,36 @@ export function buildDependencyGraph(
         node.dependencies[middleware.id] = middlewareNode;
       }
     }
+
+    const localMiddlewareIds = new Set(
+      t.middleware.map((middleware) => middleware.id),
+    );
+    for (const middleware of resolveApplicableSubtreeTaskMiddlewares(
+      subtreeLookup,
+      t,
+    )) {
+      if (localMiddlewareIds.has(middleware.id)) {
+        continue;
+      }
+
+      const middlewareNode = nodeMap.get(middleware.id);
+      if (!middlewareNode) {
+        continue;
+      }
+
+      node.dependencies[`__subtree.middleware.${middleware.id}`] =
+        middlewareNode;
+    }
   }
 
   // Populate task middleware dependencies
   for (const storeTaskMiddleware of registry.taskMiddlewares.values()) {
     const node = nodeMap.get(storeTaskMiddleware.middleware.id)!;
-    const { middleware, applyTo } = storeTaskMiddleware;
+    const { middleware } = storeTaskMiddleware;
 
     if (middleware.dependencies) {
       for (const [depKey, depItem] of Object.entries(middleware.dependencies)) {
         attachDependency(node, depKey, depItem, registry, nodeMap);
-      }
-    }
-
-    for (const task of registry.tasks.values()) {
-      if (
-        isMiddlewareAutoAppliedToTarget(
-          { id: middleware.id, applyTo },
-          task.task,
-          {
-            isVisibleToTarget: (middlewareId, targetId) =>
-              registry.visibilityTracker.isAccessible(middlewareId, targetId),
-            isInSubtreeScope: (middlewareId, targetId) =>
-              isInSubtreeScope(registry, middlewareId, targetId),
-          },
-        )
-      ) {
-        const taskNode = nodeMap.get(task.task.id)!;
-        taskNode.dependencies[`__middleware.${middleware.id}`] = node;
       }
     }
   }
@@ -247,28 +246,10 @@ export function buildDependencyGraph(
   // Populate resource middleware dependencies
   for (const storeResourceMiddleware of registry.resourceMiddlewares.values()) {
     const node = nodeMap.get(storeResourceMiddleware.middleware.id)!;
-    const { middleware, applyTo } = storeResourceMiddleware;
+    const { middleware } = storeResourceMiddleware;
     if (middleware.dependencies) {
       for (const [depKey, depItem] of Object.entries(middleware.dependencies)) {
         attachDependency(node, depKey, depItem, registry, nodeMap);
-      }
-    }
-
-    for (const resource of registry.resources.values()) {
-      if (
-        isMiddlewareAutoAppliedToTarget(
-          { id: middleware.id, applyTo },
-          resource.resource,
-          {
-            isVisibleToTarget: (middlewareId, targetId) =>
-              registry.visibilityTracker.isAccessible(middlewareId, targetId),
-            isInSubtreeScope: (middlewareId, targetId) =>
-              isInSubtreeScope(registry, middlewareId, targetId),
-          },
-        )
-      ) {
-        const resourceNode = nodeMap.get(resource.resource.id)!;
-        resourceNode.dependencies[`__middleware.${middleware.id}`] = node;
       }
     }
   }
@@ -292,6 +273,26 @@ export function buildDependencyGraph(
       if (middlewareNode) {
         node.dependencies[middleware.id] = middlewareNode;
       }
+    }
+
+    const localMiddlewareIds = new Set(
+      resource.resource.middleware.map((middleware) => middleware.id),
+    );
+    for (const middleware of resolveApplicableSubtreeResourceMiddlewares(
+      subtreeLookup,
+      resource.resource,
+    )) {
+      if (localMiddlewareIds.has(middleware.id)) {
+        continue;
+      }
+
+      const middlewareNode = nodeMap.get(middleware.id);
+      if (!middlewareNode) {
+        continue;
+      }
+
+      node.dependencies[`__subtree.middleware.${middleware.id}`] =
+        middlewareNode;
     }
   }
 

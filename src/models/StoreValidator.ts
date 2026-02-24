@@ -7,6 +7,7 @@ import {
   duplicateTagIdOnDefinitionError,
   duplicateRegistrationError,
   middlewareNotRegisteredError,
+  subtreeValidationFailedError,
   tagSelfDependencyError,
   tagNotFoundError,
 } from "../errors";
@@ -15,6 +16,9 @@ import type {
   IsolationExportsTarget,
   IsolationPolicy,
   IsolationTarget,
+  SubtreePolicyViolationRecord,
+  SubtreeValidationTargetType,
+  SubtreeViolation,
 } from "../defs";
 import {
   isOptional,
@@ -109,6 +113,7 @@ export class StoreValidator {
       });
     }
 
+    this.ensureSubtreePoliciesAreValid();
     this.ensureTagIdsAreUniquePerDefinition();
     this.ensureAllTagsUsedAreRegistered();
     this.ensureNoSelfTagDependencies();
@@ -116,6 +121,222 @@ export class StoreValidator {
 
     // Validate module boundary visibility after all items are registered
     this.registry.visibilityTracker.validateVisibility(this.registry);
+  }
+
+  private ensureSubtreePoliciesAreValid() {
+    const violations: SubtreePolicyViolationRecord[] = [];
+
+    for (const {
+      resource: ownerResource,
+    } of this.registry.resources.values()) {
+      const ownerResourceId = ownerResource.id;
+      const subtreePolicy = ownerResource.subtree;
+      if (!subtreePolicy) {
+        continue;
+      }
+
+      for (const middleware of subtreePolicy.tasks?.middleware ?? []) {
+        if (!this.registry.taskMiddlewares.has(middleware.id)) {
+          middlewareNotRegisteredError.throw({
+            type: "task",
+            source: ownerResourceId,
+            middlewareId: middleware.id,
+          });
+        }
+      }
+
+      for (const middleware of subtreePolicy.resources?.middleware ?? []) {
+        if (!this.registry.resourceMiddlewares.has(middleware.id)) {
+          middlewareNotRegisteredError.throw({
+            type: "resource",
+            source: ownerResourceId,
+            middlewareId: middleware.id,
+          });
+        }
+      }
+
+      this.collectSubtreeValidationViolations(
+        {
+          ownerResourceId,
+          validators: subtreePolicy.tasks?.validate ?? [],
+          targetType: "task",
+          entries: Array.from(this.registry.tasks.values()),
+          getDefinition: (entry) => entry.task,
+        },
+        violations,
+      );
+
+      this.collectSubtreeValidationViolations(
+        {
+          ownerResourceId,
+          validators: subtreePolicy.resources?.validate ?? [],
+          targetType: "resource",
+          entries: Array.from(this.registry.resources.values()),
+          getDefinition: (entry) => entry.resource,
+        },
+        violations,
+      );
+
+      this.collectSubtreeValidationViolations(
+        {
+          ownerResourceId,
+          validators: subtreePolicy.hooks?.validate ?? [],
+          targetType: "hook",
+          entries: Array.from(this.registry.hooks.values()),
+          getDefinition: (entry) => entry.hook,
+        },
+        violations,
+      );
+
+      this.collectSubtreeValidationViolations(
+        {
+          ownerResourceId,
+          validators: subtreePolicy.taskMiddleware?.validate ?? [],
+          targetType: "task-middleware",
+          entries: Array.from(this.registry.taskMiddlewares.values()),
+          getDefinition: (entry) => entry.middleware,
+        },
+        violations,
+      );
+
+      this.collectSubtreeValidationViolations(
+        {
+          ownerResourceId,
+          validators: subtreePolicy.resourceMiddleware?.validate ?? [],
+          targetType: "resource-middleware",
+          entries: Array.from(this.registry.resourceMiddlewares.values()),
+          getDefinition: (entry) => entry.middleware,
+        },
+        violations,
+      );
+
+      this.collectSubtreeValidationViolations(
+        {
+          ownerResourceId,
+          validators: subtreePolicy.events?.validate ?? [],
+          targetType: "event",
+          entries: Array.from(this.registry.events.values()),
+          getDefinition: (entry) => entry.event,
+        },
+        violations,
+      );
+
+      this.collectSubtreeValidationViolations(
+        {
+          ownerResourceId,
+          validators: subtreePolicy.tags?.validate ?? [],
+          targetType: "tag",
+          entries: Array.from(this.registry.tags.values()),
+          getDefinition: (entry) => entry,
+        },
+        violations,
+      );
+    }
+
+    if (violations.length === 0) {
+      return;
+    }
+
+    subtreeValidationFailedError.throw({
+      violations: violations.map((entry) => ({
+        ownerResourceId: entry.ownerResourceId,
+        targetType: entry.targetType,
+        targetId: entry.targetId,
+        code: entry.violation.code,
+        message: entry.violation.message,
+      })),
+    });
+  }
+
+  private collectSubtreeValidationViolations<TEntry, TDefinition>(
+    input: {
+      ownerResourceId: string;
+      validators: Array<(definition: TDefinition) => SubtreeViolation[]>;
+      targetType: SubtreeValidationTargetType;
+      entries: Array<TEntry>;
+      getDefinition: (entry: TEntry) => TDefinition;
+    },
+    violations: SubtreePolicyViolationRecord[],
+  ): void {
+    if (input.validators.length === 0) {
+      return;
+    }
+
+    for (const entry of input.entries) {
+      const definition = input.getDefinition(entry);
+      const targetId = (definition as { id: string }).id;
+
+      if (
+        !this.registry.visibilityTracker.isWithinResourceSubtree(
+          input.ownerResourceId,
+          targetId,
+        )
+      ) {
+        continue;
+      }
+
+      for (const validate of input.validators) {
+        const validated = this.executeSubtreeValidator({
+          ownerResourceId: input.ownerResourceId,
+          targetType: input.targetType,
+          targetId,
+          run: () => validate(definition),
+        });
+        violations.push(...validated);
+      }
+    }
+  }
+
+  private executeSubtreeValidator(input: {
+    ownerResourceId: string;
+    targetType: SubtreeValidationTargetType;
+    targetId: string;
+    run: () => SubtreeViolation[];
+  }): SubtreePolicyViolationRecord[] {
+    try {
+      const violations = input.run();
+      if (!Array.isArray(violations)) {
+        return [
+          this.createInvalidSubtreeViolation(
+            input,
+            "Validator must return an array.",
+          ),
+        ];
+      }
+
+      return violations.map((violation) => ({
+        ownerResourceId: input.ownerResourceId,
+        targetType: input.targetType,
+        targetId: input.targetId,
+        violation,
+      }));
+    } catch (error) {
+      return [
+        this.createInvalidSubtreeViolation(
+          input,
+          error instanceof Error ? error.message : String(error),
+        ),
+      ];
+    }
+  }
+
+  private createInvalidSubtreeViolation(
+    input: {
+      ownerResourceId: string;
+      targetType: SubtreeValidationTargetType;
+      targetId: string;
+    },
+    message: string,
+  ): SubtreePolicyViolationRecord {
+    return {
+      ownerResourceId: input.ownerResourceId,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      violation: {
+        code: "invalid-definition",
+        message,
+      },
+    };
   }
 
   private ensureTagIdsAreUniquePerDefinition() {

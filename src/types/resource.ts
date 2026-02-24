@@ -26,6 +26,10 @@ import {
   HasOutputContracts,
   InferInputOrViolationFromContracts,
 } from "./contracts";
+import type {
+  NormalizedResourceSubtreePolicy,
+  ResourceSubtreePolicy,
+} from "./subtree";
 
 export type {
   DependencyMapType,
@@ -38,6 +42,18 @@ export type {
 export type { ResourceMiddlewareAttachmentType } from "./resourceMiddleware";
 export type { ResourceTagType, TagType } from "./tag";
 export type { IResourceMeta } from "./meta";
+export type {
+  ResourceSubtreePolicy,
+  SubtreeEventValidator,
+  SubtreeHookValidator,
+  SubtreePolicyOptions,
+  SubtreeResourceMiddlewareValidator,
+  SubtreeResourceValidator,
+  SubtreeTagValidator,
+  SubtreeTaskMiddlewareValidator,
+  SubtreeTaskValidator,
+  SubtreeViolation,
+} from "./subtree";
 
 export type ResourceForkRegisterMode = "keep" | "drop" | "deep";
 
@@ -213,6 +229,10 @@ export interface IResourceDefinition<
    * This is the reason we allow it here as well.
    */
   [symbolFilePath]?: string;
+  /**
+   * Declares subtree policies for tasks/resources registered under this resource.
+   */
+  subtree?: ResourceSubtreePolicy;
   tags?: TTags;
 }
 
@@ -300,6 +320,10 @@ export interface IResource<
    * Wiring isolation policy for this resource and its subtree.
    */
   isolate?: IsolationPolicy;
+  /**
+   * Normalized subtree policy declarations owned by this resource.
+   */
+  subtree?: NormalizedResourceSubtreePolicy;
   /** Return an optional dependency wrapper for this resource. */
   optional: () => IOptionalDependency<
     IResource<

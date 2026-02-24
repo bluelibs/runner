@@ -11,7 +11,10 @@ import type {
   TunnelMiddlewareId,
   TunnelTaskMiddlewarePolicyConfig,
 } from "../../globals/resources/tunnel/tunnel.policy.tag";
-import { isMiddlewareAutoAppliedToTarget } from "../../tools/middlewareAutoApply";
+import {
+  resolveApplicableSubtreeResourceMiddlewares,
+  resolveApplicableSubtreeTaskMiddlewares,
+} from "../../tools/subtreeMiddleware";
 
 /**
  * Resolves which middlewares should be applied to tasks and resources.
@@ -20,13 +23,40 @@ import { isMiddlewareAutoAppliedToTarget } from "../../tools/middlewareAutoApply
 export class MiddlewareResolver {
   constructor(private readonly store: Store) {}
 
-  private isInSubtreeScope(middlewareId: string, targetId: string): boolean {
-    const ownerId = this.store.getOwnerResourceId(middlewareId);
-    if (!ownerId) {
-      return false;
+  private getOwnerResourceId(itemId: string): string | undefined {
+    if (typeof this.store.getOwnerResourceId === "function") {
+      return this.store.getOwnerResourceId(itemId);
     }
 
-    return this.store.isItemWithinResourceSubtree(ownerId, targetId);
+    const visibilityTracker = (
+      this.store as unknown as {
+        visibilityTracker?: {
+          getOwnerResourceId?: (targetId: string) => string | undefined;
+        };
+      }
+    ).visibilityTracker;
+
+    if (typeof visibilityTracker?.getOwnerResourceId === "function") {
+      return visibilityTracker.getOwnerResourceId(itemId);
+    }
+
+    return undefined;
+  }
+
+  private getResource(
+    resourceId: string,
+  ): IResource<any, any, any, any> | undefined {
+    const resourcesMap = (
+      this.store as unknown as {
+        resources?: Map<string, { resource?: IResource<any, any, any, any> }>;
+      }
+    ).resources;
+
+    if (!resourcesMap || typeof resourcesMap.get !== "function") {
+      return undefined;
+    }
+
+    return resourcesMap.get(resourceId)?.resource;
   }
 
   /**
@@ -112,20 +142,13 @@ export class MiddlewareResolver {
   public getEverywhereTaskMiddlewares(
     task: ITask<any, any, any>,
   ): ITaskMiddleware[] {
-    return Array.from(this.store.taskMiddlewares.values())
-      .filter((x) => {
-        return isMiddlewareAutoAppliedToTarget(
-          { id: x.middleware.id, applyTo: x.applyTo },
-          task,
-          {
-            isVisibleToTarget: (middlewareId, targetId) =>
-              this.store.isItemVisibleToConsumer(middlewareId, targetId),
-            isInSubtreeScope: (middlewareId, targetId) =>
-              this.isInSubtreeScope(middlewareId, targetId),
-          },
-        );
-      })
-      .map((x) => x.middleware);
+    return resolveApplicableSubtreeTaskMiddlewares(
+      {
+        getOwnerResourceId: (itemId) => this.getOwnerResourceId(itemId),
+        getResource: (resourceId) => this.getResource(resourceId),
+      },
+      task,
+    );
   }
 
   /**
@@ -135,20 +158,13 @@ export class MiddlewareResolver {
   public getEverywhereResourceMiddlewares(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
-    return Array.from(this.store.resourceMiddlewares.values())
-      .filter((x) => {
-        return isMiddlewareAutoAppliedToTarget(
-          { id: x.middleware.id, applyTo: x.applyTo },
-          resource,
-          {
-            isVisibleToTarget: (middlewareId, targetId) =>
-              this.store.isItemVisibleToConsumer(middlewareId, targetId),
-            isInSubtreeScope: (middlewareId, targetId) =>
-              this.isInSubtreeScope(middlewareId, targetId),
-          },
-        );
-      })
-      .map((x) => x.middleware);
+    return resolveApplicableSubtreeResourceMiddlewares(
+      {
+        getOwnerResourceId: (itemId) => this.getOwnerResourceId(itemId),
+        getResource: (resourceId) => this.getResource(resourceId),
+      },
+      resource,
+    );
   }
 }
 

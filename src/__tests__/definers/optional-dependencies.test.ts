@@ -135,7 +135,7 @@ describe("Optional dependencies", () => {
     expect(value).toBe("ok");
   });
 
-  test("global middleware exclusion detects optional-wrapped dependency on target task", async () => {
+  test("fails fast when subtree middleware depends on an optional-wrapped target task", async () => {
     const target = task({
       id: "tests.optional.middleware.target",
       async run() {
@@ -148,32 +148,25 @@ describe("Optional dependencies", () => {
       dependencies: {
         target: target.optional(),
       },
-      async run({ next }) {
+      async run({ task, next }) {
+        if (task?.definition.id === target.id) {
+          return next();
+        }
         return next();
       },
     });
 
     const app = resource({
       id: "tests.optional.middleware.app",
-      register: [
-        target,
-        mw.applyTo("where-visible", (task) => task.id !== target.id),
-      ],
-      async init() {
-        // Running the task should not apply the middleware because it depends on the same task
-        const harness = resource({
-          id: "tests.optional.middleware.harness",
-          register: [target],
-        });
-        const rr = await run(harness);
-        const out = await rr.runTask(target);
-        expect(out).toBe("x");
-        return "ready" as const;
+      subtree: {
+        tasks: {
+          middleware: [mw],
+        },
       },
+      register: [target, mw],
     });
 
-    const { value } = await run(app);
-    expect(value).toBe("ready");
+    await expect(run(app)).rejects.toThrow(/Circular dependencies detected/);
   });
 
   test("event.optional() missing should resolve to undefined", async () => {
@@ -319,18 +312,19 @@ describe("Optional dependencies", () => {
       run: async (input: string) => input,
     });
 
+    const scopedTasksResource = defineResource({
+      id: "app.scoped.tasks",
+      subtree: {
+        tasks: {
+          middleware: [mw],
+        },
+      },
+      register: [middlewarableTask],
+    });
+
     const app = defineResource({
       id: "app",
-      register: [
-        mw.applyTo(
-          "where-visible",
-          (task) =>
-            ![registeredTask, nonRegisteredTask].some((t) => t.id === task.id),
-        ),
-        registeredTask,
-        registeredResource,
-        middlewarableTask,
-      ],
+      register: [mw, registeredTask, registeredResource, scopedTasksResource],
     });
 
     const r = await run(app);
@@ -366,6 +360,14 @@ describe("Optional dependencies", () => {
         nonRegisteredTask: nonRegisteredTask.optional(),
       },
       run: async ({ next, resource: _resource }, deps) => {
+        if (
+          [registeredResource, nonRegisteredResource].some(
+            (resourceDefinition) =>
+              resourceDefinition.id === _resource.definition.id,
+          )
+        ) {
+          return next();
+        }
         expect(deps.registeredResource).toBeDefined();
         expect(deps.registeredTask).toBeDefined();
         expect(deps.nonRegisteredResource).toBeUndefined();
@@ -379,19 +381,23 @@ describe("Optional dependencies", () => {
       init: async () => "Hello",
     });
 
+    const scopedResourcesResource = defineResource({
+      id: "app.scoped.resources",
+      subtree: {
+        resources: {
+          middleware: [mw],
+        },
+      },
+      register: [middlewarableResource],
+    });
+
     const app = defineResource({
       id: "app",
       register: [
-        mw.applyTo(
-          "where-visible",
-          (resource) =>
-            ![registeredResource, nonRegisteredResource].some(
-              (r) => r.id === resource.id,
-            ),
-        ),
+        mw,
         registeredTask,
         registeredResource,
-        middlewarableResource,
+        scopedResourcesResource,
       ],
     });
 

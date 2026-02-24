@@ -20,5 +20,10 @@ describe("globals.tags.containerInternals", () => {
     expect(
       globalResources.runtime.tags.some((tag) => tag.id === expectedTagId),
     ).toBe(true);
+    expect(
+      globalResources.middlewareManager.tags.some(
+        (tag) => tag.id === expectedTagId,
+      ),
+    ).toBe(true);
   });
 });

@@ -11,10 +11,6 @@ import { IResourceMiddleware } from "./resourceMiddleware";
 import { IEvent } from "./event";
 import { IEventDefinition } from "./event";
 import { TaskLocalInterceptor } from "./utilities";
-import type {
-  ResourceMiddlewareApplyTo,
-  TaskMiddlewareApplyTo,
-} from "./middlewareApplyTo";
 
 export enum HookDependencyState {
   Pending = "pending",
@@ -66,7 +62,6 @@ export type TaskMiddlewareStoreElementType<
   TDeps extends DependencyMapType = any,
 > = {
   middleware: ITaskMiddleware<any, any, any, TDeps>;
-  applyTo?: TaskMiddlewareApplyTo;
   computedDependencies: DependencyValuesType<TDeps>;
   isInitialized: boolean;
 };
@@ -75,7 +70,6 @@ export type ResourceMiddlewareStoreElementType<
   TDeps extends DependencyMapType = any,
 > = {
   middleware: IResourceMiddleware<any, any, any, TDeps>;
-  applyTo?: ResourceMiddlewareApplyTo;
   computedDependencies: DependencyValuesType<TDeps>;
   isInitialized: boolean;
 };

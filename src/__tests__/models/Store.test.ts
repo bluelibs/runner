@@ -32,6 +32,36 @@ describe("Store", () => {
     expect(store.getMiddlewareManager()).toBeInstanceOf(MiddlewareManager);
   });
 
+  it("should expose visibility helper methods", () => {
+    const rootResource = defineResource({
+      id: "store.visibility.helpers.root",
+      register: [
+        defineTask({
+          id: "store.visibility.helpers.task",
+          run: async () => "ok",
+        }),
+      ],
+      async init() {
+        return "ready";
+      },
+    });
+
+    store.initializeStore(rootResource, {}, runtimeResult);
+
+    expect(
+      store.isItemVisibleToConsumer(
+        "store.visibility.helpers.task",
+        "store.visibility.helpers.root",
+      ),
+    ).toBe(true);
+    expect(
+      store.isItemWithinResourceSubtree(
+        "store.visibility.helpers.root",
+        "store.visibility.helpers.root",
+      ),
+    ).toBe(true);
+  });
+
   it("should enter shutdown lockdown once and keep it idempotent", () => {
     const eventManager = (
       store as unknown as {
@@ -353,6 +383,19 @@ describe("Store", () => {
     store.storeGenericItem(testTask);
 
     expect(() => store.storeGenericItem(testTask)).toThrow(
+      /already registered/i,
+    );
+  });
+
+  it("should throw an error for duplicate resource middleware registration", () => {
+    const middleware = defineResourceMiddleware({
+      id: "duplicate.resource.middleware",
+      run: async ({ next }) => next(),
+    });
+
+    store.storeGenericItem(middleware);
+
+    expect(() => store.storeGenericItem(middleware)).toThrow(
       /already registered/i,
     );
   });

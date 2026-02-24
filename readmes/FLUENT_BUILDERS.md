@@ -252,8 +252,6 @@ const tmw = r.middleware
     return next(task.input);
   })
   .build();
-
-const tmwGlobalRegistration = tmw.applyTo("where-visible", () => true);
 ```
 
 Resource middleware:
@@ -267,11 +265,33 @@ const rmw = r.middleware
   .meta({ title: "ResourceWrapper" } as any)
   .run(async ({ next }) => next())
   .build();
-
-const rmwGlobalRegistration = rmw.applyTo("where-visible", () => true);
 ```
 
-Attach to resources or tasks via `.middleware([mw])`. For global auto-application, register `mw.applyTo(...)` in a parent resource.
+Attach to resources or tasks via `.middleware([mw])`.
+
+For owner-scoped auto-application and governance, use resource subtree policies:
+
+```ts
+const app = r
+  .resource("app")
+  .subtree({
+    tasks: { middleware: [tmw] },
+    resources: { middleware: [rmw] },
+    hooks: {
+      validate: (hook) =>
+        hook.meta?.title
+          ? []
+          : [{ code: "missing-meta-title", message: "Hook meta.title required" }],
+    },
+    taskMiddleware: { validate: (mw) => [] },
+    resourceMiddleware: { validate: (mw) => [] },
+    events: { validate: (event) => [] },
+    tags: { validate: (tag) => [] },
+  })
+  .build();
+```
+
+Use `taskRunner.intercept(interceptor, { when })` for cross-cutting catch-all task interception.
 
 Note on `.init()`:
 

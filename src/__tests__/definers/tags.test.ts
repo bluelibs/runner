@@ -217,12 +217,12 @@ describe("Configurable Tags", () => {
 
       const app = defineResource({
         id: "test.app",
-        register: [
-          fastTask,
-          slowTask,
-          performanceMiddleware.applyTo("where-visible"),
-          performanceTag,
-        ],
+        subtree: {
+          tasks: {
+            middleware: [performanceMiddleware],
+          },
+        },
+        register: [fastTask, slowTask, performanceMiddleware, performanceTag],
         dependencies: { fastTask, slowTask },
         init: async (_, { fastTask, slowTask }) => {
           await fastTask();

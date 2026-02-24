@@ -8,8 +8,6 @@ import {
   ITag,
   ITask,
   ITaskMiddleware,
-  ITaskMiddlewareRegistration,
-  IResourceMiddlewareRegistration,
   RegisterableItems,
   EventStoreElementType,
   HookStoreElementType,
@@ -21,11 +19,9 @@ import {
   symbolHook,
   symbolResource,
   symbolResourceMiddleware,
-  symbolResourceMiddlewareRegistration,
   symbolResourceWithConfig,
   symbolTag,
   symbolTask,
-  symbolTaskMiddlewareRegistration,
   symbolTaskMiddleware,
 } from "../../defs";
 import { unknownItemTypeError } from "../../errors";
@@ -64,8 +60,6 @@ enum RegisterableKind {
   AsyncContext = "asyncContext",
   TaskMiddleware = "taskMiddleware",
   ResourceMiddleware = "resourceMiddleware",
-  TaskMiddlewareRegistration = "taskMiddlewareRegistration",
-  ResourceMiddlewareRegistration = "resourceMiddlewareRegistration",
   ResourceWithConfig = "resourceWithConfig",
   Tag = "tag",
 }
@@ -113,12 +107,6 @@ function resolveRegisterableKind(
   if (hasSymbolBrand(item, symbolResourceMiddleware)) {
     return RegisterableKind.ResourceMiddleware;
   }
-  if (hasSymbolBrand(item, symbolTaskMiddlewareRegistration)) {
-    return RegisterableKind.TaskMiddlewareRegistration;
-  }
-  if (hasSymbolBrand(item, symbolResourceMiddlewareRegistration)) {
-    return RegisterableKind.ResourceMiddlewareRegistration;
-  }
   if (hasSymbolBrand(item, symbolResourceWithConfig)) {
     return RegisterableKind.ResourceWithConfig;
   }
@@ -164,16 +152,6 @@ export class StoreRegistryWriter {
         return;
       case RegisterableKind.ResourceMiddleware:
         this.storeResourceMiddleware<_C>(item as IResourceMiddleware<any>);
-        return;
-      case RegisterableKind.TaskMiddlewareRegistration:
-        this.storeTaskMiddlewareRegistration<_C>(
-          item as ITaskMiddlewareRegistration<any>,
-        );
-        return;
-      case RegisterableKind.ResourceMiddlewareRegistration:
-        this.storeResourceMiddlewareRegistration<_C>(
-          item as IResourceMiddlewareRegistration<any>,
-        );
         return;
       case RegisterableKind.ResourceWithConfig:
         this.storeResourceWithConfig<_C>(
@@ -242,7 +220,6 @@ export class StoreRegistryWriter {
   storeTaskMiddleware<_C>(
     item: ITaskMiddleware<any>,
     storingMode: StoringMode = "normal",
-    applyTo?: ITaskMiddlewareRegistration<any>["applyTo"],
   ) {
     storingMode === "normal" && this.validator.checkIfIDExists(item.id);
 
@@ -256,7 +233,6 @@ export class StoreRegistryWriter {
 
     this.collections.taskMiddlewares.set(middleware.id, {
       middleware,
-      applyTo,
       computedDependencies: {},
       isInitialized: false,
     });
@@ -270,21 +246,9 @@ export class StoreRegistryWriter {
     this.visibilityTracker.recordDefinitionTags(middleware.id, tags);
   }
 
-  storeTaskMiddlewareRegistration<_C>(
-    item: ITaskMiddlewareRegistration<any>,
-    storingMode: StoringMode = "normal",
-  ) {
-    return this.storeTaskMiddleware<_C>(
-      item.middleware,
-      storingMode,
-      item.applyTo,
-    );
-  }
-
   storeResourceMiddleware<_C>(
     item: IResourceMiddleware<any>,
     storingMode: StoringMode = "normal",
-    applyTo?: IResourceMiddlewareRegistration<any>["applyTo"],
   ) {
     storingMode === "normal" && this.validator.checkIfIDExists(item.id);
     const middleware = this.definitionPreparer.prepareFreshValue({
@@ -297,7 +261,6 @@ export class StoreRegistryWriter {
 
     this.collections.resourceMiddlewares.set(middleware.id, {
       middleware,
-      applyTo,
       computedDependencies: {},
       isInitialized: false,
     });
@@ -309,17 +272,6 @@ export class StoreRegistryWriter {
       tags,
     );
     this.visibilityTracker.recordDefinitionTags(middleware.id, tags);
-  }
-
-  storeResourceMiddlewareRegistration<_C>(
-    item: IResourceMiddlewareRegistration<any>,
-    storingMode: StoringMode = "normal",
-  ) {
-    return this.storeResourceMiddleware<_C>(
-      item.middleware,
-      storingMode,
-      item.applyTo,
-    );
   }
 
   storeEvent<_C>(item: IEvent<void>) {
