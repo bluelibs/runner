@@ -22,6 +22,19 @@ They are **not** designed to be a public web API surface for browsers or untrust
 
 If you expose `nodeExposure` over the network, put it behind an API gateway/reverse proxy and enforce strict auth, rate limiting, and network controls.
 
+## Tunnels vs Event Lanes
+
+Use the two features for different boundaries:
+
+- **Tunnels**: direct cross-process execution (RPC). Caller invokes a task/event id on another Runner and gets a remote result/error.
+- **Event Lanes**: queue-backed async event routing inside your application/event graph (producer/consumer profiles with lane bindings).
+
+Pick based on desired interaction:
+
+- Need synchronous remote call between services: use **Tunnels**.
+- Need async event fan-out, queue buffering, and worker consumption: use **Event Lanes**.
+- Need both: call remote command via **Tunnel**, then emit domain event and route it via **Event Lane** for background processing.
+
 ## Read This First: Exposure Rule
 
 `nodeExposure` opens the HTTP entrypoints, but it does not by itself decide which tasks are callable.

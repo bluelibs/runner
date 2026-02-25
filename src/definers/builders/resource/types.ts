@@ -55,6 +55,19 @@ export type BuilderState<
       TMiddleware
     >["dispose"]
   >;
+  cooldown?: NonNullable<
+    IResourceDefinition<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >["cooldown"]
+  >;
   configSchema?: IValidationSchema<any>;
   resultSchema?: IValidationSchema<any>;
   meta?: TMeta;

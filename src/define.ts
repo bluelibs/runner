@@ -3,6 +3,7 @@ export { defineTask } from "./definers/defineTask";
 export { defineHook } from "./definers/defineHook";
 export { defineResource } from "./definers/defineResource";
 export { defineEvent } from "./definers/defineEvent";
+export { defineEventLane } from "./definers/defineEventLane";
 export { defineTaskMiddleware } from "./definers/defineTaskMiddleware";
 export { defineResourceMiddleware } from "./definers/defineResourceMiddleware";
 export { defineOverride } from "./definers/defineOverride";
@@ -15,6 +16,7 @@ export {
   isResource,
   isResourceWithConfig,
   isEvent,
+  isEventLane,
   isHook,
   isTaskMiddleware,
   isResourceMiddleware,

@@ -20,6 +20,10 @@ export type { AsyncContextFluentBuilder } from "./definers/builders/asyncContext
 export type { ErrorFluentBuilder } from "./definers/builders/error";
 export type { EventFluentBuilder } from "./definers/builders/event";
 export type {
+  EventLaneBuilderWithTopology,
+  EventLaneFluentBuilder,
+} from "./definers/builders/eventLane";
+export type {
   HookFluentBuilder,
   ValidOnTarget,
   ResolvedOn,

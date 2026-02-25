@@ -347,6 +347,33 @@ export function makeResourceBuilder<
         THasInit
       >(next);
     },
+    cooldown(
+      fn: NonNullable<
+        IResourceDefinition<
+          TConfig,
+          TValue,
+          TDeps,
+          TContext,
+          any,
+          any,
+          TMeta,
+          TTags,
+          TMiddleware
+        >["cooldown"]
+      >,
+    ) {
+      const next = clone(state, { cooldown: fn });
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        THasInit
+      >(next);
+    },
     meta<TNewMeta extends IResourceMeta>(m: TNewMeta) {
       const next = clone<
         TConfig,
@@ -503,6 +530,7 @@ export function makeResourceBuilder<
         context: state.context,
         init: state.init,
         dispose: state.dispose,
+        cooldown: state.cooldown,
         configSchema: state.configSchema,
         resultSchema: state.resultSchema,
         meta: state.meta,

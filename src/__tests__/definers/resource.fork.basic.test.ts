@@ -147,6 +147,24 @@ describe("IResource.fork() (basic)", () => {
     expect(forked.middleware).toHaveLength(1);
   });
 
+  it("preserves cooldown hook through fork cloning", async () => {
+    const cooldownCalls: string[] = [];
+    const base = r
+      .resource("base.with.cooldown")
+      .init(async () => "ok")
+      .cooldown(async () => {
+        cooldownCalls.push("cooled");
+      })
+      .build();
+    const forked = base.fork("forked.with.cooldown");
+    const app = r.resource("app").register([forked]).build();
+
+    const runtime = await run(app);
+    await runtime.dispose();
+
+    expect(cooldownCalls).toEqual(["cooled"]);
+  });
+
   it("can drop registered items on fork", async () => {
     const sharedTask = r
       .task("test.shared")

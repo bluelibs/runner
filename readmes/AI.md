@@ -9,12 +9,17 @@ import { nodeExposure } from "@bluelibs/runner/node";
 
 const server = r
   .resource<{ port: number }>("app.server")
-  .context(() => ({ app: express() }))
+  .context(() => ({ app: express(), isReady: true as boolean }))
   .schema(z.object({ port: z.number().default(3000) }))
   .init(async ({ port }, _deps, ctx) => {
     ctx.app.use(express.json());
     const listener = ctx.app.listen(port);
     return { ...ctx, listener };
+  })
+  .cooldown(async ({ listener }, _config, _deps, ctx) => {
+    // Intake stop phase: quickly stop new requests.
+    ctx.isReady = false;
+    listener.close();
   })
   .dispose(async ({ listener }) => listener.close())
   .build();
@@ -60,6 +65,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 - `.with(config)` exists on configurable built definitions (resources, middleware, tags); fluent builders chain methods plus `.build()`.
 - Direct `define*()` outputs and fluent `.build()` outputs are deep-frozen (immutable); so are `.with(config)` and `.fork(...)` outputs.
 - `r.resource<Config>(id)` / `r.task<Input>(id)` seed typing before explicit schema; config-only resources can omit `.init()`.
+- Resource lifecycle split: use `cooldown()` to stop ingress quickly at shutdown start, then use `dispose()` for final teardown after runtime drain. `cooldown()` can be async, but should return promptly by contract. Treat it as an ingress hook (HTTP/tRPC/consumer boundaries), not a teardown phase for support resources like databases.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` clones a resource under a new id with a separate runtime instance. `"drop"` clears nested items; `"deep"` deep-forks the resource tree and remaps dependencies.
 - Dependency maps are fail-fast validated: when `dependencies` is a function, Runner resolves it during bootstrap and it must return an object map (not `null`, array, or primitive).
 - `.isolate({ exports: [...] })` narrows visibility: omit = everything public; `exports: []` / `exports: "none"` = nothing public (private subtree). String entries support id selectors with segment wildcard `*` (for example: `app.resources.*`) and must match at least one id at bootstrap.
@@ -449,6 +455,65 @@ const processOrder = r
 
 For advanced usage, import `Queue` directly and use `on(type, handler)` / `once(type, handler)` to observe lifecycle events. Call `dispose({ cancel: true })` to abort in-flight work via the `AbortSignal`.
 
+## Event Lanes (Node)
+
+Event Lanes route tagged events to queues using explicit lane references.
+
+- Define lanes with `r.eventLane("app.lanes.email").build()` (or `eventLane(...)`).
+- Define topology with `r.eventLane.topology({ profiles, bindings })`.
+- Boundary reminder: Event Lanes are async queue routing inside your event graph; use Tunnels for cross-process RPC (`readmes/TUNNELS.md`).
+- Tag events with `globals.tags.eventLane.with({ lane, orderingKey?, metadata? })`.
+- Tag hooks with `globals.tags.eventLaneHook.with({ lane, metadata? })`.
+- Register `eventLanesResource` (from `@bluelibs/runner/node`) with:
+  - `profile` + `topology` (canonical)
+  - `bindings: [{ lane, queue, prefetch?, dlq? }]` where `queue` can be a queue instance or a queue resource
+- Use profile constants when desired:
+  - `const Profiles = { API: "api", WORKER: "worker" } as const`
+  - `profile: Profiles.API`
+- Producer behavior:
+  - Tagged event emissions are intercepted.
+  - Local propagation is stopped.
+  - Payload is serialized using `globals.resources.serializer.stringify(...)`.
+  - Message is enqueued to the lane's bound queue.
+- Consumer behavior:
+  - Starts on `globals.events.ready`.
+  - Only consumes lanes listed by the active profile.
+  - Deserializes with `serializer.parse(...)`, then re-emits in-process.
+  - Relay re-emits bypass producer interception to prevent loops.
+  - Hook lane tags run only for matching relay lane ids.
+  - Consumer queue prefetch is resolved from lane binding `prefetch`.
+  - Event Lanes does not apply queue-level business retries; use task middleware for retry logic, with optional DLQ routing on failure.
+  - Multiple lanes can share one queue, but each lane can only have one binding.
+
+Built-in queue adapters:
+
+- `MemoryEventLaneQueue`
+- `RabbitMQEventLaneQueue`
+
+Custom backends implement `IEventLaneQueue` (`enqueue`, `consume`, `ack`, `nack`, optional `setPrefetch`, `init`, `dispose`).
+
+```ts
+import { randomUUID } from "node:crypto";
+import type {
+  EventLaneMessage,
+  EventLaneMessageHandler,
+  IEventLaneQueue,
+} from "@bluelibs/runner/node";
+
+class CustomEventLaneQueue implements IEventLaneQueue {
+  async enqueue(
+    _message: Omit<EventLaneMessage, "id" | "createdAt" | "attempts">,
+  ): Promise<string> {
+    return randomUUID();
+  }
+
+  async consume(_handler: EventLaneMessageHandler): Promise<void> {}
+  async ack(_messageId: string): Promise<void> {}
+  async nack(_messageId: string, _requeue: boolean = true): Promise<void> {}
+  async setPrefetch(_count: number): Promise<void> {}
+}
+```
+
 ## Errors
 
 Define typed, namespaced errors with a fluent builder. Built helpers expose `new`, `create` (alias), `throw`, and `is`:
@@ -522,7 +587,7 @@ const app = r
 - `emitEvent(event, payload, options?)` accepts the same emission options (`failureMode`, `throwOnError`, `report`) as dependency emitters.
 - `.isolate({ exports: [...] })` on the root restricts `runTask`, `emitEvent`, `getResourceValue` to exported ids; omit for full open surface.
 - Run options highlights: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `disposeBudgetMs` (total disposal wait budget), `disposeDrainBudgetMs` (drain wait budget), `dryRun`, `lazy`, `lifecycleMode` (`"sequential"` or `"parallel"`). `initMode` is a deprecated alias.
-- Shutdown behavior: `dispose()` transitions to `disposing`, emits `globals.events.disposing`, waits for tasks + event listeners to drain up to `disposeDrainBudgetMs` (capped by remaining `disposeBudgetMs`), transitions to `drained` (blocks all new business admissions), emits `globals.events.drained` (lifecycle-bypassed — hooks fire but cannot start new tasks/events), then disposes resources using remaining budget. Signals received during bootstrap cancel startup and roll back initialized resources.
+- Shutdown behavior: `dispose()` transitions to `disposing`, runs resource `cooldown()` (reverse dependency order), emits `globals.events.disposing`, waits for tasks + event listeners to drain up to `disposeDrainBudgetMs` (capped by remaining `disposeBudgetMs`), transitions to `drained` (blocks all new business admissions), emits `globals.events.drained` (lifecycle-bypassed — hooks fire but cannot start new tasks/events), then disposes resources using remaining budget. Signals received during bootstrap cancel startup and roll back initialized resources.
 - Global lifecycle events: use `globals.events.ready` for post-boot orchestration, and `globals.events.disposing` / `globals.events.drained` for disposal lifecycle.
 - Event source model: `IEventEmission.source` is object-based end-to-end: `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime.

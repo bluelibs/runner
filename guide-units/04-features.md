@@ -545,6 +545,66 @@ const messageBroker = r
 
 ---
 
+## HTTP Server Shutdown Pattern (`cooldown` + `dispose`)
+
+For HTTP servers, split shutdown work into two phases:
+
+- `cooldown()`: stop new intake immediately.
+- `dispose()`: finish teardown after Runner drain and lifecycle hooks complete.
+
+```typescript
+import express from "express";
+import type { Server } from "node:http";
+import { r } from "@bluelibs/runner";
+
+type ServerContext = {
+  app: express.Express;
+  listener: Server | null;
+  readiness: "up" | "down";
+};
+
+const httpServer = r
+  .resource<{ port: number }>("app.http.server")
+  .context<ServerContext>(() => ({
+    app: express(),
+    listener: null,
+    readiness: "up",
+  }))
+  .init(async ({ port }, _deps, context) => {
+    context.app.get("/health", (_req, res) => {
+      const status = context.readiness === "up" ? 200 : 503;
+      res.status(status).json({ status: context.readiness });
+    });
+
+    context.listener = context.app.listen(port);
+    return context.listener;
+  })
+  .cooldown(async (listener, _config, _deps, context) => {
+    // Intake-stop phase: fast and non-blocking in intent.
+    context.readiness = "down";
+    listener?.close();
+  })
+  .dispose(async (_listener, _config, _deps, context) => {
+    // Final teardown phase: force-close leftovers if needed.
+    context.listener?.closeAllConnections?.();
+    context.listener?.closeIdleConnections?.();
+    context.listener = null;
+  })
+  .build();
+```
+
+Why this pattern works:
+
+- `cooldown()` runs before `globals.events.disposing` and before drain wait, so it prevents new HTTP requests from entering.
+- In-flight requests/tasks/events still get the normal drain window (`disposeDrainBudgetMs`).
+- `dispose()` runs after drain, so cleanup can focus on leftovers only.
+- This is the intended `cooldown()` shape: ingress resources that route to tasks/events.
+- Infrastructure dependencies (database connections, cache clients, brokers) should usually skip `cooldown()` and only clean up in `dispose()`, so in-flight work can still finish during drain.
+
+`cooldown()` can be async, but keep it short. Trigger intake stop and return quickly; let Runner's drain phase do the waiting.
+
+---
+
 ## Cron Scheduling
 
 Need recurring task execution without bringing in a separate scheduler process? Runner ships with a built-in global cron scheduler.
@@ -936,3 +996,347 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 ```
 
 > **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
+
+---
+
+## Event Lanes (Node)
+
+Need queue-backed event transport with reference-safe routing? Event Lanes let you mark specific events for queue delivery while keeping the same in-process event definitions and hooks.
+
+```typescript
+import { globals, r } from "@bluelibs/runner";
+import {
+  eventLanesResource,
+  MemoryEventLaneQueue,
+} from "@bluelibs/runner/node";
+
+const notificationsLane = r.eventLane("app.lanes.notifications").build();
+const notificationsQueue = r
+  .resource("app.resources.notificationsQueue")
+  .init(async () => new MemoryEventLaneQueue())
+  .dispose(async (queue) => {
+    await queue.dispose?.();
+  })
+  .build();
+
+const notificationRequested = r
+  .event<{ userId: string; channel: "email" | "sms" }>(
+    "app.events.notificationRequested",
+  )
+  .tags([globals.tags.eventLane.with({ lane: notificationsLane })])
+  .build();
+
+const sendNotification = r
+  .hook("app.hooks.sendNotification")
+  .on(notificationRequested)
+  .tags([globals.tags.eventLaneHook.with({ lane: notificationsLane })])
+  .run(async (event) => {
+    // queue-consumed relay for notifications lane
+    await deliverNotification(event.data);
+  })
+  .build();
+
+const Profiles = {
+  NotificationsWorker: "worker.notifications",
+} as const;
+
+const topology = r.eventLane.topology({
+  profiles: {
+    [Profiles.NotificationsWorker]: {
+      consume: [notificationsLane],
+    },
+  },
+  bindings: [
+    {
+      lane: notificationsLane,
+      queue: notificationsQueue, // resource reference
+      prefetch: 8,
+    },
+  ],
+});
+
+const app = r
+  .resource("app")
+  .register([
+    notificationRequested,
+    sendNotification,
+    notificationsQueue,
+    eventLanesResource.with({
+      profile: Profiles.NotificationsWorker,
+      topology,
+    }),
+  ])
+  .build();
+```
+
+DomainEvent example (single domain event routed through a lane):
+
+```typescript
+import { globals, r } from "@bluelibs/runner";
+
+type DomainEvent<TType extends string, TPayload> = {
+  type: TType;
+  aggregateId: string;
+  occurredAt: string;
+  payload: TPayload;
+};
+
+const billingDomainEventsLane = r
+  .eventLane("billing.lanes.domain-events")
+  .build();
+
+const invoiceIssued = r
+  .event<DomainEvent<"InvoiceIssued", { invoiceId: string; total: number }>>(
+    "billing.events.invoiceIssued",
+  )
+  .tags([globals.tags.eventLane.with({ lane: billingDomainEventsLane })])
+  .build();
+
+const publishInvoiceIssued = r
+  .task("billing.tasks.publishInvoiceIssued")
+  .dependencies({ invoiceIssued })
+  .run(async (_input, { invoiceIssued }) => {
+    await invoiceIssued({
+      type: "InvoiceIssued",
+      aggregateId: "invoice-42",
+      occurredAt: new Date().toISOString(),
+      payload: { invoiceId: "invoice-42", total: 1500 },
+    });
+  })
+  .build();
+
+const projectInvoiceReadModel = r
+  .hook("billing.hooks.projectInvoiceReadModel")
+  .on(invoiceIssued)
+  .tags([globals.tags.eventLaneHook.with({ lane: billingDomainEventsLane })])
+  .run(async (event) => {
+    // update read-model from domain event payload
+    await updateInvoiceProjection(event.data.payload);
+  })
+  .build();
+```
+
+How Event Lanes work:
+
+- **Lane references, not lane strings**: Routing uses the `IEventLaneDefinition` reference you pass to `globals.tags.eventLane.with({ lane })` and `bindings`.
+- **Centralized topology**: Define topology once via `r.eventLane.topology({ profiles, bindings })` and pass it to runtimes via `eventLanesResource.with({ profile, topology })`.
+- **Canonical config shape**: Event Lanes runtime wiring uses `eventLanesResource.with({ profile, topology, durableWorker? })`.
+- **Container-friendly queues**: Bindings accept direct queue instances or queue resources, so lane wiring can stay inside the container graph.
+- **Many lanes can share one queue**: Multiple lane refs may target the same queue. Event Lanes enforces one binding per lane for deterministic routing.
+- **All nodes produce**: Tagged emits are intercepted, local propagation is stopped, and the event is enqueued.
+- **Only some profiles consume**: `profiles[profile].consume` controls which lane references this runtime dequeues.
+- **Hook lane targeting**: `globals.tags.eventLaneHook.with({ lane })` makes a hook run only for relay emissions from that lane.
+- **Prefetch policy**: configure queue prefetch at binding level (`bindings[].prefetch`).
+- **Serializer-first transport**: Payloads are serialized/deserialized through `globals.resources.serializer`, so Dates, RegExp, and custom serializer types survive queue transport.
+- **Relay loop protection**: Consumer re-emits include a relay source prefix so producer interception bypasses requeue.
+- **Failure + DLQ**: Event Lanes does not own business retry policy; failed consumer handling is single-attempt with optional DLQ routing.
+
+Event Lanes vs Tunnels:
+
+- **Event Lanes** are in-process event semantics with queue-backed async delivery.
+- **Tunnels** are cross-process RPC transport for tasks/events over HTTP.
+- Choose **Event Lanes** when you want eventual async fan-out, queue decoupling, and worker profiles around the same domain events.
+- Choose **Tunnels** when one Runner must directly call another Runner and wait for a remote result.
+- Use **both** when you need cross-service command + local async projection:
+  - call a remote task through a tunnel
+  - emit a domain event
+  - route that event through an Event Lane for background hooks/projections.
+
+See [TUNNELS.md](../readmes/TUNNELS.md) for transport/auth/exposure guidance.
+
+Queue adapters:
+
+- Built-in: `MemoryEventLaneQueue`, `RabbitMQEventLaneQueue`
+- Custom: implement `IEventLaneQueue` (`enqueue`, `consume`, `ack`, `nack`, optional `setPrefetch`, `init`, `dispose`)
+
+RabbitMQ example (built-in adapter):
+
+```typescript
+import { globals, r } from "@bluelibs/runner";
+import {
+  eventLanesResource,
+  RabbitMQEventLaneQueue,
+} from "@bluelibs/runner/node";
+
+const notificationsLane = r.eventLane("app.lanes.notifications").build();
+
+const notificationsQueue = r
+  .resource("app.resources.notificationsQueue")
+  .init(
+    async () =>
+      new RabbitMQEventLaneQueue({
+        url: process.env.RABBITMQ_URL,
+        queue: {
+          name: "runner.notifications",
+          quorum: true,
+          deadLetter: "runner.notifications.dlq",
+          messageTtl: 60_000,
+        },
+        prefetch: 16,
+      }),
+  )
+  .dispose(async (queue) => {
+    await queue.dispose();
+  })
+  .build();
+
+const Profiles = {
+  Api: "api",
+  Worker: "worker",
+} as const;
+
+const topology = r.eventLane.topology({
+  profiles: {
+    [Profiles.Api]: { consume: [] },
+    [Profiles.Worker]: { consume: [notificationsLane] },
+  },
+  bindings: [{ lane: notificationsLane, queue: notificationsQueue }],
+});
+
+const app = r
+  .resource("app")
+  .register([
+    notificationsQueue,
+    eventLanesResource.with({
+      profile:
+        (process.env
+          .RUNNER_PROFILE as (typeof Profiles)[keyof typeof Profiles]) ??
+        Profiles.Api,
+      topology,
+    }),
+  ])
+  .build();
+```
+
+The built-in adapter handles RabbitMQ connection/channel lifecycle, queue assertion, and broker ack/nack plumbing. If you need custom behavior, implement your own `IEventLaneQueue`:
+
+```typescript
+import { randomUUID } from "node:crypto";
+import { r } from "@bluelibs/runner";
+import type { Channel, Connection, ConsumeMessage } from "amqplib";
+import { connect } from "amqplib";
+import type {
+  EventLaneMessage,
+  EventLaneMessageHandler,
+  IEventLaneQueue,
+} from "@bluelibs/runner/node";
+
+class CustomRabbitEventLaneQueue implements IEventLaneQueue {
+  private connection: Connection | null = null;
+  private channel: Channel | null = null;
+  private readonly inFlight = new Map<string, ConsumeMessage>();
+
+  constructor(
+    private readonly config: {
+      url: string;
+      queueName: string;
+      prefetch?: number;
+    },
+  ) {}
+
+  async init(): Promise<void> {
+    this.connection = await connect(this.config.url);
+    this.channel = await this.connection.createChannel();
+
+    // assertQueue is where durability and queue arguments are defined.
+    await this.channel.assertQueue(this.config.queueName, {
+      durable: true,
+      arguments: {
+        "x-queue-type": "quorum",
+      },
+    });
+    await this.channel.prefetch(this.config.prefetch ?? 10);
+  }
+
+  async enqueue(
+    message: Omit<EventLaneMessage, "id" | "createdAt" | "attempts">,
+  ): Promise<string> {
+    const channel = this.requireChannel();
+    const id = randomUUID();
+    const payload: EventLaneMessage = {
+      ...message,
+      id,
+      createdAt: new Date(),
+      attempts: 0,
+    };
+
+    channel.sendToQueue(
+      this.config.queueName,
+      Buffer.from(JSON.stringify(payload)),
+      { persistent: true },
+    );
+    return id;
+  }
+
+  async consume(handler: EventLaneMessageHandler): Promise<void> {
+    const channel = this.requireChannel();
+    await channel.consume(this.config.queueName, async (raw) => {
+      if (!raw) {
+        return;
+      }
+
+      let parsed: EventLaneMessage;
+      try {
+        parsed = JSON.parse(raw.content.toString()) as EventLaneMessage;
+      } catch {
+        channel.nack(raw, false, false); // malformed payload, drop
+        return;
+      }
+
+      if (!parsed || typeof parsed.id !== "string") {
+        channel.nack(raw, false, false);
+        return;
+      }
+
+      const message: EventLaneMessage = {
+        ...parsed,
+        createdAt: new Date(parsed.createdAt),
+        attempts: (parsed.attempts ?? 0) + 1,
+        maxAttempts: parsed.maxAttempts ?? 1,
+      };
+
+      // Keep broker message so runtime-level ack/nack can resolve by message id.
+      this.inFlight.set(message.id, raw);
+      await handler(message);
+    });
+  }
+
+  async ack(messageId: string): Promise<void> {
+    const channel = this.channel;
+    const raw = this.inFlight.get(messageId);
+    if (!channel || !raw) {
+      return;
+    }
+    channel.ack(raw);
+    this.inFlight.delete(messageId);
+  }
+
+  async nack(messageId: string, requeue: boolean = true): Promise<void> {
+    const channel = this.channel;
+    const raw = this.inFlight.get(messageId);
+    if (!channel || !raw) {
+      return;
+    }
+    channel.nack(raw, false, requeue);
+    this.inFlight.delete(messageId);
+  }
+
+  async dispose(): Promise<void> {
+    await this.channel?.close();
+    await this.connection?.close();
+  }
+
+  private requireChannel(): Channel {
+    if (!this.channel) {
+      throw new Error("CustomRabbitEventLaneQueue not initialized.");
+    }
+    return this.channel;
+  }
+}
+```
+
+Lifecycle note:
+
+- Consumers start on `globals.events.ready`, which ensures startup resources (including serializer type registration done in resource init) are initialized before first dequeue processing.
+
+> **runtime:** "You throw events into lanes and call it architecture. I turn them into queue messages, ferry them across workers, and quietly prevent recursive event ping-pong."

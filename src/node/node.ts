@@ -25,3 +25,4 @@ export type {
   Readable,
 } from "./http";
 export * from "./durable";
+export * from "./event-lanes";

@@ -20,6 +20,7 @@ export * from "./types/tag";
 export * from "./types/hook";
 export * from "./types/resource";
 export * from "./types/event";
+export * from "./types/eventLane";
 export * from "./types/task";
 export * from "./types/taskMiddleware";
 export * from "./types/resourceMiddleware";

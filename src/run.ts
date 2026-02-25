@@ -208,6 +208,7 @@ export async function run<C, V extends Promise<any>>(
   const disposeWithShutdownLifecycle = async () => {
     const disposalBudget = createDisposalBudget(disposeBudgetMs);
     store.beginDisposing();
+    await disposalBudget.waitWithinBudget(() => store.cooldown());
     await disposalBudget.waitWithinBudget(() =>
       emitLifecycleEvent(globalEvents.disposing),
     );

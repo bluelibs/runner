@@ -45,6 +45,7 @@ export function resourceBuilder<TConfig = void>(
     context: undefined,
     init: undefined,
     dispose: undefined,
+    cooldown: undefined,
     configSchema: undefined,
     resultSchema: undefined,
     meta: undefined,

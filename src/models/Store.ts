@@ -72,6 +72,8 @@ export class Store {
   private middlewareManager!: MiddlewareManager;
   private readonly initWaves: InitWave[] = [];
   private readonly initializedResourceIds = new Set<string>();
+  private readonly pendingCooldownErrors: Error[] = [];
+  private hasRunCooldown = false;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
 
   #isLocked = false;
@@ -375,7 +377,7 @@ export class Store {
   }
 
   public async dispose() {
-    const disposalErrors: Error[] = [];
+    const disposalErrors: Error[] = [...this.pendingCooldownErrors];
 
     for (const wave of this.getResourcesInDisposeWaves()) {
       const waveErrors = await this.disposeWave(wave);
@@ -434,6 +436,20 @@ export class Store {
     return computeDisposeWaves(this.resources, this.initWaves);
   }
 
+  public async cooldown() {
+    if (this.hasRunCooldown) {
+      return;
+    }
+
+    this.hasRunCooldown = true;
+    this.pendingCooldownErrors.length = 0;
+
+    for (const wave of this.getResourcesInDisposeWaves()) {
+      const waveErrors = await this.cooldownWave(wave);
+      this.pendingCooldownErrors.push(...waveErrors);
+    }
+  }
+
   private clearRuntimeStateAfterDispose() {
     for (const resource of this.resources.values()) {
       resource.value = undefined;
@@ -444,7 +460,40 @@ export class Store {
 
     this.initWaves.length = 0;
     this.initializedResourceIds.clear();
+    this.pendingCooldownErrors.length = 0;
+    this.hasRunCooldown = false;
     this.markDisposed();
+  }
+
+  private async cooldownWave(wave: DisposeWave): Promise<Error[]> {
+    const normalizeError = (error: unknown): Error =>
+      error instanceof Error ? error : new Error(String(error));
+    const collectWaveErrors = (
+      results: readonly PromiseSettledResult<void>[],
+    ): Error[] =>
+      results
+        .filter(
+          (result): result is PromiseRejectedResult =>
+            result.status === "rejected",
+        )
+        .map((result) => normalizeError(result.reason));
+
+    if (wave.parallel) {
+      const results = await Promise.allSettled(
+        wave.resources.map((resource) => this.cooldownResource(resource)),
+      );
+      return collectWaveErrors(results);
+    }
+
+    const errors: Error[] = [];
+    for (const resource of wave.resources) {
+      try {
+        await this.cooldownResource(resource);
+      } catch (error) {
+        errors.push(normalizeError(error));
+      }
+    }
+    return errors;
   }
 
   private async disposeWave(wave: DisposeWave): Promise<Error[]> {
@@ -486,6 +535,21 @@ export class Store {
     }
 
     await resource.resource.dispose(
+      resource.value,
+      resource.config,
+      resource.computedDependencies ?? {},
+      resource.context,
+    );
+  }
+
+  private async cooldownResource(
+    resource: ResourceStoreElementType,
+  ): Promise<void> {
+    if (!resource.isInitialized || !resource.resource.cooldown) {
+      return;
+    }
+
+    await resource.resource.cooldown(
       resource.value,
       resource.config,
       resource.computedDependencies ?? {},

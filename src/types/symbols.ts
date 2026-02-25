@@ -16,6 +16,7 @@ export const symbolResourceWithConfig: unique symbol = Symbol.for(
   "runner.resourceWithConfig",
 );
 export const symbolEvent: unique symbol = Symbol.for("runner.event");
+export const symbolEventLane: unique symbol = Symbol.for("runner.eventLane");
 /** @internal Marks an error helper definition */
 export const symbolError: unique symbol = Symbol.for("runner.error");
 export const symbolMiddleware: unique symbol = Symbol.for("runner.middleware");

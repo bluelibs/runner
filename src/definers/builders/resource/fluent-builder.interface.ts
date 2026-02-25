@@ -227,6 +227,30 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  cooldown(
+    fn: NonNullable<
+      IResourceDefinition<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        any,
+        any,
+        TMeta,
+        TTags,
+        TMiddleware
+      >["cooldown"]
+    >,
+  ): ResourceFluentBuilderBeforeInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+
   throws(
     list: ThrowsList,
   ): ResourceFluentBuilderBeforeInit<
@@ -355,6 +379,29 @@ export interface ResourceFluentBuilderAfterInit<
         TTags,
         TMiddleware
       >["dispose"]
+    >,
+  ): ResourceFluentBuilderAfterInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  cooldown(
+    fn: NonNullable<
+      IResourceDefinition<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        any,
+        any,
+        TMeta,
+        TTags,
+        TMiddleware
+      >["cooldown"]
     >,
   ): ResourceFluentBuilderAfterInit<
     TConfig,

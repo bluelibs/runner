@@ -134,6 +134,7 @@ describe("resource builder", () => {
         return Promise.resolve(deps.a + deps.b + ctx.c);
       })
       .meta({ title: "X" } as unknown as IResourceMeta)
+      .cooldown(async () => {})
       .dispose(async () => {})
       .build();
 
@@ -142,6 +143,7 @@ describe("resource builder", () => {
     ).toBeTruthy();
     expect(app.register).toBeInstanceOf(Array);
     expect(app.context).toBeDefined();
+    expect(app.cooldown).toBeDefined();
     expect(app.meta).toEqual({ title: "X" });
   });
 

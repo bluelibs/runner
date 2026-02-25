@@ -18,6 +18,18 @@ describe("global cron resource (additional)", () => {
     }
   };
 
+  const waitFor = async (
+    predicate: () => boolean,
+    attempts: number = 64,
+  ): Promise<void> => {
+    for (let i = 0; i < attempts; i += 1) {
+      if (predicate()) {
+        return;
+      }
+      await flushMicrotasks();
+    }
+  };
+
   it("fails fast when cron expression is invalid", async () => {
     const invalidTask = r
       .task("app.tasks.invalid-cron")
@@ -161,6 +173,9 @@ describe("global cron resource (additional)", () => {
 
     const disposePromise = runtime.dispose();
     await flushMicrotasks();
+    await waitFor(
+      () => cron.schedules.get("app.tasks.shutdown.cron")?.stopped === true,
+    );
 
     expect(cron.schedules.get("app.tasks.shutdown.cron")?.stopped).toBe(true);
     expect(clearTimeoutSpy).toHaveBeenCalled();

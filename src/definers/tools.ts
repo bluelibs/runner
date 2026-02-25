@@ -8,7 +8,9 @@ import {
   ITaskMiddleware,
   IResourceMiddleware,
   IEvent,
+  IEventLane,
   symbolEvent,
+  symbolEventLane,
   symbolTask,
   symbolPhantomTask,
   symbolHook,
@@ -82,6 +84,11 @@ export function isResourceWithConfig(
  */
 export function isEvent(definition: unknown): definition is IEvent {
   return hasBrand(definition, symbolEvent);
+}
+
+/** Type guard: checks if a definition is an Event Lane reference. */
+export function isEventLane(definition: unknown): definition is IEventLane {
+  return hasBrand(definition, symbolEventLane);
 }
 
 /** Type guard: checks if a definition is a Hook. */

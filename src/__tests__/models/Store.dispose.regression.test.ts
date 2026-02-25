@@ -116,4 +116,28 @@ describe("Store disposal regressions", () => {
       expect.arrayContaining(["string failure", "error failure"]),
     );
   });
+
+  it("passes an empty dependency object to cooldown when computed dependencies are missing", async () => {
+    expect.assertions(1);
+
+    const fixture = createTestFixture();
+    const { store } = fixture;
+    store.setTaskRunner(fixture.createTaskRunner());
+
+    const resource = defineResource({
+      id: "store.cooldown.missing-computed-deps",
+      async cooldown(_value, _config, deps) {
+        expect(deps).toEqual({});
+      },
+    });
+
+    store.storeGenericItem(resource);
+
+    const entry = store.resources.get(resource.id)!;
+    entry.isInitialized = true;
+    entry.computedDependencies = undefined;
+    store.recordResourceInitialized(resource.id);
+
+    await store.cooldown();
+  });
 });

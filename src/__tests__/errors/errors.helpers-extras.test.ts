@@ -19,6 +19,7 @@ import {
   parallelInitSchedulingError,
   platformUnreachableError,
   dashboardApiRequestError,
+  eventLaneEventNotRegisteredError,
 } from "../../errors";
 
 describe("error helpers extra branches", () => {
@@ -129,6 +130,11 @@ describe("error helpers extra branches", () => {
           dashboardApiRequestError.throw({ message: "dashboard failed" }),
         ),
       ).toContain("dashboard failed");
+      expect(
+        captureMessage(() =>
+          eventLaneEventNotRegisteredError.throw({ eventId: "evt.missing" }),
+        ),
+      ).toContain('unknown event "evt.missing"');
     });
 
     it("includes remediation advice in the message", () => {

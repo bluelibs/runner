@@ -1,39 +1,12 @@
+import { randomUUID } from "node:crypto";
+import { durableQueueNotInitializedError } from "../../../errors";
+import { Logger } from "../../../models/Logger";
+import { RabbitMQTransport } from "../../queue/rabbitmq/RabbitMQTransport";
 import type {
   IDurableQueue,
   MessageHandler,
   QueueMessage,
 } from "../core/interfaces/queue";
-import { connectAmqplib } from "../optionalDeps/amqplib";
-import { durableQueueNotInitializedError } from "../../../errors";
-import { randomUUID } from "node:crypto";
-import { Logger } from "../../../models/Logger";
-
-type ConsumeMessage = { content: Buffer };
-
-type Channel = {
-  assertQueue: (
-    queue: string,
-    options: Record<string, unknown>,
-  ) => Promise<unknown>;
-  prefetch: (count: number) => Promise<unknown>;
-  sendToQueue: (
-    queue: string,
-    content: Buffer,
-    options: Record<string, unknown>,
-  ) => unknown;
-  consume: (
-    queue: string,
-    onMessage: (msg: ConsumeMessage | null) => Promise<void>,
-  ) => Promise<unknown>;
-  ack: (msg: ConsumeMessage) => unknown;
-  nack: (msg: ConsumeMessage, allUpTo?: boolean, requeue?: boolean) => unknown;
-  close: () => Promise<unknown>;
-};
-
-type ChannelModel = {
-  createChannel: () => Promise<Channel>;
-  close: () => Promise<unknown>;
-};
 
 export interface RabbitMQQueueConfig {
   url?: string;
@@ -49,79 +22,62 @@ export interface RabbitMQQueueConfig {
 }
 
 export class RabbitMQQueue implements IDurableQueue {
-  private connection: ChannelModel | null = null;
-  private channel: Channel | null = null;
-  private url: string;
-  private queueName: string;
-  private prefetch: number;
-  private readonly isQuorum: boolean;
-  private readonly deadLetterQueue?: string;
-  private readonly messageTtl?: number;
-  private readonly logger: Pick<Logger, "error">;
-  private messageMap = new Map<string, ConsumeMessage>();
+  private readonly queueName: string;
+  private readonly transport: RabbitMQTransport<QueueMessage<unknown>>;
 
   constructor(config: RabbitMQQueueConfig) {
-    this.url = config.url || "amqp://localhost";
     this.queueName =
       config.queue?.name ?? config.queueName ?? "durable_executions";
-    this.prefetch = config.prefetch || 10;
-    this.isQuorum = config.queue?.quorum ?? true;
-    this.deadLetterQueue = config.queue?.deadLetter;
-    this.messageTtl = config.queue?.messageTtl;
-    this.logger =
+    const logger =
       config.logger ??
       new Logger({
         printThreshold: "error",
         printStrategy: "pretty",
         bufferLogs: false,
       }).with({ source: "durable.rabbitmq.queue" });
+
+    this.transport = new RabbitMQTransport<QueueMessage<unknown>>({
+      url: config.url,
+      prefetch: config.prefetch,
+      queue: {
+        name: this.queueName,
+        quorum: config.queue?.quorum ?? true,
+        deadLetter: config.queue?.deadLetter,
+        messageTtl: config.queue?.messageTtl,
+      },
+      logger,
+      parseFailureLogMessage:
+        "RabbitMQQueue failed to parse incoming message; nacking without requeue.",
+      handlerFailureLogMessage:
+        "RabbitMQQueue handler threw; leaving ack/nack to consumer.",
+      decode: (content) => this.decode(content),
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => durableQueueNotInitializedError.throw(),
+    });
   }
 
-  private reportError(message: string, data: Record<string, unknown>) {
-    try {
-      void this.logger.error(message, data);
-    } catch {
-      // Ignore logger failures to preserve queue processing flow.
+  private decode(content: Buffer): QueueMessage<unknown> | null {
+    const parsed = JSON.parse(content.toString()) as Partial<
+      QueueMessage<unknown>
+    >;
+    if (!parsed || typeof parsed.id !== "string") {
+      return null;
     }
+    const currentAttempts =
+      typeof parsed.attempts === "number" ? parsed.attempts : 0;
+    return {
+      ...parsed,
+      attempts: currentAttempts + 1,
+    } as QueueMessage<unknown>;
   }
 
   async init(): Promise<void> {
-    const connection = (await connectAmqplib(this.url)) as ChannelModel;
-    const channel = await connection.createChannel();
-    this.connection = connection;
-    this.channel = channel;
-
-    if (this.deadLetterQueue) {
-      await channel.assertQueue(this.deadLetterQueue, {
-        durable: true,
-      });
-    }
-
-    const argumentsMap: Record<string, unknown> = {};
-    if (this.isQuorum) {
-      argumentsMap["x-queue-type"] = "quorum";
-    }
-    if (this.deadLetterQueue) {
-      argumentsMap["x-dead-letter-exchange"] = "";
-      argumentsMap["x-dead-letter-routing-key"] = this.deadLetterQueue;
-    }
-    if (this.messageTtl !== undefined) {
-      argumentsMap["x-message-ttl"] = this.messageTtl;
-    }
-
-    await channel.assertQueue(this.queueName, {
-      durable: true,
-      arguments: argumentsMap,
-    });
-    await channel.prefetch(this.prefetch);
+    await this.transport.init();
   }
 
   async enqueue<T>(
     message: Omit<QueueMessage<T>, "id" | "createdAt" | "attempts">,
   ): Promise<string> {
-    const channel = this.channel;
-    if (!channel) durableQueueNotInitializedError.throw();
-
     const id = randomUUID();
     const fullMessage: QueueMessage<T> = {
       ...message,
@@ -130,88 +86,25 @@ export class RabbitMQQueue implements IDurableQueue {
       attempts: 0,
     };
 
-    channel!.sendToQueue(
-      this.queueName,
-      Buffer.from(JSON.stringify(fullMessage)),
-      { persistent: true },
-    );
-
+    await this.transport.publish(Buffer.from(JSON.stringify(fullMessage)));
     return id;
   }
 
   async consume<T>(handler: MessageHandler<T>): Promise<void> {
-    const channel = this.channel;
-    if (!channel) durableQueueNotInitializedError.throw();
-
-    await channel!.consume(
-      this.queueName,
-      async (msg: ConsumeMessage | null) => {
-        if (msg === null) return;
-
-        let content: QueueMessage<T>;
-        try {
-          const parsed = JSON.parse(msg.content.toString()) as Partial<
-            QueueMessage<T>
-          >;
-          if (!parsed || typeof parsed.id !== "string") {
-            channel!.nack(msg, false, false);
-            return;
-          }
-          const currentAttempts =
-            typeof parsed.attempts === "number" ? parsed.attempts : 0;
-          content = {
-            ...parsed,
-            attempts: currentAttempts + 1,
-          } as QueueMessage<T>;
-        } catch (error) {
-          this.reportError(
-            "RabbitMQQueue failed to parse incoming message; nacking without requeue.",
-            {
-              error: error instanceof Error ? error : new Error(String(error)),
-              payload: msg.content.toString(),
-            },
-          );
-          channel!.nack(msg, false, false);
-          return;
-        }
-        this.messageMap.set(content.id, msg);
-
-        try {
-          await handler(content);
-        } catch (error) {
-          this.reportError(
-            "RabbitMQQueue handler threw; leaving ack/nack to consumer.",
-            {
-              error: error instanceof Error ? error : new Error(String(error)),
-              messageId: content.id,
-            },
-          );
-          // Let the consumer decide ack/nack
-        }
-      },
+    await this.transport.consume(async (message) =>
+      handler(message as QueueMessage<T>),
     );
   }
 
   async ack(messageId: string): Promise<void> {
-    const msg = this.messageMap.get(messageId);
-    const channel = this.channel;
-    if (msg && channel) {
-      channel.ack(msg);
-      this.messageMap.delete(messageId);
-    }
+    await this.transport.ack(messageId);
   }
 
   async nack(messageId: string, requeue: boolean = true): Promise<void> {
-    const msg = this.messageMap.get(messageId);
-    const channel = this.channel;
-    if (msg && channel) {
-      channel.nack(msg, false, requeue);
-      this.messageMap.delete(messageId);
-    }
+    await this.transport.nack(messageId, requeue);
   }
 
   async dispose(): Promise<void> {
-    await this.channel?.close();
-    await this.connection?.close();
+    await this.transport.dispose();
   }
 }

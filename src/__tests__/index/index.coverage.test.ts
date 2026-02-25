@@ -8,6 +8,7 @@ describe("package root exports coverage", () => {
     expect(typeof root.task).toBe("function");
     expect(typeof root.resource).toBe("function");
     expect(typeof root.event).toBe("function");
+    expect(typeof root.eventLane).toBe("function");
     expect(typeof root.taskMiddleware).toBe("function");
     expect(typeof root.resourceMiddleware).toBe("function");
     expect(typeof root.tag).toBe("function");
@@ -22,6 +23,7 @@ describe("package root exports coverage", () => {
     expect(typeof root.r.task).toBe("function");
     expect(typeof root.r.resource).toBe("function");
     expect(typeof root.r.event).toBe("function");
+    expect(typeof root.r.eventLane).toBe("function");
     expect(typeof root.r.hook).toBe("function");
     expect(typeof root.r.tag).toBe("function");
     expect(typeof root.r.override).toBe(functionType);

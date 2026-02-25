@@ -1,4 +1,5 @@
 import { defineTag } from "../define";
+import type { IEventLaneDefinition } from "../defs";
 import { cronTag } from "./cron/cron.tag";
 import { debugTag } from "./resources/debug/debug.tag";
 import { tunnelTag } from "./resources/tunnel/tunnel.tag";
@@ -23,6 +24,30 @@ const globalTagsBase = {
       title: "Exclude Event From Global Hooks",
       description:
         "Marks events that should not be dispatched to global hooks (on: '*').",
+    },
+  }),
+  eventLane: defineTag<{
+    lane: IEventLaneDefinition;
+    orderingKey?: string;
+    metadata?: Record<string, unknown>;
+  }>({
+    id: "globals.tags.eventLane",
+    targets: ["events"],
+    meta: {
+      title: "Event Lane",
+      description:
+        "Routes tagged events to the configured Event Lane binding (reference-based).",
+    },
+  }),
+  eventLaneHook: defineTag<{
+    lane: IEventLaneDefinition;
+    metadata?: Record<string, unknown>;
+  }>({
+    id: "globals.tags.eventLaneHook",
+    targets: ["hooks"],
+    meta: {
+      title: "Event Lane Hook",
+      description: "Assigns a hook to a lane-specific consumer path.",
     },
   }),
   containerInternals: defineTag<{

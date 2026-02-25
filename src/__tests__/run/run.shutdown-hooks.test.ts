@@ -726,4 +726,223 @@ describe("run.ts shutdown hooks & error boundary", () => {
       "resource-dispose",
     ]);
   });
+
+  it("manual dispose runs resource cooldown before disposing hooks", async () => {
+    const lifecycleOrder: string[] = [];
+
+    const disposingHook = defineHook({
+      id: "tests.app.dispose.cooldown-order.disposing-hook",
+      on: globalEvents.disposing,
+      async run() {
+        lifecycleOrder.push("disposing");
+      },
+    });
+
+    const drainedHook = defineHook({
+      id: "tests.app.dispose.cooldown-order.drained-hook",
+      on: globalEvents.drained,
+      async run() {
+        lifecycleOrder.push("drained");
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.dispose.cooldown-order",
+      register: [disposingHook, drainedHook],
+      async init() {
+        return "ok";
+      },
+      async cooldown() {
+        lifecycleOrder.push("resource-cooldown");
+      },
+      async dispose() {
+        lifecycleOrder.push("resource-dispose");
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+    });
+
+    await runtime.dispose();
+
+    expect(lifecycleOrder).toEqual([
+      "resource-cooldown",
+      "disposing",
+      "drained",
+      "resource-dispose",
+    ]);
+  });
+
+  it("runs cooldown before waiting for in-flight task/event drain", async () => {
+    let releaseTaskGate: (() => void) | undefined;
+    const taskGate = new Promise<void>((resolve) => {
+      releaseTaskGate = resolve;
+    });
+    const lifecycleOrder: string[] = [];
+    let disposed = false;
+
+    const slowTask = defineTask({
+      id: "tests.app.dispose.cooldown-before-drain.task",
+      async run() {
+        await taskGate;
+        return "done";
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.dispose.cooldown-before-drain",
+      register: [slowTask],
+      async init() {
+        return "ok";
+      },
+      async cooldown() {
+        lifecycleOrder.push("resource-cooldown");
+      },
+      async dispose() {
+        disposed = true;
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+      disposeDrainBudgetMs: 150,
+    });
+
+    const inFlightTask = runtime.runTask(slowTask);
+    await new Promise((r) => setTimeout(r, 0));
+
+    const disposePromise = runtime.dispose();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(lifecycleOrder).toEqual(["resource-cooldown"]);
+    expect(disposed).toBe(false);
+
+    if (!releaseTaskGate) {
+      throw createMessageError("Expected slow task gate release handler");
+    }
+
+    releaseTaskGate();
+    await inFlightTask;
+    await disposePromise;
+    expect(disposed).toBe(true);
+  });
+
+  it("aggregates cooldown and dispose errors while continuing shutdown", async () => {
+    let disposeCalled = false;
+
+    const app = defineResource({
+      id: "tests.app.dispose.cooldown-errors",
+      async init() {
+        return "ok";
+      },
+      async cooldown() {
+        throw createMessageError("cooldown failed");
+      },
+      async dispose() {
+        disposeCalled = true;
+        throw createMessageError("dispose failed");
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+    });
+
+    let caught: unknown;
+    try {
+      await runtime.dispose();
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(disposeCalled).toBe(true);
+
+    const aggregateError = caught as Error & { name: string; errors: Error[] };
+    expect(aggregateError.name).toBe("AggregateError");
+    expect(aggregateError.errors.map((error) => error.message)).toEqual(
+      expect.arrayContaining(["cooldown failed", "dispose failed"]),
+    );
+  });
+
+  it("runs cooldown once when invoked manually before dispose lifecycle", async () => {
+    const cooldown = jest.fn(async () => undefined);
+    const dispose = jest.fn(async () => undefined);
+
+    const app = defineResource({
+      id: "tests.app.dispose.cooldown.manual-once",
+      async init() {
+        return "ok";
+      },
+      cooldown,
+      dispose,
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+    });
+
+    await runtime.store.cooldown();
+    await runtime.store.cooldown();
+    expect(cooldown).toHaveBeenCalledTimes(1);
+
+    await runtime.dispose();
+    expect(cooldown).toHaveBeenCalledTimes(1);
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("normalizes non-error cooldown failures in parallel waves and still disposes", async () => {
+    let firstDisposed = false;
+    let secondDisposed = false;
+
+    const first = defineResource({
+      id: "tests.app.dispose.cooldown.non-error.parallel.first",
+      async init() {
+        return "first";
+      },
+      async cooldown() {
+        throw "cooldown-string-failure";
+      },
+      async dispose() {
+        firstDisposed = true;
+      },
+    });
+
+    const second = defineResource({
+      id: "tests.app.dispose.cooldown.non-error.parallel.second",
+      async init() {
+        return "second";
+      },
+      async cooldown() {
+        return;
+      },
+      async dispose() {
+        secondDisposed = true;
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.dispose.cooldown.non-error.parallel.app",
+      register: [first, second],
+      async init() {
+        return "app";
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+      lifecycleMode: "parallel",
+    });
+
+    await expect(runtime.dispose()).rejects.toMatchObject({
+      message: "cooldown-string-failure",
+    });
+    expect(firstDisposed).toBe(true);
+    expect(secondDisposed).toBe(true);
+  });
 });

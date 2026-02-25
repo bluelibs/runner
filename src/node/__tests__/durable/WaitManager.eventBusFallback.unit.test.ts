@@ -92,7 +92,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
     ).rejects.toThrow("Timeout waiting for execution");
   });
 
-  it("propagates store failures while building the timeout error", async () => {
+  it("propagates store failures during timeout resolution", async () => {
     const store = new MemoryStore();
     const bus = new SilentEventBus();
     const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
@@ -113,7 +113,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
     let calls = 0;
     jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
       calls += 1;
-      if (calls === 4) {
+      if (calls >= 3) {
         throw createMessageError("getExecution-failed");
       }
       return await originalGet(id);

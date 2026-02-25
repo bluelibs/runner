@@ -2714,13 +2714,25 @@ An object with the following properties and methods:
 | `getRootValue()`            | Read the initialized root resource value                                                                                                                                                                                                                                                                                                                                                                                        |
 | `logger`                    | Logger instance                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `store`                     | Runtime store with registered resources, tasks, middleware, events, and introspection helpers (for example, `getAllThrows(task \| resource)`)                                                                                                                                                                                                                                                                                   |
-| `dispose()`                 | Transitions to `disposing` (stops admitting fresh external work), emits `globals.events.disposing` (awaited), waits for in-flight tasks + event listeners to drain (up to `disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`), transitions to `drained` (blocks all new business task/event admissions), emits `globals.events.drained` (lifecycle-bypassed, awaited), then disposes resources and unhooks listeners |
+| `dispose()`                 | Transitions to `disposing` (stops admitting fresh external work), runs resource `cooldown()` in reverse dependency order, emits `globals.events.disposing` (awaited), waits for in-flight tasks + event listeners to drain (up to `disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`), transitions to `drained` (blocks all new business task/event admissions), emits `globals.events.drained` (lifecycle-bypassed, awaited), then disposes resources and unhooks listeners |
 
 Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.
 
 This object is your main interface to interact with the running application. Can also be injected as dependency via `globals.resources.runtime`.
 
 Important bootstrap note: when `runtime` is injected inside a resource `init()`, startup may still be in progress. You are guaranteed your current resource dependencies are ready, but not that all registered resources in the container are already initialized.
+
+### Ready-phase startup orchestration
+
+Use `globals.events.ready` for components that should start only after bootstrap is fully complete.
+
+Example:
+
+- Event Lanes consumers (from `eventLanesResource`) attach dequeue workers on `globals.events.ready`.
+- This guarantees serializer/resource setup done during `init()` is available before first consumed message is re-emitted.
+- Event Lanes also resolves queue `prefetch` from lane bindings at this phase, before consumers start.
+
+If a component may process external work immediately, prefer `ready` over direct startup in `init()`.
 
 ### RunOptions
 
@@ -2732,7 +2744,7 @@ Pass as the second argument to `run(app, options)`.
 | `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                          |
 | `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                                 |
 | `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners for graceful shutdown. If a signal arrives during bootstrap, startup is cancelled and initialized resources are rolled back.                                                                                                                                                                                                                                                                                                                   |
-| `disposeBudgetMs`            | `number`                                        | (default: `30_000`) Total disposal budget in milliseconds. Covers `disposing` hooks, drain wait, `drained` hooks, and resource disposal wait. When exhausted, Runner stops waiting and returns.                                                                                                                                                                                                                                                                                                        |
+| `disposeBudgetMs`            | `number`                                        | (default: `30_000`) Total disposal budget in milliseconds. Covers resource `cooldown()`, `disposing` hooks, drain wait, `drained` hooks, and resource disposal wait. When exhausted, Runner stops waiting and returns.                                                                                                                                                                                                                                                                                |
 | `disposeDrainBudgetMs`       | `number`                                        | (default: `30_000`) Drain wait budget in milliseconds while in `disposing`. Runner waits for in-flight business work (tasks + event listener execution) up to this value, capped by remaining `disposeBudgetMs`. Set to `0` to skip drain waiting.                                                                                                                                                                                                                                                     |
 | `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                                                                                                                                                                                          |
 | `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                                   |
@@ -2812,6 +2824,17 @@ Practical effect for HTTP modules:
 - Let already in-flight request work finish during the drain budget window.
 - In `drained`, business admissions are fully closed; resource cleanup/disposal starts.
 
+### Resource `cooldown()` in Shutdown
+
+`resource.cooldown(...)` is a pre-drain ingress-stop hook. It runs right after Runner enters `disposing`, before `globals.events.disposing`, and before drain waiting.
+
+- Use it to stop intake quickly (for example: stop accepting HTTP requests, mark readiness as false, stop new queue consumption).
+- It can be async, but keep it fast and return promptly. Let Runner's drain phase wait for business work.
+- Do not use `cooldown()` as "wait until all work is done"; that is the runtime drain phase (`disposeDrainBudgetMs`).
+- Apply `cooldown()` primarily to ingress/front-door resources that admit external work into Runner (HTTP APIs, tRPC gateways, queue consumers, websocket gateways).
+- Supporting resources that in-flight tasks depend on (for example: database pools, cache clients, message producers) should usually not perform teardown in `cooldown()`. Keep them available until `dispose()`.
+- Execution order mirrors resource disposal: reverse dependency waves, with same-wave parallelism when `lifecycleMode: "parallel"` is enabled.
+
 ### How it works
 
 Resources initialize in dependency order and dispose in **reverse** order. If Resource B depends on Resource A, then:
@@ -2819,7 +2842,7 @@ Resources initialize in dependency order and dispose in **reverse** order. If Re
 1. **Startup**: A initializes first, then B
 2. **Shutdown**: B disposes first, then A
 
-This ensures a resource can safely use its dependencies during both `init()` and `dispose()`.
+This ensures a resource can safely use its dependencies during `init()`, `cooldown()`, and `dispose()`.
 
 ```mermaid
 sequenceDiagram
@@ -2881,6 +2904,7 @@ const database = r
 const server = r
   .resource<{ port: number }>("app.server")
   .dependencies({ database })
+  .context(() => ({ isReady: true as boolean }))
   .init(async ({ port }, { database }) => {
     await database.ping(); // Guaranteed to exist: `database` initializes first
 
@@ -2888,7 +2912,13 @@ const server = r
     console.log(`Server on port ${port}`);
     return httpServer;
   })
+  .cooldown(async (httpServer, _config, _deps, context) => {
+    // Intake stop phase: signal "not ready" and stop new connections quickly.
+    context.isReady = false;
+    httpServer.close();
+  })
   .dispose(async (app) => {
+    // Final teardown phase: close leftovers, free resources.
     return new Promise((resolve) => {
       app.close(() => {
         console.log("Server closed");
@@ -2919,11 +2949,12 @@ By default, Runner installs handlers for `SIGTERM` and `SIGINT`.
 When a signal arrives, Runner:
 
 1. Transitions to `disposing` (blocks fresh `runtime`/`resource` admissions)
-2. Emits `globals.events.disposing` (awaited)
-3. Waits for drain up to `disposeDrainBudgetMs` (capped by remaining `disposeBudgetMs`)
-4. Transitions to `drained` (blocks all new business task/event admissions)
-5. Emits `globals.events.drained` (lifecycle-bypassed, awaited)
-6. Disposes resources in reverse dependency order (within remaining `disposeBudgetMs`)
+2. Runs resource `cooldown()` in reverse dependency order
+3. Emits `globals.events.disposing` (awaited)
+4. Waits for drain up to `disposeDrainBudgetMs` (capped by remaining `disposeBudgetMs`)
+5. Transitions to `drained` (blocks all new business task/event admissions)
+6. Emits `globals.events.drained` (lifecycle-bypassed, awaited)
+7. Disposes resources in reverse dependency order (within remaining `disposeBudgetMs`)
 
 If a signal arrives while `run(...)` is still bootstrapping, Runner cancels startup and performs the same graceful teardown path.
 
@@ -2954,11 +2985,12 @@ process.on("SIGTERM", async () => {
 Manual `runtime.dispose()` and signal-based shutdown both follow:
 
 1. transition to `disposing`
-2. `globals.events.disposing` (awaited)
-3. drain wait (`disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`)
-4. transition to `drained`
-5. `globals.events.drained` (lifecycle-bypassed, awaited)
-6. resource disposal (within remaining `disposeBudgetMs`)
+2. resource `cooldown()` (reverse dependency order)
+3. `globals.events.disposing` (awaited)
+4. drain wait (`disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`)
+5. transition to `drained`
+6. `globals.events.drained` (lifecycle-bypassed, awaited)
+7. resource disposal (within remaining `disposeBudgetMs`)
 
 Important: hooks registered on `globals.events.drained` **do fire** (the emission is lifecycle-bypassed), but those hooks cannot start new tasks or emit additional events — all regular business admissions are blocked once `drained` begins.
 
@@ -3577,6 +3609,66 @@ const messageBroker = r
 
 ---
 
+## HTTP Server Shutdown Pattern (`cooldown` + `dispose`)
+
+For HTTP servers, split shutdown work into two phases:
+
+- `cooldown()`: stop new intake immediately.
+- `dispose()`: finish teardown after Runner drain and lifecycle hooks complete.
+
+```typescript
+import express from "express";
+import type { Server } from "node:http";
+import { r } from "@bluelibs/runner";
+
+type ServerContext = {
+  app: express.Express;
+  listener: Server | null;
+  readiness: "up" | "down";
+};
+
+const httpServer = r
+  .resource<{ port: number }>("app.http.server")
+  .context<ServerContext>(() => ({
+    app: express(),
+    listener: null,
+    readiness: "up",
+  }))
+  .init(async ({ port }, _deps, context) => {
+    context.app.get("/health", (_req, res) => {
+      const status = context.readiness === "up" ? 200 : 503;
+      res.status(status).json({ status: context.readiness });
+    });
+
+    context.listener = context.app.listen(port);
+    return context.listener;
+  })
+  .cooldown(async (listener, _config, _deps, context) => {
+    // Intake-stop phase: fast and non-blocking in intent.
+    context.readiness = "down";
+    listener?.close();
+  })
+  .dispose(async (_listener, _config, _deps, context) => {
+    // Final teardown phase: force-close leftovers if needed.
+    context.listener?.closeAllConnections?.();
+    context.listener?.closeIdleConnections?.();
+    context.listener = null;
+  })
+  .build();
+```
+
+Why this pattern works:
+
+- `cooldown()` runs before `globals.events.disposing` and before drain wait, so it prevents new HTTP requests from entering.
+- In-flight requests/tasks/events still get the normal drain window (`disposeDrainBudgetMs`).
+- `dispose()` runs after drain, so cleanup can focus on leftovers only.
+- This is the intended `cooldown()` shape: ingress resources that route to tasks/events.
+- Infrastructure dependencies (database connections, cache clients, brokers) should usually skip `cooldown()` and only clean up in `dispose()`, so in-flight work can still finish during drain.
+
+`cooldown()` can be async, but keep it short. Trigger intake stop and return quickly; let Runner's drain phase do the waiting.
+
+---
+
 ## Cron Scheduling
 
 Need recurring task execution without bringing in a separate scheduler process? Runner ships with a built-in global cron scheduler.
@@ -3968,6 +4060,350 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 ```
 
 > **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
+
+---
+
+## Event Lanes (Node)
+
+Need queue-backed event transport with reference-safe routing? Event Lanes let you mark specific events for queue delivery while keeping the same in-process event definitions and hooks.
+
+```typescript
+import { globals, r } from "@bluelibs/runner";
+import {
+  eventLanesResource,
+  MemoryEventLaneQueue,
+} from "@bluelibs/runner/node";
+
+const notificationsLane = r.eventLane("app.lanes.notifications").build();
+const notificationsQueue = r
+  .resource("app.resources.notificationsQueue")
+  .init(async () => new MemoryEventLaneQueue())
+  .dispose(async (queue) => {
+    await queue.dispose?.();
+  })
+  .build();
+
+const notificationRequested = r
+  .event<{ userId: string; channel: "email" | "sms" }>(
+    "app.events.notificationRequested",
+  )
+  .tags([globals.tags.eventLane.with({ lane: notificationsLane })])
+  .build();
+
+const sendNotification = r
+  .hook("app.hooks.sendNotification")
+  .on(notificationRequested)
+  .tags([globals.tags.eventLaneHook.with({ lane: notificationsLane })])
+  .run(async (event) => {
+    // queue-consumed relay for notifications lane
+    await deliverNotification(event.data);
+  })
+  .build();
+
+const Profiles = {
+  NotificationsWorker: "worker.notifications",
+} as const;
+
+const topology = r.eventLane.topology({
+  profiles: {
+    [Profiles.NotificationsWorker]: {
+      consume: [notificationsLane],
+    },
+  },
+  bindings: [
+    {
+      lane: notificationsLane,
+      queue: notificationsQueue, // resource reference
+      prefetch: 8,
+    },
+  ],
+});
+
+const app = r
+  .resource("app")
+  .register([
+    notificationRequested,
+    sendNotification,
+    notificationsQueue,
+    eventLanesResource.with({
+      profile: Profiles.NotificationsWorker,
+      topology,
+    }),
+  ])
+  .build();
+```
+
+DomainEvent example (single domain event routed through a lane):
+
+```typescript
+import { globals, r } from "@bluelibs/runner";
+
+type DomainEvent<TType extends string, TPayload> = {
+  type: TType;
+  aggregateId: string;
+  occurredAt: string;
+  payload: TPayload;
+};
+
+const billingDomainEventsLane = r
+  .eventLane("billing.lanes.domain-events")
+  .build();
+
+const invoiceIssued = r
+  .event<DomainEvent<"InvoiceIssued", { invoiceId: string; total: number }>>(
+    "billing.events.invoiceIssued",
+  )
+  .tags([globals.tags.eventLane.with({ lane: billingDomainEventsLane })])
+  .build();
+
+const publishInvoiceIssued = r
+  .task("billing.tasks.publishInvoiceIssued")
+  .dependencies({ invoiceIssued })
+  .run(async (_input, { invoiceIssued }) => {
+    await invoiceIssued({
+      type: "InvoiceIssued",
+      aggregateId: "invoice-42",
+      occurredAt: new Date().toISOString(),
+      payload: { invoiceId: "invoice-42", total: 1500 },
+    });
+  })
+  .build();
+
+const projectInvoiceReadModel = r
+  .hook("billing.hooks.projectInvoiceReadModel")
+  .on(invoiceIssued)
+  .tags([globals.tags.eventLaneHook.with({ lane: billingDomainEventsLane })])
+  .run(async (event) => {
+    // update read-model from domain event payload
+    await updateInvoiceProjection(event.data.payload);
+  })
+  .build();
+```
+
+How Event Lanes work:
+
+- **Lane references, not lane strings**: Routing uses the `IEventLaneDefinition` reference you pass to `globals.tags.eventLane.with({ lane })` and `bindings`.
+- **Centralized topology**: Define topology once via `r.eventLane.topology({ profiles, bindings })` and pass it to runtimes via `eventLanesResource.with({ profile, topology })`.
+- **Canonical config shape**: Event Lanes runtime wiring uses `eventLanesResource.with({ profile, topology, durableWorker? })`.
+- **Container-friendly queues**: Bindings accept direct queue instances or queue resources, so lane wiring can stay inside the container graph.
+- **Many lanes can share one queue**: Multiple lane refs may target the same queue. Event Lanes enforces one binding per lane for deterministic routing.
+- **All nodes produce**: Tagged emits are intercepted, local propagation is stopped, and the event is enqueued.
+- **Only some profiles consume**: `profiles[profile].consume` controls which lane references this runtime dequeues.
+- **Hook lane targeting**: `globals.tags.eventLaneHook.with({ lane })` makes a hook run only for relay emissions from that lane.
+- **Prefetch policy**: configure queue prefetch at binding level (`bindings[].prefetch`).
+- **Serializer-first transport**: Payloads are serialized/deserialized through `globals.resources.serializer`, so Dates, RegExp, and custom serializer types survive queue transport.
+- **Relay loop protection**: Consumer re-emits include a relay source prefix so producer interception bypasses requeue.
+- **Failure + DLQ**: Event Lanes does not own business retry policy; failed consumer handling is single-attempt with optional DLQ routing.
+
+Event Lanes vs Tunnels:
+
+- **Event Lanes** are in-process event semantics with queue-backed async delivery.
+- **Tunnels** are cross-process RPC transport for tasks/events over HTTP.
+- Choose **Event Lanes** when you want eventual async fan-out, queue decoupling, and worker profiles around the same domain events.
+- Choose **Tunnels** when one Runner must directly call another Runner and wait for a remote result.
+- Use **both** when you need cross-service command + local async projection:
+  - call a remote task through a tunnel
+  - emit a domain event
+  - route that event through an Event Lane for background hooks/projections.
+
+See [TUNNELS.md](../readmes/TUNNELS.md) for transport/auth/exposure guidance.
+
+Queue adapters:
+
+- Built-in: `MemoryEventLaneQueue`, `RabbitMQEventLaneQueue`
+- Custom: implement `IEventLaneQueue` (`enqueue`, `consume`, `ack`, `nack`, optional `setPrefetch`, `init`, `dispose`)
+
+RabbitMQ example (built-in adapter):
+
+```typescript
+import { globals, r } from "@bluelibs/runner";
+import {
+  eventLanesResource,
+  RabbitMQEventLaneQueue,
+} from "@bluelibs/runner/node";
+
+const notificationsLane = r.eventLane("app.lanes.notifications").build();
+
+const notificationsQueue = r
+  .resource("app.resources.notificationsQueue")
+  .init(
+    async () =>
+      new RabbitMQEventLaneQueue({
+        url: process.env.RABBITMQ_URL,
+        queue: {
+          name: "runner.notifications",
+          quorum: true,
+          deadLetter: "runner.notifications.dlq",
+          messageTtl: 60_000,
+        },
+        prefetch: 16,
+      }),
+  )
+  .dispose(async (queue) => {
+    await queue.dispose();
+  })
+  .build();
+
+const Profiles = {
+  Api: "api",
+  Worker: "worker",
+} as const;
+
+const topology = r.eventLane.topology({
+  profiles: {
+    [Profiles.Api]: { consume: [] },
+    [Profiles.Worker]: { consume: [notificationsLane] },
+  },
+  bindings: [{ lane: notificationsLane, queue: notificationsQueue }],
+});
+
+const app = r
+  .resource("app")
+  .register([
+    notificationsQueue,
+    eventLanesResource.with({
+      profile:
+        (process.env
+          .RUNNER_PROFILE as (typeof Profiles)[keyof typeof Profiles]) ??
+        Profiles.Api,
+      topology,
+    }),
+  ])
+  .build();
+```
+
+The built-in adapter handles RabbitMQ connection/channel lifecycle, queue assertion, and broker ack/nack plumbing. If you need custom behavior, implement your own `IEventLaneQueue`:
+
+```typescript
+import { randomUUID } from "node:crypto";
+import { r } from "@bluelibs/runner";
+import type { Channel, Connection, ConsumeMessage } from "amqplib";
+import { connect } from "amqplib";
+import type {
+  EventLaneMessage,
+  EventLaneMessageHandler,
+  IEventLaneQueue,
+} from "@bluelibs/runner/node";
+
+class CustomRabbitEventLaneQueue implements IEventLaneQueue {
+  private connection: Connection | null = null;
+  private channel: Channel | null = null;
+  private readonly inFlight = new Map<string, ConsumeMessage>();
+
+  constructor(
+    private readonly config: {
+      url: string;
+      queueName: string;
+      prefetch?: number;
+    },
+  ) {}
+
+  async init(): Promise<void> {
+    this.connection = await connect(this.config.url);
+    this.channel = await this.connection.createChannel();
+
+    // assertQueue is where durability and queue arguments are defined.
+    await this.channel.assertQueue(this.config.queueName, {
+      durable: true,
+      arguments: {
+        "x-queue-type": "quorum",
+      },
+    });
+    await this.channel.prefetch(this.config.prefetch ?? 10);
+  }
+
+  async enqueue(
+    message: Omit<EventLaneMessage, "id" | "createdAt" | "attempts">,
+  ): Promise<string> {
+    const channel = this.requireChannel();
+    const id = randomUUID();
+    const payload: EventLaneMessage = {
+      ...message,
+      id,
+      createdAt: new Date(),
+      attempts: 0,
+    };
+
+    channel.sendToQueue(
+      this.config.queueName,
+      Buffer.from(JSON.stringify(payload)),
+      { persistent: true },
+    );
+    return id;
+  }
+
+  async consume(handler: EventLaneMessageHandler): Promise<void> {
+    const channel = this.requireChannel();
+    await channel.consume(this.config.queueName, async (raw) => {
+      if (!raw) {
+        return;
+      }
+
+      let parsed: EventLaneMessage;
+      try {
+        parsed = JSON.parse(raw.content.toString()) as EventLaneMessage;
+      } catch {
+        channel.nack(raw, false, false); // malformed payload, drop
+        return;
+      }
+
+      if (!parsed || typeof parsed.id !== "string") {
+        channel.nack(raw, false, false);
+        return;
+      }
+
+      const message: EventLaneMessage = {
+        ...parsed,
+        createdAt: new Date(parsed.createdAt),
+        attempts: (parsed.attempts ?? 0) + 1,
+        maxAttempts: parsed.maxAttempts ?? 1,
+      };
+
+      // Keep broker message so runtime-level ack/nack can resolve by message id.
+      this.inFlight.set(message.id, raw);
+      await handler(message);
+    });
+  }
+
+  async ack(messageId: string): Promise<void> {
+    const channel = this.channel;
+    const raw = this.inFlight.get(messageId);
+    if (!channel || !raw) {
+      return;
+    }
+    channel.ack(raw);
+    this.inFlight.delete(messageId);
+  }
+
+  async nack(messageId: string, requeue: boolean = true): Promise<void> {
+    const channel = this.channel;
+    const raw = this.inFlight.get(messageId);
+    if (!channel || !raw) {
+      return;
+    }
+    channel.nack(raw, false, requeue);
+    this.inFlight.delete(messageId);
+  }
+
+  async dispose(): Promise<void> {
+    await this.channel?.close();
+    await this.connection?.close();
+  }
+
+  private requireChannel(): Channel {
+    if (!this.channel) {
+      throw new Error("CustomRabbitEventLaneQueue not initialized.");
+    }
+    return this.channel;
+  }
+}
+```
+
+Lifecycle note:
+
+- Consumers start on `globals.events.ready`, which ensures startup resources (including serializer type registration done in resource init) are initialized before first dequeue processing.
+
+> **runtime:** "You throw events into lanes and call it architecture. I turn them into queue messages, ferry them across workers, and quietly prevent recursive event ping-pong."
 ## Observability Strategy (Logs, Metrics, and Traces)
 
 Runner gives you primitives for all three observability signals:
@@ -8172,6 +8608,10 @@ const myResource = r
 const myResource = r
   .resource("id")
   .init(async () => connection)
+  .cooldown(async (connection) => {
+    // Stop intake quickly (for example, stop new HTTP connections)
+    connection.stopAccepting?.();
+  })
   .dispose(async (connection) => connection.close())
   .build();
 
@@ -8180,6 +8620,13 @@ const myEvent = r
   .event("id")
   .payloadSchema<{ data: string }>({ parse: (v) => v })
   .build();
+
+// Event Lane (reference target for queue routing)
+const notificationsLane = r.eventLane("app.lanes.notifications").build();
+const topology = r.eventLane.topology({
+  profiles: { worker: { consume: [notificationsLane] } },
+  bindings: [{ lane: notificationsLane, queue: { id: "queue.ref" } }],
+});
 
 // Hook
 const myHook = r
@@ -8207,6 +8654,13 @@ const requestContext = r
   .asyncContext<{ requestId: string }>("app.ctx.request")
   .build();
 ```
+
+`resource.cooldown(value, config, dependencies, context): Promise<void>`
+- Runs at shutdown start (right after `disposing`, before `globals.events.disposing` and before drain waiting).
+- Use for ingress-stop behavior; it can be async, but should return quickly by contract.
+- Intended mostly for ingress/front-door resources (HTTP/tRPC/websocket/consumer boundaries) that admit new work.
+- Avoid using it for infrastructure resources that tasks still need during drain (for example, database or cache resources); keep those for `dispose()`.
+- Ordering matches dispose ordering (reverse dependency waves; same-wave parallelism in parallel lifecycle mode).
 
 ### Running Your App
 
@@ -8251,7 +8705,7 @@ await disposeWithOptions();
 | `logs`                       | Configure logger strategy/threshold/buffering                           |
 | `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
 | `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with graceful shutdown (also during bootstrap) |
-| `disposeBudgetMs`            | Total disposal wait budget (ms) across disposing hooks, drain wait, drained hooks, and resource disposal |
+| `disposeBudgetMs`            | Total disposal wait budget (ms) across resource cooldown, disposing hooks, drain wait, drained hooks, and resource disposal |
 | `disposeDrainBudgetMs`       | Drain wait budget (ms) for in-flight tasks/event listeners; capped by remaining `disposeBudgetMs` (`0` disables drain waiting) |
 | `onUnhandledError`           | Custom handler for normalized unhandled errors                          |
 | `dryRun`                     | Validate graph without running resource `init()`                        |
@@ -8613,6 +9067,13 @@ Node-only entrypoint: `@bluelibs/runner/node`.
 | `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path         |
 | `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                |
 | `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                           |
+| `eventLanesResource`                                  | Node Event Lanes runtime resource (producer interception + profile consumers) |
+| `MemoryEventLaneQueue`, `RabbitMQEventLaneQueue`      | Built-in Event Lanes queue adapters                                     |
+| `EventLaneMessage`                                    | Queue message contract for Event Lanes transport                        |
+| `bindEventLane`                                       | Immutable helper for lane-to-queue binding objects                      |
+| `EventLaneQueueReference`, `EventLaneQueueResource`   | Queue binding references (direct queue instance or container resource)   |
+| `EventLanesTopology`, `EventLanesResourceWithConfig`  | Topology-first config types for centralized Event Lanes wiring           |
+| `IEventLaneQueue`                                     | Interface for custom Event Lanes backends (`enqueue`, `consume`, `ack`, `nack`, optional `setPrefetch`/`init`/`dispose`) |
 
 See also:
 

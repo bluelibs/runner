@@ -338,6 +338,60 @@ export const durableQueueNotInitializedError = error<DefaultErrorType>(
   )
   .build();
 
+export const eventLaneQueueNotInitializedError = error<DefaultErrorType>(
+  "runner.errors.eventLanes.queueNotInitialized",
+)
+  .format(() => "Event lane queue not initialized")
+  .remediation(
+    "Initialize the event lane queue connection/channel before enqueue/consume operations.",
+  )
+  .build();
+
+export const eventLaneProfileNotFoundError = error<
+  { profile: string } & DefaultErrorType
+>("runner.errors.eventLanes.profileNotFound")
+  .format(({ profile }) => `Event lanes profile "${profile}" was not found.`)
+  .remediation(
+    ({ profile }) =>
+      `Define profile "${profile}" under eventLanesResource.with({ topology: { profiles: ... } }) before startup.`,
+  )
+  .build();
+
+export const eventLaneBindingNotFoundError = error<
+  { laneId: string } & DefaultErrorType
+>("runner.errors.eventLanes.bindingNotFound")
+  .format(
+    ({ laneId }) =>
+      `Event lane "${laneId}" has no queue binding in eventLanesResource configuration.`,
+  )
+  .remediation(
+    ({ laneId }) =>
+      `Add a binding entry for lane "${laneId}" in eventLanesResource.with({ topology: { bindings: [...] } }).`,
+  )
+  .build();
+
+export const eventLaneEventNotRegisteredError = error<
+  { eventId: string } & DefaultErrorType
+>("runner.errors.eventLanes.eventNotRegistered")
+  .format(
+    ({ eventId }) =>
+      `Event lane consumer received unknown event "${eventId}" (not registered in this runtime).`,
+  )
+  .remediation(
+    ({ eventId }) =>
+      `Register event "${eventId}" in the runtime or stop producing it for this profile.`,
+  )
+  .build();
+
+export const eventLaneMessageMalformedError = error<
+  { reason: string } & DefaultErrorType
+>("runner.errors.eventLanes.messageMalformed")
+  .format(({ reason }) => `Event lane message is malformed: ${reason}`)
+  .remediation(
+    "Ensure queue messages are produced by Event Lanes runtime or follow EventLaneMessage contract.",
+  )
+  .build();
+
 export const durableContextCancelledError = error<
   { message: string } & DefaultErrorType
 >(RunnerErrorId.DurableContextCancelled)

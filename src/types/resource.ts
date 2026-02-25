@@ -179,6 +179,20 @@ export interface IResourceDefinition<
     dependencies: ResourceDependencyValuesType<TDependencies>,
     context: TContext,
   ) => Promise<void>;
+  /**
+   * Cooldown hook for the resource. This runs during shutdown to stop intake
+   * quickly before runtime drains in-flight business work.
+   *
+   * Keep this fast and non-blocking in intent: trigger ingress stop, capture
+   * handles/promises in context, and return promptly.
+   */
+  cooldown?: (
+    this: unknown,
+    value: TValue extends Promise<infer U> ? U : TValue,
+    config: TConfig,
+    dependencies: ResourceDependencyValuesType<TDependencies>,
+    context: TContext,
+  ) => Promise<void>;
   meta?: TMeta;
   /**
    * Declares which typed errors are part of this resource's contract.
@@ -201,10 +215,11 @@ export interface IResourceDefinition<
    */
   overrides?: Array<OverridableElements>;
 
-  /** Middleware applied around init/dispose. */
+  /** Middleware applied around init/cooldown/dispose. */
   middleware?: TMiddleware;
   /**
-   * Create a private, mutable context shared between `init` and `dispose`.
+   * Create a private, mutable context shared between `init`, `cooldown`, and
+   * `dispose`.
    */
   context?: () => TContext;
   /**

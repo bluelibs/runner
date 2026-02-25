@@ -44,6 +44,10 @@ const myResource = r
 const myResource = r
   .resource("id")
   .init(async () => connection)
+  .cooldown(async (connection) => {
+    // Stop intake quickly (for example, stop new HTTP connections)
+    connection.stopAccepting?.();
+  })
   .dispose(async (connection) => connection.close())
   .build();
 
@@ -52,6 +56,13 @@ const myEvent = r
   .event("id")
   .payloadSchema<{ data: string }>({ parse: (v) => v })
   .build();
+
+// Event Lane (reference target for queue routing)
+const notificationsLane = r.eventLane("app.lanes.notifications").build();
+const topology = r.eventLane.topology({
+  profiles: { worker: { consume: [notificationsLane] } },
+  bindings: [{ lane: notificationsLane, queue: { id: "queue.ref" } }],
+});
 
 // Hook
 const myHook = r
@@ -79,6 +90,13 @@ const requestContext = r
   .asyncContext<{ requestId: string }>("app.ctx.request")
   .build();
 ```
+
+`resource.cooldown(value, config, dependencies, context): Promise<void>`
+- Runs at shutdown start (right after `disposing`, before `globals.events.disposing` and before drain waiting).
+- Use for ingress-stop behavior; it can be async, but should return quickly by contract.
+- Intended mostly for ingress/front-door resources (HTTP/tRPC/websocket/consumer boundaries) that admit new work.
+- Avoid using it for infrastructure resources that tasks still need during drain (for example, database or cache resources); keep those for `dispose()`.
+- Ordering matches dispose ordering (reverse dependency waves; same-wave parallelism in parallel lifecycle mode).
 
 ### Running Your App
 
@@ -123,7 +141,7 @@ await disposeWithOptions();
 | `logs`                       | Configure logger strategy/threshold/buffering                           |
 | `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
 | `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with graceful shutdown (also during bootstrap) |
-| `disposeBudgetMs`            | Total disposal wait budget (ms) across disposing hooks, drain wait, drained hooks, and resource disposal |
+| `disposeBudgetMs`            | Total disposal wait budget (ms) across resource cooldown, disposing hooks, drain wait, drained hooks, and resource disposal |
 | `disposeDrainBudgetMs`       | Drain wait budget (ms) for in-flight tasks/event listeners; capped by remaining `disposeBudgetMs` (`0` disables drain waiting) |
 | `onUnhandledError`           | Custom handler for normalized unhandled errors                          |
 | `dryRun`                     | Validate graph without running resource `init()`                        |
@@ -485,6 +503,13 @@ Node-only entrypoint: `@bluelibs/runner/node`.
 | `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path         |
 | `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                |
 | `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                           |
+| `eventLanesResource`                                  | Node Event Lanes runtime resource (producer interception + profile consumers) |
+| `MemoryEventLaneQueue`, `RabbitMQEventLaneQueue`      | Built-in Event Lanes queue adapters                                     |
+| `EventLaneMessage`                                    | Queue message contract for Event Lanes transport                        |
+| `bindEventLane`                                       | Immutable helper for lane-to-queue binding objects                      |
+| `EventLaneQueueReference`, `EventLaneQueueResource`   | Queue binding references (direct queue instance or container resource)   |
+| `EventLanesTopology`, `EventLanesResourceWithConfig`  | Topology-first config types for centralized Event Lanes wiring           |
+| `IEventLaneQueue`                                     | Interface for custom Event Lanes backends (`enqueue`, `consume`, `ack`, `nack`, optional `setPrefetch`/`init`/`dispose`) |
 
 See also:
 

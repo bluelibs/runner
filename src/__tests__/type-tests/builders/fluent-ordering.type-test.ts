@@ -112,21 +112,45 @@ import { r } from "../../../";
 {
   // Resource: init() locks shape/wiring-affecting methods; post-init metadata and topology methods stay valid.
   const child = r.resource("types.order.resource.child").build();
+  const dep = r
+    .resource("types.order.resource.cooldown.dep")
+    .init(async () => 1)
+    .build();
 
   const resourceAfterInit = r
     .resource("types.order.resource")
-    .dependencies({})
+    .dependencies({ dep })
     .schema<{ enabled: boolean }>({ parse: (x: any) => x })
     .resultSchema<{ ready: true }>({ parse: (x: any) => x })
     .tags([])
     .middleware([])
     .context(() => ({ started: false }))
-    .init(async () => ({ ready: true as const }))
+    .init(async (cfg, deps, ctx) => {
+      const cfgValue: { enabled: boolean } = cfg;
+      const depValue: number = deps.dep;
+      const ctxValue: { started: boolean } = ctx;
+      return Promise.resolve({
+        ready: cfgValue.enabled && depValue > 0 && ctxValue.started === false,
+      });
+    })
     .register([child])
     .overrides([])
     .isolate({})
     .exports([])
-    .dispose(async () => {})
+    .cooldown(async (value, config, deps, context) => {
+      const valueReady: boolean = value.ready;
+      const configEnabled: boolean = config.enabled;
+      const depValue: number = deps.dep;
+      const contextStarted: boolean = context.started;
+      [valueReady, configEnabled, depValue, contextStarted];
+    })
+    .dispose(async (value, config, deps, context) => {
+      const valueReady: boolean = value.ready;
+      const configEnabled: boolean = config.enabled;
+      const depValue: number = deps.dep;
+      const contextStarted: boolean = context.started;
+      [valueReady, configEnabled, depValue, contextStarted];
+    })
     .meta({ title: "Resource" })
     .throws([]);
 
