@@ -15,6 +15,7 @@ import {
   eventEmissionCycleError,
   lockedError,
   taskRunnerNotSetError,
+  validationError,
 } from "../errors";
 import { EventManager } from "./EventManager";
 import { Logger } from "./Logger";
@@ -274,6 +275,20 @@ export class Store {
       typeof rootDefinition.dependencies === "function"
         ? rootDefinition.dependencies(config)
         : rootDefinition.dependencies;
+
+    if (
+      resolvedDependencies !== undefined &&
+      (resolvedDependencies === null ||
+        typeof resolvedDependencies !== "object" ||
+        Array.isArray(resolvedDependencies))
+    ) {
+      validationError.throw({
+        subject: "Dependencies",
+        id: rootDefinition.id,
+        originalError:
+          "Dependencies must be an object map. If you use dependencies as a function, it must return an object.",
+      });
+    }
 
     const dependenciesObject = (resolvedDependencies || {}) as Record<
       string,

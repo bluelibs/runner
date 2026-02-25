@@ -309,21 +309,17 @@ describe("Store", () => {
     expect(callOrder).toEqual(["dependent", "dep"]);
   });
 
-  it("should ignore non-object dependencies when ordering disposal", async () => {
-    const disposeFn = jest.fn();
+  it("should fail fast when dependencies are not an object map", () => {
     const weirdDepsResource = defineResource({
       id: "dispose.order.weird.deps",
       dependencies: (() => "not-an-object") as any,
-      dispose: async () => {
-        disposeFn();
-      },
     });
 
-    store.storeGenericItem(weirdDepsResource);
-    store.resources.get(weirdDepsResource.id)!.isInitialized = true;
-
-    await store.dispose();
-    expect(disposeFn).toHaveBeenCalledTimes(1);
+    expect(() => store.storeGenericItem(weirdDepsResource)).toThrow(
+      expect.objectContaining({
+        id: "runner.errors.validation",
+      }),
+    );
   });
 
   it("should not throw if a dependency resource is not registered during disposal ordering", async () => {

@@ -62,6 +62,8 @@ const result = await runTask(sendEmail, {
 
 > **Lockdown note:** Direct `define*()` outputs and fluent `.build()` outputs are deep-frozen definitions. Treat definitions as immutable and use builder chaining, `.with()`, `.fork()`, `intercept()`, or `r.override(...)` for changes.
 
+> **Dependencies note:** `dependencies` can be declared as an object or factory function. Factory output is resolved during bootstrap and must return an object map (not `null`, array, or primitive), otherwise Runner fails fast.
+
 **The Two Ways to Call Tasks:**
 
 1. **In production/integration**: `runTask(task, input)` - Gets full DI, middleware, events, the works

@@ -1,5 +1,8 @@
 import { StoringMode } from "./types";
-import { overrideTargetNotRegisteredError } from "../../errors";
+import {
+  overrideTargetNotRegisteredError,
+  validationError,
+} from "../../errors";
 
 type OverrideTargetType =
   | "Task"
@@ -24,6 +27,21 @@ type PrepareFreshValueInput<T extends PreparedDefinition, TMapValue> = {
 };
 
 export class StoreRegistryDefinitionPreparer {
+  private ensureDependenciesShape(definitionId: string, value: unknown): void {
+    if (value === undefined) {
+      return;
+    }
+
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      validationError.throw({
+        subject: "Dependencies",
+        id: definitionId,
+        originalError:
+          "Dependencies must be an object map. If you use dependencies as a function, it must return an object.",
+      });
+    }
+  }
+
   prepareFreshValue<T extends PreparedDefinition, TMapValue>({
     item,
     collection,
@@ -56,6 +74,8 @@ export class StoreRegistryDefinitionPreparer {
         effectiveConfig,
       ) as T["dependencies"];
     }
+
+    this.ensureDependenciesShape(currentItem.id, currentItem.dependencies);
 
     return currentItem;
   }
