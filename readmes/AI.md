@@ -92,6 +92,7 @@ const app = r
 
 await run(app); // throws aggregated subtreeValidationFailedError if violations exist
 ```
+
 - `.isolate({ deny: [...] })` blocks listed ids/tags; `{ only: [...] }` is a boundary-scoped external allowlist (internal subtree items remain reachable). String entries support id selectors with segment wildcard `*` (for example: `app.resources.*.test`). Policies are additive across ancestors (effective external access is the intersection of ancestor `only` lists); Runner fails fast on violations or unmatched selectors at bootstrap.
 - Tag object entries and tag-id string entries are intentionally different: `deny: [myTag]` / `only: [myTag]` match the tag dependency and all tagged carriers; `deny: [myTag.id]` / `only: [myTag.id]` match only the exact id string.
 - Isolation/visibility enforcement covers dependency wiring plus hook event subscriptions and middleware attachments (task + resource middleware), so the same rules apply to events and middleware too.
@@ -520,7 +521,7 @@ const app = r
 - `emitEvent(event, payload, options?)` accepts the same emission options (`failureMode`, `throwOnError`, `report`) as dependency emitters.
 - `.isolate({ exports: [...] })` on the root restricts `runTask`, `emitEvent`, `getResourceValue` to exported ids; omit for full open surface.
 - Run options highlights: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `disposeBudgetMs` (total disposal wait budget), `disposeDrainBudgetMs` (drain wait budget), `dryRun`, `lazy`, `lifecycleMode` (`"sequential"` or `"parallel"`). `initMode` is a deprecated alias.
-- Shutdown behavior: `dispose()` transitions to `disposing`, emits `globals.events.disposing`, waits for tasks + event listeners to drain up to `disposeDrainBudgetMs` (capped by remaining `disposeBudgetMs`), transitions to `drained`, emits `globals.events.drained`, then disposes resources using remaining budget. Signals received during bootstrap cancel startup and roll back initialized resources.
+- Shutdown behavior: `dispose()` transitions to `disposing`, emits `globals.events.disposing`, waits for tasks + event listeners to drain up to `disposeDrainBudgetMs` (capped by remaining `disposeBudgetMs`), transitions to `drained` (blocks all new business admissions), emits `globals.events.drained` (lifecycle-bypassed — hooks fire but cannot start new tasks/events), then disposes resources using remaining budget. Signals received during bootstrap cancel startup and roll back initialized resources.
 - Global lifecycle events: use `globals.events.ready` for post-boot orchestration, and `globals.events.disposing` / `globals.events.drained` for disposal lifecycle.
 - Event source model: `IEventEmission.source` is object-based end-to-end: `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime.

@@ -727,7 +727,7 @@ Available system events:
 
 - `globals.events.ready` - System has completed initialization
 - `globals.events.disposing` - Runtime entered `disposing`; fresh `runtime`/`resource` admissions are blocked while in-flight business work drains
-- `globals.events.drained` - Drain completed (or grace timed out); all new task/event admissions are blocked before resource disposal
+- `globals.events.drained` - Drain completed (or grace timed out); hooks registered on this event fire (lifecycle-bypassed), but cannot start new tasks or emit additional events — all regular business admissions are blocked before resource disposal
   // Note: use run({ onUnhandledError }) for unhandled error handling
 
 #### stopPropagation()
