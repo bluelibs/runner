@@ -224,5 +224,15 @@ describe("TaskRunner", () => {
     );
   });
 
+  it("rejects interceptor registration after store lock", () => {
+    store.lock();
+
+    expect(() =>
+      taskRunner.intercept(async (next, input) => next(input)),
+    ).toThrow(
+      "Cannot register a task interceptor after the runtime has been locked.",
+    );
+  });
+
   // Global lifecycle events removed
 });

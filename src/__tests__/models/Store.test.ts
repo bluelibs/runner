@@ -115,6 +115,10 @@ describe("Store", () => {
     );
   });
 
+  it("should allow checkLock when store is unlocked", () => {
+    expect(() => store.checkLock()).not.toThrow();
+  });
+
   it("should lock all registry maps when the store is locked", () => {
     store.lock();
 

@@ -2,9 +2,12 @@ import { defineResource } from "../../define";
 import type { AnyTask, DependencyMapType } from "../../defs";
 import { loggerResource } from "../resources/logger.resource";
 import { taskRunnerResource } from "../resources/taskRunner.resource";
+import { eventManagerResource } from "../resources/eventManager.resource";
+import { globalEvents } from "../globalEvents";
 import { globalTags } from "../globalTags";
 import { CronParser } from "./cron-parser";
 import { cronExecutionError } from "./cron.errors";
+import { shutdownLockdownError } from "../../errors";
 import { cronTag } from "./cron.tag";
 import {
   CronOnError,
@@ -28,6 +31,7 @@ type CronResourceDependencies = DependencyMapType & {
   cron: typeof cronTag;
   logger: typeof loggerResource;
   taskRunner: typeof taskRunnerResource;
+  eventManager: typeof eventManagerResource;
 };
 
 export const cronResource = defineResource<
@@ -40,16 +44,48 @@ export const cronResource = defineResource<
     cron: cronTag,
     logger: loggerResource,
     taskRunner: taskRunnerResource,
+    eventManager: eventManagerResource,
   },
   context: () => ({
     disposed: false,
     stateByTaskId: new Map<string, CronTaskState>(),
   }),
-  init: async (_config, { cron, logger, taskRunner }, context) => {
+  init: async (
+    _config,
+    { cron, logger, taskRunner, eventManager },
+    context,
+  ) => {
     const scopedLogger = logger.with({ source: "globals.resources.cron" });
     const scheduledTasks = cron.tasks;
 
     const isSilent = (config: CronTagConfig): boolean => config.silent === true;
+
+    const stopSchedule = (taskState: CronTaskState): void => {
+      taskState.stopped = true;
+      if (taskState.timer) {
+        clearTimeout(taskState.timer);
+        taskState.timer = undefined;
+      }
+    };
+
+    const stopAllSchedules = (): void => {
+      for (const state of context.stateByTaskId.values()) {
+        stopSchedule(state);
+      }
+    };
+
+    eventManager.addListener(
+      globalEvents.disposing,
+      async () => {
+        // Stop scheduling immediately when shutdown starts so cron does not
+        // compete with drain and does not trigger avoidable shutdown rejections.
+        stopAllSchedules();
+      },
+      {
+        id: "globals.resources.cron.onDisposing",
+        order: -1_000,
+      },
+    );
 
     const scheduleNext = (taskState: CronTaskState, from: Date): void => {
       if (context.disposed || taskState.stopped) {
@@ -100,6 +136,13 @@ export const cronResource = defineResource<
           source: runtimeSource.resource("globals.resources.cron"),
         });
       } catch (error) {
+        if (shutdownLockdownError.is(error)) {
+          // During runtime shutdown, cron should stop cleanly instead of
+          // treating lifecycle admission rejection as task failure.
+          stopSchedule(taskState);
+          return;
+        }
+
         const normalizedError =
           error instanceof Error
             ? error
@@ -127,11 +170,7 @@ export const cronResource = defineResource<
           (taskState.config.onError || CronOnError.Continue) ===
           CronOnError.Stop
         ) {
-          taskState.stopped = true;
-          if (taskState.timer) {
-            clearTimeout(taskState.timer);
-            taskState.timer = undefined;
-          }
+          stopSchedule(taskState);
           return;
         }
       }

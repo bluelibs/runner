@@ -1038,9 +1038,9 @@ const myTask = r
 
 - **Fail-fast**: Duplicate key writes throw immediately, catching integration bugs early
 - **Type-safe keys**: Use `journal.createKey<T>()` for compile-time type checking
-- **Per-execution**: Fresh journal for every task run
+- **Per-execution**: Fresh journal is auto-injected for every top-level task run
 - **Forwarding**: Pass `{ journal }` to nested task calls to share context across the call tree
-- **Source-aware task context**: Task `run(..., deps, context)` receives `context.source` as `{ kind, id }`
+- **Auto-injected task context**: Task `run(..., deps, context)` receives both `context.journal` and `context.source` (`{ kind, id }`)
 
 #### Cross-Middleware Coordination
 

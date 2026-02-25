@@ -120,6 +120,72 @@ describe("global cron resource (additional)", () => {
     expect(attempts).toBe(0);
   });
 
+  it("stops a pending schedule without failure logs when runtime is disposing", async () => {
+    let cronRuns = 0;
+    let releaseBlocker!: () => void;
+    const blockerGate = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const clearTimeoutSpy = jest
+      .spyOn(globalThis, "clearTimeout")
+      .mockImplementation(() => undefined);
+
+    const blockerTask = r
+      .task("app.tasks.shutdown.blocker")
+      .run(async () => {
+        await blockerGate;
+      })
+      .build();
+
+    const shutdownAwareCronTask = r
+      .task("app.tasks.shutdown.cron")
+      .tags([globals.tags.cron.with({ expression: "* * * * *" })])
+      .run(async () => {
+        cronRuns += 1;
+      })
+      .build();
+
+    const app = r
+      .resource("app")
+      .register([blockerTask, shutdownAwareCronTask])
+      .build();
+    const runtime = await run(app, {
+      disposeBudgetMs: 1_000_000,
+      disposeDrainBudgetMs: 1_000_000,
+    });
+    const cron = runtime.getResourceValue(globals.resources.cron);
+
+    const blockerRun = runtime.runTask(blockerTask);
+    await flushMicrotasks();
+
+    const disposePromise = runtime.dispose();
+    await flushMicrotasks();
+
+    expect(cron.schedules.get("app.tasks.shutdown.cron")?.stopped).toBe(true);
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+
+    jest.advanceTimersByTime(60_000);
+    await flushMicrotasks();
+
+    expect(cronRuns).toBe(0);
+
+    const cronErrors = errorSpy.mock.calls.filter((args) =>
+      args.some(
+        (value) =>
+          typeof value === "string" &&
+          value.includes("app.tasks.shutdown.cron"),
+      ),
+    );
+    expect(cronErrors).toHaveLength(0);
+
+    releaseBlocker();
+    await blockerRun;
+    await disposePromise;
+    errorSpy.mockRestore();
+    clearTimeoutSpy.mockRestore();
+  });
+
   it("suppresses all log output when silent is true", async () => {
     const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});

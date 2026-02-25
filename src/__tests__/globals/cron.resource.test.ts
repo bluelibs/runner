@@ -226,7 +226,7 @@ describe("global cron resource", () => {
 
     const app = r.resource("app").register([selfDisposingTask]).build();
     runtimeRef.current = await run(app, {
-      shutdownGracePeriodMs: 0,
+      disposeDrainBudgetMs: 0,
     });
 
     jest.advanceTimersByTime(60_000);

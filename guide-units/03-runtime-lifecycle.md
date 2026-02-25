@@ -40,7 +40,7 @@ An object with the following properties and methods:
 | `getRootValue()`            | Read the initialized root resource value                                                                                                                                                                                                                    |
 | `logger`                    | Logger instance                                                                                                                                                                                                                                             |
 | `store`                     | Runtime store with registered resources, tasks, middleware, events, and introspection helpers (for example, `getAllThrows(task \| resource)`)                                                                                                               |
-| `dispose()`                 | Transitions to `disposing`, emits `globals.events.disposing` (awaited), waits for in-flight tasks + event listeners to drain (up to `shutdownGracePeriodMs`), transitions to `drained`, emits `globals.events.drained` (awaited), then disposes resources and unhooks listeners |
+| `dispose()`                 | Transitions to `disposing` (stops admitting fresh external work), emits `globals.events.disposing` (awaited), waits for in-flight tasks + event listeners to drain (up to `disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`), transitions to `drained` (blocks all new task/event admissions), emits `globals.events.drained` (awaited), then disposes resources and unhooks listeners |
 
 Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.
 
@@ -58,7 +58,8 @@ Pass as the second argument to `run(app, options)`.
 | `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                          |
 | `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                                 |
 | `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners for graceful shutdown. If a signal arrives during bootstrap, startup is cancelled and initialized resources are rolled back.                                                                                                                                                                                                                                                                                                                   |
-| `shutdownGracePeriodMs`      | `number`                                        | (default: `30_000`) Grace window in milliseconds while in `disposing`. Runner waits for in-flight business work (tasks + event listener execution) to drain before moving to `drained`. Set to `0` to skip waiting.                                                                                                                                                                                                                                                                               |
+| `disposeBudgetMs`            | `number`                                        | (default: `30_000`) Total disposal budget in milliseconds. Covers `disposing` hooks, drain wait, `drained` hooks, and resource disposal wait. When exhausted, Runner stops waiting and returns.                                                                                                                                                                                                                                                                                                     |
+| `disposeDrainBudgetMs`       | `number`                                        | (default: `30_000`) Drain wait budget in milliseconds while in `disposing`. Runner waits for in-flight business work (tasks + event listener execution) up to this value, capped by remaining `disposeBudgetMs`. Set to `0` to skip drain waiting.                                                                                                                                                                                                                                              |
 | `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                                                                                                                                                                                          |
 | `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                                   |
 | `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `lifecycleMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred. |
@@ -120,6 +121,21 @@ await run(app, {
 ## Lifecycle Management
 
 When your app stops—whether from Ctrl+C, a deployment, or a crash—you need to stop admitting new work and close resources cleanly. Runner handles this automatically.
+
+### Shutdown Admission Semantics
+
+Runner applies source-aware admission rules during shutdown:
+
+| Phase       | Admission Policy |
+| ----------- | ---------------- |
+| `running`   | Admit all task/event calls. |
+| `disposing` | Reject fresh external admissions (`runtime`, `resource`). Allow in-flight internal continuations (`task`, `hook`, `middleware`) while their originating execution is still active. |
+| `drained`   | Reject all new task/event admissions. Lifecycle flow continues to resource disposal. |
+
+Practical effect for HTTP modules:
+- In `disposing`, stop accepting new requests and stop new external admissions into Runner.
+- Let already in-flight request work finish during the drain budget window.
+- In `drained`, business admissions are fully closed; resource cleanup/disposal starts.
 
 ### How it works
 
@@ -229,17 +245,20 @@ When a signal arrives, Runner:
 
 1. Transitions to `disposing` (blocks fresh `runtime`/`resource` admissions)
 2. Emits `globals.events.disposing` (awaited)
-3. Waits for drain up to `shutdownGracePeriodMs`
+3. Waits for drain up to `disposeDrainBudgetMs` (capped by remaining `disposeBudgetMs`)
 4. Transitions to `drained` (blocks all new task/event admissions)
 5. Emits `globals.events.drained` (awaited)
-6. Disposes resources in reverse dependency order
+6. Disposes resources in reverse dependency order (within remaining `disposeBudgetMs`)
 
 If a signal arrives while `run(...)` is still bootstrapping, Runner cancels startup and performs the same graceful teardown path.
+
+Signal-based shutdown and manual `runtime.dispose()` follow the same lifecycle events (`disposing`, `drained`) and the same admission rules.
 
 ```typescript
 await run(app, {
   shutdownHooks: true, // default: true
-  shutdownGracePeriodMs: 30_000, // wait up to 30s for task/event drain
+  disposeBudgetMs: 30_000, // total shutdown/disposal wait budget
+  disposeDrainBudgetMs: 30_000, // drain wait budget (capped by remaining disposeBudgetMs)
 });
 ```
 
@@ -261,10 +280,10 @@ Manual `runtime.dispose()` and signal-based shutdown both follow:
 
 1. transition to `disposing`
 2. `globals.events.disposing` (awaited)
-3. drain wait (`shutdownGracePeriodMs`)
+3. drain wait (`disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`)
 4. transition to `drained`
 5. `globals.events.drained` (awaited)
-6. resource disposal
+6. resource disposal (within remaining `disposeBudgetMs`)
 
 Important: once `drained` starts, all new task runs and event emissions are blocked, including calls attempted from `drained` hooks.
 

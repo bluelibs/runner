@@ -7,24 +7,23 @@ import {
 import { globalEvents } from "../../globals/globalEvents";
 import { run } from "../../run";
 import { createMessageError } from "../../errors";
+import { getPlatform } from "../../platform";
 
 describe("run.ts shutdown hooks & error boundary", () => {
-  const originalExit = process.exit;
   const capturedExitCalls: number[] = [];
-
-  beforeAll(() => {
-    (process as unknown as { exit: unknown }).exit = ((code?: number) => {
-      capturedExitCalls.push(code ?? 0);
-      return undefined as unknown as never;
-    }) as unknown as never;
-  });
-
-  afterAll(() => {
-    (process as unknown as { exit: unknown }).exit = originalExit;
-  });
+  let exitSpy: jest.SpyInstance<void, [number]> | undefined;
 
   beforeEach(() => {
     capturedExitCalls.length = 0;
+    exitSpy?.mockRestore();
+    exitSpy = jest.spyOn(getPlatform(), "exit").mockImplementation((code) => {
+      capturedExitCalls.push(code);
+    });
+  });
+
+  afterAll(() => {
+    exitSpy?.mockRestore();
+    exitSpy = undefined;
   });
 
   it("installs process safety nets and calls onUnhandledError for uncaughtException", async () => {
@@ -148,7 +147,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtimePromise = run(app, {
       errorBoundary: false,
       shutdownHooks: true,
-      shutdownGracePeriodMs: 50,
+      disposeDrainBudgetMs: 50,
     });
 
     await new Promise((r) => setTimeout(r, 0));
@@ -285,7 +284,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtime = await run(app, {
       errorBoundary: false,
       shutdownHooks: true,
-      shutdownGracePeriodMs: 150,
+      disposeDrainBudgetMs: 150,
     });
 
     const inFlightTask = runtime.runTask(slowTask);
@@ -322,7 +321,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     await new Promise((r) => setTimeout(r, 0));
   });
 
-  it("continues shutdown without waiting for grace period", async () => {
+  it("continues shutdown without waiting for drain budget", async () => {
     const neverTask = defineTask({
       id: "tests.app.shutdown.timeout.task",
       async run() {
@@ -345,7 +344,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtime = await run(app, {
       errorBoundary: false,
       shutdownHooks: true,
-      shutdownGracePeriodMs: 20,
+      disposeDrainBudgetMs: 20,
     });
 
     void runtime.runTask(neverTask);
@@ -412,7 +411,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtime = await run(app, {
       errorBoundary: false,
       shutdownHooks: false,
-      shutdownGracePeriodMs: 150,
+      disposeDrainBudgetMs: 150,
     });
 
     const inFlightTask = runtime.runTask(slowTask);
@@ -450,7 +449,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     expect(disposed).toBe(true);
   });
 
-  it("manual dispose proceeds without waiting for grace period", async () => {
+  it("manual dispose proceeds without waiting for drain budget", async () => {
     const neverTask = defineTask({
       id: "tests.app.manual-dispose.timeout.task",
       async run() {
@@ -473,7 +472,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtime = await run(app, {
       errorBoundary: false,
       shutdownHooks: false,
-      shutdownGracePeriodMs: 20,
+      disposeDrainBudgetMs: 20,
     });
 
     void runtime.runTask(neverTask);
@@ -486,6 +485,136 @@ describe("run.ts shutdown hooks & error boundary", () => {
     expect(disposed).toBe(true);
     await expect(disposePromise).resolves.toBeUndefined();
     expect(() => runtime.runTask(neverTask)).toThrow(/disposed/i);
+  });
+
+  it("caps drain wait by remaining dispose budget", async () => {
+    jest.useFakeTimers();
+
+    try {
+      const neverTask = defineTask({
+        id: "tests.app.shutdown.dispose-budget-cap.task",
+        async run() {
+          return new Promise<never>(() => undefined);
+        },
+      });
+
+      let disposed = false;
+      const app = defineResource({
+        id: "tests.app.shutdown.dispose-budget-cap",
+        register: [neverTask],
+        async init() {
+          return "ok" as const;
+        },
+        async dispose() {
+          disposed = true;
+        },
+      });
+
+      const runtime = await run(app, {
+        errorBoundary: false,
+        shutdownHooks: false,
+        disposeBudgetMs: 30,
+        disposeDrainBudgetMs: 1_000,
+      });
+
+      void runtime.runTask(neverTask);
+      const disposePromise = runtime.dispose();
+      await Promise.resolve();
+
+      jest.advanceTimersByTime(29);
+      await Promise.resolve();
+      expect(disposed).toBe(false);
+
+      jest.advanceTimersByTime(2);
+      await Promise.resolve();
+      await expect(disposePromise).resolves.toBeUndefined();
+      expect(disposed).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("does not wait for resource disposal when dispose budget is zero", async () => {
+    let disposeCalls = 0;
+    const app = defineResource({
+      id: "tests.app.shutdown.dispose-budget.zero",
+      async init() {
+        return "ok" as const;
+      },
+      async dispose() {
+        disposeCalls += 1;
+        throw createMessageError("detached dispose failure");
+      },
+    });
+
+    const runtime = await run(app, {
+      errorBoundary: false,
+      shutdownHooks: false,
+      disposeBudgetMs: 0,
+      disposeDrainBudgetMs: 0,
+    });
+
+    await expect(runtime.dispose()).resolves.toBeUndefined();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(disposeCalls).toBe(1);
+  });
+
+  it("stops waiting for resource disposal when dispose budget expires", async () => {
+    jest.useFakeTimers();
+
+    try {
+      let releaseResourceDispose: (() => void) | undefined;
+      let disposeStarted = false;
+      let disposeCompleted = false;
+
+      const app = defineResource({
+        id: "tests.app.shutdown.dispose-budget.resource-timeout",
+        async init() {
+          return "ok" as const;
+        },
+        async dispose() {
+          disposeStarted = true;
+          await new Promise<void>((resolve) => {
+            releaseResourceDispose = resolve;
+          });
+          disposeCompleted = true;
+        },
+      });
+
+      const runtime = await run(app, {
+        errorBoundary: false,
+        shutdownHooks: false,
+        disposeBudgetMs: 20,
+        disposeDrainBudgetMs: 0,
+      });
+
+      const disposePromise = runtime.dispose();
+      jest.advanceTimersByTime(1);
+      for (let i = 0; i < 10; i += 1) {
+        await Promise.resolve();
+      }
+
+      expect(disposeCompleted).toBe(false);
+
+      jest.advanceTimersByTime(20);
+      await Promise.resolve();
+      await expect(disposePromise).resolves.toBeUndefined();
+      for (let i = 0; i < 10; i += 1) {
+        await Promise.resolve();
+      }
+      expect(disposeStarted).toBe(true);
+      expect(disposeCompleted).toBe(false);
+
+      if (!releaseResourceDispose) {
+        throw createMessageError("Expected resource dispose to begin");
+      }
+
+      releaseResourceDispose();
+      await Promise.resolve();
+      expect(disposeCompleted).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("process signal emits disposing and allows its in-flight continuations before drain", async () => {

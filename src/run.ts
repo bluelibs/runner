@@ -10,7 +10,7 @@ import { debugResource } from "./globals/resources/debug";
 import {
   registerProcessLevelSafetyNets,
   registerShutdownHook,
-  waitForShutdownGracePeriod,
+  waitForDisposeDrainBudget,
 } from "./tools/processShutdownHooks";
 import { cancellationError } from "./errors";
 import {
@@ -27,6 +27,7 @@ import {
 import { getPlatform } from "./platform";
 import { runtimeSource } from "./types/runtimeSource";
 import { LifecycleAdmissionController } from "./models/runtime/LifecycleAdmissionController";
+import { createDisposalBudget } from "./tools/disposalBudget";
 
 const activeRunResults = new Set<RunResult<any>>();
 
@@ -64,7 +65,8 @@ export async function run<C, V extends Promise<any>>(
     logs = {},
     errorBoundary = true,
     shutdownHooks = true,
-    shutdownGracePeriodMs = 30_000,
+    disposeBudgetMs = 30_000,
+    disposeDrainBudgetMs = 30_000,
     dryRun = false,
     lazy = false,
     onUnhandledError: onUnhandledErrorOpt,
@@ -156,8 +158,27 @@ export async function run<C, V extends Promise<any>>(
     });
   };
 
+  const waitForStoreDisposeWithinBudget = async (
+    disposalBudget?: ReturnType<typeof createDisposalBudget>,
+  ) => {
+    if (!disposalBudget) {
+      await store.dispose();
+      return;
+    }
+
+    const remainingBudgetMs = disposalBudget.remainingMs();
+    if (remainingBudgetMs <= 0) {
+      void store.dispose().catch(() => undefined);
+      return;
+    }
+
+    await disposalBudget.waitWithinBudget(() => store.dispose());
+  };
+
   // Helper dispose that always unhooks process listeners first
-  const disposeAll = async () => {
+  const disposeAll = async (
+    disposalBudget?: ReturnType<typeof createDisposalBudget>,
+  ) => {
     try {
       if (unhookProcessSafetyNets) {
         unhookProcessSafetyNets();
@@ -169,7 +190,7 @@ export async function run<C, V extends Promise<any>>(
       }
     } finally {
       activeRunResults.delete(runtimeResult);
-      await store.dispose();
+      await waitForStoreDisposeWithinBudget(disposalBudget);
     }
   };
   const runtimeLifecycleSource = runtimeSource.runtime("runtime.lifecycle");
@@ -185,13 +206,24 @@ export async function run<C, V extends Promise<any>>(
   };
 
   const disposeWithShutdownLifecycle = async () => {
+    const disposalBudget = createDisposalBudget(disposeBudgetMs);
     store.beginDisposing();
-    await emitLifecycleEvent(globalEvents.disposing);
-    await waitForShutdownGracePeriod(store, shutdownGracePeriodMs);
-    store.beginDrained();
-    await emitLifecycleEvent(globalEvents.drained);
+    await disposalBudget.waitWithinBudget(() =>
+      emitLifecycleEvent(globalEvents.disposing),
+    );
 
-    await disposeAll();
+    const effectiveDrainBudgetMs =
+      disposalBudget.capByRemainingBudget(disposeDrainBudgetMs);
+    await disposalBudget.waitWithinBudget(() =>
+      waitForDisposeDrainBudget(store, effectiveDrainBudgetMs),
+    );
+
+    store.beginDrained();
+    await disposalBudget.waitWithinBudget(() =>
+      emitLifecycleEvent(globalEvents.drained),
+    );
+
+    await disposeAll(disposalBudget);
   };
   const runtimeResult = new RunResult<any>(
     logger,

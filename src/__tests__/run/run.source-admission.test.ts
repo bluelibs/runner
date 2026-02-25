@@ -42,7 +42,7 @@ describe("run source-admission during shutdown drain", () => {
 
     const runtime = await run(app, {
       shutdownHooks: false,
-      shutdownGracePeriodMs: 200,
+      disposeDrainBudgetMs: 200,
     });
 
     const inFlight = runtime.runTask(slowTask);
@@ -92,7 +92,7 @@ describe("run source-admission during shutdown drain", () => {
 
     const runtime = await run(app, {
       shutdownHooks: false,
-      shutdownGracePeriodMs: 200,
+      disposeDrainBudgetMs: 200,
     });
 
     const inFlight = runtime.runTask(slowTask);
@@ -150,7 +150,7 @@ describe("run source-admission during shutdown drain", () => {
 
     const runtime = await run(app, {
       shutdownHooks: false,
-      shutdownGracePeriodMs: 200,
+      disposeDrainBudgetMs: 200,
     });
 
     const inFlightParent = runtime.runTask(parentTask);
@@ -206,7 +206,7 @@ describe("run source-admission during shutdown drain", () => {
 
     const runtime = await run(app, {
       shutdownHooks: false,
-      shutdownGracePeriodMs: 200,
+      disposeDrainBudgetMs: 200,
     });
 
     const inFlightEvent = runtime.emitEvent(triggerEvent);
@@ -262,7 +262,7 @@ describe("run source-admission during shutdown drain", () => {
 
     const runtime = await run(app, {
       shutdownHooks: false,
-      shutdownGracePeriodMs: 200,
+      disposeDrainBudgetMs: 200,
     });
 
     const inFlightParent = runtime.runTask(parentTask);
@@ -312,7 +312,7 @@ describe("run source-admission during shutdown drain", () => {
 
     const runtime = await run(app, {
       shutdownHooks: false,
-      shutdownGracePeriodMs: 200,
+      disposeDrainBudgetMs: 200,
     });
 
     await expect(runtime.runTask(parentTask)).resolves.toBe("parent-done");

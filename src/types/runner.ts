@@ -99,12 +99,18 @@ export type RunOptions = {
    */
   shutdownHooks?: boolean;
   /**
-   * Grace window (milliseconds) used during shutdown after entering `disposing`.
-   * Runner waits up to this duration for in-flight business work (tasks + event
-   * listener execution) to drain before moving to `drained` and resource disposal.
-   * Set to `0` to skip waiting.
+   * Total disposal budget (milliseconds) for the shutdown lifecycle.
+   * This budget covers `disposing` hooks, drain wait, `drained` hooks, and
+   * resource disposal. Once exhausted, Runner stops waiting and returns.
    */
-  shutdownGracePeriodMs?: number;
+  disposeBudgetMs?: number;
+  /**
+   * Drain budget (milliseconds) used while waiting for in-flight business work
+   * (tasks + event listeners) after entering `disposing`.
+   * Effective wait is capped by remaining `disposeBudgetMs`.
+   * Set to `0` to skip drain waiting.
+   */
+  disposeDrainBudgetMs?: number;
   /**
    * Custom handler for any unhandled error caught by Runner. Defaults to logging via the created logger.
    */

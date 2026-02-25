@@ -3,7 +3,7 @@ import { EventManager } from "./EventManager";
 import { Store } from "./Store";
 import { Logger } from "./Logger";
 import { MiddlewareManager } from "./MiddlewareManager";
-import { shutdownLockdownError } from "../errors";
+import { interceptAfterLockError, shutdownLockdownError } from "../errors";
 import type { ExecutionJournal } from "../types/executionJournal";
 import type {
   TaskRunnerInterceptOptions,
@@ -127,11 +127,19 @@ export class TaskRunner {
   /**
    * Registers a global task execution interceptor.
    * Interceptors are evaluated outermost around task middleware.
+   *
+   * Must be called during init() (pre-lock). After store.lock(), the middleware
+   * stack is frozen and calling intercept() would create inconsistency between
+   * already-cached runners and newly-composed ones.
    */
   public intercept(
     interceptor: TaskRunnerInterceptor,
     options?: TaskRunnerInterceptOptions,
   ): void {
+    if (this.store.isLocked) {
+      interceptAfterLockError.throw({});
+    }
+
     const conditionalInterceptor: TaskRunnerInterceptor = async (
       next,
       input,

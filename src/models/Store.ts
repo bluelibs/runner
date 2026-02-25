@@ -210,10 +210,8 @@ export class Store {
     this.lifecycleAdmissionController.beginDrained();
   }
 
-  public async waitForDrain(shutdownGracePeriodMs: number): Promise<boolean> {
-    return this.lifecycleAdmissionController.waitForDrain(
-      shutdownGracePeriodMs,
-    );
+  public async waitForDrain(disposeDrainBudgetMs: number): Promise<boolean> {
+    return this.lifecycleAdmissionController.waitForDrain(disposeDrainBudgetMs);
   }
 
   public markDisposed() {

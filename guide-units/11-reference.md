@@ -21,6 +21,7 @@ const myTask = r
   .task("id")
   .dependencies({ db, logger })
   .run(async (input, { db, logger }, context) => {
+    // context?.journal is auto-injected
     // context?.source => { kind, id }
     return result;
   })
@@ -96,7 +97,8 @@ const configuredRuntime = await run(app, {
   },
   errorBoundary: true,
   shutdownHooks: true,
-  shutdownGracePeriodMs: 30_000,
+  disposeBudgetMs: 30_000,
+  disposeDrainBudgetMs: 30_000,
   onUnhandledError: ({ error }) => console.error(error),
   dryRun: false,
   lazy: false,
@@ -121,7 +123,8 @@ await disposeWithOptions();
 | `logs`                       | Configure logger strategy/threshold/buffering                           |
 | `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
 | `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with graceful shutdown (also during bootstrap) |
-| `shutdownGracePeriodMs`      | Grace window (ms) to wait for in-flight tasks/event listeners before resource disposal (`0` disables waiting) |
+| `disposeBudgetMs`            | Total disposal wait budget (ms) across disposing hooks, drain wait, drained hooks, and resource disposal |
+| `disposeDrainBudgetMs`       | Drain wait budget (ms) for in-flight tasks/event listeners; capped by remaining `disposeBudgetMs` (`0` disables drain waiting) |
 | `onUnhandledError`           | Custom handler for normalized unhandled errors                          |
 | `dryRun`                     | Validate graph without running resource `init()`                        |
 | `lazy`                       | Defer startup-unused resources until on-demand access                   |

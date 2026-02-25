@@ -276,7 +276,7 @@ const myKey = journal.createKey<{ startedAt: Date }>("app.middleware.timing");
 
 **Built-in Middleware Journal Keys**: Global middlewares (`retry`, `cache`, `circuitBreaker`, `rateLimit`, `fallback`, `timeout`) expose runtime state via typed journal keys at `globals.middleware.task.<name>.journalKeys`. For example, `retry` exposes `attempt` and `lastError`; `cache` exposes `hit`; `circuitBreaker` exposes `state` and `failures`. Access these via `journal.get(key)` without deep imports.
 
-Task `run(..., deps, context)` context includes both `journal` and `source` (`{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`).
+Task `run(..., deps, context)` context includes both `journal` and `source` (both auto-injected): `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
 
 ## Tags
 
@@ -371,6 +371,7 @@ Notes:
 
 - One cron tag per task is supported. If you need multiple schedules, use task forking and tag each fork.
 - Cron startup logs are emitted through `globals.resources.logger`.
+- On `globals.events.disposing`, cron stops all pending schedules immediately (no new timer-driven runs), while already in-flight cron task executions drain with normal shutdown budgets.
 
 ## Async Context
 
@@ -518,8 +519,8 @@ const app = r
 - `run(root, options)` wires dependencies, initializes resources, and returns the runtime object: `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, `store`, `logger`, and `dispose`. `getLazyResourceValue` is available only when `run(..., { lazy: true })` is enabled.
 - `emitEvent(event, payload, options?)` accepts the same emission options (`failureMode`, `throwOnError`, `report`) as dependency emitters.
 - `.isolate({ exports: [...] })` on the root restricts `runTask`, `emitEvent`, `getResourceValue` to exported ids; omit for full open surface.
-- Run options highlights: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `shutdownGracePeriodMs` (active grace window for drain wait), `dryRun`, `lazy`, `lifecycleMode` (`"sequential"` or `"parallel"`). `initMode` is a deprecated alias.
-- Shutdown behavior: `dispose()` transitions to `disposing`, emits `globals.events.disposing`, waits up to `shutdownGracePeriodMs` for tasks + event listeners to drain, transitions to `drained`, emits `globals.events.drained`, then disposes resources. Signals received during bootstrap cancel startup and roll back initialized resources.
+- Run options highlights: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `disposeBudgetMs` (total disposal wait budget), `disposeDrainBudgetMs` (drain wait budget), `dryRun`, `lazy`, `lifecycleMode` (`"sequential"` or `"parallel"`). `initMode` is a deprecated alias.
+- Shutdown behavior: `dispose()` transitions to `disposing`, emits `globals.events.disposing`, waits for tasks + event listeners to drain up to `disposeDrainBudgetMs` (capped by remaining `disposeBudgetMs`), transitions to `drained`, emits `globals.events.drained`, then disposes resources using remaining budget. Signals received during bootstrap cancel startup and roll back initialized resources.
 - Global lifecycle events: use `globals.events.ready` for post-boot orchestration, and `globals.events.disposing` / `globals.events.drained` for disposal lifecycle.
 - Event source model: `IEventEmission.source` is object-based end-to-end: `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime.

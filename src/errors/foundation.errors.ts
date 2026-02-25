@@ -622,6 +622,19 @@ export const runResultDisposedError = error<DefaultErrorType>(
   )
   .build();
 
+export const interceptAfterLockError = error<
+  { taskId?: string; source?: string } & DefaultErrorType
+>("runner.errors.interceptAfterLock")
+  .format(({ taskId, source }) => {
+    const target = taskId ? ` on task "${taskId}"` : "";
+    const caller = source ? ` from "${source}"` : "";
+    return `Cannot register a task interceptor${target}${caller} after the runtime has been locked. Interceptors must be registered during init().`;
+  })
+  .remediation(
+    "Move your intercept() call into a resource's init() function where the middleware stack is still mutable. After store.lock(), the middleware composition is frozen and cached per task \u2014 late interceptors would create inconsistency between already-cached and newly-composed runners.",
+  )
+  .build();
+
 export const shutdownLockdownError = error<DefaultErrorType>(
   "runner.errors.shutdownLockdown",
 )

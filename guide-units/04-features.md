@@ -587,6 +587,7 @@ Operational notes:
 - One cron tag per task is supported. If you need multiple schedules, fork the task and tag each fork.
 - Scheduler uses `setTimeout` chaining, which keeps it portable across supported runtimes.
 - Startup and execution lifecycle messages are emitted via `globals.resources.logger`.
+- On `globals.events.disposing`, cron stops all pending schedules immediately (no new timer-driven runs), while already in-flight cron executions drain under the normal shutdown budgets.
 
 Best practices:
 

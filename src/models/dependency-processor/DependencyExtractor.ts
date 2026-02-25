@@ -18,7 +18,11 @@ import {
   TaskLocalInterceptor,
   TaggedTask,
 } from "../../defs";
-import { dependencyNotFoundError, unknownItemTypeError } from "../../errors";
+import {
+  dependencyNotFoundError,
+  interceptAfterLockError,
+  unknownItemTypeError,
+} from "../../errors";
 import { EventManager } from "../EventManager";
 import { Logger } from "../Logger";
 import { Store } from "../Store";
@@ -454,7 +458,11 @@ export class DependencyExtractor {
     };
     return Object.assign(fn, {
       intercept: (middleware: TaskLocalInterceptor<I, O>) => {
-        this.store.checkLock();
+        // Fail-fast: interceptors are a registration-phase action. Post-lock,
+        // cached runners would miss this interceptor, creating silent inconsistency.
+        if (this.store.isLocked) {
+          interceptAfterLockError.throw({ taskId, source: ownerResourceId });
+        }
         const storeTask = this.getStoreTaskOrThrow(taskId);
 
         if (!storeTask.interceptors) storeTask.interceptors = [];
