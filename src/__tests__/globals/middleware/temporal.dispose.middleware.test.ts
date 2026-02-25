@@ -19,7 +19,7 @@ const createTemporalState = (
 });
 
 describe("Temporal Middleware: Dispose", () => {
-  it("drains pending debounce callers when runtime is disposed", async () => {
+  it("rejects pending debounce callers when runtime is disposed", async () => {
     let callCount = 0;
     const task = defineTask({
       id: "debounce.dispose.task",
@@ -35,16 +35,20 @@ describe("Temporal Middleware: Dispose", () => {
       register: [task],
     });
 
-    const runtime = await run(app);
+    const runtime = await run(app, {
+      shutdownGracePeriodMs: 0,
+    });
     const pending = runtime.runTask(task, "a");
 
     await runtime.dispose();
 
-    await expect(pending).resolves.toBe("a");
-    expect(callCount).toBe(1);
+    await expect(pending).rejects.toThrow(
+      "Temporal middleware resource has been disposed.",
+    );
+    expect(callCount).toBe(0);
   });
 
-  it("drains pending throttle callers when runtime is disposed", async () => {
+  it("rejects pending throttle callers when runtime is disposed", async () => {
     let callCount = 0;
     const task = defineTask({
       id: "throttle.dispose.task",
@@ -60,14 +64,18 @@ describe("Temporal Middleware: Dispose", () => {
       register: [task],
     });
 
-    const runtime = await run(app);
+    const runtime = await run(app, {
+      shutdownGracePeriodMs: 0,
+    });
     await expect(runtime.runTask(task, "a")).resolves.toBe("a");
     const pending = runtime.runTask(task, "b");
 
     await runtime.dispose();
 
-    await expect(pending).resolves.toBe("b");
-    expect(callCount).toBe(2);
+    await expect(pending).rejects.toThrow(
+      "Temporal middleware resource has been disposed.",
+    );
+    expect(callCount).toBe(1);
   });
 
   it("throws immediately when debounce middleware state is already disposed", async () => {

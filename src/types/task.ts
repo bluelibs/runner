@@ -9,6 +9,7 @@ import { TaskTagType } from "./tag";
 import { ITaskMeta } from "./meta";
 import type { ThrowsList } from "./error";
 import type { ExecutionJournal } from "./executionJournal";
+import type { RuntimeCallSource } from "./runtimeSource";
 import {
   symbolFilePath,
   symbolTask,
@@ -31,6 +32,11 @@ export type {
 export type { TaskMiddlewareAttachmentType } from "./taskMiddleware";
 export type { TagType, TaskTagType } from "./tag";
 export type { ITaskMeta } from "./meta";
+
+export type TaskRunContext = {
+  journal: ExecutionJournal;
+  source: RuntimeCallSource;
+};
 
 export interface ITaskDefinition<
   TInput = undefined,
@@ -81,7 +87,7 @@ export interface ITaskDefinition<
         : EnsureInputSatisfiesContracts<[...TTags, ...TMiddleware], TInput>
       : TInput,
     dependencies: DependencyValuesType<TDependencies>,
-    context?: { journal: ExecutionJournal },
+    context?: TaskRunContext,
   ) => HasOutputContracts<[...TTags, ...TMiddleware]> extends true
     ? EnsureOutputSatisfiesContracts<[...TTags, ...TMiddleware], TOutput>
     : TOutput;

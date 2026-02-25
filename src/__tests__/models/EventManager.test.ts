@@ -8,6 +8,7 @@ import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
 import { createMessageError } from "../../errors";
+import { runtimeSource } from "../../types/runtimeSource";
 
 describe("EventManager", () => {
   let eventManager: EventManager;
@@ -22,7 +23,11 @@ describe("EventManager", () => {
     const handler = jest.fn();
     eventManager.addListener(eventDefinition, handler);
 
-    await eventManager.emit(eventDefinition, "testData", "test");
+    await eventManager.emit(
+      eventDefinition,
+      "testData",
+      runtimeSource.runtime("test"),
+    );
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler).toHaveBeenCalledWith(
@@ -69,7 +74,11 @@ describe("EventManager", () => {
       { order: 3 },
     );
 
-    await eventManager.emit(eventDefinition, "testData", "test");
+    await eventManager.emit(
+      eventDefinition,
+      "testData",
+      runtimeSource.runtime("test"),
+    );
 
     expect(results).toEqual([0, 1, 2, 3]);
   });
@@ -81,7 +90,11 @@ describe("EventManager", () => {
 
     eventManager.addGlobalListener(handler);
 
-    await eventManager.emit(eventDefinition, "testData", "test");
+    await eventManager.emit(
+      eventDefinition,
+      "testData",
+      runtimeSource.runtime("test"),
+    );
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler).toHaveBeenCalledWith(
@@ -126,7 +139,11 @@ describe("EventManager", () => {
       { order: 3 },
     );
 
-    await eventManager.emit(eventDefinition, "testData", "test");
+    await eventManager.emit(
+      eventDefinition,
+      "testData",
+      runtimeSource.runtime("test"),
+    );
 
     expect(results).toEqual([
       "globalListener1",
@@ -161,7 +178,11 @@ describe("EventManager", () => {
     });
     eventManager.addListener(eventDefinition, keptHandler, { id: "keep-me" });
 
-    await eventManager.emit(eventDefinition, "before", "test");
+    await eventManager.emit(
+      eventDefinition,
+      "before",
+      runtimeSource.runtime("test"),
+    );
     expect(removedHandler).toHaveBeenCalledTimes(1);
     expect(keptHandler).toHaveBeenCalledTimes(1);
 
@@ -169,7 +190,11 @@ describe("EventManager", () => {
     keptHandler.mockClear();
 
     eventManager.removeListenerById("remove-me");
-    await eventManager.emit(eventDefinition, "after", "test");
+    await eventManager.emit(
+      eventDefinition,
+      "after",
+      runtimeSource.runtime("test"),
+    );
 
     expect(removedHandler).not.toHaveBeenCalled();
     expect(keptHandler).toHaveBeenCalledTimes(1);
@@ -196,8 +221,8 @@ describe("EventManager", () => {
     eventManager.addListener(eventDef1, handler1);
     eventManager.addListener(eventDef2, handler2);
 
-    await eventManager.emit(eventDef1, "data1", "test");
-    await eventManager.emit(eventDef2, "data2", "test");
+    await eventManager.emit(eventDef1, "data1", runtimeSource.runtime("test"));
+    await eventManager.emit(eventDef2, "data2", runtimeSource.runtime("test"));
 
     expect(handler1).toHaveBeenCalledTimes(1);
     expect(handler1).toHaveBeenCalledWith(
@@ -224,7 +249,11 @@ describe("EventManager", () => {
     eventManager.addListener(eventDefinition, handler1, { order: 1 });
     eventManager.addListener(eventDefinition, handler2, { order: 2 });
 
-    await eventManager.emit(eventDefinition, "testData", "test");
+    await eventManager.emit(
+      eventDefinition,
+      "testData",
+      runtimeSource.runtime("test"),
+    );
 
     expect(handler1).toHaveBeenCalledTimes(1);
     expect(handler2).toHaveBeenCalledTimes(1);
@@ -238,8 +267,8 @@ describe("EventManager", () => {
 
     eventManager.addListener([eventDef1, eventDef2], handler);
 
-    await eventManager.emit(eventDef1, "data1", "test");
-    await eventManager.emit(eventDef2, "data2", "test");
+    await eventManager.emit(eventDef1, "data1", runtimeSource.runtime("test"));
+    await eventManager.emit(eventDef2, "data2", runtimeSource.runtime("test"));
 
     expect(handler).toHaveBeenCalledTimes(2);
     expect(handler).toHaveBeenNthCalledWith(
@@ -268,7 +297,7 @@ describe("EventManager", () => {
     eventManager.addListener(eventDef1, handler1);
     eventManager.addListener(eventDef2, handler2);
 
-    await eventManager.emit(eventDef1, "data1", "test");
+    await eventManager.emit(eventDef1, "data1", runtimeSource.runtime("test"));
 
     expect(handler1).toHaveBeenCalledTimes(1);
     expect(handler2).not.toHaveBeenCalled();
@@ -294,7 +323,11 @@ describe("EventManager", () => {
       { order: 0 },
     );
 
-    await eventManager.emit(eventDefinition, "testData", "test");
+    await eventManager.emit(
+      eventDefinition,
+      "testData",
+      runtimeSource.runtime("test"),
+    );
 
     expect(results).toEqual([0, 1]);
   });
@@ -340,7 +373,7 @@ describe("EventManager", () => {
     );
 
     await expect(
-      eventManager.emit(parallelEvent, "data", "src"),
+      eventManager.emit(parallelEvent, "data", runtimeSource.runtime("src")),
     ).rejects.toMatchObject({
       name: "AggregateError",
     });
@@ -349,7 +382,11 @@ describe("EventManager", () => {
     expect(results).toEqual(["ok-1"]);
 
     try {
-      await eventManager.emit(parallelEvent, "data", "src");
+      await eventManager.emit(
+        parallelEvent,
+        "data",
+        runtimeSource.runtime("src"),
+      );
     } catch (err: unknown) {
       const aggErr = err as {
         name: string;
@@ -381,7 +418,11 @@ describe("EventManager", () => {
     );
 
     try {
-      await eventManager.emit(parallelEvent, "data", "src");
+      await eventManager.emit(
+        parallelEvent,
+        "data",
+        runtimeSource.runtime("src"),
+      );
     } catch (error: unknown) {
       const err = error as {
         listenerId: string;
@@ -409,7 +450,7 @@ describe("EventManager", () => {
     );
 
     await expect(
-      eventManager.emit(parallelEvent, "data", "src"),
+      eventManager.emit(parallelEvent, "data", runtimeSource.runtime("src")),
     ).rejects.toMatchObject({
       listenerId: "primitive",
       listenerOrder: 0,
@@ -425,7 +466,11 @@ describe("EventManager", () => {
     eventManager.addListener(eventDefinition, handler);
 
     await expect(
-      eventManager.emit(eventDefinition, "testData", "test"),
+      eventManager.emit(
+        eventDefinition,
+        "testData",
+        runtimeSource.runtime("test"),
+      ),
     ).rejects.toThrow("Handler error");
   });
 
@@ -439,7 +484,11 @@ describe("EventManager", () => {
     eventManager.addListener(eventDefinition, handler2, { order: 10 });
 
     await expect(
-      eventManager.emit(eventDefinition, "testData", "test"),
+      eventManager.emit(
+        eventDefinition,
+        "testData",
+        runtimeSource.runtime("test"),
+      ),
     ).rejects.toThrow("Handler error");
 
     expect(handler2).toHaveBeenCalledTimes(0);
@@ -455,7 +504,11 @@ describe("EventManager", () => {
     eventManager.addListener(eventDefinition, second, { order: 10 });
 
     await expect(
-      eventManager.emit(eventDefinition, "testData", "test"),
+      eventManager.emit(
+        eventDefinition,
+        "testData",
+        runtimeSource.runtime("test"),
+      ),
     ).rejects.toThrow("first failed");
 
     expect(first).toHaveBeenCalledTimes(1);
@@ -474,7 +527,7 @@ describe("EventManager", () => {
     const report = await eventManager.emit(
       eventDefinition,
       "testData",
-      "test",
+      runtimeSource.runtime("test"),
       {
         report: true,
         throwOnError: false,
@@ -520,9 +573,14 @@ describe("EventManager", () => {
     );
 
     await expect(
-      eventManager.emit(eventDefinition, "testData", "test", {
-        failureMode: EventEmissionFailureMode.Aggregate,
-      }),
+      eventManager.emit(
+        eventDefinition,
+        "testData",
+        runtimeSource.runtime("test"),
+        {
+          failureMode: EventEmissionFailureMode.Aggregate,
+        },
+      ),
     ).rejects.toMatchObject({ name: "AggregateError" });
     expect(calls).toEqual(["first", "second", "third"]);
   });
@@ -546,7 +604,7 @@ describe("EventManager", () => {
     const report = await eventManager.emit(
       eventDefinition,
       "testData",
-      "test",
+      runtimeSource.runtime("test"),
       {
         report: true,
         throwOnError: false,
@@ -572,9 +630,14 @@ describe("EventManager", () => {
     );
 
     await expect(
-      eventManager.emit(eventDefinition, "testData", "test", {
-        failureMode: EventEmissionFailureMode.Aggregate,
-      }),
+      eventManager.emit(
+        eventDefinition,
+        "testData",
+        runtimeSource.runtime("test"),
+        {
+          failureMode: EventEmissionFailureMode.Aggregate,
+        },
+      ),
     ).rejects.toThrow("single-aggregate-error");
   });
 
@@ -593,7 +656,11 @@ describe("EventManager", () => {
     });
 
     await expect(
-      eventManager.emit(eventDefinition, "testData", "test"),
+      eventManager.emit(
+        eventDefinition,
+        "testData",
+        runtimeSource.runtime("test"),
+      ),
     ).rejects.toMatchObject({
       message: "first failed",
       listenerId: "first",
@@ -612,7 +679,11 @@ describe("EventManager", () => {
     );
 
     await expect(
-      eventManager.emit(eventDefinition, "testData", "test"),
+      eventManager.emit(
+        eventDefinition,
+        "testData",
+        runtimeSource.runtime("test"),
+      ),
     ).rejects.toMatchObject({
       message: "seq-primitive-error",
       listenerId: "seq-primitive",
@@ -636,7 +707,11 @@ describe("EventManager", () => {
     eventManager.lock();
 
     await expect(
-      eventManager.emit(eventDefinition, "testData", "test"),
+      eventManager.emit(
+        eventDefinition,
+        "testData",
+        runtimeSource.runtime("test"),
+      ),
     ).resolves.toBeUndefined();
 
     expect(handler).toHaveBeenCalledTimes(1);
@@ -660,7 +735,11 @@ describe("EventManager", () => {
       { order: 1 },
     );
 
-    await eventManager.emit(eventDefinition, "testData", "test");
+    await eventManager.emit(
+      eventDefinition,
+      "testData",
+      runtimeSource.runtime("test"),
+    );
 
     // According to the merge logic, event listeners come before global listeners when orders are equal
     expect(results).toEqual(["eventListener", "globalListener"]);
@@ -672,10 +751,18 @@ describe("EventManager", () => {
 
     eventManager.addGlobalListener(handler, { filter });
 
-    await eventManager.emit(eventDefinition, "blocked", "test");
+    await eventManager.emit(
+      eventDefinition,
+      "blocked",
+      runtimeSource.runtime("test"),
+    );
     expect(handler).not.toHaveBeenCalled();
 
-    await eventManager.emit(eventDefinition, "allowed", "test");
+    await eventManager.emit(
+      eventDefinition,
+      "allowed",
+      runtimeSource.runtime("test"),
+    );
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
@@ -685,11 +772,19 @@ describe("EventManager", () => {
     eventManager.addListener(eventDefinition, handler, { id: "self" });
 
     // When the source equals the listener id, the listener should be skipped
-    await eventManager.emit(eventDefinition, "data", "self");
+    await eventManager.emit(
+      eventDefinition,
+      "data",
+      runtimeSource.runtime("self"),
+    );
     expect(handler).not.toHaveBeenCalled();
 
     // When source is different, it should be called
-    await eventManager.emit(eventDefinition, "data", "other");
+    await eventManager.emit(
+      eventDefinition,
+      "data",
+      runtimeSource.runtime("other"),
+    );
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
@@ -707,7 +802,11 @@ describe("EventManager", () => {
 
   it("should handle emitting with no listeners", async () => {
     await expect(
-      eventManager.emit(eventDefinition, "testData", "test"),
+      eventManager.emit(
+        eventDefinition,
+        "testData",
+        runtimeSource.runtime("test"),
+      ),
     ).resolves.toBeUndefined();
   });
 
@@ -718,7 +817,11 @@ describe("EventManager", () => {
 
     eventManager.addListener(voidEventDefinition, handler);
 
-    await eventManager.emit(voidEventDefinition, undefined, "test");
+    await eventManager.emit(
+      voidEventDefinition,
+      undefined,
+      runtimeSource.runtime("test"),
+    );
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler).toHaveBeenCalledWith(
@@ -739,9 +842,17 @@ describe("EventManager", () => {
       eventManager.addGlobalListener(handler2, { order: 2 });
 
       // First emit should build cache
-      await eventManager.emit(eventDefinition, "test1", "source");
+      await eventManager.emit(
+        eventDefinition,
+        "test1",
+        runtimeSource.runtime("source"),
+      );
       // Second emit should use cache
-      await eventManager.emit(eventDefinition, "test2", "source");
+      await eventManager.emit(
+        eventDefinition,
+        "test2",
+        runtimeSource.runtime("source"),
+      );
 
       expect(handler1).toHaveBeenCalledTimes(2);
       expect(handler2).toHaveBeenCalledTimes(2);
@@ -753,13 +864,21 @@ describe("EventManager", () => {
       const handler3 = jest.fn();
 
       eventManager.addListener(eventDefinition, handler1, { order: 2 });
-      await eventManager.emit(eventDefinition, "test1", "source");
+      await eventManager.emit(
+        eventDefinition,
+        "test1",
+        runtimeSource.runtime("source"),
+      );
 
       // Add new listener - should invalidate cache for this event
       eventManager.addListener(eventDefinition, handler2, { order: 1 });
       eventManager.addGlobalListener(handler3, { order: 3 });
 
-      await eventManager.emit(eventDefinition, "test2", "source");
+      await eventManager.emit(
+        eventDefinition,
+        "test2",
+        runtimeSource.runtime("source"),
+      );
 
       expect(handler1).toHaveBeenCalledTimes(2);
       expect(handler2).toHaveBeenCalledTimes(1);
@@ -778,15 +897,15 @@ describe("EventManager", () => {
       eventManager.addListener(event2, handler2);
 
       // Emit to build caches
-      await eventManager.emit(event1, "test1", "source");
-      await eventManager.emit(event2, "test2", "source");
+      await eventManager.emit(event1, "test1", runtimeSource.runtime("source"));
+      await eventManager.emit(event2, "test2", runtimeSource.runtime("source"));
 
       // Add global listener - should invalidate all caches
       eventManager.addGlobalListener(globalHandler);
 
       // Emit again - global handler should be called
-      await eventManager.emit(event1, "test3", "source");
-      await eventManager.emit(event2, "test4", "source");
+      await eventManager.emit(event1, "test3", runtimeSource.runtime("source"));
+      await eventManager.emit(event2, "test4", runtimeSource.runtime("source"));
 
       expect(globalHandler).toHaveBeenCalledTimes(2);
     });
@@ -795,7 +914,11 @@ describe("EventManager", () => {
       const emptyEventDef = defineEvent<string>({ id: "emptyEvent" });
 
       // Should return immediately without creating event object
-      const result = await eventManager.emit(emptyEventDef, "test", "source");
+      const result = await eventManager.emit(
+        emptyEventDef,
+        "test",
+        runtimeSource.runtime("source"),
+      );
 
       // No errors should occur
       expect(result).toBeUndefined();
@@ -810,7 +933,11 @@ describe("EventManager", () => {
       const startTime = Date.now();
 
       for (let i = 0; i < emitCount; i++) {
-        await eventManager.emit(eventDefinition, `test${i}`, "source");
+        await eventManager.emit(
+          eventDefinition,
+          `test${i}`,
+          runtimeSource.runtime("source"),
+        );
       }
 
       const endTime = Date.now();
@@ -836,7 +963,11 @@ describe("EventManager", () => {
         });
       }
 
-      await eventManager.emit(eventDefinition, "test", "source");
+      await eventManager.emit(
+        eventDefinition,
+        "test",
+        runtimeSource.runtime("source"),
+      );
 
       // Should maintain correct order and call all listeners
       expect(results).toHaveLength(20);
@@ -859,10 +990,10 @@ describe("EventManager", () => {
       eventManager.addGlobalListener(globalHandler);
 
       // Multiple emits should use cached merged listeners
-      await eventManager.emit(event1, "test1", "source");
-      await eventManager.emit(event2, "test2", "source");
-      await eventManager.emit(event1, "test3", "source");
-      await eventManager.emit(event2, "test4", "source");
+      await eventManager.emit(event1, "test1", runtimeSource.runtime("source"));
+      await eventManager.emit(event2, "test2", runtimeSource.runtime("source"));
+      await eventManager.emit(event1, "test3", runtimeSource.runtime("source"));
+      await eventManager.emit(event2, "test4", runtimeSource.runtime("source"));
 
       expect(handler1).toHaveBeenCalledTimes(2);
       expect(handler2).toHaveBeenCalledTimes(2);
@@ -892,7 +1023,11 @@ describe("EventManager", () => {
     eventManager.addListener(eventDefinition, secondHandler, { order: 2 });
     eventManager.addGlobalListener(globalHandler, { order: 3 });
 
-    await eventManager.emit(eventDefinition, "data", "test");
+    await eventManager.emit(
+      eventDefinition,
+      "data",
+      runtimeSource.runtime("test"),
+    );
 
     expect(firstHandler).toHaveBeenCalledTimes(1);
     expect(secondHandler).not.toHaveBeenCalled();
@@ -936,7 +1071,7 @@ describe("EventManager", () => {
     const ok = jest.fn();
     eventManager.addListener(schemaEvent, ok);
     await expect(
-      eventManager.emit(schemaEvent, { x: 1 }, "src"),
+      eventManager.emit(schemaEvent, { x: 1 }, runtimeSource.runtime("src")),
     ).resolves.toBeUndefined();
     expect(ok).toHaveBeenCalled();
 
@@ -944,7 +1079,7 @@ describe("EventManager", () => {
       eventManager.emit(
         schemaEvent,
         { x: "nope" } as unknown as { x: number },
-        "src",
+        runtimeSource.runtime("src"),
       ),
     ).rejects.toThrow(/Event payload/i);
   });
@@ -960,7 +1095,11 @@ describe("EventManager", () => {
     });
 
     await expect(
-      eventManager.emit(schemaEvent, { whatever: true }, "src"),
+      eventManager.emit(
+        schemaEvent,
+        { whatever: true },
+        runtimeSource.runtime("src"),
+      ),
     ).rejects.toThrow(/Event payload/);
   });
 
@@ -986,7 +1125,11 @@ describe("EventManager", () => {
       const handler = jest.fn();
       eventManager.addListener(eventDefinition, handler);
 
-      await eventManager.emit(eventDefinition, "data", "source");
+      await eventManager.emit(
+        eventDefinition,
+        "data",
+        runtimeSource.runtime("source"),
+      );
 
       expect(interceptor1).toHaveBeenCalledTimes(1);
       expect(interceptor2).toHaveBeenCalledTimes(1);
@@ -1019,7 +1162,11 @@ describe("EventManager", () => {
       const handler = jest.fn();
       eventManager.addListener(eventDefinition, handler);
 
-      await eventManager.emit(eventDefinition, "test", "source");
+      await eventManager.emit(
+        eventDefinition,
+        "test",
+        runtimeSource.runtime("source"),
+      );
 
       expect(executionOrder).toEqual([
         "interceptor1",
@@ -1041,7 +1188,11 @@ describe("EventManager", () => {
       const handler = jest.fn();
       eventManager.addListener(eventDefinition, handler);
 
-      await eventManager.emit(eventDefinition, "original", "source");
+      await eventManager.emit(
+        eventDefinition,
+        "original",
+        runtimeSource.runtime("source"),
+      );
 
       expect(handler).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1061,7 +1212,11 @@ describe("EventManager", () => {
       const handler = jest.fn();
       eventManager.addListener(eventDefinition, handler);
 
-      await eventManager.emit(eventDefinition, "test", "source");
+      await eventManager.emit(
+        eventDefinition,
+        "test",
+        runtimeSource.runtime("source"),
+      );
 
       expect(handler).not.toHaveBeenCalled();
       expect(interceptor).toHaveBeenCalledTimes(1);
@@ -1083,7 +1238,11 @@ describe("EventManager", () => {
       const handler = jest.fn();
       eventManager.addListener(eventDefinition, handler);
 
-      await eventManager.emit(eventDefinition, "test", "source");
+      await eventManager.emit(
+        eventDefinition,
+        "test",
+        runtimeSource.runtime("source"),
+      );
 
       expect(handler).not.toHaveBeenCalled();
       expect(interceptor1).toHaveBeenCalledTimes(1);
@@ -1092,6 +1251,41 @@ describe("EventManager", () => {
   });
 
   describe("emitWithResult", () => {
+    it("emitLifecycle works without explicit options", async () => {
+      const handler = jest.fn();
+      eventManager.addListener(eventDefinition, handler);
+
+      await expect(
+        eventManager.emitLifecycle(
+          eventDefinition,
+          "orig",
+          runtimeSource.runtime("runtime.lifecycle"),
+        ),
+      ).resolves.toBeUndefined();
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it("emitLifecycle returns report when report=true", async () => {
+      const handler = jest.fn();
+      eventManager.addListener(eventDefinition, handler);
+
+      const report = await eventManager.emitLifecycle(
+        eventDefinition,
+        "orig",
+        runtimeSource.runtime("runtime.lifecycle"),
+        {
+          report: true,
+          throwOnError: false,
+        },
+      );
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(report).toBeDefined();
+      expect(report?.totalListeners).toBe(1);
+      expect(report?.attemptedListeners).toBe(1);
+    });
+
     it("returns final payload after interceptor and listener mutations", async () => {
       eventManager.intercept(async (next, event) => {
         return next({ ...event, data: `${event.data}-i` });
@@ -1104,7 +1298,7 @@ describe("EventManager", () => {
       const out = await eventManager.emitWithResult(
         eventDefinition,
         "orig",
-        "src",
+        runtimeSource.runtime("src"),
       );
       expect(out).toBe("orig-i-l");
     });
@@ -1124,7 +1318,7 @@ describe("EventManager", () => {
       const out = await eventManager.emitWithResult(
         eventDefinition,
         "orig",
-        "src",
+        runtimeSource.runtime("src"),
       );
       expect(handler).not.toHaveBeenCalled();
       expect(out).toBe("deep");
@@ -1396,7 +1590,11 @@ describe("EventManager", () => {
       const handler = jest.fn();
       eventManager.addListener(eventDefinition, handler);
 
-      await eventManager.emit(eventDefinition, "test", "source");
+      await eventManager.emit(
+        eventDefinition,
+        "test",
+        runtimeSource.runtime("source"),
+      );
 
       expect(handler).toHaveBeenCalledTimes(1);
     });
@@ -1412,7 +1610,11 @@ describe("EventManager", () => {
       eventManager.addListener(eventDefinition, handler);
 
       await expect(
-        eventManager.emit(eventDefinition, "test", "source"),
+        eventManager.emit(
+          eventDefinition,
+          "test",
+          runtimeSource.runtime("source"),
+        ),
       ).rejects.toThrow("Interceptor error");
       expect(handler).not.toHaveBeenCalled();
     });
@@ -1460,7 +1662,7 @@ describe("EventManager", () => {
     eventManager.addListener(taggedEvent, handlerEvent);
     eventManager.addGlobalListener(handlerGlobal);
 
-    await eventManager.emit(taggedEvent, "data", "test");
+    await eventManager.emit(taggedEvent, "data", runtimeSource.runtime("test"));
 
     expect(handlerEvent).toHaveBeenCalledTimes(1);
     expect(handlerGlobal).not.toHaveBeenCalled();
@@ -1476,7 +1678,7 @@ describe("EventManager", () => {
     });
 
     // Emit should ignore global listeners for this tagged event
-    await eventManager.emit(taggedEvent, "data", "src");
+    await eventManager.emit(taggedEvent, "data", runtimeSource.runtime("src"));
 
     expect(handlerGlobal).not.toHaveBeenCalled();
     expect(eventManager.hasListeners(taggedEvent)).toBe(false);
@@ -1502,7 +1704,7 @@ describe("EventManager", () => {
     eventManager.addListener(taggedEvent, handlerEvent);
     eventManager.addGlobalListener(handlerGlobal);
 
-    await eventManager.emit(taggedEvent, "data", "src");
+    await eventManager.emit(taggedEvent, "data", runtimeSource.runtime("src"));
 
     expect(interceptor).toHaveBeenCalledTimes(1);
     expect(handlerEvent).toHaveBeenCalledTimes(1);
@@ -1531,7 +1733,7 @@ describe("EventManager", () => {
     eventManager.addListener(taggedEvent, handlerEvent);
     eventManager.addGlobalListener(handlerGlobal);
 
-    await eventManager.emit(taggedEvent, "data", "src");
+    await eventManager.emit(taggedEvent, "data", runtimeSource.runtime("src"));
 
     expect(handlerEvent).toHaveBeenCalledTimes(1);
     expect(handlerGlobal).not.toHaveBeenCalled();
@@ -1603,10 +1805,12 @@ describe("EventManager", () => {
       const em = new EventManager();
       const A = defineEvent<string>({ id: "A_default" });
       em.addListener(A, async () => {
-        await em.emit(A, "x", "listener-A");
+        await em.emit(A, "x", runtimeSource.runtime("listener-A"));
       });
 
-      await expect(em.emit(A, "init", "test")).rejects.toThrow();
+      await expect(
+        em.emit(A, "init", runtimeSource.runtime("test")),
+      ).rejects.toThrow();
     });
 
     it("safe re-emit by same hook does not throw", async () => {
@@ -1618,7 +1822,7 @@ describe("EventManager", () => {
         run: async (event: any) => {
           // only re-emit once for the initial event to avoid infinite recursion
           if (event && event.data === "start") {
-            await em.emit(A, "from-hook", "hook-1");
+            await em.emit(A, "from-hook", runtimeSource.runtime("hook-1"));
           }
           return undefined;
         },
@@ -1630,15 +1834,19 @@ describe("EventManager", () => {
       });
 
       // Initial emit should not throw because re-emit is from the same hook id
-      await expect(em.emit(A, "start", "origin")).resolves.toBeUndefined();
+      await expect(
+        em.emit(A, "start", runtimeSource.runtime("origin")),
+      ).resolves.toBeUndefined();
     });
     it("throws on direct self-cycle (A -> A)", async () => {
       const A = defineEvent<string>({ id: "A" });
       eventManager.addListener(A, async () => {
-        await eventManager.emit(A, "x", "listener-A");
+        await eventManager.emit(A, "x", runtimeSource.runtime("listener-A"));
       });
 
-      await expect(eventManager.emit(A, "init", "test")).rejects.toThrow();
+      await expect(
+        eventManager.emit(A, "init", runtimeSource.runtime("test")),
+      ).rejects.toThrow();
     });
 
     it("throws on cross-cycle (A -> B -> A)", async () => {
@@ -1646,13 +1854,15 @@ describe("EventManager", () => {
       const B = defineEvent<string>({ id: "B" });
 
       eventManager.addListener(A, async () => {
-        await eventManager.emit(B, "x", "listener-A");
+        await eventManager.emit(B, "x", runtimeSource.runtime("listener-A"));
       });
       eventManager.addListener(B, async () => {
-        await eventManager.emit(A, "y", "listener-B");
+        await eventManager.emit(A, "y", runtimeSource.runtime("listener-B"));
       });
 
-      await expect(eventManager.emit(A, "init", "test")).rejects.toThrow();
+      await expect(
+        eventManager.emit(A, "init", runtimeSource.runtime("test")),
+      ).rejects.toThrow();
     });
 
     it("allows acyclic chains (A -> B -> C)", async () => {
@@ -1663,18 +1873,18 @@ describe("EventManager", () => {
 
       eventManager.addListener(A, async () => {
         calls.push("A");
-        await eventManager.emit(B, "x", "listener-A");
+        await eventManager.emit(B, "x", runtimeSource.runtime("listener-A"));
       });
       eventManager.addListener(B, async () => {
         calls.push("B");
-        await eventManager.emit(C, "y", "listener-B");
+        await eventManager.emit(C, "y", runtimeSource.runtime("listener-B"));
       });
       eventManager.addListener(C, async () => {
         calls.push("C");
       });
 
       await expect(
-        eventManager.emit(A, "init", "test"),
+        eventManager.emit(A, "init", runtimeSource.runtime("test")),
       ).resolves.toBeUndefined();
       expect(calls).toEqual(["A", "B", "C"]);
     });
@@ -1690,18 +1900,28 @@ describe("EventManager", () => {
       em.addListener(A, async (event) => {
         calls.push("A");
         if (event.data.count < max) {
-          await em.emit(B, { count: event.data.count + 1 }, "listener-A");
+          await em.emit(
+            B,
+            { count: event.data.count + 1 },
+            runtimeSource.runtime("listener-A"),
+          );
         }
       });
 
       em.addListener(B, async (event) => {
         calls.push("B");
         if (event.data.count < max) {
-          await em.emit(A, { count: event.data.count + 1 }, "listener-B");
+          await em.emit(
+            A,
+            { count: event.data.count + 1 },
+            runtimeSource.runtime("listener-B"),
+          );
         }
       });
 
-      await expect(em.emit(A, { count: 0 }, "test")).resolves.toBeUndefined();
+      await expect(
+        em.emit(A, { count: 0 }, runtimeSource.runtime("test")),
+      ).resolves.toBeUndefined();
       expect(calls).toEqual(["A", "B", "A"]);
     });
   });

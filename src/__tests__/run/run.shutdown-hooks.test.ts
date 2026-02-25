@@ -239,7 +239,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     }
   });
 
-  it("enters shutdown lockdown, blocks new work, and drains in-flight task/event work", async () => {
+  it("enters shutdown lockdown, blocks new work, and waits for in-flight work before teardown", async () => {
     let releaseTask: (() => void) | undefined;
     const taskGate = new Promise<void>((resolve) => {
       releaseTask = resolve;
@@ -293,6 +293,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
     await new Promise((r) => setTimeout(r, 0));
     process.emit("SIGTERM");
+    await new Promise((r) => setTimeout(r, 0));
 
     await expect(
       Promise.resolve().then(() => runtime.runTask(slowTask)),
@@ -304,6 +305,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     if (!releaseTask || !releaseEvent) {
       throw createMessageError("Expected shutdown gates to be initialized");
     }
+
+    expect(disposed).toBe(false);
+
     releaseTask();
     releaseEvent();
 
@@ -313,11 +317,12 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
     expect(disposed).toBe(true);
     expect(capturedExitCalls[0]).toBe(0);
+
     await runtime.dispose();
     await new Promise((r) => setTimeout(r, 0));
   });
 
-  it("continues shutdown after grace period expires", async () => {
+  it("continues shutdown without waiting for grace period", async () => {
     const neverTask = defineTask({
       id: "tests.app.shutdown.timeout.task",
       async run() {
@@ -347,7 +352,10 @@ describe("run.ts shutdown hooks & error boundary", () => {
     await new Promise((r) => setTimeout(r, 0));
     process.emit("SIGTERM");
 
-    await new Promise((r) => setTimeout(r, 60));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(disposed).toBe(false);
+
+    await new Promise((r) => setTimeout(r, 20));
 
     expect(disposed).toBe(true);
     expect(capturedExitCalls[0]).toBe(0);
@@ -358,7 +366,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     await new Promise((r) => setTimeout(r, 0));
   });
 
-  it("manual dispose enters lockdown and waits for in-flight task/event work", async () => {
+  it("manual dispose enters lockdown and waits for in-flight work before teardown", async () => {
     let releaseTask: (() => void) | undefined;
     const taskGate = new Promise<void>((resolve) => {
       releaseTask = resolve;
@@ -411,11 +419,20 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const inFlightEvent = runtime.emitEvent(slowEvent, undefined);
 
     const disposePromise = runtime.dispose();
+    let disposeResolved = false;
+    void disposePromise.then(() => {
+      disposeResolved = true;
+    });
     await new Promise((r) => setTimeout(r, 0));
 
     expect(disposed).toBe(false);
-    expect(() => runtime.runTask(slowTask)).toThrow(/disposed/i);
-    expect(() => runtime.emitEvent(slowEvent)).toThrow(/disposed/i);
+    expect(disposeResolved).toBe(false);
+    await expect(
+      Promise.resolve().then(() => runtime.runTask(slowTask)),
+    ).rejects.toThrow(/(disposed|shutting down)/i);
+    await expect(
+      Promise.resolve().then(() => runtime.emitEvent(slowEvent)),
+    ).rejects.toThrow(/(disposed|shutting down)/i);
 
     if (!releaseTask || !releaseEvent) {
       throw createMessageError(
@@ -433,7 +450,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     expect(disposed).toBe(true);
   });
 
-  it("manual dispose proceeds after grace period expires", async () => {
+  it("manual dispose proceeds without waiting for grace period", async () => {
     const neverTask = defineTask({
       id: "tests.app.manual-dispose.timeout.task",
       async run() {
@@ -461,41 +478,44 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
     void runtime.runTask(neverTask);
     const disposePromise = runtime.dispose();
-    await new Promise((r) => setTimeout(r, 60));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(disposed).toBe(false);
+
+    await new Promise((r) => setTimeout(r, 20));
 
     expect(disposed).toBe(true);
     await expect(disposePromise).resolves.toBeUndefined();
     expect(() => runtime.runTask(neverTask)).toThrow(/disposed/i);
   });
 
-  it("emits shutdown before lockdown on process signal so shutdown hooks can trigger their own drain logic", async () => {
-    const postShutdownEvent = defineEvent({
-      id: "tests.app.shutdown.pre-lockdown.event",
+  it("process signal emits disposing and allows its in-flight continuations before drain", async () => {
+    const postDisposingEvent = defineEvent({
+      id: "tests.app.shutdown.signal-disposing.event",
     });
 
-    const postShutdownHandler = jest.fn();
-    const postShutdownHook = defineHook({
-      id: "tests.app.shutdown.pre-lockdown.handler",
-      on: postShutdownEvent,
+    const postDisposingHandler = jest.fn();
+    const postDisposingHook = defineHook({
+      id: "tests.app.shutdown.signal-disposing.handler",
+      on: postDisposingEvent,
       async run() {
-        postShutdownHandler();
+        postDisposingHandler();
       },
     });
 
-    const shutdownHook = defineHook({
-      id: "tests.app.shutdown.pre-lockdown.shutdown-hook",
-      on: globalEvents.shutdown,
+    const disposingHook = defineHook({
+      id: "tests.app.shutdown.signal-disposing.lifecycle-hook",
+      on: globalEvents.disposing,
       dependencies: {
-        emitPostShutdownEvent: postShutdownEvent,
+        emitPostDisposingEvent: postDisposingEvent,
       },
-      async run(_event, { emitPostShutdownEvent }) {
-        await emitPostShutdownEvent(undefined);
+      async run(_event, { emitPostDisposingEvent }) {
+        await emitPostDisposingEvent(undefined);
       },
     });
 
     const app = defineResource({
-      id: "tests.app.shutdown.pre-lockdown",
-      register: [postShutdownEvent, postShutdownHook, shutdownHook],
+      id: "tests.app.shutdown.signal-disposing",
+      register: [postDisposingEvent, postDisposingHook, disposingHook],
       async init() {
         return "ok";
       },
@@ -509,11 +529,11 @@ describe("run.ts shutdown hooks & error boundary", () => {
     process.emit("SIGTERM");
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(postShutdownHandler).toHaveBeenCalledTimes(1);
+    expect(postDisposingHandler).toHaveBeenCalledTimes(1);
     await runtime.dispose();
   });
 
-  it("manual dispose emits disposing then drained then resource dispose, and does not emit shutdown", async () => {
+  it("manual dispose emits disposing then drained then resource dispose", async () => {
     const lifecycleOrder: string[] = [];
     const postDisposingEvent = defineEvent({
       id: "tests.app.dispose.lifecycle.post-disposing.event",
@@ -547,14 +567,6 @@ describe("run.ts shutdown hooks & error boundary", () => {
       },
     });
 
-    const shutdownHook = defineHook({
-      id: "tests.app.dispose.lifecycle.shutdown-hook",
-      on: globalEvents.shutdown,
-      async run() {
-        lifecycleOrder.push("shutdown");
-      },
-    });
-
     const app = defineResource({
       id: "tests.app.dispose.lifecycle",
       register: [
@@ -562,7 +574,6 @@ describe("run.ts shutdown hooks & error boundary", () => {
         postDisposingHandler,
         disposingHook,
         drainedHook,
-        shutdownHook,
       ],
       async init() {
         return "ok";

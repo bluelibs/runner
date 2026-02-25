@@ -1,6 +1,7 @@
 import { eventCycleError } from "../../errors";
 import { getPlatform, IAsyncLocalStorage } from "../../platform";
 import { IEmissionFrame } from "./types";
+import { RuntimeCallSource } from "../../types/runtimeSource";
 
 export class CycleContext {
   private readonly emissionStack: IAsyncLocalStorage<IEmissionFrame[]> | null;
@@ -22,7 +23,6 @@ export class CycleContext {
 
   runEmission<TResult>(
     frame: IEmissionFrame,
-    source: string,
     processEmission: () => Promise<TResult>,
   ): Promise<TResult> {
     if (!this.isEnabled || !this.emissionStack || !this.currentHookIdContext) {
@@ -32,7 +32,7 @@ export class CycleContext {
     const currentStack = this.emissionStack.getStore();
     if (currentStack) {
       const cycleStart = currentStack.findIndex(
-        (f: { id: string; source: string }) => f.id === frame.id,
+        (f: { id: string; source: RuntimeCallSource }) => f.id === frame.id,
       );
       if (cycleStart !== -1) {
         const top = currentStack[currentStack.length - 1];
@@ -43,12 +43,12 @@ export class CycleContext {
         // If the source is unchanged (hook->hook), it means the hook triggered itself, which is an infinite loop.
         const hasSameSourceInCycle = currentStack
           .slice(cycleStart)
-          .some((f) => f.source === source);
+          .some((f) => this.sameSource(f.source, frame.source));
         const isSafeReEmit =
           top.id === frame.id &&
           currentHookId &&
-          currentHookId === source &&
-          top.source !== source &&
+          currentHookId === frame.source.id &&
+          !this.sameSource(top.source, frame.source) &&
           !hasSameSourceInCycle;
 
         if (!isSafeReEmit) {
@@ -68,5 +68,9 @@ export class CycleContext {
       return execute();
     }
     return this.currentHookIdContext.run(hookId, execute);
+  }
+
+  private sameSource(a: RuntimeCallSource, b: RuntimeCallSource): boolean {
+    return a.kind === b.kind && a.id === b.id;
   }
 }

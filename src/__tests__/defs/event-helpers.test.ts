@@ -1,5 +1,6 @@
 import { defineEvent } from "../../define";
 import { isOneOf, IEventEmission, onAnyOf } from "../../defs";
+import { runtimeSource } from "../../types/runtimeSource";
 
 describe("event helpers", () => {
   it("isOneOf checks membership by id", () => {
@@ -10,7 +11,7 @@ describe("event helpers", () => {
       id: "ev.a",
       data: { a: "x" },
       timestamp: new Date(),
-      source: "test",
+      source: runtimeSource.runtime("test"),
       meta: {},
       stopPropagation() {},
       isPropagationStopped() {
@@ -23,7 +24,7 @@ describe("event helpers", () => {
       id: "ev.c",
       data: { c: true },
       timestamp: new Date(),
-      source: "test",
+      source: runtimeSource.runtime("test"),
       meta: {},
       stopPropagation() {},
       isPropagationStopped() {

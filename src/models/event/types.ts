@@ -4,6 +4,7 @@ import {
   IEventEmission,
 } from "../../defs";
 import { IHook } from "../../types/hook";
+import { RuntimeCallSource } from "../../types/runtimeSource";
 
 /**
  * Default options for event handlers.
@@ -66,5 +67,5 @@ export type HookExecutor = (
  */
 export interface IEmissionFrame {
   id: string;
-  source: string;
+  source: RuntimeCallSource;
 }

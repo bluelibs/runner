@@ -29,6 +29,7 @@ import {
 import { withExposureContext } from "./contextWrapper";
 import { getRequestId } from "../requestIdentity";
 import type { MultipartLimits } from "../multipart";
+import { runtimeSource } from "../../../types/runtimeSource";
 
 interface TaskHandlerDeps {
   store: NodeExposureDeps["store"];
@@ -68,6 +69,9 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     typeof value === "object" &&
     "stream" in value &&
     isReadableStream((value as { stream?: unknown }).stream);
+  const exposureSource = runtimeSource.resource(
+    "platform.node.resources.exposure",
+  );
 
   return async (
     req: IncomingMessage,
@@ -144,7 +148,9 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
         let taskResult: unknown;
         try {
           taskResult = await runWithContext(() =>
-            taskRunner.run(storeTask.task, multipart.value),
+            taskRunner.run(storeTask.task, multipart.value, {
+              source: exposureSource,
+            }),
           );
         } catch (err) {
           taskError = err;
@@ -187,7 +193,9 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
       // we do not pre-consume the request body and allow task to read from context.req
       if (/^application\/octet-stream(?:;|$)/i.test(contentType)) {
         const result = await runWithContext(() =>
-          taskRunner.run(storeTask.task, undefined),
+          taskRunner.run(storeTask.task, undefined, {
+            source: exposureSource,
+          }),
         );
         if (!res.writableEnded && isReadableStream(result)) {
           applyCorsActual(req, res, cors);
@@ -232,7 +240,9 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
         return body.value as unknown;
       })();
       const result = await runWithContext(() =>
-        taskRunner.run(storeTask.task, payload),
+        taskRunner.run(storeTask.task, payload, {
+          source: exposureSource,
+        }),
       );
       if (!res.writableEnded && isReadableStream(result)) {
         applyCorsActual(req, res, cors);

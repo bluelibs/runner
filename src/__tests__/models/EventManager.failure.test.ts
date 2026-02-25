@@ -2,6 +2,7 @@ import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { IEvent } from "../../defs";
 import { createMessageError } from "../../errors";
+import { runtimeSource } from "../../types/runtimeSource";
 
 describe("EventManager Parallel Failure Behavior", () => {
   let eventManager: EventManager;
@@ -49,7 +50,7 @@ describe("EventManager Parallel Failure Behavior", () => {
 
     // Expect the emit to throw
     await expect(
-      eventManager.emit(parallelEvent, "data", "test"),
+      eventManager.emit(parallelEvent, "data", runtimeSource.runtime("test")),
     ).rejects.toThrow("Fail immediately");
 
     // Let pending microtasks settle.

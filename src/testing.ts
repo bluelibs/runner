@@ -10,6 +10,7 @@ import {
   DependencyMapType,
 } from "./defs";
 import { EventManager, Logger, Store, TaskRunner } from "./models";
+import { runtimeSource } from "./types/runtimeSource";
 
 let testResourceCounter = 0;
 
@@ -70,8 +71,12 @@ function buildTestFacade(deps: {
     runTask: <I, O extends Promise<any>, D extends DependencyMapType>(
       task: ITask<I, O, D>,
       ...args: I extends undefined ? [] : [I]
-    ): Promise<Awaited<O> | undefined> =>
-      deps.taskRunner.run(task, ...args) as Promise<Awaited<O> | undefined>,
+    ): Promise<Awaited<O> | undefined> => {
+      const input = (args as unknown[])[0] as I | undefined;
+      return deps.taskRunner.run(task, input, {
+        source: runtimeSource.runtime("runtime.testing"),
+      }) as Promise<Awaited<O> | undefined>;
+    },
     // Access a resource value by id (string or symbol)
     getResource: (id: string) => deps.store.resources.get(id)?.value,
     // Expose internals when needed in tests (not recommended for app usage)

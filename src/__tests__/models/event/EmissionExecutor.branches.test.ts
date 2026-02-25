@@ -1,5 +1,6 @@
 import { EventEmissionFailureMode } from "../../../defs";
 import { executeSequentially } from "../../../models/event/EmissionExecutor";
+import { runtimeSource } from "../../../types/runtimeSource";
 
 describe("EmissionExecutor branches", () => {
   it("preserves listener metadata when thrown error already includes it", async () => {
@@ -23,7 +24,7 @@ describe("EmissionExecutor branches", () => {
         id: "event.id",
         data: undefined,
         timestamp: new Date(),
-        source: "test.source",
+        source: runtimeSource.runtime("test.source"),
         meta: {},
         isPropagationStopped: () => false,
         stopPropagation: () => undefined,

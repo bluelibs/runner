@@ -487,10 +487,17 @@ export const resultSchemaValidationError = validationError;
 
 // Event cycle (runtime)
 export const eventCycleError = error<
-  { path: Array<{ id: string; source: string }> } & DefaultErrorType
+  {
+    path: Array<{
+      id: string;
+      source: { kind: string; id: string };
+    }>;
+  } & DefaultErrorType
 >("runner.errors.eventCycle")
   .format(({ path }) => {
-    const chain = path.map((p) => `${p.id}<-${p.source}`).join("  ->  ");
+    const chain = path
+      .map((p) => `${p.id}<-${p.source.kind}:${p.source.id}`)
+      .join("  ->  ");
     return `Event emission cycle detected:\n  ${chain}\n\nBreak the cycle by changing hook logic (avoid mutual emits) or gate with conditions/tags.`;
   })
   .remediation(

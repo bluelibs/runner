@@ -25,6 +25,8 @@ import {
   RunOptions,
 } from "./types/runner";
 import { getPlatform } from "./platform";
+import { runtimeSource } from "./types/runtimeSource";
+import { LifecycleAdmissionController } from "./models/runtime/LifecycleAdmissionController";
 
 const activeRunResults = new Set<RunResult<any>>();
 
@@ -83,8 +85,10 @@ export async function run<C, V extends Promise<any>>(
     bufferLogs = false,
   } = logs;
 
+  const lifecycleAdmissionController = new LifecycleAdmissionController();
   const eventManager = new EventManager({
     runtimeEventCycleDetection,
+    lifecycleAdmissionController,
   });
 
   const { resource, config } = extractResourceAndConfig(
@@ -101,7 +105,13 @@ export async function run<C, V extends Promise<any>>(
   const onUnhandledError: OnUnhandledError =
     onUnhandledErrorOpt || createDefaultUnhandledError(logger);
 
-  const store = new Store(eventManager, logger, onUnhandledError);
+  const store = new Store(
+    eventManager,
+    logger,
+    onUnhandledError,
+    undefined,
+    lifecycleAdmissionController,
+  );
   const taskRunner = new TaskRunner(store, eventManager, logger);
   store.setTaskRunner(taskRunner);
 
@@ -126,7 +136,6 @@ export async function run<C, V extends Promise<any>>(
   // We may install shutdown hooks; capture unhook function to remove them on dispose
   let unhookShutdown: (() => void) | undefined;
   let bootstrapShutdownRequested = false;
-  let disposeRequestedByShutdownSignal = false;
   let bootstrapCompleted = false;
   let bootstrapSucceeded = false;
   let resolveBootstrapCompletion!: () => void;
@@ -163,48 +172,37 @@ export async function run<C, V extends Promise<any>>(
       await store.dispose();
     }
   };
-  // Ensure every runtime disposal path enters lockdown and drains in-flight
-  // work before tearing down resource values.
+  const runtimeLifecycleSource = runtimeSource.runtime("runtime.lifecycle");
+  // Ensure every runtime disposal path enters shutdown lockdown before
+  // tearing down resource values.
   const emitLifecycleEvent = async (
     event: (typeof globalEvents)[keyof typeof globalEvents],
   ) => {
-    await eventManager.emit(event, undefined, "run", {
+    await eventManager.emitLifecycle(event, undefined, runtimeLifecycleSource, {
       throwOnError: false,
       failureMode: "aggregate",
     });
   };
 
-  const disposeAfterDraining = async () => {
-    try {
-      if (disposeRequestedByShutdownSignal) {
-        await emitLifecycleEvent(globalEvents.shutdown);
-      }
+  const disposeWithShutdownLifecycle = async () => {
+    store.beginDisposing();
+    await emitLifecycleEvent(globalEvents.disposing);
+    await waitForShutdownGracePeriod(store, shutdownGracePeriodMs);
+    store.beginDrained();
+    await emitLifecycleEvent(globalEvents.drained);
 
-      await emitLifecycleEvent(globalEvents.disposing);
-      const drained = await waitForShutdownGracePeriod(
-        store,
-        shutdownGracePeriodMs,
-      );
-      if (drained) {
-        await emitLifecycleEvent(globalEvents.drained);
-      }
-
-      await disposeAll();
-    } finally {
-      disposeRequestedByShutdownSignal = false;
-    }
+    await disposeAll();
   };
   const runtimeResult = new RunResult<any>(
     logger,
     store,
     eventManager,
     taskRunner,
-    disposeAfterDraining,
+    disposeWithShutdownLifecycle,
   );
 
   if (shutdownHooks) {
     unhookShutdown = registerShutdownHook(async () => {
-      disposeRequestedByShutdownSignal = true;
       if (!bootstrapCompleted) {
         requestBootstrapShutdown();
         await bootstrapCompletion;
@@ -272,7 +270,11 @@ export async function run<C, V extends Promise<any>>(
     eventManager.lock();
     await logger.lock();
 
-    await eventManager.emit(globalEvents.ready, undefined, "run");
+    await eventManager.emit(
+      globalEvents.ready,
+      undefined,
+      runtimeLifecycleSource,
+    );
 
     await boundedLogger.info("Runner online. Awaiting tasks and events.");
 
@@ -293,7 +295,7 @@ export async function run<C, V extends Promise<any>>(
   } catch (err) {
     // Rollback initialized resources
     if (bootstrapShutdownRequested) {
-      await disposeAfterDraining();
+      await disposeWithShutdownLifecycle();
     } else {
       await disposeAll();
     }

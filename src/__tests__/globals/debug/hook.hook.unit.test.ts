@@ -3,6 +3,7 @@ import { globalTags } from "../../../globals/globalTags";
 import { allFalse } from "../../../globals/resources/debug/types";
 import { hookInterceptorResource } from "../../../globals/resources/debug/hook.hook";
 import { Logger } from "../../../models/Logger";
+import { runtimeSource } from "../../../types/runtimeSource";
 
 type HookInterceptorInit = NonNullable<typeof hookInterceptorResource.init>;
 type HookInterceptorDeps = Parameters<HookInterceptorInit>[1];
@@ -17,7 +18,7 @@ function createEmission(id: string): HookExecutionEvent {
     id,
     data: undefined,
     timestamp: new Date(),
-    source: "tests",
+    source: runtimeSource.runtime("tests"),
     meta: {},
     stopPropagation() {
       propagationStopped = true;

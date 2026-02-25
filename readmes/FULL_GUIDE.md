@@ -1837,9 +1837,8 @@ const systemReadyHook = r
 Available system events:
 
 - `globals.events.ready` - System has completed initialization
-- `globals.events.disposing` - Disposal started (before lockdown/drain)
-- `globals.events.drained` - In-flight task/event work drained (before resource disposers)
-- `globals.events.shutdown` - Process shutdown hook signal received (before disposal starts)
+- `globals.events.disposing` - Runtime entered `disposing`; fresh `runtime`/`resource` admissions are blocked while in-flight business work drains
+- `globals.events.drained` - Drain completed (or grace timed out); all new task/event admissions are blocked before resource disposal
   // Note: use run({ onUnhandledError }) for unhandled error handling
 
 #### stopPropagation()
@@ -2123,9 +2122,11 @@ const traceMiddleware = r.middleware
 const myTask = r
   .task("app.tasks.myTask")
   .middleware([traceMiddleware])
-  .run(async (input, deps, { journal }) => {
+  .run(async (input, deps, { journal, source }) => {
     // 3. Read from the journal (fully typed!)
     const traceId = journal.get(traceIdKey); // string | undefined
+    // 4. Inspect who invoked this task
+    const invocationSource = source; // { kind, id }
     return { traceId };
   })
   .build();
@@ -2150,6 +2151,7 @@ const myTask = r
 - **Type-safe keys**: Use `journal.createKey<T>()` for compile-time type checking
 - **Per-execution**: Fresh journal for every task run
 - **Forwarding**: Pass `{ journal }` to nested task calls to share context across the call tree
+- **Source-aware task context**: Task `run(..., deps, context)` receives `context.source` as `{ kind, id }`
 
 #### Cross-Middleware Coordination
 
@@ -2710,7 +2712,7 @@ An object with the following properties and methods:
 | `getRootValue()`            | Read the initialized root resource value                                                                                                                                                                                                                    |
 | `logger`                    | Logger instance                                                                                                                                                                                                                                             |
 | `store`                     | Runtime store with registered resources, tasks, middleware, events, and introspection helpers (for example, `getAllThrows(task \| resource)`)                                                                                                               |
-| `dispose()`                 | Emits `globals.events.disposing` (awaited), enters shutdown lockdown, drains in-flight task/event work (up to `shutdownGracePeriodMs`), emits `globals.events.drained` when drain finishes in time (awaited), then disposes resources and unhooks listeners |
+| `dispose()`                 | Transitions to `disposing`, emits `globals.events.disposing` (awaited), waits for in-flight tasks + event listeners to drain (up to `shutdownGracePeriodMs`), transitions to `drained`, emits `globals.events.drained` (awaited), then disposes resources and unhooks listeners |
 
 Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.
 
@@ -2728,7 +2730,7 @@ Pass as the second argument to `run(app, options)`.
 | `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                          |
 | `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                                 |
 | `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners for graceful shutdown. If a signal arrives during bootstrap, startup is cancelled and initialized resources are rolled back.                                                                                                                                                                                                                                                                                                                   |
-| `shutdownGracePeriodMs`      | `number`                                        | (default: `30000`) During shutdown, Runner waits up to this duration for in-flight task/event work before resource disposal continues. If draining finishes in time, `globals.events.drained` is emitted; otherwise disposal continues after timeout.                                                                                                                                                                                                                                                  |
+| `shutdownGracePeriodMs`      | `number`                                        | (default: `30_000`) Grace window in milliseconds while in `disposing`. Runner waits for in-flight business work (tasks + event listener execution) to drain before moving to `drained`. Set to `0` to skip waiting.                                                                                                                                                                                                                                                                               |
 | `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                                                                                                                                                                                          |
 | `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                                   |
 | `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `lifecycleMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred. |
@@ -2789,7 +2791,7 @@ await run(app, {
 
 ## Lifecycle Management
 
-When your app stops—whether from Ctrl+C, a deployment, or a crash—you need to close database connections, flush logs, and finish in-flight requests. Runner handles this automatically.
+When your app stops—whether from Ctrl+C, a deployment, or a crash—you need to stop admitting new work and close resources cleanly. Runner handles this automatically.
 
 ### How it works
 
@@ -2897,11 +2899,11 @@ await dispose();
 By default, Runner installs handlers for `SIGTERM` and `SIGINT`.
 When a signal arrives, Runner:
 
-1. Emits `globals.events.shutdown` (awaited) for signal-origin teardown hooks
+1. Transitions to `disposing` (blocks fresh `runtime`/`resource` admissions)
 2. Emits `globals.events.disposing` (awaited)
-3. Enters shutdown lockdown (no new `runTask`/`emitEvent` admissions)
-4. Waits for in-flight task/event listeners work up to `shutdownGracePeriodMs` (default 30s)
-5. Emits `globals.events.drained` if draining completed in time (awaited)
+3. Waits for drain up to `shutdownGracePeriodMs`
+4. Transitions to `drained` (blocks all new task/event admissions)
+5. Emits `globals.events.drained` (awaited)
 6. Disposes resources in reverse dependency order
 
 If a signal arrives while `run(...)` is still bootstrapping, Runner cancels startup and performs the same graceful teardown path.
@@ -2909,7 +2911,7 @@ If a signal arrives while `run(...)` is still bootstrapping, Runner cancels star
 ```typescript
 await run(app, {
   shutdownHooks: true, // default: true
-  shutdownGracePeriodMs: 30_000, // default: 30 seconds
+  shutdownGracePeriodMs: 30_000, // wait up to 30s for task/event drain
 });
 ```
 
@@ -2927,13 +2929,16 @@ process.on("SIGTERM", async () => {
 
 ### Disposal lifecycle events
 
-Manual `runtime.dispose()` and signal-based shutdown both emit:
+Manual `runtime.dispose()` and signal-based shutdown both follow:
 
-1. `globals.events.disposing` (awaited)
-2. drain phase (lockdown + in-flight wait, not an event)
-3. `globals.events.drained` (awaited, only when drain completes before timeout)
+1. transition to `disposing`
+2. `globals.events.disposing` (awaited)
+3. drain wait (`shutdownGracePeriodMs`)
+4. transition to `drained`
+5. `globals.events.drained` (awaited)
+6. resource disposal
 
-Additionally, signal-based shutdown emits `globals.events.shutdown` first.
+Important: once `drained` starts, all new task runs and event emissions are blocked, including calls attempted from `drained` hooks.
 
 ### Error Boundary Integration
 
@@ -8119,7 +8124,10 @@ const myTask = r
 const myTask = r
   .task("id")
   .dependencies({ db, logger })
-  .run(async (input, { db, logger }) => result)
+  .run(async (input, { db, logger }, context) => {
+    // context?.source => { kind, id }
+    return result;
+  })
   .build();
 
 // Task - With Middleware
@@ -8217,13 +8225,16 @@ await disposeWithOptions();
 | `logs`                       | Configure logger strategy/threshold/buffering                           |
 | `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
 | `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with graceful shutdown (also during bootstrap) |
-| `shutdownGracePeriodMs`      | Lockdown + max wait for in-flight task/event work before dispose        |
+| `shutdownGracePeriodMs`      | Grace window (ms) to wait for in-flight tasks/event listeners before resource disposal (`0` disables waiting) |
 | `onUnhandledError`           | Custom handler for normalized unhandled errors                          |
 | `dryRun`                     | Validate graph without running resource `init()`                        |
 | `lazy`                       | Defer startup-unused resources until on-demand access                   |
 | `lifecycleMode`              | Choose startup/dispose scheduler strategy (`sequential` or `parallel`) |
 | `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                            |
 | `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)           |
+
+Event source contract:
+`IEventEmission.source` is a structured object: `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
 
 ### Testing Patterns
 
@@ -8357,7 +8368,7 @@ Quick rules:
 - `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
 - The same selector semantics apply to `isolate({ deny: [...] })` and `isolate({ only: [...] })`
 - Tag definition vs string id is intentional in `deny`/`only`: `deny: [someTag]` blocks tag carriers, while `deny: [someTag.id]` blocks only the exact id
-- Use `isolate({ deny: [globals.tags.containerInternals] })` to block privileged container resources (`globals.resources.store`, `globals.resources.taskRunner`, `globals.resources.middlewareManager`, `globals.resources.runtime`) inside a boundary
+- Use `isolate({ deny: [globals.tags.containerInternals] })` to block privileged container resources (`globals.resources.store`, `globals.resources.taskRunner`, `globals.resources.middlewareManager`, `globals.resources.eventManager`, `globals.resources.runtime`) inside a boundary
 - Visibility is enforced at `run(app)` bootstrap
 - Wiring checks include dependencies, hook event subscriptions, and middleware attachments (task + resource middleware)
 - Subtree middleware (`resource.subtree({ tasks/resources: { middleware: [...] } })`) applies to the declaring resource subtree only

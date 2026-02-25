@@ -8,6 +8,7 @@ import {
 import { validationError } from "../../errors";
 import { EventEmissionInterceptor } from "./types";
 import { executeInParallel, executeSequentially } from "./EmissionExecutor";
+import { RuntimeCallSource } from "../../types/runtimeSource";
 
 export class EventEmissionImpl<TInput> implements IEventEmission<TInput> {
   private propagationStopped = false;
@@ -16,7 +17,7 @@ export class EventEmissionImpl<TInput> implements IEventEmission<TInput> {
     public readonly id: string,
     public readonly data: TInput,
     public readonly timestamp: Date,
-    public readonly source: string,
+    public readonly source: RuntimeCallSource,
     public readonly meta: Record<string, any>,
     public readonly tags: TagType[],
   ) {}

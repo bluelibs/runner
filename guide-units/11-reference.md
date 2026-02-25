@@ -20,7 +20,10 @@ const myTask = r
 const myTask = r
   .task("id")
   .dependencies({ db, logger })
-  .run(async (input, { db, logger }) => result)
+  .run(async (input, { db, logger }, context) => {
+    // context?.source => { kind, id }
+    return result;
+  })
   .build();
 
 // Task - With Middleware
@@ -118,13 +121,16 @@ await disposeWithOptions();
 | `logs`                       | Configure logger strategy/threshold/buffering                           |
 | `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
 | `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with graceful shutdown (also during bootstrap) |
-| `shutdownGracePeriodMs`      | Lockdown + max wait for in-flight task/event work before dispose        |
+| `shutdownGracePeriodMs`      | Grace window (ms) to wait for in-flight tasks/event listeners before resource disposal (`0` disables waiting) |
 | `onUnhandledError`           | Custom handler for normalized unhandled errors                          |
 | `dryRun`                     | Validate graph without running resource `init()`                        |
 | `lazy`                       | Defer startup-unused resources until on-demand access                   |
 | `lifecycleMode`              | Choose startup/dispose scheduler strategy (`sequential` or `parallel`) |
 | `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                            |
 | `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)           |
+
+Event source contract:
+`IEventEmission.source` is a structured object: `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
 
 ### Testing Patterns
 
@@ -258,7 +264,7 @@ Quick rules:
 - `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
 - The same selector semantics apply to `isolate({ deny: [...] })` and `isolate({ only: [...] })`
 - Tag definition vs string id is intentional in `deny`/`only`: `deny: [someTag]` blocks tag carriers, while `deny: [someTag.id]` blocks only the exact id
-- Use `isolate({ deny: [globals.tags.containerInternals] })` to block privileged container resources (`globals.resources.store`, `globals.resources.taskRunner`, `globals.resources.middlewareManager`, `globals.resources.runtime`) inside a boundary
+- Use `isolate({ deny: [globals.tags.containerInternals] })` to block privileged container resources (`globals.resources.store`, `globals.resources.taskRunner`, `globals.resources.middlewareManager`, `globals.resources.eventManager`, `globals.resources.runtime`) inside a boundary
 - Visibility is enforced at `run(app)` bootstrap
 - Wiring checks include dependencies, hook event subscriptions, and middleware attachments (task + resource middleware)
 - Subtree middleware (`resource.subtree({ tasks/resources: { middleware: [...] } })`) applies to the declaring resource subtree only

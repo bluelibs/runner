@@ -513,6 +513,32 @@ describe("run.isolate", () => {
       `"${globalResources.middlewareManager.id}"`,
     );
   });
+
+  it("denies eventManager when containerInternals is blocked", async () => {
+    const consumer = defineTask({
+      id: "policy.container-internals.event-manager.consumer",
+      dependencies: {
+        eventManager: globalResources.eventManager,
+      },
+      run: async (_input, deps) => deps.eventManager,
+    });
+
+    const guarded = defineResource({
+      id: "policy.container-internals.event-manager.guarded",
+      register: [consumer],
+      isolate: {
+        deny: [globalTags.containerInternals],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy.container-internals.event-manager.app",
+      register: [guarded],
+    });
+
+    const error = await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
+    expect(error.message).toContain(`"${globalResources.eventManager.id}"`);
+  });
 });
 
 describe("run.isolate (only mode)", () => {

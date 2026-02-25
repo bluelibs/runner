@@ -2,6 +2,7 @@ import { IOptionalDependency, IValidationSchema } from "./utilities";
 import { EventTagType } from "./tag";
 import { IEventMeta } from "./meta";
 import { CommonPayload, symbolEvent, symbolFilePath } from "./utilities";
+import { RuntimeCallSource } from "./runtimeSource";
 
 export type EventHandlerType<T = any> = (
   event: IEventEmission<T>,
@@ -118,7 +119,7 @@ export interface IEventEmission<TPayload = any> {
   /**
    * The source of the event. This can be useful for debugging.
    */
-  source: string;
+  source: RuntimeCallSource;
   /**
    * Metadata associated with the event definition.
    */

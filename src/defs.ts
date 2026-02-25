@@ -27,6 +27,7 @@ export * from "./types/subtree";
 export * from "./types/taskRunner";
 export * from "./types/meta";
 export * from "./types/runner";
+export * from "./types/runtimeSource";
 export * from "./types/asyncContext";
 export * from "./types/error";
 export * from "./types/contracts";

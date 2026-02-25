@@ -2,6 +2,7 @@ import { defineTaskMiddleware, isTask } from "../../define";
 import type { ITask } from "../../defs";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalResources } from "../globalResources";
+import { runtimeSource } from "../../types/runtimeSource";
 
 type FallbackTask = ITask;
 type FallbackResolver = {
@@ -68,7 +69,9 @@ export const fallbackTaskMiddleware = defineTaskMiddleware({
 
       if (isTask(fallback)) {
         // If it's a task, run it with the same input using the taskRunner
-        return await taskRunner.run(fallback, task.input);
+        return await taskRunner.run(fallback, task.input, {
+          source: runtimeSource.middleware("globals.middleware.task.fallback"),
+        });
       }
 
       if (typeof fallback === "function") {

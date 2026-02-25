@@ -9,17 +9,28 @@ import { MiddlewareResolver } from "./MiddlewareResolver";
 import { ValidationHelper } from "./ValidationHelper";
 import { IResourceMiddlewareExecutionInput } from "../../types/resourceMiddleware";
 import type { ResourceMiddlewareInterceptor } from "./types";
+import { runtimeSource } from "../../types/runtimeSource";
+import { LifecycleAdmissionController } from "../runtime/LifecycleAdmissionController";
 
 /**
  * Composes resource initialization chains with validation, interceptors, and middlewares.
  * Builds the onion-style wrapping of resource init functions.
  */
 export class ResourceMiddlewareComposer {
+  private readonly lifecycleAdmissionController: LifecycleAdmissionController;
+
   constructor(
     private readonly store: Store,
     private readonly interceptorRegistry: InterceptorRegistry,
     private readonly middlewareResolver: MiddlewareResolver,
-  ) {}
+  ) {
+    const storeWithLifecycle = this.store as unknown as {
+      getLifecycleAdmissionController?: () => LifecycleAdmissionController;
+    };
+    this.lifecycleAdmissionController =
+      storeWithLifecycle.getLifecycleAdmissionController?.() ??
+      new LifecycleAdmissionController();
+  }
 
   /**
    * Runs resource initialization with all middleware and interceptors applied
@@ -107,20 +118,25 @@ export class ResourceMiddlewareComposer {
         middleware.id,
       )!;
       const nextFunction = next;
+      const middlewareSource = runtimeSource.middleware(middleware.id);
 
       // Create base middleware runner
       const baseMiddlewareRunner = async (cfg: TConfig) => {
-        return storeMiddleware.middleware.run(
-          {
-            resource: {
-              definition: resource,
-              config: cfg,
-            },
-            next: (...args: [TConfig?]) =>
-              nextFunction((args.length > 0 ? args[0] : cfg) as TConfig),
-          },
-          storeMiddleware.computedDependencies,
-          middleware.config,
+        return this.lifecycleAdmissionController.trackMiddlewareExecution(
+          middlewareSource,
+          () =>
+            storeMiddleware.middleware.run(
+              {
+                resource: {
+                  definition: resource,
+                  config: cfg,
+                },
+                next: (...args: [TConfig?]) =>
+                  nextFunction((args.length > 0 ? args[0] : cfg) as TConfig),
+              },
+              storeMiddleware.computedDependencies,
+              middleware.config,
+            ),
         );
       };
 

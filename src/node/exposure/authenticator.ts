@@ -7,6 +7,7 @@ import type {
 } from "./types";
 import type { ITask } from "../../defs";
 import type { TaskRunner } from "../../models/TaskRunner";
+import { runtimeSource } from "../../types/runtimeSource";
 
 export interface NodeExposureHttpAuthConfig {
   header?: string;
@@ -41,6 +42,9 @@ export function createAuthenticator(
   >[],
 ): Authenticator {
   const headerName = (authCfg?.header ?? "x-runner-token").toLowerCase();
+  const exposureSource = runtimeSource.resource(
+    "platform.node.resources.exposure",
+  );
 
   return async (req) => {
     const providedToken = headerValue(req.headers[headerName]);
@@ -68,7 +72,9 @@ export function createAuthenticator(
 
       for (const task of validatorTasks) {
         try {
-          const result = await taskRunner.run(task, input);
+          const result = await taskRunner.run(task, input, {
+            source: exposureSource,
+          });
           if (result?.ok) {
             return { ok: true };
           }

@@ -17,40 +17,26 @@ export const globalEvents = {
    */
   ready: readyEvent,
   /**
-   * Emitted when runtime.dispose() starts, before shutdown lockdown and draining begin.
+   * Emitted when runtime enters the `disposing` phase.
    */
   disposing: defineEvent({
     id: "globals.events.disposing",
     meta: {
       title: "System Disposing",
       description:
-        "Emitted when runtime.dispose() begins teardown, before shutdown lockdown" +
-        " and in-flight drain.",
+        "Emitted when runtime enters disposing and starts draining in-flight work.",
     },
   }),
   /**
-   * Emitted when runtime.dispose() finishes draining in-flight task/event work,
-   * right before resource-level `.dispose()` hooks execute.
+   * Emitted when runtime.dispose() has entered shutdown lockdown
+   * and right before resource-level `.dispose()` hooks execute.
    */
   drained: defineEvent({
     id: "globals.events.drained",
     meta: {
       title: "System Drained",
       description:
-        "Emitted after shutdown lockdown has drained in-flight task/event work and" +
-        " right before resource disposal begins.",
-    },
-  }),
-  /**
-   * Emitted when process shutdown hooks (SIGINT/SIGTERM) begin teardown.
-   * This is not emitted by manual runtime.dispose().
-   */
-  shutdown: defineEvent({
-    id: "globals.events.shutdown",
-    meta: {
-      title: "System Shutdown",
-      description:
-        "Emitted when shutdown hooks react to a process shutdown signal and start teardown.",
+        "Emitted after shutdown lockdown and right before resource disposal begins.",
     },
   }),
 } as const;
@@ -59,5 +45,4 @@ export const globalEventsArray: IEvent<any>[] = [
   globalEvents.ready,
   globalEvents.disposing,
   globalEvents.drained,
-  globalEvents.shutdown,
 ];

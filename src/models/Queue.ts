@@ -7,6 +7,7 @@ import {
   queueDeadlockError,
   cancellationError,
 } from "../errors";
+import { runtimeSource } from "../types/runtimeSource";
 
 export type QueueEventType =
   | "enqueue"
@@ -209,7 +210,7 @@ export class Queue {
           disposed: this.disposed,
           error,
         },
-        "queue",
+        runtimeSource.runtime("runtime.internal.queue"),
       )
       .catch(() => {});
   }

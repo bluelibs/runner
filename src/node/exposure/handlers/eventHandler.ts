@@ -18,6 +18,7 @@ import { createAbortControllerForRequest } from "../utils";
 import { withUserContexts } from "./contextWrapper";
 import { ExposureErrorLogKey, handleRequestError } from "./errorHandlers";
 import { getRequestId } from "../requestIdentity";
+import { runtimeSource } from "../../../types/runtimeSource";
 
 interface EventHandlerDeps {
   store: NodeExposureDeps["store"];
@@ -45,6 +46,9 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     limits,
     allowAsyncContext = () => true,
   } = deps;
+  const exposureSource = runtimeSource.resource(
+    "platform.node.resources.exposure",
+  );
 
   return async (
     req: IncomingMessage,
@@ -121,13 +125,13 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
               return await eventManager.emitWithResult(
                 storeEvent.event,
                 body.value?.payload,
-                "exposure:http",
+                exposureSource,
               );
             }
             await eventManager.emit(
               storeEvent.event,
               body.value?.payload,
-              "exposure:http",
+              exposureSource,
             );
             return undefined;
           },

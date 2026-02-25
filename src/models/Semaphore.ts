@@ -8,6 +8,7 @@ import {
   semaphoreAcquireTimeoutError,
   cancellationError,
 } from "../errors";
+import { runtimeSource } from "../types/runtimeSource";
 
 export type SemaphoreEventType =
   | "queued"
@@ -401,7 +402,11 @@ export class Semaphore {
     // Fire-and-forget to maintain synchronous behavior, but always catch to avoid
     // process-level unhandledRejection if a lifecycle listener throws.
     void this.eventManager
-      .emit(eventDef, this.buildEvent(type), "semaphore")
+      .emit(
+        eventDef,
+        this.buildEvent(type),
+        runtimeSource.runtime("runtime.internal.semaphore"),
+      )
       .catch(() => {});
   }
 

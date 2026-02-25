@@ -8,6 +8,7 @@
 import { defineEvent, defineHook, defineResource } from "../../define";
 import { run } from "../../run";
 import { globals } from "../../index";
+import { runtimeSource } from "../../types/runtimeSource";
 
 describe("Security: Event cycle detection", () => {
   it("prevents emission cycles (A -> B -> A)", async () => {
@@ -23,7 +24,11 @@ describe("Security: Event cycle detection", () => {
       dependencies: { eventManager: globals.resources.eventManager },
       on: e1,
       run: async (ev, { eventManager }) => {
-        await eventManager.emit(e2, { v: ev.data.v + 1 }, "test");
+        await eventManager.emit(
+          e2,
+          { v: ev.data.v + 1 },
+          runtimeSource.runtime("test"),
+        );
       },
     });
 
@@ -32,7 +37,11 @@ describe("Security: Event cycle detection", () => {
       dependencies: { eventManager: globals.resources.eventManager },
       on: e2,
       run: async (ev, { eventManager }) => {
-        await eventManager.emit(e1, { v: ev.data.v + 1 }, "test");
+        await eventManager.emit(
+          e1,
+          { v: ev.data.v + 1 },
+          runtimeSource.runtime("test"),
+        );
       },
     });
 

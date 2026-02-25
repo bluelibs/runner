@@ -42,6 +42,11 @@ import type { ITask } from "../types/task";
 import { registerStoreBuiltins } from "./BuiltinsRegistry";
 import { mergeResourceSubtreePolicy } from "../definers/subtreePolicy";
 import { tunnelResourceMiddleware } from "../globals/middleware/tunnel.middleware";
+import type { RuntimeCallSource } from "../types/runtimeSource";
+import {
+  LifecycleAdmissionController,
+  RuntimeLifecyclePhase,
+} from "./runtime/LifecycleAdmissionController";
 
 const INTERNAL_ROOT_CRON_DEPENDENCY_KEY = "__runnerCron";
 
@@ -66,10 +71,10 @@ export class Store {
   private middlewareManager!: MiddlewareManager;
   private readonly initWaves: InitWave[] = [];
   private readonly initializedResourceIds = new Set<string>();
+  private readonly lifecycleAdmissionController: LifecycleAdmissionController;
 
   #isLocked = false;
   #isInitialized = false;
-  #shutdownLockdown = false;
   public mode: RunnerMode;
 
   constructor(
@@ -77,7 +82,10 @@ export class Store {
     protected readonly logger: Logger,
     public readonly onUnhandledError: OnUnhandledError,
     mode?: RunnerMode,
+    lifecycleAdmissionController?: LifecycleAdmissionController,
   ) {
+    this.lifecycleAdmissionController =
+      lifecycleAdmissionController ?? new LifecycleAdmissionController();
     this.registry = new StoreRegistry(this);
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
@@ -125,6 +133,10 @@ export class Store {
   // can compose runners using the same interceptor configuration.
   public getMiddlewareManager(): MiddlewareManager {
     return this.middlewareManager;
+  }
+
+  public getLifecycleAdmissionController(): LifecycleAdmissionController {
+    return this.lifecycleAdmissionController;
   }
 
   /**
@@ -176,22 +188,40 @@ export class Store {
   }
 
   public isInShutdownLockdown() {
-    return this.#shutdownLockdown;
+    return this.lifecycleAdmissionController.isShutdownLockdown();
+  }
+
+  public canAdmitTaskCall(source: RuntimeCallSource): boolean {
+    return this.lifecycleAdmissionController.canAdmitTask(source);
+  }
+
+  public beginDisposing() {
+    if (
+      this.lifecycleAdmissionController.getPhase() !==
+      RuntimeLifecyclePhase.Running
+    ) {
+      return;
+    }
+    this.eventManager.enterShutdownLockdown();
+    this.lifecycleAdmissionController.beginDisposing();
+  }
+
+  public beginDrained() {
+    this.lifecycleAdmissionController.beginDrained();
+  }
+
+  public async waitForDrain(shutdownGracePeriodMs: number): Promise<boolean> {
+    return this.lifecycleAdmissionController.waitForDrain(
+      shutdownGracePeriodMs,
+    );
+  }
+
+  public markDisposed() {
+    this.lifecycleAdmissionController.markDisposed();
   }
 
   public enterShutdownLockdown() {
-    if (this.#shutdownLockdown) {
-      return;
-    }
-    this.#shutdownLockdown = true;
-    this.eventManager.enterShutdownLockdown();
-  }
-
-  public async waitForInFlightOperations() {
-    await Promise.all([
-      this.eventManager.waitForIdle({ allowCurrentContext: true }),
-      this.taskRunner?.waitForIdle({ allowCurrentContext: true }),
-    ]);
+    this.beginDisposing();
   }
 
   lock() {
@@ -401,7 +431,7 @@ export class Store {
 
     this.initWaves.length = 0;
     this.initializedResourceIds.clear();
-    this.#shutdownLockdown = false;
+    this.markDisposed();
   }
 
   private async disposeWave(wave: DisposeWave): Promise<Error[]> {

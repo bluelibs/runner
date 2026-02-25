@@ -18,6 +18,7 @@ import {
 import { IErrorHelper } from "./error";
 import type { IAsyncContext } from "./asyncContext";
 import type { ExecutionJournal } from "./executionJournal";
+import type { RuntimeCallSource } from "./runtimeSource";
 
 export * from "./symbols";
 
@@ -153,11 +154,13 @@ export type CommonPayload<
 
 /**
  * Options that can be passed when calling a task dependency.
- * Allows forwarding the execution journal to nested task calls.
+ * Allows forwarding execution context to nested task calls.
  */
 export interface TaskCallOptions {
   /** Optional journal to forward to the nested task */
   journal?: ExecutionJournal;
+  /** Source metadata used for lifecycle admission and tracing. */
+  source?: RuntimeCallSource;
 }
 
 /**

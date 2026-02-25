@@ -12,6 +12,7 @@ import {
   CronScheduledTask,
   CronTagConfig,
 } from "./types";
+import { runtimeSource } from "../../types/runtimeSource";
 
 type CronTimer = ReturnType<typeof setTimeout>;
 
@@ -95,7 +96,9 @@ export const cronResource = defineResource<
       }
 
       try {
-        await taskRunner.run(taskState.task, taskState.config.input);
+        await taskRunner.run(taskState.task, taskState.config.input, {
+          source: runtimeSource.resource("globals.resources.cron"),
+        });
       } catch (error) {
         const normalizedError =
           error instanceof Error

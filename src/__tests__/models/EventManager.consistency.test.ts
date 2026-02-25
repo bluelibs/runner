@@ -1,6 +1,7 @@
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { createMessageError } from "../../errors";
+import { runtimeSource } from "../../types/runtimeSource";
 
 describe("EventManager Consistency", () => {
   describe("Snapshot Isolation", () => {
@@ -29,12 +30,12 @@ describe("EventManager Consistency", () => {
 
       // Trigger emission.
       // Expected: G1 runs. G2 is added, but should NOT run in this emission.
-      await mgr.emit(event, undefined, "source");
+      await mgr.emit(event, undefined, runtimeSource.runtime("source"));
 
       expect(listenerCallCount).toBe(0);
 
       // Verify G2 runs on NEXT emission
-      await mgr.emit(event, undefined, "source");
+      await mgr.emit(event, undefined, runtimeSource.runtime("source"));
       expect(listenerCallCount).toBe(1);
     });
   });
@@ -55,7 +56,7 @@ describe("EventManager Consistency", () => {
             );
           // Emit same event, claiming to be this hook (source=hook.id)
           // This previously triggered the "safeReEmitBySameHook" bypass in CycleContext
-          await mgr.emit(event, undefined, "test.hook");
+          await mgr.emit(event, undefined, runtimeSource.runtime("test.hook"));
         },
       };
 
@@ -65,9 +66,9 @@ describe("EventManager Consistency", () => {
       });
 
       // Initial emission
-      await expect(mgr.emit(event, undefined, "initial")).rejects.toThrow(
-        /cycle detected/i,
-      );
+      await expect(
+        mgr.emit(event, undefined, runtimeSource.runtime("initial")),
+      ).rejects.toThrow(/cycle detected/i);
     });
   });
 });

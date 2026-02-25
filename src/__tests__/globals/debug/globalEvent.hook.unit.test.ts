@@ -2,6 +2,7 @@ import { Logger } from "../../../models/Logger";
 import { allFalse } from "../../../globals/resources/debug/types";
 import { globalTags } from "../../../globals/globalTags";
 import { globalEventListener } from "../../../globals/resources/debug/globalEvent.hook";
+import { runtimeSource } from "../../../types/runtimeSource";
 
 type GlobalEventRun = NonNullable<typeof globalEventListener.run>;
 type GlobalEventRunDeps = Parameters<GlobalEventRun>[1];
@@ -16,7 +17,7 @@ function createEvent(
     id,
     data: undefined,
     timestamp: new Date(),
-    source: "tests",
+    source: runtimeSource.runtime("tests"),
     meta: {},
     stopPropagation() {
       propagationStopped = true;

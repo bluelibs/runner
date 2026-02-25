@@ -261,8 +261,10 @@ const auditMiddleware = r.middleware
 // Task accesses journal via context
 const myTask = r
   .task("app.tasks.myTask")
-  .run(async (input, deps, { journal }) => {
+  .run(async (input, deps, { journal, source }) => {
     journal.set(abortControllerKey, new AbortController());
+    // Task invocation source metadata: { kind, id }
+    const kind = source.kind;
     // To update existing: journal.set(key, newValue, { override: true });
     return "done";
   })
@@ -273,6 +275,8 @@ const myKey = journal.createKey<{ startedAt: Date }>("app.middleware.timing");
 ```
 
 **Built-in Middleware Journal Keys**: Global middlewares (`retry`, `cache`, `circuitBreaker`, `rateLimit`, `fallback`, `timeout`) expose runtime state via typed journal keys at `globals.middleware.task.<name>.journalKeys`. For example, `retry` exposes `attempt` and `lastError`; `cache` exposes `hit`; `circuitBreaker` exposes `state` and `failures`. Access these via `journal.get(key)` without deep imports.
+
+Task `run(..., deps, context)` context includes both `journal` and `source` (`{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`).
 
 ## Tags
 
@@ -315,7 +319,7 @@ Use `tag.startup()` when startup ordering matters; treat that accessor as metada
 
 - Scope tags with `.for([...])` to specific definition kinds (`"tasks"`, `"resources"`, `"events"`, `"hooks"`, `"taskMiddlewares"`, `"resourceMiddlewares"`, `"errors"`). Wrong usage is rejected by TypeScript in `.tags([...])` and also fails fast at runtime (useful when `any`/casts bypass TS).
 - Contract tags (a "smart tag"): define type contracts for task input/output (or resource config/value) via `r.tag<TConfig, TInputContract, TOutputContract>(id)`. They don't change runtime behavior; they shape the inferred types and compose with contract middleware.
-- Smart tags: built-in tags like `globals.tags.system`, `globals.tags.debug`, `globals.tags.excludeFromGlobalHooks`, and `globals.tags.containerInternals` change framework behavior; use them for debug/scoping and for denying privileged container resources (`store`, `taskRunner`, `middlewareManager`, `runtime`) via `.isolate({ deny: [globals.tags.containerInternals] })` (use the tag definition, not the string id, when you want to block all carriers).
+- Smart tags: built-in tags like `globals.tags.system`, `globals.tags.debug`, `globals.tags.excludeFromGlobalHooks`, and `globals.tags.containerInternals` change framework behavior; use them for debug/scoping and for denying privileged container resources (`store`, `taskRunner`, `middlewareManager`, `eventManager`, `runtime`) via `.isolate({ deny: [globals.tags.containerInternals] })` (use the tag definition, not the string id, when you want to block all carriers).
 
 ```ts
 type Input = { id: string };
@@ -514,9 +518,10 @@ const app = r
 - `run(root, options)` wires dependencies, initializes resources, and returns the runtime object: `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, `store`, `logger`, and `dispose`. `getLazyResourceValue` is available only when `run(..., { lazy: true })` is enabled.
 - `emitEvent(event, payload, options?)` accepts the same emission options (`failureMode`, `throwOnError`, `report`) as dependency emitters.
 - `.isolate({ exports: [...] })` on the root restricts `runTask`, `emitEvent`, `getResourceValue` to exported ids; omit for full open surface.
-- Run options highlights: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `shutdownGracePeriodMs` (default `30_000`), `dryRun`, `lazy`, `lifecycleMode` (`"sequential"` or `"parallel"`). `initMode` is a deprecated alias.
-- Shutdown behavior: on manual `runtime.dispose()`, Runner emits `globals.events.disposing`, enters lockdown (no new task runs or event emissions), waits for in-flight task/event work to drain until `shutdownGracePeriodMs`, emits `globals.events.drained` if draining completed in time, then disposes resources. Signals received during bootstrap cancel startup and roll back initialized resources.
-- Global lifecycle events: use `globals.events.ready` for post-boot orchestration, `globals.events.disposing` / `globals.events.drained` for disposal lifecycle, and `globals.events.shutdown` for shutdown-hook signal handling (SIGINT/SIGTERM) before disposal starts.
+- Run options highlights: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `shutdownGracePeriodMs` (active grace window for drain wait), `dryRun`, `lazy`, `lifecycleMode` (`"sequential"` or `"parallel"`). `initMode` is a deprecated alias.
+- Shutdown behavior: `dispose()` transitions to `disposing`, emits `globals.events.disposing`, waits up to `shutdownGracePeriodMs` for tasks + event listeners to drain, transitions to `drained`, emits `globals.events.drained`, then disposes resources. Signals received during bootstrap cancel startup and roll back initialized resources.
+- Global lifecycle events: use `globals.events.ready` for post-boot orchestration, and `globals.events.disposing` / `globals.events.drained` for disposal lifecycle.
+- Event source model: `IEventEmission.source` is object-based end-to-end: `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime.
 
 ## Reliability & Performance

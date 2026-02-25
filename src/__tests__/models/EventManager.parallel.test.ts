@@ -2,6 +2,7 @@ import { EventEmissionFailureMode, IEvent } from "../../defs";
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { createMessageError } from "../../errors";
+import { runtimeSource } from "../../types/runtimeSource";
 
 describe("EventManager Parallel Execution", () => {
   let eventManager: EventManager;
@@ -36,7 +37,11 @@ describe("EventManager Parallel Execution", () => {
       { order: 1 },
     );
 
-    await eventManager.emit(parallelEvent, "data", "test");
+    await eventManager.emit(
+      parallelEvent,
+      "data",
+      runtimeSource.runtime("test"),
+    );
 
     // "fast" should finish before "slow" even if "slow" was added first
     expect(results).toEqual(["fast", "slow"]);
@@ -72,7 +77,11 @@ describe("EventManager Parallel Execution", () => {
       { order: 1 },
     );
 
-    await eventManager.emit(parallelEvent, "data", "test");
+    await eventManager.emit(
+      parallelEvent,
+      "data",
+      runtimeSource.runtime("test"),
+    );
 
     // Batch 1 should finish completely before Batch 2 starts
     // Inside Batch 1, "fast" finishes before "slow"
@@ -101,7 +110,11 @@ describe("EventManager Parallel Execution", () => {
       { order: 1 },
     );
 
-    await eventManager.emit(parallelEvent, "data", "test");
+    await eventManager.emit(
+      parallelEvent,
+      "data",
+      runtimeSource.runtime("test"),
+    );
 
     expect(results).toEqual(["batch1"]);
   });
@@ -127,7 +140,11 @@ describe("EventManager Parallel Execution", () => {
       { order: 0 },
     );
 
-    await eventManager.emit(parallelEvent, "data", "test");
+    await eventManager.emit(
+      parallelEvent,
+      "data",
+      runtimeSource.runtime("test"),
+    );
 
     // Both should run because they are in the same parallel batch
     expect(results).toContain("batch1-stopper");
@@ -158,7 +175,11 @@ describe("EventManager Parallel Execution", () => {
       { order: 1 },
     );
 
-    await eventManager.emit(parallelEvent, "data", "test");
+    await eventManager.emit(
+      parallelEvent,
+      "data",
+      runtimeSource.runtime("test"),
+    );
 
     expect(results).toEqual([]);
   });
@@ -181,7 +202,7 @@ describe("EventManager Parallel Execution", () => {
     );
 
     await expect(
-      eventManager.emit(parallelEvent, "data", "test"),
+      eventManager.emit(parallelEvent, "data", runtimeSource.runtime("test")),
     ).rejects.toThrow("Parallel Error");
   });
 
@@ -212,7 +233,11 @@ describe("EventManager Parallel Execution", () => {
     );
 
     try {
-      await eventManager.emit(parallelEvent, "data", "test");
+      await eventManager.emit(
+        parallelEvent,
+        "data",
+        runtimeSource.runtime("test"),
+      );
       fail("Should have thrown");
     } catch (err: any) {
       expect(err.name).toBe("AggregateError");
@@ -244,7 +269,11 @@ describe("EventManager Parallel Execution", () => {
       { order: 0 },
     );
 
-    await eventManager.emit(parallelEvent, "data", sourceId);
+    await eventManager.emit(
+      parallelEvent,
+      "data",
+      runtimeSource.runtime(sourceId),
+    );
 
     expect(results).toEqual(["should-run"]);
   });
@@ -274,7 +303,11 @@ describe("EventManager Parallel Execution", () => {
       },
     );
 
-    await eventManager.emit(parallelEvent, "data", "test");
+    await eventManager.emit(
+      parallelEvent,
+      "data",
+      runtimeSource.runtime("test"),
+    );
 
     expect(results).toEqual(["filtered-in"]);
   });
@@ -288,7 +321,7 @@ describe("EventManager Parallel Execution", () => {
 
     // Should not throw
     await expect(
-      eventManager.emit(emptyEvent, "data", "test"),
+      eventManager.emit(emptyEvent, "data", runtimeSource.runtime("test")),
     ).resolves.toBeUndefined();
   });
 
@@ -303,7 +336,11 @@ describe("EventManager Parallel Execution", () => {
       { order: 0 },
     );
 
-    await eventManager.emit(parallelEvent, "data", "test");
+    await eventManager.emit(
+      parallelEvent,
+      "data",
+      runtimeSource.runtime("test"),
+    );
 
     expect(results).toEqual(["single"]);
   });
@@ -335,7 +372,11 @@ describe("EventManager Parallel Execution", () => {
       { order: 2 },
     );
 
-    await eventManager.emit(parallelEvent, "data", "test");
+    await eventManager.emit(
+      parallelEvent,
+      "data",
+      runtimeSource.runtime("test"),
+    );
 
     // Should execute in order since each is in its own batch
     expect(results).toEqual(["order-0", "order-1", "order-2"]);
@@ -363,7 +404,7 @@ describe("EventManager Parallel Execution", () => {
     );
 
     await expect(
-      eventManager.emit(parallelEvent, "data", "test"),
+      eventManager.emit(parallelEvent, "data", runtimeSource.runtime("test")),
     ).rejects.toThrow("Batch 0 error");
 
     expect(results).not.toContain("batch1-should-not-run");
@@ -395,11 +436,16 @@ describe("EventManager Parallel Execution", () => {
       { order: 2, id: "b2" },
     );
 
-    const report = await eventManager.emit(parallelEvent, "data", "test", {
-      report: true,
-      throwOnError: false,
-      failureMode: EventEmissionFailureMode.Aggregate,
-    });
+    const report = await eventManager.emit(
+      parallelEvent,
+      "data",
+      runtimeSource.runtime("test"),
+      {
+        report: true,
+        throwOnError: false,
+        failureMode: EventEmissionFailureMode.Aggregate,
+      },
+    );
 
     expect(results).toEqual(["batch1-ran", "batch2-ran"]);
     expect(report.failedListeners).toBe(2);

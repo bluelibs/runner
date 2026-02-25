@@ -25,5 +25,8 @@ describe("globals.tags.containerInternals", () => {
         (tag) => tag.id === expectedTagId,
       ),
     ).toBe(true);
+    expect(
+      globalResources.eventManager.tags.some((tag) => tag.id === expectedTagId),
+    ).toBe(true);
   });
 });

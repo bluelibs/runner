@@ -225,7 +225,9 @@ describe("global cron resource", () => {
       .build();
 
     const app = r.resource("app").register([selfDisposingTask]).build();
-    runtimeRef.current = await run(app);
+    runtimeRef.current = await run(app, {
+      shutdownGracePeriodMs: 0,
+    });
 
     jest.advanceTimersByTime(60_000);
     await flushMicrotasks();

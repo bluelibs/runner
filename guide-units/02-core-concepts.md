@@ -726,9 +726,8 @@ const systemReadyHook = r
 Available system events:
 
 - `globals.events.ready` - System has completed initialization
-- `globals.events.disposing` - Disposal started (before lockdown/drain)
-- `globals.events.drained` - In-flight task/event work drained (before resource disposers)
-- `globals.events.shutdown` - Process shutdown hook signal received (before disposal starts)
+- `globals.events.disposing` - Runtime entered `disposing`; fresh `runtime`/`resource` admissions are blocked while in-flight business work drains
+- `globals.events.drained` - Drain completed (or grace timed out); all new task/event admissions are blocked before resource disposal
   // Note: use run({ onUnhandledError }) for unhandled error handling
 
 #### stopPropagation()
@@ -1012,9 +1011,11 @@ const traceMiddleware = r.middleware
 const myTask = r
   .task("app.tasks.myTask")
   .middleware([traceMiddleware])
-  .run(async (input, deps, { journal }) => {
+  .run(async (input, deps, { journal, source }) => {
     // 3. Read from the journal (fully typed!)
     const traceId = journal.get(traceIdKey); // string | undefined
+    // 4. Inspect who invoked this task
+    const invocationSource = source; // { kind, id }
     return { traceId };
   })
   .build();
@@ -1039,6 +1040,7 @@ const myTask = r
 - **Type-safe keys**: Use `journal.createKey<T>()` for compile-time type checking
 - **Per-execution**: Fresh journal for every task run
 - **Forwarding**: Pass `{ journal }` to nested task calls to share context across the call tree
+- **Source-aware task context**: Task `run(..., deps, context)` receives `context.source` as `{ kind, id }`
 
 #### Cross-Middleware Coordination
 

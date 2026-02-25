@@ -35,6 +35,11 @@ import type {
   ResourceMiddlewareInterceptor,
   TaskMiddlewareInterceptor,
 } from "../middleware/types";
+import {
+  RuntimeCallSource,
+  RuntimeCallSourceKind,
+  runtimeSource,
+} from "../../types/runtimeSource";
 
 const MIDDLEWARE_MANAGER_RESOURCE_ID = "globals.resources.middlewareManager";
 
@@ -165,7 +170,7 @@ export class DependencyExtractor {
     }
 
     if (utils.isResource(item)) return this.extractResourceDependency(item);
-    if (utils.isTask(item)) return this.extractTaskDependency(item);
+    if (utils.isTask(item)) return this.extractTaskDependency(item, source);
     if (utils.isEvent(item)) return this.extractEventDependency(item, source);
     if (utils.isTag(item)) return this.extractTagDependency(item, source);
 
@@ -181,12 +186,13 @@ export class DependencyExtractor {
   }
 
   extractEventDependency(object: IEvent<any>, source: string) {
+    const runtimeCallSource = this.resolveRuntimeCallSource(source);
     return async (input: unknown, options?: IEventEmitOptions) => {
-      return this.eventManager.emit(object, input, source, options);
+      return this.eventManager.emit(object, input, runtimeCallSource, options);
     };
   }
 
-  async extractTaskDependency(object: ITask<any, any, {}>) {
+  async extractTaskDependency(object: ITask<any, any, {}>, source?: string) {
     const storeTask = this.store.tasks.get(object.id);
     if (storeTask === undefined) {
       dependencyNotFoundError.throw({ key: `Task ${object.id}` });
@@ -211,12 +217,18 @@ export class DependencyExtractor {
       await initPromise;
     }
 
+    const runtimeCallSource = this.resolveRuntimeCallSource(
+      source ?? st.task.id,
+    );
     return (inputOrOptions?: unknown, maybeOptions?: TaskCallOptions) => {
       const { input, options } = this.normalizeTaskDependencyArgs(
         inputOrOptions,
         maybeOptions,
       );
-      return this.taskRunner.run(st.task, input, options);
+      return this.taskRunner.run(st.task, input, {
+        ...(options || {}),
+        source: runtimeCallSource,
+      });
     };
   }
 
@@ -257,7 +269,7 @@ export class DependencyExtractor {
           baseAccessor.tasks.map((entry) => ({
             definition: entry.definition,
             config: entry.config,
-            run: this.createTaggedTaskRunner(entry.definition),
+            run: this.createTaggedTaskRunner(entry.definition, source),
             ...(ownerResourceId
               ? this.createTaggedTaskInterceptHelpers(
                   entry.definition,
@@ -310,6 +322,7 @@ export class DependencyExtractor {
 
   private createTaggedTaskRunner<TTask extends TaggedTask<any>>(
     task: TTask,
+    source: string,
   ): TaskDependency<ExtractTaskInput<TTask>, ExtractTaskOutput<TTask>> {
     let cachedRunner:
       | ((
@@ -322,6 +335,7 @@ export class DependencyExtractor {
       if (!cachedRunner) {
         cachedRunner = (await this.extractTaskDependency(
           task as ITask<any, any, {}>,
+          source,
         )) as (
           input: ExtractTaskInput<TTask>,
           options?: TaskCallOptions,
@@ -375,7 +389,11 @@ export class DependencyExtractor {
     }
 
     const keys = Object.keys(value as Record<string, unknown>);
-    return keys.length === 0 || (keys.length === 1 && keys[0] === "journal");
+    if (keys.length === 0) {
+      return true;
+    }
+
+    return keys.every((key) => key === "journal" || key === "source");
   }
 
   private createTaggedTaskInterceptHelpers<TTask extends TaggedTask<any>>(
@@ -427,8 +445,12 @@ export class DependencyExtractor {
     const fn: (input: I, options?: TaskCallOptions) => O = (input, options) => {
       const storeTask = this.getStoreTaskOrThrow(taskId);
       const effective: ITask<I, O, D> = storeTask.task;
+      const runtimeCallSource = this.resolveRuntimeCallSource(ownerResourceId);
 
-      return this.taskRunner.run(effective, input, options) as O;
+      return this.taskRunner.run(effective, input, {
+        ...(options || {}),
+        source: runtimeCallSource,
+      }) as O;
     };
     return Object.assign(fn, {
       intercept: (middleware: TaskLocalInterceptor<I, O>) => {
@@ -542,5 +564,27 @@ export class DependencyExtractor {
       return dependencyNotFoundError.throw({ key: `Task ${taskId}` });
     }
     return storeTask;
+  }
+
+  private resolveRuntimeCallSource(sourceId: string): RuntimeCallSource {
+    if (this.store.tasks.has(sourceId)) {
+      return runtimeSource.task(sourceId);
+    }
+    if (this.store.hooks.has(sourceId)) {
+      return runtimeSource.hook(sourceId);
+    }
+    if (
+      this.store.taskMiddlewares.has(sourceId) ||
+      this.store.resourceMiddlewares.has(sourceId)
+    ) {
+      return runtimeSource.middleware(sourceId);
+    }
+    if (this.store.resources.has(sourceId)) {
+      return runtimeSource.resource(sourceId);
+    }
+    return {
+      kind: RuntimeCallSourceKind.Runtime,
+      id: sourceId,
+    };
   }
 }

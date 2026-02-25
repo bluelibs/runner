@@ -22,6 +22,7 @@ import {
   runtimeRootNotAvailableError,
   runtimeRootNotInitializedError,
 } from "../errors";
+import { runtimeSource } from "../types/runtimeSource";
 
 /**
  * Options for configuring lazy resource loading behavior.
@@ -239,6 +240,7 @@ export class RunResult<V> implements IRuntime<V> {
    *
    * // Run with options for journal forwarding
    * const result = await runtime.runTask(greet, undefined, { journal });
+   * // Inside task.run(...), context.source is injected automatically
    */
   public runTask = <TTask extends ITask<any, Promise<any>, any> | string>(
     task: TTask,
@@ -272,11 +274,10 @@ export class RunResult<V> implements IRuntime<V> {
         : Promise<any>;
     }
 
-    return this.taskRunner.run(
-      resolvedTask,
-      input,
-      options,
-    ) as TTask extends ITask<any, infer O, any> ? O : Promise<any>;
+    return this.taskRunner.run(resolvedTask, input, {
+      ...(options || {}),
+      source: runtimeSource.runtime("runtime.api"),
+    }) as TTask extends ITask<any, infer O, any> ? O : Promise<any>;
   };
 
   /**
@@ -326,7 +327,12 @@ export class RunResult<V> implements IRuntime<V> {
       return Promise.reject(e);
     }
 
-    return this.eventManager.emit(event, payload, "outside", options);
+    return this.eventManager.emit(
+      event,
+      payload,
+      runtimeSource.runtime("runtime.api"),
+      options,
+    );
   }) as {
     <P>(
       event: IEvent<P> | string,

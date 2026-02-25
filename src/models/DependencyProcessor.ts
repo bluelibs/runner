@@ -363,7 +363,7 @@ export class DependencyProcessor {
         const eventDefinition = hook.on;
 
         const handler = async (receivedEvent: IEventEmission<any>) => {
-          if (receivedEvent.source === hook.id) {
+          if (receivedEvent.source.id === hook.id) {
             return;
           }
           if (hookStoreElement.dependencyState !== HookDependencyState.Ready) {

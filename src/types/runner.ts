@@ -99,8 +99,10 @@ export type RunOptions = {
    */
   shutdownHooks?: boolean;
   /**
-   * Grace window used during shutdown to let in-flight tasks/events finish before disposal proceeds.
-   * Defaults to 30 seconds.
+   * Grace window (milliseconds) used during shutdown after entering `disposing`.
+   * Runner waits up to this duration for in-flight business work (tasks + event
+   * listener execution) to drain before moving to `drained` and resource disposal.
+   * Set to `0` to skip waiting.
    */
   shutdownGracePeriodMs?: number;
   /**

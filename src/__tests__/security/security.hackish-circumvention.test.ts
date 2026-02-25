@@ -13,6 +13,7 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { globals } from "../../index";
+import { runtimeSource } from "../../types/runtimeSource";
 
 describe("Security: Hackish circumvention attempts", () => {
   it("source spoofing cannot suppress all listeners", async () => {
@@ -48,7 +49,7 @@ describe("Security: Hackish circumvention attempts", () => {
       id: "sec.hack.emitWithSpoof",
       dependencies: { eventManager: globals.resources.eventManager },
       run: async (input, { eventManager }) => {
-        await eventManager.emit(e, input, h1.id); // spoof source as h1
+        await eventManager.emit(e, input, runtimeSource.runtime(h1.id)); // spoof source as h1
       },
     });
 
@@ -81,7 +82,11 @@ describe("Security: Hackish circumvention attempts", () => {
       run: async (ev, { eventManager }) => {
         countH++;
         if (ev.data.step === 0) {
-          await eventManager.emit(e, { step: 1 }, "sec.hack.h");
+          await eventManager.emit(
+            e,
+            { step: 1 },
+            runtimeSource.runtime("sec.hack.h"),
+          );
         }
       },
     });

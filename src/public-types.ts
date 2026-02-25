@@ -56,3 +56,8 @@ export type {
   JournalKey,
   JournalSetOptions,
 } from "./types/executionJournal";
+
+export type {
+  RuntimeCallSource,
+  RuntimeCallSourceKind,
+} from "./types/runtimeSource";

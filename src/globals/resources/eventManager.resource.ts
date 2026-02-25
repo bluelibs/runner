@@ -10,7 +10,7 @@ export const eventManagerResource = defineResource<void, Promise<EventManager>>(
       description:
         "Manages all events and event listeners. This is meant to be used internally for most use-cases.",
     },
-    tags: [globalTags.system],
+    tags: [globalTags.system, globalTags.containerInternals],
     dispose: async (eventManager) => {
       eventManager.dispose();
     },

@@ -4,6 +4,8 @@ import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { createTestFixture } from "../test-utils";
 import { createMessageError } from "../../errors";
 import { ResourceInitMode } from "../../types/runner";
+import { runtimeSource } from "../../types/runtimeSource";
+import type { RuntimeCallSource } from "../../types/runtimeSource";
 
 enum ResourceId {
   Broken = "broken.resource",
@@ -371,8 +373,46 @@ describe("DependencyProcessor Consistency", () => {
     );
     processor.attachListeners();
 
-    await eventManager.emit(event, { ok: true }, "test");
+    await eventManager.emit(event, { ok: true }, runtimeSource.runtime("test"));
     expect(runHook).not.toHaveBeenCalled();
+  });
+
+  it("falls back to runtime source for unknown dependency owners", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const event = r
+      .event<{ ok: boolean }>("tests.dependency.source.fallback")
+      .build();
+    store.storeGenericItem(event);
+
+    const processor = new DependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+    );
+
+    const seenSources: RuntimeCallSource[] = [];
+    eventManager.addListener(event, (received) => {
+      seenSources.push(received.source);
+    });
+
+    const emitFromUnknownOwner = processor.extractEventDependency(
+      event,
+      "unknown.owner.id",
+    );
+
+    await emitFromUnknownOwner({ ok: true });
+
+    expect(seenSources).toEqual([
+      {
+        kind: "runtime",
+        id: "unknown.owner.id",
+      },
+    ]);
   });
 
   it("covers buffered hook flush guards and self-source filtering", async () => {
@@ -387,7 +427,7 @@ describe("DependencyProcessor Consistency", () => {
       taskRunner,
       logger,
     );
-    type HookEvent = { source: string; data: unknown };
+    type HookEvent = { source: RuntimeCallSource; data: unknown };
     type HookStoreElementShape = {
       hook: { id: string; run: () => Promise<void> };
       computedDependencies: Record<string, never>;
@@ -417,7 +457,9 @@ describe("DependencyProcessor Consistency", () => {
     ).resolves.toBeUndefined();
 
     hookStoreElement.dependencyState = "ready";
-    internals.pendingHookEvents.set(hook.id, [{ source: "outside", data: {} }]);
+    internals.pendingHookEvents.set(hook.id, [
+      { source: runtimeSource.runtime("outside"), data: {} },
+    ]);
     internals.drainingHookIds.add(hook.id);
 
     await expect(
@@ -427,8 +469,8 @@ describe("DependencyProcessor Consistency", () => {
 
     internals.drainingHookIds.delete(hook.id);
     internals.pendingHookEvents.set(hook.id, [
-      { source: hook.id, data: { skip: true } },
-      { source: "outside", data: { run: true } },
+      { source: runtimeSource.hook(hook.id), data: { skip: true } },
+      { source: runtimeSource.runtime("outside"), data: { run: true } },
     ]);
 
     const executeSpy = jest
@@ -440,7 +482,9 @@ describe("DependencyProcessor Consistency", () => {
     expect(executeSpy).toHaveBeenCalledTimes(1);
     expect(executeSpy).toHaveBeenCalledWith(
       hook,
-      expect.objectContaining({ source: "outside" }),
+      expect.objectContaining({
+        source: expect.objectContaining({ id: "outside" }),
+      }),
       {},
     );
   });
@@ -460,7 +504,7 @@ describe("DependencyProcessor Consistency", () => {
       false,
       false,
     );
-    type HookEvent = { source: string; data: unknown };
+    type HookEvent = { source: RuntimeCallSource; data: unknown };
     type HookStoreElementShape = {
       hook: { id: string; run: () => Promise<void> };
       computedDependencies: Record<string, never>;
@@ -485,13 +529,15 @@ describe("DependencyProcessor Consistency", () => {
       dependencyState: "ready",
     };
 
-    internals.pendingHookEvents.set(hook.id, [{ source: "outside", data: {} }]);
+    internals.pendingHookEvents.set(hook.id, [
+      { source: runtimeSource.runtime("outside"), data: {} },
+    ]);
 
     const executeSpy = jest
       .spyOn(eventManager, "executeHookWithInterceptors")
       .mockImplementation(async () => {
         internals.pendingHookEvents.set(hook.id, [
-          { source: "outside", data: {} },
+          { source: runtimeSource.runtime("outside"), data: {} },
         ]);
       });
     const consoleErrorSpy = jest

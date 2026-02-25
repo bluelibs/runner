@@ -11,6 +11,7 @@ import { TaskRunner } from "../../models";
 import { run } from "../../run";
 import { createTestFixture } from "../test-utils";
 import { createMessageError } from "../../errors";
+import { runtimeSource } from "../../types/runtimeSource";
 
 describe("RunResult", () => {
   it("exposes runTask, emitEvent, getResourceValue, getResourceConfig, logger and they work", async () => {
@@ -133,11 +134,13 @@ describe("RunResult", () => {
 
   it("supports runTask call-options via input/options arguments", async () => {
     const seenJournals: unknown[] = [];
+    const seenSources: unknown[] = [];
 
     const noInputTask = defineTask<void, Promise<string>>({
       id: "rr.options.noInputTask",
       run: async (_input, _deps, context) => {
         seenJournals.push(context?.journal);
+        seenSources.push(context?.source);
         return "ok";
       },
     });
@@ -156,6 +159,39 @@ describe("RunResult", () => {
     });
 
     expect(seenJournals[0]).toBe(twoArgOptionsJournal);
+    expect(seenSources[0]).toEqual(runtimeSource.runtime("runtime.api"));
+    await runtime.dispose();
+  });
+
+  it("passes task-dependency source into nested task run context", async () => {
+    const seenChildSources: unknown[] = [];
+
+    const child = defineTask<void, Promise<string>>({
+      id: "rr.source.child",
+      run: async (_input, _deps, context) => {
+        seenChildSources.push(context?.source);
+        return "child";
+      },
+    });
+
+    const parent = defineTask<void, Promise<string>>({
+      id: "rr.source.parent",
+      dependencies: { runChild: child },
+      run: async (_input, { runChild }) => runChild(),
+    });
+
+    const app = defineResource({
+      id: "rr.source.app",
+      register: [parent, child],
+      async init() {
+        return "ready";
+      },
+    });
+
+    const runtime = await run(app);
+    await runtime.runTask(parent);
+
+    expect(seenChildSources[0]).toEqual(runtimeSource.task(parent.id));
     await runtime.dispose();
   });
 

@@ -4,8 +4,8 @@ import { normalizeError } from "../globals/resources/tunnel/error-utils";
 const platform = getPlatform();
 
 type ShutdownDrainTarget = {
-  enterShutdownLockdown(): void;
-  waitForInFlightOperations(): Promise<void>;
+  beginDisposing(): void;
+  waitForDrain(shutdownGracePeriodMs: number): Promise<boolean>;
 };
 
 // Global registry of active error handlers for process-level safety nets
@@ -109,27 +109,6 @@ export async function waitForShutdownGracePeriod(
   target: ShutdownDrainTarget,
   shutdownGracePeriodMs: number,
 ): Promise<boolean> {
-  target.enterShutdownLockdown();
-
-  const drainPromise = target.waitForInFlightOperations();
-  const timeoutSymbol = Symbol("shutdown-grace-period-timeout");
-
-  let timeout!: ReturnType<typeof platform.setTimeout>;
-  const timeoutPromise = new Promise<symbol>((resolve) => {
-    timeout = platform.setTimeout(
-      () => resolve(timeoutSymbol),
-      shutdownGracePeriodMs,
-    );
-    (timeout as { unref?: () => void }).unref?.();
-  });
-
-  try {
-    const result = await Promise.race([
-      drainPromise.then(() => true),
-      timeoutPromise.then(() => false),
-    ]);
-    return result;
-  } finally {
-    platform.clearTimeout(timeout);
-  }
+  target.beginDisposing();
+  return target.waitForDrain(shutdownGracePeriodMs);
 }
