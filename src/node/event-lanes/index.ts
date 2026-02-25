@@ -13,6 +13,7 @@ export type {
   EventLaneProfileConfig,
   EventLaneQueueReference,
   EventLaneQueueResource,
+  EventLanesMode,
   EventLanesResourceConfig,
   EventLanesResourceWithConfig,
   EventLanesTopology,

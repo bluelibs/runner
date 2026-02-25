@@ -162,18 +162,18 @@ describe("event-lanes: hook lanes + prefetch", () => {
     await runtime.dispose();
   });
 
-  it("does not start consumers when profile durableWorker flag mismatches", async () => {
-    const lane = r.eventLane("tests.event-lanes.durable-worker.lane").build();
+  it("does not start consumers in producer mode", async () => {
+    const lane = r.eventLane("tests.event-lanes.mode.producer.lane").build();
     const queue = new CoverageQueue();
     const app = r
-      .resource("tests.event-lanes.durable-worker.app")
+      .resource("tests.event-lanes.mode.producer.app")
       .register([
         eventLanesResource.with({
           profile: "worker",
-          durableWorker: false,
+          mode: "producer",
           topology: {
             profiles: {
-              worker: { consume: [lane], durableWorker: true },
+              worker: { consume: [lane] },
             },
             bindings: [{ lane, queue }],
           },

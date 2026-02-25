@@ -22,7 +22,6 @@ export interface IEventLaneTopologyProfile<
   TLane extends IEventLaneDefinition = IEventLaneDefinition,
 > {
   consume: readonly TLane[];
-  durableWorker?: boolean;
 }
 
 export interface IEventLaneTopology<

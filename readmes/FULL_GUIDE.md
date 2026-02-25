@@ -4184,11 +4184,12 @@ How Event Lanes work:
 
 - **Lane references, not lane strings**: Routing uses the `IEventLaneDefinition` reference you pass to `globals.tags.eventLane.with({ lane })` and `bindings`.
 - **Centralized topology**: Define topology once via `r.eventLane.topology({ profiles, bindings })` and pass it to runtimes via `eventLanesResource.with({ profile, topology })`.
-- **Canonical config shape**: Event Lanes runtime wiring uses `eventLanesResource.with({ profile, topology, durableWorker? })`.
+- **Canonical config shape**: Event Lanes runtime wiring uses `eventLanesResource.with({ profile, topology, mode? })`.
 - **Container-friendly queues**: Bindings accept direct queue instances or queue resources, so lane wiring can stay inside the container graph.
 - **Many lanes can share one queue**: Multiple lane refs may target the same queue. Event Lanes enforces one binding per lane for deterministic routing.
 - **All nodes produce**: Tagged emits are intercepted, local propagation is stopped, and the event is enqueued.
 - **Only some profiles consume**: `profiles[profile].consume` controls which lane references this runtime dequeues.
+- **Mode gate**: `mode: "producer" | "consumer"` defaults to `"consumer"` behavior; `"producer"` disables dequeue consumers while preserving producer interception.
 - **Hook lane targeting**: `globals.tags.eventLaneHook.with({ lane })` makes a hook run only for relay emissions from that lane.
 - **Prefetch policy**: configure queue prefetch at binding level (`bindings[].prefetch`).
 - **Serializer-first transport**: Payloads are serialized/deserialized through `globals.resources.serializer`, so Dates, RegExp, and custom serializer types survive queue transport.

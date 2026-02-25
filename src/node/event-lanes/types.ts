@@ -62,6 +62,8 @@ export type EventLaneProfileConfig<
   TLane extends IEventLaneDefinition = IEventLaneDefinition,
 > = IEventLaneTopologyProfile<TLane>;
 
+export type EventLanesMode = "producer" | "consumer";
+
 export type EventLanesTopology<
   TBindings extends readonly EventLaneBinding[] = readonly EventLaneBinding[],
   TProfiles extends Record<
@@ -82,7 +84,7 @@ export interface EventLanesResourceConfig<
 > {
   profile: TProfile;
   topology: TTopology;
-  durableWorker?: boolean;
+  mode?: EventLanesMode;
 }
 
 export type EventLanesResourceWithConfig<

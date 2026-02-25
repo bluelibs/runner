@@ -185,11 +185,8 @@ function resolveProfile(config: EventLanesResourceConfig) {
 }
 
 function shouldConsumeProfile(config: EventLanesResourceConfig): boolean {
-  const profile = resolveProfile(config);
-  if (profile.durableWorker === undefined) {
-    return true;
-  }
-  return profile.durableWorker === config.durableWorker;
+  resolveProfile(config);
+  return config.mode !== "producer";
 }
 
 function resolveRelayLaneId(

@@ -465,7 +465,7 @@ Event Lanes route tagged events to queues using explicit lane references.
 - Tag events with `globals.tags.eventLane.with({ lane, orderingKey?, metadata? })`.
 - Tag hooks with `globals.tags.eventLaneHook.with({ lane, metadata? })`.
 - Register `eventLanesResource` (from `@bluelibs/runner/node`) with:
-  - `profile` + `topology` (canonical)
+  - `profile` + `topology` + optional `mode` (`"producer"` or `"consumer"`)
   - `bindings: [{ lane, queue, prefetch?, dlq? }]` where `queue` can be a queue instance or a queue resource
 - Use profile constants when desired:
   - `const Profiles = { API: "api", WORKER: "worker" } as const`
@@ -477,6 +477,7 @@ Event Lanes route tagged events to queues using explicit lane references.
   - Message is enqueued to the lane's bound queue.
 - Consumer behavior:
   - Starts on `globals.events.ready`.
+  - `mode: "producer"` disables consumers while preserving producer path.
   - Only consumes lanes listed by the active profile.
   - Deserializes with `serializer.parse(...)`, then re-emits in-process.
   - Relay re-emits bypass producer interception to prevent loops.
