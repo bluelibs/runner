@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { run } from "@bluelibs/runner";
+import { ExecutionStatus, waitUntil } from "@bluelibs/runner/node";
 
 import {
   buildOnboardingApp,
@@ -104,7 +105,7 @@ test(TestName.OnboardingVerifiedCompletesWithWorkspace, async () => {
 });
 
 test(TestName.OnboardingTimeoutSkipsProvisioning, async () => {
-  const { app, durable, userOnboarding } = buildOnboardingApp(
+  const { app, durable, store, userOnboarding } = buildOnboardingApp(
     Namespace.OnboardingTimeout,
     TimeoutMs.OnboardingShort,
   );
@@ -117,10 +118,21 @@ test(TestName.OnboardingTimeoutSkipsProvisioning, async () => {
       plan: "free" as const,
     });
 
-    const result = (await service.wait(executionId, {
-      timeout: TimeoutMs.ExecutionWait,
-      waitPollIntervalMs: IntervalMs.WaitPolling,
-    })) as OnboardingWorkflowResult;
+    await waitUntil(
+      async () => {
+        const execution = await store.getExecution(executionId);
+        return execution?.status === ExecutionStatus.Completed;
+      },
+      {
+        timeoutMs: TimeoutMs.ExecutionWait,
+        intervalMs: IntervalMs.WaitPolling,
+      },
+    );
+
+    const execution = await store.getExecution(executionId);
+    assert.ok(execution, "execution should exist in store");
+    const result = execution.result as OnboardingWorkflowResult | undefined;
+    assert.ok(result, "execution result should exist");
 
     assert.equal(result.email, "timeout@example.com");
     assert.equal(result.plan, "free");
