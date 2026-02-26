@@ -13,3 +13,4 @@
 !include: 09-troubleshooting.md
 !include: 10-deep-dives.md
 !include: 11-reference.md
+!include: 12-upgrading-to-v6.md

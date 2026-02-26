@@ -10,7 +10,6 @@ import { debugResource } from "./globals/resources/debug";
 import {
   registerProcessLevelSafetyNets,
   registerShutdownHook,
-  waitForDisposeDrainBudget,
 } from "./tools/processShutdownHooks";
 import { cancellationError } from "./errors";
 import {
@@ -27,7 +26,11 @@ import {
 import { getPlatform } from "./platform";
 import { runtimeSource } from "./types/runtimeSource";
 import { LifecycleAdmissionController } from "./models/runtime/LifecycleAdmissionController";
-import { createDisposalBudget } from "./tools/disposalBudget";
+import {
+  disposeRunArtifacts,
+  DisposeRunArtifactsInput,
+  runShutdownDisposalLifecycle,
+} from "./tools/shutdownDisposalLifecycle";
 
 const activeRunResults = new Set<RunResult<any>>();
 
@@ -158,74 +161,40 @@ export async function run<C, V extends Promise<any>>(
     });
   };
 
-  const waitForStoreDisposeWithinBudget = async (
-    disposalBudget?: ReturnType<typeof createDisposalBudget>,
-  ) => {
-    if (!disposalBudget) {
-      await store.dispose();
-      return;
-    }
-
-    const remainingBudgetMs = disposalBudget.remainingMs();
-    if (remainingBudgetMs <= 0) {
-      void store.dispose().catch(() => undefined);
-      return;
-    }
-
-    await disposalBudget.waitWithinBudget(() => store.dispose());
-  };
-
   // Helper dispose that always unhooks process listeners first
   const disposeAll = async (
-    disposalBudget?: ReturnType<typeof createDisposalBudget>,
+    disposalBudget?: DisposeRunArtifactsInput["disposalBudget"],
   ) => {
-    try {
-      if (unhookProcessSafetyNets) {
-        unhookProcessSafetyNets();
+    await disposeRunArtifacts({
+      store,
+      disposalBudget,
+      takeUnhookProcessSafetyNets: () => {
+        const current = unhookProcessSafetyNets;
         unhookProcessSafetyNets = undefined;
-      }
-      if (unhookShutdown) {
-        unhookShutdown();
+        return current;
+      },
+      takeUnhookShutdown: () => {
+        const current = unhookShutdown;
         unhookShutdown = undefined;
-      }
-    } finally {
-      activeRunResults.delete(runtimeResult);
-      await waitForStoreDisposeWithinBudget(disposalBudget);
-    }
-  };
-  const runtimeLifecycleSource = runtimeSource.runtime("runtime.lifecycle");
-  // Ensure every runtime disposal path enters shutdown lockdown before
-  // tearing down resource values.
-  const emitLifecycleEvent = async (
-    event: (typeof globalEvents)[keyof typeof globalEvents],
-  ) => {
-    await eventManager.emitLifecycle(event, undefined, runtimeLifecycleSource, {
-      throwOnError: false,
-      failureMode: "aggregate",
+        return current;
+      },
+      onBeforeStoreDispose: () => {
+        activeRunResults.delete(runtimeResult);
+      },
     });
   };
-
-  const disposeWithShutdownLifecycle = async () => {
-    const disposalBudget = createDisposalBudget(disposeBudgetMs);
-    store.beginDisposing();
-    await disposalBudget.waitWithinBudget(() => store.cooldown());
-    await disposalBudget.waitWithinBudget(() =>
-      emitLifecycleEvent(globalEvents.disposing),
-    );
-
-    const effectiveDrainBudgetMs =
-      disposalBudget.capByRemainingBudget(disposeDrainBudgetMs);
-    await disposalBudget.waitWithinBudget(() =>
-      waitForDisposeDrainBudget(store, effectiveDrainBudgetMs),
-    );
-
-    store.beginDrained();
-    await disposalBudget.waitWithinBudget(() =>
-      emitLifecycleEvent(globalEvents.drained),
-    );
-
-    await disposeAll(disposalBudget);
-  };
+  const runtimeLifecycleSource = runtimeSource.runtime("runtime.lifecycle");
+  const runLogger = logger.with({ source: "run" });
+  const disposeWithShutdownLifecycle = async () =>
+    runShutdownDisposalLifecycle({
+      store,
+      eventManager,
+      runLogger,
+      runtimeLifecycleSource,
+      disposeBudgetMs,
+      disposeDrainBudgetMs,
+      disposeAll,
+    });
   const runtimeResult = new RunResult<any>(
     logger,
     store,
@@ -266,22 +235,21 @@ export async function run<C, V extends Promise<any>>(
     // Compile-time event emission cycle detection (cheap, graph-based)
     store.validateEventEmissionGraph();
 
-    const boundedLogger = logger.with({ source: "run" });
     if (dryRun) {
-      await boundedLogger.debug("Dry run mode. Skipping initialization...");
+      await runLogger.debug("Dry run mode. Skipping initialization...");
       runtimeResult.setValue(store.root.value);
       return runtimeResult as RunResult<V extends Promise<infer U> ? U : V>;
     }
 
     // Beginning initialization
-    await boundedLogger.debug("Events stored. Attaching listeners...");
+    await runLogger.debug("Events stored. Attaching listeners...");
     await processor.attachListeners();
     throwIfBootstrapShutdownRequested("listener attachment");
-    await boundedLogger.debug("Listeners attached. Computing dependencies...");
+    await runLogger.debug("Listeners attached. Computing dependencies...");
     await processor.computeAllDependencies();
     throwIfBootstrapShutdownRequested("dependency computation");
     // After this stage, logger print policy could have been set.
-    await boundedLogger.debug(
+    await runLogger.debug(
       "Dependencies computed. Proceeding with initialization...",
     );
 
@@ -309,7 +277,7 @@ export async function run<C, V extends Promise<any>>(
       runtimeLifecycleSource,
     );
 
-    await boundedLogger.info("Runner online. Awaiting tasks and events.");
+    await runLogger.info("Runner online. Awaiting tasks and events.");
 
     runtimeResult.setLazyOptions({
       lazyMode: lazy,

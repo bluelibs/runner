@@ -589,10 +589,23 @@ const app = r
 - `emitEvent(event, payload, options?)` accepts the same emission options (`failureMode`, `throwOnError`, `report`) as dependency emitters.
 - `.isolate({ exports: [...] })` on the root restricts `runTask`, `emitEvent`, `getResourceValue` to exported ids; omit for full open surface.
 - Run options highlights: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `disposeBudgetMs` (total disposal wait budget), `disposeDrainBudgetMs` (drain wait budget), `dryRun`, `lazy`, `lifecycleMode` (`"sequential"` or `"parallel"`). `initMode` is a deprecated alias.
-- Shutdown behavior: `dispose()` transitions to `disposing`, runs resource `cooldown()` (reverse dependency order), emits `globals.events.disposing`, waits for tasks + event listeners to drain up to `disposeDrainBudgetMs` (capped by remaining `disposeBudgetMs`), transitions to `drained` (blocks all new business admissions), emits `globals.events.drained` (lifecycle-bypassed — hooks fire but cannot start new tasks/events), then disposes resources using remaining budget. Signals received during bootstrap cancel startup and roll back initialized resources.
+- Shutdown behavior: `dispose()` transitions to `disposing`, runs resource `cooldown()` (reverse dependency order), emits `globals.events.disposing`, waits for tasks + event listeners to drain up to `disposeDrainBudgetMs` (capped by remaining `disposeBudgetMs`), logs a structured warning if drain does not complete in time, transitions to `drained` (blocks all new business admissions), emits `globals.events.drained` (lifecycle-bypassed — hooks fire but cannot start new tasks/events), then disposes resources using remaining budget. Signals received during bootstrap cancel startup and roll back initialized resources.
 - Global lifecycle events: use `globals.events.ready` for post-boot orchestration, and `globals.events.disposing` / `globals.events.drained` for disposal lifecycle.
 - Event source model: `IEventEmission.source` is object-based end-to-end: `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime.
+
+## Migration (5.x to 6.0)
+
+Given the set of removals and behavior changes, this upgrade should be treated as a major-version migration.
+
+- Use the full migration playbook: [Upgrading from 5.x to 6.0](./FULL_GUIDE.md#upgrading-from-5x-to-60).
+- Highest-impact migrations:
+  - `r.override.*(...)` -> `r.override(base, fn)`
+  - `middleware.everywhere` -> `resource.subtree(...)` / `taskRunner.intercept(...)`
+  - Event source strings -> structured source objects (`{ kind, id }`)
+  - Event Lanes helper APIs -> canonical `eventLanesResource.with({ profile, topology, mode? })`
+  - Implicit runtime surface -> explicit root `.isolate({ exports: [...] })` when you need access control
+- Run `npm run qa` after each migration batch.
 
 ## Reliability & Performance
 
