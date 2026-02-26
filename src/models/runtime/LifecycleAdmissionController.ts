@@ -61,7 +61,7 @@ export class LifecycleAdmissionController {
   }
 
   public canAdmitTask(source: RuntimeCallSource): boolean {
-    return this.canAdmit(source, false);
+    return this.canAdmit(source);
   }
 
   public canAdmitEvent(
@@ -71,7 +71,7 @@ export class LifecycleAdmissionController {
     if (options?.allowLifecycleBypass === true) {
       return true;
     }
-    return this.canAdmit(source, true);
+    return this.canAdmit(source);
   }
 
   public async trackTaskExecution<T>(
@@ -123,7 +123,7 @@ export class LifecycleAdmissionController {
     });
   }
 
-  private canAdmit(source: RuntimeCallSource, _isEvent: boolean): boolean {
+  private canAdmit(source: RuntimeCallSource): boolean {
     if (this.phase === RuntimeLifecyclePhase.Running) {
       return true;
     }

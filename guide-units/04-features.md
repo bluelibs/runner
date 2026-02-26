@@ -1199,10 +1199,7 @@ const app = r
   .register([
     notificationsQueue,
     eventLanesResource.with({
-      profile:
-        (process.env
-          .RUNNER_PROFILE as (typeof Profiles)[keyof typeof Profiles]) ??
-        Profiles.Api,
+      profile: process.env.RUNNER_PROFILE || Profiles.Worker,
       topology,
     }),
   ])

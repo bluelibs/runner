@@ -2,6 +2,7 @@ import { InterceptorRegistry } from "../../../models/middleware/InterceptorRegis
 import { MiddlewareResolver } from "../../../models/middleware/MiddlewareResolver";
 import { ResourceMiddlewareComposer } from "../../../models/middleware/ResourceMiddlewareComposer";
 import { TaskMiddlewareComposer } from "../../../models/middleware/TaskMiddlewareComposer";
+import { LifecycleAdmissionController } from "../../../models/runtime/LifecycleAdmissionController";
 
 describe("Middleware interceptor default next() argument branches", () => {
   it("resource global interceptor uses executionInput.next() default config", async () => {
@@ -12,6 +13,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       tasks: new Map(),
       onUnhandledError: jest.fn(),
       getOwnerResourceId: () => undefined,
+      getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
     const interceptorRegistry = new InterceptorRegistry();
     const middlewareResolver = new MiddlewareResolver(store);
@@ -44,6 +46,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       tasks: new Map(),
       onUnhandledError: jest.fn(),
       getOwnerResourceId: () => undefined,
+      getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
     const interceptorRegistry = new InterceptorRegistry();
     const middlewareResolver = new MiddlewareResolver(store);
@@ -91,6 +94,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       resourceMiddlewares: new Map(),
       resources: new Map(),
       getOwnerResourceId: () => undefined,
+      getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
     const interceptorRegistry = new InterceptorRegistry();
     const middlewareResolver = new MiddlewareResolver(store);

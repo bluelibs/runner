@@ -23,12 +23,8 @@ export class TaskMiddlewareComposer {
     private readonly interceptorRegistry: InterceptorRegistry,
     private readonly middlewareResolver: MiddlewareResolver,
   ) {
-    const storeWithLifecycle = this.store as unknown as {
-      getLifecycleAdmissionController?: () => LifecycleAdmissionController;
-    };
     this.lifecycleAdmissionController =
-      storeWithLifecycle.getLifecycleAdmissionController?.() ??
-      new LifecycleAdmissionController();
+      this.store.getLifecycleAdmissionController();
   }
 
   /**
