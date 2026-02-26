@@ -1654,7 +1654,7 @@ Transactional behavior:
 
 - Transactional is event-level metadata (available as `event.transactional` in emission info), not hook metadata.
 - Every executed listener must return an async undo closure.
-- If a listener fails, previously completed listeners are rolled back in reverse completion order.
+- If a listener fails (throws), previously completed listeners are rolled back in reverse completion order.
 - Rollback continues even if one undo fails; Runner throws an aggregated transactional rollback error.
 - Transactional execution is always fail-fast.
 - Runtime sanity constraints: `transactional + parallel` and `transactional + globals.tags.eventLane` are invalid.
