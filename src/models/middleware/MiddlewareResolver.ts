@@ -46,15 +46,7 @@ export class MiddlewareResolver {
   private getResource(
     resourceId: string,
   ): IResource<any, any, any, any> | undefined {
-    const resourcesMap = (
-      this.store as unknown as {
-        resources?: Map<string, { resource?: IResource<any, any, any, any> }>;
-      }
-    ).resources;
-
-    if (!resourcesMap || typeof resourcesMap.get !== "function") {
-      return undefined;
-    }
+    const resourcesMap = this.store.resources;
 
     return resourcesMap.get(resourceId)?.resource;
   }
