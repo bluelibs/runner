@@ -28,6 +28,7 @@ export interface IEventLaneQueue {
     message: Omit<EventLaneMessage, "id" | "createdAt" | "attempts">,
   ): Promise<string>;
   consume(handler: EventLaneMessageHandler): Promise<void>;
+  cooldown?(): Promise<void>;
   ack(messageId: string): Promise<void>;
   nack(messageId: string, requeue?: boolean): Promise<void>;
   setPrefetch?(count: number): Promise<void>;

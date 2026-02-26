@@ -151,6 +151,28 @@ describe("event-lanes: MemoryEventLaneQueue", () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it("stops processing after cooldown", async () => {
+    const queue = new MemoryEventLaneQueue();
+    const handler = jest.fn();
+
+    await queue.enqueue({
+      laneId: "lane.cooldown",
+      eventId: "event.cooldown",
+      payload: "{}",
+      source: { kind: "runtime", id: "tests" },
+      maxAttempts: 1,
+    });
+
+    await queue.consume(async (message) => {
+      handler(message);
+      await queue.ack(message.id);
+    });
+    await queue.cooldown();
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(handler).toHaveBeenCalledTimes(0);
+  });
+
   it("does not requeue thrown messages at max attempts", async () => {
     const queue = new MemoryEventLaneQueue();
     const attempts: number[] = [];

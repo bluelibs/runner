@@ -4093,7 +4093,6 @@ const notificationRequested = r
 const sendNotification = r
   .hook("app.hooks.sendNotification")
   .on(notificationRequested)
-  .tags([globals.tags.eventLaneHook.with({ lane: notificationsLane })])
   .run(async (event) => {
     // queue-consumed relay for notifications lane
     await deliverNotification(event.data);
@@ -4172,7 +4171,6 @@ const publishInvoiceIssued = r
 const projectInvoiceReadModel = r
   .hook("billing.hooks.projectInvoiceReadModel")
   .on(invoiceIssued)
-  .tags([globals.tags.eventLaneHook.with({ lane: billingDomainEventsLane })])
   .run(async (event) => {
     // update read-model from domain event payload
     await updateInvoiceProjection(event.data.payload);
@@ -4190,7 +4188,7 @@ How Event Lanes work:
 - **All nodes produce**: Tagged emits are intercepted, local propagation is stopped, and the event is enqueued.
 - **Only some profiles consume**: `profiles[profile].consume` controls which lane references this runtime dequeues.
 - **Mode gate**: `mode: "producer" | "consumer"` defaults to `"consumer"` behavior; `"producer"` disables dequeue consumers while preserving producer interception.
-- **Hook lane targeting**: `globals.tags.eventLaneHook.with({ lane })` makes a hook run only for relay emissions from that lane.
+- **Hook dispatch stays event-driven**: Once a lane message is consumed and relayed, hooks run based on their `.on(event)` subscription.
 - **Prefetch policy**: configure queue prefetch at binding level (`bindings[].prefetch`).
 - **Serializer-first transport**: Payloads are serialized/deserialized through `globals.resources.serializer`, so Dates, RegExp, and custom serializer types survive queue transport.
 - **Relay loop protection**: Consumer re-emits include a relay source prefix so producer interception bypasses requeue.
@@ -4263,10 +4261,7 @@ const app = r
   .register([
     notificationsQueue,
     eventLanesResource.with({
-      profile:
-        (process.env
-          .RUNNER_PROFILE as (typeof Profiles)[keyof typeof Profiles]) ??
-        Profiles.Api,
+      profile: process.env.RUNNER_PROFILE || Profiles.Worker,
       topology,
     }),
   ])
@@ -4403,6 +4398,7 @@ class CustomRabbitEventLaneQueue implements IEventLaneQueue {
 Lifecycle note:
 
 - Consumers start on `globals.events.ready`, which ensures startup resources (including serializer type registration done in resource init) are initialized before first dequeue processing.
+- During shutdown start (`globals.events.disposing` phase), consumer queues enter cooldown and stop intake before final disposal.
 
 > **runtime:** "You throw events into lanes and call it architecture. I turn them into queue messages, ferry them across workers, and quietly prevent recursive event ping-pong."
 ## Observability Strategy (Logs, Metrics, and Traces)

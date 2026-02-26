@@ -6,6 +6,7 @@ type ChannelMock = {
   prefetch: jest.Mock;
   sendToQueue: jest.Mock;
   consume: jest.Mock;
+  cancel: jest.Mock;
   ack: jest.Mock;
   nack: jest.Mock;
   close: jest.Mock;
@@ -26,6 +27,7 @@ describe("node: RabbitMQTransport", () => {
       prefetch: jest.fn().mockResolvedValue({}),
       sendToQueue: jest.fn().mockResolvedValue(true),
       consume: jest.fn().mockResolvedValue({ consumerTag: "tag" }),
+      cancel: jest.fn().mockResolvedValue({}),
       ack: jest.fn(),
       nack: jest.fn(),
       close: jest.fn().mockResolvedValue({}),
@@ -75,9 +77,32 @@ describe("node: RabbitMQTransport", () => {
     await transport.setPrefetch(5);
     expect(channelMock.prefetch).toHaveBeenLastCalledWith(5);
 
+    await transport.consume(async () => {});
     await transport.dispose();
+    expect(channelMock.cancel).toHaveBeenCalledWith("tag");
     expect(channelMock.close).toHaveBeenCalled();
     expect(connMock.close).toHaveBeenCalled();
+  });
+
+  it("supports cancelConsumer with and without an active consumer", async () => {
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: { name: "transport.cancel" },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+    await transport.cancelConsumer();
+    expect(channelMock.cancel).not.toHaveBeenCalled();
+
+    await transport.consume(async () => {});
+    await transport.cancelConsumer();
+    expect(channelMock.cancel).toHaveBeenCalledWith("tag");
   });
 
   it("throws from throwNotInitialized before init", async () => {

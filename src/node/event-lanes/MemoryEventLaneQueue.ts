@@ -9,6 +9,7 @@ export class MemoryEventLaneQueue implements IEventLaneQueue {
   private queue: EventLaneMessage[] = [];
   private handler: EventLaneMessageHandler | null = null;
   private isProcessing = false;
+  private acceptingWork = true;
   private readonly inFlight = new Map<string, EventLaneMessage>();
 
   async enqueue(
@@ -28,7 +29,12 @@ export class MemoryEventLaneQueue implements IEventLaneQueue {
 
   async consume(handler: EventLaneMessageHandler): Promise<void> {
     this.handler = handler;
+    this.acceptingWork = true;
     setImmediate(() => void this.processNext());
+  }
+
+  async cooldown(): Promise<void> {
+    this.acceptingWork = false;
   }
 
   async ack(messageId: string): Promise<void> {
@@ -51,12 +57,18 @@ export class MemoryEventLaneQueue implements IEventLaneQueue {
 
   async dispose(): Promise<void> {
     this.handler = null;
+    this.acceptingWork = false;
     this.queue = [];
     this.inFlight.clear();
   }
 
   private async processNext(): Promise<void> {
-    if (this.isProcessing || !this.handler || this.queue.length === 0) {
+    if (
+      this.isProcessing ||
+      !this.acceptingWork ||
+      !this.handler ||
+      this.queue.length === 0
+    ) {
       return;
     }
 

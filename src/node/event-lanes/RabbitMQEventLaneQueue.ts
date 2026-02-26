@@ -27,6 +27,7 @@ export interface RabbitMQEventLaneQueueConfig {
 export class RabbitMQEventLaneQueue implements IEventLaneQueue {
   private readonly queueName: string;
   private readonly transport: RabbitMQTransport<EventLaneMessage>;
+  private acceptingWork = true;
 
   constructor(config: RabbitMQEventLaneQueueConfig) {
     this.queueName =
@@ -122,7 +123,20 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
   }
 
   async consume(handler: EventLaneMessageHandler): Promise<void> {
-    await this.transport.consume(handler);
+    this.acceptingWork = true;
+    await this.transport.consume(async (message) => {
+      if (!this.acceptingWork) {
+        await this.nack(message.id, true);
+        return;
+      }
+
+      await handler(message);
+    });
+  }
+
+  async cooldown(): Promise<void> {
+    this.acceptingWork = false;
+    await this.transport.cancelConsumer();
   }
 
   async ack(messageId: string): Promise<void> {
@@ -138,6 +152,7 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
   }
 
   async dispose(): Promise<void> {
+    this.acceptingWork = false;
     await this.transport.dispose();
   }
 }

@@ -97,10 +97,9 @@ async function waitUntil(
   }
 }
 
-describe("event-lanes: hook lanes + prefetch", () => {
-  it("filters relay hooks by lane tag and applies binding prefetch", async () => {
+describe("event-lanes: hook relay behavior + prefetch", () => {
+  it("runs all matching hooks on relay emissions and applies binding prefetch", async () => {
     const laneA = r.eventLane("tests.event-lanes.hook-lane.a").build();
-    const laneB = r.eventLane("tests.event-lanes.hook-lane.b").build();
     const queue = new CoverageQueue();
     const event = r
       .event<{ id: string }>("tests.event-lanes.hook-lane.event")
@@ -112,7 +111,6 @@ describe("event-lanes: hook lanes + prefetch", () => {
     const hookA = r
       .hook("tests.event-lanes.hook-lane.hookA")
       .on(event)
-      .tags([globals.tags.eventLaneHook.with({ lane: laneA })])
       .run(async () => {
         callsA += 1;
       })
@@ -120,7 +118,6 @@ describe("event-lanes: hook lanes + prefetch", () => {
     const hookB = r
       .hook("tests.event-lanes.hook-lane.hookB")
       .on(event)
-      .tags([globals.tags.eventLaneHook.with({ lane: laneB })])
       .run(async () => {
         callsB += 1;
       })
@@ -156,7 +153,7 @@ describe("event-lanes: hook lanes + prefetch", () => {
     await waitUntil(() => callsA === 1);
 
     expect(callsA).toBe(1);
-    expect(callsB).toBe(0);
+    expect(callsB).toBe(1);
     expect(queue.prefetchCalls).toContain(6);
 
     await runtime.dispose();

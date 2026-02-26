@@ -361,7 +361,6 @@ describe("event-lanes: eventLanesResource", () => {
     const hookA = r
       .hook("tests.event-lanes.topology.hookA")
       .on(eventA)
-      .tags([globals.tags.eventLaneHook.with({ lane: laneA })])
       .run(async (event) => {
         seen.push(`A:${event.data.id}`);
       })
@@ -369,7 +368,6 @@ describe("event-lanes: eventLanesResource", () => {
     const hookB = r
       .hook("tests.event-lanes.topology.hookB")
       .on(eventB)
-      .tags([globals.tags.eventLaneHook.with({ lane: laneB })])
       .run(async (event) => {
         seen.push(`B:${event.data.id}`);
       })

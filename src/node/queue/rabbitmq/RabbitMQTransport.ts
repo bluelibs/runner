@@ -18,6 +18,7 @@ type Channel = {
     queue: string,
     onMessage: (msg: ConsumeMessage | null) => Promise<void>,
   ) => Promise<unknown>;
+  cancel: (consumerTag: string) => Promise<unknown>;
   ack: (msg: ConsumeMessage) => unknown;
   nack: (msg: ConsumeMessage, allUpTo?: boolean, requeue?: boolean) => unknown;
   close: () => Promise<unknown>;
@@ -50,6 +51,7 @@ export interface RabbitMQTransportConfig<TMessage> {
 export class RabbitMQTransport<TMessage> {
   private connection: ChannelModel | null = null;
   private channel: Channel | null = null;
+  private consumerTag: string | null = null;
   private readonly messageMap = new Map<string, ConsumeMessage>();
   private readonly logger: Pick<Logger, "error">;
 
@@ -128,44 +130,65 @@ export class RabbitMQTransport<TMessage> {
   async consume(handler: (message: TMessage) => Promise<void>): Promise<void> {
     const channel = this.requireChannel();
 
-    await channel.consume(this.config.queue.name, async (msg) => {
-      if (!msg) {
-        return;
-      }
+    const consumeReply = (await channel.consume(
+      this.config.queue.name,
+      async (msg) => {
+        if (!msg) {
+          return;
+        }
 
-      let decoded: TMessage | null;
-      try {
-        decoded = this.config.decode(msg.content);
-      } catch (error) {
-        this.reportError(this.config.parseFailureLogMessage, {
-          error: error instanceof Error ? error : new Error(String(error)),
-          payload: msg.content.toString(),
-        });
-        channel.nack(msg, false, false);
-        return;
-      }
+        let decoded: TMessage | null;
+        try {
+          decoded = this.config.decode(msg.content);
+        } catch (error) {
+          this.reportError(this.config.parseFailureLogMessage, {
+            error: error instanceof Error ? error : new Error(String(error)),
+            payload: msg.content.toString(),
+          });
+          channel.nack(msg, false, false);
+          return;
+        }
 
-      if (!decoded) {
-        channel.nack(msg, false, false);
-        return;
-      }
+        if (!decoded) {
+          channel.nack(msg, false, false);
+          return;
+        }
 
-      const messageId = this.config.resolveMessageId(decoded);
-      if (!messageId) {
-        channel.nack(msg, false, false);
-        return;
-      }
+        const messageId = this.config.resolveMessageId(decoded);
+        if (!messageId) {
+          channel.nack(msg, false, false);
+          return;
+        }
 
-      this.messageMap.set(messageId, msg);
-      try {
-        await handler(decoded);
-      } catch (error) {
-        this.reportError(this.config.handlerFailureLogMessage, {
-          error: error instanceof Error ? error : new Error(String(error)),
-          messageId,
-        });
-      }
-    });
+        this.messageMap.set(messageId, msg);
+        try {
+          await handler(decoded);
+        } catch (error) {
+          this.reportError(this.config.handlerFailureLogMessage, {
+            error: error instanceof Error ? error : new Error(String(error)),
+            messageId,
+          });
+        }
+      },
+    )) as { consumerTag?: unknown };
+
+    if (typeof consumeReply?.consumerTag === "string") {
+      this.consumerTag = consumeReply.consumerTag;
+      return;
+    }
+
+    this.consumerTag = null;
+  }
+
+  async cancelConsumer(): Promise<void> {
+    const channel = this.channel;
+    const consumerTag = this.consumerTag;
+    if (!channel || !consumerTag) {
+      return;
+    }
+
+    await channel.cancel(consumerTag);
+    this.consumerTag = null;
   }
 
   async ack(messageId: string): Promise<void> {
@@ -191,7 +214,10 @@ export class RabbitMQTransport<TMessage> {
   }
 
   async dispose(): Promise<void> {
+    await this.cancelConsumer();
+    this.messageMap.clear();
     await this.channel?.close();
     await this.connection?.close();
+    this.consumerTag = null;
   }
 }

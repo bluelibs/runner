@@ -28,6 +28,7 @@ type EventLanesResolvedBinding = Omit<EventLaneBinding, "queue" | "dlq"> & {
 
 interface EventLanesResourceContext {
   started: boolean;
+  coolingDown: boolean;
   disposed: boolean;
   activeBindingsByQueue: Map<IEventLaneQueue, Set<string>>;
   bindingsByLaneReference: Map<IEventLaneDefinition, EventLanesResolvedBinding>;
@@ -189,22 +190,6 @@ function shouldConsumeProfile(config: EventLanesResourceConfig): boolean {
   return config.mode !== "producer";
 }
 
-function resolveRelayLaneId(
-  event: IEventEmission<unknown>,
-  relaySourcePrefix: string,
-): string | undefined {
-  if (!isRelayEmission(event, relaySourcePrefix)) {
-    return undefined;
-  }
-
-  const relayTail = event.source.id.slice(relaySourcePrefix.length);
-  const separatorIndex = relayTail.lastIndexOf(":");
-  if (separatorIndex === -1) {
-    return undefined;
-  }
-  return relayTail.slice(separatorIndex + 1);
-}
-
 function buildContext(
   config: EventLanesResourceConfig,
   bindings: EventLanesResolvedBinding[],
@@ -240,6 +225,7 @@ function buildContext(
 
   return {
     started: false,
+    coolingDown: false,
     disposed: false,
     activeBindingsByQueue,
     bindingsByLaneReference,
@@ -295,24 +281,6 @@ const eventLanesResourceBase = r
     for (const queue of ctx.managedQueues) {
       await queue.init?.();
     }
-
-    eventManager.interceptHook(async (next, hook, event) => {
-      const relayLaneId = resolveRelayLaneId(event, ctx.relaySourcePrefix);
-      if (!relayLaneId) {
-        return next(hook, event);
-      }
-
-      const hookLaneConfig = globals.tags.eventLaneHook.extract(hook.tags);
-      if (!hookLaneConfig) {
-        return next(hook, event);
-      }
-
-      if (hookLaneConfig.lane.id !== relayLaneId) {
-        return;
-      }
-
-      return next(hook, event);
-    });
 
     eventManager.intercept(async (next, emission) => {
       if (isRelayEmission(emission, ctx.relaySourcePrefix)) {
@@ -370,7 +338,7 @@ const eventLanesResourceBase = r
 
         for (const [queue, activeLaneIds] of ctx.activeBindingsByQueue) {
           await queue.consume(async (message) => {
-            if (ctx.disposed) {
+            if (ctx.coolingDown || ctx.disposed) {
               await queue.nack(message.id, true);
               return;
             }
@@ -440,7 +408,18 @@ const eventLanesResourceBase = r
       ),
     };
   })
+  .cooldown(async (_value, _config, _deps, ctx) => {
+    if (ctx.coolingDown) {
+      return;
+    }
+
+    ctx.coolingDown = true;
+    for (const queue of ctx.activeBindingsByQueue.keys()) {
+      await queue.cooldown?.();
+    }
+  })
   .dispose(async (_value, _config, _deps, ctx) => {
+    ctx.coolingDown = true;
     ctx.disposed = true;
     for (const queue of ctx.managedQueues) {
       await queue.dispose?.();

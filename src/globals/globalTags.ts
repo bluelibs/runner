@@ -39,17 +39,6 @@ const globalTagsBase = {
         "Routes tagged events to the configured Event Lane binding (reference-based).",
     },
   }),
-  eventLaneHook: defineTag<{
-    lane: IEventLaneDefinition;
-    metadata?: Record<string, unknown>;
-  }>({
-    id: "globals.tags.eventLaneHook",
-    targets: ["hooks"],
-    meta: {
-      title: "Event Lane Hook",
-      description: "Assigns a hook to a lane-specific consumer path.",
-    },
-  }),
   containerInternals: defineTag<{
     metadata?: Record<string, any>;
   }>({

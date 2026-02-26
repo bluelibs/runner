@@ -24,19 +24,14 @@ describe("globals.tags.eventLane", () => {
     });
   });
 
-  it("extracts lane hook config from hooks", () => {
-    const lane = r.eventLane("tests.global-tags.event-lane.hook").build();
+  it("does not extract lane config from hooks", () => {
     const event = r.event("tests.global-tags.event-lane.hook.event").build();
-
     const hook = r
       .hook("tests.global-tags.event-lane.hook.definition")
       .on(event)
-      .tags([globalTags.eventLaneHook.with({ lane })])
       .run(async () => {})
       .build();
 
-    expect(globalTags.eventLaneHook.extract(hook)).toEqual({
-      lane,
-    });
+    expect(globalTags.eventLane.extract(hook)).toBeUndefined();
   });
 });

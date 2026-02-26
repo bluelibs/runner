@@ -16,6 +16,7 @@ class ManualCoverageQueue implements IEventLaneQueue {
   public nacks: Array<{ messageId: string; requeue: boolean }> = [];
   public initCalls = 0;
   public disposeCalls = 0;
+  public cooldownCalls = 0;
 
   async enqueue(
     message: Omit<EventLaneMessage, "id" | "createdAt" | "attempts">,
@@ -58,6 +59,10 @@ class ManualCoverageQueue implements IEventLaneQueue {
     // keep handler to allow post-dispose delivery branch coverage
   }
 
+  async cooldown(): Promise<void> {
+    this.cooldownCalls += 1;
+  }
+
   async deliver(message: EventLaneMessage): Promise<void> {
     if (!this.handler) {
       throw createMessageError("Queue consumer not initialized");
@@ -67,9 +72,8 @@ class ManualCoverageQueue implements IEventLaneQueue {
 }
 
 describe("event-lanes: additional coverage", () => {
-  it("treats malformed relay ids as non-lane-specific and runs tagged hooks", async () => {
+  it("treats malformed relay ids as non-lane-specific and runs matching hooks", async () => {
     const laneA = r.eventLane("tests.event-lanes.malformed-relay.a").build();
-    const laneB = r.eventLane("tests.event-lanes.malformed-relay.b").build();
     const queue = new ManualCoverageQueue();
     const event = r
       .event<{ id: string }>("tests.event-lanes.malformed-relay.event")
@@ -81,7 +85,6 @@ describe("event-lanes: additional coverage", () => {
     const hookA = r
       .hook("tests.event-lanes.malformed-relay.hook-a")
       .on(event)
-      .tags([globals.tags.eventLaneHook.with({ lane: laneA })])
       .run(async () => {
         callsA += 1;
       })
@@ -89,7 +92,6 @@ describe("event-lanes: additional coverage", () => {
     const hookB = r
       .hook("tests.event-lanes.malformed-relay.hook-b")
       .on(event)
-      .tags([globals.tags.eventLaneHook.with({ lane: laneB })])
       .run(async () => {
         callsB += 1;
       })
@@ -143,7 +145,6 @@ describe("event-lanes: additional coverage", () => {
     const laneHook = r
       .hook("tests.event-lanes.prefetch.invalid.hook")
       .on(event)
-      .tags([globals.tags.eventLaneHook.with({ lane })])
       .run(async () => {})
       .build();
     const triggerReadyAgain = r
@@ -235,6 +236,7 @@ describe("event-lanes: additional coverage", () => {
     });
 
     await runtime.dispose();
+    expect(queue.cooldownCalls).toBe(1);
     await queue.deliver({
       id: "after-dispose",
       laneId: lane.id,
@@ -249,5 +251,29 @@ describe("event-lanes: additional coverage", () => {
       messageId: "after-dispose",
       requeue: true,
     });
+  });
+
+  it("treats cooldown as idempotent when already cooling down", async () => {
+    const queue = new ManualCoverageQueue();
+    const context = {
+      coolingDown: true,
+      activeBindingsByQueue: new Map([[queue, new Set(["lane.a"])]]),
+    } as unknown as Parameters<
+      NonNullable<(typeof eventLanesResource)["cooldown"]>
+    >[3];
+
+    const cooldown = eventLanesResource.cooldown;
+    if (!cooldown) {
+      throw createMessageError("eventLanesResource cooldown is missing");
+    }
+
+    await cooldown(
+      undefined as never,
+      undefined as never,
+      undefined as never,
+      context,
+    );
+
+    expect(queue.cooldownCalls).toBe(0);
   });
 });

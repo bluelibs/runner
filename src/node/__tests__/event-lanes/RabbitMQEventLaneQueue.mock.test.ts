@@ -6,6 +6,7 @@ type ChannelMock = {
   prefetch: jest.Mock;
   sendToQueue: jest.Mock;
   consume: jest.Mock;
+  cancel: jest.Mock;
   ack: jest.Mock;
   nack: jest.Mock;
   close: jest.Mock;
@@ -28,6 +29,7 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
       prefetch: jest.fn().mockResolvedValue({}),
       sendToQueue: jest.fn().mockResolvedValue(true),
       consume: jest.fn().mockResolvedValue({ consumerTag: "tag" }),
+      cancel: jest.fn().mockResolvedValue({}),
       ack: jest.fn(),
       nack: jest.fn(),
       close: jest.fn().mockResolvedValue({}),
@@ -182,9 +184,52 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
 
   it("disposes connections", async () => {
     await queue.init();
+    await queue.consume(async () => {});
     await queue.dispose();
+    expect(channelMock.cancel).toHaveBeenCalledWith("tag");
     expect(channelMock.close).toHaveBeenCalled();
     expect(connMock.close).toHaveBeenCalled();
+  });
+
+  it("cancels consumer on cooldown", async () => {
+    await queue.init();
+    await queue.consume(async () => {});
+    await queue.cooldown();
+    expect(channelMock.cancel).toHaveBeenCalledWith("tag");
+  });
+
+  it("requeues consumed message when cooldown was activated", async () => {
+    await queue.init();
+    let consumer:
+      | ((msg: { content: Buffer } | null) => Promise<void>)
+      | undefined;
+    channelMock.consume.mockImplementation(async (_q: string, h: any) => {
+      consumer = h;
+      return { consumerTag: "tag" };
+    });
+
+    const handler = jest.fn();
+    await queue.consume(handler);
+    await queue.cooldown();
+
+    const amqpMsg = {
+      content: Buffer.from(
+        JSON.stringify({
+          id: "msg-cooldown",
+          laneId: "lane.a",
+          eventId: "event.a",
+          payload: "{}",
+          source: { kind: "runtime", id: "tests" },
+          attempts: 0,
+          maxAttempts: 1,
+          createdAt: new Date().toISOString(),
+        }),
+      ),
+    };
+
+    await consumer?.(amqpMsg);
+    expect(handler).not.toHaveBeenCalled();
+    expect(channelMock.nack).toHaveBeenCalledWith(amqpMsg, false, true);
   });
 
   it("supports legacy queueName defaults and setPrefetch()", async () => {

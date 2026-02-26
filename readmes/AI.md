@@ -463,7 +463,6 @@ Event Lanes route tagged events to queues using explicit lane references.
 - Define topology with `r.eventLane.topology({ profiles, bindings })`.
 - Boundary reminder: Event Lanes are async queue routing inside your event graph; use Tunnels for cross-process RPC (`readmes/TUNNELS.md`).
 - Tag events with `globals.tags.eventLane.with({ lane, orderingKey?, metadata? })`.
-- Tag hooks with `globals.tags.eventLaneHook.with({ lane, metadata? })`.
 - Register `eventLanesResource` (from `@bluelibs/runner/node`) with:
   - `profile` + `topology` + optional `mode` (`"producer"` or `"consumer"`)
   - `bindings: [{ lane, queue, prefetch?, dlq? }]` where `queue` can be a queue instance or a queue resource
@@ -477,12 +476,13 @@ Event Lanes route tagged events to queues using explicit lane references.
   - Message is enqueued to the lane's bound queue.
 - Consumer behavior:
   - Starts on `globals.events.ready`.
-  - `mode: "producer"` disables consumers while preserving producer path.
-  - Only consumes lanes listed by the active profile.
-  - Deserializes with `serializer.parse(...)`, then re-emits in-process.
-  - Relay re-emits bypass producer interception to prevent loops.
-  - Hook lane tags run only for matching relay lane ids.
-  - Consumer queue prefetch is resolved from lane binding `prefetch`.
+  - On shutdown start, consumer queues enter cooldown and stop intake before final disposal.
+- `mode: "producer"` disables consumers while preserving producer path.
+- Only consumes lanes listed by the active profile.
+- Deserializes with `serializer.parse(...)`, then re-emits in-process.
+- Relay re-emits bypass producer interception to prevent loops.
+- Hooks run based on event subscriptions after relay re-emit.
+- Consumer queue prefetch is resolved from lane binding `prefetch`.
   - Event Lanes does not apply queue-level business retries; use task middleware for retry logic, with optional DLQ routing on failure.
   - Multiple lanes can share one queue, but each lane can only have one binding.
 
@@ -491,7 +491,7 @@ Built-in queue adapters:
 - `MemoryEventLaneQueue`
 - `RabbitMQEventLaneQueue`
 
-Custom backends implement `IEventLaneQueue` (`enqueue`, `consume`, `ack`, `nack`, optional `setPrefetch`, `init`, `dispose`).
+Custom backends implement `IEventLaneQueue` (`enqueue`, `consume`, `ack`, `nack`, optional `cooldown`, `setPrefetch`, `init`, `dispose`).
 
 ```ts
 import { randomUUID } from "node:crypto";
