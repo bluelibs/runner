@@ -24,23 +24,7 @@ export class MiddlewareResolver {
   constructor(private readonly store: Store) {}
 
   private getOwnerResourceId(itemId: string): string | undefined {
-    if (typeof this.store.getOwnerResourceId === "function") {
-      return this.store.getOwnerResourceId(itemId);
-    }
-
-    const visibilityTracker = (
-      this.store as unknown as {
-        visibilityTracker?: {
-          getOwnerResourceId?: (targetId: string) => string | undefined;
-        };
-      }
-    ).visibilityTracker;
-
-    if (typeof visibilityTracker?.getOwnerResourceId === "function") {
-      return visibilityTracker.getOwnerResourceId(itemId);
-    }
-
-    return undefined;
+    return this.store.getOwnerResourceId(itemId);
   }
 
   private getResource(

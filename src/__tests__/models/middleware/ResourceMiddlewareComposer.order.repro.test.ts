@@ -13,9 +13,11 @@ describe("ResourceMiddlewareComposer Order Bug Repro", () => {
     callOrder = [];
     store = {
       resourceMiddlewares: new Map(),
+      resources: new Map(),
       onUnhandledError: jest.fn(),
       taskMiddlewares: new Map(),
       tasks: new Map(),
+      getOwnerResourceId: () => undefined,
     };
     interceptorRegistry = new InterceptorRegistry();
     middlewareResolver = new MiddlewareResolver(store);

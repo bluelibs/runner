@@ -7,6 +7,8 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
       tasks: new Map(),
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
+      resources: new Map(),
+      getOwnerResourceId: () => undefined,
     };
 
     const resolver = new MiddlewareResolver(store);
@@ -32,6 +34,8 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
       tasks: new Map([["registered", { task }]]),
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
+      resources: new Map(),
+      getOwnerResourceId: () => undefined,
     };
     const resolver = new MiddlewareResolver(store);
     const middlewares = [{ id: "mw.a" }, { id: "mw.b" }] as any[];
@@ -57,6 +61,8 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
       tasks: new Map([["registered.grouped", { task }]]),
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
+      resources: new Map(),
+      getOwnerResourceId: () => undefined,
     };
     const resolver = new MiddlewareResolver(store);
     const middlewares = [{ id: "mw.keep" }, { id: "mw.drop" }] as any[];
@@ -76,6 +82,7 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
       tasks: new Map(),
       taskMiddlewares: new Map([[middleware.id, { middleware }]]),
       resourceMiddlewares: new Map(),
+      resources: new Map(),
       getOwnerResourceId: () => undefined,
       isItemWithinResourceSubtree: () => false,
       isItemVisibleToConsumer: () => true,
@@ -87,7 +94,7 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
     expect(resolver.getEverywhereTaskMiddlewares(task)).toEqual([]);
   });
 
-  test("resolves owner from visibilityTracker fallback when store helper is absent", () => {
+  test("resolves owner from store helper", () => {
     const middleware = {
       id: "tests.middleware.subtree.visibility-fallback",
       run: async ({ next }: any) => next(),
@@ -119,9 +126,7 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
       taskMiddlewares: new Map([[middleware.id, { middleware }]]),
       resourceMiddlewares: new Map(),
       resources: new Map([[ownerResource.id, { resource: ownerResource }]]),
-      visibilityTracker: {
-        getOwnerResourceId: () => ownerResource.id,
-      },
+      getOwnerResourceId: () => ownerResource.id,
     };
 
     const resolver = new MiddlewareResolver(store);

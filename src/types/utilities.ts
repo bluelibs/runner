@@ -165,13 +165,11 @@ export interface TaskCallOptions {
 
 /**
  * Task dependencies transform into callable functions: call with the task input
- * and you receive the task output. Optionally accepts TaskCallOptions for journal forwarding.
+ * and you receive the task output. Call options are always passed as the second
+ * argument to avoid ambiguous object-input vs options inference.
  */
 export type TaskDependency<I, O> = I extends null | void
-  ? {
-      (options?: TaskCallOptions): O;
-      (input?: I, options?: TaskCallOptions): O;
-    }
+  ? (input?: I, options?: TaskCallOptions) => O
   : (input: I, options?: TaskCallOptions) => O;
 /**
  * Resource dependencies resolve to the resource's value directly.

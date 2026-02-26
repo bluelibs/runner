@@ -224,13 +224,9 @@ export class DependencyExtractor {
     const runtimeCallSource = this.resolveRuntimeCallSource(
       source ?? st.task.id,
     );
-    return (inputOrOptions?: unknown, maybeOptions?: TaskCallOptions) => {
-      const { input, options } = this.normalizeTaskDependencyArgs(
-        inputOrOptions,
-        maybeOptions,
-      );
+    return (input?: unknown, options?: TaskCallOptions) => {
       return this.taskRunner.run(st.task, input, {
-        ...(options || {}),
+        ...(options ?? {}),
         source: runtimeCallSource,
       });
     };
@@ -349,55 +345,12 @@ export class DependencyExtractor {
     };
 
     return (async (
-      inputOrOptions?: ExtractTaskInput<TTask> | TaskCallOptions,
-      maybeOptions?: TaskCallOptions,
+      input?: ExtractTaskInput<TTask>,
+      options?: TaskCallOptions,
     ) => {
       const runner = await ensureRunner();
-      const { input, options } = this.normalizeTaskDependencyArgs<
-        ExtractTaskInput<TTask>
-      >(inputOrOptions, maybeOptions);
       return runner(input as ExtractTaskInput<TTask>, options);
     }) as TaskDependency<ExtractTaskInput<TTask>, ExtractTaskOutput<TTask>>;
-  }
-
-  private normalizeTaskDependencyArgs<TInput>(
-    inputOrOptions?: unknown,
-    maybeOptions?: TaskCallOptions,
-  ): {
-    input: TInput | undefined;
-    options: TaskCallOptions | undefined;
-  } {
-    if (maybeOptions !== undefined) {
-      return {
-        input: inputOrOptions as TInput,
-        options: maybeOptions,
-      };
-    }
-
-    if (this.looksLikeTaskCallOptions(inputOrOptions)) {
-      return {
-        input: undefined,
-        options: inputOrOptions,
-      };
-    }
-
-    return {
-      input: inputOrOptions as TInput,
-      options: undefined,
-    };
-  }
-
-  private looksLikeTaskCallOptions(value: unknown): value is TaskCallOptions {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      return false;
-    }
-
-    const keys = Object.keys(value as Record<string, unknown>);
-    if (keys.length === 0) {
-      return true;
-    }
-
-    return keys.every((key) => key === "journal" || key === "source");
   }
 
   private createTaggedTaskInterceptHelpers<TTask extends TaggedTask<any>>(

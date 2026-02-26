@@ -7,9 +7,11 @@ describe("Middleware interceptor default next() argument branches", () => {
   it("resource global interceptor uses executionInput.next() default config", async () => {
     const store: any = {
       resourceMiddlewares: new Map(),
+      resources: new Map(),
       taskMiddlewares: new Map(),
       tasks: new Map(),
       onUnhandledError: jest.fn(),
+      getOwnerResourceId: () => undefined,
     };
     const interceptorRegistry = new InterceptorRegistry();
     const middlewareResolver = new MiddlewareResolver(store);
@@ -37,9 +39,11 @@ describe("Middleware interceptor default next() argument branches", () => {
   it("resource global interceptor can override config via executionInput.next(config)", async () => {
     const store: any = {
       resourceMiddlewares: new Map(),
+      resources: new Map(),
       taskMiddlewares: new Map(),
       tasks: new Map(),
       onUnhandledError: jest.fn(),
+      getOwnerResourceId: () => undefined,
     };
     const interceptorRegistry = new InterceptorRegistry();
     const middlewareResolver = new MiddlewareResolver(store);
@@ -85,6 +89,8 @@ describe("Middleware interceptor default next() argument branches", () => {
       ]),
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
+      resources: new Map(),
+      getOwnerResourceId: () => undefined,
     };
     const interceptorRegistry = new InterceptorRegistry();
     const middlewareResolver = new MiddlewareResolver(store);
