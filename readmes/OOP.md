@@ -242,7 +242,11 @@ class RegisterUserCommand {
     private readonly logger: ILogger,
   ) {}
 
-  async execute(input: { name: string; email: string; password: string }): Promise<User> {
+  async execute(input: {
+    name: string;
+    email: string;
+    password: string;
+  }): Promise<User> {
     const existing = await this.repo.findByEmail(input.email);
     if (existing) throw new Error("Email already registered");
 
@@ -268,14 +272,17 @@ const registerUserCommand = r
     hasher: passwordHasher,
     logger: globals.resources.logger,
   })
-  .init(async (_config, deps) => new RegisterUserCommand(
-    deps.repo, deps.mailer, deps.hasher, deps.logger,
-  ))
+  .init(
+    async (_config, deps) =>
+      new RegisterUserCommand(deps.repo, deps.mailer, deps.hasher, deps.logger),
+  )
   .build();
 
 const registerUser = r
   .task("app.tasks.registerUser")
-  .schema<{ name: string; email: string; password: string }>({ parse: (v) => v })
+  .schema<{ name: string; email: string; password: string }>({
+    parse: (v) => v,
+  })
   .dependencies({ command: registerUserCommand })
   .run(async (input, { command }) => command.execute(input))
   .build();
@@ -431,9 +438,11 @@ import { r } from "@bluelibs/runner";
 
 // Contract: any resource tagged with this must expose a health() method
 const healthCheckTag = r
-  .tag<void, void, { health(): Promise<{ status: string }> }>(
-    "app.tags.healthCheck",
-  )
+  .tag<
+    void,
+    void,
+    { health(): Promise<{ status: string }> }
+  >("app.tags.healthCheck")
   .for(["resources"])
   .build();
 
