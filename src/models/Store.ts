@@ -38,8 +38,6 @@ import { detectRunnerMode } from "../tools/detectRunnerMode";
 import { Serializer } from "../serializer";
 import { getResourcesInDisposeWaves as computeDisposeWaves } from "./utils/disposeOrder";
 import { RunResult } from "./RunResult";
-import { getAllThrows } from "../tools/getAllThrows";
-import type { ITask } from "../types/task";
 import { registerStoreBuiltins } from "./BuiltinsRegistry";
 import { mergeResourceSubtreePolicy } from "../definers/subtreePolicy";
 import { tunnelResourceMiddleware } from "../globals/middleware/tunnel.middleware";
@@ -614,17 +612,5 @@ export class Store {
     return typeof tag === "string"
       ? this.registry.getResourcesWithTag(tag)
       : this.registry.getResourcesWithTag(tag);
-  }
-
-  /**
-   * Returns all error ids declared across a task or resource and its full
-   * dependency chain: own throws, middleware throws (local + auto-applied),
-   * resource dependency throws, and — for tasks — hook throws on events
-   * the task can emit. Deduplicated.
-   */
-  public getAllThrows(
-    target: ITask<any, any, any, any, any, any> | IResource<any, any, any, any>,
-  ): readonly string[] {
-    return getAllThrows(this.registry, target);
   }
 }

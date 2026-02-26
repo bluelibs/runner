@@ -876,7 +876,7 @@ try {
 }
 ```
 
-See [Errors](#errors) for `throws` contracts, `store.getAllThrows()`, and advanced patterns.
+See [Errors](#errors) for `throws` contracts and advanced patterns.
 
 ---
 
@@ -2687,14 +2687,11 @@ const app = r
   .register([unauthorized, userNotFound, getUser])
   .build();
 
-const runtime = await run(app);
-const ids = runtime.store.getAllThrows(getUser);
-
-console.log(ids);
+console.log(getUser.throws);
 // ["app.errors.Unauthorized", "app.errors.UserNotFound"]
 ```
 
-The returned ids are deduplicated and, when applicable, include declarations across the middleware/resource/event-hook chain.
+The `throws` list is normalized and deduplicated at definition time.
 
 ---
 
@@ -2749,7 +2746,7 @@ An object with the following properties and methods:
 | `getRootConfig()`           | Read the root resource config                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `getRootValue()`            | Read the initialized root resource value                                                                                                                                                                                                                                                                                                                                                                                        |
 | `logger`                    | Logger instance                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `store`                     | Runtime store with registered resources, tasks, middleware, events, and introspection helpers (for example, `getAllThrows(task \| resource)`)                                                                                                                                                                                                                                                                                   |
+| `store`                     | Runtime store with registered resources, tasks, middleware, events, and runtime internals                                                                                                                                                                                                                                                                                                                                      |
 | `dispose()`                 | Transitions to `disposing` (stops admitting fresh external work), runs resource `cooldown()` in reverse dependency order, emits `globals.events.disposing` (awaited), waits for in-flight tasks + event listeners to drain (up to `disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`), logs a structured `warn` if drain did not complete in time, transitions to `drained` (blocks all new business task/event admissions), emits `globals.events.drained` (lifecycle-bypassed, awaited), then disposes resources and unhooks listeners |
 
 Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.

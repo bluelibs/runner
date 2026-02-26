@@ -571,7 +571,7 @@ try {
 }
 ```
 
-See [Errors](#errors) for `throws` contracts, `store.getAllThrows()`, and advanced patterns.
+See [Errors](#errors) for `throws` contracts and advanced patterns.
 
 ---
 

@@ -1576,14 +1576,11 @@ const app = r
   .register([unauthorized, userNotFound, getUser])
   .build();
 
-const runtime = await run(app);
-const ids = runtime.store.getAllThrows(getUser);
-
-console.log(ids);
+console.log(getUser.throws);
 // ["app.errors.Unauthorized", "app.errors.UserNotFound"]
 ```
 
-The returned ids are deduplicated and, when applicable, include declarations across the middleware/resource/event-hook chain.
+The `throws` list is normalized and deduplicated at definition time.
 
 ---
 
