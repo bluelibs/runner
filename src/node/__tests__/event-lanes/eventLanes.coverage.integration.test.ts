@@ -276,4 +276,28 @@ describe("event-lanes: additional coverage", () => {
 
     expect(queue.cooldownCalls).toBe(0);
   });
+
+  it("uses dispose fallback when controller is missing from context map", async () => {
+    const context = {
+      coolingDown: false,
+      activeBindingsByQueue: new Map(),
+    } as unknown as Parameters<
+      NonNullable<(typeof eventLanesResource)["dispose"]>
+    >[3];
+
+    const dispose = eventLanesResource.dispose;
+    if (!dispose) {
+      throw createMessageError("eventLanesResource dispose is missing");
+    }
+
+    await dispose(
+      undefined as never,
+      undefined as never,
+      undefined as never,
+      context,
+    );
+
+    expect(context.coolingDown).toBe(true);
+    expect((context as { disposed?: boolean }).disposed).toBe(true);
+  });
 });

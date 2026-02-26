@@ -482,6 +482,7 @@ Event Lanes route tagged events to queues using explicit lane references.
 - Deserializes with `serializer.parse(...)`, then re-emits in-process.
 - Relay re-emits bypass producer interception to prevent loops.
 - Hooks run based on event subscriptions after relay re-emit.
+- When debug event emission logging is enabled (`logEventEmissionOnRun`), Event Lanes emits routing diagnostics: `event-lanes.enqueue`, `event-lanes.relay-emit`, and `event-lanes.skip-inactive-lane`.
 - Consumer queue prefetch is resolved from lane binding `prefetch`.
   - Event Lanes does not apply queue-level business retries; use task middleware for retry logic, with optional DLQ routing on failure.
   - Multiple lanes can share one queue, but each lane can only have one binding.

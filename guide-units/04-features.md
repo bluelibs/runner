@@ -1125,6 +1125,7 @@ How Event Lanes work:
 - **Only some profiles consume**: `profiles[profile].consume` controls which lane references this runtime dequeues.
 - **Mode gate**: `mode: "producer" | "consumer"` defaults to `"consumer"` behavior; `"producer"` disables dequeue consumers while preserving producer interception.
 - **Hook dispatch stays event-driven**: Once a lane message is consumed and relayed, hooks run based on their `.on(event)` subscription.
+- **Debug routing diagnostics**: When debug event emission logging is enabled (`logEventEmissionOnRun`), Event Lanes emits runtime routing logs for `enqueue`, `relay-emit`, and `skip-inactive-lane`.
 - **Prefetch policy**: configure queue prefetch at binding level (`bindings[].prefetch`).
 - **Serializer-first transport**: Payloads are serialized/deserialized through `globals.resources.serializer`, so Dates, RegExp, and custom serializer types survive queue transport.
 - **Relay loop protection**: Consumer re-emits include a relay source prefix so producer interception bypasses requeue.

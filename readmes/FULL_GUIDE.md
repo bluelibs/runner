@@ -3614,7 +3614,7 @@ const messageBroker = r
 For HTTP servers, split shutdown work into two phases:
 
 - `cooldown()`: stop new intake immediately.
-- `dispose()`: finish teardown after Runner drain and lifecycle hooks complete.
+- `dispose()`: finish teardown after Runner (task/event) drain and lifecycle hooks complete.
 
 ```typescript
 import express from "express";
@@ -3646,12 +3646,12 @@ const httpServer = r
   .cooldown(async (listener, _config, _deps, context) => {
     // Intake-stop phase: fast and non-blocking in intent.
     context.readiness = "down";
-    listener?.close();
+    listener.close();
   })
   .dispose(async (_listener, _config, _deps, context) => {
     // Final teardown phase: force-close leftovers if needed.
-    context.listener?.closeAllConnections?.();
-    context.listener?.closeIdleConnections?.();
+    context.listener.closeAllConnections();
+    context.listener.closeIdleConnections();
     context.listener = null;
   })
   .build();
@@ -4189,6 +4189,7 @@ How Event Lanes work:
 - **Only some profiles consume**: `profiles[profile].consume` controls which lane references this runtime dequeues.
 - **Mode gate**: `mode: "producer" | "consumer"` defaults to `"consumer"` behavior; `"producer"` disables dequeue consumers while preserving producer interception.
 - **Hook dispatch stays event-driven**: Once a lane message is consumed and relayed, hooks run based on their `.on(event)` subscription.
+- **Debug routing diagnostics**: When debug event emission logging is enabled (`logEventEmissionOnRun`), Event Lanes emits runtime routing logs for `enqueue`, `relay-emit`, and `skip-inactive-lane`.
 - **Prefetch policy**: configure queue prefetch at binding level (`bindings[].prefetch`).
 - **Serializer-first transport**: Payloads are serialized/deserialized through `globals.resources.serializer`, so Dates, RegExp, and custom serializer types survive queue transport.
 - **Relay loop protection**: Consumer re-emits include a relay source prefix so producer interception bypasses requeue.
