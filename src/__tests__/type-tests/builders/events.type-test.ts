@@ -1,6 +1,7 @@
 import { r } from "../../../";
 import { isOneOf, onAnyOf } from "../../../types/event";
 import type { IEventEmitReport } from "../../../types/event";
+import type { HookRevertFn } from "../../../types/hook";
 
 // Type-only tests for builder event and hook typing.
 
@@ -39,6 +40,47 @@ import type { IEventEmitReport } from "../../../types/event";
       // @ts-expect-error
       deps.task2x;
     })
+    .build();
+}
+
+// Scenario: transactional events require hook undo closures when known at type level.
+{
+  const txEvent = r.event("events.type.tx").transactional().build();
+  const nonTxEvent = r.event("events.type.non-tx").build();
+
+  r.hook("events.type.tx.hook.ok")
+    .on(txEvent)
+    .run(async () => {
+      const revert: HookRevertFn = async () => {};
+      return revert;
+    })
+    .build();
+
+  r.hook("events.type.tx.hook.non-tx")
+    .on(nonTxEvent)
+    .run(async () => {})
+    .build();
+
+  r.hook("events.type.tx.hook.mixed.ok")
+    .on([txEvent, nonTxEvent] as const)
+    .run(async () => async () => {})
+    .build();
+
+  r.hook("events.type.tx.hook.wildcard.runtime")
+    .on("*")
+    .run(async () => {})
+    .build();
+
+  r.hook("events.type.tx.hook.fail")
+    .on(txEvent)
+    // @ts-expect-error transactional hooks must return undo closure
+    .run(async () => {})
+    .build();
+
+  r.hook("events.type.tx.hook.mixed.fail")
+    .on([txEvent, nonTxEvent] as const)
+    // @ts-expect-error mixed subscriptions including transactional events must return undo closure
+    .run(async () => {})
     .build();
 }
 

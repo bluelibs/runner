@@ -184,6 +184,15 @@ const sendWelcomeEmail = r
 - Use `.on(onAnyOf(...))` to listen to several events while keeping inference. Import `onAnyOf` from `@bluelibs/runner/defs` (or `@bluelibs/runner` if you already re-export it in your local facade).
 - Hooks can set `.order(priority)`; lower numbers run first. Call `event.stopPropagation()` inside `run` to cancel downstream hooks.
 - Wildcard hooks use `.on("*")` and receive every emission except events tagged with `globals.tags.excludeFromGlobalHooks`.
+- Use `.transactional(true)` on events when listeners must be reversible:
+  - Transactional is event metadata (`event.transactional` on emission info), not hook metadata.
+  - Every executed listener must return an async undo closure: `async () => { ... }`.
+  - If a listener fails, previously completed listeners are rolled back in reverse completion order.
+  - Rollback still continues if one undo fails; Runner throws an aggregated transactional rollback error.
+  - `run(root)` API is unchanged. This affects hook/listener `run(...)` return behavior for transactional emissions only.
+- Transactional constraints (fail-fast runtime sanity checks):
+  - `transactional + parallel` is invalid.
+  - `transactional + globals.tags.eventLane` is invalid.
 - Use `.parallel(true)` on event definitions: same-`order` listeners run concurrently, batches execute sequentially by ascending priority; if any batch throws, subsequent batches are skipped.
 - Event emitters (dependency-injected or `runtime.emitEvent`) support options:
   - `failureMode: "fail-fast" | "aggregate"`
@@ -491,6 +500,15 @@ Built-in queue adapters:
 
 - `MemoryEventLaneQueue`
 - `RabbitMQEventLaneQueue`
+
+`RabbitMQEventLaneQueue` supports queue wiring options for common broker setups:
+
+- All options are optional except `queue.name`.
+- `queue.durable` (default `true`)
+- `queue.assert` (`"active" | "passive"`, default `"active"`)
+- `queue.arguments` (extra `assertQueue` arguments)
+- `queue.deadLetter` (plain string shorthand like `"my.dlq"`, or `{ queue, exchange, routingKey }`)
+- `publishOptions` (defaults to `{ persistent: true }`; message publish properties, intentionally separate from queue declaration settings)
 
 Custom backends implement `IEventLaneQueue` (`enqueue`, `consume`, `ack`, `nack`, optional `cooldown`, `setPrefetch`, `init`, `dispose`).
 

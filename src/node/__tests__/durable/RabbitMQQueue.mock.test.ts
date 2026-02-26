@@ -3,6 +3,7 @@ import * as amqplibModule from "../../durable/optionalDeps/amqplib";
 
 type ChannelMock = {
   assertQueue: jest.Mock;
+  checkQueue: jest.Mock;
   prefetch: jest.Mock;
   sendToQueue: jest.Mock;
   consume: jest.Mock;
@@ -25,6 +26,7 @@ describe("durable: RabbitMQQueue", () => {
   beforeEach(() => {
     channelMock = {
       assertQueue: jest.fn().mockResolvedValue({}),
+      checkQueue: jest.fn().mockResolvedValue({}),
       prefetch: jest.fn().mockResolvedValue({}),
       sendToQueue: jest.fn().mockResolvedValue(true),
       consume: jest.fn().mockResolvedValue({ consumerTag: "tag" }),
@@ -338,6 +340,34 @@ describe("durable: RabbitMQQueue", () => {
     expect(channelMock.assertQueue).toHaveBeenCalledWith(
       "durable_executions",
       expect.anything(),
+    );
+  });
+
+  it("supports passive queue assertions and custom publish options", async () => {
+    const configured = new RabbitMQQueue({
+      queue: {
+        name: "durable.passive",
+        assert: "passive",
+      },
+      publishOptions: {
+        persistent: false,
+      },
+    });
+
+    await configured.init();
+    expect(channelMock.checkQueue).toHaveBeenCalledWith("durable.passive");
+    expect(channelMock.assertQueue).not.toHaveBeenCalled();
+
+    await configured.enqueue({
+      type: "execute",
+      payload: { x: 1 },
+      maxAttempts: 1,
+    });
+
+    expect(channelMock.sendToQueue).toHaveBeenCalledWith(
+      "durable.passive",
+      expect.any(Buffer),
+      expect.objectContaining({ persistent: false }),
     );
   });
 });

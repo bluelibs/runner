@@ -1625,6 +1625,41 @@ const userRegistered = r
   .build();
 ```
 
+#### Transactional Events
+
+Use transactional events when listeners must be reversible:
+
+```typescript
+const orderPlaced = r
+  .event("app.events.orderPlaced")
+  .payloadSchema<{ orderId: string }>({ parse: (value) => value })
+  .transactional()
+  .build();
+
+const reserveInventory = r
+  .hook("app.hooks.reserveInventory")
+  .on(orderPlaced)
+  .run(async (event) => {
+    await reserve(event.data.orderId);
+
+    // Must return async undo closure for transactional events
+    return async () => {
+      await release(event.data.orderId);
+    };
+  })
+  .build();
+```
+
+Transactional behavior:
+
+- Transactional is event-level metadata (available as `event.transactional` in emission info), not hook metadata.
+- Every executed listener must return an async undo closure.
+- If a listener fails, previously completed listeners are rolled back in reverse completion order.
+- Rollback continues even if one undo fails; Runner throws an aggregated transactional rollback error.
+- Transactional execution is always fail-fast.
+- Runtime sanity constraints: `transactional + parallel` and `transactional + globals.tags.eventLane` are invalid.
+- `run(root)` API does not change; only hook/listener return behavior changes for transactional emissions.
+
 #### Parallel Event Execution
 
 By default, hooks run sequentially in priority order. Use `.parallel(true)` on an event to enable concurrent execution within priority batches:
@@ -1652,6 +1687,7 @@ Event emitters (dependency-injected or `runtime.emitEvent`) accept optional emis
 - `failureMode`: `"fail-fast"` (default) or `"aggregate"`
 - `throwOnError`: `true` by default
 - `report`: when `true`, emit returns `IEventEmitReport`
+- For transactional events, fail-fast rollback semantics are enforced regardless of aggregate options.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -4194,6 +4230,7 @@ How Event Lanes work:
 - **Serializer-first transport**: Payloads are serialized/deserialized through `globals.resources.serializer`, so Dates, RegExp, and custom serializer types survive queue transport.
 - **Relay loop protection**: Consumer re-emits include a relay source prefix so producer interception bypasses requeue.
 - **Failure + DLQ**: Event Lanes does not own business retry policy; failed consumer handling is single-attempt with optional DLQ routing.
+- **Transactional compatibility guard**: Events tagged with `globals.tags.eventLane` cannot be `.transactional()`. Transactional events also cannot be `.parallel()`.
 
 Event Lanes vs Tunnels:
 
@@ -4232,11 +4269,24 @@ const notificationsQueue = r
         url: process.env.RABBITMQ_URL,
         queue: {
           name: "runner.notifications",
+          durable: true, // optional, default true
+          assert: "active", // optional, default "active"
           quorum: true,
-          deadLetter: "runner.notifications.dlq",
+          // You can also use a plain string: deadLetter: "runner.notifications.dlq"
+          deadLetter: {
+            queue: "runner.notifications.dlq",
+            exchange: "",
+            routingKey: "runner.notifications.dlq",
+          },
           messageTtl: 60_000,
+          arguments: {
+            "x-max-length": 10_000,
+          },
         },
         prefetch: 16,
+        publishOptions: {
+          persistent: true, // optional, default true
+        },
       }),
   )
   .dispose(async (queue) => {
@@ -4270,6 +4320,15 @@ const app = r
 ```
 
 The built-in adapter handles RabbitMQ connection/channel lifecycle, queue assertion, and broker ack/nack plumbing. If you need custom behavior, implement your own `IEventLaneQueue`:
+
+RabbitMQ queue options supported by the built-in adapter:
+
+- All options below are optional except `queue.name`.
+- `queue.durable` (default `true`): queue durability flag at declaration time.
+- `queue.assert` (`"active" | "passive"`, default `"active"`): create/assert queues or only validate they already exist.
+- `queue.arguments`: additional RabbitMQ queue arguments passed to `assertQueue`.
+- `queue.deadLetter`: plain string shorthand (`"my.dlq"`) or `{ queue, exchange, routingKey }`.
+- `publishOptions`: `sendToQueue` publish options (default `{ persistent: true }`). This is intentionally outside `queue` because it configures message publish properties, not queue declaration properties.
 
 ```typescript
 import { randomUUID } from "node:crypto";
@@ -8619,6 +8678,13 @@ const myEvent = r
   .payloadSchema<{ data: string }>({ parse: (v) => v })
   .build();
 
+// Transactional event (listeners must return undo closure)
+const myTransactionalEvent = r
+  .event("id.transactional")
+  .payloadSchema<{ data: string }>({ parse: (v) => v })
+  .transactional()
+  .build();
+
 // Event Lane (reference target for queue routing)
 const notificationsLane = r.eventLane("app.lanes.notifications").build();
 const topology = r.eventLane.topology({
@@ -8873,6 +8939,11 @@ type SubtreeViolation = {
 | `failureMode`  | `"fail-fast" \| "aggregate"`      | `fail-fast`  | Stop on first listener error or aggregate all |
 | `throwOnError` | `boolean`                         | `true`       | Throw after listener failure(s)               |
 | `report`       | `boolean`                         | `false`      | Return `IEventEmitReport` for listener outcomes |
+
+Transactional notes:
+- Transactional events always execute with fail-fast rollback semantics.
+- Executed listeners must return async undo closures.
+- `transactional + parallel` and `transactional + globals.tags.eventLane` are rejected at runtime sanity checks.
 
 ### Type Helpers
 
@@ -9279,6 +9350,44 @@ After:
 
 - Build final shape up front (builder chain or `r.override(...)`).
 - Do not mutate built definitions.
+
+### 8.1 Transactional Hook Return Contract
+
+Transactional behavior is event-level (`.transactional()` on events), not hook-level metadata.
+
+Before (now invalid):
+
+```typescript
+const orderPlaced = r.event("app.events.orderPlaced").transactional().build();
+
+r.hook("app.hooks.reserve")
+  .on(orderPlaced)
+  .run(async () => {
+    // side effect
+  })
+  .build();
+```
+
+After:
+
+```typescript
+const orderPlaced = r.event("app.events.orderPlaced").transactional().build();
+
+r.hook("app.hooks.reserve")
+  .on(orderPlaced)
+  .run(async () => {
+    // side effect
+    return async () => {
+      // undo side effect
+    };
+  })
+  .build();
+```
+
+Runtime constraints:
+
+- `transactional + parallel` is invalid.
+- `transactional + globals.tags.eventLane` is invalid.
 
 ### 9. Switch Tag Discovery to Tag Dependencies
 

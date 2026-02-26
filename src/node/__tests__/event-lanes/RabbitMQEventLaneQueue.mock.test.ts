@@ -3,6 +3,7 @@ import { RabbitMQEventLaneQueue } from "../../event-lanes/RabbitMQEventLaneQueue
 
 type ChannelMock = {
   assertQueue: jest.Mock;
+  checkQueue: jest.Mock;
   prefetch: jest.Mock;
   sendToQueue: jest.Mock;
   consume: jest.Mock;
@@ -26,6 +27,7 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
   beforeEach(() => {
     channelMock = {
       assertQueue: jest.fn().mockResolvedValue({}),
+      checkQueue: jest.fn().mockResolvedValue({}),
       prefetch: jest.fn().mockResolvedValue({}),
       sendToQueue: jest.fn().mockResolvedValue(true),
       consume: jest.fn().mockResolvedValue({ consumerTag: "tag" }),
@@ -361,6 +363,60 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
       expect.anything(),
       false,
       true,
+    );
+  });
+
+  it("forwards durable/assert/arguments and publishOptions to transport", async () => {
+    const configuredQueue = new RabbitMQEventLaneQueue({
+      queue: {
+        name: "event-lanes.configured",
+        durable: false,
+        assert: "active",
+        quorum: false,
+        deadLetter: {
+          queue: "event-lanes.configured.dlq",
+          exchange: "event-lanes.dlx",
+          routingKey: "event-lanes.failed",
+        },
+        arguments: {
+          "x-max-length": 500,
+        },
+      },
+      publishOptions: {
+        persistent: false,
+      },
+    });
+
+    await configuredQueue.init();
+
+    expect(channelMock.assertQueue).toHaveBeenCalledWith(
+      "event-lanes.configured.dlq",
+      expect.objectContaining({ durable: false }),
+    );
+    expect(channelMock.assertQueue).toHaveBeenCalledWith(
+      "event-lanes.configured",
+      expect.objectContaining({
+        durable: false,
+        arguments: expect.objectContaining({
+          "x-max-length": 500,
+          "x-dead-letter-exchange": "event-lanes.dlx",
+          "x-dead-letter-routing-key": "event-lanes.failed",
+        }),
+      }),
+    );
+
+    await configuredQueue.enqueue({
+      laneId: "lane.configured",
+      eventId: "event.configured",
+      payload: "{}",
+      source: { kind: "runtime", id: "tests" },
+      maxAttempts: 1,
+    });
+
+    expect(channelMock.sendToQueue).toHaveBeenCalledWith(
+      "event-lanes.configured",
+      expect.any(Buffer),
+      expect.objectContaining({ persistent: false }),
     );
   });
 });

@@ -3,6 +3,7 @@ import { RabbitMQTransport } from "../../../queue/rabbitmq/RabbitMQTransport";
 
 type ChannelMock = {
   assertQueue: jest.Mock;
+  checkQueue?: jest.Mock;
   prefetch: jest.Mock;
   sendToQueue: jest.Mock;
   consume: jest.Mock;
@@ -24,6 +25,7 @@ describe("node: RabbitMQTransport", () => {
   beforeEach(() => {
     channelMock = {
       assertQueue: jest.fn().mockResolvedValue({}),
+      checkQueue: jest.fn().mockResolvedValue({}),
       prefetch: jest.fn().mockResolvedValue({}),
       sendToQueue: jest.fn().mockResolvedValue(true),
       consume: jest.fn().mockResolvedValue({ consumerTag: "tag" }),
@@ -193,5 +195,145 @@ describe("node: RabbitMQTransport", () => {
         messageId: "route-2",
       }),
     );
+  });
+
+  it("supports passive queue checks without asserting queues", async () => {
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: {
+        name: "transport.passive",
+        assert: "passive",
+        deadLetter: {
+          queue: "transport.passive.dlq",
+          exchange: "",
+          routingKey: "transport.passive.dlq",
+        },
+      },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+    expect(channelMock.checkQueue).toHaveBeenCalledWith(
+      "transport.passive.dlq",
+    );
+    expect(channelMock.checkQueue).toHaveBeenCalledWith("transport.passive");
+    expect(channelMock.assertQueue).not.toHaveBeenCalled();
+  });
+
+  it("applies custom durable, arguments, and publish options", async () => {
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: {
+        name: "transport.custom",
+        durable: false,
+        quorum: false,
+        deadLetter: {
+          queue: "transport.custom.dlq",
+          exchange: "events.dlx",
+          routingKey: "events.failed",
+        },
+        arguments: {
+          "x-single-active-consumer": true,
+        },
+      },
+      publishOptions: {
+        persistent: false,
+        expiration: "5000",
+      },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+
+    expect(channelMock.assertQueue).toHaveBeenCalledWith(
+      "transport.custom.dlq",
+      expect.objectContaining({ durable: false }),
+    );
+    expect(channelMock.assertQueue).toHaveBeenCalledWith(
+      "transport.custom",
+      expect.objectContaining({
+        durable: false,
+        arguments: expect.objectContaining({
+          "x-single-active-consumer": true,
+          "x-dead-letter-exchange": "events.dlx",
+          "x-dead-letter-routing-key": "events.failed",
+        }),
+      }),
+    );
+
+    await transport.publish(Buffer.from('{"id":"custom"}'));
+    expect(channelMock.sendToQueue).toHaveBeenCalledWith(
+      "transport.custom",
+      expect.any(Buffer),
+      expect.objectContaining({
+        persistent: false,
+        expiration: "5000",
+      }),
+    );
+  });
+
+  it("supports deadLetter routing key without an explicit queue target", async () => {
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: {
+        name: "transport.routing-only",
+        deadLetter: {
+          routingKey: "failed.routing.only",
+        },
+      },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+
+    expect(channelMock.assertQueue).toHaveBeenCalledTimes(1);
+    expect(channelMock.assertQueue).toHaveBeenCalledWith(
+      "transport.routing-only",
+      expect.objectContaining({
+        arguments: expect.objectContaining({
+          "x-dead-letter-routing-key": "failed.routing.only",
+        }),
+      }),
+    );
+  });
+
+  it("falls back gracefully when passive checkQueue is unavailable", async () => {
+    channelMock.checkQueue = undefined;
+
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: {
+        name: "transport.passive-no-check",
+        assert: "passive",
+        deadLetter: {
+          queue: "transport.passive-no-check.dlq",
+        },
+      },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+
+    expect(channelMock.assertQueue).not.toHaveBeenCalled();
   });
 });

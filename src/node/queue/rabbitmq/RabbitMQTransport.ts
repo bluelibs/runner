@@ -8,6 +8,7 @@ type Channel = {
     queue: string,
     options: Record<string, unknown>,
   ) => Promise<unknown>;
+  checkQueue?: (queue: string) => Promise<unknown>;
   prefetch: (count: number) => Promise<unknown>;
   sendToQueue: (
     queue: string,
@@ -32,14 +33,24 @@ type ChannelModel = {
 export interface RabbitMQTransportQueueConfig {
   name: string;
   quorum?: boolean;
-  deadLetter?: string;
+  deadLetter?:
+    | string
+    | {
+        queue?: string;
+        exchange?: string;
+        routingKey?: string;
+      };
   messageTtl?: number;
+  durable?: boolean;
+  assert?: "active" | "passive";
+  arguments?: Record<string, unknown>;
 }
 
 export interface RabbitMQTransportConfig<TMessage> {
   url?: string;
   queue: RabbitMQTransportQueueConfig;
   prefetch?: number;
+  publishOptions?: Record<string, unknown>;
   logger?: Pick<Logger, "error">;
   parseFailureLogMessage: string;
   handlerFailureLogMessage: string;
@@ -80,6 +91,47 @@ export class RabbitMQTransport<TMessage> {
     return this.channel;
   }
 
+  private resolveDeadLetterConfig(): {
+    queueName?: string;
+    exchange?: string;
+    routingKey?: string;
+  } {
+    const deadLetter = this.config.queue.deadLetter;
+    if (!deadLetter) {
+      return {};
+    }
+
+    if (typeof deadLetter === "string") {
+      return {
+        queueName: deadLetter,
+        exchange: "",
+        routingKey: deadLetter,
+      };
+    }
+
+    const queueName = deadLetter.queue;
+    if (deadLetter.exchange !== undefined) {
+      return {
+        queueName,
+        exchange: deadLetter.exchange,
+        routingKey: deadLetter.routingKey,
+      };
+    }
+
+    if (!queueName) {
+      return {
+        exchange: undefined,
+        routingKey: deadLetter.routingKey,
+      };
+    }
+
+    return {
+      queueName,
+      exchange: "",
+      routingKey: deadLetter.routingKey ?? queueName,
+    };
+  }
+
   async init(): Promise<void> {
     const connection = (await connectAmqplib(
       this.config.url || "amqp://localhost",
@@ -88,35 +140,55 @@ export class RabbitMQTransport<TMessage> {
     this.connection = connection;
     this.channel = channel;
 
-    const deadLetterQueue = this.config.queue.deadLetter;
-    if (deadLetterQueue) {
-      await channel.assertQueue(deadLetterQueue, {
-        durable: true,
-      });
+    const durable = this.config.queue.durable ?? true;
+    const assertMode = this.config.queue.assert ?? "active";
+    const deadLetter = this.resolveDeadLetterConfig();
+
+    if (deadLetter.queueName) {
+      if (assertMode === "passive") {
+        await channel.checkQueue?.(deadLetter.queueName);
+      } else {
+        await channel.assertQueue(deadLetter.queueName, {
+          durable,
+        });
+      }
     }
 
-    const argumentsMap: Record<string, unknown> = {};
-    if (this.config.queue.quorum ?? true) {
+    const argumentsMap: Record<string, unknown> = {
+      ...(this.config.queue.arguments ?? {}),
+    };
+    if (
+      (this.config.queue.quorum ?? true) &&
+      argumentsMap["x-queue-type"] === undefined
+    ) {
       argumentsMap["x-queue-type"] = "quorum";
     }
-    if (deadLetterQueue) {
-      argumentsMap["x-dead-letter-exchange"] = "";
-      argumentsMap["x-dead-letter-routing-key"] = deadLetterQueue;
+    if (deadLetter.exchange !== undefined) {
+      argumentsMap["x-dead-letter-exchange"] = deadLetter.exchange;
+    }
+    if (deadLetter.routingKey !== undefined) {
+      argumentsMap["x-dead-letter-routing-key"] = deadLetter.routingKey;
     }
     if (this.config.queue.messageTtl !== undefined) {
       argumentsMap["x-message-ttl"] = this.config.queue.messageTtl;
     }
 
-    await channel.assertQueue(this.config.queue.name, {
-      durable: true,
-      arguments: argumentsMap,
-    });
+    if (assertMode === "passive") {
+      await channel.checkQueue?.(this.config.queue.name);
+    } else {
+      await channel.assertQueue(this.config.queue.name, {
+        durable,
+        arguments: argumentsMap,
+      });
+    }
     await channel.prefetch(this.config.prefetch || 10);
   }
 
   async publish(
     content: Buffer,
-    options: Record<string, unknown> = { persistent: true },
+    options: Record<string, unknown> = this.config.publishOptions ?? {
+      persistent: true,
+    },
   ): Promise<void> {
     const channel = this.requireChannel();
     channel.sendToQueue(this.config.queue.name, content, options);

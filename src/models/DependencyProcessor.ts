@@ -363,9 +363,6 @@ export class DependencyProcessor {
         const eventDefinition = hook.on;
 
         const handler = async (receivedEvent: IEventEmission<any>) => {
-          if (receivedEvent.source.id === hook.id) {
-            return;
-          }
           if (hookStoreElement.dependencyState !== HookDependencyState.Ready) {
             this.enqueueBufferedHookEvent(hook.id, receivedEvent);
             return;
@@ -381,7 +378,7 @@ export class DependencyProcessor {
         const order = hook.order ?? 0;
 
         if (eventDefinition === "*") {
-          this.eventManager.addGlobalListener(handler, { order });
+          this.eventManager.addGlobalListener(handler, { order, id: hook.id });
         } else if (Array.isArray(eventDefinition)) {
           for (const e of eventDefinition) {
             if (this.store.events.get(e.id) === undefined) {
@@ -390,6 +387,7 @@ export class DependencyProcessor {
           }
           this.eventManager.addListener(eventDefinition as IEvent[], handler, {
             order,
+            id: hook.id,
           });
         } else {
           if (this.store.events.get(eventDefinition.id) === undefined) {
@@ -397,6 +395,7 @@ export class DependencyProcessor {
           }
           this.eventManager.addListener(eventDefinition as IEvent, handler, {
             order,
+            id: hook.id,
           });
         }
       }

@@ -10,6 +10,19 @@ import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 
+export function defineEvent<
+  TPayload = void,
+  TTransactional extends boolean | undefined = boolean | undefined,
+  TParallel extends boolean | undefined = boolean | undefined,
+>(
+  config: IEventDefinition<TPayload> & {
+    transactional?: TTransactional;
+    parallel?: TParallel;
+  },
+): IEvent<TPayload> & {
+  parallel?: TParallel;
+  transactional?: TTransactional;
+};
 export function defineEvent<TPayload = void>(
   config: IEventDefinition<TPayload>,
 ): IEvent<TPayload> {
@@ -28,6 +41,7 @@ export function defineEvent<TPayload = void>(
     [symbolEvent]: true, // This is a workaround
     tags: eventConfig.tags || [],
     parallel: eventConfig.parallel,
+    transactional: eventConfig.transactional,
     optional() {
       const wrapper = {
         inner: this,

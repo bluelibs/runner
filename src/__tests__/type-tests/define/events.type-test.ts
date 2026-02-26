@@ -1,5 +1,6 @@
 import { defineEvent, defineHook, defineTask } from "../../../define";
 import { isOneOf, onAnyOf } from "../../../types/event";
+import type { HookRevertFn } from "../../../types/hook";
 
 // Type-only tests for define event and hook typing.
 
@@ -37,6 +38,60 @@ import { isOneOf, onAnyOf } from "../../../types/event";
       // @ts-expect-error
       deps.task2;
     },
+  });
+}
+
+// Scenario: defineEvent transactional flag propagates to hook run typing where known.
+{
+  const txEvent = defineEvent({
+    id: "define.tx.event",
+    payloadSchema: { parse: (value: unknown) => value as { id: string } },
+    transactional: true,
+  });
+  const nonTxEvent = defineEvent({
+    id: "define.non-tx.event",
+    payloadSchema: { parse: (value: unknown) => value as { id: string } },
+  });
+
+  defineHook({
+    id: "define.tx.hook.ok",
+    on: txEvent,
+    run: async () => {
+      const revert: HookRevertFn = async () => {};
+      return revert;
+    },
+  });
+
+  defineHook({
+    id: "define.tx.hook.non-tx",
+    on: nonTxEvent,
+    run: async () => {},
+  });
+
+  defineHook({
+    id: "define.tx.hook.mixed.ok",
+    on: [txEvent, nonTxEvent] as const,
+    run: async () => async () => {},
+  });
+
+  defineHook({
+    id: "define.tx.hook.wildcard.runtime",
+    on: "*",
+    run: async () => {},
+  });
+
+  defineHook({
+    id: "define.tx.hook.fail",
+    on: txEvent,
+    // @ts-expect-error transactional hooks must return undo closure
+    run: async () => {},
+  });
+
+  defineHook({
+    id: "define.tx.hook.mixed.fail",
+    on: [txEvent, nonTxEvent] as const,
+    // @ts-expect-error mixed subscriptions including transactional events must return undo closure
+    run: async () => {},
   });
 }
 

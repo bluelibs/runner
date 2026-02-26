@@ -1130,6 +1130,7 @@ How Event Lanes work:
 - **Serializer-first transport**: Payloads are serialized/deserialized through `globals.resources.serializer`, so Dates, RegExp, and custom serializer types survive queue transport.
 - **Relay loop protection**: Consumer re-emits include a relay source prefix so producer interception bypasses requeue.
 - **Failure + DLQ**: Event Lanes does not own business retry policy; failed consumer handling is single-attempt with optional DLQ routing.
+- **Transactional compatibility guard**: Events tagged with `globals.tags.eventLane` cannot be `.transactional()`. Transactional events also cannot be `.parallel()`.
 
 Event Lanes vs Tunnels:
 
@@ -1168,11 +1169,24 @@ const notificationsQueue = r
         url: process.env.RABBITMQ_URL,
         queue: {
           name: "runner.notifications",
+          durable: true, // optional, default true
+          assert: "active", // optional, default "active"
           quorum: true,
-          deadLetter: "runner.notifications.dlq",
+          // You can also use a plain string: deadLetter: "runner.notifications.dlq"
+          deadLetter: {
+            queue: "runner.notifications.dlq",
+            exchange: "",
+            routingKey: "runner.notifications.dlq",
+          },
           messageTtl: 60_000,
+          arguments: {
+            "x-max-length": 10_000,
+          },
         },
         prefetch: 16,
+        publishOptions: {
+          persistent: true, // optional, default true
+        },
       }),
   )
   .dispose(async (queue) => {
@@ -1206,6 +1220,15 @@ const app = r
 ```
 
 The built-in adapter handles RabbitMQ connection/channel lifecycle, queue assertion, and broker ack/nack plumbing. If you need custom behavior, implement your own `IEventLaneQueue`:
+
+RabbitMQ queue options supported by the built-in adapter:
+
+- All options below are optional except `queue.name`.
+- `queue.durable` (default `true`): queue durability flag at declaration time.
+- `queue.assert` (`"active" | "passive"`, default `"active"`): create/assert queues or only validate they already exist.
+- `queue.arguments`: additional RabbitMQ queue arguments passed to `assertQueue`.
+- `queue.deadLetter`: plain string shorthand (`"my.dlq"`) or `{ queue, exchange, routingKey }`.
+- `publishOptions`: `sendToQueue` publish options (default `{ persistent: true }`). This is intentionally outside `queue` because it configures message publish properties, not queue declaration properties.
 
 ```typescript
 import { randomUUID } from "node:crypto";

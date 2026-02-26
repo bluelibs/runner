@@ -26,6 +26,7 @@ describe("EmissionExecutor branches", () => {
         timestamp: new Date(),
         source: runtimeSource.runtime("test.source"),
         meta: {},
+        transactional: false,
         isPropagationStopped: () => false,
         stopPropagation: () => undefined,
         tags: [],

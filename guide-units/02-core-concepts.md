@@ -514,6 +514,41 @@ const userRegistered = r
   .build();
 ```
 
+#### Transactional Events
+
+Use transactional events when listeners must be reversible:
+
+```typescript
+const orderPlaced = r
+  .event("app.events.orderPlaced")
+  .payloadSchema<{ orderId: string }>({ parse: (value) => value })
+  .transactional()
+  .build();
+
+const reserveInventory = r
+  .hook("app.hooks.reserveInventory")
+  .on(orderPlaced)
+  .run(async (event) => {
+    await reserve(event.data.orderId);
+
+    // Must return async undo closure for transactional events
+    return async () => {
+      await release(event.data.orderId);
+    };
+  })
+  .build();
+```
+
+Transactional behavior:
+
+- Transactional is event-level metadata (available as `event.transactional` in emission info), not hook metadata.
+- Every executed listener must return an async undo closure.
+- If a listener fails (throws), previously completed listeners are rolled back in reverse completion order.
+- Rollback continues even if one undo fails; Runner throws an aggregated transactional rollback error.
+- Transactional execution is always fail-fast.
+- Runtime sanity constraints: `transactional + parallel` and `transactional + globals.tags.eventLane` are invalid.
+- `run(root)` API does not change; only hook/listener return behavior changes for transactional emissions.
+
 #### Parallel Event Execution
 
 By default, hooks run sequentially in priority order. Use `.parallel(true)` on an event to enable concurrent execution within priority batches:
@@ -541,6 +576,7 @@ Event emitters (dependency-injected or `runtime.emitEvent`) accept optional emis
 - `failureMode`: `"fail-fast"` (default) or `"aggregate"`
 - `throwOnError`: `true` by default
 - `report`: when `true`, emit returns `IEventEmitReport`
+- For transactional events, fail-fast rollback semantics are enforced regardless of aggregate options.
 
 ```typescript
 import { r } from "@bluelibs/runner";

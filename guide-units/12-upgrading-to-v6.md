@@ -182,6 +182,44 @@ After:
 - Build final shape up front (builder chain or `r.override(...)`).
 - Do not mutate built definitions.
 
+### 8.1 Transactional Hook Return Contract
+
+Transactional behavior is event-level (`.transactional()` on events), not hook-level metadata.
+
+Before (now invalid):
+
+```typescript
+const orderPlaced = r.event("app.events.orderPlaced").transactional().build();
+
+r.hook("app.hooks.reserve")
+  .on(orderPlaced)
+  .run(async () => {
+    // side effect
+  })
+  .build();
+```
+
+After:
+
+```typescript
+const orderPlaced = r.event("app.events.orderPlaced").transactional().build();
+
+r.hook("app.hooks.reserve")
+  .on(orderPlaced)
+  .run(async () => {
+    // side effect
+    return async () => {
+      // undo side effect
+    };
+  })
+  .build();
+```
+
+Runtime constraints:
+
+- `transactional + parallel` is invalid.
+- `transactional + globals.tags.eventLane` is invalid.
+
 ### 9. Switch Tag Discovery to Tag Dependencies
 
 Deprecated:

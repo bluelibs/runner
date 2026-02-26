@@ -57,6 +57,13 @@ const myEvent = r
   .payloadSchema<{ data: string }>({ parse: (v) => v })
   .build();
 
+// Transactional event (listeners must return undo closure)
+const myTransactionalEvent = r
+  .event("id.transactional")
+  .payloadSchema<{ data: string }>({ parse: (v) => v })
+  .transactional()
+  .build();
+
 // Event Lane (reference target for queue routing)
 const notificationsLane = r.eventLane("app.lanes.notifications").build();
 const topology = r.eventLane.topology({
@@ -311,6 +318,11 @@ type SubtreeViolation = {
 | `failureMode`  | `"fail-fast" \| "aggregate"`      | `fail-fast`  | Stop on first listener error or aggregate all |
 | `throwOnError` | `boolean`                         | `true`       | Throw after listener failure(s)               |
 | `report`       | `boolean`                         | `false`      | Return `IEventEmitReport` for listener outcomes |
+
+Transactional notes:
+- Transactional events always execute with fail-fast rollback semantics.
+- Executed listeners must return async undo closures.
+- `transactional + parallel` and `transactional + globals.tags.eventLane` are rejected at runtime sanity checks.
 
 ### Type Helpers
 

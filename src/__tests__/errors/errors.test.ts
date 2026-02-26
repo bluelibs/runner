@@ -15,6 +15,10 @@ import {
   isolateUnknownTargetError,
   isolateViolationError,
   isolateConflictError,
+  transactionalEventLaneConflictError,
+  transactionalMissingUndoClosureError,
+  transactionalParallelConflictError,
+  transactionalRollbackFailureError,
   unknownItemTypeError,
   eventNotFoundError,
   circularDependencyError,
@@ -496,6 +500,78 @@ describe("Errors", () => {
       expect(policyOnlyViolation.message).toContain(
         'not allowed by isolate "only" rule on resource "resources.boundary"',
       );
+
+      const txParallel = capture(() =>
+        transactionalParallelConflictError.throw({
+          eventId: "events.tx.invalid",
+        }),
+      );
+      expect(txParallel.message).toContain(
+        'Event "events.tx.invalid" cannot be both transactional and parallel.',
+      );
+      expect(transactionalParallelConflictError.is(txParallel)).toBe(true);
+
+      const txLane = capture(() =>
+        transactionalEventLaneConflictError.throw({
+          eventId: "events.tx.lane.invalid",
+          tagId: "globals.tags.eventLane",
+        }),
+      );
+      expect(txLane.message).toContain(
+        'Event "events.tx.lane.invalid" cannot be transactional while using lane tag "globals.tags.eventLane".',
+      );
+      expect(transactionalEventLaneConflictError.is(txLane)).toBe(true);
+
+      const txMissingUndo = capture(() =>
+        transactionalMissingUndoClosureError.throw({
+          eventId: "events.tx.missingUndo",
+          listenerId: "hooks.tx.listener",
+          listenerOrder: 5,
+        }),
+      );
+      expect(txMissingUndo.message).toContain(
+        'Transactional listener for event "events.tx.missingUndo" did not return an undo closure',
+      );
+      expect(transactionalMissingUndoClosureError.is(txMissingUndo)).toBe(true);
+
+      const txMissingUndoUnknown = capture(() =>
+        transactionalMissingUndoClosureError.throw({
+          eventId: "events.tx.missingUndo.unknown",
+        }),
+      );
+      expect(txMissingUndoUnknown.message).toContain("listenerId=unknown");
+      expect(txMissingUndoUnknown.message).toContain("order=unknown");
+
+      const txRollback = capture(() =>
+        transactionalRollbackFailureError.throw({
+          eventId: "events.tx.rollback",
+          triggerMessage: "listener failed",
+          triggerListenerId: "hooks.tx.trigger",
+          triggerListenerOrder: 3,
+          rollbackFailures: [
+            {
+              message: "undo failed",
+              listenerId: "hooks.tx.undo",
+              listenerOrder: 1,
+            },
+          ],
+        }),
+      );
+      expect(txRollback.message).toContain(
+        'Transactional event "events.tx.rollback" failed and rollback had 1 error(s).',
+      );
+      expect(txRollback.message).toContain("undo failed");
+      expect(transactionalRollbackFailureError.is(txRollback)).toBe(true);
+
+      const txRollbackUnknown = capture(() =>
+        transactionalRollbackFailureError.throw({
+          eventId: "events.tx.rollback.unknown",
+          triggerMessage: "listener failed",
+          rollbackFailures: [{ message: "undo failed" }],
+        }),
+      );
+      expect(txRollbackUnknown.message).toContain("listenerId=unknown");
+      expect(txRollbackUnknown.message).toContain("order=unknown");
     });
   });
 });

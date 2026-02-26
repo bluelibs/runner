@@ -20,6 +20,7 @@ function createEmission(id: string): HookExecutionEvent {
     timestamp: new Date(),
     source: runtimeSource.runtime("tests"),
     meta: {},
+    transactional: false,
     stopPropagation() {
       propagationStopped = true;
     },

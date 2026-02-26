@@ -14,10 +14,20 @@ export interface RabbitMQQueueConfig {
   queue?: {
     name?: string;
     quorum?: boolean;
-    deadLetter?: string;
+    deadLetter?:
+      | string
+      | {
+          queue?: string;
+          exchange?: string;
+          routingKey?: string;
+        };
     messageTtl?: number;
+    durable?: boolean;
+    assert?: "active" | "passive";
+    arguments?: Record<string, unknown>;
   };
   prefetch?: number;
+  publishOptions?: Record<string, unknown>;
   logger?: Pick<Logger, "error">;
 }
 
@@ -44,7 +54,11 @@ export class RabbitMQQueue implements IDurableQueue {
         quorum: config.queue?.quorum ?? true,
         deadLetter: config.queue?.deadLetter,
         messageTtl: config.queue?.messageTtl,
+        durable: config.queue?.durable,
+        assert: config.queue?.assert,
+        arguments: config.queue?.arguments,
       },
+      publishOptions: config.publishOptions,
       logger,
       parseFailureLogMessage:
         "RabbitMQQueue failed to parse incoming message; nacking without requeue.",

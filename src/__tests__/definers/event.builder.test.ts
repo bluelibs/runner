@@ -1,7 +1,8 @@
 import { definitions, r } from "../..";
+import { defineEvent } from "../../define";
 
 describe("event builder", () => {
-  it("builds events with payload schema, meta, and parallel toggle", () => {
+  it("builds events with payload schema, meta, and execution toggles", () => {
     const schema = { parse: (input: unknown) => input };
 
     const ev = r
@@ -9,12 +10,14 @@ describe("event builder", () => {
       .payloadSchema(schema)
       .meta({ title: "unit" })
       .parallel(false)
+      .transactional(false)
       .build();
 
     expect(ev.id).toBe("tests.builder.event.base");
     expect(ev.payloadSchema).toBe(schema);
     expect(ev.meta).toEqual({ title: "unit" });
     expect(ev.parallel).toBe(false);
+    expect(ev.transactional).toBe(false);
     expect(
       (ev as unknown as Record<symbol, any>)[definitions.symbolFilePath],
     ).toContain("event.builder.test");
@@ -25,6 +28,22 @@ describe("event builder", () => {
       .build();
 
     expect(evDefaultParallel.parallel).toBe(true);
+
+    const evDefaultTransactional = r
+      .event("tests.builder.event.transactional.default")
+      .transactional()
+      .build();
+
+    expect(evDefaultTransactional.transactional).toBe(true);
+  });
+
+  it("preserves transactional from defineEvent", () => {
+    const transactionalEvent = defineEvent({
+      id: "tests.builder.event.direct.transactional",
+      transactional: true as const,
+    });
+
+    expect(transactionalEvent.transactional).toBe(true);
   });
 
   it("appends tags by default and overrides when requested", () => {

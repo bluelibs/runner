@@ -184,9 +184,13 @@ export class EventManager {
     // Snapshot interceptors so in-flight emissions stay deterministic even if
     // dispose() clears interceptor registries mid-emission.
     const emissionInterceptorsSnapshot = this.emissionInterceptors.slice();
-    const configuredFailureMode =
-      params.options?.failureMode ?? EventEmissionFailureMode.FailFast;
-    const shouldThrow = params.options?.throwOnError ?? true;
+    const isTransactional = Boolean(eventDefinition.transactional);
+    const configuredFailureMode = isTransactional
+      ? EventEmissionFailureMode.FailFast
+      : (params.options?.failureMode ?? EventEmissionFailureMode.FailFast);
+    const shouldThrow = isTransactional
+      ? true
+      : (params.options?.throwOnError ?? true);
     const failureMode =
       !shouldThrow &&
       configuredFailureMode === EventEmissionFailureMode.FailFast
@@ -220,6 +224,7 @@ export class EventManager {
         new Date(),
         source,
         { ...(eventDefinition.meta || {}) },
+        Boolean(eventDefinition.transactional),
         [...eventDefinition.tags],
       );
 

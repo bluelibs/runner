@@ -5,9 +5,16 @@ import {
   IEventEmitReport,
   TagType,
 } from "../../defs";
-import { validationError } from "../../errors";
+import {
+  transactionalParallelConflictError,
+  validationError,
+} from "../../errors";
 import { EventEmissionInterceptor } from "./types";
-import { executeInParallel, executeSequentially } from "./EmissionExecutor";
+import {
+  executeInParallel,
+  executeSequentially,
+  executeTransactionally,
+} from "./EmissionExecutor";
 import { RuntimeCallSource } from "../../types/runtimeSource";
 
 export class EventEmissionImpl<TInput> implements IEventEmission<TInput> {
@@ -19,6 +26,7 @@ export class EventEmissionImpl<TInput> implements IEventEmission<TInput> {
     public readonly timestamp: Date,
     public readonly source: RuntimeCallSource,
     public readonly meta: Record<string, any>,
+    public readonly transactional: boolean,
     public readonly tags: TagType[],
   ) {}
 
@@ -87,6 +95,20 @@ export class EmissionContext<TInput> {
         propagationStopped: eventToEmit.isPropagationStopped(),
         errors: [],
       };
+    }
+
+    if (this.eventDefinition.transactional && this.eventDefinition.parallel) {
+      transactionalParallelConflictError.throw({
+        eventId: this.eventDefinition.id,
+      });
+    }
+
+    if (this.eventDefinition.transactional) {
+      return executeTransactionally({
+        listeners: this.allListeners,
+        event: eventToEmit,
+        isPropagationStopped: eventToEmit.isPropagationStopped,
+      });
     }
 
     if (this.eventDefinition.parallel) {

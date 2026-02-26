@@ -1,5 +1,6 @@
 import type {
   EnsureTagsForTarget,
+  IEvent,
   EventTagType,
   IEventDefinition,
   IEventMeta,
@@ -16,18 +17,24 @@ import { clone, mergeArray } from "./utils";
  * Creates an EventFluentBuilder from the given state.
  * Each builder method returns a new builder with updated state.
  */
-export function makeEventBuilder<TPayload>(
-  state: BuilderState<TPayload>,
-): EventFluentBuilder<TPayload> {
-  const builder: EventFluentBuilder<TPayload> = {
+export function makeEventBuilder<
+  TPayload,
+  TTransactional extends boolean | undefined,
+>(
+  state: BuilderState<TPayload, TTransactional>,
+): EventFluentBuilder<TPayload, TTransactional> {
+  const builder: EventFluentBuilder<TPayload, TTransactional> = {
     id: state.id,
 
     payloadSchema<TNew>(schema: IValidationSchema<TNew>) {
       // Cast state to target type for widening, then assign the schema
-      const next = clone(state as BuilderState<TNew>, {
-        payloadSchema: schema,
-      });
-      return makeEventBuilder<TNew>(next);
+      const next = clone(
+        state as unknown as BuilderState<TNew, TTransactional>,
+        {
+          payloadSchema: schema,
+        },
+      );
+      return makeEventBuilder<TNew, TTransactional>(next);
     },
 
     schema<TNew>(schema: IValidationSchema<TNew>) {
@@ -42,7 +49,7 @@ export function makeEventBuilder<TPayload>(
       const next = clone(state, {
         tags: mergeArray(state.tags, t, override) as EventTagType[],
       });
-      return makeEventBuilder<TPayload>(next);
+      return makeEventBuilder<TPayload, TTransactional>(next);
     },
 
     throws(_list) {
@@ -52,12 +59,20 @@ export function makeEventBuilder<TPayload>(
 
     meta<TNewMeta extends IEventMeta>(m: TNewMeta) {
       const next = clone(state, { meta: m as IEventMeta });
-      return makeEventBuilder<TPayload>(next);
+      return makeEventBuilder<TPayload, TTransactional>(next);
     },
 
     parallel(enabled = true) {
       const next = clone(state, { parallel: enabled });
-      return makeEventBuilder<TPayload>(next);
+      return makeEventBuilder<TPayload, TTransactional>(next);
+    },
+
+    transactional<TEnabled extends boolean = true>(enabled?: TEnabled) {
+      const next = Object.freeze({
+        ...state,
+        transactional: (enabled ?? true) as TEnabled,
+      }) as BuilderState<TPayload, TEnabled>;
+      return makeEventBuilder<TPayload, TEnabled>(next);
     },
 
     build() {
@@ -67,7 +82,9 @@ export function makeEventBuilder<TPayload>(
       return deepFreeze({
         ...event,
         [symbolFilePath]: state.filePath,
-      });
+      }) as IEvent<TPayload> & {
+        transactional?: TTransactional;
+      };
     },
   };
 

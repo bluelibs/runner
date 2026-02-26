@@ -81,6 +81,10 @@ export interface IEventDefinition<TPayload = void> {
    * Batches (grouped by order) still execute sequentially in priority order.
    */
   parallel?: boolean;
+  /**
+   * If true, listeners run in transactional mode and must return an undo closure.
+   */
+  transactional?: boolean;
 }
 
 /**
@@ -124,6 +128,10 @@ export interface IEventEmission<TPayload = any> {
    * Metadata associated with the event definition.
    */
   meta: IEventMeta;
+  /**
+   * Whether this emission runs in transactional listener mode.
+   */
+  transactional: boolean;
   /**
    * Stops propagation to remaining event listeners.
    */

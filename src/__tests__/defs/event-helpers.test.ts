@@ -13,6 +13,7 @@ describe("event helpers", () => {
       timestamp: new Date(),
       source: runtimeSource.runtime("test"),
       meta: {},
+      transactional: false,
       stopPropagation() {},
       isPropagationStopped() {
         return false;
@@ -26,6 +27,7 @@ describe("event helpers", () => {
       timestamp: new Date(),
       source: runtimeSource.runtime("test"),
       meta: {},
+      transactional: false,
       stopPropagation() {},
       isPropagationStopped() {
         return false;

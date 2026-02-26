@@ -7,10 +7,13 @@ import {
   duplicateTagIdOnDefinitionError,
   duplicateRegistrationError,
   middlewareNotRegisteredError,
+  transactionalEventLaneConflictError,
+  transactionalParallelConflictError,
   subtreeValidationFailedError,
   tagSelfDependencyError,
   tagNotFoundError,
 } from "../errors";
+import { globalTags } from "../globals/globalTags";
 import type {
   ITaggable,
   IsolationExportsTarget,
@@ -113,6 +116,7 @@ export class StoreValidator {
       });
     }
 
+    this.ensureTransactionalEventsAreValid();
     this.ensureSubtreePoliciesAreValid();
     this.ensureTagIdsAreUniquePerDefinition();
     this.ensureAllTagsUsedAreRegistered();
@@ -121,6 +125,30 @@ export class StoreValidator {
 
     // Validate module boundary visibility after all items are registered
     this.registry.visibilityTracker.validateVisibility(this.registry);
+  }
+
+  private ensureTransactionalEventsAreValid() {
+    for (const { event } of this.registry.events.values()) {
+      if (!event.transactional) {
+        continue;
+      }
+
+      if (event.parallel) {
+        transactionalParallelConflictError.throw({
+          eventId: event.id,
+        });
+      }
+
+      const hasEventLaneTag = event.tags.some(
+        (tag) => tag.id === globalTags.eventLane.id,
+      );
+      if (hasEventLaneTag) {
+        transactionalEventLaneConflictError.throw({
+          eventId: event.id,
+          tagId: globalTags.eventLane.id,
+        });
+      }
+    }
   }
 
   private ensureSubtreePoliciesAreValid() {

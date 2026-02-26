@@ -1,9 +1,14 @@
 import {
   EventEmissionFailureMode,
+  HookRevertFn,
   IEventEmission,
   IEventEmitReport,
   IEventListenerError,
 } from "../../defs";
+import {
+  transactionalMissingUndoClosureError,
+  transactionalRollbackFailureError,
+} from "../../errors";
 import { IListenerStorage } from "./types";
 
 interface ExecuteOptions {
@@ -83,6 +88,99 @@ export async function executeSequentially({
       }
     } else {
       report.skippedListeners += 1;
+    }
+  }
+
+  report.propagationStopped =
+    report.propagationStopped || event.isPropagationStopped();
+  return report;
+}
+
+async function rollbackTransactionalListeners(
+  listenersToRollback: Array<{
+    listener: IListenerStorage;
+    revert: HookRevertFn;
+  }>,
+): Promise<IEventListenerError[]> {
+  const rollbackErrors: IEventListenerError[] = [];
+  for (let index = listenersToRollback.length - 1; index >= 0; index--) {
+    const rollbackTarget = listenersToRollback[index];
+    try {
+      await rollbackTarget.revert();
+    } catch (error) {
+      rollbackErrors.push(toListenerError(error, rollbackTarget.listener));
+    }
+  }
+  return rollbackErrors;
+}
+
+export async function executeTransactionally({
+  listeners,
+  event,
+  isPropagationStopped,
+}: Omit<ExecuteOptions, "failureMode">): Promise<IEventEmitReport> {
+  const report = createReport(listeners.length);
+  const listenersToRollback: Array<{
+    listener: IListenerStorage;
+    revert: HookRevertFn;
+  }> = [];
+
+  for (const listener of listeners) {
+    if (isPropagationStopped?.()) {
+      report.propagationStopped = true;
+      break;
+    }
+
+    if (!shouldExecuteListener(listener, event)) {
+      report.skippedListeners += 1;
+      continue;
+    }
+
+    report.attemptedListeners += 1;
+    try {
+      const revertFn = await listener.handler(event);
+      if (typeof revertFn !== "function") {
+        transactionalMissingUndoClosureError.throw({
+          eventId: event.id,
+          listenerId: listener.id,
+          listenerOrder: listener.order,
+        });
+      }
+
+      listenersToRollback.push({
+        listener,
+        revert: revertFn as HookRevertFn,
+      });
+      report.succeededListeners += 1;
+    } catch (error) {
+      const triggerError = toListenerError(error, listener);
+      report.failedListeners += 1;
+      report.errors.push(triggerError);
+
+      const rollbackErrors =
+        await rollbackTransactionalListeners(listenersToRollback);
+
+      if (rollbackErrors.length > 0) {
+        const rollbackError = transactionalRollbackFailureError.new({
+          eventId: event.id,
+          triggerMessage: triggerError.message,
+          triggerListenerId: triggerError.listenerId,
+          triggerListenerOrder: triggerError.listenerOrder,
+          rollbackFailures: rollbackErrors.map((rollbackFailure) => ({
+            message: rollbackFailure.message,
+            listenerId: rollbackFailure.listenerId,
+            listenerOrder: rollbackFailure.listenerOrder,
+          })),
+        });
+
+        throw Object.assign(rollbackError, {
+          cause: triggerError,
+          triggerError,
+          rollbackErrors,
+        });
+      }
+
+      throw triggerError;
     }
   }
 
