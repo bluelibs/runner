@@ -196,4 +196,18 @@ describe("EventManager regressions", () => {
     ).resolves.toBeUndefined();
     expect(secondListener).not.toHaveBeenCalled();
   });
+
+  it("rejects interceptors that call next() more than once", async () => {
+    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const event = defineEvent<string>({ id: "reg.next-once" });
+
+    eventManager.intercept(async (next, emission) => {
+      await next(emission);
+      return next(emission);
+    });
+
+    await expect(
+      eventManager.emit(event, "data", runtimeSource.runtime("src")),
+    ).rejects.toThrow("Interceptors can call next() only once per emission.");
+  });
 });

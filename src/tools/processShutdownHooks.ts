@@ -107,6 +107,7 @@ const activeDisposers = new Set<() => Promise<void>>();
 const inFlightShutdownDispatches = new Set<Promise<void>>();
 let shutdownHooksInstalled = false;
 let unhookShutdownSignals: (() => void) | undefined;
+let activeShutdownDispatch: Promise<void> | undefined;
 
 function installGlobalShutdownHooksOnce() {
   if (shutdownHooksInstalled) return;
@@ -137,7 +138,12 @@ function installGlobalShutdownHooksOnce() {
     }
   };
   const handler = () => {
-    trackAsyncDispatch(inFlightShutdownDispatches, dispatchShutdown());
+    if (!activeShutdownDispatch) {
+      activeShutdownDispatch = dispatchShutdown().finally(() => {
+        activeShutdownDispatch = undefined;
+      });
+    }
+    trackAsyncDispatch(inFlightShutdownDispatches, activeShutdownDispatch);
   };
   unhookShutdownSignals = platform.onShutdownSignal(handler);
 }
@@ -195,6 +201,7 @@ export function __resetProcessHooksForTests(): void {
   unhookUncaughtException = undefined;
   unhookUnhandledRejection = undefined;
   unhookShutdownSignals = undefined;
+  activeShutdownDispatch = undefined;
   processSafetyNetsInstalled = false;
   shutdownHooksInstalled = false;
 }

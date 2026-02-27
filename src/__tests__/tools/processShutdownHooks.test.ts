@@ -1,9 +1,17 @@
 import {
+  __resetProcessHooksForTests,
   __waitForProcessHooksIdleForTests,
   registerProcessLevelSafetyNets,
+  registerShutdownHook,
 } from "../../tools/processShutdownHooks";
+import { getPlatform } from "../../platform";
 
 describe("processShutdownHooks", () => {
+  afterEach(() => {
+    __resetProcessHooksForTests();
+    jest.restoreAllMocks();
+  });
+
   it("waits for in-flight process safety-net dispatches", async () => {
     let releaseHandler!: () => void;
     const gate = new Promise<void>((resolve) => {
@@ -59,6 +67,39 @@ describe("processShutdownHooks", () => {
     } finally {
       cleanup();
       consoleSpy.mockRestore();
+    }
+  });
+
+  it("runs shutdown disposers only once when multiple signals arrive quickly", async () => {
+    let releaseDispose: (() => void) | undefined;
+    const disposeGate = new Promise<void>((resolve) => {
+      releaseDispose = resolve;
+    });
+    const disposer = jest.fn(async () => {
+      await disposeGate;
+    });
+
+    const exitSpy = jest
+      .spyOn(getPlatform(), "exit")
+      .mockImplementation(() => undefined);
+
+    const cleanup = registerShutdownHook(disposer);
+    try {
+      process.emit("SIGTERM");
+      process.emit("SIGINT");
+
+      await Promise.resolve();
+      expect(disposer).toHaveBeenCalledTimes(1);
+
+      if (!releaseDispose) {
+        throw new Error("Expected disposer gate release function");
+      }
+      releaseDispose();
+
+      await __waitForProcessHooksIdleForTests();
+      expect(exitSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      cleanup();
     }
   });
 });

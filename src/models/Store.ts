@@ -331,10 +331,11 @@ export class Store {
     this.registry.visibilityTracker.recordResource(root.id);
     this.registry.visibilityTracker.recordDefinitionTags(root.id, root.tags);
     this.registry.visibilityTracker.recordIsolation(root.id, root.isolate);
+    this.validator.checkIfIDExists(root.id);
+    this.validator.trackRegisteredId(root.id);
 
     this.registry.computeRegistrationDeeply(root, config);
     this.registry.resources.set(root.id, this.root);
-    this.validator.trackRegisteredId(root.id);
   }
 
   public validateDependencyGraph() {
@@ -367,8 +368,12 @@ export class Store {
     this.setupRootResource(root, config);
     this.validator.runSanityChecks();
 
+    const overrideTraversalVisited = new Set<string>();
     for (const resource of this.resources.values()) {
-      this.overrideManager.storeOverridesDeeply(resource.resource);
+      this.overrideManager.storeOverridesDeeply(
+        resource.resource,
+        overrideTraversalVisited,
+      );
     }
 
     this.#isInitialized = true;
@@ -560,6 +565,7 @@ export class Store {
    */
   public processOverrides() {
     this.overrideManager.processOverrides();
+    this.validator.runSanityChecks();
   }
 
   /**

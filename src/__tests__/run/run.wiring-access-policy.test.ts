@@ -448,7 +448,7 @@ describe("run.isolate", () => {
     await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
   });
 
-  it("ignores internal __runner dependency keys for policy enforcement", async () => {
+  it("enforces policy checks for internal __runner dependency keys", async () => {
     const app = defineResource({
       id: "policy.internal.app",
       isolate: {
@@ -457,9 +457,7 @@ describe("run.isolate", () => {
       init: async () => "ok",
     });
 
-    const runtime = await run(app);
-    expect(runtime.value).toBe("ok");
-    await runtime.dispose();
+    await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
   });
 
   it("supports denying container internals via globals.tags.containerInternals", async () => {

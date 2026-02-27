@@ -9,6 +9,7 @@ import {
 } from "../defs";
 import * as utils from "../define";
 import {
+  overrideDuplicateTargetError,
   overrideTargetNotRegisteredError,
   unknownItemTypeError,
 } from "../errors";
@@ -114,6 +115,12 @@ export class OverrideManager {
       }
 
       this.overrideRequests.add({ source: element.id, override });
+      if (this.overrides.has(id)) {
+        overrideDuplicateTargetError.throw({
+          targetId: id,
+          sources: this.getOverrideSourcesById(id),
+        });
+      }
       this.overrides.set(id, override);
     });
   }

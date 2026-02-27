@@ -454,4 +454,14 @@ describe("Queue", () => {
     expect(after).not.toBe(before);
     expect(after.signal.aborted).toBe(false);
   });
+
+  it("fails fast when task id counter reaches Number.MAX_SAFE_INTEGER", async () => {
+    const q = new Queue();
+    (q as unknown as { nextTaskId: number }).nextTaskId =
+      Number.MAX_SAFE_INTEGER;
+
+    await expect(q.run(async () => "nope")).rejects.toThrow(
+      /task id counter reached its limit/i,
+    );
+  });
 });

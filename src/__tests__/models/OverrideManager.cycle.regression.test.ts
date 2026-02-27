@@ -33,6 +33,36 @@ describe("OverrideManager override graph recursion", () => {
     expect(() => store.initializeStore(root, {}, runtimeResult)).not.toThrow();
   });
 
+  it("supports storeOverridesDeeply without explicitly passing a visited set", () => {
+    const fixture = createTestFixture();
+    const { store } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+    const runtimeResult = fixture.createRuntimeResult(taskRunner);
+
+    const baseTask = defineTask({
+      id: "override.default-visited.base",
+      run: async () => "base",
+    });
+    const overrideTask = defineTask({
+      id: "override.default-visited.base",
+      run: async () => "override",
+    });
+
+    const root = defineResource({
+      id: "override.default-visited.root",
+      register: [baseTask],
+      overrides: [overrideTask],
+    });
+
+    store.initializeStore(root, {}, runtimeResult);
+
+    const registry = (store as any).registry as any;
+    const manager = new OverrideManager(registry);
+    expect(() => manager.storeOverridesDeeply(root)).not.toThrow();
+    expect(manager.overrides.has(baseTask.id)).toBe(true);
+  });
+
   it("processes hook overrides and reports missing hook override targets with filtered sources", () => {
     const fixture = createTestFixture();
     const { store } = fixture;

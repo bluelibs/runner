@@ -242,7 +242,7 @@ describe("durable: RabbitMQQueue", () => {
     );
   });
 
-  it("reports primitive handler failures and preserves consumer ack/nack control", async () => {
+  it("reports primitive handler failures and nacks without requeue", async () => {
     await queue.init();
     let consumer:
       | ((msg: { content: Buffer } | null) => Promise<void>)
@@ -274,7 +274,11 @@ describe("durable: RabbitMQQueue", () => {
         messageId: "handler-primitive",
       }),
     );
-    expect(channelMock.nack).not.toHaveBeenCalled();
+    expect(channelMock.nack).toHaveBeenCalledWith(
+      expect.anything(),
+      false,
+      false,
+    );
   });
 
   it("reports Error handler failures without wrapping", async () => {

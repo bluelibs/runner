@@ -34,6 +34,8 @@ type EventLanesInitializationResult = {
 };
 
 export class EventLanesController {
+  private producerInterceptorRegistered = false;
+
   constructor(
     private readonly config: EventLanesResourceConfig,
     private readonly dependencies: EventLanesCoreDependencies,
@@ -124,7 +126,16 @@ export class EventLanesController {
   }
 
   private registerProducerInterceptor() {
+    if (this.producerInterceptorRegistered) {
+      return;
+    }
+    this.producerInterceptorRegistered = true;
+
     this.dependencies.eventManager.intercept(async (next, emission) => {
+      if (this.context.disposed || this.context.coolingDown) {
+        return next(emission);
+      }
+
       if (isRelayEmission(emission, this.context.relaySourcePrefix)) {
         return next(emission);
       }
@@ -138,7 +149,6 @@ export class EventLanesController {
         eventRoute.lane.id,
         this.context.bindingsByLaneId,
       );
-      emission.stopPropagation();
 
       await binding.queue.enqueue({
         laneId: eventRoute.lane.id,
@@ -149,6 +159,7 @@ export class EventLanesController {
         metadata: eventRoute.metadata,
         maxAttempts: 1,
       });
+      emission.stopPropagation();
       await this.diagnostics.logEnqueue({
         eventId: emission.id,
         laneId: eventRoute.lane.id,
@@ -251,30 +262,54 @@ export class EventLanesController {
       );
       await queue.ack(message.id);
     } catch (error) {
+      const consumerError =
+        error instanceof Error ? error : new Error(String(error));
+      let dlqEnqueueError: Error | null = null;
+
       if (binding.dlq?.queue) {
-        await binding.dlq.queue.enqueue({
-          laneId: message.laneId,
-          eventId: message.eventId,
-          payload: message.payload,
-          source: message.source,
-          orderingKey: message.orderingKey,
-          maxAttempts: 1,
-          metadata: {
-            ...(message.metadata || {}),
-            eventLaneDlq: {
-              failedAt: new Date().toISOString(),
-              reason: normalizeErrorMessage(error),
+        try {
+          await binding.dlq.queue.enqueue({
+            laneId: message.laneId,
+            eventId: message.eventId,
+            payload: message.payload,
+            source: message.source,
+            orderingKey: message.orderingKey,
+            maxAttempts: 1,
+            metadata: {
+              ...(message.metadata || {}),
+              eventLaneDlq: {
+                failedAt: new Date().toISOString(),
+                reason: normalizeErrorMessage(consumerError),
+              },
             },
-          },
-        });
+          });
+        } catch (dlqError) {
+          dlqEnqueueError =
+            dlqError instanceof Error ? dlqError : new Error(String(dlqError));
+          await this.dependencies.logger.error(
+            "Event lane consumer failed to enqueue message into DLQ.",
+            {
+              laneId: message.laneId,
+              eventId: message.eventId,
+              error: dlqEnqueueError,
+            },
+          );
+        }
       }
 
-      await queue.nack(message.id, false);
-      await this.dependencies.logger.error("Event lane consumer failed.", {
-        laneId: message.laneId,
-        eventId: message.eventId,
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
+      try {
+        await queue.nack(message.id, false);
+      } finally {
+        await this.dependencies.logger.error("Event lane consumer failed.", {
+          laneId: message.laneId,
+          eventId: message.eventId,
+          error: consumerError,
+          data:
+            dlqEnqueueError === null
+              ? undefined
+              : { dlqEnqueueError: dlqEnqueueError.message },
+        });
+      }
     }
   }
 }

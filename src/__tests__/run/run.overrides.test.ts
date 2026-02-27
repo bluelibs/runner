@@ -354,7 +354,7 @@ describe("run.overrides", () => {
     );
   });
 
-  it("should have an override priority, the deeper you are, the less priority you have in the override", async () => {
+  it("fails fast when a deep override target is not registered", async () => {
     const task = defineTask({
       id: "task",
       run: async () => "Task executed",
@@ -371,7 +371,7 @@ describe("run.overrides", () => {
     });
 
     const middle = defineResource({
-      id: "app",
+      id: "app.middle",
       register: [task],
       overrides: [override],
     });
@@ -388,8 +388,9 @@ describe("run.overrides", () => {
       },
     });
 
-    const result = await run(app);
-    expect(result.value).toBe("Task super-overridden");
+    await expect(run(app)).rejects.toThrow(
+      'Override target Task "task2" is not registered',
+    );
   });
 
   it("should override if I have a previously registered normal resource with a resource with config", async () => {
@@ -512,8 +513,8 @@ describe("run.overrides", () => {
       },
     });
 
-    const result = await run(app);
-    // Since root is visited after middle, its override takes precedence.
-    expect(result.value).toBe("Root");
+    await expect(run(app)).rejects.toThrow(
+      'Override target "task.same" is declared more than once.',
+    );
   });
 });

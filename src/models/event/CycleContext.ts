@@ -1,7 +1,9 @@
-import { eventCycleError } from "../../errors";
+import { eventCycleError, validationError } from "../../errors";
 import { getPlatform, IAsyncLocalStorage } from "../../platform";
 import { IEmissionFrame } from "./types";
 import { RuntimeCallSource } from "../../types/runtimeSource";
+
+const MAX_EMISSION_STACK_DEPTH = 1000;
 
 export class CycleContext {
   private readonly emissionStack: IAsyncLocalStorage<IEmissionFrame[]> | null;
@@ -57,6 +59,14 @@ export class CycleContext {
           });
         }
       }
+    }
+
+    if (currentStack && currentStack.length >= MAX_EMISSION_STACK_DEPTH) {
+      validationError.throw({
+        subject: "Event cycle detection",
+        id: frame.id,
+        originalError: `Emission stack exceeded ${MAX_EMISSION_STACK_DEPTH} frames.`,
+      });
     }
 
     const nextStack = currentStack ? [...currentStack, frame] : [frame];

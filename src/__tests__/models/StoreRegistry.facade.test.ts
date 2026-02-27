@@ -145,4 +145,32 @@ describe("StoreRegistry facade delegates", () => {
     expect(store.errors.has(typedError.id)).toBe(true);
     expect(store.asyncContexts.has(asyncContext.id)).toBe(true);
   });
+
+  it("covers writer id resolution fallbacks for null and id-less values", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+    const writer = registry.writer as {
+      resolveRegisterableId: (item: unknown) => string | undefined;
+    };
+
+    expect(writer.resolveRegisterableId(null)).toBeUndefined();
+    expect(writer.resolveRegisterableId(undefined)).toBeUndefined();
+    expect(writer.resolveRegisterableId(123)).toBeUndefined();
+  });
+
+  it("handles writer registration failures for id-less items without rollback lookup", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+    const root = {
+      id: "registry.delegate.invalid-item.root",
+      register: [123 as any],
+      dependencies: {},
+      middleware: [],
+      overrides: [],
+      subtree: undefined,
+      tags: [],
+    };
+
+    expect(() => registry.computeRegistrationDeeply(root)).toThrow(
+      /Unknown item type/,
+    );
+  });
 });

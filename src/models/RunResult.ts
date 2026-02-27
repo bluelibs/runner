@@ -563,8 +563,10 @@ export class RunResult<V> implements IRuntime<V> {
 
     this.#disposePromise = Promise.resolve()
       .then(() => this.disposeFn())
-      .finally(() => {
+      .then(() => {
         this.#disposed = true;
+      })
+      .finally(() => {
         this.#disposing = false;
         this.#disposePromise = undefined;
       });

@@ -101,7 +101,23 @@ export class ResourceScheduler {
       );
 
       if (readyWave.length === 0) {
-        parallelInitSchedulingError.throw();
+        parallelInitSchedulingError.throw({
+          pendingResourceIds: pending.map((resource) => resource.resource.id),
+          blockedDependencies: pending.map((resource) => {
+            const dependencyIds = this.collectDirectResourceDependenciesFromMap(
+              resource.resource.dependencies,
+              resource.resource.id,
+            ).filter((dependencyId) => {
+              const dependencyResource = this.store.resources.get(dependencyId);
+              return dependencyResource?.isInitialized !== true;
+            });
+
+            return {
+              resourceId: resource.resource.id,
+              dependencyIds,
+            };
+          }),
+        });
       }
 
       const results = await Promise.allSettled(

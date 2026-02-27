@@ -176,6 +176,76 @@ describe("durable: RedisStore", () => {
     );
   });
 
+  it("preserves serializer marker payloads through updateExecution merge roundtrips", async () => {
+    const initialExecution: Execution = {
+      id: "lua-safe-1",
+      taskId: "task.lua-safe",
+      input: undefined,
+      status: ExecutionStatus.Running,
+      attempt: 1,
+      maxAttempts: 3,
+      createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+    };
+
+    const redisState = new Map<string, string>([
+      ["durable:exec:lua-safe-1", serializer.stringify(initialExecution)],
+    ]);
+
+    redisMock.get.mockImplementation(async (key: unknown) => {
+      if (typeof key !== "string") return null;
+      return redisState.get(key) ?? null;
+    });
+
+    redisMock.eval.mockImplementationOnce(
+      async (
+        scriptUnknown: unknown,
+        _numKeysUnknown: unknown,
+        keyUnknown: unknown,
+        updatesUnknown: unknown,
+      ) => {
+        const script = typeof scriptUnknown === "string" ? scriptUnknown : "";
+        const key = typeof keyUnknown === "string" ? keyUnknown : "";
+        const updatesPayload =
+          typeof updatesUnknown === "string" ? updatesUnknown : "";
+
+        if (
+          !script.includes("cjson.decode(current)") ||
+          key.length === 0 ||
+          updatesPayload.length === 0
+        ) {
+          return null;
+        }
+
+        const current = redisState.get(key);
+        if (!current) return null;
+
+        const decodedCurrent = JSON.parse(current) as Record<string, unknown>;
+        const decodedUpdates = JSON.parse(updatesPayload) as Record<
+          string,
+          unknown
+        >;
+        const merged = { ...decodedCurrent, ...decodedUpdates };
+        redisState.set(key, JSON.stringify(merged));
+        return "OK";
+      },
+    );
+
+    await store.updateExecution("lua-safe-1", {
+      status: ExecutionStatus.Completed,
+      completedAt: new Date("2024-01-02T03:04:05.000Z"),
+      cancelledAt: new Date("2024-01-02T04:05:06.000Z"),
+    });
+
+    const updatedExecution = await store.getExecution("lua-safe-1");
+    expect(updatedExecution).not.toBeNull();
+    expect(updatedExecution?.createdAt).toBeInstanceOf(Date);
+    expect(updatedExecution?.updatedAt).toBeInstanceOf(Date);
+    expect(updatedExecution?.completedAt).toBeInstanceOf(Date);
+    expect(updatedExecution?.cancelledAt).toBeInstanceOf(Date);
+    expect(updatedExecution?.status).toBe(ExecutionStatus.Completed);
+  });
+
   it("lists executions for dashboard", async () => {
     redisMock.scan.mockResolvedValue(["0", ["durable:exec:1"]]);
     redisMock.pipeline.mockReturnValue({

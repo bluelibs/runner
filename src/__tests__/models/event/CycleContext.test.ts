@@ -134,4 +134,32 @@ describe("CycleContext", () => {
       ),
     ).rejects.toThrow(/cycle detected/i);
   });
+
+  it("fails fast when emission stack depth exceeds safety cap", async () => {
+    const ctx = new CycleContext(true);
+    if (!ctx.isEnabled) {
+      return;
+    }
+
+    const internals = ctx as unknown as {
+      emissionStack: { getStore: () => Array<{ id: string; source: any }> };
+    };
+
+    const deepStack = Array.from({ length: 1000 }, () => ({
+      id: "evt.previous",
+      source: runtimeSource.runtime("deep.stack"),
+    }));
+
+    jest.spyOn(internals.emissionStack, "getStore").mockReturnValue(deepStack);
+
+    expect(() =>
+      ctx.runEmission(
+        {
+          id: "evt.overflow",
+          source: runtimeSource.runtime("overflow"),
+        },
+        async () => undefined,
+      ),
+    ).toThrow(/Emission stack exceeded 1000 frames/);
+  });
 });

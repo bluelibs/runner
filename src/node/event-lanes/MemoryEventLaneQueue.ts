@@ -45,7 +45,7 @@ export class MemoryEventLaneQueue implements IEventLaneQueue {
   async nack(messageId: string, requeue: boolean = true): Promise<void> {
     const msg = this.inFlight.get(messageId);
     this.inFlight.delete(messageId);
-    if (requeue && msg && msg.attempts < msg.maxAttempts) {
+    if (msg && this.shouldRequeue(msg, requeue)) {
       this.queue.push(msg);
     }
     setImmediate(() => void this.processNext());
@@ -76,12 +76,9 @@ export class MemoryEventLaneQueue implements IEventLaneQueue {
     try {
       while (this.queue.length > 0) {
         const msg = this.queue.shift()!;
-        const next: EventLaneMessage = {
-          ...msg,
-          attempts: msg.attempts + 1,
-        };
+        const next = this.withIncrementedAttempts(msg);
 
-        if (next.attempts > next.maxAttempts) {
+        if (!this.shouldAttemptDelivery(next)) {
           continue;
         }
 
@@ -90,7 +87,7 @@ export class MemoryEventLaneQueue implements IEventLaneQueue {
           await this.handler(next);
         } catch {
           this.inFlight.delete(next.id);
-          if (next.attempts < next.maxAttempts) {
+          if (this.shouldRequeue(next, true)) {
             this.queue.push(next);
           }
         }
@@ -98,5 +95,20 @@ export class MemoryEventLaneQueue implements IEventLaneQueue {
     } finally {
       this.isProcessing = false;
     }
+  }
+
+  private withIncrementedAttempts(message: EventLaneMessage): EventLaneMessage {
+    return {
+      ...message,
+      attempts: message.attempts + 1,
+    };
+  }
+
+  private shouldAttemptDelivery(message: EventLaneMessage): boolean {
+    return message.attempts <= message.maxAttempts;
+  }
+
+  private shouldRequeue(message: EventLaneMessage, requeue: boolean): boolean {
+    return requeue && message.attempts < message.maxAttempts;
   }
 }

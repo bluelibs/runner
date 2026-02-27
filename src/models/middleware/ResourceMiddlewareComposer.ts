@@ -168,7 +168,7 @@ export class ResourceMiddlewareComposer {
 
     const createExecutionInput = (
       config: TConfig,
-      nextFunc: (config?: TConfig) => Promise<Awaited<TValue>>,
+      nextFunc: (...args: [config?: TConfig]) => Promise<Awaited<TValue>>,
     ): IResourceMiddlewareExecutionInput<TConfig, Awaited<TValue>> => ({
       resource: {
         definition: resource,
@@ -185,11 +185,11 @@ export class ResourceMiddlewareComposer {
 
       currentNext = (async (cfg: TConfig) => {
         const nextForExecutionInput = (
-          nextConfig?: TConfig,
-        ): Promise<Awaited<TValue>> => {
-          const effectiveConfig = nextConfig === undefined ? cfg : nextConfig;
-          return nextFunction(effectiveConfig) as Promise<Awaited<TValue>>;
-        };
+          ...args: [nextConfig?: TConfig]
+        ): Promise<Awaited<TValue>> =>
+          nextFunction((args.length > 0 ? args[0] : cfg) as TConfig) as Promise<
+            Awaited<TValue>
+          >;
         const executionInput = createExecutionInput(cfg, nextForExecutionInput);
         const wrappedNext = (
           input: IResourceMiddlewareExecutionInput<TConfig, Awaited<TValue>>,
@@ -224,6 +224,13 @@ export class ResourceMiddlewareComposer {
       const nextFunction = wrapped;
 
       wrapped = (async (config: TConfig) => {
+        const nextForExecutionInput = (
+          ...args: [resourceConfig?: TConfig]
+        ): Promise<Awaited<TValue>> =>
+          nextFunction(
+            (args.length > 0 ? args[0] : config) as TConfig,
+          ) as Promise<Awaited<TValue>>;
+
         const executionInput: IResourceMiddlewareExecutionInput<
           TConfig,
           Awaited<TValue>
@@ -232,9 +239,7 @@ export class ResourceMiddlewareComposer {
             definition: resource,
             config: config,
           },
-          next: nextFunction as (
-            resourceConfig?: TConfig,
-          ) => Promise<Awaited<TValue>>,
+          next: nextForExecutionInput,
         };
 
         const wrappedNext = (

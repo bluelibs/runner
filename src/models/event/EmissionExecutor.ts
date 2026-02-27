@@ -23,9 +23,17 @@ function toListenerError(
   listener: IListenerStorage,
 ): IEventListenerError {
   const errObj: IEventListenerError =
-    error && typeof error === "object"
-      ? (error as IEventListenerError)
-      : new Error(String(error));
+    error instanceof Error
+      ? (Object.assign(new Error(error.message), error) as IEventListenerError)
+      : error && typeof error === "object"
+        ? ({
+            ...(error as Record<string, unknown>),
+          } as unknown as IEventListenerError)
+        : new Error(String(error));
+
+  if (typeof errObj.message !== "string") {
+    errObj.message = String(error);
+  }
 
   if (errObj.listenerId === undefined) {
     errObj.listenerId = listener.id;

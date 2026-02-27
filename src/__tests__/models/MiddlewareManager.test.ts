@@ -245,7 +245,7 @@ describe("MiddlewareManager", () => {
     expect(result.some((m) => m.id === "mw.everywhere.true")).toBe(true);
   });
 
-  it("getEverywhereMiddlewareForResources prefers nearest owner for duplicate ids", () => {
+  it("getEverywhereMiddlewareForResources fails fast on duplicate subtree middleware ids", () => {
     const r = defineResource({ id: "r.test.func" });
     const baseMw = defineResourceMiddleware({
       id: "mw.everywhere.func",
@@ -271,10 +271,9 @@ describe("MiddlewareManager", () => {
       register: [baseMw, child],
     });
     store.storeGenericItem(owner);
-    const result = manager.getEverywhereMiddlewareForResources(r);
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe("mw.everywhere.func");
-    expect(result[0]).toBe(childMw);
+    expect(() => manager.getEverywhereMiddlewareForResources(r)).toThrow(
+      'Duplicate middleware id "mw.everywhere.func"',
+    );
   });
 
   it("should access resourceMiddlewareInterceptors getter", () => {
@@ -326,7 +325,7 @@ describe("MiddlewareManager", () => {
     expect(res.some((m) => m.id === "mw.task.everywhere.true")).toBe(true);
   });
 
-  it("getEverywhereMiddlewareForTasks resolves nearest subtree owner for duplicate ids", () => {
+  it("getEverywhereMiddlewareForTasks fails fast on duplicate subtree middleware ids", () => {
     const task = defineTask({ id: "task.dep", run: async () => 0 });
     const baseMw = defineTaskMiddleware({
       id: "mw",
@@ -353,9 +352,9 @@ describe("MiddlewareManager", () => {
       register: [baseMw, child],
     });
     store.storeGenericItem(owner);
-    const res = manager.getEverywhereMiddlewareForTasks(task);
-    expect(res).toHaveLength(1);
-    expect(res[0]).toBe(childMw);
+    expect(() => manager.getEverywhereMiddlewareForTasks(task)).toThrow(
+      'Duplicate middleware id "mw"',
+    );
   });
 
   it("should export middleware classes from barrel file", () => {

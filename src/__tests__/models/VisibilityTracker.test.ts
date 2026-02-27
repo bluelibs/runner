@@ -590,6 +590,65 @@ describe("VisibilityTracker", () => {
     });
   });
 
+  describe("regression branches", () => {
+    it("skips hooks without an `on` target during visibility validation", () => {
+      const registry = {
+        tasks: new Map(),
+        hooks: new Map([
+          [
+            "tracker.hook.no-on",
+            {
+              hook: {
+                id: "tracker.hook.no-on",
+                on: undefined,
+              },
+            },
+          ],
+        ]),
+        taskMiddlewares: new Map(),
+        resourceMiddlewares: new Map(),
+        resources: new Map(),
+      };
+
+      expect(() => tracker.validateVisibility(registry as any)).not.toThrow();
+    });
+
+    it("rolls back ownership transitively for descendants of a failed registration", () => {
+      const childResource = defineResource({
+        id: "tracker.rollback.child",
+      });
+      const nestedTask = defineTask({
+        id: "tracker.rollback.nested-task",
+        run: async () => "ok",
+      });
+
+      tracker.recordOwnership("tracker.rollback.root", childResource);
+      tracker.recordOwnership(childResource.id, nestedTask);
+
+      expect(tracker.getOwnership().has(childResource.id)).toBe(true);
+      expect(tracker.getOwnership().has(nestedTask.id)).toBe(true);
+
+      tracker.rollbackOwnershipTree(childResource.id);
+
+      expect(tracker.getOwnership().has(childResource.id)).toBe(false);
+      expect(tracker.getOwnership().has(nestedTask.id)).toBe(false);
+    });
+
+    it("returns early when rollback is requested for an unknown id", () => {
+      const task = defineTask({
+        id: "tracker.rollback.safe-task",
+        run: async () => "ok",
+      });
+      tracker.recordOwnership("tracker.rollback.owner", task);
+
+      tracker.rollbackOwnershipTree("tracker.rollback.missing");
+
+      expect(tracker.getOwnership().get(task.id)).toBe(
+        "tracker.rollback.owner",
+      );
+    });
+  });
+
   it("treats a resource as inside its own subtree", () => {
     expect(
       tracker.isWithinResourceSubtree(

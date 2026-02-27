@@ -32,7 +32,7 @@ describe("run.exports-visibility privileged surfaces", () => {
     await runtime.dispose();
   });
 
-  it("keeps hook.on('*') globally observable, including private events", async () => {
+  it("validates hook.on('*') against visibility rules for private events", async () => {
     const seenEventIds: string[] = [];
 
     const privateEvent = defineEvent<{ value: string }>({
@@ -67,9 +67,7 @@ describe("run.exports-visibility privileged surfaces", () => {
       },
     });
 
-    const runtime = await run(root);
-    expect(runtime.value).toBe("child");
-    expect(seenEventIds).toContain(privateEvent.id);
-    await runtime.dispose();
+    await expect(run(root)).rejects.toThrow(privateEvent.id);
+    expect(seenEventIds).toEqual([]);
   });
 });

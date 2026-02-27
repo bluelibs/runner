@@ -38,4 +38,34 @@ describe("EmissionExecutor branches", () => {
     expect(report.errors[0]?.listenerId).toBe("pre-set-listener");
     expect(report.errors[0]?.listenerOrder).toBe(99);
   });
+
+  it("normalizes object errors with non-string message fields", async () => {
+    const report = await executeSequentially({
+      listeners: [
+        {
+          id: "listener.object-message",
+          order: 1,
+          isGlobal: false,
+          handler: async () => {
+            throw { message: 123 };
+          },
+        },
+      ],
+      event: {
+        id: "event.id.object-message",
+        data: undefined,
+        timestamp: new Date(),
+        source: runtimeSource.runtime("test.source.object-message"),
+        meta: {},
+        transactional: false,
+        isPropagationStopped: () => false,
+        stopPropagation: () => undefined,
+        tags: [],
+      },
+      failureMode: EventEmissionFailureMode.Aggregate,
+    });
+
+    expect(report.failedListeners).toBe(1);
+    expect(report.errors[0]?.message).toBe("[object Object]");
+  });
 });

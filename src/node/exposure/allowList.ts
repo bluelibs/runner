@@ -41,10 +41,14 @@ export function createAllowListGuard(
     }
   };
 
-  const allowList = (): TunnelAllowList =>
-    logger
+  let cachedAllowList: TunnelAllowList | null = null;
+  const allowList = (): TunnelAllowList => {
+    if (cachedAllowList) return cachedAllowList;
+    cachedAllowList = logger
       ? computeAllowList(store, reportSelectorError)
       : computeAllowList(store);
+    return cachedAllowList;
+  };
 
   return {
     ensureTask(id) {

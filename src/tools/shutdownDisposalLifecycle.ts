@@ -114,11 +114,11 @@ export async function disposeRunArtifacts(
   input: DisposeRunArtifactsInput,
 ): Promise<void> {
   try {
-    input.takeUnhookProcessSafetyNets()?.();
-    input.takeUnhookShutdown()?.();
-  } finally {
     input.onBeforeStoreDispose();
     await waitForStoreDisposeWithinBudget(input.store, input.disposalBudget);
+  } finally {
+    input.takeUnhookProcessSafetyNets()?.();
+    input.takeUnhookShutdown()?.();
   }
 }
 

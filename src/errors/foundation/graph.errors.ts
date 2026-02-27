@@ -62,6 +62,22 @@ export const overrideTargetNotRegisteredError = error<
   })
   .build();
 
+export const overrideDuplicateTargetError = error<
+  {
+    targetId: string;
+    sources: string[];
+  } & DefaultErrorType
+>("runner.errors.overrideDuplicateTarget")
+  .format(
+    ({ targetId, sources }) =>
+      `Override target "${targetId}" is declared more than once. Conflicting override sources: ${sources.join(", ")}.`,
+  )
+  .remediation(
+    ({ targetId }) =>
+      `Keep a single override for "${targetId}" within the same runtime graph. If you need environment variants, select one override at composition time.`,
+  )
+  .build();
+
 // Unknown item type
 export const unknownItemTypeError = error<{ item: unknown } & DefaultErrorType>(
   "runner.errors.unknownItemType",

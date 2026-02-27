@@ -4,6 +4,7 @@ import type {
   ITask,
   ITaskMiddleware,
 } from "../defs";
+import { validationError } from "../errors";
 
 type SubtreeLookup = {
   getOwnerResourceId: (itemId: string) => string | undefined;
@@ -55,6 +56,7 @@ function resolveApplicableSubtreeMiddlewares<
     {
       middleware: TMiddleware;
       order: number;
+      ownerResourceId: string;
     }
   >();
   let order = 0;
@@ -71,9 +73,19 @@ function resolveApplicableSubtreeMiddlewares<
     }
 
     for (const middleware of middlewares) {
+      const existing = byMiddlewareId.get(middleware.id);
+      if (existing) {
+        validationError.throw({
+          subject: "Subtree middleware",
+          id: middleware.id,
+          originalError: `Duplicate middleware id "${middleware.id}" resolved from resources "${existing.ownerResourceId}" and "${ownerResourceId}".`,
+        });
+      }
+
       byMiddlewareId.set(middleware.id, {
         middleware,
         order,
+        ownerResourceId,
       });
       order += 1;
     }

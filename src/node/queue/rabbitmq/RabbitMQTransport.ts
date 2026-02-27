@@ -240,6 +240,11 @@ export class RabbitMQTransport<TMessage> {
             error: error instanceof Error ? error : new Error(String(error)),
             messageId,
           });
+          try {
+            channel.nack(msg, false, false);
+          } finally {
+            this.messageMap.delete(messageId);
+          }
         }
       },
     )) as { consumerTag?: unknown };

@@ -7,8 +7,6 @@ import * as utils from "../define";
 import { isolateViolationError, visibilityViolationError } from "../errors";
 import { StoreRegistry } from "./StoreRegistry";
 
-const INTERNAL_DEPENDENCY_PREFIX = "__runner";
-
 type CompiledIsolationPolicy = {
   denyIds: Set<string>;
   denyTagIds: Set<string>;
@@ -437,13 +435,9 @@ export class VisibilityTracker {
     for (const { consumerId, consumerType, dependencies } of entries) {
       if (!dependencies || typeof dependencies !== "object") continue;
 
-      for (const [depKey, depDef] of Object.entries(
+      for (const [, depDef] of Object.entries(
         dependencies as Record<string, unknown>,
       )) {
-        if (depKey.startsWith(INTERNAL_DEPENDENCY_PREFIX)) {
-          continue;
-        }
-
         const dep = utils.isOptional(depDef)
           ? (depDef as { inner: unknown }).inner
           : depDef;
@@ -476,9 +470,14 @@ export class VisibilityTracker {
    */
   private validateHookEventVisibility(registry: StoreRegistry): void {
     for (const { hook } of registry.hooks.values()) {
-      if (!hook.on || hook.on === "*") continue;
+      if (!hook.on) continue;
 
-      const events = Array.isArray(hook.on) ? hook.on : [hook.on];
+      const events =
+        hook.on === "*"
+          ? Array.from(registry.events.values()).map((entry) => entry.event)
+          : Array.isArray(hook.on)
+            ? hook.on
+            : [hook.on];
       for (const event of events) {
         const eventId = event.id;
         const violation = this.getAccessViolation(eventId, hook.id);
@@ -762,5 +761,42 @@ export class VisibilityTracker {
       return true;
     }
     return this.subtrees.get(resourceId)?.has(itemId) === true;
+  }
+
+  rollbackOwnershipTree(itemId: string): void {
+    const toRemove = new Set<string>();
+    if (this.ownership.has(itemId)) {
+      toRemove.add(itemId);
+    }
+
+    let added = true;
+    while (added) {
+      added = false;
+      for (const [id, ownerId] of this.ownership.entries()) {
+        if (!toRemove.has(id) && toRemove.has(ownerId)) {
+          toRemove.add(id);
+          added = true;
+        }
+      }
+    }
+
+    if (toRemove.size === 0) {
+      return;
+    }
+
+    for (const id of toRemove) {
+      this.ownership.delete(id);
+      this.exportSets.delete(id);
+      this.subtrees.delete(id);
+      this.knownResources.delete(id);
+      this.isolationPolicies.delete(id);
+      this.definitionTagIds.delete(id);
+    }
+
+    for (const subtree of this.subtrees.values()) {
+      for (const id of toRemove) {
+        subtree.delete(id);
+      }
+    }
   }
 }

@@ -20,6 +20,7 @@ import {
   serializeRecordEntries,
   serializeSymbolValue,
 } from "./serialize-utils";
+import { escapeReservedMarkerKey } from "./marker-key-escapes";
 
 export interface SerializeState {
   serializingValueTypes: WeakSet<object>;
@@ -205,6 +206,7 @@ export const serializeValue = (
     objectValue as Record<string, unknown>,
     options.unsafeKeys,
     (nested) => serializeValue(nested, context, state, depth + 1, options),
+    escapeReservedMarkerKey,
   );
 
   storeNode(context, objectId, { kind: "object", value: record });

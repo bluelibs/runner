@@ -35,7 +35,9 @@ export class WaitManager {
     const pollEveryMs =
       options?.waitPollIntervalMs ?? this.config?.defaultPollIntervalMs ?? 500;
 
-    const check = async (): Promise<TResult | undefined> => {
+    const check = async (): Promise<
+      { done: false } | { done: true; value: TResult }
+    > => {
       const exec = await this.store.getExecution(executionId);
       if (!exec) {
         throw new DurableExecutionError(
@@ -47,15 +49,7 @@ export class WaitManager {
       }
 
       if (exec.status === ExecutionStatus.Completed) {
-        if (exec.result === undefined) {
-          throw new DurableExecutionError(
-            `Execution ${executionId} completed without result`,
-            exec.id,
-            exec.taskId,
-            exec.attempt,
-          );
-        }
-        return exec.result as TResult;
+        return { done: true, value: exec.result as TResult };
       }
 
       if (exec.status === ExecutionStatus.Failed) {
@@ -88,13 +82,13 @@ export class WaitManager {
         );
       }
 
-      return undefined;
+      return { done: false };
     };
 
     const pollingFallback = async (): Promise<TResult> => {
       while (true) {
         const result = await check();
-        if (result !== undefined) return result;
+        if (result.done) return result.value;
 
         if (timeoutMs !== undefined && Date.now() - startedAt > timeoutMs) {
           const exec = await this.store.getExecution(executionId);
@@ -112,7 +106,7 @@ export class WaitManager {
 
     // Initial check
     const initialResult = await check();
-    if (initialResult !== undefined) return initialResult;
+    if (initialResult.done) return initialResult.value;
 
     // Use EventBus if available
     if (this.eventBus) {
@@ -127,8 +121,8 @@ export class WaitManager {
         const handler = async (_event: BusEvent) => {
           try {
             const result = await check();
-            if (result !== undefined) {
-              await finalize({ ok: true, value: result });
+            if (result.done) {
+              await finalize({ ok: true, value: result.value });
             }
           } catch (err) {
             await finalize({ ok: false, error: err });
@@ -170,8 +164,8 @@ export class WaitManager {
         void (async () => {
           try {
             const result = await check();
-            if (result !== undefined) {
-              await finalize({ ok: true, value: result });
+            if (result.done) {
+              await finalize({ ok: true, value: result.value });
             }
           } catch (err) {
             await finalize({ ok: false, error: err });
@@ -218,8 +212,8 @@ export class WaitManager {
           if (done) return;
           try {
             const result = await check();
-            if (result !== undefined) {
-              await finalize({ ok: true, value: result });
+            if (result.done) {
+              await finalize({ ok: true, value: result.value });
               return;
             }
           } catch (err) {

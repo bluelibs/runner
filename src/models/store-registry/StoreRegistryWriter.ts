@@ -339,12 +339,36 @@ export class StoreRegistryWriter {
 
     for (const item of items) {
       this.visibilityTracker.recordOwnership(element.id, item);
-      this.storeGenericItem<_C>(item);
+      const itemId = this.resolveRegisterableId(item);
+      try {
+        this.storeGenericItem<_C>(item);
+      } catch (error) {
+        if (itemId) {
+          this.visibilityTracker.rollbackOwnershipTree(itemId);
+        }
+        throw error;
+      }
     }
 
     if (element.exports) {
       this.visibilityTracker.recordExports(element.id, element.exports);
     }
+  }
+
+  private resolveRegisterableId(item: RegisterableItems): string | undefined {
+    if (item === null || item === undefined) {
+      return undefined;
+    }
+
+    if (hasSymbolBrand(item, symbolResourceWithConfig)) {
+      return (item as IResourceWithConfig<any, any, any>).resource.id;
+    }
+
+    if (typeof item === "object" && "id" in item) {
+      return (item as { id: string }).id;
+    }
+
+    return undefined;
   }
 
   storeResource<_C>(

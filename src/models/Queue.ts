@@ -5,6 +5,7 @@ import { IEventDefinition, IEventEmission } from "../defs";
 import {
   queueDisposedError,
   queueDeadlockError,
+  queueTaskIdOverflowError,
   cancellationError,
 } from "../errors";
 import { runtimeSource } from "../types/runtimeSource";
@@ -76,6 +77,14 @@ export class Queue {
         queueDeadlockError.throw();
       } catch (e) {
         return Promise.reject(e);
+      }
+    }
+
+    if (this.nextTaskId >= Number.MAX_SAFE_INTEGER) {
+      try {
+        queueTaskIdOverflowError.throw();
+      } catch (error) {
+        return Promise.reject(error);
       }
     }
 

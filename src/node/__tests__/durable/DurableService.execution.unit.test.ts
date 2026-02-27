@@ -283,7 +283,7 @@ describe("durable: DurableService — execution (unit)", () => {
     );
   });
 
-  it("throws DurableExecutionError if completed without result", async () => {
+  it("resolves undefined if completed without result", async () => {
     const store = new MemoryStore();
     const task = r
       .task("t.void")
@@ -298,9 +298,10 @@ describe("durable: DurableService — execution (unit)", () => {
       execution: { maxAttempts: 1 },
     });
 
-    await expect(service.startAndWait(task)).rejects.toBeInstanceOf(
-      DurableExecutionError,
-    );
+    await expect(service.startAndWait(task)).resolves.toEqual({
+      durable: { executionId: expect.any(String) },
+      data: undefined,
+    });
   });
 
   it("sets execution to sleeping on SuspensionSignal", async () => {

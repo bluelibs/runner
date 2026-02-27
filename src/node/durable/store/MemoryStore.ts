@@ -229,7 +229,12 @@ export class MemoryStore implements IDurableStore {
 
   async markTimerFired(timerId: string): Promise<void> {
     const t = this.timers.get(timerId);
-    if (t) t.status = TimerStatus.Fired;
+    if (t) {
+      this.timers.set(timerId, {
+        ...t,
+        status: TimerStatus.Fired,
+      });
+    }
   }
 
   async deleteTimer(timerId: string): Promise<void> {

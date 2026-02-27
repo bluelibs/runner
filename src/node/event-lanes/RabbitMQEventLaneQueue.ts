@@ -38,6 +38,7 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
   private readonly queueName: string;
   private readonly transport: RabbitMQTransport<EventLaneMessage>;
   private acceptingWork = true;
+  private readonly attemptsByMessageId = new Map<string, number>();
 
   constructor(config: RabbitMQEventLaneQueueConfig) {
     this.queueName =
@@ -101,8 +102,11 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
       });
     }
 
-    const currentAttempts =
+    const parsedAttempts =
       typeof parsed.attempts === "number" ? parsed.attempts : 0;
+    const currentAttempts = this.attemptsByMessageId.get(parsed.id);
+    const nextAttempts = Math.max(currentAttempts ?? 0, parsedAttempts) + 1;
+    this.attemptsByMessageId.set(parsed.id, nextAttempts);
     const maxAttempts =
       typeof parsed.maxAttempts === "number" ? parsed.maxAttempts : 1;
 
@@ -112,7 +116,7 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
       createdAt: parsed.createdAt
         ? new Date(parsed.createdAt as unknown as string)
         : new Date(),
-      attempts: currentAttempts + 1,
+      attempts: nextAttempts,
       maxAttempts,
     } as EventLaneMessage;
   }
@@ -154,10 +158,14 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
   }
 
   async ack(messageId: string): Promise<void> {
+    this.attemptsByMessageId.delete(messageId);
     await this.transport.ack(messageId);
   }
 
   async nack(messageId: string, requeue: boolean = true): Promise<void> {
+    if (!requeue) {
+      this.attemptsByMessageId.delete(messageId);
+    }
     await this.transport.nack(messageId, requeue);
   }
 
@@ -167,6 +175,7 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
 
   async dispose(): Promise<void> {
     this.acceptingWork = false;
+    this.attemptsByMessageId.clear();
     await this.transport.dispose();
   }
 }

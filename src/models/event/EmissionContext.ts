@@ -137,7 +137,16 @@ export class EmissionContext<TInput> {
       this.executionReport = await this.baseEmit(eventToEmit);
       return;
     }
+    let didCallNext = false;
     return interceptor((nextEvent) => {
+      if (didCallNext) {
+        validationError.throw({
+          subject: "Event interceptor",
+          id: this.eventDefinition.id,
+          originalError: "Interceptors can call next() only once per emission.",
+        });
+      }
+      didCallNext = true;
       assertPropagationMethodsUnchanged(
         this.eventDefinition.id,
         eventToEmit,

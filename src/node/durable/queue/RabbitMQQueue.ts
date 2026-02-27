@@ -34,6 +34,7 @@ export interface RabbitMQQueueConfig {
 export class RabbitMQQueue implements IDurableQueue {
   private readonly queueName: string;
   private readonly transport: RabbitMQTransport<QueueMessage<unknown>>;
+  private readonly attemptsByMessageId = new Map<string, number>();
 
   constructor(config: RabbitMQQueueConfig) {
     this.queueName =
@@ -77,11 +78,15 @@ export class RabbitMQQueue implements IDurableQueue {
     if (!parsed || typeof parsed.id !== "string") {
       return null;
     }
-    const currentAttempts =
+    const parsedAttempts =
       typeof parsed.attempts === "number" ? parsed.attempts : 0;
+    const currentAttempts = this.attemptsByMessageId.get(parsed.id);
+    const nextAttempts = Math.max(currentAttempts ?? 0, parsedAttempts) + 1;
+    this.attemptsByMessageId.set(parsed.id, nextAttempts);
+
     return {
       ...parsed,
-      attempts: currentAttempts + 1,
+      attempts: nextAttempts,
     } as QueueMessage<unknown>;
   }
 
@@ -111,14 +116,19 @@ export class RabbitMQQueue implements IDurableQueue {
   }
 
   async ack(messageId: string): Promise<void> {
+    this.attemptsByMessageId.delete(messageId);
     await this.transport.ack(messageId);
   }
 
   async nack(messageId: string, requeue: boolean = true): Promise<void> {
+    if (!requeue) {
+      this.attemptsByMessageId.delete(messageId);
+    }
     await this.transport.nack(messageId, requeue);
   }
 
   async dispose(): Promise<void> {
+    this.attemptsByMessageId.clear();
     await this.transport.dispose();
   }
 }

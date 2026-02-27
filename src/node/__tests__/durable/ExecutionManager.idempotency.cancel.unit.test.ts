@@ -671,4 +671,54 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       { channel: "execution:e.notify", type: "finished" },
     ]);
   });
+
+  it("falls back to NoopEventBus when eventBus is not provided", async () => {
+    const store: IDurableStore = {
+      saveExecution: async () => {},
+      getExecution: async () => null,
+      updateExecution: async () => {},
+      listIncompleteExecutions: async () => [],
+      getStepResult: async () => null,
+      saveStepResult: async () => {},
+      createTimer: async () => {},
+      getReadyTimers: async () => [],
+      markTimerFired: async () => {},
+      deleteTimer: async () => {},
+      createSchedule: async () => {},
+      getSchedule: async () => null,
+      updateSchedule: async () => {},
+      deleteSchedule: async () => {},
+      listSchedules: async () => [],
+      listActiveSchedules: async () => [],
+    };
+
+    const taskRegistry = new TaskRegistry();
+    const auditLogger = new AuditLogger({ enabled: false }, store);
+    const waitManager = new WaitManager(store);
+
+    const manager = new ExecutionManager(
+      {
+        store,
+        taskExecutor: createFixedTaskExecutor(undefined),
+      },
+      taskRegistry,
+      auditLogger,
+      waitManager,
+    );
+
+    await expect(
+      manager.notifyExecutionFinished({
+        id: "e.notify.noop",
+        taskId: TaskId.T,
+        input: undefined,
+        status: ExecutionStatus.Completed,
+        attempt: 1,
+        maxAttempts: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        completedAt: new Date(),
+        result: undefined,
+      }),
+    ).resolves.toBeUndefined();
+  });
 });

@@ -199,7 +199,7 @@ export class TaskMiddlewareComposer {
 
     const createExecutionInput = (
       input: TInput,
-      nextFunc: (inp?: TInput) => Promise<Awaited<TOutput>>,
+      nextFunc: (...args: [inp?: TInput]) => Promise<Awaited<TOutput>>,
       journal: ExecutionJournal,
     ): ITaskMiddlewareExecutionInput<TInput, Awaited<TOutput>> => ({
       task: {
@@ -222,10 +222,10 @@ export class TaskMiddlewareComposer {
         source: RuntimeCallSource,
       ) => {
         const wrappedNextForInterceptor = (
-          inp?: TInput,
+          ...args: [inp?: TInput]
         ): Promise<Awaited<TOutput>> =>
           nextFunction(
-            inp === undefined ? input : inp,
+            args.length > 0 ? (args[0] as TInput) : input,
             journal,
             source,
           ) as Promise<Awaited<TOutput>>;
