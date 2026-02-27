@@ -1,5 +1,12 @@
 import type { IEventLaneTopology, IRpcLaneDefinition } from "../../defs";
-import { createMessageError } from "../../errors";
+import {
+  rpcLaneApplyToInvalidTargetError,
+  rpcLaneApplyToTargetNotFoundError,
+  rpcLaneApplyToTargetTypeError,
+  rpcLaneAssignmentEventLaneConflictError,
+  rpcLaneEventAssignmentConflictError,
+  rpcLaneTaskAssignmentConflictError,
+} from "../../errors";
 import { globalTags } from "../../globals/globalTags";
 import type { Store } from "../../models/Store";
 import { collectEventTopologyLanes } from "../remote-lanes/topologyLanes";
@@ -76,9 +83,11 @@ function assignTask(
 ): void {
   const current = assignments.get(taskId);
   if (current && current.id !== lane.id) {
-    createMessageError(
-      `Task "${taskId}" is already assigned to rpcLane "${current.id}". Cannot also assign rpcLane "${lane.id}" via applyTo().`,
-    );
+    rpcLaneTaskAssignmentConflictError.throw({
+      taskId,
+      currentLaneId: current.id,
+      attemptedLaneId: lane.id,
+    });
   }
 
   if (!current) {
@@ -93,9 +102,11 @@ function assignEvent(
 ): void {
   const current = assignments.get(eventId);
   if (current && current.id !== lane.id) {
-    createMessageError(
-      `Event "${eventId}" is already assigned to rpcLane "${current.id}". Cannot also assign rpcLane "${lane.id}" via applyTo().`,
-    );
+    rpcLaneEventAssignmentConflictError.throw({
+      eventId,
+      currentLaneId: current.id,
+      attemptedLaneId: lane.id,
+    });
   }
 
   if (!current) {
@@ -118,14 +129,16 @@ function resolveRpcLaneTarget(
   }
 
   if (isRegisteredDefinitionId(store, targetId)) {
-    return createMessageError(
-      `rpcLane "${laneId}" applyTo target "${targetId}" must reference a task or event, but resolved to a non-task/event definition.`,
-    );
+    return rpcLaneApplyToTargetTypeError.throw({
+      laneId,
+      targetId,
+    });
   }
 
-  return createMessageError(
-    `rpcLane "${laneId}" applyTo target "${targetId}" was not found in this container. Register it first or fix the id.`,
-  );
+  return rpcLaneApplyToTargetNotFoundError.throw({
+    laneId,
+    targetId,
+  });
 }
 
 function readTargetId(target: unknown, laneId: string): string {
@@ -142,9 +155,9 @@ function readTargetId(target: unknown, laneId: string): string {
     return (target as { id: string }).id;
   }
 
-  return createMessageError(
-    `rpcLane "${laneId}" applyTo() received an invalid target. Expected a task, event, or non-empty id string.`,
-  );
+  return rpcLaneApplyToInvalidTargetError.throw({
+    laneId,
+  });
 }
 
 function isRegisteredDefinitionId(store: Store, id: string): boolean {
@@ -179,9 +192,10 @@ function assertEventIsNotAssignedToEventLane(
     globalTags.eventLane.exists(eventEntry.event.tags) ||
     eventLaneApplyToEventIds.has(eventId)
   ) {
-    createMessageError(
-      `Event "${eventId}" cannot be assigned to rpcLane "${rpcLaneId}" because it is already assigned to an event lane.`,
-    );
+    rpcLaneAssignmentEventLaneConflictError.throw({
+      eventId,
+      rpcLaneId,
+    });
   }
 }
 

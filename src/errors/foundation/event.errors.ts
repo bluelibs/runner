@@ -56,6 +56,19 @@ export const eventCycleError = error<
   )
   .build();
 
+export const eventCycleDepthExceededError = error<
+  { eventId: string; currentDepth: number; maxDepth: number } & DefaultErrorType
+>("runner.errors.eventCycleDepthExceeded")
+  .format(
+    ({ eventId, currentDepth, maxDepth }) =>
+      `Emission stack exceeded ${maxDepth} frames while processing event "${eventId}" (current depth: ${currentDepth}).`,
+  )
+  .remediation(
+    ({ eventId }) =>
+      `Inspect hooks emitting "${eventId}" for runaway re-emission loops, or disable runtimeEventCycleDetection only when you can guarantee bounded emissions.`,
+  )
+  .build();
+
 // Event emission cycles (compile-time/dry-run)
 export const eventEmissionCycleError = error<
   { cycles: string[] } & DefaultErrorType

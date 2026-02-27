@@ -52,24 +52,20 @@ describe("EventLanesController unit coverage", () => {
     expect(eventManager.intercept).toHaveBeenCalledTimes(1);
   });
 
-  it("normalizes primitive DLQ enqueue failures and still nacks the source message", async () => {
+  it("nacks without requeue when attempts are exhausted", async () => {
     const logger = { error: jest.fn(async () => undefined) };
     const queue = {
       ack: jest.fn(async () => undefined),
       nack: jest.fn(async () => undefined),
     };
-    const dlqQueue = {
-      enqueue: jest.fn(async () => {
-        throw "dlq-primitive";
-      }),
-    };
+    const emitError = new Error("emit failed");
 
     const controller = new EventLanesController(
       createBaseConfig(),
       {
         eventManager: {
           emit: jest.fn(async () => {
-            throw new Error("emit failed");
+            throw emitError;
           }),
           intercept: jest.fn(),
           addListener: jest.fn(),
@@ -102,7 +98,6 @@ describe("EventLanesController unit coverage", () => {
             {
               lane: { id: "lane.unit" },
               queue,
-              dlq: { queue: dlqQueue },
             },
           ],
         ]),
@@ -135,32 +130,24 @@ describe("EventLanesController unit coverage", () => {
 
     expect(queue.nack).toHaveBeenCalledWith("message-1", false);
     expect(logger.error).toHaveBeenCalledWith(
-      "Event lane consumer failed to enqueue message into DLQ.",
+      "Event lane consumer failed.",
       expect.objectContaining({
         laneId: "lane.unit",
         eventId: "unit.event",
-        error: expect.any(Error),
-      }),
-    );
-    expect(logger.error).toHaveBeenCalledWith(
-      "Event lane consumer failed.",
-      expect.objectContaining({
-        data: { dlqEnqueueError: "dlq-primitive" },
+        error: emitError,
+        data: expect.objectContaining({
+          attempts: 1,
+          maxAttempts: 1,
+        }),
       }),
     );
   });
 
-  it("preserves Error instances from DLQ enqueue failures", async () => {
+  it("requeues for retry before maxAttempts is reached", async () => {
     const logger = { error: jest.fn(async () => undefined) };
     const queue = {
       ack: jest.fn(async () => undefined),
       nack: jest.fn(async () => undefined),
-    };
-    const dlqError = new Error("dlq-error-instance");
-    const dlqQueue = {
-      enqueue: jest.fn(async () => {
-        throw dlqError;
-      }),
     };
 
     const controller = new EventLanesController(
@@ -180,9 +167,9 @@ describe("EventLanesController unit coverage", () => {
         store: {
           events: new Map([
             [
-              "unit.event.error",
+              "unit.event.retry",
               {
-                event: { id: "unit.event.error" },
+                event: { id: "unit.event.retry" },
               },
             ],
           ]),
@@ -197,11 +184,11 @@ describe("EventLanesController unit coverage", () => {
         activeBindingsByQueue: new Map(),
         bindingsByLaneId: new Map([
           [
-            "lane.unit.error",
+            "lane.unit.retry",
             {
-              lane: { id: "lane.unit.error" },
+              lane: { id: "lane.unit.retry" },
               queue,
-              dlq: { queue: dlqQueue },
+              retryDelayMs: 1,
             },
           ],
         ]),
@@ -219,23 +206,27 @@ describe("EventLanesController unit coverage", () => {
 
     await (controller as any).consumeQueueMessage(
       queue,
-      new Set(["lane.unit.error"]),
+      new Set(["lane.unit.retry"]),
       {
-        id: "message-2",
-        laneId: "lane.unit.error",
-        eventId: "unit.event.error",
+        id: "message-retry",
+        laneId: "lane.unit.retry",
+        eventId: "unit.event.retry",
         payload: JSON.stringify({ ok: true }),
-        source: runtimeSource.runtime("tests.event-lanes.unit.error"),
+        source: runtimeSource.runtime("tests.event-lanes.unit.retry"),
         createdAt: new Date(),
         attempts: 1,
-        maxAttempts: 1,
+        maxAttempts: 2,
       },
     );
 
+    expect(queue.nack).toHaveBeenCalledWith("message-retry", true);
     expect(logger.error).toHaveBeenCalledWith(
-      "Event lane consumer failed to enqueue message into DLQ.",
+      "Event lane consumer failed; message requeued for retry.",
       expect.objectContaining({
-        error: dlqError,
+        data: expect.objectContaining({
+          attempts: 1,
+          maxAttempts: 2,
+        }),
       }),
     );
   });

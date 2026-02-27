@@ -6,16 +6,20 @@ type ChannelMock = {
   checkQueue?: jest.Mock;
   prefetch: jest.Mock;
   sendToQueue: jest.Mock;
+  waitForConfirms?: jest.Mock;
   consume: jest.Mock;
   cancel: jest.Mock;
   ack: jest.Mock;
   nack: jest.Mock;
   close: jest.Mock;
+  on?: jest.Mock;
 };
 
 type ConnectionMock = {
   createChannel: jest.Mock;
+  createConfirmChannel?: jest.Mock;
   close: jest.Mock;
+  on?: jest.Mock;
 };
 
 describe("node: RabbitMQTransport", () => {
@@ -33,10 +37,12 @@ describe("node: RabbitMQTransport", () => {
       ack: jest.fn(),
       nack: jest.fn(),
       close: jest.fn().mockResolvedValue({}),
+      on: jest.fn(),
     };
     connMock = {
       createChannel: jest.fn().mockResolvedValue(channelMock),
       close: jest.fn().mockResolvedValue({}),
+      on: jest.fn(),
     };
     jest
       .spyOn(amqplibModule, "connectAmqplib")
@@ -223,6 +229,100 @@ describe("node: RabbitMQTransport", () => {
     );
     expect(channelMock.checkQueue).toHaveBeenCalledWith("transport.passive");
     expect(channelMock.assertQueue).not.toHaveBeenCalled();
+  });
+
+  it("waits for publisher confirms when confirm channel support exists", async () => {
+    channelMock.waitForConfirms = jest.fn().mockResolvedValue(undefined);
+    connMock.createConfirmChannel = jest.fn().mockResolvedValue(channelMock);
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: { name: "transport.confirm" },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+    await transport.publish(Buffer.from('{"id":"confirm"}'));
+    expect(connMock.createConfirmChannel).toHaveBeenCalled();
+    expect(channelMock.waitForConfirms).toHaveBeenCalled();
+  });
+
+  it("recovers publish after channel drop and reconnects", async () => {
+    const listenersA: Record<string, (error?: unknown) => void> = {};
+    const listenersB: Record<string, (error?: unknown) => void> = {};
+
+    const channelA: ChannelMock = {
+      assertQueue: jest.fn().mockResolvedValue({}),
+      checkQueue: jest.fn().mockResolvedValue({}),
+      prefetch: jest.fn().mockResolvedValue({}),
+      sendToQueue: jest.fn(() => {
+        throw new Error("channel closed");
+      }),
+      consume: jest.fn().mockResolvedValue({ consumerTag: "tag-a" }),
+      cancel: jest.fn().mockResolvedValue({}),
+      ack: jest.fn(),
+      nack: jest.fn(),
+      close: jest.fn().mockResolvedValue({}),
+      on: jest.fn((event: string, handler: (error?: unknown) => void) => {
+        listenersA[event] = handler;
+      }),
+    };
+
+    const channelB: ChannelMock = {
+      assertQueue: jest.fn().mockResolvedValue({}),
+      checkQueue: jest.fn().mockResolvedValue({}),
+      prefetch: jest.fn().mockResolvedValue({}),
+      sendToQueue: jest.fn().mockResolvedValue(true),
+      consume: jest.fn().mockResolvedValue({ consumerTag: "tag-b" }),
+      cancel: jest.fn().mockResolvedValue({}),
+      ack: jest.fn(),
+      nack: jest.fn(),
+      close: jest.fn().mockResolvedValue({}),
+      on: jest.fn((event: string, handler: (error?: unknown) => void) => {
+        listenersB[event] = handler;
+      }),
+    };
+
+    const connectionA: ConnectionMock = {
+      createChannel: jest.fn().mockResolvedValue(channelA),
+      close: jest.fn().mockResolvedValue({}),
+      on: jest.fn(),
+    };
+    const connectionB: ConnectionMock = {
+      createChannel: jest.fn().mockResolvedValue(channelB),
+      close: jest.fn().mockResolvedValue({}),
+      on: jest.fn(),
+    };
+
+    const connectSpy = jest
+      .spyOn(amqplibModule, "connectAmqplib")
+      .mockResolvedValueOnce(connectionA as any)
+      .mockResolvedValueOnce(connectionB as any);
+
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: { name: "transport.recover" },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+    await transport.consume(async () => undefined);
+    listenersA.close?.();
+
+    await transport.publish(Buffer.from('{"id":"recover"}'));
+
+    expect(connectSpy).toHaveBeenCalledTimes(2);
+    expect(channelB.consume).toHaveBeenCalled();
+    expect(channelB.sendToQueue).toHaveBeenCalled();
   });
 
   it("applies custom durable, arguments, and publish options", async () => {

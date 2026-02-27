@@ -1001,13 +1001,29 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 
 ## Remote Lanes (Node)
 
-Event Lanes and RPC Lanes are now documented in one canonical document:
+Remote Lanes unify distributed routing in Runner:
 
-- [REMOTE_LANES.md](../readmes/REMOTE_LANES.md)
+- Event Lanes (`eventLane`) for async queue-backed event delivery.
+- RPC Lanes (`rpcLane`) for sync remote execution of lane-assigned tasks/events.
 
-Use that guide for:
+Core guarantees:
 
-- Event Lanes (`eventLane`) topology, queue bindings, modes, lifecycle, and adapters
-- RPC Lanes (`rpcLane`) topology, communicator bindings, exposure, and mode behavior
-- `network` vs `transparent` vs `local-simulated` routing semantics
-- migration guidance from legacy tunnel event routing
+- Lane ids must be non-empty strings.
+- A definition cannot be assigned to multiple lanes in the same lane system.
+- Events cannot be assigned to both lane systems (`eventLane` + `rpcLane`).
+- `applyTo` targets are validated and fail fast on invalid id/type.
+
+Event Lanes in `mode: "network"`:
+
+- Lane-assigned emits are intercepted and enqueued.
+- `profiles[profile].consume` controls which lanes this runtime consumes.
+- `bindings[]` supports `prefetch`, `maxAttempts`, and `retryDelayMs`.
+- Producer-routed lanes are validated eagerly at init, not first emit.
+
+RabbitMQ adapter highlights:
+
+- Optional publisher confirms (`publishConfirm`) for safer writes.
+- Reconnect/recovery policy (`reconnect.enabled/maxAttempts/initialDelayMs/maxDelayMs`).
+- Dead-letter routing is delegated to broker/queue config via final `nack(false)` settlement.
+
+For full examples and migration guidance, see [REMOTE_LANES.md](../readmes/REMOTE_LANES.md).

@@ -49,15 +49,12 @@ export type EventLaneQueueResource = IResource<
 
 export type EventLaneQueueReference = IEventLaneQueue | EventLaneQueueResource;
 
-export interface EventLaneDlqConfig {
-  queue: EventLaneQueueReference;
-}
-
 export interface EventLaneBinding {
   lane: IEventLaneDefinition;
   queue: EventLaneQueueReference;
   prefetch?: number;
-  dlq?: EventLaneDlqConfig;
+  maxAttempts?: number;
+  retryDelayMs?: number;
 }
 
 export type EventLaneProfileConfig<
@@ -91,7 +88,3 @@ export interface EventLanesResourceConfig<
 export type EventLanesResourceWithConfig<
   TTopology extends EventLanesTopology = EventLanesTopology,
 > = EventLanesResourceConfig<TTopology, EventLanesProfileId<TTopology>>;
-
-export function bindEventLane(binding: EventLaneBinding): EventLaneBinding {
-  return Object.freeze({ ...binding });
-}

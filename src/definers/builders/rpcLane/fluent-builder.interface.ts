@@ -19,6 +19,5 @@ export interface RpcLaneFluentBuilder<
   meta<TNewMeta extends IRpcLaneMeta>(
     meta: TNewMeta,
   ): RpcLaneFluentBuilder<TNewMeta>;
-  client(client: "fetch" | "mixed" | "smart"): RpcLaneFluentBuilder<_TMeta>;
   build(): IRpcLane;
 }

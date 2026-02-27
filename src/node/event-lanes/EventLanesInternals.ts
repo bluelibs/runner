@@ -1,9 +1,11 @@
 import { isResource } from "../../define";
 import type { IEventEmission, IEventLaneTopologyProfile } from "../../defs";
 import {
-  createMessageError,
+  eventLaneDuplicateBindingError,
   eventLaneBindingNotFoundError,
   eventLaneProfileNotFoundError,
+  eventLaneQueueReferenceInvalidError,
+  eventLaneRetryPolicyInvalidError,
 } from "../../errors";
 import type { EventLaneRoute } from "./EventLaneAssignments";
 import type {
@@ -18,12 +20,8 @@ import { resolveRemoteLanesMode } from "../remote-lanes/mode";
 const EVENT_LANE_QUEUE_DEPENDENCY_PREFIX = "__eventLaneQueue__:";
 export const DEFAULT_RELAY_SOURCE_PREFIX = "runner.event-lanes.relay:";
 
-export type EventLanesResolvedBinding = Omit<
-  EventLaneBinding,
-  "queue" | "dlq"
-> & {
+export type EventLanesResolvedBinding = Omit<EventLaneBinding, "queue"> & {
   queue: IEventLaneQueue;
-  dlq?: { queue: IEventLaneQueue };
 };
 
 export interface EventLanesResourceContext {
@@ -76,11 +74,6 @@ export function collectEventLaneQueueResourceDependencies(
     if (isResource(binding.queue)) {
       deps[toQueueDependencyKey(binding.queue.id)] = binding.queue;
     }
-
-    const dlqQueue = binding.dlq?.queue;
-    if (dlqQueue && isResource(dlqQueue)) {
-      deps[toQueueDependencyKey(dlqQueue.id)] = dlqQueue;
-    }
   }
 
   return deps;
@@ -96,30 +89,49 @@ export function resolveEventLaneBindings(
 
   for (const binding of config.topology.bindings) {
     if (seenLaneIds.has(binding.lane.id)) {
-      throw createMessageError(
-        `Event lane "${binding.lane.id}" is bound multiple times. Define exactly one queue binding per lane.`,
-      );
+      eventLaneDuplicateBindingError.throw({
+        laneId: binding.lane.id,
+      });
     }
     seenLaneIds.add(binding.lane.id);
+    validateBindingRetryPolicy(binding);
 
     const resolvedQueue = resolveQueueReference(binding.queue, dependencies);
     if (resolvedQueue.managed) managedQueues.add(resolvedQueue.queue);
 
-    let resolvedDlqQueue: IEventLaneQueue | undefined;
-    if (binding.dlq?.queue) {
-      const dlqQueue = resolveQueueReference(binding.dlq.queue, dependencies);
-      resolvedDlqQueue = dlqQueue.queue;
-      if (dlqQueue.managed) managedQueues.add(dlqQueue.queue);
-    }
-
     bindings.push({
       ...binding,
       queue: resolvedQueue.queue,
-      dlq: resolvedDlqQueue ? { queue: resolvedDlqQueue } : undefined,
     });
   }
 
   return { bindings, managedQueues };
+}
+
+function validateBindingRetryPolicy(binding: EventLaneBinding): void {
+  const { maxAttempts, retryDelayMs } = binding;
+
+  if (
+    maxAttempts !== undefined &&
+    (!Number.isInteger(maxAttempts) || maxAttempts < 1)
+  ) {
+    eventLaneRetryPolicyInvalidError.throw({
+      laneId: binding.lane.id,
+      field: "maxAttempts",
+      value: String(maxAttempts),
+    });
+  }
+
+  if (
+    retryDelayMs !== undefined &&
+    (!Number.isFinite(retryDelayMs) || retryDelayMs < 0)
+  ) {
+    eventLaneRetryPolicyInvalidError.throw({
+      laneId: binding.lane.id,
+      field: "retryDelayMs",
+      value: String(retryDelayMs),
+    });
+  }
 }
 
 export function buildEventLanesContext(
@@ -152,13 +164,6 @@ export function getLaneBindingOrThrow(
   return binding!;
 }
 
-export function normalizeErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-}
-
 function toQueueDependencyKey(queueResourceId: string): string {
   return `${EVENT_LANE_QUEUE_DEPENDENCY_PREFIX}${queueResourceId}`;
 }
@@ -181,12 +186,10 @@ function requireEventLaneQueue(
   value: unknown,
   source: string,
 ): IEventLaneQueue {
-  if (!isEventLaneQueue(value)) {
-    throw createMessageError(
-      `Event lanes queue reference "${source}" did not resolve to a valid IEventLaneQueue instance.`,
-    );
+  if (isEventLaneQueue(value)) {
+    return value;
   }
-  return value;
+  throw eventLaneQueueReferenceInvalidError.create({ source });
 }
 
 function resolveQueueReference(
@@ -237,7 +240,6 @@ function buildContext(
   for (const binding of bindings) {
     bindingsByLaneId.set(binding.lane.id, binding);
     queues.add(binding.queue);
-    if (binding.dlq?.queue) queues.add(binding.dlq.queue);
   }
 
   const activeBindingsByQueue = new Map<IEventLaneQueue, Set<string>>();

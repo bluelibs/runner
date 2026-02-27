@@ -46,16 +46,10 @@ export function makeRpcLaneBuilder<TMeta extends IRpcLaneMeta>(
       return makeRpcLaneBuilder(next);
     },
 
-    client(client: "fetch" | "mixed" | "smart") {
-      const next = clone(state, { client });
-      return makeRpcLaneBuilder(next);
-    },
-
     build() {
       const lane = defineRpcLane({
         id: state.id,
         meta: state.meta,
-        client: state.client,
         applyTo: state.applyTo,
       });
       return deepFreeze({

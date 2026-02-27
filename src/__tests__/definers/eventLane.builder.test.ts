@@ -1,4 +1,5 @@
 import { defineEventLane, isEventLane } from "../../define";
+import { eventLaneInvalidIdError } from "../../errors";
 import { definitions, r } from "../..";
 
 describe("event lane builder", () => {
@@ -80,6 +81,32 @@ describe("event lane builder", () => {
 
     expect(lane.meta).toEqual({});
     expect(isEventLane(lane)).toBe(true);
+  });
+
+  it("fails fast when event lane id is empty", () => {
+    try {
+      defineEventLane({
+        id: "",
+      } as unknown as Parameters<typeof defineEventLane>[0]);
+      throw new Error("Expected defineEventLane to throw");
+    } catch (error) {
+      expect(eventLaneInvalidIdError.is(error)).toBe(true);
+      expect((error as Error).message).toContain(
+        "eventLane id must be a non-empty string",
+      );
+    }
+  });
+
+  it("fails fast when event lane id is not a string", () => {
+    try {
+      defineEventLane({
+        id: 42 as unknown as string,
+      } as unknown as Parameters<typeof defineEventLane>[0]);
+      throw new Error("Expected defineEventLane to throw");
+    } catch (error) {
+      expect(eventLaneInvalidIdError.is(error)).toBe(true);
+      expect((error as Error).message).toContain('Received "42"');
+    }
   });
 
   it("builds frozen topology with lane-aware profile typing helper", () => {

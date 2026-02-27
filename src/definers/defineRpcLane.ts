@@ -4,10 +4,15 @@ import {
   symbolFilePath,
   symbolRpcLane,
 } from "../defs";
+import { rpcLaneInvalidIdError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze } from "../tools/deepFreeze";
 
 export function defineRpcLane(config: IRpcLaneDefinition): IRpcLane {
+  if (typeof config.id !== "string" || config.id.trim().length === 0) {
+    rpcLaneInvalidIdError.throw({ id: String(config.id) });
+  }
+
   const callerFilePath = getCallerFile();
   return deepFreeze({
     ...config,

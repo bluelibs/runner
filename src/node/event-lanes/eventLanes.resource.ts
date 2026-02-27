@@ -33,8 +33,7 @@ const eventLanesResourceBase = r
   .dependencies((config) => collectEventLaneQueueResourceDependencies(config))
   .context<EventLanesPrivateContext>(() => createDefaultEventLanesContext())
   .init(async (config, dependencies, context) => {
-    const typedDependencies =
-      dependencies as unknown as EventLanesResourceDependencies;
+    const typedDependencies = dependencies as EventLanesResourceDependencies;
     const diagnostics = EventLanesDiagnostics.fromDebugConfig(
       typedDependencies.logger,
       typedDependencies.debugConfig,

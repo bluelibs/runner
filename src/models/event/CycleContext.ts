@@ -1,4 +1,4 @@
-import { eventCycleError, validationError } from "../../errors";
+import { eventCycleDepthExceededError, eventCycleError } from "../../errors";
 import { getPlatform, IAsyncLocalStorage } from "../../platform";
 import { IEmissionFrame } from "./types";
 import { RuntimeCallSource } from "../../types/runtimeSource";
@@ -62,10 +62,10 @@ export class CycleContext {
     }
 
     if (currentStack && currentStack.length >= MAX_EMISSION_STACK_DEPTH) {
-      validationError.throw({
-        subject: "Event cycle detection",
-        id: frame.id,
-        originalError: `Emission stack exceeded ${MAX_EMISSION_STACK_DEPTH} frames.`,
+      eventCycleDepthExceededError.throw({
+        eventId: frame.id,
+        currentDepth: currentStack.length,
+        maxDepth: MAX_EMISSION_STACK_DEPTH,
       });
     }
 

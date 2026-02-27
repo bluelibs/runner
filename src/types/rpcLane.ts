@@ -7,7 +7,6 @@ import { symbolFilePath, symbolRpcLane } from "./utilities";
 export interface IRpcLaneDefinition {
   id: string;
   meta?: IRpcLaneMeta;
-  client?: "fetch" | "mixed" | "smart";
   applyTo?: readonly (ITaskDefinition<any> | IEventDefinition<any> | string)[];
   [symbolFilePath]?: string;
 }

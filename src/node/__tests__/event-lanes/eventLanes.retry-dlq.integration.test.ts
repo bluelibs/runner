@@ -13,6 +13,7 @@ class TestQueue implements IEventLaneQueue {
 
   public enqueued: EventLaneMessage[] = [];
   public nackedNoRequeue = 0;
+  public nackedRequeue = 0;
 
   async enqueue(
     message: Omit<EventLaneMessage, "id" | "createdAt" | "attempts">,
@@ -47,6 +48,8 @@ class TestQueue implements IEventLaneQueue {
     }
     if (!requeue) {
       this.nackedNoRequeue += 1;
+    } else {
+      this.nackedRequeue += 1;
     }
     setImmediate(() => void this.process());
   }
@@ -91,19 +94,18 @@ async function waitUntil(
   }
 }
 
-describe("event-lanes: failure + dlq", () => {
-  it("nacks and sends failures to DLQ", async () => {
-    const lane = r.eventLane("tests.event-lanes.retry.lane").build();
+describe("event-lanes: failure settlement + retries", () => {
+  it("nacks without requeue after final failure", async () => {
+    const lane = r.eventLane("tests.event-lanes.failure.settle.lane").build();
     const queue = new TestQueue();
-    const dlq = new TestQueue();
 
     const tagged = r
-      .event<{ id: string }>("tests.event-lanes.retry.event")
+      .event<{ id: string }>("tests.event-lanes.failure.settle.event")
       .tags([globals.tags.eventLane.with({ lane })])
       .build();
 
     const failingHook = r
-      .hook("tests.event-lanes.retry.failing-hook")
+      .hook("tests.event-lanes.failure.settle.failing-hook")
       .on(tagged)
       .run(async () => {
         throw createMessageError("hook failed");
@@ -111,7 +113,7 @@ describe("event-lanes: failure + dlq", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.retry.emit")
+      .task("tests.event-lanes.failure.settle.emit")
       .dependencies({ tagged })
       .run(async (_input, { tagged }) => {
         await tagged({ id: "evt-1" });
@@ -119,7 +121,7 @@ describe("event-lanes: failure + dlq", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.retry.app")
+      .resource("tests.event-lanes.failure.settle.app")
       .register([
         tagged,
         failingHook,
@@ -128,7 +130,7 @@ describe("event-lanes: failure + dlq", () => {
           profile: "worker",
           topology: {
             profiles: { worker: { consume: [lane] } },
-            bindings: [{ lane, queue, dlq: { queue: dlq } }],
+            bindings: [{ lane, queue }],
           },
         }),
       ])
@@ -137,29 +139,25 @@ describe("event-lanes: failure + dlq", () => {
     const runtime = await run(app);
     await runtime.runTask(emitTask);
 
-    await waitUntil(() => dlq.enqueued.length === 1);
-    expect(dlq.enqueued[0].eventId).toBe(tagged.id);
-    expect(
-      (dlq.enqueued[0].metadata as { eventLaneDlq?: { reason?: string } })
-        .eventLaneDlq?.reason,
-    ).toContain("hook failed");
-    expect(queue.nackedNoRequeue).toBe(1);
+    await waitUntil(() => queue.nackedNoRequeue === 1);
+    expect(queue.nackedRequeue).toBe(0);
 
     await runtime.dispose();
   });
 
-  it("normalizes non-Error failures before DLQ and logger reporting", async () => {
-    const lane = r.eventLane("tests.event-lanes.retry.primitive.lane").build();
+  it("normalizes primitive failures and still settles with nack(false)", async () => {
+    const lane = r
+      .eventLane("tests.event-lanes.failure.primitive.lane")
+      .build();
     const queue = new TestQueue();
-    const dlq = new TestQueue();
 
     const tagged = r
-      .event<{ id: string }>("tests.event-lanes.retry.primitive.event")
+      .event<{ id: string }>("tests.event-lanes.failure.primitive.event")
       .tags([globals.tags.eventLane.with({ lane })])
       .build();
 
     const failingHook = r
-      .hook("tests.event-lanes.retry.primitive.failing-hook")
+      .hook("tests.event-lanes.failure.primitive.failing-hook")
       .on(tagged)
       .run(async () => {
         throw "primitive-failure";
@@ -167,7 +165,7 @@ describe("event-lanes: failure + dlq", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.retry.primitive.emit")
+      .task("tests.event-lanes.failure.primitive.emit")
       .dependencies({ tagged })
       .run(async (_input, { tagged }) => {
         await tagged({ id: "evt-primitive" });
@@ -175,7 +173,7 @@ describe("event-lanes: failure + dlq", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.retry.primitive.app")
+      .resource("tests.event-lanes.failure.primitive.app")
       .register([
         tagged,
         failingHook,
@@ -184,7 +182,7 @@ describe("event-lanes: failure + dlq", () => {
           profile: "worker",
           topology: {
             profiles: { worker: { consume: [lane] } },
-            bindings: [{ lane, queue, dlq: { queue: dlq } }],
+            bindings: [{ lane, queue }],
           },
         }),
       ])
@@ -193,63 +191,48 @@ describe("event-lanes: failure + dlq", () => {
     const runtime = await run(app);
     await runtime.runTask(emitTask);
 
-    await waitUntil(() => dlq.enqueued.length === 1);
-    expect(
-      (dlq.enqueued[0].metadata as { eventLaneDlq?: { reason?: string } })
-        .eventLaneDlq?.reason,
-    ).toContain("primitive-failure");
+    await waitUntil(() => queue.nackedNoRequeue === 1);
+    expect(queue.nackedRequeue).toBe(0);
 
     await runtime.dispose();
   });
 
-  it("normalizes primitive serializer failures in consumer catch path", async () => {
-    const lane = r
-      .eventLane("tests.event-lanes.retry.serializer-primitive.lane")
-      .build();
+  it("retries before final nack(false) when maxAttempts is greater than one", async () => {
+    const lane = r.eventLane("tests.event-lanes.retry.multiple.lane").build();
     const queue = new TestQueue();
-    const dlq = new TestQueue();
 
     const tagged = r
-      .event<{ id: string }>(
-        "tests.event-lanes.retry.serializer-primitive.event",
-      )
+      .event<{ id: string }>("tests.event-lanes.retry.multiple.event")
       .tags([globals.tags.eventLane.with({ lane })])
       .build();
 
-    const serializerBreaker = r
-      .resource("tests.event-lanes.retry.serializer-primitive.breaker")
-      .dependencies({ serializer: globals.resources.serializer })
-      .init(async (_config, { serializer }) => {
-        const originalParse = serializer.parse.bind(serializer);
-        serializer.parse = <T = unknown>(_payload: string): T => {
-          throw "primitive-parse-error";
-        };
-        return { originalParse };
-      })
-      .dispose(async (value, _config, { serializer }) => {
-        serializer.parse = value.originalParse;
+    const failingHook = r
+      .hook("tests.event-lanes.retry.multiple.failing-hook")
+      .on(tagged)
+      .run(async () => {
+        throw createMessageError("hook failed on retry");
       })
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.retry.serializer-primitive.emit")
+      .task("tests.event-lanes.retry.multiple.emit")
       .dependencies({ tagged })
       .run(async (_input, { tagged }) => {
-        await tagged({ id: "evt-serializer-primitive" });
+        await tagged({ id: "evt-retry" });
       })
       .build();
 
     const app = r
-      .resource("tests.event-lanes.retry.serializer-primitive.app")
+      .resource("tests.event-lanes.retry.multiple.app")
       .register([
-        serializerBreaker,
         tagged,
+        failingHook,
         emitTask,
         eventLanesResource.with({
           profile: "worker",
           topology: {
             profiles: { worker: { consume: [lane] } },
-            bindings: [{ lane, queue, dlq: { queue: dlq } }],
+            bindings: [{ lane, queue, maxAttempts: 2 }],
           },
         }),
       ])
@@ -258,11 +241,9 @@ describe("event-lanes: failure + dlq", () => {
     const runtime = await run(app);
     await runtime.runTask(emitTask);
 
-    await waitUntil(() => dlq.enqueued.length === 1);
-    expect(
-      (dlq.enqueued[0].metadata as { eventLaneDlq?: { reason?: string } })
-        .eventLaneDlq?.reason,
-    ).toContain("primitive-parse-error");
+    await waitUntil(
+      () => queue.nackedRequeue === 1 && queue.nackedNoRequeue === 1,
+    );
 
     await runtime.dispose();
   });

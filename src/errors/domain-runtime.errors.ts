@@ -179,6 +179,18 @@ export const rpcLaneCommunicatorContractError = error<
   )
   .build();
 
+export const rpcLaneInvalidIdError = error<{ id: string } & DefaultErrorType>(
+  "runner.errors.rpcLane.invalidId",
+)
+  .format(
+    ({ id }) =>
+      `rpcLane id must be a non-empty string. Received "${id.length === 0 ? "<empty>" : id}".`,
+  )
+  .remediation(
+    "Provide a non-empty rpcLane id when calling defineRpcLane(...) or r.rpcLane(...).",
+  )
+  .build();
+
 export const rpcLaneProfileNotFoundError = error<
   { profile: string } & DefaultErrorType
 >(RunnerErrorId.RpcLaneProfileNotFound)
@@ -204,6 +216,105 @@ export const rpcLaneBindingNotFoundError = error<
   )
   .build();
 
+export const rpcLaneDuplicateBindingError = error<
+  { laneId: string } & DefaultErrorType
+>("runner.errors.rpcLane.duplicateBinding")
+  .format(
+    ({ laneId }) =>
+      `rpcLane "${laneId}" is bound multiple times. Define exactly one communicator binding per lane.`,
+  )
+  .remediation(
+    ({ laneId }) =>
+      `Keep exactly one binding entry for rpcLane "${laneId}" in r.rpcLane.topology({ bindings: [...] }).`,
+  )
+  .build();
+
+export const rpcLaneTaskAssignmentConflictError = error<
+  {
+    taskId: string;
+    currentLaneId: string;
+    attemptedLaneId: string;
+  } & DefaultErrorType
+>("runner.errors.rpcLane.taskAssignmentConflict")
+  .format(
+    ({ taskId, currentLaneId, attemptedLaneId }) =>
+      `Task "${taskId}" is already assigned to rpcLane "${currentLaneId}". Cannot also assign rpcLane "${attemptedLaneId}" via applyTo().`,
+  )
+  .remediation(
+    ({ taskId }) =>
+      `Assign task "${taskId}" to exactly one rpcLane (either tag-based or applyTo), not multiple lanes.`,
+  )
+  .build();
+
+export const rpcLaneEventAssignmentConflictError = error<
+  {
+    eventId: string;
+    currentLaneId: string;
+    attemptedLaneId: string;
+  } & DefaultErrorType
+>("runner.errors.rpcLane.eventAssignmentConflict")
+  .format(
+    ({ eventId, currentLaneId, attemptedLaneId }) =>
+      `Event "${eventId}" is already assigned to rpcLane "${currentLaneId}". Cannot also assign rpcLane "${attemptedLaneId}" via applyTo().`,
+  )
+  .remediation(
+    ({ eventId }) =>
+      `Assign event "${eventId}" to exactly one rpcLane (either tag-based or applyTo), not multiple lanes.`,
+  )
+  .build();
+
+export const rpcLaneApplyToInvalidTargetError = error<
+  { laneId: string } & DefaultErrorType
+>("runner.errors.rpcLane.applyToInvalidTarget")
+  .format(
+    ({ laneId }) =>
+      `rpcLane "${laneId}" applyTo() received an invalid target. Expected a task, event, or non-empty id string.`,
+  )
+  .remediation(
+    ({ laneId }) =>
+      `Use r.rpcLane("${laneId}").applyTo([taskOrEventOrNonEmptyId]).`,
+  )
+  .build();
+
+export const rpcLaneApplyToTargetTypeError = error<
+  { laneId: string; targetId: string } & DefaultErrorType
+>("runner.errors.rpcLane.applyToTargetType")
+  .format(
+    ({ laneId, targetId }) =>
+      `rpcLane "${laneId}" applyTo target "${targetId}" must reference a task or event, but resolved to a non-task/event definition.`,
+  )
+  .remediation(
+    ({ targetId }) =>
+      `Change applyTo target "${targetId}" to a registered task/event definition id.`,
+  )
+  .build();
+
+export const rpcLaneApplyToTargetNotFoundError = error<
+  { laneId: string; targetId: string } & DefaultErrorType
+>("runner.errors.rpcLane.applyToTargetNotFound")
+  .format(
+    ({ laneId, targetId }) =>
+      `rpcLane "${laneId}" applyTo target "${targetId}" was not found in this container. Register it first or fix the id.`,
+  )
+  .remediation(
+    ({ targetId }) =>
+      `Register "${targetId}" in this container or fix the id used in rpcLane.applyTo(...).`,
+  )
+  .build();
+
+export const rpcLaneAssignmentEventLaneConflictError = error<
+  { eventId: string; rpcLaneId: string } & DefaultErrorType
+>("runner.errors.rpcLane.eventLaneConflict")
+  .format(
+    ({ eventId, rpcLaneId }) =>
+      `Event "${eventId}" cannot be assigned to rpcLane "${rpcLaneId}" because it is already assigned to an event lane.`,
+  )
+  .remediation(
+    ({ eventId }) =>
+      `Remove either eventLane or rpcLane assignment for event "${eventId}". A single event cannot belong to both lane systems.`,
+  )
+  .build();
+
 export const rpcLaneCommunicatorResourceInvalidError = error<
   { resourceId: string } & DefaultErrorType
 >(RunnerErrorId.RpcLaneCommunicatorResourceInvalid)
@@ -214,6 +325,18 @@ export const rpcLaneCommunicatorResourceInvalidError = error<
   .remediation(
     ({ resourceId }) =>
       `Ensure resource "${resourceId}" init() returns an object with at least one RPC method: task(...), event(...), or eventWithResult(...).`,
+  )
+  .build();
+
+export const rpcLanesExposureModeError = error<
+  { mode: string } & DefaultErrorType
+>("runner.errors.rpcLane.exposureMode")
+  .format(
+    ({ mode }) =>
+      `rpcLanesResource.with({ exposure.http }) is only supported in mode "network". Received mode "${mode}".`,
+  )
+  .remediation(
+    'Use mode: "network" when enabling exposure.http, or remove exposure.http for transparent/local-simulated modes.',
   )
   .build();
 
@@ -406,6 +529,18 @@ export const eventLaneQueueNotInitializedError = error<DefaultErrorType>(
   )
   .build();
 
+export const eventLaneInvalidIdError = error<{ id: string } & DefaultErrorType>(
+  "runner.errors.eventLanes.invalidId",
+)
+  .format(
+    ({ id }) =>
+      `eventLane id must be a non-empty string. Received "${id.length === 0 ? "<empty>" : id}".`,
+  )
+  .remediation(
+    "Provide a non-empty eventLane id when calling defineEventLane(...) or r.eventLane(...).",
+  )
+  .build();
+
 export const eventLaneProfileNotFoundError = error<
   { profile: string } & DefaultErrorType
 >("runner.errors.eventLanes.profileNotFound")
@@ -426,6 +561,119 @@ export const eventLaneBindingNotFoundError = error<
   .remediation(
     ({ laneId }) =>
       `Add a binding entry for lane "${laneId}" in eventLanesResource.with({ topology: { bindings: [...] } }).`,
+  )
+  .build();
+
+export const eventLaneDuplicateBindingError = error<
+  { laneId: string } & DefaultErrorType
+>("runner.errors.eventLanes.duplicateBinding")
+  .format(
+    ({ laneId }) =>
+      `Event lane "${laneId}" is bound multiple times. Define exactly one queue binding per lane.`,
+  )
+  .remediation(
+    ({ laneId }) =>
+      `Keep exactly one queue binding for event lane "${laneId}" in eventLanesResource.with({ topology: { bindings: [...] } }).`,
+  )
+  .build();
+
+export const eventLaneRetryPolicyInvalidError = error<
+  {
+    laneId: string;
+    field: "maxAttempts" | "retryDelayMs";
+    value: string;
+  } & DefaultErrorType
+>("runner.errors.eventLanes.retryPolicyInvalid")
+  .format(
+    ({ laneId, field, value }) =>
+      `Event lane "${laneId}" binding has invalid retry policy field "${field}" with value "${value}".`,
+  )
+  .remediation(({ field }) =>
+    field === "maxAttempts"
+      ? "Use a positive integer for maxAttempts (for example: 1, 2, 3...)."
+      : "Use a non-negative number for retryDelayMs (milliseconds).",
+  )
+  .build();
+
+export const eventLaneQueueReferenceInvalidError = error<
+  { source: string } & DefaultErrorType
+>("runner.errors.eventLanes.queueReferenceInvalid")
+  .format(
+    ({ source }) =>
+      `Event lanes queue reference "${source}" did not resolve to a valid IEventLaneQueue instance.`,
+  )
+  .remediation(
+    ({ source }) =>
+      `Ensure "${source}" resolves to an object implementing enqueue/consume/ack/nack.`,
+  )
+  .build();
+
+export const eventLaneAssignmentConflictError = error<
+  {
+    eventId: string;
+    currentLaneId: string;
+    attemptedLaneId: string;
+  } & DefaultErrorType
+>("runner.errors.eventLanes.assignmentConflict")
+  .format(
+    ({ eventId, currentLaneId, attemptedLaneId }) =>
+      `Event "${eventId}" is already assigned to eventLane "${currentLaneId}". Cannot also assign eventLane "${attemptedLaneId}" via applyTo().`,
+  )
+  .remediation(
+    ({ eventId }) =>
+      `Assign event "${eventId}" to exactly one eventLane (either tag-based or applyTo), not multiple lanes.`,
+  )
+  .build();
+
+export const eventLaneApplyToInvalidTargetError = error<
+  { laneId: string } & DefaultErrorType
+>("runner.errors.eventLanes.applyToInvalidTarget")
+  .format(
+    ({ laneId }) =>
+      `eventLane "${laneId}" applyTo() received an invalid target. Expected an event or non-empty id string.`,
+  )
+  .remediation(
+    ({ laneId }) =>
+      `Use r.eventLane("${laneId}").applyTo([eventOrNonEmptyId]).`,
+  )
+  .build();
+
+export const eventLaneApplyToTargetTypeError = error<
+  { laneId: string; targetId: string } & DefaultErrorType
+>("runner.errors.eventLanes.applyToTargetType")
+  .format(
+    ({ laneId, targetId }) =>
+      `eventLane "${laneId}" applyTo target "${targetId}" must reference an event, but resolved to a non-event definition.`,
+  )
+  .remediation(
+    ({ targetId }) =>
+      `Change applyTo target "${targetId}" to a registered event definition id.`,
+  )
+  .build();
+
+export const eventLaneApplyToTargetNotFoundError = error<
+  { laneId: string; targetId: string } & DefaultErrorType
+>("runner.errors.eventLanes.applyToTargetNotFound")
+  .format(
+    ({ laneId, targetId }) =>
+      `eventLane "${laneId}" applyTo target "${targetId}" was not found in this container. Register it first or fix the id.`,
+  )
+  .remediation(
+    ({ targetId }) =>
+      `Register event "${targetId}" in this container or fix the id used in eventLane.applyTo(...).`,
+  )
+  .build();
+
+export const eventLaneAssignmentRpcLaneConflictError = error<
+  { eventId: string; eventLaneId: string } & DefaultErrorType
+>("runner.errors.eventLanes.rpcLaneConflict")
+  .format(
+    ({ eventId, eventLaneId }) =>
+      `Event "${eventId}" cannot be assigned to eventLane "${eventLaneId}" because it is already assigned to an rpcLane.`,
+  )
+  .remediation(
+    ({ eventId }) =>
+      `Remove either eventLane or rpcLane assignment for event "${eventId}". A single event cannot belong to both lane systems.`,
   )
   .build();
 

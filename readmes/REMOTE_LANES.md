@@ -29,6 +29,7 @@ Both are lane-based, topology-driven, and container/resource-aware.
 - Event definitions cannot be assigned to both lane systems (`eventLane` + `rpcLane`) across tags and/or `applyTo`.
 - A definition cannot be assigned to two different lanes of the same lane system.
 - `applyTo` string targets are runtime-validated against container definitions and fail fast on invalid type/id.
+- Lane ids must be non-empty strings.
 - `transactional + globals.tags.eventLane` is invalid.
 - `transactional + parallel` is invalid.
 - For RPC Lanes in `mode: "network"`, each served/assigned lane must be bound to a communicator.
@@ -129,7 +130,7 @@ const app = r
 - Event tagging: `globals.tags.eventLane.with({ lane, orderingKey?, metadata? })`
 - Topology: `r.eventLane.topology({ profiles, bindings })`
   - `profiles[profile].consume`: lanes consumed by this runtime
-  - `bindings[]`: `lane -> queue` (resource or instance), optional `prefetch` and `dlq`
+  - `bindings[]`: `lane -> queue` (resource or instance), optional `prefetch`, `maxAttempts`, and `retryDelayMs`
 - Runtime resource: `eventLanesResource.with({ profile, topology, mode? })`
 
 ### Runtime routing
@@ -142,6 +143,7 @@ const app = r
 
 - In `mode: "network"`, consumer workers attach on `globals.events.ready`.
 - Queue `prefetch` is resolved before network consumers start.
+- Producer-routed lanes are validated eagerly at init; missing binding fails fast before first emit.
 - On shutdown (`globals.events.disposing`), queues enter cooldown before final disposal.
 
 ### Queue adapters
@@ -185,6 +187,13 @@ const notificationsQueue = r
         publishOptions: {
           persistent: true,
         },
+        publishConfirm: true,
+        reconnect: {
+          enabled: true,
+          maxAttempts: 10,
+          initialDelayMs: 200,
+          maxDelayMs: 2_000,
+        },
       }),
   )
   .dispose(async (queue) => {
@@ -197,7 +206,14 @@ const topology = r.eventLane.topology({
     api: { consume: [] },
     worker: { consume: [notificationsLane] },
   },
-  bindings: [{ lane: notificationsLane, queue: notificationsQueue }],
+  bindings: [
+    {
+      lane: notificationsLane,
+      queue: notificationsQueue,
+      maxAttempts: 3,
+      retryDelayMs: 250,
+    },
+  ],
 });
 
 const app = r
@@ -211,6 +227,11 @@ const app = r
   ])
   .build();
 ```
+
+### DLQ note (RabbitMQ)
+
+- RabbitMQ dead-letters automatically when queue dead-letter args are configured and messages are rejected/nacked with `requeue: false`.
+- Event Lanes now settles final failures with `nack(false)` and delegates DLQ behavior to broker/queue configuration.
 
 ## RPC Lanes (Sync)
 

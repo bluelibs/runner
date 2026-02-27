@@ -1,4 +1,5 @@
 import { defineRpcLane, isRpcLane } from "../../define";
+import { rpcLaneInvalidIdError } from "../../errors";
 import { definitions, r } from "../..";
 
 describe("rpc lane builder", () => {
@@ -6,12 +7,10 @@ describe("rpc lane builder", () => {
     const lane = defineRpcLane({
       id: "tests.rpc-lanes.direct",
       meta: { title: "Direct RPC Lane" },
-      client: "fetch",
     });
 
     expect(lane.id).toBe("tests.rpc-lanes.direct");
     expect(lane.meta.title).toBe("Direct RPC Lane");
-    expect(lane.client).toBe("fetch");
     expect(isRpcLane(lane)).toBe(true);
     expect(
       (lane as unknown as Record<symbol, unknown>)[definitions.symbolFilePath],
@@ -32,7 +31,6 @@ describe("rpc lane builder", () => {
       .rpcLane("tests.rpc-lanes.builder")
       .title("RPC Lane")
       .description("test")
-      .client("mixed")
       .build();
 
     expect(lane.id).toBe("tests.rpc-lanes.builder");
@@ -40,7 +38,6 @@ describe("rpc lane builder", () => {
       title: "RPC Lane",
       description: "test",
     });
-    expect(lane.client).toBe("mixed");
     expect(isRpcLane(lane)).toBe(true);
   });
 
@@ -107,5 +104,31 @@ describe("rpc lane builder", () => {
 
     expect(topology.profiles.api.serve).toEqual([laneB]);
     expect(Object.isFrozen(topology)).toBe(true);
+  });
+
+  it("fails fast when rpc lane id is empty", () => {
+    try {
+      defineRpcLane({
+        id: "",
+      } as unknown as Parameters<typeof defineRpcLane>[0]);
+      throw new Error("Expected defineRpcLane to throw");
+    } catch (error) {
+      expect(rpcLaneInvalidIdError.is(error)).toBe(true);
+      expect((error as Error).message).toContain(
+        "rpcLane id must be a non-empty string",
+      );
+    }
+  });
+
+  it("fails fast when rpc lane id is not a string", () => {
+    try {
+      defineRpcLane({
+        id: 42 as unknown as string,
+      } as unknown as Parameters<typeof defineRpcLane>[0]);
+      throw new Error("Expected defineRpcLane to throw");
+    } catch (error) {
+      expect(rpcLaneInvalidIdError.is(error)).toBe(true);
+      expect((error as Error).message).toContain('Received "42"');
+    }
   });
 });

@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { durableQueueNotInitializedError } from "../../../errors";
 import { Logger } from "../../../models/Logger";
-import { RabbitMQTransport } from "../../queue/rabbitmq/RabbitMQTransport";
+import {
+  RabbitMQTransport,
+  type RabbitMQTransportReconnectConfig,
+} from "../../queue/rabbitmq/RabbitMQTransport";
 import type {
   IDurableQueue,
   MessageHandler,
@@ -28,6 +31,8 @@ export interface RabbitMQQueueConfig {
   };
   prefetch?: number;
   publishOptions?: Record<string, unknown>;
+  publishConfirm?: boolean;
+  reconnect?: RabbitMQTransportReconnectConfig;
   logger?: Pick<Logger, "error">;
 }
 
@@ -60,6 +65,8 @@ export class RabbitMQQueue implements IDurableQueue {
         arguments: config.queue?.arguments,
       },
       publishOptions: config.publishOptions,
+      publishConfirm: config.publishConfirm,
+      reconnect: config.reconnect,
       logger,
       parseFailureLogMessage:
         "RabbitMQQueue failed to parse incoming message; nacking without requeue.",

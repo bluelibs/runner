@@ -10,6 +10,7 @@ import { resolveRemoteLanesMode } from "../remote-lanes/mode";
 import { collectEventTopologyLanes } from "../remote-lanes/topologyLanes";
 import { resolveEventLaneAssignments } from "./EventLaneAssignments";
 import { EventLanesDiagnostics } from "./EventLanesDiagnostics";
+import { handleEventLaneConsumerFailure } from "./EventLanesFailureHandler";
 import { LocalSimulatedEventLaneTransport } from "./LocalSimulatedEventLaneTransport";
 import {
   buildEventLanesContext,
@@ -17,7 +18,6 @@ import {
   EventLanesResourceContext,
   getLaneBindingOrThrow,
   isRelayEmission,
-  normalizeErrorMessage,
   resolveEventLaneBindings,
 } from "./EventLanesInternals";
 
@@ -62,6 +62,7 @@ export class EventLanesController {
           eventRouteByEventId,
         ),
       );
+      this.validateAssignedEventRoutesHaveBindings();
 
       for (const queue of this.context.managedQueues) {
         await queue.init?.();
@@ -157,7 +158,7 @@ export class EventLanesController {
         source: emission.source,
         orderingKey: eventRoute.orderingKey,
         metadata: eventRoute.metadata,
-        maxAttempts: 1,
+        maxAttempts: binding.maxAttempts ?? 1,
       });
       emission.stopPropagation();
       await this.diagnostics.logEnqueue({
@@ -191,6 +192,17 @@ export class EventLanesController {
       },
       { id: `${this.context.profile}.event-lanes.ready` },
     );
+  }
+
+  private validateAssignedEventRoutesHaveBindings(): void {
+    const seenLaneIds = new Set<string>();
+    for (const route of this.context.eventRouteByEventId.values()) {
+      if (seenLaneIds.has(route.lane.id)) {
+        continue;
+      }
+      seenLaneIds.add(route.lane.id);
+      getLaneBindingOrThrow(route.lane.id, this.context.bindingsByLaneId);
+    }
   }
 
   private async applyPrefetchPolicies(): Promise<void> {
@@ -262,54 +274,18 @@ export class EventLanesController {
       );
       await queue.ack(message.id);
     } catch (error) {
-      const consumerError =
-        error instanceof Error ? error : new Error(String(error));
-      let dlqEnqueueError: Error | null = null;
-
-      if (binding.dlq?.queue) {
-        try {
-          await binding.dlq.queue.enqueue({
-            laneId: message.laneId,
-            eventId: message.eventId,
-            payload: message.payload,
-            source: message.source,
-            orderingKey: message.orderingKey,
-            maxAttempts: 1,
-            metadata: {
-              ...(message.metadata || {}),
-              eventLaneDlq: {
-                failedAt: new Date().toISOString(),
-                reason: normalizeErrorMessage(consumerError),
-              },
-            },
-          });
-        } catch (dlqError) {
-          dlqEnqueueError =
-            dlqError instanceof Error ? dlqError : new Error(String(dlqError));
-          await this.dependencies.logger.error(
-            "Event lane consumer failed to enqueue message into DLQ.",
-            {
-              laneId: message.laneId,
-              eventId: message.eventId,
-              error: dlqEnqueueError,
-            },
-          );
-        }
-      }
-
-      try {
-        await queue.nack(message.id, false);
-      } finally {
-        await this.dependencies.logger.error("Event lane consumer failed.", {
-          laneId: message.laneId,
-          eventId: message.eventId,
-          error: consumerError,
-          data:
-            dlqEnqueueError === null
-              ? undefined
-              : { dlqEnqueueError: dlqEnqueueError.message },
-        });
-      }
+      await handleEventLaneConsumerFailure({
+        queue,
+        binding,
+        message,
+        error,
+        logger: this.dependencies.logger,
+        delay: (ms) => this.delay(ms),
+      });
     }
+  }
+
+  private async delay(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

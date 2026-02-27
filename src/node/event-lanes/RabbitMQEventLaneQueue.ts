@@ -4,7 +4,10 @@ import {
   eventLaneQueueNotInitializedError,
 } from "../../errors";
 import { Logger } from "../../models/Logger";
-import { RabbitMQTransport } from "../queue/rabbitmq/RabbitMQTransport";
+import {
+  RabbitMQTransport,
+  type RabbitMQTransportReconnectConfig,
+} from "../queue/rabbitmq/RabbitMQTransport";
 import {
   EventLaneMessage,
   EventLaneMessageHandler,
@@ -31,6 +34,8 @@ export interface RabbitMQEventLaneQueueConfig {
   };
   prefetch?: number;
   publishOptions?: Record<string, unknown>;
+  publishConfirm?: boolean;
+  reconnect?: RabbitMQTransportReconnectConfig;
   logger?: Pick<Logger, "error">;
 }
 
@@ -64,6 +69,8 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
         arguments: config.queue?.arguments,
       },
       publishOptions: config.publishOptions,
+      publishConfirm: config.publishConfirm,
+      reconnect: config.reconnect,
       logger,
       parseFailureLogMessage:
         "RabbitMQEventLaneQueue failed to parse incoming message; nacking without requeue.",

@@ -142,7 +142,46 @@ describe("event-lanes: eventLanesResource", () => {
     expect(localHookCalls).toBe(0);
     expect(queue.enqueued).toHaveLength(1);
     expect(queue.enqueued[0].eventId).toBe(tagged.id);
+    expect(queue.enqueued[0].maxAttempts).toBe(1);
 
+    await runtime.dispose();
+  });
+
+  it("uses binding maxAttempts on producer-enqueued messages", async () => {
+    const lane = r.eventLane("tests.event-lanes.producer.max-attempts").build();
+    const queue = new TestEventLaneQueue();
+    const tagged = r
+      .event("tests.event-lanes.producer.max-attempts.event")
+      .tags([globals.tags.eventLane.with({ lane })])
+      .build();
+
+    const emitTask = r
+      .task("tests.event-lanes.producer.max-attempts.emit")
+      .dependencies({ tagged })
+      .run(async (_input, { tagged }) => {
+        await tagged();
+      })
+      .build();
+
+    const app = r
+      .resource("tests.event-lanes.producer.max-attempts.app")
+      .register([
+        tagged,
+        emitTask,
+        eventLanesResource.with({
+          profile: "producer",
+          topology: {
+            profiles: { producer: { consume: [] } },
+            bindings: [{ lane, queue, maxAttempts: 3 }],
+          },
+        }),
+      ])
+      .build();
+
+    const runtime = await run(app);
+    await runtime.runTask(emitTask);
+    expect(queue.enqueued).toHaveLength(1);
+    expect(queue.enqueued[0].maxAttempts).toBe(3);
     await runtime.dispose();
   });
 
@@ -228,6 +267,48 @@ describe("event-lanes: eventLanesResource", () => {
     expect(seen).not.toContain("B:2");
     expect(queueB.consumeCalls).toBe(0);
 
+    await runtime.dispose();
+  });
+
+  it("validates one binding for multiple events assigned to the same lane", async () => {
+    const lane = r.eventLane("tests.event-lanes.shared-lane").build();
+    const queue = new TestEventLaneQueue();
+    const eventA = r
+      .event<{ id: string }>("tests.event-lanes.shared-lane.eventA")
+      .tags([globals.tags.eventLane.with({ lane })])
+      .build();
+    const eventB = r
+      .event<{ id: string }>("tests.event-lanes.shared-lane.eventB")
+      .tags([globals.tags.eventLane.with({ lane })])
+      .build();
+    const emitTask = r
+      .task("tests.event-lanes.shared-lane.emit")
+      .dependencies({ eventA, eventB })
+      .run(async (_input, deps) => {
+        await deps.eventA({ id: "a" });
+        await deps.eventB({ id: "b" });
+      })
+      .build();
+
+    const app = r
+      .resource("tests.event-lanes.shared-lane.app")
+      .register([
+        eventA,
+        eventB,
+        emitTask,
+        eventLanesResource.with({
+          profile: "producer",
+          topology: {
+            profiles: { producer: { consume: [] } },
+            bindings: [{ lane, queue }],
+          },
+        }),
+      ])
+      .build();
+
+    const runtime = await run(app);
+    await runtime.runTask(emitTask);
+    expect(queue.enqueued).toHaveLength(2);
     await runtime.dispose();
   });
 
@@ -336,11 +417,49 @@ describe("event-lanes: eventLanesResource", () => {
       ])
       .build();
 
-    const runtime = await run(app);
-    await expect(runtime.runTask(emitTask)).rejects.toThrow(
+    await expect(run(app)).rejects.toThrow(
       `Event lane "${lane.id}" has no queue binding`,
     );
-    await runtime.dispose();
+  });
+
+  it("fails fast when maxAttempts is invalid", async () => {
+    const lane = r.eventLane("tests.event-lanes.invalid-max-attempts").build();
+    const queue = new TestEventLaneQueue();
+
+    const app = r
+      .resource("tests.event-lanes.invalid-max-attempts.app")
+      .register([
+        eventLanesResource.with({
+          profile: "producer",
+          topology: {
+            profiles: { producer: { consume: [] } },
+            bindings: [{ lane, queue, maxAttempts: 0 }],
+          },
+        }),
+      ])
+      .build();
+
+    await expect(run(app)).rejects.toThrow('field "maxAttempts"');
+  });
+
+  it("fails fast when retryDelayMs is invalid", async () => {
+    const lane = r.eventLane("tests.event-lanes.invalid-retry-delay").build();
+    const queue = new TestEventLaneQueue();
+
+    const app = r
+      .resource("tests.event-lanes.invalid-retry-delay.app")
+      .register([
+        eventLanesResource.with({
+          profile: "producer",
+          topology: {
+            profiles: { producer: { consume: [] } },
+            bindings: [{ lane, queue, retryDelayMs: -1 }],
+          },
+        }),
+      ])
+      .build();
+
+    await expect(run(app)).rejects.toThrow('field "retryDelayMs"');
   });
 
   it("supports centralized topology config with many lanes mapped to one queue", async () => {

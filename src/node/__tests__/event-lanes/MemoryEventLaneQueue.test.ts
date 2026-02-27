@@ -1,20 +1,6 @@
 import { MemoryEventLaneQueue } from "../../event-lanes/MemoryEventLaneQueue";
-import { bindEventLane } from "../../event-lanes";
-import { r } from "../../..";
 
 describe("event-lanes: MemoryEventLaneQueue", () => {
-  it("bindEventLane returns frozen bindings", () => {
-    const lane = r.eventLane("tests.event-lanes.binding.lane").build();
-    const queue = new MemoryEventLaneQueue();
-    const binding = bindEventLane({
-      lane,
-      queue,
-    });
-
-    expect(binding.queue).toBe(queue);
-    expect(Object.isFrozen(binding)).toBe(true);
-  });
-
   it("enqueues and consumes messages", async () => {
     const queue = new MemoryEventLaneQueue();
     const received: unknown[] = [];

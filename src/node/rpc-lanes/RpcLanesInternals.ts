@@ -1,6 +1,6 @@
 import type { Store } from "../../models/Store";
 import {
-  createMessageError,
+  rpcLaneDuplicateBindingError,
   rpcLaneBindingNotFoundError,
   rpcLaneCommunicatorResourceInvalidError,
   rpcLaneProfileNotFoundError,
@@ -188,9 +188,7 @@ function resolveBindings(
 
   for (const binding of config.topology.bindings) {
     if (seenLaneIds.has(binding.lane.id)) {
-      createMessageError(
-        `rpcLane "${binding.lane.id}" is bound multiple times. Define exactly one communicator binding per lane.`,
-      );
+      rpcLaneDuplicateBindingError.throw({ laneId: binding.lane.id });
     }
     seenLaneIds.add(binding.lane.id);
 

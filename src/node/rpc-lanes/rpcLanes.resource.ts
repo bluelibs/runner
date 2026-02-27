@@ -5,8 +5,8 @@ import { createNodeExposure } from "../exposure/createNodeExposure";
 import type { NodeExposureDeps } from "../exposure/resourceTypes";
 import { symbolTunneledBy } from "../../types/symbols";
 import {
-  createMessageError,
   rpcLaneCommunicatorContractError,
+  rpcLanesExposureModeError,
   tunnelOwnershipConflictError,
 } from "../../errors";
 import {
@@ -168,9 +168,7 @@ export const rpcLanesResource = defineResource<
     let exposure: { close: () => Promise<void> } | null = null;
     if (config.exposure?.http) {
       if (resolved.mode !== "network") {
-        createMessageError(
-          `rpcLanesResource.with({ exposure.http }) is only supported in mode "network". Received mode "${resolved.mode}".`,
-        );
+        rpcLanesExposureModeError.throw({ mode: resolved.mode });
       }
       exposure = await createNodeExposure(
         { http: config.exposure.http },

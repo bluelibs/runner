@@ -475,7 +475,7 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
 - Tag events with `globals.tags.eventLane.with({ lane, orderingKey?, metadata? })`.
 - Register `eventLanesResource` (from `@bluelibs/runner/node`) with:
   - `profile` + `topology` + optional `mode` (`"network"` | `"transparent"` | `"local-simulated"`)
-  - `bindings: [{ lane, queue, prefetch?, dlq? }]` where `queue` can be a queue instance or a queue resource
+  - `bindings: [{ lane, queue, prefetch?, maxAttempts?, retryDelayMs? }]` where `queue` can be a queue instance or a queue resource
 - Use profile constants when desired:
   - `const Profiles = { API: "api", WORKER: "worker" } as const`
   - `profile: Profiles.API`
@@ -490,6 +490,7 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
   - Lane-assigned events use an in-memory simulated relay path.
   - Payload crosses a serializer boundary (`stringify -> parse`) before local re-emit.
 - Runtime guard rails:
+  - lane ids must be non-empty strings (`defineEventLane`, `defineRpcLane`)
   - `applyTo` string ids are validated against container definitions and type (event only).
   - Event cannot be on two different `eventLane`s.
   - Event cannot be on both `eventLane` and `rpcLane` (via tags and/or `applyTo`).
@@ -498,8 +499,11 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
 - Hooks run based on event subscriptions after relay re-emit.
 - When debug event emission logging is enabled (`logEventEmissionOnRun`), Event Lanes emits routing diagnostics: `event-lanes.enqueue`, `event-lanes.relay-emit`, and `event-lanes.skip-inactive-lane`.
 - Consumer queue prefetch is resolved from lane binding `prefetch`.
-  - Event Lanes does not apply queue-level business retries; use task middleware for retry logic, with optional DLQ routing on failure.
-  - Multiple lanes can share one queue, but each lane can only have one binding.
+- Event Lanes supports binding-level retry policy:
+  - `maxAttempts` (default `1`) controls retry budget before final fail path.
+  - `retryDelayMs` adds a delay before requeue retries.
+- final failure settles with `nack(false)` and dead-letter routing is delegated to queue/broker configuration.
+- Multiple lanes can share one queue, but each lane can only have one binding.
 
 Built-in queue adapters:
 
@@ -514,6 +518,8 @@ Built-in queue adapters:
 - `queue.arguments` (extra `assertQueue` arguments)
 - `queue.deadLetter` (plain string shorthand like `"my.dlq"`, or `{ queue, exchange, routingKey }`)
 - `publishOptions` (defaults to `{ persistent: true }`; message publish properties, intentionally separate from queue declaration settings)
+- `publishConfirm` (default `true`; waits for broker confirms when available)
+- `reconnect` (`{ enabled?, maxAttempts?, initialDelayMs?, maxDelayMs? }`; retry/recovery policy for connection/channel drops)
 
 Custom backends implement `IEventLaneQueue` (`enqueue`, `consume`, `ack`, `nack`, optional `cooldown`, `setPrefetch`, `init`, `dispose`).
 

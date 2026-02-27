@@ -1,5 +1,11 @@
 import type { IEventLaneDefinition, IRpcLanesTopology } from "../../defs";
-import { createMessageError } from "../../errors";
+import {
+  eventLaneApplyToInvalidTargetError,
+  eventLaneApplyToTargetNotFoundError,
+  eventLaneApplyToTargetTypeError,
+  eventLaneAssignmentConflictError,
+  eventLaneAssignmentRpcLaneConflictError,
+} from "../../errors";
 import { globalTags } from "../../globals/globalTags";
 import type { Store } from "../../models/Store";
 import { collectRpcTopologyLanes } from "../remote-lanes/topologyLanes";
@@ -51,9 +57,11 @@ export function resolveEventLaneAssignments(
 
       const current = routesByEventId.get(eventId);
       if (current && current.lane.id !== lane.id) {
-        createMessageError(
-          `Event "${eventId}" is already assigned to eventLane "${current.lane.id}". Cannot also assign eventLane "${lane.id}" via applyTo().`,
-        );
+        eventLaneAssignmentConflictError.throw({
+          eventId,
+          currentLaneId: current.lane.id,
+          attemptedLaneId: lane.id,
+        });
       }
 
       if (!current) {
@@ -76,14 +84,16 @@ function resolveEventLaneTarget(
   }
 
   if (isRegisteredDefinitionId(store, targetId)) {
-    return createMessageError(
-      `eventLane "${laneId}" applyTo target "${targetId}" must reference an event, but resolved to a non-event definition.`,
-    );
+    return eventLaneApplyToTargetTypeError.throw({
+      laneId,
+      targetId,
+    });
   }
 
-  return createMessageError(
-    `eventLane "${laneId}" applyTo target "${targetId}" was not found in this container. Register it first or fix the id.`,
-  );
+  return eventLaneApplyToTargetNotFoundError.throw({
+    laneId,
+    targetId,
+  });
 }
 
 function readTargetId(target: unknown, laneId: string): string {
@@ -100,9 +110,9 @@ function readTargetId(target: unknown, laneId: string): string {
     return (target as { id: string }).id;
   }
 
-  return createMessageError(
-    `eventLane "${laneId}" applyTo() received an invalid target. Expected an event or non-empty id string.`,
-  );
+  return eventLaneApplyToInvalidTargetError.throw({
+    laneId,
+  });
 }
 
 function isRegisteredDefinitionId(store: Store, id: string): boolean {
@@ -138,9 +148,10 @@ function assertEventIsNotAssignedToRpcLane(
     globalTags.rpcLane.exists(eventEntry.event.tags) ||
     rpcLaneApplyToEventIds.has(eventId)
   ) {
-    createMessageError(
-      `Event "${eventId}" cannot be assigned to eventLane "${eventLaneId}" because it is already assigned to an rpcLane.`,
-    );
+    eventLaneAssignmentRpcLaneConflictError.throw({
+      eventId,
+      eventLaneId,
+    });
   }
 }
 
