@@ -466,30 +466,35 @@ For advanced usage, import `Queue` directly and use `on(type, handler)` / `once(
 
 ## Event Lanes (Node)
 
-Event Lanes route tagged events to queues using explicit lane references.
+Event Lanes route lane-assigned events to queues using explicit lane references.
 
 - Define lanes with `r.eventLane("app.lanes.email").build()` (or `eventLane(...)`).
+- Optional lane-side assignment: `r.eventLane("...").applyTo([eventOrId])`.
 - Define topology with `r.eventLane.topology({ profiles, bindings })`.
-- Boundary reminder: Event Lanes are async queue routing inside your event graph; use Tunnels for cross-process RPC (`readmes/TUNNELS.md`).
+- Boundary reminder: Event Lanes are async fire-and-forget queue routing; use RPC Lanes for synchronous task/event RPC (`readmes/REMOTE_LANES.md`).
 - Tag events with `globals.tags.eventLane.with({ lane, orderingKey?, metadata? })`.
 - Register `eventLanesResource` (from `@bluelibs/runner/node`) with:
-  - `profile` + `topology` + optional `mode` (`"producer"` or `"consumer"`)
+  - `profile` + `topology` + optional `mode` (`"network"` | `"transparent"` | `"local-simulated"`)
   - `bindings: [{ lane, queue, prefetch?, dlq? }]` where `queue` can be a queue instance or a queue resource
 - Use profile constants when desired:
   - `const Profiles = { API: "api", WORKER: "worker" } as const`
   - `profile: Profiles.API`
-- Producer behavior:
-  - Tagged event emissions are intercepted.
-  - Local propagation is stopped.
-  - Payload is serialized using `globals.resources.serializer.stringify(...)`.
-  - Message is enqueued to the lane's bound queue.
-- Consumer behavior:
-  - Starts on `globals.events.ready`.
-  - On shutdown start, consumer queues enter cooldown and stop intake before final disposal.
-- `mode: "producer"` disables consumers while preserving producer path.
-- Only consumes lanes listed by the active profile.
-- Deserializes with `serializer.parse(...)`, then re-emits in-process.
-- Relay re-emits bypass producer interception to prevent loops.
+- `mode: "network"` (default):
+  - Lane-assigned event emissions (tag or `applyTo`) are intercepted and enqueued to bound queues.
+  - Active profile `consume` lanes start dequeue workers on `globals.events.ready`.
+  - Payload is deserialized with `serializer.parse(...)`, then re-emitted in-process.
+- `mode: "transparent"`:
+  - Lane transport is bypassed.
+  - Lane-assigned events execute locally through the normal event pipeline.
+- `mode: "local-simulated"`:
+  - Lane-assigned events use an in-memory simulated relay path.
+  - Payload crosses a serializer boundary (`stringify -> parse`) before local re-emit.
+- Runtime guard rails:
+  - `applyTo` string ids are validated against container definitions and type (event only).
+  - Event cannot be on two different `eventLane`s.
+  - Event cannot be on both `eventLane` and `rpcLane` (via tags and/or `applyTo`).
+- In `transparent` and `local-simulated`, profile `consume` is ignored for routing decisions.
+- Relay re-emits bypass lane interception to prevent loops.
 - Hooks run based on event subscriptions after relay re-emit.
 - When debug event emission logging is enabled (`logEventEmissionOnRun`), Event Lanes emits routing diagnostics: `event-lanes.enqueue`, `event-lanes.relay-emit`, and `event-lanes.skip-inactive-lane`.
 - Consumer queue prefetch is resolved from lane binding `prefetch`.
@@ -533,6 +538,37 @@ class CustomEventLaneQueue implements IEventLaneQueue {
   async setPrefetch(_count: number): Promise<void> {}
 }
 ```
+
+## RPC Lanes (Node)
+
+RPC Lanes route lane-assigned tasks/events across runners using profile/topology bindings.
+
+- Define lanes with `r.rpcLane("app.lanes.billing").build()`.
+- Optional lane-side assignment: `r.rpcLane("...").applyTo([taskOrEventOrId])`.
+- Tag tasks/events with `globals.tags.rpcLane.with({ lane })`.
+- Define topology with `r.rpcLane.topology({ profiles, bindings })`:
+  - `profiles[profile].serve` selects lanes this runtime serves locally.
+  - `bindings[]` maps `lane -> communicator resource` plus async-context policy.
+- Register `rpcLanesResource` (from `@bluelibs/runner/node`) with:
+  - `profile` + `topology` + optional `mode` (`"network"` | `"transparent"` | `"local-simulated"`) + optional `exposure.http`.
+- Communicator resources are container-aware and can use:
+  - `init(r.rpcLane.httpClient({ client: "fetch" | "mixed" | "smart", ... }))`
+  - `fetch` is universal (`createHttpClient`)
+  - `mixed` / `smart` are Node presets.
+- Routing behavior in `mode: "network"`:
+  - Lane in `serve` -> task/event executes locally.
+  - Lane not in `serve` -> task/event routes remotely via communicator.
+  - Every assigned or served lane must have a communicator binding.
+- Mode overrides:
+  - `transparent`: lane-assigned tasks/events execute locally (no lane transport).
+  - `local-simulated`: lane-assigned tasks/events go through a local serializer roundtrip simulation.
+- In `transparent` and `local-simulated`, profile `serve` is ignored for routing decisions.
+- Exposure behavior:
+  - `serve` lanes derive server allow-list automatically for lane-assigned tasks/events.
+  - Auth remains fail-closed unless explicitly configured otherwise.
+- Runtime guard rails:
+  - `applyTo` string ids are validated against container definitions and type (task/event).
+  - Task/event cannot be on two different `rpcLane`s.
 
 ## Errors
 
@@ -669,9 +705,17 @@ Given the set of removals and behavior changes, this upgrade should be treated a
   .tags([globals.tags.debug])
   ```
 
-## HTTP & Tunnels
+## HTTP RPC Transport
 
-Tunnels let you call Runner tasks/events across a process boundary over a small HTTP surface (Node-only exposure via `nodeExposure`), while preserving task ids, middleware, validation, typed errors, and async context.
+HTTP RPC transport is used by RPC Lane communicators (`fetch`, `mixed`, `smart`) and keeps RPC capabilities intact:
+
+- JSON payloads
+- multipart uploads
+- octet-stream/duplex paths (Node smart/mixed)
+- typed error rethrow via `errorRegistry`
+- async-context header propagation (policy-controlled per rpc lane binding)
+- request-id/correlation headers and discovery endpoints
+- event return payload support (`eventWithResult`)
 
 ## Serialization
 
@@ -679,7 +723,7 @@ Runner ships with a serializer that round-trips Dates, RegExp, binary, and custo
 
 Register custom types via `serializer.addType({ id, is, serialize, deserialize, strategy })` (inject `globals.resources.serializer`). Use `new Serializer()` for a standalone instance.
 
-Note: file uploads use `createWebFile`/`createNodeFile` — handled by the tunnel layer, not the serializer.
+Note: file uploads use `createWebFile`/`createNodeFile` — handled by HTTP RPC transport, not the serializer.
 
 ## Testing
 

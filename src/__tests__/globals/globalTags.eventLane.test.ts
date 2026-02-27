@@ -3,6 +3,9 @@ import { r } from "../..";
 
 describe("globals.tags.eventLane", () => {
   it("is scoped to events and extracts lane config", () => {
+    expect(globalTags.eventLane.targets).toEqual(["events"]);
+    expect(Object.isFrozen(globalTags.eventLane.targets)).toBe(true);
+
     const lane = r.eventLane("tests.global-tags.event-lane").build();
 
     const event = r

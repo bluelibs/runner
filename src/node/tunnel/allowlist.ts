@@ -23,6 +23,13 @@ interface TunnelResourceValue {
   events?: IdentifiableItem[] | ((event: { id: string }) => boolean);
 }
 
+interface RpcLanesResourceValue {
+  serveTaskIds?: readonly string[];
+  serveEventIds?: readonly string[];
+  taskAllowAsyncContext?: Readonly<Record<string, boolean>>;
+  eventAllowAsyncContext?: Readonly<Record<string, boolean>>;
+}
+
 export interface AllowListSelectorErrorInfo {
   selectorKind: "task" | "event";
   candidateId: string;
@@ -71,6 +78,9 @@ export function computeAllowList(
   const resourceEntries = Array.from(store.resources?.values() ?? []);
   const tunnelEntries = resourceEntries.filter((e: ResourceStoreElementType) =>
     e.resource.tags?.some((t: ITag) => t?.id === globalTags.tunnel.id),
+  );
+  const rpcLaneEntries = resourceEntries.filter((e: ResourceStoreElementType) =>
+    e.resource.tags?.some((t: ITag) => t?.id === globalTags.rpcLanes.id),
   );
 
   for (const entry of tunnelEntries) {
@@ -169,14 +179,53 @@ export function computeAllowList(
     }
   }
 
+  for (const entry of rpcLaneEntries) {
+    const value = entry?.value as RpcLanesResourceValue | undefined;
+    if (!value || typeof value !== "object") continue;
+    const serveTaskIds = Array.isArray(value.serveTaskIds)
+      ? value.serveTaskIds
+      : [];
+    const serveEventIds = Array.isArray(value.serveEventIds)
+      ? value.serveEventIds
+      : [];
+    const allowContextMap = value.taskAllowAsyncContext ?? {};
+    const eventAllowContextMap = value.eventAllowAsyncContext ?? {};
+    for (const taskId of serveTaskIds) {
+      taskIds.add(taskId);
+      const allowAsyncContext = allowContextMap[taskId] !== false;
+      mergeAsyncContextPolicy(
+        taskAcceptsAsyncContext,
+        taskId,
+        allowAsyncContext,
+      );
+    }
+    for (const eventId of serveEventIds) {
+      eventIds.add(eventId);
+      const allowAsyncContext = eventAllowContextMap[eventId] !== false;
+      mergeAsyncContextPolicy(
+        eventAcceptsAsyncContext,
+        eventId,
+        allowAsyncContext,
+      );
+    }
+  }
+
   const enabled = tunnelEntries.some(
     (r) =>
       (r?.value?.mode === "server" || r?.value?.mode === "both") &&
       (!r.value.transport || r.value.transport === "http"),
   );
+  const rpcEnabled = rpcLaneEntries.some((entry) => {
+    const value = entry?.value as RpcLanesResourceValue | undefined;
+    const hasTasks =
+      Array.isArray(value?.serveTaskIds) && value!.serveTaskIds.length > 0;
+    const hasEvents =
+      Array.isArray(value?.serveEventIds) && value!.serveEventIds.length > 0;
+    return hasTasks || hasEvents;
+  });
 
   return {
-    enabled,
+    enabled: enabled || rpcEnabled,
     taskIds,
     eventIds,
     taskAcceptsAsyncContext,

@@ -158,6 +158,65 @@ export const tunnelClientContractError = error<
   )
   .build();
 
+export const rpcLaneHttpClientPresetNotFoundError = error<
+  { presetId: string; availablePresets: string[] } & DefaultErrorType
+>(RunnerErrorId.RpcLaneHttpClientPresetNotFound)
+  .format(
+    ({ presetId, availablePresets }) =>
+      `rpcLane.httpClient preset "${presetId}" is not registered. Available presets: ${availablePresets.join(", ")}.`,
+  )
+  .remediation(
+    'Use a registered preset id. Core provides "fetch". Node entry registers "mixed" and "smart".',
+  )
+  .build();
+
+export const rpcLaneCommunicatorContractError = error<
+  { message: string } & DefaultErrorType
+>(RunnerErrorId.RpcLaneCommunicatorContract)
+  .format(({ message }) => message)
+  .remediation(
+    "Ensure communicator exposes task(id, input), event(id, payload), or eventWithResult(id, payload), and each method returns a promise.",
+  )
+  .build();
+
+export const rpcLaneProfileNotFoundError = error<
+  { profile: string } & DefaultErrorType
+>(RunnerErrorId.RpcLaneProfileNotFound)
+  .format(
+    ({ profile }) => `rpcLane profile "${profile}" not found in topology.`,
+  )
+  .remediation(
+    ({ profile }) =>
+      `Define profile "${profile}" in r.rpcLane.topology({ profiles }) or choose an existing profile.`,
+  )
+  .build();
+
+export const rpcLaneBindingNotFoundError = error<
+  { laneId: string } & DefaultErrorType
+>(RunnerErrorId.RpcLaneBindingNotFound)
+  .format(
+    ({ laneId }) =>
+      `rpcLane binding not found for lane "${laneId}". Every tagged or served rpc lane must have a communicator binding.`,
+  )
+  .remediation(
+    ({ laneId }) =>
+      `Add a binding for lane "${laneId}" in r.rpcLane.topology({ bindings: [...] }).`,
+  )
+  .build();
+
+export const rpcLaneCommunicatorResourceInvalidError = error<
+  { resourceId: string } & DefaultErrorType
+>(RunnerErrorId.RpcLaneCommunicatorResourceInvalid)
+  .format(
+    ({ resourceId }) =>
+      `rpcLane communicator resource "${resourceId}" did not resolve to a valid communicator.`,
+  )
+  .remediation(
+    ({ resourceId }) =>
+      `Ensure resource "${resourceId}" init() returns an object with at least one RPC method: task(...), event(...), or eventWithResult(...).`,
+  )
+  .build();
+
 export const resourceForkInvalidIdError = error<
   { id: string } & DefaultErrorType
 >(RunnerErrorId.ResourceForkInvalidId)

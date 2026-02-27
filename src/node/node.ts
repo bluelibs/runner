@@ -1,5 +1,9 @@
 // Node entry point
 // Re-export the full public API so Node consumers get the same base surface.
+import { registerRpcLaneHttpPresetsForNode } from "./rpc-lanes/registerRpcLaneHttpPresets";
+
+registerRpcLaneHttpPresetsForNode();
+
 export * from "../public";
 
 export { nodeExposure } from "./exposure";
@@ -26,3 +30,4 @@ export type {
 } from "./http";
 export * from "./durable";
 export * from "./event-lanes";
+export * from "./rpc-lanes";

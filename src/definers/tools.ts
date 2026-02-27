@@ -9,8 +9,10 @@ import {
   IResourceMiddleware,
   IEvent,
   IEventLane,
+  IRpcLane,
   symbolEvent,
   symbolEventLane,
+  symbolRpcLane,
   symbolTask,
   symbolPhantomTask,
   symbolHook,
@@ -89,6 +91,11 @@ export function isEvent(definition: unknown): definition is IEvent {
 /** Type guard: checks if a definition is an Event Lane reference. */
 export function isEventLane(definition: unknown): definition is IEventLane {
   return hasBrand(definition, symbolEventLane);
+}
+
+/** Type guard: checks if a definition is an RPC Lane reference. */
+export function isRpcLane(definition: unknown): definition is IRpcLane {
+  return hasBrand(definition, symbolRpcLane);
 }
 
 /** Type guard: checks if a definition is a Hook. */

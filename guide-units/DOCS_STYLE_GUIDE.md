@@ -478,7 +478,7 @@ See the [Tasks section](#tasks) for more details.
 Use relative paths from the composed README location:
 
 ```markdown
-For advanced patterns, see [Tunnels Documentation](./readmes/TUNNELS.md).
+For advanced patterns, see [Remote Lanes Documentation](./readmes/REMOTE_LANES.md).
 ```
 
 ### Links to External Resources
@@ -792,7 +792,7 @@ The main `README.md` and `FULL_GUIDE.md` are not edited directly. They are compo
 
 ### Supplementary Docs (readmes/)
 
-- **Naming**: `TOPIC_NAME.md` (e.g., `TUNNELS.md`, `MIGRATION.md`)
+- **Naming**: `TOPIC_NAME.md` (e.g., `REMOTE_LANES.md`, `MIGRATION.md`)
 - **Purpose**: Deep dives that don't fit in main README
 - **Back-links**: Always link back to main README
 
@@ -1030,3 +1030,4 @@ Content...
 ---
 
 _Last updated: January 2026 · Version 2.0_
+

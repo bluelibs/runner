@@ -5,6 +5,7 @@ import type {
   IResource,
   RuntimeCallSource,
 } from "../../defs";
+import type { RemoteLanesMode } from "../remote-lanes/mode";
 
 export interface EventLaneMessage {
   id: string;
@@ -62,8 +63,7 @@ export interface EventLaneBinding {
 export type EventLaneProfileConfig<
   TLane extends IEventLaneDefinition = IEventLaneDefinition,
 > = IEventLaneTopologyProfile<TLane>;
-
-export type EventLanesMode = "producer" | "consumer";
+export type EventLanesMode = RemoteLanesMode;
 
 export type EventLanesTopology<
   TBindings extends readonly EventLaneBinding[] = readonly EventLaneBinding[],

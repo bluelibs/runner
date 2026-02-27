@@ -54,9 +54,11 @@ Use `globals.events.ready` for components that should start only after bootstrap
 
 Example:
 
-- Event Lanes consumers (from `eventLanesResource`) attach dequeue workers on `globals.events.ready`.
+- In `eventLanesResource` `mode: "network"` (default), Event Lanes consumers attach dequeue workers on `globals.events.ready`.
 - This guarantees serializer/resource setup done during `init()` is available before first consumed message is re-emitted.
-- Event Lanes also resolves queue `prefetch` from lane bindings at this phase, before consumers start.
+- Event Lanes also resolves queue `prefetch` from lane bindings at this phase, before `network`-mode consumers start.
+- RPC Lanes (`rpcLanesResource`) resolve task/event routing + serve allow-list during `init()`; they do not require a separate ready-phase consumer start.
+- Full Event/RPC lane behavior is documented in [REMOTE_LANES.md](../readmes/REMOTE_LANES.md).
 
 If a component may process external work immediately, prefer `ready` over direct startup in `init()`.
 

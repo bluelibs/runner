@@ -9,7 +9,7 @@ Runner is a TypeScript-first toolkit for building an `app` out of small, typed b
 - **Tasks**: async functions with explicit `dependencies`, middleware, and input/output validation
 - **Resources**: singletons with `init`/`dispose` lifecycle (databases, clients, servers, caches)
 - **Reliability Middleware**: built-in `retry`, `timeout`, `circuitBreaker`, `cache`, and `rateLimit`
-- **HTTP Tunnels**: cross-process execution (the "Distributed Monolith") with zero call-site changes
+- **Remote Lanes**: cross-process execution (the "Distributed Monolith") with zero call-site changes
 - **Durable Workflows**: persistent, crash-recoverable async logic for Node.js
 - **Events & hooks**: typed signals and subscribers for decoupling
 - **Runtime control**: run, observe, test, and dispose your `app` predictably
@@ -96,7 +96,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 - **New to Runner**: Start with [Your First 5 Minutes](#your-first-5-minutes)
 - **Prefer an end-to-end example**: Jump to [Quick Start](#quick-start) or the [Real-World Example](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#real-world-example-the-complete-package)
 - **Need Node-only capabilities**: See [Durable Workflows](./DURABLE_WORKFLOWS.md)
-- **Need remote execution**: See [HTTP Tunnels](./TUNNELS.md) (expose from Node.js, call from any `fetch` runtime)
+- **Need remote execution**: See [Remote Lanes](./REMOTE_LANES.md) (expose from Node.js, call from any `fetch` runtime)
 - **Care about portability**: Read [Multi-Platform Architecture](./MULTI_PLATFORM.md)
 - **Planning upgrades**: See [Support & Release Policy](./ENTERPRISE.md)
 - **Want the complete guide**: Read [FULL_GUIDE.md](./FULL_GUIDE.md)
@@ -109,8 +109,8 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
 | Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
 | Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                           |
-| Tunnels client (`createHttpClient`)                    | Full    | Full    | Full | Requires `fetch`                           |
-| Tunnels server (`@bluelibs/runner/node`)               | Full    | None    | None | Exposes tasks/events over HTTP             |
+| Remote Lanes client (`createHttpClient`)               | Full    | Full    | Full | Requires `fetch`                           |
+| Remote Lanes server (`@bluelibs/runner/node`)          | Full    | None    | None | Exposes tasks/events over HTTP             |
 
 ---
 
@@ -128,6 +128,7 @@ Use these minimums before starting:
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
+
 ## Why Runner?
 
 Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
@@ -265,7 +266,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 **Deployment & Integrations** (see dedicated guides in this folder)
 
 - [Durable Workflows](./DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows (Node-only)
-- [HTTP Tunnels](./TUNNELS.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)
+- [Remote Lanes](./REMOTE_LANES.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)
 - [Multi-Platform Architecture](./MULTI_PLATFORM.md) - How Runner supports Node, browsers, and edge runtimes
 
 **Architecture Patterns**
@@ -303,6 +304,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Under the Hood](#under-the-hood) - Architecture deep dive
 - [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
+
 ## What Is This Thing?
 
 BlueLibs Runner is a TypeScript-first dependency injection framework built around **tasks** (functions) and **resources** (singletons). It's explicit and composition-first: you write normal async functions; Runner wires dependencies, middleware, events/hooks, and lifecycle.
@@ -389,10 +391,10 @@ test("getUser works", async () => {
 | **Middleware**           | Composable, type-safe                       | Guard/Interceptor system | Aspect-oriented via Layers        | N/A                    | N/A                    | N/A                    |
 | **Events**               | First-class support                         | EventEmitter2            | PubSub module                     | N/A                    | N/A                    | N/A                    |
 | **Durable Workflows**    | Yes (Node-only)                             | No (external libs)       | No                                | No                     | No                     | No                     |
-| **HTTP Tunnels**         | Yes (server Node-only, client browser/edge) | No                       | No                                | No                     | No                     | No                     |
+| **Remote Lanes (HTTP)**  | Yes (server Node-only, client browser/edge) | No                       | No                                | No                     | No                     | No                     |
 | **Ecosystem**            | Growing                                     | Mature, extensive        | Growing, active                   | Moderate               | Moderate               | Small                  |
 
-> **Note:** This table is intentionally qualitative. Durable workflows are Node-only (via `@bluelibs/runner/node`), while HTTP tunnels require Node on the server/exposure side and work in any `fetch` runtime on the client side.
+> **Note:** This table is intentionally qualitative. Durable workflows are Node-only (via `@bluelibs/runner/node`), while Remote Lanes HTTP transport requires Node on the server/exposure side and works in any `fetch` runtime on the client side.
 
 **Choose Runner when:**
 
@@ -400,7 +402,7 @@ test("getUser works", async () => {
 - You want **full type inference** -- dependencies, middleware configs, and task I/O are inferred, not manually typed
 - **Testing speed matters** -- call `task.run(input, { mockDep })` directly; no framework test modules, no DI container setup
 - You're building **any TypeScript application** (CLI tools, workers, services, serverless) -- Runner isn't web-specific
-- You need **durable workflows** or **HTTP tunnels** for distributed task execution (Node.js)
+- You need **durable workflows** or **Remote Lanes** for distributed task execution (Node.js)
 - You want **middleware introspection** -- the ExecutionJournal exposes cache hits, retry attempts, circuit state, and more at runtime
 - You're integrating into an existing project gradually -- no "rewrite in our style" requirement
 
@@ -687,7 +689,7 @@ Runner auto-detects the platform (Node.js, browser, edge) and adapts behavior at
 
 - [Async Context](#async-context) - Request-scoped state via `AsyncLocalStorage`
 - [Durable Workflows](./DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows
-- [HTTP Tunnels](./TUNNELS.md) - Remote task execution
+- [Remote Lanes](./REMOTE_LANES.md) - Remote task/event execution
 
 ## Learning Guide
 
@@ -896,6 +898,7 @@ Now that you know the patterns, here's your learning path:
 > **runtime:** "Seven patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
 
 ---
+
 ## Quick Wins: Copy-Paste Solutions
 
 Production-ready patterns you can use today. Each example is complete and tested.
@@ -2701,7 +2704,7 @@ The core concepts above cover most use cases. For specialized features:
 
 - **Async Context**: Per-request/thread-local state via `r.asyncContext()`. See [Async Context](#async-context) for Node.js `AsyncLocalStorage` patterns.
 - **Durable Workflows** (Node-only): Replay-safe primitives like `ctx.step()`, `ctx.sleep()`, and `ctx.waitForSignal()`. See [Durable Workflows](../readmes/DURABLE_WORKFLOWS.md).
-- **HTTP Tunnels**: Expose tasks over HTTP or call remote Runners. See [Tunnels](../readmes/TUNNELS.md).
+- **Remote Lanes (Node)**: Event Lanes + RPC Lanes are documented in [REMOTE_LANES.md](../readmes/REMOTE_LANES.md).
 - **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](../readmes/SERIALIZER_PROTOCOL.md).
 
 ---
@@ -2761,9 +2764,11 @@ Use `globals.events.ready` for components that should start only after bootstrap
 
 Example:
 
-- Event Lanes consumers (from `eventLanesResource`) attach dequeue workers on `globals.events.ready`.
+- In `eventLanesResource` `mode: "network"` (default), Event Lanes consumers attach dequeue workers on `globals.events.ready`.
 - This guarantees serializer/resource setup done during `init()` is available before first consumed message is re-emitted.
-- Event Lanes also resolves queue `prefetch` from lane bindings at this phase, before consumers start.
+- Event Lanes also resolves queue `prefetch` from lane bindings at this phase, before `network`-mode consumers start.
+- RPC Lanes (`rpcLanesResource`) resolve task/event routing + serve allow-list during `init()`; they do not require a separate ready-phase consumer start.
+- Full Event/RPC lane behavior is documented in [REMOTE_LANES.md](../readmes/REMOTE_LANES.md).
 
 If a component may process external work immediately, prefer `ready` over direct startup in `init()`.
 
@@ -4096,368 +4101,18 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 
 ---
 
-## Event Lanes (Node)
+## Remote Lanes (Node)
 
-Need queue-backed event transport with reference-safe routing? Event Lanes let you mark specific events for queue delivery while keeping the same in-process event definitions and hooks.
+Event Lanes and RPC Lanes are now documented in one canonical document:
 
-```typescript
-import { globals, r } from "@bluelibs/runner";
-import {
-  eventLanesResource,
-  MemoryEventLaneQueue,
-} from "@bluelibs/runner/node";
+- [REMOTE_LANES.md](../readmes/REMOTE_LANES.md)
 
-const notificationsLane = r.eventLane("app.lanes.notifications").build();
-const notificationsQueue = r
-  .resource("app.resources.notificationsQueue")
-  .init(async () => new MemoryEventLaneQueue())
-  .dispose(async (queue) => {
-    await queue.dispose?.();
-  })
-  .build();
+Use that guide for:
 
-const notificationRequested = r
-  .event<{ userId: string; channel: "email" | "sms" }>(
-    "app.events.notificationRequested",
-  )
-  .tags([globals.tags.eventLane.with({ lane: notificationsLane })])
-  .build();
-
-const sendNotification = r
-  .hook("app.hooks.sendNotification")
-  .on(notificationRequested)
-  .run(async (event) => {
-    // queue-consumed relay for notifications lane
-    await deliverNotification(event.data);
-  })
-  .build();
-
-const Profiles = {
-  NotificationsWorker: "worker.notifications",
-} as const;
-
-const topology = r.eventLane.topology({
-  profiles: {
-    [Profiles.NotificationsWorker]: {
-      consume: [notificationsLane],
-    },
-  },
-  bindings: [
-    {
-      lane: notificationsLane,
-      queue: notificationsQueue, // resource reference
-      prefetch: 8,
-    },
-  ],
-});
-
-const app = r
-  .resource("app")
-  .register([
-    notificationRequested,
-    sendNotification,
-    notificationsQueue,
-    eventLanesResource.with({
-      profile: Profiles.NotificationsWorker,
-      topology,
-    }),
-  ])
-  .build();
-```
-
-DomainEvent example (single domain event routed through a lane):
-
-```typescript
-import { globals, r } from "@bluelibs/runner";
-
-type DomainEvent<TType extends string, TPayload> = {
-  type: TType;
-  aggregateId: string;
-  occurredAt: string;
-  payload: TPayload;
-};
-
-const billingDomainEventsLane = r
-  .eventLane("billing.lanes.domain-events")
-  .build();
-
-const invoiceIssued = r
-  .event<DomainEvent<"InvoiceIssued", { invoiceId: string; total: number }>>(
-    "billing.events.invoiceIssued",
-  )
-  .tags([globals.tags.eventLane.with({ lane: billingDomainEventsLane })])
-  .build();
-
-const publishInvoiceIssued = r
-  .task("billing.tasks.publishInvoiceIssued")
-  .dependencies({ invoiceIssued })
-  .run(async (_input, { invoiceIssued }) => {
-    await invoiceIssued({
-      type: "InvoiceIssued",
-      aggregateId: "invoice-42",
-      occurredAt: new Date().toISOString(),
-      payload: { invoiceId: "invoice-42", total: 1500 },
-    });
-  })
-  .build();
-
-const projectInvoiceReadModel = r
-  .hook("billing.hooks.projectInvoiceReadModel")
-  .on(invoiceIssued)
-  .run(async (event) => {
-    // update read-model from domain event payload
-    await updateInvoiceProjection(event.data.payload);
-  })
-  .build();
-```
-
-How Event Lanes work:
-
-- **Lane references, not lane strings**: Routing uses the `IEventLaneDefinition` reference you pass to `globals.tags.eventLane.with({ lane })` and `bindings`.
-- **Centralized topology**: Define topology once via `r.eventLane.topology({ profiles, bindings })` and pass it to runtimes via `eventLanesResource.with({ profile, topology })`.
-- **Canonical config shape**: Event Lanes runtime wiring uses `eventLanesResource.with({ profile, topology, mode? })`.
-- **Container-friendly queues**: Bindings accept direct queue instances or queue resources, so lane wiring can stay inside the container graph.
-- **Many lanes can share one queue**: Multiple lane refs may target the same queue. Event Lanes enforces one binding per lane for deterministic routing.
-- **All nodes produce**: Tagged emits are intercepted, local propagation is stopped, and the event is enqueued.
-- **Only some profiles consume**: `profiles[profile].consume` controls which lane references this runtime dequeues.
-- **Mode gate**: `mode: "producer" | "consumer"` defaults to `"consumer"` behavior; `"producer"` disables dequeue consumers while preserving producer interception.
-- **Hook dispatch stays event-driven**: Once a lane message is consumed and relayed, hooks run based on their `.on(event)` subscription.
-- **Debug routing diagnostics**: When debug event emission logging is enabled (`logEventEmissionOnRun`), Event Lanes emits runtime routing logs for `enqueue`, `relay-emit`, and `skip-inactive-lane`.
-- **Prefetch policy**: configure queue prefetch at binding level (`bindings[].prefetch`).
-- **Serializer-first transport**: Payloads are serialized/deserialized through `globals.resources.serializer`, so Dates, RegExp, and custom serializer types survive queue transport.
-- **Relay loop protection**: Consumer re-emits include a relay source prefix so producer interception bypasses requeue.
-- **Failure + DLQ**: Event Lanes does not own business retry policy; failed consumer handling is single-attempt with optional DLQ routing.
-- **Transactional compatibility guard**: Events tagged with `globals.tags.eventLane` cannot be `.transactional()`. Transactional events also cannot be `.parallel()`.
-
-Event Lanes vs Tunnels:
-
-- **Event Lanes** are in-process event semantics with queue-backed async delivery.
-- **Tunnels** are cross-process RPC transport for tasks/events over HTTP.
-- Choose **Event Lanes** when you want eventual async fan-out, queue decoupling, and worker profiles around the same domain events.
-- Choose **Tunnels** when one Runner must directly call another Runner and wait for a remote result.
-- Use **both** when you need cross-service command + local async projection:
-  - call a remote task through a tunnel
-  - emit a domain event
-  - route that event through an Event Lane for background hooks/projections.
-
-See [TUNNELS.md](../readmes/TUNNELS.md) for transport/auth/exposure guidance.
-
-Queue adapters:
-
-- Built-in: `MemoryEventLaneQueue`, `RabbitMQEventLaneQueue`
-- Custom: implement `IEventLaneQueue` (`enqueue`, `consume`, `ack`, `nack`, optional `setPrefetch`, `init`, `dispose`)
-
-RabbitMQ example (built-in adapter):
-
-```typescript
-import { globals, r } from "@bluelibs/runner";
-import {
-  eventLanesResource,
-  RabbitMQEventLaneQueue,
-} from "@bluelibs/runner/node";
-
-const notificationsLane = r.eventLane("app.lanes.notifications").build();
-
-const notificationsQueue = r
-  .resource("app.resources.notificationsQueue")
-  .init(
-    async () =>
-      new RabbitMQEventLaneQueue({
-        url: process.env.RABBITMQ_URL,
-        queue: {
-          name: "runner.notifications",
-          durable: true, // optional, default true
-          assert: "active", // optional, default "active"
-          quorum: true,
-          // You can also use a plain string: deadLetter: "runner.notifications.dlq"
-          deadLetter: {
-            queue: "runner.notifications.dlq",
-            exchange: "",
-            routingKey: "runner.notifications.dlq",
-          },
-          messageTtl: 60_000,
-          arguments: {
-            "x-max-length": 10_000,
-          },
-        },
-        prefetch: 16,
-        publishOptions: {
-          persistent: true, // optional, default true
-        },
-      }),
-  )
-  .dispose(async (queue) => {
-    await queue.dispose();
-  })
-  .build();
-
-const Profiles = {
-  Api: "api",
-  Worker: "worker",
-} as const;
-
-const topology = r.eventLane.topology({
-  profiles: {
-    [Profiles.Api]: { consume: [] },
-    [Profiles.Worker]: { consume: [notificationsLane] },
-  },
-  bindings: [{ lane: notificationsLane, queue: notificationsQueue }],
-});
-
-const app = r
-  .resource("app")
-  .register([
-    notificationsQueue,
-    eventLanesResource.with({
-      profile: process.env.RUNNER_PROFILE || Profiles.Worker,
-      topology,
-    }),
-  ])
-  .build();
-```
-
-The built-in adapter handles RabbitMQ connection/channel lifecycle, queue assertion, and broker ack/nack plumbing. If you need custom behavior, implement your own `IEventLaneQueue`:
-
-RabbitMQ queue options supported by the built-in adapter:
-
-- All options below are optional except `queue.name`.
-- `queue.durable` (default `true`): queue durability flag at declaration time.
-- `queue.assert` (`"active" | "passive"`, default `"active"`): create/assert queues or only validate they already exist.
-- `queue.arguments`: additional RabbitMQ queue arguments passed to `assertQueue`.
-- `queue.deadLetter`: plain string shorthand (`"my.dlq"`) or `{ queue, exchange, routingKey }`.
-- `publishOptions`: `sendToQueue` publish options (default `{ persistent: true }`). This is intentionally outside `queue` because it configures message publish properties, not queue declaration properties.
-
-```typescript
-import { randomUUID } from "node:crypto";
-import { r } from "@bluelibs/runner";
-import type { Channel, Connection, ConsumeMessage } from "amqplib";
-import { connect } from "amqplib";
-import type {
-  EventLaneMessage,
-  EventLaneMessageHandler,
-  IEventLaneQueue,
-} from "@bluelibs/runner/node";
-
-class CustomRabbitEventLaneQueue implements IEventLaneQueue {
-  private connection: Connection | null = null;
-  private channel: Channel | null = null;
-  private readonly inFlight = new Map<string, ConsumeMessage>();
-
-  constructor(
-    private readonly config: {
-      url: string;
-      queueName: string;
-      prefetch?: number;
-    },
-  ) {}
-
-  async init(): Promise<void> {
-    this.connection = await connect(this.config.url);
-    this.channel = await this.connection.createChannel();
-
-    // assertQueue is where durability and queue arguments are defined.
-    await this.channel.assertQueue(this.config.queueName, {
-      durable: true,
-      arguments: {
-        "x-queue-type": "quorum",
-      },
-    });
-    await this.channel.prefetch(this.config.prefetch ?? 10);
-  }
-
-  async enqueue(
-    message: Omit<EventLaneMessage, "id" | "createdAt" | "attempts">,
-  ): Promise<string> {
-    const channel = this.requireChannel();
-    const id = randomUUID();
-    const payload: EventLaneMessage = {
-      ...message,
-      id,
-      createdAt: new Date(),
-      attempts: 0,
-    };
-
-    channel.sendToQueue(
-      this.config.queueName,
-      Buffer.from(JSON.stringify(payload)),
-      { persistent: true },
-    );
-    return id;
-  }
-
-  async consume(handler: EventLaneMessageHandler): Promise<void> {
-    const channel = this.requireChannel();
-    await channel.consume(this.config.queueName, async (raw) => {
-      if (!raw) {
-        return;
-      }
-
-      let parsed: EventLaneMessage;
-      try {
-        parsed = JSON.parse(raw.content.toString()) as EventLaneMessage;
-      } catch {
-        channel.nack(raw, false, false); // malformed payload, drop
-        return;
-      }
-
-      if (!parsed || typeof parsed.id !== "string") {
-        channel.nack(raw, false, false);
-        return;
-      }
-
-      const message: EventLaneMessage = {
-        ...parsed,
-        createdAt: new Date(parsed.createdAt),
-        attempts: (parsed.attempts ?? 0) + 1,
-        maxAttempts: parsed.maxAttempts ?? 1,
-      };
-
-      // Keep broker message so runtime-level ack/nack can resolve by message id.
-      this.inFlight.set(message.id, raw);
-      await handler(message);
-    });
-  }
-
-  async ack(messageId: string): Promise<void> {
-    const channel = this.channel;
-    const raw = this.inFlight.get(messageId);
-    if (!channel || !raw) {
-      return;
-    }
-    channel.ack(raw);
-    this.inFlight.delete(messageId);
-  }
-
-  async nack(messageId: string, requeue: boolean = true): Promise<void> {
-    const channel = this.channel;
-    const raw = this.inFlight.get(messageId);
-    if (!channel || !raw) {
-      return;
-    }
-    channel.nack(raw, false, requeue);
-    this.inFlight.delete(messageId);
-  }
-
-  async dispose(): Promise<void> {
-    await this.channel?.close();
-    await this.connection?.close();
-  }
-
-  private requireChannel(): Channel {
-    if (!this.channel) {
-      throw new Error("CustomRabbitEventLaneQueue not initialized.");
-    }
-    return this.channel;
-  }
-}
-```
-
-Lifecycle note:
-
-- Consumers start on `globals.events.ready`, which ensures startup resources (including serializer type registration done in resource init) are initialized before first dequeue processing.
-- During shutdown start (`globals.events.disposing` phase), consumer queues enter cooldown and stop intake before final disposal.
-
-> **runtime:** "You throw events into lanes and call it architecture. I turn them into queue messages, ferry them across workers, and quietly prevent recursive event ping-pong."
+- Event Lanes (`eventLane`) topology, queue bindings, modes, lifecycle, and adapters
+- RPC Lanes (`rpcLane`) topology, communicator bindings, exposure, and mode behavior
+- `network` vs `transparent` vs `local-simulated` routing semantics
+- migration guidance from legacy tunnel event routing
 ## Observability Strategy (Logs, Metrics, and Traces)
 
 Runner gives you primitives for all three observability signals:
@@ -5286,7 +4941,7 @@ The serializer is hardened against common attacks:
 - **Type allow-listing**: `allowedTypes` narrows which runtime type ids are accepted
 - **Symbol registry safety**: `symbolPolicy` controls symbol deserialization behavior
 
-> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](../readmes/TUNNELS.md) for file upload patterns.
+> **Note:** File uploads use the remote lane HTTP multipart handling, not the serializer. See [Remote Lanes](../readmes/REMOTE_LANES.md) for file upload patterns.
 
 ### Tunnels: Bridging Runners
 
@@ -5343,7 +4998,7 @@ const client = createClient({
 });
 ```
 
-For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](../readmes/TUNNELS.md).
+For a deep dive into streaming, authentication, file uploads, and more, check out the [full Remote Lanes documentation](../readmes/REMOTE_LANES.md).
 
 ---
 
@@ -6408,6 +6063,7 @@ export const problematicResource = r
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
 > **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
+
 ## Async Context
 
 Ever needed to pass a request ID, user session, or trace ID through your entire call stack without threading it through every function parameter? That's what Async Context does.
@@ -9133,7 +8789,7 @@ Node-only entrypoint: `@bluelibs/runner/node`.
 | `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path         |
 | `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                |
 | `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                           |
-| `eventLanesResource`                                  | Node Event Lanes runtime resource (producer interception + profile consumers) |
+| `eventLanesResource`                                  | Node Event Lanes runtime resource (lane interception + profile consumers) |
 | `MemoryEventLaneQueue`, `RabbitMQEventLaneQueue`      | Built-in Event Lanes queue adapters                                     |
 | `EventLaneMessage`                                    | Queue message contract for Event Lanes transport                        |
 | `bindEventLane`                                       | Immutable helper for lane-to-queue binding objects                      |
@@ -9143,7 +8799,7 @@ Node-only entrypoint: `@bluelibs/runner/node`.
 
 See also:
 
-- [TUNNELS.md](./TUNNELS.md) for transport semantics
+- [REMOTE_LANES.md](./REMOTE_LANES.md) for transport semantics
 - [DURABLE_WORKFLOWS.md](./DURABLE_WORKFLOWS.md) for workflow APIs
 
 ## Community & Support
@@ -9164,6 +8820,7 @@ _P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still 
 This project is licensed under the MIT License - see the [LICENSE.md](../LICENSE.md) file for details.
 
 > **runtime:** "MIT License: do cool stuff, don't blame us. A dignified bow. Now if you'll excuse me, I have sockets to tuck in and tasks to shepherd."
+
 ## Upgrading from 5.x to 6.0
 
 This release removes and reshapes core APIs (`override` builders, middleware catch-all, Event Lanes helpers, event source contract), so treat it as a **major** upgrade.

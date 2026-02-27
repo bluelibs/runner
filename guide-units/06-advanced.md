@@ -327,7 +327,7 @@ The serializer is hardened against common attacks:
 - **Type allow-listing**: `allowedTypes` narrows which runtime type ids are accepted
 - **Symbol registry safety**: `symbolPolicy` controls symbol deserialization behavior
 
-> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](../readmes/TUNNELS.md) for file upload patterns.
+> **Note:** File uploads use the remote lane HTTP multipart handling, not the serializer. See [Remote Lanes](../readmes/REMOTE_LANES.md) for file upload patterns.
 
 ### Tunnels: Bridging Runners
 
@@ -384,7 +384,7 @@ const client = createClient({
 });
 ```
 
-For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](../readmes/TUNNELS.md).
+For a deep dive into streaming, authentication, file uploads, and more, check out the [full Remote Lanes documentation](../readmes/REMOTE_LANES.md).
 
 ---
 
@@ -1449,3 +1449,4 @@ export const problematicResource = r
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
 > **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
+

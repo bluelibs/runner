@@ -1,5 +1,6 @@
 import type { Logger } from "../../models/Logger";
 import type { DebugConfig } from "../../globals/resources/debug";
+import type { EventLanesMode } from "./types";
 
 const EVENT_LANES_LOG_SOURCE = "globals.resources.node.eventLanes";
 
@@ -7,7 +8,7 @@ type EventLanesEnqueueLogInput = {
   eventId: string;
   laneId: string;
   profile: string;
-  mode: "producer" | "consumer";
+  mode: EventLanesMode;
   sourceKind: string;
   sourceId: string;
   orderingKey?: string;

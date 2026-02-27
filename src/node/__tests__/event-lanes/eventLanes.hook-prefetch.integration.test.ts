@@ -159,7 +159,7 @@ describe("event-lanes: hook relay behavior + prefetch", () => {
     await runtime.dispose();
   });
 
-  it("does not start consumers in producer mode", async () => {
+  it("does not start consumers in transparent mode", async () => {
     const lane = r.eventLane("tests.event-lanes.mode.producer.lane").build();
     const queue = new CoverageQueue();
     const app = r
@@ -167,7 +167,7 @@ describe("event-lanes: hook relay behavior + prefetch", () => {
       .register([
         eventLanesResource.with({
           profile: "worker",
-          mode: "producer",
+          mode: "transparent",
           topology: {
             profiles: {
               worker: { consume: [lane] },

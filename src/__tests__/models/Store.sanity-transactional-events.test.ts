@@ -1,4 +1,9 @@
-import { defineEvent, defineEventLane, defineResource } from "../../define";
+import {
+  defineEvent,
+  defineEventLane,
+  defineResource,
+  defineRpcLane,
+} from "../../define";
 import { globalTags } from "../../globals/globalTags";
 import { run } from "../../run";
 import { RunnerMode } from "../../types/runner";
@@ -44,6 +49,35 @@ describe("Store sanity checks (transactional events)", () => {
 
     await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
       /cannot be transactional while using lane tag/i,
+    );
+    expect(rootInit).not.toHaveBeenCalled();
+  });
+
+  it("fails before initialization when an event has both eventLane and rpcLane tags", async () => {
+    const rootInit = jest.fn(async () => "ok");
+    const notificationsLane = defineEventLane({
+      id: "app.lanes.event.invalid",
+    });
+    const billingLane = defineRpcLane({
+      id: "app.lanes.rpc.invalid",
+    });
+
+    const invalidEvent = defineEvent({
+      id: "app.events.lanes.invalid",
+      tags: [
+        globalTags.eventLane.with({ lane: notificationsLane }),
+        globalTags.rpcLane.with({ lane: billingLane }),
+      ],
+    });
+
+    const app = defineResource({
+      id: "app.root.lanes.invalid",
+      register: [invalidEvent],
+      init: rootInit,
+    });
+
+    await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
+      /cannot define both lane tags/i,
     );
     expect(rootInit).not.toHaveBeenCalled();
   });

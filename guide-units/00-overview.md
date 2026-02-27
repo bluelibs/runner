@@ -135,7 +135,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 **Deployment & Integrations** (see dedicated guides in this folder)
 
 - [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows (Node-only)
-- [HTTP Tunnels](./readmes/TUNNELS.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)
+- [Remote Lanes](./readmes/REMOTE_LANES.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)
 - [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md) - How Runner supports Node, browsers, and edge runtimes
 
 **Architecture Patterns**
@@ -173,3 +173,4 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Under the Hood](#under-the-hood) - Architecture deep dive
 - [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
+

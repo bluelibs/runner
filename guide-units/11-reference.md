@@ -515,7 +515,7 @@ Node-only entrypoint: `@bluelibs/runner/node`.
 | `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path         |
 | `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                |
 | `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                           |
-| `eventLanesResource`                                  | Node Event Lanes runtime resource (producer interception + profile consumers) |
+| `eventLanesResource`                                  | Node Event Lanes runtime resource (lane interception + profile consumers) |
 | `MemoryEventLaneQueue`, `RabbitMQEventLaneQueue`      | Built-in Event Lanes queue adapters                                     |
 | `EventLaneMessage`                                    | Queue message contract for Event Lanes transport                        |
 | `bindEventLane`                                       | Immutable helper for lane-to-queue binding objects                      |
@@ -525,7 +525,7 @@ Node-only entrypoint: `@bluelibs/runner/node`.
 
 See also:
 
-- [TUNNELS.md](./readmes/TUNNELS.md) for transport semantics
+- [REMOTE_LANES.md](./readmes/REMOTE_LANES.md) for transport semantics
 - [DURABLE_WORKFLOWS.md](./readmes/DURABLE_WORKFLOWS.md) for workflow APIs
 
 ## Community & Support
@@ -546,3 +546,4 @@ _P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still 
 This project is licensed under the MIT License - see the [LICENSE.md](./LICENSE.md) file for details.
 
 > **runtime:** "MIT License: do cool stuff, don't blame us. A dignified bow. Now if you'll excuse me, I have sockets to tuck in and tasks to shepherd."
+

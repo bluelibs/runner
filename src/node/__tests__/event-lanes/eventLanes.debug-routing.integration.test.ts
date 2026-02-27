@@ -211,7 +211,7 @@ describe("event-lanes: debug routing logs", () => {
       eventId: event.id,
       laneId: lane.id,
       profile: "worker",
-      mode: "consumer",
+      mode: "network",
       routingDecision: "direct-emission-intercepted-enqueued",
     });
 

@@ -87,7 +87,7 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
 - **Token-friendly overview**: Read [AI.md](./readmes/AI.md)
 - **Node-only features**:
   - [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
-  - [HTTP Tunnels](./readmes/TUNNELS.md)
+  - [Remote Lanes](./readmes/REMOTE_LANES.md)
 - **Releases and upgrades**:
   - [GitHub Releases](https://github.com/bluelibs/runner/releases)
   - [Support & Release Policy](./readmes/ENTERPRISE.md)
@@ -100,3 +100,4 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
 ## License
 
 This project is licensed under the MIT License - see [LICENSE.md](./LICENSE.md).
+

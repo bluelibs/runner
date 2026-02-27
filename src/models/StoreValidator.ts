@@ -7,6 +7,7 @@ import {
   duplicateTagIdOnDefinitionError,
   duplicateRegistrationError,
   middlewareNotRegisteredError,
+  eventLaneRpcLaneConflictError,
   transactionalEventLaneConflictError,
   transactionalParallelConflictError,
   subtreeValidationFailedError,
@@ -117,6 +118,7 @@ export class StoreValidator {
     }
 
     this.ensureTransactionalEventsAreValid();
+    this.ensureEventLaneAndRpcLaneAreMutuallyExclusive();
     this.ensureSubtreePoliciesAreValid();
     this.ensureTagIdsAreUniquePerDefinition();
     this.ensureAllTagsUsedAreRegistered();
@@ -148,6 +150,30 @@ export class StoreValidator {
           tagId: globalTags.eventLane.id,
         });
       }
+    }
+  }
+
+  private ensureEventLaneAndRpcLaneAreMutuallyExclusive() {
+    for (const { event } of this.registry.events.values()) {
+      const hasEventLaneTag = event.tags.some(
+        (tag) => tag.id === globalTags.eventLane.id,
+      );
+      if (!hasEventLaneTag) {
+        continue;
+      }
+
+      const hasRpcLaneTag = event.tags.some(
+        (tag) => tag.id === globalTags.rpcLane.id,
+      );
+      if (!hasRpcLaneTag) {
+        continue;
+      }
+
+      eventLaneRpcLaneConflictError.throw({
+        eventId: event.id,
+        eventLaneTagId: globalTags.eventLane.id,
+        rpcLaneTagId: globalTags.rpcLane.id,
+      });
     }
   }
 

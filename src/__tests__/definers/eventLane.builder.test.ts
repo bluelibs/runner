@@ -43,6 +43,19 @@ describe("event lane builder", () => {
     });
   });
 
+  it("supports applyTo() with event definitions and ids", () => {
+    const event = r.event("tests.event-lanes.builder.apply-to.event").build();
+    const lane = r
+      .eventLane("tests.event-lanes.builder.apply-to")
+      .applyTo([event, "tests.event-lanes.builder.apply-to.event"])
+      .build();
+
+    expect(lane.applyTo).toEqual([
+      event,
+      "tests.event-lanes.builder.apply-to.event",
+    ]);
+  });
+
   it("lets meta() override title()/description() values", () => {
     const lane = r
       .eventLane("tests.event-lanes.builder.meta-precedence")

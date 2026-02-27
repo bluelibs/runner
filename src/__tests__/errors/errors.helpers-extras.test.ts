@@ -20,6 +20,7 @@ import {
   platformUnreachableError,
   dashboardApiRequestError,
   eventLaneEventNotRegisteredError,
+  eventLaneRpcLaneConflictError,
 } from "../../errors";
 
 describe("error helpers extra branches", () => {
@@ -135,6 +136,15 @@ describe("error helpers extra branches", () => {
           eventLaneEventNotRegisteredError.throw({ eventId: "evt.missing" }),
         ),
       ).toContain('unknown event "evt.missing"');
+      expect(
+        captureMessage(() =>
+          eventLaneRpcLaneConflictError.throw({
+            eventId: "evt.lanes.invalid",
+            eventLaneTagId: "globals.tags.eventLane",
+            rpcLaneTagId: "globals.tags.rpcLane",
+          }),
+        ),
+      ).toContain('Event "evt.lanes.invalid" cannot define both lane tags');
     });
 
     it("includes remediation advice in the message", () => {

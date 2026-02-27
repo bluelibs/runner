@@ -3,6 +3,7 @@ import {
   defineResource,
   defineEvent,
   defineEventLane,
+  defineRpcLane,
   defineTaskMiddleware,
   defineResourceMiddleware,
   defineTag,
@@ -25,6 +26,7 @@ import { resource as resourceFn } from "./definers/builders/resource";
 import { task as taskFn } from "./definers/builders/task";
 import { event as eventFn } from "./definers/builders/event";
 import { eventLane as eventLaneFn } from "./definers/builders/eventLane";
+import { rpcLane as rpcLaneFn } from "./definers/builders/rpcLane";
 import { hook as hookFn } from "./definers/builders/hook";
 import {
   taskMiddleware as taskMiddlewareFn,
@@ -51,6 +53,7 @@ export {
   defineResource as resource,
   defineEvent as event,
   defineEventLane as eventLane,
+  defineRpcLane as rpcLane,
   defineTaskMiddleware as taskMiddleware,
   defineResourceMiddleware as resourceMiddleware,
   defineAsyncContext as asyncContext,
@@ -88,6 +91,7 @@ export const r = Object.freeze({
   task: taskFn,
   event: eventFn,
   eventLane: eventLaneFn,
+  rpcLane: rpcLaneFn,
   hook: hookFn,
   tag: tagFn,
   override: overrideBuilder,

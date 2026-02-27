@@ -8,6 +8,7 @@ describe("node index exports", () => {
     expect(typeof (nodeExports as any).task).toBe("function");
     expect(typeof (nodeExports as any).resource).toBe("function");
     expect(typeof (nodeExports as any).eventLanesResource).toBe("object");
+    expect(typeof (nodeExports as any).rpcLanesResource).toBe("object");
     expect(typeof (nodeExports as any).MemoryEventLaneQueue).toBe("function");
     expect(typeof (nodeExports as any).RabbitMQEventLaneQueue).toBe("function");
   });

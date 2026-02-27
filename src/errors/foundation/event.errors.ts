@@ -95,6 +95,23 @@ export const transactionalEventLaneConflictError = error<
   )
   .build();
 
+export const eventLaneRpcLaneConflictError = error<
+  {
+    eventId: string;
+    eventLaneTagId: string;
+    rpcLaneTagId: string;
+  } & DefaultErrorType
+>("runner.errors.eventLaneRpcLaneConflict")
+  .format(
+    ({ eventId, eventLaneTagId, rpcLaneTagId }) =>
+      `Event "${eventId}" cannot define both lane tags "${eventLaneTagId}" and "${rpcLaneTagId}".`,
+  )
+  .remediation(
+    ({ eventId }) =>
+      `Pick one lane model for "${eventId}": use globals.tags.eventLane for async queue delivery, or globals.tags.rpcLane for synchronous RPC-style delivery.`,
+  )
+  .build();
+
 export const transactionalMissingUndoClosureError = error<
   {
     eventId: string;

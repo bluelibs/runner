@@ -9,7 +9,7 @@ Runner is a TypeScript-first toolkit for building an `app` out of small, typed b
 - **Tasks**: async functions with explicit `dependencies`, middleware, and input/output validation
 - **Resources**: singletons with `init`/`dispose` lifecycle (databases, clients, servers, caches)
 - **Reliability Middleware**: built-in `retry`, `timeout`, `circuitBreaker`, `cache`, and `rateLimit`
-- **HTTP Tunnels**: cross-process execution (the "Distributed Monolith") with zero call-site changes
+- **Remote Lanes**: cross-process execution (the "Distributed Monolith") with zero call-site changes
 - **Durable Workflows**: persistent, crash-recoverable async logic for Node.js
 - **Events & hooks**: typed signals and subscribers for decoupling
 - **Runtime control**: run, observe, test, and dispose your `app` predictably
@@ -96,7 +96,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 - **New to Runner**: Start with [Your First 5 Minutes](#your-first-5-minutes)
 - **Prefer an end-to-end example**: Jump to [Quick Start](#quick-start) or the [Real-World Example](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#real-world-example-the-complete-package)
 - **Need Node-only capabilities**: See [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
-- **Need remote execution**: See [HTTP Tunnels](./readmes/TUNNELS.md) (expose from Node.js, call from any `fetch` runtime)
+- **Need remote execution**: See [Remote Lanes](./readmes/REMOTE_LANES.md) (expose from Node.js, call from any `fetch` runtime)
 - **Care about portability**: Read [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md)
 - **Planning upgrades**: See [Support & Release Policy](./readmes/ENTERPRISE.md)
 - **Want the complete guide**: Read [FULL_GUIDE.md](./readmes/FULL_GUIDE.md)
@@ -109,8 +109,8 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
 | Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
 | Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                           |
-| Tunnels client (`createHttpClient`)                    | Full    | Full    | Full | Requires `fetch`                           |
-| Tunnels server (`@bluelibs/runner/node`)               | Full    | None    | None | Exposes tasks/events over HTTP             |
+| Remote Lanes client (`createHttpClient`)               | Full    | Full    | Full | Requires `fetch`                           |
+| Remote Lanes server (`@bluelibs/runner/node`)          | Full    | None    | None | Exposes tasks/events over HTTP             |
 
 ---
 
@@ -128,3 +128,4 @@ Use these minimums before starting:
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
+

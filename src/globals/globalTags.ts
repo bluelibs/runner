@@ -1,5 +1,6 @@
 import { defineTag } from "../define";
-import type { IEventLaneDefinition } from "../defs";
+import { tag as tagBuilder } from "../definers/builders/tag";
+import type { IEventLaneDefinition, IRpcLaneDefinition } from "../defs";
 import { cronTag } from "./cron/cron.tag";
 import { debugTag } from "./resources/debug/debug.tag";
 import { tunnelTag } from "./resources/tunnel/tunnel.tag";
@@ -26,19 +27,38 @@ const globalTagsBase = {
         "Marks events that should not be dispatched to global hooks (on: '*').",
     },
   }),
-  eventLane: defineTag<{
+  eventLane: tagBuilder<{
     lane: IEventLaneDefinition;
     orderingKey?: string;
     metadata?: Record<string, unknown>;
-  }>({
-    id: "globals.tags.eventLane",
-    targets: ["events"],
-    meta: {
+  }>("globals.tags.eventLane")
+    .for("events")
+    .meta({
       title: "Event Lane",
       description:
         "Routes tagged events to the configured Event Lane binding (reference-based).",
-    },
-  }),
+    })
+    .build(),
+  rpcLane: tagBuilder<{
+    lane: IRpcLaneDefinition;
+  }>("globals.tags.rpcLane")
+    .for(["tasks", "events"])
+    .meta({
+      title: "RPC Lane",
+      description:
+        "Routes tagged tasks/events through rpcLane topology bindings and profile rules.",
+    })
+    .build(),
+  rpcLanes: tagBuilder<{ metadata?: Record<string, any> }>(
+    "globals.tags.rpcLanes",
+  )
+    .for("resources")
+    .meta({
+      title: "RPC Lanes",
+      description:
+        "Marks resources that apply rpcLane topology and optional server exposure.",
+    })
+    .build(),
   containerInternals: defineTag<{
     metadata?: Record<string, any>;
   }>({
@@ -53,14 +73,14 @@ const globalTagsBase = {
   cron: cronTag,
   tunnel: tunnelTag,
   tunnelTaskPolicy: tunnelTaskPolicyTag,
-  authValidator: defineTag({
-    id: "globals.tags.authValidator",
-    meta: {
+  authValidator: tagBuilder("globals.tags.authValidator")
+    .for("tasks")
+    .meta({
       title: "Auth Validator",
       description:
         "Marks tasks that validate HTTP requests for tunnel authentication.",
-    },
-  }),
+    })
+    .build(),
 };
 
 type GlobalTags = typeof globalTagsBase & {

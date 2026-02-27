@@ -11,6 +11,7 @@ describe("main exports", () => {
     expect(typeof mainExports.taskMiddleware).toBe("function");
     expect(typeof mainExports.event).toBe("function");
     expect(typeof mainExports.hook).toBe("function");
+    expect(typeof mainExports.rpcLane).toBe("function");
     expect(typeof mainExports.tag).toBe("function");
     expect(typeof mainExports.run).toBe("function");
     expect(typeof mainExports.createContext).toBe("function");
@@ -56,5 +57,6 @@ describe("main exports", () => {
     expect(typeof mainExports.globals.resources).toBe("object");
     expect(typeof mainExports.globals.middleware).toBe("object");
     expect(typeof mainExports.globals.resources.runtime).toBe("object");
+    expect(typeof (mainExports.r as any).rpcLane).toBe("function");
   });
 });

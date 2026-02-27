@@ -34,6 +34,13 @@ export function makeEventLaneBuilder<TMeta extends IEventLaneMeta>(
       return makeEventLaneBuilder(next);
     },
 
+    applyTo(targets) {
+      const next = clone(state, {
+        applyTo: targets.slice(),
+      });
+      return makeEventLaneBuilder(next);
+    },
+
     meta<TNewMeta extends IEventLaneMeta>(meta: TNewMeta) {
       const next = clone(state as BuilderState<TNewMeta>, { meta });
       return makeEventLaneBuilder(next);
@@ -43,6 +50,7 @@ export function makeEventLaneBuilder<TMeta extends IEventLaneMeta>(
       const lane = defineEventLane({
         id: state.id,
         meta: state.meta,
+        applyTo: state.applyTo,
       });
       return deepFreeze({
         ...lane,

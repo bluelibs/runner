@@ -1,14 +1,11 @@
 import { isResource } from "../../define";
-import type {
-  IEventEmission,
-  IEventLaneDefinition,
-  IEventLaneTopologyProfile,
-} from "../../defs";
+import type { IEventEmission, IEventLaneTopologyProfile } from "../../defs";
 import {
   createMessageError,
   eventLaneBindingNotFoundError,
   eventLaneProfileNotFoundError,
 } from "../../errors";
+import type { EventLaneRoute } from "./EventLaneAssignments";
 import type {
   EventLaneBinding,
   EventLaneQueueReference,
@@ -16,6 +13,7 @@ import type {
   EventLanesResourceConfig,
   IEventLaneQueue,
 } from "./types";
+import { resolveRemoteLanesMode } from "../remote-lanes/mode";
 
 const EVENT_LANE_QUEUE_DEPENDENCY_PREFIX = "__eventLaneQueue__:";
 export const DEFAULT_RELAY_SOURCE_PREFIX = "runner.event-lanes.relay:";
@@ -33,8 +31,8 @@ export interface EventLanesResourceContext {
   coolingDown: boolean;
   disposed: boolean;
   activeBindingsByQueue: Map<IEventLaneQueue, Set<string>>;
-  bindingsByLaneReference: Map<IEventLaneDefinition, EventLanesResolvedBinding>;
   bindingsByLaneId: Map<string, EventLanesResolvedBinding>;
+  eventRouteByEventId: Map<string, EventLaneRoute>;
   queues: Set<IEventLaneQueue>;
   managedQueues: Set<IEventLaneQueue>;
   relaySourcePrefix: string;
@@ -62,12 +60,16 @@ const defaultConfig: EventLanesResourceConfig = {
 };
 
 export function createDefaultEventLanesContext(): EventLanesResourceContext {
-  return buildContext(defaultConfig, [], new Set());
+  return buildContext(defaultConfig, [], new Set(), new Map());
 }
 
 export function collectEventLaneQueueResourceDependencies(
   config: EventLanesResourceConfig,
 ): Record<string, EventLaneQueueResource> {
+  if (resolveRemoteLanesMode(config.mode) !== "network") {
+    return {};
+  }
+
   const deps: Record<string, EventLaneQueueResource> = {};
 
   for (const binding of config.topology.bindings) {
@@ -124,8 +126,9 @@ export function buildEventLanesContext(
   config: EventLanesResourceConfig,
   bindings: EventLanesResolvedBinding[],
   managedQueues: Set<IEventLaneQueue>,
+  eventRouteByEventId: Map<string, EventLaneRoute>,
 ): EventLanesResourceContext {
-  return buildContext(config, bindings, managedQueues);
+  return buildContext(config, bindings, managedQueues, eventRouteByEventId);
 }
 
 export function isRelayEmission(
@@ -139,12 +142,12 @@ export function isRelayEmission(
 }
 
 export function getLaneBindingOrThrow(
-  lane: IEventLaneDefinition,
-  bindingsByLaneReference: Map<IEventLaneDefinition, EventLanesResolvedBinding>,
+  laneId: string,
+  bindingsByLaneId: Map<string, EventLanesResolvedBinding>,
 ): EventLanesResolvedBinding {
-  const binding = bindingsByLaneReference.get(lane);
+  const binding = bindingsByLaneId.get(laneId);
   if (!binding) {
-    eventLaneBindingNotFoundError.throw({ laneId: lane.id });
+    eventLaneBindingNotFoundError.throw({ laneId });
   }
   return binding!;
 }
@@ -215,24 +218,23 @@ function resolveProfile(
 }
 
 function shouldConsumeProfile(config: EventLanesResourceConfig): boolean {
+  if (resolveRemoteLanesMode(config.mode) !== "network") {
+    return false;
+  }
   resolveProfile(config);
-  return config.mode !== "producer";
+  return true;
 }
 
 function buildContext(
   config: EventLanesResourceConfig,
   bindings: EventLanesResolvedBinding[],
   managedQueues: Set<IEventLaneQueue>,
+  eventRouteByEventId: Map<string, EventLaneRoute>,
 ): EventLanesResourceContext {
-  const bindingsByLaneReference = new Map<
-    IEventLaneDefinition,
-    EventLanesResolvedBinding
-  >();
   const bindingsByLaneId = new Map<string, EventLanesResolvedBinding>();
   const queues = new Set<IEventLaneQueue>();
 
   for (const binding of bindings) {
-    bindingsByLaneReference.set(binding.lane, binding);
     bindingsByLaneId.set(binding.lane.id, binding);
     queues.add(binding.queue);
     if (binding.dlq?.queue) queues.add(binding.dlq.queue);
@@ -242,7 +244,7 @@ function buildContext(
   if (shouldConsumeProfile(config)) {
     const profile = resolveProfile(config);
     for (const lane of profile.consume) {
-      const binding = getLaneBindingOrThrow(lane, bindingsByLaneReference);
+      const binding = getLaneBindingOrThrow(lane.id, bindingsByLaneId);
       const activeLaneIds =
         activeBindingsByQueue.get(binding.queue) ?? new Set<string>();
       activeLaneIds.add(lane.id);
@@ -255,8 +257,8 @@ function buildContext(
     coolingDown: false,
     disposed: false,
     activeBindingsByQueue,
-    bindingsByLaneReference,
     bindingsByLaneId,
+    eventRouteByEventId,
     queues,
     managedQueues,
     relaySourcePrefix:

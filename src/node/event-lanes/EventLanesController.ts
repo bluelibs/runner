@@ -6,7 +6,11 @@ import type { Logger } from "../../models/Logger";
 import type { Store } from "../../models/Store";
 import type { Serializer } from "../../serializer";
 import type { EventLaneMessage, EventLanesResourceConfig } from "./types";
+import { resolveRemoteLanesMode } from "../remote-lanes/mode";
+import { collectEventTopologyLanes } from "../remote-lanes/topologyLanes";
+import { resolveEventLaneAssignments } from "./EventLaneAssignments";
 import { EventLanesDiagnostics } from "./EventLanesDiagnostics";
+import { LocalSimulatedEventLaneTransport } from "./LocalSimulatedEventLaneTransport";
 import {
   buildEventLanesContext,
   EventLanesLifecycleContext,
@@ -38,22 +42,46 @@ export class EventLanesController {
   ) {}
 
   public async init(): Promise<EventLanesInitializationResult> {
-    const resolved = resolveEventLaneBindings(this.config, this.dependencies);
-    Object.assign(
-      this.context,
-      buildEventLanesContext(
-        this.config,
-        resolved.bindings,
-        resolved.managedQueues,
-      ),
+    const mode = resolveRemoteLanesMode(this.config.mode);
+    const topologyLanes = collectEventTopologyLanes(this.config.topology);
+    const eventRouteByEventId = resolveEventLaneAssignments(
+      this.dependencies.store,
+      topologyLanes,
     );
 
-    for (const queue of this.context.managedQueues) {
-      await queue.init?.();
+    if (mode === "network") {
+      const resolved = resolveEventLaneBindings(this.config, this.dependencies);
+      Object.assign(
+        this.context,
+        buildEventLanesContext(
+          this.config,
+          resolved.bindings,
+          resolved.managedQueues,
+          eventRouteByEventId,
+        ),
+      );
+
+      for (const queue of this.context.managedQueues) {
+        await queue.init?.();
+      }
+
+      this.registerProducerInterceptor();
+      this.registerConsumersOnReady();
+    } else {
+      Object.assign(
+        this.context,
+        buildEventLanesContext(this.config, [], new Set(), eventRouteByEventId),
+      );
     }
 
-    this.registerProducerInterceptor();
-    this.registerConsumersOnReady();
+    if (mode === "local-simulated") {
+      const localSimulatedTransport = new LocalSimulatedEventLaneTransport(
+        this.dependencies,
+        this.context,
+        this.diagnostics,
+      );
+      localSimulatedTransport.register();
+    }
 
     return {
       profile: this.config.profile,
@@ -101,34 +129,34 @@ export class EventLanesController {
         return next(emission);
       }
 
-      const laneConfig = globals.tags.eventLane.extract(emission.tags);
-      if (!laneConfig) {
+      const eventRoute = this.context.eventRouteByEventId.get(emission.id);
+      if (!eventRoute) {
         return next(emission);
       }
 
       const binding = getLaneBindingOrThrow(
-        laneConfig.lane,
-        this.context.bindingsByLaneReference,
+        eventRoute.lane.id,
+        this.context.bindingsByLaneId,
       );
       emission.stopPropagation();
 
       await binding.queue.enqueue({
-        laneId: laneConfig.lane.id,
+        laneId: eventRoute.lane.id,
         eventId: emission.id,
         payload: this.dependencies.serializer.stringify(emission.data),
         source: emission.source,
-        orderingKey: laneConfig.orderingKey,
-        metadata: laneConfig.metadata,
+        orderingKey: eventRoute.orderingKey,
+        metadata: eventRoute.metadata,
         maxAttempts: 1,
       });
       await this.diagnostics.logEnqueue({
         eventId: emission.id,
-        laneId: laneConfig.lane.id,
+        laneId: eventRoute.lane.id,
         profile: this.context.profile,
-        mode: this.config.mode ?? "consumer",
+        mode: resolveRemoteLanesMode(this.config.mode),
         sourceKind: emission.source.kind,
         sourceId: emission.source.id,
-        orderingKey: laneConfig.orderingKey,
+        orderingKey: eventRoute.orderingKey,
       });
     });
   }

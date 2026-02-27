@@ -425,4 +425,75 @@ describe("computeAllowList (server-mode http tunnels)", () => {
     expect(list.taskIds.size).toBe(0);
     expect(list.eventIds.size).toBe(0);
   });
+
+  it("handles rpcLanes resource edge values and defaults async-context to allowed", () => {
+    const store = {
+      resources: new Map([
+        [
+          "rpc.invalid",
+          {
+            resource: { id: "rpc.invalid", tags: [globalTags.rpcLanes] },
+            value: null,
+          },
+        ],
+        [
+          "rpc.valid",
+          {
+            resource: { id: "rpc.valid", tags: [globalTags.rpcLanes] },
+            value: {
+              serveTaskIds: ["rpc.allow.t1", "rpc.allow.t2"],
+              serveEventIds: ["rpc.allow.e1"],
+            },
+          },
+        ],
+        [
+          "rpc.non-array",
+          {
+            resource: { id: "rpc.non-array", tags: [globalTags.rpcLanes] },
+            value: {
+              serveTaskIds: "not-array",
+              serveEventIds: "not-array",
+              taskAllowAsyncContext: undefined,
+              eventAllowAsyncContext: undefined,
+            },
+          },
+        ],
+      ]),
+      tasks: new Map(),
+      events: new Map(),
+    } as unknown as Store;
+
+    const list = computeAllowList(store);
+    expect(list.enabled).toBe(true);
+    expect(list.taskIds.has("rpc.allow.t1")).toBe(true);
+    expect(list.taskIds.has("rpc.allow.t2")).toBe(true);
+    expect(list.eventIds.has("rpc.allow.e1")).toBe(true);
+    expect(list.taskAcceptsAsyncContext.get("rpc.allow.t1")).toBe(true);
+    expect(list.taskAcceptsAsyncContext.get("rpc.allow.t2")).toBe(true);
+    expect(list.eventAcceptsAsyncContext.get("rpc.allow.e1")).toBe(true);
+  });
+
+  it("enables allow-list when rpcLanes serves only events", () => {
+    const store = {
+      resources: new Map([
+        [
+          "rpc.events-only",
+          {
+            resource: { id: "rpc.events-only", tags: [globalTags.rpcLanes] },
+            value: {
+              serveEventIds: ["rpc.events.only.e1"],
+              eventAllowAsyncContext: { "rpc.events.only.e1": false },
+            },
+          },
+        ],
+      ]),
+      tasks: new Map(),
+      events: new Map(),
+    } as unknown as Store;
+
+    const list = computeAllowList(store);
+    expect(list.enabled).toBe(true);
+    expect(list.eventIds.has("rpc.events.only.e1")).toBe(true);
+    expect(list.eventAcceptsAsyncContext.get("rpc.events.only.e1")).toBe(false);
+  });
 });
