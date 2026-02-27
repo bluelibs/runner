@@ -4103,32 +4103,106 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 
 ## Remote Lanes (Node)
 
-Remote Lanes unify distributed routing in Runner:
+Remote Lanes let you split a Runner application across processes or machines without changing your business logic. Two lane systems cover the common distributed patterns:
 
-- Event Lanes (`eventLane`) for async queue-backed event delivery.
-- RPC Lanes (`rpcLane`) for sync remote execution of lane-assigned tasks/events.
+| Need | Lane System | Semantics |
+| --- | --- | --- |
+| Fire-and-forget async delivery | **Event Lanes** (`eventLane`) | Queue-backed produce/consume |
+| Request/response across services | **RPC Lanes** (`rpcLane`) | Sync remote task/event execution |
 
-Core guarantees:
+Lane behavior is attached at runtime by `eventLanesResource` / `rpcLanesResource`. Definitions that are **not** assigned to a lane keep normal local Runner behavior — lanes are additive, never invasive.
 
-- Lane ids must be non-empty strings.
-- A definition cannot be assigned to multiple lanes in the same lane system.
-- Events cannot be assigned to both lane systems (`eventLane` + `rpcLane`).
-- `applyTo` targets are validated and fail fast on invalid id/type.
+### Event Lane Quick Start
 
-Event Lanes in `mode: "network"`:
+```typescript
+import { globals, r, run } from "@bluelibs/runner";
+import { eventLanesResource, MemoryEventLaneQueue } from "@bluelibs/runner/node";
 
-- Lane-assigned emits are intercepted and enqueued.
-- `profiles[profile].consume` controls which lanes this runtime consumes.
-- `bindings[]` supports `prefetch`, `maxAttempts`, and `retryDelayMs`.
-- Producer-routed lanes are validated eagerly at init, not first emit.
+// 1. Define a lane — a logical routing channel
+const emailLane = r.eventLane("app.lanes.email").build();
 
-RabbitMQ adapter highlights:
+// 2. Tag the event for lane routing
+const userRegistered = r
+  .event<{ userId: string }>("app.events.userRegistered")
+  .tags([globals.tags.eventLane.with({ lane: emailLane })])
+  .build();
 
-- Optional publisher confirms (`publishConfirm`) for safer writes.
-- Reconnect/recovery policy (`reconnect.enabled/maxAttempts/initialDelayMs/maxDelayMs`).
-- Dead-letter routing is delegated to broker/queue config via final `nack(false)` settlement.
+// 3. Hook runs on the consumer side after relay
+const sendWelcome = r
+  .hook("app.hooks.sendWelcome")
+  .on(userRegistered)
+  .run(async (event) => {
+    console.log("Sending welcome email to", event.data.userId);
+  })
+  .build();
 
-For full examples and migration guidance, see [REMOTE_LANES.md](../readmes/REMOTE_LANES.md).
+// 4. Wire topology: who consumes what, and which queue backs each lane
+const topology = r.eventLane.topology({
+  profiles: {
+    api: { consume: [] },
+    worker: { consume: [emailLane] },
+  },
+  bindings: [{ lane: emailLane, queue: new MemoryEventLaneQueue() }],
+});
+
+// 5. Register and run
+const app = r
+  .resource("app")
+  .register([
+    userRegistered,
+    sendWelcome,
+    eventLanesResource.with({ profile: "worker", topology, mode: "network" }),
+  ])
+  .build();
+```
+
+### RPC Lane Quick Start
+
+```typescript
+import { globals, r } from "@bluelibs/runner";
+import { rpcLanesResource } from "@bluelibs/runner/node";
+
+// 1. Define a lane
+const billingLane = r.rpcLane("app.rpc.billing").build();
+
+// 2. Tag the task for lane routing
+const chargeCard = r
+  .task("billing.tasks.chargeCard")
+  .tags([globals.tags.rpcLane.with({ lane: billingLane })])
+  .run(async (input: { amount: number }) => ({ ok: true, amount: input.amount }))
+  .build();
+
+// 3. Create a communicator for the remote side
+const billingComm = r
+  .resource("app.resources.billingComm")
+  .init(r.rpcLane.httpClient({ client: "mixed", baseUrl: "http://billing:7070/__runner" }))
+  .build();
+
+// 4. Wire topology and register
+const topology = r.rpcLane.topology({
+  profiles: {
+    api: { serve: [] },
+    billing: { serve: [billingLane] },
+  },
+  bindings: [{ lane: billingLane, communicator: billingComm }],
+});
+```
+
+### Local Development Modes
+
+You don't need external infrastructure to develop and test lanes:
+
+- `mode: "transparent"` — bypass transport completely; hooks run locally as if no lane existed. Use for fast unit-test feedback.
+- `mode: "local-simulated"` — events cross the serializer boundary (`stringify -> parse`) before local re-emit. Catches non-JSON-safe payload issues.
+- Two runtimes in one process + `MemoryEventLaneQueue` — emulate full profile split without external infra.
+
+### Operational Knobs
+
+In `mode: "network"`, Event Lane bindings support `prefetch`, `maxAttempts`, and `retryDelayMs`. RabbitMQ dead-letter ownership is broker/queue-policy based; Runner settles final failures with `nack(false)` and does not manually publish to DLQ.
+
+For complete examples, common patterns, testing strategies, debugging, migration notes, and RabbitMQ configuration, see [REMOTE_LANES.md](../readmes/REMOTE_LANES.md).
+
+> **runtime:** "Serve it or ship it. There is no 'maybe call the other service.'"
 ## Observability Strategy (Logs, Metrics, and Traces)
 
 Runner gives you primitives for all three observability signals:

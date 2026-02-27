@@ -468,6 +468,7 @@ For advanced usage, import `Queue` directly and use `on(type, handler)` / `once(
 
 Event Lanes route lane-assigned events to queues using explicit lane references.
 
+- Runtime boundary: `eventLanesResource` attaches interception at runtime for lane-assigned emissions only; non-lane events keep normal local behavior.
 - Define lanes with `r.eventLane("app.lanes.email").build()` (or `eventLane(...)`).
 - Optional lane-side assignment: `r.eventLane("...").applyTo([eventOrId])`.
 - Define topology with `r.eventLane.topology({ profiles, bindings })`.
@@ -489,6 +490,9 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
 - `mode: "local-simulated"`:
   - Lane-assigned events use an in-memory simulated relay path.
   - Payload crosses a serializer boundary (`stringify -> parse`) before local re-emit.
+- Local emulation options without extra services:
+  - `transparent` for fastest feedback loops.
+  - `local-simulated` for serializer-boundary simulation.
 - Runtime guard rails:
   - lane ids must be non-empty strings (`defineEventLane`, `defineRpcLane`)
   - `applyTo` string ids are validated against container definitions and type (event only).
@@ -502,7 +506,7 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
 - Event Lanes supports binding-level retry policy:
   - `maxAttempts` (default `1`) controls retry budget before final fail path.
   - `retryDelayMs` adds a delay before requeue retries.
-- final failure settles with `nack(false)` and dead-letter routing is delegated to queue/broker configuration.
+- Final failure settles with `nack(false)`: dead-letter behavior is broker/queue-policy owned (Runner does not manually publish to DLQ).
 - Multiple lanes can share one queue, but each lane can only have one binding.
 
 Built-in queue adapters:
@@ -549,6 +553,7 @@ class CustomEventLaneQueue implements IEventLaneQueue {
 
 RPC Lanes route lane-assigned tasks/events across runners using profile/topology bindings.
 
+- Runtime boundary: `rpcLanesResource` routes lane-assigned events via interception and lane-assigned tasks via runtime task decoration; non-lane flows remain unchanged.
 - Define lanes with `r.rpcLane("app.lanes.billing").build()`.
 - Optional lane-side assignment: `r.rpcLane("...").applyTo([taskOrEventOrId])`.
 - Tag tasks/events with `globals.tags.rpcLane.with({ lane })`.
@@ -568,6 +573,9 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
 - Mode overrides:
   - `transparent`: lane-assigned tasks/events execute locally (no lane transport).
   - `local-simulated`: lane-assigned tasks/events go through a local serializer roundtrip simulation.
+- Local emulation options:
+  - `transparent` for pure local smoke tests.
+  - `local-simulated` for local transport-shape simulation.
 - In `transparent` and `local-simulated`, profile `serve` is ignored for routing decisions.
 - Exposure behavior:
   - `serve` lanes derive server allow-list automatically for lane-assigned tasks/events.

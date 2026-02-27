@@ -1,56 +1,206 @@
 # Runner Remote Lanes
 
-<- [Back to main README](../README.md) | [Full guide](./FULL_GUIDE.md)
+← [Back to main README](../README.md) | [Full guide](./FULL_GUIDE.md)
 
 ---
 
-`Remote Lanes` unify distributed routing in Runner v6:
+When your Runner system grows beyond a single process — separate workers for email, a billing service on its own box, event propagation across microservices — you need a routing layer that doesn't rewrite your domain model. Remote Lanes are that layer.
 
 - **Event Lanes**: async, queue-backed event delivery
 - **RPC Lanes**: sync RPC calls for lane-assigned tasks/events
 
-Both are lane-based, topology-driven, and container/resource-aware.
+Both are **topology-driven** and implemented as Node runtime resources. Topology means you declare which runtime profiles consume or serve which lanes, and which infrastructure (queues or communicators) backs each lane.
 
-## Mental Model
+## Start Here: Event Lane or RPC Lane?
 
-1. Choose lane assignment style per definition:
-   - inversion-of-control via tags:
-     - `globals.tags.eventLane` for async event transport
-     - `globals.tags.rpcLane` for sync RPC transport
-   - lane-driven via builder assignment:
-     - `r.eventLane("...").applyTo([eventOrId])`
-     - `r.rpcLane("...").applyTo([taskOrEventOrId])`
-2. Define topology once.
-3. Register lane runtime resources in Node with `profile` and optional `mode`.
+Use this table when you're choosing a lane system for a new flow.
 
-## Core Guard Rails
+| Concern           | Event Lanes                       | RPC Lanes                             |
+| ----------------- | --------------------------------- | ------------------------------------- |
+| Latency model     | asynchronous                      | synchronous                           |
+| Delivery model    | queue-driven delivery and retries | request/response call path            |
+| Caller experience | emit and continue                 | await remote result                   |
+| Coupling          | lower temporal coupling           | tighter temporal coupling             |
+| Failure surface   | enqueue/consume and retry policy  | remote call and communicator contract |
 
-- Event definitions cannot be tagged with both `eventLane` and `rpcLane`.
-- Event definitions cannot be assigned to both lane systems (`eventLane` + `rpcLane`) across tags and/or `applyTo`.
-- A definition cannot be assigned to two different lanes of the same lane system.
-- `applyTo` string targets are runtime-validated against container definitions and fail fast on invalid type/id.
-- Lane ids must be non-empty strings.
-- `transactional + globals.tags.eventLane` is invalid.
-- `transactional + parallel` is invalid.
-- For RPC Lanes in `mode: "network"`, each served/assigned lane must be bound to a communicator.
+**TL;DR:** Use **RPC Lanes for request/response**, and **Event Lanes for async propagation**.
 
-## Modes (Mode-First)
+A common architecture combines both: issue a command via RPC Lane, then propagate the domain result via Event Lane. For example, the API calls `billing.tasks.chargeCard` over RPC, and the billing service emits `billing.events.cardCharged` over an Event Lane for downstream projections.
 
-`mode` is authoritative and sits above topology/profile routing.
+## How Lanes Plug Into Runner Core
 
-- `"network"` (default): normal remote-lane behavior.
-- `"transparent"`: bypass lane transport and execute locally.
-- `"local-simulated"`: local in-memory transport simulation with serializer boundary.
+Remote Lanes work through runtime interception and decoration — they never touch your core domain definitions.
 
-### Mode behavior summary
+- Event Lanes register an event emission interceptor. Only lane-assigned events are intercepted; everything else passes through unchanged.
+- RPC Lanes decorate lane-assigned task execution at runtime and route lane-assigned events through an event interceptor.
+- Non-lane-assigned tasks and events continue through normal Runner behavior.
 
-- In `transparent` / `local-simulated`, profile routing (`serve`/`consume`) is ignored.
-- Only `network` uses profile-based lane routing decisions.
-- In `transparent` / `local-simulated`, lane transport dependencies (queues/communicators) are not required to resolve.
+Your task and event definitions stay exactly the same. Lane routing is attached purely by resource configuration.
 
-## Event Lanes (Async)
+### Event Lane Data Flow
 
-Use Event Lanes for fire-and-forget queue semantics and decoupled worker consumption.
+```mermaid
+graph LR
+    E[emit event] --> I{Lane-assigned?}
+    I -->|Yes| Q[Serialize and enqueue]
+    I -->|No| L[Normal local pipeline]
+    Q --> C[Consumer dequeues]
+    C --> D[Deserialize and relay-emit]
+    D --> H[Hooks run locally]
+
+    style E fill:#FF9800,color:#fff
+    style Q fill:#2196F3,color:#fff
+    style C fill:#2196F3,color:#fff
+    style D fill:#2196F3,color:#fff
+    style H fill:#4CAF50,color:#fff
+    style L fill:#4CAF50,color:#fff
+```
+
+### RPC Lane Routing
+
+```mermaid
+graph LR
+    T[runTask] --> R{Lane-assigned?}
+    R -->|Yes| S{In profile serve?}
+    S -->|Yes| LE[Execute locally]
+    S -->|No| RE[Route via communicator]
+    R -->|No| LE
+
+    style T fill:#4CAF50,color:#fff
+    style LE fill:#4CAF50,color:#fff
+    style RE fill:#2196F3,color:#fff
+```
+
+## Local Development Without Extra Microservices
+
+You don't need RabbitMQ or a separate RPC service running locally to develop with lanes. Here are three paths, ordered from fastest feedback to most realistic.
+
+### Path 1: `transparent` Mode (Fast Smoke Test)
+
+Use when you want lane assignments present but transport bypassed entirely.
+
+- **Pros**: fastest local loop, zero queue/communicator setup
+- **Cons**: does not exercise transport boundaries
+
+```typescript
+import { r } from "@bluelibs/runner";
+import { eventLanesResource, rpcLanesResource } from "@bluelibs/runner/node";
+
+const lane = r.eventLane("app.lanes.notifications").build();
+const rpc = r.rpcLane("app.rpc.billing").build();
+
+const topologyEvents = r.eventLane.topology({
+  profiles: { local: { consume: [] } },
+  bindings: [],
+});
+
+const topologyRpc = r.rpcLane.topology({
+  profiles: { local: { serve: [] } },
+  bindings: [],
+});
+
+const app = r
+  .resource("app")
+  .register([
+    eventLanesResource.with({
+      profile: "local",
+      topology: topologyEvents,
+      mode: "transparent",
+    }),
+    rpcLanesResource.with({
+      profile: "local",
+      topology: topologyRpc,
+      mode: "transparent",
+    }),
+  ])
+  .build();
+```
+
+### Path 2: `local-simulated` Mode (Serializer Boundary Test)
+
+Use when you want local execution with transport-like serialization behavior.
+
+- **Pros**: catches serializer boundary issues early
+- **Cons**: still not a true broker/network failure surface
+
+```typescript
+import { r } from "@bluelibs/runner";
+import { eventLanesResource, rpcLanesResource } from "@bluelibs/runner/node";
+
+const eventLane = r.eventLane("app.lanes.audit").build();
+const rpcLane = r.rpcLane("app.rpc.users").build();
+
+const app = r
+  .resource("app")
+  .register([
+    eventLanesResource.with({
+      profile: "local",
+      mode: "local-simulated",
+      topology: r.eventLane.topology({
+        profiles: { local: { consume: [] } },
+        bindings: [],
+      }),
+    }),
+    rpcLanesResource.with({
+      profile: "local",
+      mode: "local-simulated",
+      topology: r.rpcLane.topology({
+        profiles: { local: { serve: [] } },
+        bindings: [],
+      }),
+    }),
+  ])
+  .build();
+```
+
+### Path 3: Two Local Runtimes in One Process (Profile Topology Test)
+
+Use when you want to emulate producer/consumer separation without deploying extra services.
+
+- **Pros**: validates profile routing and worker startup behavior
+- **Cons**: still single-process reliability characteristics
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+import {
+  eventLanesResource,
+  MemoryEventLaneQueue,
+} from "@bluelibs/runner/node";
+
+const lane = r.eventLane("app.lanes.notifications").build();
+const queue = new MemoryEventLaneQueue();
+
+const topology = r.eventLane.topology({
+  profiles: {
+    api: { consume: [] },
+    worker: { consume: [lane] },
+  },
+  bindings: [{ lane, queue }],
+});
+
+const apiApp = r
+  .resource("app.api")
+  .register([
+    eventLanesResource.with({ profile: "api", topology, mode: "network" }),
+  ])
+  .build();
+
+const workerApp = r
+  .resource("app.worker")
+  .register([
+    eventLanesResource.with({ profile: "worker", topology, mode: "network" }),
+  ])
+  .build();
+
+const apiRuntime = await run(apiApp);
+const workerRuntime = await run(workerApp);
+```
+
+> **runtime:** "Three modes of local development. Because 'it works on my machine' is not a deployment strategy."
+
+## Event Lanes in Network Mode
+
+Use Event Lanes for fire-and-forget queue semantics and decoupled worker consumption. The producer emits and moves on; a consumer dequeues, deserializes, and re-emits locally so hooks run on the worker side.
 
 ### Quick Start
 
@@ -61,20 +211,10 @@ import {
   MemoryEventLaneQueue,
 } from "@bluelibs/runner/node";
 
+// 1. Define a lane — a logical routing channel
 const notificationsLane = r.eventLane("app.lanes.notifications").build();
-// Alternative non-IoC assignment:
-// const notificationsLane = r
-//   .eventLane("app.lanes.notifications")
-//   .applyTo(["app.events.notificationRequested"])
-//   .build();
-const notificationsQueue = r
-  .resource("app.resources.notificationsQueue")
-  .init(async () => new MemoryEventLaneQueue())
-  .dispose(async (queue) => {
-    await queue.dispose?.();
-  })
-  .build();
 
+// 2. Tag the event for lane routing
 const notificationRequested = r
   .event<{ userId: string; channel: "email" | "sms" }>(
     "app.events.notificationRequested",
@@ -82,6 +222,8 @@ const notificationRequested = r
   .tags([globals.tags.eventLane.with({ lane: notificationsLane })])
   .build();
 
+// 3. Hook runs on the consumer side after relay
+// Assuming: deliverNotification is defined elsewhere
 const sendNotification = r
   .hook("app.hooks.sendNotification")
   .on(notificationRequested)
@@ -90,117 +232,7 @@ const sendNotification = r
   })
   .build();
 
-const Profiles = {
-  NotificationsWorker: "worker.notifications",
-} as const;
-
-const topology = r.eventLane.topology({
-  profiles: {
-    [Profiles.NotificationsWorker]: {
-      consume: [notificationsLane],
-    },
-  },
-  bindings: [
-    {
-      lane: notificationsLane,
-      queue: notificationsQueue,
-      prefetch: 8,
-    },
-  ],
-});
-
-const app = r
-  .resource("app")
-  .register([
-    notificationRequested,
-    sendNotification,
-    notificationsQueue,
-    eventLanesResource.with({
-      profile: Profiles.NotificationsWorker,
-      topology,
-      mode: "network", // default
-    }),
-  ])
-  .build();
-```
-
-### Topology contract
-
-- Lane definition: `r.eventLane("...").applyTo([...])?.build()`
-- Event tagging: `globals.tags.eventLane.with({ lane, orderingKey?, metadata? })`
-- Topology: `r.eventLane.topology({ profiles, bindings })`
-  - `profiles[profile].consume`: lanes consumed by this runtime
-  - `bindings[]`: `lane -> queue` (resource or instance), optional `prefetch`, `maxAttempts`, and `retryDelayMs`
-- Runtime resource: `eventLanesResource.with({ profile, topology, mode? })`
-
-### Runtime routing
-
-- `network`: lane-assigned emits (tag or `applyTo`) are intercepted and enqueued; consumers relay from queue.
-- `transparent`: lane transport bypassed; lane-assigned events run local pipeline.
-- `local-simulated`: lane-assigned emits go through in-memory relay path with serializer boundary.
-
-### Lifecycle integration
-
-- In `mode: "network"`, consumer workers attach on `globals.events.ready`.
-- Queue `prefetch` is resolved before network consumers start.
-- Producer-routed lanes are validated eagerly at init; missing binding fails fast before first emit.
-- On shutdown (`globals.events.disposing`), queues enter cooldown before final disposal.
-
-### Queue adapters
-
-- Built-in: `MemoryEventLaneQueue`, `RabbitMQEventLaneQueue`
-- Custom: implement `IEventLaneQueue` (`enqueue`, `consume`, `ack`, `nack`, optional `setPrefetch`, `init`, `dispose`)
-
-### RabbitMQ example
-
-```typescript
-import { globals, r } from "@bluelibs/runner";
-import {
-  eventLanesResource,
-  RabbitMQEventLaneQueue,
-} from "@bluelibs/runner/node";
-
-const notificationsLane = r.eventLane("app.lanes.notifications").build();
-
-const notificationsQueue = r
-  .resource("app.resources.notificationsQueue")
-  .init(
-    async () =>
-      new RabbitMQEventLaneQueue({
-        url: process.env.RABBITMQ_URL,
-        queue: {
-          name: "runner.notifications",
-          durable: true,
-          assert: "active",
-          quorum: true,
-          deadLetter: {
-            queue: "runner.notifications.dlq",
-            exchange: "",
-            routingKey: "runner.notifications.dlq",
-          },
-          messageTtl: 60_000,
-          arguments: {
-            "x-max-length": 10_000,
-          },
-        },
-        prefetch: 16,
-        publishOptions: {
-          persistent: true,
-        },
-        publishConfirm: true,
-        reconnect: {
-          enabled: true,
-          maxAttempts: 10,
-          initialDelayMs: 200,
-          maxDelayMs: 2_000,
-        },
-      }),
-  )
-  .dispose(async (queue) => {
-    await queue.dispose();
-  })
-  .build();
-
+// 4. Wire topology: who consumes what, and which queue backs each lane
 const topology = r.eventLane.topology({
   profiles: {
     api: { consume: [] },
@@ -209,33 +241,70 @@ const topology = r.eventLane.topology({
   bindings: [
     {
       lane: notificationsLane,
-      queue: notificationsQueue,
+      queue: new MemoryEventLaneQueue(),
+      prefetch: 8,
       maxAttempts: 3,
       retryDelayMs: 250,
     },
   ],
 });
 
+// 5. Register and run
 const app = r
   .resource("app")
   .register([
-    notificationsQueue,
+    notificationRequested,
+    sendNotification,
     eventLanesResource.with({
       profile: process.env.RUNNER_PROFILE || "worker",
       topology,
+      mode: "network",
     }),
   ])
   .build();
 ```
 
-### DLQ note (RabbitMQ)
+**What you just learned**: Lane definition, event tagging, topology wiring, and profile-based consumer routing — the full Event Lane pattern.
 
-- RabbitMQ dead-letters automatically when queue dead-letter args are configured and messages are rejected/nacked with `requeue: false`.
-- Event Lanes now settles final failures with `nack(false)` and delegates DLQ behavior to broker/queue configuration.
+### RabbitMQ Notes and Operational Knobs
 
-## RPC Lanes (Sync)
+For production, swap `MemoryEventLaneQueue` for `RabbitMQEventLaneQueue`. It supports practical operational controls:
 
-Use RPC Lanes when one Runner must call another Runner and wait for a result.
+- `prefetch`: consumer back-pressure per worker
+- `maxAttempts` + `retryDelayMs`: retry policy at lane binding level
+- `publishConfirm`: wait for broker publish confirmations (recommended for durability)
+- `reconnect`: connection/channel recovery policy for broker drops
+- `queue.deadLetter`: dead-letter policy wiring on queue declaration
+
+```typescript
+import { RabbitMQEventLaneQueue } from "@bluelibs/runner/node";
+
+new RabbitMQEventLaneQueue({
+  url: process.env.RABBITMQ_URL,
+  queue: {
+    name: "runner.notifications",
+    durable: true,
+    deadLetter: {
+      queue: "runner.notifications.dlq",
+      exchange: "",
+      routingKey: "runner.notifications.dlq",
+    },
+  },
+  publishConfirm: true,
+  reconnect: {
+    enabled: true,
+    maxAttempts: 10,
+    initialDelayMs: 200,
+    maxDelayMs: 2000,
+  },
+});
+```
+
+> **runtime:** "publishConfirm: true. Because 'the broker probably got it' is not a delivery guarantee."
+
+## RPC Lanes in Network Mode
+
+Use RPC Lanes when one Runner needs to call another Runner and wait for the result. The caller awaits a response; the routing decision (local vs. remote) is made by the active profile's `serve` list.
 
 ### Quick Start
 
@@ -243,30 +312,32 @@ Use RPC Lanes when one Runner must call another Runner and wait for a result.
 import { globals, r } from "@bluelibs/runner";
 import { rpcLanesResource } from "@bluelibs/runner/node";
 
+// 1. Define a lane
 const billingLane = r.rpcLane("app.rpc.billing").build();
-// Alternative non-IoC assignment:
-// const billingLane = r
-//   .rpcLane("app.rpc.billing")
-//   .applyTo(["billing.tasks.chargeCard"])
-//   .build();
 
+// 2. Tag the task for lane routing
 const chargeCard = r
   .task("billing.tasks.chargeCard")
   .tags([globals.tags.rpcLane.with({ lane: billingLane })])
-  .run(async (input: { amount: number }) => ({ ok: true, amount: input.amount }))
+  .run(async (input: { amount: number }) => ({
+    ok: true,
+    amount: input.amount,
+  }))
   .build();
 
+// 3. Create a communicator for the remote side
 const billingCommunicator = r
   .resource("app.resources.billingCommunicator")
   .init(
     r.rpcLane.httpClient({
-      client: "mixed", // "fetch" | "mixed" | "smart"
+      client: "mixed",
       baseUrl: process.env.BILLING_RPC_URL as string,
       auth: { token: process.env.RUNNER_RPC_TOKEN as string },
     }),
   )
   .build();
 
+// 4. Wire topology: who serves what, and which communicator reaches each lane
 const topology = r.rpcLane.topology({
   profiles: {
     api: { serve: [] },
@@ -275,6 +346,7 @@ const topology = r.rpcLane.topology({
   bindings: [{ lane: billingLane, communicator: billingCommunicator }],
 });
 
+// 5. Register and run
 const app = r
   .resource("app")
   .register([
@@ -283,88 +355,312 @@ const app = r
     rpcLanesResource.with({
       profile: "api",
       topology,
-      mode: "network", // default
-      exposure: {
-        http: {
-          basePath: "/__runner",
-          listen: { port: 7070 },
-          auth: { token: process.env.RUNNER_RPC_TOKEN as string },
-        },
-      },
+      mode: "network",
     }),
   ])
   .build();
 ```
 
-### Topology contract
+**What you just learned**: RPC lane definition, task tagging, communicator wiring, and profile-based serve routing — the full RPC Lane pattern.
 
-- Lane definition: `r.rpcLane("...").applyTo([...])?.build()`
-- Tag tasks/events: `globals.tags.rpcLane.with({ lane })`
-- Topology: `r.rpcLane.topology({ profiles, bindings })`
-  - `profiles[profile].serve`: lanes served locally by this runtime
-  - `bindings[]`: `lane -> communicator resource`, optional `allowAsyncContext`
-- Runtime resource: `rpcLanesResource.with({ profile, topology, mode?, exposure? })`
-  - `exposure.http` is supported only in `mode: "network"` and fails fast otherwise.
+### Routing Branches (`mode: "network"`)
 
-### Communicator contract
+| Condition                             | Result                                 |
+| ------------------------------------- | -------------------------------------- |
+| lane is in active profile `serve`     | execute locally                        |
+| lane is not in active profile `serve` | execute remotely via lane communicator |
+| task/event is not lane-assigned       | use normal local Runner path           |
 
-- `task(id, input?) => Promise<unknown>` (required for task RPC)
-- `event(id, payload?) => Promise<void>` (optional)
-- `eventWithResult(id, payload?) => Promise<unknown>` (optional)
+> **runtime:** "Serve it or ship it. There is no 'maybe call the other service.'"
 
-### RPC routing
+## Common Patterns
 
-For lane-assigned tasks/events (tag or `applyTo`) in `mode: "network"`:
+### Command via RPC, then Propagate via Event Lane
 
-- lane in active profile `serve` => execute/emit locally
-- lane outside active profile `serve` => route remotely via lane binding communicator
+A typical microservice boundary: the API calls billing synchronously (RPC Lane), and billing broadcasts the result asynchronously (Event Lane) for downstream projections.
 
-For non-lane-assigned tasks/events:
+```typescript
+// API service: calls billing via RPC Lane, waits for result
+const result = await runTask(chargeCard, { amount: 42 });
 
-- unchanged local behavior
+// Billing service hook: after charging, emits domain event via Event Lane
+// -> order service, analytics workers, and audit consumers pick it up asynchronously
+const onCardCharged = r
+  .hook("billing.hooks.onCardCharged")
+  .on(chargeCardCompleted)
+  .run(async (event) => {
+    await emitEvent(cardCharged, {
+      orderId: event.data.orderId,
+      amount: event.data.amount,
+    });
+  })
+  .build();
+```
 
-Mode overrides:
+### Multi-Worker Prefetch Topology
 
-- `transparent`: bypass lane transport and execute locally
-- `local-simulated`: local serializer roundtrip simulation for lane-assigned task/event flow
+Multiple worker processes consume from the same queue. Each worker gets `prefetch` messages at a time, providing natural back-pressure.
 
-### HTTP communicator helper
+```typescript
+const topology = r.eventLane.topology({
+  profiles: {
+    api: { consume: [] },
+    worker: { consume: [emailLane, smsLane] },
+  },
+  bindings: [
+    { lane: emailLane, queue: emailQueue, prefetch: 16 },
+    { lane: smsLane, queue: smsQueue, prefetch: 4 },
+  ],
+});
+// Deploy N worker instances — each gets its own prefetch window
+```
 
-`r.rpcLane.httpClient({ ... })` wraps existing HTTP clients with lane-friendly presets:
+### Progressive Profile Expansion
 
-- `fetch` -> `createHttpClient` (universal)
-- `mixed` -> `createHttpMixedClient` (Node)
-- `smart` -> `createHttpSmartClient` (Node)
+Start with one profile that does everything, then split as traffic grows. Bindings stay the same — only the profile assignment changes per deployment.
 
-## Exposure and Allow-List
+```typescript
+// Phase 1: monolith — one profile consumes all lanes
+const topology = r.eventLane.topology({
+  profiles: {
+    mono: { consume: [emailLane, analyticsLane] },
+  },
+  bindings: [
+    { lane: emailLane, queue: emailQueue },
+    { lane: analyticsLane, queue: analyticsQueue },
+  ],
+});
 
-`rpcLanesResource` derives exposure allow-list from active `profile.serve` lanes plus lane-assigned tasks/events.
+// Phase 2: split workers — add profiles, same bindings
+const topology = r.eventLane.topology({
+  profiles: {
+    emailWorker: { consume: [emailLane] },
+    analyticsWorker: { consume: [analyticsLane] },
+  },
+  bindings: [
+    { lane: emailLane, queue: emailQueue },
+    { lane: analyticsLane, queue: analyticsQueue },
+  ],
+});
+```
 
-In `mode: "network"`, `exposure.http` starts/stops Node exposure with the resource lifecycle and remains fail-closed by default (configure `http.auth`).
+## DLQ, Retries, and Failure Ownership
 
-## Event Lanes vs RPC Lanes
+Keep responsibilities clearly separated:
 
-- **Event Lanes**: async queue delivery for lane-assigned events.
-- **RPC Lanes**: sync remote call semantics for lane-assigned tasks/events.
-- Common pattern: command via RPC Lane, then domain projection via Event Lane.
+**Transport-level (lane binding + broker config):**
 
-## Migration Note (v6)
+- `maxAttempts` + `retryDelayMs` at the lane binding level control retry budget before final failure
+- DLQ behavior is **broker/queue-policy owned**
+- Runner settles final consumer failure with `nack(false)` — it does **not** manually publish to a DLQ queue
+- If your queue has no dead-letter configuration, a final `nack(false)` discards the message per broker behavior
 
-Legacy tunnel event routing (`events` + `emit` + `eventDeliveryMode`) is removed.
+**Business-level (task/hook middleware + domain logic):**
 
-- Use Event Lanes for async event transport.
-- Use RPC Lanes for sync task/event RPC.
+- Use task middleware (`retry`, `circuitBreaker`, `fallback`) for business-level resilience
+- Use domain compensation patterns for recovery flows
 
-## HTTP Wire Policy
+> **runtime:** "Retry at the transport layer. Compensate at the business layer. Panic at the ops layer."
 
-Transport/wire details are documented in:
+## Testing Lanes
 
-- [TUNNEL_HTTP_POLICY.md](./TUNNEL_HTTP_POLICY.md)
+### Unit Tests: `transparent` Mode
 
-This policy applies to HTTP RPC communicators used by RPC Lanes in `mode: "network"`.
+Use `transparent` mode when you want to test business logic without transport noise. Lane assignments are present but transport is completely bypassed — hooks run locally as if no lane existed.
 
-## Security Notes
+```typescript
+import { r, run } from "@bluelibs/runner";
+import { eventLanesResource } from "@bluelibs/runner/node";
 
-- Remote lane servers are intended for trusted network boundaries.
-- Always configure `http.auth` and infrastructure protections (gateway/rate-limits/network policy).
-- Keep anonymous exposure disabled unless explicitly needed.
+// Assuming: myEvent and myHook are defined elsewhere
+const app = r
+  .resource("app")
+  .register([
+    myEvent,
+    myHook,
+    eventLanesResource.with({
+      profile: "test",
+      mode: "transparent",
+      topology: r.eventLane.topology({
+        profiles: { test: { consume: [] } },
+        bindings: [],
+      }),
+    }),
+  ])
+  .build();
+
+const { emitEvent, dispose } = await run(app);
+await emitEvent(myEvent, { userId: "u1" }); // hooks run locally, no queue involved
+await dispose();
+```
+
+### Boundary Tests: `local-simulated` Mode
+
+Use `local-simulated` when you want to verify that your event payloads survive serialization. This catches issues with Dates, RegExp, class instances, and other non-JSON-safe types before they hit production.
+
+```typescript
+eventLanesResource.with({
+  profile: "test",
+  mode: "local-simulated",
+  topology: r.eventLane.topology({
+    profiles: { test: { consume: [] } },
+    bindings: [],
+  }),
+});
+```
+
+### Integration Tests: `MemoryEventLaneQueue`
+
+Use `MemoryEventLaneQueue` for full lane routing tests without external infrastructure. This exercises the real enqueue/consume/relay path in-process.
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+import {
+  eventLanesResource,
+  MemoryEventLaneQueue,
+} from "@bluelibs/runner/node";
+
+const lane = r.eventLane("app.lanes.test").build();
+const queue = new MemoryEventLaneQueue();
+
+const topology = r.eventLane.topology({
+  profiles: { test: { consume: [lane] } },
+  bindings: [{ lane, queue }],
+});
+
+// Assuming: myEvent and myHook are defined elsewhere
+const app = r
+  .resource("app")
+  .register([
+    myEvent,
+    myHook,
+    eventLanesResource.with({ profile: "test", topology, mode: "network" }),
+  ])
+  .build();
+
+const { emitEvent, dispose } = await run(app);
+await emitEvent(myEvent, { userId: "u1" }); // enqueues, consumes, relays, hooks run
+await dispose();
+```
+
+## Debugging
+
+When things go sideways, start with verbose mode:
+
+```typescript
+const runtime = await run(app, { debug: "verbose" });
+```
+
+This enables Event Lanes routing diagnostics. Look for these entries:
+
+| Diagnostic                       | Meaning                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------ |
+| `event-lanes.enqueue`            | Event was intercepted and enqueued to the lane's queue                   |
+| `event-lanes.relay-emit`         | Consumer dequeued and re-emitted the event locally                       |
+| `event-lanes.skip-inactive-lane` | Event's lane is not consumed by the active profile (nacked with requeue) |
+
+If you see `skip-inactive-lane`, your active profile likely doesn't include the lane in its `consume` list.
+
+## Pros and Cons by Mode
+
+| Mode              | Pros                                                                                              | Cons                                    | Misuse Warning                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------- |
+| `network`         | true transport behavior, real queue/communicator integration, realistic failure surfaces          | infra required, slower local loop       | Do not skip this mode before production rollout                |
+| `transparent`     | fastest local feedback, zero transport dependencies, queues/communicators not required to resolve | hides serialization and network effects | Do not treat passing transparent tests as transport validation |
+| `local-simulated` | tests serializer boundary and relay paths locally, queues/communicators not required to resolve   | no real network or broker behavior      | Do not assume retry/DLQ behavior from local simulation         |
+
+Key rules:
+
+- `mode` is authoritative and sits above topology/profile routing.
+- In `transparent` and `local-simulated`, profile routing (`consume`/`serve`) is ignored for transport decisions.
+- Only `network` uses queue/communicator bindings for remote routing.
+
+## Security and Exposure
+
+RPC lane HTTP exposure is available through `rpcLanesResource.with({ exposure: { http: ... } })` in `mode: "network"` only. Attempting to use `exposure.http` in other modes fails fast at startup.
+
+Security defaults:
+
+- Exposure remains **fail-closed** unless you explicitly configure otherwise
+- Always configure `http.auth` with a token or a validator task
+- Run behind trusted network boundaries and infrastructure gateway controls (rate-limits, network policy)
+- Keep anonymous exposure disabled unless explicitly needed
+
+```typescript
+rpcLanesResource.with({
+  profile: "billing",
+  topology,
+  exposure: {
+    http: {
+      basePath: "/__runner",
+      listen: { port: 7070 },
+      auth: { token: process.env.RUNNER_RPC_TOKEN as string },
+    },
+  },
+});
+```
+
+## Migration Notes (v6)
+
+Legacy tunnel event routing (`events` + `emit` + `eventDeliveryMode`) is removed in v6. Here's what replaces it:
+
+| Legacy tunnel pattern                    | v6 replacement                                          |
+| ---------------------------------------- | ------------------------------------------------------- |
+| `tunnelResource.with({ events: [...] })` | `eventLanesResource.with({ topology, profile })`        |
+| `tunnelResource.with({ emit: [...] })`   | Tag events with `globals.tags.eventLane.with({ lane })` |
+| `eventDeliveryMode: "queue"`             | Event Lanes `mode: "network"` with queue binding        |
+| Sync tunnel task calls                   | RPC Lanes `mode: "network"` with communicator binding   |
+
+Transport/wire details for HTTP RPC are in [TUNNEL_HTTP_POLICY.md](./TUNNEL_HTTP_POLICY.md).
+
+## Troubleshooting Checklist
+
+When routing does not behave as expected, check in this order:
+
+1. **Lane binding exists** for each lane-assigned definition used in `network` mode.
+2. **Active profile includes expected lanes** — `consume` for event workers, `serve` for RPC servers.
+3. **Queue/communicator dependencies resolve** in the runtime container.
+4. **Runtime mode is what you think it is** — `transparent` and `local-simulated` bypass network routing entirely.
+5. **Queue dead-letter policy is configured** if you expect failed messages in a DLQ.
+6. **Debug mode is on** — `run(app, { debug: "verbose" })` shows lane routing diagnostics.
+
+## Reference Contracts
+
+### Core Guard Rails
+
+- Lane ids must be non-empty strings.
+- Event definitions cannot be assigned to both lane systems (`eventLane` + `rpcLane`) across tags and/or `applyTo`.
+- A definition cannot be assigned to two different lanes in the same lane system.
+- `applyTo` string targets are validated against container definitions and fail fast on invalid type/id.
+- `transactional + globals.tags.eventLane` is invalid.
+- `transactional + parallel` is invalid.
+
+### Event Lane Contract
+
+| Concept          | API                                                              |
+| ---------------- | ---------------------------------------------------------------- |
+| Lane definition  | `r.eventLane("...").applyTo([...])?.build()`                     |
+| Event tagging    | `globals.tags.eventLane.with({ lane, orderingKey?, metadata? })` |
+| Topology         | `r.eventLane.topology({ profiles, bindings })`                   |
+| Profile consume  | `profiles[profile].consume: lane[]`                              |
+| Binding          | `{ lane, queue, prefetch?, maxAttempts?, retryDelayMs? }`        |
+| Runtime resource | `eventLanesResource.with({ profile, topology, mode? })`          |
+
+### RPC Lane Contract
+
+| Concept            | API                                                              |
+| ------------------ | ---------------------------------------------------------------- |
+| Lane definition    | `r.rpcLane("...").applyTo([...])?.build()`                       |
+| Task/event tagging | `globals.tags.rpcLane.with({ lane })`                            |
+| Topology           | `r.rpcLane.topology({ profiles, bindings })`                     |
+| Profile serve      | `profiles[profile].serve: lane[]`                                |
+| Binding            | `{ lane, communicator, allowAsyncContext? }`                     |
+| Runtime resource   | `rpcLanesResource.with({ profile, topology, mode?, exposure? })` |
+
+### Communicator Contract
+
+| Method            | Signature                            | Required           |
+| ----------------- | ------------------------------------ | ------------------ |
+| `task`            | `(id, input?) => Promise<unknown>`   | Yes (for task RPC) |
+| `event`           | `(id, payload?) => Promise<void>`    | Optional           |
+| `eventWithResult` | `(id, payload?) => Promise<unknown>` | Optional           |
