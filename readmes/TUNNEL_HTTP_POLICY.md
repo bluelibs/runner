@@ -85,11 +85,14 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 ### Authentication
 
 - **Header**: Default `x-runner-token: <token>` (configurable via `auth.header` in `nodeExposure` and in clients).
+- **Lane JWT**: Remote Lanes may use binding-level JWT auth via `binding.auth` (default header `authorization: Bearer <jwt>` unless binding overrides header).
+- **Layering**: `x-runner-token` (or custom `auth.header`) is exposure-level auth; lane JWT is an independent lane authorization layer.
 - **Token**: `auth.token` supports a string or string[] (any match is accepted).
 - **Validators**: If tasks tagged with `globals.tags.authValidator` exist, they are executed (OR logic); any validator returning `{ ok: true }` authenticates the request.
 - **Anonymous access**: If no token and no validators exist, `nodeExposure` fails closed by default with `500 AUTH_NOT_CONFIGURED`. Set `auth.allowAnonymous: true` to explicitly allow unauthenticated access.
 - **Dynamic headers**: Clients can override per-request via `onRequest({ headers })`.
 - **Allow-Lists**: Server restricts to configured exposure allow-list sources (legacy tunnel server selectors and/or `rpcLanesResource` serve topology in `mode: "network"`). Unknown IDs → 403 Forbidden.
+- **Lane authorization**: For served RPC lanes with binding auth enabled, token verification is lane-specific and happens before task/event execution.
 - **Exposure disabled**: If no HTTP exposure allow-list source is active, task/event requests return 403 (fail-closed), unless `http.dangerouslyAllowOpenExposure: true` is set.
 - **Auth audit logs**: Failed authentication attempts are logged (`exposure.auth.failure`) with request metadata and correlation id.
 
@@ -99,7 +102,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 | --- | --- | --- | --- |
 | `x-runner-token` | client -> server | Yes (unless `auth.allowAnonymous: true`) | Authentication token. Header name can be overridden by `auth.header`. |
 | `x-runner-request-id` | client <-> server | Optional | Correlation id. Server accepts valid incoming ids and otherwise generates one; response echoes final id. |
-| `x-runner-context` | client -> server | Optional | Serializer-encoded async-context map. Server restores only registered contexts for tunnel-selected ids where `allowAsyncContext !== false`; invalid entries are ignored. |
+| `x-runner-context` | client -> server | Optional | Serializer-encoded async-context map. Server restores only registered contexts and applies lane/exposure async-context policy (lane `asyncContexts` allowlist defaults to none; legacy `allowAsyncContext` bridge can temporarily allow all). Invalid entries are ignored. |
 | `content-type` | client -> server | Yes | Request mode selector (`application/json`, `multipart/form-data`, `application/octet-stream`). |
 | `x-content-type-options` | server -> client | Always | Security header set to `nosniff`. |
 | `x-frame-options` | server -> client | Always | Security header set to `DENY`. |

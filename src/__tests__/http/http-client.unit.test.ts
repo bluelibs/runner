@@ -185,6 +185,38 @@ describe("http-client (universal)", () => {
     expect(calls[0].init.redirect).toBe("error");
   });
 
+  it("browser multipart merges per-call headers", async () => {
+    const blob = new Blob([new Uint8Array(Buffer.from("abc"))], {
+      type: "text/plain",
+    });
+    const file = createWebFile(
+      { name: "a2.txt", type: "text/plain" },
+      blob,
+      "F2H",
+    );
+    const calls: Array<{ headers: Record<string, string> }> = [];
+    const fetchMock = jest.fn(async (_url: any, init?: any) => {
+      calls.push({ headers: (init?.headers ?? {}) as Record<string, string> });
+      return {
+        text: async () =>
+          new Serializer().stringify({ ok: true, result: "UPH" }),
+      } as unknown as Response;
+    });
+    const client = createHttpClient({
+      baseUrl,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      serializer: new Serializer(),
+    });
+
+    const r = await client.task(
+      "t.upload.web.headers",
+      { file },
+      { headers: { "x-extra": "yes" } },
+    );
+    expect(r).toBe("UPH");
+    expect(calls[0].headers["x-extra"]).toBe("yes");
+  });
+
   it("browser multipart fails fast when context serialization fails", async () => {
     const blob = new Blob([new Uint8Array(Buffer.from("abc"))], {
       type: "text/plain",

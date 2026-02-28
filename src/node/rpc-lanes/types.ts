@@ -34,6 +34,8 @@ export interface RpcLanesResourceValue {
   serveEventIds: readonly string[];
   taskAllowAsyncContext: Readonly<Record<string, boolean>>;
   eventAllowAsyncContext: Readonly<Record<string, boolean>>;
+  taskAsyncContextAllowList: Readonly<Record<string, readonly string[]>>;
+  eventAsyncContextAllowList: Readonly<Record<string, readonly string[]>>;
   communicatorByLaneId: ReadonlyMap<string, IRpcLaneCommunicator>;
   exposure?: { close: () => Promise<void> } | null;
 }

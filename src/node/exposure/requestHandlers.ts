@@ -49,6 +49,14 @@ export interface RequestProcessingDeps {
     multipart?: MultipartLimits;
   };
   disableDiscovery?: boolean;
+  authorizeTask?: (
+    req: IncomingMessage,
+    taskId: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
+  authorizeEvent?: (
+    req: IncomingMessage,
+    eventId: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
 }
 
 export interface NodeExposureRequestHandlers {
@@ -125,10 +133,24 @@ export function createRequestHandlers(
     return tunnelDecision ?? true;
   };
 
+  const resolveTaskAsyncContextAllowList = (
+    taskId: string,
+  ): readonly string[] | undefined => {
+    const list = computeAllowList(store, reportAllowListSelectorError);
+    return list.taskAsyncContextAllowList.get(taskId);
+  };
+
   const resolveEventAllowAsyncContext = (eventId: string): boolean => {
     const list = computeAllowList(store, reportAllowListSelectorError);
     const tunnelDecision = list.eventAcceptsAsyncContext.get(eventId);
     return tunnelDecision ?? true;
+  };
+
+  const resolveEventAsyncContextAllowList = (
+    eventId: string,
+  ): readonly string[] | undefined => {
+    const list = computeAllowList(store, reportAllowListSelectorError);
+    return list.eventAsyncContextAllowList.get(eventId);
   };
 
   const processTaskRequest = createTaskHandler({
@@ -142,6 +164,8 @@ export function createRequestHandlers(
     serializer,
     limits,
     allowAsyncContext: resolveTaskAllowAsyncContext,
+    resolveAsyncContextAllowList: resolveTaskAsyncContextAllowList,
+    authorizeTask: deps.authorizeTask,
   });
 
   const processEventRequest = createEventHandler({
@@ -154,6 +178,8 @@ export function createRequestHandlers(
     serializer,
     limits,
     allowAsyncContext: resolveEventAllowAsyncContext,
+    resolveAsyncContextAllowList: resolveEventAsyncContextAllowList,
+    authorizeEvent: deps.authorizeEvent,
   });
 
   const handleTask = async (req: IncomingMessage, res: ServerResponse) => {

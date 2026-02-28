@@ -476,7 +476,7 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
 - Tag events with `globals.tags.eventLane.with({ lane, orderingKey?, metadata? })`.
 - Register `eventLanesResource` (from `@bluelibs/runner/node`) with:
   - `profile` + `topology` + optional `mode` (`"network"` | `"transparent"` | `"local-simulated"`)
-  - `bindings: [{ lane, queue, prefetch?, maxAttempts?, retryDelayMs? }]` where `queue` can be a queue instance or a queue resource
+  - `bindings: [{ lane, queue, auth?, prefetch?, maxAttempts?, retryDelayMs? }]` where `queue` can be a queue instance or a queue resource
 - Use profile constants when desired:
   - `const Profiles = { API: "api", WORKER: "worker" } as const`
   - `profile: Profiles.API`
@@ -484,12 +484,16 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
   - Lane-assigned event emissions (tag or `applyTo`) are intercepted and enqueued to bound queues.
   - Active profile `consume` lanes start dequeue workers on `globals.events.ready`.
   - Payload is deserialized with `serializer.parse(...)`, then re-emitted in-process.
+  - Auth readiness is role-based: consumed lanes require verifier material; non-consumed lanes require signer material.
+  - In `jwt_asymmetric`, this enables producer-only private key and consumer-only public key setups.
 - `mode: "transparent"`:
   - Lane transport is bypassed.
   - Lane-assigned events execute locally through the normal event pipeline.
 - `mode: "local-simulated"`:
   - Lane-assigned events use an in-memory simulated relay path.
   - Payload crosses a serializer boundary (`stringify -> parse`) before local re-emit.
+  - If `binding.auth` is configured, the simulated path also signs+verifies JWT lane tokens before relay emit.
+  - In `jwt_asymmetric`, local-simulated must have both signer and verifier key material available.
 - Local emulation options without extra services:
   - `transparent` for fastest feedback loops.
   - `local-simulated` for serializer-boundary simulation.
@@ -498,6 +502,8 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
   - `applyTo` string ids are validated against container definitions and type (event only).
   - Event cannot be on two different `eventLane`s.
   - Event cannot be on both `eventLane` and `rpcLane` (via tags and/or `applyTo`).
+  - Missing signer material fails fast (`runner.errors.remoteLanes.auth.signerMissing`) for producer roles.
+  - Missing verifier material fails fast (`runner.errors.remoteLanes.auth.verifierMissing`) for consumer roles.
 - In `transparent` and `local-simulated`, profile `consume` is ignored for routing decisions.
 - Relay re-emits bypass lane interception to prevent loops.
 - Hooks run based on event subscriptions after relay re-emit.
@@ -555,13 +561,17 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
 
 - Runtime boundary: `rpcLanesResource` routes lane-assigned events via interception and lane-assigned tasks via runtime task decoration; non-lane flows remain unchanged.
 - Define lanes with `r.rpcLane("app.lanes.billing").build()`.
+- Lane async-context policy is lane-level: `r.rpcLane("...").asyncContexts([...])` (default is `[]`, so none are forwarded unless explicitly allowlisted).
 - Optional lane-side assignment: `r.rpcLane("...").applyTo([taskOrEventOrId])`.
 - Tag tasks/events with `globals.tags.rpcLane.with({ lane })`.
 - Define topology with `r.rpcLane.topology({ profiles, bindings })`:
   - `profiles[profile].serve` selects lanes this runtime serves locally.
-  - `bindings[]` maps `lane -> communicator resource` plus async-context policy.
+  - `bindings[]` maps `lane -> communicator resource` plus async-context policy and optional lane JWT material (`auth`).
 - Register `rpcLanesResource` (from `@bluelibs/runner/node`) with:
   - `profile` + `topology` + optional `mode` (`"network"` | `"transparent"` | `"local-simulated"`) + optional `exposure.http`.
+- Exposure `http.auth` and lane JWT auth are separate:
+  - `exposure.http.auth` gates HTTP endpoint access.
+  - `binding.auth` gates lane authorization for task/event execution.
 - Communicator resources are container-aware and can use:
   - `init(r.rpcLane.httpClient({ client: "fetch" | "mixed" | "smart", ... }))`
   - `fetch` is universal (`createHttpClient`)
@@ -572,17 +582,22 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
   - Every assigned or served lane must have a communicator binding.
 - Mode overrides:
   - `transparent`: lane-assigned tasks/events execute locally (no lane transport).
-  - `local-simulated`: lane-assigned tasks/events go through a local serializer roundtrip simulation.
+  - `local-simulated`: lane-assigned tasks/events go through a local serializer roundtrip simulation and still enforce lane JWT when `binding.auth` is enabled.
+  - In `jwt_asymmetric`, `local-simulated` requires both signer and verifier key material (same runtime signs and verifies).
 - Local emulation options:
   - `transparent` for pure local smoke tests.
   - `local-simulated` for local transport-shape simulation.
 - In `transparent` and `local-simulated`, profile `serve` is ignored for routing decisions.
 - Exposure behavior:
+  - HTTP exposure starts only when the active profile serves at least one lane.
   - `serve` lanes derive server allow-list automatically for lane-assigned tasks/events.
   - Auth remains fail-closed unless explicitly configured otherwise.
+  - Lane JWT authorization is validated per served lane before task/event execution.
 - Runtime guard rails:
   - `applyTo` string ids are validated against container definitions and type (task/event).
   - Task/event cannot be on two different `rpcLane`s.
+  - Missing signer material fails fast (`runner.errors.remoteLanes.auth.signerMissing`).
+  - Missing verifier material fails fast (`runner.errors.remoteLanes.auth.verifierMissing`).
 
 ## Errors
 

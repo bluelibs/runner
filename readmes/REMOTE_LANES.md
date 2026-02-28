@@ -283,6 +283,30 @@ const app = r
 
 **What you just learned**: Lane definition, event tagging, topology wiring, and profile-based consumer routing — the full Event Lane pattern.
 
+### Event Lane Network Lifecycle (Auth + Serialization)
+
+```mermaid
+sequenceDiagram
+    participant P as Producer Runtime
+    participant EI as EventLane Interceptor
+    participant Q as Queue (Binding)
+    participant C as Consumer Runtime
+    participant EM as EventManager/Hooks
+
+    P->>EI: emit(event, payload)
+    EI->>EI: resolve lane + binding
+    EI->>EI: issue lane JWT (binding.auth signer)
+    EI->>EI: serialize payload
+    EI->>Q: enqueue { laneId, eventId, payload, authToken, attempts }
+
+    Q->>C: consume(message)
+    C->>C: verify lane JWT (binding.auth verifier)
+    C->>C: deserialize payload
+    C->>EM: relay emit(event, payload, relay source)
+    EM-->>C: hooks execute locally
+    C->>Q: ack(message)
+```
+
 ### Event Lane Message Envelope (What Actually Travels)
 
 When an event is routed through an Event Lane in `mode: "network"`, Runner wraps it in an internal transport envelope.
@@ -389,7 +413,7 @@ const billingCommunicator = r
     r.rpcLane.httpClient({
       client: "mixed",
       baseUrl: process.env.BILLING_RPC_URL as string,
-      auth: { token: process.env.RUNNER_RPC_TOKEN as string },
+      auth: { token: process.env.RUNNER_RPC_TOKEN as string }, // exposure HTTP auth
     }),
   )
   .build();
@@ -429,6 +453,34 @@ const app = r
 | task/event is not lane-assigned       | use normal local Runner path           |
 
 > **runtime:** "Serve it or ship it. There is no 'maybe call the other service.'"
+
+### RPC Lane Network Lifecycle (Routing + Exposure + Lane Auth)
+
+```mermaid
+sequenceDiagram
+    participant CR as Caller Runtime
+    participant RL as RpcLane Router
+    participant CM as Communicator
+    participant EX as RPC Exposure Server
+    participant SR as Serving Runtime
+
+    CR->>RL: runTask/runEvent (lane-assigned)
+    RL->>RL: is lane in active profile serve?
+    alt Served locally
+      RL->>SR: execute locally
+      SR-->>CR: result
+    else Routed remotely
+      RL->>RL: build headers (lane JWT + allowlisted async contexts)
+      RL->>CM: communicator.task/event(...)
+      CM->>EX: HTTP request to /__runner/*
+      EX->>EX: exposure auth + allow-list check
+      EX->>EX: verify lane JWT (binding.auth verifier)
+      EX->>SR: execute task/event
+      SR-->>EX: serialized result
+      EX-->>CM: HTTP response
+      CM-->>CR: result
+    end
+```
 
 ## Common Patterns
 
@@ -555,6 +607,8 @@ await dispose();
 
 Use `local-simulated` when you want to verify that your event payloads survive serialization. This catches issues with Dates, RegExp, class instances, and other non-JSON-safe types before they hit production.
 
+When binding auth is configured (`binding.auth`), `local-simulated` also enforces JWT signing+verification so local simulation tests both payload shape and lane security behavior.
+
 ```typescript
 eventLanesResource.with({
   profile: "test",
@@ -634,28 +688,152 @@ Key rules:
 
 ## Security and Exposure
 
-RPC lane HTTP exposure is available through `rpcLanesResource.with({ exposure: { http: ... } })` in `mode: "network"` only. Attempting to use `exposure.http` in other modes fails fast at startup.
+RPC lane HTTP exposure is available through `rpcLanesResource.with({ exposure: { http: ... } })` in `mode: "network"` only. Attempting to use `exposure.http` in other modes fails fast at startup. Exposure HTTP is only started when the active profile serves at least one RPC lane.
 
 Security defaults:
 
 - Exposure remains **fail-closed** unless you explicitly configure otherwise
-- Always configure `http.auth` with a token or a validator task
+- Always configure `http.auth` with a token or a validator task (edge gate)
 - Run behind trusted network boundaries and infrastructure gateway controls (rate-limits, network policy)
 - Keep anonymous exposure disabled unless explicitly needed
 
+There are two independent security layers:
+
+1. **Exposure HTTP auth** (`exposure.http.auth`) controls who can hit `POST /__runner/task/...` and `POST /__runner/event/...`.
+2. **Lane JWT auth** (`binding.auth`) controls lane-authorized produce/consume behavior.
+
+You usually want both.
+
 ```typescript
+const activeProfile = (process.env.RUNNER_PROFILE as "api" | "billing") ?? "api";
+const billingLane = r.rpcLane("app.rpc.billing").build();
+const topology = r.rpcLane.topology({
+  profiles: {
+    api: { serve: [] },
+    billing: { serve: [billingLane] },
+  },
+  bindings: [
+    {
+      lane: billingLane,
+      communicator: billingCommunicator,
+      auth: {
+        mode: "jwt_asymmetric",
+        algorithm: "EdDSA",
+        privateKey: process.env.BILLING_PRIVATE_KEY as string,
+        publicKey: process.env.BILLING_PUBLIC_KEY as string,
+      },
+    },
+  ],
+});
+
 rpcLanesResource.with({
-  profile: "billing",
+  profile: activeProfile,
   topology,
+  mode: "network",
   exposure: {
     http: {
       basePath: "/__runner",
       listen: { port: 7070 },
-      auth: { token: process.env.RUNNER_RPC_TOKEN as string },
+      auth: { token: process.env.RUNNER_RPC_TOKEN as string }, // HTTP edge gate
     },
   },
 });
 ```
+
+Binding auth (JWT):
+
+- JWT mode is configured only at `binding.auth`.
+- Supported modes: `none`, `jwt_hmac`, `jwt_asymmetric`.
+- `local-simulated` enforces auth when configured (it does not bypass lane JWT checks).
+- For asymmetric mode (`jwt_asymmetric`), producers sign with **private keys**, consumers verify with **public keys**.
+- This principle is identical for RPC and Event Lanes.
+
+Asymmetric JWT should prove these two properties in your setup:
+
+1. **Producer cannot produce with only public key material**.
+2. **Consumer cannot verify with only private key material**.
+
+```typescript
+// Producer profile (not serving lane): needs signer material (private key)
+const producerTopology = r.rpcLane.topology({
+  profiles: { api: { serve: [] } },
+  bindings: [
+    {
+      lane: billingLane,
+      communicator: billingCommunicator,
+      auth: {
+        mode: "jwt_asymmetric",
+        privateKey: process.env.BILLING_PRIVATE_KEY as string,
+      },
+    },
+  ],
+});
+
+// Consumer profile (serving lane): needs verifier material (public key)
+const consumerTopology = r.rpcLane.topology({
+  profiles: { billing: { serve: [billingLane] } },
+  bindings: [
+    {
+      lane: billingLane,
+      communicator: billingCommunicator,
+      auth: {
+        mode: "jwt_asymmetric",
+        publicKey: process.env.BILLING_PUBLIC_KEY as string,
+      },
+    },
+  ],
+});
+```
+
+Fail-fast proof snippets (recommended in integration tests):
+
+```typescript
+// 1) Producer with only public key -> signer missing (cannot mint lane token)
+await expect(run(producerAppWithPublicKeyOnly)).rejects.toMatchObject({
+  name: "runner.errors.remoteLanes.auth.signerMissing",
+});
+
+// 2) Consumer with only private key -> verifier missing (cannot verify lane token)
+await expect(run(consumerAppWithPrivateKeyOnly)).rejects.toMatchObject({
+  name: "runner.errors.remoteLanes.auth.verifierMissing",
+});
+```
+
+Event Lane parity example (same asymmetric role split):
+
+```typescript
+const activeProfile = (process.env.RUNNER_PROFILE as "api" | "worker") ?? "api";
+const notificationsLane = r.eventLane("app.events.notifications").build();
+const topology = r.eventLane.topology({
+  profiles: {
+    api: { consume: [] }, // producer profile
+    worker: { consume: [notificationsLane] }, // consumer profile
+  },
+  bindings: [
+    {
+      lane: notificationsLane,
+      queue: new MemoryEventLaneQueue(),
+      auth: {
+        mode: "jwt_asymmetric",
+        privateKey: process.env.EVENTS_PRIVATE_KEY as string, // producer path
+        publicKey: process.env.EVENTS_PUBLIC_KEY as string, // consumer path
+      },
+    },
+  ],
+});
+
+eventLanesResource.with({
+  profile: activeProfile,
+  topology,
+  mode: "network",
+});
+```
+
+`local-simulated` note:
+
+- Auth is still enforced.
+- For `jwt_asymmetric`, the same runtime signs and verifies during simulation, so binding auth must provide both sides of material.
+- RPC lane `asyncContexts` allowlist still applies in `local-simulated` (default `[]`, so no implicit forwarding).
 
 ## Migration Notes (v6)
 
@@ -707,11 +885,11 @@ When routing does not behave as expected, check in this order:
 
 | Concept            | API                                                              |
 | ------------------ | ---------------------------------------------------------------- |
-| Lane definition    | `r.rpcLane("...").applyTo([...])?.build()`                       |
+| Lane definition    | `r.rpcLane("...").applyTo([...])?.asyncContexts([...])?.build()` |
 | Task/event tagging | `globals.tags.rpcLane.with({ lane })`                            |
 | Topology           | `r.rpcLane.topology({ profiles, bindings })`                     |
 | Profile serve      | `profiles[profile].serve: lane[]`                                |
-| Binding            | `{ lane, communicator, allowAsyncContext? }`                     |
+| Binding            | `{ lane, communicator, auth?, allowAsyncContext? }`              |
 | Runtime resource   | `rpcLanesResource.with({ profile, topology, mode?, exposure? })` |
 
 ### Communicator Contract

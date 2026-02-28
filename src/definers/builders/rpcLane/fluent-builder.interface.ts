@@ -1,6 +1,7 @@
 import type {
   IEventDefinition,
   IRpcLane,
+  IRpcLaneDefinition,
   IRpcLaneMeta,
   ITaskDefinition,
 } from "../../../defs";
@@ -15,6 +16,9 @@ export interface RpcLaneFluentBuilder<
   ): RpcLaneFluentBuilder<_TMeta & { description: string }>;
   applyTo(
     targets: readonly (ITaskDefinition<any> | IEventDefinition<any> | string)[],
+  ): RpcLaneFluentBuilder<_TMeta>;
+  asyncContexts(
+    contexts: NonNullable<IRpcLaneDefinition["asyncContexts"]>,
   ): RpcLaneFluentBuilder<_TMeta>;
   meta<TNewMeta extends IRpcLaneMeta>(
     meta: TNewMeta,

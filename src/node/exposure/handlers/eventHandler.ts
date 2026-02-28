@@ -7,7 +7,7 @@ import {
 } from "../httpResponse";
 import { readJsonBody } from "../requestBody";
 import type { SerializerLike } from "../../../serializer";
-import type { Authenticator, AllowListGuard } from "../types";
+import type { Authenticator, AllowListGuard, JsonResponse } from "../types";
 import type {
   NodeExposureDeps,
   NodeExposureHttpCorsConfig,
@@ -32,6 +32,13 @@ interface EventHandlerDeps {
     json?: { maxSize?: number };
   };
   allowAsyncContext?: (eventId: string) => boolean;
+  resolveAsyncContextAllowList?: (
+    eventId: string,
+  ) => readonly string[] | undefined;
+  authorizeEvent?: (
+    req: IncomingMessage,
+    eventId: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
 }
 
 export const createEventHandler = (deps: EventHandlerDeps) => {
@@ -45,6 +52,8 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     serializer,
     limits,
     allowAsyncContext = () => true,
+    resolveAsyncContextAllowList = () => undefined,
+    authorizeEvent = () => null,
   } = deps;
   const exposureSource = runtimeSource.resource(
     "platform.node.resources.exposure",
@@ -56,6 +65,7 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     eventId: string,
   ): Promise<void> => {
     const allowAsyncContextForEvent = allowAsyncContext(eventId);
+    const asyncContextAllowListForEvent = resolveAsyncContextAllowList(eventId);
 
     if (req.method !== "POST") {
       applyCorsActual(req, res, cors);
@@ -74,6 +84,13 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     if (allowError) {
       applyCorsActual(req, res, cors);
       respondJson(res, allowError, serializer);
+      return;
+    }
+
+    const authzError = await authorizeEvent(req, eventId);
+    if (authzError) {
+      applyCorsActual(req, res, cors);
+      respondJson(res, authzError, serializer);
       return;
     }
 
@@ -135,7 +152,10 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
             );
             return undefined;
           },
-          { allowAsyncContext: allowAsyncContextForEvent },
+          {
+            allowAsyncContext: allowAsyncContextForEvent,
+            allowedAsyncContextIds: asyncContextAllowListForEvent,
+          },
         );
 
       const payload = await runEmit();

@@ -21,6 +21,8 @@ import {
   dashboardApiRequestError,
   eventLaneEventNotRegisteredError,
   eventLaneRpcLaneConflictError,
+  remoteLaneAuthSignerMissingError,
+  remoteLaneAuthVerifierMissingError,
 } from "../../errors";
 
 describe("error helpers extra branches", () => {
@@ -145,6 +147,38 @@ describe("error helpers extra branches", () => {
           }),
         ),
       ).toContain('Event "evt.lanes.invalid" cannot define both lane tags');
+      expect(
+        captureMessage(() =>
+          remoteLaneAuthSignerMissingError.throw({
+            laneId: "lane.h",
+            mode: "jwt_hmac",
+          }),
+        ),
+      ).toContain("auth.secret (or auth.produceSecret)");
+      expect(
+        captureMessage(() =>
+          remoteLaneAuthSignerMissingError.throw({
+            laneId: "lane.a",
+            mode: "jwt_asymmetric",
+          }),
+        ),
+      ).toContain("auth.privateKey");
+      expect(
+        captureMessage(() =>
+          remoteLaneAuthVerifierMissingError.throw({
+            laneId: "lane.h",
+            mode: "jwt_hmac",
+          }),
+        ),
+      ).toContain("auth.secret (or auth.consumeSecret)");
+      expect(
+        captureMessage(() =>
+          remoteLaneAuthVerifierMissingError.throw({
+            laneId: "lane.a",
+            mode: "jwt_asymmetric",
+          }),
+        ),
+      ).toContain("auth.publicKey or auth.publicKeysByKid");
     });
 
     it("includes remediation advice in the message", () => {

@@ -9,6 +9,8 @@ export interface TunnelAllowList {
   eventIds: Set<string>;
   taskAcceptsAsyncContext: Map<string, boolean>;
   eventAcceptsAsyncContext: Map<string, boolean>;
+  taskAsyncContextAllowList: Map<string, readonly string[] | undefined>;
+  eventAsyncContextAllowList: Map<string, readonly string[] | undefined>;
 }
 
 /** Item that can be referenced - either a string id or an object with id */
@@ -28,6 +30,8 @@ interface RpcLanesResourceValue {
   serveEventIds?: readonly string[];
   taskAllowAsyncContext?: Readonly<Record<string, boolean>>;
   eventAllowAsyncContext?: Readonly<Record<string, boolean>>;
+  taskAsyncContextAllowList?: Readonly<Record<string, readonly string[]>>;
+  eventAsyncContextAllowList?: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface AllowListSelectorErrorInfo {
@@ -64,6 +68,14 @@ export function computeAllowList(
   const eventIds: Set<string> = new Set();
   const taskAcceptsAsyncContext = new Map<string, boolean>();
   const eventAcceptsAsyncContext = new Map<string, boolean>();
+  const taskAsyncContextAllowList = new Map<
+    string,
+    readonly string[] | undefined
+  >();
+  const eventAsyncContextAllowList = new Map<
+    string,
+    readonly string[] | undefined
+  >();
 
   const mergeAsyncContextPolicy = (
     target: Map<string, boolean>,
@@ -190,6 +202,8 @@ export function computeAllowList(
       : [];
     const allowContextMap = value.taskAllowAsyncContext ?? {};
     const eventAllowContextMap = value.eventAllowAsyncContext ?? {};
+    const taskContextAllowListMap = value.taskAsyncContextAllowList ?? {};
+    const eventContextAllowListMap = value.eventAsyncContextAllowList ?? {};
     for (const taskId of serveTaskIds) {
       taskIds.add(taskId);
       const allowAsyncContext = allowContextMap[taskId] !== false;
@@ -198,6 +212,7 @@ export function computeAllowList(
         taskId,
         allowAsyncContext,
       );
+      taskAsyncContextAllowList.set(taskId, taskContextAllowListMap[taskId]);
     }
     for (const eventId of serveEventIds) {
       eventIds.add(eventId);
@@ -206,6 +221,10 @@ export function computeAllowList(
         eventAcceptsAsyncContext,
         eventId,
         allowAsyncContext,
+      );
+      eventAsyncContextAllowList.set(
+        eventId,
+        eventContextAllowListMap[eventId],
       );
     }
   }
@@ -230,5 +249,7 @@ export function computeAllowList(
     eventIds,
     taskAcceptsAsyncContext,
     eventAcceptsAsyncContext,
+    taskAsyncContextAllowList,
+    eventAsyncContextAllowList,
   };
 }

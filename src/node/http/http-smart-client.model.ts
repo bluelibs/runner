@@ -35,9 +35,21 @@ export interface HttpSmartClientConfig {
 }
 
 export interface HttpSmartClient {
-  task<I = unknown, O = unknown>(id: string, input?: I): Promise<O | Readable>;
-  event<P = unknown>(id: string, payload?: P): Promise<void>;
-  eventWithResult?<P = unknown>(id: string, payload?: P): Promise<P>;
+  task<I = unknown, O = unknown>(
+    id: string,
+    input?: I,
+    options?: { headers?: Record<string, string> },
+  ): Promise<O | Readable>;
+  event<P = unknown>(
+    id: string,
+    payload?: P,
+    options?: { headers?: Record<string, string> },
+  ): Promise<void>;
+  eventWithResult?<P = unknown>(
+    id: string,
+    payload?: P,
+    options?: { headers?: Record<string, string> },
+  ): Promise<P>;
 }
 
 function isReadable(value: unknown): value is Readable {
@@ -79,6 +91,19 @@ function toHeaders(auth?: HttpSmartClientAuthConfig): Record<string, string> {
   if (auth?.token)
     headers[(auth.header ?? "x-runner-token").toLowerCase()] = auth.token;
   return headers;
+}
+
+function mergeHeaders(
+  base: Record<string, string>,
+  extra?: Record<string, string>,
+): Record<string, string> {
+  if (!extra) {
+    return base;
+  }
+  return {
+    ...base,
+    ...extra,
+  };
 }
 
 function buildContextHeaderOrThrow(options: {
@@ -152,13 +177,14 @@ async function postJson<T = any>(
   cfg: HttpSmartClientConfig,
   url: string,
   body: unknown,
+  headersOverride?: Record<string, string>,
 ): Promise<T> {
   const serializer = cfg.serializer;
   const parsed = new URL(url);
   const lib = requestLib(parsed);
   const headers = {
     "content-type": "application/json; charset=utf-8",
-    ...toHeaders(cfg.auth),
+    ...mergeHeaders(toHeaders(cfg.auth), headersOverride),
   } as Record<string, string>;
   const contextHeader = buildContextHeaderOrThrow({
     serializer: cfg.serializer,
@@ -309,6 +335,7 @@ async function postMultipart(
   url: string,
   manifestText: string,
   files: ReturnType<typeof buildNodeManifest>["files"],
+  headersOverride?: Record<string, string>,
 ): Promise<{ stream: Readable; res: http.IncomingMessage }> {
   const parsed = new URL(url);
   const lib = requestLib(parsed);
@@ -318,7 +345,7 @@ async function postMultipart(
   const body = encodeMultipart(manifestText, files, boundary);
   const headers: Record<string, string> = {
     "content-type": `multipart/form-data; boundary=${boundary}`,
-    ...toHeaders(cfg.auth),
+    ...mergeHeaders(toHeaders(cfg.auth), headersOverride),
   };
   const contextHeader = buildContextHeaderOrThrow({
     serializer: cfg.serializer,
@@ -369,12 +396,13 @@ async function postOctetStream(
   cfg: HttpSmartClientConfig,
   url: string,
   stream: Readable,
+  headersOverride?: Record<string, string>,
 ): Promise<{ stream: Readable; res: http.IncomingMessage }> {
   const parsed = new URL(url);
   const lib = requestLib(parsed);
   const headers: Record<string, string> = {
     "content-type": "application/octet-stream",
-    ...toHeaders(cfg.auth),
+    ...mergeHeaders(toHeaders(cfg.auth), headersOverride),
   };
   const contextHeader = buildContextHeaderOrThrow({
     serializer: cfg.serializer,
@@ -527,12 +555,21 @@ export function createHttpSmartClient(
   const serializer = cfg.serializer;
 
   return {
-    async task<I, O>(id: string, input?: I): Promise<O | Readable> {
+    async task<I, O>(
+      id: string,
+      input?: I,
+      options?: { headers?: Record<string, string> },
+    ): Promise<O | Readable> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
 
       // A) Duplex raw-body: input itself is a Node Readable
       if (isReadable(input)) {
-        const { res } = await postOctetStream(cfg, url, input);
+        const { res } = await postOctetStream(
+          cfg,
+          url,
+          input,
+          options?.headers,
+        );
         const maybe = await parseMaybeJsonResponse<ProtocolEnvelope<O>>(
           res,
           serializer,
@@ -555,6 +592,7 @@ export function createHttpSmartClient(
             url,
             manifestText,
             manifest.files,
+            options?.headers,
           );
           const maybe = await parseMaybeJsonResponse<ProtocolEnvelope<O>>(
             res,
@@ -571,7 +609,12 @@ export function createHttpSmartClient(
 
       // C) JSON fallback
       try {
-        const r = await postJson<ProtocolEnvelope<O>>(cfg, url, { input });
+        const r = await postJson<ProtocolEnvelope<O>>(
+          cfg,
+          url,
+          { input },
+          options?.headers,
+        );
         return assertOkEnvelope<O>(r, {
           fallbackMessage: "Tunnel task error",
         });
@@ -580,23 +623,41 @@ export function createHttpSmartClient(
       }
     },
 
-    async event<P>(id: string, payload?: P): Promise<void> {
+    async event<P>(
+      id: string,
+      payload?: P,
+      options?: { headers?: Record<string, string> },
+    ): Promise<void> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
       try {
-        const r = await postJson<ProtocolEnvelope<void>>(cfg, url, { payload });
+        const r = await postJson<ProtocolEnvelope<void>>(
+          cfg,
+          url,
+          { payload },
+          options?.headers,
+        );
         assertOkEnvelope<void>(r, { fallbackMessage: "Tunnel event error" });
       } catch (error) {
         rethrowTyped(cfg.errorRegistry, error);
       }
     },
 
-    async eventWithResult<P>(id: string, payload?: P): Promise<P> {
+    async eventWithResult<P>(
+      id: string,
+      payload?: P,
+      options?: { headers?: Record<string, string> },
+    ): Promise<P> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
       try {
-        const r = await postJson<ProtocolEnvelope<P>>(cfg, url, {
-          payload,
-          returnPayload: true,
-        });
+        const r = await postJson<ProtocolEnvelope<P>>(
+          cfg,
+          url,
+          {
+            payload,
+            returnPayload: true,
+          },
+          options?.headers,
+        );
         if (r && typeof r === "object" && r.ok && !("result" in r)) {
           throw new TunnelError(
             "INVALID_RESPONSE",

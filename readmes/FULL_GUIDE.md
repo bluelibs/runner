@@ -5192,6 +5192,20 @@ const client = createClient({
 
 For a deep dive into streaming, authentication, file uploads, and more, check out the [full Remote Lanes documentation](../readmes/REMOTE_LANES.md).
 
+Remote lane auth tip:
+
+- Keep exposure auth and lane auth separate:
+  - `exposure.http.auth` controls who can call the HTTP endpoints.
+  - `binding.auth` controls lane-level JWT authorization.
+- Configure lane JWT mode/material on topology bindings (`binding.auth`), not on lane definitions.
+- `local-simulated` mode still enforces lane auth when `binding.auth` is enabled, so local simulations cover both serializer boundaries and JWT checks.
+- In `network` mode, both RPC and Event Lanes follow the same asymmetric role split:
+  - producer role requires private key (signer)
+  - consumer role requires public key (verifier)
+- For `jwt_asymmetric`, prove both sides:
+  - Producer runtime without private key must fail fast (`runner.errors.remoteLanes.auth.signerMissing`).
+  - Consumer runtime without public key must fail fast (`runner.errors.remoteLanes.auth.verifierMissing`).
+
 ---
 
 ## Resilience Orchestration

@@ -12,6 +12,7 @@ export interface ExposureContextDeps {
 
 interface AsyncContextHydrationOptions {
   allowAsyncContext?: boolean;
+  allowedAsyncContextIds?: readonly string[];
 }
 
 /**
@@ -28,6 +29,10 @@ export const withExposureContext = <T>(
   const { store, router, serializer } = deps;
   const url = requestUrl(req);
   const allowAsyncContext = options?.allowAsyncContext !== false;
+  const allowedIds =
+    options?.allowedAsyncContextIds === undefined
+      ? undefined
+      : new Set(options.allowedAsyncContextIds);
 
   // Read context header if present
   const rawHeader = req.headers["x-runner-context"];
@@ -41,6 +46,9 @@ export const withExposureContext = <T>(
       const map = serializer.parse<Record<string, string>>(headerText);
       // Compose provides for known contexts present in the map
       for (const [id, ctx] of store.asyncContexts.entries()) {
+        if (allowedIds && !allowedIds.has(id)) {
+          continue;
+        }
         const raw = map[id];
         if (typeof raw === "string") {
           try {
@@ -85,6 +93,10 @@ export const withUserContexts = <T>(
 ): Promise<T> => {
   const { store, serializer } = deps;
   const allowAsyncContext = options?.allowAsyncContext !== false;
+  const allowedIds =
+    options?.allowedAsyncContextIds === undefined
+      ? undefined
+      : new Set(options.allowedAsyncContextIds);
 
   const rawHeader = req.headers["x-runner-context"];
   let headerText: string | undefined;
@@ -96,6 +108,9 @@ export const withUserContexts = <T>(
     try {
       const map = serializer.parse<Record<string, string>>(headerText);
       for (const [id, ctx] of store.asyncContexts.entries()) {
+        if (allowedIds && !allowedIds.has(id)) {
+          continue;
+        }
         const raw = map[id];
         if (typeof raw === "string") {
           try {

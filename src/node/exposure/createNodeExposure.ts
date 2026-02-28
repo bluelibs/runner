@@ -10,10 +10,24 @@ import type {
 } from "./resourceTypes";
 import type { AuthValidatorInput, AuthValidatorResult } from "./types";
 import type { ITask } from "../../defs";
+import type { IncomingMessage } from "http";
+import type { JsonResponse } from "./types";
+
+export interface NodeExposureAuthorizationOptions {
+  authorizeTask?: (
+    req: IncomingMessage,
+    taskId: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
+  authorizeEvent?: (
+    req: IncomingMessage,
+    eventId: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
+}
 
 export async function createNodeExposure(
   cfg: NodeExposureConfig | undefined,
   deps: NodeExposureDeps,
+  authorization?: NodeExposureAuthorizationOptions,
 ): Promise<NodeExposureHandlers> {
   const {
     store,
@@ -67,6 +81,8 @@ export async function createNodeExposure(
       serializer,
       limits: httpConfig?.limits,
       disableDiscovery: httpConfig?.disableDiscovery,
+      authorizeTask: authorization?.authorizeTask,
+      authorizeEvent: authorization?.authorizeEvent,
     });
 
   const serverControls = await createExposureServer({

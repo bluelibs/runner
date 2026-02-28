@@ -22,6 +22,7 @@ export function eventLaneBuilder(id: string): EventLaneFluentBuilder {
     filePath,
     meta: {} as IEventLaneMeta,
     applyTo: undefined,
+    asyncContexts: undefined,
   });
 
   return makeEventLaneBuilder(initial);

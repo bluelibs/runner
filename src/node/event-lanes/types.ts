@@ -3,6 +3,7 @@ import type {
   IEventLaneTopology,
   IEventLaneTopologyProfile,
   IResource,
+  RemoteLaneBindingAuth,
   RuntimeCallSource,
 } from "../../defs";
 import type { RemoteLanesMode } from "../remote-lanes/mode";
@@ -15,6 +16,7 @@ export interface EventLaneMessage {
   source: RuntimeCallSource;
   orderingKey?: string;
   metadata?: Record<string, unknown>;
+  authToken?: string;
   createdAt: Date;
   attempts: number;
   maxAttempts: number;
@@ -52,6 +54,7 @@ export type EventLaneQueueReference = IEventLaneQueue | EventLaneQueueResource;
 export interface EventLaneBinding {
   lane: IEventLaneDefinition;
   queue: EventLaneQueueReference;
+  auth?: RemoteLaneBindingAuth;
   prefetch?: number;
   maxAttempts?: number;
   retryDelayMs?: number;

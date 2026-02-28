@@ -1,6 +1,5 @@
 import { createHttpClient } from "../../../http-client";
 import { Serializer } from "../../../serializer";
-import type { IAsyncContext } from "../../../types/asyncContext";
 import type { IErrorHelper } from "../../../types/error";
 import type { Store } from "../../../models/Store";
 import type { IRpcLaneCommunicator } from "../../../defs";
@@ -57,13 +56,6 @@ function createErrorRegistry(store?: Store): Map<string, IErrorHelper<any>> {
   return map;
 }
 
-function createAsyncContexts(store?: Store): Array<IAsyncContext<unknown>> {
-  if (!store) return [];
-  return Array.from(store.asyncContexts.values()) as Array<
-    IAsyncContext<unknown>
-  >;
-}
-
 function resolveSerializer(
   dependencies: Record<string, unknown>,
 ): SerializerLike {
@@ -90,10 +82,16 @@ registerRpcLaneHttpClientPreset("fetch", (config, dependencies) => {
   if (factory) {
     const client = factory(toFactoryConfig(config));
     return {
-      task: async (id, input) => client.task(id, input),
-      event: async (id, payload) => client.event(id, payload),
-      eventWithResult: async (id, payload) =>
-        client.eventWithResult?.(id, payload),
+      task: async (id, input, options) =>
+        options ? client.task(id, input, options) : client.task(id, input),
+      event: async (id, payload, options) =>
+        options
+          ? client.event(id, payload, options)
+          : client.event(id, payload),
+      eventWithResult: async (id, payload, options) =>
+        options
+          ? client.eventWithResult?.(id, payload, options)
+          : client.eventWithResult?.(id, payload),
     };
   }
 
@@ -106,15 +104,19 @@ registerRpcLaneHttpClientPreset("fetch", (config, dependencies) => {
     fetchImpl: config.fetchImpl,
     onRequest: config.onRequest,
     serializer,
-    contexts: createAsyncContexts(store),
+    contexts: [],
     errorRegistry: createErrorRegistry(store),
   });
 
   return {
-    task: async (id, input) => client.task(id, input),
-    event: async (id, payload) => client.event(id, payload),
-    eventWithResult: async (id, payload) =>
-      client.eventWithResult?.(id, payload),
+    task: async (id, input, options) =>
+      options ? client.task(id, input, options) : client.task(id, input),
+    event: async (id, payload, options) =>
+      options ? client.event(id, payload, options) : client.event(id, payload),
+    eventWithResult: async (id, payload, options) =>
+      options
+        ? client.eventWithResult?.(id, payload, options)
+        : client.eventWithResult?.(id, payload),
   };
 });
 

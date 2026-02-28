@@ -1,8 +1,11 @@
+import { AsyncResource } from "node:async_hooks";
 import { defineResource } from "../../define";
 import { globalResources } from "../../globals/globalResources";
 import { globalTags } from "../../globals/globalTags";
+import type { IRpcLaneDefinition } from "../../defs";
 import { createNodeExposure } from "../exposure/createNodeExposure";
 import type { NodeExposureDeps } from "../exposure/resourceTypes";
+import { withUserContexts } from "../exposure/handlers/contextWrapper";
 import { symbolTunneledBy } from "../../types/symbols";
 import {
   rpcLaneCommunicatorContractError,
@@ -10,11 +13,25 @@ import {
   tunnelOwnershipConflictError,
 } from "../../errors";
 import {
+  issueRemoteLaneToken,
+  verifyRemoteLaneToken,
+} from "../remote-lanes/laneAuth";
+import {
   resolveRpcLaneState,
   toRpcLanesResourceValue,
 } from "./RpcLanesInternals";
 import type { RpcLanesResourceConfig, RpcLanesResourceValue } from "./types";
 import { collectRpcLaneCommunicatorResourceDependencies } from "./RpcLanesInternals";
+import {
+  authorizeRpcLaneRequest,
+  buildRpcLaneAuthHeaders,
+  enforceRpcLaneAuthReadiness,
+  getBindingAuthForRpcLane,
+} from "./rpcLanes.auth";
+import {
+  buildAsyncContextHeader,
+  resolveLaneAsyncContextAllowList,
+} from "../remote-lanes/asyncContextAllowlist";
 
 type RpcLanesDependencies = NodeExposureDeps & Record<string, unknown>;
 
@@ -38,6 +55,79 @@ export const rpcLanesResource = defineResource<
     const store = typedDependencies.store;
     const resolved = resolveRpcLaneState(config, typedDependencies, store);
     const resourceId = "platform.node.resources.rpcLanes";
+    enforceRpcLaneAuthReadiness(config, resolved);
+
+    const buildRpcLaneRequestHeaders = (laneId: string) => {
+      const binding = resolved.bindingsByLaneId.get(laneId)!;
+
+      const headers = {
+        ...(buildRpcLaneAuthHeaders(binding.lane, binding.auth) ?? {}),
+      };
+      const contextHeader = buildAsyncContextHeader({
+        allowList: binding.asyncContextAllowList,
+        registry: store.asyncContexts,
+        serializer: typedDependencies.serializer,
+      });
+      if (contextHeader) {
+        headers["x-runner-context"] = contextHeader;
+      }
+      return Object.keys(headers).length > 0 ? headers : undefined;
+    };
+
+    const localSimulatedScope = new AsyncResource(
+      "runner.rpcLanes.localSimulated",
+    );
+    const resolveLocalSimulatedAsyncContextPolicy = (
+      lane: IRpcLaneDefinition,
+    ) => {
+      const configuredBinding = config.topology.bindings.find(
+        (entry) => entry.lane.id === lane.id,
+      );
+      const allowList = resolveLaneAsyncContextAllowList({
+        laneAsyncContexts: lane.asyncContexts,
+        legacyAllowAsyncContext: configuredBinding?.allowAsyncContext,
+      });
+      const allowAsyncContext =
+        allowList === undefined ? true : allowList.length > 0;
+
+      return {
+        allowList,
+        allowAsyncContext,
+      };
+    };
+    const runInLocalSimulatedScope = async <T>(
+      lane: IRpcLaneDefinition,
+      fn: () => Promise<T>,
+    ): Promise<T> => {
+      const policy = resolveLocalSimulatedAsyncContextPolicy(lane);
+      const contextHeader = buildAsyncContextHeader({
+        allowList: policy.allowList,
+        registry: store.asyncContexts,
+        serializer: typedDependencies.serializer,
+      });
+      const req = {
+        headers: contextHeader ? { "x-runner-context": contextHeader } : {},
+      } as any;
+
+      return await new Promise<T>((resolve, reject) => {
+        localSimulatedScope.runInAsyncScope(() => {
+          Promise.resolve(
+            withUserContexts(
+              req,
+              {
+                store,
+                serializer: typedDependencies.serializer,
+              },
+              fn,
+              {
+                allowAsyncContext: policy.allowAsyncContext,
+                allowedAsyncContextIds: policy.allowList,
+              },
+            ),
+          ).then(resolve, reject);
+        });
+      });
+    };
 
     if (resolved.mode === "network") {
       for (const [taskId, lane] of resolved.taskLaneByTaskId.entries()) {
@@ -71,8 +161,12 @@ export const rpcLanesResource = defineResource<
             const executeRemoteTask = runRemoteTask as (
               id: string,
               input?: unknown,
+              options?: { headers?: Record<string, string> },
             ) => Promise<unknown>;
-            return executeRemoteTask(taskEntry.task.id, input);
+            const headers = buildRpcLaneRequestHeaders(lane.id);
+            return headers
+              ? executeRemoteTask(taskEntry.task.id, input, { headers })
+              : executeRemoteTask(taskEntry.task.id, input);
           }) as typeof taskEntry.task.run,
           isTunneled: true,
           [symbolTunneledBy]: resourceId,
@@ -93,9 +187,11 @@ export const rpcLanesResource = defineResource<
         }
 
         if (typeof binding.communicator.eventWithResult === "function") {
+          const headers = buildRpcLaneRequestHeaders(lane.id);
           const result = await binding.communicator.eventWithResult(
             emission.id,
             emission.data,
+            headers ? { headers } : undefined,
           );
           if (result !== undefined) {
             emission.data = result;
@@ -104,7 +200,14 @@ export const rpcLanesResource = defineResource<
         }
 
         if (typeof binding.communicator.event === "function") {
-          await binding.communicator.event(emission.id, emission.data);
+          const headers = buildRpcLaneRequestHeaders(lane.id);
+          if (headers) {
+            await binding.communicator.event(emission.id, emission.data, {
+              headers,
+            });
+          } else {
+            await binding.communicator.event(emission.id, emission.data);
+          }
           return;
         }
 
@@ -120,8 +223,9 @@ export const rpcLanesResource = defineResource<
           typedDependencies.serializer.stringify(value),
         );
 
-      for (const [taskId] of resolved.taskLaneByTaskId.entries()) {
+      for (const [taskId, lane] of resolved.taskLaneByTaskId.entries()) {
         const taskEntry = store.tasks.get(taskId)!;
+        const bindingAuth = getBindingAuthForRpcLane(config, lane.id);
 
         const currentOwner = taskEntry.task[symbolTunneledBy];
         if (currentOwner && currentOwner !== resourceId) {
@@ -136,16 +240,27 @@ export const rpcLanesResource = defineResource<
         taskEntry.task = {
           ...taskEntry.task,
           run: (async (input: unknown, taskDependencies: unknown, context) => {
+            const token = issueRemoteLaneToken({
+              laneId: lane.id,
+              bindingAuth,
+              capability: "produce",
+            });
+            if (token) {
+              verifyRemoteLaneToken({
+                laneId: lane.id,
+                bindingAuth,
+                token,
+                requiredCapability: "produce",
+              });
+            }
             const transportedInput = roundTrip(input);
             const localTask = executeLocalTask as (
               input: unknown,
               dependencies: unknown,
               context?: unknown,
             ) => Promise<unknown>;
-            const result = await localTask(
-              transportedInput,
-              taskDependencies,
-              context,
+            const result = await runInLocalSimulatedScope(lane, async () =>
+              localTask(transportedInput, taskDependencies, context),
             );
             return roundTrip(result);
           }) as typeof taskEntry.task.run,
@@ -155,13 +270,32 @@ export const rpcLanesResource = defineResource<
       }
 
       typedDependencies.eventManager.intercept(async (next, emission) => {
-        if (!resolved.eventLaneByEventId.has(emission.id)) {
+        const lane = resolved.eventLaneByEventId.get(emission.id);
+        if (!lane) {
           return next(emission);
         }
+        const bindingAuth = getBindingAuthForRpcLane(config, lane.id);
+        const token = issueRemoteLaneToken({
+          laneId: lane.id,
+          bindingAuth,
+          capability: "produce",
+        });
+        if (token) {
+          verifyRemoteLaneToken({
+            laneId: lane.id,
+            bindingAuth,
+            token,
+            requiredCapability: "produce",
+          });
+        }
 
-        emission.data = roundTrip(emission.data);
-        await next(emission);
-        emission.data = roundTrip(emission.data);
+        const transportedPayload = roundTrip(emission.data);
+        const resultPayload = await runInLocalSimulatedScope(lane, async () => {
+          emission.data = transportedPayload;
+          await next(emission);
+          return emission.data;
+        });
+        emission.data = roundTrip(resultPayload);
       });
     }
 
@@ -170,10 +304,30 @@ export const rpcLanesResource = defineResource<
       if (resolved.mode !== "network") {
         rpcLanesExposureModeError.throw({ mode: resolved.mode });
       }
-      exposure = await createNodeExposure(
-        { http: config.exposure.http },
-        typedDependencies as NodeExposureDeps,
-      );
+      if (resolved.serveLaneIds.size > 0) {
+        exposure = await createNodeExposure(
+          { http: config.exposure.http },
+          typedDependencies as NodeExposureDeps,
+          {
+            authorizeTask: async (req, taskId) => {
+              const lane = resolved.taskLaneByTaskId.get(taskId);
+              if (!lane || !resolved.serveLaneIds.has(lane.id)) {
+                return null;
+              }
+              const binding = resolved.bindingsByLaneId.get(lane.id);
+              return authorizeRpcLaneRequest(req, lane, binding?.auth);
+            },
+            authorizeEvent: async (req, eventId) => {
+              const lane = resolved.eventLaneByEventId.get(eventId);
+              if (!lane || !resolved.serveLaneIds.has(lane.id)) {
+                return null;
+              }
+              const binding = resolved.bindingsByLaneId.get(lane.id);
+              return authorizeRpcLaneRequest(req, lane, binding?.auth);
+            },
+          },
+        );
+      }
     }
 
     return toRpcLanesResourceValue(resolved, exposure);

@@ -170,13 +170,20 @@ export function createExposureFetch(
   };
 
   return {
-    async task<I, O>(id: string, input?: I): Promise<O> {
+    async task<I, O>(
+      id: string,
+      input?: I,
+      options?: { headers?: Record<string, string> },
+    ): Promise<O> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
       const r: ProtocolEnvelope<O> = await postSerialized({
         fetch: fetchImpl,
         url,
         body: { input },
-        headers: buildHeaders(),
+        headers: {
+          ...buildHeaders(),
+          ...(options?.headers ?? {}),
+        },
         timeoutMs: cfg?.timeoutMs,
         serializer: cfg.serializer,
         onRequest: cfg?.onRequest,
@@ -194,13 +201,20 @@ export function createExposureFetch(
         throw e;
       }
     },
-    async event<P>(id: string, payload?: P): Promise<void> {
+    async event<P>(
+      id: string,
+      payload?: P,
+      options?: { headers?: Record<string, string> },
+    ): Promise<void> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
       const r: ProtocolEnvelope<void> = await postSerialized({
         fetch: fetchImpl,
         url,
         body: { payload },
-        headers: buildHeaders(),
+        headers: {
+          ...buildHeaders(),
+          ...(options?.headers ?? {}),
+        },
         timeoutMs: cfg?.timeoutMs,
         serializer: cfg.serializer,
         onRequest: cfg?.onRequest,
@@ -217,13 +231,20 @@ export function createExposureFetch(
         throw e;
       }
     },
-    async eventWithResult<P>(id: string, payload?: P): Promise<P> {
+    async eventWithResult<P>(
+      id: string,
+      payload?: P,
+      options?: { headers?: Record<string, string> },
+    ): Promise<P> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
       const r: ProtocolEnvelope<P> = await postSerialized({
         fetch: fetchImpl,
         url,
         body: { payload, returnPayload: true },
-        headers: buildHeaders(),
+        headers: {
+          ...buildHeaders(),
+          ...(options?.headers ?? {}),
+        },
         timeoutMs: cfg?.timeoutMs,
         serializer: cfg.serializer,
         onRequest: cfg?.onRequest,

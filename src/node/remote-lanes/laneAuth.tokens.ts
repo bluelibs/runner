@@ -1,0 +1,185 @@
+import type { RemoteLaneBindingAuth } from "../../defs";
+import {
+  remoteLaneAuthSignerMissingError,
+  remoteLaneAuthUnauthorizedError,
+  remoteLaneAuthVerifierMissingError,
+} from "../../errors";
+import {
+  resolveAsymmetricKid,
+  resolveAsymmetricPrivateKey,
+  resolveAsymmetricPublicKey,
+  resolveHmacSecret,
+} from "./laneAuth.binding";
+import {
+  parseLaneJwt,
+  signLaneJwtWithAsymmetric,
+  signLaneJwtWithHmac,
+  verifyLaneJwtAsymmetricSignature,
+  verifyLaneJwtHmacSignature,
+} from "./laneAuth.jwt";
+import { resolveLaneAuthPolicy } from "./laneAuth.policy";
+
+type LaneCapability = "produce" | "consume";
+
+export interface RemoteLaneTokenIssueInput {
+  laneId: string;
+  bindingAuth?: RemoteLaneBindingAuth;
+  capability: LaneCapability;
+  nowMs?: number;
+}
+
+export interface RemoteLaneTokenVerifyInput {
+  laneId: string;
+  bindingAuth?: RemoteLaneBindingAuth;
+  token: string;
+  requiredCapability: LaneCapability;
+  nowMs?: number;
+}
+
+export function issueRemoteLaneToken({
+  laneId,
+  bindingAuth,
+  capability,
+  nowMs = Date.now(),
+}: RemoteLaneTokenIssueInput): string | undefined {
+  const resolvedPolicy = resolveLaneAuthPolicy(bindingAuth);
+  if (resolvedPolicy.mode === "none") {
+    return undefined;
+  }
+
+  const iat = Math.floor(nowMs / 1000);
+  const exp = Math.floor((nowMs + resolvedPolicy.tokenTtlMs) / 1000);
+  const payload = { lane: laneId, cap: capability, iat, exp } as const;
+
+  if (resolvedPolicy.mode === "jwt_hmac") {
+    const secret = resolveHmacSecret(bindingAuth, "produce");
+    if (!secret) {
+      remoteLaneAuthSignerMissingError.throw({
+        laneId,
+        mode: resolvedPolicy.mode,
+      });
+    }
+    return signLaneJwtWithHmac({ alg: "HS256", typ: "JWT" }, payload, secret!);
+  }
+
+  const privateKey = resolveAsymmetricPrivateKey(bindingAuth);
+  if (!privateKey) {
+    remoteLaneAuthSignerMissingError.throw({
+      laneId,
+      mode: resolvedPolicy.mode,
+    });
+  }
+
+  return signLaneJwtWithAsymmetric({
+    header: {
+      alg: resolvedPolicy.algorithm,
+      typ: "JWT",
+      kid: resolveAsymmetricKid(bindingAuth),
+    },
+    payload,
+    privateKey: privateKey!,
+    algorithm: resolvedPolicy.algorithm,
+  });
+}
+
+export function verifyRemoteLaneToken({
+  laneId,
+  bindingAuth,
+  token,
+  requiredCapability,
+  nowMs = Date.now(),
+}: RemoteLaneTokenVerifyInput): void {
+  const resolvedPolicy = resolveLaneAuthPolicy(bindingAuth);
+  if (resolvedPolicy.mode === "none") {
+    return;
+  }
+
+  const parsed = parseLaneJwt(token, laneId);
+  const { header, payload, encoded, signature } = parsed;
+
+  if (payload.lane !== laneId) {
+    remoteLaneAuthUnauthorizedError.throw({
+      laneId,
+      reason: "token lane claim mismatch",
+    });
+  }
+  if (payload.cap !== requiredCapability) {
+    remoteLaneAuthUnauthorizedError.throw({
+      laneId,
+      reason: `token capability "${payload.cap}" does not allow "${requiredCapability}"`,
+    });
+  }
+
+  const nowSeconds = Math.floor(nowMs / 1000);
+  const skewSeconds = Math.floor(resolvedPolicy.clockSkewMs / 1000);
+  if (payload.exp < nowSeconds - skewSeconds) {
+    remoteLaneAuthUnauthorizedError.throw({
+      laneId,
+      reason: "token expired",
+    });
+  }
+  if (payload.iat > nowSeconds + skewSeconds) {
+    remoteLaneAuthUnauthorizedError.throw({
+      laneId,
+      reason: "token issued in the future",
+    });
+  }
+
+  if (resolvedPolicy.mode === "jwt_hmac") {
+    if (header.alg !== "HS256") {
+      remoteLaneAuthUnauthorizedError.throw({
+        laneId,
+        reason: `unexpected JWT alg "${header.alg}"`,
+      });
+    }
+    const secret = resolveHmacSecret(bindingAuth, "consume");
+    if (!secret) {
+      remoteLaneAuthVerifierMissingError.throw({
+        laneId,
+        mode: resolvedPolicy.mode,
+      });
+    }
+    const verified = verifyLaneJwtHmacSignature({
+      encoded,
+      signature,
+      secret: secret!,
+    });
+    if (!verified) {
+      remoteLaneAuthUnauthorizedError.throw({
+        laneId,
+        reason: "invalid signature",
+      });
+    }
+    return;
+  }
+
+  if (header.alg !== resolvedPolicy.algorithm) {
+    remoteLaneAuthUnauthorizedError.throw({
+      laneId,
+      reason: `unexpected JWT alg "${header.alg}"`,
+    });
+  }
+  const publicKey = resolveAsymmetricPublicKey({
+    bindingAuth,
+    kid: header.kid,
+  });
+  if (!publicKey) {
+    remoteLaneAuthVerifierMissingError.throw({
+      laneId,
+      mode: resolvedPolicy.mode,
+    });
+  }
+
+  const verified = verifyLaneJwtAsymmetricSignature({
+    encoded,
+    signature,
+    publicKey: publicKey!,
+    algorithm: resolvedPolicy.algorithm,
+  });
+  if (!verified) {
+    remoteLaneAuthUnauthorizedError.throw({
+      laneId,
+      reason: "invalid signature",
+    });
+  }
+}

@@ -1,6 +1,7 @@
 import { AsyncResource } from "async_hooks";
 import { eventLaneEventNotRegisteredError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
+import type { RemoteLaneBindingAuth } from "../../defs";
 import type { EventManager } from "../../models/EventManager";
 import type { Logger } from "../../models/Logger";
 import type { Store } from "../../models/Store";
@@ -9,6 +10,10 @@ import type { EventLaneMessage } from "./types";
 import type { EventLanesDiagnostics } from "./EventLanesDiagnostics";
 import type { EventLanesResourceContext } from "./EventLanesInternals";
 import { isRelayEmission } from "./EventLanesInternals";
+import {
+  issueRemoteLaneToken,
+  verifyRemoteLaneToken,
+} from "../remote-lanes/laneAuth";
 
 type Dependencies = {
   eventManager: EventManager;
@@ -27,6 +32,10 @@ export class LocalSimulatedEventLaneTransport {
     private readonly dependencies: Dependencies,
     private readonly context: EventLanesResourceContext,
     private readonly diagnostics: EventLanesDiagnostics,
+    private readonly bindingAuthByLaneId: ReadonlyMap<
+      string,
+      RemoteLaneBindingAuth | undefined
+    > = new Map(),
   ) {}
 
   public register() {
@@ -41,6 +50,12 @@ export class LocalSimulatedEventLaneTransport {
       }
 
       emission.stopPropagation();
+      const bindingAuth = this.resolveBindingAuth(eventRoute.lane.id);
+      const authToken = issueRemoteLaneToken({
+        laneId: eventRoute.lane.id,
+        bindingAuth,
+        capability: "produce",
+      });
       const message: EventLaneMessage = {
         id: `sim-${++this.sequence}`,
         laneId: eventRoute.lane.id,
@@ -49,6 +64,7 @@ export class LocalSimulatedEventLaneTransport {
         source: emission.source,
         orderingKey: eventRoute.orderingKey,
         metadata: eventRoute.metadata,
+        authToken,
         createdAt: new Date(),
         attempts: 1,
         maxAttempts: 1,
@@ -89,6 +105,13 @@ export class LocalSimulatedEventLaneTransport {
         eventLaneEventNotRegisteredError.throw({ eventId: message.eventId });
       }
 
+      verifyRemoteLaneToken({
+        laneId: message.laneId,
+        bindingAuth: this.resolveBindingAuth(message.laneId),
+        token: message.authToken ?? "",
+        requiredCapability: "produce",
+      });
+
       const payload = this.dependencies.serializer.parse(message.payload);
       const relaySourceId = `${this.context.relaySourcePrefix}${this.context.profile}:${message.laneId}:local-simulated`;
       await this.diagnostics.logRelayEmit({
@@ -113,5 +136,14 @@ export class LocalSimulatedEventLaneTransport {
         },
       );
     }
+  }
+
+  private resolveBindingAuth(
+    laneId: string,
+  ): RemoteLaneBindingAuth | undefined {
+    return (
+      this.context.bindingsByLaneId.get(laneId)?.auth ??
+      this.bindingAuthByLaneId.get(laneId)
+    );
   }
 }

@@ -41,6 +41,13 @@ export function makeRpcLaneBuilder<TMeta extends IRpcLaneMeta>(
       return makeRpcLaneBuilder(next);
     },
 
+    asyncContexts(contexts) {
+      const next = clone(state, {
+        asyncContexts: contexts.slice(),
+      });
+      return makeRpcLaneBuilder(next);
+    },
+
     meta<TNewMeta extends IRpcLaneMeta>(meta: TNewMeta) {
       const next = clone(state as BuilderState<TNewMeta>, { meta });
       return makeRpcLaneBuilder(next);
@@ -51,6 +58,7 @@ export function makeRpcLaneBuilder<TMeta extends IRpcLaneMeta>(
         id: state.id,
         meta: state.meta,
         applyTo: state.applyTo,
+        asyncContexts: state.asyncContexts,
       });
       return deepFreeze({
         ...lane,

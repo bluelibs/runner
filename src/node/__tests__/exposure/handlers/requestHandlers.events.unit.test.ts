@@ -24,6 +24,51 @@ describe("requestHandlers - event handling", () => {
     jest.resetModules();
   });
 
+  it("returns authorization error when authorizeEvent blocks request", async () => {
+    const emitSpy = jest.fn(async () => undefined);
+    const deps: any = {
+      store: {
+        events: new Map([["e.authz", { event: { id: "e.authz" } }]]),
+        errors: new Map(),
+      },
+      taskRunner: {} as any,
+      eventManager: { emit: emitSpy },
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      authenticator: async () => ({ ok: true }),
+      allowList: { ensureTask: () => null, ensureEvent: () => null },
+      router: {
+        basePath: "/api",
+        extract: (_p: string) => ({ kind: "event", id: "e.authz" }),
+        isUnderBase: () => true,
+      },
+      cors: undefined,
+      serializer,
+      authorizeEvent: async () => ({
+        status: 401,
+        body: {
+          ok: false,
+          error: { code: "UNAUTHORIZED", message: "Unauthorized" },
+        },
+      }),
+    };
+
+    const { handleEvent } = createRequestHandlers(deps);
+    const { req, res } = createReqRes({
+      method: HttpMethod.Post,
+      url: "/api/event/e.authz",
+      headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
+      body: JSON.stringify({ payload: { x: 1 } }),
+    });
+    await handleEvent(req, res);
+    const json = res._buf
+      ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+      : undefined;
+
+    expect(res._status).toBe(401);
+    expect(json?.error?.code).toBe("UNAUTHORIZED");
+    expect(emitSpy).not.toHaveBeenCalled();
+  });
+
   describe("Application Errors and Sanitization", () => {
     it("includes id and data for known application errors", async () => {
       const AppError = defineError<{ code: number; message: string }>({
@@ -419,6 +464,106 @@ describe("requestHandlers - event handling", () => {
       expect(res._status).toBe(200);
       expect(parse).not.toHaveBeenCalled();
       expect(provide).not.toHaveBeenCalled();
+    });
+
+    it("hydrates only rpc-lane allowlisted async contexts for event ids", async () => {
+      let allowedCurrent: any;
+      let blockedCurrent: any;
+      const allowedParse = jest.fn((s: string) => JSON.parse(s));
+      const allowedProvide = jest.fn((v: any, fn: any) => {
+        allowedCurrent = v;
+        return fn();
+      });
+      const blockedParse = jest.fn((s: string) => JSON.parse(s));
+      const blockedProvide = jest.fn((v: any, fn: any) => {
+        blockedCurrent = v;
+        return fn();
+      });
+      const allowedCtx = {
+        id: "ctx.rpc.allowed.event",
+        use: () => allowedCurrent,
+        serialize: (v: any) => JSON.stringify(v),
+        parse: allowedParse,
+        provide: allowedProvide,
+        require: () => ({}) as any,
+      } as any;
+      const blockedCtx = {
+        id: "ctx.rpc.blocked.event",
+        use: () => blockedCurrent,
+        serialize: (v: any) => JSON.stringify(v),
+        parse: blockedParse,
+        provide: blockedProvide,
+        require: () => ({}) as any,
+      } as any;
+
+      const deps: any = {
+        store: {
+          tasks: new Map(),
+          events: new Map([["e.ctx.rpc", { event: { id: "e.ctx.rpc" } }]]),
+          resources: new Map([
+            [
+              "rpc.lanes",
+              {
+                resource: { id: "rpc.lanes", tags: [globalTags.rpcLanes] },
+                value: {
+                  serveTaskIds: [],
+                  serveEventIds: ["e.ctx.rpc"],
+                  taskAllowAsyncContext: {},
+                  eventAllowAsyncContext: { "e.ctx.rpc": true },
+                  taskAsyncContextAllowList: {},
+                  eventAsyncContextAllowList: {
+                    "e.ctx.rpc": [allowedCtx.id],
+                  },
+                },
+              },
+            ],
+          ]),
+          errors: new Map(),
+          asyncContexts: new Map([
+            [allowedCtx.id, allowedCtx],
+            [blockedCtx.id, blockedCtx],
+          ]),
+        },
+        taskRunner: {} as any,
+        eventManager: {
+          emit: async () => {
+            expect(allowedCtx.use()).toEqual({ ok: "yes" });
+            expect(blockedCtx.use()).toBeUndefined();
+          },
+        },
+        logger: { info: () => {}, warn: () => {}, error: () => {} },
+        authenticator: async () => ({ ok: true }),
+        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "event", id: "e.ctx.rpc" }),
+          isUnderBase: () => true,
+        },
+        cors: undefined,
+        serializer,
+      };
+
+      const { handleEvent } = createRequestHandlers(deps);
+      const headers = {
+        [HeaderName.ContentType]: MimeType.ApplicationJson,
+        [HeaderName.XRunnerContext]: serializer.stringify({
+          [allowedCtx.id]: allowedCtx.serialize({ ok: "yes" }),
+          [blockedCtx.id]: blockedCtx.serialize({ no: "no" }),
+        }),
+      } satisfies NodeLikeHeaders;
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/event/e.ctx.rpc",
+        headers,
+        body: JSON.stringify({ payload: { a: 1 } }),
+      });
+
+      await handleEvent(req, res);
+      expect(res._status).toBe(200);
+      expect(allowedParse).toHaveBeenCalledTimes(1);
+      expect(allowedProvide).toHaveBeenCalledTimes(1);
+      expect(blockedParse).not.toHaveBeenCalled();
+      expect(blockedProvide).not.toHaveBeenCalled();
     });
   });
 

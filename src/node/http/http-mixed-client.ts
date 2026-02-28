@@ -48,9 +48,18 @@ export interface MixedHttpClient {
   task<I = unknown, O = unknown>(
     id: string,
     input?: I,
+    options?: { headers?: Record<string, string> },
   ): Promise<O | Readable | ReadableStream<Uint8Array>>;
-  event<P = unknown>(id: string, payload?: P): Promise<void>;
-  eventWithResult?<P = unknown>(id: string, payload?: P): Promise<P>;
+  event<P = unknown>(
+    id: string,
+    payload?: P,
+    options?: { headers?: Record<string, string> },
+  ): Promise<void>;
+  eventWithResult?<P = unknown>(
+    id: string,
+    payload?: P,
+    options?: { headers?: Record<string, string> },
+  ): Promise<P>;
 }
 
 function isReadable(value: unknown): value is Readable {
@@ -134,6 +143,7 @@ export function createHttpMixedClient(
     async task<I, O>(
       id: string,
       input?: I,
+      options?: { headers?: Record<string, string> },
     ): Promise<O | Readable | ReadableStream<Uint8Array>> {
       // Prefer Smart path only when needed (streams or Node file sentinels)
       if (
@@ -141,22 +151,30 @@ export function createHttpMixedClient(
         hasNodeFile(input) ||
         (await shouldForceSmart(cfg, id, input))
       ) {
-        return await smartClient.task<I, O>(id, input as I);
+        return await smartClient.task<I, O>(id, input as I, options);
       }
       // Otherwise, lean JSON path
-      return await fetchClient.task<I, O>(id, input as I);
+      return await fetchClient.task<I, O>(id, input as I, options);
     },
-    async event<P>(id: string, payload?: P): Promise<void> {
+    async event<P>(
+      id: string,
+      payload?: P,
+      options?: { headers?: Record<string, string> },
+    ): Promise<void> {
       // Events are always plain JSON
-      return await fetchClient.event<P>(id, payload);
+      return await fetchClient.event<P>(id, payload, options);
     },
-    async eventWithResult<P>(id: string, payload?: P): Promise<P> {
+    async eventWithResult<P>(
+      id: string,
+      payload?: P,
+      options?: { headers?: Record<string, string> },
+    ): Promise<P> {
       if (!fetchClient.eventWithResult) {
         httpEventWithResultUnavailableError.throw({
           clientFactory: "createHttpMixedClient",
         });
       }
-      return await fetchClient.eventWithResult!<P>(id, payload);
+      return await fetchClient.eventWithResult!<P>(id, payload, options);
     },
   };
 }

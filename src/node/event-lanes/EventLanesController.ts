@@ -12,6 +12,13 @@ import { resolveEventLaneAssignments } from "./EventLaneAssignments";
 import { EventLanesDiagnostics } from "./EventLanesDiagnostics";
 import { handleEventLaneConsumerFailure } from "./EventLanesFailureHandler";
 import { LocalSimulatedEventLaneTransport } from "./LocalSimulatedEventLaneTransport";
+import { issueRemoteLaneToken } from "../remote-lanes/laneAuth";
+import {
+  collectBindingAuthByLaneId,
+  enforceEventLaneAuthReadiness,
+  resolveEventLaneBindingAuth,
+  verifyEventLaneMessageToken,
+} from "./eventLanes.auth";
 import {
   buildEventLanesContext,
   EventLanesLifecycleContext,
@@ -20,7 +27,10 @@ import {
   isRelayEmission,
   resolveEventLaneBindings,
 } from "./EventLanesInternals";
-
+import {
+  applyPrefetchPolicies,
+  validateAssignedEventRoutesHaveBindings,
+} from "./eventLanes.routing";
 export type EventLanesCoreDependencies = Record<string, unknown> & {
   eventManager: EventManager;
   serializer: Serializer;
@@ -32,7 +42,6 @@ type EventLanesInitializationResult = {
   profile: string;
   consumers: number;
 };
-
 export class EventLanesController {
   private producerInterceptorRegistered = false;
 
@@ -62,7 +71,7 @@ export class EventLanesController {
           eventRouteByEventId,
         ),
       );
-      this.validateAssignedEventRoutesHaveBindings();
+      validateAssignedEventRoutesHaveBindings(this.context);
 
       for (const queue of this.context.managedQueues) {
         await queue.init?.();
@@ -77,11 +86,18 @@ export class EventLanesController {
       );
     }
 
+    enforceEventLaneAuthReadiness({
+      mode,
+      context: this.context,
+      config: this.config,
+    });
+
     if (mode === "local-simulated") {
       const localSimulatedTransport = new LocalSimulatedEventLaneTransport(
         this.dependencies,
         this.context,
         this.diagnostics,
+        collectBindingAuthByLaneId(this.config),
       );
       localSimulatedTransport.register();
     }
@@ -150,6 +166,16 @@ export class EventLanesController {
         eventRoute.lane.id,
         this.context.bindingsByLaneId,
       );
+      const bindingAuth = resolveEventLaneBindingAuth({
+        laneId: eventRoute.lane.id,
+        context: this.context,
+        config: this.config,
+      });
+      const authToken = issueRemoteLaneToken({
+        laneId: eventRoute.lane.id,
+        bindingAuth,
+        capability: "produce",
+      });
 
       await binding.queue.enqueue({
         laneId: eventRoute.lane.id,
@@ -158,6 +184,7 @@ export class EventLanesController {
         source: emission.source,
         orderingKey: eventRoute.orderingKey,
         metadata: eventRoute.metadata,
+        authToken,
         maxAttempts: binding.maxAttempts ?? 1,
       });
       emission.stopPropagation();
@@ -182,7 +209,7 @@ export class EventLanesController {
         }
         this.context.started = true;
 
-        await this.applyPrefetchPolicies();
+        await applyPrefetchPolicies(this.context);
         for (const [queue, activeLaneIds] of this.context
           .activeBindingsByQueue) {
           await queue.consume(async (message) => {
@@ -192,35 +219,6 @@ export class EventLanesController {
       },
       { id: `${this.context.profile}.event-lanes.ready` },
     );
-  }
-
-  private validateAssignedEventRoutesHaveBindings(): void {
-    const seenLaneIds = new Set<string>();
-    for (const route of this.context.eventRouteByEventId.values()) {
-      if (seenLaneIds.has(route.lane.id)) {
-        continue;
-      }
-      seenLaneIds.add(route.lane.id);
-      getLaneBindingOrThrow(route.lane.id, this.context.bindingsByLaneId);
-    }
-  }
-
-  private async applyPrefetchPolicies(): Promise<void> {
-    for (const [queue, laneIds] of this.context.activeBindingsByQueue) {
-      let resolvedPrefetch: number | undefined;
-      for (const laneId of laneIds) {
-        const binding = this.context.bindingsByLaneId.get(laneId)!;
-        const candidatePrefetch = binding.prefetch;
-        if (candidatePrefetch === undefined || candidatePrefetch < 1) {
-          continue;
-        }
-        resolvedPrefetch = Math.max(resolvedPrefetch ?? 0, candidatePrefetch);
-      }
-
-      if (resolvedPrefetch !== undefined) {
-        await queue.setPrefetch?.(resolvedPrefetch);
-      }
-    }
   }
 
   private async consumeQueueMessage(
@@ -251,6 +249,15 @@ export class EventLanesController {
     const binding = this.context.bindingsByLaneId.get(message.laneId)!;
 
     try {
+      verifyEventLaneMessageToken({
+        message,
+        laneId: binding.lane.id,
+        bindingAuth: resolveEventLaneBindingAuth({
+          laneId: binding.lane.id,
+          context: this.context,
+          config: this.config,
+        }),
+      });
       const eventStoreEntry = this.dependencies.store.events.get(
         message.eventId,
       );

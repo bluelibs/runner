@@ -12,6 +12,7 @@ import type { SerializerLike } from "../../../serializer";
 import type {
   Authenticator,
   AllowListGuard,
+  JsonResponse,
   StreamingResponse,
 } from "../types";
 import type {
@@ -45,6 +46,13 @@ interface TaskHandlerDeps {
     multipart?: MultipartLimits;
   };
   allowAsyncContext?: (taskId: string) => boolean;
+  resolveAsyncContextAllowList?: (
+    taskId: string,
+  ) => readonly string[] | undefined;
+  authorizeTask?: (
+    req: IncomingMessage,
+    taskId: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
 }
 
 export const createTaskHandler = (deps: TaskHandlerDeps) => {
@@ -59,6 +67,8 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     serializer,
     limits,
     allowAsyncContext = () => true,
+    resolveAsyncContextAllowList = () => undefined,
+    authorizeTask = () => null,
   } = deps;
 
   const isReadableStream = (value: unknown): value is NodeJS.ReadableStream =>
@@ -79,6 +89,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     taskId: string,
   ): Promise<void> => {
     const allowAsyncContextForTask = allowAsyncContext(taskId);
+    const asyncContextAllowListForTask = resolveAsyncContextAllowList(taskId);
 
     if (req.method !== "POST") {
       applyCorsActual(req, res, cors);
@@ -97,6 +108,13 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     if (allowError) {
       applyCorsActual(req, res, cors);
       respondJson(res, allowError, serializer);
+      return;
+    }
+
+    const authzError = await authorizeTask(req, taskId);
+    if (authzError) {
+      applyCorsActual(req, res, cors);
+      respondJson(res, authzError, serializer);
       return;
     }
 
@@ -124,7 +142,10 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
           controller,
           { store, router, serializer },
           fn,
-          { allowAsyncContext: allowAsyncContextForTask },
+          {
+            allowAsyncContext: allowAsyncContextForTask,
+            allowedAsyncContextIds: asyncContextAllowListForTask,
+          },
         );
 
       if (isMultipart(contentType)) {

@@ -1,3 +1,4 @@
+import type { RpcLaneRequestOptions } from "../../../defs";
 import { defineEvent, defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { globalResources } from "../../../globals/globalResources";
@@ -7,8 +8,13 @@ import { rpcLanesResource } from "../../rpc-lanes";
 import { r } from "../../../public";
 import { symbolTunneledBy } from "../../../defs";
 import { runtimeSource } from "../../../types/runtimeSource";
+import * as exposureModule from "../../exposure/createNodeExposure";
 
 describe("rpcLanesResource", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it("routes tagged tasks remotely when lane is not served by active profile", async () => {
     const lane = r.rpcLane("tests.rpc-lanes.remote.task.lane").build();
     const task = defineTask({
@@ -40,6 +46,70 @@ describe("rpcLanesResource", () => {
 
     const rr = await run(app);
     await expect(rr.runTask(task as any)).resolves.toBe("remote");
+    await rr.dispose();
+  });
+
+  it("forwards only lane-allowlisted async contexts on remote RPC task calls", async () => {
+    const allowedContext = r
+      .asyncContext<{ value: string }>("tests.rpc-lanes.ctx.allowed")
+      .build();
+    const blockedContext = r
+      .asyncContext<{ value: string }>("tests.rpc-lanes.ctx.blocked")
+      .build();
+    const lane = r
+      .rpcLane("tests.rpc-lanes.remote.task.allowlisted-contexts")
+      .asyncContexts([allowedContext.id])
+      .build();
+    const task = defineTask({
+      id: "tests.rpc-lanes.remote.task.allowlisted-contexts.task",
+      tags: [globalTags.rpcLane.with({ lane })],
+      run: async () => "local",
+    });
+    const remoteTask = jest.fn(
+      async (_id: string, _input?: unknown, _options?: RpcLaneRequestOptions) =>
+        "remote",
+    );
+    const communicator = defineResource({
+      id: "tests.rpc-lanes.remote.task.allowlisted-contexts.communicator",
+      init: async () => ({
+        task: remoteTask,
+      }),
+    });
+    const topology = r.rpcLane.topology({
+      profiles: {
+        client: { serve: [] },
+      },
+      bindings: [{ lane, communicator }],
+    });
+    const app = defineResource({
+      id: "tests.rpc-lanes.remote.task.allowlisted-contexts.app",
+      register: [
+        allowedContext,
+        blockedContext,
+        task,
+        communicator,
+        rpcLanesResource.with({ profile: "client", topology }),
+      ],
+    });
+
+    const rr = await run(app);
+    const serializer = await rr.getResourceValue(
+      globalResources.serializer as any,
+    );
+
+    await allowedContext.provide({ value: "A" }, async () => {
+      await blockedContext.provide({ value: "B" }, async () => {
+        await expect(rr.runTask(task as any)).resolves.toBe("remote");
+      });
+    });
+
+    const options = remoteTask.mock.calls[0]?.[2];
+    const contextHeader = options?.headers?.["x-runner-context"] ?? "";
+    const headerMap = serializer.parse(contextHeader) as Record<string, string>;
+    expect(headerMap[allowedContext.id]).toBe(
+      allowedContext.serialize({ value: "A" }),
+    );
+    expect(headerMap[blockedContext.id]).toBeUndefined();
     await rr.dispose();
   });
 
@@ -555,7 +625,113 @@ describe("rpcLanesResource", () => {
     await rr.dispose();
   });
 
+  it("publishes lane async-context allowlist with default deny-all", async () => {
+    const allowedCtx = r
+      .asyncContext("tests.rpc-lanes.serve.ctx.allowed")
+      .build();
+    const laneDefault = r.rpcLane("tests.rpc-lanes.serve.default-none").build();
+    const laneAllowed = r
+      .rpcLane("tests.rpc-lanes.serve.allow-one")
+      .asyncContexts([allowedCtx.id])
+      .build();
+    const defaultTask = defineTask({
+      id: "tests.rpc-lanes.serve.default-none.task",
+      tags: [globalTags.rpcLane.with({ lane: laneDefault })],
+      run: async () => "local",
+    });
+    const allowedTask = defineTask({
+      id: "tests.rpc-lanes.serve.allow-one.task",
+      tags: [globalTags.rpcLane.with({ lane: laneAllowed })],
+      run: async () => "local",
+    });
+    const communicator = defineResource({
+      id: "tests.rpc-lanes.serve.ctx.communicator",
+      init: async () => ({ task: async () => "remote" }),
+    });
+    const topology = r.rpcLane.topology({
+      profiles: {
+        server: { serve: [laneDefault, laneAllowed] },
+      },
+      bindings: [
+        { lane: laneDefault, communicator },
+        { lane: laneAllowed, communicator },
+      ],
+    });
+    const app = defineResource({
+      id: "tests.rpc-lanes.serve.ctx.app",
+      register: [
+        allowedCtx,
+        defaultTask,
+        allowedTask,
+        communicator,
+        rpcLanesResource.with({ profile: "server", topology }),
+      ],
+    });
+
+    const rr = await run(app);
+    const store = await rr.getResourceValue(globalResources.store as any);
+    const allowList = computeAllowList(store);
+    expect(allowList.taskAcceptsAsyncContext.get(defaultTask.id)).toBe(false);
+    expect(allowList.taskAsyncContextAllowList.get(defaultTask.id)).toEqual([]);
+    expect(allowList.taskAcceptsAsyncContext.get(allowedTask.id)).toBe(true);
+    expect(allowList.taskAsyncContextAllowList.get(allowedTask.id)).toEqual([
+      allowedCtx.id,
+    ]);
+    await rr.dispose();
+  });
+
+  it("supports legacy allowAsyncContext=true bridge when lane allowlist is omitted", async () => {
+    const lane = r.rpcLane("tests.rpc-lanes.serve.legacy-context-all").build();
+    const task = defineTask({
+      id: "tests.rpc-lanes.serve.legacy-context-all.task",
+      tags: [globalTags.rpcLane.with({ lane })],
+      run: async () => "local",
+    });
+    const event = defineEvent({
+      id: "tests.rpc-lanes.serve.legacy-context-all.event",
+      tags: [globalTags.rpcLane.with({ lane })],
+    });
+    const communicator = defineResource({
+      id: "tests.rpc-lanes.serve.legacy-context-all.communicator",
+      init: async () => ({
+        task: async () => "remote",
+        event: async () => undefined,
+      }),
+    });
+    const topology = r.rpcLane.topology({
+      profiles: {
+        server: { serve: [lane] },
+      },
+      bindings: [{ lane, communicator, allowAsyncContext: true }],
+    });
+    const app = defineResource({
+      id: "tests.rpc-lanes.serve.legacy-context-all.app",
+      register: [
+        task,
+        event,
+        communicator,
+        rpcLanesResource.with({ profile: "server", topology }),
+      ],
+    });
+
+    const rr = await run(app);
+    const store = await rr.getResourceValue(globalResources.store as any);
+    const allowList = computeAllowList(store);
+    expect(allowList.taskAcceptsAsyncContext.get(task.id)).toBe(true);
+    expect(allowList.taskAsyncContextAllowList.get(task.id)).toBeUndefined();
+    expect(allowList.eventAcceptsAsyncContext.get(event.id)).toBe(true);
+    expect(allowList.eventAsyncContextAllowList.get(event.id)).toBeUndefined();
+    await rr.dispose();
+  });
+
   it("can auto-start and dispose exposure when exposure config is provided", async () => {
+    const close = jest.fn(async () => undefined);
+    const createExposureSpy = jest
+      .spyOn(exposureModule, "createNodeExposure")
+      .mockResolvedValue({
+        close,
+      } as any);
+
     const lane = r.rpcLane("tests.rpc-lanes.exposure.lane").build();
     const task = defineTask({
       id: "tests.rpc-lanes.exposure.task",
@@ -591,6 +767,48 @@ describe("rpcLanesResource", () => {
     });
 
     const rr = await run(app);
+    expect(createExposureSpy).toHaveBeenCalledTimes(1);
+    await rr.dispose();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start exposure when active profile serves no lanes", async () => {
+    const createExposureSpy = jest.spyOn(exposureModule, "createNodeExposure");
+    const lane = r.rpcLane("tests.rpc-lanes.exposure.not-served.lane").build();
+    const task = defineTask({
+      id: "tests.rpc-lanes.exposure.not-served.task",
+      tags: [globalTags.rpcLane.with({ lane })],
+      run: async () => "local",
+    });
+    const communicator = defineResource({
+      id: "tests.rpc-lanes.exposure.not-served.communicator",
+      init: async () => ({
+        task: async () => "remote",
+      }),
+    });
+    const cfg = {
+      profile: "client",
+      topology: r.rpcLane.topology({
+        profiles: {
+          client: { serve: [] },
+        },
+        bindings: [{ lane, communicator }],
+      }),
+      exposure: {
+        http: {
+          basePath: "/__runner",
+          auth: { allowAnonymous: true },
+        },
+      },
+    } as const;
+
+    const app = defineResource({
+      id: "tests.rpc-lanes.exposure.not-served.app",
+      register: [task, communicator, rpcLanesResource.with(cfg)],
+    });
+
+    const rr = await run(app);
+    expect(createExposureSpy).not.toHaveBeenCalled();
     await rr.dispose();
   });
 

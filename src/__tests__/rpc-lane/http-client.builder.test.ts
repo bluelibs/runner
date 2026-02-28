@@ -29,6 +29,9 @@ describe("r.rpcLane.httpClient helper", () => {
     await expect(
       communicator.task!("app.tasks.any", { ok: true }),
     ).resolves.toBe("remote-value");
+    await expect(
+      communicator.task!("app.tasks.any", { ok: true }, { headers: {} }),
+    ).resolves.toBe("remote-value");
     expect(taskMock).toHaveBeenCalledWith("app.tasks.any", { ok: true });
   });
 
@@ -55,7 +58,21 @@ describe("r.rpcLane.httpClient helper", () => {
       communicator.event?.("app.events.any", { p: true }),
     ).resolves.toBeUndefined();
     await expect(
+      communicator.event?.(
+        "app.events.any",
+        { p: true },
+        { headers: { "x-test": "1" } },
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
       communicator.eventWithResult?.("app.events.any", { p: true }),
+    ).resolves.toEqual({ ok: "yes" });
+    await expect(
+      communicator.eventWithResult?.(
+        "app.events.any",
+        { p: true },
+        { headers: { "x-test": "1" } },
+      ),
     ).resolves.toEqual({ ok: "yes" });
 
     expect(eventMock).toHaveBeenCalledWith("app.events.any", { p: true });
@@ -86,6 +103,13 @@ describe("r.rpcLane.httpClient helper", () => {
 
     await expect(
       communicator.task!("app.tasks.add", { a: 3, b: 4 }),
+    ).resolves.toBe(7);
+    await expect(
+      communicator.task!(
+        "app.tasks.add",
+        { a: 3, b: 4 },
+        { headers: { "x-trace": "a" } },
+      ),
     ).resolves.toBe(7);
   });
 
@@ -119,7 +143,21 @@ describe("r.rpcLane.httpClient helper", () => {
       communicator.event?.("app.events.notify", { x: 1 }),
     ).resolves.toBeUndefined();
     await expect(
+      communicator.event?.(
+        "app.events.notify",
+        { x: 1 },
+        { headers: { "x-trace": "b" } },
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
       communicator.eventWithResult?.("app.events.notify", { x: 1 }),
+    ).resolves.toEqual({ v: 11 });
+    await expect(
+      communicator.eventWithResult?.(
+        "app.events.notify",
+        { x: 1 },
+        { headers: { "x-trace": "c" } },
+      ),
     ).resolves.toEqual({ v: 11 });
   });
 

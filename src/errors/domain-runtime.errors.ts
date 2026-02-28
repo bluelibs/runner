@@ -340,6 +340,48 @@ export const rpcLanesExposureModeError = error<
   )
   .build();
 
+export const remoteLaneAuthSignerMissingError = error<
+  { laneId: string; mode: string } & DefaultErrorType
+>("runner.errors.remoteLanes.auth.signerMissing")
+  .format(
+    ({ laneId, mode }) =>
+      `Lane "${laneId}" requires ${mode} signing material for produce flow, but no signer credentials were configured.`,
+  )
+  .remediation(({ laneId, mode }) =>
+    mode === "jwt_hmac"
+      ? `Configure binding auth for lane "${laneId}" with auth.secret (or auth.produceSecret) when using jwt_hmac.`
+      : `Configure binding auth for lane "${laneId}" with auth.privateKey when using jwt_asymmetric.`,
+  )
+  .build();
+
+export const remoteLaneAuthVerifierMissingError = error<
+  { laneId: string; mode: string } & DefaultErrorType
+>("runner.errors.remoteLanes.auth.verifierMissing")
+  .format(
+    ({ laneId, mode }) =>
+      `Lane "${laneId}" requires ${mode} verification material for consume flow, but no verifier credentials were configured.`,
+  )
+  .remediation(({ laneId, mode }) =>
+    mode === "jwt_hmac"
+      ? `Configure binding auth for lane "${laneId}" with auth.secret (or auth.consumeSecret) when using jwt_hmac.`
+      : `Configure binding auth for lane "${laneId}" with auth.publicKey or auth.publicKeysByKid when using jwt_asymmetric.`,
+  )
+  .build();
+
+export const remoteLaneAuthUnauthorizedError = error<
+  { laneId: string; reason: string } & DefaultErrorType
+>("runner.errors.remoteLanes.auth.unauthorized")
+  .format(
+    ({ laneId, reason }) =>
+      `Remote lane "${laneId}" authorization failed: ${reason}.`,
+  )
+  .httpCode(401)
+  .remediation(
+    ({ laneId }) =>
+      `Ensure requests/messages for lane "${laneId}" include a valid JWT with matching lane claim and unexpired timestamps.`,
+  )
+  .build();
+
 export const resourceForkInvalidIdError = error<
   { id: string } & DefaultErrorType
 >(RunnerErrorId.ResourceForkInvalidId)

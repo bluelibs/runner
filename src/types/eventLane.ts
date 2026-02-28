@@ -1,11 +1,14 @@
 import { IEventLaneMeta } from "./meta";
 import type { IEventDefinition } from "./event";
+import type { IAsyncContext } from "./asyncContext";
+import type { RemoteLaneBindingAuth } from "./remoteLaneAuth";
 import { symbolEventLane, symbolFilePath } from "./utilities";
 
 export interface IEventLaneDefinition {
   id: string;
   meta?: IEventLaneMeta;
   applyTo?: readonly (IEventDefinition<any> | string)[];
+  asyncContexts?: readonly (IAsyncContext<unknown> | string)[];
   [symbolFilePath]?: string;
 }
 
@@ -18,6 +21,7 @@ export interface IEventLane extends IEventLaneDefinition {
 
 export interface IEventLaneTopologyBinding {
   lane: IEventLaneDefinition;
+  auth?: RemoteLaneBindingAuth;
 }
 
 export interface IEventLaneTopologyProfile<

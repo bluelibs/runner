@@ -5,7 +5,6 @@ import {
   RpcLaneHttpClientConfig,
 } from "../../definers/builders/rpcLane";
 import type { Store } from "../../models/Store";
-import type { IAsyncContext } from "../../types/asyncContext";
 import type { IErrorHelper } from "../../types/error";
 import { Serializer } from "../../serializer";
 
@@ -18,13 +17,6 @@ function createErrorRegistry(store?: Store): Map<string, IErrorHelper<any>> {
   }
 
   return map;
-}
-
-function createAsyncContexts(store?: Store): Array<IAsyncContext<unknown>> {
-  if (!store) return [];
-  return Array.from(store.asyncContexts.values()) as Array<
-    IAsyncContext<unknown>
-  >;
 }
 
 function resolveSerializer(dependencies: Record<string, unknown>) {
@@ -61,17 +53,35 @@ export function registerRpcLaneHttpPresetsForNode() {
       onRequest: config.onRequest,
       serializer,
       forceSmart: config.forceSmart,
-      contexts: createAsyncContexts(store),
+      contexts: [],
       errorRegistry: createErrorRegistry(store),
     });
 
     return {
-      task: async (taskId: string, input?: unknown) =>
-        client.task(taskId, input),
-      event: async (eventId: string, payload?: unknown) =>
-        client.event(eventId, payload),
-      eventWithResult: async (eventId: string, payload?: unknown) =>
-        client.eventWithResult!(eventId, payload),
+      task: async (
+        taskId: string,
+        input?: unknown,
+        options?: { headers?: Record<string, string> },
+      ) =>
+        options
+          ? client.task(taskId, input, options)
+          : client.task(taskId, input),
+      event: async (
+        eventId: string,
+        payload?: unknown,
+        options?: { headers?: Record<string, string> },
+      ) =>
+        options
+          ? client.event(eventId, payload, options)
+          : client.event(eventId, payload),
+      eventWithResult: async (
+        eventId: string,
+        payload?: unknown,
+        options?: { headers?: Record<string, string> },
+      ) =>
+        options
+          ? client.eventWithResult!(eventId, payload, options)
+          : client.eventWithResult!(eventId, payload),
     };
   });
 
@@ -84,17 +94,35 @@ export function registerRpcLaneHttpPresetsForNode() {
       timeoutMs: config.timeoutMs,
       onRequest: config.onRequest,
       serializer,
-      contexts: createAsyncContexts(store),
+      contexts: [],
       errorRegistry: createErrorRegistry(store),
     });
 
     return {
-      task: async (taskId: string, input?: unknown) =>
-        client.task(taskId, input),
-      event: async (eventId: string, payload?: unknown) =>
-        client.event(eventId, payload),
-      eventWithResult: async (eventId: string, payload?: unknown) =>
-        client.eventWithResult!(eventId, payload),
+      task: async (
+        taskId: string,
+        input?: unknown,
+        options?: { headers?: Record<string, string> },
+      ) =>
+        options
+          ? client.task(taskId, input, options)
+          : client.task(taskId, input),
+      event: async (
+        eventId: string,
+        payload?: unknown,
+        options?: { headers?: Record<string, string> },
+      ) =>
+        options
+          ? client.event(eventId, payload, options)
+          : client.event(eventId, payload),
+      eventWithResult: async (
+        eventId: string,
+        payload?: unknown,
+        options?: { headers?: Record<string, string> },
+      ) =>
+        options
+          ? client.eventWithResult!(eventId, payload, options)
+          : client.eventWithResult!(eventId, payload),
     };
   });
 }

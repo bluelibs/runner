@@ -22,6 +22,7 @@ export * from "./types/resource";
 export * from "./types/event";
 export * from "./types/eventLane";
 export * from "./types/rpcLane";
+export * from "./types/remoteLaneAuth";
 export * from "./types/task";
 export * from "./types/taskMiddleware";
 export * from "./types/resourceMiddleware";

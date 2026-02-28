@@ -19,6 +19,52 @@ describe("requestHandlers - task handling", () => {
     jest.restoreAllMocks();
   });
 
+  it("returns authorizeTask response before task execution", async () => {
+    const runSpy = jest.fn(async () => "ok");
+    const deps: any = {
+      store: {
+        tasks: new Map([["t.authz", { task: { id: "t.authz" } }]]),
+        errors: new Map(),
+      },
+      taskRunner: {
+        run: runSpy,
+      },
+      eventManager: {} as any,
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      authenticator: async () => ({ ok: true }),
+      allowList: { ensureTask: () => null, ensureEvent: () => null },
+      router: {
+        basePath: "/api",
+        extract: () => ({ kind: "task", id: "t.authz" }),
+        isUnderBase: () => true,
+      },
+      cors: undefined,
+      serializer,
+      authorizeTask: async () => ({
+        status: 401,
+        body: {
+          ok: false,
+          error: { code: "UNAUTHORIZED", message: "Unauthorized" },
+        },
+      }),
+    };
+
+    const { handleTask } = createRequestHandlers(deps);
+    const { req, res } = createReqRes({
+      method: HttpMethod.Post,
+      url: "/api/task/t.authz",
+      headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
+      body: JSON.stringify({ input: { a: 1 } }),
+    });
+    await handleTask(req, res);
+    expect(runSpy).not.toHaveBeenCalled();
+    expect(res._status).toBe(401);
+    const json = res._buf
+      ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+      : undefined;
+    expect(json?.error?.code).toBe("UNAUTHORIZED");
+  });
+
   describe("Application Errors and Sanitization", () => {
     it("includes id and data for known application errors", async () => {
       const AppError = defineError<{ code: number; message: string }>({
@@ -386,6 +432,107 @@ describe("requestHandlers - task handling", () => {
       expect(res._status).toBe(200);
       expect(parse).not.toHaveBeenCalled();
       expect(provide).not.toHaveBeenCalled();
+    });
+
+    it("hydrates only rpc-lane allowlisted async contexts for task ids", async () => {
+      let allowedCurrent: any;
+      let blockedCurrent: any;
+      const allowedParse = jest.fn((s: string) => JSON.parse(s));
+      const allowedProvide = jest.fn((v: any, fn: any) => {
+        allowedCurrent = v;
+        return fn();
+      });
+      const blockedParse = jest.fn((s: string) => JSON.parse(s));
+      const blockedProvide = jest.fn((v: any, fn: any) => {
+        blockedCurrent = v;
+        return fn();
+      });
+      const allowedCtx = {
+        id: "ctx.rpc.allowed.task",
+        use: () => allowedCurrent,
+        serialize: (v: any) => JSON.stringify(v),
+        parse: allowedParse,
+        provide: allowedProvide,
+        require: () => ({}) as any,
+      } as any;
+      const blockedCtx = {
+        id: "ctx.rpc.blocked.task",
+        use: () => blockedCurrent,
+        serialize: (v: any) => JSON.stringify(v),
+        parse: blockedParse,
+        provide: blockedProvide,
+        require: () => ({}) as any,
+      } as any;
+
+      const deps: any = {
+        store: {
+          tasks: new Map([["t.ctx.rpc", { task: { id: "t.ctx.rpc" } }]]),
+          events: new Map(),
+          resources: new Map([
+            [
+              "rpc.lanes",
+              {
+                resource: { id: "rpc.lanes", tags: [globalTags.rpcLanes] },
+                value: {
+                  serveTaskIds: ["t.ctx.rpc"],
+                  serveEventIds: [],
+                  taskAllowAsyncContext: { "t.ctx.rpc": true },
+                  eventAllowAsyncContext: {},
+                  taskAsyncContextAllowList: {
+                    "t.ctx.rpc": [allowedCtx.id],
+                  },
+                  eventAsyncContextAllowList: {},
+                },
+              },
+            ],
+          ]),
+          errors: new Map(),
+          asyncContexts: new Map([
+            [allowedCtx.id, allowedCtx],
+            [blockedCtx.id, blockedCtx],
+          ]),
+        },
+        taskRunner: {
+          run: async () => {
+            expect(allowedCtx.use()).toEqual({ ok: "yes" });
+            expect(blockedCtx.use()).toBeUndefined();
+            return "ok";
+          },
+        },
+        eventManager: {} as any,
+        logger: { info: () => {}, warn: () => {}, error: () => {} },
+        authenticator: async () => ({ ok: true }),
+        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "task", id: "t.ctx.rpc" }),
+          isUnderBase: () => true,
+        },
+        cors: undefined,
+        serializer,
+      };
+
+      const { handleTask } = createRequestHandlers(deps);
+      const headers = {
+        [HeaderName.ContentType]: MimeType.ApplicationJson,
+        [HeaderName.XRunnerContext]: serializer.stringify({
+          [allowedCtx.id]: allowedCtx.serialize({ ok: "yes" }),
+          [blockedCtx.id]: blockedCtx.serialize({ no: "no" }),
+        }),
+      } satisfies NodeLikeHeaders;
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/task/t.ctx.rpc",
+        headers,
+        body: JSON.stringify({ input: { a: 1 } }),
+      });
+
+      await handleTask(req, res);
+      expect(res._status).toBe(200);
+      expect(allowedParse).toHaveBeenCalledTimes(1);
+      expect(allowedProvide).toHaveBeenCalledTimes(1);
+      expect(blockedParse).not.toHaveBeenCalled();
+      expect(blockedProvide).not.toHaveBeenCalled();
     });
   });
 

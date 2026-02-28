@@ -34,10 +34,23 @@ describe("rpcLane node http preset registration", () => {
       communicator.task!("tests.rpc-preset.task", { v: 1 }),
     ).resolves.toBe("mixed-ok");
     await expect(
+      communicator.task!("tests.rpc-preset.task", { v: 1 }, { headers: {} }),
+    ).resolves.toBe("mixed-ok");
+    await expect(
       communicator.event?.("tests.rpc-preset.event", { v: 1 }),
     ).resolves.toBeUndefined();
     await expect(
+      communicator.event?.("tests.rpc-preset.event", { v: 1 }, { headers: {} }),
+    ).resolves.toBeUndefined();
+    await expect(
       communicator.eventWithResult?.("tests.rpc-preset.event", { v: 1 }),
+    ).resolves.toBe("mixed-ok");
+    await expect(
+      communicator.eventWithResult?.(
+        "tests.rpc-preset.event",
+        { v: 1 },
+        { headers: {} },
+      ),
     ).resolves.toBe("mixed-ok");
     await runtime.dispose();
   });
@@ -59,10 +72,23 @@ describe("rpcLane node http preset registration", () => {
       communicator.task!("tests.rpc-preset.task", { v: 1 }),
     ).rejects.toBeTruthy();
     await expect(
+      communicator.task!("tests.rpc-preset.task", { v: 1 }, { headers: {} }),
+    ).rejects.toBeTruthy();
+    await expect(
       communicator.event?.("tests.rpc-preset.event", { v: 1 }),
     ).rejects.toBeTruthy();
     await expect(
+      communicator.event?.("tests.rpc-preset.event", { v: 1 }, { headers: {} }),
+    ).rejects.toBeTruthy();
+    await expect(
       communicator.eventWithResult?.("tests.rpc-preset.event", { v: 1 }),
+    ).rejects.toBeTruthy();
+    await expect(
+      communicator.eventWithResult?.(
+        "tests.rpc-preset.event",
+        { v: 1 },
+        { headers: {} },
+      ),
     ).rejects.toBeTruthy();
   });
 

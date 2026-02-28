@@ -2,12 +2,15 @@ import type { IResource } from "./resource";
 import type { IRpcLaneMeta } from "./meta";
 import type { IEventDefinition } from "./event";
 import type { ITaskDefinition } from "./task";
+import type { IAsyncContext } from "./asyncContext";
+import type { RemoteLaneBindingAuth } from "./remoteLaneAuth";
 import { symbolFilePath, symbolRpcLane } from "./utilities";
 
 export interface IRpcLaneDefinition {
   id: string;
   meta?: IRpcLaneMeta;
   applyTo?: readonly (ITaskDefinition<any> | IEventDefinition<any> | string)[];
+  asyncContexts?: readonly (IAsyncContext<unknown> | string)[];
   [symbolFilePath]?: string;
 }
 
@@ -19,9 +22,25 @@ export interface IRpcLane extends IRpcLaneDefinition {
 }
 
 export interface IRpcLaneCommunicator {
-  task?(id: string, input?: unknown): Promise<unknown>;
-  event?(id: string, payload?: unknown): Promise<void>;
-  eventWithResult?(id: string, payload?: unknown): Promise<unknown>;
+  task?(
+    id: string,
+    input?: unknown,
+    options?: RpcLaneRequestOptions,
+  ): Promise<unknown>;
+  event?(
+    id: string,
+    payload?: unknown,
+    options?: RpcLaneRequestOptions,
+  ): Promise<void>;
+  eventWithResult?(
+    id: string,
+    payload?: unknown,
+    options?: RpcLaneRequestOptions,
+  ): Promise<unknown>;
+}
+
+export interface RpcLaneRequestOptions {
+  headers?: Record<string, string>;
 }
 
 export type RpcLaneCommunicatorResource = IResource<
@@ -38,6 +57,7 @@ export interface IRpcLaneTopologyBinding {
   lane: IRpcLaneDefinition;
   communicator: RpcLaneCommunicatorResource;
   allowAsyncContext?: boolean;
+  auth?: RemoteLaneBindingAuth;
 }
 
 export interface IRpcLaneTopologyProfile<

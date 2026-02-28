@@ -81,6 +81,19 @@ describe("rpc lane builder", () => {
     ]);
   });
 
+  it("supports lane-level async context allowlist", () => {
+    const context = r.asyncContext("tests.rpc-lanes.builder.ctx").build();
+    const lane = r
+      .rpcLane("tests.rpc-lanes.builder.contexts")
+      .asyncContexts([context, "tests.rpc-lanes.builder.ctx"])
+      .build();
+
+    expect(lane.asyncContexts).toEqual([
+      context,
+      "tests.rpc-lanes.builder.ctx",
+    ]);
+  });
+
   it("builds frozen topology with lane-aware profile typing helper", () => {
     const laneA = r.rpcLane("tests.rpc-lanes.topology.helper.a").build();
     const laneB = r.rpcLane("tests.rpc-lanes.topology.helper.b").build();

@@ -144,4 +144,55 @@ describe("contextWrapper", () => {
     expect(parseSpy).not.toHaveBeenCalled();
     expect(provideSpy).not.toHaveBeenCalled();
   });
+
+  it("hydrates only allowlisted async context ids", async () => {
+    const firstParse = jest.fn((value: string) => JSON.parse(value));
+    const firstProvide = jest.fn(
+      async (_value: unknown, fn: () => Promise<string>) => fn(),
+    );
+    const secondParse = jest.fn((value: string) => JSON.parse(value));
+    const secondProvide = jest.fn(
+      async (_value: unknown, fn: () => Promise<string>) => fn(),
+    );
+    const firstCtx = {
+      id: "ctx.first",
+      parse: firstParse,
+      provide: firstProvide,
+    };
+    const secondCtx = {
+      id: "ctx.second",
+      parse: secondParse,
+      provide: secondProvide,
+    };
+
+    const req = {
+      headers: {
+        "x-runner-context": JSON.stringify({
+          [firstCtx.id]: JSON.stringify({ ok: true }),
+          [secondCtx.id]: JSON.stringify({ ok: true }),
+        }),
+      },
+    } as any;
+
+    const out = await withUserContexts(
+      req,
+      {
+        store: {
+          asyncContexts: new Map([
+            [firstCtx.id, firstCtx],
+            [secondCtx.id, secondCtx],
+          ]),
+        } as any,
+        serializer: { parse: (text: string) => JSON.parse(text) } as any,
+      },
+      async () => "ok",
+      { allowedAsyncContextIds: [secondCtx.id] },
+    );
+
+    expect(out).toBe("ok");
+    expect(firstParse).not.toHaveBeenCalled();
+    expect(firstProvide).not.toHaveBeenCalled();
+    expect(secondParse).toHaveBeenCalledTimes(1);
+    expect(secondProvide).toHaveBeenCalledTimes(1);
+  });
 });

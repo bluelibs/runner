@@ -27,6 +27,7 @@ export function rpcLaneBuilder(id: string): RpcLaneFluentBuilder {
     filePath,
     meta: {} as IRpcLaneMeta,
     applyTo: undefined,
+    asyncContexts: undefined,
   });
 
   return makeRpcLaneBuilder(initial);

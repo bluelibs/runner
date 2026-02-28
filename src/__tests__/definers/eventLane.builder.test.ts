@@ -57,6 +57,19 @@ describe("event lane builder", () => {
     ]);
   });
 
+  it("supports lane-level async context allowlist", () => {
+    const context = r.asyncContext("tests.event-lanes.builder.ctx").build();
+    const lane = r
+      .eventLane("tests.event-lanes.builder.contexts")
+      .asyncContexts([context, "tests.event-lanes.builder.ctx"])
+      .build();
+
+    expect(lane.asyncContexts).toEqual([
+      context,
+      "tests.event-lanes.builder.ctx",
+    ]);
+  });
+
   it("lets meta() override title()/description() values", () => {
     const lane = r
       .eventLane("tests.event-lanes.builder.meta-precedence")

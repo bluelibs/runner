@@ -17,6 +17,7 @@ import {
 } from "../remote-lanes/mode";
 import { collectRpcTopologyLanes } from "../remote-lanes/topologyLanes";
 import { resolveRpcLaneAssignments } from "./RpcLaneAssignments";
+import { resolveLaneAsyncContextAllowList } from "../remote-lanes/asyncContextAllowlist";
 
 const RPC_LANE_COMMUNICATOR_DEPENDENCY_PREFIX = "__rpcLaneCommunicator__:";
 
@@ -24,6 +25,8 @@ export type RpcLaneResolvedBinding = {
   lane: IRpcLaneDefinition;
   communicator: IRpcLaneCommunicator;
   allowAsyncContext: boolean;
+  asyncContextAllowList: readonly string[] | undefined;
+  auth: RpcLanesTopology["bindings"][number]["auth"];
 };
 
 export interface RpcLaneResolvedState {
@@ -37,6 +40,8 @@ export interface RpcLaneResolvedState {
   serveEventIds: Set<string>;
   taskAllowAsyncContext: Map<string, boolean>;
   eventAllowAsyncContext: Map<string, boolean>;
+  taskAsyncContextAllowList: Map<string, readonly string[] | undefined>;
+  eventAsyncContextAllowList: Map<string, readonly string[] | undefined>;
   communicatorByLaneId: Map<string, IRpcLaneCommunicator>;
 }
 
@@ -102,6 +107,14 @@ export function resolveRpcLaneState(
   const serveEventIds = new Set<string>();
   const taskAllowAsyncContext = new Map<string, boolean>();
   const eventAllowAsyncContext = new Map<string, boolean>();
+  const taskAsyncContextAllowList = new Map<
+    string,
+    readonly string[] | undefined
+  >();
+  const eventAsyncContextAllowList = new Map<
+    string,
+    readonly string[] | undefined
+  >();
   if (mode === "network") {
     for (const [taskId, lane] of assignments.taskLaneByTaskId.entries()) {
       if (!serveLaneIds.has(lane.id)) {
@@ -110,6 +123,7 @@ export function resolveRpcLaneState(
       const binding = bindingsByLaneId.get(lane.id)!;
       serveTaskIds.add(taskId);
       taskAllowAsyncContext.set(taskId, binding.allowAsyncContext);
+      taskAsyncContextAllowList.set(taskId, binding.asyncContextAllowList);
     }
 
     for (const [eventId, lane] of assignments.eventLaneByEventId.entries()) {
@@ -119,6 +133,7 @@ export function resolveRpcLaneState(
       const binding = bindingsByLaneId.get(lane.id)!;
       serveEventIds.add(eventId);
       eventAllowAsyncContext.set(eventId, binding.allowAsyncContext);
+      eventAsyncContextAllowList.set(eventId, binding.asyncContextAllowList);
     }
   }
 
@@ -133,6 +148,8 @@ export function resolveRpcLaneState(
     serveEventIds,
     taskAllowAsyncContext,
     eventAllowAsyncContext,
+    taskAsyncContextAllowList,
+    eventAsyncContextAllowList,
     communicatorByLaneId,
   };
 }
@@ -159,6 +176,26 @@ export function toRpcLanesResourceValue(
         Record<string, boolean>
       >((acc, [eventId, allow]) => {
         acc[eventId] = allow;
+        return acc;
+      }, {}),
+    ),
+    taskAsyncContextAllowList: Object.freeze(
+      Array.from(resolved.taskAsyncContextAllowList.entries()).reduce<
+        Record<string, readonly string[]>
+      >((acc, [taskId, allowList]) => {
+        if (allowList !== undefined) {
+          acc[taskId] = allowList;
+        }
+        return acc;
+      }, {}),
+    ),
+    eventAsyncContextAllowList: Object.freeze(
+      Array.from(resolved.eventAsyncContextAllowList.entries()).reduce<
+        Record<string, readonly string[]>
+      >((acc, [eventId, allowList]) => {
+        if (allowList !== undefined) {
+          acc[eventId] = allowList;
+        }
         return acc;
       }, {}),
     ),
@@ -207,10 +244,18 @@ function resolveBindings(
       });
     }
 
+    const asyncContextAllowList = resolveLaneAsyncContextAllowList({
+      laneAsyncContexts: binding.lane.asyncContexts,
+      legacyAllowAsyncContext: binding.allowAsyncContext,
+    });
+
     map.set(binding.lane.id, {
       lane: binding.lane,
       communicator: communicator as IRpcLaneCommunicator,
-      allowAsyncContext: binding.allowAsyncContext !== false,
+      allowAsyncContext:
+        asyncContextAllowList === undefined || asyncContextAllowList.length > 0,
+      asyncContextAllowList,
+      auth: binding.auth,
     });
   }
 
