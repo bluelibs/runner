@@ -4,9 +4,10 @@ Runner gives you primitives for all three observability signals:
 
 - **Logs**: structured application/runtime events via `globals.resources.logger`
 - **Metrics**: numeric health and performance indicators from your resources/tasks/middleware
-- **Traces**: distributed timing and call-path correlation via OpenTelemetry
+- **Traces**: distributed timing and call-path correlation using your tracing stack (for example OpenTelemetry)
 
 Use all three together. Logs explain what happened, metrics tell you when it is happening repeatedly, and traces show where latency accumulates.
+Runner provides the integration points (interceptors, context propagation, structured logs), while tracer backends are installed and configured by your application.
 
 ### Naming conventions
 

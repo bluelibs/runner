@@ -3092,7 +3092,33 @@ await run(app, {
 > **runtime:** "An error boundary: a trampoline under your tightrope. I'm the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
 ## Caching
 
-Avoid recomputing expensive work by caching task results with TTL-based eviction:
+Avoid recomputing expensive work by caching task results with TTL-based eviction.
+Cache is opt-in: you must register `globals.resources.cache`.
+
+### Provider Contract
+
+When you provide a custom cache backend, this is the contract:
+
+```typescript
+import type { ICacheProvider } from "@bluelibs/runner";
+
+interface CacheProviderOptions {
+  ttl?: number;
+  max?: number;
+  ttlAutopurge?: boolean;
+}
+
+type CacheProviderFactory = (
+  options: CacheProviderOptions,
+) => Promise<ICacheProvider>;
+```
+
+Notes:
+- `options` are merged from `globals.resources.cache.with({ defaultOptions })` and middleware-level cache options.
+- `keyBuilder` is middleware-only and is not passed to the provider.
+- `has()` is optional, but recommended when `undefined` can be a valid cached value.
+
+### Default Usage
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -3128,10 +3154,11 @@ const app = r
   .build();
 ```
 
-Want Redis instead of the default LRU cache? Provide a custom `cacheProvider` resource:
+### Minimal Redis Provider Example
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
+import Redis from "ioredis";
 
 const redis = r
   .resource<{ url: string }>("app.resources.redis")
@@ -3139,11 +3166,40 @@ const redis = r
   .dispose(async (client) => client.disconnect())
   .build();
 
+class RedisCache {
+  constructor(
+    private client: Redis,
+    private ttlMs?: number,
+    private prefix: string = "cache:",
+  ) {}
+
+  async get(key: string): Promise<unknown | undefined> {
+    const value = await this.client.get(this.prefix + key);
+    return value ? JSON.parse(value) : undefined;
+  }
+
+  async set(key: string, value: unknown): Promise<void> {
+    const payload = JSON.stringify(value);
+    if (this.ttlMs && this.ttlMs > 0) {
+      await this.client.setex(this.prefix + key, Math.ceil(this.ttlMs / 1000), payload);
+      return;
+    }
+    await this.client.set(this.prefix + key, payload);
+  }
+
+  async clear(): Promise<void> {
+    const keys = await this.client.keys(this.prefix + "*");
+    if (keys.length > 0) {
+      await this.client.del(...keys);
+    }
+  }
+}
+
 const redisCacheProvider = r
   .resource("app.resources.cacheProvider.redis")
   .dependencies({ redis })
   .init(async (_config, { redis }) => {
-    return async (options) => new RedisCache(redis, options);
+    return async (options) => new RedisCache(redis, options.ttl);
   })
   .build();
 
@@ -3155,32 +3211,6 @@ const app = r
   ])
   .build();
 ```
-
-Cache provider contract:
-
-```typescript
-import type { ICacheProvider } from "@bluelibs/runner";
-
-type CacheProvider = (options: {
-  ttl?: number;
-  max?: number;
-  ttlAutopurge?: boolean;
-  [key: string]: unknown;
-}) => Promise<ICacheProvider>;
-
-interface ICacheProvider {
-  get(key: string): unknown | Promise<unknown>;
-  set(key: string, value: unknown): unknown | Promise<unknown>;
-  clear(): void | Promise<void>;
-  has?(key: string): boolean | Promise<boolean>;
-}
-```
-
-Notes:
-
-- `options` are merged from `globals.resources.cache.with({ defaultOptions })` and middleware-level cache options.
-- `keyBuilder` is middleware-only and is not passed to `cacheProvider`.
-- `has()` is optional, but recommended when `undefined` can be a valid cached value.
 
 **Why would you need this?** For monitoring and metrics—you want to know cache hit rates to optimize your application.
 
@@ -4247,9 +4277,10 @@ Runner gives you primitives for all three observability signals:
 
 - **Logs**: structured application/runtime events via `globals.resources.logger`
 - **Metrics**: numeric health and performance indicators from your resources/tasks/middleware
-- **Traces**: distributed timing and call-path correlation via OpenTelemetry
+- **Traces**: distributed timing and call-path correlation using your tracing stack (for example OpenTelemetry)
 
 Use all three together. Logs explain what happened, metrics tell you when it is happening repeatedly, and traces show where latency accumulates.
+Runner provides the integration points (interceptors, context propagation, structured logs), while tracer backends are installed and configured by your application.
 
 ### Naming conventions
 
@@ -4836,14 +4867,41 @@ For tasks, prefer static dependencies (required or `.optional()`) and branch at 
 
 ## Execution Journal (Advanced Coordination)
 
-When multiple middleware need to exchange execution-local state without polluting task input/output, use the **ExecutionJournal**.
+Use the **ExecutionJournal** when middleware and tasks must share execution-local state without polluting task input/output contracts.
 
-- Use typed keys via `journal.createKey<T>(...)`
-- `set()` is fail-fast by default (duplicate key writes throw)
-- Use `{ override: true }` only when mutation is intentional
-- Forward journal explicitly in nested task calls when you need shared trace/state continuity
+### Example: Correlation ID shared across middleware and task
 
-For the full API and patterns, see the Execution Journal section in [Core Concepts](#execution-journal).
+```typescript
+import { journal, r } from "@bluelibs/runner";
+
+const correlationIdKey = journal.createKey<string>("app.correlationId");
+
+const correlationMiddleware = r.middleware
+  .task("app.middleware.correlation")
+  .run(async ({ task, next, journal }) => {
+    const correlationId = `${Date.now()}-${task.definition.id}`;
+    journal.set(correlationIdKey, correlationId);
+    return next(task.input);
+  })
+  .build();
+
+const processOrder = r
+  .task("app.tasks.processOrder")
+  .middleware([correlationMiddleware])
+  .run(async (_input, _deps, context) => {
+    const correlationId = context.journal.get(correlationIdKey);
+    return { correlationId, ok: true };
+  })
+  .build();
+```
+
+### Best practices
+
+- Define and export journal keys once per domain (`journal.createKey<T>(...)`) so middleware/tasks share a typed contract.
+- Keep fail-fast semantics: duplicate `set()` calls should throw unless mutation is truly intentional (`{ override: true }`).
+- Forward `journal` explicitly in nested task calls only when child work must share the same execution context.
+
+For the full API surface and patterns, see the Execution Journal section in [Core Concepts](#execution-journal).
 
 ---
 
@@ -5213,9 +5271,10 @@ Every component can have these basic metadata properties:
 interface IMeta {
   title?: string; // Human-readable name
   description?: string; // What this component does
-  tags?: TagType[]; // Categories and behavioral flags
 }
 ```
+
+Use `.tags([...])` for behavioral categorization/filtering. Keep `.meta(...)` focused on descriptive documentation fields.
 
 ### Simple Documentation Example
 
@@ -6963,24 +7022,24 @@ The quick-reference table for "I've seen this error, what do I do?"
 | Error                                                                                          | Symptom                             | Likely Cause                                         | Fix                                                                                           |
 | ---------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `TypeError: X is not a function`                                                               | Task call fails at runtime          | Forgot `.build()` on task/resource definition        | Add `.build()` at the end of your fluent chain                                                |
-| `Resource "X" not found`                                                                       | Runtime crash during initialization | Component not registered                             | Add to `.register([...])` in parent resource                                                  |
-| `Config validation failed for X`                                                               | Startup crash before app runs       | Missing `.with()` config for resource                | Provide required config: `resource.with({ ... })`                                             |
-| `"X" is internal to resource "Y" and cannot be referenced by ...` (`visibilityViolationError`) | `run(app)` fails during bootstrap   | Cross-resource reference to a non-exported item      | Export the item with `.isolate({ exports: [...] })` or depend on an already exported contract |
-| `Circular dependencies detected: ...` (`circularDependencyError`)                              | `run(app)` fails before startup     | Actual runtime dependency graph cycle                | Break the dependency loop across tasks/resources/middleware/hooks                             |
+| `Resource "X" not found` (`resourceNotFoundError`, `runner.errors.resourceNotFound`)          | Runtime crash during initialization | Component not registered                             | Add to `.register([...])` in parent resource                                                  |
+| `Config validation failed for X` (`validationError`, `runner.errors.validation`)              | Startup crash before app runs       | Missing `.with()` config for resource                | Provide required config: `resource.with({ ... })`                                             |
+| `"X" is internal to resource "Y" and cannot be referenced by ...` (`visibilityViolationError`, `runner.errors.visibilityViolation`) | `run(app)` fails during bootstrap   | Cross-resource reference to a non-exported item      | Export the item with `.isolate({ exports: [...] })` or depend on an already exported contract |
+| `Circular dependencies detected: ...` (`circularDependencyError`, `runner.errors.circularDependencies`) | `run(app)` fails before startup     | Actual runtime dependency graph cycle                | Break the dependency loop across tasks/resources/middleware/hooks                             |
 | `Circular dependency detected` (type inference)                                                | TypeScript inference fails          | Import cycle between files                           | Use explicit type annotation: `as IResource<Config, Value>`                                   |
 | `middlewareTimeoutError` (`runner.errors.middleware.timeout`, HTTP 408)                        | Task hangs then throws              | Operation exceeded timeout TTL                       | Increase TTL or investigate underlying slow operation                                         |
 | `Cannot read property 'X' of undefined`                                                        | Task crashes mid-execution          | Dependency not properly declared                     | Check `.dependencies({})` matches what you use                                                |
 | `validationError` (`runner.errors.validation`)                                                 | Task rejects valid-looking input    | Input/result/config schema validation failed         | Check schema constraints (types, required fields)                                             |
 | `middlewareRateLimitExceededError` (`runner.errors.middleware.rateLimitExceeded`, HTTP 429)    | Task throws after repeated calls    | Exceeded rate limit threshold                        | Wait for window reset or increase `max` limit                                                 |
 | `middlewareCircuitBreakerOpenError` (`runner.errors.middleware.circuitBreakerOpen`, HTTP 503)  | All calls fail immediately          | Circuit tripped after failures                       | Wait for `resetTimeout` or fix underlying service                                             |
-| `EventCycleError`                                                                              | Emissions recurse / stack explodes  | Event graph emitted itself (direct/indirect)         | Break the cycle or emit asynchronously outside the chain                                      |
-| `InputContractViolationError`                                                                  | Type errors on task input           | Task input does not satisfy middleware/tag contract  | Expand task input type to include required contract fields                                    |
-| `OutputContractViolationError`                                                                 | Type errors on task output          | Task output does not satisfy middleware/tag contract | Return a contract-compatible shape or relax contract                                          |
-| `DurableExecutionError`                                                                        | Durable workflow replay fails       | Step/signal shape changed incompatibly               | Keep step ids stable and migrate workflow logic carefully                                     |
-| `SemaphoreDisposedError`                                                                       | Acquire fails immediately           | Semaphore disposed while callers still running       | Create a new semaphore per lifecycle and dispose at shutdown                                  |
-| `QueueDeadlockError`                                                                           | Queue stops progressing             | Job waited on work that required the same queue      | Avoid self-wait cycles; split queues or redesign flow                                         |
+| `eventCycleError` (`runner.errors.eventCycle`)                                                 | Emissions recurse / stack explodes  | Event graph emitted itself (direct/indirect)         | Break the cycle or emit asynchronously outside the chain                                      |
+| `InputContractViolationError` (TypeScript compile-time)                                        | Type errors on task input           | Task input does not satisfy middleware/tag contract  | Expand task input type to include required contract fields                                    |
+| `OutputContractViolationError` (TypeScript compile-time)                                       | Type errors on task output          | Task output does not satisfy middleware/tag contract | Return a contract-compatible shape or relax contract                                          |
+| `durableExecutionError` (`runner.errors.durable.executionError`)                              | Durable workflow replay fails       | Step/signal shape changed incompatibly               | Keep step ids stable and migrate workflow logic carefully                                     |
+| `semaphoreDisposedError` (`runner.errors.semaphore.disposed`)                                 | Acquire fails immediately           | Semaphore disposed while callers still running       | Create a new semaphore per lifecycle and dispose at shutdown                                  |
+| `queueDeadlockError` (`runner.errors.queue.deadlock`)                                          | Queue stops progressing             | Job waited on work that required the same queue      | Avoid self-wait cycles; split queues or redesign flow                                         |
 
-> **Note:** All errors above (except standard `TypeError`/`Cannot read property`) are `RunnerError` instances, not standard `Error` subclasses. Use `r.error.is(err)` to check whether an error matches a specific Runner error.
+> **Note:** Rows with `runner.errors.*` ids (or known Runner helpers such as `validationError`) are runtime `RunnerError` instances. Rows marked as TypeScript compile-time diagnostics are type-system errors and do not have runtime `runner.errors.*` ids.
 
 ---
 
@@ -7283,7 +7342,7 @@ const adminTask = r
 
 ### Runtime Safety Errors
 
-#### `EventCycleError`
+#### `eventCycleError` (`runner.errors.eventCycle`)
 
 **Symptom**: Event emission loops forever, throws cycle error, or eventually hits `Maximum call stack size exceeded`.
 
@@ -7295,11 +7354,13 @@ const adminTask = r
 2. Move follow-up emission to a separate async boundary when it should not be in the same chain.
 3. Keep `runtimeEventCycleDetection` enabled (default) unless you have fully proven your graph is acyclic.
 
-#### `InputContractViolationError` / `OutputContractViolationError`
+#### `InputContractViolationError` / `OutputContractViolationError` (TypeScript compile-time)
 
 **Symptom**: TypeScript errors appear when composing middleware/tags with tasks.
 
 **Cause**: Contract middleware or contract tags require input/output shapes that the task does not satisfy.
+
+These are type-level diagnostics from contract composition, not runtime `RunnerError` ids.
 
 **Fix**:
 
@@ -7307,7 +7368,9 @@ const adminTask = r
 2. Verify `inputSchema`/`resultSchema` inferred types match those contract shapes.
 3. If needed, narrow middleware/tag contracts to the actual shared surface.
 
-#### `DurableExecutionError`
+#### `durableExecutionError` (`runner.errors.durable.executionError`)
+
+When using Node durable APIs, this may surface as the exported `DurableExecutionError` class. The underlying Runner error id remains `runner.errors.durable.executionError`.
 
 **Symptom**: Durable workflow resumes fail after deployment, replay diverges, or signal waiting behavior breaks.
 
@@ -7319,7 +7382,7 @@ const adminTask = r
 2. Introduce migration-safe branching/versioning in workflow logic.
 3. Use the durable workflows guide for replay-safe patterns: [Durable Workflows](../readmes/DURABLE_WORKFLOWS.md).
 
-#### `SemaphoreDisposedError`
+#### `semaphoreDisposedError` (`runner.errors.semaphore.disposed`)
 
 **Symptom**: `acquire()` fails immediately in active code paths.
 
@@ -7331,7 +7394,7 @@ const adminTask = r
 2. Dispose semaphores during app shutdown, not while tasks still need them.
 3. Fail fast when a disposed semaphore is accessed unexpectedly.
 
-#### `QueueDeadlockError`
+#### `queueDeadlockError` (`runner.errors.queue.deadlock`)
 
 **Symptom**: Queue appears stuck; queued jobs never complete.
 
@@ -8098,25 +8161,35 @@ sdk.start();
 
 ---
 
-### Redis Cache Override
+### Redis Cache Provider
 
-Replace the default LRU cache with Redis:
+Use a provider resource when you want Redis-backed caching.
 
 ```typescript
-import { r, globals, override } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
+import type { ICacheProvider } from "@bluelibs/runner";
 import Redis from "ioredis";
 
-// Redis connection resource
+interface CacheProviderOptions {
+  ttl?: number;
+  max?: number;
+  ttlAutopurge?: boolean;
+}
+
+type CacheProviderFactory = (
+  options: CacheProviderOptions,
+) => Promise<ICacheProvider>;
+
 const redis = r
   .resource<{ url: string }>("app.redis")
   .init(async ({ url }) => new Redis(url))
   .dispose(async (client) => client.disconnect())
   .build();
 
-// Redis cache implementation (matches ICacheProvider)
-class RedisCache {
+class RedisCache implements ICacheProvider {
   constructor(
     private client: Redis,
+    private ttlMs?: number,
     private prefix: string = "cache:",
   ) {}
 
@@ -8126,8 +8199,12 @@ class RedisCache {
   }
 
   async set(key: string, value: unknown): Promise<void> {
-    const serialized = JSON.stringify(value);
-    await this.client.set(this.prefix + key, serialized);
+    const payload = JSON.stringify(value);
+    if (this.ttlMs && this.ttlMs > 0) {
+      await this.client.setex(this.prefix + key, Math.ceil(this.ttlMs / 1000), payload);
+      return;
+    }
+    await this.client.set(this.prefix + key, payload);
   }
 
   async clear(): Promise<void> {
@@ -8138,16 +8215,14 @@ class RedisCache {
   }
 }
 
-// Provide a custom cache provider resource
 const redisCacheProvider = r
   .resource("app.cacheProvider.redis")
   .dependencies({ redis })
-  .init(async (_config, { redis }) => {
-    return async () => new RedisCache(redis);
+  .init(async (_config, { redis }): Promise<CacheProviderFactory> => {
+    return async (options) => new RedisCache(redis, options.ttl);
   })
   .build();
 
-// Wire it up
 const app = r
   .resource("app")
   .register([
@@ -8156,12 +8231,6 @@ const app = r
   ])
   .build();
 ```
-
-Provider contract reminder:
-
-- Provider signature: `async (options) => ICacheProvider`
-- Required instance methods: `get`, `set`, `clear`
-- Optional method: `has` (recommended when caching `undefined` values)
 
 ---
 
@@ -8251,85 +8320,7 @@ const adminTask = r
   .build();
 ```
 
----
-
-### BullMQ Job Queue Integration
-
-Background job processing with BullMQ:
-
-```typescript
-import { r, globals } from "@bluelibs/runner";
-import { Queue, Worker, Job } from "bullmq";
-
-// Queue resource
-const jobQueue = r
-  .resource<{ redis: string; queueName: string }>("app.jobQueue")
-  .context(() => ({ worker: null as Worker | null }))
-  .init(async ({ redis, queueName }, _deps, ctx) => {
-    const queue = new Queue(queueName, { connection: { url: redis } });
-
-    return {
-      queue,
-      async add<T>(jobName: string, data: T, opts?: { delay?: number }) {
-        return queue.add(jobName, data, opts);
-      },
-      async startWorker(processor: (job: Job) => Promise<void>) {
-        ctx.worker = new Worker(queueName, processor, {
-          connection: { url: redis },
-        });
-        return ctx.worker;
-      },
-    };
-  })
-  .dispose(async (value, _config, _deps, ctx) => {
-    await value.queue.close();
-    if (ctx.worker) await ctx.worker.close();
-  })
-  .build();
-
-// Email sending task (can be called directly or via queue)
-const sendEmail = r
-  .task("app.tasks.sendEmail")
-  .dependencies({ mailer })
-  .run(
-    async (
-      input: { to: string; subject: string; body: string },
-      { mailer },
-    ) => {
-      await mailer.send(input);
-      return { sent: true, to: input.to };
-    },
-  )
-  .build();
-
-// Queue wrapper for background processing
-const queueEmail = r
-  .task("app.tasks.queueEmail")
-  .dependencies({ jobQueue })
-  .run(
-    async (
-      input: { to: string; subject: string; body: string },
-      { jobQueue },
-    ) => {
-      const job = await jobQueue.add("sendEmail", input);
-      return { queued: true, jobId: job.id };
-    },
-  )
-  .build();
-
-// Worker initialization
-const emailWorker = r
-  .resource("app.emailWorker")
-  .dependencies({ jobQueue, sendEmail })
-  .init(async (_, { jobQueue, sendEmail }) => {
-    await jobQueue.startWorker(async (job) => {
-      await sendEmail(job.data);
-    });
-  })
-  .build();
-```
-
----
+For queue-based background processing in v6, prefer Event Lanes (`eventLanesResource` + topology profiles/bindings) over ad-hoc queue integration.
 
 ### Structured JSON Logging for Production
 

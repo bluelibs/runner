@@ -1,6 +1,32 @@
 ## Caching
 
-Avoid recomputing expensive work by caching task results with TTL-based eviction:
+Avoid recomputing expensive work by caching task results with TTL-based eviction.
+Cache is opt-in: you must register `globals.resources.cache`.
+
+### Provider Contract
+
+When you provide a custom cache backend, this is the contract:
+
+```typescript
+import type { ICacheProvider } from "@bluelibs/runner";
+
+interface CacheProviderOptions {
+  ttl?: number;
+  max?: number;
+  ttlAutopurge?: boolean;
+}
+
+type CacheProviderFactory = (
+  options: CacheProviderOptions,
+) => Promise<ICacheProvider>;
+```
+
+Notes:
+- `options` are merged from `globals.resources.cache.with({ defaultOptions })` and middleware-level cache options.
+- `keyBuilder` is middleware-only and is not passed to the provider.
+- `has()` is optional, but recommended when `undefined` can be a valid cached value.
+
+### Default Usage
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -36,10 +62,11 @@ const app = r
   .build();
 ```
 
-Want Redis instead of the default LRU cache? Provide a custom `cacheProvider` resource:
+### Minimal Redis Provider Example
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
+import Redis from "ioredis";
 
 const redis = r
   .resource<{ url: string }>("app.resources.redis")
@@ -47,11 +74,40 @@ const redis = r
   .dispose(async (client) => client.disconnect())
   .build();
 
+class RedisCache {
+  constructor(
+    private client: Redis,
+    private ttlMs?: number,
+    private prefix: string = "cache:",
+  ) {}
+
+  async get(key: string): Promise<unknown | undefined> {
+    const value = await this.client.get(this.prefix + key);
+    return value ? JSON.parse(value) : undefined;
+  }
+
+  async set(key: string, value: unknown): Promise<void> {
+    const payload = JSON.stringify(value);
+    if (this.ttlMs && this.ttlMs > 0) {
+      await this.client.setex(this.prefix + key, Math.ceil(this.ttlMs / 1000), payload);
+      return;
+    }
+    await this.client.set(this.prefix + key, payload);
+  }
+
+  async clear(): Promise<void> {
+    const keys = await this.client.keys(this.prefix + "*");
+    if (keys.length > 0) {
+      await this.client.del(...keys);
+    }
+  }
+}
+
 const redisCacheProvider = r
   .resource("app.resources.cacheProvider.redis")
   .dependencies({ redis })
   .init(async (_config, { redis }) => {
-    return async (options) => new RedisCache(redis, options);
+    return async (options) => new RedisCache(redis, options.ttl);
   })
   .build();
 
@@ -63,32 +119,6 @@ const app = r
   ])
   .build();
 ```
-
-Cache provider contract:
-
-```typescript
-import type { ICacheProvider } from "@bluelibs/runner";
-
-type CacheProvider = (options: {
-  ttl?: number;
-  max?: number;
-  ttlAutopurge?: boolean;
-  [key: string]: unknown;
-}) => Promise<ICacheProvider>;
-
-interface ICacheProvider {
-  get(key: string): unknown | Promise<unknown>;
-  set(key: string, value: unknown): unknown | Promise<unknown>;
-  clear(): void | Promise<void>;
-  has?(key: string): boolean | Promise<boolean>;
-}
-```
-
-Notes:
-
-- `options` are merged from `globals.resources.cache.with({ defaultOptions })` and middleware-level cache options.
-- `keyBuilder` is middleware-only and is not passed to `cacheProvider`.
-- `has()` is optional, but recommended when `undefined` can be a valid cached value.
 
 **Why would you need this?** For monitoring and metrics—you want to know cache hit rates to optimize your application.
 

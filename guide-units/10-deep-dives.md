@@ -686,25 +686,35 @@ sdk.start();
 
 ---
 
-### Redis Cache Override
+### Redis Cache Provider
 
-Replace the default LRU cache with Redis:
+Use a provider resource when you want Redis-backed caching.
 
 ```typescript
-import { r, globals, override } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
+import type { ICacheProvider } from "@bluelibs/runner";
 import Redis from "ioredis";
 
-// Redis connection resource
+interface CacheProviderOptions {
+  ttl?: number;
+  max?: number;
+  ttlAutopurge?: boolean;
+}
+
+type CacheProviderFactory = (
+  options: CacheProviderOptions,
+) => Promise<ICacheProvider>;
+
 const redis = r
   .resource<{ url: string }>("app.redis")
   .init(async ({ url }) => new Redis(url))
   .dispose(async (client) => client.disconnect())
   .build();
 
-// Redis cache implementation (matches ICacheProvider)
-class RedisCache {
+class RedisCache implements ICacheProvider {
   constructor(
     private client: Redis,
+    private ttlMs?: number,
     private prefix: string = "cache:",
   ) {}
 
@@ -714,8 +724,12 @@ class RedisCache {
   }
 
   async set(key: string, value: unknown): Promise<void> {
-    const serialized = JSON.stringify(value);
-    await this.client.set(this.prefix + key, serialized);
+    const payload = JSON.stringify(value);
+    if (this.ttlMs && this.ttlMs > 0) {
+      await this.client.setex(this.prefix + key, Math.ceil(this.ttlMs / 1000), payload);
+      return;
+    }
+    await this.client.set(this.prefix + key, payload);
   }
 
   async clear(): Promise<void> {
@@ -726,16 +740,14 @@ class RedisCache {
   }
 }
 
-// Provide a custom cache provider resource
 const redisCacheProvider = r
   .resource("app.cacheProvider.redis")
   .dependencies({ redis })
-  .init(async (_config, { redis }) => {
-    return async () => new RedisCache(redis);
+  .init(async (_config, { redis }): Promise<CacheProviderFactory> => {
+    return async (options) => new RedisCache(redis, options.ttl);
   })
   .build();
 
-// Wire it up
 const app = r
   .resource("app")
   .register([
@@ -744,12 +756,6 @@ const app = r
   ])
   .build();
 ```
-
-Provider contract reminder:
-
-- Provider signature: `async (options) => ICacheProvider`
-- Required instance methods: `get`, `set`, `clear`
-- Optional method: `has` (recommended when caching `undefined` values)
 
 ---
 
@@ -839,85 +845,7 @@ const adminTask = r
   .build();
 ```
 
----
-
-### BullMQ Job Queue Integration
-
-Background job processing with BullMQ:
-
-```typescript
-import { r, globals } from "@bluelibs/runner";
-import { Queue, Worker, Job } from "bullmq";
-
-// Queue resource
-const jobQueue = r
-  .resource<{ redis: string; queueName: string }>("app.jobQueue")
-  .context(() => ({ worker: null as Worker | null }))
-  .init(async ({ redis, queueName }, _deps, ctx) => {
-    const queue = new Queue(queueName, { connection: { url: redis } });
-
-    return {
-      queue,
-      async add<T>(jobName: string, data: T, opts?: { delay?: number }) {
-        return queue.add(jobName, data, opts);
-      },
-      async startWorker(processor: (job: Job) => Promise<void>) {
-        ctx.worker = new Worker(queueName, processor, {
-          connection: { url: redis },
-        });
-        return ctx.worker;
-      },
-    };
-  })
-  .dispose(async (value, _config, _deps, ctx) => {
-    await value.queue.close();
-    if (ctx.worker) await ctx.worker.close();
-  })
-  .build();
-
-// Email sending task (can be called directly or via queue)
-const sendEmail = r
-  .task("app.tasks.sendEmail")
-  .dependencies({ mailer })
-  .run(
-    async (
-      input: { to: string; subject: string; body: string },
-      { mailer },
-    ) => {
-      await mailer.send(input);
-      return { sent: true, to: input.to };
-    },
-  )
-  .build();
-
-// Queue wrapper for background processing
-const queueEmail = r
-  .task("app.tasks.queueEmail")
-  .dependencies({ jobQueue })
-  .run(
-    async (
-      input: { to: string; subject: string; body: string },
-      { jobQueue },
-    ) => {
-      const job = await jobQueue.add("sendEmail", input);
-      return { queued: true, jobId: job.id };
-    },
-  )
-  .build();
-
-// Worker initialization
-const emailWorker = r
-  .resource("app.emailWorker")
-  .dependencies({ jobQueue, sendEmail })
-  .init(async (_, { jobQueue, sendEmail }) => {
-    await jobQueue.startWorker(async (job) => {
-      await sendEmail(job.data);
-    });
-  })
-  .build();
-```
-
----
+For queue-based background processing in v6, prefer Event Lanes (`eventLanesResource` + topology profiles/bindings) over ad-hoc queue integration.
 
 ### Structured JSON Logging for Production
 

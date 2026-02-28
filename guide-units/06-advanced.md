@@ -88,14 +88,41 @@ For tasks, prefer static dependencies (required or `.optional()`) and branch at 
 
 ## Execution Journal (Advanced Coordination)
 
-When multiple middleware need to exchange execution-local state without polluting task input/output, use the **ExecutionJournal**.
+Use the **ExecutionJournal** when middleware and tasks must share execution-local state without polluting task input/output contracts.
 
-- Use typed keys via `journal.createKey<T>(...)`
-- `set()` is fail-fast by default (duplicate key writes throw)
-- Use `{ override: true }` only when mutation is intentional
-- Forward journal explicitly in nested task calls when you need shared trace/state continuity
+### Example: Correlation ID shared across middleware and task
 
-For the full API and patterns, see the Execution Journal section in [Core Concepts](#execution-journal).
+```typescript
+import { journal, r } from "@bluelibs/runner";
+
+const correlationIdKey = journal.createKey<string>("app.correlationId");
+
+const correlationMiddleware = r.middleware
+  .task("app.middleware.correlation")
+  .run(async ({ task, next, journal }) => {
+    const correlationId = `${Date.now()}-${task.definition.id}`;
+    journal.set(correlationIdKey, correlationId);
+    return next(task.input);
+  })
+  .build();
+
+const processOrder = r
+  .task("app.tasks.processOrder")
+  .middleware([correlationMiddleware])
+  .run(async (_input, _deps, context) => {
+    const correlationId = context.journal.get(correlationIdKey);
+    return { correlationId, ok: true };
+  })
+  .build();
+```
+
+### Best practices
+
+- Define and export journal keys once per domain (`journal.createKey<T>(...)`) so middleware/tasks share a typed contract.
+- Keep fail-fast semantics: duplicate `set()` calls should throw unless mutation is truly intentional (`{ override: true }`).
+- Forward `journal` explicitly in nested task calls only when child work must share the same execution context.
+
+For the full API surface and patterns, see the Execution Journal section in [Core Concepts](#execution-journal).
 
 ---
 
@@ -465,9 +492,10 @@ Every component can have these basic metadata properties:
 interface IMeta {
   title?: string; // Human-readable name
   description?: string; // What this component does
-  tags?: TagType[]; // Categories and behavioral flags
 }
 ```
+
+Use `.tags([...])` for behavioral categorization/filtering. Keep `.meta(...)` focused on descriptive documentation fields.
 
 ### Simple Documentation Example
 

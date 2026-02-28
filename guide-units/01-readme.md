@@ -5,7 +5,7 @@
 1. **Tasks** are your business logic functions (with dependencies and middleware)
 2. **Resources** are shared services (database, config, clients) with lifecycle (`init` / `dispose`)
 3. **You compose everything** under an `app` resource with `.register([...])`
-4. **You run it** with `run(app)` which gives you `runTask()` and `dispose()`
+4. **You run it** with `run(app)` which gives you `runTask()` and `dispose()` first, plus more runtime helpers as you grow (`emitEvent()`, resource getters)
 
 That's it. Now let's get you to a first successful run.
 

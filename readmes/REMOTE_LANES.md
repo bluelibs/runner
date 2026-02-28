@@ -37,6 +37,23 @@ Remote Lanes work through runtime interception and decoration — they never tou
 
 Your task and event definitions stay exactly the same. Lane routing is attached purely by resource configuration.
 
+### Design Boundary: Lanes Route Work, Hooks Decide Side Effects
+
+Remote lanes (`lane` / `profile` / `binding`) are infrastructure controls: routing, delivery mode, reliability, and scale.
+
+- Use lanes/profiles to decide **where and how** work runs.
+- Use hook/task logic (feature flags, business rules, tenant/region policy) to decide **what should happen**.
+
+Runner intentionally does **not** provide lane/profile-level hook allow/deny gating. We want to avoid coupling transport topology to domain behavior, because that creates hidden behavior and a larger config/test matrix.
+
+In practice:
+
+- If you need throughput/locality/fault-isolation changes, adjust lane topology.
+- If you need to enable/disable a side effect, do it in hook business logic.
+- If semantics truly differ, split events instead of transport-filtering hooks.
+
+Related transactional boundary: transactional events are in-process rollback semantics, so `transactional + eventLane` is invalid by design.
+
 ### Event Lane Data Flow
 
 ```mermaid
