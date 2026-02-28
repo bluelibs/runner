@@ -304,7 +304,6 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Under the Hood](#under-the-hood) - Architecture deep dive
 - [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
-
 ## What Is This Thing?
 
 BlueLibs Runner is a TypeScript-first dependency injection framework built around **tasks** (functions) and **resources** (singletons). It's explicit and composition-first: you write normal async functions; Runner wires dependencies, middleware, events/hooks, and lifecycle.
@@ -2736,19 +2735,19 @@ await result.dispose();
 
 An object with the following properties and methods:
 
-| Property                    | Description                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `value`                     | Value returned by the `app` resource's `init()`                                                                                                                                                                                                                                                                                                                                                                                 |
-| `runTask(...)`              | Run a task by reference or string id                                                                                                                                                                                                                                                                                                                                                                                            |
-| `emitEvent(...)`            | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`)                                                                                                                                                                                                                                                                                                                                      |
-| `getResourceValue(...)`     | Read a resource's value                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `getLazyResourceValue(...)` | Initialize/read a resource on demand. Available only when `run(..., { lazy: true })` is enabled.                                                                                                                                                                                                                                                                                                                                |
-| `getResourceConfig(...)`    | Read a resource's resolved config                                                                                                                                                                                                                                                                                                                                                                                               |
-| `getRootId()`               | Read the root resource id                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `getRootConfig()`           | Read the root resource config                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `getRootValue()`            | Read the initialized root resource value                                                                                                                                                                                                                                                                                                                                                                                        |
-| `logger`                    | Logger instance                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `store`                     | Runtime store with registered resources, tasks, middleware, events, and runtime internals                                                                                                                                                                                                                                                                                                                                      |
+| Property                    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `value`                     | Value returned by the `app` resource's `init()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `runTask(...)`              | Run a task by reference or string id                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `emitEvent(...)`            | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`)                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `getResourceValue(...)`     | Read a resource's value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `getLazyResourceValue(...)` | Initialize/read a resource on demand. Available only when `run(..., { lazy: true })` is enabled.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `getResourceConfig(...)`    | Read a resource's resolved config                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `getRootId()`               | Read the root resource id                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `getRootConfig()`           | Read the root resource config                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `getRootValue()`            | Read the initialized root resource value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `logger`                    | Logger instance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `store`                     | Runtime store with registered resources, tasks, middleware, events, and runtime internals                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `dispose()`                 | Transitions to `disposing` (stops admitting fresh external work), runs resource `cooldown()` in reverse dependency order, emits `globals.events.disposing` (awaited), waits for in-flight tasks + event hooks to drain (up to `disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`), logs a structured `warn` if drain did not complete in time, transitions to `drained` (blocks all new business task/event admissions), emits `globals.events.drained` (lifecycle-bypassed, awaited), then disposes resources and removes hooks |
 
 Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.
@@ -2780,9 +2779,9 @@ Pass as the second argument to `run(app, options)`.
 | `debug`                      | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                                                                                                                                                                                                                                                                                                   |
 | `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                          |
 | `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                                 |
-| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` signal handlers for graceful shutdown. If a signal arrives during bootstrap, startup is cancelled and initialized resources are rolled back.                                                                                                                                                                                                                                                                                                                   |
-| `disposeBudgetMs`            | `number`                                        | (default: `30_000`) Total disposal budget in milliseconds. Covers resource `cooldown()`, `disposing` hooks, drain wait, `drained` hooks, and resource disposal wait. When exhausted, Runner stops waiting and returns.                                                                                                                                                                                                                                                                                |
-| `disposeDrainBudgetMs`       | `number`                                        | (default: `30_000`) Drain wait budget in milliseconds while in `disposing`. Runner waits for in-flight business work (tasks + event hook execution) up to this value, capped by remaining `disposeBudgetMs`. If drain times out, Runner logs a structured warning and continues shutdown. Set to `0` to skip drain waiting.                                                                                                                                                                                                                                                     |
+| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` signal handlers for graceful shutdown. If a signal arrives during bootstrap, startup is cancelled and initialized resources are rolled back.                                                                                                                                                                                                                                                                                                             |
+| `disposeBudgetMs`            | `number`                                        | (default: `30_000`) Total disposal budget in milliseconds. Covers resource `cooldown()`, `disposing` hooks, drain wait, `drained` hooks, and resource disposal wait. When exhausted, Runner stops waiting and returns.                                                                                                                                                                                                                                                                                 |
+| `disposeDrainBudgetMs`       | `number`                                        | (default: `30_000`) Drain wait budget in milliseconds while in `disposing`. Runner waits for in-flight business work (tasks + event hook execution) up to this value, capped by remaining `disposeBudgetMs`. If drain times out, Runner logs a structured warning and continues shutdown. Set to `0` to skip drain waiting.                                                                                                                                                                            |
 | `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                                                                                                                                                                                          |
 | `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                                   |
 | `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `lifecycleMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred. |
@@ -3160,18 +3159,16 @@ const app = r
 Cache provider contract:
 
 ```typescript
-import type { ICacheInstance } from "@bluelibs/runner";
+import type { ICacheProvider } from "@bluelibs/runner";
 
-type CacheProvider = (
-  options: {
-    ttl?: number;
-    max?: number;
-    ttlAutopurge?: boolean;
-    [key: string]: unknown;
-  },
-) => Promise<ICacheInstance>;
+type CacheProvider = (options: {
+  ttl?: number;
+  max?: number;
+  ttlAutopurge?: boolean;
+  [key: string]: unknown;
+}) => Promise<ICacheProvider>;
 
-interface ICacheInstance {
+interface ICacheProvider {
   get(key: string): unknown | Promise<unknown>;
   set(key: string, value: unknown): unknown | Promise<unknown>;
   clear(): void | Promise<void>;
@@ -3180,6 +3177,7 @@ interface ICacheInstance {
 ```
 
 Notes:
+
 - `options` are merged from `globals.resources.cache.with({ defaultOptions })` and middleware-level cache options.
 - `keyBuilder` is middleware-only and is not passed to `cacheProvider`.
 - `has()` is optional, but recommended when `undefined` can be a valid cached value.
@@ -5321,7 +5319,6 @@ const productionEmailer = r
   .init(async () => new SMTPEmailer())
   .build();
 
-
 // Option 1: Namespace form
 const shorthandOverrideEmailer = r.override(
   productionEmailer,
@@ -5333,7 +5330,6 @@ const helperOverrideEmailer = override(
   productionEmailer,
   async () => new MockEmailer(),
 );
-
 
 const app = r
   .resource("app")
@@ -5375,6 +5371,7 @@ const overriddenMiddleware = r.override(
 ```
 
 `r.override(base, fn)` is behavior-only:
+
 - task/hook/task-middleware/resource-middleware: callback replaces `run`
 - resource: callback replaces `init`
 - hook overrides keep the same `.on` target
@@ -5471,17 +5468,17 @@ Overrides are applied after everything is registered. If multiple overrides targ
 
 As your app grows, you'll want consistent naming. Here's the convention that won't drive you crazy:
 
-| Type                | Format                                           |
-| ------------------- | ------------------------------------------------ |
-| Resources           | `{domain}.{noun}`                                |
-| Tasks               | `{domain}.tasks.{verb}`                          |
-| Events              | `{domain}.events.{pastTenseVerbOrNoun}`          |
+| Type                | Format                                        |
+| ------------------- | --------------------------------------------- |
+| Resources           | `{domain}.{noun}`                             |
+| Tasks               | `{domain}.tasks.{verb}`                       |
+| Events              | `{domain}.events.{pastTenseVerbOrNoun}`       |
 | Hooks               | `{domain}.hooks.{name}` (use `onX` for hooks) |
-| Task Middleware     | `{domain}.middleware.task.{name}`                |
-| Resource Middleware | `{domain}.middleware.resource.{name}`            |
-| Errors              | `{domain}.errors.{PascalCaseName}`               |
-| Async Context       | `{domain}.ctx.{noun}`                            |
-| Tags                | `{domain}.tags.{noun}`                           |
+| Task Middleware     | `{domain}.middleware.task.{name}`             |
+| Resource Middleware | `{domain}.middleware.resource.{name}`         |
+| Errors              | `{domain}.errors.{PascalCaseName}`            |
+| Async Context       | `{domain}.ctx.{noun}`                         |
+| Tags                | `{domain}.tags.{noun}`                        |
 
 Use dot-separated IDs and keep them human-readable. Prefer `camelCase` for the final segment (tasks/events/hooks/middleware/ctx/tags) and `PascalCase` for errors.
 Use verbs for task IDs, past tense for event IDs, and nouns for resources/contexts/tags.
@@ -6288,6 +6285,7 @@ const sessionContext = r
 ```
 
 > **runtime:** "Async Context: your data playing hide-and-seek across the event loop. One forgotten `.provide()` and the 'Context not available' error will find you at 3am, exactly where your stack trace is least helpful."
+
 ## Fluent Builders (`r.*`)
 
 The `r` namespace gives you a chainable, discoverable way to build Runner components. Instead of memorizing object shapes, you get autocomplete that guides you through the options.
@@ -6447,6 +6445,7 @@ Two important exceptions:
 For the complete API reference, see the [Fluent Builders documentation](../readmes/FLUENT_BUILDERS.md).
 
 > **runtime:** "Fluent builders: method chaining dressed up for a job interview. You type a dot and I whisper possibilities. It's the same definition either way—I just appreciate the ceremony."
+
 ## Type Helpers
 
 When you need to reference a task's input type in another function, or pass a resource's value type to a generic, these utility types save you from re-declaring the same shapes.
@@ -6874,6 +6873,7 @@ describe("registerUser task", () => {
 Use `run()` to start the full app with middleware, events, and lifecycle. Swap infrastructure with `override()`.
 
 Important:
+
 - `r.override(base, fn)` (or alias `override(base, fn)`) creates a replacement definition.
 - `.overrides([...])` only accepts override-produced definitions.
 - If you place both base and replacement in `.register([...])`, you'll get duplicate-id registration errors.
@@ -6960,25 +6960,25 @@ When things go sideways, this is your field manual. No fluff, just fixes.
 
 The quick-reference table for "I've seen this error, what do I do?"
 
-| Error                                                                                          | Symptom                             | Likely Cause                                         | Fix                                                                              |
-| ---------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `TypeError: X is not a function`                                                               | Task call fails at runtime          | Forgot `.build()` on task/resource definition        | Add `.build()` at the end of your fluent chain                                   |
-| `Resource "X" not found`                                                                       | Runtime crash during initialization | Component not registered                             | Add to `.register([...])` in parent resource                                     |
-| `Config validation failed for X`                                                               | Startup crash before app runs       | Missing `.with()` config for resource                | Provide required config: `resource.with({ ... })`                                |
+| Error                                                                                          | Symptom                             | Likely Cause                                         | Fix                                                                                           |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `TypeError: X is not a function`                                                               | Task call fails at runtime          | Forgot `.build()` on task/resource definition        | Add `.build()` at the end of your fluent chain                                                |
+| `Resource "X" not found`                                                                       | Runtime crash during initialization | Component not registered                             | Add to `.register([...])` in parent resource                                                  |
+| `Config validation failed for X`                                                               | Startup crash before app runs       | Missing `.with()` config for resource                | Provide required config: `resource.with({ ... })`                                             |
 | `"X" is internal to resource "Y" and cannot be referenced by ...` (`visibilityViolationError`) | `run(app)` fails during bootstrap   | Cross-resource reference to a non-exported item      | Export the item with `.isolate({ exports: [...] })` or depend on an already exported contract |
-| `Circular dependencies detected: ...` (`circularDependencyError`)                              | `run(app)` fails before startup     | Actual runtime dependency graph cycle                | Break the dependency loop across tasks/resources/middleware/hooks                |
-| `Circular dependency detected` (type inference)                                                | TypeScript inference fails          | Import cycle between files                           | Use explicit type annotation: `as IResource<Config, Value>`                      |
-| `middlewareTimeoutError` (`runner.errors.middleware.timeout`, HTTP 408)                         | Task hangs then throws              | Operation exceeded timeout TTL                       | Increase TTL or investigate underlying slow operation                            |
-| `Cannot read property 'X' of undefined`                                                        | Task crashes mid-execution          | Dependency not properly declared                     | Check `.dependencies({})` matches what you use                                   |
-| `validationError` (`runner.errors.validation`)                                                  | Task rejects valid-looking input    | Input/result/config schema validation failed         | Check schema constraints (types, required fields)                                |
-| `middlewareRateLimitExceededError` (`runner.errors.middleware.rateLimitExceeded`, HTTP 429)      | Task throws after repeated calls    | Exceeded rate limit threshold                        | Wait for window reset or increase `max` limit                                    |
-| `middlewareCircuitBreakerOpenError` (`runner.errors.middleware.circuitBreakerOpen`, HTTP 503)    | All calls fail immediately          | Circuit tripped after failures                       | Wait for `resetTimeout` or fix underlying service                                |
-| `EventCycleError`                                                                              | Emissions recurse / stack explodes  | Event graph emitted itself (direct/indirect)         | Break the cycle or emit asynchronously outside the chain                         |
-| `InputContractViolationError`                                                                  | Type errors on task input           | Task input does not satisfy middleware/tag contract  | Expand task input type to include required contract fields                       |
-| `OutputContractViolationError`                                                                 | Type errors on task output          | Task output does not satisfy middleware/tag contract | Return a contract-compatible shape or relax contract                             |
-| `DurableExecutionError`                                                                        | Durable workflow replay fails       | Step/signal shape changed incompatibly               | Keep step ids stable and migrate workflow logic carefully                        |
-| `SemaphoreDisposedError`                                                                       | Acquire fails immediately           | Semaphore disposed while callers still running       | Create a new semaphore per lifecycle and dispose at shutdown                     |
-| `QueueDeadlockError`                                                                           | Queue stops progressing             | Job waited on work that required the same queue      | Avoid self-wait cycles; split queues or redesign flow                            |
+| `Circular dependencies detected: ...` (`circularDependencyError`)                              | `run(app)` fails before startup     | Actual runtime dependency graph cycle                | Break the dependency loop across tasks/resources/middleware/hooks                             |
+| `Circular dependency detected` (type inference)                                                | TypeScript inference fails          | Import cycle between files                           | Use explicit type annotation: `as IResource<Config, Value>`                                   |
+| `middlewareTimeoutError` (`runner.errors.middleware.timeout`, HTTP 408)                        | Task hangs then throws              | Operation exceeded timeout TTL                       | Increase TTL or investigate underlying slow operation                                         |
+| `Cannot read property 'X' of undefined`                                                        | Task crashes mid-execution          | Dependency not properly declared                     | Check `.dependencies({})` matches what you use                                                |
+| `validationError` (`runner.errors.validation`)                                                 | Task rejects valid-looking input    | Input/result/config schema validation failed         | Check schema constraints (types, required fields)                                             |
+| `middlewareRateLimitExceededError` (`runner.errors.middleware.rateLimitExceeded`, HTTP 429)    | Task throws after repeated calls    | Exceeded rate limit threshold                        | Wait for window reset or increase `max` limit                                                 |
+| `middlewareCircuitBreakerOpenError` (`runner.errors.middleware.circuitBreakerOpen`, HTTP 503)  | All calls fail immediately          | Circuit tripped after failures                       | Wait for `resetTimeout` or fix underlying service                                             |
+| `EventCycleError`                                                                              | Emissions recurse / stack explodes  | Event graph emitted itself (direct/indirect)         | Break the cycle or emit asynchronously outside the chain                                      |
+| `InputContractViolationError`                                                                  | Type errors on task input           | Task input does not satisfy middleware/tag contract  | Expand task input type to include required contract fields                                    |
+| `OutputContractViolationError`                                                                 | Type errors on task output          | Task output does not satisfy middleware/tag contract | Return a contract-compatible shape or relax contract                                          |
+| `DurableExecutionError`                                                                        | Durable workflow replay fails       | Step/signal shape changed incompatibly               | Keep step ids stable and migrate workflow logic carefully                                     |
+| `SemaphoreDisposedError`                                                                       | Acquire fails immediately           | Semaphore disposed while callers still running       | Create a new semaphore per lifecycle and dispose at shutdown                                  |
+| `QueueDeadlockError`                                                                           | Queue stops progressing             | Job waited on work that required the same queue      | Avoid self-wait cycles; split queues or redesign flow                                         |
 
 > **Note:** All errors above (except standard `TypeError`/`Cannot read property`) are `RunnerError` instances, not standard `Error` subclasses. Use `r.error.is(err)` to check whether an error matches a specific Runner error.
 
@@ -8113,7 +8113,7 @@ const redis = r
   .dispose(async (client) => client.disconnect())
   .build();
 
-// Redis cache implementation (matches ICacheInstance)
+// Redis cache implementation (matches ICacheProvider)
 class RedisCache {
   constructor(
     private client: Redis,
@@ -8158,7 +8158,8 @@ const app = r
 ```
 
 Provider contract reminder:
-- Provider signature: `async (options) => ICacheInstance`
+
+- Provider signature: `async (options) => ICacheProvider`
 - Required instance methods: `get`, `set`, `clear`
 - Optional method: `has` (recommended when caching `undefined` values)
 
@@ -8500,6 +8501,7 @@ const requestContext = r
 ```
 
 `resource.cooldown(value, config, dependencies, context): Promise<void>`
+
 - Runs at shutdown start (right after `disposing`, before `globals.events.disposing` and before drain waiting).
 - Use for ingress-stop behavior; it can be async, but should return quickly by contract.
 - Intended mostly for ingress/front-door resources (HTTP/tRPC/websocket/consumer boundaries) that admit new work.
@@ -8543,20 +8545,20 @@ await dispose();
 await disposeWithOptions();
 ```
 
-| Run Option                    | Purpose                                                                 |
-| ---------------------------- | ----------------------------------------------------------------------- |
-| `debug`                      | Enable Runner debug logging                                             |
-| `logs`                       | Configure logger strategy/threshold/buffering                           |
-| `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
-| `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with graceful shutdown (also during bootstrap) |
+| Run Option                   | Purpose                                                                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `debug`                      | Enable Runner debug logging                                                                                                 |
+| `logs`                       | Configure logger strategy/threshold/buffering                                                                               |
+| `errorBoundary`              | Catch process-level unhandled exceptions/rejections                                                                         |
+| `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with graceful shutdown (also during bootstrap)                                                   |
 | `disposeBudgetMs`            | Total disposal wait budget (ms) across resource cooldown, disposing hooks, drain wait, drained hooks, and resource disposal |
-| `disposeDrainBudgetMs`       | Drain wait budget (ms) for in-flight tasks/event hooks; capped by remaining `disposeBudgetMs` (`0` disables drain waiting) |
-| `onUnhandledError`           | Custom callback for normalized unhandled errors                          |
-| `dryRun`                     | Validate graph without running resource `init()`                        |
-| `lazy`                       | Defer startup-unused resources until on-demand access                   |
-| `lifecycleMode`              | Choose startup/dispose scheduler strategy (`sequential` or `parallel`) |
-| `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                            |
-| `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)           |
+| `disposeDrainBudgetMs`       | Drain wait budget (ms) for in-flight tasks/event hooks; capped by remaining `disposeBudgetMs` (`0` disables drain waiting)  |
+| `onUnhandledError`           | Custom callback for normalized unhandled errors                                                                             |
+| `dryRun`                     | Validate graph without running resource `init()`                                                                            |
+| `lazy`                       | Defer startup-unused resources until on-demand access                                                                       |
+| `lifecycleMode`              | Choose startup/dispose scheduler strategy (`sequential` or `parallel`)                                                      |
+| `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                                                                                |
+| `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)                                                               |
 
 Event source contract:
 `IEventEmission.source` is a structured object: `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
@@ -8584,7 +8586,10 @@ const realMailer = r
   .build();
 
 // Namespace form
-const shorthandMockMailer = r.override(realMailer, async () => new MockMailer());
+const shorthandMockMailer = r.override(
+  realMailer,
+  async () => new MockMailer(),
+);
 
 // Alias form (same behavior)
 const helperMockMailer = override(realMailer, async () => new MockMailer());
@@ -8597,6 +8602,7 @@ const app = r
 ```
 
 Quick rule:
+
 - `r.override(...)` / `override(...)` build replacement definitions.
 - `.overrides([...])` applies replacement during bootstrap and accepts only override-produced definitions.
 - Registering only the replacement definition is valid.
@@ -8675,8 +8681,14 @@ const task = r.task("id")
 ### Resource Isolation (`.exports`)
 
 ```typescript
-const internalTask = r.task("billing.tasks.internal").run(async () => 1).build();
-const publicTask = r.task("billing.tasks.public").run(async () => 2).build();
+const internalTask = r
+  .task("billing.tasks.internal")
+  .run(async () => 1)
+  .build();
+const publicTask = r
+  .task("billing.tasks.public")
+  .run(async () => 2)
+  .build();
 
 const billing = r
   .resource("billing")
@@ -8686,6 +8698,7 @@ const billing = r
 ```
 
 Quick rules:
+
 - No isolate `exports` means everything public (backward compatible)
 - `isolate: { exports: [] }` / `isolate: { exports: "none" }` means everything private outside that subtree
 - `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
@@ -8712,13 +8725,14 @@ type SubtreeViolation = {
 
 ### Event Emission Options
 
-| Option         | Type                              | Default      | Purpose                                      |
-| -------------- | --------------------------------- | ------------ | -------------------------------------------- |
-| `failureMode`  | `"fail-fast" \| "aggregate"`      | `fail-fast`  | Stop on first hook error or aggregate all |
-| `throwOnError` | `boolean`                         | `true`       | Throw after hook failure(s)               |
-| `report`       | `boolean`                         | `false`      | Return `IEventEmitReport` for hook outcomes |
+| Option         | Type                         | Default     | Purpose                                     |
+| -------------- | ---------------------------- | ----------- | ------------------------------------------- |
+| `failureMode`  | `"fail-fast" \| "aggregate"` | `fail-fast` | Stop on first hook error or aggregate all   |
+| `throwOnError` | `boolean`                    | `true`      | Throw after hook failure(s)                 |
+| `report`       | `boolean`                    | `false`     | Return `IEventEmitReport` for hook outcomes |
 
 Transactional notes:
+
 - Transactional events always execute with fail-fast rollback semantics.
 - Executed hooks must return async undo closures.
 - `transactional + parallel` and `transactional + globals.tags.eventLane` are rejected at runtime sanity checks.
@@ -8726,7 +8740,11 @@ Transactional notes:
 ### Type Helpers
 
 ```typescript
-import type { ExtractTaskInput, ExtractTaskOutput, ExtractResourceValue } from "@bluelibs/runner";
+import type {
+  ExtractTaskInput,
+  ExtractTaskOutput,
+  ExtractResourceValue,
+} from "@bluelibs/runner";
 
 type Input = ExtractTaskInput<typeof myTask>; // Get task input type
 type Output = ExtractTaskOutput<typeof myTask>; // Get task output type
@@ -8858,11 +8876,11 @@ Current support channels:
 
 When a public API is deprecated, use this lifecycle:
 
-| Stage             | What Happens                                                        | Removal |
-| ----------------- | ------------------------------------------------------------------- | ------- |
-| **Announced**     | Release note entry + docs note with replacement path                | No      |
-| **Warned**        | Deprecated marker in docs/types and migration recommendation        | No      |
-| **Removed**       | Removed in next allowed major with migration notes in release notes | Yes     |
+| Stage         | What Happens                                                        | Removal |
+| ------------- | ------------------------------------------------------------------- | ------- |
+| **Announced** | Release note entry + docs note with replacement path                | No      |
+| **Warned**    | Deprecated marker in docs/types and migration recommendation        | No      |
+| **Removed**   | Removed in next allowed major with migration notes in release notes | Yes     |
 
 If a behavior changes without breaking types (for example default values), document it in your release notes.
 
@@ -8906,20 +8924,20 @@ Use this list before promoting a Runner app to production:
 
 Node-only entrypoint: `@bluelibs/runner/node`.
 
-| Export                                                | Purpose                                                                 |
-| ----------------------------------------------------- | ----------------------------------------------------------------------- |
-| `nodeExposure`                                        | Expose tasks/events over HTTP                                           |
-| `createHttpMixedClient`, `createHttpSmartClient`      | Node tunnel clients (JSON + multipart + streaming modes)                |
-| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart tunnel calls                       |
-| `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path         |
-| `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                |
-| `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                           |
-| `eventLanesResource`                                  | Node Event Lanes runtime resource (lane interception + profile consumers) |
-| `MemoryEventLaneQueue`, `RabbitMQEventLaneQueue`      | Built-in Event Lanes queue adapters                                     |
-| `EventLaneMessage`                                    | Queue message contract for Event Lanes transport                        |
-| `bindEventLane`                                       | Immutable helper for lane-to-queue binding objects                      |
-| `EventLaneQueueReference`, `EventLaneQueueResource`   | Queue binding references (direct queue instance or app resource)   |
-| `EventLanesTopology`, `EventLanesResourceWithConfig`  | Topology-first config types for centralized Event Lanes wiring           |
+| Export                                                | Purpose                                                                                                                  |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `nodeExposure`                                        | Expose tasks/events over HTTP                                                                                            |
+| `createHttpMixedClient`, `createHttpSmartClient`      | Node tunnel clients (JSON + multipart + streaming modes)                                                                 |
+| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart tunnel calls                                                                        |
+| `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path                                                          |
+| `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                                                                 |
+| `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                                                                            |
+| `eventLanesResource`                                  | Node Event Lanes runtime resource (lane interception + profile consumers)                                                |
+| `MemoryEventLaneQueue`, `RabbitMQEventLaneQueue`      | Built-in Event Lanes queue adapters                                                                                      |
+| `EventLaneMessage`                                    | Queue message contract for Event Lanes transport                                                                         |
+| `bindEventLane`                                       | Immutable helper for lane-to-queue binding objects                                                                       |
+| `EventLaneQueueReference`, `EventLaneQueueResource`   | Queue binding references (direct queue instance or app resource)                                                         |
+| `EventLanesTopology`, `EventLanesResourceWithConfig`  | Topology-first config types for centralized Event Lanes wiring                                                           |
 | `IEventLaneQueue`                                     | Interface for custom Event Lanes backends (`enqueue`, `consume`, `ack`, `nack`, optional `setPrefetch`/`init`/`dispose`) |
 
 See also:
@@ -8972,7 +8990,10 @@ Before code changes:
 Before:
 
 ```typescript
-const mocked = r.override.task(realTask).run(async () => "ok").build();
+const mocked = r.override
+  .task(realTask)
+  .run(async () => "ok")
+  .build();
 ```
 
 After:
@@ -9038,7 +9059,11 @@ After:
 const redisCacheProvider = r
   .resource("app.cacheProvider.redis")
   .dependencies({ redis })
-  .init(async (_config, { redis }) => async () => new RedisCache(redis))
+  .init(
+    async (_config, { redis }) =>
+      async () =>
+        new RedisCache(redis),
+  )
   .build();
 
 const app = r
@@ -9099,7 +9124,10 @@ Only low-level/manual emissions need updates.
 Allowed shape:
 
 ```typescript
-{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }
+{
+  kind: "runtime" | "resource" | "task" | "hook" | "middleware";
+  id: string;
+}
 ```
 
 ### 5. Migrate Event Lanes APIs
@@ -9164,13 +9192,19 @@ Builder chains are phase-locked. Reorder invalid chains.
 Before:
 
 ```typescript
-r.task("x").run(async () => "ok").dependencies({ db }).build();
+r.task("x")
+  .run(async () => "ok")
+  .dependencies({ db })
+  .build();
 ```
 
 After:
 
 ```typescript
-r.task("x").dependencies({ db }).run(async () => "ok").build();
+r.task("x")
+  .dependencies({ db })
+  .run(async () => "ok")
+  .build();
 ```
 
 ### 8. Treat Built Definitions as Immutable
@@ -9180,7 +9214,10 @@ r.task("x").dependencies({ db }).run(async () => "ok").build();
 Before:
 
 ```typescript
-const task = r.task("x").run(async () => "ok").build();
+const task = r
+  .task("x")
+  .run(async () => "ok")
+  .build();
 (task as any).meta = { title: "Changed at runtime" };
 ```
 
@@ -9235,7 +9272,9 @@ Preferred:
 const inspect = r
   .task("app.tasks.inspect")
   .dependencies({ routeTag })
-  .run(async (_input, { routeTag }) => routeTag.tasks.map((x) => x.definition.id))
+  .run(async (_input, { routeTag }) =>
+    routeTag.tasks.map((x) => x.definition.id),
+  )
   .build();
 ```
 

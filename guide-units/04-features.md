@@ -67,16 +67,16 @@ const app = r
 Cache provider contract:
 
 ```typescript
-import type { ICacheInstance } from "@bluelibs/runner";
+import type { ICacheProvider } from "@bluelibs/runner";
 
 type CacheProvider = (options: {
   ttl?: number;
   max?: number;
   ttlAutopurge?: boolean;
   [key: string]: unknown;
-}) => Promise<ICacheInstance>;
+}) => Promise<ICacheProvider>;
 
-interface ICacheInstance {
+interface ICacheProvider {
   get(key: string): unknown | Promise<unknown>;
   set(key: string, value: unknown): unknown | Promise<unknown>;
   clear(): void | Promise<void>;

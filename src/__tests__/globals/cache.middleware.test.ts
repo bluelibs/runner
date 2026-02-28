@@ -4,7 +4,7 @@ import {
   cacheResource,
   cacheProviderResource,
   cacheMiddleware,
-  ICacheInstance,
+  ICacheProvider,
   journalKeys as cacheJournalKeys,
 } from "../../globals/middleware/cache.middleware";
 import { createMessageError } from "../../errors";
@@ -62,7 +62,7 @@ describe("Caching System", () => {
 
   describe("Cache Provider Override", () => {
     it("should allow overriding the cache provider", async () => {
-      class CustomCache implements ICacheInstance {
+      class CustomCache implements ICacheProvider {
         store = new Map<string, any>();
         customFlag = true;
 
@@ -112,7 +112,7 @@ describe("Caching System", () => {
 
     it("should allow Redis-like cache provider", async () => {
       jest.useFakeTimers();
-      class RedisLikeCache implements ICacheInstance {
+      class RedisLikeCache implements ICacheProvider {
         private store = new Map<string, { value: any; expiry?: number }>();
 
         get(key: string) {
@@ -213,7 +213,7 @@ describe("Caching System", () => {
     });
 
     it("should use cachedValue when cache lacks has()", async () => {
-      class NoHasCache implements ICacheInstance {
+      class NoHasCache implements ICacheProvider {
         private store = new Map<string, number>();
 
         get(key: string) {
@@ -262,7 +262,7 @@ describe("Caching System", () => {
     });
 
     it("should await async has() implementations", async () => {
-      class AsyncHasCache implements ICacheInstance {
+      class AsyncHasCache implements ICacheProvider {
         private store = new Map<string, number>();
 
         get(key: string) {
@@ -382,7 +382,7 @@ describe("Caching System", () => {
       await run(app);
     });
     it("should fail-open when cache set throws an Error instance", async () => {
-      class ErrorThrowingCache implements ICacheInstance {
+      class ErrorThrowingCache implements ICacheProvider {
         store = new Map<string, number>();
 
         get(key: string) {
@@ -540,7 +540,7 @@ describe("Caching System", () => {
     });
 
     it("should return task result even when cache set fails", async () => {
-      class SetFailingCache implements ICacheInstance {
+      class SetFailingCache implements ICacheProvider {
         private store = new Map<string, number>();
 
         get(key: string) {
@@ -633,7 +633,7 @@ describe("Caching System", () => {
   });
 
   describe("Async Cache Handlers", () => {
-    class AsyncMockCache implements ICacheInstance {
+    class AsyncMockCache implements ICacheProvider {
       store = new Map<string, any>();
       async get(key: string) {
         return this.store.get(key);
@@ -878,7 +878,7 @@ describe("Caching System", () => {
     });
 
     it("creates only one cache instance under concurrent first access", async () => {
-      class TestCache implements ICacheInstance {
+      class TestCache implements ICacheProvider {
         private store = new Map<string, any>();
         get(key: string) {
           return this.store.get(key);
@@ -927,7 +927,7 @@ describe("Caching System", () => {
 
   describe("Memory and Disposal", () => {
     it("should properly dispose async cache handlers", async () => {
-      class AsyncDisposableCache implements ICacheInstance {
+      class AsyncDisposableCache implements ICacheProvider {
         store = new Map<string, any>();
         disposed = false;
 

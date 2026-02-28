@@ -701,7 +701,7 @@ const redis = r
   .dispose(async (client) => client.disconnect())
   .build();
 
-// Redis cache implementation (matches ICacheInstance)
+// Redis cache implementation (matches ICacheProvider)
 class RedisCache {
   constructor(
     private client: Redis,
@@ -747,7 +747,7 @@ const app = r
 
 Provider contract reminder:
 
-- Provider signature: `async (options) => ICacheInstance`
+- Provider signature: `async (options) => ICacheProvider`
 - Required instance methods: `get`, `set`, `clear`
 - Optional method: `has` (recommended when caching `undefined` values)
 

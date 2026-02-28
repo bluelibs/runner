@@ -6,7 +6,7 @@ import { LRUCache } from "lru-cache";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { safeStringify } from "../../models/utils/safeStringify";
 
-export interface ICacheInstance {
+export interface ICacheProvider {
   set(key: string, value: unknown): unknown | Promise<unknown>;
   get(key: string): unknown | Promise<unknown>;
   clear(): void | Promise<void>;
@@ -21,7 +21,7 @@ type CacheFactoryOptions = Partial<
 
 export type CacheProvider = (
   options: CacheFactoryOptions,
-) => Promise<ICacheInstance>;
+) => Promise<ICacheProvider>;
 
 type CacheProviderResource = IResource<
   any,
@@ -38,7 +38,7 @@ export const cacheProviderResource = defineResource({
   init: async () => {
     const provider: CacheProvider = async (
       options: CacheFactoryOptions,
-    ): Promise<ICacheInstance> =>
+    ): Promise<ICacheProvider> =>
       new LRUCache<string, CacheStoredValue, unknown>(
         options as LRUCache.Options<string, CacheStoredValue, unknown>,
       );
@@ -74,8 +74,8 @@ export const cacheResource = defineResource({
   }),
   init: async (config: CacheResourceConfig, { cacheProvider }) => {
     return {
-      map: new Map<string, ICacheInstance>(),
-      pendingCreates: new Map<string, Promise<ICacheInstance>>(),
+      map: new Map<string, ICacheProvider>(),
+      pendingCreates: new Map<string, Promise<ICacheProvider>>(),
       cacheProvider,
       defaultOptions: {
         ttl: 10 * 1000,

@@ -9,7 +9,7 @@ export { CronOnError } from "./cron/types";
 export * from "./debug";
 export type {
   CacheResourceConfig,
-  ICacheInstance,
+  ICacheProvider,
 } from "./middleware/cache.middleware";
 export type { CircuitBreakerOpenError } from "./middleware/circuitBreaker.middleware";
 export type {
