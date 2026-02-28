@@ -384,6 +384,59 @@ describe("Caching System", () => {
 
       await run(app);
     });
+    it("should fail-open when cache set throws an Error instance", async () => {
+      class ErrorThrowingCache implements ICacheInstance {
+        store = new Map<string, number>();
+
+        get(key: string) {
+          return this.store.get(key);
+        }
+
+        set(_key: string, _value: number) {
+          throw createMessageError("cache write failed");
+        }
+
+        has(key: string) {
+          return this.store.has(key);
+        }
+
+        clear() {
+          this.store.clear();
+        }
+      }
+
+      const cacheFactoryTask = defineTask({
+        id: "globals.tasks.cacheFactory",
+        run: async () => new ErrorThrowingCache(),
+      });
+
+      let callCount = 0;
+      const task = defineTask({
+        id: "cache.set-fail-open-error.task",
+        middleware: [cacheMiddleware],
+        run: async () => {
+          callCount += 1;
+          return callCount;
+        },
+      });
+
+      const app = defineResource({
+        id: "cache.set-fail-open-error.app",
+        register: [cacheResource, cacheMiddleware, task],
+        overrides: [cacheFactoryTask],
+        dependencies: { task },
+        async init(_, { task }) {
+          const first = await task();
+          const second = await task();
+
+          expect(first).toBe(1);
+          expect(second).toBe(2);
+          expect(callCount).toBe(2);
+        },
+      });
+
+      await run(app);
+    });
 
     it("should cache falsy values and record hit flag", async () => {
       let callCount = 0;
@@ -498,7 +551,7 @@ describe("Caching System", () => {
         }
 
         set(_key: string, _value: number) {
-          throw createMessageError("cache write failed");
+          throw "cache write failed";
         }
 
         has(key: string) {

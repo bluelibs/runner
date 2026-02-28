@@ -170,7 +170,7 @@ export class ListenerRegistry {
     let high = listeners.length;
     while (low < high) {
       const mid = (low + high) >>> 1;
-      if (listeners[mid].order < newListener.order) {
+      if (listeners[mid].order <= newListener.order) {
         low = mid + 1;
       } else {
         high = mid;

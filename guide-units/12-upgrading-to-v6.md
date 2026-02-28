@@ -109,24 +109,31 @@ Removed:
 - `defineEventLanesTopology(...)`
 - `toEventLanesResourceConfig(...)`
 - `globals.tags.eventLaneHook`
-- lane retry config (`retry.maxAttempts`) on bindings
 
 Use canonical config:
 
 ```typescript
 const topology = r.eventLane.topology({
   profiles: { worker: { consume: [billingLane] } },
-  bindings: [{ lane: billingLane, queue, prefetch: 10 }],
+  bindings: [
+    {
+      lane: billingLane,
+      queue,
+      prefetch: 10,
+      maxAttempts: 3,
+      retryDelayMs: 250,
+    },
+  ],
 });
 
 eventLanesResource.with({
   profile: "worker",
   topology,
-  mode: "consumer",
+  mode: "network",
 });
 ```
 
-Retry policy now belongs in business middleware (task/resource middleware), not transport config.
+Binding-level retry config remains available for lane delivery retries (`maxAttempts`, `retryDelayMs`).
 
 ### 6. Move to Isolation-Based Public Surface
 

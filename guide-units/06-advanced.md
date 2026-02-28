@@ -715,7 +715,7 @@ const extendingEmailer = override(productionEmailer, {
 });
 ```
 
-Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the top) wins, because it's applied last. Conflicting overrides are allowed; overriding something that wasn't registered throws a dedicated error with remediation (register the base first, or for resources use `.fork("new.id")` when you meant a separate instance). Use override() to change behavior safely while preserving the original id.
+Overrides are applied after everything is registered. If multiple overrides target the same id, Runner rejects the graph with a dedicated duplicate-target override error (instead of applying precedence). Overriding something that wasn't registered also throws a dedicated error with remediation (register the base first, or for resources use `.fork("new.id")` when you meant a separate instance). Use override() to change behavior safely while preserving the original id.
 
 > **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
 

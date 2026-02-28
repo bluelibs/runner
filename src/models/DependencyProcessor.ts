@@ -68,7 +68,6 @@ export class DependencyProcessor {
     );
     this.hookEventBuffer = new HookEventBuffer(
       eventManager,
-      this.logger,
       runtimeEventCycleDetection,
     );
     this.pendingHookEvents = this.hookEventBuffer.pendingHookEvents;

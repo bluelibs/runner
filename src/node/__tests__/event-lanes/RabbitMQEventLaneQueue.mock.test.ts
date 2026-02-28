@@ -118,6 +118,46 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
     expect(channelMock.nack).toHaveBeenCalledWith(amqpMsg, false, false);
   });
 
+  it("falls back to broker nack requeue when message is not tracked", async () => {
+    await queue.init();
+
+    let consumer:
+      | ((msg: { content: Buffer } | null) => Promise<void>)
+      | undefined;
+    channelMock.consume.mockImplementation(async (_q: string, h: any) => {
+      consumer = h;
+    });
+
+    await queue.consume(async () => {
+      return;
+    });
+
+    const amqpMsg = {
+      content: Buffer.from(
+        JSON.stringify({
+          id: "msg-requeue-fallback",
+          laneId: "lane.a",
+          eventId: "event.a",
+          payload: "{}",
+          source: { kind: "runtime", id: "tests" },
+          attempts: 2,
+          maxAttempts: 3,
+          createdAt: new Date().toISOString(),
+        }),
+      ),
+    };
+
+    await consumer?.(amqpMsg);
+
+    (
+      queue as unknown as { messagesById: Map<string, unknown> }
+    ).messagesById.delete("msg-requeue-fallback");
+
+    await queue.nack("msg-requeue-fallback", true);
+
+    expect(channelMock.nack).toHaveBeenCalledWith(amqpMsg, false, true);
+  });
+
   it("throws if used before init", async () => {
     await expect(
       queue.enqueue({
@@ -231,7 +271,12 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
 
     await consumer?.(amqpMsg);
     expect(handler).not.toHaveBeenCalled();
-    expect(channelMock.nack).toHaveBeenCalledWith(amqpMsg, false, true);
+    expect(channelMock.ack).toHaveBeenCalledWith(amqpMsg);
+    expect(channelMock.sendToQueue).toHaveBeenCalledWith(
+      "event-lanes",
+      expect.any(Buffer),
+      expect.any(Object),
+    );
   });
 
   it("supports legacy queueName defaults and setPrefetch()", async () => {
@@ -359,11 +404,19 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
     );
 
     await queue.nack("msg-defaults");
-    expect(channelMock.nack).toHaveBeenCalledWith(
-      expect.anything(),
-      false,
-      true,
-    );
+    expect(channelMock.ack).toHaveBeenCalledWith(expect.anything());
+    const lastPublishCall =
+      channelMock.sendToQueue.mock.calls[
+        channelMock.sendToQueue.mock.calls.length - 1
+      ];
+    const republishedPayload = JSON.parse(lastPublishCall[1].toString()) as {
+      id: string;
+      attempts: number;
+      maxAttempts: number;
+    };
+    expect(republishedPayload.id).toBe("msg-defaults");
+    expect(republishedPayload.attempts).toBe(1);
+    expect(republishedPayload.maxAttempts).toBe(1);
   });
 
   it("forwards durable/assert/arguments and publishOptions to transport", async () => {

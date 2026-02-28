@@ -42,6 +42,27 @@ describe("Timeout Middleware", () => {
     removeSpy.mockRestore();
   });
 
+  it("reuses pre-set abort controller from journal", async () => {
+    const journalInstance = executionJournal.create();
+    const presetController = new AbortController();
+    journalInstance.set(timeoutJournalKeys.abortController, presetController);
+
+    const result = await timeoutMiddleware.run(
+      {
+        task: { definition: { id: "spec.task" } as any, input: "x" },
+        journal: journalInstance as any,
+        next: () => Promise.resolve("ok"),
+      },
+      {},
+      { ttl: 50 },
+    );
+
+    expect(result).toBe("ok");
+    expect(journalInstance.get(timeoutJournalKeys.abortController)).toBe(
+      presetController,
+    );
+  });
+
   it("should cleanup abort listener on success (resource middleware)", async () => {
     const removeSpy = jest.spyOn(AbortSignal.prototype, "removeEventListener");
     removeSpy.mockClear();

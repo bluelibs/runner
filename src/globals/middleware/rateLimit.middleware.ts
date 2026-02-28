@@ -44,6 +44,20 @@ function assertRateLimitMiddlewareConfig(
   }
 }
 
+function assertRateLimitMiddlewareConfigured(config: unknown): void {
+  const maybe = config as Partial<RateLimitMiddlewareConfig> | null;
+  if (
+    !config ||
+    typeof config !== "object" ||
+    !Number.isFinite(maybe?.windowMs) ||
+    !Number.isFinite(maybe?.max)
+  ) {
+    throw new TypeError(
+      "rateLimitTaskMiddleware requires .with({ windowMs, max }) configuration.",
+    );
+  }
+}
+
 const rateLimitConfigSchema = {
   parse: (config: unknown) => {
     assertRateLimitMiddlewareConfig(config);
@@ -112,7 +126,7 @@ export const rateLimitTaskMiddleware = defineTaskMiddleware({
     { state },
     config: RateLimitMiddlewareConfig,
   ) {
-    assertRateLimitMiddlewareConfig(config);
+    assertRateLimitMiddlewareConfigured(config);
 
     const { states } = state;
     let limitState = states.get(config);

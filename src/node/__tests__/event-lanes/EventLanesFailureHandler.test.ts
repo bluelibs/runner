@@ -75,4 +75,39 @@ describe("EventLanesFailureHandler", () => {
       }),
     );
   });
+
+  it("applies retry delay before requeue", async () => {
+    const order: string[] = [];
+    const queue = {
+      nack: jest.fn(async () => {
+        order.push("nack");
+      }),
+    };
+    const logger = {
+      error: jest.fn(async () => undefined),
+    };
+    const delay = jest.fn(async () => {
+      order.push("delay");
+    });
+
+    await handleEventLaneConsumerFailure({
+      queue,
+      binding: {
+        lane: { id: "lane.a" },
+        queue: {} as any,
+        retryDelayMs: 25,
+      } as any,
+      message: {
+        ...baseMessage,
+        maxAttempts: 2,
+      },
+      error: new Error("retry-with-delay"),
+      logger: logger as any,
+      delay,
+    });
+
+    expect(delay).toHaveBeenCalledWith(25);
+    expect(queue.nack).toHaveBeenCalledWith("m1", true);
+    expect(order).toEqual(["delay", "nack"]);
+  });
 });

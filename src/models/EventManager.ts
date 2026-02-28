@@ -25,6 +25,16 @@ import { CycleContext } from "./event/CycleContext";
 import { EmissionContext, EventEmissionImpl } from "./event/EmissionContext";
 import { LifecycleAdmissionController } from "./runtime/LifecycleAdmissionController";
 
+type AggregateErrorCtor = new (
+  errors: unknown[],
+  message?: string,
+  options?: { cause?: unknown },
+) => Error;
+
+const nativeAggregateErrorCtor = (
+  globalThis as unknown as { AggregateError: AggregateErrorCtor }
+).AggregateError;
+
 type EventEmissionInternalOptions = IEventEmitOptions & {
   allowLifecycleBypass?: boolean;
 };
@@ -249,11 +259,10 @@ export class EventManager {
         if (executionReport.errors.length === 1) {
           throw executionReport.errors[0];
         }
-        throw Object.assign(
-          new Error(`${executionReport.errors.length} listeners failed`),
+        throw new nativeAggregateErrorCtor(
+          executionReport.errors,
+          `${executionReport.errors.length} listeners failed`,
           {
-            name: "AggregateError",
-            errors: executionReport.errors,
             cause: executionReport.errors[0],
           },
         );
@@ -268,7 +277,6 @@ export class EventManager {
       this.cycleContext.runEmission(frame, processEmission),
     );
   }
-
   /**
    * Registers an event listener for specific event(s).
    * Listeners are ordered by priority and executed in ascending order.

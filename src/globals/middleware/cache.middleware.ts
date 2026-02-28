@@ -1,6 +1,7 @@
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { defineResource } from "../../definers/defineResource";
 import { defineTask } from "../../definers/defineTask";
+import { loggerResource } from "../resources/logger.resource";
 import { LRUCache } from "lru-cache";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { safeStringify } from "../../models/utils/safeStringify";
@@ -77,9 +78,9 @@ const defaultKeyBuilder = (taskId: string, input: unknown) =>
 
 export const cacheMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.cache",
-  dependencies: { cache: cacheResource },
+  dependencies: { cache: cacheResource, logger: loggerResource.optional() },
   async run({ task, next, journal }, deps, config: CacheMiddlewareConfig) {
-    const { cache } = deps;
+    const { cache, logger } = deps;
     config = {
       keyBuilder: defaultKeyBuilder,
       ttl: 10 * 1000,
@@ -137,8 +138,18 @@ export const cacheMiddleware = defineTaskMiddleware({
 
     try {
       await cacheHolderForTask.set(key, result);
-    } catch {
+    } catch (error) {
       // Fail-open: preserve successful task result even if cache backend write fails.
+      await logger?.error(
+        "Cache middleware write failed; returning fresh result.",
+        {
+          taskId,
+          data: {
+            key,
+          },
+          error: error instanceof Error ? error : new Error(String(error)),
+        },
+      );
     }
 
     return result;

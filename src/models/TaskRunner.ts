@@ -86,11 +86,7 @@ export class TaskRunner {
   ): Promise<TOutput | undefined> {
     const source = options?.source ?? defaultTaskSource;
     if (!this.store.canAdmitTaskCall(source)) {
-      try {
-        shutdownLockdownError.throw();
-      } catch (error) {
-        return Promise.reject(error);
-      }
+      shutdownLockdownError.throw();
     }
 
     // Middleware chain caching is lock-gated: during init(), resources may still

@@ -56,10 +56,13 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
       throw timeoutError;
     }
 
-    const controller = new AbortController();
+    const existingController = journal.get(journalKeys.abortController);
+    const controller = existingController ?? new AbortController();
 
-    // Expose controller for downstream middleware/tasks
-    journal.set(journalKeys.abortController, controller);
+    if (!existingController) {
+      // Expose controller for downstream middleware/tasks
+      journal.set(journalKeys.abortController, controller);
+    }
 
     return await new Promise((resolve, reject) => {
       let settled = false;

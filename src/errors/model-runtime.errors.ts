@@ -159,3 +159,18 @@ export const parallelInitSchedulingError = error<
     "This indicates a dependency ordering issue in parallel initialization mode. Ensure all resources have their dependencies properly declared, or switch to sequential lifecycle mode via run(app, { lifecycleMode: 'sequential' }).",
   )
   .build();
+
+export const hookEventBufferFlushAbortedError = error<
+  {
+    hookId: string;
+    flushPasses: number;
+  } & DefaultErrorType
+>("runner.errors.dependencyProcessor.hookEventBufferFlushAborted")
+  .format(
+    ({ hookId, flushPasses }) =>
+      `Buffered hook event flush for "${hookId}" exceeded ${flushPasses} passes while runtime event cycle detection is disabled.`,
+  )
+  .remediation(
+    "Enable runtime event cycle detection, or update hooks to stop re-buffering the same event chain during flush.",
+  )
+  .build();

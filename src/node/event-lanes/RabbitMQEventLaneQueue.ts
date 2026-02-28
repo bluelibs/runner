@@ -43,7 +43,7 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
   private readonly queueName: string;
   private readonly transport: RabbitMQTransport<EventLaneMessage>;
   private acceptingWork = true;
-  private readonly attemptsByMessageId = new Map<string, number>();
+  private readonly messagesById = new Map<string, EventLaneMessage>();
 
   constructor(config: RabbitMQEventLaneQueueConfig) {
     this.queueName =
@@ -111,13 +111,11 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
 
     const parsedAttempts =
       typeof parsed.attempts === "number" ? parsed.attempts : 0;
-    const currentAttempts = this.attemptsByMessageId.get(parsed.id);
-    const nextAttempts = Math.max(currentAttempts ?? 0, parsedAttempts) + 1;
-    this.attemptsByMessageId.set(parsed.id, nextAttempts);
+    const nextAttempts = parsedAttempts + 1;
     const maxAttempts =
       typeof parsed.maxAttempts === "number" ? parsed.maxAttempts : 1;
 
-    return {
+    const message = {
       ...parsed,
       source: parsed.source as EventLaneMessage["source"],
       createdAt: parsed.createdAt
@@ -126,6 +124,10 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
       attempts: nextAttempts,
       maxAttempts,
     } as EventLaneMessage;
+
+    this.messagesById.set(message.id, message);
+
+    return message;
   }
 
   async init(): Promise<void> {
@@ -165,14 +167,33 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
   }
 
   async ack(messageId: string): Promise<void> {
-    this.attemptsByMessageId.delete(messageId);
+    this.messagesById.delete(messageId);
     await this.transport.ack(messageId);
   }
 
   async nack(messageId: string, requeue: boolean = true): Promise<void> {
+    const message = this.messagesById.get(messageId);
+
     if (!requeue) {
-      this.attemptsByMessageId.delete(messageId);
+      this.messagesById.delete(messageId);
+      await this.transport.nack(messageId, false);
+      return;
     }
+
+    if (message) {
+      const messageForRetry: EventLaneMessage = {
+        ...message,
+        attempts: message.attempts,
+      };
+
+      await this.transport.publish(
+        Buffer.from(JSON.stringify(messageForRetry)),
+      );
+      this.messagesById.delete(messageId);
+      await this.transport.ack(messageId);
+      return;
+    }
+
     await this.transport.nack(messageId, requeue);
   }
 
@@ -182,7 +203,7 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
 
   async dispose(): Promise<void> {
     this.acceptingWork = false;
-    this.attemptsByMessageId.clear();
+    this.messagesById.clear();
     await this.transport.dispose();
   }
 }

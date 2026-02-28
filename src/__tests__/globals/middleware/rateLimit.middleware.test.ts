@@ -167,6 +167,13 @@ describe("Rate Limit Middleware", () => {
     }).toThrow(/requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i);
   });
 
+  it("should throw when required config keys are missing", () => {
+    expect(() => {
+      // @ts-expect-error - runtime guard should reject missing keys.
+      rateLimitTaskMiddleware.with({});
+    }).toThrow(/requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i);
+  });
+
   it("should throw when windowMs is not finite", () => {
     expect(() => {
       rateLimitTaskMiddleware.with({ windowMs: Infinity, max: 1 });

@@ -4105,10 +4105,10 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 
 Remote Lanes let you split a Runner application across processes or machines without changing your business logic. Two lane systems cover the common distributed patterns:
 
-| Need | Lane System | Semantics |
-| --- | --- | --- |
-| Fire-and-forget async delivery | **Event Lanes** (`eventLane`) | Queue-backed produce/consume |
-| Request/response across services | **RPC Lanes** (`rpcLane`) | Sync remote task/event execution |
+| Need                             | Lane System                   | Semantics                        |
+| -------------------------------- | ----------------------------- | -------------------------------- |
+| Fire-and-forget async delivery   | **Event Lanes** (`eventLane`) | Queue-backed produce/consume     |
+| Request/response across services | **RPC Lanes** (`rpcLane`)     | Sync remote task/event execution |
 
 Lane behavior is attached at runtime by `eventLanesResource` / `rpcLanesResource`. Definitions that are **not** assigned to a lane keep normal local Runner behavior — lanes are additive, never invasive.
 
@@ -4116,7 +4116,10 @@ Lane behavior is attached at runtime by `eventLanesResource` / `rpcLanesResource
 
 ```typescript
 import { globals, r, run } from "@bluelibs/runner";
-import { eventLanesResource, MemoryEventLaneQueue } from "@bluelibs/runner/node";
+import {
+  eventLanesResource,
+  MemoryEventLaneQueue,
+} from "@bluelibs/runner/node";
 
 // 1. Define a lane — a logical routing channel
 const emailLane = r.eventLane("app.lanes.email").build();
@@ -4169,13 +4172,21 @@ const billingLane = r.rpcLane("app.rpc.billing").build();
 const chargeCard = r
   .task("billing.tasks.chargeCard")
   .tags([globals.tags.rpcLane.with({ lane: billingLane })])
-  .run(async (input: { amount: number }) => ({ ok: true, amount: input.amount }))
+  .run(async (input: { amount: number }) => ({
+    ok: true,
+    amount: input.amount,
+  }))
   .build();
 
 // 3. Create a communicator for the remote side
 const billingComm = r
   .resource("app.resources.billingComm")
-  .init(r.rpcLane.httpClient({ client: "mixed", baseUrl: "http://billing:7070/__runner" }))
+  .init(
+    r.rpcLane.httpClient({
+      client: "mixed",
+      baseUrl: "http://billing:7070/__runner",
+    }),
+  )
   .build();
 
 // 4. Wire topology and register
@@ -5419,7 +5430,7 @@ const extendingEmailer = override(productionEmailer, {
 });
 ```
 
-Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the top) wins, because it's applied last. Conflicting overrides are allowed; overriding something that wasn't registered throws a dedicated error with remediation (register the base first, or for resources use `.fork("new.id")` when you meant a separate instance). Use override() to change behavior safely while preserving the original id.
+Overrides are applied after everything is registered. If multiple overrides target the same id, Runner rejects the graph with a dedicated duplicate-target override error (instead of applying precedence). Overriding something that wasn't registered also throws a dedicated error with remediation (register the base first, or for resources use `.fork("new.id")` when you meant a separate instance). Use override() to change behavior safely while preserving the original id.
 
 > **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
 
@@ -9022,24 +9033,31 @@ Removed:
 - `defineEventLanesTopology(...)`
 - `toEventLanesResourceConfig(...)`
 - `globals.tags.eventLaneHook`
-- lane retry config (`retry.maxAttempts`) on bindings
 
 Use canonical config:
 
 ```typescript
 const topology = r.eventLane.topology({
   profiles: { worker: { consume: [billingLane] } },
-  bindings: [{ lane: billingLane, queue, prefetch: 10 }],
+  bindings: [
+    {
+      lane: billingLane,
+      queue,
+      prefetch: 10,
+      maxAttempts: 3,
+      retryDelayMs: 250,
+    },
+  ],
 });
 
 eventLanesResource.with({
   profile: "worker",
   topology,
-  mode: "consumer",
+  mode: "network",
 });
 ```
 
-Retry policy now belongs in business middleware (task/resource middleware), not transport config.
+Binding-level retry config remains available for lane delivery retries (`maxAttempts`, `retryDelayMs`).
 
 ### 6. Move to Isolation-Based Public Surface
 

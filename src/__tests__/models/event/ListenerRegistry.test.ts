@@ -170,4 +170,23 @@ describe("ListenerRegistry", () => {
     expect(registry.listeners.get("ev1")).toBeUndefined();
     expect(registry.listeners.get("ev2")).toBeUndefined();
   });
+
+  it("keeps FIFO order when listeners share the same priority", () => {
+    const registry = new ListenerRegistry();
+    const first = createListener({
+      handler: jest.fn(),
+      order: 1,
+      id: "first",
+    });
+    const second = createListener({
+      handler: jest.fn(),
+      order: 1,
+      id: "second",
+    });
+
+    registry.addListener("ev", first);
+    registry.addListener("ev", second);
+
+    expect(registry.listeners.get("ev")).toEqual([first, second]);
+  });
 });

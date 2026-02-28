@@ -83,6 +83,7 @@ async function tryRetry({
   }
 
   await queue.nack(message.id, true);
+
   await logger.error(
     "Event lane consumer failed; message requeued for retry.",
     {

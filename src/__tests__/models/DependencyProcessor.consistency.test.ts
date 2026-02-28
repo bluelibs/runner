@@ -540,16 +540,14 @@ describe("DependencyProcessor Consistency", () => {
           { source: runtimeSource.runtime("outside"), data: {} },
         ]);
       });
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
 
     await expect(
       internals.flushBufferedHookEvents(hookStoreElement),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow(
+      `Buffered hook event flush for "${hook.id}" exceeded 128 passes while runtime event cycle detection is disabled.`,
+    );
 
     expect(executeSpy).toHaveBeenCalled();
-    expect(consoleErrorSpy).toHaveBeenCalled();
     expect(internals.drainingHookIds.has(hook.id)).toBe(false);
   });
 });
