@@ -1,6 +1,6 @@
 # BlueLibs Runner
 
-### Explicit TypeScript Dependency Injection Toolkit
+## Explicit TypeScript Dependency Injection Toolkit
 
 **Build apps from tasks and resources with explicit dependencies, predictable lifecycle, and first-class testing**
 

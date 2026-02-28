@@ -1,6 +1,6 @@
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { defineResource } from "../../definers/defineResource";
-import { defineTask } from "../../definers/defineTask";
+import type { IResource } from "../../defs";
 import { loggerResource } from "../resources/logger.resource";
 import { LRUCache } from "lru-cache";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
@@ -19,18 +19,36 @@ type CacheFactoryOptions = Partial<
   LRUCache.Options<string, CacheStoredValue, unknown>
 >;
 
-// Default cache factory task that can be overridden
-export const cacheFactoryTask = defineTask({
-  id: "globals.tasks.cacheFactory",
-  run: async (options: CacheFactoryOptions): Promise<ICacheInstance> => {
-    return new LRUCache<string, CacheStoredValue, unknown>(
-      options as LRUCache.Options<string, CacheStoredValue, unknown>,
-    );
+export type CacheProvider = (
+  options: CacheFactoryOptions,
+) => Promise<ICacheInstance>;
+
+type CacheProviderResource = IResource<
+  any,
+  Promise<CacheProvider>,
+  any,
+  any,
+  any,
+  any,
+  any
+>;
+
+export const cacheProviderResource = defineResource({
+  id: "globals.resources.cacheProvider",
+  init: async () => {
+    const provider: CacheProvider = async (
+      options: CacheFactoryOptions,
+    ): Promise<ICacheInstance> =>
+      new LRUCache<string, CacheStoredValue, unknown>(
+        options as LRUCache.Options<string, CacheStoredValue, unknown>,
+      );
+    return provider;
   },
 });
 
 export interface CacheResourceConfig {
   defaultOptions?: CacheFactoryOptions;
+  provider?: CacheProviderResource;
 }
 
 type CacheMiddlewareConfig = CacheFactoryOptions & {
@@ -48,20 +66,22 @@ export const journalKeys = {
 
 export const cacheResource = defineResource({
   id: "globals.resources.cache",
-  register: [cacheFactoryTask],
-  dependencies: {
-    cacheFactoryTask,
-  },
-  init: async (config: CacheResourceConfig, { cacheFactoryTask }) => {
+  register: (config: CacheResourceConfig) => [
+    config?.provider ?? cacheProviderResource,
+  ],
+  dependencies: (config: CacheResourceConfig) => ({
+    cacheProvider: config?.provider ?? cacheProviderResource,
+  }),
+  init: async (config: CacheResourceConfig, { cacheProvider }) => {
     return {
       map: new Map<string, ICacheInstance>(),
       pendingCreates: new Map<string, Promise<ICacheInstance>>(),
-      cacheFactoryTask,
+      cacheProvider,
       defaultOptions: {
         ttl: 10 * 1000,
         max: 100, // Maximum number of items in cache
         ttlAutopurge: true, // Automatically purge expired items
-        ...config.defaultOptions,
+        ...(config?.defaultOptions ?? {}),
       },
     };
   },
@@ -98,16 +118,14 @@ export const cacheMiddleware = defineTaskMiddleware({
         ...cache.defaultOptions,
         ...lruOptions,
       };
-      const pendingCreates =
-        cache.pendingCreates ??
-        (cache.pendingCreates = new Map<string, Promise<ICacheInstance>>());
+      const pendingCreates = cache.pendingCreates;
 
       const pendingCreate = pendingCreates.get(taskId);
       if (pendingCreate) {
         cacheHolderForTask = await pendingCreate;
       } else {
         const createPromise = cache
-          .cacheFactoryTask(cacheOptions)
+          .cacheProvider(cacheOptions)
           .then((instance) => {
             cache.map.set(taskId, instance);
             return instance;

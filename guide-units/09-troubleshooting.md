@@ -10,25 +10,27 @@ When things go sideways, this is your field manual. No fluff, just fixes.
 
 The quick-reference table for "I've seen this error, what do I do?"
 
-| Error                                                                                          | Symptom                             | Likely Cause                                         | Fix                                                                              |
-| ---------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `TypeError: X is not a function`                                                               | Task call fails at runtime          | Forgot `.build()` on task/resource definition        | Add `.build()` at the end of your fluent chain                                   |
-| `Resource "X" not found`                                                                       | Runtime crash during initialization | Component not registered                             | Add to `.register([...])` in parent resource                                     |
-| `Config validation failed for X`                                                               | Startup crash before app runs       | Missing `.with()` config for resource                | Provide required config: `resource.with({ ... })`                                |
+| Error                                                                                          | Symptom                             | Likely Cause                                         | Fix                                                                                           |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `TypeError: X is not a function`                                                               | Task call fails at runtime          | Forgot `.build()` on task/resource definition        | Add `.build()` at the end of your fluent chain                                                |
+| `Resource "X" not found`                                                                       | Runtime crash during initialization | Component not registered                             | Add to `.register([...])` in parent resource                                                  |
+| `Config validation failed for X`                                                               | Startup crash before app runs       | Missing `.with()` config for resource                | Provide required config: `resource.with({ ... })`                                             |
 | `"X" is internal to resource "Y" and cannot be referenced by ...` (`visibilityViolationError`) | `run(app)` fails during bootstrap   | Cross-resource reference to a non-exported item      | Export the item with `.isolate({ exports: [...] })` or depend on an already exported contract |
-| `Circular dependencies detected: ...` (`circularDependencyError`)                              | `run(app)` fails before startup     | Actual runtime dependency graph cycle                | Break the dependency loop across tasks/resources/middleware/hooks                |
-| `Circular dependency detected` (type inference)                                                | TypeScript inference fails          | Import cycle between files                           | Use explicit type annotation: `as IResource<Config, Value>`                      |
-| `TimeoutError`                                                                                 | Task hangs then throws              | Operation exceeded timeout TTL                       | Increase TTL or investigate underlying slow operation                            |
-| `Cannot read property 'X' of undefined`                                                        | Task crashes mid-execution          | Dependency not properly injected                     | Check `.dependencies({})` matches what you use                                   |
-| `ValidationError: Task input...`                                                               | Task rejects valid-looking input    | Input doesn't match `inputSchema`                    | Check schema constraints (types, required fields)                                |
-| `RateLimitError`                                                                               | Task throws after repeated calls    | Exceeded rate limit threshold                        | Wait for window reset or increase `max` limit                                    |
-| `CircuitBreakerOpenError`                                                                      | All calls fail immediately          | Circuit tripped after failures                       | Wait for `resetTimeout` or fix underlying service                                |
-| `EventCycleError`                                                                              | Emissions recurse / stack explodes  | Event graph emitted itself (direct/indirect)         | Break the cycle or emit asynchronously outside the chain                         |
-| `InputContractViolationError`                                                                  | Type errors on task input           | Task input does not satisfy middleware/tag contract  | Expand task input type to include required contract fields                       |
-| `OutputContractViolationError`                                                                 | Type errors on task output          | Task output does not satisfy middleware/tag contract | Return a contract-compatible shape or relax contract                             |
-| `DurableExecutionError`                                                                        | Durable workflow replay fails       | Step/signal shape changed incompatibly               | Keep step ids stable and migrate workflow logic carefully                        |
-| `SemaphoreDisposedError`                                                                       | Acquire fails immediately           | Semaphore disposed while callers still running       | Create a new semaphore per lifecycle and dispose at shutdown                     |
-| `QueueDeadlockError`                                                                           | Queue stops progressing             | Job waited on work that required the same queue      | Avoid self-wait cycles; split queues or redesign flow                            |
+| `Circular dependencies detected: ...` (`circularDependencyError`)                              | `run(app)` fails before startup     | Actual runtime dependency graph cycle                | Break the dependency loop across tasks/resources/middleware/hooks                             |
+| `Circular dependency detected` (type inference)                                                | TypeScript inference fails          | Import cycle between files                           | Use explicit type annotation: `as IResource<Config, Value>`                                   |
+| `middlewareTimeoutError` (`runner.errors.middleware.timeout`, HTTP 408)                        | Task hangs then throws              | Operation exceeded timeout TTL                       | Increase TTL or investigate underlying slow operation                                         |
+| `Cannot read property 'X' of undefined`                                                        | Task crashes mid-execution          | Dependency not properly declared                     | Check `.dependencies({})` matches what you use                                                |
+| `validationError` (`runner.errors.validation`)                                                 | Task rejects valid-looking input    | Input/result/config schema validation failed         | Check schema constraints (types, required fields)                                             |
+| `middlewareRateLimitExceededError` (`runner.errors.middleware.rateLimitExceeded`, HTTP 429)    | Task throws after repeated calls    | Exceeded rate limit threshold                        | Wait for window reset or increase `max` limit                                                 |
+| `middlewareCircuitBreakerOpenError` (`runner.errors.middleware.circuitBreakerOpen`, HTTP 503)  | All calls fail immediately          | Circuit tripped after failures                       | Wait for `resetTimeout` or fix underlying service                                             |
+| `EventCycleError`                                                                              | Emissions recurse / stack explodes  | Event graph emitted itself (direct/indirect)         | Break the cycle or emit asynchronously outside the chain                                      |
+| `InputContractViolationError`                                                                  | Type errors on task input           | Task input does not satisfy middleware/tag contract  | Expand task input type to include required contract fields                                    |
+| `OutputContractViolationError`                                                                 | Type errors on task output          | Task output does not satisfy middleware/tag contract | Return a contract-compatible shape or relax contract                                          |
+| `DurableExecutionError`                                                                        | Durable workflow replay fails       | Step/signal shape changed incompatibly               | Keep step ids stable and migrate workflow logic carefully                                     |
+| `SemaphoreDisposedError`                                                                       | Acquire fails immediately           | Semaphore disposed while callers still running       | Create a new semaphore per lifecycle and dispose at shutdown                                  |
+| `QueueDeadlockError`                                                                           | Queue stops progressing             | Job waited on work that required the same queue      | Avoid self-wait cycles; split queues or redesign flow                                         |
+
+> **Note:** All errors above (except standard `TypeError`/`Cannot read property`) are `RunnerError` instances, not standard `Error` subclasses. Use `r.error.is(err)` to check whether an error matches a specific Runner error.
 
 ---
 
@@ -233,7 +235,7 @@ console.log(`App initialized in ${Date.now() - start}ms`);
 
 ### Lifecycle Issues
 
-#### Resources not disposing properly
+#### Resources Not Disposing Properly
 
 **Symptom**: Hanging process, "port already in use" on restart, connection leaks.
 
@@ -244,12 +246,12 @@ const server = r
   .resource<{ port: number }>("app.server")
   .init(async ({ port }) => {
     const app = express();
-    const listener = app.listen(port);
-    return { app, listener };
+    const server = app.listen(port);
+    return { app, server };
   })
-  .dispose(async ({ listener }) => {
+  .dispose(async ({ server }) => {
     // Don't forget this!
-    return new Promise((resolve) => listener.close(resolve));
+    return new Promise((resolve) => server.close(resolve));
   })
   .build();
 ```
@@ -375,7 +377,7 @@ const adminTask = r
 
 **Fix**:
 
-1. Scope semaphore lifecycle to the owning resource/container.
+1. Scope semaphore lifecycle to the owning resource.
 2. Dispose semaphores during app shutdown, not while tasks still need them.
 3. Fail fast when a disposed semaphore is accessed unexpectedly.
 
@@ -398,14 +400,14 @@ const adminTask = r
 When you need help, include this information:
 
 ```markdown
-## Environment
+#### Environment
 
 - @bluelibs/runner version: X.X.X
 - Node.js version: X.X.X
 - TypeScript version: X.X.X
 - OS: macOS/Windows/Linux
 
-## Minimal Reproduction
+#### Minimal Reproduction
 
 \`\`\`typescript
 // Smallest possible code that reproduces the issue
@@ -415,21 +417,21 @@ const app = r.resource("app").build();
 await run(app); // Describe what goes wrong here
 \`\`\`
 
-## Expected Behavior
+#### Expected Behavior
 
 What should happen.
 
-## Actual Behavior
+#### Actual Behavior
 
 What actually happens.
 
-## Error Output
+#### Error Output
 
 \`\`\`
 Full stack trace here
 \`\`\`
 
-## Debug Logs
+#### Debug Logs
 
 \`\`\`
 Output from: await run(app, { debug: "verbose" })

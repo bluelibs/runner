@@ -2,27 +2,28 @@ import { defineResource, defineTask, defineTaskMiddleware } from "../../define";
 import { run } from "../../run";
 import {
   cacheResource,
+  cacheProviderResource,
   cacheMiddleware,
   ICacheInstance,
   journalKeys as cacheJournalKeys,
 } from "../../globals/middleware/cache.middleware";
 import { createMessageError } from "../../errors";
+import { r } from "../..";
 
 enum CacheNoHasId {
   App = "cache.nohas.app",
-  CacheFactory = "globals.tasks.cacheFactory",
   Task = "cache.nohas.task",
 }
 
 describe("Caching System", () => {
   describe("Cache Resource", () => {
-    it("should initialize with default cache factory task", async () => {
+    it("should initialize with default cache provider", async () => {
       const app = defineResource({
         id: "app",
         register: [cacheResource, cacheMiddleware],
         dependencies: { cache: cacheResource },
         async init(_, { cache }) {
-          expect(cache.cacheFactoryTask).toBeDefined();
+          expect(cache.cacheProvider).toBeDefined();
           expect(cache.defaultOptions).toEqual({
             ttl: 10000,
             max: 100,
@@ -59,8 +60,8 @@ describe("Caching System", () => {
     });
   });
 
-  describe("Cache Factory Task Override", () => {
-    it("should allow overriding the cache factory task", async () => {
+  describe("Cache Provider Override", () => {
+    it("should allow overriding the cache provider", async () => {
       class CustomCache implements ICacheInstance {
         store = new Map<string, any>();
         customFlag = true;
@@ -78,12 +79,10 @@ describe("Caching System", () => {
         }
       }
 
-      const customCacheFactoryTask = defineTask({
-        id: "globals.tasks.cacheFactory",
-        run: async (_options: any) => {
-          return new CustomCache();
-        },
-      });
+      const customCacheProvider = r.override(
+        cacheProviderResource,
+        async () => async (_options: any) => new CustomCache(),
+      );
 
       const testTask = defineTask({
         id: "custom.factory.task",
@@ -94,7 +93,7 @@ describe("Caching System", () => {
       const app = defineResource({
         id: "app",
         register: [cacheResource, cacheMiddleware, testTask],
-        overrides: [customCacheFactoryTask],
+        overrides: [customCacheProvider],
         dependencies: { testTask, cache: cacheResource },
         async init(_, { testTask, cache }) {
           const result1 = await testTask("test");
@@ -111,7 +110,7 @@ describe("Caching System", () => {
       await run(app);
     });
 
-    it("should allow Redis-like cache factory task", async () => {
+    it("should allow Redis-like cache provider", async () => {
       jest.useFakeTimers();
       class RedisLikeCache implements ICacheInstance {
         private store = new Map<string, { value: any; expiry?: number }>();
@@ -142,12 +141,10 @@ describe("Caching System", () => {
         }
       }
 
-      const redisCacheFactoryTask = defineTask({
-        id: "globals.tasks.cacheFactory",
-        run: async (_options: any) => {
-          return new RedisLikeCache();
-        },
-      });
+      const redisCacheProvider = r.override(
+        cacheProviderResource,
+        async () => async (_options: any) => new RedisLikeCache(),
+      );
 
       let callCount = 0;
       const testTask = defineTask({
@@ -162,7 +159,7 @@ describe("Caching System", () => {
       const app = defineResource({
         id: "app",
         register: [cacheResource, cacheMiddleware, testTask],
-        overrides: [redisCacheFactoryTask],
+        overrides: [redisCacheProvider],
         dependencies: { testTask },
         async init(_, { testTask }) {
           const result1 = await testTask();
@@ -232,10 +229,10 @@ describe("Caching System", () => {
         }
       }
 
-      const cacheFactoryTask = defineTask({
-        id: CacheNoHasId.CacheFactory,
-        run: async () => new NoHasCache(),
-      });
+      const cacheProviderOverride = r.override(
+        cacheProviderResource,
+        async () => async () => new NoHasCache(),
+      );
 
       let callCount = 0;
       const testTask = defineTask({
@@ -250,7 +247,7 @@ describe("Caching System", () => {
       const app = defineResource({
         id: CacheNoHasId.App,
         register: [cacheResource, cacheMiddleware, testTask],
-        overrides: [cacheFactoryTask],
+        overrides: [cacheProviderOverride],
         dependencies: { testTask },
         async init(_, { testTask }) {
           const first = await testTask();
@@ -286,10 +283,10 @@ describe("Caching System", () => {
         }
       }
 
-      const cacheFactoryTask = defineTask({
-        id: "globals.tasks.cacheFactory",
-        run: async () => new AsyncHasCache(),
-      });
+      const cacheProviderOverride = r.override(
+        cacheProviderResource,
+        async () => async () => new AsyncHasCache(),
+      );
 
       let callCount = 0;
       const testTask = defineTask({
@@ -304,7 +301,7 @@ describe("Caching System", () => {
       const app = defineResource({
         id: "cache.async-has.app",
         register: [cacheResource, cacheMiddleware, testTask],
-        overrides: [cacheFactoryTask],
+        overrides: [cacheProviderOverride],
         dependencies: { testTask },
         async init(_, { testTask }) {
           const first = await testTask();
@@ -405,10 +402,10 @@ describe("Caching System", () => {
         }
       }
 
-      const cacheFactoryTask = defineTask({
-        id: "globals.tasks.cacheFactory",
-        run: async () => new ErrorThrowingCache(),
-      });
+      const cacheProviderOverride = r.override(
+        cacheProviderResource,
+        async () => async () => new ErrorThrowingCache(),
+      );
 
       let callCount = 0;
       const task = defineTask({
@@ -423,7 +420,7 @@ describe("Caching System", () => {
       const app = defineResource({
         id: "cache.set-fail-open-error.app",
         register: [cacheResource, cacheMiddleware, task],
-        overrides: [cacheFactoryTask],
+        overrides: [cacheProviderOverride],
         dependencies: { task },
         async init(_, { task }) {
           const first = await task();
@@ -563,10 +560,10 @@ describe("Caching System", () => {
         }
       }
 
-      const cacheFactoryTask = defineTask({
-        id: "globals.tasks.cacheFactory",
-        run: async () => new SetFailingCache(),
-      });
+      const cacheProviderOverride = r.override(
+        cacheProviderResource,
+        async () => async () => new SetFailingCache(),
+      );
 
       let callCount = 0;
       const task = defineTask({
@@ -581,7 +578,7 @@ describe("Caching System", () => {
       const app = defineResource({
         id: "cache.set-fail-open.app",
         register: [cacheResource, cacheMiddleware, task],
-        overrides: [cacheFactoryTask],
+        overrides: [cacheProviderOverride],
         dependencies: { task },
         async init(_, { task }) {
           const first = await task();
@@ -649,12 +646,10 @@ describe("Caching System", () => {
       }
     }
 
-    const asyncCacheFactoryTask = defineTask({
-      id: "globals.tasks.cacheFactory",
-      run: async (_options: any) => {
-        return new AsyncMockCache();
-      },
-    });
+    const asyncCacheProvider = r.override(
+      cacheProviderResource,
+      async () => async (_options: any) => new AsyncMockCache(),
+    );
 
     it("should handle async cache operations", async () => {
       const testTask = defineTask({
@@ -663,25 +658,10 @@ describe("Caching System", () => {
         run: async (input: number) => input * 2,
       });
 
-      const asyncCacheResource = defineResource({
-        id: "globals.resources.cache",
-        register: [asyncCacheFactoryTask],
-        dependencies: { cacheFactoryTask: asyncCacheFactoryTask },
-        init: async (config: any, { cacheFactoryTask }) => ({
-          map: new Map<string, AsyncMockCache>(),
-          cacheFactoryTask,
-          defaultOptions: { ttl: 10 * 1000, ...config?.defaultOptions },
-        }),
-        dispose: async (cache) => {
-          await Promise.all(
-            [...cache.map.values()].map((instance) => instance.clear()),
-          );
-        },
-      });
-
       const app = defineResource({
         id: "app",
-        register: [asyncCacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, cacheMiddleware, testTask],
+        overrides: [asyncCacheProvider],
         dependencies: { testTask },
         async init(_, { testTask }) {
           const result1 = await testTask(2);
@@ -912,14 +892,14 @@ describe("Caching System", () => {
       }
 
       let factoryCalls = 0;
-      const slowFactoryTask = defineTask({
-        id: "globals.tasks.cacheFactory",
-        run: async () => {
+      const slowCacheProvider = r.override(
+        cacheProviderResource,
+        async () => async () => {
           factoryCalls += 1;
           await new Promise((resolve) => setTimeout(resolve, 5));
           return new TestCache();
         },
-      });
+      );
 
       const task = defineTask({
         id: "concurrent.cache.instance.task",
@@ -930,7 +910,7 @@ describe("Caching System", () => {
       const app = defineResource({
         id: "app",
         register: [cacheResource, cacheMiddleware, task],
-        overrides: [slowFactoryTask],
+        overrides: [slowCacheProvider],
         dependencies: { task, cache: cacheResource },
         async init(_, { task, cache }) {
           const [a, b] = await Promise.all([task(1), task(2)]);
@@ -967,28 +947,10 @@ describe("Caching System", () => {
         }
       }
 
-      const disposableCacheFactoryTask = defineTask({
-        id: "globals.tasks.cacheFactory",
-        run: async (_options: any) => {
-          return new AsyncDisposableCache();
-        },
-      });
-
-      const disposableCacheResource = defineResource({
-        id: "globals.resources.cache",
-        register: [disposableCacheFactoryTask],
-        dependencies: { cacheFactoryTask: disposableCacheFactoryTask },
-        init: async (config: any, { cacheFactoryTask }) => ({
-          map: new Map<string, AsyncDisposableCache>(),
-          cacheFactoryTask,
-          defaultOptions: { ttl: 10 * 1000, ...config?.defaultOptions },
-        }),
-        dispose: async (cache) => {
-          await Promise.all(
-            [...cache.map.values()].map((instance) => instance.clear()),
-          );
-        },
-      });
+      const disposableCacheProvider = r.override(
+        cacheProviderResource,
+        async () => async (_options: any) => new AsyncDisposableCache(),
+      );
 
       const testTask = defineTask({
         id: "disposal.test.task",
@@ -998,8 +960,9 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [disposableCacheResource, cacheMiddleware, testTask],
-        dependencies: { testTask, cache: disposableCacheResource },
+        register: [cacheResource, cacheMiddleware, testTask],
+        overrides: [disposableCacheProvider],
+        dependencies: { testTask, cache: cacheResource },
         async init(_, { testTask, cache }) {
           await testTask();
           return cache;
@@ -1053,24 +1016,10 @@ describe("Caching System", () => {
         store = new Map();
       }
 
-      const invalidCacheFactoryTask = defineTask({
-        id: "globals.tasks.cacheFactory",
-        run: async (_options: any) => {
-          return new InvalidCache() as any;
-        },
-      });
-
-      const invalidCacheResource = defineResource({
-        id: "globals.resources.cache",
-        register: [invalidCacheFactoryTask],
-        dependencies: { cacheFactoryTask: invalidCacheFactoryTask },
-        init: async (config: any, { cacheFactoryTask }) => ({
-          map: new Map(),
-          cacheFactoryTask,
-          defaultOptions: { ttl: 10 * 1000, ...config?.defaultOptions },
-        }),
-        dispose: async () => {},
-      });
+      const invalidCacheProvider = r.override(
+        cacheProviderResource,
+        async () => async (_options: any) => new InvalidCache() as any,
+      );
 
       const testTask = defineTask({
         id: "invalid.handler.task",
@@ -1080,7 +1029,8 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [invalidCacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, cacheMiddleware, testTask],
+        overrides: [invalidCacheProvider],
         dependencies: { testTask },
         async init(_, { testTask }) {
           // Should fail when trying to use invalid cache handler

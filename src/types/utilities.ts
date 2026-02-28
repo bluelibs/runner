@@ -13,6 +13,7 @@ import { ITag } from "./tag";
 import type { TagDependencyAccessor } from "./tagged";
 import {
   symbolOptionalDependency,
+  symbolOverrideDefinition,
   symbolTagBeforeInitDependency,
 } from "./symbols";
 import { IErrorHelper } from "./error";
@@ -55,6 +56,27 @@ export type RequiredKeys<T> = {
   [K in keyof T]-?: {} extends Pick<T, K> ? never : K;
 }[keyof T];
 
+export type OverrideDefinitionBrand = {
+  [symbolOverrideDefinition]: true;
+};
+
+export type OverridableDefinition =
+  | (IResource<any, any, any, any, any, any, any> & OverrideDefinitionBrand)
+  | (ITask<any, any, any, any, any, any> & OverrideDefinitionBrand)
+  | (ITaskMiddleware<any, any, any, any> & OverrideDefinitionBrand)
+  | (IResourceMiddleware<any, any, any, any> & OverrideDefinitionBrand)
+  | (IHook<any, any, any> & OverrideDefinitionBrand);
+
+export type OverridableResourceWithConfig = IResourceWithConfig<
+  any,
+  any,
+  any,
+  any,
+  any,
+  any,
+  any
+>;
+
 /**
  * The reason we accept null and undefined is because we want to be able to offer beautiful DX:
  * overrides: [
@@ -62,12 +84,8 @@ export type RequiredKeys<T> = {
  * ]
  */
 export type OverridableElements =
-  | IResource<any, any, any, any, any>
-  | ITask<any, any, any, any>
-  | ITaskMiddleware<any>
-  | IResourceMiddleware<any, any>
-  | IResourceWithConfig<any, any, any>
-  | IHook<any, any>
+  | OverridableDefinition
+  | OverridableResourceWithConfig
   | undefined
   | null;
 

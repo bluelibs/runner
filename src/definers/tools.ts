@@ -28,6 +28,7 @@ import {
   ITag,
   ITagStartupDependency,
   IPhantomTask,
+  symbolOverrideDefinition,
 } from "../defs";
 import { IErrorHelper } from "../types/error";
 import { symbolAsyncContext, symbolError } from "../types/symbols";
@@ -153,4 +154,9 @@ export function isAsyncContext(
   definition: unknown,
 ): definition is IAsyncContext<any> {
   return hasBrand(definition, symbolAsyncContext);
+}
+
+/** Type guard: checks if a definition is an override produced by override APIs. */
+export function isOverrideDefinition(definition: unknown): boolean {
+  return hasBrand(definition, symbolOverrideDefinition);
 }

@@ -64,7 +64,7 @@ const userRegistered = r
 
 // Middleware
 const authMiddleware = r.middleware
-  .task("app.middleware.task.auth")
+  .task<{ requiredRole?: string }>("app.middleware.task.auth")
   .run(async ({ task, next }, deps, config?: { requiredRole?: string }) => {
     const context = RequestContext.use();
     if (config?.requiredRole && context.role !== config.requiredRole) {

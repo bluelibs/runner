@@ -16,7 +16,7 @@ Before code changes:
   - `middleware.everywhere`
   - `defineEventLanesTopology`, `toEventLanesResourceConfig`
   - `globals.tags.eventLaneHook`
-  - string event sources in custom `eventManager.emit(...)` usage
+  - string event sources in low-level custom event emission code
 
 ### 2. Replace Legacy Override Builders
 
@@ -25,7 +25,10 @@ Before code changes:
 Before:
 
 ```typescript
-const mocked = r.override.task(realTask).run(async () => "ok").build();
+const mocked = r.override
+  .task(realTask)
+  .run(async () => "ok")
+  .build();
 ```
 
 After:
@@ -38,6 +41,74 @@ Migration rule:
 
 - Task/hook/middleware: callback replaces `run`.
 - Resource: callback replaces `init`.
+
+### 2.1. Enforce Strict `.overrides([...])` Inputs
+
+`.overrides([...])` now accepts only override-produced definitions (`r.override(...)` / `override(...)`), plus `null` / `undefined` for conditional lists.
+
+Before (no longer valid):
+
+```typescript
+const mockMailer = r
+  .resource("app.mailer")
+  .init(async () => new MockMailer())
+  .build();
+
+r.resource("test").register([realMailer]).overrides([mockMailer]).build();
+```
+
+After:
+
+```typescript
+const mockMailer = r.override(realMailer, async () => new MockMailer());
+
+r.resource("test").register([realMailer]).overrides([mockMailer]).build();
+```
+
+If you intended a second component (not replacement), use a different id or `.fork("new.id")` and register it directly.
+
+### 2.2. Migrate Cache Customization to `cacheProvider`
+
+`globals.tasks.cacheFactory` is removed.
+Use `globals.resources.cacheProvider` as the extension seam (via cache config).
+
+Before:
+
+```typescript
+const redisCacheFactory = r
+  .task("globals.tasks.cacheFactory")
+  .dependencies({ redis })
+  .run(async (_options, { redis }) => new RedisCache(redis))
+  .build();
+
+const app = r
+  .resource("app")
+  .register([redis, globals.resources.cache])
+  .overrides([redisCacheFactory])
+  .build();
+```
+
+After:
+
+```typescript
+const redisCacheProvider = r
+  .resource("app.cacheProvider.redis")
+  .dependencies({ redis })
+  .init(
+    async (_config, { redis }) =>
+      async () =>
+        new RedisCache(redis),
+  )
+  .build();
+
+const app = r
+  .resource("app")
+  .register([
+    redis,
+    globals.resources.cache.with({ provider: redisCacheProvider }),
+  ])
+  .build();
+```
 
 ### 3. Remove `middleware.everywhere`
 
@@ -82,24 +153,16 @@ const app = r
 
 String sources are removed in low-level event APIs.
 
-Before:
-
-```typescript
-await eventManager.emit(orderCreated, payload, "http");
-```
-
-After:
-
-```typescript
-import { runtimeSource } from "@bluelibs/runner";
-
-await eventManager.emit(orderCreated, payload, runtimeSource.runtime("http"));
-```
+If your app emits via event dependencies, there is nothing to migrate here.
+Only low-level/manual emissions need updates.
 
 Allowed shape:
 
 ```typescript
-{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }
+{
+  kind: "runtime" | "resource" | "task" | "hook" | "middleware";
+  id: string;
+}
 ```
 
 ### 5. Migrate Event Lanes APIs
@@ -155,7 +218,7 @@ const app = r
   .build();
 ```
 
-Runtime calls (`runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`) now fail fast with `runtimeAccessViolation` when target ids are not exported from the root boundary.
+Runtime calls (`runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`) now fail fast with `runtimeAccessViolation` when target ids are not exported from the app boundary.
 
 ### 7. Respect Strict Builder Ordering
 
@@ -164,13 +227,19 @@ Builder chains are phase-locked. Reorder invalid chains.
 Before:
 
 ```typescript
-r.task("x").run(async () => "ok").dependencies({ db }).build();
+r.task("x")
+  .run(async () => "ok")
+  .dependencies({ db })
+  .build();
 ```
 
 After:
 
 ```typescript
-r.task("x").dependencies({ db }).run(async () => "ok").build();
+r.task("x")
+  .dependencies({ db })
+  .run(async () => "ok")
+  .build();
 ```
 
 ### 8. Treat Built Definitions as Immutable
@@ -180,7 +249,10 @@ r.task("x").dependencies({ db }).run(async () => "ok").build();
 Before:
 
 ```typescript
-const task = r.task("x").run(async () => "ok").build();
+const task = r
+  .task("x")
+  .run(async () => "ok")
+  .build();
 (task as any).meta = { title: "Changed at runtime" };
 ```
 
@@ -189,24 +261,18 @@ After:
 - Build final shape up front (builder chain or `r.override(...)`).
 - Do not mutate built definitions.
 
-### 8.1 Transactional Hook Return Contract
+### 8.1 Optional: Adopt Transactional Events (New in v6)
 
-Transactional behavior is event-level (`.transactional()` on events), not hook-level metadata.
+Transactional behavior is new in v6 and opt-in (`.transactional()` on events).
+There is no mandatory migration if you keep existing events non-transactional.
 
-Before (now invalid):
+Standard event (valid, no migration needed):
 
 ```typescript
-const orderPlaced = r.event("app.events.orderPlaced").transactional().build();
-
-r.hook("app.hooks.reserve")
-  .on(orderPlaced)
-  .run(async () => {
-    // side effect
-  })
-  .build();
+const orderPlaced = r.event("app.events.orderPlaced").build();
 ```
 
-After:
+Transactional event (new behavior):
 
 ```typescript
 const orderPlaced = r.event("app.events.orderPlaced").transactional().build();
@@ -222,8 +288,9 @@ r.hook("app.hooks.reserve")
   .build();
 ```
 
-Runtime constraints:
+If you opt in, enforce:
 
+- Every participating hook returns an async undo closure.
 - `transactional + parallel` is invalid.
 - `transactional + globals.tags.eventLane` is invalid.
 
@@ -240,7 +307,9 @@ Preferred:
 const inspect = r
   .task("app.tasks.inspect")
   .dependencies({ routeTag })
-  .run(async (_input, { routeTag }) => routeTag.tasks.map((x) => x.definition.id))
+  .run(async (_input, { routeTag }) =>
+    routeTag.tasks.map((x) => x.definition.id),
+  )
   .build();
 ```
 
@@ -267,12 +336,12 @@ If your service accepts external work (HTTP, queues, gateways), add `cooldown()`
 ```typescript
 const server = r
   .resource("app.server")
-  .init(async () => listener)
-  .cooldown(async (listener) => {
-    listener.close();
+  .init(async () => server)
+  .cooldown(async (server) => {
+    server.close();
   })
-  .dispose(async (listener) => {
-    listener.close();
+  .dispose(async (server) => {
+    server.close();
   })
   .build();
 ```

@@ -55,7 +55,7 @@ Runner ships a structured logger with consistent fields, onLog hooks, and multip
 
 ### Basic Logging
 
-```ts
+```typescript
 import { r, globals } from "@bluelibs/runner";
 
 const app = r
@@ -76,7 +76,7 @@ const app = r
     logger.trace("Very detailed trace"); //  Hidden by default
 
     logger.onLog(async (log) => {
-      // Sub-loggers instantiated .with() share the same log listeners.
+      // Sub-loggers instantiated .with() share the same log callbacks.
       // Catch logs
     });
   })
@@ -290,8 +290,14 @@ class JSONLogger extends Logger {
 // Custom logger resource
 const customLogger = r
   .resource("app.logger.custom")
-  .dependencies({ eventManager: globals.resources.eventManager })
-  .init(async (_config, { eventManager }) => new JSONLogger(eventManager))
+  .init(
+    async () =>
+      new JSONLogger({
+        printThreshold: "info",
+        printStrategy: "json",
+        bufferLogs: false,
+      }),
+  )
   .build();
 
 // Or you could simply add it as "globals.resources.logger" and override the default logger
@@ -303,9 +309,9 @@ Every log event contains:
 
 ```typescript
 interface ILog {
-  level: string; // The log level (trace, debug, info, etc.)
+  level: LogLevels; // "trace" | "debug" | "info" | "warn" | "error" | "critical"
   source?: string; // Where the log came from
-  message: any; // The main log message (can be object or string)
+  message: unknown; // The main log message (can be object or string)
   timestamp: Date; // When the log was created
   error?: {
     // Structured error information
@@ -313,8 +319,8 @@ interface ILog {
     message: string;
     stack?: string;
   };
-  data?: Record<string, any>; // Additional structured data, it's about the log itself
-  context?: Record<string, any>; // Bound context from logger.with(), it's about the context in which the log was created
+  data?: Record<string, unknown>; // Additional structured data, it's about the log itself
+  context?: Record<string, unknown>; // Bound context from logger.with(), it's about the context in which the log was created
 }
 ```
 
@@ -376,7 +382,7 @@ import { r, globals } from "@bluelibs/runner";
 
 // Use in custom configurations
 const customConfig = {
-  ...globals.debug.levels.normal, // or .debug
+  ...globals.debug.levels.normal, // or .verbose
   logTaskInput: true, // Override specific settings
 };
 

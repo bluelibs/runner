@@ -15,6 +15,10 @@ export const symbolForkedFrom: unique symbol = Symbol.for("runner.forkedFrom");
 export const symbolResourceWithConfig: unique symbol = Symbol.for(
   "runner.resourceWithConfig",
 );
+/** @internal Marks override definitions produced via the override builder API. */
+export const symbolOverrideDefinition: unique symbol = Symbol.for(
+  "runner.overrideDefinition",
+);
 export const symbolEvent: unique symbol = Symbol.for("runner.event");
 export const symbolEventLane: unique symbol = Symbol.for("runner.eventLane");
 export const symbolRpcLane: unique symbol = Symbol.for("runner.rpcLane");

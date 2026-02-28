@@ -6,14 +6,14 @@ It gives you **request-scoped state** that automatically flows through your asyn
 
 > **Platform Note**: Async Context uses Node.js's `AsyncLocalStorage` under the hood, so it's **Node.js-only**. For browsers, pass context explicitly through parameters instead.
 
-### When to use it
+### When to Use It
 
 - **Request tracing**: Carry a `requestId` or `traceId` through all operations
 - **User sessions**: Access the current user without passing it everywhere
 - **Database transactions**: Share a transaction across multiple operations
 - **Logging context**: Automatically include request metadata in all logs
 
-### Basic usage
+### Basic Usage
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
@@ -38,11 +38,13 @@ async function processRequest(req: Request) {
 }
 ```
 
-### Using context in tasks
+### Using Context in Tasks
 
 The real power comes when you use context inside your tasks:
 
 ```typescript
+import { r, globals } from "@bluelibs/runner";
+
 const auditLog = r
   .task("app.tasks.auditLog")
   .dependencies({ requestContext, logger: globals.resources.logger })
@@ -59,7 +61,7 @@ const auditLog = r
 const app = r.resource("app").register([requestContext, auditLog]).build();
 ```
 
-### Requiring context with middleware
+### Requiring Context with Middleware
 
 Force tasks to run only within a context boundary:
 
@@ -74,7 +76,7 @@ const securedTask = r
   .build();
 ```
 
-### Custom serialization
+### Custom Serialization
 
 By default, Runner preserves Dates, RegExp, and other types across async boundaries. For custom serialization:
 
@@ -87,11 +89,12 @@ const sessionContext = r
 ```
 
 > **runtime:** "Async Context: your data playing hide-and-seek across the event loop. One forgotten `.provide()` and the 'Context not available' error will find you at 3am, exactly where your stack trace is least helpful."
+
 ## Fluent Builders (`r.*`)
 
 The `r` namespace gives you a chainable, discoverable way to build Runner components. Instead of memorizing object shapes, you get autocomplete that guides you through the options.
 
-### Why use fluent builders?
+### Why Use Fluent Builders?
 
 ```typescript
 // Classic API - you need to know the shape
@@ -117,7 +120,7 @@ const fluentTask = r
 
 Both produce identical runtime definitions. The fluent API just makes discovery easier.
 
-### Building resources
+### Building Resources
 
 Resources are singletons with lifecycle management. Here's the progression from simple to complete:
 
@@ -161,7 +164,7 @@ const app = r
 await run(app);
 ```
 
-### Building tasks
+### Building Tasks
 
 Tasks are your business logic with DI, middleware, and validation:
 
@@ -187,7 +190,7 @@ const createUser = r
   .build();
 ```
 
-### Building events and hooks
+### Building Events and Hooks
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -209,7 +212,7 @@ const sendWelcome = r
   .build();
 ```
 
-### The pattern
+### The Pattern
 
 Every builder follows the same rhythm:
 
@@ -218,7 +221,7 @@ Every builder follows the same rhythm:
 3. **Implement** with `.run()` or `.init()`
 4. **Finish** with `.build()`
 
-### Strict order constraints
+### Strict Order Constraints
 
 For `task`, `hook`, `resource`, and middleware builders, Runner enforces phase-aware chaining in TypeScript:
 
@@ -246,11 +249,12 @@ Two important exceptions:
 For the complete API reference, see the [Fluent Builders documentation](../readmes/FLUENT_BUILDERS.md).
 
 > **runtime:** "Fluent builders: method chaining dressed up for a job interview. You type a dot and I whisper possibilities. It's the same definition either way—I just appreciate the ceremony."
+
 ## Type Helpers
 
 When you need to reference a task's input type in another function, or pass a resource's value type to a generic, these utility types save you from re-declaring the same shapes.
 
-### Extracting types from components
+### Extracting Types from Components
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -288,7 +292,7 @@ type DbValue = ExtractResourceValue<typeof database>; // Connection
 type UserCreatedPayload = ExtractEventPayload<typeof userCreated>; // { userId: string; email: string }
 ```
 
-### Practical use cases
+### Practical Use Cases
 
 **Building API handlers that match task signatures:**
 
@@ -333,7 +337,7 @@ function withLogging<T extends ITask<any, Promise<any>, any>>(task: T) {
 }
 ```
 
-### Quick reference
+### Quick Reference
 
 | Helper                     | Extracts         | From     |
 | -------------------------- | ---------------- | -------- |
@@ -351,7 +355,7 @@ Runner Dev Tools (`@bluelibs/runner-dev`) turns your runtime into an inspectable
 
 If Runner gives you explicit wiring, Runner Dev Tools gives you visibility and control over that wiring in real time.
 
-### Why teams use it
+### Why Teams Use It
 
 - **Visual DevTools UI**: inspect topology, call tasks, emit events, and debug behavior from the browser
 - **GraphQL introspection API**: query tasks/resources/events/middleware/dependencies programmatically
@@ -369,7 +373,7 @@ npm install -g @bluelibs/runner-dev
 npx @bluelibs/runner-dev --help
 ```
 
-### Common CLI commands
+### Common CLI Commands
 
 ```bash
 # Scaffold a new Runner project
@@ -388,11 +392,11 @@ ENDPOINT=http://localhost:1337/graphql runner-dev overview --details 10
 ENDPOINT=http://localhost:1337/graphql npx -y @bluelibs/runner-dev mcp
 ```
 
-### Runtime integration
+### Runtime Integration
 
 Register `dev` in your app to expose the Dev UI and GraphQL endpoint:
 
-```ts
+```typescript
 import { r } from "@bluelibs/runner";
 import { dev } from "@bluelibs/runner-dev";
 

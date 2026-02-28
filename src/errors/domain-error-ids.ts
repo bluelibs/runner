@@ -21,6 +21,7 @@ export enum RunnerErrorId {
   ResourceForkInvalidId = "runner.errors.resourceFork.invalidId",
   BuilderInvalidHttpCode = "runner.errors.builder.invalidHttpCode",
   OverrideUnsupportedBase = "runner.errors.override.unsupportedBase",
+  OverrideDefinitionRequired = "runner.errors.overrideDefinitionRequired",
   PlatformUnreachable = "runner.errors.platform.unreachable",
   SerializerInvalidPayload = "runner.errors.serializer.invalidPayload",
   SerializerValidation = "runner.errors.serializer.validation",

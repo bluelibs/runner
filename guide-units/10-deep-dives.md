@@ -31,7 +31,7 @@ sequenceDiagram
     else Cache miss
         MW->>Task: Validated input
         Task->>Deps: Resolve dependencies
-        Deps-->>Task: Injected resources
+        Deps-->>Task: Resolved dependencies
         Task->>Task: Execute business logic
         Task->>Event: Emit events
         Event->>Hooks: Propagate to hooks
@@ -277,10 +277,10 @@ const errorWrapper = r.middleware
 
 **Event propagation:**
 
-1. Task emits event via injected event callable
+1. Task emits event via its event dependency
 2. Event manager validates payload (if schema exists)
 3. Hooks are sorted by `.order()` priority
-4. Hooks execute sequentially (or parallel if `event.parallel(true)`)
+4. Hooks execute sequentially (or parallel if `event.parallel()`)
 5. Any hook can call `event.stopPropagation()` to halt further processing
 
 **Priority batches (parallel mode):**
@@ -291,7 +291,7 @@ hookA.order(10); // Priority 10
 hookB.order(10); // Priority 10
 hookC.order(20); // Priority 20
 
-// With event.parallel(true):
+// With event.parallel():
 // Batch 1: hookA and hookB run concurrently
 // Batch 2: hookC runs after batch 1 completes
 ```
@@ -350,7 +350,7 @@ const auditHook = r
 
 > **Note:** For catch-all task behavior across the runtime, use `taskRunner.intercept(...)`.
 
-**Creating reusable modules:**
+**Creating reusable resource kits:**
 
 ```typescript
 // myPlugin.ts
@@ -701,7 +701,7 @@ const redis = r
   .dispose(async (client) => client.disconnect())
   .build();
 
-// Redis cache implementation
+// Redis cache implementation (matches ICacheInstance)
 class RedisCache {
   constructor(
     private client: Redis,
@@ -713,21 +713,9 @@ class RedisCache {
     return value ? JSON.parse(value) : undefined;
   }
 
-  async set(key: string, value: unknown, ttl?: number): Promise<void> {
+  async set(key: string, value: unknown): Promise<void> {
     const serialized = JSON.stringify(value);
-    if (ttl) {
-      await this.client.setex(
-        this.prefix + key,
-        Math.ceil(ttl / 1000),
-        serialized,
-      );
-    } else {
-      await this.client.set(this.prefix + key, serialized);
-    }
-  }
-
-  async delete(key: string): Promise<void> {
-    await this.client.del(this.prefix + key);
+    await this.client.set(this.prefix + key, serialized);
   }
 
   async clear(): Promise<void> {
@@ -738,11 +726,13 @@ class RedisCache {
   }
 }
 
-// Override the cache factory
-const redisCacheFactory = r
-  .task(globals.tasks.cacheFactory.id) // Use the exact global ID
+// Provide a custom cache provider resource
+const redisCacheProvider = r
+  .resource("app.cacheProvider.redis")
   .dependencies({ redis })
-  .run(async (options, { redis }) => new RedisCache(redis, options?.prefix))
+  .init(async (_config, { redis }) => {
+    return async () => new RedisCache(redis);
+  })
   .build();
 
 // Wire it up
@@ -750,11 +740,16 @@ const app = r
   .resource("app")
   .register([
     redis.with({ url: process.env.REDIS_URL! }),
-    globals.resources.cache, // Enable caching
+    globals.resources.cache.with({ provider: redisCacheProvider }),
   ])
-  .overrides([redisCacheFactory]) // Replace the factory
   .build();
 ```
+
+Provider contract reminder:
+
+- Provider signature: `async (options) => ICacheInstance`
+- Required instance methods: `get`, `set`, `clear`
+- Optional method: `has` (recommended when caching `undefined` values)
 
 ---
 

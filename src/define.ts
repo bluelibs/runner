@@ -27,4 +27,5 @@ export {
   isOptional,
   isError,
   isAsyncContext,
+  isOverrideDefinition,
 } from "./definers/tools";

@@ -4,7 +4,7 @@ The `run()` function is your application's entry point. It initializes all resou
 
 ### Basic usage
 
-```ts
+```typescript
 import { r, run } from "@bluelibs/runner";
 
 const ping = r
@@ -27,26 +27,26 @@ await result.dispose();
 
 An object with the following properties and methods:
 
-| Property                    | Description                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `value`                     | Value returned by the `app` resource's `init()`                                                                                                                                                                                                                                                                                                                                                                                 |
-| `runTask(...)`              | Run a task by reference or string id                                                                                                                                                                                                                                                                                                                                                                                            |
-| `emitEvent(...)`            | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`)                                                                                                                                                                                                                                                                                                                                      |
-| `getResourceValue(...)`     | Read a resource's value                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `getLazyResourceValue(...)` | Initialize/read a resource on demand. Available only when `run(..., { lazy: true })` is enabled.                                                                                                                                                                                                                                                                                                                                |
-| `getResourceConfig(...)`    | Read a resource's resolved config                                                                                                                                                                                                                                                                                                                                                                                               |
-| `getRootId()`               | Read the root resource id                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `getRootConfig()`           | Read the root resource config                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `getRootValue()`            | Read the initialized root resource value                                                                                                                                                                                                                                                                                                                                                                                        |
-| `logger`                    | Logger instance                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `store`                     | Runtime store with registered resources, tasks, middleware, events, and runtime internals                                                                                                                                                                                                                                                                                                                                      |
-| `dispose()`                 | Transitions to `disposing` (stops admitting fresh external work), runs resource `cooldown()` in reverse dependency order, emits `globals.events.disposing` (awaited), waits for in-flight tasks + event listeners to drain (up to `disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`), logs a structured `warn` if drain did not complete in time, transitions to `drained` (blocks all new business task/event admissions), emits `globals.events.drained` (lifecycle-bypassed, awaited), then disposes resources and unhooks listeners |
+| Property                    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `value`                     | Value returned by the `app` resource's `init()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `runTask(...)`              | Run a task by reference or string id                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `emitEvent(...)`            | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`)                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `getResourceValue(...)`     | Read a resource's value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `getLazyResourceValue(...)` | Initialize/read a resource on demand. Available only when `run(..., { lazy: true })` is enabled.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `getResourceConfig(...)`    | Read a resource's resolved config                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `getRootId()`               | Read the root resource id                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `getRootConfig()`           | Read the root resource config                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `getRootValue()`            | Read the initialized root resource value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `logger`                    | Logger instance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `store`                     | Runtime store with registered resources, tasks, middleware, events, and runtime internals                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `dispose()`                 | Transitions to `disposing` (stops admitting fresh external work), runs resource `cooldown()` in reverse dependency order, emits `globals.events.disposing` (awaited), waits for in-flight tasks + event hooks to drain (up to `disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`), logs a structured `warn` if drain did not complete in time, transitions to `drained` (blocks all new business task/event admissions), emits `globals.events.drained` (lifecycle-bypassed, awaited), then disposes resources and removes hooks |
 
 Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.
 
-This object is your main interface to interact with the running application. Can also be injected as dependency via `globals.resources.runtime`.
+This object is your main interface to interact with the running application. Can also be declared as dependency via `globals.resources.runtime`.
 
-Important bootstrap note: when `runtime` is injected inside a resource `init()`, startup may still be in progress. You are guaranteed your current resource dependencies are ready, but not that all registered resources in the container are already initialized.
+Important bootstrap note: when `runtime` is declared as a dependency inside a resource `init()`, startup may still be in progress. You are guaranteed your current resource dependencies are ready, but not that all registered resources in the app are already initialized.
 
 ### Ready-phase startup orchestration
 
@@ -71,9 +71,9 @@ Pass as the second argument to `run(app, options)`.
 | `debug`                      | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                                                                                                                                                                                                                                                                                                   |
 | `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                          |
 | `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                                 |
-| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners for graceful shutdown. If a signal arrives during bootstrap, startup is cancelled and initialized resources are rolled back.                                                                                                                                                                                                                                                                                                                   |
-| `disposeBudgetMs`            | `number`                                        | (default: `30_000`) Total disposal budget in milliseconds. Covers resource `cooldown()`, `disposing` hooks, drain wait, `drained` hooks, and resource disposal wait. When exhausted, Runner stops waiting and returns.                                                                                                                                                                                                                                                                                |
-| `disposeDrainBudgetMs`       | `number`                                        | (default: `30_000`) Drain wait budget in milliseconds while in `disposing`. Runner waits for in-flight business work (tasks + event listener execution) up to this value, capped by remaining `disposeBudgetMs`. If drain times out, Runner logs a structured warning and continues shutdown. Set to `0` to skip drain waiting.                                                                                                                                                                                                                                                     |
+| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` signal handlers for graceful shutdown. If a signal arrives during bootstrap, startup is cancelled and initialized resources are rolled back.                                                                                                                                                                                                                                                                                                             |
+| `disposeBudgetMs`            | `number`                                        | (default: `30_000`) Total disposal budget in milliseconds. Covers resource `cooldown()`, `disposing` hooks, drain wait, `drained` hooks, and resource disposal wait. When exhausted, Runner stops waiting and returns.                                                                                                                                                                                                                                                                                 |
+| `disposeDrainBudgetMs`       | `number`                                        | (default: `30_000`) Drain wait budget in milliseconds while in `disposing`. Runner waits for in-flight business work (tasks + event hook execution) up to this value, capped by remaining `disposeBudgetMs`. If drain times out, Runner logs a structured warning and continues shutdown. Set to `0` to skip drain waiting.                                                                                                                                                                            |
 | `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                                                                                                                                                                                          |
 | `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                                   |
 | `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `lifecycleMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred. |
@@ -83,7 +83,7 @@ Pass as the second argument to `run(app, options)`.
 
 For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).
 
-```ts
+```typescript
 const result = await run(app, { dryRun: true });
 // result.value is undefined (app not initialized)
 // You can inspect result.store.resources / result.store.tasks
@@ -94,38 +94,38 @@ await result.dispose();
 
 - Minimal boot:
 
-```ts
+```typescript
 await run(app);
 ```
 
 - Debugging locally:
 
-```ts
+```typescript
 await run(app, { debug: "normal", logs: { printThreshold: "debug" } });
 ```
 
 - Verbose investigations:
 
-```ts
+```typescript
 await run(app, { debug: "verbose", logs: { printStrategy: "json-pretty" } });
 ```
 
 - CI validation (no side effects):
 
-```ts
+```typescript
 await run(app, { dryRun: true });
 ```
 
 - Lazy startup + explicit on-demand resource init:
 
-```ts
+```typescript
 const runtime = await run(app, { lazy: true, lifecycleMode: "parallel" });
 const db = await runtime.getLazyResourceValue("app.db");
 ```
 
 - Custom process error routing:
 
-```ts
+```typescript
 await run(app, {
   errorBoundary: true,
   onUnhandledError: ({ error }) => report(error),
@@ -146,7 +146,7 @@ Runner applies source-aware admission rules during shutdown:
 | `disposing` | Reject fresh external admissions (`runtime`, `resource`). Allow in-flight internal continuations (`task`, `hook`, `middleware`) while their originating execution is still active.                                                                     |
 | `drained`   | Reject all new business task/event admissions. Lifecycle events (`globals.events.drained`) are lifecycle-bypassed — their hooks fire, but those hooks cannot start new tasks or emit additional events. Lifecycle flow continues to resource disposal. |
 
-Practical effect for HTTP modules:
+Practical effect for HTTP resources:
 
 - In `disposing`, stop accepting new requests and stop new external admissions into Runner.
 - Let already in-flight request work finish during the drain budget window.
@@ -163,7 +163,7 @@ Practical effect for HTTP modules:
 - Supporting resources that in-flight tasks depend on (for example: database pools, cache clients, message producers) should usually not perform teardown in `cooldown()`. Keep them available until `dispose()`.
 - Execution order mirrors resource disposal: reverse dependency waves, with same-wave parallelism when `lifecycleMode: "parallel"` is enabled.
 
-### How it works
+### How It Works
 
 Resources initialize in dependency order and dispose in **reverse** order. If Resource B depends on Resource A, then:
 
@@ -274,15 +274,7 @@ await dispose();
 ### Automatic signal handling
 
 By default, Runner installs handlers for `SIGTERM` and `SIGINT`.
-When a signal arrives, Runner:
-
-1. Transitions to `disposing` (blocks fresh `runtime`/`resource` admissions)
-2. Runs resource `cooldown()` in reverse dependency order
-3. Emits `globals.events.disposing` (awaited)
-4. Waits for drain up to `disposeDrainBudgetMs` (capped by remaining `disposeBudgetMs`)
-5. Transitions to `drained` (blocks all new business task/event admissions)
-6. Emits `globals.events.drained` (lifecycle-bypassed, awaited)
-7. Disposes resources in reverse dependency order (within remaining `disposeBudgetMs`)
+Signal-based shutdown follows the standard disposal lifecycle sequence described in [Disposal Lifecycle Events](#disposal-lifecycle-events) below.
 
 If a signal arrives while `run(...)` is still bootstrapping, Runner cancels startup and performs the same graceful teardown path.
 

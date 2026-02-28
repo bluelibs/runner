@@ -37,7 +37,7 @@ const userCreated = r
   .payloadSchema(z.object({ userId: z.string() })) // runtime and compile-time validation
   .build();
 
-// notifications module
+// notifications
 const onUserCreatedHook = r
   .hook("app.hooks.onUserCreated")
   .on(userCreated)
@@ -173,4 +173,3 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Under the Hood](#under-the-hood) - Architecture deep dive
 - [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
-

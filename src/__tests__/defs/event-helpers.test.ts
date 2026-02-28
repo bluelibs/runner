@@ -1,5 +1,6 @@
 import { defineEvent } from "../../define";
-import { isOneOf, IEventEmission, onAnyOf } from "../../defs";
+import { onAnyOf, isOneOf } from "../../public";
+import type { IEventEmission } from "../../defs";
 import { runtimeSource } from "../../types/runtimeSource";
 
 describe("event helpers", () => {

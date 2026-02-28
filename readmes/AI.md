@@ -630,7 +630,7 @@ throw error;
 
 ## Overrides
 
-Override a task/resource/hook/middleware while preserving `id`. Use shorthand for behavior swaps, or `override(base, patch)` for full patch control:
+Override a task/resource/hook/middleware while preserving `id`:
 
 ```ts
 const mockMailer = r.override(realMailer, async () => new MockMailer());
@@ -645,7 +645,9 @@ const app = r
 - `r.override(base, fn)` is a typed shorthand for common behavior swaps:
   - task/hook/task-middleware/resource-middleware: replaces `run`
   - resource: replaces `init`
+- `override(base, fn)` is an alias with the same behavior as `r.override(base, fn)`.
 - `r.override(...)` creates replacement definitions; `.overrides([...])` applies them in a specific container during bootstrap.
+- `.overrides([...])` accepts only definitions produced by `r.override(...)` / `override(...)` (plus `null` / `undefined`).
 - Registering only the replacement definition is valid; registering both base and replacement in `.register([...])` causes duplicate-id errors.
 - `.overrides([...])` requires the target id to already be present in the graph; if you wanted a second resource instance instead of replacement, use `.fork("new.id")`.
 - Hook overrides keep the same `.on` target; shorthand only replaces `run`.
@@ -669,6 +671,8 @@ Given the set of removals and behavior changes, this upgrade should be treated a
 - Use the full migration playbook: [Upgrading from 5.x to 6.0](./FULL_GUIDE.md#upgrading-from-5x-to-60).
 - Highest-impact migrations:
   - `r.override.*(...)` -> `r.override(base, fn)`
+  - `.overrides([...])` now accepts only override-produced definitions (`r.override(...)` / `override(...)`)
+  - Cache customization moves from `globals.tasks.cacheFactory` to `globals.resources.cacheProvider` via `globals.resources.cache.with({ provider })`
   - `middleware.everywhere` -> `resource.subtree(...)` / `taskRunner.intercept(...)`
   - Event source strings -> structured source objects (`{ kind, id }`)
   - Event Lanes helper APIs -> canonical `eventLanesResource.with({ profile, topology, mode? })`

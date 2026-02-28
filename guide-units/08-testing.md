@@ -63,8 +63,9 @@ describe("registerUser task", () => {
 Use `run()` to start the full app with middleware, events, and lifecycle. Swap infrastructure with `override()`.
 
 Important:
-- `r.override(base, fn)` (or `override(base, patch)`) creates a replacement definition.
-- `.overrides([...])` is what applies replacements in the running container.
+
+- `r.override(base, fn)` (or alias `override(base, fn)`) creates a replacement definition.
+- `.overrides([...])` only accepts override-produced definitions.
 - If you place both base and replacement in `.register([...])`, you'll get duplicate-id registration errors.
 
 ```typescript
@@ -73,19 +74,15 @@ import { run, r, override } from "@bluelibs/runner";
 describe("User registration flow", () => {
   it("creates user, sends email, and tracks analytics", async () => {
     // Swap infrastructure with test doubles
-    const testDb = r
-      .resource("app.database")
-      .init(async () => new InMemoryDatabase())
-      .build();
-
-    const mockMailer = override(realMailer, {
-      init: async () => ({ send: jest.fn().mockResolvedValue(true) }),
-    });
+    const mockDb = r.override(realDb, async () => new InMemoryDatabase());
+    const mockMailer = override(realMailer, async () => ({
+      send: jest.fn().mockResolvedValue(true),
+    }));
 
     const testApp = r
       .resource("test")
-      .overrides([testDb, mockMailer])
       .register([...productionComponents])
+      .overrides([mockDb, mockMailer])
       .build();
 
     const { runTask, getResourceValue, dispose } = await run(testApp);

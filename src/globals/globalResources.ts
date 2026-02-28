@@ -1,4 +1,7 @@
-import { cacheResource } from "./middleware/cache.middleware";
+import {
+  cacheProviderResource,
+  cacheResource,
+} from "./middleware/cache.middleware";
 import { circuitBreakerResource } from "./middleware/circuitBreaker.middleware";
 import { concurrencyResource } from "./middleware/concurrency.middleware";
 import { rateLimitResource } from "./middleware/rateLimit.middleware";
@@ -25,6 +28,7 @@ export const globalResources = {
   logger,
   debug,
   serializer,
+  cacheProvider: cacheProviderResource,
   cache: cacheResource,
   cron,
   queue: queueResource,

@@ -1,38 +1,9 @@
 import { defineHook, defineResource, defineTask } from "../../define";
 import { createTestFixture } from "../test-utils";
 import { OverrideManager } from "../../models/OverrideManager";
+import { r } from "../..";
 
 describe("OverrideManager override graph recursion", () => {
-  it("handles cyclic override references without overflowing the call stack", () => {
-    const fixture = createTestFixture();
-    const { store } = fixture;
-    const taskRunner = fixture.createTaskRunner();
-    store.setTaskRunner(taskRunner);
-    const runtimeResult = fixture.createRuntimeResult(taskRunner);
-
-    const firstBase = defineResource({
-      id: "override.cycle.first",
-      overrides: [],
-    });
-
-    const second = defineResource({
-      id: "override.cycle.second",
-      overrides: [firstBase],
-    });
-
-    const first = {
-      ...firstBase,
-      overrides: [second],
-    } as typeof firstBase;
-
-    const root = defineResource({
-      id: "override.cycle.root",
-      register: [first, second],
-    });
-
-    expect(() => store.initializeStore(root, {}, runtimeResult)).not.toThrow();
-  });
-
   it("supports storeOverridesDeeply without explicitly passing a visited set", () => {
     const fixture = createTestFixture();
     const { store } = fixture;
@@ -44,10 +15,7 @@ describe("OverrideManager override graph recursion", () => {
       id: "override.default-visited.base",
       run: async () => "base",
     });
-    const overrideTask = defineTask({
-      id: "override.default-visited.base",
-      run: async () => "override",
-    });
+    const overrideTask = r.override(baseTask, async () => "override");
 
     const root = defineResource({
       id: "override.default-visited.root",

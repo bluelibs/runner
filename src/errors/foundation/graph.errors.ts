@@ -78,6 +78,26 @@ export const overrideDuplicateTargetError = error<
   )
   .build();
 
+export const overrideDefinitionRequiredError = error<
+  {
+    sourceId: string;
+    receivedId?: string;
+  } & DefaultErrorType
+>("runner.errors.overrideDefinitionRequired")
+  .format(
+    ({ sourceId, receivedId }) =>
+      `Resource "${sourceId}" declares an invalid override${
+        receivedId ? ` ("${receivedId}")` : ""
+      }. .overrides([...]) accepts only definitions produced by r.override(...) / override(...).`,
+  )
+  .remediation(
+    ({ receivedId }) =>
+      `Wrap the base definition with r.override(base, fn)${
+        receivedId ? ` for "${receivedId}"` : ""
+      } before passing it to .overrides([...]).`,
+  )
+  .build();
+
 // Unknown item type
 export const unknownItemTypeError = error<{ item: unknown } & DefaultErrorType>(
   "runner.errors.unknownItemType",

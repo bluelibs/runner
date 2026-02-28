@@ -36,22 +36,59 @@ const app = r
   .build();
 ```
 
-Want Redis instead of the default LRU cache? No problem, just override the cache factory task:
+Want Redis instead of the default LRU cache? Provide a custom `cacheProvider` resource:
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
 
-const redisCacheFactory = r
-  .task("globals.tasks.cacheFactory") // Same ID as the default task
-  .run(async (input: unknown) => new RedisCache(input))
+const redis = r
+  .resource<{ url: string }>("app.resources.redis")
+  .init(async ({ url }) => new Redis(url))
+  .dispose(async (client) => client.disconnect())
+  .build();
+
+const redisCacheProvider = r
+  .resource("app.resources.cacheProvider.redis")
+  .dependencies({ redis })
+  .init(async (_config, { redis }) => {
+    return async (options) => new RedisCache(redis, options);
+  })
   .build();
 
 const app = r
   .resource("app")
-  .register([globals.resources.cache])
-  .overrides([redisCacheFactory]) // Override the default cache factory
+  .register([
+    redis.with({ url: process.env.REDIS_URL! }),
+    globals.resources.cache.with({ provider: redisCacheProvider }),
+  ])
   .build();
 ```
+
+Cache provider contract:
+
+```typescript
+import type { ICacheInstance } from "@bluelibs/runner";
+
+type CacheProvider = (options: {
+  ttl?: number;
+  max?: number;
+  ttlAutopurge?: boolean;
+  [key: string]: unknown;
+}) => Promise<ICacheInstance>;
+
+interface ICacheInstance {
+  get(key: string): unknown | Promise<unknown>;
+  set(key: string, value: unknown): unknown | Promise<unknown>;
+  clear(): void | Promise<void>;
+  has?(key: string): boolean | Promise<boolean>;
+}
+```
+
+Notes:
+
+- `options` are merged from `globals.resources.cache.with({ defaultOptions })` and middleware-level cache options.
+- `keyBuilder` is middleware-only and is not passed to `cacheProvider`.
+- `has()` is optional, but recommended when `undefined` can be a valid cached value.
 
 **Why would you need this?** For monitoring and metrics—you want to know cache hit rates to optimize your application.
 
@@ -336,11 +373,11 @@ const myTask = r
 Fail fast when a task must run inside a specific async context. This middleware is useful for request-scoped metadata (request id, tenant id, auth claims) where continuing without context would produce incorrect behavior.
 
 ```typescript
-import { defineAsyncContext, r } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
-const RequestContext = defineAsyncContext<{ requestId: string }>({
-  id: "app.ctx.request",
-});
+const RequestContext = r
+  .asyncContext<{ requestId: string }>("app.ctx.request")
+  .build();
 
 const getAuditTrail = r
   .task("app.tasks.getAuditTrail")
@@ -356,11 +393,11 @@ const getAuditTrail = r
 If you prefer the explicit middleware form (useful in documentation and composition helpers):
 
 ```typescript
-import { defineAsyncContext, globals, r } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
-const TenantContext = defineAsyncContext<{ tenantId: string }>({
-  id: "app.ctx.tenant",
-});
+const TenantContext = r
+  .asyncContext<{ tenantId: string }>("app.ctx.tenant")
+  .build();
 
 const listProjects = r
   .task("app.tasks.listProjects")
@@ -683,7 +720,7 @@ Imagine this: Your API has a rate limit of 100 requests/second, but 1,000 users 
 
 **The better solution**: Use a Semaphore, a concurrency primitive that automatically manages permits.
 
-### When to use Semaphore
+### When to Use Semaphore
 
 | Use case                   | Why Semaphore helps                        |
 | -------------------------- | ------------------------------------------ |
@@ -813,7 +850,7 @@ Picture this: Two users register at the same time, and your code writes their da
 
 **The better solution**: Use a Queue, which serializes operations automatically, ensuring they run one-by-one in order.
 
-### When to use Queue
+### When to Use Queue
 
 | Use case             | Why Queue helps                                 |
 | -------------------- | ----------------------------------------------- |

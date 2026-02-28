@@ -60,9 +60,9 @@ const result = await runTask(sendEmail, {
 });
 ```
 
-> **Lockdown note:** Direct `define*()` outputs and fluent `.build()` outputs are deep-frozen definitions. Treat definitions as immutable and use builder chaining, `.with()`, `.fork()`, `intercept()`, or `r.override(...)` for changes.
+> **Note:** Fluent `.build()` outputs are deep-frozen definitions. Treat definitions as immutable and use builder chaining, `.with()`, `.fork()`, `intercept()`, or `r.override(...)` for changes.
 
-> **Dependencies note:** `dependencies` can be declared as an object or factory function. Factory output is resolved during bootstrap and must return an object map (not `null`, array, or primitive), otherwise Runner fails fast.
+> **Note:** `dependencies` can be declared as an object or factory function. Factory output is resolved during bootstrap and must return an object map (not `null`, array, or primitive), otherwise Runner fails fast.
 
 **The Two Ways to Call Tasks:**
 
@@ -516,7 +516,7 @@ const userRegistered = r
 
 #### Transactional Events
 
-Use transactional events when listeners must be reversible:
+Use transactional events when hooks must be reversible:
 
 ```typescript
 const orderPlaced = r
@@ -542,12 +542,12 @@ const reserveInventory = r
 Transactional behavior:
 
 - Transactional is event-level metadata (available as `event.transactional` in emission info), not hook metadata.
-- Every executed listener must return an async undo closure.
-- If a listener fails (throws), previously completed listeners are rolled back in reverse completion order.
+- Every executed hook must return an async undo closure.
+- If a hook fails (throws), previously completed hooks are rolled back in reverse completion order.
 - Rollback continues even if one undo fails; Runner throws an aggregated transactional rollback error.
 - Transactional execution is always fail-fast.
 - Runtime sanity constraints: `transactional + parallel` and `transactional + globals.tags.eventLane` are invalid.
-- `run(root)` API does not change; only hook/listener return behavior changes for transactional emissions.
+- `run(app)` API does not change; only hook return behavior changes for transactional emissions.
 
 #### Parallel Event Execution
 
@@ -667,7 +667,7 @@ const internalEvent = r
 - Events that contain sensitive information
 - Events meant only for specific components
 
-#### Hooks
+### Hooks
 
 Hooks are the modern way to subscribe to events. They are lightweight event subscribers, similar to tasks, but with a few key differences.
 
@@ -718,7 +718,7 @@ const auditUsers = r
 // Guard usage to refine at runtime (still narrows to common payload)
 const auditSome = r
   .hook("app.hooks.auditSome")
-  .on(onAnyOf([eUser, eAdmin])) // to get a combined event
+  .on(onAnyOf(eUser, eAdmin)) // to get a combined event
   .run(async (ev) => {
     if (isOneOf(ev, [eUser, eAdmin])) {
       ev.data.id; // common field of eUser and eAdmin
@@ -908,13 +908,13 @@ const app = r
   .build();
 ```
 
-> **Scope:** `.subtree({ tasks/resources: { middleware: [...] } })` applies to the declaring resource subtree only (additive through ancestors).
+> **Note:** `.subtree({ tasks/resources: { middleware: [...] } })` applies to the declaring resource subtree only (additive through ancestors).
 
-> **Ordering:** Subtree middleware resolves before local `.middleware([...])`. If the same middleware id is attached locally, local wins.
+> **Note:** Subtree middleware resolves before local `.middleware([...])`. If the same middleware id is attached locally, local wins.
 
-> **Validation behavior:** subtree `validate(definition)` callbacks are return-based. Return `SubtreeViolation[]` for policy failures. Runner aggregates all violations and throws one `subtreeValidationFailedError` during bootstrap.
+> **Note:** subtree `validate(definition)` callbacks are return-based. Return `SubtreeViolation[]` for policy failures. Runner aggregates all violations and throws one `subtreeValidationFailedError` during bootstrap.
 
-> **Fail-safe normalization:** if a validator throws or returns a non-array, Runner records an `invalid-definition` violation and still throws the aggregated subtree validation error.
+> **Note:** if a validator throws or returns a non-array, Runner records an `invalid-definition` violation and still throws the aggregated subtree validation error.
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
@@ -1020,7 +1020,7 @@ Consider this scenario: Your rate-limit middleware needs to share remaining quot
 
 **The better solution**: Use the Execution Journal, a type-safe registry that travels with your task execution.
 
-### When to use the Execution Journal
+#### When to Use the Execution Journal
 
 | Use case      | Why Journal helps                          |
 | ------------- | ------------------------------------------ |
@@ -1069,8 +1069,7 @@ const myTask = r
 | `journal.get(key)`                  | Retrieve a value (returns `T \| undefined`)                        |
 | `journal.has(key)`                  | Check if a key exists (returns `boolean`)                          |
 
-> [!IMPORTANT]
-> **Fail-fast by default**: `set()` throws an error if the key already exists. This prevents silent bugs from middleware accidentally clobbering each other's state. Use `{ override: true }` when you intentionally want to update a value.
+> **Note:** `set()` throws an error if the key already exists. This prevents silent bugs from middleware accidentally clobbering each other's state. Use `{ override: true }` when you intentionally want to update a value.
 
 **Key features:**
 
@@ -1184,7 +1183,7 @@ Imagine you want to automatically register all your HTTP routes without manually
 
 **The better solution**: Use Tags—metadata that can be queried at runtime to build dynamic functionality.
 
-#### When to use Tags
+#### When to Use Tags
 
 | Use case       | Why Tags help                               |
 | -------------- | ------------------------------------------- |
@@ -1403,12 +1402,12 @@ const internalEvent = r
   .tags([globals.tags.excludeFromGlobalHooks]) // Won't trigger wildcard hooks
   .build();
 
-// Deny privileged container resources inside a boundary
+// Deny privileged internal resources inside a boundary
 const secureModule = r
   .resource("app.secure")
   .isolate({ deny: [globals.tags.containerInternals] })
   .build();
-// If you're using runner-dev, which uses containerInternals, make sure it's a sibling of your app. root -> app, runner-dev
+// If you're using runner-dev, which uses containerInternals, make sure it's a sibling of your app. top-level -> app, runner-dev
 ```
 
 #### Contract Tags
@@ -1421,7 +1420,7 @@ Consider this: You have an authentication tag, and you want to ensure ALL tasks 
 
 **The better solution**: Use Contract Tags, which enforce type contracts at compile time.
 
-### When to use Contract Tags
+#### When to Use Contract Tags
 
 | Use case            | Why Contract Tags help                 |
 | ------------------- | -------------------------------------- |
@@ -1429,7 +1428,7 @@ Consider this: You have an authentication tag, and you want to ensure ALL tasks 
 | API standardization | Enforce consistent response shapes     |
 | Validation          | Guarantee tasks return required fields |
 
-### Contract Tags Code Example
+#### Contract Tags Code Example
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -1453,7 +1452,7 @@ const profileTask = r
 
 Typed errors can be declared once and injected anywhere. Register them alongside other items and consume via dependencies. The injected value is the error helper itself, exposing `.new()`, `.create()`, `.throw()`, `.is()`, `id`, and optional `httpCode`.
 
-```ts
+```typescript
 import { r } from "@bluelibs/runner";
 
 // Fluent builder for errors
@@ -1480,7 +1479,7 @@ The thrown `Error` has `name = id`. By default `message` is `JSON.stringify(data
 
 For dependency cycle detection, use the canonical helper name `circularDependencyError`. Legacy aliases `circularDependenciesError` and `dependencyCycleError` remain available as deprecated compatibility exports.
 
-```ts
+```typescript
 try {
   userNotFoundError.throw({ code: 404, message: "User not found" });
 } catch (err) {
@@ -1512,7 +1511,7 @@ throw userNotFoundError.create({
 
 **Remediation** can also be a function when the advice depends on the error data:
 
-```ts
+```typescript
 const quotaExceeded = r
   .error<{ limit: number; message: string }>("app.errors.QuotaExceeded")
   .format((d) => d.message)
@@ -1526,7 +1525,7 @@ const quotaExceeded = r
 
 Use `r.error.is(error, partialData?)` to detect whether an error is any Runner error, regardless of its specific type. You can optionally filter by a subset of `error.data` using shallow strict matching (`===`) on the provided keys. This is useful in catch blocks, middleware, or error filters when you want to handle all Runner errors differently from standard JavaScript errors:
 
-```ts
+```typescript
 import { r } from "@bluelibs/runner";
 
 try {
@@ -1554,7 +1553,7 @@ Use `.throws()` to declare the error ids a definition may produce. This is decla
 
 `.throws()` is available on task, resource, hook, and middleware builders.
 
-```ts
+```typescript
 import { r, run } from "@bluelibs/runner";
 
 const unauthorized = r

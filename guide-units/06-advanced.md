@@ -9,7 +9,7 @@ This section covers patterns for building resilient, distributed applications. U
 Optional dependencies are for components that may not be registered in a given runtime (for example local dev, feature-flagged modules, or partial deployments).
 They are not a substitute for retry/circuit-breaker logic when a registered dependency fails at runtime.
 
-### The problem
+### The Problem
 
 ```typescript
 // Without optional dependencies - if analytics is not registered, startup fails
@@ -24,7 +24,7 @@ const registerUser = r
   .build();
 ```
 
-### The solution
+### The Solution
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -52,7 +52,7 @@ const registerUser = r
 Important: `optional()` handles dependency absence (`undefined`) at wiring time.
 If a registered dependency throws, handle that with retry/fallback/circuit-breaker patterns.
 
-### When to use optional dependencies
+### When to Use Optional Dependencies
 
 | Use Case                  | Example                                            |
 | ------------------------- | -------------------------------------------------- |
@@ -234,7 +234,7 @@ See [Durable Workflows](../readmes/DURABLE_WORKFLOWS.md) for complete API and pa
 Ever sent a `Date` over JSON and gotten `"2024-01-15T..."` back as a string? Runner's serializer preserves types across the wire.
 It also supports object graphs that plain JSON cannot represent, including circular and self-referencing objects.
 
-### What it handles
+### What It Handles
 
 | Type          | JSON                         | Runner Serializer                                                                              |
 | ------------- | ---------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -247,7 +247,7 @@ It also supports object graphs that plain JSON cannot represent, including circu
 | Circular refs | Error                        | Preserved                                                                                      |
 | Self refs     | Error                        | Preserved                                                                                      |
 
-### Two modes
+### Two Modes
 
 ```typescript
 import { Serializer } from "@bluelibs/runner";
@@ -271,7 +271,7 @@ const restored = serializer.deserialize(data);
 // restored.self === restored (self-reference preserved)
 ```
 
-### Safety configuration for untrusted payloads
+### Safety Configuration for Untrusted Payloads
 
 When you deserialize untrusted data, configure the serializer explicitly:
 
@@ -289,7 +289,7 @@ const serializer = new Serializer({
 
 `symbolPolicy` defaults to `"allow-all"`. Prefer `"well-known-only"` (or stricter) for untrusted input.
 
-### Custom types
+### Custom Types
 
 Teach the serializer about your own classes:
 
@@ -317,7 +317,7 @@ const { price: restored } = serializer.parse(json);
 // restored instanceof Money === true
 ```
 
-### Security features
+### Security Features
 
 The serializer is hardened against common attacks:
 
@@ -429,7 +429,7 @@ const resilientTask = r
   .build();
 ```
 
-### Best practices for orchestration
+### Best Practices for Orchestration
 
 1.  **Rate Limit first**: Don't even try to execute or retry if you've exceeded your quota.
 2.  **Circuit Breaker second**: Don't retry against a service that is known to be failing.
@@ -448,7 +448,7 @@ Think about generating API documentation automatically from your tasks, or build
 
 **The better solution**: Use Meta, a structured way to describe what your components do.
 
-### When to use Meta
+### When to Use Meta
 
 | Use case         | Why Meta helps                                 |
 | ---------------- | ---------------------------------------------- |
@@ -561,7 +561,7 @@ Metadata transforms your components from anonymous functions into self-documenti
 
 Sometimes you need to replace a component entirely. Maybe you're doing integration testing or you want to override a library from an external package.
 
-Use shorthand `r.override(base, fn)` for behavior swaps and `override(base, patch)` for full patch control, while preserving `id`.
+Use `r.override(base, fn)` (or alias `override(base, fn)`) for behavior swaps while preserving the same `id`.
 
 ```typescript
 import { override, r } from "@bluelibs/runner";
@@ -571,23 +571,22 @@ const productionEmailer = r
   .init(async () => new SMTPEmailer())
   .build();
 
-
-// Option 1: Typed shorthand for common behavior swaps
+// Option 1: Namespace form
 const shorthandOverrideEmailer = r.override(
   productionEmailer,
   async () => new MockEmailer(),
 );
 
-// Option 2: Using override() helper to change behavior while preserving id
-const helperOverrideEmailer = override(productionEmailer, {
-  init: async () => new MockEmailer(),
-});
-
+// Option 2: Alias form (same behavior)
+const helperOverrideEmailer = override(
+  productionEmailer,
+  async () => new MockEmailer(),
+);
 
 const app = r
   .resource("app")
   .register([productionEmailer])
-  .overrides([shorthandOverrideEmailer, helperOverrideEmailer])
+  .overrides([shorthandOverrideEmailer])
   .build();
 
 // Tasks
@@ -623,7 +622,13 @@ const overriddenMiddleware = r.override(
 // Even hooks
 ```
 
-`r.override(base, fn)` is a typed shorthand for behavior replacement (`run` for tasks/hooks/middleware, `init` for resources). Hook overrides keep the same `.on` target. For full patch control (metadata/dependencies/etc.), use `override(base, patch)`. Boundary/topology changes belong to `.fork("new.id")`.
+`r.override(base, fn)` is behavior-only:
+
+- task/hook/task-middleware/resource-middleware: callback replaces `run`
+- resource: callback replaces `init`
+- hook overrides keep the same `.on` target
+
+Override APIs do not change structural boundaries (dependencies, register tree, subtree policies). If you need a separate structural variant, use `.fork("new.id")`.
 
 ### `r.override(...)` vs `.overrides([...])` (Critical Distinction)
 
@@ -634,9 +639,9 @@ These APIs solve different problems:
 | `r.override(base, fn)` | Creates a new definition object with replaced behavior (`init` or `run`)                     | No (not by itself)   |
 | `.overrides([...])`    | Registers override _application requests_ that Runner validates and applies during bootstrap | Yes                  |
 
-Think of `r.override(...)` as **"build replacement definition"** and `.overrides([...])` as **"apply replacement in this container"**.
+Think of `r.override(...)` as **"build replacement definition"** and `.overrides([...])` as **"apply replacement in this app"**.
 
-```ts
+```typescript
 const mockMailer = r.override(realMailer, async () => new MockMailer()); // definition only
 
 const app = r
@@ -646,9 +651,11 @@ const app = r
   .build();
 ```
 
+Important: `.overrides([...])` only accepts definitions produced by `r.override(...)` / `override(...)` (plus `null` / `undefined` for conditional lists).
+
 Direct registration of an override definition is also valid when you control the composition and only register one version for that id:
 
-```ts
+```typescript
 const customMailer = r.override(realMailer, async () => new MockMailer());
 
 const app = r
@@ -661,7 +668,7 @@ const app = r
 
 1. Creating an override but never applying/registering it:
 
-```ts
+```typescript
 const mockMailer = r.override(realMailer, async () => new MockMailer());
 await run(app); // no effect if app doesn't include mockMailer
 ```
@@ -670,7 +677,7 @@ Fix: register it directly or include it in `.overrides([...])`.
 
 2. Registering both base and override in `.register([...])`:
 
-```ts
+```typescript
 .register([realMailer, r.override(realMailer, async () => new MockMailer())])
 ```
 
@@ -678,41 +685,31 @@ Fix: either register only one definition for that id, or keep base in `register`
 
 3. Using `.overrides([...])` when target id is not registered:
 
-```ts
+```typescript
 .overrides([r.override(remoteMailer, async () => new MockMailer())])
 ```
 
 Fix: ensure the base target is in the resource graph first. If you wanted a separate resource, use `.fork("new.id")` and register that fork.
 
-4. Overriding the root app directly in tests when a wrapper is clearer:
+4. Passing raw definitions to `.overrides([...])`:
+
+```typescript
+.overrides([r.resource("app.mailer").init(async () => new MockMailer()).build()])
+```
+
+Fix: wrap the base with `r.override(base, fn)` before adding it to `.overrides([...])`.
+
+5. Overriding the root app directly in tests when a wrapper is clearer:
 
 Fix: prefer:
 
-```ts
+```typescript
 r.resource("test")
   .register([app])
   .overrides([
     /* mocks */
   ])
   .build();
-```
-
-Overrides can also extend behavior while reusing the base implementation:
-
-```ts
-const extendingEmailer = override(productionEmailer, {
-  init: async (config, deps) => {
-    const base = await productionEmailer.init(config, deps);
-    return {
-      ...base,
-      async send(to: string, body: string) {
-        // Add behavior, then delegate to base
-        console.log("Audit email send", { to });
-        return base.send(to, body);
-      },
-    };
-  },
-});
 ```
 
 Overrides are applied after everything is registered. If multiple overrides target the same id, Runner rejects the graph with a dedicated duplicate-target override error (instead of applying precedence). Overriding something that wasn't registered also throws a dedicated error with remediation (register the base first, or for resources use `.fork("new.id")` when you meant a separate instance). Use override() to change behavior safely while preserving the original id.
@@ -723,17 +720,17 @@ Overrides are applied after everything is registered. If multiple overrides targ
 
 As your app grows, you'll want consistent naming. Here's the convention that won't drive you crazy:
 
-| Type                | Format                                           |
-| ------------------- | ------------------------------------------------ |
-| Resources           | `{domain}.{noun}`                                |
-| Tasks               | `{domain}.tasks.{verb}`                          |
-| Events              | `{domain}.events.{pastTenseVerbOrNoun}`          |
-| Hooks               | `{domain}.hooks.{name}` (use `onX` for handlers) |
-| Task Middleware     | `{domain}.middleware.task.{name}`                |
-| Resource Middleware | `{domain}.middleware.resource.{name}`            |
-| Errors              | `{domain}.errors.{PascalCaseName}`               |
-| Async Context       | `{domain}.ctx.{noun}`                            |
-| Tags                | `{domain}.tags.{noun}`                           |
+| Type                | Format                                        |
+| ------------------- | --------------------------------------------- |
+| Resources           | `{domain}.{noun}`                             |
+| Tasks               | `{domain}.tasks.{verb}`                       |
+| Events              | `{domain}.events.{pastTenseVerbOrNoun}`       |
+| Hooks               | `{domain}.hooks.{name}` (use `onX` for hooks) |
+| Task Middleware     | `{domain}.middleware.task.{name}`             |
+| Resource Middleware | `{domain}.middleware.resource.{name}`         |
+| Errors              | `{domain}.errors.{PascalCaseName}`            |
+| Async Context       | `{domain}.ctx.{noun}`                         |
+| Tags                | `{domain}.tags.{noun}`                        |
 
 Use dot-separated IDs and keep them human-readable. Prefer `camelCase` for the final segment (tasks/events/hooks/middleware/ctx/tags) and `PascalCase` for errors.
 Use verbs for task IDs, past tense for event IDs, and nouns for resources/contexts/tags.
@@ -795,7 +792,7 @@ Here's the issue: TypeScript types only exist at compile time. When your API rec
 
 **The better solution**: Use runtime validation with libraries like Zod that infer types from validation schemas.
 
-### When to use Runtime Validation
+### When to Use Runtime Validation
 
 | Use case          | Why Runtime Validation helps |
 | ----------------- | ---------------------------- |
@@ -827,7 +824,7 @@ Add an `inputSchema` to any task to validate inputs before execution:
 
 ```typescript
 import { z } from "zod";
-import { task, resource, run } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 
 const userSchema = z.object({
   name: z.string().min(2),
@@ -1158,7 +1155,7 @@ Consider this: You have an authentication tag, and you want to ensure ALL tasks 
 
 **The better solution**: Use Type Contracts, which allow Tags and Middleware to declare input/output contracts that are enforced at compile time.
 
-### When to use Type Contracts
+### When to Use Type Contracts
 
 | Use case            | Why Type Contracts help                |
 | ------------------- | -------------------------------------- |
@@ -1286,9 +1283,9 @@ const invalidDb = r
 
 We expose the internal services for advanced use cases (but try not to use them unless you really need to):
 
-When you call `run(app)`, Runner creates an isolated runtime container for that specific run. During bootstrap, it registers built-in global resources for that container, including `globals.resources.runtime`.
+When you call `run(app)`, Runner creates an isolated runtime for that specific run. During bootstrap, it registers built-in global resources for that app, including `globals.resources.runtime`.
 
-`globals.resources.runtime` resolves to the same runtime object returned by `run(app)`, scoped to that container only. This lets code running _inside_ the container inject `runtime` and perform runtime operations (`runTask`, `emitEvent`, `getResourceValue`, root helpers, etc.) without passing the outer runtime object around manually.
+`globals.resources.runtime` resolves to the same runtime object returned by `run(app)`, scoped to that app only. This lets code running _inside_ the app depend on `runtime` and perform runtime operations (`runTask`, `emitEvent`, `getResourceValue`, root helpers, etc.) without passing the outer runtime object around manually.
 
 Bootstrap timing note: inside resource `init()`, `runtime` is available early, but that does **not** mean every registered resource is initialized yet. Runner guarantees dependency readiness for the currently initializing resource; unrelated resources may still be pending (especially with `lifecycleMode: "parallel"` or `lazy: true`).
 
@@ -1298,7 +1295,7 @@ import { globals } from "@bluelibs/runner";
 const advancedTask = r
   .task("app.advanced")
   .dependencies({
-    // Available because run(app) injects this resource into the current container.
+    // Available because run(app) provides this resource to the current app.
     runtime: globals.resources.runtime,
     store: globals.resources.store,
     taskRunner: globals.resources.taskRunner,
@@ -1449,4 +1446,3 @@ export const problematicResource = r
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
 > **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
-

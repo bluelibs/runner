@@ -9,6 +9,7 @@ import {
 } from "../defs";
 import * as utils from "../define";
 import {
+  overrideDefinitionRequiredError,
   overrideDuplicateTargetError,
   overrideTargetNotRegisteredError,
   unknownItemTypeError,
@@ -87,6 +88,23 @@ export class OverrideManager {
     return Array.from(sources.values());
   }
 
+  private isOverrideBranded(override: RegisterableItems): boolean {
+    if (utils.isResourceWithConfig(override)) {
+      return utils.isOverrideDefinition(override.resource);
+    }
+    return utils.isOverrideDefinition(override);
+  }
+
+  private getMaybeOverrideId(override: RegisterableItems): string | undefined {
+    if (utils.isResourceWithConfig(override)) {
+      return override.resource.id;
+    }
+    if (override && typeof override === "object" && "id" in override) {
+      return (override as { id: string }).id;
+    }
+    return undefined;
+  }
+
   storeOverridesDeeply<C>(
     element: IResource<C, any, any>,
     visited: Set<string> = new Set(),
@@ -100,6 +118,12 @@ export class OverrideManager {
     element.overrides.forEach((override) => {
       if (!override) {
         return;
+      }
+      if (!this.isOverrideBranded(override)) {
+        overrideDefinitionRequiredError.throw({
+          sourceId: element.id,
+          receivedId: this.getMaybeOverrideId(override),
+        });
       }
 
       if (utils.isResource(override)) {

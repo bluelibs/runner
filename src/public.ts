@@ -7,7 +7,6 @@ import {
   defineTaskMiddleware,
   defineResourceMiddleware,
   defineTag,
-  defineOverride,
   defineHook,
 } from "./define";
 import {
@@ -36,6 +35,7 @@ import { tag as tagFn } from "./definers/builders/tag";
 import { error as errorFn } from "./definers/builders/error";
 import { asyncContext as asyncContextFn } from "./definers/builders/asyncContext";
 import { override as overrideBuilder } from "./definers/builders/override";
+import { onAnyOf, isOneOf } from "./types/event";
 
 const globals = {
   events: globalEvents,
@@ -58,10 +58,12 @@ export {
   defineResourceMiddleware as resourceMiddleware,
   defineAsyncContext as asyncContext,
   defineTag as tag,
-  defineOverride as override,
+  overrideBuilder as override,
   defineHook as hook,
   run,
   createTestResource,
+  onAnyOf,
+  isOneOf,
 };
 
 // Legacy alias accepted in tests; with optional id support

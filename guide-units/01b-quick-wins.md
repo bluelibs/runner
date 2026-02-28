@@ -190,7 +190,7 @@ const app = r
     registerUser, // event emitter
     userRegistered, // event definition
     sendWelcomeEmail, // hook
-    processOrder, // queue-protected task
+    writeConfig, // queue-protected task
     processPayment, // logged task
   ])
   .build();

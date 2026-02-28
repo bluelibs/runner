@@ -2,11 +2,9 @@ import { defineResource } from "./define";
 import { globalResources } from "./globals/globalResources";
 import {
   IResource,
-  IResourceWithConfig,
-  ITaskMiddleware,
-  IResourceMiddleware,
   ITask,
   RegisterableItems,
+  OverridableElements,
   DependencyMapType,
 } from "./defs";
 import { EventManager, Logger, Store, TaskRunner } from "./models";
@@ -35,13 +33,7 @@ export interface TestFacade {
 export function createTestResource(
   root: RegisterableItems,
   options?: {
-    overrides?: Array<
-      | IResource
-      | ITask
-      | ITaskMiddleware
-      | IResourceMiddleware
-      | IResourceWithConfig
-    >;
+    overrides?: Array<OverridableElements>;
   },
 ): IResource<void, Promise<TestFacade>> {
   return defineResource({

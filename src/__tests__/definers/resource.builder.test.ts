@@ -179,8 +179,16 @@ describe("resource builder", () => {
   });
 
   it("resource overrides append by default and overrides when requested", () => {
-    const a = resource({ id: "tests.builder.override.a", init: async () => 1 });
-    const b = resource({ id: "tests.builder.override.b", init: async () => 2 });
+    const baseA = resource({
+      id: "tests.builder.override.a",
+      init: async () => 1,
+    });
+    const baseB = resource({
+      id: "tests.builder.override.b",
+      init: async () => 2,
+    });
+    const a = r.override(baseA, async () => 11);
+    const b = r.override(baseB, async () => 22);
 
     const appended = r
       .resource("tests.builder.overrides.append")

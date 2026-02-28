@@ -21,7 +21,7 @@ const myTask = r
   .task("id")
   .dependencies({ db, logger })
   .run(async (input, { db, logger }, context) => {
-    // context?.journal is auto-injected
+    // context?.journal is auto-provided
     // context?.source => { kind, id }
     return result;
   })
@@ -57,7 +57,7 @@ const myEvent = r
   .payloadSchema<{ data: string }>({ parse: (v) => v })
   .build();
 
-// Transactional event (listeners must return undo closure)
+// Transactional event (hooks must return undo closure)
 const myTransactionalEvent = r
   .event("id.transactional")
   .payloadSchema<{ data: string }>({ parse: (v) => v })
@@ -99,6 +99,7 @@ const requestContext = r
 ```
 
 `resource.cooldown(value, config, dependencies, context): Promise<void>`
+
 - Runs at shutdown start (right after `disposing`, before `globals.events.disposing` and before drain waiting).
 - Use for ingress-stop behavior; it can be async, but should return quickly by contract.
 - Intended mostly for ingress/front-door resources (HTTP/tRPC/websocket/consumer boundaries) that admit new work.
@@ -142,20 +143,20 @@ await dispose();
 await disposeWithOptions();
 ```
 
-| Run Option                    | Purpose                                                                 |
-| ---------------------------- | ----------------------------------------------------------------------- |
-| `debug`                      | Enable Runner debug logging                                             |
-| `logs`                       | Configure logger strategy/threshold/buffering                           |
-| `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
-| `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with graceful shutdown (also during bootstrap) |
+| Run Option                   | Purpose                                                                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `debug`                      | Enable Runner debug logging                                                                                                 |
+| `logs`                       | Configure logger strategy/threshold/buffering                                                                               |
+| `errorBoundary`              | Catch process-level unhandled exceptions/rejections                                                                         |
+| `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with graceful shutdown (also during bootstrap)                                                   |
 | `disposeBudgetMs`            | Total disposal wait budget (ms) across resource cooldown, disposing hooks, drain wait, drained hooks, and resource disposal |
-| `disposeDrainBudgetMs`       | Drain wait budget (ms) for in-flight tasks/event listeners; capped by remaining `disposeBudgetMs` (`0` disables drain waiting) |
-| `onUnhandledError`           | Custom handler for normalized unhandled errors                          |
-| `dryRun`                     | Validate graph without running resource `init()`                        |
-| `lazy`                       | Defer startup-unused resources until on-demand access                   |
-| `lifecycleMode`              | Choose startup/dispose scheduler strategy (`sequential` or `parallel`) |
-| `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                            |
-| `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)           |
+| `disposeDrainBudgetMs`       | Drain wait budget (ms) for in-flight tasks/event hooks; capped by remaining `disposeBudgetMs` (`0` disables drain waiting)  |
+| `onUnhandledError`           | Custom callback for normalized unhandled errors                                                                             |
+| `dryRun`                     | Validate graph without running resource `init()`                                                                            |
+| `lazy`                       | Defer startup-unused resources until on-demand access                                                                       |
+| `lifecycleMode`              | Choose startup/dispose scheduler strategy (`sequential` or `parallel`)                                                      |
+| `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                                                                                |
+| `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)                                                               |
 
 Event source contract:
 `IEventEmission.source` is a structured object: `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
@@ -182,13 +183,14 @@ const realMailer = r
   .init(async () => new SMTPEmailer())
   .build();
 
-// Typed shorthand
-const shorthandMockMailer = r.override(realMailer, async () => new MockMailer());
+// Namespace form
+const shorthandMockMailer = r.override(
+  realMailer,
+  async () => new MockMailer(),
+);
 
-// Helper override
-const helperMockMailer = override(realMailer, {
-  init: async () => new MockMailer(),
-});
+// Alias form (same behavior)
+const helperMockMailer = override(realMailer, async () => new MockMailer());
 
 const app = r
   .resource("app")
@@ -198,8 +200,9 @@ const app = r
 ```
 
 Quick rule:
-- `r.override(...)` builds the replacement definition.
-- `.overrides([...])` applies replacement during bootstrap.
+
+- `r.override(...)` / `override(...)` build replacement definitions.
+- `.overrides([...])` applies replacement during bootstrap and accepts only override-produced definitions.
 - Registering only the replacement definition is valid.
 - Registering both base and replacement in `.register([...])` causes duplicate-id errors.
 
@@ -276,8 +279,14 @@ const task = r.task("id")
 ### Resource Isolation (`.exports`)
 
 ```typescript
-const internalTask = r.task("billing.tasks.internal").run(async () => 1).build();
-const publicTask = r.task("billing.tasks.public").run(async () => 2).build();
+const internalTask = r
+  .task("billing.tasks.internal")
+  .run(async () => 1)
+  .build();
+const publicTask = r
+  .task("billing.tasks.public")
+  .run(async () => 2)
+  .build();
 
 const billing = r
   .resource("billing")
@@ -287,12 +296,13 @@ const billing = r
 ```
 
 Quick rules:
+
 - No isolate `exports` means everything public (backward compatible)
 - `isolate: { exports: [] }` / `isolate: { exports: "none" }` means everything private outside that subtree
 - `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
 - The same selector semantics apply to `isolate({ deny: [...] })` and `isolate({ only: [...] })`
 - Tag definition vs string id is intentional in `deny`/`only`: `deny: [someTag]` blocks tag carriers, while `deny: [someTag.id]` blocks only the exact id
-- Use `isolate({ deny: [globals.tags.containerInternals] })` to block privileged container resources (`globals.resources.store`, `globals.resources.taskRunner`, `globals.resources.middlewareManager`, `globals.resources.eventManager`, `globals.resources.runtime`) inside a boundary
+- Use `isolate({ deny: [globals.tags.containerInternals] })` to block privileged internal resources (`globals.resources.store`, `globals.resources.taskRunner`, `globals.resources.middlewareManager`, `globals.resources.eventManager`, `globals.resources.runtime`) inside a boundary
 - Visibility is enforced at `run(app)` bootstrap
 - Wiring checks include dependencies, hook event subscriptions, and middleware attachments (task + resource middleware)
 - Subtree middleware (`resource.subtree({ tasks/resources: { middleware: [...] } })`) applies to the declaring resource subtree only
@@ -313,25 +323,30 @@ type SubtreeViolation = {
 
 ### Event Emission Options
 
-| Option         | Type                              | Default      | Purpose                                      |
-| -------------- | --------------------------------- | ------------ | -------------------------------------------- |
-| `failureMode`  | `"fail-fast" \| "aggregate"`      | `fail-fast`  | Stop on first listener error or aggregate all |
-| `throwOnError` | `boolean`                         | `true`       | Throw after listener failure(s)               |
-| `report`       | `boolean`                         | `false`      | Return `IEventEmitReport` for listener outcomes |
+| Option         | Type                         | Default     | Purpose                                     |
+| -------------- | ---------------------------- | ----------- | ------------------------------------------- |
+| `failureMode`  | `"fail-fast" \| "aggregate"` | `fail-fast` | Stop on first hook error or aggregate all   |
+| `throwOnError` | `boolean`                    | `true`      | Throw after hook failure(s)                 |
+| `report`       | `boolean`                    | `false`     | Return `IEventEmitReport` for hook outcomes |
 
 Transactional notes:
+
 - Transactional events always execute with fail-fast rollback semantics.
-- Executed listeners must return async undo closures.
+- Executed hooks must return async undo closures.
 - `transactional + parallel` and `transactional + globals.tags.eventLane` are rejected at runtime sanity checks.
 
 ### Type Helpers
 
 ```typescript
-import type { TaskInput, TaskOutput, ResourceValue } from "@bluelibs/runner";
+import type {
+  ExtractTaskInput,
+  ExtractTaskOutput,
+  ExtractResourceValue,
+} from "@bluelibs/runner";
 
-type Input = TaskInput<typeof myTask>; // Get task input type
-type Output = TaskOutput<typeof myTask>; // Get task output type
-type Value = ResourceValue<typeof myResource>; // Get resource value type
+type Input = ExtractTaskInput<typeof myTask>; // Get task input type
+type Output = ExtractTaskOutput<typeof myTask>; // Get task output type
+type Value = ExtractResourceValue<typeof myResource>; // Get resource value type
 ```
 
 ### Performance Tips
@@ -459,11 +474,11 @@ Current support channels:
 
 When a public API is deprecated, use this lifecycle:
 
-| Stage             | What Happens                                                        | Removal |
-| ----------------- | ------------------------------------------------------------------- | ------- |
-| **Announced**     | Release note entry + docs note with replacement path                | No      |
-| **Warned**        | Deprecated marker in docs/types and migration recommendation        | No      |
-| **Removed**       | Removed in next allowed major with migration notes in release notes | Yes     |
+| Stage         | What Happens                                                        | Removal |
+| ------------- | ------------------------------------------------------------------- | ------- |
+| **Announced** | Release note entry + docs note with replacement path                | No      |
+| **Warned**    | Deprecated marker in docs/types and migration recommendation        | No      |
+| **Removed**   | Removed in next allowed major with migration notes in release notes | Yes     |
 
 If a behavior changes without breaking types (for example default values), document it in your release notes.
 
@@ -499,7 +514,7 @@ Use this list before promoting a Runner app to production:
 
 ### Operations
 
-- Expose `/health` (or equivalent) and wire container/platform checks
+- Expose `/health` (or equivalent) and wire platform/infrastructure checks
 - Maintain runbooks for incident triage and rollback
 - Review release notes before upgrades and test migrations in staging
 
@@ -507,20 +522,20 @@ Use this list before promoting a Runner app to production:
 
 Node-only entrypoint: `@bluelibs/runner/node`.
 
-| Export                                                | Purpose                                                                 |
-| ----------------------------------------------------- | ----------------------------------------------------------------------- |
-| `nodeExposure`                                        | Expose tasks/events over HTTP                                           |
-| `createHttpMixedClient`, `createHttpSmartClient`      | Node tunnel clients (JSON + multipart + streaming modes)                |
-| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart tunnel calls                       |
-| `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path         |
-| `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                |
-| `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                           |
-| `eventLanesResource`                                  | Node Event Lanes runtime resource (lane interception + profile consumers) |
-| `MemoryEventLaneQueue`, `RabbitMQEventLaneQueue`      | Built-in Event Lanes queue adapters                                     |
-| `EventLaneMessage`                                    | Queue message contract for Event Lanes transport                        |
-| `bindEventLane`                                       | Immutable helper for lane-to-queue binding objects                      |
-| `EventLaneQueueReference`, `EventLaneQueueResource`   | Queue binding references (direct queue instance or container resource)   |
-| `EventLanesTopology`, `EventLanesResourceWithConfig`  | Topology-first config types for centralized Event Lanes wiring           |
+| Export                                                | Purpose                                                                                                                  |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `nodeExposure`                                        | Expose tasks/events over HTTP                                                                                            |
+| `createHttpMixedClient`, `createHttpSmartClient`      | Node tunnel clients (JSON + multipart + streaming modes)                                                                 |
+| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart tunnel calls                                                                        |
+| `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path                                                          |
+| `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                                                                 |
+| `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                                                                            |
+| `eventLanesResource`                                  | Node Event Lanes runtime resource (lane interception + profile consumers)                                                |
+| `MemoryEventLaneQueue`, `RabbitMQEventLaneQueue`      | Built-in Event Lanes queue adapters                                                                                      |
+| `EventLaneMessage`                                    | Queue message contract for Event Lanes transport                                                                         |
+| `bindEventLane`                                       | Immutable helper for lane-to-queue binding objects                                                                       |
+| `EventLaneQueueReference`, `EventLaneQueueResource`   | Queue binding references (direct queue instance or app resource)                                                         |
+| `EventLanesTopology`, `EventLanesResourceWithConfig`  | Topology-first config types for centralized Event Lanes wiring                                                           |
 | `IEventLaneQueue`                                     | Interface for custom Event Lanes backends (`enqueue`, `consume`, `ack`, `nack`, optional `setPrefetch`/`init`/`dispose`) |
 
 See also:
@@ -546,4 +561,3 @@ _P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still 
 This project is licensed under the MIT License - see the [LICENSE.md](./LICENSE.md) file for details.
 
 > **runtime:** "MIT License: do cool stuff, don't blame us. A dignified bow. Now if you'll excuse me, I have sockets to tuck in and tasks to shepherd."
-

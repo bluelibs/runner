@@ -65,7 +65,7 @@ describe("createTestResource", () => {
     });
     const app = resource({ id: "app", register: [db, getDbKind] });
 
-    const mockDb = override(db, { init: async () => ({ kind: "mock" }) });
+    const mockDb = override(db, async () => ({ kind: "mock" }));
 
     const harness = createTestResource(app, { overrides: [mockDb] });
     const { value: t, dispose } = await run(harness);
