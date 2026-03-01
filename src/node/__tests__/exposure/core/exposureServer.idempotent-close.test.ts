@@ -56,11 +56,12 @@ describe("createExposureServer - idempotent close", () => {
     };
 
     const controls = await createExposureServer({
-      httpConfig: { server: external },
+      httpConfig: undefined,
       handler,
       logger,
       basePath: "/x",
     });
+    controls.attachTo(external);
 
     const p1 = controls.close();
     const p2 = controls.close();
@@ -72,7 +73,7 @@ describe("createExposureServer - idempotent close", () => {
 
   it("exposes createRequestListener() and createServer() factories", async () => {
     const controls = await createExposureServer({
-      httpConfig: { server: http.createServer() },
+      httpConfig: undefined,
       handler,
       logger,
       basePath: "/x",
@@ -94,11 +95,12 @@ describe("createExposureServer - idempotent close", () => {
     };
 
     const controls = await createExposureServer({
-      httpConfig: { server: external },
+      httpConfig: undefined,
       handler,
       logger,
       basePath: "/x",
     });
+    controls.attachTo(external);
 
     const originalPop = Array.prototype.pop;
     let injected = false;

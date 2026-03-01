@@ -1,4 +1,3 @@
-import * as http from "http";
 import { defineTask, defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
@@ -15,10 +14,8 @@ describe("nodeExposure Coverage - Multipart", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -69,10 +66,8 @@ describe("nodeExposure Coverage - Multipart", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -119,10 +114,8 @@ describe("nodeExposure Coverage - Multipart", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -162,10 +155,8 @@ describe("nodeExposure Coverage - Multipart", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({

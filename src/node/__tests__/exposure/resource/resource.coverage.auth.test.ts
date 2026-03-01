@@ -1,4 +1,3 @@
-import * as http from "http";
 import { defineEvent, defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
 import { globalTags } from "../../../../globals/globalTags";
@@ -10,10 +9,8 @@ describe("nodeExposure Coverage - Auth", () => {
     const okEvent = defineEvent<{ v?: number }>({ id: "ok.event.custom" });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "ABC", header: "x-custom-token" },
+        auth: { token: "ABC", header: "x-custom-token", allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -47,10 +44,8 @@ describe("nodeExposure Coverage - Auth", () => {
     const evt = defineEvent<void>({ id: "coverage.header.arr" });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "ARR" },
+        auth: { token: "ARR", allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -82,10 +77,8 @@ describe("nodeExposure Coverage - Auth", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: {},
+        auth: { allowAnonymous: true },
       },
     });
     const app = defineResource({

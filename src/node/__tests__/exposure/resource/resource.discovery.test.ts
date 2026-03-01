@@ -1,4 +1,3 @@
-import * as http from "http";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
 import { globals } from "../../../../index";
@@ -28,10 +27,8 @@ describe("nodeExposure discovery endpoint", () => {
 
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
 
@@ -122,10 +119,8 @@ describe("nodeExposure discovery endpoint", () => {
 
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
         disableDiscovery: true,
       },
     });

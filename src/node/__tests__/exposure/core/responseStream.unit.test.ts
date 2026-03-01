@@ -1,4 +1,3 @@
-import * as http from "http";
 import { Readable } from "node:stream";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
@@ -80,8 +79,6 @@ describe("nodeExposure - task returned stream", () => {
 
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
       },
@@ -130,8 +127,6 @@ describe("nodeExposure - task returned stream", () => {
 
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
       },

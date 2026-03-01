@@ -1,20 +1,11 @@
 import type { IValidationSchema } from "../../defs";
 import { Match } from "../../tools/check";
-import type {
-  NodeExposureConfig,
-  NodeExposureHttpConfig,
-} from "./resourceTypes";
-
-const exposureServerPattern = Match.Where(
-  (value: unknown): value is NonNullable<NodeExposureHttpConfig["server"]> =>
-    value !== null && typeof value === "object",
-);
+import type { NodeExposureConfig } from "./resourceTypes";
 
 const nodeExposureConfigPattern = Match.ObjectIncluding({
   http: Match.Optional(
     Match.ObjectIncluding({
       basePath: Match.Optional(String),
-      server: Match.Optional(exposureServerPattern),
       listen: Match.Optional(
         Match.ObjectIncluding({
           port: Match.PositiveInteger,
@@ -61,7 +52,6 @@ const nodeExposureConfigPattern = Match.ObjectIncluding({
           ),
         }),
       ),
-      dangerouslyAllowOpenExposure: Match.Optional(Boolean),
       disableDiscovery: Match.Optional(Boolean),
     }),
   ),

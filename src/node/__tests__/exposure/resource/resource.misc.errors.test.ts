@@ -1,4 +1,3 @@
-import * as http from "http";
 import { z } from "zod";
 import { defineResource, defineTask, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
@@ -19,10 +18,8 @@ describe("nodeExposure - misc error branches", () => {
   it("readJson branch: accepts non-Buffer chunks (string)", async () => {
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: TOKEN },
+        auth: { token: TOKEN, allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -59,10 +56,8 @@ describe("nodeExposure - misc error branches", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: TOKEN },
+        auth: { token: TOKEN, allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -89,10 +84,8 @@ describe("nodeExposure - misc error branches", () => {
   it("swallows logger errors inside catch blocks (event)", async () => {
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: TOKEN },
+        auth: { token: TOKEN, allowAnonymous: true },
       },
     });
     const app = defineResource({

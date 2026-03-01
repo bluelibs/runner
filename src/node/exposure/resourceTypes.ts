@@ -25,7 +25,6 @@ export type NodeExposureDeps =
 
 export interface NodeExposureHttpConfig {
   basePath?: string;
-  server?: http.Server;
   listen?: { port: number; host?: string };
   auth?: NodeExposureHttpAuthConfig;
   cors?: NodeExposureHttpCorsConfig;
@@ -33,11 +32,6 @@ export interface NodeExposureHttpConfig {
     json?: JsonLimits;
     multipart?: MultipartLimits;
   };
-  /**
-   * Opt out of fail-closed exposure (not recommended).
-   * When true and no server-mode tunnel is registered, exposure is open.
-   */
-  dangerouslyAllowOpenExposure?: boolean;
   /**
    * Disable the discovery endpoint that enumerates registered task/event IDs.
    * When true, the /__runner/discovery endpoint returns 404.

@@ -1,4 +1,3 @@
-import * as http from "http";
 import type { ServerResponse } from "http";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
@@ -17,10 +16,8 @@ describe("nodeExposure - more multipart coverage", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -57,10 +54,8 @@ describe("nodeExposure - more multipart coverage", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -97,10 +92,8 @@ describe("nodeExposure - more multipart coverage", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({

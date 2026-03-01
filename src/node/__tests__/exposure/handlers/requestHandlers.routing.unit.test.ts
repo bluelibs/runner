@@ -1,4 +1,3 @@
-import * as http from "http";
 import { Readable } from "stream";
 import { createRequestHandlers } from "../../../exposure/requestHandlers";
 import { createAllowListGuard } from "../../../exposure/allowList";
@@ -511,8 +510,6 @@ describe("requestHandlers - routing and dispatching", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },

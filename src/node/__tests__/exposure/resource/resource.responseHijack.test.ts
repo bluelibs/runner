@@ -1,4 +1,3 @@
-import * as http from "http";
 import { Readable } from "stream";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
@@ -41,8 +40,6 @@ describe("nodeExposure response hijack (duplex)", () => {
 
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
       },

@@ -1,4 +1,3 @@
-import * as http from "http";
 import { defineResource, defineTask, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
@@ -52,10 +51,8 @@ describe("nodeExposure auto-discovery (server-mode http)", () => {
 
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
 

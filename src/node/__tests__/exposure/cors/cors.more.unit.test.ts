@@ -1,4 +1,3 @@
-import * as http from "http";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
@@ -79,8 +78,6 @@ describe("exposure CORS - more branches", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         cors: {
           origin: /.*/,
@@ -145,8 +142,6 @@ describe("exposure CORS - more branches", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         cors: {
           origin: (o?: string) => (o?.endsWith(".ok.test") ? o : null),

@@ -1,4 +1,3 @@
-import * as http from "http";
 import { defineResource, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
@@ -10,13 +9,10 @@ describe("nodeExposure - misc config branches", () => {
   });
 
   it("normalizes basePath (ensure leading slash + trim trailing)", async () => {
-    const externalServer = http.createServer();
     const exposure1 = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: externalServer,
         basePath: "runner",
-        auth: { token: TOKEN },
+        auth: { token: TOKEN, allowAnonymous: true },
       },
     });
     const app1 = defineResource({
@@ -30,10 +26,8 @@ describe("nodeExposure - misc config branches", () => {
 
     const exposure2 = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: externalServer,
         basePath: "/trimmed/",
-        auth: { token: TOKEN },
+        auth: { token: TOKEN, allowAnonymous: true },
       },
     });
     const app2 = defineResource({
@@ -44,7 +38,6 @@ describe("nodeExposure - misc config branches", () => {
     const handlers2 = await rr2.getResourceValue(exposure2.resource);
     expect(handlers2.basePath).toBe("/trimmed");
     await rr2.dispose();
-    externalServer.close();
   });
 
   it("init handles undefined http config and defaults basePath", async () => {

@@ -54,10 +54,9 @@ describe("nodeExposure - more tunnel coverage", () => {
     try {
       const exposure = require("../../../exposure/resource").nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
           listen: { port: 0 },
           basePath: "/__runner",
-          auth: { token: "T" },
+          auth: { token: "T", allowAnonymous: true },
         },
       });
       const app = defineResource({
@@ -95,10 +94,8 @@ describe("nodeExposure - more tunnel coverage", () => {
 
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({

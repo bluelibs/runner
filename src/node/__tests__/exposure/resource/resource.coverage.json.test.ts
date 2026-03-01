@@ -1,4 +1,3 @@
-import * as http from "http";
 import { defineTask, defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
@@ -12,8 +11,6 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
       },
@@ -47,10 +44,8 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "ARR" },
+        auth: { token: "ARR", allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -83,10 +78,8 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "AB" },
+        auth: { token: "AB", allowAnonymous: true },
       },
     });
     const app = defineResource({

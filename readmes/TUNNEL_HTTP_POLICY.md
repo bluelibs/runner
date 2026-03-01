@@ -93,7 +93,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - **Dynamic headers**: Clients can override per-request via `onRequest({ headers })`.
 - **Allow-Lists**: Server restricts to configured exposure allow-list sources (legacy tunnel server selectors and/or `rpcLanesResource` serve topology in `mode: "network"`). Unknown IDs → 403 Forbidden.
 - **Lane authorization**: For served RPC lanes with binding auth enabled, token verification is lane-specific and happens before task/event execution.
-- **Exposure disabled**: If no HTTP exposure allow-list source is active, task/event requests return 403 (fail-closed), unless `http.dangerouslyAllowOpenExposure: true` is set.
+- **Exposure disabled**: If no HTTP exposure allow-list source is active, task/event requests return 403 (fail-closed). Set `auth.allowAnonymous: true` to explicitly opt into open exposure.
 - **Auth audit logs**: Failed authentication attempts are logged (`exposure.auth.failure`) with request metadata and correlation id.
 
 ### Header Reference

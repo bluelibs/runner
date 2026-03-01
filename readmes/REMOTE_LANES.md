@@ -696,6 +696,7 @@ Security defaults:
 - Always configure `http.auth` with a token or a validator task (edge gate)
 - Run behind trusted network boundaries and infrastructure gateway controls (rate-limits, network policy)
 - Keep anonymous exposure disabled unless explicitly needed
+- Exposure HTTP bootstrap is `listen`-based; custom `http.Server` injection is not part of the contract
 
 There are two independent security layers:
 

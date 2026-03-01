@@ -28,10 +28,9 @@ export const noInputTask = defineTask<void, Promise<number>>({
 export async function startExposureServer() {
   const exposure = nodeExposure.with({
     http: {
-      dangerouslyAllowOpenExposure: true,
       basePath: "/__runner",
       listen: { port: 0 },
-      auth: { token: TOKEN },
+      auth: { token: TOKEN, allowAnonymous: true },
     },
   });
   const app = defineResource({

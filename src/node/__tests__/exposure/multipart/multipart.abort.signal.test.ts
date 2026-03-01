@@ -1,4 +1,3 @@
-import * as http from "http";
 import { Readable } from "stream";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
@@ -12,10 +11,8 @@ describe("nodeExposure - multipart early abort via signal", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({

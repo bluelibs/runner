@@ -12,10 +12,8 @@ describe("nodeExposure Coverage - Core Routing", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -67,10 +65,8 @@ describe("nodeExposure Coverage - Core Routing", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -105,10 +101,8 @@ describe("nodeExposure Coverage - Core Routing", () => {
   it("attachTo and detachTo coverage", async () => {
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "DET" },
+        auth: { token: "DET", allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -151,10 +145,8 @@ describe("nodeExposure Coverage - Core Routing", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "R" },
+        auth: { token: "R", allowAnonymous: true },
       },
     });
     const app = defineResource({

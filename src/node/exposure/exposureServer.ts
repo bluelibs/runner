@@ -67,16 +67,8 @@ export async function createExposureServer(
   const createServerInstance = () => http.createServer(makeListener(true));
 
   let server: http.Server | null = null;
-  let ownsServer = false;
-
-  if (httpConfig?.server) {
-    server = httpConfig.server;
-    attachExposure(server);
-  }
-
-  if (!httpConfig?.server && httpConfig?.listen) {
+  if (httpConfig?.listen) {
     server = createServerInstance();
-    ownsServer = true;
     const listenHost = httpConfig.listen.host ?? "127.0.0.1";
     await startHttpServer(server, {
       port: httpConfig.listen.port,
@@ -113,7 +105,7 @@ export async function createExposureServer(
             }
           }
         }
-        if (ownsServer && server) {
+        if (server) {
           await stopHttpServer(server);
         }
       } finally {

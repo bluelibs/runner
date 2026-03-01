@@ -63,6 +63,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 ```
 
 - `.with(config)` exists on configurable built definitions (resources, middleware, tags); fluent builders chain methods plus `.build()`.
+- `nodeExposure` uses `http.listen` for managed HTTP bootstrap. For existing servers, attach manually via the returned handlers (`handlers.attachTo(server)`).
 - Direct `define*()` outputs and fluent `.build()` outputs are deep-frozen (immutable); so are `.with(config)` and `.fork(...)` outputs.
 - `r.resource<Config>(id)` / `r.task<Input>(id)` seed typing before explicit schema; config-only resources can omit `.init()`.
 - Resource lifecycle split: use `cooldown()` to stop ingress quickly at shutdown start, then use `dispose()` for final teardown after runtime drain. `cooldown()` can be async, but should return promptly by contract. Treat it as an ingress hook (HTTP/tRPC/consumer boundaries), not a teardown phase for support resources like databases.

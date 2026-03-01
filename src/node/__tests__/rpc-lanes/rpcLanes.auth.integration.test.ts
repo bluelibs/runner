@@ -8,8 +8,31 @@ import { rpcLanesResource } from "../../rpc-lanes";
 import { r } from "../../../public";
 import { issueRemoteLaneToken } from "../../remote-lanes/laneAuth";
 import { runtimeSource } from "../../../types/runtimeSource";
+import { createMessageError } from "../../../errors";
 
 describe("rpcLanes auth", () => {
+  const allocatePort = async (): Promise<number> => {
+    const probe = http.createServer();
+    await new Promise<void>((resolve, reject) => {
+      probe.once("error", reject);
+      probe.listen(0, "127.0.0.1", resolve);
+    });
+    const address = probe.address();
+    if (!address || typeof address === "string") {
+      throw createMessageError("Could not allocate test port.");
+    }
+    await new Promise<void>((resolve, reject) => {
+      probe.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+    return address.port;
+  };
+
   it("enforces lane auth in local-simulated mode", async () => {
     const lane = r.rpcLane("tests.rpc-lanes.auth.local-simulated.lane").build();
     const task = defineTask<{ value: number }>({
@@ -116,16 +139,15 @@ describe("rpcLanes auth", () => {
       },
       bindings: [{ lane, communicator, auth: { secret: "network-secret" } }],
     });
-    const server = http.createServer();
+    const exposurePort = await allocatePort();
     const lanes = rpcLanesResource.with({
       profile: "server",
       topology,
       mode: "network",
       exposure: {
         http: {
-          server,
+          listen: { port: exposurePort, host: "127.0.0.1" },
           basePath: "/__runner",
-          dangerouslyAllowOpenExposure: true,
           auth: { allowAnonymous: true },
         },
       },
@@ -137,26 +159,7 @@ describe("rpcLanes auth", () => {
 
     const runtime = await run(app);
     try {
-      await new Promise<void>((resolve, reject) => {
-        const onError = (error: NodeJS.ErrnoException) => {
-          server.off("listening", onListening);
-          reject(error);
-        };
-        const onListening = () => {
-          server.off("error", onError);
-          resolve();
-        };
-
-        server.once("error", onError);
-        server.listen(0, "127.0.0.1", onListening);
-      });
-
-      const address = server.address();
-      expect(address).toBeTruthy();
-      expect(typeof address).toBe("object");
-      const tcpAddress = address as { port: number };
-
-      const url = `http://127.0.0.1:${tcpAddress.port}/__runner/task/${encodeURIComponent(task.id)}`;
+      const url = `http://127.0.0.1:${exposurePort}/__runner/task/${encodeURIComponent(task.id)}`;
 
       const unauthorized = await fetch(url, {
         method: "POST",
@@ -186,7 +189,7 @@ describe("rpcLanes auth", () => {
       expect(authorized.status).toBe(200);
       expect(authorizedJson.result).toBe("secured");
 
-      const eventUrl = `http://127.0.0.1:${tcpAddress.port}/__runner/event/${encodeURIComponent(event.id)}`;
+      const eventUrl = `http://127.0.0.1:${exposurePort}/__runner/event/${encodeURIComponent(event.id)}`;
       const unauthorizedEvent = await fetch(eventUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -210,17 +213,6 @@ describe("rpcLanes auth", () => {
       }
       throw error;
     } finally {
-      if (server.listening) {
-        await new Promise<void>((resolve, reject) => {
-          server.close((error) => {
-            if (error) {
-              reject(error);
-              return;
-            }
-            resolve();
-          });
-        });
-      }
       await runtime.dispose();
     }
   });

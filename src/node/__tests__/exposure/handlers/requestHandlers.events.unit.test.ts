@@ -1,4 +1,3 @@
-import * as http from "http";
 import { createRequestHandlers } from "../../../exposure/requestHandlers";
 import { defineError } from "../../../../definers/defineError";
 import { Serializer } from "../../../../serializer";
@@ -736,8 +735,6 @@ describe("requestHandlers - event handling", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },

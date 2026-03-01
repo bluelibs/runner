@@ -130,10 +130,13 @@ D("nodeExposure - unit core", () => {
   it("supports custom auth header name", async () => {
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
         basePath: "/__runner",
         listen: { port: 0 },
-        auth: { header: "authorization", token: "Bearer XYZ" },
+        auth: {
+          header: "authorization",
+          token: "Bearer XYZ",
+          allowAnonymous: true,
+        },
       },
     });
     const app = defineResource({

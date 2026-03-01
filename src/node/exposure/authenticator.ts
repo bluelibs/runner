@@ -14,6 +14,7 @@ export interface NodeExposureHttpAuthConfig {
   token?: string | string[];
   /**
    * When true, allows unauthenticated access if no token or validators are configured.
+   * Also allows open exposure when no tunnel/rpc allow-list source is active.
    * Defaults to false (secure by default - requires explicit auth configuration).
    *
    * WARNING: Setting this to true without proper network isolation exposes

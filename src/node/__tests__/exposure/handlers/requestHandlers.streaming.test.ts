@@ -1,4 +1,3 @@
-import * as http from "http";
 import { Readable } from "stream";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
@@ -15,8 +14,6 @@ describe("requestHandlers - streaming", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
       },
@@ -60,8 +57,6 @@ describe("requestHandlers - streaming", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
@@ -103,8 +98,6 @@ describe("requestHandlers - streaming", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
@@ -166,8 +159,6 @@ describe("requestHandlers - streaming", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
@@ -212,8 +203,6 @@ describe("requestHandlers - streaming", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },

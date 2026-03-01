@@ -125,7 +125,7 @@ D("nodeExposure - unit server", () => {
     await rr.dispose();
   });
 
-  it("auto-attaches to a provided server and detaches on dispose", async () => {
+  it("manual attachTo detaches on dispose", async () => {
     const externalServer = http.createServer((_req, res) => {
       res.statusCode = 200;
       res.end("external");
@@ -134,7 +134,7 @@ D("nodeExposure - unit server", () => {
       externalServer.listen(0, "127.0.0.1", resolve),
     );
     const exposure = nodeExposure.with({
-      http: { server: externalServer, auth: { token: TOKEN } },
+      http: { auth: { token: TOKEN, allowAnonymous: true } },
     });
     const app = defineResource({
       id: "unit.exposure.serverProvided",
@@ -142,7 +142,8 @@ D("nodeExposure - unit server", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
-    expect(handlers.server).toBe(externalServer);
+    expect(handlers.server).toBeNull();
+    handlers.attachTo(externalServer);
     const addr = externalServer.address();
     if (!addr || typeof addr === "string")
       throw createMessageError("No server address");

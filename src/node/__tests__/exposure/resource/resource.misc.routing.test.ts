@@ -1,4 +1,3 @@
-import * as http from "http";
 import { defineResource, defineTask, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
@@ -15,7 +14,7 @@ describe("nodeExposure - misc routing branches", () => {
 
   it("direct handlers: extractTarget returns null for non-base paths and url fallback with undefined", async () => {
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), auth: { token: TOKEN } },
+      http: { auth: { token: TOKEN, allowAnonymous: true } },
     });
     const app = defineResource({
       id: "unit.exposure.misc.app5",
@@ -69,7 +68,7 @@ describe("nodeExposure - misc routing branches", () => {
 
   it("handleTask with undefined url falls back to '/' and returns 404", async () => {
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), auth: { token: TOKEN } },
+      http: { auth: { token: TOKEN, allowAnonymous: true } },
     });
     const app = defineResource({
       id: "unit.exposure.misc.app7",
@@ -103,10 +102,8 @@ describe("nodeExposure - misc routing branches", () => {
   it("handleEvent success branch returns 200 (direct)", async () => {
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: TOKEN },
+        auth: { token: TOKEN, allowAnonymous: true },
       },
     });
     const app = defineResource({

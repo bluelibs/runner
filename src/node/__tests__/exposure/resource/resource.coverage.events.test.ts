@@ -1,4 +1,3 @@
-import * as http from "http";
 import { defineEvent, defineHook, defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
@@ -10,10 +9,8 @@ describe("nodeExposure Coverage - Events", () => {
     const okEvent = defineEvent<{ v?: number }>({ id: "ok.event" });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
@@ -57,10 +54,8 @@ describe("nodeExposure Coverage - Events", () => {
     });
     const exposure = nodeExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "EVERR" },
+        auth: { token: "EVERR", allowAnonymous: true },
       },
     });
     const app = defineResource({

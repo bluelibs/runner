@@ -1,4 +1,3 @@
-import * as http from "http";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
@@ -17,7 +16,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const exposure = nodeExposure.with({
-        http: { server: http.createServer(), basePath: "/__runner" },
+        http: { basePath: "/__runner" },
       });
       const app = defineResource({
         id: "tests.app.security.auth.failclosed",
@@ -49,8 +48,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
@@ -85,10 +82,8 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
-          auth: { token: "secret-token-123" },
+          auth: { token: "secret-token-123", allowAnonymous: true },
         },
       });
       const app = defineResource({
@@ -124,10 +119,8 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
-          auth: { token: "correct-token" },
+          auth: { token: "correct-token", allowAnonymous: true },
         },
       });
       const app = defineResource({
@@ -162,7 +155,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const exposure = nodeExposure.with({
-        http: { auth: { token: "secret" } },
+        http: { auth: { token: "secret", allowAnonymous: true } },
       });
       const app = defineResource({
         id: "tests.app.security.compare",
@@ -197,8 +190,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
           cors: { credentials: true },
@@ -238,8 +229,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
           cors: { credentials: true, origin: ["https://trusted.com"] },
@@ -284,8 +273,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
@@ -323,7 +310,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
           limits: { json: { maxSize: 100 } },
           auth: { allowAnonymous: true },
         },
@@ -360,7 +346,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
           limits: { multipart: { fileSize: 10 } },
           auth: { allowAnonymous: true },
         },
@@ -402,8 +387,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
@@ -440,8 +423,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
@@ -479,8 +460,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
@@ -517,8 +496,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
@@ -553,8 +530,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           auth: { allowAnonymous: true },
         },
       });
@@ -588,8 +563,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           auth: { allowAnonymous: true },
         },
       });
@@ -635,8 +608,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
@@ -693,8 +664,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
@@ -730,8 +699,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
@@ -771,7 +738,6 @@ describe("requestHandlers - Security", () => {
       });
       const exposure = nodeExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
           limits,
           auth: { allowAnonymous: true },
         },
