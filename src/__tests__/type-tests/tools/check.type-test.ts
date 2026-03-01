@@ -1,11 +1,23 @@
 import {
+  type CheckSchemaLike,
   Match,
   check,
+  type InferCheckSchema,
   type InferMatchPattern,
   type MatchPattern,
 } from "../../../";
 
 // Type-only tests for check() pattern inference and overlap safety.
+
+{
+  type DemoParsed = { ok: true };
+  const schema: CheckSchemaLike<DemoParsed> = {
+    parse: (_value: unknown) => ({ ok: true }),
+  };
+  type Inferred = InferCheckSchema<typeof schema>;
+  const value: Inferred = { ok: true };
+  void value;
+}
 
 {
   const pattern: MatchPattern = String;
@@ -113,4 +125,68 @@ import {
   check(alwaysString, String);
   // @ts-expect-error disjoint value/pattern should fail compile-time overlap check
   check(alwaysString, Number);
+}
+
+{
+  const schema = {
+    parse: (value: unknown): { id: string; count: number } => ({
+      id: String(value),
+      count: 1,
+    }),
+  };
+
+  const parsed = check(42, schema);
+  parsed.id.toUpperCase();
+  const count: number = parsed.count;
+  void count;
+  // @ts-expect-error schema result should not narrow to boolean
+  const invalid: boolean = parsed;
+  void invalid;
+}
+
+{
+  const patternSchema = Match.ObjectIncluding({
+    id: Match.NonEmptyString,
+    retries: Match.Optional(Match.Integer),
+  });
+  const parsed = patternSchema.parse({ id: "u1", retries: 2 });
+  parsed.id.toUpperCase();
+  if (parsed.retries !== undefined) {
+    const retries: number = parsed.retries;
+    void retries;
+  }
+}
+
+{
+  const parsedInteger = Match.Integer.parse(10);
+  const n: number = parsedInteger;
+  void n;
+}
+
+{
+  const email = check("dev@example.com", Match.Email);
+  const s: string = email;
+  void s;
+
+  const uuid = check("123e4567-e89b-42d3-a456-426614174000", Match.UUID);
+  const uuidString: string = uuid;
+  void uuidString;
+
+  const url = check("https://example.com", Match.URL);
+  const urlString: string = url;
+  void urlString;
+
+  const iso = check("2026-01-01T10:20:30Z", Match.IsoDateString);
+  const isoString: string = iso;
+  void isoString;
+}
+
+{
+  const values = check([1, 2], Match.NonEmptyArray(Number));
+  const first: number = values[0];
+  void first;
+
+  const unknownValues = check(["a"], Match.NonEmptyArray());
+  const unknownFirst: unknown = unknownValues[0];
+  void unknownFirst;
 }

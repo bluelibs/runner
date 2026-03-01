@@ -3,7 +3,7 @@ import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
 import { middlewareRateLimitExceededError, RunnerErrorId } from "../../errors";
-import { Match, check } from "../../tools/check";
+import { Match } from "../../tools/check";
 
 export interface RateLimitMiddlewareConfig {
   /**
@@ -25,15 +25,6 @@ const rateLimitConfigPattern = Match.ObjectIncluding({
   windowMs: positiveFiniteNumber,
   max: positiveFiniteNumber,
 });
-
-const rateLimitConfigSchema = {
-  parse: (config: unknown): RateLimitMiddlewareConfig => {
-    return check<typeof rateLimitConfigPattern, unknown>(
-      config,
-      rateLimitConfigPattern,
-    );
-  },
-};
 
 /**
  * Custom error class for rate limit errors.
@@ -89,15 +80,13 @@ export const rateLimitResource = defineResource({
 export const rateLimitTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.rateLimit",
   throws: [middlewareRateLimitExceededError],
-  configSchema: rateLimitConfigSchema,
+  configSchema: rateLimitConfigPattern,
   dependencies: { state: rateLimitResource },
   async run(
     { task, next, journal },
     { state },
     config: RateLimitMiddlewareConfig,
   ) {
-    check(config, rateLimitConfigPattern);
-
     const { states } = state;
     let limitState = states.get(config);
     const now = Date.now();

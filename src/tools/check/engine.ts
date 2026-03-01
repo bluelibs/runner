@@ -3,17 +3,24 @@ import {
   collectMatchFailures,
   isPlainObject,
   matchAnyToken,
+  matchEmailToken,
+  matchIsoDateStringToken,
   matchIntegerToken,
   matchNonEmptyStringToken,
+  matchUrlToken,
+  matchUuidToken,
   MaybePattern,
+  NonEmptyArrayPattern,
   ObjectIncludingPattern,
   OneOfPattern,
   OptionalPattern,
   WherePattern,
 } from "./matcher";
 import type {
+  CheckSchemaLike,
   CheckedValue,
   EnsurePatternOverlap,
+  InferCheckSchema,
   InferMatchPattern,
   MatchPattern,
 } from "./types";
@@ -46,15 +53,52 @@ function readOptions(options?: CheckOptions): { throwAllErrors: boolean } {
   return { throwAllErrors: throwAllErrors === true };
 }
 
+function isCheckSchemaLike(value: unknown): value is CheckSchemaLike<unknown> {
+  if (value === null || typeof value !== "object") return false;
+  if (
+    value instanceof OptionalPattern ||
+    value instanceof MaybePattern ||
+    value instanceof OneOfPattern ||
+    value instanceof WherePattern ||
+    value instanceof ObjectIncludingPattern ||
+    value instanceof NonEmptyArrayPattern
+  ) {
+    return false;
+  }
+
+  const parse = (value as { parse?: unknown }).parse;
+  if (typeof parse !== "function") return false;
+
+  // Keep plain object patterns deterministic unless the intent is explicit.
+  if (!isPlainObject(value)) return true;
+  const keys = Object.keys(value);
+  return keys.length === 1 && keys[0] === "parse";
+}
+
+export function check<TSchema extends CheckSchemaLike<unknown>>(
+  value: unknown,
+  schema: TSchema,
+  options?: CheckOptions,
+): InferCheckSchema<TSchema>;
 export function check<TPattern extends MatchPattern, TValue>(
   value: TValue &
     EnsurePatternOverlap<TValue, InferMatchPattern<NoInfer<TPattern>>>,
   pattern: TPattern,
   options?: CheckOptions,
-): CheckedValue<TValue, TPattern> {
+): CheckedValue<TValue, TPattern>;
+export function check(
+  value: unknown,
+  pattern: unknown,
+  options?: CheckOptions,
+): unknown {
   const { throwAllErrors } = readOptions(options);
+
+  if (isCheckSchemaLike(pattern)) {
+    return pattern.parse(value);
+  }
+
   const failures = collectMatchFailures(value, pattern, throwAllErrors);
-  if (failures.length === 0) return value as CheckedValue<TValue, TPattern>;
+  if (failures.length === 0) return value;
   throw new MatchError(failures);
 }
 
@@ -84,10 +128,23 @@ const where: MatchWhere = (condition: unknown): WherePattern<unknown> => {
   return new WherePattern(condition as WherePredicate);
 };
 
+function nonEmptyArray(): NonEmptyArrayPattern<undefined>;
+function nonEmptyArray<TPattern extends MatchPattern>(
+  pattern: TPattern,
+): NonEmptyArrayPattern<TPattern>;
+function nonEmptyArray(pattern?: MatchPattern): NonEmptyArrayPattern<unknown> {
+  return new NonEmptyArrayPattern(pattern);
+}
+
 export const Match = Object.freeze({
   Any: matchAnyToken,
+  Email: matchEmailToken,
+  IsoDateString: matchIsoDateStringToken,
   Integer: matchIntegerToken,
   NonEmptyString: matchNonEmptyStringToken,
+  URL: matchUrlToken,
+  UUID: matchUuidToken,
+  NonEmptyArray: nonEmptyArray,
   Optional: <TPattern extends MatchPattern>(
     pattern: TPattern,
   ): OptionalPattern<TPattern> => new OptionalPattern(pattern),

@@ -1,7 +1,9 @@
 export { check, Match } from "./check/engine";
 export type { CheckOptions } from "./check/engine";
 export type {
+  CheckSchemaLike,
   CheckedValue,
+  InferCheckSchema,
   InferMatchPattern,
   MatchPattern,
 } from "./check/types";

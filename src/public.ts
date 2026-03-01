@@ -118,7 +118,9 @@ export { RunnerError } from "./definers/defineError";
 export { LockableMap } from "./tools/LockableMap";
 export { Match, check } from "./tools/check";
 export type {
+  CheckSchemaLike,
   CheckedValue,
+  InferCheckSchema,
   InferMatchPattern,
   MatchPattern,
 } from "./tools/check";

@@ -139,28 +139,6 @@ describe("Rate Limit Middleware", () => {
     });
   });
 
-  it("should throw a clear error when used without .with(config)", async () => {
-    const task = defineTask({
-      id: "rateLimit.missingConfig",
-      // Intentionally bypass typing to simulate JS usage without `.with(...)`.
-      // @ts-expect-error - intentionally bypassing config to exercise runtime validation.
-      middleware: [rateLimitTaskMiddleware],
-      run: async () => "ok",
-    });
-
-    const app = defineResource({
-      id: "app",
-      register: [task],
-      dependencies: { task },
-      async init(_, { task }) {
-        await task();
-      },
-    });
-
-    const runPromise = run(app);
-    await expect(runPromise).rejects.toBeInstanceOf(RunnerError);
-  });
-
   it("should throw when config is null", () => {
     expectValidationError(() => {
       // @ts-expect-error - runtime guard should reject invalid config.

@@ -1,5 +1,5 @@
 import { defineTag } from "../../define";
-import { Match, check } from "../../tools/check";
+import { Match } from "../../tools/check";
 import { CronOnError, CronTagConfig } from "./types";
 
 const nonEmptyTrimmedString = Match.Where(
@@ -19,24 +19,7 @@ const cronTagConfigPattern = Match.ObjectIncluding({
 
 export const cronTag = defineTag<CronTagConfig>({
   id: "globals.tags.cron",
-  configSchema: {
-    parse: (rawValue): CronTagConfig => {
-      const value = check<typeof cronTagConfigPattern, unknown>(
-        rawValue,
-        cronTagConfigPattern,
-      );
-
-      return {
-        expression: value.expression,
-        input: value.input,
-        timezone: value.timezone,
-        immediate: value.immediate,
-        enabled: value.enabled,
-        onError: value.onError,
-        silent: value.silent,
-      };
-    },
-  },
+  configSchema: cronTagConfigPattern,
   meta: {
     title: "Cron",
     description:

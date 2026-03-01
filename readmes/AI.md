@@ -615,15 +615,22 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
 
 ## check() and Match (Meteor-inspired)
 
-Use `check(value, pattern)` for lightweight runtime validation of plain JS values.
-It returns the same value, typed from `pattern`.
+Use `check(value, patternOrSchema)` for lightweight runtime validation of plain JS values.
 
-This API is inspired by Meteor's `check` package and supports:
+- With a `Match` pattern, it returns the same value, typed from the pattern.
+- With a schema (`{ parse(input): T }`), it returns the parsed/transformed value `T`.
+
+Main inspiration and shoutout: Meteor's `check` package.
+This API supports:
+
 - Base patterns: `String`, `Number`, `Boolean`, `Object`, `Array`, `Function`, literal values
-- Match helpers: `Match.Any`, `Match.Integer`, `Match.NonEmptyString`
+- Match helpers: `Match.Any`, `Match.Integer`, `Match.NonEmptyString`, `Match.Email`, `Match.UUID`, `Match.URL`, `Match.IsoDateString`
+- Array helper: `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`
 - Combinators: `Match.Optional(pattern)`, `Match.Maybe(pattern)`, `Match.OneOf(...)`
 - Custom predicates: `Match.Where((value) => boolean)` (or a TypeScript type guard)
 - Object partial matching: `Match.ObjectIncluding({ ... })`
+- Schema contract: any object exposing `parse(input): T` (for example `inputSchema`, `resultSchema`, Zod schemas)
+- Match helpers/tokens and wrapper patterns also expose `.parse(input)` so they are interchangeable with schema slots like `.inputSchema(...)` / `.configSchema(...)`.
 
 ```ts
 import { Match, check } from "@bluelibs/runner";
@@ -639,7 +646,8 @@ const validated = check(
 validated.id; // string
 ```
 
-- `check(...)` throws `Match.Error` (a `RunnerError`) on mismatch.
+- `check(...)` with patterns throws `Match.Error` (a `RunnerError`) on mismatch.
+- `check(...)` with schemas forwards errors thrown by `schema.parse(...)`.
 - `Match.test(value, pattern)` returns `true`/`false`, and works as a type guard for typed patterns.
 - For aggregate validation, call `check(value, pattern, { throwAllErrors: true })`.
 
@@ -722,21 +730,6 @@ const app = r
 - Global lifecycle events: use `globals.events.ready` for post-boot orchestration, and `globals.events.disposing` / `globals.events.drained` for disposal lifecycle.
 - Event source model: `IEventEmission.source` is object-based end-to-end: `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime.
-
-## Migration (5.x to 6.0)
-
-Given the set of removals and behavior changes, this upgrade should be treated as a major-version migration.
-
-- Use the full migration playbook: [Upgrading from 5.x to 6.0](./FULL_GUIDE.md#upgrading-from-5x-to-60).
-- Highest-impact migrations:
-  - `r.override.*(...)` -> `r.override(base, fn)`
-  - `.overrides([...])` now accepts only override-produced definitions (`r.override(...)` / `override(...)`)
-  - Cache customization moves from `globals.tasks.cacheFactory` to `globals.resources.cacheProvider` via `globals.resources.cache.with({ provider })`
-  - `middleware.everywhere` -> `resource.subtree(...)` / `taskRunner.intercept(...)`
-  - Event source strings -> structured source objects (`{ kind, id }`)
-  - Event Lanes helper APIs -> canonical `eventLanesResource.with({ profile, topology, mode? })`
-  - Implicit runtime surface -> explicit root `.isolate({ exports: [...] })` when you need access control
-- Run `npm run qa` after each migration batch.
 
 ## Reliability & Performance
 

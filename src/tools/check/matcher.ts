@@ -1,5 +1,9 @@
 import { MatchError, MatchFailure, MatchPatternError } from "./errors";
+import type { InferMatchPattern } from "./types";
 type PathSegment = string | number;
+type NonEmptyArrayElement<TPattern> = [TPattern] extends [undefined]
+  ? unknown
+  : InferMatchPattern<TPattern>;
 type MatchContext = {
   failures: MatchFailure[];
   collectAll: boolean;
@@ -7,32 +11,115 @@ type MatchContext = {
 type WhereCondition<TGuarded = unknown> =
   | ((value: unknown) => boolean)
   | ((value: unknown) => value is TGuarded);
-export const matchAnyToken = Object.freeze({ kind: "Match.Any" });
-export const matchIntegerToken = Object.freeze({ kind: "Match.Integer" });
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ISO_DATE_STRING_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})$/;
+export const matchAnyToken = Object.freeze({
+  kind: "Match.Any",
+  parse(value: unknown): unknown {
+    return parsePatternValue(value, matchAnyToken);
+  },
+});
+export const matchIntegerToken = Object.freeze({
+  kind: "Match.Integer",
+  parse(value: unknown): number {
+    return parsePatternValue(value, matchIntegerToken);
+  },
+});
 export const matchNonEmptyStringToken = Object.freeze({
   kind: "Match.NonEmptyString",
+  parse(value: unknown): string {
+    return parsePatternValue(value, matchNonEmptyStringToken);
+  },
+});
+export const matchEmailToken = Object.freeze({
+  kind: "Match.Email",
+  parse(value: unknown): string {
+    return parsePatternValue(value, matchEmailToken);
+  },
+});
+export const matchUuidToken = Object.freeze({
+  kind: "Match.UUID",
+  parse(value: unknown): string {
+    return parsePatternValue(value, matchUuidToken);
+  },
+});
+export const matchUrlToken = Object.freeze({
+  kind: "Match.URL",
+  parse(value: unknown): string {
+    return parsePatternValue(value, matchUrlToken);
+  },
+});
+export const matchIsoDateStringToken = Object.freeze({
+  kind: "Match.IsoDateString",
+  parse(value: unknown): string {
+    return parsePatternValue(value, matchIsoDateStringToken);
+  },
 });
 export class MaybePattern<TPattern = unknown> {
   public readonly kind = "Match.MaybePattern";
   constructor(public readonly pattern: TPattern) {}
+  parse(value: unknown): InferMatchPattern<TPattern> | null | undefined {
+    return parsePatternValue(value, this as MaybePattern<TPattern>) as
+      | InferMatchPattern<TPattern>
+      | null
+      | undefined;
+  }
 }
 export class OptionalPattern<TPattern = unknown> {
   public readonly kind = "Match.OptionalPattern";
   constructor(public readonly pattern: TPattern) {}
+  parse(value: unknown): InferMatchPattern<TPattern> | undefined {
+    return parsePatternValue(value, this as OptionalPattern<TPattern>) as
+      | InferMatchPattern<TPattern>
+      | undefined;
+  }
 }
 export class OneOfPattern<TPatterns extends readonly unknown[] = readonly []> {
   public readonly kind = "Match.OneOfPattern";
   constructor(public readonly patterns: TPatterns) {}
+  parse(value: unknown): InferMatchPattern<TPatterns[number]> {
+    return parsePatternValue(
+      value,
+      this as OneOfPattern<TPatterns>,
+    ) as InferMatchPattern<TPatterns[number]>;
+  }
 }
 export class WherePattern<TGuarded = unknown> {
   public readonly kind = "Match.WherePattern";
   constructor(public readonly condition: WhereCondition<TGuarded>) {}
+  parse(value: unknown): TGuarded {
+    return parsePatternValue(value, this as WherePattern<TGuarded>) as TGuarded;
+  }
 }
 export class ObjectIncludingPattern<
   TObjectPattern extends Record<string, unknown> = Record<string, unknown>,
 > {
   public readonly kind = "Match.ObjectIncludingPattern";
   constructor(public readonly pattern: TObjectPattern) {}
+  parse(
+    value: unknown,
+  ): InferMatchPattern<TObjectPattern> & Record<string, unknown> {
+    return parsePatternValue(
+      value,
+      this as ObjectIncludingPattern<TObjectPattern>,
+    ) as InferMatchPattern<TObjectPattern> & Record<string, unknown>;
+  }
+}
+export class NonEmptyArrayPattern<TPattern = undefined> {
+  public readonly kind = "Match.NonEmptyArrayPattern";
+  constructor(public readonly pattern?: TPattern) {}
+  parse(
+    value: unknown,
+  ): [NonEmptyArrayElement<TPattern>, ...NonEmptyArrayElement<TPattern>[]] {
+    return parsePatternValue(value, this as NonEmptyArrayPattern<TPattern>) as [
+      NonEmptyArrayElement<TPattern>,
+      ...NonEmptyArrayElement<TPattern>[],
+    ];
+  }
 }
 
 export function isPlainObject(
@@ -162,6 +249,37 @@ function matchesPattern(
       ? true
       : fail(context, path, "non-empty string", value);
   }
+  if (pattern === matchEmailToken) {
+    return typeof value === "string" && EMAIL_PATTERN.test(value)
+      ? true
+      : fail(context, path, "email", value);
+  }
+  if (pattern === matchUuidToken) {
+    return typeof value === "string" && UUID_PATTERN.test(value)
+      ? true
+      : fail(context, path, "uuid", value);
+  }
+  if (pattern === matchUrlToken) {
+    if (typeof value !== "string") {
+      return fail(context, path, "url", value);
+    }
+    try {
+      // URL constructor enforces URI syntax and supports multi-platform runtimes.
+
+      new URL(value);
+      return true;
+    } catch {
+      return fail(context, path, "url", value);
+    }
+  }
+  if (pattern === matchIsoDateStringToken) {
+    if (typeof value !== "string" || !ISO_DATE_STRING_PATTERN.test(value)) {
+      return fail(context, path, "ISO date string", value);
+    }
+    return Number.isFinite(Date.parse(value))
+      ? true
+      : fail(context, path, "ISO date string", value);
+  }
   if (pattern instanceof OptionalPattern) {
     return value === undefined
       ? true
@@ -203,6 +321,24 @@ function matchesPattern(
   }
   if (pattern instanceof ObjectIncludingPattern) {
     return matchesObjectPattern(value, pattern.pattern, context, path, true);
+  }
+  if (pattern instanceof NonEmptyArrayPattern) {
+    if (!Array.isArray(value) || value.length === 0) {
+      return fail(context, path, "non-empty array", value);
+    }
+    if (pattern.pattern === undefined) return true;
+
+    const startFailures = context.failures.length;
+    for (let index = 0; index < value.length; index += 1) {
+      const matched = matchesPattern(
+        value[index],
+        pattern.pattern,
+        context,
+        appendPath(path, index),
+      );
+      if (!matched && !context.collectAll) return false;
+    }
+    return context.failures.length === startFailures;
   }
   if (pattern === String) {
     return typeof value === "string"
@@ -298,4 +434,13 @@ export function collectMatchFailures(
   const matches = matchesPattern(value, pattern, context, []);
   if (matches) return [];
   return collectAll ? context.failures : [context.failures[0]];
+}
+
+function parsePatternValue<TPattern>(
+  value: unknown,
+  pattern: TPattern,
+): InferMatchPattern<TPattern> {
+  const failures = collectMatchFailures(value, pattern, false);
+  if (failures.length === 0) return value as InferMatchPattern<TPattern>;
+  throw new MatchError(failures);
 }

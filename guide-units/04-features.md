@@ -1,8 +1,38 @@
 ## Structural Validation with `check()`
 
-Use `check(value, pattern)` when you need strict, runtime shape validation without introducing a full schema library for small boundaries. `check()` returns the same value, typed from the pattern.
+Use `check(value, patternOrSchema)` when you need strict runtime validation at boundaries.
 
-This utility is inspired by Meteor's `check` package and supports familiar `Match` patterns such as `Match.Optional`, `Match.Maybe`, `Match.OneOf`, `Match.Where`, and `Match.ObjectIncluding`.
+- With `Match` patterns, `check()` returns the same input value, typed from the pattern.
+- With schemas (`{ parse(input): T }`), `check()` returns parsed/transformed output.
+
+Main inspiration and shoutout: Meteor's `check` package.
+
+All supported Match patterns:
+
+- Constructor patterns: `String`, `Number`, `Boolean`, `Function`, `Object`, `Array`, and class constructors (for example `Date`, `MyCustomClass`)
+- Literal patterns: exact value matches for `string`, `number`, `boolean`, `bigint`, `symbol`, `null`, `undefined`
+- Array item pattern: `[pattern]` means an array where every element matches that single pattern
+- Strict object pattern: `{ a: String, b: Number }` (unknown keys are rejected)
+- `Match.ObjectIncluding({ ... })`: object partial match (unknown keys allowed)
+- `Match.Any`: accepts any value
+- `Match.Integer`: accepts signed 32-bit integers
+- `Match.NonEmptyString`: accepts non-empty strings
+- `Match.Email`: accepts an email-shaped string
+- `Match.UUID`: accepts canonical UUID strings (versions 1-8)
+- `Match.URL`: accepts valid absolute URL strings
+- `Match.IsoDateString`: accepts ISO datetime strings with timezone (`Z` or offset)
+- `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`: accepts non-empty arrays (optionally validates each element)
+- `Match.Optional(pattern)`: accepts `undefined` or `pattern`
+- `Match.Maybe(pattern)`: accepts `undefined`, `null`, or `pattern`
+- `Match.OneOf(...patterns)`: accepts any one candidate pattern
+- `Match.Where((value) => boolean | value is T)`: custom predicate or type guard
+- `Match.test(value, pattern)`: boolean test helper (type guard-aware)
+- `Match.Error`: error class thrown by failed pattern checks
+
+Schema interoperability:
+
+- `Match` helpers/patterns expose `.parse(input)`, so they can be used directly in `.inputSchema(...)`, `.resultSchema(...)`, and `.configSchema(...)`.
+- `check()` also accepts any schema-like object with `parse(input): T`.
 
 ```typescript
 import { Match, check } from "@bluelibs/runner";
@@ -12,21 +42,79 @@ const input = {
   retries: 3,
 };
 
-const validated = check(
-  input,
-  {
-    userId: Match.NonEmptyString,
-    retries: Match.Optional(Match.Integer),
-  },
-);
+const validated = check(input, {
+  userId: Match.NonEmptyString,
+  retries: Match.Optional(Match.Integer),
+});
 
 validated.userId; // string
 ```
 
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+class UserId {
+  constructor(public readonly value: string) {}
+}
+
+check("ok", String);
+check(42, Number);
+check(true, Boolean);
+check(() => undefined, Function);
+check({ a: 1 }, Object);
+check([1, 2], Array);
+check(new UserId("u_1"), UserId);
+
+check("admin", "admin");
+check(1, 1);
+check(null, null);
+check(undefined, undefined);
+
+check(["a", "b"], [String]);
+
+check(
+  { id: "u_1" },
+  {
+    id: Match.NonEmptyString,
+  },
+);
+
+check(
+  { id: "u_1", extra: true },
+  Match.ObjectIncluding({
+    id: Match.NonEmptyString,
+  }),
+);
+
+check(12, Match.Integer);
+check("value", Match.Any);
+check("dev@example.com", Match.Email);
+check("123e4567-e89b-42d3-a456-426614174000", Match.UUID);
+check("https://example.com", Match.URL);
+check("2026-01-01T10:20:30Z", Match.IsoDateString);
+check(["a"], Match.NonEmptyArray(String));
+check("x", Match.Optional(String));
+check(null, Match.Maybe(String));
+check("abc", Match.OneOf(String, Number));
+check(
+  "ABC",
+  Match.Where(
+    (v: unknown): v is string => typeof v === "string" && v === "ABC",
+  ),
+);
+
+const hasIdSchema = Match.ObjectIncluding({
+  id: Match.NonEmptyString,
+});
+hasIdSchema.parse({ id: "u_1" }); // usable as IValidationSchema
+```
+
 Why this is useful:
+
 - Fail-fast validation at task/resource boundaries when inputs come from untyped surfaces.
 - Precise failure paths (for example: `$.user.profile.email`) for fast debugging.
 - Typed narrowing from validation patterns, including `Match.Where` type guards.
+- Reusing existing `inputSchema` / `resultSchema`-style contracts directly in ad-hoc checks.
 - Optional aggregate mode via `check(value, pattern, { throwAllErrors: true })`.
 
 > **runtime:** "Your input said it was a number. It was a string wearing a number costume. I noticed."
@@ -55,6 +143,7 @@ type CacheProviderFactory = (
 ```
 
 Notes:
+
 - `options` are merged from `globals.resources.cache.with({ defaultOptions })` and middleware-level cache options.
 - `keyBuilder` is middleware-only and is not passed to the provider.
 - `has()` is optional, but recommended when `undefined` can be a valid cached value.
@@ -122,7 +211,11 @@ class RedisCache {
   async set(key: string, value: unknown): Promise<void> {
     const payload = JSON.stringify(value);
     if (this.ttlMs && this.ttlMs > 0) {
-      await this.client.setex(this.prefix + key, Math.ceil(this.ttlMs / 1000), payload);
+      await this.client.setex(
+        this.prefix + key,
+        Math.ceil(this.ttlMs / 1000),
+        payload,
+      );
       return;
     }
     await this.client.set(this.prefix + key, payload);
