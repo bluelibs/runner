@@ -26,13 +26,15 @@ All supported Match patterns:
 - `Match.Maybe(pattern)`: accepts `undefined`, `null`, or `pattern`
 - `Match.OneOf(...patterns)`: accepts any one candidate pattern
 - `Match.Where((value) => boolean | value is T)`: custom predicate or type guard
+- `Match.compile(pattern)`: wraps any pattern into a unified schema object with `{ pattern, parse(input), toJSONSchema() }`
 - `Match.test(value, pattern)`: boolean test helper (type guard-aware)
 - `Match.Error`: error class thrown by failed pattern checks
 
 Schema interoperability:
 
 - `Match` helpers/patterns expose `.parse(input)`, so they can be used directly in `.inputSchema(...)`, `.resultSchema(...)`, and `.configSchema(...)`.
-- `check()` also accepts any schema-like object with `parse(input): T`.
+- `check()` also accepts any schema-like object with `parse(input): T` (optionally `toJSONSchema(): Record<string, unknown>` for tooling/serialization use-cases).
+- For a single reusable contract shape, use `Match.compile(pattern)` and pass the returned object wherever a schema is expected.
 
 ```typescript
 import { Match, check } from "@bluelibs/runner";
@@ -107,6 +109,14 @@ const hasIdSchema = Match.ObjectIncluding({
   id: Match.NonEmptyString,
 });
 hasIdSchema.parse({ id: "u_1" }); // usable as IValidationSchema
+
+const userSchema = Match.compile({
+  id: Match.NonEmptyString,
+  retries: Match.Optional(Match.Integer),
+});
+userSchema.parse({ id: "u_1" });
+userSchema.toJSONSchema();
+check({ id: "u_1" }, userSchema);
 ```
 
 Why this is useful:
@@ -116,6 +126,42 @@ Why this is useful:
 - Typed narrowing from validation patterns, including `Match.Where` type guards.
 - Reusing existing `inputSchema` / `resultSchema`-style contracts directly in ad-hoc checks.
 - Optional aggregate mode via `check(value, pattern, { throwAllErrors: true })`.
+
+### Match.toJSONSchema()
+
+Use `Match.toJSONSchema(pattern)` to compile supported `Match` patterns into strict JSON Schema Draft 2020-12.
+
+```typescript
+import { Match } from "@bluelibs/runner";
+
+const schema = Match.toJSONSchema({
+  id: Match.NonEmptyString,
+  retries: Match.Optional(Match.Integer),
+});
+```
+
+Strict fail-fast behavior:
+
+- Unsupported constructs throw a `RunnerError` with id `runner.errors.check.jsonSchemaUnsupportedPattern`.
+- Error data includes `path`, `reason`, and `patternKind` to identify the exact unsupported node.
+
+Supported conversion highlights:
+
+- `Match.Any`, `Match.Integer`, `Match.NonEmptyString`, `Match.Email`, `Match.UUID`, `Match.URL`, `Match.IsoDateString`
+- Constructor patterns: `String`, `Number`, `Boolean`, `Object`, `Array`
+- Literal patterns: `string`, `number`, `boolean`, `null`
+- Array patterns: `[pattern]`, `Match.NonEmptyArray()`, `Match.NonEmptyArray(pattern)`
+- Object patterns with strict `additionalProperties: false`
+- `Match.ObjectIncluding(...)` with `additionalProperties: true`
+- `Match.OneOf(...)` -> `anyOf`
+
+Unsupported (fail-fast):
+
+- `Match.Where(...)`
+- `Function` constructor pattern
+- Custom class constructor patterns
+- Literal `undefined`, `bigint`, `symbol`
+- `Match.Optional(...)` / `Match.Maybe(...)` outside object-property context
 
 > **runtime:** "Your input said it was a number. It was a string wearing a number costume. I noticed."
 

@@ -16,6 +16,50 @@ import {
 
 export interface CheckSchemaLike<TParsed = unknown> {
   parse(input: unknown): TParsed;
+  toJSONSchema?(): MatchJsonSchema;
+}
+
+export type MatchJsonPrimitive = string | number | boolean | null;
+export type MatchJsonValue =
+  | MatchJsonPrimitive
+  | MatchJsonObject
+  | readonly MatchJsonValue[];
+
+export interface MatchJsonObject {
+  [key: string]: MatchJsonValue | undefined;
+}
+
+export interface MatchJsonSchema extends MatchJsonObject {
+  $schema?: string;
+  type?:
+    | "string"
+    | "number"
+    | "integer"
+    | "boolean"
+    | "object"
+    | "array"
+    | "null"
+    | readonly (
+        | "string"
+        | "number"
+        | "integer"
+        | "boolean"
+        | "object"
+        | "array"
+        | "null"
+      )[];
+  const?: MatchJsonValue;
+  format?: string;
+  pattern?: string;
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  minItems?: number;
+  items?: MatchJsonSchema | readonly MatchJsonSchema[];
+  properties?: Record<string, MatchJsonSchema>;
+  required?: readonly string[];
+  additionalProperties?: boolean | MatchJsonSchema;
+  anyOf?: readonly MatchJsonSchema[];
 }
 
 type MatchPrimitiveLiteral =
@@ -118,6 +162,14 @@ export type MatchPattern =
   | ObjectIncludingPattern<MatchPatternObject>
   | readonly unknown[]
   | MatchPatternObject;
+
+export interface MatchCompiledSchema<
+  TPattern extends MatchPattern,
+> extends CheckSchemaLike<InferMatchPattern<TPattern>> {
+  readonly pattern: TPattern;
+  parse(input: unknown): InferMatchPattern<TPattern>;
+  toJSONSchema(): MatchJsonSchema;
+}
 
 export type InferMatchPattern<TPattern> = TPattern extends typeof matchAnyToken
   ? unknown

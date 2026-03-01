@@ -16,12 +16,15 @@ import {
   OptionalPattern,
   WherePattern,
 } from "./matcher";
+import { matchToJsonSchema } from "./toJsonSchema";
 import type {
   CheckSchemaLike,
   CheckedValue,
   EnsurePatternOverlap,
   InferCheckSchema,
   InferMatchPattern,
+  MatchCompiledSchema,
+  MatchJsonSchema,
   MatchPattern,
 } from "./types";
 
@@ -66,13 +69,45 @@ function isCheckSchemaLike(value: unknown): value is CheckSchemaLike<unknown> {
     return false;
   }
 
-  const parse = (value as { parse?: unknown }).parse;
-  if (typeof parse !== "function") return false;
+  const candidate = value as {
+    parse?: unknown;
+    toJSONSchema?: unknown;
+  };
+
+  if (typeof candidate.parse !== "function") return false;
+  if (
+    candidate.toJSONSchema !== undefined &&
+    typeof candidate.toJSONSchema !== "function"
+  ) {
+    return false;
+  }
 
   // Keep plain object patterns deterministic unless the intent is explicit.
   if (!isPlainObject(value)) return true;
   const keys = Object.keys(value);
-  return keys.length === 1 && keys[0] === "parse";
+  return keys.every((key) => key === "parse" || key === "toJSONSchema");
+}
+
+class CompiledMatchPatternSchema<
+  TPattern extends MatchPattern,
+> implements MatchCompiledSchema<TPattern> {
+  constructor(public readonly pattern: TPattern) {}
+
+  parse(input: unknown): InferMatchPattern<TPattern> {
+    const failures = collectMatchFailures(input, this.pattern, false);
+    if (failures.length === 0) return input as InferMatchPattern<TPattern>;
+    throw new MatchError(failures);
+  }
+
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(this.pattern);
+  }
+}
+
+function compileMatchPattern<TPattern extends MatchPattern>(
+  pattern: TPattern,
+): MatchCompiledSchema<TPattern> {
+  return Object.freeze(new CompiledMatchPatternSchema(pattern));
 }
 
 export function check<TSchema extends CheckSchemaLike<unknown>>(
@@ -170,9 +205,15 @@ export const Match = Object.freeze({
     );
     return new ObjectIncludingPattern(pattern);
   },
+  compile: <TPattern extends MatchPattern>(
+    pattern: TPattern,
+  ): MatchCompiledSchema<TPattern> => compileMatchPattern(pattern),
   test: <TPattern extends MatchPattern>(
     value: unknown,
     pattern: TPattern,
   ): value is InferMatchPattern<TPattern> => matchTest(value, pattern),
+  toJSONSchema: <TPattern extends MatchPattern>(
+    pattern: TPattern,
+  ): MatchJsonSchema => matchToJsonSchema(pattern),
   Error: MatchError,
 });

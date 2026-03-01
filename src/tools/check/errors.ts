@@ -5,6 +5,8 @@ export const CHECK_INVALID_PATTERN_ERROR_ID =
   "runner.errors.check.invalidPattern";
 export const CHECK_INVALID_OPTIONS_ERROR_ID =
   "runner.errors.check.invalidOptions";
+export const CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID =
+  "runner.errors.check.jsonSchemaUnsupportedPattern";
 
 export interface MatchFailure {
   path: string;
@@ -47,6 +49,27 @@ export class MatchPatternError extends RunnerError<{ message: string }> {
 export class CheckOptionsError extends RunnerError<{ message: string }> {
   constructor(message: string) {
     super(CHECK_INVALID_OPTIONS_ERROR_ID, message, { message });
+  }
+}
+
+export class CheckJsonSchemaPatternError extends RunnerError<{
+  path: string;
+  reason: string;
+  patternKind: string;
+}> {
+  public readonly path: string;
+  public readonly reason: string;
+  public readonly patternKind: string;
+
+  constructor(path: string, reason: string, patternKind: string) {
+    super(
+      CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID,
+      `Cannot convert Match pattern at ${path}: ${reason}.`,
+      { path, reason, patternKind },
+    );
+    this.path = path;
+    this.reason = reason;
+    this.patternKind = patternKind;
   }
 }
 

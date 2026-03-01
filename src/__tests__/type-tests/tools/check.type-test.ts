@@ -4,6 +4,8 @@ import {
   check,
   type InferCheckSchema,
   type InferMatchPattern,
+  type MatchCompiledSchema,
+  type MatchJsonSchema,
   type MatchPattern,
 } from "../../../";
 
@@ -13,6 +15,7 @@ import {
   type DemoParsed = { ok: true };
   const schema: CheckSchemaLike<DemoParsed> = {
     parse: (_value: unknown) => ({ ok: true }),
+    toJSONSchema: () => ({ type: "object" }),
   };
   type Inferred = InferCheckSchema<typeof schema>;
   const value: Inferred = { ok: true };
@@ -161,6 +164,10 @@ import {
   const parsedInteger = Match.Integer.parse(10);
   const n: number = parsedInteger;
   void n;
+
+  const integerJsonSchema = Match.Integer.toJSONSchema();
+  const integerTypedSchema: MatchJsonSchema = integerJsonSchema;
+  void integerTypedSchema;
 }
 
 {
@@ -189,4 +196,36 @@ import {
   const unknownValues = check(["a"], Match.NonEmptyArray());
   const unknownFirst: unknown = unknownValues[0];
   void unknownFirst;
+}
+
+{
+  const jsonSchema = Match.toJSONSchema({
+    id: Match.NonEmptyString,
+    retries: Match.Optional(Match.Integer),
+  });
+
+  const typedSchema: MatchJsonSchema = jsonSchema;
+  void typedSchema;
+
+  const idSchema = jsonSchema.properties?.id;
+  if (idSchema?.type === "string") {
+    const minLength = idSchema.minLength;
+    void minLength;
+  }
+}
+
+{
+  const compiled = Match.compile({
+    id: Match.NonEmptyString,
+    retries: Match.Optional(Match.Integer),
+  });
+
+  const typedCompiled: MatchCompiledSchema<typeof compiled.pattern> = compiled;
+  void typedCompiled;
+
+  const parsed = compiled.parse({ id: "u1", retries: 1 });
+  const id: string = parsed.id;
+  void id;
+  const retried = check({ id: "u1" }, compiled);
+  retried.id.toUpperCase();
 }

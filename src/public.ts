@@ -122,6 +122,11 @@ export type {
   CheckedValue,
   InferCheckSchema,
   InferMatchPattern,
+  MatchCompiledSchema,
+  MatchJsonObject,
+  MatchJsonPrimitive,
+  MatchJsonSchema,
+  MatchJsonValue,
   MatchPattern,
 } from "./tools/check";
 

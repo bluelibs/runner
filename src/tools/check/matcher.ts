@@ -1,5 +1,6 @@
 import { MatchError, MatchFailure, MatchPatternError } from "./errors";
-import type { InferMatchPattern } from "./types";
+import { matchToJsonSchema } from "./toJsonSchema";
+import type { InferMatchPattern, MatchJsonSchema } from "./types";
 type PathSegment = string | number;
 type NonEmptyArrayElement<TPattern> = [TPattern] extends [undefined]
   ? unknown
@@ -22,11 +23,17 @@ export const matchAnyToken = Object.freeze({
   parse(value: unknown): unknown {
     return parsePatternValue(value, matchAnyToken);
   },
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(matchAnyToken);
+  },
 });
 export const matchIntegerToken = Object.freeze({
   kind: "Match.Integer",
   parse(value: unknown): number {
     return parsePatternValue(value, matchIntegerToken);
+  },
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(matchIntegerToken);
   },
 });
 export const matchNonEmptyStringToken = Object.freeze({
@@ -34,11 +41,17 @@ export const matchNonEmptyStringToken = Object.freeze({
   parse(value: unknown): string {
     return parsePatternValue(value, matchNonEmptyStringToken);
   },
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(matchNonEmptyStringToken);
+  },
 });
 export const matchEmailToken = Object.freeze({
   kind: "Match.Email",
   parse(value: unknown): string {
     return parsePatternValue(value, matchEmailToken);
+  },
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(matchEmailToken);
   },
 });
 export const matchUuidToken = Object.freeze({
@@ -46,17 +59,26 @@ export const matchUuidToken = Object.freeze({
   parse(value: unknown): string {
     return parsePatternValue(value, matchUuidToken);
   },
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(matchUuidToken);
+  },
 });
 export const matchUrlToken = Object.freeze({
   kind: "Match.URL",
   parse(value: unknown): string {
     return parsePatternValue(value, matchUrlToken);
   },
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(matchUrlToken);
+  },
 });
 export const matchIsoDateStringToken = Object.freeze({
   kind: "Match.IsoDateString",
   parse(value: unknown): string {
     return parsePatternValue(value, matchIsoDateStringToken);
+  },
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(matchIsoDateStringToken);
   },
 });
 export class MaybePattern<TPattern = unknown> {
@@ -68,6 +90,9 @@ export class MaybePattern<TPattern = unknown> {
       | null
       | undefined;
   }
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(this as MaybePattern<TPattern>);
+  }
 }
 export class OptionalPattern<TPattern = unknown> {
   public readonly kind = "Match.OptionalPattern";
@@ -76,6 +101,9 @@ export class OptionalPattern<TPattern = unknown> {
     return parsePatternValue(value, this as OptionalPattern<TPattern>) as
       | InferMatchPattern<TPattern>
       | undefined;
+  }
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(this as OptionalPattern<TPattern>);
   }
 }
 export class OneOfPattern<TPatterns extends readonly unknown[] = readonly []> {
@@ -87,12 +115,18 @@ export class OneOfPattern<TPatterns extends readonly unknown[] = readonly []> {
       this as OneOfPattern<TPatterns>,
     ) as InferMatchPattern<TPatterns[number]>;
   }
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(this as OneOfPattern<TPatterns>);
+  }
 }
 export class WherePattern<TGuarded = unknown> {
   public readonly kind = "Match.WherePattern";
   constructor(public readonly condition: WhereCondition<TGuarded>) {}
   parse(value: unknown): TGuarded {
     return parsePatternValue(value, this as WherePattern<TGuarded>) as TGuarded;
+  }
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(this as WherePattern<TGuarded>);
   }
 }
 export class ObjectIncludingPattern<
@@ -108,6 +142,9 @@ export class ObjectIncludingPattern<
       this as ObjectIncludingPattern<TObjectPattern>,
     ) as InferMatchPattern<TObjectPattern> & Record<string, unknown>;
   }
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(this as ObjectIncludingPattern<TObjectPattern>);
+  }
 }
 export class NonEmptyArrayPattern<TPattern = undefined> {
   public readonly kind = "Match.NonEmptyArrayPattern";
@@ -119,6 +156,9 @@ export class NonEmptyArrayPattern<TPattern = undefined> {
       NonEmptyArrayElement<TPattern>,
       ...NonEmptyArrayElement<TPattern>[],
     ];
+  }
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(this as NonEmptyArrayPattern<TPattern>);
   }
 }
 

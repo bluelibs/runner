@@ -5,9 +5,16 @@ export type {
   CheckedValue,
   InferCheckSchema,
   InferMatchPattern,
+  MatchCompiledSchema,
+  MatchJsonObject,
+  MatchJsonPrimitive,
+  MatchJsonSchema,
+  MatchJsonValue,
   MatchPattern,
 } from "./check/types";
 export {
+  CheckJsonSchemaPatternError,
+  CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID,
   MatchError,
   type MatchFailure,
   CHECK_ERROR_ID,

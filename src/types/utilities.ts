@@ -34,6 +34,10 @@ export interface IValidationSchema<T = unknown> {
    * Can transform the data if the schema supports transformations.
    */
   parse(input: unknown): T;
+  /**
+   * Optional JSON Schema export for tooling/documentation use-cases.
+   */
+  toJSONSchema?(): Record<string, unknown>;
 }
 
 /**

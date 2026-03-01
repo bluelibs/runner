@@ -629,7 +629,8 @@ This API supports:
 - Combinators: `Match.Optional(pattern)`, `Match.Maybe(pattern)`, `Match.OneOf(...)`
 - Custom predicates: `Match.Where((value) => boolean)` (or a TypeScript type guard)
 - Object partial matching: `Match.ObjectIncluding({ ... })`
-- Schema contract: any object exposing `parse(input): T` (for example `inputSchema`, `resultSchema`, Zod schemas)
+- Unified schema wrapper: `Match.compile(pattern)` -> `{ pattern, parse(input), toJSONSchema() }`
+- Schema contract: any object exposing `parse(input): T` (optionally `toJSONSchema(): Record<string, unknown>`) (for example `inputSchema`, `resultSchema`, Zod schemas)
 - Match helpers/tokens and wrapper patterns also expose `.parse(input)` so they are interchangeable with schema slots like `.inputSchema(...)` / `.configSchema(...)`.
 
 ```ts
@@ -646,10 +647,38 @@ const validated = check(
 validated.id; // string
 ```
 
+When you want one reusable contract object everywhere (checks + schema slots + tooling), compile once:
+
+```ts
+const userSchema = Match.compile({
+  id: Match.NonEmptyString,
+  retries: Match.Optional(Match.Integer),
+});
+
+check({ id: "u_1" }, userSchema);
+userSchema.parse({ id: "u_1" });
+userSchema.toJSONSchema();
+```
+
 - `check(...)` with patterns throws `Match.Error` (a `RunnerError`) on mismatch.
 - `check(...)` with schemas forwards errors thrown by `schema.parse(...)`.
 - `Match.test(value, pattern)` returns `true`/`false`, and works as a type guard for typed patterns.
 - For aggregate validation, call `check(value, pattern, { throwAllErrors: true })`.
+
+`Match.toJSONSchema(pattern)` compiles supported Match patterns to strict JSON Schema Draft 2020-12:
+
+```ts
+import { Match } from "@bluelibs/runner";
+
+const schema = Match.toJSONSchema({
+  id: Match.NonEmptyString,
+  retries: Match.Optional(Match.Integer),
+});
+```
+
+- Unsupported constructs fail fast with a `RunnerError` id of `runner.errors.check.jsonSchemaUnsupportedPattern`.
+- Error metadata includes `path`, `reason`, and `patternKind`.
+- Unsupported: `Match.Where`, `Function`, custom constructors, literal `undefined`/`bigint`/`symbol`, and `Match.Optional`/`Match.Maybe` outside object-property context.
 
 ## Errors
 
