@@ -1,41 +1,21 @@
 import { defineResource } from "../../define";
-import type { AnyTask, DependencyMapType } from "../../defs";
+import type { DependencyMapType } from "../../defs";
 import { loggerResource } from "../resources/logger.resource";
 import { taskRunnerResource } from "../resources/taskRunner.resource";
-import { eventManagerResource } from "../resources/eventManager.resource";
-import { globalEvents } from "../globalEvents";
 import { globalTags } from "../globalTags";
-import { CronParser } from "./cron-parser";
-import { cronExecutionError } from "./cron.errors";
-import { shutdownLockdownError } from "../../errors";
 import { cronTag } from "./cron.tag";
-import {
-  CronOnError,
-  CronResourceValue,
-  CronScheduledTask,
-  CronTagConfig,
-} from "./types";
-import { runtimeSource } from "../../types/runtimeSource";
-
-type CronTimer = ReturnType<typeof setTimeout>;
-
-interface CronTaskState {
-  task: AnyTask;
-  config: CronTagConfig;
-  timer?: CronTimer;
-  stopped: boolean;
-  nextRunAt?: Date;
-}
+import { CronResourceConfig, CronResourceValue } from "./types";
+import { CronScheduler } from "./CronScheduler";
+import { parseCronResourceConfig } from "./parseCronResourceConfig";
 
 type CronResourceDependencies = DependencyMapType & {
   cron: typeof cronTag;
   logger: typeof loggerResource;
   taskRunner: typeof taskRunnerResource;
-  eventManager: typeof eventManagerResource;
 };
 
 export const cronResource = defineResource<
-  void,
+  CronResourceConfig,
   Promise<CronResourceValue>,
   CronResourceDependencies
 >({
@@ -44,233 +24,40 @@ export const cronResource = defineResource<
     cron: cronTag,
     logger: loggerResource,
     taskRunner: taskRunnerResource,
-    eventManager: eventManagerResource,
+  },
+  configSchema: {
+    parse: parseCronResourceConfig,
   },
   context: () => ({
-    disposed: false,
-    stateByTaskId: new Map<string, CronTaskState>(),
+    scheduler: undefined as CronScheduler | undefined,
   }),
-  init: async (
-    _config,
-    { cron, logger, taskRunner, eventManager },
-    context,
-  ) => {
-    const scopedLogger = logger.with({ source: "globals.resources.cron" });
-    const scheduledTasks = cron.tasks;
-
-    const isSilent = (config: CronTagConfig): boolean => config.silent === true;
-
-    const stopSchedule = (taskState: CronTaskState): void => {
-      taskState.stopped = true;
-      if (taskState.timer) {
-        clearTimeout(taskState.timer);
-        taskState.timer = undefined;
-      }
-    };
-
-    const stopAllSchedules = (): void => {
-      for (const state of context.stateByTaskId.values()) {
-        stopSchedule(state);
-      }
-    };
-
-    eventManager.addListener(
-      globalEvents.disposing,
-      async () => {
-        // Stop scheduling immediately when shutdown starts so cron does not
-        // compete with drain and does not trigger avoidable shutdown rejections.
-        stopAllSchedules();
-      },
-      {
-        id: "globals.resources.cron.onDisposing",
-        order: -1_000,
-      },
-    );
-
-    const scheduleNext = (taskState: CronTaskState, from: Date): void => {
-      if (context.disposed || taskState.stopped) {
-        return;
-      }
-
-      if (taskState.timer) {
-        clearTimeout(taskState.timer);
-        taskState.timer = undefined;
-      }
-
-      const nextRunAt = CronParser.getNextRun(
-        taskState.config.expression,
-        from,
-        taskState.config.timezone,
-      );
-      taskState.nextRunAt = nextRunAt;
-
-      const delay = Math.max(0, nextRunAt.getTime() - Date.now());
-      const timer = setTimeout(() => {
-        void executeTask(taskState);
-      }, delay);
-      timer.unref?.();
-      taskState.timer = timer;
-    };
-
-    const executeTask = async (taskState: CronTaskState): Promise<void> => {
-      if (context.disposed || taskState.stopped) {
-        return;
-      }
-
-      if (!isSilent(taskState.config)) {
-        await scopedLogger.info(
-          `Running cron task "${taskState.task.id}" (${taskState.config.expression}).`,
-          {
-            data: {
-              taskId: taskState.task.id,
-              expression: taskState.config.expression,
-              timezone: taskState.config.timezone,
-              scheduledAt: taskState.nextRunAt?.toISOString(),
-            },
-          },
-        );
-      }
-
-      try {
-        await taskRunner.run(taskState.task, taskState.config.input, {
-          source: runtimeSource.resource("globals.resources.cron"),
-        });
-      } catch (error) {
-        if (shutdownLockdownError.is(error)) {
-          // During runtime shutdown, cron should stop cleanly instead of
-          // treating lifecycle admission rejection as task failure.
-          stopSchedule(taskState);
-          return;
-        }
-
-        const normalizedError =
-          error instanceof Error
-            ? error
-            : cronExecutionError.new({
-                taskId: taskState.task.id,
-                expression: taskState.config.expression,
-                message: String(error),
-              });
-
-        if (!isSilent(taskState.config)) {
-          await scopedLogger.error(
-            `Cron task "${taskState.task.id}" failed during execution.`,
-            {
-              error: normalizedError,
-              data: {
-                taskId: taskState.task.id,
-                expression: taskState.config.expression,
-                onError: taskState.config.onError || CronOnError.Continue,
-              },
-            },
-          );
-        }
-
-        if (
-          (taskState.config.onError || CronOnError.Continue) ===
-          CronOnError.Stop
-        ) {
-          stopSchedule(taskState);
-          return;
-        }
-      }
-
-      scheduleNext(taskState, new Date());
-    };
-
-    for (const scheduledTask of scheduledTasks) {
-      const task = scheduledTask.definition;
-      const config = getCronConfig(task, scheduledTask.config);
-      if (config.enabled === false) {
-        if (!isSilent(config)) {
-          await scopedLogger.info(
-            `Cron task "${task.id}" is disabled and will not be scheduled.`,
-            {
-              data: {
-                taskId: task.id,
-                expression: config.expression,
-              },
-            },
-          );
-        }
-        continue;
-      }
-
-      if (!CronParser.isValid(config.expression, config.timezone)) {
-        return cronExecutionError.throw({
-          taskId: task.id,
-          expression: config.expression,
-          message: "Invalid cron expression configuration.",
-        });
-      }
-
-      if (!isSilent(config)) {
-        await scopedLogger.info(
-          `Cron task "${task.id}" started with expression "${config.expression}".`,
-          {
-            data: {
-              taskId: task.id,
-              expression: config.expression,
-              timezone: config.timezone,
-              immediate: !!config.immediate,
-              onError: config.onError || CronOnError.Continue,
-            },
-          },
-        );
-      }
-
-      const taskState: CronTaskState = {
-        task,
-        config,
-        stopped: false,
-      };
-      context.stateByTaskId.set(task.id, taskState);
-
-      if (config.immediate) {
-        void executeTask(taskState);
-      } else {
-        scheduleNext(taskState, new Date());
-      }
-    }
-
-    const toPublicState = (
-      map: Map<string, CronTaskState>,
-    ): ReadonlyMap<string, CronScheduledTask> => {
-      return new Map(
-        Array.from(map.entries()).map(([taskId, state]) => {
-          return [
-            taskId,
-            {
-              taskId,
-              expression: state.config.expression,
-              timezone: state.config.timezone,
-              nextRunAt: state.nextRunAt,
-              enabled: state.config.enabled !== false,
-              stopped: state.stopped,
-            },
-          ];
-        }),
-      );
-    };
+  init: async (config, { cron, logger, taskRunner }, context) => {
+    const scheduler = new CronScheduler({
+      cronTasks: cron.tasks,
+      logger,
+      taskRunner,
+    });
+    context.scheduler = scheduler;
+    await scheduler.start(config);
 
     return {
       get schedules() {
-        return toPublicState(context.stateByTaskId);
+        return scheduler.schedules;
       },
     };
   },
-  dispose: async (_value, _config, _deps, context) => {
-    context.disposed = true;
-
-    for (const state of context.stateByTaskId.values()) {
-      if (state.timer) {
-        clearTimeout(state.timer);
-      }
-      state.timer = undefined;
-      state.stopped = true;
+  cooldown: async (_value, _config, _deps, context) => {
+    if (!context.scheduler) {
+      return;
     }
-
-    context.stateByTaskId.clear();
+    await context.scheduler.cooldown();
+  },
+  dispose: async (_value, _config, _deps, context) => {
+    if (!context.scheduler) {
+      return;
+    }
+    await context.scheduler.dispose();
+    context.scheduler = undefined;
   },
   tags: [globalTags.system],
   meta: {
@@ -279,20 +66,3 @@ export const cronResource = defineResource<
       "Discovers tasks tagged with globals.tags.cron and schedules them with resilient timer-based execution.",
   },
 });
-
-function getCronConfig(
-  task: AnyTask,
-  configFromDependency: CronTagConfig | undefined,
-): CronTagConfig {
-  const config = configFromDependency ?? cronTag.extract(task);
-  if (!config) {
-    return cronExecutionError.throw({
-      taskId: task.id,
-      expression: "<missing>",
-      message:
-        "Cron tag is missing configuration. Use globals.tags.cron.with({ expression: ... }).",
-    });
-  }
-
-  return config;
-}

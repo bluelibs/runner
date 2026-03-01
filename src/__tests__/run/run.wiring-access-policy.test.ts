@@ -448,13 +448,17 @@ describe("run.isolate", () => {
     await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
   });
 
-  it("enforces policy checks for internal __runner dependency keys", async () => {
+  it("enforces policy checks for explicitly wired cron dependencies", async () => {
     const app = defineResource({
       id: "policy.internal.app",
+      register: [globalResources.cron],
+      dependencies: {
+        cron: globalResources.cron,
+      },
       isolate: {
         deny: [globalResources.cron.id],
       },
-      init: async () => "ok",
+      init: async (_input, deps) => deps.cron,
     });
 
     await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);

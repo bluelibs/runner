@@ -676,7 +676,7 @@ Why this pattern works:
 
 Need recurring task execution without bringing in a separate scheduler process? Runner ships with a built-in global cron scheduler.
 
-You mark tasks with `globals.tags.cron.with({...})`, and `globals.resources.cron` discovers and schedules them at startup. The cron resource is registered by default, so there is no extra bootstrap wiring needed.
+You mark tasks with `globals.tags.cron.with({...})`, and `globals.resources.cron` discovers and schedules them at startup. The cron resource is opt-in, so you must register it explicitly.
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -696,7 +696,16 @@ const sendDigest = r
   })
   .build();
 
-const app = r.resource("app").register([sendDigest]).build();
+const app = r
+  .resource("app")
+  .register([
+    globals.resources.cron.with({
+      // Optional: restrict scheduling to selected task ids/definitions.
+      only: [sendDigest],
+    }),
+    sendDigest,
+  ])
+  .build();
 ```
 
 Cron options:
@@ -709,9 +718,14 @@ Cron options:
 - `onError`: `"continue"` (default) or `"stop"` for that schedule.
 - `silent`: suppress all cron log output for this task when `true` (default `false`).
 
+`globals.resources.cron.with({...})` options:
+
+- `only`: optional array of task ids or task definitions; when set, only those cron-tagged tasks are scheduled.
+
 Operational notes:
 
 - One cron tag per task is supported. If you need multiple schedules, fork the task and tag each fork.
+- If `globals.resources.cron` is not registered, cron tags are treated as metadata and no schedules are started.
 - Scheduler uses `setTimeout` chaining, which keeps it portable across supported runtimes.
 - Startup and execution lifecycle messages are emitted via `globals.resources.logger`.
 - On `globals.events.disposing`, cron stops all pending schedules immediately (no new timer-driven runs), while already in-flight cron executions drain under the normal shutdown budgets.

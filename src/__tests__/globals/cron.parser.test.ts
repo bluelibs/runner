@@ -34,7 +34,7 @@ describe("CronParser", () => {
     });
   });
 
-  it("throws a cron configuration error for invalid expressions", () => {
+  it("throws a validation error for invalid expressions", () => {
     expect(() => CronParser.getNextRun("invalid expression")).toThrow(
       /invalid cron expression/i,
     );

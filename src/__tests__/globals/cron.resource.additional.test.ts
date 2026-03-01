@@ -1,5 +1,6 @@
 import { globals, r } from "../../public";
 import { run } from "../../run";
+import type { RegisterableItems } from "../../defs";
 
 describe("global cron resource (additional)", () => {
   beforeEach(() => {
@@ -30,6 +31,12 @@ describe("global cron resource (additional)", () => {
     }
   };
 
+  const createCronApp = (items: RegisterableItems[] = []) =>
+    r
+      .resource("app")
+      .register([globals.resources.cron, ...items])
+      .build();
+
   it("fails fast when cron expression is invalid", async () => {
     const invalidTask = r
       .task("app.tasks.invalid-cron")
@@ -37,7 +44,7 @@ describe("global cron resource (additional)", () => {
       .run(async () => undefined)
       .build();
 
-    const app = r.resource("app").register([invalidTask]).build();
+    const app = createCronApp([invalidTask]);
 
     await expect(run(app)).rejects.toThrow(
       /invalid cron expression configuration/i,
@@ -60,7 +67,7 @@ describe("global cron resource (additional)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([flakyTask]).build();
+    const app = createCronApp([flakyTask]);
     const runtime = await run(app);
 
     jest.advanceTimersByTime(60_000);
@@ -86,7 +93,7 @@ describe("global cron resource (additional)", () => {
       .run(async () => undefined)
       .build();
 
-    const app = r.resource("app").register([duplicateCronTask]).build();
+    const app = createCronApp([duplicateCronTask]);
     await expect(run(app)).rejects.toThrow(
       /duplicate tag "globals\.tags\.cron"/i,
     );
@@ -99,7 +106,7 @@ describe("global cron resource (additional)", () => {
       .run(async () => undefined)
       .build();
 
-    const app = r.resource("app").register([missingConfigTask]).build();
+    const app = createCronApp([missingConfigTask]);
     await expect(run(app)).rejects.toThrow(/missing configuration/i);
   });
 
@@ -117,7 +124,7 @@ describe("global cron resource (additional)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([scheduledTask]).build();
+    const app = createCronApp([scheduledTask]);
     const runtime = await run(app);
     const cron = runtime.getResourceValue(globals.resources.cron);
 
@@ -158,10 +165,7 @@ describe("global cron resource (additional)", () => {
       })
       .build();
 
-    const app = r
-      .resource("app")
-      .register([blockerTask, shutdownAwareCronTask])
-      .build();
+    const app = createCronApp([blockerTask, shutdownAwareCronTask]);
     const runtime = await run(app, {
       disposeBudgetMs: 1_000_000,
       disposeDrainBudgetMs: 1_000_000,
@@ -222,7 +226,7 @@ describe("global cron resource (additional)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([silentTask]).build();
+    const app = createCronApp([silentTask]);
     const runtime = await run(app);
 
     jest.advanceTimersByTime(60_000);
@@ -260,7 +264,7 @@ describe("global cron resource (additional)", () => {
       .run(async () => undefined)
       .build();
 
-    const app = r.resource("app").register([disabledSilentTask]).build();
+    const app = createCronApp([disabledSilentTask]);
     const runtime = await run(app);
 
     const cronLogs = logSpy.mock.calls.filter((args) =>
@@ -290,7 +294,7 @@ describe("global cron resource (additional)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([immediateTask]).build();
+    const app = createCronApp([immediateTask]);
     const runtime = await run(app);
 
     await flushMicrotasks();
@@ -332,10 +336,7 @@ describe("global cron resource (additional)", () => {
       })
       .build();
 
-    const app = r
-      .resource("app")
-      .register([immediateTask, regularTask])
-      .build();
+    const app = createCronApp([immediateTask, regularTask]);
     const runtime = await run(app);
 
     await flushMicrotasks();

@@ -1,6 +1,7 @@
 export * from "./resources/debug/types";
 export * from "./resources/tunnel/types";
 export type {
+  CronResourceConfig,
   CronResourceValue,
   CronScheduledTask,
   CronTagConfig,

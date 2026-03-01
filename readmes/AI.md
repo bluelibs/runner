@@ -352,7 +352,7 @@ const getUser = r
 
 ## Cron Scheduling
 
-Use `globals.tags.cron` to schedule tasks with cron expressions. The scheduler lives in `globals.resources.cron` and is registered by default, so tagged tasks begin scheduling automatically at runtime startup.
+Use `globals.tags.cron` to schedule tasks with cron expressions. The scheduler lives in `globals.resources.cron`, and it is opt-in: cron schedules run only when you explicitly register this resource.
 
 ```ts
 import { r, globals } from "@bluelibs/runner";
@@ -371,7 +371,16 @@ const cleanupTask = r
   })
   .build();
 
-const app = r.resource("app").register([cleanupTask]).build();
+const app = r
+  .resource("app")
+  .register([
+    globals.resources.cron.with({
+      // Optional: restrict scheduling to selected task ids/definitions.
+      only: [cleanupTask],
+    }),
+    cleanupTask,
+  ])
+  .build();
 ```
 
 `globals.tags.cron.with({...})` options:
@@ -384,9 +393,14 @@ const app = r.resource("app").register([cleanupTask]).build();
 - `onError`: `"continue"` (default) or `"stop"`
 - `silent`: suppress all cron log output for this task when `true` (default `false`)
 
+`globals.resources.cron.with({...})` options:
+
+- `only`: optional array of task ids or task definitions; when set, only those cron-tagged tasks are scheduled.
+
 Notes:
 
 - One cron tag per task is supported. If you need multiple schedules, use task forking and tag each fork.
+- If `globals.resources.cron` is not registered, cron tags are treated as metadata and no schedules are started.
 - Cron startup logs are emitted through `globals.resources.logger`.
 - On `globals.events.disposing`, cron stops all pending schedules immediately (no new timer-driven runs), while already in-flight cron task executions drain with normal shutdown budgets.
 

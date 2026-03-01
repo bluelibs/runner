@@ -74,7 +74,6 @@ export function registerStoreBuiltins(registry: StoreRegistry): void {
   });
 
   const builtInResources = [
-    globalResources.cron,
     rateLimitResource,
     circuitBreakerResource,
     temporalResource,

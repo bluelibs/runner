@@ -47,8 +47,6 @@ import {
   RuntimeLifecyclePhase,
 } from "./runtime/LifecycleAdmissionController";
 
-const INTERNAL_ROOT_CRON_DEPENDENCY_KEY = "__runnerCron";
-
 // Re-export types for backward compatibility
 export type {
   ResourceStoreElementType,
@@ -295,12 +293,6 @@ export class Store {
       unknown
     >;
 
-    const rootDependencies = {
-      ...dependenciesObject,
-      [INTERNAL_ROOT_CRON_DEPENDENCY_KEY]:
-        dependenciesObject[INTERNAL_ROOT_CRON_DEPENDENCY_KEY] ||
-        globalResources.cron,
-    };
     const hasTunnelResourceMiddleware = this.resourceMiddlewares.has(
       tunnelResourceMiddleware.id,
     );
@@ -309,7 +301,7 @@ export class Store {
     // never mutates the reusable user definition object.
     const root: IResource<any> = {
       ...rootDefinition,
-      dependencies: rootDependencies,
+      dependencies: dependenciesObject,
       subtree: hasTunnelResourceMiddleware
         ? mergeResourceSubtreePolicy(rootDefinition.subtree, {
             resources: {
@@ -335,6 +327,7 @@ export class Store {
     this.validator.trackRegisteredId(root.id);
 
     this.registry.computeRegistrationDeeply(root, config);
+
     this.registry.resources.set(root.id, this.root);
   }
 

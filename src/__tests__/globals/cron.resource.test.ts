@@ -1,6 +1,7 @@
 import { globals, r } from "../../public";
 import { run } from "../../run";
 import { CronOnError } from "../../globals/types";
+import type { RegisterableItems } from "../../defs";
 
 describe("global cron resource", () => {
   beforeEach(() => {
@@ -18,8 +19,37 @@ describe("global cron resource", () => {
     }
   };
 
-  it("is globally registered and auto-initialized", async () => {
-    const app = r.resource("app").build();
+  const createCronApp = (items: RegisterableItems[] = []) =>
+    r
+      .resource("app")
+      .register([globals.resources.cron, ...items])
+      .build();
+
+  it("does not auto-register cron scheduling when resource is not registered", async () => {
+    let runs = 0;
+
+    const scheduledTask = r
+      .task("app.tasks.unregistered-cron")
+      .tags([globals.tags.cron.with({ expression: "* * * * *" })])
+      .run(async () => {
+        runs += 1;
+      })
+      .build();
+
+    const app = r.resource("app").register([scheduledTask]).build();
+    const runtime = await run(app);
+
+    jest.advanceTimersByTime(120_000);
+    await flushMicrotasks();
+
+    expect(runs).toBe(0);
+    expect(() => runtime.getResourceValue(globals.resources.cron)).toThrow();
+
+    await runtime.dispose();
+  });
+
+  it("initializes when explicitly registered", async () => {
+    const app = createCronApp();
     const runtime = await run(app);
 
     const cron = runtime.getResourceValue(globals.resources.cron);
@@ -40,7 +70,7 @@ describe("global cron resource", () => {
       })
       .build();
 
-    const app = r.resource("app").register([scheduledTask]).build();
+    const app = createCronApp([scheduledTask]);
     const runtime = await run(app);
 
     const cron = runtime.getResourceValue(globals.resources.cron);
@@ -70,7 +100,7 @@ describe("global cron resource", () => {
       })
       .build();
 
-    const app = r.resource("app").register([immediateTask]).build();
+    const app = createCronApp([immediateTask]);
     const runtime = await run(app);
 
     await Promise.resolve();
@@ -95,7 +125,7 @@ describe("global cron resource", () => {
       })
       .build();
 
-    const app = r.resource("app").register([disabledTask]).build();
+    const app = createCronApp([disabledTask]);
     const runtime = await run(app);
 
     const cron = runtime.getResourceValue(globals.resources.cron);
@@ -127,7 +157,7 @@ describe("global cron resource", () => {
       })
       .build();
 
-    const app = r.resource("app").register([failingTask]).build();
+    const app = createCronApp([failingTask]);
     const runtime = await run(app);
 
     jest.advanceTimersByTime(180_000);
@@ -158,7 +188,7 @@ describe("global cron resource", () => {
       })
       .build();
 
-    const app = r.resource("app").register([immediateStopTask]).build();
+    const app = createCronApp([immediateStopTask]);
     const runtime = await run(app);
 
     await flushMicrotasks();
@@ -192,7 +222,7 @@ describe("global cron resource", () => {
       })
       .build();
 
-    const app = r.resource("app").register([flakyTask]).build();
+    const app = createCronApp([flakyTask]);
     const runtime = await run(app);
 
     jest.advanceTimersByTime(180_000);
@@ -224,7 +254,7 @@ describe("global cron resource", () => {
       })
       .build();
 
-    const app = r.resource("app").register([selfDisposingTask]).build();
+    const app = createCronApp([selfDisposingTask]);
     runtimeRef.current = await run(app, {
       disposeDrainBudgetMs: 0,
     });

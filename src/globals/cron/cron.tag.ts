@@ -1,6 +1,9 @@
 import { defineTag } from "../../define";
-import { cronConfigurationError } from "./cron.errors";
 import { CronOnError, CronTagConfig } from "./types";
+
+function parseCronTagConfigError(message: string): never {
+  throw new Error(message);
+}
 
 const cronOnErrorValues = new Set(Object.values(CronOnError));
 
@@ -9,58 +12,54 @@ export const cronTag = defineTag<CronTagConfig>({
   configSchema: {
     parse: (rawValue): CronTagConfig => {
       if (!rawValue || typeof rawValue !== "object") {
-        return cronConfigurationError.throw({
-          message: "Cron tag config must be an object.",
-        });
+        return parseCronTagConfigError("Cron tag config must be an object.");
       }
 
       const value = rawValue as Partial<CronTagConfig>;
 
       if (typeof value.expression !== "string" || !value.expression.trim()) {
-        return cronConfigurationError.throw({
-          message: 'Cron tag config requires a non-empty "expression".',
-        });
+        return parseCronTagConfigError(
+          'Cron tag config requires a non-empty "expression".',
+        );
       }
 
       if (
         value.timezone !== undefined &&
         (typeof value.timezone !== "string" || !value.timezone.trim())
       ) {
-        return cronConfigurationError.throw({
-          message:
-            'Cron tag config \"timezone\" must be a non-empty string when provided.',
-        });
+        return parseCronTagConfigError(
+          'Cron tag config \"timezone\" must be a non-empty string when provided.',
+        );
       }
 
       if (
         value.immediate !== undefined &&
         typeof value.immediate !== "boolean"
       ) {
-        return cronConfigurationError.throw({
-          message: 'Cron tag config \"immediate\" must be a boolean.',
-        });
+        return parseCronTagConfigError(
+          'Cron tag config \"immediate\" must be a boolean.',
+        );
       }
 
       if (value.enabled !== undefined && typeof value.enabled !== "boolean") {
-        return cronConfigurationError.throw({
-          message: 'Cron tag config \"enabled\" must be a boolean.',
-        });
+        return parseCronTagConfigError(
+          'Cron tag config \"enabled\" must be a boolean.',
+        );
       }
 
       if (
         value.onError !== undefined &&
         !cronOnErrorValues.has(value.onError)
       ) {
-        return cronConfigurationError.throw({
-          message:
-            'Cron tag config \"onError\" must be either \"continue\" or \"stop\".',
-        });
+        return parseCronTagConfigError(
+          'Cron tag config \"onError\" must be either \"continue\" or \"stop\".',
+        );
       }
 
       if (value.silent !== undefined && typeof value.silent !== "boolean") {
-        return cronConfigurationError.throw({
-          message: 'Cron tag config "silent" must be a boolean.',
-        });
+        return parseCronTagConfigError(
+          'Cron tag config "silent" must be a boolean.',
+        );
       }
 
       return {
