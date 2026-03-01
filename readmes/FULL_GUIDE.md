@@ -3120,7 +3120,7 @@ All supported Match patterns:
 - `Match.Maybe(pattern)`: accepts `undefined`, `null`, or `pattern`
 - `Match.OneOf(...patterns)`: accepts any one candidate pattern
 - `Match.Where((value) => boolean | value is T)`: custom predicate or type guard
-- `Match.compile(pattern)`: wraps any pattern into a unified schema object with `{ pattern, parse(input), toJSONSchema() }`
+- `Match.compile(pattern)`: wraps any pattern into a unified schema object with `{ pattern, parse(input), test(input), toJSONSchema(options?) }`
 - `Match.test(value, pattern)`: boolean test helper (type guard-aware)
 - `Match.Error`: error class thrown by failed pattern checks
 
@@ -3209,6 +3209,7 @@ const userSchema = Match.compile({
   retries: Match.Optional(Match.Integer),
 });
 userSchema.parse({ id: "u_1" });
+userSchema.test({ id: "u_1" });
 userSchema.toJSONSchema();
 check({ id: "u_1" }, userSchema);
 ```

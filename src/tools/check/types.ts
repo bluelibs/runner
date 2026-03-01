@@ -176,6 +176,7 @@ export interface MatchCompiledSchema<
 > extends CheckSchemaLike<InferMatchPattern<TPattern>> {
   readonly pattern: TPattern;
   parse(input: unknown): InferMatchPattern<TPattern>;
+  test(input: unknown): input is InferMatchPattern<TPattern>;
   toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema;
 }
 

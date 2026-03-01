@@ -274,6 +274,16 @@ import {
   const parsed = compiled.parse({ id: "u1", retries: 1 });
   const id: string = parsed.id;
   void id;
+
+  const candidate: unknown = { id: "u1" };
+  if (compiled.test(candidate)) {
+    candidate.id.toUpperCase();
+    const retries = candidate.retries;
+    if (retries !== undefined) {
+      retries.toFixed(0);
+    }
+  }
+
   const retried = check({ id: "u1" }, compiled);
   retried.id.toUpperCase();
 }

@@ -258,11 +258,14 @@ describe("tools/check schema support", () => {
     const compiled = Match.compile(pattern);
 
     expect(compiled.pattern).toBe(pattern);
+    expect(compiled.test({ id: "u1", retries: 1 })).toBe(true);
+    expect(compiled.test({ id: "", retries: 1 })).toBe(false);
     expect(compiled.parse({ id: "u1", retries: 1 })).toEqual({
       id: "u1",
       retries: 1,
     });
     expect(() => compiled.parse({ id: "", retries: 1 })).toThrow(MatchError);
+    expect(() => compiled.test("x")).not.toThrow();
     expect(check({ id: "u1" }, compiled)).toEqual({ id: "u1" });
     expect(compiled.toJSONSchema()).toEqual({
       $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -278,5 +281,16 @@ describe("tools/check schema support", () => {
       required: ["id"],
       additionalProperties: false,
     });
+  });
+
+  it("rethrows non-match errors from compiled.test()", () => {
+    const plannedError = new Error("boom");
+    const compiled = Match.compile(
+      Match.Where(() => {
+        throw plannedError;
+      }),
+    );
+
+    expect(() => compiled.test("x")).toThrow(plannedError);
   });
 });

@@ -101,6 +101,16 @@ class CompiledMatchPatternSchema<
     throw new MatchError(failures);
   }
 
+  test(input: unknown): input is InferMatchPattern<TPattern> {
+    try {
+      this.parse(input);
+      return true;
+    } catch (error) {
+      if (error instanceof MatchError) return false;
+      throw error;
+    }
+  }
+
   toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
     return matchToJsonSchema(this.pattern, options);
   }

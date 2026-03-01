@@ -630,7 +630,7 @@ This API supports:
 - Combinators: `Match.Optional(pattern)`, `Match.Maybe(pattern)`, `Match.OneOf(...)`
 - Custom predicates: `Match.Where((value) => boolean)` (or a TypeScript type guard)
 - Object partial matching: `Match.ObjectIncluding({ ... })`
-- Unified schema wrapper: `Match.compile(pattern)` -> `{ pattern, parse(input), toJSONSchema() }`
+- Unified schema wrapper: `Match.compile(pattern)` -> `{ pattern, parse(input), test(input), toJSONSchema(options?) }`
 - Schema contract: any object exposing `parse(input): T` (optionally `toJSONSchema(): Record<string, unknown>`) (for example `inputSchema`, `resultSchema`, Zod schemas)
 - Match helpers/tokens and wrapper patterns also expose `.parse(input)` so they are interchangeable with schema slots like `.inputSchema(...)` / `.configSchema(...)`.
 
@@ -658,6 +658,7 @@ const userSchema = Match.compile({
 
 check({ id: "u_1" }, userSchema);
 userSchema.parse({ id: "u_1" });
+userSchema.test({ id: "u_1" });
 userSchema.toJSONSchema();
 ```
 
