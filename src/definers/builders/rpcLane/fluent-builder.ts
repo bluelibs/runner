@@ -36,7 +36,7 @@ export function makeRpcLaneBuilder<TMeta extends IRpcLaneMeta>(
 
     applyTo(targets) {
       const next = clone(state, {
-        applyTo: targets.slice(),
+        applyTo: typeof targets === "function" ? targets : targets.slice(),
       });
       return makeRpcLaneBuilder(next);
     },

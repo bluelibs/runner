@@ -15,7 +15,9 @@ export interface RpcLaneFluentBuilder<
     description: string,
   ): RpcLaneFluentBuilder<_TMeta & { description: string }>;
   applyTo(
-    targets: readonly (ITaskDefinition<any> | IEventDefinition<any> | string)[],
+    targets:
+      | readonly (ITaskDefinition<any> | IEventDefinition<any> | string)[]
+      | ((target: ITaskDefinition<any> | IEventDefinition<any>) => boolean),
   ): RpcLaneFluentBuilder<_TMeta>;
   asyncContexts(
     contexts: NonNullable<IRpcLaneDefinition["asyncContexts"]>,

@@ -865,9 +865,12 @@ When routing does not behave as expected, check in this order:
 ### Core Guard Rails
 
 - Lane ids must be non-empty strings.
-- Event definitions cannot be assigned to both lane systems (`eventLane` + `rpcLane`) across tags and/or `applyTo`.
+- Event definitions must not end up routed through both lane systems (`eventLane` + `rpcLane`).
 - A definition cannot be assigned to two different lanes in the same lane system.
-- `applyTo` string targets are validated against container definitions and fail fast on invalid type/id.
+- `applyTo(...)` is authoritative: when a task/event matches `applyTo`, it overrides any tag-based (IoC) lane assignment for that definition.
+- `applyTo` supports either:
+  - A list of explicit targets (definitions or id strings), validated against container definitions and failing fast on invalid type/id.
+  - A predicate function that is evaluated against container definitions at runtime.
 - `transactional + globals.tags.eventLane` is invalid.
 - `transactional + parallel` is invalid.
 
@@ -875,7 +878,7 @@ When routing does not behave as expected, check in this order:
 
 | Concept          | API                                                              |
 | ---------------- | ---------------------------------------------------------------- |
-| Lane definition  | `r.eventLane("...").applyTo([...])?.build()`                     |
+| Lane definition  | `r.eventLane("...").applyTo([...])` or `r.eventLane("...").applyTo((event) => boolean)` |
 | Event tagging    | `globals.tags.eventLane.with({ lane, orderingKey?, metadata? })` |
 | Topology         | `r.eventLane.topology({ profiles, bindings })`                   |
 | Profile consume  | `profiles[profile].consume: lane[]`                              |
@@ -886,7 +889,7 @@ When routing does not behave as expected, check in this order:
 
 | Concept            | API                                                              |
 | ------------------ | ---------------------------------------------------------------- |
-| Lane definition    | `r.rpcLane("...").applyTo([...])?.asyncContexts([...])?.build()` |
+| Lane definition    | `r.rpcLane("...").applyTo([...])` or `r.rpcLane("...").applyTo((taskOrEvent) => boolean)` |
 | Task/event tagging | `globals.tags.rpcLane.with({ lane })`                            |
 | Topology           | `r.rpcLane.topology({ profiles, bindings })`                     |
 | Profile serve      | `profiles[profile].serve: lane[]`                                |

@@ -14,7 +14,9 @@ export interface EventLaneFluentBuilder<
     description: string,
   ): EventLaneFluentBuilder<_TMeta & { description: string }>;
   applyTo(
-    targets: readonly (IEventDefinition<any> | string)[],
+    targets:
+      | readonly (IEventDefinition<any> | string)[]
+      | ((event: IEventDefinition<any>) => boolean),
   ): EventLaneFluentBuilder<_TMeta>;
   asyncContexts(
     contexts: NonNullable<IEventLaneDefinition["asyncContexts"]>,

@@ -25,31 +25,43 @@ export function resolveEventLaneAssignments(
   const routesByEventId = new Map<string, EventLaneRoute>();
   const rpcLaneApplyToEventIds = collectRpcLaneApplyToEventIds(store);
 
-  for (const eventEntry of store.events.values()) {
-    const laneConfig = globalTags.eventLane.extract(eventEntry.event.tags);
-    if (!laneConfig) {
+  for (const lane of lanes) {
+    const applyTo = lane.applyTo;
+    if (applyTo === undefined) continue;
+
+    if (typeof applyTo === "function") {
+      for (const eventEntry of store.events.values()) {
+        if (!applyTo(eventEntry.event)) continue;
+        const eventId = eventEntry.event.id;
+        assertEventIsNotExplicitlyAssignedToRpcLane(
+          rpcLaneApplyToEventIds,
+          eventId,
+          lane.id,
+        );
+
+        const current = routesByEventId.get(eventId);
+        if (current && current.lane.id !== lane.id) {
+          eventLaneAssignmentConflictError.throw({
+            eventId,
+            currentLaneId: current.lane.id,
+            attemptedLaneId: lane.id,
+          });
+        }
+
+        if (!current) {
+          routesByEventId.set(eventId, { lane });
+        }
+      }
       continue;
     }
 
-    assertEventIsNotAssignedToRpcLane(
-      store,
-      rpcLaneApplyToEventIds,
-      eventEntry.event.id,
-      laneConfig.lane.id,
-    );
+    if (!Array.isArray(applyTo)) {
+      eventLaneApplyToInvalidTargetError.throw({ laneId: lane.id });
+    }
 
-    routesByEventId.set(eventEntry.event.id, {
-      lane: laneConfig.lane,
-      orderingKey: laneConfig.orderingKey,
-      metadata: laneConfig.metadata,
-    });
-  }
-
-  for (const lane of lanes) {
-    for (const target of lane.applyTo ?? []) {
+    for (const target of applyTo) {
       const eventId = resolveEventLaneTarget(target, lane.id, store);
-      assertEventIsNotAssignedToRpcLane(
-        store,
+      assertEventIsNotExplicitlyAssignedToRpcLane(
         rpcLaneApplyToEventIds,
         eventId,
         lane.id,
@@ -70,7 +82,61 @@ export function resolveEventLaneAssignments(
     }
   }
 
+  for (const eventEntry of store.events.values()) {
+    const laneConfig = globalTags.eventLane.extract(eventEntry.event.tags);
+    if (!laneConfig) {
+      continue;
+    }
+
+    const eventId = eventEntry.event.id;
+    const existing = routesByEventId.get(eventId);
+    if (existing) {
+      // applyTo is authoritative, but tags can still provide ordering/metadata
+      // when they agree on the lane.
+      if (existing.lane.id === laneConfig.lane.id) {
+        routesByEventId.set(eventId, {
+          lane: existing.lane,
+          orderingKey: existing.orderingKey ?? laneConfig.orderingKey,
+          metadata: existing.metadata ?? laneConfig.metadata,
+        });
+      }
+      continue;
+    }
+
+    // If another system explicitly applies this event, tag-based routing is ignored.
+    if (rpcLaneApplyToEventIds.has(eventId)) {
+      continue;
+    }
+
+    // Without explicit applyTo, IoC tags must not assign the same event to both systems.
+    if (globalTags.rpcLane.exists(eventEntry.event.tags)) {
+      eventLaneAssignmentRpcLaneConflictError.throw({
+        eventId,
+        eventLaneId: laneConfig.lane.id,
+      });
+    }
+
+    routesByEventId.set(eventId, {
+      lane: laneConfig.lane,
+      orderingKey: laneConfig.orderingKey,
+      metadata: laneConfig.metadata,
+    });
+  }
+
   return routesByEventId;
+}
+
+function assertEventIsNotExplicitlyAssignedToRpcLane(
+  rpcLaneApplyToEventIds: Set<string>,
+  eventId: string,
+  eventLaneId: string,
+): void {
+  if (rpcLaneApplyToEventIds.has(eventId)) {
+    eventLaneAssignmentRpcLaneConflictError.throw({
+      eventId,
+      eventLaneId,
+    });
+  }
 }
 
 function resolveEventLaneTarget(
@@ -136,25 +202,6 @@ function isRegisteredDefinitionId(store: Store, id: string): boolean {
   return false;
 }
 
-function assertEventIsNotAssignedToRpcLane(
-  store: Store,
-  rpcLaneApplyToEventIds: Set<string>,
-  eventId: string,
-  eventLaneId: string,
-): void {
-  const eventEntry = store.events.get(eventId)!;
-
-  if (
-    globalTags.rpcLane.exists(eventEntry.event.tags) ||
-    rpcLaneApplyToEventIds.has(eventId)
-  ) {
-    eventLaneAssignmentRpcLaneConflictError.throw({
-      eventId,
-      eventLaneId,
-    });
-  }
-}
-
 function collectRpcLaneApplyToEventIds(store: Store): Set<string> {
   const eventIds = new Set<string>();
   const rpcLanesEntry = store.resources.get(RPC_LANES_RESOURCE_ID);
@@ -166,7 +213,20 @@ function collectRpcLaneApplyToEventIds(store: Store): Set<string> {
 
   const lanes = collectRpcTopologyLanes(topology);
   for (const lane of lanes) {
-    for (const target of lane.applyTo ?? []) {
+    const applyTo = lane.applyTo;
+    if (applyTo === undefined) continue;
+
+    if (typeof applyTo === "function") {
+      for (const eventEntry of store.events.values()) {
+        if (applyTo(eventEntry.event)) {
+          eventIds.add(eventEntry.event.id);
+        }
+      }
+      continue;
+    }
+
+    if (!Array.isArray(applyTo)) continue;
+    for (const target of applyTo) {
       const targetId = extractTargetId(target);
       if (typeof targetId === "string" && store.events.has(targetId)) {
         eventIds.add(targetId);

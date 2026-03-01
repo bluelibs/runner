@@ -30,38 +30,41 @@ export function resolveRpcLaneAssignments(
   const eventLaneByEventId = new Map<string, IRpcLaneDefinition>();
   const eventLaneApplyToEventIds = collectEventLaneApplyToEventIds(store);
 
-  for (const taskEntry of store.tasks.values()) {
-    const laneConfig = globalTags.rpcLane.extract(taskEntry.task.tags);
-    if (!laneConfig) {
-      continue;
-    }
-    taskLaneByTaskId.set(taskEntry.task.id, laneConfig.lane);
-  }
-
-  for (const eventEntry of store.events.values()) {
-    const laneConfig = globalTags.rpcLane.extract(eventEntry.event.tags);
-    if (!laneConfig) {
-      continue;
-    }
-    assertEventIsNotAssignedToEventLane(
-      store,
-      eventLaneApplyToEventIds,
-      eventEntry.event.id,
-      laneConfig.lane.id,
-    );
-    eventLaneByEventId.set(eventEntry.event.id, laneConfig.lane);
-  }
-
   for (const lane of lanes) {
-    for (const target of lane.applyTo ?? []) {
+    const applyTo = lane.applyTo;
+    if (applyTo === undefined) continue;
+
+    if (typeof applyTo === "function") {
+      for (const taskEntry of store.tasks.values()) {
+        if (applyTo(taskEntry.task)) {
+          assignTask(taskLaneByTaskId, taskEntry.task.id, lane);
+        }
+      }
+
+      for (const eventEntry of store.events.values()) {
+        if (!applyTo(eventEntry.event)) continue;
+        assertEventIsNotExplicitlyAssignedToEventLane(
+          eventLaneApplyToEventIds,
+          eventEntry.event.id,
+          lane.id,
+        );
+        assignEvent(eventLaneByEventId, eventEntry.event.id, lane);
+      }
+      continue;
+    }
+
+    if (!Array.isArray(applyTo)) {
+      rpcLaneApplyToInvalidTargetError.throw({ laneId: lane.id });
+    }
+
+    for (const target of applyTo) {
       const resolvedTarget = resolveRpcLaneTarget(target, lane.id, store);
       if (resolvedTarget.kind === "task") {
         assignTask(taskLaneByTaskId, resolvedTarget.id, lane);
         continue;
       }
 
-      assertEventIsNotAssignedToEventLane(
-        store,
+      assertEventIsNotExplicitlyAssignedToEventLane(
         eventLaneApplyToEventIds,
         resolvedTarget.id,
         lane.id,
@@ -70,10 +73,67 @@ export function resolveRpcLaneAssignments(
     }
   }
 
+  for (const taskEntry of store.tasks.values()) {
+    const laneConfig = globalTags.rpcLane.extract(taskEntry.task.tags);
+    if (!laneConfig) {
+      continue;
+    }
+
+    const current = taskLaneByTaskId.get(taskEntry.task.id);
+    if (current) {
+      // applyTo is authoritative; ignore tag-based re-assignment.
+      continue;
+    }
+
+    taskLaneByTaskId.set(taskEntry.task.id, laneConfig.lane);
+  }
+
+  for (const eventEntry of store.events.values()) {
+    const laneConfig = globalTags.rpcLane.extract(eventEntry.event.tags);
+    if (!laneConfig) {
+      continue;
+    }
+
+    const eventId = eventEntry.event.id;
+    const current = eventLaneByEventId.get(eventId);
+    if (current) {
+      // applyTo is authoritative; ignore tag-based re-assignment.
+      continue;
+    }
+
+    // If another system explicitly applies this event, tag-based routing is ignored.
+    if (eventLaneApplyToEventIds.has(eventId)) {
+      continue;
+    }
+
+    // Without explicit applyTo, IoC tags must not assign the same event to both systems.
+    if (globalTags.eventLane.exists(eventEntry.event.tags)) {
+      rpcLaneAssignmentEventLaneConflictError.throw({
+        eventId,
+        rpcLaneId: laneConfig.lane.id,
+      });
+    }
+
+    eventLaneByEventId.set(eventId, laneConfig.lane);
+  }
+
   return {
     taskLaneByTaskId,
     eventLaneByEventId,
   };
+}
+
+function assertEventIsNotExplicitlyAssignedToEventLane(
+  eventLaneApplyToEventIds: Set<string>,
+  eventId: string,
+  rpcLaneId: string,
+): void {
+  if (eventLaneApplyToEventIds.has(eventId)) {
+    rpcLaneAssignmentEventLaneConflictError.throw({
+      eventId,
+      rpcLaneId,
+    });
+  }
 }
 
 function assignTask(
@@ -180,25 +240,6 @@ function isRegisteredDefinitionId(store: Store, id: string): boolean {
   return false;
 }
 
-function assertEventIsNotAssignedToEventLane(
-  store: Store,
-  eventLaneApplyToEventIds: Set<string>,
-  eventId: string,
-  rpcLaneId: string,
-): void {
-  const eventEntry = store.events.get(eventId)!;
-
-  if (
-    globalTags.eventLane.exists(eventEntry.event.tags) ||
-    eventLaneApplyToEventIds.has(eventId)
-  ) {
-    rpcLaneAssignmentEventLaneConflictError.throw({
-      eventId,
-      rpcLaneId,
-    });
-  }
-}
-
 function collectEventLaneApplyToEventIds(store: Store): Set<string> {
   const eventIds = new Set<string>();
   const eventLanesEntry = store.resources.get(EVENT_LANES_RESOURCE_ID);
@@ -211,7 +252,20 @@ function collectEventLaneApplyToEventIds(store: Store): Set<string> {
 
   const lanes = collectEventTopologyLanes(topology);
   for (const lane of lanes) {
-    for (const target of lane.applyTo ?? []) {
+    const applyTo = lane.applyTo;
+    if (applyTo === undefined) continue;
+
+    if (typeof applyTo === "function") {
+      for (const eventEntry of store.events.values()) {
+        if (applyTo(eventEntry.event)) {
+          eventIds.add(eventEntry.event.id);
+        }
+      }
+      continue;
+    }
+
+    if (!Array.isArray(applyTo)) continue;
+    for (const target of applyTo) {
       const targetId = extractTargetId(target);
       if (typeof targetId === "string" && store.events.has(targetId)) {
         eventIds.add(targetId);

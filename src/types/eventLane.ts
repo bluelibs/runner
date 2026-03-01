@@ -7,7 +7,9 @@ import { symbolEventLane, symbolFilePath } from "./utilities";
 export interface IEventLaneDefinition {
   id: string;
   meta?: IEventLaneMeta;
-  applyTo?: readonly (IEventDefinition<any> | string)[];
+  applyTo?:
+    | readonly (IEventDefinition<any> | string)[]
+    | ((event: IEventDefinition<any>) => boolean);
   asyncContexts?: readonly (IAsyncContext<unknown> | string)[];
   [symbolFilePath]?: string;
 }

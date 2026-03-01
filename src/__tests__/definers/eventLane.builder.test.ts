@@ -57,6 +57,21 @@ describe("event lane builder", () => {
     ]);
   });
 
+  it("supports applyTo() predicate", () => {
+    const event = r.event("tests.event-lanes.builder.apply-to.predicate").build();
+    const lane = r
+      .eventLane("tests.event-lanes.builder.apply-to.predicate.lane")
+      .applyTo((candidate) => candidate.id === event.id)
+      .build();
+
+    const applyTo = lane.applyTo;
+    expect(typeof applyTo).toBe("function");
+    if (typeof applyTo !== "function") {
+      throw new Error("Expected applyTo predicate");
+    }
+    expect(applyTo(event)).toBe(true);
+  });
+
   it("supports lane-level async context allowlist", () => {
     const context = r.asyncContext("tests.event-lanes.builder.ctx").build();
     const lane = r

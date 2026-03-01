@@ -209,20 +209,20 @@ describe("eventLanes applyTo", () => {
     );
   });
 
-  it("fails when applyTo attempts to re-assign an event already on another event lane", async () => {
-    const laneA = r.eventLane("tests.event-lanes.apply-to.reassign.a").build();
+  it("lets applyTo override tag-based event lane assignment (IoC)", async () => {
+    const laneA = r.eventLane("tests.event-lanes.apply-to.override-ioc.a").build();
     const laneB = r
-      .eventLane("tests.event-lanes.apply-to.reassign.b")
-      .applyTo(["tests.event-lanes.apply-to.reassign.event"])
+      .eventLane("tests.event-lanes.apply-to.override-ioc.b")
+      .applyTo(["tests.event-lanes.apply-to.override-ioc.event"])
       .build();
 
     const event = r
-      .event("tests.event-lanes.apply-to.reassign.event")
+      .event("tests.event-lanes.apply-to.override-ioc.event")
       .tags([globals.tags.eventLane.with({ lane: laneA })])
       .build();
 
     const app = r
-      .resource("tests.event-lanes.apply-to.reassign.app")
+      .resource("tests.event-lanes.apply-to.override-ioc.app")
       .register([
         event,
         eventLanesResource.with({
@@ -236,9 +236,8 @@ describe("eventLanes applyTo", () => {
       ])
       .build();
 
-    await expect(run(app)).rejects.toThrow(
-      `Event "${event.id}" is already assigned to eventLane "${laneA.id}"`,
-    );
+    const runtime = await run(app);
+    await runtime.dispose();
   });
 
   it("fails when eventLane applyTo collides with rpcLane applyTo on the same event", async () => {

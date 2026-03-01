@@ -81,6 +81,27 @@ describe("rpc lane builder", () => {
     ]);
   });
 
+  it("supports applyTo() predicate", () => {
+    const task = r
+      .task("tests.rpc-lanes.builder.apply-to.predicate.task")
+      .run(async () => "ok")
+      .build();
+    const event = r.event("tests.rpc-lanes.builder.apply-to.predicate.event").build();
+
+    const lane = r
+      .rpcLane("tests.rpc-lanes.builder.apply-to.predicate.lane")
+      .applyTo((candidate) => candidate.id === task.id || candidate.id === event.id)
+      .build();
+
+    const applyTo = lane.applyTo;
+    expect(typeof applyTo).toBe("function");
+    if (typeof applyTo !== "function") {
+      throw new Error("Expected applyTo predicate");
+    }
+    expect(applyTo(task)).toBe(true);
+    expect(applyTo(event)).toBe(true);
+  });
+
   it("supports lane-level async context allowlist", () => {
     const context = r.asyncContext("tests.rpc-lanes.builder.ctx").build();
     const lane = r

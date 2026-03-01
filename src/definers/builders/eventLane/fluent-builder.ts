@@ -36,7 +36,7 @@ export function makeEventLaneBuilder<TMeta extends IEventLaneMeta>(
 
     applyTo(targets) {
       const next = clone(state, {
-        applyTo: targets.slice(),
+        applyTo: typeof targets === "function" ? targets : targets.slice(),
       });
       return makeEventLaneBuilder(next);
     },

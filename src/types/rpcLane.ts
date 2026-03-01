@@ -9,7 +9,9 @@ import { symbolFilePath, symbolRpcLane } from "./utilities";
 export interface IRpcLaneDefinition {
   id: string;
   meta?: IRpcLaneMeta;
-  applyTo?: readonly (ITaskDefinition<any> | IEventDefinition<any> | string)[];
+  applyTo?:
+    | readonly (ITaskDefinition<any> | IEventDefinition<any> | string)[]
+    | ((target: ITaskDefinition<any> | IEventDefinition<any>) => boolean);
   asyncContexts?: readonly (IAsyncContext<unknown> | string)[];
   [symbolFilePath]?: string;
 }

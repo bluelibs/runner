@@ -221,52 +221,6 @@ describe("rpcLanes applyTo", () => {
     );
   });
 
-  it("fails when applyTo attempts to re-assign a task already routed to another rpcLane", async () => {
-    const task = defineTask({
-      id: "tests.rpc-lanes.apply-to.reassign.task",
-      tags: [
-        globalTags.rpcLane.with({
-          lane: r
-            .rpcLane("tests.rpc-lanes.apply-to.reassign.tagged-lane")
-            .build(),
-        }),
-      ],
-      run: async () => "ok",
-    });
-    const taggedLane = globalTags.rpcLane.extract(task.tags)!.lane;
-    const secondLane = r
-      .rpcLane("tests.rpc-lanes.apply-to.reassign.second-lane")
-      .applyTo([task])
-      .build();
-    const communicator = defineResource({
-      id: "tests.rpc-lanes.apply-to.reassign.communicator",
-      init: async () => ({
-        task: async () => "remote",
-      }),
-    });
-    const topology = r.rpcLane.topology({
-      profiles: {
-        client: { serve: [] },
-      },
-      bindings: [
-        { lane: taggedLane, communicator },
-        { lane: secondLane, communicator },
-      ],
-    });
-    const app = defineResource({
-      id: "tests.rpc-lanes.apply-to.reassign.app",
-      register: [
-        task,
-        communicator,
-        rpcLanesResource.with({ profile: "client", topology }),
-      ],
-    });
-
-    await expect(run(app)).rejects.toThrow(
-      `Task "${task.id}" is already assigned to rpcLane "${taggedLane.id}"`,
-    );
-  });
-
   it("fails when rpcLane applyTo collides with eventLane applyTo on the same event", async () => {
     const event = defineEvent<{ value: number }>({
       id: "tests.rpc-lanes.apply-to.cross-lane.event",
