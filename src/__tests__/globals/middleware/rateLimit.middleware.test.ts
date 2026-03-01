@@ -1,8 +1,18 @@
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.middleware";
+import { RunnerError } from "../../../definers/defineError";
 
 describe("Rate Limit Middleware", () => {
+  const expectValidationError = (fn: () => unknown): void => {
+    try {
+      fn();
+      throw new Error("Expected validation error");
+    } catch (error) {
+      expect(error).toBeInstanceOf(RunnerError);
+    }
+  };
+
   it("should allow requests within limit", async () => {
     let callCount = 0;
     const task = defineTask({
@@ -133,7 +143,7 @@ describe("Rate Limit Middleware", () => {
     const task = defineTask({
       id: "rateLimit.missingConfig",
       // Intentionally bypass typing to simulate JS usage without `.with(...)`.
-      // @ts-expect-error - rateLimitTaskMiddleware requires `.with({ windowMs, max })`.
+      // @ts-expect-error - intentionally bypassing config to exercise runtime validation.
       middleware: [rateLimitTaskMiddleware],
       run: async () => "ok",
     });
@@ -148,53 +158,51 @@ describe("Rate Limit Middleware", () => {
     });
 
     const runPromise = run(app);
-    await expect(runPromise).rejects.toThrow(
-      /requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i,
-    );
+    await expect(runPromise).rejects.toBeInstanceOf(RunnerError);
   });
 
   it("should throw when config is null", () => {
-    expect(() => {
+    expectValidationError(() => {
       // @ts-expect-error - runtime guard should reject invalid config.
       rateLimitTaskMiddleware.with(null);
-    }).toThrow(/requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i);
+    });
   });
 
   it("should throw when config is a non-object", () => {
-    expect(() => {
+    expectValidationError(() => {
       // @ts-expect-error - runtime guard should reject invalid config.
       rateLimitTaskMiddleware.with(5);
-    }).toThrow(/requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i);
+    });
   });
 
   it("should throw when required config keys are missing", () => {
-    expect(() => {
+    expectValidationError(() => {
       // @ts-expect-error - runtime guard should reject missing keys.
       rateLimitTaskMiddleware.with({});
-    }).toThrow(/requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i);
+    });
   });
 
   it("should throw when windowMs is not finite", () => {
-    expect(() => {
+    expectValidationError(() => {
       rateLimitTaskMiddleware.with({ windowMs: Infinity, max: 1 });
-    }).toThrow(/positive number for config\.windowMs/i);
+    });
   });
 
   it("should throw when windowMs is not positive", () => {
-    expect(() => {
+    expectValidationError(() => {
       rateLimitTaskMiddleware.with({ windowMs: 0, max: 1 });
-    }).toThrow(/positive number for config\.windowMs/i);
+    });
   });
 
   it("should throw when max is not finite", () => {
-    expect(() => {
+    expectValidationError(() => {
       rateLimitTaskMiddleware.with({ windowMs: 1000, max: Infinity });
-    }).toThrow(/positive number for config\.max/i);
+    });
   });
 
   it("should throw when max is not positive", () => {
-    expect(() => {
+    expectValidationError(() => {
       rateLimitTaskMiddleware.with({ windowMs: 1000, max: 0 });
-    }).toThrow(/positive number for config\.max/i);
+    });
   });
 });

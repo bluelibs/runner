@@ -116,6 +116,12 @@ export { cancellationError } from "./errors";
 export { PlatformAdapter, setPlatform } from "./platform";
 export { RunnerError } from "./definers/defineError";
 export { LockableMap } from "./tools/LockableMap";
+export { Match, check } from "./tools/check";
+export type {
+  CheckedValue,
+  InferMatchPattern,
+  MatchPattern,
+} from "./tools/check";
 
 // HTTP and tunnel functionality
 export * from "./http-client";

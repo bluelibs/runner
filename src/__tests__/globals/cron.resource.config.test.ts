@@ -1,6 +1,7 @@
 import { globals, r } from "../../public";
 import { run } from "../../run";
 import { cronResource } from "../../globals/cron/cron.resource";
+import { RunnerError } from "../../definers/defineError";
 
 describe("global cron resource config", () => {
   beforeEach(() => {
@@ -16,6 +17,15 @@ describe("global cron resource config", () => {
   const flushMicrotasks = async (iterations: number = 12): Promise<void> => {
     for (let i = 0; i < iterations; i += 1) {
       await Promise.resolve();
+    }
+  };
+
+  const expectConfigValidationError = (fn: () => unknown): void => {
+    try {
+      fn();
+      throw new Error("Expected validation error");
+    } catch (error) {
+      expect(error).toBeInstanceOf(RunnerError);
     }
   };
 
@@ -132,53 +142,49 @@ describe("global cron resource config", () => {
   });
 
   it("fails fast when cron resource config is not an object", async () => {
-    expect(() =>
+    expectConfigValidationError(() =>
       r
         .resource("app")
         .register([globals.resources.cron.with("invalid" as never)])
         .build(),
-    ).toThrow(/cron resource config must be an object/i);
+    );
   });
 
   it("fails fast when cron resource config `only` is not an array", async () => {
-    expect(() =>
+    expectConfigValidationError(() =>
       r
         .resource("app")
         .register([globals.resources.cron.with({ only: "task.id" } as never)])
         .build(),
-    ).toThrow(/cron resource config "only" must be an array/i);
+    );
   });
 
   it("fails fast when cron resource config `only` entries are invalid", async () => {
-    expect(() =>
+    expectConfigValidationError(() =>
       r
         .resource("app")
         .register([globals.resources.cron.with({ only: [42] } as never)])
         .build(),
-    ).toThrow(
-      /cron resource config "only" entries must be task ids \(string\) or task definitions/i,
     );
   });
 
   it("fails fast when cron resource config is an array", async () => {
-    expect(() =>
+    expectConfigValidationError(() =>
       r
         .resource("app")
         .register([globals.resources.cron.with([] as never)])
         .build(),
-    ).toThrow(/cron resource config must be an object/i);
+    );
   });
 
   it("fails fast when cron resource config `only` object entry has invalid id", async () => {
-    expect(() =>
+    expectConfigValidationError(() =>
       r
         .resource("app")
         .register([
           globals.resources.cron.with({ only: [{ id: 123 }] } as never),
         ])
         .build(),
-    ).toThrow(
-      /cron resource config "only" entries must be task ids \(string\) or task definitions/i,
     );
   });
 

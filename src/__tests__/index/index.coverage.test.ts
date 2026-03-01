@@ -41,6 +41,8 @@ describe("package root exports coverage", () => {
     expect(typeof root.SymbolPolicyErrorMessage).toBe("object");
     expect(root.LogPrinter).toBeDefined();
     expect(typeof root.LogPrinter).toBe("function");
+    expect(typeof root.check).toBe("function");
+    expect(typeof root.Match).toBe("object");
     expect(root.PlatformAdapter).toBeDefined();
     expect(typeof root.setPlatform).toBe("function");
   });

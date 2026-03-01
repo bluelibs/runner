@@ -613,6 +613,36 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
   - Missing signer material fails fast (`runner.errors.remoteLanes.auth.signerMissing`).
   - Missing verifier material fails fast (`runner.errors.remoteLanes.auth.verifierMissing`).
 
+## check() and Match (Meteor-inspired)
+
+Use `check(value, pattern)` for lightweight runtime validation of plain JS values.
+It returns the same value, typed from `pattern`.
+
+This API is inspired by Meteor's `check` package and supports:
+- Base patterns: `String`, `Number`, `Boolean`, `Object`, `Array`, `Function`, literal values
+- Match helpers: `Match.Any`, `Match.Integer`, `Match.NonEmptyString`
+- Combinators: `Match.Optional(pattern)`, `Match.Maybe(pattern)`, `Match.OneOf(...)`
+- Custom predicates: `Match.Where((value) => boolean)` (or a TypeScript type guard)
+- Object partial matching: `Match.ObjectIncluding({ ... })`
+
+```ts
+import { Match, check } from "@bluelibs/runner";
+
+const validated = check(
+  { id: "u_1", retries: 2 },
+  {
+    id: Match.NonEmptyString,
+    retries: Match.Optional(Match.Integer),
+  },
+);
+
+validated.id; // string
+```
+
+- `check(...)` throws `Match.Error` (a `RunnerError`) on mismatch.
+- `Match.test(value, pattern)` returns `true`/`false`, and works as a type guard for typed patterns.
+- For aggregate validation, call `check(value, pattern, { throwAllErrors: true })`.
+
 ## Errors
 
 Define typed, namespaced errors with a fluent builder. Built helpers expose `new`, `create` (alias), `throw`, and `is`:

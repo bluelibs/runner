@@ -3090,6 +3090,39 @@ await run(app, {
 - Stop accepting new work before cleaning up
 
 > **runtime:** "An error boundary: a trampoline under your tightrope. I'm the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
+## Structural Validation with `check()`
+
+Use `check(value, pattern)` when you need strict, runtime shape validation without introducing a full schema library for small boundaries. `check()` returns the same value, typed from the pattern.
+
+This utility is inspired by Meteor's `check` package and supports familiar `Match` patterns such as `Match.Optional`, `Match.Maybe`, `Match.OneOf`, `Match.Where`, and `Match.ObjectIncluding`.
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+const input = {
+  userId: "u_1",
+  retries: 3,
+};
+
+const validated = check(
+  input,
+  {
+    userId: Match.NonEmptyString,
+    retries: Match.Optional(Match.Integer),
+  },
+);
+
+validated.userId; // string
+```
+
+Why this is useful:
+- Fail-fast validation at task/resource boundaries when inputs come from untyped surfaces.
+- Precise failure paths (for example: `$.user.profile.email`) for fast debugging.
+- Typed narrowing from validation patterns, including `Match.Where` type guards.
+- Optional aggregate mode via `check(value, pattern, { throwAllErrors: true })`.
+
+> **runtime:** "Your input said it was a number. It was a string wearing a number costume. I noticed."
+
 ## Caching
 
 Avoid recomputing expensive work by caching task results with TTL-based eviction.

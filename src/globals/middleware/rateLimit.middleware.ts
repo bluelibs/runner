@@ -3,6 +3,7 @@ import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
 import { middlewareRateLimitExceededError, RunnerErrorId } from "../../errors";
+import { Match, check } from "../../tools/check";
 
 export interface RateLimitMiddlewareConfig {
   /**
@@ -15,53 +16,22 @@ export interface RateLimitMiddlewareConfig {
   max: number;
 }
 
-function assertRateLimitMiddlewareConfig(
-  config: unknown,
-): asserts config is RateLimitMiddlewareConfig {
-  if (!config || typeof config !== "object") {
-    throw new TypeError(
-      "rateLimitTaskMiddleware requires .with({ windowMs, max }) configuration.",
-    );
-  }
+const positiveFiniteNumber = Match.Where(
+  (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value > 0,
+);
 
-  const maybe = config as Partial<RateLimitMiddlewareConfig>;
-  if (maybe.windowMs === undefined || maybe.max === undefined) {
-    throw new TypeError(
-      "rateLimitTaskMiddleware requires .with({ windowMs, max }) configuration.",
-    );
-  }
-
-  if (!Number.isFinite(maybe.windowMs) || (maybe.windowMs as number) <= 0) {
-    throw new TypeError(
-      "rateLimitTaskMiddleware requires a positive number for config.windowMs.",
-    );
-  }
-
-  if (!Number.isFinite(maybe.max) || (maybe.max as number) <= 0) {
-    throw new TypeError(
-      "rateLimitTaskMiddleware requires a positive number for config.max.",
-    );
-  }
-}
-
-function assertRateLimitMiddlewareConfigured(config: unknown): void {
-  const maybe = config as Partial<RateLimitMiddlewareConfig> | null;
-  if (
-    !config ||
-    typeof config !== "object" ||
-    !Number.isFinite(maybe?.windowMs) ||
-    !Number.isFinite(maybe?.max)
-  ) {
-    throw new TypeError(
-      "rateLimitTaskMiddleware requires .with({ windowMs, max }) configuration.",
-    );
-  }
-}
+const rateLimitConfigPattern = Match.ObjectIncluding({
+  windowMs: positiveFiniteNumber,
+  max: positiveFiniteNumber,
+});
 
 const rateLimitConfigSchema = {
-  parse: (config: unknown) => {
-    assertRateLimitMiddlewareConfig(config);
-    return config;
+  parse: (config: unknown): RateLimitMiddlewareConfig => {
+    return check<typeof rateLimitConfigPattern, unknown>(
+      config,
+      rateLimitConfigPattern,
+    );
   },
 };
 
@@ -126,7 +96,7 @@ export const rateLimitTaskMiddleware = defineTaskMiddleware({
     { state },
     config: RateLimitMiddlewareConfig,
   ) {
-    assertRateLimitMiddlewareConfigured(config);
+    check(config, rateLimitConfigPattern);
 
     const { states } = state;
     let limitState = states.get(config);
