@@ -206,7 +206,7 @@ describe("subtreeMiddleware tools", () => {
     ).toThrow(/Invalid subtree resource middleware entry/);
   });
 
-  it("ignores invalid conditional-shaped entries when resolving middleware lists", () => {
+  it("fails fast on invalid conditional-shaped entries when resolving middleware lists", () => {
     const taskMiddleware = defineTaskMiddleware({
       id: "tests.tools.subtree.invalid-entry.task.middleware",
       run: async ({ next, task }) => next(task.input),
@@ -242,37 +242,34 @@ describe("subtreeMiddleware tools", () => {
       [targetResource.id, targetResource],
     ]);
 
-    const taskResolved = resolveApplicableSubtreeTaskMiddlewares(
-      {
-        getOwnerResourceId: (itemId: string) => {
-          if (itemId === targetTask.id) {
-            return ownerResource.id;
-          }
-          return undefined;
-        },
-        getResource: (resourceId: string) => resources.get(resourceId),
-      },
-      targetTask,
-    );
-
-    const resourceResolved = resolveApplicableSubtreeResourceMiddlewares(
-      {
-        getOwnerResourceId: (itemId: string) => {
-          if (itemId === ownerResource.id) {
+    expect(() =>
+      resolveApplicableSubtreeTaskMiddlewares(
+        {
+          getOwnerResourceId: (itemId: string) => {
+            if (itemId === targetTask.id) {
+              return ownerResource.id;
+            }
             return undefined;
-          }
-          return ownerResource.id;
+          },
+          getResource: (resourceId: string) => resources.get(resourceId),
         },
-        getResource: (resourceId: string) => resources.get(resourceId),
-      },
-      targetResource,
-    );
+        targetTask,
+      ),
+    ).toThrow(/Invalid subtree task middleware entry/);
 
-    expect(taskResolved.map((middleware) => middleware.id)).toEqual([
-      taskMiddleware.id,
-    ]);
-    expect(resourceResolved.map((middleware) => middleware.id)).toEqual([
-      resourceMiddleware.id,
-    ]);
+    expect(() =>
+      resolveApplicableSubtreeResourceMiddlewares(
+        {
+          getOwnerResourceId: (itemId: string) => {
+            if (itemId === ownerResource.id) {
+              return undefined;
+            }
+            return ownerResource.id;
+          },
+          getResource: (resourceId: string) => resources.get(resourceId),
+        },
+        targetResource,
+      ),
+    ).toThrow(/Invalid subtree resource middleware entry/);
   });
 });

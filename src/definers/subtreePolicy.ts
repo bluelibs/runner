@@ -24,37 +24,17 @@ function toArray<T>(value: T | T[] | undefined): T[] {
   return Array.isArray(value) ? [...value] : [value];
 }
 
-function cloneSubtreeTaskMiddlewareEntry(
-  entry: SubtreeTaskMiddlewareEntry,
-): SubtreeTaskMiddlewareEntry {
+function cloneSubtreeConditionalMiddlewareEntry<TEntry>(entry: TEntry): TEntry {
   if (
     entry &&
     typeof entry === "object" &&
     "use" in entry &&
-    entry.use !== undefined
+    (entry as { use?: unknown }).use !== undefined
   ) {
     return {
-      use: entry.use,
-      when: entry.when,
-    };
-  }
-
-  return entry;
-}
-
-function cloneSubtreeResourceMiddlewareEntry(
-  entry: SubtreeResourceMiddlewareEntry,
-): SubtreeResourceMiddlewareEntry {
-  if (
-    entry &&
-    typeof entry === "object" &&
-    "use" in entry &&
-    entry.use !== undefined
-  ) {
-    return {
-      use: entry.use,
-      when: entry.when,
-    };
+      use: (entry as { use: unknown }).use,
+      when: (entry as { when?: unknown }).when,
+    } as TEntry;
   }
 
   return entry;
@@ -71,7 +51,7 @@ export function normalizeResourceSubtreePolicy(
   if (policy.tasks) {
     normalized.tasks = {
       middleware: (policy.tasks.middleware ?? []).map(
-        cloneSubtreeTaskMiddlewareEntry,
+        cloneSubtreeConditionalMiddlewareEntry<SubtreeTaskMiddlewareEntry>,
       ),
       validate: toArray<SubtreeTaskValidator>(policy.tasks.validate),
     };
@@ -80,7 +60,7 @@ export function normalizeResourceSubtreePolicy(
   if (policy.resources) {
     normalized.resources = {
       middleware: (policy.resources.middleware ?? []).map(
-        cloneSubtreeResourceMiddlewareEntry,
+        cloneSubtreeConditionalMiddlewareEntry<SubtreeResourceMiddlewareEntry>,
       ),
       validate: toArray<SubtreeResourceValidator>(policy.resources.validate),
     };

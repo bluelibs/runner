@@ -16,14 +16,9 @@ export interface RateLimitMiddlewareConfig {
   max: number;
 }
 
-const positiveFiniteNumber = Match.Where(
-  (value: unknown): value is number =>
-    typeof value === "number" && Number.isFinite(value) && value > 0,
-);
-
 const rateLimitConfigPattern = Match.ObjectIncluding({
-  windowMs: positiveFiniteNumber,
-  max: positiveFiniteNumber,
+  windowMs: Match.PositiveInteger,
+  max: Match.PositiveInteger,
 });
 
 /**

@@ -34,13 +34,11 @@ export interface TunnelTaskMiddlewarePolicyConfig {
   };
 }
 
-const tunnelMiddlewareIdPattern = Match.Where(
-  (value: unknown): value is TunnelMiddlewareId =>
-    typeof value === "string" ||
-    (value !== null &&
-      typeof value === "object" &&
-      "id" in value &&
-      typeof value.id === "string"),
+const tunnelMiddlewareIdPattern = Match.OneOf(
+  String,
+  Match.ObjectIncluding({
+    id: String,
+  }),
 );
 
 const tunnelTaskMiddlewarePolicySidePattern = Match.ObjectIncluding({
