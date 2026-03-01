@@ -251,6 +251,18 @@ import {
 }
 
 {
+  const whereSchema = Match.Where(
+    (value: unknown): value is Date => value instanceof Date,
+  ).toJSONSchema({ strict: false });
+  const typedWhereSchema: MatchJsonSchema = whereSchema;
+  void typedWhereSchema;
+
+  const strictSchema = Match.toJSONSchema(Match.Any, { strict: true });
+  const typedStrictSchema: MatchJsonSchema = strictSchema;
+  void typedStrictSchema;
+}
+
+{
   const compiled = Match.compile({
     id: Match.NonEmptyString,
     retries: Match.Optional(Match.Integer),

@@ -216,13 +216,52 @@ describe("tools/check toJSONSchema", () => {
     });
   });
 
-  it("fails fast for unsupported patterns with path metadata", () => {
-    const whereError = expectSchemaError(() =>
+  it("represents Match.Where using custom JSON Schema metadata by default", () => {
+    expect(
       Match.toJSONSchema({
         profile: {
           custom: Match.Where((value: unknown) => typeof value === "string"),
         },
       }),
+    ).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "object",
+      properties: {
+        profile: {
+          type: "object",
+          properties: {
+            custom: {
+              description:
+                "Custom runtime predicate from Match.Where; not representable in strict JSON Schema.",
+              "x-runner-match-kind": "Match.Where",
+            },
+          },
+          required: ["custom"],
+          additionalProperties: false,
+        },
+      },
+      required: ["profile"],
+      additionalProperties: false,
+    });
+
+    expect(Match.toJSONSchema(Match.RecordOf(String))).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      description:
+        "Custom runtime predicate from Match.Where; not representable in strict JSON Schema.",
+      "x-runner-match-kind": "Match.Where",
+    });
+  });
+
+  it("fails fast for unsupported patterns with path metadata in strict mode", () => {
+    const whereError = expectSchemaError(() =>
+      Match.toJSONSchema(
+        {
+          profile: {
+            custom: Match.Where((value: unknown) => typeof value === "string"),
+          },
+        },
+        { strict: true },
+      ),
     );
     expect(whereError.id).toBe(CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID);
     expect(whereError.path).toBe("$.profile.custom");
@@ -230,7 +269,7 @@ describe("tools/check toJSONSchema", () => {
     expect(whereError.patternKind).toBe("Match.Where");
 
     const recordOfError = expectSchemaError(() =>
-      Match.toJSONSchema(Match.RecordOf(String)),
+      Match.toJSONSchema(Match.RecordOf(String), { strict: true }),
     );
     expect(recordOfError.path).toBe("$");
     expect(recordOfError.reason).toContain("Match.Where");

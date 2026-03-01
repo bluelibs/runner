@@ -51,7 +51,7 @@ describe("tools/check toJsonSchema helpers", () => {
   });
 
   it("throws on cycle detection and returns execution result otherwise", () => {
-    const context = { activePatterns: new WeakSet<object>() };
+    const context = { activePatterns: new WeakSet<object>(), strict: false };
     const pattern = {};
     const value = withCycleGuard(pattern, context, "$", () => "ok");
     expect(value).toBe("ok");

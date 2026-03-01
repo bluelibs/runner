@@ -17,7 +17,7 @@ import {
 
 export interface CheckSchemaLike<TParsed = unknown> {
   parse(input: unknown): TParsed;
-  toJSONSchema?(): MatchJsonSchema;
+  toJSONSchema?(options?: MatchToJsonSchemaOptions): MatchJsonSchema;
 }
 
 export type MatchJsonPrimitive = string | number | boolean | null;
@@ -61,6 +61,10 @@ export interface MatchJsonSchema extends MatchJsonObject {
   required?: readonly string[];
   additionalProperties?: boolean | MatchJsonSchema;
   anyOf?: readonly MatchJsonSchema[];
+}
+
+export interface MatchToJsonSchemaOptions {
+  strict?: boolean;
 }
 
 type MatchPrimitiveLiteral =
@@ -172,7 +176,7 @@ export interface MatchCompiledSchema<
 > extends CheckSchemaLike<InferMatchPattern<TPattern>> {
   readonly pattern: TPattern;
   parse(input: unknown): InferMatchPattern<TPattern>;
-  toJSONSchema(): MatchJsonSchema;
+  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema;
 }
 
 export type InferMatchPattern<TPattern> = TPattern extends typeof matchAnyToken

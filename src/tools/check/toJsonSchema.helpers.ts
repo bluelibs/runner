@@ -2,6 +2,7 @@ import { CheckJsonSchemaPatternError } from "./errors";
 
 export type CompileContext = {
   activePatterns: WeakSet<object>;
+  strict: boolean;
 };
 
 export type CompileMode = "default" | "object-property";

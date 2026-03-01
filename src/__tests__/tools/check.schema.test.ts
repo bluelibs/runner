@@ -159,7 +159,13 @@ describe("tools/check schema support", () => {
     expect(() => Match.Maybe(String).toJSONSchema()).toThrow(
       CheckJsonSchemaPatternError,
     );
-    expect(() => Match.Where(() => true).toJSONSchema()).toThrow(
+    expect(Match.Where(() => true).toJSONSchema()).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      description:
+        "Custom runtime predicate from Match.Where; not representable in strict JSON Schema.",
+      "x-runner-match-kind": "Match.Where",
+    });
+    expect(() => Match.Where(() => true).toJSONSchema({ strict: true })).toThrow(
       CheckJsonSchemaPatternError,
     );
   });

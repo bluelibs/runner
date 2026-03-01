@@ -666,7 +666,7 @@ userSchema.toJSONSchema();
 - `Match.test(value, pattern)` returns `true`/`false`, and works as a type guard for typed patterns.
 - For aggregate validation, call `check(value, pattern, { throwAllErrors: true })`.
 
-`Match.toJSONSchema(pattern)` compiles supported Match patterns to strict JSON Schema Draft 2020-12:
+`Match.toJSONSchema(pattern, options?)` compiles Match patterns to JSON Schema Draft 2020-12:
 
 ```ts
 import { Match } from "@bluelibs/runner";
@@ -677,9 +677,14 @@ const schema = Match.toJSONSchema({
 });
 ```
 
-- Unsupported constructs fail fast with a `RunnerError` id of `runner.errors.check.jsonSchemaUnsupportedPattern`.
+- `options.strict` defaults to `false`.
+- When `strict` is `false` (default), `Match.Where(...)` does not throw and is emitted as a permissive schema node with metadata:
+  - `description: "Custom runtime predicate from Match.Where; not representable in strict JSON Schema."`
+  - `"x-runner-match-kind": "Match.Where"`
+- When `strict` is `true` (`Match.toJSONSchema(pattern, { strict: true })`), `Match.Where(...)` fails fast with a `RunnerError` id of `runner.errors.check.jsonSchemaUnsupportedPattern`.
+- All other unsupported constructs still fail fast in both modes.
 - Error metadata includes `path`, `reason`, and `patternKind`.
-- Unsupported: `Match.Where`, `Function`, custom constructors, literal `undefined`/`bigint`/`symbol`, and `Match.Optional`/`Match.Maybe` outside object-property context.
+- Unsupported in strict mode: `Match.Where`, `Function`, custom constructors, literal `undefined`/`bigint`/`symbol`, and `Match.Optional`/`Match.Maybe` outside object-property context.
 
 ## Errors
 

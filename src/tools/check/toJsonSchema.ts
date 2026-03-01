@@ -7,7 +7,7 @@ import {
   throwUnsupported,
   withCycleGuard,
 } from "./toJsonSchema.helpers";
-import type { MatchJsonSchema } from "./types";
+import type { MatchJsonSchema, MatchToJsonSchemaOptions } from "./types";
 
 const JSON_SCHEMA_DRAFT_2020_12 =
   "https://json-schema.org/draft/2020-12/schema";
@@ -179,6 +179,13 @@ function compilePattern(
     });
   }
   if (isKindPattern(pattern, MATCH_KIND.WherePattern)) {
+    if (!context.strict) {
+      return {
+        description:
+          "Custom runtime predicate from Match.Where; not representable in strict JSON Schema.",
+        "x-runner-match-kind": "Match.Where",
+      };
+    }
     throwUnsupported(
       path,
       "Match.Where relies on runtime predicates and cannot be represented in strict JSON Schema.",
@@ -299,8 +306,14 @@ function compilePattern(
   );
 }
 
-export function matchToJsonSchema(pattern: unknown): MatchJsonSchema {
-  const context: CompileContext = { activePatterns: new WeakSet<object>() };
+export function matchToJsonSchema(
+  pattern: unknown,
+  options?: MatchToJsonSchemaOptions,
+): MatchJsonSchema {
+  const context: CompileContext = {
+    activePatterns: new WeakSet<object>(),
+    strict: options?.strict === true,
+  };
   const compiled = compilePattern(pattern, context, "$", "default");
   return {
     $schema: JSON_SCHEMA_DRAFT_2020_12,

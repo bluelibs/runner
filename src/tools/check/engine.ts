@@ -27,6 +27,7 @@ import type {
   MatchCompiledSchema,
   MatchJsonSchema,
   MatchPattern,
+  MatchToJsonSchemaOptions,
 } from "./types";
 
 export interface CheckOptions {
@@ -100,8 +101,8 @@ class CompiledMatchPatternSchema<
     throw new MatchError(failures);
   }
 
-  toJSONSchema(): MatchJsonSchema {
-    return matchToJsonSchema(this.pattern);
+  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
+    return matchToJsonSchema(this.pattern, options);
   }
 }
 
@@ -240,6 +241,7 @@ export const Match = Object.freeze({
   ): value is InferMatchPattern<TPattern> => matchTest(value, pattern),
   toJSONSchema: <TPattern extends MatchPattern>(
     pattern: TPattern,
-  ): MatchJsonSchema => matchToJsonSchema(pattern),
+    options?: MatchToJsonSchemaOptions,
+  ): MatchJsonSchema => matchToJsonSchema(pattern, options),
   Error: MatchError,
 });

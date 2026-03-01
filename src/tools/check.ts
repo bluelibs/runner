@@ -11,6 +11,7 @@ export type {
   MatchJsonSchema,
   MatchJsonValue,
   MatchPattern,
+  MatchToJsonSchemaOptions,
 } from "./check/types";
 export {
   CheckJsonSchemaPatternError,

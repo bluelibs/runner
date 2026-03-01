@@ -3223,7 +3223,7 @@ Why this is useful:
 
 ### Match.toJSONSchema()
 
-Use `Match.toJSONSchema(pattern)` to compile supported `Match` patterns into strict JSON Schema Draft 2020-12.
+Use `Match.toJSONSchema(pattern, options?)` to compile `Match` patterns into JSON Schema Draft 2020-12.
 
 ```typescript
 import { Match } from "@bluelibs/runner";
@@ -3234,9 +3234,17 @@ const schema = Match.toJSONSchema({
 });
 ```
 
-Strict fail-fast behavior:
+Default behavior:
 
-- Unsupported constructs throw a `RunnerError` with id `runner.errors.check.jsonSchemaUnsupportedPattern`.
+- `options.strict` defaults to `false`.
+- When `strict` is `false`, `Match.Where(...)` is represented as a permissive schema node annotated with:
+  - `description: "Custom runtime predicate from Match.Where; not representable in strict JSON Schema."`
+  - `"x-runner-match-kind": "Match.Where"`
+
+Strict fail-fast behavior (`{ strict: true }`):
+
+- `Match.Where(...)` throws a `RunnerError` with id `runner.errors.check.jsonSchemaUnsupportedPattern`.
+- All other unsupported constructs still throw in both modes.
 - Error data includes `path`, `reason`, and `patternKind` to identify the exact unsupported node.
 
 Supported conversion highlights:
@@ -3249,7 +3257,7 @@ Supported conversion highlights:
 - `Match.ObjectIncluding(...)` with `additionalProperties: true`
 - `Match.OneOf(...)` -> `anyOf`
 
-Unsupported (fail-fast):
+Unsupported in strict mode (fail-fast):
 
 - `Match.Where(...)`
 - `Function` constructor pattern
