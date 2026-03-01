@@ -19,6 +19,7 @@ const ISO_DATE_STRING_PATTERN =
 const MATCH_KIND = {
   Any: "Match.Any",
   Integer: "Match.Integer",
+  PositiveInteger: "Match.PositiveInteger",
   NonEmptyString: "Match.NonEmptyString",
   Email: "Match.Email",
   UUID: "Match.UUID",
@@ -106,6 +107,12 @@ function compilePattern(
       type: "integer",
       minimum: INT32_MIN,
       maximum: INT32_MAX,
+    };
+  }
+  if (isKindPattern(pattern, MATCH_KIND.PositiveInteger)) {
+    return {
+      type: "integer",
+      minimum: 0,
     };
   }
   if (isKindPattern(pattern, MATCH_KIND.NonEmptyString)) {

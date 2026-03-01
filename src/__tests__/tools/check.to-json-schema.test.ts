@@ -31,6 +31,11 @@ describe("tools/check toJSONSchema", () => {
       minimum: -2147483648,
       maximum: 2147483647,
     });
+    expect(Match.toJSONSchema(Match.PositiveInteger)).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "integer",
+      minimum: 0,
+    });
     expect(Match.toJSONSchema(Match.NonEmptyString)).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
       type: "string",
@@ -115,6 +120,11 @@ describe("tools/check toJSONSchema", () => {
       type: "array",
       minItems: 1,
       items: { type: "number" },
+    });
+    expect(Match.toJSONSchema(Match.ArrayOf(String))).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "array",
+      items: { type: "string" },
     });
   });
 
@@ -218,6 +228,12 @@ describe("tools/check toJSONSchema", () => {
     expect(whereError.path).toBe("$.profile.custom");
     expect(whereError.reason).toContain("Match.Where");
     expect(whereError.patternKind).toBe("Match.Where");
+
+    const recordOfError = expectSchemaError(() =>
+      Match.toJSONSchema(Match.RecordOf(String)),
+    );
+    expect(recordOfError.path).toBe("$");
+    expect(recordOfError.reason).toContain("Match.Where");
   });
 
   it("fails fast for Optional/Maybe outside object properties", () => {

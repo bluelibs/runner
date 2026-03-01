@@ -1,5 +1,6 @@
 import { defineTag } from "../../../define";
 import type { ITaskMiddleware } from "../../../defs";
+import { Match } from "../../../tools/check";
 
 export type TunnelPolicySide = "client" | "server";
 
@@ -33,8 +34,38 @@ export interface TunnelTaskMiddlewarePolicyConfig {
   };
 }
 
+const tunnelMiddlewareIdPattern = Match.Where(
+  (value: unknown): value is TunnelMiddlewareId =>
+    typeof value === "string" ||
+    (value !== null &&
+      typeof value === "object" &&
+      "id" in value &&
+      typeof value.id === "string"),
+);
+
+const tunnelTaskMiddlewarePolicySidePattern = Match.ObjectIncluding({
+  middlewareAllowList: Match.Optional([tunnelMiddlewareIdPattern]),
+});
+
+const tunnelTaskMiddlewarePolicySideConfigPattern = Match.OneOf(
+  tunnelTaskMiddlewarePolicySidePattern,
+  [tunnelMiddlewareIdPattern],
+);
+
+const tunnelTaskMiddlewarePolicyConfigPattern = Match.ObjectIncluding({
+  client: Match.Optional(tunnelTaskMiddlewarePolicySideConfigPattern),
+  server: Match.Optional(tunnelTaskMiddlewarePolicySideConfigPattern),
+  middlewareAllowList: Match.Optional(
+    Match.ObjectIncluding({
+      client: Match.Optional([tunnelMiddlewareIdPattern]),
+      server: Match.Optional([tunnelMiddlewareIdPattern]),
+    }),
+  ),
+});
+
 export const tunnelTaskPolicyTag = defineTag<TunnelTaskMiddlewarePolicyConfig>({
   id: "globals.tags.tunnel.middlewarePolicy",
+  configSchema: tunnelTaskMiddlewarePolicyConfigPattern,
   meta: {
     title: "Tunnel Middleware Policy",
     description:

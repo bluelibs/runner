@@ -4,11 +4,13 @@ import { globalTags } from "../../globals/globalTags";
 
 import { createNodeExposure } from "./createNodeExposure";
 import type { NodeExposureConfig } from "./resourceTypes";
+import { nodeExposureConfigSchema } from "./configSchema";
 
 export type { NodeExposureHttpAuthConfig } from "./authenticator";
 
 export const nodeExposure = defineResource({
   id: "platform.node.resources.exposure",
+  configSchema: nodeExposureConfigSchema,
   meta: {
     title: "Node Exposure (HTTP)",
     description:

@@ -22,6 +22,7 @@ import {
 } from "./RpcLanesInternals";
 import type { RpcLanesResourceConfig, RpcLanesResourceValue } from "./types";
 import { collectRpcLaneCommunicatorResourceDependencies } from "./RpcLanesInternals";
+import { rpcLanesResourceConfigSchema } from "./configSchema";
 import {
   authorizeRpcLaneRequest,
   buildRpcLaneAuthHeaders,
@@ -41,6 +42,7 @@ export const rpcLanesResource = defineResource<
 >({
   id: "platform.node.resources.rpcLanes",
   tags: [globalTags.rpcLanes],
+  configSchema: rpcLanesResourceConfigSchema,
   dependencies: (config) => ({
     store: globalResources.store,
     authValidators: globalTags.authValidator,

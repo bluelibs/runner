@@ -36,6 +36,15 @@ export const matchIntegerToken = Object.freeze({
     return matchToJsonSchema(matchIntegerToken);
   },
 });
+export const matchPositiveIntegerToken = Object.freeze({
+  kind: "Match.PositiveInteger",
+  parse(value: unknown): number {
+    return parsePatternValue(value, matchPositiveIntegerToken);
+  },
+  toJSONSchema(): MatchJsonSchema {
+    return matchToJsonSchema(matchPositiveIntegerToken);
+  },
+});
 export const matchNonEmptyStringToken = Object.freeze({
   kind: "Match.NonEmptyString",
   parse(value: unknown): string {
@@ -258,6 +267,21 @@ function matchesObjectPattern(
     if (!context.collectAll) return false;
   }
   for (const [key, childPattern] of Object.entries(pattern)) {
+    const hasOwnKey = Object.prototype.hasOwnProperty.call(value, key);
+    if (!hasOwnKey) {
+      if (childPattern instanceof OptionalPattern) {
+        continue;
+      }
+      fail(
+        context,
+        appendPath(path, key),
+        "defined value",
+        undefined,
+        `Missing required key "${key}" at ${formatPath(path)}.`,
+      );
+      if (!context.collectAll) return false;
+      continue;
+    }
     const matched = matchesPattern(
       value[key],
       childPattern,
@@ -283,6 +307,11 @@ function matchesPattern(
       value >= -2147483648
       ? true
       : fail(context, path, "32-bit integer", value);
+  }
+  if (pattern === matchPositiveIntegerToken) {
+    return Number.isInteger(value) && typeof value === "number" && value >= 0
+      ? true
+      : fail(context, path, "non-negative integer", value);
   }
   if (pattern === matchNonEmptyStringToken) {
     return typeof value === "string" && value.length > 0

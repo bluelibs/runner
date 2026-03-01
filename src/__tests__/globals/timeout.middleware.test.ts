@@ -42,6 +42,22 @@ describe("Timeout Middleware", () => {
     removeSpy.mockRestore();
   });
 
+  it("uses default ttl when task middleware config omits ttl", async () => {
+    const journalInstance = executionJournal.create();
+
+    const result = await timeoutMiddleware.run(
+      {
+        task: { definition: { id: "spec.task" } as any, input: "x" },
+        journal: journalInstance as any,
+        next: async () => "ok",
+      },
+      {},
+      {},
+    );
+
+    expect(result).toBe("ok");
+  });
+
   it("reuses pre-set abort controller from journal", async () => {
     const journalInstance = executionJournal.create();
     const presetController = new AbortController();
@@ -88,6 +104,19 @@ describe("Timeout Middleware", () => {
     expect(removeSpy).toHaveBeenCalledWith("abort", expect.any(Function));
 
     removeSpy.mockRestore();
+  });
+
+  it("uses default ttl when resource middleware config omits ttl", async () => {
+    const result = await timeoutResourceMiddleware.run(
+      {
+        resource: { definition: { id: "spec.resource" }, config: {} } as any,
+        next: async () => "ready",
+      },
+      {},
+      {},
+    );
+
+    expect(result).toBe("ready");
   });
 
   it("should abort long-running tasks after ttl", async () => {

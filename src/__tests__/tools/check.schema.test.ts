@@ -10,6 +10,8 @@ describe("tools/check schema support", () => {
   it("allows Match tokens to behave as schemas via parse()", () => {
     expect(Match.Any.parse({ any: "value" })).toEqual({ any: "value" });
     expect(Match.Integer.parse(10)).toBe(10);
+    expect(Match.PositiveInteger.parse(0)).toBe(0);
+    expect(Match.PositiveInteger.parse(10)).toBe(10);
     expect(Match.NonEmptyString.parse("ok")).toBe("ok");
     expect(Match.Email.parse("dev@example.com")).toBe("dev@example.com");
     expect(Match.UUID.parse("123e4567-e89b-42d3-a456-426614174000")).toBe(
@@ -20,6 +22,8 @@ describe("tools/check schema support", () => {
       "2026-01-01T10:20:30Z",
     );
     expect(() => Match.Integer.parse(1.1)).toThrow(MatchError);
+    expect(() => Match.PositiveInteger.parse(-1)).toThrow(MatchError);
+    expect(() => Match.PositiveInteger.parse(1.1)).toThrow(MatchError);
     expect(() => Match.NonEmptyString.parse("")).toThrow(MatchError);
     expect(() => Match.Email.parse("not-an-email")).toThrow(MatchError);
     expect(() => Match.UUID.parse("not-a-uuid")).toThrow(MatchError);
@@ -63,6 +67,26 @@ describe("tools/check schema support", () => {
     expect(Match.NonEmptyArray(String).parse(["a"])).toEqual(["a"]);
     expect(() => Match.NonEmptyArray().parse([])).toThrow(MatchError);
     expect(() => Match.NonEmptyArray(String).parse([1])).toThrow(MatchError);
+
+    expect(check([1, 2], Match.ArrayOf(Number))).toEqual([1, 2]);
+    expect(() => check(["1"] as never, Match.ArrayOf(Number))).toThrow(
+      MatchError,
+    );
+
+    const map = check(
+      {
+        worker: { id: "lane.worker" },
+      },
+      Match.RecordOf(
+        Match.ObjectIncluding({
+          id: String,
+        }),
+      ),
+    );
+    expect(map.worker.id).toBe("lane.worker");
+    expect(() =>
+      check({ worker: { id: 123 } }, Match.RecordOf({ id: String })),
+    ).toThrow(MatchError);
   });
 
   it("supports toJSONSchema() on Match schema-like tokens and wrappers", () => {
@@ -74,6 +98,11 @@ describe("tools/check schema support", () => {
       type: "integer",
       minimum: -2147483648,
       maximum: 2147483647,
+    });
+    expect(Match.PositiveInteger.toJSONSchema()).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "integer",
+      minimum: 0,
     });
     expect(Match.NonEmptyString.toJSONSchema()).toEqual({
       $schema: "https://json-schema.org/draft/2020-12/schema",

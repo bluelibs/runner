@@ -1,4 +1,5 @@
 import { defineTag } from "../../../define";
+import { Match } from "../../../tools/check";
 
 export interface DurableWorkflowTagConfig {
   /**
@@ -16,11 +17,18 @@ export interface DurableWorkflowTagConfig {
   metadata?: Record<string, unknown>;
 }
 
+const durableWorkflowConfigPattern = Match.ObjectIncluding({
+  category: Match.Optional(String),
+  defaults: Match.Optional(Object),
+  metadata: Match.Optional(Object),
+});
+
 /**
  * Marks a task as a durable workflow for runtime discovery.
  */
 export const durableWorkflowTag = defineTag<DurableWorkflowTagConfig>({
   id: "globals.tags.durableWorkflow",
+  configSchema: durableWorkflowConfigPattern,
   meta: {
     title: "Durable Workflow",
     description:

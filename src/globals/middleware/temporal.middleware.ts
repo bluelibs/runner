@@ -1,10 +1,15 @@
 import { defineTaskMiddleware, defineResource } from "../../define";
 import { globalTags } from "../globalTags";
 import { middlewareTemporalDisposedError } from "../../errors";
+import { Match } from "../../tools/check";
 
 export interface TemporalMiddlewareConfig {
   ms: number;
 }
+
+const temporalConfigPattern = Match.ObjectIncluding({
+  ms: Match.PositiveInteger,
+});
 
 type TimeoutHandle = ReturnType<typeof setTimeout>;
 
@@ -113,6 +118,7 @@ export const temporalResource = defineResource({
 export const debounceTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.debounce",
   throws: [middlewareTemporalDisposedError],
+  configSchema: temporalConfigPattern,
   dependencies: { state: temporalResource },
   async run({ task, next }, { state }, config: TemporalMiddlewareConfig) {
     if (state.isDisposed === true) {
@@ -182,6 +188,7 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
 export const throttleTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.throttle",
   throws: [middlewareTemporalDisposedError],
+  configSchema: temporalConfigPattern,
   dependencies: { state: temporalResource },
   async run({ task, next }, { state }, config: TemporalMiddlewareConfig) {
     if (state.isDisposed === true) {

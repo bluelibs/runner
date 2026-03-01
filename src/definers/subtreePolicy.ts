@@ -6,10 +6,12 @@ import type {
   NormalizedResourceSubtreeTagPolicy,
   NormalizedResourceSubtreeTaskMiddlewarePolicy,
   ResourceSubtreePolicy,
+  SubtreeResourceMiddlewareEntry,
   SubtreeEventValidator,
   SubtreeHookValidator,
   SubtreeResourceMiddlewareValidator,
   SubtreeResourceValidator,
+  SubtreeTaskMiddlewareEntry,
   SubtreeTagValidator,
   SubtreeTaskMiddlewareValidator,
   SubtreeTaskValidator,
@@ -22,6 +24,42 @@ function toArray<T>(value: T | T[] | undefined): T[] {
   return Array.isArray(value) ? [...value] : [value];
 }
 
+function cloneSubtreeTaskMiddlewareEntry(
+  entry: SubtreeTaskMiddlewareEntry,
+): SubtreeTaskMiddlewareEntry {
+  if (
+    entry &&
+    typeof entry === "object" &&
+    "use" in entry &&
+    entry.use !== undefined
+  ) {
+    return {
+      use: entry.use,
+      when: entry.when,
+    };
+  }
+
+  return entry;
+}
+
+function cloneSubtreeResourceMiddlewareEntry(
+  entry: SubtreeResourceMiddlewareEntry,
+): SubtreeResourceMiddlewareEntry {
+  if (
+    entry &&
+    typeof entry === "object" &&
+    "use" in entry &&
+    entry.use !== undefined
+  ) {
+    return {
+      use: entry.use,
+      when: entry.when,
+    };
+  }
+
+  return entry;
+}
+
 export function normalizeResourceSubtreePolicy(
   policy: ResourceSubtreePolicy | undefined,
 ): NormalizedResourceSubtreePolicy | undefined {
@@ -32,14 +70,18 @@ export function normalizeResourceSubtreePolicy(
   const normalized: NormalizedResourceSubtreePolicy = {};
   if (policy.tasks) {
     normalized.tasks = {
-      middleware: [...(policy.tasks.middleware ?? [])],
+      middleware: (policy.tasks.middleware ?? []).map(
+        cloneSubtreeTaskMiddlewareEntry,
+      ),
       validate: toArray<SubtreeTaskValidator>(policy.tasks.validate),
     };
   }
 
   if (policy.resources) {
     normalized.resources = {
-      middleware: [...(policy.resources.middleware ?? [])],
+      middleware: (policy.resources.middleware ?? []).map(
+        cloneSubtreeResourceMiddlewareEntry,
+      ),
       validate: toArray<SubtreeResourceValidator>(policy.resources.validate),
     };
   }

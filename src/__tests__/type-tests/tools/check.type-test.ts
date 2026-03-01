@@ -48,9 +48,22 @@ import {
 }
 
 {
+  const anyValue = check({ a: 1 }, Match.Any);
+  const typedAny: any = anyValue;
+  void typedAny;
+}
+
+{
   const value = check(["a", "b"], [String]);
   const first: string = value[0];
   void first;
+}
+
+{
+  const fn = check(() => "ok", Function);
+  const result = fn("a", 1, true);
+  const typedResult: any = result;
+  void typedResult;
 }
 
 {
@@ -165,6 +178,10 @@ import {
   const n: number = parsedInteger;
   void n;
 
+  const parsedPositiveInteger = Match.PositiveInteger.parse(10);
+  const p: number = parsedPositiveInteger;
+  void p;
+
   const integerJsonSchema = Match.Integer.toJSONSchema();
   const integerTypedSchema: MatchJsonSchema = integerJsonSchema;
   void integerTypedSchema;
@@ -196,6 +213,25 @@ import {
   const unknownValues = check(["a"], Match.NonEmptyArray());
   const unknownFirst: unknown = unknownValues[0];
   void unknownFirst;
+}
+
+{
+  const values = check([1, 2], Match.ArrayOf(Number));
+  const first: number = values[0];
+  void first;
+}
+
+{
+  const map = check(
+    { a: { id: "lane.a" } },
+    Match.RecordOf(
+      Match.ObjectIncluding({
+        id: String,
+      }),
+    ),
+  );
+  const laneId: string = map.a.id;
+  void laneId;
 }
 
 {

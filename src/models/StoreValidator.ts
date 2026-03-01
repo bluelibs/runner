@@ -32,6 +32,10 @@ import {
 } from "../define";
 import { StoreRegistry } from "./StoreRegistry";
 import { resolveIsolationSelector } from "./utils/isolationSelectors";
+import {
+  getSubtreeResourceMiddlewareAttachment,
+  getSubtreeTaskMiddlewareAttachment,
+} from "../tools/subtreeMiddleware";
 
 type SanityCheckTaggable = ITaggable & {
   id: string;
@@ -189,7 +193,8 @@ export class StoreValidator {
         continue;
       }
 
-      for (const middleware of subtreePolicy.tasks?.middleware ?? []) {
+      for (const middlewareEntry of subtreePolicy.tasks?.middleware ?? []) {
+        const middleware = getSubtreeTaskMiddlewareAttachment(middlewareEntry);
         if (!this.registry.taskMiddlewares.has(middleware.id)) {
           middlewareNotRegisteredError.throw({
             type: "task",
@@ -199,7 +204,9 @@ export class StoreValidator {
         }
       }
 
-      for (const middleware of subtreePolicy.resources?.middleware ?? []) {
+      for (const middlewareEntry of subtreePolicy.resources?.middleware ?? []) {
+        const middleware =
+          getSubtreeResourceMiddlewareAttachment(middlewareEntry);
         if (!this.registry.resourceMiddlewares.has(middleware.id)) {
           middlewareNotRegisteredError.throw({
             type: "resource",

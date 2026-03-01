@@ -6,6 +6,10 @@ import {
 import * as utils from "../define";
 import { isolateViolationError, visibilityViolationError } from "../errors";
 import { StoreRegistry } from "./StoreRegistry";
+import {
+  getSubtreeResourceMiddlewareAttachment,
+  getSubtreeTaskMiddlewareAttachment,
+} from "../tools/subtreeMiddleware";
 
 type CompiledIsolationPolicy = {
   denyIds: Set<string>;
@@ -547,8 +551,9 @@ export class VisibilityTracker {
         continue;
       }
 
-      for (const middlewareAttachment of subtreePolicy.tasks?.middleware ??
-        []) {
+      for (const middlewareEntry of subtreePolicy.tasks?.middleware ?? []) {
+        const middlewareAttachment =
+          getSubtreeTaskMiddlewareAttachment(middlewareEntry);
         const violation = this.getAccessViolation(
           middlewareAttachment.id,
           ownerId,
@@ -566,8 +571,9 @@ export class VisibilityTracker {
         });
       }
 
-      for (const middlewareAttachment of subtreePolicy.resources?.middleware ??
-        []) {
+      for (const middlewareEntry of subtreePolicy.resources?.middleware ?? []) {
+        const middlewareAttachment =
+          getSubtreeResourceMiddlewareAttachment(middlewareEntry);
         const violation = this.getAccessViolation(
           middlewareAttachment.id,
           ownerId,

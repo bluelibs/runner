@@ -17,6 +17,17 @@ enum CacheNoHasId {
 
 describe("Caching System", () => {
   describe("Cache Resource", () => {
+    it("accepts explicit cache resource config via schema", () => {
+      expect(() =>
+        cacheResource.with({
+          defaultOptions: {
+            ttl: 1_000,
+          },
+          provider: cacheProviderResource,
+        }),
+      ).not.toThrow();
+    });
+
     it("should initialize with default cache provider", async () => {
       const app = defineResource({
         id: "app",

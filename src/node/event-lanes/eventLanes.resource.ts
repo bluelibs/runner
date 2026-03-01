@@ -12,6 +12,7 @@ import {
   EventLanesResourceContext,
 } from "./EventLanesInternals";
 import type { EventLanesResourceConfig } from "./types";
+import { eventLanesResourceConfigSchema } from "./configSchema";
 
 type EventLanesResourceDependencies = EventLanesCoreDependencies & {
   debugConfig?: DebugConfig;
@@ -23,6 +24,7 @@ type EventLanesPrivateContext = EventLanesResourceContext & {
 
 const eventLanesResourceBase = r
   .resource<EventLanesResourceConfig>("globals.resources.node.eventLanes")
+  .configSchema(eventLanesResourceConfigSchema)
   .dependencies({
     eventManager: globals.resources.eventManager,
     serializer: globals.resources.serializer,

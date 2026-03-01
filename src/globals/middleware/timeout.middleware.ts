@@ -2,6 +2,7 @@ import { defineTaskMiddleware, defineResourceMiddleware } from "../../define";
 import { journal } from "../../models/ExecutionJournal";
 import { RunnerError } from "../../definers/defineError";
 import { middlewareTimeoutError, RunnerErrorId } from "../../errors";
+import { Match } from "../../tools/check";
 
 enum AbortSignalEventType {
   Abort = "abort",
@@ -12,8 +13,12 @@ export interface TimeoutMiddlewareConfig {
    * Maximum time in milliseconds before the wrapped operation is aborted
    * and a timeout error is thrown. Defaults to 5000ms.
    */
-  ttl: number;
+  ttl?: number;
 }
+
+const timeoutConfigPattern = Match.ObjectIncluding({
+  ttl: Match.Optional(Match.PositiveInteger),
+});
 
 /**
  * Custom error class for timeout errors.
@@ -44,10 +49,11 @@ export const journalKeys = {
 export const timeoutTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.timeout.task",
   throws: [middlewareTimeoutError],
+  configSchema: timeoutConfigPattern,
   async run({ task, next, journal }, _deps, config: TimeoutMiddlewareConfig) {
     const input = task?.input;
 
-    const ttl = Math.max(0, config.ttl);
+    const ttl = Math.max(0, config.ttl ?? 5000);
     const message = `Operation timed out after ${ttl}ms`;
     const timeoutError = new TimeoutError(message);
 
@@ -109,9 +115,10 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
 export const timeoutResourceMiddleware = defineResourceMiddleware({
   id: "globals.middleware.timeout.resource",
   throws: [middlewareTimeoutError],
+  configSchema: timeoutConfigPattern,
   async run({ resource, next }, _deps, config: TimeoutMiddlewareConfig) {
     const input = resource?.config;
-    const ttl = Math.max(0, config.ttl);
+    const ttl = Math.max(0, config.ttl ?? 5000);
     const message = `Operation timed out after ${ttl}ms`;
     const timeoutError = new TimeoutError(message);
     if (ttl === 0) {

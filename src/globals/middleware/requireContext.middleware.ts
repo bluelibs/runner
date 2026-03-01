@@ -1,14 +1,24 @@
 import type { IAsyncContext } from "../../definers/defineAsyncContext";
 import { defineTaskMiddleware } from "../../define";
 import { middlewareContextRequiredError } from "../../errors";
+import { Match } from "../../tools/check";
+
+type AsyncContextLike = Pick<IAsyncContext<any>, "use">;
 
 export interface RequireContextMiddlewareConfig {
-  context: IAsyncContext<any>;
+  context: AsyncContextLike;
 }
+
+const requireContextConfigPattern = Match.ObjectIncluding({
+  context: Match.ObjectIncluding({
+    use: Function,
+  }),
+});
 
 export const requireContextTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.requireContext",
   throws: [middlewareContextRequiredError],
+  configSchema: requireContextConfigPattern,
   async run({ task, next }, _deps, config: RequireContextMiddlewareConfig) {
     if (!config.context) {
       middlewareContextRequiredError.throw({

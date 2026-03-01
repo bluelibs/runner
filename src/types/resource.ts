@@ -44,12 +44,16 @@ export type { ResourceTagType, TagType } from "./tag";
 export type { IResourceMeta } from "./meta";
 export type {
   ResourceSubtreePolicy,
+  SubtreeResourceMiddlewareEntry,
+  SubtreeResourceMiddlewarePredicate,
   SubtreeEventValidator,
   SubtreeHookValidator,
   SubtreePolicyOptions,
   SubtreeResourceMiddlewareValidator,
   SubtreeResourceValidator,
   SubtreeTagValidator,
+  SubtreeTaskMiddlewareEntry,
+  SubtreeTaskMiddlewarePredicate,
   SubtreeTaskMiddlewareValidator,
   SubtreeTaskValidator,
   SubtreeViolation,

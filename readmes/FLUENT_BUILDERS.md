@@ -291,6 +291,24 @@ const app = r
   .build();
 ```
 
+Conditional subtree middleware entries are also supported:
+
+```ts
+const appWithConditional = r
+  .resource("app.conditional")
+  .subtree({
+    tasks: {
+      middleware: [
+        {
+          use: tmw.with({ mode: "strict" }),
+          when: (task) => task.tags.some((tag) => tag.id === "app.tags.strict"),
+        },
+      ],
+    },
+  })
+  .build();
+```
+
 Use `taskRunner.intercept(interceptor, { when })` for cross-cutting catch-all task interception.
 
 Note on `.init()`:

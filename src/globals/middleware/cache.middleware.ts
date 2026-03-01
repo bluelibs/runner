@@ -5,6 +5,7 @@ import { loggerResource } from "../resources/logger.resource";
 import { LRUCache } from "lru-cache";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { safeStringify } from "../../models/utils/safeStringify";
+import { Match } from "../../tools/check";
 
 export interface ICacheProvider {
   set(key: string, value: unknown): unknown | Promise<unknown>;
@@ -55,6 +56,50 @@ type CacheMiddlewareConfig = CacheFactoryOptions & {
   keyBuilder?: (taskId: string, input: unknown) => string;
 };
 
+const cacheFactoryOptionsPattern = Match.Where(
+  (value: unknown): value is CacheFactoryOptions =>
+    value !== null && typeof value === "object",
+);
+
+const cacheProviderResourcePattern = Match.Where(
+  (_value: unknown): _value is CacheProviderResource => true,
+);
+
+const cacheResourceConfigPattern = Match.ObjectIncluding({
+  defaultOptions: Match.Optional(cacheFactoryOptionsPattern),
+  provider: Match.Optional(cacheProviderResourcePattern),
+});
+
+const cacheMiddlewareConfigPattern = Match.ObjectIncluding({
+  keyBuilder: Match.Optional(Function),
+  ttl: Match.Optional(Match.PositiveInteger),
+  max: Match.Optional(Match.PositiveInteger),
+  ttlAutopurge: Match.Optional(Boolean),
+  allowStale: Match.Optional(Boolean),
+  updateAgeOnGet: Match.Optional(Boolean),
+  updateAgeOnHas: Match.Optional(Boolean),
+  maxSize: Match.Optional(Match.PositiveInteger),
+  maxEntrySize: Match.Optional(Match.PositiveInteger),
+  ttlResolution: Match.Optional(Match.PositiveInteger),
+  ttlAutopurgeWarn: Match.Optional(Boolean),
+  noDeleteOnFetchRejection: Match.Optional(Boolean),
+  noDeleteOnStaleGet: Match.Optional(Boolean),
+  noDisposeOnSet: Match.Optional(Boolean),
+  fetchMethod: Match.Optional(Function),
+  sizeCalculation: Match.Optional(Function),
+  dispose: Match.Optional(Function),
+  disposeAfter: Match.Optional(Function),
+  noUpdateTTL: Match.Optional(Boolean),
+  noDeleteOnStaleFetchRejection: Match.Optional(Boolean),
+  allowStaleOnFetchAbort: Match.Optional(Boolean),
+  allowStaleOnFetchRejection: Match.Optional(Boolean),
+  ignoreFetchAbort: Match.Optional(Boolean),
+  forceRefresh: Match.Optional(Boolean),
+  noDeleteOnFetchAbort: Match.Optional(Boolean),
+  size: Match.Optional(Number),
+  stale: Match.Optional(Boolean),
+});
+
 /**
  * Journal keys exposed by the cache middleware.
  * Use these to access shared state from downstream middleware or tasks.
@@ -66,6 +111,7 @@ export const journalKeys = {
 
 export const cacheResource = defineResource({
   id: "globals.resources.cache",
+  configSchema: cacheResourceConfigPattern,
   register: (config: CacheResourceConfig) => [
     config?.provider ?? cacheProviderResource,
   ],
@@ -98,6 +144,7 @@ const defaultKeyBuilder = (taskId: string, input: unknown) =>
 
 export const cacheMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.cache",
+  configSchema: cacheMiddlewareConfigPattern,
   dependencies: { cache: cacheResource, logger: loggerResource.optional() },
   async run({ task, next, journal }, deps, config: CacheMiddlewareConfig) {
     const { cache, logger } = deps;
@@ -126,7 +173,7 @@ export const cacheMiddleware = defineTaskMiddleware({
       } else {
         const createPromise = cache
           .cacheProvider(cacheOptions)
-          .then((instance) => {
+          .then((instance: ICacheProvider) => {
             cache.map.set(taskId, instance);
             return instance;
           })

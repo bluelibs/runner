@@ -3,6 +3,7 @@ import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
 import { middlewareCircuitBreakerOpenError, RunnerErrorId } from "../../errors";
+import { Match } from "../../tools/check";
 
 /**
  * States of the Circuit Breaker
@@ -28,6 +29,11 @@ export interface CircuitBreakerMiddlewareConfig {
    */
   resetTimeout?: number;
 }
+
+const circuitBreakerConfigPattern = Match.ObjectIncluding({
+  failureThreshold: Match.Optional(Match.PositiveInteger),
+  resetTimeout: Match.Optional(Match.PositiveInteger),
+});
 
 /**
  * Error thrown when the circuit is OPEN
@@ -81,6 +87,7 @@ export const circuitBreakerResource = defineResource({
 export const circuitBreakerMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.circuitBreaker",
   throws: [middlewareCircuitBreakerOpenError],
+  configSchema: circuitBreakerConfigPattern,
   dependencies: { state: circuitBreakerResource },
   async run(
     { task, next, journal },

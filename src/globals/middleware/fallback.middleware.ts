@@ -3,6 +3,7 @@ import type { ITask } from "../../defs";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalResources } from "../globalResources";
 import { runtimeSource } from "../../types/runtimeSource";
+import { Match } from "../../tools/check";
 
 type FallbackTask = ITask;
 type FallbackResolver = {
@@ -15,7 +16,6 @@ type FallbackValue =
   | bigint
   | symbol
   | null
-  | undefined
   | Record<string, unknown>
   | Array<unknown>;
 
@@ -26,6 +26,10 @@ export interface FallbackMiddlewareConfig {
    */
   fallback: FallbackTask | FallbackResolver | FallbackValue;
 }
+
+const fallbackConfigPattern = Match.ObjectIncluding({
+  fallback: Match.Any,
+});
 
 /**
  * Journal keys exposed by the fallback middleware.
@@ -47,6 +51,7 @@ export const journalKeys = {
  */
 export const fallbackTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.fallback",
+  configSchema: fallbackConfigPattern,
   dependencies: {
     taskRunner: globalResources.taskRunner,
   },
@@ -76,7 +81,7 @@ export const fallbackTaskMiddleware = defineTaskMiddleware({
 
       if (typeof fallback === "function") {
         // If it's a function, call it with the error and task input
-        return await (fallback as FallbackResolver)(error, task.input);
+        return await fallback(error, task.input);
       }
 
       // Otherwise, return the fallback value directly

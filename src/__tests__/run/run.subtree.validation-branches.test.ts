@@ -18,6 +18,29 @@ describe("run subtree validation branches", () => {
     await expect(run(app)).rejects.toThrow(/not registered/);
   });
 
+  it("fails fast when conditional subtree task middleware is not registered", async () => {
+    const app = defineResource({
+      id: "tests.subtree.missing.conditional.task.middleware.app",
+      subtree: {
+        tasks: {
+          middleware: [
+            {
+              use: {
+                id: "tests.subtree.missing.conditional.task.middleware",
+              } as any,
+              when: () => true,
+            },
+          ],
+        },
+      },
+      async init() {
+        return "never";
+      },
+    });
+
+    await expect(run(app)).rejects.toThrow(/not registered/);
+  });
+
   it("fails fast when subtree resource middleware is not registered", async () => {
     const app = defineResource({
       id: "tests.subtree.missing.resource.middleware.app",
@@ -25,6 +48,29 @@ describe("run subtree validation branches", () => {
         resources: {
           middleware: [
             { id: "tests.subtree.missing.resource.middleware" } as any,
+          ],
+        },
+      },
+      async init() {
+        return "never";
+      },
+    });
+
+    await expect(run(app)).rejects.toThrow(/not registered/);
+  });
+
+  it("fails fast when conditional subtree resource middleware is not registered", async () => {
+    const app = defineResource({
+      id: "tests.subtree.missing.conditional.resource.middleware.app",
+      subtree: {
+        resources: {
+          middleware: [
+            {
+              use: {
+                id: "tests.subtree.missing.conditional.resource.middleware",
+              } as any,
+              when: () => true,
+            },
           ],
         },
       },

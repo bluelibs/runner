@@ -6,6 +6,7 @@ import {
   matchEmailToken,
   matchIsoDateStringToken,
   matchIntegerToken,
+  matchPositiveIntegerToken,
   matchNonEmptyStringToken,
   matchUrlToken,
   matchUuidToken,
@@ -171,12 +172,37 @@ function nonEmptyArray(pattern?: MatchPattern): NonEmptyArrayPattern<unknown> {
   return new NonEmptyArrayPattern(pattern);
 }
 
+function arrayOf<TPattern extends MatchPattern>(
+  pattern: TPattern,
+): readonly [TPattern] {
+  return [pattern] as const;
+}
+
+function recordOf<TPattern extends MatchPattern>(
+  pattern: TPattern,
+): WherePattern<Record<string, InferMatchPattern<TPattern>>> {
+  return where(
+    (value: unknown): value is Record<string, InferMatchPattern<TPattern>> => {
+      if (!isPlainObject(value)) return false;
+      for (const entryValue of Object.values(value)) {
+        if (collectMatchFailures(entryValue, pattern, false).length > 0) {
+          return false;
+        }
+      }
+      return true;
+    },
+  );
+}
+
 export const Match = Object.freeze({
   Any: matchAnyToken,
+  ArrayOf: arrayOf,
   Email: matchEmailToken,
   IsoDateString: matchIsoDateStringToken,
   Integer: matchIntegerToken,
+  PositiveInteger: matchPositiveIntegerToken,
   NonEmptyString: matchNonEmptyStringToken,
+  RecordOf: recordOf,
   URL: matchUrlToken,
   UUID: matchUuidToken,
   NonEmptyArray: nonEmptyArray,
@@ -186,7 +212,7 @@ export const Match = Object.freeze({
   Maybe: <TPattern extends MatchPattern>(
     pattern: TPattern,
   ): MaybePattern<TPattern> => new MaybePattern(pattern),
-  OneOf: <TPatterns extends readonly MatchPattern[]>(
+  OneOf: <const TPatterns extends readonly MatchPattern[]>(
     ...patterns: TPatterns
   ): OneOfPattern<TPatterns> => {
     assertPattern(
@@ -196,7 +222,7 @@ export const Match = Object.freeze({
     return new OneOfPattern(patterns);
   },
   Where: where,
-  ObjectIncluding: <TObjectPattern extends Record<string, unknown>>(
+  ObjectIncluding: <const TObjectPattern extends Record<string, unknown>>(
     pattern: TObjectPattern,
   ): ObjectIncludingPattern<TObjectPattern> => {
     assertPattern(

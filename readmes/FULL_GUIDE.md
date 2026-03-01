@@ -2023,6 +2023,8 @@ const app = r
 
 > **Note:** `.subtree({ tasks/resources: { middleware: [...] } })` applies to the declaring resource subtree only (additive through ancestors).
 
+> **Note:** subtree middleware entries can be conditional: `{ use: middleware.with(config), when: (definition) => boolean }`. The predicate receives the target task/resource definition.
+
 > **Note:** Subtree middleware resolves before local `.middleware([...])`. If the same middleware id is attached locally, local wins.
 
 > **Note:** subtree `validate(definition)` callbacks are return-based. Return `SubtreeViolation[]` for policy failures. Runner aggregates all violations and throws one `subtreeValidationFailedError` during bootstrap.
@@ -8018,7 +8020,7 @@ const auditHook = r
 
 **Plugin patterns:**
 
-1. **Subtree middleware** — attach middleware via `.subtree({ tasks/resources: { middleware: [...] } })` for scoped cross-cutting concerns
+1. **Subtree middleware** — attach middleware via `.subtree({ tasks/resources: { middleware: [...] } })` for scoped cross-cutting concerns (including conditional `{ use, when }` entries)
 2. **Tag-based behavior** — use tags for declarative configuration
 3. **Resource wrappers** — compose resources for reusable patterns
 4. **Event interception** — use `eventManager.intercept()` for audit/logging
@@ -8899,6 +8901,7 @@ Quick rules:
 - Visibility is enforced at `run(app)` bootstrap
 - Wiring checks include dependencies, hook event subscriptions, and middleware attachments (task + resource middleware)
 - Subtree middleware (`resource.subtree({ tasks/resources: { middleware: [...] } })`) applies to the declaring resource subtree only
+- Subtree middleware entries can be conditional: `{ use, when }` where `when(definition)` decides whether that entry applies to the target task/resource
 - Subtree validators are return-based: `validate(definition)` must return `SubtreeViolation[]` (do not throw for normal policy failures)
 - Runner aggregates subtree validation violations and throws a single `subtreeValidationFailedError` at bootstrap
 - If a subtree validator throws or returns a non-array, Runner records an `invalid-definition` violation and still throws the aggregated subtree error

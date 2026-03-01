@@ -2,6 +2,7 @@ import { defineTaskMiddleware, defineResource } from "../../define";
 import { Semaphore } from "../../models/Semaphore";
 import { globalTags } from "../globalTags";
 import { middlewareConcurrencyConflictError } from "../../errors";
+import { Match } from "../../tools/check";
 
 export interface ConcurrencyMiddlewareConfig {
   /**
@@ -28,6 +29,12 @@ export interface ConcurrencyState {
   semaphores: Set<Semaphore>;
 }
 
+const concurrencyConfigPattern = Match.ObjectIncluding({
+  limit: Match.Optional(Match.PositiveInteger),
+  key: Match.Optional(String),
+  semaphore: Match.Optional(Semaphore),
+});
+
 export const concurrencyResource = defineResource({
   id: "globals.resources.concurrency",
   tags: [globalTags.system],
@@ -51,6 +58,7 @@ export const concurrencyResource = defineResource({
 export const concurrencyTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.concurrency",
   throws: [middlewareConcurrencyConflictError],
+  configSchema: concurrencyConfigPattern,
   dependencies: { state: concurrencyResource },
   async run({ task, next }, { state }, config: ConcurrencyMiddlewareConfig) {
     let semaphore = config.semaphore;

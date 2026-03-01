@@ -4,6 +4,10 @@ import { fallbackTaskMiddleware } from "../../../globals/middleware/fallback.mid
 import { createMessageError } from "../../../errors";
 
 describe("Fallback Middleware", () => {
+  it("requires fallback to be provided", () => {
+    expect(() => fallbackTaskMiddleware.with({} as never)).toThrow();
+  });
+
   it("should return fallback value when task fails", async () => {
     const task = defineTask({
       id: "fallback.value",

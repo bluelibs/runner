@@ -910,6 +910,8 @@ const app = r
 
 > **Note:** `.subtree({ tasks/resources: { middleware: [...] } })` applies to the declaring resource subtree only (additive through ancestors).
 
+> **Note:** subtree middleware entries can be conditional: `{ use: middleware.with(config), when: (definition) => boolean }`. The predicate receives the target task/resource definition.
+
 > **Note:** Subtree middleware resolves before local `.middleware([...])`. If the same middleware id is attached locally, local wins.
 
 > **Note:** subtree `validate(definition)` callbacks are return-based. Return `SubtreeViolation[]` for policy failures. Runner aggregates all violations and throws one `subtreeValidationFailedError` during bootstrap.

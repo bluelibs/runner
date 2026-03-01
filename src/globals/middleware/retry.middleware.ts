@@ -1,6 +1,7 @@
 import { defineTaskMiddleware, defineResourceMiddleware } from "../../define";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { journalKeys as timeoutJournalKeys } from "./timeout.middleware";
+import { Match } from "../../tools/check";
 
 /**
  * Configuration options for the retry middleware
@@ -22,6 +23,12 @@ export interface RetryMiddlewareConfig {
   delayStrategy?: (attempt: number, error: Error) => number;
 }
 
+const retryConfigPattern = Match.ObjectIncluding({
+  retries: Match.Optional(Match.PositiveInteger),
+  stopRetryIf: Match.Optional(Function),
+  delayStrategy: Match.Optional(Function),
+});
+
 /**
  * Journal keys exposed by the retry middleware.
  * Use these to access shared state from downstream middleware or tasks.
@@ -37,6 +44,7 @@ export const journalKeys = {
 
 export const retryTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.retry.task",
+  configSchema: retryConfigPattern,
   async run({ task, next, journal }, _deps, config: RetryMiddlewareConfig) {
     const input = task?.input;
     let attempts = 0;
@@ -89,6 +97,7 @@ export const retryTaskMiddleware = defineTaskMiddleware({
 
 export const retryResourceMiddleware = defineResourceMiddleware({
   id: "globals.middleware.retry.resource",
+  configSchema: retryConfigPattern,
   async run({ resource, next }, _deps, config: RetryMiddlewareConfig) {
     const input = resource?.config;
     let attempts = 0;

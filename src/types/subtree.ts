@@ -19,9 +19,17 @@ export type SubtreeTaskValidator = (
   taskDefinition: ITask<any, any, any, any, any, any>,
 ) => SubtreeViolation[];
 
+export type SubtreeTaskMiddlewarePredicate = (
+  taskDefinition: ITask<any, any, any, any, any, any>,
+) => boolean;
+
 export type SubtreeResourceValidator = (
   resourceDefinition: IResource<any, any, any, any, any, any, any>,
 ) => SubtreeViolation[];
+
+export type SubtreeResourceMiddlewarePredicate = (
+  resourceDefinition: IResource<any, any, any, any, any, any, any>,
+) => boolean;
 
 export type SubtreeHookValidator = (
   hookDefinition: IHook<any, any, any>,
@@ -43,13 +51,27 @@ export type SubtreeTagValidator = (
   tagDefinition: ITag<any, any, any, any>,
 ) => SubtreeViolation[];
 
+export type SubtreeTaskMiddlewareEntry =
+  | TaskMiddlewareAttachmentType
+  | {
+      use: TaskMiddlewareAttachmentType;
+      when?: SubtreeTaskMiddlewarePredicate;
+    };
+
+export type SubtreeResourceMiddlewareEntry =
+  | ResourceMiddlewareAttachmentType
+  | {
+      use: ResourceMiddlewareAttachmentType;
+      when?: SubtreeResourceMiddlewarePredicate;
+    };
+
 export type ResourceSubtreeTaskPolicy = {
-  middleware?: TaskMiddlewareAttachmentType[];
+  middleware?: SubtreeTaskMiddlewareEntry[];
   validate?: SubtreeTaskValidator | SubtreeTaskValidator[];
 };
 
 export type ResourceSubtreeResourcePolicy = {
-  middleware?: ResourceMiddlewareAttachmentType[];
+  middleware?: SubtreeResourceMiddlewareEntry[];
   validate?: SubtreeResourceValidator | SubtreeResourceValidator[];
 };
 
@@ -86,12 +108,12 @@ export type ResourceSubtreePolicy = {
 };
 
 export type NormalizedResourceSubtreeTaskPolicy = {
-  middleware: TaskMiddlewareAttachmentType[];
+  middleware: SubtreeTaskMiddlewareEntry[];
   validate: SubtreeTaskValidator[];
 };
 
 export type NormalizedResourceSubtreeResourcePolicy = {
-  middleware: ResourceMiddlewareAttachmentType[];
+  middleware: SubtreeResourceMiddlewareEntry[];
   validate: SubtreeResourceValidator[];
 };
 

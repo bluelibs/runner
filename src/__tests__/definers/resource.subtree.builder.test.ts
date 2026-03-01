@@ -1,4 +1,5 @@
 import { r } from "../..";
+import { getSubtreeTaskMiddlewareAttachment } from "../../tools/subtreeMiddleware";
 
 describe("resource builder subtree()", () => {
   it("applies subtree policy and keeps chaining", () => {
@@ -19,6 +20,13 @@ describe("resource builder subtree()", () => {
 
     expect(built.subtree).toBeDefined();
     expect(built.subtree?.tasks?.middleware).toHaveLength(1);
-    expect(built.subtree?.tasks?.middleware?.[0]?.id).toBe(taskMiddleware.id);
+    const firstMiddleware = built.subtree?.tasks?.middleware?.[0];
+    expect(firstMiddleware).toBeDefined();
+    if (!firstMiddleware) {
+      return;
+    }
+    expect(getSubtreeTaskMiddlewareAttachment(firstMiddleware).id).toBe(
+      taskMiddleware.id,
+    );
   });
 });

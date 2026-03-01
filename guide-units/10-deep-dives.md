@@ -343,7 +343,7 @@ const auditHook = r
 
 **Plugin patterns:**
 
-1. **Subtree middleware** — attach middleware via `.subtree({ tasks/resources: { middleware: [...] } })` for scoped cross-cutting concerns
+1. **Subtree middleware** — attach middleware via `.subtree({ tasks/resources: { middleware: [...] } })` for scoped cross-cutting concerns (including conditional `{ use, when }` entries)
 2. **Tag-based behavior** — use tags for declarative configuration
 3. **Resource wrappers** — compose resources for reusable patterns
 4. **Event interception** — use `eventManager.intercept()` for audit/logging

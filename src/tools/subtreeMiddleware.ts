@@ -3,6 +3,8 @@ import type {
   IResourceMiddleware,
   ITask,
   ITaskMiddleware,
+  SubtreeResourceMiddlewareEntry,
+  SubtreeTaskMiddlewareEntry,
 } from "../defs";
 import { validationError } from "../errors";
 
@@ -20,6 +22,14 @@ type MiddlewareWithId = {
 type ResolveSubtreeMiddlewareOptions = {
   targetId: string;
   isResourceTarget: boolean;
+};
+
+type ConditionalSubtreeMiddlewareEntry<
+  TMiddleware extends MiddlewareWithId,
+  TTargetDefinition,
+> = {
+  use: TMiddleware;
+  when?: (definition: TTargetDefinition) => boolean;
 };
 
 export function getTargetOwnerResourceChain(
@@ -41,14 +51,147 @@ export function getTargetOwnerResourceChain(
   return chain;
 }
 
+function isConditionalTaskSubtreeMiddlewareEntry(
+  entry: SubtreeTaskMiddlewareEntry,
+): entry is ConditionalSubtreeMiddlewareEntry<
+  ITaskMiddleware<any, any, any, any>,
+  ITask<any, any, any, any, any, any>
+> {
+  return (
+    entry !== null &&
+    typeof entry === "object" &&
+    "use" in entry &&
+    (entry as { use?: unknown }).use !== undefined
+  );
+}
+
+function isTaskMiddlewareAttachmentEntry(
+  entry: SubtreeTaskMiddlewareEntry,
+): entry is ITaskMiddleware<any, any, any, any> {
+  return (
+    entry !== null &&
+    typeof entry === "object" &&
+    "id" in entry &&
+    typeof (entry as { id?: unknown }).id === "string"
+  );
+}
+
+function isConditionalResourceSubtreeMiddlewareEntry(
+  entry: SubtreeResourceMiddlewareEntry,
+): entry is ConditionalSubtreeMiddlewareEntry<
+  IResourceMiddleware<any, any, any, any>,
+  IResource<any, any, any, any, any, any, any>
+> {
+  return (
+    entry !== null &&
+    typeof entry === "object" &&
+    "use" in entry &&
+    (entry as { use?: unknown }).use !== undefined
+  );
+}
+
+function isResourceMiddlewareAttachmentEntry(
+  entry: SubtreeResourceMiddlewareEntry,
+): entry is IResourceMiddleware<any, any, any, any> {
+  return (
+    entry !== null &&
+    typeof entry === "object" &&
+    "id" in entry &&
+    typeof (entry as { id?: unknown }).id === "string"
+  );
+}
+
+export function getSubtreeTaskMiddlewareAttachment(
+  entry: SubtreeTaskMiddlewareEntry,
+): ITaskMiddleware<any, any, any, any> {
+  if (isTaskMiddlewareAttachmentEntry(entry)) {
+    return entry;
+  }
+  if (!isConditionalTaskSubtreeMiddlewareEntry(entry)) {
+    validationError.throw({
+      subject: "Subtree middleware",
+      id: "<unknown>",
+      originalError: "Invalid subtree task middleware entry.",
+    });
+  }
+  const conditionalEntry = entry as ConditionalSubtreeMiddlewareEntry<
+    ITaskMiddleware<any, any, any, any>,
+    ITask<any, any, any, any, any, any>
+  >;
+  return conditionalEntry.use;
+}
+
+export function getSubtreeResourceMiddlewareAttachment(
+  entry: SubtreeResourceMiddlewareEntry,
+): IResourceMiddleware<any, any, any, any> {
+  if (isResourceMiddlewareAttachmentEntry(entry)) {
+    return entry;
+  }
+  if (!isConditionalResourceSubtreeMiddlewareEntry(entry)) {
+    validationError.throw({
+      subject: "Subtree middleware",
+      id: "<unknown>",
+      originalError: "Invalid subtree resource middleware entry.",
+    });
+  }
+  const conditionalEntry = entry as ConditionalSubtreeMiddlewareEntry<
+    IResourceMiddleware<any, any, any, any>,
+    IResource<any, any, any, any, any, any, any>
+  >;
+  return conditionalEntry.use;
+}
+
+function resolveTaskSubtreeMiddlewareEntry(
+  entry: SubtreeTaskMiddlewareEntry,
+  task: ITask<any, any, any, any, any, any>,
+): ITaskMiddleware<any, any, any, any> | undefined {
+  if (isTaskMiddlewareAttachmentEntry(entry)) {
+    return entry;
+  }
+
+  if (!isConditionalTaskSubtreeMiddlewareEntry(entry)) {
+    return;
+  }
+
+  if (!entry.when) {
+    return entry.use;
+  }
+  return entry.when(task) ? entry.use : undefined;
+}
+
+function resolveResourceSubtreeMiddlewareEntry(
+  entry: SubtreeResourceMiddlewareEntry,
+  resource: IResource<any, any, any, any, any, any, any>,
+): IResourceMiddleware<any, any, any, any> | undefined {
+  if (isResourceMiddlewareAttachmentEntry(entry)) {
+    return entry;
+  }
+
+  if (!isConditionalResourceSubtreeMiddlewareEntry(entry)) {
+    return;
+  }
+
+  if (!entry.when) {
+    return entry.use;
+  }
+  return entry.when(resource) ? entry.use : undefined;
+}
+
 function resolveApplicableSubtreeMiddlewares<
   TMiddleware extends MiddlewareWithId,
+  TTargetDefinition,
+  TSubtreeMiddlewareEntry,
 >(
   lookup: SubtreeLookup,
   chainNearestToRoot: readonly string[],
+  targetDefinition: TTargetDefinition,
   readSubtreeMiddlewares: (
     resource: IResource<any, any, any, any, any, any, any>,
-  ) => readonly TMiddleware[] | undefined,
+  ) => readonly TSubtreeMiddlewareEntry[] | undefined,
+  resolveEntry: (
+    entry: TSubtreeMiddlewareEntry,
+    targetDefinition: TTargetDefinition,
+  ) => TMiddleware | undefined,
 ): TMiddleware[] {
   const chainRootToNearest = [...chainNearestToRoot].reverse();
   const byMiddlewareId = new Map<
@@ -72,7 +215,12 @@ function resolveApplicableSubtreeMiddlewares<
       continue;
     }
 
-    for (const middleware of middlewares) {
+    for (const middlewareEntry of middlewares) {
+      const middleware = resolveEntry(middlewareEntry, targetDefinition);
+      if (!middleware) {
+        continue;
+      }
+
       const existing = byMiddlewareId.get(middleware.id);
       if (existing) {
         validationError.throw({
@@ -108,7 +256,9 @@ export function resolveApplicableSubtreeTaskMiddlewares(
   return resolveApplicableSubtreeMiddlewares(
     lookup,
     chain,
+    task,
     (resource) => resource.subtree?.tasks?.middleware,
+    resolveTaskSubtreeMiddlewareEntry,
   );
 }
 
@@ -124,6 +274,8 @@ export function resolveApplicableSubtreeResourceMiddlewares(
   return resolveApplicableSubtreeMiddlewares(
     lookup,
     chain,
+    resource,
     (ownerResource) => ownerResource.subtree?.resources?.middleware,
+    resolveResourceSubtreeMiddlewareEntry,
   );
 }

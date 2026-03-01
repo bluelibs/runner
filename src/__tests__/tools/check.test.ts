@@ -143,6 +143,89 @@ describe("tools/check", () => {
     ).not.toThrow();
   });
 
+  it("requires required object keys even when the pattern is Match.Any", () => {
+    expect(() =>
+      checkRuntime(
+        {},
+        Match.ObjectIncluding({
+          value: Match.Any,
+        }),
+      ),
+    ).toThrow(Match.Error);
+
+    expect(() =>
+      checkRuntime(
+        { value: undefined },
+        Match.ObjectIncluding({
+          value: Match.Any,
+        }),
+      ),
+    ).not.toThrow();
+
+    expect(() =>
+      checkRuntime(
+        {},
+        Match.ObjectIncluding({
+          value: Match.Optional(Match.Any),
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it("validates nested object graphs with arrays and reports deep paths", () => {
+    const pattern = Match.ObjectIncluding({
+      topology: Match.ObjectIncluding({
+        bindings: Match.ArrayOf(
+          Match.ObjectIncluding({
+            lane: Match.ObjectIncluding({
+              id: String,
+            }),
+            communicator: Match.ObjectIncluding({
+              id: String,
+            }),
+          }),
+        ),
+      }),
+    });
+
+    expect(() =>
+      checkRuntime(
+        {
+          topology: {
+            bindings: [
+              {
+                lane: { id: "lane.ok" },
+                communicator: { id: "comm.ok" },
+              },
+            ],
+          },
+        },
+        pattern,
+      ),
+    ).not.toThrow();
+
+    try {
+      checkRuntime(
+        {
+          topology: {
+            bindings: [
+              {
+                lane: { id: 123 },
+                communicator: { id: "comm.bad" },
+              },
+            ],
+          },
+        },
+        pattern,
+      );
+      throw new Error("Expected Match.Error");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Match.Error);
+      const matchError = error as InstanceType<typeof Match.Error>;
+      expect(matchError.path).toBe("$.topology.bindings[0].lane.id");
+    }
+  });
+
   it("supports OneOf and Where", () => {
     expect(() =>
       checkRuntime("abc", Match.OneOf(String, Number)),

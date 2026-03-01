@@ -76,6 +76,34 @@ describe("subtree policy normalization", () => {
     expect(result?.tags?.validate).toEqual([tagValidator]);
   });
 
+  it("normalizes conditional subtree middleware entries", () => {
+    const taskPredicate = (definition: { id: string }) =>
+      definition.id.endsWith(".critical");
+    const resourcePredicate = (definition: { id: string }) =>
+      definition.id.endsWith(".critical");
+
+    const taskEntry = {
+      use: taskMw.with({ role: "critical" }),
+      when: taskPredicate,
+    };
+    const resourceEntry = {
+      use: resourceMw.with({ role: "critical" }),
+      when: resourcePredicate,
+    };
+
+    const result = normalizeResourceSubtreePolicy({
+      tasks: { middleware: [taskEntry] },
+      resources: { middleware: [resourceEntry] },
+    });
+
+    expect(result?.tasks?.middleware).toHaveLength(1);
+    expect(result?.resources?.middleware).toHaveLength(1);
+    expect(result?.tasks?.middleware?.[0]).toEqual(taskEntry);
+    expect(result?.resources?.middleware?.[0]).toEqual(resourceEntry);
+    expect(result?.tasks?.middleware?.[0]).not.toBe(taskEntry);
+    expect(result?.resources?.middleware?.[0]).not.toBe(resourceEntry);
+  });
+
   it("appends middleware and validators by default", () => {
     const firstTaskValidator = () => [
       { code: "custom" as const, message: "1" },

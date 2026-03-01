@@ -40,4 +40,11 @@ describe("tools/check common match patterns", () => {
       MatchError,
     );
   });
+
+  it("validates PositiveInteger", () => {
+    expect(() => check(0, Match.PositiveInteger)).not.toThrow();
+    expect(() => check(2, Match.PositiveInteger)).not.toThrow();
+    expect(() => check(-1, Match.PositiveInteger)).toThrow(MatchError);
+    expect(() => check(1.5, Match.PositiveInteger)).toThrow(MatchError);
+  });
 });
