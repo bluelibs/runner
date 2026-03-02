@@ -47,4 +47,11 @@ describe("tools/check common match patterns", () => {
     expect(() => check(-1, Match.PositiveInteger)).toThrow(MatchError);
     expect(() => check(1.5, Match.PositiveInteger)).toThrow(MatchError);
   });
+
+  it("validates Match.RegExp patterns", () => {
+    expect(() => check("runner", Match.RegExp(/^runner$/))).not.toThrow();
+    expect(() => check("runner", Match.RegExp("^runner$"))).not.toThrow();
+    expect(() => check("Runner", Match.RegExp(/^runner$/))).toThrow(MatchError);
+    expect(() => check(123, Match.RegExp(/^runner$/))).toThrow(MatchError);
+  });
 });

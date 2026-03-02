@@ -15,6 +15,7 @@ import {
   ObjectIncludingPattern,
   OneOfPattern,
   OptionalPattern,
+  RegExpPattern,
   WherePattern,
 } from "./matcher";
 import { matchToJsonSchema } from "./toJsonSchema";
@@ -66,7 +67,8 @@ function isCheckSchemaLike(value: unknown): value is CheckSchemaLike<unknown> {
     value instanceof OneOfPattern ||
     value instanceof WherePattern ||
     value instanceof ObjectIncludingPattern ||
-    value instanceof NonEmptyArrayPattern
+    value instanceof NonEmptyArrayPattern ||
+    value instanceof RegExpPattern
   ) {
     return false;
   }
@@ -189,6 +191,26 @@ function arrayOf<TPattern extends MatchPattern>(
   return [pattern] as const;
 }
 
+function regexpPattern(expression: RegExp | string): RegExpPattern<RegExp> {
+  if (typeof expression === "string") {
+    try {
+      return new RegExpPattern(new RegExp(expression));
+    } catch {
+      throw new MatchPatternError(
+        "Bad pattern: Match.RegExp requires a valid regular expression source string.",
+      );
+    }
+  }
+
+  if (expression instanceof RegExp) {
+    return new RegExpPattern(expression);
+  }
+
+  throw new MatchPatternError(
+    "Bad pattern: Match.RegExp requires a RegExp instance or source string.",
+  );
+}
+
 function recordOf<TPattern extends MatchPattern>(
   pattern: TPattern,
 ): WherePattern<Record<string, InferMatchPattern<TPattern>>> {
@@ -213,6 +235,7 @@ export const Match = Object.freeze({
   Integer: matchIntegerToken,
   PositiveInteger: matchPositiveIntegerToken,
   NonEmptyString: matchNonEmptyStringToken,
+  RegExp: regexpPattern,
   RecordOf: recordOf,
   URL: matchUrlToken,
   UUID: matchUuidToken,

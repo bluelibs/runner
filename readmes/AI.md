@@ -625,7 +625,7 @@ Main inspiration and shoutout: Meteor's `check` package.
 This API supports:
 
 - Base patterns: `String`, `Number`, `Boolean`, `Object`, `Array`, `Function`, literal values
-- Match helpers: `Match.Any`, `Match.Integer`, `Match.NonEmptyString`, `Match.Email`, `Match.UUID`, `Match.URL`, `Match.IsoDateString`
+- Match helpers: `Match.Any`, `Match.Integer`, `Match.NonEmptyString`, `Match.Email`, `Match.UUID`, `Match.URL`, `Match.IsoDateString`, `Match.RegExp(re)`
 - Array helper: `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`
 - Combinators: `Match.Optional(pattern)`, `Match.Maybe(pattern)`, `Match.OneOf(...)`
 - Custom predicates: `Match.Where((value) => boolean)` (or a TypeScript type guard)
@@ -682,6 +682,11 @@ const schema = Match.toJSONSchema({
 - When `strict` is `false` (default), `Match.Where(...)` does not throw and is emitted as a permissive schema node with metadata:
   - `description: "Custom runtime predicate from Match.Where; not representable in strict JSON Schema."`
   - `"x-runner-match-kind": "Match.Where"`
+- `Match.RegExp(...)` compiles to `{ type: "string", pattern: re.source }`.
+- When `Match.RegExp(...)` contains flags, JSON Schema export stays non-failing (including `strict: true`) and adds metadata:
+  - `description: "Regex flags are not represented by JSON Schema pattern and are ignored during schema export."`
+  - `"x-runner-match-kind": "Match.RegExp"`
+  - `"x-runner-regexp-flags": "..."`
 - When `strict` is `true` (`Match.toJSONSchema(pattern, { strict: true })`), `Match.Where(...)` fails fast with a `RunnerError` id of `runner.errors.check.jsonSchemaUnsupportedPattern`.
 - All other unsupported constructs still fail fast in both modes.
 - Error metadata includes `path`, `reason`, and `patternKind`.

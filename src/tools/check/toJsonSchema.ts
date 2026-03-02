@@ -29,6 +29,7 @@ const MATCH_KIND = {
   MaybePattern: "Match.MaybePattern",
   OneOfPattern: "Match.OneOfPattern",
   WherePattern: "Match.WherePattern",
+  RegExpPattern: "Match.RegExpPattern",
   ObjectIncludingPattern: "Match.ObjectIncludingPattern",
   NonEmptyArrayPattern: "Match.NonEmptyArrayPattern",
 } as const;
@@ -55,6 +56,11 @@ function readPatternField(pattern: unknown): unknown {
 function readPatternsField(pattern: unknown): readonly unknown[] {
   const patterns = (pattern as { patterns?: unknown }).patterns;
   return Array.isArray(patterns) ? patterns : [];
+}
+
+function readRegExpExpressionField(pattern: unknown): RegExp | undefined {
+  const expression = (pattern as { expression?: unknown }).expression;
+  return expression instanceof RegExp ? expression : undefined;
 }
 
 function compileObjectPattern(
@@ -191,6 +197,30 @@ function compilePattern(
       "Match.Where relies on runtime predicates and cannot be represented in strict JSON Schema.",
       pattern,
     );
+  }
+  if (isKindPattern(pattern, MATCH_KIND.RegExpPattern)) {
+    const expression = readRegExpExpressionField(pattern);
+    if (!expression) {
+      throwUnsupported(
+        path,
+        "Match.RegExp requires a RegExp expression instance.",
+        pattern,
+      );
+    }
+
+    const schema: MatchJsonSchema = {
+      type: "string",
+      pattern: expression.source,
+    };
+
+    if (expression.flags.length > 0) {
+      schema.description =
+        "Regex flags are not represented by JSON Schema pattern and are ignored during schema export.";
+      schema["x-runner-match-kind"] = "Match.RegExp";
+      schema["x-runner-regexp-flags"] = expression.flags;
+    }
+
+    return schema;
   }
   if (isKindPattern(pattern, MATCH_KIND.ObjectIncludingPattern)) {
     return withCycleGuard(pattern, context, path, () => {

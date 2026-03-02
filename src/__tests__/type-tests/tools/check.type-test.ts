@@ -203,6 +203,14 @@ import {
   const iso = check("2026-01-01T10:20:30Z", Match.IsoDateString);
   const isoString: string = iso;
   void isoString;
+
+  const regexA = check("runner", Match.RegExp(/^runner$/));
+  const regexAString: string = regexA;
+  void regexAString;
+
+  const regexB = check("runner", Match.RegExp("^runner$"));
+  const regexBString: string = regexB;
+  void regexBString;
 }
 
 {

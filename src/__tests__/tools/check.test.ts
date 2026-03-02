@@ -249,6 +249,33 @@ describe("tools/check", () => {
     ).toThrow(Match.Error);
   });
 
+  it("supports Match.RegExp with RegExp and source string inputs", () => {
+    expect(() => checkRuntime("abc-123", Match.RegExp(/^[a-z]+-\d+$/))).not.toThrow();
+    expect(() => checkRuntime("abc-123", Match.RegExp("^[a-z]+-\\d+$"))).not.toThrow();
+
+    expect(() => checkRuntime("ABC-123", Match.RegExp(/^[a-z]+-\d+$/))).toThrow(
+      Match.Error,
+    );
+    expect(() => checkRuntime(123, Match.RegExp(/^[a-z]+-\d+$/))).toThrow(
+      Match.Error,
+    );
+  });
+
+  it("keeps Match.RegExp deterministic for stateful g/y regex flags", () => {
+    const globalPattern = Match.RegExp(/foo/g);
+    expect(() => checkRuntime("foo", globalPattern)).not.toThrow();
+    expect(() => checkRuntime("foo", globalPattern)).not.toThrow();
+
+    const stickyPattern = Match.RegExp(/foo/y);
+    expect(() => checkRuntime("foo", stickyPattern)).not.toThrow();
+    expect(() => checkRuntime("foo", stickyPattern)).not.toThrow();
+  });
+
+  it("throws invalid-pattern runner errors for invalid Match.RegExp source strings", () => {
+    expect(() => checkRuntime("v", Match.RegExp("["))).toThrow(RunnerError);
+    expect(() => Match.RegExp(123 as unknown as RegExp)).toThrow(RunnerError);
+  });
+
   it("treats Match.Error thrown from Match.Where as validation failure", () => {
     const where = Match.Where(() => {
       throw new Match.Error([

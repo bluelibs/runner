@@ -87,6 +87,9 @@ describe("tools/check schema support", () => {
     expect(() =>
       check({ worker: { id: 123 } }, Match.RecordOf({ id: String })),
     ).toThrow(MatchError);
+
+    expect(Match.RegExp(/^ok$/).parse("ok")).toBe("ok");
+    expect(() => Match.RegExp(/^ok$/).parse("nope")).toThrow(MatchError);
   });
 
   it("supports toJSONSchema() on Match schema-like tokens and wrappers", () => {
@@ -152,6 +155,11 @@ describe("tools/check schema support", () => {
       type: "array",
       minItems: 1,
       items: { type: "string" },
+    });
+    expect(Match.RegExp(/^runner$/).toJSONSchema()).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "string",
+      pattern: "^runner$",
     });
     expect(() => Match.Optional(String).toJSONSchema()).toThrow(
       CheckJsonSchemaPatternError,

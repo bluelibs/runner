@@ -142,6 +142,25 @@ export class WherePattern<TGuarded = unknown> {
     return matchToJsonSchema(this as WherePattern<TGuarded>, options);
   }
 }
+export class RegExpPattern<TExpression extends RegExp = RegExp> {
+  public readonly kind = "Match.RegExpPattern";
+  public readonly expression: TExpression;
+
+  constructor(expression: TExpression) {
+    this.expression = new RegExp(
+      expression.source,
+      expression.flags,
+    ) as TExpression;
+  }
+
+  parse(value: unknown): string {
+    return parsePatternValue(value, this as RegExpPattern<TExpression>) as string;
+  }
+
+  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
+    return matchToJsonSchema(this as RegExpPattern<TExpression>, options);
+  }
+}
 export class ObjectIncludingPattern<
   TObjectPattern extends Record<string, unknown> = Record<string, unknown>,
 > {
@@ -394,6 +413,19 @@ function matchesPattern(
       value,
       `Failed Match.Where validation at ${formatPath(path)}.`,
     );
+  }
+  if (pattern instanceof RegExpPattern) {
+    if (typeof value !== "string") {
+      return fail(context, path, "string matching regular expression", value);
+    }
+
+    pattern.expression.lastIndex = 0;
+    const matched = pattern.expression.test(value);
+    pattern.expression.lastIndex = 0;
+
+    return matched
+      ? true
+      : fail(context, path, "string matching regular expression", value);
   }
   if (pattern instanceof ObjectIncludingPattern) {
     return matchesObjectPattern(value, pattern.pattern, context, path, true);

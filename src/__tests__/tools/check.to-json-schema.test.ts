@@ -63,6 +63,35 @@ describe("tools/check toJSONSchema", () => {
       pattern:
         "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?(?:Z|[+-]\\d{2}:\\d{2})$",
     });
+    expect(Match.toJSONSchema(Match.RegExp(/^[a-z]+$/))).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "string",
+      pattern: "^[a-z]+$",
+    });
+  });
+
+  it("converts Match.RegExp with flags without failing and annotates metadata", () => {
+    expect(Match.toJSONSchema(Match.RegExp(/^[a-z]+$/i))).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "string",
+      pattern: "^[a-z]+$",
+      description:
+        "Regex flags are not represented by JSON Schema pattern and are ignored during schema export.",
+      "x-runner-match-kind": "Match.RegExp",
+      "x-runner-regexp-flags": "i",
+    });
+
+    expect(
+      Match.toJSONSchema(Match.RegExp(/^[a-z]+$/im), { strict: true }),
+    ).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "string",
+      pattern: "^[a-z]+$",
+      description:
+        "Regex flags are not represented by JSON Schema pattern and are ignored during schema export.",
+      "x-runner-match-kind": "Match.RegExp",
+      "x-runner-regexp-flags": "im",
+    });
   });
 
   it("converts constructor and literal patterns", () => {
@@ -348,5 +377,16 @@ describe("tools/check toJSONSchema", () => {
     );
     expect(objectIncludingError.path).toBe("$");
     expect(objectIncludingError.reason).toContain("plain object pattern");
+
+    const invalidRegExpPattern = {
+      kind: "Match.RegExpPattern",
+      parse: () => undefined,
+      expression: 123,
+    };
+    const regexpPatternError = expectSchemaError(() =>
+      Match.toJSONSchema(invalidRegExpPattern as never),
+    );
+    expect(regexpPatternError.path).toBe("$");
+    expect(regexpPatternError.reason).toContain("RegExp expression");
   });
 });

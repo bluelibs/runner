@@ -21,6 +21,7 @@ All supported Match patterns:
 - `Match.UUID`: accepts canonical UUID strings (versions 1-8)
 - `Match.URL`: accepts valid absolute URL strings
 - `Match.IsoDateString`: accepts ISO datetime strings with timezone (`Z` or offset)
+- `Match.RegExp(re)`: accepts strings that satisfy the provided regular expression (`RegExp` or source string)
 - `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`: accepts non-empty arrays (optionally validates each element)
 - `Match.Optional(pattern)`: accepts `undefined` or `pattern`
 - `Match.Maybe(pattern)`: accepts `undefined`, `null`, or `pattern`
@@ -94,6 +95,7 @@ check("dev@example.com", Match.Email);
 check("123e4567-e89b-42d3-a456-426614174000", Match.UUID);
 check("https://example.com", Match.URL);
 check("2026-01-01T10:20:30Z", Match.IsoDateString);
+check("runner", Match.RegExp(/^runner$/));
 check(["a"], Match.NonEmptyArray(String));
 check("x", Match.Optional(String));
 check(null, Match.Maybe(String));
@@ -153,6 +155,14 @@ Strict fail-fast behavior (`{ strict: true }`):
 - `Match.Where(...)` throws a `RunnerError` with id `runner.errors.check.jsonSchemaUnsupportedPattern`.
 - All other unsupported constructs still throw in both modes.
 - Error data includes `path`, `reason`, and `patternKind` to identify the exact unsupported node.
+
+`Match.RegExp(...)` JSON Schema behavior:
+
+- Converts to `type: "string"` + `pattern: re.source`.
+- If the regex has flags, export remains non-failing (including `strict: true`) and includes metadata:
+  - `description: "Regex flags are not represented by JSON Schema pattern and are ignored during schema export."`
+  - `"x-runner-match-kind": "Match.RegExp"`
+  - `"x-runner-regexp-flags": "..."`
 
 Supported conversion highlights:
 

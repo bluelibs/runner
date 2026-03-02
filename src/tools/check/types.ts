@@ -12,6 +12,7 @@ import {
   ObjectIncludingPattern,
   OneOfPattern,
   OptionalPattern,
+  RegExpPattern,
   WherePattern,
 } from "./matcher";
 
@@ -167,6 +168,7 @@ export type MatchPattern =
   | MaybePattern<unknown>
   | OneOfPattern<readonly unknown[]>
   | WherePattern<unknown>
+  | RegExpPattern<RegExp>
   | ObjectIncludingPattern<MatchPatternObject>
   | readonly unknown[]
   | MatchPatternObject;
@@ -209,6 +211,8 @@ export type InferMatchPattern<TPattern> = TPattern extends typeof matchAnyToken
                         ? InferMatchPattern<TCandidates[number]>
                         : TPattern extends WherePattern<infer TGuarded>
                           ? TGuarded
+                          : TPattern extends RegExpPattern<RegExp>
+                            ? string
                           : TPattern extends ObjectIncludingPattern<
                                 infer TObjectPattern
                               >
