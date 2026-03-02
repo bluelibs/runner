@@ -322,9 +322,7 @@ Wire payload (simplified):
   "source": { "kind": "runtime", "id": "app" },
   "createdAt": "2026-02-28T12:00:00.000Z",
   "attempts": 0,
-  "maxAttempts": 3,
-  "orderingKey": "optional",
-  "metadata": { "optional": true }
+  "maxAttempts": 3
 }
 ```
 
@@ -879,7 +877,7 @@ When routing does not behave as expected, check in this order:
 | Concept          | API                                                              |
 | ---------------- | ---------------------------------------------------------------- |
 | Lane definition  | `r.eventLane("...").applyTo([...])` or `r.eventLane("...").applyTo((event) => boolean)` |
-| Event tagging    | `globals.tags.eventLane.with({ lane, orderingKey?, metadata? })` |
+| Event tagging    | `globals.tags.eventLane.with({ lane })` |
 | Topology         | `r.eventLane.topology({ profiles, bindings })`                   |
 | Profile consume  | `profiles[profile].consume: lane[]`                              |
 | Binding          | `{ lane, queue, prefetch?, maxAttempts?, retryDelayMs? }`        |

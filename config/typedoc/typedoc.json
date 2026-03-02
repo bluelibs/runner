@@ -2,7 +2,7 @@
   "entryPoints": ["../../src/index.ts"],
   "tsconfig": "../../config/ts/tsconfig.build.json",
   "out": "../../docs",
-  "exclude": ["**/__tests__/**/*", "**/src/node/durable/dashboard/**/*"],
+  "exclude": ["**/__tests__/**/*"],
   "includeVersion": true,
   "plugin": ["typedoc-material-theme"],
   "themeColor": "#cb9820",

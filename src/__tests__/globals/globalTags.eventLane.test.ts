@@ -13,8 +13,6 @@ describe("globals.tags.eventLane", () => {
       .tags([
         globalTags.eventLane.with({
           lane,
-          orderingKey: "order-1",
-          metadata: { domain: "tests" },
         }),
       ])
       .build();
@@ -22,8 +20,6 @@ describe("globals.tags.eventLane", () => {
     const extracted = globalTags.eventLane.extract(event);
     expect(extracted).toEqual({
       lane,
-      orderingKey: "order-1",
-      metadata: { domain: "tests" },
     });
   });
 

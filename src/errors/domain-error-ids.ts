@@ -45,6 +45,5 @@ export enum RunnerErrorId {
   DurableExecutionError = "runner.errors.durable.executionError",
   DurableExecutionInvariant = "runner.errors.durable.executionInvariant",
   DurableOperatorUnsupportedStoreCapability = "runner.errors.durable.operator.unsupportedStoreCapability",
-  DashboardApiRequest = "runner.errors.durable.dashboard.apiRequest",
   LockableMapLocked = "runner.errors.tools.lockableMapLocked",
 }

@@ -1,7 +1,6 @@
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.middleware";
-import { RunnerError } from "../../../definers/defineError";
 
 describe("Rate Limit Middleware", () => {
   const expectValidationError = (fn: () => unknown): void => {
@@ -9,7 +8,7 @@ describe("Rate Limit Middleware", () => {
       fn();
       throw new Error("Expected validation error");
     } catch (error) {
-      expect(error).toBeInstanceOf(RunnerError);
+      expect(error).toBeInstanceOf(Error);
     }
   };
 

@@ -823,15 +823,6 @@ export const durableOperatorUnsupportedStoreCapabilityError = error<
   )
   .build();
 
-export const dashboardApiRequestError = error<
-  { message: string } & DefaultErrorType
->(RunnerErrorId.DashboardApiRequest)
-  .format(({ message }) => message)
-  .remediation(
-    "Verify dashboard API endpoint availability, authentication, and request payload shape.",
-  )
-  .build();
-
 export const lockableMapLockedError = error<
   { mapName: string } & DefaultErrorType
 >(RunnerErrorId.LockableMapLocked)

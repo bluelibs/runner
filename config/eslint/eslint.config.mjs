@@ -19,7 +19,6 @@ export default tseslint.config(
       "coverage/**",
       "examples/**",
       "web/**",
-      "src/node/durable/dashboard/**",
       "scripts/**",
       "*.config.js",
       "*.config.mjs",

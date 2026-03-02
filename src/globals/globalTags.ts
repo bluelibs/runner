@@ -29,8 +29,6 @@ const globalTagsBase = {
   }),
   eventLane: tagBuilder<{
     lane: IEventLaneDefinition;
-    orderingKey?: string;
-    metadata?: Record<string, unknown>;
   }>("globals.tags.eventLane")
     .for("events")
     .meta({

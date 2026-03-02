@@ -182,8 +182,6 @@ export class EventLanesController {
         eventId: emission.id,
         payload: this.dependencies.serializer.stringify(emission.data),
         source: emission.source,
-        orderingKey: eventRoute.orderingKey,
-        metadata: eventRoute.metadata,
         authToken,
         maxAttempts: binding.maxAttempts ?? 1,
       });
@@ -195,7 +193,6 @@ export class EventLanesController {
         mode: resolveRemoteLanesMode(this.config.mode),
         sourceKind: emission.source.kind,
         sourceId: emission.source.id,
-        orderingKey: eventRoute.orderingKey,
       });
     });
   }

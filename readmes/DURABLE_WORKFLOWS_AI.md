@@ -167,13 +167,12 @@ const durableProd = redisDurableResource.fork("app.durable").with({
 
 ## Inspecting an execution
 
+- `createDashboardMiddleware` is now part of `@bluelibs/runner-durable-dashboard` (not core).
 - `store.getExecution(executionId)` → status (running/sleeping/completed/failed/etc)
 - When supported:
   - `store.listStepResults(executionId)` → completed steps
   - `store.listAuditEntries(executionId)` → timeline (step_completed, signal_waiting, signal_delivered, sleeps, status changes)
 - `new DurableOperator(store).getExecutionDetail(executionId)` returns `{ execution, steps, audit }`.
-
-There's also a dashboard middleware: `createDashboardMiddleware(service, new DurableOperator(store), { operatorAuth })` (operator actions are denied unless `operatorAuth` is provided; opt out with `dangerouslyAllowUnauthenticatedOperator: true`).
 
 "Internal steps" are recorded steps created by durable primitives (`sleep/waitForSignal/emit` and some bookkeeping). They typically use reserved step id prefixes like `__...` or `rollback:...`.
 

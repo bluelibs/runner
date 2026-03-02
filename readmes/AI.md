@@ -488,7 +488,7 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
 - Optional lane-side assignment: `r.eventLane("...").applyTo([eventOrId])`.
 - Define topology with `r.eventLane.topology({ profiles, bindings })`.
 - Boundary reminder: Event Lanes are async fire-and-forget queue routing; use RPC Lanes for synchronous task/event RPC (`readmes/REMOTE_LANES.md`).
-- Tag events with `globals.tags.eventLane.with({ lane, orderingKey?, metadata? })`.
+- Tag events with `globals.tags.eventLane.with({ lane })`.
 - Register `eventLanesResource` (from `@bluelibs/runner/node`) with:
   - `profile` + `topology` + optional `mode` (`"network"` | `"transparent"` | `"local-simulated"`)
   - `bindings: [{ lane, queue, auth?, prefetch?, maxAttempts?, retryDelayMs? }]` where `queue` can be a queue instance or a queue resource

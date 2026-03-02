@@ -2085,34 +2085,10 @@ npm run coverage:ai
 | Learning curve      | High                                                        | Low                                       |
 | Implementation time | 12 weeks                                                    | 2-3 weeks                                 |
 
-## Dashboard & Observability
-
-A basic dashboard middleware is provided to inspect executions, view step results, and perform administrative actions (like retrying failed steps or skipping steps).
-
-The dashboard UI is **pre-built and included** in the published npm package — no build step required.
+## Operator & Observability
 
 > [!NOTE]
-> **Working from source?** If you've cloned this repo and are developing locally, run `npm run build:dashboard` once to build the UI assets into `dist/ui/`.
-
-```typescript
-import {
-  createDashboardMiddleware,
-  DurableOperator,
-} from "@bluelibs/runner/node";
-
-// Create operator
-const operator = new DurableOperator(store);
-
-// Expose dashboard on /durable-dashboard
-const d = runtime.getResourceValue(durable);
-app.use(
-  "/durable-dashboard",
-  createDashboardMiddleware(d.service, operator, {
-    // Require explicit auth for operator actions
-    operatorAuth: (req) => req.headers["x-ops-token"] === process.env.OPS_TOKEN,
-  }),
-);
-```
+> `createDashboardMiddleware` moved out of core and now lives in `@bluelibs/runner-durable-dashboard`.
 
 ### What is the store?
 
@@ -2130,41 +2106,13 @@ You provide a store implementation when you create the durable resource/service:
 
 ### What is `DurableOperator`?
 
-`DurableOperator` is an **operations/admin helper** around the store. It does not execute workflows; it reads/writes durable state to support dashboards and manual interventions:
+`DurableOperator` is an **operations/admin helper** around the store. It does not execute workflows; it reads/writes durable state to support external tooling and manual interventions:
 
 - query executions for listing (filters/pagination)
 - load execution details (execution + step results + audit)
 - operator actions: retry rollback, skip steps, force fail, patch a step result
 
-The dashboard middleware uses `DurableOperator` to power its `/api/*` endpoints.
-
-### End-to-End: run the dashboard locally (Express)
-
-1. Mount the dashboard middleware (you can mount under any prefix):
-
-```ts
-import express from "express";
-import {
-  DurableOperator,
-  createDashboardMiddleware,
-} from "@bluelibs/runner/node";
-
-const app = express();
-app.use(
-  "/durable-dashboard",
-  createDashboardMiddleware(d.service, new DurableOperator(store), {
-    operatorAuth: (req) => req.headers["x-ops-token"] === process.env.OPS_TOKEN,
-  }),
-);
-app.listen(3000);
-```
-
-> [!NOTE]
-> Operator actions are denied by default unless you provide `operatorAuth`. You can opt out with `dangerouslyAllowUnauthenticatedOperator: true` (not recommended).
-
-2. Start a few executions (so you have something to look at), then open:
-
-- `http://localhost:3000/durable-dashboard`
+You can use `DurableOperator` as the backend contract for your own operational UI or APIs.
 
 ### Audit trail (timeline)
 
@@ -2217,7 +2165,7 @@ const mirrorAudit = r
 - **Don't hang forever**: prefer `durableService.wait(executionId, { timeout: ... })` unless you intentionally want an unbounded wait.
 - **Compensation failures are terminal**: if `ctx.rollback()` fails, execution becomes `compensation_failed` and `wait()` rejects. Use `DurableOperator.retryRollback(executionId)` after fixing the underlying issue.
 - **Intervals can overlap**: interval schedules are currently measured from kickoff time, not completion time. If you need non-overlapping behavior, implement it via `ctx.sleep()` inside the workflow.
-- **Debugging**: inspect step results + timers in the dashboard, or query your `IDurableStore` implementation directly (Redis keys are prefixed by `durable:` by default).
+- **Debugging**: inspect step results + timers via `DurableOperator`/store queries (Redis keys are prefixed by `durable:` by default).
 
 ## Idempotency & Deduplication
 
@@ -2258,10 +2206,10 @@ Administrative alternatives still exist:
 1. **Exactly-once external side effects** – The system provides at-least-once execution with effectively-once steps; true exactly-once semantics at the boundary (e.g., payment processors) are left to idempotent APIs and application logic.
 2. **Event sourcing** – Steps are modeled as checkpoints, not a full event stream. This keeps the model simple.
 3. **Automatic saga orchestration DSLs** – There is no separate workflow language or visual designer. Compensation is regular TypeScript code using `try/catch` and `ctx.step`.
-4. **Built-in dashboards** – While a basic dashboard middleware is now included for developer convenience, the core design focuses on a clean API and store schema; sophisticated observability remains the responsibility of the application.
+4. **Built-in dashboards** – not included in core; observability UIs are intentionally external to the runtime package.
 5. **Cross-region or multi-tenant sharding logic** – Multi-region replication and advanced topology concerns are out of scope for v1.
 
-Also intentionally minimal in v1: 6. **Preemptive cancellation** – cancellation is cooperative (checkpoints), not an interrupt/kill mechanism for arbitrary in-flight async work. 7. **Advanced visibility indexes** – `listExecutions` is dashboard-oriented and not a full-blown search/indexing system. 8. **Cron timezone & misfire policies** – cron is evaluated using the process environment defaults; DST/timezone/misfire handling is not configurable yet.
+Also intentionally minimal in v1: 6. **Preemptive cancellation** – cancellation is cooperative (checkpoints), not an interrupt/kill mechanism for arbitrary in-flight async work. 7. **Advanced visibility indexes** – `listExecutions` is operator-oriented and not a full-blown search/indexing system. 8. **Cron timezone & misfire policies** – cron is evaluated using the process environment defaults; DST/timezone/misfire handling is not configurable yet.
 
 These can all be added in future versions if needed, without changing the core `DurableContext` and `DurableService` APIs.
 

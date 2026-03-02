@@ -4,7 +4,16 @@ import { Match } from "../../../tools/check";
 
 export type TunnelPolicySide = "client" | "server";
 
-export type TunnelMiddlewareId = string | ITaskMiddleware<any, any, any, any>;
+/**
+ * Identifier-like shape for task middleware references in tunnel policies.
+ *
+ * Why: tunnel policy config is often authored as plain JSON-ish data, so we
+ * support both string ids and `{ id }` objects. Real middleware definitions are
+ * also accepted because they structurally contain `id: string`.
+ */
+export type TunnelMiddlewareId =
+  | string
+  | Pick<ITaskMiddleware<any, any, any, any>, "id">;
 
 export interface TunnelTaskMiddlewareSidePolicy {
   /**

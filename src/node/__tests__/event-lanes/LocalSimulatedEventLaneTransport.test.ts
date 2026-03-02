@@ -215,8 +215,6 @@ describe("LocalSimulatedEventLaneTransport", () => {
     });
     context.eventRouteByEventId.set(event.id, {
       lane: { id: laneId },
-      orderingKey: undefined,
-      metadata: undefined,
     } as any);
     const store = {
       events: new Map([[event.id, { event }]]),
@@ -263,8 +261,6 @@ describe("LocalSimulatedEventLaneTransport", () => {
     });
     context.eventRouteByEventId.set(event.id, {
       lane: { id: "tests.local-simulated.policy-miss.other-lane" },
-      orderingKey: undefined,
-      metadata: undefined,
     } as any);
     const store = {
       events: new Map([[event.id, { event }]]),

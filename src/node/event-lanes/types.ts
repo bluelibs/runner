@@ -14,8 +14,6 @@ export interface EventLaneMessage {
   eventId: string;
   payload: string;
   source: RuntimeCallSource;
-  orderingKey?: string;
-  metadata?: Record<string, unknown>;
   authToken?: string;
   createdAt: Date;
   attempts: number;

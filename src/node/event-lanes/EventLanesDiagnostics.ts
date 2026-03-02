@@ -11,7 +11,6 @@ type EventLanesEnqueueLogInput = {
   mode: EventLanesMode;
   sourceKind: string;
   sourceId: string;
-  orderingKey?: string;
 };
 
 type EventLanesRelayLogInput = {

@@ -12,7 +12,6 @@ export function isInCoverageScope(relPosix) {
   if (relPosix.endsWith(".d.ts")) return false;
   if (!(relPosix.endsWith(".ts") || relPosix.endsWith(".tsx"))) return false;
   if (relPosix.includes("/__tests__/")) return false;
-  if (relPosix.startsWith("src/node/durable/dashboard/")) return false;
   return true;
 }
 

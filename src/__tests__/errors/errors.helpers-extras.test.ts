@@ -18,9 +18,10 @@ import {
   unknownMiddlewareTypeError,
   parallelInitSchedulingError,
   platformUnreachableError,
-  dashboardApiRequestError,
   eventLaneEventNotRegisteredError,
   eventLaneRpcLaneConflictError,
+  eventLaneAssignmentConflictError,
+  rpcLaneTaskAssignmentConflictError,
   remoteLaneAuthSignerMissingError,
   remoteLaneAuthVerifierMissingError,
 } from "../../errors";
@@ -130,11 +131,6 @@ describe("error helpers extra branches", () => {
       ).toContain("unreachable branch");
       expect(
         captureMessage(() =>
-          dashboardApiRequestError.throw({ message: "dashboard failed" }),
-        ),
-      ).toContain("dashboard failed");
-      expect(
-        captureMessage(() =>
           eventLaneEventNotRegisteredError.throw({ eventId: "evt.missing" }),
         ),
       ).toContain('unknown event "evt.missing"');
@@ -147,6 +143,24 @@ describe("error helpers extra branches", () => {
           }),
         ),
       ).toContain('Event "evt.lanes.invalid" cannot define both lane tags');
+      expect(
+        captureMessage(() =>
+          rpcLaneTaskAssignmentConflictError.throw({
+            taskId: "task.double-lane",
+            currentLaneId: "rpc.a",
+            attemptedLaneId: "rpc.b",
+          }),
+        ),
+      ).toContain('Task "task.double-lane" is already assigned');
+      expect(
+        captureMessage(() =>
+          eventLaneAssignmentConflictError.throw({
+            eventId: "evt.double-lane",
+            currentLaneId: "event.a",
+            attemptedLaneId: "event.b",
+          }),
+        ),
+      ).toContain('Event "evt.double-lane" is already assigned');
       expect(
         captureMessage(() =>
           remoteLaneAuthSignerMissingError.throw({

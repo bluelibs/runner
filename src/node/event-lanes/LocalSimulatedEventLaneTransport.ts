@@ -62,8 +62,6 @@ export class LocalSimulatedEventLaneTransport {
         eventId: emission.id,
         payload: this.dependencies.serializer.stringify(emission.data),
         source: emission.source,
-        orderingKey: eventRoute.orderingKey,
-        metadata: eventRoute.metadata,
         authToken,
         createdAt: new Date(),
         attempts: 1,
@@ -77,7 +75,6 @@ export class LocalSimulatedEventLaneTransport {
         mode: "local-simulated",
         sourceKind: emission.source.kind,
         sourceId: emission.source.id,
-        orderingKey: eventRoute.orderingKey,
       });
 
       this.scheduleRelay(message);

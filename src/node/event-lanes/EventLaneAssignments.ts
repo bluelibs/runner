@@ -14,8 +14,6 @@ const RPC_LANES_RESOURCE_ID = "platform.node.resources.rpcLanes";
 
 export interface EventLaneRoute {
   lane: IEventLaneDefinition;
-  orderingKey?: string;
-  metadata?: Record<string, unknown>;
 }
 
 export function resolveEventLaneAssignments(
@@ -91,14 +89,9 @@ export function resolveEventLaneAssignments(
     const eventId = eventEntry.event.id;
     const existing = routesByEventId.get(eventId);
     if (existing) {
-      // applyTo is authoritative, but tags can still provide ordering/metadata
-      // when they agree on the lane.
+      // applyTo is authoritative; tags only apply when no applyTo matched.
       if (existing.lane.id === laneConfig.lane.id) {
-        routesByEventId.set(eventId, {
-          lane: existing.lane,
-          orderingKey: existing.orderingKey ?? laneConfig.orderingKey,
-          metadata: existing.metadata ?? laneConfig.metadata,
-        });
+        // Same lane, no-op.
       }
       continue;
     }
@@ -118,8 +111,6 @@ export function resolveEventLaneAssignments(
 
     routesByEventId.set(eventId, {
       lane: laneConfig.lane,
-      orderingKey: laneConfig.orderingKey,
-      metadata: laneConfig.metadata,
     });
   }
 

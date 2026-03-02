@@ -67,7 +67,7 @@ const SUPPORTED_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"]);
 function collectFiles(dir) {
   const results = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    // Skip node_modules folders nested inside src (e.g. bundled dashboard deps).
+    // Skip nested dependency folders if present under src.
     if (entry.isDirectory() && entry.name === "node_modules") continue;
 
     const full = path.join(dir, entry.name);
