@@ -1,4 +1,4 @@
-import type { ITagMeta, IValidationSchema, TagTarget } from "../../../defs";
+import type { ITagMeta, TagTarget, ValidationSchemaInput } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineTag } from "../../defineTag";
@@ -30,14 +30,14 @@ export function makeTagBuilder<
       return makeTagBuilder(next);
     },
 
-    configSchema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
+    configSchema<TNewConfig>(schema: ValidationSchemaInput<TNewConfig>) {
       const next = clone(state, {
         configSchema: schema,
       }) as BuilderState<TNewConfig, TEnforceIn, TEnforceOut, TAllowedTargets>;
       return makeTagBuilder(next);
     },
 
-    schema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
+    schema<TNewConfig>(schema: ValidationSchemaInput<TNewConfig>) {
       return builder.configSchema(schema);
     },
 
@@ -85,7 +85,7 @@ export function makeTagBuilder<
       const tag = defineTag<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets>({
         id: state.id,
         meta: state.meta,
-        configSchema: state.configSchema as IValidationSchema<TConfig>,
+        configSchema: state.configSchema,
         config: state.config as TConfig,
         targets: state.targets,
       });

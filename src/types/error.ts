@@ -1,6 +1,6 @@
 import { symbolError, symbolFilePath } from "./symbols";
 import type { IOptionalDependency } from "./utilities";
-import type { IValidationSchema } from "./utilities";
+import type { IValidationSchema, ValidationSchemaInput } from "./utilities";
 import type { IErrorMeta } from "./meta";
 import type { ErrorTagType } from "./tag";
 
@@ -24,7 +24,7 @@ export interface IErrorDefinition<
   /**
    * Validate error data on throw(). If provided, data is parsed first.
    */
-  dataSchema?: IValidationSchema<TData>;
+  dataSchema?: ValidationSchemaInput<TData>;
   meta?: IErrorMeta;
   tags?: ErrorTagType[];
 }
@@ -35,6 +35,7 @@ export interface IErrorDefinitionFinal<
   format: (data: TData) => string;
   httpCode?: number;
   remediation?: string | ((data: TData) => string);
+  dataSchema?: IValidationSchema<TData>;
 }
 
 export type DefaultErrorType = Record<string, unknown>;

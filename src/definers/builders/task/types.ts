@@ -1,9 +1,9 @@
 import type {
   DependencyMapType,
   ITaskMeta,
-  IValidationSchema,
   TaskTagType,
   TaskMiddlewareAttachmentType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -35,8 +35,8 @@ export type BuilderState<
   dependencies?: TDeps | (() => TDeps);
   middleware?: TMiddleware;
   meta?: TMeta;
-  inputSchema?: IValidationSchema<any>;
-  resultSchema?: IValidationSchema<any>;
+  inputSchema?: ValidationSchemaInput<any>;
+  resultSchema?: ValidationSchemaInput<any>;
   throws?: ThrowsList;
   run?: (input: unknown, dependencies: unknown) => unknown;
   tags?: TTags;
@@ -58,8 +58,8 @@ export type PhantomBuilderState<
   dependencies?: TDeps | (() => TDeps);
   middleware?: TMiddleware;
   meta?: TMeta;
-  inputSchema?: IValidationSchema<any>;
-  resultSchema?: IValidationSchema<any>;
+  inputSchema?: ValidationSchemaInput<any>;
+  resultSchema?: ValidationSchemaInput<any>;
   throws?: ThrowsList;
   tags?: TTags;
 }>;

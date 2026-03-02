@@ -194,4 +194,110 @@ describe("tools/check decorators", () => {
     );
     expect(anonymousDefinition.schemaId).toBe("Anonymous");
   });
+
+  it("caches resolved schema definitions and invalidates on metadata updates", () => {
+    class CachedSchema {
+      public id!: string;
+      public title!: string;
+    }
+
+    Match.Schema()(CachedSchema);
+    Match.Field(Match.NonEmptyString)(CachedSchema.prototype, "id");
+
+    const firstDefinition = getClassSchemaDefinition(CachedSchema);
+    const secondDefinition = getClassSchemaDefinition(CachedSchema);
+    expect(secondDefinition).toBe(firstDefinition);
+    expect(Object.keys(firstDefinition.pattern)).toEqual(["id"]);
+
+    Match.Field(Match.NonEmptyString)(CachedSchema.prototype, "title");
+
+    const thirdDefinition = getClassSchemaDefinition(CachedSchema);
+    expect(thirdDefinition).not.toBe(firstDefinition);
+    expect(Object.keys(thirdDefinition.pattern)).toEqual(["id", "title"]);
+  });
+
+  it("supports explicit schema base extension via Match.Schema({ base })", () => {
+    class BaseSchema {
+      public id!: string;
+    }
+
+    class DerivedSchema {
+      public title!: string;
+    }
+
+    class LazyDerivedSchema {
+      public label!: string;
+    }
+
+    Match.Schema()(BaseSchema);
+    Match.Field(Match.NonEmptyString)(BaseSchema.prototype, "id");
+
+    Match.Schema({ base: BaseSchema })(DerivedSchema);
+    Match.Field(Match.NonEmptyString)(DerivedSchema.prototype, "title");
+
+    Match.Schema({ base: () => BaseSchema })(LazyDerivedSchema);
+    Match.Field(Match.NonEmptyString)(LazyDerivedSchema.prototype, "label");
+
+    expect(getClassSchemaDefinition(DerivedSchema).pattern).toEqual({
+      id: Match.NonEmptyString,
+      title: Match.NonEmptyString,
+    });
+    expect(getClassSchemaDefinition(LazyDerivedSchema).pattern).toEqual({
+      id: Match.NonEmptyString,
+      label: Match.NonEmptyString,
+    });
+
+    expect(() =>
+      check(
+        { id: "id-1", title: "Book" },
+        Match.fromSchema(DerivedSchema, { exact: true }),
+      ),
+    ).not.toThrow();
+
+    class LeftSchema {
+      public left!: string;
+    }
+
+    class RightSchema {
+      public right!: string;
+    }
+
+    Match.Schema({ base: () => RightSchema })(LeftSchema);
+    Match.Schema({ base: () => LeftSchema })(RightSchema);
+    Match.Field(Match.NonEmptyString)(LeftSchema.prototype, "left");
+    Match.Field(Match.NonEmptyString)(RightSchema.prototype, "right");
+
+    expect(() => getClassSchemaDefinition(LeftSchema)).toThrow(RunnerError);
+
+    const AnonymousLeft = function () {
+      return undefined;
+    };
+    const AnonymousRight = function () {
+      return undefined;
+    };
+    Object.defineProperty(AnonymousLeft, "name", { value: "" });
+    Object.defineProperty(AnonymousRight, "name", { value: "" });
+
+    Match.Schema({ base: () => AnonymousRight as never })(
+      AnonymousLeft as never,
+    );
+    Match.Schema({ base: () => AnonymousLeft as never })(
+      AnonymousRight as never,
+    );
+
+    expect(() => getClassSchemaDefinition(AnonymousLeft as never)).toThrow(
+      "Anonymous",
+    );
+
+    const AnonymousBaseOwner = function () {
+      return undefined;
+    };
+    Object.defineProperty(AnonymousBaseOwner, "name", { value: "" });
+
+    Match.Schema({ base: () => ({}) as never })(AnonymousBaseOwner as never);
+
+    expect(() => getClassSchemaDefinition(AnonymousBaseOwner as never)).toThrow(
+      RunnerError,
+    );
+  });
 });

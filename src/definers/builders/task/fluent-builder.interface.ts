@@ -4,10 +4,10 @@ import type {
   ITask,
   ITaskDefinition,
   ITaskMeta,
-  IValidationSchema,
   TagType,
   TaskTagType,
   TaskMiddlewareAttachmentType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 import type { ResolveInput } from "./types";
@@ -70,18 +70,18 @@ export interface TaskFluentBuilder<
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TNewTags, TMiddleware>;
 
   inputSchema<TNewInput>(
-    schema: IValidationSchema<TNewInput>,
+    schema: ValidationSchemaInput<TNewInput>,
   ): TaskFluentBuilder<TNewInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
 
   /**
    * Alias for inputSchema. Use this to define the task input validation contract.
    */
   schema<TNewInput>(
-    schema: IValidationSchema<TNewInput>,
+    schema: ValidationSchemaInput<TNewInput>,
   ): TaskFluentBuilder<TNewInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
 
   resultSchema<TResolved>(
-    schema: IValidationSchema<TResolved>,
+    schema: ValidationSchemaInput<TResolved>,
   ): TaskFluentBuilder<
     TInput,
     Promise<TResolved>,

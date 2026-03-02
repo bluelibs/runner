@@ -4,6 +4,7 @@ import {
   ITagStartupDependency,
   IOptionalDependency,
   IValidationSchema,
+  ValidationSchemaInput,
   RequiredKeys,
   symbolFilePath,
   symbolTag,
@@ -31,7 +32,7 @@ export interface ITagDefinition<
 > {
   id: string;
   meta?: ITagMeta;
-  configSchema?: IValidationSchema<TConfig>;
+  configSchema?: ValidationSchemaInput<TConfig>;
   /**
    * Utilizing config at definition level stores its defaults
    */
@@ -71,6 +72,7 @@ export interface ITag<
   readonly __allowedTagTargets?: TAllowedTargets;
 
   config?: TConfig;
+  configSchema?: IValidationSchema<TConfig>;
   meta: ITagMeta;
   /**
    * Checks if the tag exists in a taggable or a list of tags.

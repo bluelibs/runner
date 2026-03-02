@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "child_process";
+import { sanitizeNodeOptionEnv } from "./sanitize-node-options.mjs";
 
 function parseArgs(argv) {
   const idx = argv.indexOf("--");
@@ -19,7 +20,8 @@ async function main() {
 
   const child = spawn("jest", jestArgs, {
     stdio: "inherit",
-    env: process.env,
+    // Guard against malformed upstream Node flags propagating into Jest workers.
+    env: sanitizeNodeOptionEnv(process.env),
     shell: process.platform === "win32",
   });
 

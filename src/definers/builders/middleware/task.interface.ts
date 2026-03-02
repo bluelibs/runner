@@ -3,9 +3,9 @@ import type {
   EnsureTagsForTarget,
   ITaskMiddleware,
   ITaskMiddlewareDefinition,
-  IValidationSchema,
   IMiddlewareMeta,
   TaskMiddlewareTagType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -27,14 +27,14 @@ export interface TaskMiddlewareFluentBuilderBeforeRun<
     options: { override: true },
   ): TaskMiddlewareFluentBuilderBeforeRun<C, In, Out, TNewDeps>;
   configSchema<TNew>(
-    schema: IValidationSchema<TNew>,
+    schema: ValidationSchemaInput<TNew>,
   ): TaskMiddlewareFluentBuilderBeforeRun<TNew, In, Out, D>;
 
   /**
    * Alias for configSchema. Use this to define the middleware configuration validation contract.
    */
   schema<TNew>(
-    schema: IValidationSchema<TNew>,
+    schema: ValidationSchemaInput<TNew>,
   ): TaskMiddlewareFluentBuilderBeforeRun<TNew, In, Out, D>;
 
   run(

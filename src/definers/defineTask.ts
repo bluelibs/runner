@@ -19,6 +19,7 @@ import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 /**
  * Define a task.
@@ -46,6 +47,20 @@ export function defineTask<
 ): ITask<Input, Output, Deps, TMeta, TTags, TMiddleware> {
   const filePath = getCallerFile();
   const id = taskConfig.id;
+  const inputSchema = normalizeOptionalValidationSchema(
+    taskConfig.inputSchema,
+    {
+      definitionId: id,
+      subject: "Task input",
+    },
+  );
+  const resultSchema = normalizeOptionalValidationSchema(
+    taskConfig.resultSchema,
+    {
+      definitionId: id,
+      subject: "Task result",
+    },
+  );
   assertTagTargetsApplicableTo("tasks", "Task", id, taskConfig.tags);
   return deepFreeze({
     [symbolTask]: true,
@@ -56,8 +71,8 @@ export function defineTask<
       taskConfig.middleware ||
       ([] as TaskMiddlewareAttachmentType[] as TMiddleware),
     run: taskConfig.run,
-    inputSchema: taskConfig.inputSchema,
-    resultSchema: taskConfig.resultSchema,
+    inputSchema,
+    resultSchema,
     meta: taskConfig.meta || ({} as TMeta),
     tags: taskConfig.tags || ([] as TaskTagType[] as TTags),
     throws: normalizeThrows({ kind: "task", id }, taskConfig.throws),

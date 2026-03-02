@@ -15,6 +15,7 @@ import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { normalizeThrows } from "../tools/throws";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 export function defineResourceMiddleware<
   TConfig = any,
@@ -35,6 +36,13 @@ export function defineResourceMiddleware<
   TDependencies
 > {
   const filePath = getCallerFile();
+  const configSchema = normalizeOptionalValidationSchema(
+    middlewareDef.configSchema,
+    {
+      definitionId: middlewareDef.id,
+      subject: "Middleware config",
+    },
+  );
   assertTagTargetsApplicableTo(
     "resourceMiddlewares",
     "Resource middleware",
@@ -46,8 +54,8 @@ export function defineResourceMiddleware<
     [symbolFilePath]: filePath,
     [symbolResourceMiddleware]: true,
     config: {} as TConfig,
-    configSchema: middlewareDef.configSchema,
     ...middlewareDef,
+    configSchema,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
     throws: normalizeThrows(
       { kind: "resource-middleware", id: middlewareDef.id },

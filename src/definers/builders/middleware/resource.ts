@@ -2,9 +2,9 @@ import type {
   DependencyMapType,
   EnsureTagsForTarget,
   IResourceMiddlewareDefinition,
-  IValidationSchema,
   IMiddlewareMeta,
   ResourceMiddlewareTagType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
@@ -71,14 +71,14 @@ export function makeResourceMiddlewareBuilder<
       );
     },
 
-    configSchema<TNew>(schema: IValidationSchema<TNew>) {
+    configSchema<TNew>(schema: ValidationSchemaInput<TNew>) {
       const next = cloneRes<C, In, Out, D, TNew, In, Out, D>(state, {
         configSchema: schema,
       });
       return makeResourceMiddlewareBuilder<TNew, In, Out, D, false>(next);
     },
 
-    schema<TNew>(schema: IValidationSchema<TNew>) {
+    schema<TNew>(schema: ValidationSchemaInput<TNew>) {
       return builder.configSchema(schema);
     },
 

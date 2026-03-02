@@ -2,6 +2,7 @@ import {
   DependencyMapType,
   DependencyValuesType,
   IValidationSchema,
+  ValidationSchemaInput,
 } from "./utilities";
 import type { ITask } from "./task";
 import type { ExecutionJournal } from "./executionJournal";
@@ -32,7 +33,7 @@ export interface ITaskMiddlewareDefinition<
    * Optional validation schema for runtime config validation.
    * When provided, middleware config will be validated when .with() is called.
    */
-  configSchema?: IValidationSchema<TConfig>;
+  configSchema?: ValidationSchemaInput<TConfig>;
   /**
    * The middleware body, called with task execution input.
    */
@@ -75,6 +76,7 @@ export interface ITaskMiddleware<
   throws?: readonly string[];
   /** Current configuration object (empty by default). */
   config: TConfig;
+  configSchema?: IValidationSchema<TConfig>;
   /** Configure the middleware and return a marked, configured instance. */
   with: (
     config: TConfig,

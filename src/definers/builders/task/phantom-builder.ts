@@ -3,10 +3,10 @@ import type {
   EnsureTagsForTarget,
   IPhantomTask,
   ITaskMeta,
-  IValidationSchema,
   TagType,
   TaskTagType,
   TaskMiddlewareAttachmentType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
@@ -176,7 +176,7 @@ export function makePhantomTaskBuilder<
       >(next);
     },
 
-    inputSchema<TNewInput>(schema: IValidationSchema<TNewInput>) {
+    inputSchema<TNewInput>(schema: ValidationSchemaInput<TNewInput>) {
       const next = clone<
         TInput,
         TResolved,
@@ -203,7 +203,7 @@ export function makePhantomTaskBuilder<
       >(next);
     },
 
-    resultSchema<TNewResolved>(schema: IValidationSchema<TNewResolved>) {
+    resultSchema<TNewResolved>(schema: ValidationSchemaInput<TNewResolved>) {
       const next = clone<
         TInput,
         TResolved,

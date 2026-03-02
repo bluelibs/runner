@@ -1,8 +1,8 @@
 import type {
   ITag,
   ITagMeta,
-  IValidationSchema,
   TagTarget,
+  ValidationSchemaInput,
 } from "../../../defs";
 
 export interface TagFluentBuilder<
@@ -17,14 +17,14 @@ export interface TagFluentBuilder<
   ): TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets>;
 
   configSchema<TNewConfig>(
-    schema: IValidationSchema<TNewConfig>,
+    schema: ValidationSchemaInput<TNewConfig>,
   ): TagFluentBuilder<TNewConfig, TEnforceIn, TEnforceOut, TAllowedTargets>;
 
   /**
    * Alias for configSchema. Use this to define the tag configuration validation contract.
    */
   schema<TNewConfig>(
-    schema: IValidationSchema<TNewConfig>,
+    schema: ValidationSchemaInput<TNewConfig>,
   ): TagFluentBuilder<TNewConfig, TEnforceIn, TEnforceOut, TAllowedTargets>;
 
   config<TNewConfig>(

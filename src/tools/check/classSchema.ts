@@ -1,6 +1,15 @@
+import { MatchPatternError } from "./errors";
+
+type ClassConstructor = abstract new (...args: never[]) => unknown;
+
+type ClassSchemaBaseResolver = () => ClassConstructor;
+
+export type MatchSchemaBase = ClassConstructor | ClassSchemaBaseResolver;
+
 export interface MatchSchemaOptions {
   exact?: boolean;
   schemaId?: string;
+  base?: MatchSchemaBase;
 }
 
 export type MatchClassOptions = MatchSchemaOptions;
@@ -10,9 +19,23 @@ interface ClassSchemaMetadata {
   options: MatchSchemaOptions;
 }
 
-type ClassConstructor = abstract new (...args: never[]) => unknown;
+interface ClassSchemaDefinition {
+  pattern: Record<string, unknown>;
+  exact: boolean;
+  schemaId: string;
+}
+
+interface CachedClassSchemaDefinition {
+  version: number;
+  definition: ClassSchemaDefinition;
+}
 
 const CLASS_SCHEMA_METADATA = new WeakMap<Function, ClassSchemaMetadata>();
+const CLASS_SCHEMA_DEFINITION_CACHE = new WeakMap<
+  Function,
+  CachedClassSchemaDefinition
+>();
+let classSchemaMetadataVersion = 0;
 
 function ensureMetadata(target: Function): ClassSchemaMetadata {
   const existing = CLASS_SCHEMA_METADATA.get(target);
@@ -24,6 +47,35 @@ function ensureMetadata(target: Function): ClassSchemaMetadata {
   };
   CLASS_SCHEMA_METADATA.set(target, created);
   return created;
+}
+
+function bumpSchemaMetadataVersion(): void {
+  classSchemaMetadataVersion += 1;
+}
+
+function isClassConstructor(value: unknown): value is ClassConstructor {
+  return (
+    typeof value === "function" &&
+    typeof (value as { prototype?: unknown }).prototype === "object"
+  );
+}
+
+function resolveSchemaBase(
+  baseOption: MatchSchemaBase,
+  owner: Function,
+): ClassConstructor {
+  if (isClassConstructor(baseOption)) {
+    return baseOption;
+  }
+
+  const resolved = baseOption();
+  if (!isClassConstructor(resolved)) {
+    throw new MatchPatternError(
+      `Bad pattern: Match.Schema({ base }) for ${owner.name || "Anonymous"} must resolve to a class constructor.`,
+    );
+  }
+
+  return resolved;
 }
 
 function getClassChain(target: Function): Function[] {
@@ -49,6 +101,7 @@ export function setClassSchemaOptions(
     ...metadata.options,
     ...options,
   };
+  bumpSchemaMetadataVersion();
 }
 
 export function setClassFieldPattern(
@@ -58,39 +111,82 @@ export function setClassFieldPattern(
 ): void {
   const metadata = ensureMetadata(target as unknown as Function);
   metadata.fields.set(propertyKey, pattern);
+  bumpSchemaMetadataVersion();
 }
 
-export function getClassSchemaDefinition(target: ClassConstructor): {
-  pattern: Record<string, unknown>;
-  exact: boolean;
-  schemaId: string;
-} {
+function buildClassSchemaDefinition(
+  target: ClassConstructor,
+  activeTargets: Set<Function>,
+): ClassSchemaDefinition {
+  if (activeTargets.has(target as unknown as Function)) {
+    throw new MatchPatternError(
+      `Bad pattern: Match.Schema({ base }) contains a circular base chain at ${target.name || "Anonymous"}.`,
+    );
+  }
+
+  activeTargets.add(target as unknown as Function);
+
   const fields: Record<string, unknown> = {};
   let exact = false;
   let schemaId = target.name || "Anonymous";
 
-  for (const ctor of getClassChain(target as unknown as Function)) {
-    const metadata = CLASS_SCHEMA_METADATA.get(ctor);
-    if (!metadata) continue;
+  try {
+    for (const ctor of getClassChain(target as unknown as Function)) {
+      const metadata = CLASS_SCHEMA_METADATA.get(ctor);
+      if (!metadata) continue;
 
-    for (const [key, pattern] of metadata.fields.entries()) {
-      fields[key] = pattern;
+      if (metadata.options.base) {
+        const baseConstructor = resolveSchemaBase(metadata.options.base, ctor);
+        const baseDefinition = buildClassSchemaDefinition(
+          baseConstructor,
+          activeTargets,
+        );
+
+        Object.assign(fields, baseDefinition.pattern);
+        exact = baseDefinition.exact;
+        schemaId = baseDefinition.schemaId;
+      }
+
+      for (const [key, pattern] of metadata.fields.entries()) {
+        fields[key] = pattern;
+      }
+
+      if (metadata.options.exact !== undefined) {
+        exact = metadata.options.exact;
+      }
+
+      if (metadata.options.schemaId && metadata.options.schemaId.length > 0) {
+        schemaId = metadata.options.schemaId;
+      }
     }
 
-    if (metadata.options.exact !== undefined) {
-      exact = metadata.options.exact;
-    }
+    return Object.freeze({
+      pattern: Object.freeze({ ...fields }),
+      exact,
+      schemaId,
+    });
+  } finally {
+    activeTargets.delete(target as unknown as Function);
+  }
+}
 
-    if (metadata.options.schemaId && metadata.options.schemaId.length > 0) {
-      schemaId = metadata.options.schemaId;
-    }
+export function getClassSchemaDefinition(
+  target: ClassConstructor,
+): ClassSchemaDefinition {
+  const cached = CLASS_SCHEMA_DEFINITION_CACHE.get(
+    target as unknown as Function,
+  );
+  if (cached && cached.version === classSchemaMetadataVersion) {
+    return cached.definition;
   }
 
-  return {
-    pattern: fields,
-    exact,
-    schemaId,
-  };
+  const definition = buildClassSchemaDefinition(target, new Set<Function>());
+  CLASS_SCHEMA_DEFINITION_CACHE.set(target as unknown as Function, {
+    version: classSchemaMetadataVersion,
+    definition,
+  });
+
+  return definition;
 }
 
 export function hasClassSchemaMetadata(target: ClassConstructor): boolean {

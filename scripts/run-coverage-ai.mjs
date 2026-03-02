@@ -6,6 +6,7 @@ import {
   isInCoverageScope,
   toCoverageScopedRelPosixPath,
 } from "./coverage-scope.mjs";
+import { sanitizeNodeOptionEnv } from "./sanitize-node-options.mjs";
 
 function parseArgs(argv) {
   const idx = argv.indexOf("--");
@@ -76,9 +77,11 @@ function countCoverageBelowHundredFromFinal() {
 
 function run(cmd, args, env) {
   return new Promise((resolve) => {
+    // Keep child runs stable when external wrappers inject malformed Node flags.
+    const mergedEnv = sanitizeNodeOptionEnv({ ...process.env, ...env });
     const child = spawn(cmd, args, {
       stdio: "inherit",
-      env: { ...process.env, ...env },
+      env: mergedEnv,
       shell: false,
     });
     child.on("close", (code) => resolve(code ?? 0));

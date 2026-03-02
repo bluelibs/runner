@@ -16,6 +16,7 @@ import {
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
+import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 /**
  * Create a tag definition.
@@ -47,13 +48,20 @@ export function defineTag<
 > {
   const id = definition.id;
   const filePath = getCallerFile();
+  const configSchema = normalizeOptionalValidationSchema(
+    definition.configSchema,
+    {
+      definitionId: id,
+      subject: "Tag config",
+    },
+  );
   const isPlainObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null && !Array.isArray(value);
   const foundation = {
     id,
     meta: definition.meta ?? {},
     config: definition.config,
-    configSchema: definition.configSchema,
+    configSchema,
     targets: definition.targets,
   } as ITag<
     TConfig,
@@ -72,9 +80,9 @@ export function defineTag<
      * @returns
      */
     with(tagConfig: TConfig) {
-      if (definition.configSchema) {
+      if (configSchema) {
         try {
-          tagConfig = definition.configSchema.parse(tagConfig);
+          tagConfig = configSchema.parse(tagConfig);
         } catch (error) {
           validationError.throw({
             subject: "Tag config",

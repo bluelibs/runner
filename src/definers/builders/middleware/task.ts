@@ -2,9 +2,9 @@ import type {
   DependencyMapType,
   EnsureTagsForTarget,
   ITaskMiddlewareDefinition,
-  IValidationSchema,
   IMiddlewareMeta,
   TaskMiddlewareTagType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
@@ -69,14 +69,14 @@ export function makeTaskMiddlewareBuilder<
       return makeTaskMiddlewareBuilder<C, In, Out, D & TNewDeps, false>(next);
     },
 
-    configSchema<TNew>(schema: IValidationSchema<TNew>) {
+    configSchema<TNew>(schema: ValidationSchemaInput<TNew>) {
       const next = cloneTask<C, In, Out, D, TNew, In, Out, D>(state, {
         configSchema: schema,
       });
       return makeTaskMiddlewareBuilder<TNew, In, Out, D, false>(next);
     },
 
-    schema<TNew>(schema: IValidationSchema<TNew>) {
+    schema<TNew>(schema: ValidationSchemaInput<TNew>) {
       return builder.configSchema(schema);
     },
 

@@ -3,7 +3,6 @@ import type {
   EnsureTagsForTarget,
   IResourceDefinition,
   IResourceMeta,
-  IValidationSchema,
   IsolationExportsTarget,
   IsolationPolicy,
   OverridableElements,
@@ -13,6 +12,7 @@ import type {
   ResourceSubtreePolicy,
   ResourceTagType,
   TagType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
@@ -223,7 +223,7 @@ export function makeResourceBuilder<
         false
       >(next);
     },
-    configSchema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
+    configSchema<TNewConfig>(schema: ValidationSchemaInput<TNewConfig>) {
       const next = clone<
         TConfig,
         TValue,
@@ -251,10 +251,10 @@ export function makeResourceBuilder<
         false
       >(next);
     },
-    schema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
+    schema<TNewConfig>(schema: ValidationSchemaInput<TNewConfig>) {
       return builder.configSchema(schema);
     },
-    resultSchema<TResolved>(schema: IValidationSchema<TResolved>) {
+    resultSchema<TResolved>(schema: ValidationSchemaInput<TResolved>) {
       const next = clone<
         TConfig,
         TValue,

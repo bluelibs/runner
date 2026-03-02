@@ -3,6 +3,7 @@ import {
   DependencyValuesType,
   IOptionalDependency,
   IValidationSchema,
+  ValidationSchemaInput,
 } from "./utilities";
 import { TaskMiddlewareAttachmentType } from "./taskMiddleware";
 import { TaskTagType } from "./tag";
@@ -63,13 +64,13 @@ export interface ITaskDefinition<
    * Optional validation schema for runtime input validation.
    * When provided, task input will be validated before execution.
    */
-  inputSchema?: IValidationSchema<TInput>;
+  inputSchema?: ValidationSchemaInput<TInput>;
   /**
    * Optional validation schema for the task result.
    * When provided, the result will be validated immediately after the task's
    * `run` resolves, without considering middleware.
    */
-  resultSchema?: IValidationSchema<
+  resultSchema?: ValidationSchemaInput<
     TOutput extends Promise<infer U> ? U : never
   >;
   /**
@@ -129,6 +130,10 @@ export interface ITask<
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
   middleware: TMiddleware;
+  inputSchema?: IValidationSchema<TInput>;
+  resultSchema?: IValidationSchema<
+    TOutput extends Promise<infer U> ? U : never
+  >;
   /** Normalized list of error ids declared via `throws`. */
   throws?: readonly string[];
   /** Return an optional dependency wrapper for this task. */

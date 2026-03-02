@@ -1,4 +1,4 @@
-import type { ITagMeta, IValidationSchema, TagTarget } from "../../../defs";
+import type { ITagMeta, TagTarget, ValidationSchemaInput } from "../../../defs";
 
 /**
  * Internal state for the TagFluentBuilder.
@@ -13,7 +13,7 @@ export type BuilderState<
   id: string;
   filePath: string;
   meta?: ITagMeta;
-  configSchema?: IValidationSchema<any>;
+  configSchema?: ValidationSchemaInput<any>;
   config?: TConfig;
   targets?: readonly TagTarget[];
 }>;

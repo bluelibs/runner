@@ -1,11 +1,11 @@
 import type {
   DependencyMapType,
-  IValidationSchema,
   IMiddlewareMeta,
   ResourceMiddlewareTagType,
   TaskMiddlewareTagType,
   ITaskMiddlewareDefinition,
   IResourceMiddlewareDefinition,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -15,7 +15,7 @@ import type { ThrowsList } from "../../../types/error";
 export type TaskMwState<C, In, Out, D extends DependencyMapType> = Readonly<{
   id: string;
   dependencies: D | ((config: C) => D);
-  configSchema: IValidationSchema<C> | undefined;
+  configSchema: ValidationSchemaInput<C> | undefined;
   run: ITaskMiddlewareDefinition<any, In, Out, any>["run"] | undefined;
   meta: IMiddlewareMeta;
   tags: TaskMiddlewareTagType[];
@@ -30,7 +30,7 @@ export type TaskMwState<C, In, Out, D extends DependencyMapType> = Readonly<{
 export type ResMwState<C, In, Out, D extends DependencyMapType> = Readonly<{
   id: string;
   dependencies: D | ((config: C) => D);
-  configSchema: IValidationSchema<C> | undefined;
+  configSchema: ValidationSchemaInput<C> | undefined;
   run: IResourceMiddlewareDefinition<any, In, Out, any>["run"] | undefined;
   meta: IMiddlewareMeta;
   tags: ResourceMiddlewareTagType[];

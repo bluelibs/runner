@@ -3,10 +3,10 @@ import type {
   EnsureTagsForTarget,
   IPhantomTask,
   ITaskMeta,
-  IValidationSchema,
   TagType,
   TaskTagType,
   TaskMiddlewareAttachmentType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -80,7 +80,7 @@ export interface PhantomTaskFluentBuilder<
   >;
 
   inputSchema<TNewInput>(
-    schema: IValidationSchema<TNewInput>,
+    schema: ValidationSchemaInput<TNewInput>,
   ): PhantomTaskFluentBuilder<
     TNewInput,
     TResolved,
@@ -91,7 +91,7 @@ export interface PhantomTaskFluentBuilder<
   >;
 
   resultSchema<TNewResolved>(
-    schema: IValidationSchema<TNewResolved>,
+    schema: ValidationSchemaInput<TNewResolved>,
   ): PhantomTaskFluentBuilder<
     TInput,
     TNewResolved,

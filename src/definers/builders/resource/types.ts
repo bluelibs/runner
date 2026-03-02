@@ -2,13 +2,13 @@ import type {
   DependencyMapType,
   IResourceDefinition,
   IResourceMeta,
-  IValidationSchema,
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   ResourceTagType,
   IsolationPolicy,
   NormalizedResourceSubtreePolicy,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -68,8 +68,8 @@ export type BuilderState<
       TMiddleware
     >["cooldown"]
   >;
-  configSchema?: IValidationSchema<any>;
-  resultSchema?: IValidationSchema<any>;
+  configSchema?: ValidationSchemaInput<any>;
+  resultSchema?: ValidationSchemaInput<any>;
   meta?: TMeta;
   overrides?: Array<any>;
   throws?: ThrowsList;

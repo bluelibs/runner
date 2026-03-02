@@ -3,9 +3,9 @@ import type {
   EnsureTagsForTarget,
   IResourceMiddleware,
   IResourceMiddlewareDefinition,
-  IValidationSchema,
   IMiddlewareMeta,
   ResourceMiddlewareTagType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -27,14 +27,14 @@ export interface ResourceMiddlewareFluentBuilderBeforeRun<
     options: { override: true },
   ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, TNewDeps>;
   configSchema<TNew>(
-    schema: IValidationSchema<TNew>,
+    schema: ValidationSchemaInput<TNew>,
   ): ResourceMiddlewareFluentBuilderBeforeRun<TNew, In, Out, D>;
 
   /**
    * Alias for configSchema. Use this to define the middleware configuration validation contract.
    */
   schema<TNew>(
-    schema: IValidationSchema<TNew>,
+    schema: ValidationSchemaInput<TNew>,
   ): ResourceMiddlewareFluentBuilderBeforeRun<TNew, In, Out, D>;
 
   run(

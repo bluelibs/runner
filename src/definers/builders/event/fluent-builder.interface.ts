@@ -3,7 +3,7 @@ import type {
   EventTagType,
   IEvent,
   IEventMeta,
-  IValidationSchema,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -13,14 +13,14 @@ export interface EventFluentBuilder<
 > {
   id: string;
   payloadSchema<TNew>(
-    schema: IValidationSchema<TNew>,
+    schema: ValidationSchemaInput<TNew>,
   ): EventFluentBuilder<TNew, TTransactional>;
 
   /**
    * Alias for payloadSchema. Use this to define the event payload validation contract.
    */
   schema<TNew>(
-    schema: IValidationSchema<TNew>,
+    schema: ValidationSchemaInput<TNew>,
   ): EventFluentBuilder<TNew, TTransactional>;
 
   tags<TNewTags extends EventTagType[]>(

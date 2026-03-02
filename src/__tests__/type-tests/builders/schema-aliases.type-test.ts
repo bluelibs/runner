@@ -1,4 +1,11 @@
-import { r } from "../../../";
+import { Match, r } from "../../../";
+
+class DecoratedSchema {
+  scope!: string;
+}
+
+Match.Schema()(DecoratedSchema);
+Match.Field(String)(DecoratedSchema.prototype, "scope");
 
 // Type-only tests for fluent `.schema()` aliases.
 
@@ -191,4 +198,26 @@ import { r } from "../../../";
   featureTag.with({ scope: "core" });
   // @ts-expect-error schema enforces tag config shape
   featureTag.with({ scope: 1 });
+}
+
+// Scenario: decorator class shorthand should be accepted in fluent schema APIs.
+{
+  r.task("types.schema.decorator.task")
+    .schema(DecoratedSchema)
+    .run(async (input) => {
+      input.scope;
+      // @ts-expect-error decorator shorthand should infer decorated fields only
+      input.missing;
+      return input.scope;
+    })
+    .build();
+
+  const decoratedTag = r
+    .tag<{ scope: string }>("types.schema.decorator.tag")
+    .configSchema(DecoratedSchema)
+    .build();
+
+  decoratedTag.with({ scope: "x" });
+  // @ts-expect-error config should remain strict with class shorthand schema
+  decoratedTag.with({ scope: 5 });
 }

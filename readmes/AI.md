@@ -134,6 +134,8 @@ const sendEmail = r
 
 - All list builders (`dependencies`, `middleware`, `tags`, `register`, `overrides`, `exports`) append by default; pass `{ override: true }` to replace.
 - `.schema()` is a unified alias for `inputSchema`, `configSchema`, `payloadSchema`, and `dataSchema` (errors). For tasks, maps to `inputSchema` only; use `.resultSchema()` for output validation.
+- Schema resolution precedence is: explicit `parse(input)` schema first; otherwise Runner falls back to pattern validation (`check(...)`).
+- Decorator class shorthand is supported across fluent and non-fluent schema APIs (for example `.configSchema(User)`), but class shorthand requires `Match.Schema()` metadata.
 - Entry generic `r.task<Input>(id)` / `r.resource<Config>(id)` seeds typing before explicit schema declarations.
 - All builders support `.meta({ ... })` for documentation and tooling metadata.
 - Strict chain constraints are enforced on `r.*` builders:
@@ -504,6 +506,7 @@ Recursive/class schemas:
 
 - `Match.Lazy(() => pattern)` for recursive/forward references.
 - `Match.Schema(options?)` + `Match.Field(pattern)` for optional decorator-based class schemas.
+- `Match.Schema({ base: BaseClass | () => BaseClass })` composes class schemas even when classes do not use `extends`.
 - `Match.fromSchema(Class, { exact? })` returns a schema-like matcher (default class behavior is ObjectIncluding-style).
 - Runtime handles cyclic input graphs for recursive patterns.
 

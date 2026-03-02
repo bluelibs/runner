@@ -23,6 +23,7 @@ import { normalizeThrows } from "../tools/throws";
 import { resolveForkedRegisterAndDependencies } from "./resourceFork";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { normalizeResourceSubtreePolicy } from "./subtreePolicy";
+import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 export function defineResource<
   TConfig = void,
@@ -64,6 +65,20 @@ export function defineResource<
    */
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
   const id = constConfig.id;
+  const configSchema = normalizeOptionalValidationSchema(
+    constConfig.configSchema,
+    {
+      definitionId: id,
+      subject: "Resource config",
+    },
+  );
+  const resultSchema = normalizeOptionalValidationSchema(
+    constConfig.resultSchema,
+    {
+      definitionId: id,
+      subject: "Resource result",
+    },
+  );
   assertTagTargetsApplicableTo("resources", "Resource", id, constConfig.tags);
 
   const isolate = (() => {
@@ -109,8 +124,8 @@ export function defineResource<
     overrides: constConfig.overrides || [],
     init: constConfig.init,
     context: constConfig.context,
-    configSchema: constConfig.configSchema,
-    resultSchema: constConfig.resultSchema,
+    configSchema,
+    resultSchema,
     tags: constConfig.tags ?? [],
     throws: normalizeThrows({ kind: "resource", id }, constConfig.throws),
     meta: (constConfig.meta || {}) as TMeta,

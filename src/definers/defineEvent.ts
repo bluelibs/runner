@@ -9,6 +9,7 @@ import {
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 export function defineEvent<
   TPayload = void,
@@ -28,6 +29,13 @@ export function defineEvent<TPayload = void>(
 ): IEvent<TPayload> {
   const callerFilePath = getCallerFile();
   const eventConfig = config;
+  const payloadSchema = normalizeOptionalValidationSchema(
+    eventConfig.payloadSchema,
+    {
+      definitionId: eventConfig.id,
+      subject: "Event payload",
+    },
+  );
   assertTagTargetsApplicableTo(
     "events",
     "Event",
@@ -40,6 +48,7 @@ export function defineEvent<TPayload = void>(
     [symbolFilePath]: callerFilePath,
     [symbolEvent]: true, // This is a workaround
     tags: eventConfig.tags || [],
+    payloadSchema,
     parallel: eventConfig.parallel,
     transactional: eventConfig.transactional,
     optional() {

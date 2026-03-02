@@ -20,6 +20,7 @@ import { IErrorHelper } from "./error";
 import type { IAsyncContext } from "./asyncContext";
 import type { ExecutionJournal } from "./executionJournal";
 import type { RuntimeCallSource } from "./runtimeSource";
+import type { MatchPattern } from "../tools/check";
 
 export * from "./symbols";
 
@@ -39,6 +40,15 @@ export interface IValidationSchema<T = unknown> {
    */
   toJSONSchema?(): Record<string, unknown>;
 }
+
+export type ValidationSchemaClassConstructor<T = unknown> = abstract new (
+  ...args: never[]
+) => T;
+
+export type ValidationSchemaInput<T = unknown> =
+  | IValidationSchema<T>
+  | MatchPattern
+  | ValidationSchemaClassConstructor<T>;
 
 /**
  * Core public TypeScript types for BlueLibs Runner.

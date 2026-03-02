@@ -12,6 +12,7 @@ import {
 } from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
+import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 export { contextError as ContextError };
 
@@ -39,6 +40,10 @@ export function defineAsyncContext<T>(
   }
 
   const ctxId = def.id;
+  const configSchema = normalizeOptionalValidationSchema(def.configSchema, {
+    definitionId: ctxId,
+    subject: "Async context config",
+  });
   const resolvedFilePath = filePath ?? getCallerFile();
 
   /* istanbul ignore next */
@@ -71,13 +76,12 @@ export function defineAsyncContext<T>(
     id: ctxId,
     [symbolAsyncContext]: true as const,
     [symbolFilePath]: resolvedFilePath,
+    configSchema,
     use,
     /* istanbul ignore next */
     provide(value: T, fn: () => Promise<any> | any) {
       // Validate provided context if schema exists
-      const validated = def.configSchema
-        ? def.configSchema.parse(value)
-        : value;
+      const validated = configSchema ? configSchema.parse(value) : value;
       return provide(validated, fn);
     },
     require(): ITaskMiddlewareConfigured {

@@ -4,7 +4,7 @@ import type {
   EventTagType,
   IEventDefinition,
   IEventMeta,
-  IValidationSchema,
+  ValidationSchemaInput,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
@@ -26,7 +26,7 @@ export function makeEventBuilder<
   const builder: EventFluentBuilder<TPayload, TTransactional> = {
     id: state.id,
 
-    payloadSchema<TNew>(schema: IValidationSchema<TNew>) {
+    payloadSchema<TNew>(schema: ValidationSchemaInput<TNew>) {
       // Cast state to target type for widening, then assign the schema
       const next = clone(
         state as unknown as BuilderState<TNew, TTransactional>,
@@ -37,7 +37,7 @@ export function makeEventBuilder<
       return makeEventBuilder<TNew, TTransactional>(next);
     },
 
-    schema<TNew>(schema: IValidationSchema<TNew>) {
+    schema<TNew>(schema: ValidationSchemaInput<TNew>) {
       return builder.payloadSchema(schema);
     },
 

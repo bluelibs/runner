@@ -2,6 +2,7 @@ import {
   DependencyMapType,
   IOptionalDependency,
   IValidationSchema,
+  ValidationSchemaInput,
   OverridableElements,
   RegisterableItems,
   ResourceDependencyValuesType,
@@ -35,6 +36,7 @@ export type {
   DependencyMapType,
   IOptionalDependency,
   IValidationSchema,
+  ValidationSchemaInput,
   OverridableElements,
   RegisterableItems,
   ResourceDependencyValuesType,
@@ -165,7 +167,7 @@ export interface IResourceDefinition<
    * When provided, the value will be validated immediately after `init` resolves,
    * without considering middleware.
    */
-  resultSchema?: IValidationSchema<
+  resultSchema?: ValidationSchemaInput<
     TValue extends Promise<infer U> ? U : TValue
   >;
   /**
@@ -212,7 +214,7 @@ export interface IResourceDefinition<
    * Optional validation schema for runtime config validation.
    * When provided, resource config will be validated when .with() is called.
    */
-  configSchema?: IValidationSchema<TConfig>;
+  configSchema?: ValidationSchemaInput<TConfig>;
   /**
    * Safe overrides to swap behavior while preserving identities. See
    * README: Overrides.
@@ -301,6 +303,10 @@ export interface IResource<
   TTags,
   TMiddleware
 > {
+  configSchema?: IValidationSchema<TConfig>;
+  resultSchema?: IValidationSchema<
+    TValue extends Promise<infer U> ? U : TValue
+  >;
   id: string;
   with(
     config: HasInputContracts<[...TTags, ...TMiddleware]> extends true

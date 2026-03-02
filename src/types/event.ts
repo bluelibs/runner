@@ -1,4 +1,8 @@
-import { IOptionalDependency, IValidationSchema } from "./utilities";
+import {
+  IOptionalDependency,
+  IValidationSchema,
+  ValidationSchemaInput,
+} from "./utilities";
 import { EventTagType } from "./tag";
 import { IEventMeta } from "./meta";
 import { CommonPayload, symbolEvent, symbolFilePath } from "./utilities";
@@ -74,7 +78,7 @@ export interface IEventDefinition<TPayload = void> {
    * Optional validation schema for runtime payload validation.
    * When provided, event payload will be validated when emitted.
    */
-  payloadSchema?: IValidationSchema<TPayload>;
+  payloadSchema?: ValidationSchemaInput<TPayload>;
   tags?: EventTagType[];
   /**
    * If true, listeners with the same priority run concurrently within a batch.
@@ -98,6 +102,7 @@ export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
    */
   [symbolEvent]: true;
   [symbolFilePath]: string;
+  payloadSchema?: IValidationSchema<TPayload>;
   /** Return an optional dependency wrapper for this event. */
   optional: () => IOptionalDependency<IEvent<TPayload>>;
   tags: EventTagType[];

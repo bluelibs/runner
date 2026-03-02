@@ -1,6 +1,10 @@
 import { symbolAsyncContext, symbolFilePath } from "./symbols";
 import { ITaskMiddlewareConfigured } from "./taskMiddleware";
-import type { IValidationSchema, IOptionalDependency } from "./utilities";
+import type {
+  IOptionalDependency,
+  IValidationSchema,
+  ValidationSchemaInput,
+} from "./utilities";
 import type { IAsyncContextMeta } from "./meta";
 
 export interface IAsyncContextDefinition<T> {
@@ -10,7 +14,7 @@ export interface IAsyncContextDefinition<T> {
   /**
    * When provided, context values will be validated when provide() is called.
    */
-  configSchema?: IValidationSchema<T>;
+  configSchema?: ValidationSchemaInput<T>;
   meta?: IAsyncContextMeta;
 }
 
@@ -35,6 +39,7 @@ export interface IAsyncContext<T> {
 
   serialize(data: T): string;
   parse(data: string): T;
+  configSchema?: IValidationSchema<T>;
   /** Return an optional dependency wrapper for this context */
   optional(): IOptionalDependency<IAsyncContext<T>>;
   /** File path where this async context was defined */

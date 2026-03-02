@@ -4,7 +4,6 @@ import type {
   IResource,
   IResourceDefinition,
   IResourceMeta,
-  IValidationSchema,
   IsolationExportsTarget,
   IsolationPolicy,
   OverridableElements,
@@ -15,6 +14,7 @@ import type {
   ResourceTagType,
   SubtreePolicyOptions,
   TagType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 import type { ResolveConfig } from "./types";
@@ -116,7 +116,7 @@ export interface ResourceFluentBuilderBeforeInit<
   >;
 
   configSchema<TNewConfig>(
-    schema: IValidationSchema<TNewConfig>,
+    schema: ValidationSchemaInput<TNewConfig>,
   ): ResourceFluentBuilderBeforeInit<
     TNewConfig,
     TValue,
@@ -131,7 +131,7 @@ export interface ResourceFluentBuilderBeforeInit<
    * Alias for configSchema. Use this to define the resource configuration validation contract.
    */
   schema<TNewConfig>(
-    schema: IValidationSchema<TNewConfig>,
+    schema: ValidationSchemaInput<TNewConfig>,
   ): ResourceFluentBuilderBeforeInit<
     TNewConfig,
     TValue,
@@ -143,7 +143,7 @@ export interface ResourceFluentBuilderBeforeInit<
   >;
 
   resultSchema<TResolved>(
-    schema: IValidationSchema<TResolved>,
+    schema: ValidationSchemaInput<TResolved>,
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
     Promise<TResolved>,

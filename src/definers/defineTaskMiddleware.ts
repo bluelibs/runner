@@ -15,6 +15,7 @@ import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { normalizeThrows } from "../tools/throws";
+import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 export function defineTaskMiddleware<
   TConfig = any,
@@ -35,6 +36,13 @@ export function defineTaskMiddleware<
   TDependencies
 > {
   const filePath = getCallerFile();
+  const configSchema = normalizeOptionalValidationSchema(
+    middlewareDef.configSchema,
+    {
+      definitionId: middlewareDef.id,
+      subject: "Middleware config",
+    },
+  );
   assertTagTargetsApplicableTo(
     "taskMiddlewares",
     "Task middleware",
@@ -46,8 +54,8 @@ export function defineTaskMiddleware<
     [symbolFilePath]: filePath,
     [symbolTaskMiddleware]: true,
     config: {} as TConfig,
-    configSchema: middlewareDef.configSchema,
     ...middlewareDef,
+    configSchema,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
     throws: normalizeThrows(
       { kind: "task-middleware", id: middlewareDef.id },

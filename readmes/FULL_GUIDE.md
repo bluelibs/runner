@@ -3130,6 +3130,8 @@ Schema interoperability:
 
 - `Match` helpers/patterns expose `.parse(input)`, so they can be used directly in `.inputSchema(...)`, `.resultSchema(...)`, and `.configSchema(...)`.
 - `check()` also accepts any schema-like object with `parse(input): T` (optionally `toJSONSchema(): Record<string, unknown>` for tooling/serialization use-cases).
+- Schema precedence in Runner definition APIs is: explicit `parse(input)` schema first; if absent, Runner validates via `check(pattern)` fallback.
+- Class shorthand (for example `.configSchema(User)`) is supported when the class has `Match.Schema()` metadata.
 - For a single reusable contract shape, use `Match.compile(pattern)` and pass the returned object wherever a schema is expected.
 
 ```typescript
@@ -3247,6 +3249,7 @@ check({ name: "Ada", items: [] }, schema);
 ```
 
 - `Match.Schema({ exact: true })` switches class validation from ObjectIncluding behavior to strict key matching.
+- `Match.Schema({ base: BaseClass | () => BaseClass })` lets one schema class compose another schema class without requiring TypeScript `extends`.
 - `Match.fromSchema(Class)` returns a schema-like matcher compatible with `check()`, `.parse()`, and `.toJSONSchema()`.
 - Bidirectional/self-referencing graphs (`User -> Item -> User`) are supported at runtime.
 - `Match.Lazy(() => pattern)` is available for recursive non-class pattern graphs.

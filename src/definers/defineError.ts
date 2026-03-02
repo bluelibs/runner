@@ -15,6 +15,10 @@ import {
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import type {
+  IValidationSchema,
+  ValidationSchemaInput,
+} from "../types/utilities";
 
 const isValidHttpCode = (value: number): boolean =>
   Number.isInteger(value) && value >= 100 && value <= 599;
@@ -50,6 +54,68 @@ export const matchesRunnerErrorData = <
 
 const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object";
+
+const isClassConstructor = (
+  value: unknown,
+): value is abstract new (...args: never[]) => unknown => {
+  if (typeof value !== "function") return false;
+
+  const prototype = (value as { prototype?: unknown }).prototype;
+  if (!prototype || typeof prototype !== "object") return false;
+
+  return (prototype as { constructor?: unknown }).constructor === value;
+};
+
+const hasParseFunction = <T>(value: unknown): value is IValidationSchema<T> => {
+  if (
+    (typeof value !== "object" && typeof value !== "function") ||
+    value === null
+  ) {
+    return false;
+  }
+
+  return typeof (value as { parse?: unknown }).parse === "function";
+};
+
+const normalizeErrorDataSchema = <TData extends DefaultErrorType>(
+  schema: ValidationSchemaInput<TData> | undefined,
+  errorId: string,
+): IValidationSchema<TData> | undefined => {
+  if (schema === undefined) {
+    return undefined;
+  }
+
+  if (hasParseFunction<TData>(schema)) {
+    return schema;
+  }
+
+  const checkModule =
+    require("../tools/check") as typeof import("../tools/check");
+
+  if (isClassConstructor(schema)) {
+    const classSchemaModule =
+      require("../tools/check/classSchema") as typeof import("../tools/check/classSchema");
+    if (!classSchemaModule.hasClassSchemaMetadata(schema)) {
+      throw new RunnerError(
+        "runner.errors.validation",
+        `Error data validation failed for ${errorId}: Class schema shorthand requires @Match.Schema() metadata for ${schema.name || "Anonymous"}.`,
+        {
+          subject: "Error data",
+          id: errorId,
+          originalError: "Missing @Match.Schema() metadata",
+        },
+      );
+    }
+
+    return checkModule.Match.fromSchema(schema) as IValidationSchema<TData>;
+  }
+
+  return {
+    parse(input: unknown): TData {
+      return checkModule.check(input, schema as never) as TData;
+    },
+  };
+};
 
 export class RunnerError<
   TData extends DefaultErrorType = DefaultErrorType,
@@ -175,10 +241,11 @@ export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
     definition.tags,
   );
 
-  return deepFreeze(
-    new ErrorHelper<TData>(
-      definition as IErrorDefinitionFinal<TData>,
-      resolvedFilePath,
-    ),
-  );
+  const finalDefinition: IErrorDefinitionFinal<TData> = {
+    ...definition,
+    format: definition.format,
+    dataSchema: normalizeErrorDataSchema(definition.dataSchema, definition.id),
+  } as IErrorDefinitionFinal<TData>;
+
+  return deepFreeze(new ErrorHelper<TData>(finalDefinition, resolvedFilePath));
 }
