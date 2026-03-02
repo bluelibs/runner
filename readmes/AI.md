@@ -491,7 +491,7 @@ Remote Lanes documentation has been split into a dedicated AI guide to keep this
 Use `check(value, patternOrSchema)` for runtime validation.
 
 - Pattern mode: returns the same value (typed by pattern), throws `Match.Error` on mismatch.
-- Schema mode: calls `schema.parse(value)` and returns parsed output.
+- Schema mode: calls `schema.parse(value)` and returns validated output or throws.
 
 Main patterns/helpers:
 
@@ -647,7 +647,8 @@ Register custom types via `serializer.addType({ id, is, serialize, deserialize, 
 
 Schema-aware deserialization is available via `deserialize(payload, { schema })` (or `parse(payload, { schema })`):
 
-- Decorated classes support shorthand: `schema: User` and `schema: [User]`.
+- Decorated classes support shorthand: `schema: User` and `schema: [User]` when the class has `@Match.Schema()` metadata.
+- If a class is not decorated with `@Match.Schema()`, constructor shorthand keeps constructor semantics (`instanceof`), which usually fails for plain deserialized objects.
 - Schema-like parsers support shorthand arrays: `schema: [mySchema]`.
 - Use `schema: Match.fromSchema(User)` for class-backed contracts.
 - For arrays, use `schema: Match.ArrayOf(Match.fromSchema(User))`.

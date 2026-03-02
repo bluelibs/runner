@@ -5365,7 +5365,8 @@ const users = serializer.deserialize(payload, {
 
 Guidelines:
 
-- Decorated classes support shorthand: `schema: UserDto` and `schema: [UserDto]`.
+- Decorated classes support shorthand: `schema: UserDto` and `schema: [UserDto]` when the class has `@Match.Schema()` metadata.
+- If a class is not decorated with `@Match.Schema()`, constructor shorthand keeps constructor semantics (`instanceof`), which usually fails for plain deserialized objects.
 - Schema-like parsers support shorthand arrays: `schema: [mySchema]`.
 - Explicit forms still work: `Match.fromSchema(UserDto)` and `Match.ArrayOf(Match.fromSchema(UserDto))`.
 - Prefer explicit entry schemas at trust boundaries.
