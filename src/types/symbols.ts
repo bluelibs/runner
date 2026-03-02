@@ -5,10 +5,6 @@
  * @internal
  */
 export const symbolTask: unique symbol = Symbol.for("runner.task");
-/** Marks a task as a phantom task (throws when unrouted; meant to be RPC-routed). */
-export const symbolPhantomTask: unique symbol = Symbol.for(
-  "runner.task.phantom",
-);
 export const symbolResource: unique symbol = Symbol.for("runner.resource");
 /** @internal Generic fork provenance metadata for definitions that support `.fork()` */
 export const symbolForkedFrom: unique symbol = Symbol.for("runner.forkedFrom");

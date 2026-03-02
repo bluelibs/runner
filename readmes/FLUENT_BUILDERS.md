@@ -166,47 +166,6 @@ const calc = r
   .build();
 ```
 
-### Phantom Tasks
-
-Create a task that is intended to be routed through RPC lanes. When run locally without a matching lane route, it throws `runner.errors.phantomTaskNotRouted`. Use it to strongly type calls to remote services.
-
-```ts
-// Define a phantom task with typed input and resolved result
-const remoteHello = r.task
-  .phantom<{ name: string }, string>("app.tasks.remoteHello")
-  .build();
-
-const lane = r
-  .rpcLane("app.rpc.client")
-  .applyTo([remoteHello])
-  .policy({ middlewareAllowList: ["app.middleware.task.audit"] })
-  .build();
-
-const topology = r.rpcLane.topology({
-  profiles: {
-    client: { serve: [] },
-  },
-  bindings: [{ lane, communicator: r.rpcLane.http() }],
-});
-
-const app = r
-  .resource("app")
-  .register([
-    remoteHello,
-    rpcLanesResource.with({
-      profile: "client",
-      topology,
-      mode: "network",
-    }),
-  ])
-  .build();
-```
-
-Notes:
-
-- Builder exposes the same knobs as normal tasks: `.dependencies()`, `.middleware()`, `.tags()`, `.meta()`, `.inputSchema()`, `.resultSchema()`.
-- The builder does not accept `.run()`; the runner injects a fail-fast function and brands the definition so rpc lane routing can intercept it.
-
 ---
 
 ## Events and Hooks
@@ -293,7 +252,12 @@ const app = r
       validate: (hook) =>
         hook.meta?.title
           ? []
-          : [{ code: "missing-meta-title", message: "Hook meta.title required" }],
+          : [
+              {
+                code: "missing-meta-title",
+                message: "Hook meta.title required",
+              },
+            ],
     },
     taskMiddleware: { validate: (mw) => [] },
     resourceMiddleware: { validate: (mw) => [] },

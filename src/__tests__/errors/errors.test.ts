@@ -25,7 +25,6 @@ import {
   lockedError,
   storeAlreadyInitializedError,
   validationError,
-  phantomTaskNotRoutedError,
   createMessageError,
 } from "../../errors";
 
@@ -434,13 +433,6 @@ describe("Errors", () => {
       expect(ve2.message).toContain(
         "Resource config validation failed for test-resource: Invalid configuration",
       );
-
-      const phantom = capture(() =>
-        phantomTaskNotRoutedError.throw({ taskId: "my.phantom.task" }),
-      );
-      expect(phantom.message).toContain('Phantom task "my.phantom.task"');
-      expect(phantom.message).toContain("not routed through any rpc lane");
-      expect(phantomTaskNotRoutedError.is(phantom)).toBe(true);
 
       const policyInvalid = capture(() =>
         isolateInvalidEntryError.throw({

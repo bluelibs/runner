@@ -6,11 +6,10 @@ import {
   isInCoverageScope,
   toCoverageScopedRelPosixPath,
 } from "./coverage-scope.mjs";
-import { sanitizeNodeOptionEnv } from "./sanitize-node-options.mjs";
 
 function parseArgs(argv) {
   const idx = argv.indexOf("--");
-  if (idx === -1) return { extraJestArgs: [] };
+  if (idx === -1) return { extraJestArgs: argv.slice(2) };
   return { extraJestArgs: argv.slice(idx + 1) };
 }
 
@@ -77,11 +76,9 @@ function countCoverageBelowHundredFromFinal() {
 
 function run(cmd, args, env) {
   return new Promise((resolve) => {
-    // Keep child runs stable when external wrappers inject malformed Node flags.
-    const mergedEnv = sanitizeNodeOptionEnv({ ...process.env, ...env });
     const child = spawn(cmd, args, {
       stdio: "inherit",
-      env: mergedEnv,
+      env: { ...process.env, ...env },
       shell: false,
     });
     child.on("close", (code) => resolve(code ?? 0));
@@ -118,6 +115,7 @@ async function main() {
     {
       AI_REPORTER_DISABLE_COVERAGE: "1",
       AI_REPORTER_SUMMARY_PATH: reporterSummaryPath,
+      NODE_NO_WARNINGS: "1",
     },
   );
 

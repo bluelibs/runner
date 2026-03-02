@@ -19,20 +19,6 @@ export const rpcLaneOwnershipConflictError = error<
   )
   .build();
 
-// Phantom task executed without a matching rpc lane route
-export const phantomTaskNotRoutedError = error<
-  { taskId: string } & DefaultErrorType
->("runner.errors.phantomTaskNotRouted")
-  .format(
-    ({ taskId }) =>
-      `Phantom task "${taskId}" is not routed through any rpc lane. Ensure an rpc lane assignment selects this task id (or avoid calling the phantom task directly).`,
-  )
-  .remediation(
-    ({ taskId }) =>
-      `Configure rpcLanes topology so "${taskId}" is routed to a remote runtime. Phantom tasks cannot be executed locally - they only serve as local proxies for remote tasks.`,
-  )
-  .build();
-
 // Task not registered in Store (internal invariant)
 export const taskNotRegisteredError = error<
   { taskId: string } & DefaultErrorType

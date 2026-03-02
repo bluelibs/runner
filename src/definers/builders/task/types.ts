@@ -41,25 +41,3 @@ export type BuilderState<
   run?: (input: unknown, dependencies: unknown) => unknown;
   tags?: TTags;
 }>;
-
-/**
- * Internal state for the PhantomTaskFluentBuilder.
- */
-export type PhantomBuilderState<
-  _TInput,
-  _TResolved,
-  TDeps extends DependencyMapType,
-  TMeta extends ITaskMeta,
-  TTags extends TaskTagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[],
-> = Readonly<{
-  id: string;
-  filePath: string;
-  dependencies?: TDeps | (() => TDeps);
-  middleware?: TMiddleware;
-  meta?: TMeta;
-  inputSchema?: ValidationSchemaInput<any>;
-  resultSchema?: ValidationSchemaInput<any>;
-  throws?: ThrowsList;
-  tags?: TTags;
-}>;

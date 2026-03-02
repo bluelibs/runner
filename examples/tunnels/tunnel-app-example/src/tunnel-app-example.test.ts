@@ -14,7 +14,7 @@ import {
 } from "./example.js";
 
 enum TestName {
-  InMemory = "tunnel example (memory): phantom tasks are routed",
+  InMemory = "tunnel example (memory): remote tasks are routed",
   OverHttp = "tunnel example (http): tasks execute on remote server",
 }
 

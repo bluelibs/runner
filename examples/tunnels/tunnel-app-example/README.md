@@ -8,7 +8,7 @@ What this example demonstrates:
 - **Server-side** allow-listing of reachable task ids (`globals.tags.tunnel` in `mode: "server"`).
 - **Node exposure** via `nodeExposure` (`POST /__runner/task/:id`).
 - **Client-side** routing via a tunnel resource (`globals.tags.tunnel` in `mode: "client"`).
-- **Phantom tasks** (`r.task.phantom(...)`) as typed placeholders for remote execution.
+- **Remote task placeholders** (`r.task(...).run(...)`) used only through tunnel routing.
 - **Auth token** for tunnel requests (`RUNNER_EXAMPLE_TOKEN`).
 
 ## Install
@@ -32,7 +32,7 @@ npm run start
 This will:
 
 - Start a **SERVER runtime** that owns in-memory state (notes + audits) and exposes allow-listed tasks via `nodeExposure`.
-- Start a **CLIENT runtime** that calls phantom tasks; the tunnel middleware routes them over HTTP.
+- Start a **CLIENT runtime** that calls remote task placeholders; the tunnel middleware routes them over HTTP.
 - Log server-side mutations and verify `Date` round-tripping.
 
 ## Test
@@ -61,7 +61,7 @@ in a normal shell/CI environment that allows binding to localhost.
 ## File Layout
 
 - `src/server/*`: server state + tasks + `nodeExposure` allow-list policy
-- `src/client/*`: phantom tasks + tunnel client resource + demo task
+- `src/client/*`: remote task placeholders + tunnel client resource + demo task
 - `src/example.ts`: orchestration helpers used by `src/index.ts` and tests
 - `src/tunnel-app-example.test.ts`: memory test + opt-in net test
 

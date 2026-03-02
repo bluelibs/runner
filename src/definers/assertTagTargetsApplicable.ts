@@ -53,15 +53,16 @@ export function assertTagTargetsApplicable({
   }
 }
 
-export const assertTagTargetsApplicableTo = (
+export function assertTagTargetsApplicableTo(
   target: TagTarget,
   definitionType: string,
   definitionId: string,
   tags: TagType[] | undefined,
-): void =>
+): void {
   assertTagTargetsApplicable({
     target,
     definitionType,
     definitionId,
     tags,
   });
+}

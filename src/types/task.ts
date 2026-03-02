@@ -14,7 +14,6 @@ import type { RuntimeCallSource } from "./runtimeSource";
 import {
   symbolFilePath,
   symbolTask,
-  symbolPhantomTask,
   symbolRpcLanePolicy,
   symbolRpcLaneRoutedBy,
 } from "./symbols";
@@ -118,8 +117,6 @@ export interface ITask<
 > {
   [symbolFilePath]: string;
   [symbolTask]: true;
-  /** Present only for phantom tasks. */
-  [symbolPhantomTask]?: true;
   /** Indicates if the task was patched for remote execution through rpc lanes. */
   isRpcRouted?: boolean;
   /** Records which rpc-lanes resource owns the task routing patch (exclusivity). */
@@ -144,21 +141,3 @@ export interface ITask<
 }
 
 export type AnyTask = ITask<any, any, any, any, any, any>;
-
-/** Narrowed type for phantom tasks (throws unless routed through rpc lanes). */
-export type IPhantomTask<
-  TInput = any,
-  TResolved = any,
-  TDependencies extends DependencyMapType = {},
-  TMeta extends ITaskMeta = any,
-  TTags extends TaskTagType[] = TaskTagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[] =
-    TaskMiddlewareAttachmentType[],
-> = ITask<
-  TInput,
-  Promise<TResolved>,
-  TDependencies,
-  TMeta,
-  TTags,
-  TMiddleware
-> & { [symbolPhantomTask]: true };

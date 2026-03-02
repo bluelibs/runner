@@ -13,7 +13,6 @@ export { defineTag } from "./definers/defineTag";
 // Re-export type guards and utility functions
 export {
   isTask,
-  isPhantomTask,
   isResource,
   isResourceWithConfig,
   isEvent,

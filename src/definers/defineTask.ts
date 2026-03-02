@@ -6,15 +6,12 @@ import type {
   TaskTagType,
   IOptionalDependency,
   TaskMiddlewareAttachmentType,
-  IPhantomTask,
 } from "../types/task";
 import {
   symbolTask,
   symbolFilePath,
   symbolOptionalDependency,
-  symbolPhantomTask,
 } from "../types/symbols";
-import { phantomTaskNotRoutedError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
@@ -88,30 +85,3 @@ export function defineTask<
     },
   });
 }
-
-defineTask.phantom = <Input = undefined, Output extends Promise<any> = any>(
-  taskConfig: Omit<ITaskDefinition<Input, Output, any, any, any, any>, "run">,
-) => {
-  const phantomRun = (async (_input: Input) => {
-    phantomTaskNotRoutedError.throw({ taskId: taskConfig.id });
-  }) as unknown as ITaskDefinition<Input, Output, any, any, any, any>["run"];
-
-  const taskDef = defineTask({
-    ...taskConfig,
-    run: phantomRun,
-  });
-
-  const phantomTask = {
-    ...taskDef,
-    [symbolPhantomTask]: true as const,
-  };
-
-  return deepFreeze(phantomTask) as IPhantomTask<
-    Input,
-    Output,
-    any,
-    any,
-    any,
-    any
-  >;
-};

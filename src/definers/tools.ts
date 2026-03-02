@@ -14,7 +14,6 @@ import {
   symbolEventLane,
   symbolRpcLane,
   symbolTask,
-  symbolPhantomTask,
   symbolHook,
   symbolResourceWithConfig,
   symbolResource,
@@ -27,7 +26,6 @@ import {
   symbolTagBeforeInitDependency,
   ITag,
   ITagStartupDependency,
-  IPhantomTask,
   symbolOverrideDefinition,
 } from "../defs";
 import { IErrorHelper } from "../types/error";
@@ -51,13 +49,6 @@ function hasBrand(definition: unknown, symbol: symbol): boolean {
  */
 export function isTask(definition: unknown): definition is ITask {
   return hasBrand(definition, symbolTask);
-}
-
-/** Type guard: checks if a definition is a Phantom Task. */
-export function isPhantomTask(definition: unknown): definition is IPhantomTask {
-  return (
-    hasBrand(definition, symbolTask) && hasBrand(definition, symbolPhantomTask)
-  );
 }
 
 /**

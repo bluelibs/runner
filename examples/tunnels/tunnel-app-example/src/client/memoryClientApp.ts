@@ -11,11 +11,11 @@ import type {
 import { assertDefined } from "../assertDefined.js";
 import { demoTask } from "./demoTask.js";
 import {
-  createNotePhantom,
-  listAuditsPhantom,
-  listNotesPhantom,
-  logAuditPhantom,
-} from "./phantoms.js";
+  createNoteRemoteTask,
+  listAuditsRemoteTask,
+  listNotesRemoteTask,
+  logAuditRemoteTask,
+} from "./remoteTasks.js";
 
 enum IdPrefix {
   Note = "note-",
@@ -97,41 +97,43 @@ export function buildMemoryClientApp() {
   const tunnelClient = r
     .resource(ResourceId.TunnelClient)
     .tags([globals.tags.tunnel])
-    .init(async (): Promise<MemoryTunnelClientValue> => ({
-      mode: TunnelMode.Client,
-      tasks: [
-        TaskId.CreateNote,
-        TaskId.ListNotes,
-        TaskId.LogAudit,
-        TaskId.ListAudits,
-      ],
-      run: async (task, input) => {
-        switch (task.id) {
-          case TaskId.CreateNote:
-            assertNoteInput(input);
-            return state.createNote(input);
-          case TaskId.ListNotes:
-            return state.listNotes();
-          case TaskId.LogAudit:
-            assertAuditInput(input);
-            return state.logAudit(input);
-          case TaskId.ListAudits:
-            return state.listAudits();
-          default:
-            throw new Error(`${ErrorMessage.UnsupportedTask}: ${task.id}`);
-        }
-      },
-    }))
+    .init(
+      async (): Promise<MemoryTunnelClientValue> => ({
+        mode: TunnelMode.Client,
+        tasks: [
+          TaskId.CreateNote,
+          TaskId.ListNotes,
+          TaskId.LogAudit,
+          TaskId.ListAudits,
+        ],
+        run: async (task, input) => {
+          switch (task.id) {
+            case TaskId.CreateNote:
+              assertNoteInput(input);
+              return state.createNote(input);
+            case TaskId.ListNotes:
+              return state.listNotes();
+            case TaskId.LogAudit:
+              assertAuditInput(input);
+              return state.logAudit(input);
+            case TaskId.ListAudits:
+              return state.listAudits();
+            default:
+              throw new Error(`${ErrorMessage.UnsupportedTask}: ${task.id}`);
+          }
+        },
+      }),
+    )
     .build();
 
   const app = r
     .resource(ResourceId.ClientApp)
     .register([
       tunnelClient,
-      createNotePhantom,
-      listNotesPhantom,
-      logAuditPhantom,
-      listAuditsPhantom,
+      createNoteRemoteTask,
+      listNotesRemoteTask,
+      logAuditRemoteTask,
+      listAuditsRemoteTask,
       demoTask,
     ])
     .build();

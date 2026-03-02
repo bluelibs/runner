@@ -2,7 +2,7 @@
  * Tunnel App Example: Two separate runtimes communicating over real HTTP.
  *
  * - SERVER runtime: owns state and exposes allow-listed tasks via nodeExposure.
- * - CLIENT runtime: uses phantom tasks routed through a tunnel resource.
+ * - CLIENT runtime: uses remote task placeholders routed through a tunnel resource.
  */
 
 import { run } from "@bluelibs/runner/node";

@@ -3,11 +3,11 @@ import { globals, r } from "@bluelibs/runner/node";
 import { ResourceId, TaskId, TunnelMode, TunnelTransport } from "../ids.js";
 import { demoTask } from "./demoTask.js";
 import {
-  createNotePhantom,
-  listAuditsPhantom,
-  listNotesPhantom,
-  logAuditPhantom,
-} from "./phantoms.js";
+  createNoteRemoteTask,
+  listAuditsRemoteTask,
+  listNotesRemoteTask,
+  logAuditRemoteTask,
+} from "./remoteTasks.js";
 
 type HttpTunnelClientValue = {
   transport: TunnelTransport;
@@ -51,10 +51,10 @@ export function buildHttpClientApp(options: BuildHttpClientAppOptions) {
     .resource(ResourceId.ClientApp)
     .register([
       tunnelClient,
-      createNotePhantom,
-      listNotesPhantom,
-      logAuditPhantom,
-      listAuditsPhantom,
+      createNoteRemoteTask,
+      listNotesRemoteTask,
+      logAuditRemoteTask,
+      listAuditsRemoteTask,
       demoTask,
     ])
     .build();

@@ -9,8 +9,6 @@ export type {
 export type { TestFacade } from "./testing";
 
 export type {
-  TaskBuilderWithPhantom,
-  PhantomTaskFluentBuilder,
   TaskFluentBuilder,
   ResolveInput,
   ShouldReplaceInput,
