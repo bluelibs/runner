@@ -11,8 +11,13 @@ import type {
   SerializerOptions,
   SerializedGraph,
   DeserializationContext,
+  SerializerDeserializeOptions,
+  SerializerSchemaLike,
 } from "./types";
 import { SymbolPolicy } from "./types";
+import { validationError } from "./errors";
+import { check, Match } from "../tools/check";
+import { hasClassSchemaMetadata } from "../tools/check/classSchema";
 import { TypeRegistry } from "./type-registry";
 import {
   isGraphPayload,
@@ -35,12 +40,77 @@ const GRAPH_VERSION = 1;
 const DEFAULT_MAX_DEPTH = 1000;
 const DEFAULT_MAX_REGEXP_PATTERN_LENGTH = 1024;
 
+type ClassConstructor = abstract new (...args: never[]) => unknown;
+
 function parseJsonPayload(payload: string): unknown {
   try {
     return JSON.parse(payload);
   } catch {
     throw new SyntaxError("Invalid JSON payload.");
   }
+}
+
+function parseWithSchema<TParsed>(
+  value: unknown,
+  schema?: unknown,
+): TParsed | unknown {
+  if (schema === undefined) return value;
+
+  if (typeof schema === "object" && schema !== null && "parse" in schema) {
+    const parseFn = (schema as SerializerSchemaLike<TParsed>).parse;
+    return parseFn.call(schema, value);
+  }
+
+  return check(value, schema as never) as TParsed;
+}
+
+function isClassConstructor(value: unknown): value is ClassConstructor {
+  if (typeof value !== "function") return false;
+
+  const prototype = (value as { prototype?: unknown }).prototype;
+  if (!prototype || typeof prototype !== "object") return false;
+
+  const constructor = (prototype as { constructor?: unknown }).constructor;
+  return constructor === value;
+}
+
+function normalizeSchemaOption(schema: unknown): unknown {
+  if (schema === undefined) return undefined;
+
+  if (Array.isArray(schema)) {
+    if (schema.length !== 1) {
+      validationError(
+        "Invalid deserialize() schema option: array schemas must contain exactly one element.",
+      );
+    }
+
+    const elementSchema = normalizeSchemaOption(schema[0]);
+
+    return {
+      parse(input: unknown): unknown[] {
+        if (!Array.isArray(input)) {
+          return check(input, Array);
+        }
+
+        return input.map((value) => parseWithSchema(value, elementSchema));
+      },
+    };
+  }
+
+  if (isClassConstructor(schema) && hasClassSchemaMetadata(schema)) {
+    return Match.fromSchema(schema);
+  }
+
+  if (typeof schema === "object" && schema !== null && "parse" in schema) {
+    const parse = (schema as { parse?: unknown }).parse;
+    if (typeof parse !== "function") {
+      validationError(
+        "Invalid deserialize() schema option: expected an object with a parse(input) function.",
+      );
+    }
+  }
+
+  return schema;
 }
 
 export class Serializer {
@@ -110,8 +180,19 @@ export class Serializer {
   /**
    * Alias of `deserialize()` to match the historical remote-lane serializer surface.
    */
-  public parse<T = unknown>(payload: string): T {
-    return this.deserialize<T>(payload);
+  public parse<TSchemaParsed>(
+    payload: string,
+    options: { schema: SerializerSchemaLike<TSchemaParsed> },
+  ): TSchemaParsed;
+  public parse<T = unknown>(
+    payload: string,
+    options?: SerializerDeserializeOptions,
+  ): T;
+  public parse<T = unknown>(
+    payload: string,
+    options?: SerializerDeserializeOptions,
+  ): T {
+    return this.deserialize<T>(payload, options);
   }
 
   /**
@@ -148,11 +229,24 @@ export class Serializer {
   /**
    * Deserialize a JSON string back to its original value.
    */
-  public deserialize<T = unknown>(payload: string): T {
+  public deserialize<TSchemaParsed>(
+    payload: string,
+    options: { schema: SerializerSchemaLike<TSchemaParsed> },
+  ): TSchemaParsed;
+  public deserialize<T = unknown>(
+    payload: string,
+    options?: SerializerDeserializeOptions,
+  ): T;
+  public deserialize<T = unknown>(
+    payload: string,
+    options?: SerializerDeserializeOptions,
+  ): T {
     const parsed = parseJsonPayload(payload);
+    const schema = normalizeSchemaOption(options?.schema);
 
     if (!isGraphPayload(parsed)) {
-      return deserializeLegacy(parsed, 0, this.runtimeOptions) as T;
+      const deserialized = deserializeLegacy(parsed, 0, this.runtimeOptions);
+      return parseWithSchema(deserialized, schema) as T;
     }
 
     const context: DeserializationContext = {
@@ -162,12 +256,14 @@ export class Serializer {
       resolvingRefs: new Set(),
     };
 
-    return deserializeValueFn(
+    const deserialized = deserializeValueFn(
       parsed.root,
       context,
       0,
       this.runtimeOptions,
-    ) as T;
+    );
+
+    return parseWithSchema(deserialized, schema) as T;
   }
 
   /**

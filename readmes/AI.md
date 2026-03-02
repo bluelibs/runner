@@ -503,8 +503,8 @@ Main patterns/helpers:
 Recursive/class schemas:
 
 - `Match.Lazy(() => pattern)` for recursive/forward references.
-- `Match.Class(options?)` + `Match.Field(pattern)` for optional decorator-based class schemas.
-- `Match.fromClass(Class, { exact? })` returns a schema-like matcher (default class behavior is ObjectIncluding-style).
+- `Match.Schema(options?)` + `Match.Field(pattern)` for optional decorator-based class schemas.
+- `Match.fromSchema(Class, { exact? })` returns a schema-like matcher (default class behavior is ObjectIncluding-style).
 - Runtime handles cyclic input graphs for recursive patterns.
 
 JSON Schema (`Match.toJSONSchema(pattern, { strict? })`):
@@ -513,7 +513,7 @@ JSON Schema (`Match.toJSONSchema(pattern, { strict? })`):
 - `strict: false` (default): `Match.Where` exports permissive metadata node.
 - `strict: true`: `Match.Where` fails fast (`runner.errors.check.jsonSchemaUnsupportedPattern`).
 - `Match.RegExp(re)` exports `type: "string"` + `pattern: re.source`; flags are exported as metadata.
-- `Match.fromClass(...)` exports recursive class graphs via `$defs/$ref`.
+- `Match.fromSchema(...)` exports recursive class graphs via `$defs/$ref`.
 
 ## Errors
 
@@ -644,6 +644,14 @@ const app = r
 Runner ships with a serializer that round-trips Dates, RegExp, binary, and custom shapes across Node and web.
 
 Register custom types via `serializer.addType({ id, is, serialize, deserialize, strategy })` (inject `globals.resources.serializer`). Use `new Serializer()` for a standalone instance.
+
+Schema-aware deserialization is available via `deserialize(payload, { schema })` (or `parse(payload, { schema })`):
+
+- Decorated classes support shorthand: `schema: User` and `schema: [User]`.
+- Schema-like parsers support shorthand arrays: `schema: [mySchema]`.
+- Use `schema: Match.fromSchema(User)` for class-backed contracts.
+- For arrays, use `schema: Match.ArrayOf(Match.fromSchema(User))`.
+- Prefer explicit entry schemas at trust boundaries.
 
 Note: file uploads use `createWebFile`/`createNodeFile` — handled by HTTP RPC transport, not the serializer.
 

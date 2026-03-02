@@ -390,7 +390,7 @@ describe("tools/check toJSONSchema", () => {
     expect(regexpPatternError.reason).toContain("RegExp expression");
   });
 
-  it("exports Match.fromClass recursive schemas using $defs/$ref", () => {
+  it("exports Match.fromSchema recursive schemas using $defs/$ref", () => {
     class User {
       public name!: string;
       public items!: Item[];
@@ -401,14 +401,14 @@ describe("tools/check toJSONSchema", () => {
       public owner!: User;
     }
 
-    Match.Class()(User);
-    Match.Class()(Item);
+    Match.Schema()(User);
+    Match.Schema()(Item);
     Match.Field(Match.NonEmptyString)(User.prototype, "name");
-    Match.Field(Match.ArrayOf(Match.fromClass(Item)))(User.prototype, "items");
+    Match.Field(Match.ArrayOf(Match.fromSchema(Item)))(User.prototype, "items");
     Match.Field(Match.NonEmptyString)(Item.prototype, "title");
-    Match.Field(Match.fromClass(User))(Item.prototype, "owner");
+    Match.Field(Match.fromSchema(User))(Item.prototype, "owner");
 
-    const schema = Match.toJSONSchema(Match.fromClass(User));
+    const schema = Match.toJSONSchema(Match.fromSchema(User));
     expect(schema).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
       $ref: "#/$defs/User",
@@ -447,15 +447,15 @@ describe("tools/check toJSONSchema", () => {
       public title!: string;
     }
 
-    Match.Class({ schemaId: "shared-id" })(UserA);
-    Match.Class({ schemaId: "shared-id", exact: true })(UserB);
+    Match.Schema({ schemaId: "shared-id" })(UserA);
+    Match.Schema({ schemaId: "shared-id", exact: true })(UserB);
     Match.Field(Match.NonEmptyString)(UserA.prototype, "name");
     Match.Field(Match.NonEmptyString)(UserB.prototype, "title");
 
     const schema = Match.toJSONSchema(
       Match.OneOf(
-        Match.fromClass(UserA),
-        Match.fromClass(UserB, { exact: false }),
+        Match.fromSchema(UserA),
+        Match.fromSchema(UserB, { exact: false }),
       ),
     );
 
@@ -486,10 +486,10 @@ describe("tools/check toJSONSchema", () => {
       public id!: string;
     }
 
-    Match.Class()(StrictUser);
+    Match.Schema()(StrictUser);
     Match.Field(Match.NonEmptyString)(StrictUser.prototype, "id");
     expect(
-      Match.toJSONSchema(Match.fromClass(StrictUser, { exact: true })),
+      Match.toJSONSchema(Match.fromSchema(StrictUser, { exact: true })),
     ).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
       $ref: "#/$defs/StrictUser",
@@ -509,9 +509,9 @@ describe("tools/check toJSONSchema", () => {
       public value!: string;
     }
 
-    Match.Class({ schemaId: "!!!" })(AnonymousSchema);
+    Match.Schema({ schemaId: "!!!" })(AnonymousSchema);
     Match.Field(Match.NonEmptyString)(AnonymousSchema.prototype, "value");
-    expect(Match.toJSONSchema(Match.fromClass(AnonymousSchema))).toEqual({
+    expect(Match.toJSONSchema(Match.fromSchema(AnonymousSchema))).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
       $ref: "#/$defs/___",
       $defs: {
@@ -530,10 +530,10 @@ describe("tools/check toJSONSchema", () => {
       public token!: string;
     }
 
-    Match.Class()(EmptySchemaId);
+    Match.Schema()(EmptySchemaId);
     Match.Field(Match.NonEmptyString)(EmptySchemaId.prototype, "token");
     expect(
-      Match.toJSONSchema(Match.fromClass(EmptySchemaId, { schemaId: "" })),
+      Match.toJSONSchema(Match.fromSchema(EmptySchemaId, { schemaId: "" })),
     ).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
       $ref: "#/$defs/Anonymous",
@@ -552,8 +552,8 @@ describe("tools/check toJSONSchema", () => {
     expect(
       Match.toJSONSchema(
         Match.OneOf(
-          Match.fromClass(EmptySchemaId),
-          Match.fromClass(EmptySchemaId),
+          Match.fromSchema(EmptySchemaId),
+          Match.fromSchema(EmptySchemaId),
         ),
       ),
     ).toEqual({

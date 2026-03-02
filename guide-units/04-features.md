@@ -23,8 +23,8 @@ All supported Match patterns:
 - `Match.IsoDateString`: accepts ISO datetime strings with timezone (`Z` or offset)
 - `Match.RegExp(re)`: accepts strings that satisfy the provided regular expression (`RegExp` or source string)
 - `Match.Lazy(() => pattern)`: lazily resolves recursive patterns
-- `Match.fromClass(Class, options?)`: validates plain objects using class decorator metadata
-- `Match.Class(options?)` / `Match.Field(pattern)`: optional decorator layer to build class-backed schemas
+- `Match.fromSchema(Class, options?)`: validates plain objects using class decorator metadata
+- `Match.Schema(options?)` / `Match.Field(pattern)`: optional decorator layer to build class-backed schemas
 - `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`: accepts non-empty arrays (optionally validates each element)
 - `Match.Optional(pattern)`: accepts `undefined` or `pattern`
 - `Match.Maybe(pattern)`: accepts `undefined`, `null`, or `pattern`
@@ -132,30 +132,30 @@ Use decorators when you prefer class ergonomics while keeping `check()`/`Match` 
 ```typescript
 import { Match, check } from "@bluelibs/runner";
 
-@Match.Class() // default: ObjectIncluding semantics
+@Match.Schema() // default: ObjectIncluding semantics
 class User {
   @Match.Field(Match.NonEmptyString)
   name!: string;
 
-  @Match.Field(Match.ArrayOf(Match.fromClass(Item)))
+  @Match.Field(Match.ArrayOf(Match.fromSchema(Item)))
   items!: Item[];
 }
 
-@Match.Class()
+@Match.Schema()
 class Item {
   @Match.Field(Match.NonEmptyString)
   title!: string;
 
-  @Match.Field(Match.fromClass(User))
+  @Match.Field(Match.fromSchema(User))
   owner!: User;
 }
 
-const schema = Match.fromClass(User);
+const schema = Match.fromSchema(User);
 check({ name: "Ada", items: [] }, schema);
 ```
 
-- `Match.Class({ exact: true })` switches class validation from ObjectIncluding behavior to strict key matching.
-- `Match.fromClass(Class)` returns a schema-like matcher compatible with `check()`, `.parse()`, and `.toJSONSchema()`.
+- `Match.Schema({ exact: true })` switches class validation from ObjectIncluding behavior to strict key matching.
+- `Match.fromSchema(Class)` returns a schema-like matcher compatible with `check()`, `.parse()`, and `.toJSONSchema()`.
 - Bidirectional/self-referencing graphs (`User -> Item -> User`) are supported at runtime.
 - `Match.Lazy(() => pattern)` is available for recursive non-class pattern graphs.
 
@@ -201,7 +201,7 @@ Strict fail-fast behavior (`{ strict: true }`):
   - `"x-runner-match-kind": "Match.RegExp"`
   - `"x-runner-regexp-flags": "..."`
 
-`Match.fromClass(...)` JSON Schema behavior:
+`Match.fromSchema(...)` JSON Schema behavior:
 
 - Recursive class graphs are emitted with `$defs/$ref` references.
 - `schemaId` values are sanitized for JSON Schema definition keys and auto-deduplicated.

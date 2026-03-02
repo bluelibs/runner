@@ -307,12 +307,12 @@ import {
     public owner!: User;
   }
 
-  Match.Class()(User);
-  Match.Class()(Item);
+  Match.Schema()(User);
+  Match.Schema()(Item);
   Match.Field(Match.NonEmptyString)(User.prototype, "name");
-  Match.Field(Match.ArrayOf(Match.fromClass(Item)))(User.prototype, "items");
+  Match.Field(Match.ArrayOf(Match.fromSchema(Item)))(User.prototype, "items");
   Match.Field(Match.NonEmptyString)(Item.prototype, "title");
-  Match.Field(Match.fromClass(User))(Item.prototype, "owner");
+  Match.Field(Match.fromSchema(User))(Item.prototype, "owner");
 
   const checkedUser = check(
     {
@@ -324,7 +324,7 @@ import {
         },
       ],
     },
-    Match.fromClass(User),
+    Match.fromSchema(User),
   );
 
   const userName: string = checkedUser.name;

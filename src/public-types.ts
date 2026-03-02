@@ -53,6 +53,8 @@ export type {
   SerializedValue,
   SerializationContext,
   DeserializationContext,
+  SerializerSchemaLike,
+  SerializerDeserializeOptions,
 } from "./serializer";
 
 export type {

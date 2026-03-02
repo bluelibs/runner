@@ -316,6 +316,34 @@ const serializer = new Serializer({
 
 `symbolPolicy` defaults to `"allow-all"`. Prefer `"well-known-only"` (or stricter) for untrusted input.
 
+### Schema-Aware Deserialization
+
+You can validate deserialized payloads immediately by passing a schema option:
+
+```typescript
+import { Match, Serializer } from "@bluelibs/runner";
+
+@Match.Schema()
+class UserDto {
+  @Match.Field(Match.NonEmptyString)
+  id!: string;
+}
+
+const serializer = new Serializer();
+const payload = serializer.serialize([{ id: "u1" }]);
+
+const users = serializer.deserialize(payload, {
+  schema: Match.ArrayOf(Match.fromSchema(UserDto)),
+});
+```
+
+Guidelines:
+
+- Decorated classes support shorthand: `schema: UserDto` and `schema: [UserDto]`.
+- Schema-like parsers support shorthand arrays: `schema: [mySchema]`.
+- Explicit forms still work: `Match.fromSchema(UserDto)` and `Match.ArrayOf(Match.fromSchema(UserDto))`.
+- Prefer explicit entry schemas at trust boundaries.
+
 ### Custom Types
 
 Teach the serializer about your own classes:

@@ -125,6 +125,14 @@ export interface SerializerOptions {
   allowUnsafeRegExp?: boolean;
 }
 
+export interface SerializerSchemaLike<TParsed = unknown> {
+  parse(input: unknown): TParsed;
+}
+
+export interface SerializerDeserializeOptions {
+  schema?: unknown;
+}
+
 /**
  * Minimal serializer contract used across transports and persistence.
  * Implementations must be able to round-trip JSON-compatible payloads and
@@ -132,7 +140,7 @@ export interface SerializerOptions {
  */
 export interface SerializerLike {
   stringify(value: unknown): string;
-  parse<T = unknown>(text: string): T;
+  parse<T = unknown>(text: string, options?: SerializerDeserializeOptions): T;
   addType?<TInstance, TSerialized>(
     typeDef: TypeDefinition<TInstance, TSerialized>,
   ): void;

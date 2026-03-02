@@ -10,6 +10,8 @@ export type {
   MatchJsonPrimitive,
   MatchJsonSchema,
   MatchJsonValue,
+  MatchSchemaDecorator,
+  MatchSchemaOptions,
   MatchClassDecorator,
   MatchClassOptions,
   MatchPropertyDecorator,

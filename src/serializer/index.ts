@@ -14,6 +14,8 @@ export type {
   DeserializationContext,
   SerializedGraph,
   SerializerLike,
+  SerializerSchemaLike,
+  SerializerDeserializeOptions,
 } from "./types";
 
 export { SymbolPolicy, SymbolPolicyErrorMessage } from "./types";

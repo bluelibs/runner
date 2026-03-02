@@ -2,7 +2,7 @@ import { CheckOptionsError, MatchError, MatchPatternError } from "./errors";
 import {
   setClassFieldPattern,
   setClassSchemaOptions,
-  type MatchClassOptions,
+  type MatchSchemaOptions,
 } from "./classSchema";
 import {
   ClassPattern,
@@ -36,7 +36,7 @@ import type {
   MatchJsonSchema,
   MatchPattern,
   MatchPropertyDecorator,
-  MatchClassDecorator,
+  MatchSchemaDecorator,
   MatchToJsonSchemaOptions,
 } from "./types";
 
@@ -232,18 +232,18 @@ function lazyPattern<TPattern extends MatchPattern>(
   return new LazyPattern(resolver);
 }
 
-function fromClass<TClass extends abstract new (...args: never[]) => unknown>(
+function fromSchema<TClass extends abstract new (...args: never[]) => unknown>(
   target: TClass,
-  options?: MatchClassOptions,
+  options?: MatchSchemaOptions,
 ): ClassPattern<TClass> {
   assertPattern(
     typeof target === "function",
-    "Bad pattern: Match.fromClass requires a class constructor.",
+    "Bad pattern: Match.fromSchema requires a class constructor.",
   );
   return new ClassPattern(target, options);
 }
 
-function classDecorator(options?: MatchClassOptions): MatchClassDecorator {
+function schemaDecorator(options?: MatchSchemaOptions): MatchSchemaDecorator {
   return (target) => {
     setClassSchemaOptions(target, options ?? {});
   };
@@ -298,8 +298,10 @@ export const Match = Object.freeze({
   NonEmptyString: matchNonEmptyStringToken,
   RegExp: regexpPattern,
   Lazy: lazyPattern,
-  fromClass,
-  Class: classDecorator,
+  fromSchema,
+  Schema: schemaDecorator,
+  fromClass: fromSchema,
+  Class: schemaDecorator,
   Field: fieldDecorator,
   RecordOf: recordOf,
   URL: matchUrlToken,

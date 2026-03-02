@@ -17,7 +17,7 @@ import {
   RegExpPattern,
   WherePattern,
 } from "./matcher";
-import type { MatchClassOptions } from "./classSchema";
+import type { MatchClassOptions, MatchSchemaOptions } from "./classSchema";
 
 export interface CheckSchemaLike<TParsed = unknown> {
   parse(input: unknown): TParsed;
@@ -77,16 +77,18 @@ type MatchDecoratorClassConstructor<T = unknown> = abstract new (
   ...args: never[]
 ) => T;
 
-export type MatchClassDecorator = <T extends MatchDecoratorClassConstructor>(
+export type MatchSchemaDecorator = <T extends MatchDecoratorClassConstructor>(
   target: T,
 ) => void;
+
+export type MatchClassDecorator = MatchSchemaDecorator;
 
 export type MatchPropertyDecorator = (
   target: object | Function,
   propertyKey: string | symbol,
 ) => void;
 
-export type { MatchClassOptions };
+export type { MatchSchemaOptions, MatchClassOptions };
 
 type MatchPrimitiveLiteral =
   | string

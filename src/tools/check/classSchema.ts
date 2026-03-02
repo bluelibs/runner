@@ -1,11 +1,13 @@
-export interface MatchClassOptions {
+export interface MatchSchemaOptions {
   exact?: boolean;
   schemaId?: string;
 }
 
+export type MatchClassOptions = MatchSchemaOptions;
+
 interface ClassSchemaMetadata {
   fields: Map<string, unknown>;
-  options: MatchClassOptions;
+  options: MatchSchemaOptions;
 }
 
 type ClassConstructor = abstract new (...args: never[]) => unknown;
@@ -40,7 +42,7 @@ function getClassChain(target: Function): Function[] {
 
 export function setClassSchemaOptions(
   target: ClassConstructor,
-  options: MatchClassOptions,
+  options: MatchSchemaOptions,
 ): void {
   const metadata = ensureMetadata(target as unknown as Function);
   metadata.options = {
@@ -89,4 +91,14 @@ export function getClassSchemaDefinition(target: ClassConstructor): {
     exact,
     schemaId,
   };
+}
+
+export function hasClassSchemaMetadata(target: ClassConstructor): boolean {
+  for (const ctor of getClassChain(target as unknown as Function)) {
+    if (CLASS_SCHEMA_METADATA.has(ctor)) {
+      return true;
+    }
+  }
+
+  return false;
 }

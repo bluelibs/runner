@@ -3,6 +3,11 @@ import { RunnerError } from "../../definers/defineError";
 import { getClassSchemaDefinition } from "../../tools/check/classSchema";
 
 describe("tools/check decorators", () => {
+  it("keeps Class/fromClass aliases mapped to Schema/fromSchema", () => {
+    expect(Match.Class).toBe(Match.Schema);
+    expect(Match.fromClass).toBe(Match.fromSchema);
+  });
+
   it("supports class + field decorators with nested arrays and bidirectional references", () => {
     class User {
       public name!: string;
@@ -14,12 +19,12 @@ describe("tools/check decorators", () => {
       public owner!: User;
     }
 
-    Match.Class()(User);
-    Match.Class()(Item);
+    Match.Schema()(User);
+    Match.Schema()(Item);
     Match.Field(Match.NonEmptyString)(User.prototype, "name");
-    Match.Field(Match.ArrayOf(Match.fromClass(Item)))(User.prototype, "items");
+    Match.Field(Match.ArrayOf(Match.fromSchema(Item)))(User.prototype, "items");
     Match.Field(Match.NonEmptyString)(Item.prototype, "title");
-    Match.Field(Match.fromClass(User))(Item.prototype, "owner");
+    Match.Field(Match.fromSchema(User))(Item.prototype, "owner");
 
     const user: Record<string, unknown> = {
       name: "Ada",
@@ -35,7 +40,7 @@ describe("tools/check decorators", () => {
       extra: true,
     };
 
-    expect(() => check(user, Match.fromClass(User))).not.toThrow();
+    expect(() => check(user, Match.fromSchema(User))).not.toThrow();
 
     const cyclicUser: Record<string, unknown> = { name: "Ada", items: [] };
     const cyclicItem: Record<string, unknown> = {
@@ -44,7 +49,7 @@ describe("tools/check decorators", () => {
     };
     (cyclicUser.items as unknown[]).push(cyclicItem);
 
-    expect(() => check(cyclicUser, Match.fromClass(User))).not.toThrow();
+    expect(() => check(cyclicUser, Match.fromSchema(User))).not.toThrow();
   });
 
   it("supports exact mode for class schemas", () => {
@@ -52,27 +57,27 @@ describe("tools/check decorators", () => {
       public name!: string;
     }
 
-    Match.Class({ exact: true })(ExactUser);
+    Match.Schema({ exact: true })(ExactUser);
     Match.Field(Match.NonEmptyString)(ExactUser.prototype, "name");
 
     expect(() =>
-      check({ name: "Ada" }, Match.fromClass(ExactUser)),
+      check({ name: "Ada" }, Match.fromSchema(ExactUser)),
     ).not.toThrow();
     expect(() =>
-      check({ name: "Ada", extra: true }, Match.fromClass(ExactUser)),
+      check({ name: "Ada", extra: true }, Match.fromSchema(ExactUser)),
     ).toThrow(MatchError);
 
     expect(() =>
       check(
         { name: "Ada", extra: true },
-        Match.fromClass(ExactUser, { exact: false }),
+        Match.fromSchema(ExactUser, { exact: false }),
       ),
     ).not.toThrow();
 
     expect(() =>
       check(
         { name: "Ada", extra: true },
-        Match.fromClass(ExactUser, { exact: true }),
+        Match.fromSchema(ExactUser, { exact: true }),
       ),
     ).toThrow(MatchError);
 
@@ -143,8 +148,8 @@ describe("tools/check decorators", () => {
       public title!: string;
     }
 
-    Match.Class({ schemaId: "custom.base" })(Base);
-    Match.Class({ exact: true })(Derived);
+    Match.Schema({ schemaId: "custom.base" })(Base);
+    Match.Schema({ exact: true })(Derived);
     Match.Field(Match.NonEmptyString)(Base.prototype, "id");
     Match.Field(Match.NonEmptyString)(Derived.prototype, "title");
 
@@ -175,7 +180,7 @@ describe("tools/check decorators", () => {
       public id!: string;
     }
 
-    Match.Class()(Tracked);
+    Match.Schema()(Tracked);
     Match.Field(Match.NonEmptyString)(Tracked.prototype, "id");
     const trackedDefinition = getClassSchemaDefinition(Tracked);
     expect(Object.keys(trackedDefinition.pattern)).toEqual(["id"]);
