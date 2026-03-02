@@ -4,7 +4,7 @@ import { globalResources } from "../../../globals/globalResources";
 import { globalTags } from "../../../globals/globalTags";
 import { r } from "../../../public";
 import { runtimeSource } from "../../../types/runtimeSource";
-import { symbolTunneledBy } from "../../../types/symbols";
+import { symbolRpcLaneRoutedBy } from "../../../types/symbols";
 import { rpcLanesResource } from "../../rpc-lanes";
 
 describe("rpcLanesResource modes", () => {
@@ -137,7 +137,7 @@ describe("rpcLanesResource modes", () => {
     await runtime.dispose();
   });
 
-  it("local-simulated mode fails when task is already tunneled by another resource", async () => {
+  it("local-simulated mode fails when task is already routed by another resource", async () => {
     const lane = r
       .rpcLane("tests.rpc-lanes.mode.simulated.ownership.lane")
       .build();
@@ -157,7 +157,7 @@ describe("rpcLanesResource modes", () => {
         const taskEntry = store.tasks.get(task.id);
         taskEntry.task = {
           ...taskEntry.task,
-          [symbolTunneledBy]: "tests.other.owner",
+          [symbolRpcLaneRoutedBy]: "tests.other.owner",
         };
         return null;
       },
@@ -184,7 +184,7 @@ describe("rpcLanesResource modes", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.tunnelOwnershipConflict",
+      name: "runner.errors.rpcLane.ownershipConflict",
     });
   });
 });

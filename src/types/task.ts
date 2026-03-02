@@ -14,8 +14,10 @@ import {
   symbolFilePath,
   symbolTask,
   symbolPhantomTask,
-  symbolTunneledBy,
+  symbolRpcLanePolicy,
+  symbolRpcLaneRoutedBy,
 } from "./symbols";
+import type { IRpcLanePolicy } from "./rpcLane";
 import {
   EnsureInputSatisfiesContracts,
   EnsureOutputSatisfiesContracts,
@@ -117,10 +119,12 @@ export interface ITask<
   [symbolTask]: true;
   /** Present only for phantom tasks. */
   [symbolPhantomTask]?: true;
-  /** Indicates if the task is tunneled through a tunnel client. */
-  isTunneled?: boolean;
-  /** Records which tunnel resource owns the task (exclusivity). */
-  [symbolTunneledBy]?: string;
+  /** Indicates if the task was patched for remote execution through rpc lanes. */
+  isRpcRouted?: boolean;
+  /** Records which rpc-lanes resource owns the task routing patch (exclusivity). */
+  [symbolRpcLaneRoutedBy]?: string;
+  /** Stores lane policy used for caller-side middleware filtering. */
+  [symbolRpcLanePolicy]?: IRpcLanePolicy;
   id: string;
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
@@ -136,7 +140,7 @@ export interface ITask<
 
 export type AnyTask = ITask<any, any, any, any, any, any>;
 
-/** Narrowed type for phantom tasks (throws unless routed through a tunnel). */
+/** Narrowed type for phantom tasks (throws unless routed through rpc lanes). */
 export type IPhantomTask<
   TInput = any,
   TResolved = any,

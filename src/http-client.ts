@@ -1,7 +1,7 @@
 import type { SerializerLike } from "./serializer";
-import type { ProtocolEnvelope } from "./globals/resources/tunnel/protocol";
-import { assertOkEnvelope } from "./globals/resources/tunnel/protocol";
-import { createExposureFetch } from "./http-fetch-tunnel.resource";
+import type { ProtocolEnvelope } from "./remote-lanes/http/protocol";
+import { assertOkEnvelope } from "./remote-lanes/http/protocol";
+import { createExposureFetch } from "./http-fetch-remote-lane.resource";
 import { buildUniversalManifest } from "./tools/buildUniversalManifest";
 import type { IAsyncContext } from "./types/asyncContext";
 import type { IErrorHelper } from "./types/error";
@@ -161,7 +161,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       method: "POST",
       body: fd,
       headers,
-      // Security: prevent automatic redirects from forwarding tunnel auth headers.
+      // Security: prevent automatic redirects from forwarding auth headers.
       redirect: "error",
     });
     const text = await res.text();
@@ -199,7 +199,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
         );
         try {
           return assertOkEnvelope<O>(r as ProtocolEnvelope<O>, {
-            fallbackMessage: "Tunnel task error",
+            fallbackMessage: "Remote lane task error",
           });
         } catch (e) {
           rethrowWithRegistry(e, cfg.errorRegistry);

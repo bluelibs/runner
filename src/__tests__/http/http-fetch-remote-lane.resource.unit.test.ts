@@ -1,9 +1,9 @@
-import { createExposureFetch } from "../../http-fetch-tunnel.resource";
+import { createExposureFetch } from "../../http-fetch-remote-lane.resource";
 import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
 import { createMessageError } from "../../errors";
 
-describe("http-fetch-tunnel.resource (unit)", () => {
+describe("http-fetch-remote-lane.resource (unit)", () => {
   it("createExposureFetch: throws when baseUrl is empty or '/'", () => {
     // @ts-expect-error
     expect(() => createExposureFetch({ baseUrl: "/" })).toThrow(
@@ -81,7 +81,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       serializer: new Serializer(),
     });
     await expect(c2.event("e.id", { y: 1 })).rejects.toThrow(
-      /Tunnel event error/,
+      /Remote lane event error/,
     );
   });
 
@@ -95,7 +95,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       serializer: new Serializer(),
     });
     await expect(c.event("e.id", { y: 2 })).rejects.toThrow(
-      /Tunnel event error/,
+      /Remote lane event error/,
     );
   });
 
@@ -175,7 +175,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     );
   });
 
-  it("createExposureFetch: eventWithResult() rethrows TunnelError when no typed mapping is present", async () => {
+  it("createExposureFetch: eventWithResult() rethrows RemoteLaneTransportError when no typed mapping is present", async () => {
     const serializer = new Serializer();
     const fetchImpl: typeof fetch = (async () => ({
       text: async () => serializer.stringify({ ok: false }),
@@ -187,7 +187,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     });
 
     await expect(c.eventWithResult!("e.id", { x: 1 })).rejects.toThrow(
-      /Tunnel event error/,
+      /Remote lane event error/,
     );
   });
 
@@ -200,7 +200,9 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       fetchImpl: fetchNoMsg,
       serializer: new Serializer(),
     });
-    await expect(c.task("t.id", { z: 1 })).rejects.toThrow(/Tunnel task error/);
+    await expect(c.task("t.id", { z: 1 })).rejects.toThrow(
+      /Remote lane task error/,
+    );
   });
 
   it("createExposureFetch: strips trailing slash in baseUrl for task()", async () => {

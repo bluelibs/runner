@@ -1,7 +1,7 @@
 import { MiddlewareResolver } from "../../../models/middleware/MiddlewareResolver";
-import { globalTags } from "../../../globals/globalTags";
+import { symbolRpcLanePolicy } from "../../../defs";
 
-describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
+describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
   test("throws when task is not registered", () => {
     const store: any = {
       tasks: new Map(),
@@ -14,21 +14,19 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
     const resolver = new MiddlewareResolver(store);
     const task: any = { id: "unregistered", middleware: [] };
 
-    expect(() => resolver.applyTunnelPolicyFilter(task, [])).toThrow(
+    expect(() => resolver.applyRpcLanePolicyFilter(task, [])).toThrow(
       /Task "unregistered" is not registered/,
     );
   });
 
-  test("applies object-style client middleware allow list", () => {
+  test("applies middleware allow list from routed task lane policy", () => {
     const task: any = {
       id: "registered",
       middleware: [],
-      isTunneled: true,
-      tags: [
-        globalTags.tunnelTaskPolicy.with({
-          client: { middlewareAllowList: ["mw.a"] },
-        }),
-      ],
+      isRpcRouted: true,
+      [symbolRpcLanePolicy]: {
+        middlewareAllowList: ["mw.a"],
+      },
     };
     const store: any = {
       tasks: new Map([["registered", { task }]]),
@@ -40,22 +38,16 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
     const resolver = new MiddlewareResolver(store);
     const middlewares = [{ id: "mw.a" }, { id: "mw.b" }] as any[];
 
-    expect(resolver.applyTunnelPolicyFilter(task, middlewares)).toEqual([
+    expect(resolver.applyRpcLanePolicyFilter(task, middlewares)).toEqual([
       { id: "mw.a" },
     ]);
   });
 
-  test("falls back to grouped allow list when client object has no middlewareAllowList", () => {
+  test("returns empty list when routed task has no allow list policy", () => {
     const task: any = {
       id: "registered.grouped",
       middleware: [],
-      isTunneled: true,
-      tags: [
-        globalTags.tunnelTaskPolicy.with({
-          client: {},
-          middlewareAllowList: { client: ["mw.keep"] },
-        }),
-      ],
+      isRpcRouted: true,
     };
     const store: any = {
       tasks: new Map([["registered.grouped", { task }]]),
@@ -67,9 +59,33 @@ describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
     const resolver = new MiddlewareResolver(store);
     const middlewares = [{ id: "mw.keep" }, { id: "mw.drop" }] as any[];
 
-    expect(resolver.applyTunnelPolicyFilter(task, middlewares)).toEqual([
-      { id: "mw.keep" },
-    ]);
+    expect(resolver.applyRpcLanePolicyFilter(task, middlewares)).toEqual([]);
+  });
+
+  test("supports legacy object middleware ids in lane policy allow list", () => {
+    const task: any = {
+      id: "registered.legacy-allow-list",
+      middleware: [],
+      isRpcRouted: true,
+      [symbolRpcLanePolicy]: {
+        middlewareAllowList: [{ id: "mw.legacy.allowed" }],
+      },
+    };
+    const store: any = {
+      tasks: new Map([["registered.legacy-allow-list", { task }]]),
+      taskMiddlewares: new Map(),
+      resourceMiddlewares: new Map(),
+      resources: new Map(),
+      getOwnerResourceId: () => undefined,
+    };
+    const resolver = new MiddlewareResolver(store);
+
+    expect(
+      resolver.applyRpcLanePolicyFilter(task, [
+        { id: "mw.legacy.allowed" },
+        { id: "mw.legacy.blocked" },
+      ] as any[]),
+    ).toEqual([{ id: "mw.legacy.allowed" }]);
   });
 
   test("does not auto-apply subtree middleware when owner cannot be resolved", () => {

@@ -26,12 +26,8 @@ function createStore(options: {
   }
 
   return {
-    events: new Map(
-      options.events.map((event) => [event.id, { event }]),
-    ),
-    tasks: new Map(
-      (options.tasks ?? []).map((task) => [task.id, { task }]),
-    ),
+    events: new Map(options.events.map((event) => [event.id, { event }])),
+    tasks: new Map((options.tasks ?? []).map((task) => [task.id, { task }])),
     resources,
     hooks: new Map(),
     taskMiddlewares: new Map(),
@@ -98,11 +94,13 @@ describe("EventLaneAssignments", () => {
       id: "tests.event-lane.tag-skip.event",
       tags: [globalTags.eventLane.with({ lane: eventLaneDefinition })],
     };
-    const rpcFunctionLane = rpcLane("rpc.func", (target) => target.id === event.id);
-    const rpcInvalidLane = rpcLane(
-      "rpc.invalid-shape",
-      { bad: true } as unknown as string[],
+    const rpcFunctionLane = rpcLane(
+      "rpc.func",
+      (target) => target.id === event.id,
     );
+    const rpcInvalidLane = rpcLane("rpc.invalid-shape", {
+      bad: true,
+    } as unknown as string[]);
 
     const store = createStore({
       events: [event],
@@ -131,5 +129,62 @@ describe("EventLaneAssignments", () => {
     expect(() => resolveEventLaneAssignments(store, [])).toThrow(
       'Event "tests.event-lane.tag-conflict.event" cannot be assigned to eventLane "lane.tagged" because it is already assigned to an rpcLane.',
     );
+  });
+
+  it("allows duplicate function applyTo declarations when they use the same lane id", () => {
+    const event = { id: "tests.event-lane.same-id.function.event", tags: [] };
+    const store = createStore({ events: [event] });
+    const lanes = [
+      eventLane("lane.same", () => true),
+      eventLane("lane.same", () => true),
+    ];
+
+    const routes = resolveEventLaneAssignments(store, lanes);
+    expect(routes.get(event.id)?.lane.id).toBe("lane.same");
+  });
+
+  it("allows duplicate id-list applyTo declarations when they use the same lane id", () => {
+    const event = { id: "tests.event-lane.same-id.list.event", tags: [] };
+    const store = createStore({ events: [event] });
+    const lanes = [
+      eventLane("lane.same", [event.id]),
+      eventLane("lane.same", [event.id]),
+    ];
+
+    const routes = resolveEventLaneAssignments(store, lanes);
+    expect(routes.get(event.id)?.lane.id).toBe("lane.same");
+  });
+
+  it("collects rpc applyTo function targets selectively", () => {
+    const selected = { id: "tests.event-lane.rpc-select.selected" };
+    const ignored = { id: "tests.event-lane.rpc-select.ignored" };
+    const eventLaneDefinition = eventLane("lane.tagged");
+
+    const store = createStore({
+      events: [
+        {
+          id: selected.id,
+          tags: [globalTags.eventLane.with({ lane: eventLaneDefinition })],
+        },
+        {
+          id: ignored.id,
+          tags: [globalTags.eventLane.with({ lane: eventLaneDefinition })],
+        },
+      ],
+      rpcTopology: {
+        profiles: {
+          client: {
+            serve: [
+              rpcLane("rpc.selective", (target) => target.id === selected.id),
+            ],
+          },
+        },
+        bindings: [],
+      },
+    });
+
+    const routes = resolveEventLaneAssignments(store, []);
+    expect(routes.has(selected.id)).toBe(false);
+    expect(routes.get(ignored.id)?.lane.id).toBe("lane.tagged");
   });
 });

@@ -1,4 +1,4 @@
-import { createExposureFetch } from "../../http-fetch-tunnel.resource";
+import { createExposureFetch } from "../../http-fetch-remote-lane.resource";
 import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
 import { createMessageError } from "../../errors";

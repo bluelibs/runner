@@ -1960,7 +1960,7 @@ const durableRegistration = durable.with({ store });
 
 ### Integration with HTTP Exposure
 
-Expose durable task execution over HTTP using Runner's tunnel pattern:
+Expose durable task execution over HTTP using Runner's remote lanes pattern:
 
 ```typescript
 import { createHttpClient } from "@bluelibs/runner";

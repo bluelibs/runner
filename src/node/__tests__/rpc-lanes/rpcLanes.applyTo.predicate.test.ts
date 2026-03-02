@@ -29,7 +29,11 @@ describe("rpcLanes applyTo predicate", () => {
 
     const app = defineResource({
       id: "tests.rpc-lanes.apply-to.predicate.app",
-      register: [task, communicator, rpcLanesResource.with({ profile: "client", topology })],
+      register: [
+        task,
+        communicator,
+        rpcLanesResource.with({ profile: "client", topology }),
+      ],
     });
 
     const runtime = await run(app);

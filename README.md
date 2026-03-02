@@ -123,12 +123,11 @@ Use these minimums before starting:
 | Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                                 |
 | TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository                   |
 | Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works                  |
-| `fetch` runtime | Built-in or polyfilled  | Required for tunnel clients (`createHttpClient`, universal HTTP client) |
+| `fetch` runtime | Built-in or polyfilled  | Required for remote lane clients (`createHttpClient`, universal HTTP client) |
 
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
-
 ## Your First 5 Minutes
 
 **New to Runner?** Here's the absolute minimum you need to know:

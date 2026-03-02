@@ -3,10 +3,10 @@ import { defineEvent, defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { globalResources } from "../../../globals/globalResources";
 import { globalTags } from "../../../globals/globalTags";
-import { computeAllowList } from "../../tunnel";
+import { computeRpcLaneAllowList } from "../../rpc-lanes";
 import { rpcLanesResource } from "../../rpc-lanes";
 import { r } from "../../../public";
-import { symbolTunneledBy } from "../../../defs";
+import { symbolRpcLaneRoutedBy } from "../../../types/symbols";
 import { runtimeSource } from "../../../types/runtimeSource";
 import * as exposureModule from "../../exposure/createNodeExposure";
 
@@ -616,7 +616,7 @@ describe("rpcLanesResource", () => {
 
     const rr = await run(app);
     const store = await rr.getResourceValue(globalResources.store as any);
-    const allowList = computeAllowList(store);
+    const allowList = computeRpcLaneAllowList(store);
     expect(allowList.enabled).toBe(true);
     expect(allowList.taskIds.has(task.id)).toBe(true);
     expect(allowList.taskAcceptsAsyncContext.get(task.id)).toBe(false);
@@ -670,7 +670,7 @@ describe("rpcLanesResource", () => {
 
     const rr = await run(app);
     const store = await rr.getResourceValue(globalResources.store as any);
-    const allowList = computeAllowList(store);
+    const allowList = computeRpcLaneAllowList(store);
     expect(allowList.taskAcceptsAsyncContext.get(defaultTask.id)).toBe(false);
     expect(allowList.taskAsyncContextAllowList.get(defaultTask.id)).toEqual([]);
     expect(allowList.taskAcceptsAsyncContext.get(allowedTask.id)).toBe(true);
@@ -716,7 +716,7 @@ describe("rpcLanesResource", () => {
 
     const rr = await run(app);
     const store = await rr.getResourceValue(globalResources.store as any);
-    const allowList = computeAllowList(store);
+    const allowList = computeRpcLaneAllowList(store);
     expect(allowList.taskAcceptsAsyncContext.get(task.id)).toBe(true);
     expect(allowList.taskAsyncContextAllowList.get(task.id)).toBeUndefined();
     expect(allowList.eventAcceptsAsyncContext.get(event.id)).toBe(true);
@@ -812,7 +812,7 @@ describe("rpcLanesResource", () => {
     await rr.dispose();
   });
 
-  it("fails when task is already tunneled by another resource", async () => {
+  it("fails when task is already routed by another resource", async () => {
     const lane = r.rpcLane("tests.rpc-lanes.ownership.lane").build();
     const task = defineTask({
       id: "tests.rpc-lanes.ownership.task",
@@ -836,7 +836,7 @@ describe("rpcLanesResource", () => {
         const taskEntry = store.tasks.get(task.id);
         taskEntry.task = {
           ...taskEntry.task,
-          [symbolTunneledBy]: "tests.other.owner",
+          [symbolRpcLaneRoutedBy]: "tests.other.owner",
         };
         return null;
       },
@@ -859,7 +859,7 @@ describe("rpcLanesResource", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.tunnelOwnershipConflict",
+      name: "runner.errors.rpcLane.ownershipConflict",
     });
   });
 });

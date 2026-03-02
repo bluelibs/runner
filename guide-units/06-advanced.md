@@ -356,50 +356,49 @@ The serializer is hardened against common attacks:
 
 > **Note:** File uploads use the remote lane HTTP multipart handling, not the serializer. See [Remote Lanes](../readmes/REMOTE_LANES.md) for file upload patterns.
 
-### Tunnels: Bridging Runners
+### Remote Lanes: Bridging Runners
 
-Tunnels are a powerful feature for building distributed systems. They let you expose your tasks and events over HTTP, making them callable from other processes, services, or even a browser UI. This allows a server and client to co-exist, enabling one Runner instance to securely call another.
+Remote Lanes are the distributed execution model for Runner. They let you expose tasks and events over HTTP, making them callable from other processes, services, or a browser UI. This allows a server and client to co-exist, enabling one Runner instance to securely call another.
 
-Here's a sneak peek of how you can expose your application and configure a client tunnel to consume a remote Runner:
+Here's a sneak peek of how you can expose your application and configure RPC lane routing for remote execution:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
-import { nodeExposure } from "@bluelibs/runner/node";
+import { r } from "@bluelibs/runner";
+import { rpcLanesResource } from "@bluelibs/runner/node";
 
 let app = r.resource("app");
 
-if (process.env.SERVER) {
-  // 1. Expose your local tasks and events over HTTP, only when server mode is active.
-  app.register([
-    // ... your tasks and events
-    nodeExposure.with({
-      http: {
-        basePath: "/__runner",
-        listen: { port: 7070 },
+const lane = r
+  .rpcLane("app.rpc.main")
+  .policy({ middlewareAllowList: ["app.middleware.task.audit"] })
+  .build();
+
+const topology = r.rpcLane.topology({
+  profiles: {
+    client: { serve: [] },
+  },
+  bindings: [{ lane, communicator: r.rpcLane.http() }],
+});
+
+app = app
+  .register([
+    // ... your tasks and events tagged with globals.tags.rpcLane.with({ lane })
+    rpcLanesResource.with({
+      profile: "client",
+      topology,
+      mode: "network",
+      exposure: {
+        http: {
+          basePath: "/__runner",
+          listen: { port: 7070 },
+        },
       },
     }),
-  ]);
-}
-app = app.build();
-
-// 2. In another app, define a tunnel resource to call a remote Runner
-const remoteTasksTunnel = r
-  .resource("app.tunnels.http")
-  .tags([globals.tags.tunnel])
-  .dependencies({ createClient: globals.resources.httpClientFactory })
-  .init(async (_, { createClient }) => ({
-    mode: "client", // or "server", or "none", or "both" for emulating network infrastructure
-    transport: "http", // the only one supported for now
-    // Selectively forward tasks starting with "remote.tasks."
-    tasks: (t) => t.id.startsWith("remote.tasks."),
-    client: createClient({
-      url: "http://remote-runner:8080/__runner",
-    }),
-  }))
+  ])
   .build();
 ```
 
-This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
+This is just a glimpse. With remote lanes, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
 
 For typed remote error hydration, pass an `errorRegistry` to the client:
 

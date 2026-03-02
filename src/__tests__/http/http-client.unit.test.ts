@@ -4,8 +4,8 @@ import { createWebFile } from "../../platform/createWebFile";
 import { createFile as createNodeFile } from "../../node/platform/createFile";
 import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
-import * as exposureFetchModule from "../../http-fetch-tunnel.resource";
-import { TunnelError } from "../../globals/resources/tunnel/protocol";
+import * as exposureFetchModule from "../../http-fetch-remote-lane.resource";
+import { RemoteLaneTransportError } from "../../remote-lanes/http/protocol";
 import { createMessageError } from "../../errors";
 
 type ExposureFetchState = {
@@ -106,9 +106,9 @@ describe("http-client (universal)", () => {
     );
   });
 
-  it("eventWithResult: rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
+  it("eventWithResult: rethrows typed app error via errorRegistry when RemoteLaneTransportError carries id+data", async () => {
     exposureState.eventWithResult.mockImplementationOnce(async () => {
-      throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
+      throw new RemoteLaneTransportError("INTERNAL_ERROR", "boom", undefined, {
         id: "tests.errors.evret",
         data: { code: 9, message: "evret" },
       });
@@ -357,9 +357,9 @@ describe("http-client (universal)", () => {
     );
   });
 
-  it("event: rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
+  it("event: rethrows typed app error via errorRegistry when RemoteLaneTransportError carries id+data", async () => {
     exposureState.event.mockImplementationOnce(async () => {
-      throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
+      throw new RemoteLaneTransportError("INTERNAL_ERROR", "boom", undefined, {
         id: "tests.errors.ev",
         data: { code: 8, message: "ev" },
       });
@@ -380,9 +380,9 @@ describe("http-client (universal)", () => {
     await expect(client.event("e.1", { a: 1 })).rejects.toThrow(/typed-ev:8/);
   });
 
-  it("JSON fallback rethrows TunnelError when no registry present", async () => {
+  it("JSON fallback rethrows RemoteLaneTransportError when no registry present", async () => {
     exposureState.task.mockImplementationOnce(async () => {
-      throw new TunnelError("INTERNAL_ERROR", "json-raw");
+      throw new RemoteLaneTransportError("INTERNAL_ERROR", "json-raw");
     });
     const client = createHttpClient({
       baseUrl,
@@ -393,9 +393,9 @@ describe("http-client (universal)", () => {
     );
   });
 
-  it("event rethrows TunnelError when no registry present", async () => {
+  it("event rethrows RemoteLaneTransportError when no registry present", async () => {
     exposureState.event.mockImplementationOnce(async () => {
-      throw new TunnelError("INTERNAL_ERROR", "ev-raw");
+      throw new RemoteLaneTransportError("INTERNAL_ERROR", "ev-raw");
     });
     const client = createHttpClient({
       baseUrl,
@@ -470,10 +470,10 @@ describe("http-client (universal)", () => {
     ).toThrow();
   });
 
-  it("rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
-    // Make the mocked exposure fetch throw a TunnelError
+  it("rethrows typed app error via errorRegistry when RemoteLaneTransportError carries id+data", async () => {
+    // Make the mocked exposure fetch throw a RemoteLaneTransportError
     exposureState.task.mockImplementationOnce(async () => {
-      throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
+      throw new RemoteLaneTransportError("INTERNAL_ERROR", "boom", undefined, {
         id: "tests.errors.app",
         data: { code: 5, message: "boom" },
       });

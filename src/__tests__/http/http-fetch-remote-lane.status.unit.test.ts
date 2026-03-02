@@ -1,9 +1,9 @@
-import { createExposureFetch } from "../../http-fetch-tunnel.resource";
+import { createExposureFetch } from "../../http-fetch-remote-lane.resource";
 import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
 import { createMessageError } from "../../errors";
 
-describe("http-fetch-tunnel.resource - HTTP status handling", () => {
+describe("http-fetch-remote-lane.resource - HTTP status handling", () => {
   it("throws HTTP_ERROR when non-2xx response body is not serializer-parsable", async () => {
     const fetchImpl: typeof fetch = (async () =>
       ({
@@ -64,7 +64,7 @@ describe("http-fetch-tunnel.resource - HTTP status handling", () => {
     });
 
     await expect(client.task("t.id", { a: 1 })).rejects.toThrow(
-      /Tunnel HTTP 504/,
+      /Remote lane HTTP 504/,
     );
   });
 
@@ -84,7 +84,7 @@ describe("http-fetch-tunnel.resource - HTTP status handling", () => {
     });
 
     await expect(client.event("e.id", { x: 1 })).rejects.toThrow(
-      /Tunnel HTTP 500/,
+      /Remote lane HTTP 500/,
     );
   });
 

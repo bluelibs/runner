@@ -44,7 +44,7 @@ export class TaskMiddlewareComposer {
     const storeTask = this.store.tasks.get(task.id)!;
 
     // Determine the effective task definition for this execution.
-    // When tunneled, the Store task definition carries tunnel overrides and metadata.
+    // When RPC-routed, the Store task definition carries runtime routing overrides.
     const runnerTask = this.resolveTaskDefinition(task, storeTask.task);
 
     // 1. Base runner with validation (receives input + journal)
@@ -126,14 +126,14 @@ export class TaskMiddlewareComposer {
 
   /**
    * Determines which task definition to use for execution
-   * Prefers store definition when task is tunneled (tunnel overrides apply)
+   * Prefers store definition when task is RPC-routed (runtime overrides apply)
    */
   private resolveTaskDefinition<T extends ITask<any, any, any>>(
     task: T,
     storeTask: T,
   ): T {
-    const isLocallyTunneled = task.isTunneled || storeTask.isTunneled;
-    return isLocallyTunneled ? storeTask : task;
+    const isRpcRouted = task.isRpcRouted || storeTask.isRpcRouted;
+    return isRpcRouted ? storeTask : task;
   }
 
   /**
@@ -274,8 +274,8 @@ export class TaskMiddlewareComposer {
     let middlewares =
       this.middlewareResolver.getApplicableTaskMiddlewares(task);
 
-    // Apply tunnel policy filter if needed
-    middlewares = this.middlewareResolver.applyTunnelPolicyFilter(
+    // Apply rpc lane policy filter if needed
+    middlewares = this.middlewareResolver.applyRpcLanePolicyFilter(
       task,
       middlewares,
     );

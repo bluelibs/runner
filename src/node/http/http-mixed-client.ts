@@ -1,5 +1,5 @@
 import type { Readable } from "stream";
-import { createExposureFetch } from "../../http-fetch-tunnel.resource";
+import { createExposureFetch } from "../../http-fetch-remote-lane.resource";
 import type { SerializerLike } from "../../serializer";
 import { createHttpSmartClient } from "./http-smart-client.model";
 import type { IAsyncContext } from "../../types/asyncContext";

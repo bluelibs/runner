@@ -1,10 +1,10 @@
 import {
   createExposureFetch,
   normalizeError,
-} from "../../../http-fetch-tunnel.resource";
+} from "../../../http-fetch-remote-lane.resource";
 import { Serializer } from "../../../serializer";
 
-describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
+describe("httpFetchRemoteLane & createExposureFetch - additional coverage", () => {
   const serializer = new Serializer();
 
   it("normalizes baseUrl and serializes bodies (postJson lines)", async () => {
@@ -89,10 +89,10 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
       serializer,
     });
     await expect(client.task("tid" as any, {})).rejects.toThrow(
-      /Tunnel task error/,
+      /Remote lane task error/,
     );
     await expect(client.event("eid" as any, {})).rejects.toThrow(
-      /Tunnel event error/,
+      /Remote lane event error/,
     );
   });
 
@@ -116,7 +116,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
     expect(e3.message).toBe("undefined");
   });
 
-  it("keeps original tunnel error when error registry has no matching helper", async () => {
+  it("keeps original remote lane transport error when error registry has no matching helper", async () => {
     const envelope = serializer.stringify({
       ok: false,
       error: {
@@ -135,12 +135,12 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
     });
 
     await expect(client.task("task.unmapped", {})).rejects.toMatchObject({
-      name: "TunnelError",
+      name: "RemoteLaneTransportError",
       id: "tests.unmapped.error",
       data: { x: 1 },
     });
     await expect(client.event("event.unmapped", {})).rejects.toMatchObject({
-      name: "TunnelError",
+      name: "RemoteLaneTransportError",
       id: "tests.unmapped.error",
       data: { x: 1 },
     });
@@ -148,7 +148,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
     await expect(
       client.eventWithResult!("event.unmapped.result", {}),
     ).rejects.toMatchObject({
-      name: "TunnelError",
+      name: "RemoteLaneTransportError",
       id: "tests.unmapped.error",
       data: { x: 1 },
     });

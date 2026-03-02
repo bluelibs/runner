@@ -91,7 +91,7 @@ export class Serializer {
   }
 
   /**
-   * Alias of `serialize()` to match the historical tunnel serializer surface.
+   * Alias of `serialize()` to match the historical remote-lane serializer surface.
    */
   public stringify<T>(value: T): string {
     const root = serializeTreeValue(
@@ -108,7 +108,7 @@ export class Serializer {
   }
 
   /**
-   * Alias of `deserialize()` to match the historical tunnel serializer surface.
+   * Alias of `deserialize()` to match the historical remote-lane serializer surface.
    */
   public parse<T = unknown>(payload: string): T {
     return this.deserialize<T>(payload);

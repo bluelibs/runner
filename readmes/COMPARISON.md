@@ -226,7 +226,7 @@ Both Runner and Effect are functional-first and offer full type inference. They 
 | **Lifecycle**         | `init` / `dispose` on resources               | Layer acquisition / release                    |
 | **Middleware**        | First-class, composable, with journal         | Aspect-oriented via Layer composition          |
 | **Durable Workflows** | Built-in (Node)                               | Not built-in                                   |
-| **HTTP Tunnels**      | Built-in (Node server, any fetch client)      | Not built-in                                   |
+| **HTTP Remote Lanes** | Built-in (Node server, any fetch client)      | Not built-in                                   |
 | **Adoption path**     | Incremental -- wrap existing async functions  | Pervasive -- all code wrapped in `Effect`      |
 | **Learning curve**    | Gentle (familiar async/await)                 | Steep (FP concepts: fibers, layers, schemas)   |
 

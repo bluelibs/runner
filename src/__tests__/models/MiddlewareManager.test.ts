@@ -13,8 +13,7 @@ import {
 import { OnUnhandledError } from "../../index";
 import { RunnerMode } from "../../types/runner";
 import { TaskStoreElementType } from "../../types/storeTypes";
-import { ITaskMiddleware, IResource } from "../../defs";
-import { globalTags } from "../../globals/globalTags";
+import { ITaskMiddleware, IResource, symbolRpcLanePolicy } from "../../defs";
 import { createMessageError } from "../../errors";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
@@ -387,28 +386,26 @@ describe("MiddlewareManager", () => {
     await expect(runner(undefined)).rejects.toThrow();
   });
 
-  it("should apply tunnel policy filter when task is tunneled", () => {
-    // Test MiddlewareResolver branch for tunnel policy
+  it("should apply rpc lane policy filter when task is routed", () => {
+    // Test MiddlewareResolver branch for rpc lane policy
 
     const mw = defineTaskMiddleware({
-      id: "test.mw.tunnel",
+      id: "test.mw.rpc-lane",
       run: async ({ next, task }) => next(task?.input),
     });
 
     const task = defineTask({
-      id: "task.tunneled",
-      tags: [
-        globalTags.tunnelTaskPolicy.with({
-          client: { middlewareAllowList: [mw.id] },
-        }),
-      ],
+      id: "task.rpc-routed",
       middleware: [mw],
       run: async () => 0,
     });
 
-    const tunneledTask = {
+    const routedTask = {
       ...task,
-      isTunneled: true,
+      isRpcRouted: true,
+      [symbolRpcLanePolicy]: {
+        middlewareAllowList: [mw.id],
+      },
     };
 
     store.taskMiddlewares.set(mw.id, {
@@ -417,8 +414,8 @@ describe("MiddlewareManager", () => {
       isInitialized: true,
     });
 
-    // Create a copy of the task for the store and mark it as tunneled too
-    const storeTask = { ...tunneledTask };
+    // Create a copy of the task for the store and mark it as routed too
+    const storeTask = { ...routedTask };
 
     store.tasks.set(task.id, {
       task: storeTask,
@@ -426,7 +423,7 @@ describe("MiddlewareManager", () => {
       isInitialized: true,
     });
 
-    const runner = manager.composeTaskRunner(tunneledTask as typeof task);
+    const runner = manager.composeTaskRunner(routedTask as typeof task);
     expect(runner).toBeDefined();
   });
 

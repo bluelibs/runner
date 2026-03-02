@@ -86,11 +86,15 @@ describe("rpc lane builder", () => {
       .task("tests.rpc-lanes.builder.apply-to.predicate.task")
       .run(async () => "ok")
       .build();
-    const event = r.event("tests.rpc-lanes.builder.apply-to.predicate.event").build();
+    const event = r
+      .event("tests.rpc-lanes.builder.apply-to.predicate.event")
+      .build();
 
     const lane = r
       .rpcLane("tests.rpc-lanes.builder.apply-to.predicate.lane")
-      .applyTo((candidate) => candidate.id === task.id || candidate.id === event.id)
+      .applyTo(
+        (candidate) => candidate.id === task.id || candidate.id === event.id,
+      )
       .build();
 
     const applyTo = lane.applyTo;
@@ -113,6 +117,29 @@ describe("rpc lane builder", () => {
       context,
       "tests.rpc-lanes.builder.ctx",
     ]);
+  });
+
+  it("supports rpc lane policy and clones middleware allow list values", () => {
+    const allowList = ["tests.middleware.rpc.a", "tests.middleware.rpc.b"];
+    const lane = r
+      .rpcLane("tests.rpc-lanes.builder.policy")
+      .policy({ middlewareAllowList: allowList })
+      .build();
+
+    expect(lane.policy).toEqual({ middlewareAllowList: allowList });
+    expect(lane.policy?.middlewareAllowList).not.toBe(allowList);
+
+    allowList.push("tests.middleware.rpc.c");
+    expect(lane.policy?.middlewareAllowList).toEqual([
+      "tests.middleware.rpc.a",
+      "tests.middleware.rpc.b",
+    ]);
+
+    const emptyPolicyLane = r
+      .rpcLane("tests.rpc-lanes.builder.policy.empty")
+      .policy({})
+      .build();
+    expect(emptyPolicyLane.policy).toEqual({});
   });
 
   it("builds frozen topology with lane-aware profile typing helper", () => {

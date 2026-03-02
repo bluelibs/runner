@@ -1,20 +1,20 @@
 import {
   assertOkEnvelope,
-  ProtocolEnvelope,
-  TunnelError,
-} from "./globals/resources/tunnel/protocol";
+  type ProtocolEnvelope,
+  RemoteLaneTransportError,
+} from "./remote-lanes/http/protocol";
 import type { SerializerLike } from "./serializer";
 import type {
   ExposureFetchConfig,
   ExposureFetchClient,
-} from "./globals/resources/tunnel/types";
+} from "./remote-lanes/http/types";
 import { httpBaseUrlRequiredError, httpFetchUnavailableError } from "./errors";
-export { normalizeError } from "./globals/resources/tunnel/error-utils";
+export { normalizeError } from "./tools/normalizeError";
 export type {
   ExposureFetchAuthConfig,
   ExposureFetchConfig,
   ExposureFetchClient,
-} from "./globals/resources/tunnel/types";
+} from "./remote-lanes/http/types";
 
 // normalizeError is re-exported from error-utils for public API
 
@@ -59,7 +59,7 @@ async function postSerialized<T = any>(options: {
       headers: reqHeaders,
       body: serializer.stringify(body),
       signal: controller?.signal,
-      // Security: prevent automatic redirects from forwarding tunnel auth headers.
+      // Security: prevent automatic redirects from forwarding auth headers.
       redirect: "error",
     });
 
@@ -86,11 +86,11 @@ async function postSerialized<T = any>(options: {
 
     if (!text) {
       if (!ok) {
-        throw new TunnelError(
+        throw new RemoteLaneTransportError(
           "HTTP_ERROR",
           statusText
-            ? `Tunnel HTTP ${status} ${statusText}`
-            : `Tunnel HTTP ${status}`,
+            ? `Remote lane HTTP ${status} ${statusText}`
+            : `Remote lane HTTP ${status}`,
           { statusCode: status, statusText, contentType },
           { httpCode: status },
         );
@@ -105,11 +105,11 @@ async function postSerialized<T = any>(options: {
       return json;
     } catch (error) {
       if (!ok) {
-        throw new TunnelError(
+        throw new RemoteLaneTransportError(
           "HTTP_ERROR",
           statusText
-            ? `Tunnel HTTP ${status} ${statusText}`
-            : `Tunnel HTTP ${status}`,
+            ? `Remote lane HTTP ${status} ${statusText}`
+            : `Remote lane HTTP ${status}`,
           {
             statusCode: status,
             statusText,
@@ -128,7 +128,7 @@ async function postSerialized<T = any>(options: {
 
 /**
  * This functions communicates with the exposure server over HTTP.
- * It uses the @readmes/TUNNEL_HTTP_POLICY.md strategy.
+ * It uses the remote-lanes HTTP policy strategy.
  *
  * @param cfg
  * @returns
@@ -190,7 +190,9 @@ export function createExposureFetch(
         contextHeaderText: buildContextHeader(),
       });
       try {
-        return assertOkEnvelope<O>(r, { fallbackMessage: "Tunnel task error" });
+        return assertOkEnvelope<O>(r, {
+          fallbackMessage: "Remote lane task error",
+        });
       } catch (e) {
         // Optionally rethrow typed errors if registry present
         const te = e as { id?: unknown; data?: unknown };
@@ -221,7 +223,9 @@ export function createExposureFetch(
         contextHeaderText: buildContextHeader(),
       });
       try {
-        assertOkEnvelope<void>(r, { fallbackMessage: "Tunnel event error" });
+        assertOkEnvelope<void>(r, {
+          fallbackMessage: "Remote lane event error",
+        });
       } catch (e) {
         const te = e as { id?: unknown; data?: unknown };
         if (cfg.errorRegistry && te.id && te.data) {
@@ -251,14 +255,14 @@ export function createExposureFetch(
         contextHeaderText: buildContextHeader(),
       });
       if (r && typeof r === "object" && r.ok && !("result" in r)) {
-        throw new TunnelError(
+        throw new RemoteLaneTransportError(
           "INVALID_RESPONSE",
-          "Tunnel event returnPayload requested but server did not include result. Upgrade the exposure server.",
+          "Remote lane event returnPayload requested but server did not include result. Upgrade the exposure server.",
         );
       }
       try {
         return assertOkEnvelope<P>(r, {
-          fallbackMessage: "Tunnel event error",
+          fallbackMessage: "Remote lane event error",
         });
       } catch (e) {
         const te = e as { id?: unknown; data?: unknown };

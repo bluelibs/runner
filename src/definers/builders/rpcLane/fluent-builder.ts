@@ -1,4 +1,4 @@
-import type { IRpcLaneMeta } from "../../../defs";
+import type { IRpcLaneMeta, IRpcLanePolicy } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineRpcLane } from "../../defineRpcLane";
@@ -34,6 +34,18 @@ export function makeRpcLaneBuilder<TMeta extends IRpcLaneMeta>(
       return makeRpcLaneBuilder(next);
     },
 
+    policy(value: IRpcLanePolicy) {
+      const next = clone(state, {
+        policy: {
+          ...value,
+          ...(value.middlewareAllowList
+            ? { middlewareAllowList: value.middlewareAllowList.slice() }
+            : {}),
+        },
+      });
+      return makeRpcLaneBuilder(next);
+    },
+
     applyTo(targets) {
       const next = clone(state, {
         applyTo: typeof targets === "function" ? targets : targets.slice(),
@@ -57,6 +69,7 @@ export function makeRpcLaneBuilder<TMeta extends IRpcLaneMeta>(
       const lane = defineRpcLane({
         id: state.id,
         meta: state.meta,
+        policy: state.policy,
         applyTo: state.applyTo,
         asyncContexts: state.asyncContexts,
       });

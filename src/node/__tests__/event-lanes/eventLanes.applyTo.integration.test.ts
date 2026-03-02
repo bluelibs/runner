@@ -210,7 +210,9 @@ describe("eventLanes applyTo", () => {
   });
 
   it("lets applyTo override tag-based event lane assignment (IoC)", async () => {
-    const laneA = r.eventLane("tests.event-lanes.apply-to.override-ioc.a").build();
+    const laneA = r
+      .eventLane("tests.event-lanes.apply-to.override-ioc.a")
+      .build();
     const laneB = r
       .eventLane("tests.event-lanes.apply-to.override-ioc.b")
       .applyTo(["tests.event-lanes.apply-to.override-ioc.event"])

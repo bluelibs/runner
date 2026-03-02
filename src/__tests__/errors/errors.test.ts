@@ -439,7 +439,7 @@ describe("Errors", () => {
         phantomTaskNotRoutedError.throw({ taskId: "my.phantom.task" }),
       );
       expect(phantom.message).toContain('Phantom task "my.phantom.task"');
-      expect(phantom.message).toContain("not routed through any tunnel");
+      expect(phantom.message).toContain("not routed through any rpc lane");
       expect(phantomTaskNotRoutedError.is(phantom)).toBe(true);
 
       const policyInvalid = capture(() =>

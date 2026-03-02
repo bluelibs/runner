@@ -3,8 +3,6 @@ import { tag as tagBuilder } from "../definers/builders/tag";
 import type { IEventLaneDefinition, IRpcLaneDefinition } from "../defs";
 import { cronTag } from "./cron/cron.tag";
 import { debugTag } from "./resources/debug/debug.tag";
-import { tunnelTag } from "./resources/tunnel/tunnel.tag";
-import { tunnelTaskPolicyTag } from "./resources/tunnel/tunnel.policy.tag";
 
 const globalTagsBase = {
   system: defineTag<{
@@ -69,27 +67,13 @@ const globalTagsBase = {
   }),
   debug: debugTag,
   cron: cronTag,
-  tunnel: tunnelTag,
-  tunnelTaskPolicy: tunnelTaskPolicyTag,
   authValidator: tagBuilder("globals.tags.authValidator")
     .for("tasks")
     .meta({
       title: "Auth Validator",
       description:
-        "Marks tasks that validate HTTP requests for tunnel authentication.",
+        "Marks tasks that validate HTTP requests for remote lane exposure authentication.",
     })
     .build(),
 };
-
-type GlobalTags = typeof globalTagsBase & {
-  /** @deprecated Use globals.tags.tunnelTaskPolicy instead. */
-  tunnelPolicy: typeof tunnelTaskPolicyTag;
-};
-
-export const globalTags = globalTagsBase as GlobalTags;
-
-Object.defineProperty(globalTags, "tunnelPolicy", {
-  get: () => globalTags.tunnelTaskPolicy,
-  enumerable: false,
-  configurable: false,
-});
+export const globalTags = globalTagsBase;

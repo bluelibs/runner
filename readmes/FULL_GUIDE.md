@@ -123,12 +123,11 @@ Use these minimums before starting:
 | Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                                 |
 | TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository                   |
 | Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works                  |
-| `fetch` runtime | Built-in or polyfilled  | Required for tunnel clients (`createHttpClient`, universal HTTP client) |
+| `fetch` runtime | Built-in or polyfilled  | Required for remote lane clients (`createHttpClient`, universal HTTP client) |
 
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
-
 ## Why Runner?
 
 Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
@@ -274,7 +273,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Optional Dependencies](#optional-dependencies) - Graceful degradation
 - [Resource Forking](#resource-forking) - Multi-instance patterns
 - [Serialization](#serialization) - Advanced data handling
-- [Tunnels](#tunnels-bridging-runners) - Distributed systems
+- [Remote Lanes](#remote-lanes-bridging-runners) - Distributed systems
 - [Async Context](#async-context) - Request-scoped state
 - [Overrides](#overrides) - Component replacement
 - [Namespacing](#namespacing) - Code organization
@@ -492,7 +491,7 @@ Runner comes with **everything you need** to build production apps:
 **Advanced Patterns**
 
 - Durable Workflows (Node)
-- Tunnels (Distributed)
+- Remote Lanes (Distributed)
 - Tags System
 - Factory Pattern
 - Namespacing
@@ -897,7 +896,6 @@ Now that you know the patterns, here's your learning path:
 > **runtime:** "Seven patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
 
 ---
-
 ## Quick Wins: Copy-Paste Solutions
 
 Production-ready patterns you can use today. Each example is complete and tested.
@@ -3115,6 +3113,7 @@ All supported Match patterns:
 - `Match.UUID`: accepts canonical UUID strings (versions 1-8)
 - `Match.URL`: accepts valid absolute URL strings
 - `Match.IsoDateString`: accepts ISO datetime strings with timezone (`Z` or offset)
+- `Match.RegExp(re)`: accepts strings that satisfy the provided regular expression (`RegExp` or source string)
 - `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`: accepts non-empty arrays (optionally validates each element)
 - `Match.Optional(pattern)`: accepts `undefined` or `pattern`
 - `Match.Maybe(pattern)`: accepts `undefined`, `null`, or `pattern`
@@ -3188,6 +3187,7 @@ check("dev@example.com", Match.Email);
 check("123e4567-e89b-42d3-a456-426614174000", Match.UUID);
 check("https://example.com", Match.URL);
 check("2026-01-01T10:20:30Z", Match.IsoDateString);
+check("runner", Match.RegExp(/^runner$/));
 check(["a"], Match.NonEmptyArray(String));
 check("x", Match.Optional(String));
 check(null, Match.Maybe(String));
@@ -3247,6 +3247,14 @@ Strict fail-fast behavior (`{ strict: true }`):
 - `Match.Where(...)` throws a `RunnerError` with id `runner.errors.check.jsonSchemaUnsupportedPattern`.
 - All other unsupported constructs still throw in both modes.
 - Error data includes `path`, `reason`, and `patternKind` to identify the exact unsupported node.
+
+`Match.RegExp(...)` JSON Schema behavior:
+
+- Converts to `type: "string"` + `pattern: re.source`.
+- If the regex has flags, export remains non-failing (including `strict: true`) and includes metadata:
+  - `description: "Regex flags are not represented by JSON Schema pattern and are ignored during schema export."`
+  - `"x-runner-match-kind": "Match.RegExp"`
+  - `"x-runner-regexp-flags": "..."`
 
 Supported conversion highlights:
 
@@ -5332,50 +5340,49 @@ The serializer is hardened against common attacks:
 
 > **Note:** File uploads use the remote lane HTTP multipart handling, not the serializer. See [Remote Lanes](../readmes/REMOTE_LANES.md) for file upload patterns.
 
-### Tunnels: Bridging Runners
+### Remote Lanes: Bridging Runners
 
-Tunnels are a powerful feature for building distributed systems. They let you expose your tasks and events over HTTP, making them callable from other processes, services, or even a browser UI. This allows a server and client to co-exist, enabling one Runner instance to securely call another.
+Remote Lanes are the distributed execution model for Runner. They let you expose tasks and events over HTTP, making them callable from other processes, services, or a browser UI. This allows a server and client to co-exist, enabling one Runner instance to securely call another.
 
-Here's a sneak peek of how you can expose your application and configure a client tunnel to consume a remote Runner:
+Here's a sneak peek of how you can expose your application and configure RPC lane routing for remote execution:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
-import { nodeExposure } from "@bluelibs/runner/node";
+import { r } from "@bluelibs/runner";
+import { rpcLanesResource } from "@bluelibs/runner/node";
 
 let app = r.resource("app");
 
-if (process.env.SERVER) {
-  // 1. Expose your local tasks and events over HTTP, only when server mode is active.
-  app.register([
-    // ... your tasks and events
-    nodeExposure.with({
-      http: {
-        basePath: "/__runner",
-        listen: { port: 7070 },
+const lane = r
+  .rpcLane("app.rpc.main")
+  .policy({ middlewareAllowList: ["app.middleware.task.audit"] })
+  .build();
+
+const topology = r.rpcLane.topology({
+  profiles: {
+    client: { serve: [] },
+  },
+  bindings: [{ lane, communicator: r.rpcLane.http() }],
+});
+
+app = app
+  .register([
+    // ... your tasks and events tagged with globals.tags.rpcLane.with({ lane })
+    rpcLanesResource.with({
+      profile: "client",
+      topology,
+      mode: "network",
+      exposure: {
+        http: {
+          basePath: "/__runner",
+          listen: { port: 7070 },
+        },
       },
     }),
-  ]);
-}
-app = app.build();
-
-// 2. In another app, define a tunnel resource to call a remote Runner
-const remoteTasksTunnel = r
-  .resource("app.tunnels.http")
-  .tags([globals.tags.tunnel])
-  .dependencies({ createClient: globals.resources.httpClientFactory })
-  .init(async (_, { createClient }) => ({
-    mode: "client", // or "server", or "none", or "both" for emulating network infrastructure
-    transport: "http", // the only one supported for now
-    // Selectively forward tasks starting with "remote.tasks."
-    tasks: (t) => t.id.startsWith("remote.tasks."),
-    client: createClient({
-      url: "http://remote-runner:8080/__runner",
-    }),
-  }))
+  ])
   .build();
 ```
 
-This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
+This is just a glimpse. With remote lanes, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
 
 For typed remote error hydration, pass an `errorRegistry` to the client:
 
@@ -9099,7 +9106,7 @@ Use this list before promoting a Runner app to production:
 
 ### Security
 
-- Configure exposure auth for tunnels (`http.auth`) and avoid anonymous exposure
+- Configure exposure auth for remote lanes (`http.auth`) and avoid anonymous exposure
 - Use allow-lists for remotely callable task/event ids
 - Set payload limits for JSON/multipart traffic
 - Review logs for sensitive data before enabling external sinks
@@ -9130,8 +9137,8 @@ Node-only entrypoint: `@bluelibs/runner/node`.
 | Export                                                | Purpose                                                                                                                  |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `nodeExposure`                                        | Expose tasks/events over HTTP                                                                                            |
-| `createHttpMixedClient`, `createHttpSmartClient`      | Node tunnel clients (JSON + multipart + streaming modes)                                                                 |
-| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart tunnel calls                                                                        |
+| `createHttpMixedClient`, `createHttpSmartClient`      | Node remote lane clients (JSON + multipart + streaming modes)                                                            |
+| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart remote lane calls                                                                   |
 | `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path                                                          |
 | `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                                                                 |
 | `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                                                                            |

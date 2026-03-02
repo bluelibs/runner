@@ -7,10 +7,6 @@ import {
   middlewareRateLimitExceededError,
   middlewareTemporalDisposedError,
   middlewareTimeoutError,
-  tunnelClientContractError,
-  tunnelEventNotFoundError,
-  tunnelOwnershipConflictError,
-  tunnelTaskNotFoundError,
 } from "../../../errors";
 import { concurrencyTaskMiddleware } from "../../../globals/middleware/concurrency.middleware";
 import {
@@ -30,7 +26,6 @@ import {
   debounceTaskMiddleware,
   throttleTaskMiddleware,
 } from "../../../globals/middleware/temporal.middleware";
-import { tunnelResourceMiddleware } from "../../../globals/middleware/tunnel.middleware";
 import { DurableExecutionError } from "../../../node/durable/core/utils";
 
 describe("Typed Infrastructure Errors", () => {
@@ -98,14 +93,6 @@ describe("Typed Infrastructure Errors", () => {
     );
     expect(throttleTaskMiddleware.throws).toContain(
       middlewareTemporalDisposedError.id,
-    );
-    expect(tunnelResourceMiddleware.throws).toEqual(
-      expect.arrayContaining([
-        tunnelClientContractError.id,
-        tunnelTaskNotFoundError.id,
-        tunnelEventNotFoundError.id,
-        tunnelOwnershipConflictError.id,
-      ]),
     );
   });
 

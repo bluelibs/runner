@@ -168,7 +168,7 @@ const calc = r
 
 ### Phantom Tasks
 
-Create a task that is intended to be routed through a tunnel (HTTP or custom). When run locally without a matching tunnel, it throws `runner.errors.phantomTaskNotRouted`. Use it to strongly type calls to remote services.
+Create a task that is intended to be routed through RPC lanes. When run locally without a matching lane route, it throws `runner.errors.phantomTaskNotRouted`. Use it to strongly type calls to remote services.
 
 ```ts
 // Define a phantom task with typed input and resolved result
@@ -176,24 +176,36 @@ const remoteHello = r.task
   .phantom<{ name: string }, string>("app.tasks.remoteHello")
   .build();
 
-// Register a tunnel that can execute it remotely
-const tunnel = r
-  .resource("app.tunnels.client")
-  .tags([globals.tags.tunnel])
-  .init(async () => ({
-    mode: "client" as const,
-    tasks: [remoteHello.id],
-    run: async (task, input) => `Hello ${input.name}!`,
-  }))
+const lane = r
+  .rpcLane("app.rpc.client")
+  .applyTo([remoteHello])
+  .policy({ middlewareAllowList: ["app.middleware.task.audit"] })
   .build();
 
-const app = r.resource("app").register([remoteHello, tunnel]).build();
+const topology = r.rpcLane.topology({
+  profiles: {
+    client: { serve: [] },
+  },
+  bindings: [{ lane, communicator: r.rpcLane.http() }],
+});
+
+const app = r
+  .resource("app")
+  .register([
+    remoteHello,
+    rpcLanesResource.with({
+      profile: "client",
+      topology,
+      mode: "network",
+    }),
+  ])
+  .build();
 ```
 
 Notes:
 
 - Builder exposes the same knobs as normal tasks: `.dependencies()`, `.middleware()`, `.tags()`, `.meta()`, `.inputSchema()`, `.resultSchema()`.
-- The builder does not accept `.run()`; the runner injects a fail-fast function and brands the definition so tunnel middleware can intercept it.
+- The builder does not accept `.run()`; the runner injects a fail-fast function and brands the definition so rpc lane routing can intercept it.
 
 ---
 

@@ -39,8 +39,6 @@ import { Serializer } from "../serializer";
 import { getResourcesInDisposeWaves as computeDisposeWaves } from "./utils/disposeOrder";
 import { RunResult } from "./RunResult";
 import { registerStoreBuiltins } from "./BuiltinsRegistry";
-import { mergeResourceSubtreePolicy } from "../definers/subtreePolicy";
-import { tunnelResourceMiddleware } from "../globals/middleware/tunnel.middleware";
 import type { RuntimeCallSource } from "../types/runtimeSource";
 import {
   LifecycleAdmissionController,
@@ -293,22 +291,12 @@ export class Store {
       unknown
     >;
 
-    const hasTunnelResourceMiddleware = this.resourceMiddlewares.has(
-      tunnelResourceMiddleware.id,
-    );
-
     // Clone the root definition so per-run dependency/register resolution
     // never mutates the reusable user definition object.
     const root: IResource<any> = {
       ...rootDefinition,
       dependencies: dependenciesObject,
-      subtree: hasTunnelResourceMiddleware
-        ? mergeResourceSubtreePolicy(rootDefinition.subtree, {
-            resources: {
-              middleware: [tunnelResourceMiddleware],
-            },
-          })
-        : rootDefinition.subtree,
+      subtree: rootDefinition.subtree,
     };
 
     this.root = {

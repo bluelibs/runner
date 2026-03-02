@@ -160,7 +160,7 @@ export class EventManager {
    * - the base listener executor, or
    * - an interceptor that short-circuited the emission.
    *
-   * This enables tunnel transports to return the final payload after local and/or remote delivery.
+   * This enables remote transports to return the final payload after local and/or remote delivery.
    */
   async emitWithResult<TInput>(
     eventDefinition: IEvent<TInput>,

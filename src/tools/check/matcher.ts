@@ -154,7 +154,10 @@ export class RegExpPattern<TExpression extends RegExp = RegExp> {
   }
 
   parse(value: unknown): string {
-    return parsePatternValue(value, this as RegExpPattern<TExpression>) as string;
+    return parsePatternValue(
+      value,
+      this as RegExpPattern<TExpression>,
+    ) as string;
   }
 
   toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {

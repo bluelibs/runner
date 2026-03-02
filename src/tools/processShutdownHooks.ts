@@ -1,5 +1,5 @@
 import { getPlatform } from "../platform";
-import { normalizeError } from "../globals/resources/tunnel/error-utils";
+import { normalizeError } from "./normalizeError";
 
 const platform = getPlatform();
 

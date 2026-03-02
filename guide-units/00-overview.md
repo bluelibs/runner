@@ -143,7 +143,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Optional Dependencies](#optional-dependencies) - Graceful degradation
 - [Resource Forking](#resource-forking) - Multi-instance patterns
 - [Serialization](#serialization) - Advanced data handling
-- [Tunnels](#tunnels-bridging-runners) - Distributed systems
+- [Remote Lanes](#remote-lanes-bridging-runners) - Distributed systems
 - [Async Context](#async-context) - Request-scoped state
 - [Overrides](#overrides) - Component replacement
 - [Namespacing](#namespacing) - Code organization

@@ -1,27 +1,24 @@
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
 import { globals } from "../../../../index";
-import type { TunnelRunner } from "../../../../globals/resources/tunnel/types";
 import { nodeExposure } from "../../../exposure/resource";
 import { createReqRes } from "./resource.test.utils";
 
 describe("nodeExposure discovery endpoint", () => {
-  it("returns allow-list derived from server http tunnels and enforces auth/methods", async () => {
+  it("returns allow-list derived from rpc lanes and enforces auth/methods", async () => {
     const t = defineTask<void, Promise<number>>({
       id: "discovery.ok.task",
       run: async () => 1,
     });
 
-    const tunnelServer = defineResource({
-      id: "discovery.tunnel",
-      tags: [globals.tags.tunnel],
-      async init(): Promise<TunnelRunner> {
+    const rpcLanesServer = defineResource({
+      id: "discovery.rpc-lanes",
+      tags: [globals.tags.rpcLanes],
+      async init() {
         return {
-          mode: "server",
-          transport: "http",
-          tasks: [t.id],
-          events: [],
-        } satisfies TunnelRunner;
+          serveTaskIds: [t.id],
+          serveEventIds: [],
+        };
       },
     });
 
@@ -34,7 +31,7 @@ describe("nodeExposure discovery endpoint", () => {
 
     const app = defineResource({
       id: "discovery.app",
-      register: [t, tunnelServer, exposure],
+      register: [t, rpcLanesServer, exposure],
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
@@ -104,16 +101,14 @@ describe("nodeExposure discovery endpoint", () => {
       run: async () => 42,
     });
 
-    const tunnelServer = defineResource({
-      id: "discovery.disabled.tunnel",
-      tags: [globals.tags.tunnel],
-      async init(): Promise<TunnelRunner> {
+    const rpcLanesServer = defineResource({
+      id: "discovery.disabled.rpc-lanes",
+      tags: [globals.tags.rpcLanes],
+      async init() {
         return {
-          mode: "server",
-          transport: "http",
-          tasks: [t.id],
-          events: [],
-        } satisfies TunnelRunner;
+          serveTaskIds: [t.id],
+          serveEventIds: [],
+        };
       },
     });
 
@@ -127,7 +122,7 @@ describe("nodeExposure discovery endpoint", () => {
 
     const app = defineResource({
       id: "discovery.disabled.app",
-      register: [t, tunnelServer, exposure],
+      register: [t, rpcLanesServer, exposure],
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);

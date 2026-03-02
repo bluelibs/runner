@@ -6,9 +6,16 @@ import type { IAsyncContext } from "./asyncContext";
 import type { RemoteLaneBindingAuth } from "./remoteLaneAuth";
 import { symbolFilePath, symbolRpcLane } from "./utilities";
 
+export type RpcLaneMiddlewareId = string | { id: string };
+
+export interface IRpcLanePolicy {
+  middlewareAllowList?: readonly RpcLaneMiddlewareId[];
+}
+
 export interface IRpcLaneDefinition {
   id: string;
   meta?: IRpcLaneMeta;
+  policy?: IRpcLanePolicy;
   applyTo?:
     | readonly (ITaskDefinition<any> | IEventDefinition<any> | string)[]
     | ((target: ITaskDefinition<any> | IEventDefinition<any>) => boolean);

@@ -1,7 +1,5 @@
 import { r, run } from "../..";
 import { isTask, isPhantomTask } from "../../define";
-import { globalTags } from "../../globals/globalTags";
-import type { TunnelRunner } from "../../globals/resources/tunnel/types";
 import { phantomTaskNotRoutedError } from "../../errors";
 
 describe("Phantom tasks - fluent builders", () => {
@@ -11,7 +9,7 @@ describe("Phantom tasks - fluent builders", () => {
     ).not.toThrow();
   });
 
-  it("throws when executed directly without a tunnel route", async () => {
+  it("throws when executed directly without rpc lane routing", async () => {
     const ph = r.task
       .phantom<{ v: string }, string>("app.tasks.phantom.builder.1")
       .build();
@@ -44,7 +42,7 @@ describe("Phantom tasks - fluent builders", () => {
     await rr.dispose();
   });
 
-  it("fails fast when used as a dependency without tunnel routing (builder)", async () => {
+  it("fails fast when used as a dependency without rpc lane routing (builder)", async () => {
     const ph = r.task
       .phantom<{ x: number }, number>("app.tasks.phantom.builder.2")
       .build();
@@ -65,36 +63,6 @@ describe("Phantom tasks - fluent builders", () => {
     await expect(run(app)).rejects.toMatchObject({
       name: phantomTaskNotRoutedError.id,
     });
-  });
-
-  it("phantom task is routed by tunnel middleware when selected (builder)", async () => {
-    const ph = r.task
-      .phantom<{ v: string }, string>("app.tasks.phantom.builder.tunnel")
-      .build();
-
-    const tunnelRes = r
-      .resource("app.resources.phantom.builder.tunnel")
-      .tags([globalTags.tunnel])
-      .init(
-        async (): Promise<TunnelRunner> => ({
-          mode: "client",
-          tasks: [ph.id],
-          run: async (task: { id: string }, input: unknown) =>
-            `TUN:${task.id}:${(input as { v?: string } | undefined)?.v}`,
-        }),
-      )
-      .build();
-
-    const app = r
-      .resource("app.phantom.builder.tunnel")
-      .register([ph, tunnelRes])
-      .dependencies({ ph })
-      .init(async (_c, { ph }) => ph({ v: "A" }))
-      .build();
-
-    const rr = await run(app);
-    expect(rr.value).toBe("TUN:app.tasks.phantom.builder.tunnel:A");
-    await rr.dispose();
   });
 
   it("phantom builder supports deps append/override, middleware, tags, schemas, meta", () => {

@@ -186,7 +186,7 @@ Runner comes with **everything you need** to build production apps:
 **Advanced Patterns**
 
 - Durable Workflows (Node)
-- Tunnels (Distributed)
+- Remote Lanes (Distributed)
 - Tags System
 - Factory Pattern
 - Namespacing
@@ -591,4 +591,3 @@ Now that you know the patterns, here's your learning path:
 > **runtime:** "Seven patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
 
 ---
-

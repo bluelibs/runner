@@ -1,6 +1,6 @@
 import type { IAsyncLocalStorage, IPlatformAdapter } from "../types";
 import { platformUnsupportedFunctionError } from "../../errors";
-import { normalizeError } from "../../globals/resources/tunnel/error-utils";
+import { normalizeError } from "../../tools/normalizeError";
 
 interface GenericEventTarget extends Record<string, unknown> {
   addEventListener?: (type: string, listener: (event: unknown) => void) => void;

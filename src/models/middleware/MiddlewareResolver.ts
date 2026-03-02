@@ -3,14 +3,12 @@ import {
   IResource,
   ITaskMiddleware,
   IResourceMiddleware,
+  symbolRpcLanePolicy,
+  type IRpcLanePolicy,
+  type RpcLaneMiddlewareId,
 } from "../../defs";
 import { Store } from "../Store";
-import { globalTags } from "../../globals/globalTags";
 import { taskNotRegisteredError } from "../../errors";
-import type {
-  TunnelMiddlewareId,
-  TunnelTaskMiddlewarePolicyConfig,
-} from "../../globals/resources/tunnel/tunnel.policy.tag";
 import {
   resolveApplicableSubtreeResourceMiddlewares,
   resolveApplicableSubtreeTaskMiddlewares,
@@ -18,7 +16,7 @@ import {
 
 /**
  * Resolves which middlewares should be applied to tasks and resources.
- * Handles auto-applied middlewares, local middlewares, and tunnel policies.
+ * Handles auto-applied middlewares, local middlewares, and rpc-lane policies.
  */
 export class MiddlewareResolver {
   constructor(private readonly store: Store) {}
@@ -67,10 +65,10 @@ export class MiddlewareResolver {
   }
 
   /**
-   * For tunneled tasks, controls caller-side task middleware execution.
+   * For rpc-routed tasks, controls caller-side task middleware execution.
    * Caller-side middleware is skipped by default and can be re-enabled via allowlist.
    */
-  applyTunnelPolicyFilter(
+  applyRpcLanePolicyFilter(
     task: ITask<any, any, any>,
     middlewares: ITaskMiddleware[],
   ): ITaskMiddleware[] {
@@ -79,33 +77,27 @@ export class MiddlewareResolver {
       return taskNotRegisteredError.throw({ taskId: task.id });
     }
     const tDef = entry.task;
-    const isLocallyTunneled = tDef.isTunneled;
+    const isRpcRouted = tDef.isRpcRouted;
 
-    if (!isLocallyTunneled) {
+    if (!isRpcRouted) {
       return middlewares;
     }
 
-    // Tunneled tasks skip caller-side middleware by default.
+    // RPC-routed tasks skip caller-side middleware by default.
     // Only explicitly allowlisted middleware runs locally.
-    if (!globalTags.tunnelTaskPolicy.exists(tDef)) {
-      return [];
-    }
-
     // Use the Store definition to avoid relying on object-identity.
     // Consumers can pass a different task object with the same id.
-    const cfg = globalTags.tunnelTaskPolicy.extract(tDef) as
-      | TunnelTaskMiddlewarePolicyConfig
-      | undefined;
-    const clientAllowList = getClientMiddlewareAllowList(cfg);
+    const policy = tDef[symbolRpcLanePolicy];
+    const allowList = getMiddlewareAllowList(policy);
 
-    if (!Array.isArray(clientAllowList)) {
+    if (!Array.isArray(allowList)) {
       return [];
     }
 
     const toId = (x: string | { id: string }) =>
       typeof x === "string" ? x : x?.id;
     const allowed = new Set(
-      clientAllowList.map(toId).filter((id): id is string => !!id),
+      allowList.map(toId).filter((id): id is string => !!id),
     );
 
     return middlewares.filter((m) => allowed.has(m.id));
@@ -144,26 +136,13 @@ export class MiddlewareResolver {
   }
 }
 
-function getClientMiddlewareAllowList(
-  cfg: TunnelTaskMiddlewarePolicyConfig | undefined,
-): TunnelMiddlewareId[] | undefined {
-  if (!cfg) {
+function getMiddlewareAllowList(
+  policy: IRpcLanePolicy | undefined,
+): RpcLaneMiddlewareId[] | undefined {
+  const allowList = policy?.middlewareAllowList;
+  if (!Array.isArray(allowList)) {
     return;
   }
 
-  const preferred = cfg.client;
-  if (Array.isArray(preferred)) {
-    return preferred;
-  }
-  if (preferred && typeof preferred === "object") {
-    const allowList = preferred.middlewareAllowList;
-    if (Array.isArray(allowList)) return allowList;
-  }
-
-  const grouped = cfg.middlewareAllowList?.client;
-  if (Array.isArray(grouped)) {
-    return grouped;
-  }
-
-  return;
+  return [...allowList];
 }

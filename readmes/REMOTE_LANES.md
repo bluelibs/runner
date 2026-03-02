@@ -836,16 +836,16 @@ eventLanesResource.with({
 
 ## Migration Notes (v6)
 
-Legacy tunnel event routing (`events` + `emit` + `eventDeliveryMode`) is removed in v6. Here's what replaces it:
+Legacy pre-lane event routing (`events` + `emit` + `eventDeliveryMode`) is removed in v6. Here's what replaces it:
 
-| Legacy tunnel pattern                    | v6 replacement                                          |
+| Legacy pre-lane pattern                  | v6 replacement                                          |
 | ---------------------------------------- | ------------------------------------------------------- |
-| `tunnelResource.with({ events: [...] })` | `eventLanesResource.with({ topology, profile })`        |
-| `tunnelResource.with({ emit: [...] })`   | Tag events with `globals.tags.eventLane.with({ lane })` |
+| `remoteResource.with({ events: [...] })` | `eventLanesResource.with({ topology, profile })`        |
+| `remoteResource.with({ emit: [...] })`   | Tag events with `globals.tags.eventLane.with({ lane })` |
 | `eventDeliveryMode: "queue"`             | Event Lanes `mode: "network"` with queue binding        |
-| Sync tunnel task calls                   | RPC Lanes `mode: "network"` with communicator binding   |
+| Sync remote task calls                   | RPC Lanes `mode: "network"` with communicator binding   |
 
-Transport/wire details for HTTP RPC are in [TUNNEL_HTTP_POLICY.md](./TUNNEL_HTTP_POLICY.md).
+Transport/wire details for HTTP RPC are in [REMOTE_LANES_HTTP_POLICY.md](./REMOTE_LANES_HTTP_POLICY.md).
 
 ## Troubleshooting Checklist
 

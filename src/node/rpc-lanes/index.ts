@@ -1,4 +1,5 @@
 export { rpcLanesResource } from "./rpcLanes.resource";
+export { computeRpcLaneAllowList } from "./allowList";
 export type {
   RpcLanesResourceConfig,
   RpcLanesResourceValue,
@@ -6,3 +7,4 @@ export type {
   RpcLanesProfileConfig,
   RpcLanesProfileId,
 } from "./types";
+export type { RpcLaneAllowList } from "./allowList";

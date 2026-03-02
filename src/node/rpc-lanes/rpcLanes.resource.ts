@@ -6,11 +6,14 @@ import type { IRpcLaneDefinition } from "../../defs";
 import { createNodeExposure } from "../exposure/createNodeExposure";
 import type { NodeExposureDeps } from "../exposure/resourceTypes";
 import { withUserContexts } from "../exposure/handlers/contextWrapper";
-import { symbolTunneledBy } from "../../types/symbols";
 import {
+  symbolRpcLanePolicy,
+  symbolRpcLaneRoutedBy,
+} from "../../types/symbols";
+import {
+  rpcLaneOwnershipConflictError,
   rpcLaneCommunicatorContractError,
   rpcLanesExposureModeError,
-  tunnelOwnershipConflictError,
 } from "../../errors";
 import {
   issueRemoteLaneToken,
@@ -142,9 +145,9 @@ export const rpcLanesResource = defineResource<
           continue;
         }
 
-        const currentOwner = taskEntry.task[symbolTunneledBy];
+        const currentOwner = taskEntry.task[symbolRpcLaneRoutedBy];
         if (currentOwner && currentOwner !== resourceId) {
-          tunnelOwnershipConflictError.throw({
+          rpcLaneOwnershipConflictError.throw({
             taskId: taskEntry.task.id,
             currentOwnerId: currentOwner,
             attemptedOwnerId: resourceId,
@@ -170,8 +173,9 @@ export const rpcLanesResource = defineResource<
               ? executeRemoteTask(taskEntry.task.id, input, { headers })
               : executeRemoteTask(taskEntry.task.id, input);
           }) as typeof taskEntry.task.run,
-          isTunneled: true,
-          [symbolTunneledBy]: resourceId,
+          isRpcRouted: true,
+          [symbolRpcLaneRoutedBy]: resourceId,
+          [symbolRpcLanePolicy]: lane.policy,
         };
       }
 
@@ -229,9 +233,9 @@ export const rpcLanesResource = defineResource<
         const taskEntry = store.tasks.get(taskId)!;
         const bindingAuth = getBindingAuthForRpcLane(config, lane.id);
 
-        const currentOwner = taskEntry.task[symbolTunneledBy];
+        const currentOwner = taskEntry.task[symbolRpcLaneRoutedBy];
         if (currentOwner && currentOwner !== resourceId) {
-          tunnelOwnershipConflictError.throw({
+          rpcLaneOwnershipConflictError.throw({
             taskId: taskEntry.task.id,
             currentOwnerId: currentOwner,
             attemptedOwnerId: resourceId,
@@ -266,8 +270,9 @@ export const rpcLanesResource = defineResource<
             );
             return roundTrip(result);
           }) as typeof taskEntry.task.run,
-          isTunneled: true,
-          [symbolTunneledBy]: resourceId,
+          isRpcRouted: true,
+          [symbolRpcLaneRoutedBy]: resourceId,
+          [symbolRpcLanePolicy]: lane.policy,
         };
       }
 

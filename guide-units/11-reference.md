@@ -495,7 +495,7 @@ Use this list before promoting a Runner app to production:
 
 ### Security
 
-- Configure exposure auth for tunnels (`http.auth`) and avoid anonymous exposure
+- Configure exposure auth for remote lanes (`http.auth`) and avoid anonymous exposure
 - Use allow-lists for remotely callable task/event ids
 - Set payload limits for JSON/multipart traffic
 - Review logs for sensitive data before enabling external sinks
@@ -526,8 +526,8 @@ Node-only entrypoint: `@bluelibs/runner/node`.
 | Export                                                | Purpose                                                                                                                  |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `nodeExposure`                                        | Expose tasks/events over HTTP                                                                                            |
-| `createHttpMixedClient`, `createHttpSmartClient`      | Node tunnel clients (JSON + multipart + streaming modes)                                                                 |
-| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart tunnel calls                                                                        |
+| `createHttpMixedClient`, `createHttpSmartClient`      | Node remote lane clients (JSON + multipart + streaming modes)                                                            |
+| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart remote lane calls                                                                   |
 | `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path                                                          |
 | `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                                                                 |
 | `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                                                                            |

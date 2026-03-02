@@ -143,7 +143,7 @@ describe("http smart/mixed client typed errors", () => {
     expect(reqSpy).toHaveBeenCalled();
   });
 
-  it("rethrows original TunnelError when typed id exists but data is missing", async () => {
+  it("rethrows original RemoteLaneTransportError when typed id exists but data is missing", async () => {
     jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
       const env = {
         ok: false,
@@ -169,13 +169,13 @@ describe("http smart/mixed client typed errors", () => {
     });
 
     await expect(client.task("t.json", { a: 1 } as any)).rejects.toMatchObject({
-      name: "TunnelError",
+      name: "RemoteLaneTransportError",
       id: helper.id,
       data: undefined,
     });
   });
 
-  it("rethrows original TunnelError when errorRegistry has no matching helper", async () => {
+  it("rethrows original RemoteLaneTransportError when errorRegistry has no matching helper", async () => {
     jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
       const env = {
         ok: false,
@@ -202,7 +202,7 @@ describe("http smart/mixed client typed errors", () => {
     });
 
     await expect(client.task("t.json", { a: 1 } as any)).rejects.toMatchObject({
-      name: "TunnelError",
+      name: "RemoteLaneTransportError",
       id: "unknown.helper",
       data: { code: 32 },
     });

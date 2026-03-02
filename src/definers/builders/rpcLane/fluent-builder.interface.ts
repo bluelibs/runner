@@ -1,5 +1,6 @@
 import type {
   IEventDefinition,
+  IRpcLanePolicy,
   IRpcLane,
   IRpcLaneDefinition,
   IRpcLaneMeta,
@@ -14,6 +15,7 @@ export interface RpcLaneFluentBuilder<
   description(
     description: string,
   ): RpcLaneFluentBuilder<_TMeta & { description: string }>;
+  policy(policy: IRpcLanePolicy): RpcLaneFluentBuilder<_TMeta>;
   applyTo(
     targets:
       | readonly (ITaskDefinition<any> | IEventDefinition<any> | string)[]

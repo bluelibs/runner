@@ -14,7 +14,7 @@ export const nodeExposure = defineResource({
   meta: {
     title: "Node Exposure (HTTP)",
     description:
-      "Exposes Runner tasks and events over HTTP so a tunnel client can invoke them.",
+      "Exposes Runner tasks and events over HTTP so remote lane clients can invoke them.",
   },
   dependencies: {
     store: globalResources.store,

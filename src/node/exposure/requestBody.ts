@@ -4,7 +4,7 @@ import type { SerializerLike } from "../../serializer";
 import { jsonErrorResponse } from "./httpResponse";
 import type { JsonResponse } from "./types";
 import { cancellationError } from "../../errors";
-import { normalizeError } from "../../globals/resources/tunnel/error-utils";
+import { normalizeError } from "../../tools/normalizeError";
 
 export async function readRequestBody(
   req: IncomingMessage,

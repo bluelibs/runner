@@ -213,22 +213,22 @@ export type InferMatchPattern<TPattern> = TPattern extends typeof matchAnyToken
                           ? TGuarded
                           : TPattern extends RegExpPattern<RegExp>
                             ? string
-                          : TPattern extends ObjectIncludingPattern<
-                                infer TObjectPattern
-                              >
-                            ? InferMatchObject<TObjectPattern> &
-                                Record<string, unknown>
-                            : TPattern extends readonly (infer TArrayPattern)[]
-                              ? InferMatchPattern<TArrayPattern>[]
-                              : TPattern extends MatchPrimitiveLiteral
-                                ? TPattern
-                                : TPattern extends MatchConstructorPattern
-                                  ? InferMatchConstructor<TPattern>
-                                  : TPattern extends MatchCallablePattern
-                                    ? unknown
-                                    : TPattern extends MatchPatternObject
-                                      ? InferMatchObject<TPattern>
-                                      : unknown;
+                            : TPattern extends ObjectIncludingPattern<
+                                  infer TObjectPattern
+                                >
+                              ? InferMatchObject<TObjectPattern> &
+                                  Record<string, unknown>
+                              : TPattern extends readonly (infer TArrayPattern)[]
+                                ? InferMatchPattern<TArrayPattern>[]
+                                : TPattern extends MatchPrimitiveLiteral
+                                  ? TPattern
+                                  : TPattern extends MatchConstructorPattern
+                                    ? InferMatchConstructor<TPattern>
+                                    : TPattern extends MatchCallablePattern
+                                      ? unknown
+                                      : TPattern extends MatchPatternObject
+                                        ? InferMatchObject<TPattern>
+                                        : unknown;
 
 export type EnsurePatternOverlap<TValue, TExpected> =
   IsAny<TValue> extends true

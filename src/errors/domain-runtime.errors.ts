@@ -42,10 +42,10 @@ export const httpEventWithResultUnavailableError = error<
 >(RunnerErrorId.HttpEventWithResultUnavailable)
   .format(
     ({ clientFactory }) =>
-      `${clientFactory}: eventWithResult not available on underlying tunnel client.`,
+      `${clientFactory}: eventWithResult not available on underlying remote-lane HTTP client.`,
   )
   .remediation(
-    "Use a tunnel client/server pair that supports event return payloads, or fall back to fire-and-forget events.",
+    "Use a remote-lane HTTP client/server pair that supports event return payloads, or fall back to fire-and-forget events.",
   )
   .build();
 
@@ -120,41 +120,6 @@ export const middlewareTemporalDisposedError = error<
   .format(({ message }) => message)
   .remediation(
     "Ensure temporal middleware is not used after runtime disposal; create a fresh runtime instance before invoking tasks again.",
-  )
-  .build();
-
-export const tunnelTaskNotFoundError = error<
-  { taskId: string } & DefaultErrorType
->(RunnerErrorId.TunnelTaskNotFound)
-  .format(
-    ({ taskId }) =>
-      `Task ${taskId} not found while trying to resolve tasks for tunnel.`,
-  )
-  .remediation(
-    ({ taskId }) =>
-      `Register task "${taskId}" in the runtime before tunnel middleware resolves task selectors.`,
-  )
-  .build();
-
-export const tunnelEventNotFoundError = error<
-  { eventId: string } & DefaultErrorType
->(RunnerErrorId.TunnelEventNotFound)
-  .format(
-    ({ eventId }) =>
-      `Event ${eventId} not found while trying to resolve events for tunnel.`,
-  )
-  .remediation(
-    ({ eventId }) =>
-      `Register event "${eventId}" in the runtime before tunnel middleware resolves event selectors.`,
-  )
-  .build();
-
-export const tunnelClientContractError = error<
-  { message: string } & DefaultErrorType
->(RunnerErrorId.TunnelClientContract)
-  .format(({ message }) => message)
-  .remediation(
-    "In client/both tunnel mode, ensure the tunnel value exposes run(task, input) for tasks and emit(event, payload) for events.",
   )
   .build();
 

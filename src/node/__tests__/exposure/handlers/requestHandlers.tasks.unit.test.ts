@@ -277,7 +277,7 @@ describe("requestHandlers - task handling", () => {
       expect(json?.result).toBe(321);
     });
 
-    it("skips async context hydration when tunnel policy disables it", async () => {
+    it("skips async context hydration when rpc-lane policy disables it", async () => {
       let current: any;
       const parse = jest.fn((s: string) => JSON.parse(s));
       const provide = jest.fn((v: any, fn: any) => {
@@ -302,12 +302,13 @@ describe("requestHandlers - task handling", () => {
             [
               "srv",
               {
-                resource: { id: "srv", tags: [globalTags.tunnel] },
+                resource: { id: "srv", tags: [globalTags.rpcLanes] },
                 value: {
-                  mode: "server",
-                  transport: "http",
-                  allowAsyncContext: false,
-                  tasks: ["t.ctx.disabled"],
+                  serveTaskIds: ["t.ctx.disabled"],
+                  serveEventIds: [],
+                  taskAllowAsyncContext: {
+                    "t.ctx.disabled": false,
+                  },
                 },
               },
             ],
@@ -358,7 +359,7 @@ describe("requestHandlers - task handling", () => {
       expect(provide).not.toHaveBeenCalled();
     });
 
-    it("uses tunnel-level allowAsyncContext=false policy for task ids", async () => {
+    it("uses rpc-lane allowAsyncContext=false policy for task ids", async () => {
       let current: any;
       const parse = jest.fn((s: string) => JSON.parse(s));
       const provide = jest.fn((v: any, fn: any) => {
@@ -366,7 +367,7 @@ describe("requestHandlers - task handling", () => {
         return fn();
       });
       const ctx = {
-        id: "ctx.tunnel.policy.task",
+        id: "ctx.rpc.policy.task",
         use: () => current,
         serialize: (v: any) => JSON.stringify(v),
         parse,
@@ -382,12 +383,13 @@ describe("requestHandlers - task handling", () => {
             [
               "srv",
               {
-                resource: { id: "srv", tags: [globalTags.tunnel] },
+                resource: { id: "srv", tags: [globalTags.rpcLanes] },
                 value: {
-                  mode: "server",
-                  transport: "http",
-                  allowAsyncContext: false,
-                  tasks: ["t.ctx.policy"],
+                  serveTaskIds: ["t.ctx.policy"],
+                  serveEventIds: [],
+                  taskAllowAsyncContext: {
+                    "t.ctx.policy": false,
+                  },
                 },
               },
             ],

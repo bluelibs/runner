@@ -1,4 +1,4 @@
-import type { ITask, IEventEmission } from "../../../defs";
+import type { ITask, IEventEmission } from "../../defs";
 
 export interface ProtocolErrorShape {
   code: string;
@@ -33,7 +33,7 @@ export interface EventRequest {
   traceId?: string;
 }
 
-export class TunnelError extends Error {
+export class RemoteLaneTransportError extends Error {
   public readonly code: string;
   public readonly details?: unknown;
   public readonly httpCode?: number;
@@ -47,7 +47,7 @@ export class TunnelError extends Error {
     extras?: { id?: string; data?: unknown; httpCode?: number },
   ) {
     super(message);
-    this.name = "TunnelError";
+    this.name = "RemoteLaneTransportError";
     this.code = code;
     this.details = details;
     this.httpCode = extras?.httpCode;
@@ -56,12 +56,12 @@ export class TunnelError extends Error {
   }
 }
 
-export function toTunnelError(
+export function toRemoteLaneTransportError(
   input: unknown,
   fallbackMessage?: string,
-): TunnelError {
+): RemoteLaneTransportError {
   if (input instanceof Error) {
-    return new TunnelError("UNKNOWN", input.message);
+    return new RemoteLaneTransportError("UNKNOWN", input.message);
   }
   if (
     input &&
@@ -72,8 +72,9 @@ export function toTunnelError(
     const typed = input as { code: unknown; message: unknown };
     if (typeof typed.message === "string" && typeof typed.code === "string") {
       const pe = input as ProtocolErrorShape;
-      const msg = pe.message || fallbackMessage || "Tunnel error";
-      return new TunnelError(pe.code, msg, pe.details, {
+      const msg =
+        pe.message || fallbackMessage || "Remote lane transport error";
+      return new RemoteLaneTransportError(pe.code, msg, pe.details, {
         httpCode: pe.httpCode,
         id: pe.id,
         data: pe.data,
@@ -84,13 +85,15 @@ export function toTunnelError(
   if (input && typeof input === "object" && "message" in input) {
     const typed = input as { message: unknown };
     if (typeof typed.message === "string") {
-      return new TunnelError("UNKNOWN", typed.message);
+      return new RemoteLaneTransportError("UNKNOWN", typed.message);
     }
   }
 
-  return new TunnelError(
+  return new RemoteLaneTransportError(
     "UNKNOWN",
-    (typeof input === "string" && input) || fallbackMessage || "Tunnel error",
+    (typeof input === "string" && input) ||
+      fallbackMessage ||
+      "Remote lane transport error",
   );
 }
 
@@ -99,7 +102,7 @@ export function assertOkEnvelope<T>(
   opts?: { fallbackMessage?: string },
 ): T {
   if (!envelope || typeof envelope !== "object") {
-    throw new TunnelError(
+    throw new RemoteLaneTransportError(
       "INVALID_RESPONSE",
       opts?.fallbackMessage || "Invalid or empty response",
     );
@@ -109,13 +112,16 @@ export function assertOkEnvelope<T>(
   }
   if (envelope.error) {
     return ((): never => {
-      throw toTunnelError(envelope.error, opts?.fallbackMessage);
+      throw toRemoteLaneTransportError(envelope.error, opts?.fallbackMessage);
     })();
   }
-  throw new TunnelError("UNKNOWN", opts?.fallbackMessage || "Tunnel error");
+  throw new RemoteLaneTransportError(
+    "UNKNOWN",
+    opts?.fallbackMessage || "Remote lane transport error",
+  );
 }
 
-export async function runViaTunnel(
+export async function runViaRemoteLane(
   runner: (
     task: ITask<any, any, any, any, any, any>,
     input?: unknown,
@@ -126,7 +132,7 @@ export async function runViaTunnel(
   return runner(task, input);
 }
 
-export async function emitViaTunnel(
+export async function emitViaRemoteLane(
   runner: (emission: IEventEmission<any>) => Promise<unknown>,
   emission: IEventEmission<any>,
 ): Promise<void> {

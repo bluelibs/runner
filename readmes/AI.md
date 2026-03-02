@@ -418,7 +418,7 @@ const requestContext = r
   .asyncContext<{ requestId: string }>("app.ctx.request")
   // below is optional
   .configSchema(z.object({ ... }))
-  // for tunnels mostly
+  // mostly for remote lane HTTP propagation
   .serialize((data) => JSON.stringify(data))
   .parse((raw) => JSON.parse(raw))
   .build();

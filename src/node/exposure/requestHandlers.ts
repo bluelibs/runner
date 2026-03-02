@@ -20,10 +20,7 @@ import type {
   NodeExposureHttpCorsConfig,
 } from "./resourceTypes";
 import { applyCorsActual, handleCorsPreflight } from "./cors";
-import {
-  computeAllowList,
-  type AllowListSelectorErrorInfo,
-} from "../tunnel/allowlist";
+import { computeRpcLaneAllowList } from "../rpc-lanes/allowList";
 import { createTaskHandler } from "./handlers/taskHandler";
 import { createEventHandler } from "./handlers/eventHandler";
 import { safeLogWarn } from "./logging";
@@ -90,24 +87,6 @@ export function createRequestHandlers(
     return typeof code === "string" ? code : undefined;
   };
 
-  const reportAllowListSelectorError = ({
-    selectorKind,
-    candidateId,
-    tunnelResourceId,
-    error,
-  }: AllowListSelectorErrorInfo) => {
-    safeLogWarn(
-      logger,
-      "[runner] Tunnel allow-list selector failed; item skipped.",
-      {
-        selectorKind,
-        candidateId,
-        tunnelResourceId,
-        error: error instanceof Error ? error : new Error(String(error)),
-      },
-    );
-  };
-
   const auditedAuthenticator: Authenticator = async (req) => {
     const authResult = await authenticator(req);
     if (!authResult.ok) {
@@ -128,28 +107,28 @@ export function createRequestHandlers(
   };
 
   const resolveTaskAllowAsyncContext = (taskId: string): boolean => {
-    const list = computeAllowList(store, reportAllowListSelectorError);
-    const tunnelDecision = list.taskAcceptsAsyncContext.get(taskId);
-    return tunnelDecision ?? true;
+    const list = computeRpcLaneAllowList(store);
+    const decision = list.taskAcceptsAsyncContext.get(taskId);
+    return decision ?? true;
   };
 
   const resolveTaskAsyncContextAllowList = (
     taskId: string,
   ): readonly string[] | undefined => {
-    const list = computeAllowList(store, reportAllowListSelectorError);
+    const list = computeRpcLaneAllowList(store);
     return list.taskAsyncContextAllowList.get(taskId);
   };
 
   const resolveEventAllowAsyncContext = (eventId: string): boolean => {
-    const list = computeAllowList(store, reportAllowListSelectorError);
-    const tunnelDecision = list.eventAcceptsAsyncContext.get(eventId);
-    return tunnelDecision ?? true;
+    const list = computeRpcLaneAllowList(store);
+    const decision = list.eventAcceptsAsyncContext.get(eventId);
+    return decision ?? true;
   };
 
   const resolveEventAsyncContextAllowList = (
     eventId: string,
   ): readonly string[] | undefined => {
-    const list = computeAllowList(store, reportAllowListSelectorError);
+    const list = computeRpcLaneAllowList(store);
     return list.eventAsyncContextAllowList.get(eventId);
   };
 
@@ -227,7 +206,7 @@ export function createRequestHandlers(
       respondJson(res, auth.response, serializer);
       return;
     }
-    const list = computeAllowList(store, reportAllowListSelectorError);
+    const list = computeRpcLaneAllowList(store);
     applyCorsActual(req, res, cors);
     respondJson(
       res,

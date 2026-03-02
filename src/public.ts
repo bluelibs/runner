@@ -19,7 +19,6 @@ import { globalMiddlewares } from "./globals/globalMiddleware";
 import { globalTags } from "./globals/globalTags";
 import { debug } from "./globals/debug";
 import { run } from "./run";
-import { tunnels } from "./globals/tunnels";
 import { createTestResource } from "./testing";
 import { resource as resourceFn } from "./definers/builders/resource";
 import { task as taskFn } from "./definers/builders/task";
@@ -43,7 +42,6 @@ const globals = {
   middleware: globalMiddlewares,
   middlewares: globalMiddlewares, // Some people prefer this forced plural, for consistency
   tags: globalTags,
-  tunnels,
   debug,
 };
 
@@ -130,7 +128,7 @@ export type {
   MatchPattern,
 } from "./tools/check";
 
-// HTTP and tunnel functionality
+// HTTP transport functionality
 export * from "./http-client";
 
 export {

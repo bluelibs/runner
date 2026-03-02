@@ -1,12 +1,10 @@
 import { defineTask, defineResource } from "../../define";
 import { run } from "../../run";
 import { isTask, isPhantomTask } from "../../define";
-import { globalTags } from "../../globals/globalTags";
-import type { TunnelRunner } from "../../globals/resources/tunnel/types";
 import { phantomTaskNotRoutedError } from "../../errors";
 
 describe("Phantom tasks", () => {
-  it("throws when executed directly without a tunnel route", async () => {
+  it("throws when executed directly without rpc lane routing", async () => {
     const ph = defineTask.phantom<{ v: string }, Promise<string>>({
       id: "app.tasks.phantom.1",
     });
@@ -45,7 +43,7 @@ describe("Phantom tasks", () => {
     await rr.dispose();
   });
 
-  it("fails fast when used as a dependency without tunnel routing", async () => {
+  it("fails fast when used as a dependency without rpc lane routing", async () => {
     const ph = defineTask.phantom<{ x: number }, Promise<number>>({
       id: "app.tasks.phantom.2",
     });
@@ -72,32 +70,5 @@ describe("Phantom tasks", () => {
     await expect(run(app)).rejects.toMatchObject({
       name: phantomTaskNotRoutedError.id,
     });
-  });
-
-  it("is routed by tunnel middleware when selected", async () => {
-    const ph = defineTask.phantom<{ v: string }, Promise<string>>({
-      id: "app.tasks.phantom.tunnel",
-    });
-
-    const tunnelRes = defineResource({
-      id: "app.resources.phantom.tunnel",
-      tags: [globalTags.tunnel],
-      init: async (): Promise<TunnelRunner> => ({
-        mode: "client",
-        tasks: [ph.id],
-        run: async (task: any, input: any) => `TUN:${task.id}:${input?.v}`,
-      }),
-    });
-
-    const app = defineResource({
-      id: "app.phantom.tunnel",
-      register: [ph, tunnelRes],
-      dependencies: { ph, tunnelRes },
-      init: async (_, { ph }) => ph({ v: "A" }),
-    });
-
-    const rr = await run(app);
-    expect(rr.value).toBe("TUN:app.tasks.phantom.tunnel:A");
-    await rr.dispose();
   });
 });

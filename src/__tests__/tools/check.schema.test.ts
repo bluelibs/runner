@@ -173,9 +173,9 @@ describe("tools/check schema support", () => {
         "Custom runtime predicate from Match.Where; not representable in strict JSON Schema.",
       "x-runner-match-kind": "Match.Where",
     });
-    expect(() => Match.Where(() => true).toJSONSchema({ strict: true })).toThrow(
-      CheckJsonSchemaPatternError,
-    );
+    expect(() =>
+      Match.Where(() => true).toJSONSchema({ strict: true }),
+    ).toThrow(CheckJsonSchemaPatternError);
   });
 
   it("returns schema.parse output and supports transforms", () => {

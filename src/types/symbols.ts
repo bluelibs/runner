@@ -5,7 +5,7 @@
  * @internal
  */
 export const symbolTask: unique symbol = Symbol.for("runner.task");
-/** Marks a task as a phantom task (throws when unrouted; meant to be tunneled/routed). */
+/** Marks a task as a phantom task (throws when unrouted; meant to be RPC-routed). */
 export const symbolPhantomTask: unique symbol = Symbol.for(
   "runner.task.phantom",
 );
@@ -35,8 +35,14 @@ export const symbolResourceMiddleware: unique symbol = Symbol.for(
 export const symbolMiddlewareConfigured: unique symbol = Symbol.for(
   "runner.middlewareConfigured",
 );
-/** Records which tunnel resource owns the task patching (exclusivity). */
-export const symbolTunneledBy: unique symbol = Symbol.for("runner.tunneledBy");
+/** Records which rpc-lanes resource owns the task routing patch (exclusivity). */
+export const symbolRpcLaneRoutedBy: unique symbol = Symbol.for(
+  "runner.rpcLaneRoutedBy",
+);
+/** Stores the resolved rpc lane policy on routed task definitions. */
+export const symbolRpcLanePolicy: unique symbol = Symbol.for(
+  "runner.rpcLanePolicy",
+);
 /** @internal Marks hook definitions (event listeners without middleware) */
 export const symbolHook: unique symbol = Symbol.for("runner.hook");
 // export const symbolMiddlewareEverywhereTasks: unique symbol = Symbol.for(

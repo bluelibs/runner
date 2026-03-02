@@ -27,7 +27,6 @@ import {
   circuitBreakerMiddleware,
   circuitBreakerResource,
 } from "../globals/middleware/circuitBreaker.middleware";
-import { tunnelResourceMiddleware } from "../globals/middleware/tunnel.middleware";
 import { globalTags } from "../globals/globalTags";
 import type { StoreRegistry } from "./StoreRegistry";
 import {
@@ -67,7 +66,6 @@ export function registerStoreBuiltins(registry: StoreRegistry): void {
   const builtInResourceMiddlewares = [
     retryResourceMiddleware,
     timeoutResourceMiddleware,
-    tunnelResourceMiddleware,
   ];
   builtInResourceMiddlewares.forEach((middleware) => {
     registry.storeGenericItem(middleware);

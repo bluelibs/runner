@@ -262,7 +262,7 @@ The main README follows this high-level structure:
 
 ## Architecture Patterns
 
-- Optional Dependencies, Serialization, Tunnels, etc.
+- Optional Dependencies, Serialization, Remote Lanes, etc.
 
 ## Developer Experience
 
@@ -293,7 +293,7 @@ The main README follows this high-level structure:
 
 ### Namespacing & IDs
 
-Component ids are part of Runner's public surface: they show up in logs, tooling, overrides, tunnels/clients, and docs.
+Component ids are part of Runner's public surface: they show up in logs, tooling, overrides, remote lane clients, and docs.
 In documentation, always use stable, readable ids and keep them consistent across examples.
 
 **Recommended id namespaces:**
@@ -1030,4 +1030,3 @@ Content...
 ---
 
 _Last updated: January 2026 · Version 2.0_
-

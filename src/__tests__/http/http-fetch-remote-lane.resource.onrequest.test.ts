@@ -1,7 +1,7 @@
-import { createExposureFetch } from "../../http-fetch-tunnel.resource";
+import { createExposureFetch } from "../../http-fetch-remote-lane.resource";
 import { Serializer } from "../../serializer";
 
-describe("http-fetch-tunnel.resource onRequest hook", () => {
+describe("http-fetch-remote-lane.resource onRequest hook", () => {
   it("invokes onRequest with url and headers", async () => {
     const seen: any[] = [];
     const fetchImpl: typeof fetch = (async (_url: any, _init?: any) => {

@@ -186,7 +186,7 @@ describe("createHttpSmartClient - timeout and status handling", () => {
 
     const client = createHttpSmartClient({ baseUrl, serializer });
     await expect(client.task("t.json", { a: 1 })).rejects.toThrow(
-      /Tunnel HTTP 500/,
+      /Remote lane HTTP 500/,
     );
   });
 
@@ -202,7 +202,7 @@ describe("createHttpSmartClient - timeout and status handling", () => {
 
     const client = createHttpSmartClient({ baseUrl, serializer });
     await expect(client.task("t.json", { a: 1 })).rejects.toThrow(
-      /Tunnel HTTP 500/,
+      /Remote lane HTTP 500/,
     );
   });
 

@@ -58,7 +58,9 @@ describe("event lane builder", () => {
   });
 
   it("supports applyTo() predicate", () => {
-    const event = r.event("tests.event-lanes.builder.apply-to.predicate").build();
+    const event = r
+      .event("tests.event-lanes.builder.apply-to.predicate")
+      .build();
     const lane = r
       .eventLane("tests.event-lanes.builder.apply-to.predicate.lane")
       .applyTo((candidate) => candidate.id === event.id)

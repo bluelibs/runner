@@ -45,7 +45,9 @@ describe("eventLanes applyTo override IoC", () => {
     const queueA = new RecordingQueue();
     const queueB = new RecordingQueue();
 
-    const laneA = r.eventLane("tests.event-lanes.apply-to.override-ioc.a").build();
+    const laneA = r
+      .eventLane("tests.event-lanes.apply-to.override-ioc.a")
+      .build();
     const laneB = r
       .eventLane("tests.event-lanes.apply-to.override-ioc.b")
       .applyTo(["tests.event-lanes.apply-to.override-ioc.event"])
@@ -83,7 +85,9 @@ describe("eventLanes applyTo override IoC", () => {
     const runtime = await run(app);
     await runtime.runTask(emitTask);
 
-    await waitUntil(() => queueA.enqueued.length + queueB.enqueued.length === 1);
+    await waitUntil(
+      () => queueA.enqueued.length + queueB.enqueued.length === 1,
+    );
     expect(queueA.enqueued.length).toBe(0);
     expect(queueB.enqueued.length).toBe(1);
     expect(queueB.enqueued[0].eventId).toBe(event.id);
@@ -91,4 +95,3 @@ describe("eventLanes applyTo override IoC", () => {
     await runtime.dispose();
   });
 });
-

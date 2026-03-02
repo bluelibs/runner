@@ -250,8 +250,12 @@ describe("tools/check", () => {
   });
 
   it("supports Match.RegExp with RegExp and source string inputs", () => {
-    expect(() => checkRuntime("abc-123", Match.RegExp(/^[a-z]+-\d+$/))).not.toThrow();
-    expect(() => checkRuntime("abc-123", Match.RegExp("^[a-z]+-\\d+$"))).not.toThrow();
+    expect(() =>
+      checkRuntime("abc-123", Match.RegExp(/^[a-z]+-\d+$/)),
+    ).not.toThrow();
+    expect(() =>
+      checkRuntime("abc-123", Match.RegExp("^[a-z]+-\\d+$")),
+    ).not.toThrow();
 
     expect(() => checkRuntime("ABC-123", Match.RegExp(/^[a-z]+-\d+$/))).toThrow(
       Match.Error,

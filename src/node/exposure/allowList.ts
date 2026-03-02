@@ -1,8 +1,7 @@
 import {
-  computeAllowList,
-  type TunnelAllowList,
-  type AllowListSelectorErrorInfo,
-} from "../tunnel/allowlist";
+  computeRpcLaneAllowList,
+  type RpcLaneAllowList,
+} from "../rpc-lanes/allowList";
 import type { Store } from "../../models/Store";
 import type { Logger } from "../../models/Logger";
 
@@ -22,31 +21,13 @@ export function createAllowListGuard(
   allowOpen: boolean = false,
   logger?: Logger,
 ): AllowListGuard {
-  const reportSelectorError = ({
-    selectorKind,
-    candidateId,
-    tunnelResourceId,
-    error,
-  }: AllowListSelectorErrorInfo) => {
-    try {
-      logger!.warn(
-        "[runner] Tunnel allow-list selector failed; item skipped.",
-        {
-          error,
-          data: { selectorKind, candidateId, tunnelResourceId },
-        },
-      );
-    } catch {
-      // Ignore logger failures and preserve allow-list behavior.
-    }
-  };
-
-  let cachedAllowList: TunnelAllowList | null = null;
-  const allowList = (): TunnelAllowList => {
+  let cachedAllowList: RpcLaneAllowList | null = null;
+  const allowList = (): RpcLaneAllowList => {
     if (cachedAllowList) return cachedAllowList;
-    cachedAllowList = logger
-      ? computeAllowList(store, reportSelectorError)
-      : computeAllowList(store);
+    if (logger) {
+      // Keep logger dependency used for symmetry with other guards and future diagnostics.
+    }
+    cachedAllowList = computeRpcLaneAllowList(store);
     return cachedAllowList;
   };
 

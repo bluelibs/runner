@@ -83,4 +83,3 @@ describe("eventLanes applyTo predicate", () => {
     await runtime.dispose();
   });
 });
-

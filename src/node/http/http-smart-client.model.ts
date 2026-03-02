@@ -2,11 +2,11 @@ import * as http from "http";
 import * as https from "https";
 import { Readable, pipeline } from "stream";
 import type { SerializerLike } from "../../serializer";
-import type { ProtocolEnvelope } from "../../globals/resources/tunnel/protocol";
+import type { ProtocolEnvelope } from "../../remote-lanes/http/protocol";
 import {
   assertOkEnvelope,
-  TunnelError,
-} from "../../globals/resources/tunnel/protocol";
+  RemoteLaneTransportError,
+} from "../../remote-lanes/http/protocol";
 import type { IAsyncContext } from "../../types/asyncContext";
 import type { IErrorHelper } from "../../types/error";
 // Avoid `.node` bare import which triggers tsup native addon resolver
@@ -142,12 +142,12 @@ function toHttpStatusError(options: {
   statusMessage?: string;
   contentType?: string;
   bodyPreview?: string;
-}): TunnelError {
+}): RemoteLaneTransportError {
   const { statusCode, statusMessage, contentType, bodyPreview } = options;
   const message = statusMessage
-    ? `Tunnel HTTP ${statusCode} ${statusMessage}`
-    : `Tunnel HTTP ${statusCode}`;
-  return new TunnelError(
+    ? `Remote lane HTTP ${statusCode} ${statusMessage}`
+    : `Remote lane HTTP ${statusCode}`;
+  return new RemoteLaneTransportError(
     "HTTP_ERROR",
     message,
     {
@@ -160,14 +160,17 @@ function toHttpStatusError(options: {
   );
 }
 
-function toTimeoutError(url: string, timeoutMs?: number): TunnelError {
+function toTimeoutError(
+  url: string,
+  timeoutMs?: number,
+): RemoteLaneTransportError {
   const detail =
     typeof timeoutMs === "number" && timeoutMs > 0
       ? ` after ${timeoutMs}ms`
       : "";
-  return new TunnelError(
+  return new RemoteLaneTransportError(
     "REQUEST_TIMEOUT",
-    `Tunnel request timeout${detail}`,
+    `Remote lane request timeout${detail}`,
     { url, timeoutMs },
     { httpCode: 408 },
   );
@@ -576,7 +579,7 @@ export function createHttpSmartClient(
         );
         if (isReadable(maybe)) return maybe;
         return assertOkEnvelope<O>(maybe as ProtocolEnvelope<O>, {
-          fallbackMessage: "Tunnel task error",
+          fallbackMessage: "Remote lane task error",
         }) as O;
       }
 
@@ -600,7 +603,7 @@ export function createHttpSmartClient(
           );
           if (isReadable(maybe)) return maybe; // server streamed back directly
           return assertOkEnvelope<O>(maybe as ProtocolEnvelope<O>, {
-            fallbackMessage: "Tunnel task error",
+            fallbackMessage: "Remote lane task error",
           }) as O;
         } catch (error) {
           rethrowTyped(cfg.errorRegistry, error);
@@ -616,7 +619,7 @@ export function createHttpSmartClient(
           options?.headers,
         );
         return assertOkEnvelope<O>(r, {
-          fallbackMessage: "Tunnel task error",
+          fallbackMessage: "Remote lane task error",
         });
       } catch (error) {
         rethrowTyped(cfg.errorRegistry, error);
@@ -636,7 +639,9 @@ export function createHttpSmartClient(
           { payload },
           options?.headers,
         );
-        assertOkEnvelope<void>(r, { fallbackMessage: "Tunnel event error" });
+        assertOkEnvelope<void>(r, {
+          fallbackMessage: "Remote lane event error",
+        });
       } catch (error) {
         rethrowTyped(cfg.errorRegistry, error);
       }
@@ -659,13 +664,13 @@ export function createHttpSmartClient(
           options?.headers,
         );
         if (r && typeof r === "object" && r.ok && !("result" in r)) {
-          throw new TunnelError(
+          throw new RemoteLaneTransportError(
             "INVALID_RESPONSE",
-            "Tunnel event returnPayload requested but server did not include result. Upgrade the exposure server.",
+            "Remote lane event returnPayload requested but server did not include result. Upgrade the exposure server.",
           );
         }
         return assertOkEnvelope<P>(r, {
-          fallbackMessage: "Tunnel event error",
+          fallbackMessage: "Remote lane event error",
         });
       } catch (error) {
         rethrowTyped(cfg.errorRegistry, error);

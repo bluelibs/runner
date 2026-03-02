@@ -1,4 +1,4 @@
-# Runner Tunnel HTTP Protocol Policy (v1.0)
+# Runner Remote Lanes HTTP Protocol Policy (v1.0)
 
 > **Status**: Draft spec derived from Runner implementation. This document formalizes the wire protocol used by HTTP RPC communicators (`rpcLane` presets and HTTP clients), enabling interoperability, debugging, and future extensions. It is not a normative standard but reflects the current behavior of `nodeExposure` and fetch-based clients like `createHttpClient`. For usage, see [REMOTE_LANES.md](REMOTE_LANES.md).
 
@@ -8,7 +8,7 @@
 
 ## Table of Contents
 
-- [Runner Tunnel HTTP Protocol Policy (v1.0)](#runner-tunnel-http-protocol-policy-v10)
+- [Runner Remote Lanes HTTP Protocol Policy (v1.0)](#runner-remote-lanes-http-protocol-policy-v10)
   - [Table of Contents](#table-of-contents)
   - [Overview](#overview)
     - [Goals](#goals)
@@ -42,7 +42,7 @@
 
 ## Overview
 
-The Runner tunnel HTTP protocol enables remote invocation of tasks and RPC-style event emission across processes (e.g., Node server to browser or CLI) using standard HTTP. It is stateless, extensible, and optimized for Runner's dependency injection, middleware, and validation model.
+The Runner remote lanes HTTP protocol enables remote invocation of tasks and RPC-style event emission across processes (e.g., Node server to browser or CLI) using standard HTTP. It is stateless, extensible, and optimized for Runner's dependency injection, middleware, and validation model.
 
 ### Goals
 
@@ -91,7 +91,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - **Validators**: If tasks tagged with `globals.tags.authValidator` exist, they are executed (OR logic); any validator returning `{ ok: true }` authenticates the request.
 - **Anonymous access**: If no token and no validators exist, `nodeExposure` fails closed by default with `500 AUTH_NOT_CONFIGURED`. Set `auth.allowAnonymous: true` to explicitly allow unauthenticated access.
 - **Dynamic headers**: Clients can override per-request via `onRequest({ headers })`.
-- **Allow-Lists**: Server restricts to configured exposure allow-list sources (legacy tunnel server selectors and/or `rpcLanesResource` serve topology in `mode: "network"`). Unknown IDs → 403 Forbidden.
+- **Allow-Lists**: Server restricts to configured exposure allow-list sources (`rpcLanesResource` serve topology in `mode: "network"`). Unknown IDs → 403 Forbidden.
 - **Lane authorization**: For served RPC lanes with binding auth enabled, token verification is lane-specific and happens before task/event execution.
 - **Exposure disabled**: If no HTTP exposure allow-list source is active, task/event requests return 403 (fail-closed). Set `auth.allowAnonymous: true` to explicitly opt into open exposure.
 - **Auth audit logs**: Failed authentication attempts are logged (`exposure.auth.failure`) with request metadata and correlation id.
@@ -149,7 +149,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 
 - **Purpose**: Run a remote task with input; returns result.
 - **Auth**: Required.
-- **Allow-List**: Checked against server exposure policies (legacy tunnel server selectors and/or `rpcLanesResource` serve topology).
+- **Allow-List**: Checked against server exposure policies (`rpcLanesResource` serve topology).
 - **Body Modes**: See [Request Modes](#request-modes).
 - **Context**: Task receives `useExposureContext()` (Node-only: `{ req, res, url, headers, method, signal }`).
 - **Response**:
@@ -261,7 +261,7 @@ Server routes by `Content-Type`.
 - **Transport**: A Serializer-encoded map sent in `x-runner-context` header (applies to JSON, multipart, and octet-stream).
 - **Rules**: Stable IDs; optional `serialize`/`parse` hooks. Filtered for size/serializability.
 - **Security**: Server only restores known registered contexts; invalid headers/entries are ignored.
-- **Gate**: Set `allowAsyncContext: false` on server tunnel resources to disable server-side hydration of `x-runner-context` for selected ids.
+- **Gate**: Set `allowAsyncContext: false` on server rpc-lanes resources to disable server-side hydration of `x-runner-context` for selected ids.
 
 ### Streaming
 
