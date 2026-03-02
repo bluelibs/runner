@@ -295,3 +295,61 @@ import {
   const retried = check({ id: "u1" }, compiled);
   retried.id.toUpperCase();
 }
+
+{
+  class User {
+    public name!: string;
+    public items!: Item[];
+  }
+
+  class Item {
+    public title!: string;
+    public owner!: User;
+  }
+
+  Match.Class()(User);
+  Match.Class()(Item);
+  Match.Field(Match.NonEmptyString)(User.prototype, "name");
+  Match.Field(Match.ArrayOf(Match.fromClass(Item)))(User.prototype, "items");
+  Match.Field(Match.NonEmptyString)(Item.prototype, "title");
+  Match.Field(Match.fromClass(User))(Item.prototype, "owner");
+
+  const checkedUser = check(
+    {
+      name: "Ada",
+      items: [
+        {
+          title: "Laptop",
+          owner: { name: "Ada", items: [] },
+        },
+      ],
+    },
+    Match.fromClass(User),
+  );
+
+  const userName: string = checkedUser.name;
+  void userName;
+  const firstItemTitle: string = checkedUser.items[0].title;
+  void firstItemTitle;
+}
+
+{
+  const getTreePattern = (): MatchPattern =>
+    Match.ObjectIncluding({
+      id: Match.NonEmptyString,
+      children: Match.Optional(Match.ArrayOf(Match.Lazy(getTreePattern))),
+    });
+
+  const treePattern = getTreePattern();
+
+  const tree = check(
+    {
+      id: "root",
+      children: [{ id: "child" }],
+    },
+    treePattern,
+  );
+
+  const treeId: unknown = tree.id;
+  void treeId;
+}

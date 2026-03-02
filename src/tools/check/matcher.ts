@@ -1,4 +1,5 @@
 import { MatchError, MatchFailure, MatchPatternError } from "./errors";
+import { getClassSchemaDefinition } from "./classSchema";
 import { matchToJsonSchema } from "./toJsonSchema";
 import type {
   InferMatchPattern,
@@ -12,6 +13,7 @@ type NonEmptyArrayElement<TPattern> = [TPattern] extends [undefined]
 type MatchContext = {
   failures: MatchFailure[];
   collectAll: boolean;
+  activeComparisons: WeakMap<object, WeakSet<object>>;
 };
 type WhereCondition<TGuarded = unknown> =
   | ((value: unknown) => boolean)
@@ -140,6 +142,76 @@ export class WherePattern<TGuarded = unknown> {
   }
   toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
     return matchToJsonSchema(this as WherePattern<TGuarded>, options);
+  }
+}
+export class LazyPattern<TPattern = unknown> {
+  public readonly kind = "Match.LazyPattern";
+  private hasResolved = false;
+  private resolvedPattern?: TPattern;
+  private isResolving = false;
+
+  constructor(private readonly resolver: () => TPattern) {}
+
+  resolve(): TPattern {
+    if (this.hasResolved) return this.resolvedPattern as TPattern;
+    if (this.isResolving) {
+      throw new MatchPatternError(
+        "Bad pattern: Match.Lazy resolver produced a circular unresolved reference.",
+      );
+    }
+
+    this.isResolving = true;
+    try {
+      const resolved = this.resolver();
+      if (resolved === undefined) {
+        throw new MatchPatternError(
+          "Bad pattern: Match.Lazy resolver must return a pattern.",
+        );
+      }
+      if ((resolved as unknown) === (this as unknown)) {
+        throw new MatchPatternError(
+          "Bad pattern: Match.Lazy resolver cannot resolve to itself.",
+        );
+      }
+
+      this.resolvedPattern = resolved;
+      this.hasResolved = true;
+      return resolved;
+    } finally {
+      this.isResolving = false;
+    }
+  }
+
+  parse(value: unknown): InferMatchPattern<TPattern> {
+    return parsePatternValue(
+      value,
+      this as LazyPattern<TPattern>,
+    ) as InferMatchPattern<TPattern>;
+  }
+
+  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
+    return matchToJsonSchema(this as LazyPattern<TPattern>, options);
+  }
+}
+export class ClassPattern<
+  TCtor extends abstract new (...args: never[]) => unknown,
+> {
+  public readonly kind = "Match.ClassPattern";
+
+  constructor(
+    public readonly ctor: TCtor,
+    public readonly options?: { exact?: boolean; schemaId?: string },
+  ) {}
+
+  parse(value: unknown): InstanceType<TCtor> {
+    return parsePatternValue(
+      value,
+      this as ClassPattern<TCtor>,
+    ) as InstanceType<TCtor>;
+  }
+
+  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
+    return matchToJsonSchema(this as ClassPattern<TCtor>, options);
   }
 }
 export class RegExpPattern<TExpression extends RegExp = RegExp> {
@@ -273,6 +345,35 @@ function appendPath(
   return [...path, segment];
 }
 
+function isObjectReference(value: unknown): value is object {
+  return typeof value === "object" && value !== null;
+}
+
+function trackActiveComparison(
+  context: MatchContext,
+  value: unknown,
+  pattern: unknown,
+): (() => void) | "active" {
+  if (!isObjectReference(value) || !isObjectReference(pattern)) {
+    return () => undefined;
+  }
+
+  let patternSet = context.activeComparisons.get(value);
+  if (!patternSet) {
+    patternSet = new WeakSet<object>();
+    context.activeComparisons.set(value, patternSet);
+  }
+
+  if (patternSet.has(pattern)) {
+    return "active";
+  }
+
+  patternSet.add(pattern);
+  return () => {
+    patternSet?.delete(pattern);
+  };
+}
+
 function matchesObjectPattern(
   value: unknown,
   pattern: Record<string, unknown>,
@@ -328,212 +429,247 @@ function matchesPattern(
   context: MatchContext,
   path: readonly PathSegment[],
 ): boolean {
-  if (pattern === matchAnyToken) return true;
-  if (pattern === matchIntegerToken) {
-    return Number.isInteger(value) &&
-      typeof value === "number" &&
-      value <= 2147483647 &&
-      value >= -2147483648
-      ? true
-      : fail(context, path, "32-bit integer", value);
-  }
-  if (pattern === matchPositiveIntegerToken) {
-    return Number.isInteger(value) && typeof value === "number" && value >= 0
-      ? true
-      : fail(context, path, "non-negative integer", value);
-  }
-  if (pattern === matchNonEmptyStringToken) {
-    return typeof value === "string" && value.length > 0
-      ? true
-      : fail(context, path, "non-empty string", value);
-  }
-  if (pattern === matchEmailToken) {
-    return typeof value === "string" && EMAIL_PATTERN.test(value)
-      ? true
-      : fail(context, path, "email", value);
-  }
-  if (pattern === matchUuidToken) {
-    return typeof value === "string" && UUID_PATTERN.test(value)
-      ? true
-      : fail(context, path, "uuid", value);
-  }
-  if (pattern === matchUrlToken) {
-    if (typeof value !== "string") {
-      return fail(context, path, "url", value);
-    }
-    try {
-      // URL constructor enforces URI syntax and supports multi-platform runtimes.
+  const releaseActiveComparison = trackActiveComparison(
+    context,
+    value,
+    pattern,
+  );
+  if (releaseActiveComparison === "active") return true;
 
-      new URL(value);
-      return true;
-    } catch {
-      return fail(context, path, "url", value);
+  try {
+    if (pattern === matchAnyToken) return true;
+    if (pattern === matchIntegerToken) {
+      return Number.isInteger(value) &&
+        typeof value === "number" &&
+        value <= 2147483647 &&
+        value >= -2147483648
+        ? true
+        : fail(context, path, "32-bit integer", value);
     }
-  }
-  if (pattern === matchIsoDateStringToken) {
-    if (typeof value !== "string" || !ISO_DATE_STRING_PATTERN.test(value)) {
-      return fail(context, path, "ISO date string", value);
+    if (pattern === matchPositiveIntegerToken) {
+      return Number.isInteger(value) && typeof value === "number" && value >= 0
+        ? true
+        : fail(context, path, "non-negative integer", value);
     }
-    return Number.isFinite(Date.parse(value))
-      ? true
-      : fail(context, path, "ISO date string", value);
-  }
-  if (pattern instanceof OptionalPattern) {
-    return value === undefined
-      ? true
-      : matchesPattern(value, pattern.pattern, context, path);
-  }
-  if (pattern instanceof MaybePattern) {
-    return value === undefined || value === null
-      ? true
-      : matchesPattern(value, pattern.pattern, context, path);
-  }
-  if (pattern instanceof OneOfPattern) {
-    for (const candidatePattern of pattern.patterns) {
-      const candidateContext: MatchContext = { failures: [], collectAll: true };
-      if (matchesPattern(value, candidatePattern, candidateContext, path)) {
+    if (pattern === matchNonEmptyStringToken) {
+      return typeof value === "string" && value.length > 0
+        ? true
+        : fail(context, path, "non-empty string", value);
+    }
+    if (pattern === matchEmailToken) {
+      return typeof value === "string" && EMAIL_PATTERN.test(value)
+        ? true
+        : fail(context, path, "email", value);
+    }
+    if (pattern === matchUuidToken) {
+      return typeof value === "string" && UUID_PATTERN.test(value)
+        ? true
+        : fail(context, path, "uuid", value);
+    }
+    if (pattern === matchUrlToken) {
+      if (typeof value !== "string") {
+        return fail(context, path, "url", value);
+      }
+      try {
+        new URL(value);
         return true;
+      } catch {
+        return fail(context, path, "url", value);
       }
     }
-    return fail(
-      context,
-      path,
-      "one of the provided patterns",
-      value,
-      `Failed Match.OneOf validation at ${formatPath(path)}.`,
-    );
-  }
-  if (pattern instanceof WherePattern) {
-    try {
-      if (pattern.condition(value)) return true;
-    } catch (error) {
-      if (!(error instanceof MatchError)) throw error;
-    }
-    return fail(
-      context,
-      path,
-      "Match.Where condition",
-      value,
-      `Failed Match.Where validation at ${formatPath(path)}.`,
-    );
-  }
-  if (pattern instanceof RegExpPattern) {
-    if (typeof value !== "string") {
-      return fail(context, path, "string matching regular expression", value);
-    }
-
-    pattern.expression.lastIndex = 0;
-    const matched = pattern.expression.test(value);
-    pattern.expression.lastIndex = 0;
-
-    return matched
-      ? true
-      : fail(context, path, "string matching regular expression", value);
-  }
-  if (pattern instanceof ObjectIncludingPattern) {
-    return matchesObjectPattern(value, pattern.pattern, context, path, true);
-  }
-  if (pattern instanceof NonEmptyArrayPattern) {
-    if (!Array.isArray(value) || value.length === 0) {
-      return fail(context, path, "non-empty array", value);
-    }
-    if (pattern.pattern === undefined) return true;
-
-    const startFailures = context.failures.length;
-    for (let index = 0; index < value.length; index += 1) {
-      const matched = matchesPattern(
-        value[index],
-        pattern.pattern,
-        context,
-        appendPath(path, index),
-      );
-      if (!matched && !context.collectAll) return false;
-    }
-    return context.failures.length === startFailures;
-  }
-  if (pattern === String) {
-    return typeof value === "string"
-      ? true
-      : fail(context, path, "string", value);
-  }
-  if (pattern === Number) {
-    return typeof value === "number"
-      ? true
-      : fail(context, path, "number", value);
-  }
-  if (pattern === Boolean) {
-    return typeof value === "boolean"
-      ? true
-      : fail(context, path, "boolean", value);
-  }
-  if (pattern === Function) {
-    return typeof value === "function"
-      ? true
-      : fail(context, path, "function", value);
-  }
-  if (pattern === Object) {
-    return value !== null && typeof value === "object" && !Array.isArray(value)
-      ? true
-      : fail(context, path, "object", value);
-  }
-  if (pattern === Array) {
-    return Array.isArray(value) ? true : fail(context, path, "array", value);
-  }
-  if (
-    pattern === null ||
-    pattern === undefined ||
-    typeof pattern === "string" ||
-    typeof pattern === "number" ||
-    typeof pattern === "boolean" ||
-    typeof pattern === "bigint" ||
-    typeof pattern === "symbol"
-  ) {
-    return value === pattern
-      ? true
-      : fail(context, path, JSON.stringify(pattern), value);
-  }
-  if (Array.isArray(pattern)) {
-    if (pattern.length !== 1) {
-      throw new MatchPatternError(
-        "Bad pattern: arrays must have exactly one type element.",
-      );
-    }
-    if (!Array.isArray(value)) return fail(context, path, "array", value);
-
-    const startFailures = context.failures.length;
-    for (let index = 0; index < value.length; index += 1) {
-      const matched = matchesPattern(
-        value[index],
-        pattern[0],
-        context,
-        appendPath(path, index),
-      );
-      if (!matched && !context.collectAll) return false;
-    }
-    return context.failures.length === startFailures;
-  }
-  if (isPlainObject(pattern)) {
-    return matchesObjectPattern(value, pattern, context, path, false);
-  }
-  if (typeof pattern === "function") {
-    try {
-      return value instanceof pattern
+    if (pattern === matchIsoDateStringToken) {
+      if (typeof value !== "string" || !ISO_DATE_STRING_PATTERN.test(value)) {
+        return fail(context, path, "ISO date string", value);
+      }
+      return Number.isFinite(Date.parse(value))
         ? true
-        : fail(
-            context,
-            path,
-            `instance of ${pattern.name || "constructor"}`,
-            value,
-          );
-    } catch {
-      throw new MatchPatternError(
-        `Bad pattern: constructor pattern "${pattern.name || "<anonymous>"}" is not valid.`,
+        : fail(context, path, "ISO date string", value);
+    }
+    if (pattern instanceof OptionalPattern) {
+      return value === undefined
+        ? true
+        : matchesPattern(value, pattern.pattern, context, path);
+    }
+    if (pattern instanceof MaybePattern) {
+      return value === undefined || value === null
+        ? true
+        : matchesPattern(value, pattern.pattern, context, path);
+    }
+    if (pattern instanceof OneOfPattern) {
+      for (const candidatePattern of pattern.patterns) {
+        const candidateContext: MatchContext = {
+          failures: [],
+          collectAll: true,
+          activeComparisons: new WeakMap<object, WeakSet<object>>(),
+        };
+        if (matchesPattern(value, candidatePattern, candidateContext, path)) {
+          return true;
+        }
+      }
+      return fail(
+        context,
+        path,
+        "one of the provided patterns",
+        value,
+        `Failed Match.OneOf validation at ${formatPath(path)}.`,
       );
     }
+    if (pattern instanceof WherePattern) {
+      try {
+        if (pattern.condition(value)) return true;
+      } catch (error) {
+        if (!(error instanceof MatchError)) throw error;
+      }
+      return fail(
+        context,
+        path,
+        "Match.Where condition",
+        value,
+        `Failed Match.Where validation at ${formatPath(path)}.`,
+      );
+    }
+    if (pattern instanceof LazyPattern) {
+      return matchesPattern(value, pattern.resolve(), context, path);
+    }
+    if (pattern instanceof ClassPattern) {
+      const classSchema = getClassSchemaDefinition(pattern.ctor);
+      const allowUnknownKeys =
+        pattern.options?.exact === true
+          ? false
+          : pattern.options?.exact === false
+            ? true
+            : !classSchema.exact;
+
+      return matchesObjectPattern(
+        value,
+        classSchema.pattern,
+        context,
+        path,
+        allowUnknownKeys,
+      );
+    }
+    if (pattern instanceof RegExpPattern) {
+      if (typeof value !== "string") {
+        return fail(context, path, "string matching regular expression", value);
+      }
+
+      pattern.expression.lastIndex = 0;
+      const matched = pattern.expression.test(value);
+      pattern.expression.lastIndex = 0;
+
+      return matched
+        ? true
+        : fail(context, path, "string matching regular expression", value);
+    }
+    if (pattern instanceof ObjectIncludingPattern) {
+      return matchesObjectPattern(value, pattern.pattern, context, path, true);
+    }
+    if (pattern instanceof NonEmptyArrayPattern) {
+      if (!Array.isArray(value) || value.length === 0) {
+        return fail(context, path, "non-empty array", value);
+      }
+      if (pattern.pattern === undefined) return true;
+
+      const startFailures = context.failures.length;
+      for (let index = 0; index < value.length; index += 1) {
+        const matched = matchesPattern(
+          value[index],
+          pattern.pattern,
+          context,
+          appendPath(path, index),
+        );
+        if (!matched && !context.collectAll) return false;
+      }
+      return context.failures.length === startFailures;
+    }
+    if (pattern === String) {
+      return typeof value === "string"
+        ? true
+        : fail(context, path, "string", value);
+    }
+    if (pattern === Number) {
+      return typeof value === "number"
+        ? true
+        : fail(context, path, "number", value);
+    }
+    if (pattern === Boolean) {
+      return typeof value === "boolean"
+        ? true
+        : fail(context, path, "boolean", value);
+    }
+    if (pattern === Function) {
+      return typeof value === "function"
+        ? true
+        : fail(context, path, "function", value);
+    }
+    if (pattern === Object) {
+      return value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value)
+        ? true
+        : fail(context, path, "object", value);
+    }
+    if (pattern === Array) {
+      return Array.isArray(value) ? true : fail(context, path, "array", value);
+    }
+    if (
+      pattern === null ||
+      pattern === undefined ||
+      typeof pattern === "string" ||
+      typeof pattern === "number" ||
+      typeof pattern === "boolean" ||
+      typeof pattern === "bigint" ||
+      typeof pattern === "symbol"
+    ) {
+      return value === pattern
+        ? true
+        : fail(context, path, JSON.stringify(pattern), value);
+    }
+    if (Array.isArray(pattern)) {
+      if (pattern.length !== 1) {
+        throw new MatchPatternError(
+          "Bad pattern: arrays must have exactly one type element.",
+        );
+      }
+      if (!Array.isArray(value)) return fail(context, path, "array", value);
+
+      const startFailures = context.failures.length;
+      for (let index = 0; index < value.length; index += 1) {
+        const matched = matchesPattern(
+          value[index],
+          pattern[0],
+          context,
+          appendPath(path, index),
+        );
+        if (!matched && !context.collectAll) return false;
+      }
+      return context.failures.length === startFailures;
+    }
+    if (isPlainObject(pattern)) {
+      return matchesObjectPattern(value, pattern, context, path, false);
+    }
+    if (typeof pattern === "function") {
+      try {
+        return value instanceof pattern
+          ? true
+          : fail(
+              context,
+              path,
+              `instance of ${pattern.name || "constructor"}`,
+              value,
+            );
+      } catch {
+        throw new MatchPatternError(
+          `Bad pattern: constructor pattern "${pattern.name || "<anonymous>"}" is not valid.`,
+        );
+      }
+    }
+    throw new MatchPatternError(
+      `Bad pattern: unsupported pattern type "${describeType(pattern)}".`,
+    );
+  } finally {
+    releaseActiveComparison();
   }
-  throw new MatchPatternError(
-    `Bad pattern: unsupported pattern type "${describeType(pattern)}".`,
-  );
 }
 
 export function collectMatchFailures(
@@ -541,7 +677,11 @@ export function collectMatchFailures(
   pattern: unknown,
   collectAll: boolean,
 ): MatchFailure[] {
-  const context: MatchContext = { failures: [], collectAll };
+  const context: MatchContext = {
+    failures: [],
+    collectAll,
+    activeComparisons: new WeakMap<object, WeakSet<object>>(),
+  };
   const matches = matchesPattern(value, pattern, context, []);
   if (matches) return [];
   return collectAll ? context.failures : [context.failures[0]];

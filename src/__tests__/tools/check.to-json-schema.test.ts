@@ -389,4 +389,222 @@ describe("tools/check toJSONSchema", () => {
     expect(regexpPatternError.path).toBe("$");
     expect(regexpPatternError.reason).toContain("RegExp expression");
   });
+
+  it("exports Match.fromClass recursive schemas using $defs/$ref", () => {
+    class User {
+      public name!: string;
+      public items!: Item[];
+    }
+
+    class Item {
+      public title!: string;
+      public owner!: User;
+    }
+
+    Match.Class()(User);
+    Match.Class()(Item);
+    Match.Field(Match.NonEmptyString)(User.prototype, "name");
+    Match.Field(Match.ArrayOf(Match.fromClass(Item)))(User.prototype, "items");
+    Match.Field(Match.NonEmptyString)(Item.prototype, "title");
+    Match.Field(Match.fromClass(User))(Item.prototype, "owner");
+
+    const schema = Match.toJSONSchema(Match.fromClass(User));
+    expect(schema).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      $ref: "#/$defs/User",
+      $defs: {
+        User: {
+          type: "object",
+          properties: {
+            name: { type: "string", minLength: 1 },
+            items: {
+              type: "array",
+              items: { $ref: "#/$defs/Item" },
+            },
+          },
+          required: ["name", "items"],
+          additionalProperties: true,
+        },
+        Item: {
+          type: "object",
+          properties: {
+            title: { type: "string", minLength: 1 },
+            owner: { $ref: "#/$defs/User" },
+          },
+          required: ["title", "owner"],
+          additionalProperties: true,
+        },
+      },
+    });
+  });
+
+  it("supports class schemaId collisions and exact override in JSON Schema export", () => {
+    class UserA {
+      public name!: string;
+    }
+
+    class UserB {
+      public title!: string;
+    }
+
+    Match.Class({ schemaId: "shared-id" })(UserA);
+    Match.Class({ schemaId: "shared-id", exact: true })(UserB);
+    Match.Field(Match.NonEmptyString)(UserA.prototype, "name");
+    Match.Field(Match.NonEmptyString)(UserB.prototype, "title");
+
+    const schema = Match.toJSONSchema(
+      Match.OneOf(
+        Match.fromClass(UserA),
+        Match.fromClass(UserB, { exact: false }),
+      ),
+    );
+
+    expect(schema).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      anyOf: [{ $ref: "#/$defs/shared_id" }, { $ref: "#/$defs/shared_id_1" }],
+      $defs: {
+        shared_id: {
+          type: "object",
+          properties: {
+            name: { type: "string", minLength: 1 },
+          },
+          required: ["name"],
+          additionalProperties: true,
+        },
+        shared_id_1: {
+          type: "object",
+          properties: {
+            title: { type: "string", minLength: 1 },
+          },
+          required: ["title"],
+          additionalProperties: true,
+        },
+      },
+    });
+
+    class StrictUser {
+      public id!: string;
+    }
+
+    Match.Class()(StrictUser);
+    Match.Field(Match.NonEmptyString)(StrictUser.prototype, "id");
+    expect(
+      Match.toJSONSchema(Match.fromClass(StrictUser, { exact: true })),
+    ).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      $ref: "#/$defs/StrictUser",
+      $defs: {
+        StrictUser: {
+          type: "object",
+          properties: {
+            id: { type: "string", minLength: 1 },
+          },
+          required: ["id"],
+          additionalProperties: false,
+        },
+      },
+    });
+
+    class AnonymousSchema {
+      public value!: string;
+    }
+
+    Match.Class({ schemaId: "!!!" })(AnonymousSchema);
+    Match.Field(Match.NonEmptyString)(AnonymousSchema.prototype, "value");
+    expect(Match.toJSONSchema(Match.fromClass(AnonymousSchema))).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      $ref: "#/$defs/___",
+      $defs: {
+        ___: {
+          type: "object",
+          properties: {
+            value: { type: "string", minLength: 1 },
+          },
+          required: ["value"],
+          additionalProperties: true,
+        },
+      },
+    });
+
+    class EmptySchemaId {
+      public token!: string;
+    }
+
+    Match.Class()(EmptySchemaId);
+    Match.Field(Match.NonEmptyString)(EmptySchemaId.prototype, "token");
+    expect(
+      Match.toJSONSchema(Match.fromClass(EmptySchemaId, { schemaId: "" })),
+    ).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      $ref: "#/$defs/Anonymous",
+      $defs: {
+        Anonymous: {
+          type: "object",
+          properties: {
+            token: { type: "string", minLength: 1 },
+          },
+          required: ["token"],
+          additionalProperties: true,
+        },
+      },
+    });
+
+    expect(
+      Match.toJSONSchema(
+        Match.OneOf(
+          Match.fromClass(EmptySchemaId),
+          Match.fromClass(EmptySchemaId),
+        ),
+      ),
+    ).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      anyOf: [
+        { $ref: "#/$defs/EmptySchemaId" },
+        { $ref: "#/$defs/EmptySchemaId" },
+      ],
+      $defs: {
+        EmptySchemaId: {
+          type: "object",
+          properties: {
+            token: { type: "string", minLength: 1 },
+          },
+          required: ["token"],
+          additionalProperties: true,
+        },
+      },
+    });
+  });
+
+  it("fails fast for invalid lazy and class pattern internals in toJSONSchema", () => {
+    const invalidLazy = {
+      kind: "Match.LazyPattern",
+      parse: () => undefined,
+      resolve: 123,
+    };
+    const lazyError = expectSchemaError(() =>
+      Match.toJSONSchema(invalidLazy as never),
+    );
+    expect(lazyError.reason).toContain("resolver");
+
+    const invalidClass = {
+      kind: "Match.ClassPattern",
+      parse: () => undefined,
+      ctor: class ValidClass {},
+      options: 123,
+    };
+    const classError = expectSchemaError(() =>
+      Match.toJSONSchema(invalidClass as never),
+    );
+    expect(classError.reason).toContain("class constructor");
+
+    const invalidClassCtor = {
+      kind: "Match.ClassPattern",
+      parse: () => undefined,
+      ctor: 123,
+    };
+    const classCtorError = expectSchemaError(() =>
+      Match.toJSONSchema(invalidClassCtor as never),
+    );
+    expect(classCtorError.reason).toContain("class constructor");
+  });
 });

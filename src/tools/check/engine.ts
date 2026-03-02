@@ -1,7 +1,14 @@
 import { CheckOptionsError, MatchError, MatchPatternError } from "./errors";
 import {
+  setClassFieldPattern,
+  setClassSchemaOptions,
+  type MatchClassOptions,
+} from "./classSchema";
+import {
+  ClassPattern,
   collectMatchFailures,
   isPlainObject,
+  LazyPattern,
   matchAnyToken,
   matchEmailToken,
   matchIsoDateStringToken,
@@ -28,6 +35,8 @@ import type {
   MatchCompiledSchema,
   MatchJsonSchema,
   MatchPattern,
+  MatchPropertyDecorator,
+  MatchClassDecorator,
   MatchToJsonSchemaOptions,
 } from "./types";
 
@@ -68,7 +77,9 @@ function isCheckSchemaLike(value: unknown): value is CheckSchemaLike<unknown> {
     value instanceof WherePattern ||
     value instanceof ObjectIncludingPattern ||
     value instanceof NonEmptyArrayPattern ||
-    value instanceof RegExpPattern
+    value instanceof RegExpPattern ||
+    value instanceof LazyPattern ||
+    value instanceof ClassPattern
   ) {
     return false;
   }
@@ -211,6 +222,56 @@ function regexpPattern(expression: RegExp | string): RegExpPattern<RegExp> {
   );
 }
 
+function lazyPattern<TPattern extends MatchPattern>(
+  resolver: () => TPattern,
+): LazyPattern<TPattern> {
+  assertPattern(
+    typeof resolver === "function",
+    "Bad pattern: Match.Lazy requires a resolver function.",
+  );
+  return new LazyPattern(resolver);
+}
+
+function fromClass<TClass extends abstract new (...args: never[]) => unknown>(
+  target: TClass,
+  options?: MatchClassOptions,
+): ClassPattern<TClass> {
+  assertPattern(
+    typeof target === "function",
+    "Bad pattern: Match.fromClass requires a class constructor.",
+  );
+  return new ClassPattern(target, options);
+}
+
+function classDecorator(options?: MatchClassOptions): MatchClassDecorator {
+  return (target) => {
+    setClassSchemaOptions(target, options ?? {});
+  };
+}
+
+function fieldDecorator<TPattern extends MatchPattern>(
+  pattern: TPattern,
+): MatchPropertyDecorator {
+  return (target, key) => {
+    if (typeof key !== "string") {
+      throw new MatchPatternError(
+        "Bad pattern: Match.Field supports string property names only.",
+      );
+    }
+
+    const ctor = (
+      typeof target === "function" ? target : target.constructor
+    ) as abstract new (...args: never[]) => unknown;
+
+    assertPattern(
+      typeof ctor === "function",
+      "Bad pattern: Match.Field can only be used on class members.",
+    );
+
+    setClassFieldPattern(ctor, key, pattern);
+  };
+}
+
 function recordOf<TPattern extends MatchPattern>(
   pattern: TPattern,
 ): WherePattern<Record<string, InferMatchPattern<TPattern>>> {
@@ -236,6 +297,10 @@ export const Match = Object.freeze({
   PositiveInteger: matchPositiveIntegerToken,
   NonEmptyString: matchNonEmptyStringToken,
   RegExp: regexpPattern,
+  Lazy: lazyPattern,
+  fromClass,
+  Class: classDecorator,
+  Field: fieldDecorator,
   RecordOf: recordOf,
   URL: matchUrlToken,
   UUID: matchUuidToken,

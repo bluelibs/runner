@@ -3114,6 +3114,9 @@ All supported Match patterns:
 - `Match.URL`: accepts valid absolute URL strings
 - `Match.IsoDateString`: accepts ISO datetime strings with timezone (`Z` or offset)
 - `Match.RegExp(re)`: accepts strings that satisfy the provided regular expression (`RegExp` or source string)
+- `Match.Lazy(() => pattern)`: lazily resolves recursive patterns
+- `Match.fromClass(Class, options?)`: validates plain objects using class decorator metadata
+- `Match.Class(options?)` / `Match.Field(pattern)`: optional decorator layer to build class-backed schemas
 - `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`: accepts non-empty arrays (optionally validates each element)
 - `Match.Optional(pattern)`: accepts `undefined` or `pattern`
 - `Match.Maybe(pattern)`: accepts `undefined`, `null`, or `pattern`
@@ -3214,6 +3217,40 @@ userSchema.toJSONSchema();
 check({ id: "u_1" }, userSchema);
 ```
 
+### Decorator-backed Class Schemas
+
+Use decorators when you prefer class ergonomics while keeping `check()`/`Match` contracts.
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+@Match.Class() // default: ObjectIncluding semantics
+class User {
+  @Match.Field(Match.NonEmptyString)
+  name!: string;
+
+  @Match.Field(Match.ArrayOf(Match.fromClass(Item)))
+  items!: Item[];
+}
+
+@Match.Class()
+class Item {
+  @Match.Field(Match.NonEmptyString)
+  title!: string;
+
+  @Match.Field(Match.fromClass(User))
+  owner!: User;
+}
+
+const schema = Match.fromClass(User);
+check({ name: "Ada", items: [] }, schema);
+```
+
+- `Match.Class({ exact: true })` switches class validation from ObjectIncluding behavior to strict key matching.
+- `Match.fromClass(Class)` returns a schema-like matcher compatible with `check()`, `.parse()`, and `.toJSONSchema()`.
+- Bidirectional/self-referencing graphs (`User -> Item -> User`) are supported at runtime.
+- `Match.Lazy(() => pattern)` is available for recursive non-class pattern graphs.
+
 Why this is useful:
 
 - Fail-fast validation at task/resource boundaries when inputs come from untyped surfaces.
@@ -3255,6 +3292,11 @@ Strict fail-fast behavior (`{ strict: true }`):
   - `description: "Regex flags are not represented by JSON Schema pattern and are ignored during schema export."`
   - `"x-runner-match-kind": "Match.RegExp"`
   - `"x-runner-regexp-flags": "..."`
+
+`Match.fromClass(...)` JSON Schema behavior:
+
+- Recursive class graphs are emitted with `$defs/$ref` references.
+- `schemaId` values are sanitized for JSON Schema definition keys and auto-deduplicated.
 
 Supported conversion highlights:
 

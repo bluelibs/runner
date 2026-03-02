@@ -10,6 +10,9 @@ export type {
   MatchJsonPrimitive,
   MatchJsonSchema,
   MatchJsonValue,
+  MatchClassDecorator,
+  MatchClassOptions,
+  MatchPropertyDecorator,
   MatchPattern,
   MatchToJsonSchemaOptions,
 } from "./check/types";

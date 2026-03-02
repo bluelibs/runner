@@ -161,6 +161,34 @@ describe("tools/check schema support", () => {
       type: "string",
       pattern: "^runner$",
     });
+
+    class UserSchema {
+      public name!: string;
+    }
+    Match.Class()(UserSchema);
+    Match.Field(Match.NonEmptyString)(UserSchema.prototype, "name");
+
+    expect(Match.fromClass(UserSchema).parse({ name: "Ada" })).toEqual({
+      name: "Ada",
+    });
+
+    expect(Match.fromClass(UserSchema).toJSONSchema()).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $ref: "#/$defs/UserSchema",
+      $defs: {
+        UserSchema: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              minLength: 1,
+            },
+          },
+          required: ["name"],
+          additionalProperties: true,
+        },
+      },
+    });
     expect(() => Match.Optional(String).toJSONSchema()).toThrow(
       CheckJsonSchemaPatternError,
     );

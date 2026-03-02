@@ -1,8 +1,13 @@
 import { CheckJsonSchemaPatternError } from "./errors";
+import type { MatchJsonSchema } from "./types";
 
 export type CompileContext = {
   activePatterns: WeakSet<object>;
   strict: boolean;
+  definitions: Record<string, MatchJsonSchema>;
+  classDefinitionIds: WeakMap<Function, string>;
+  compilingDefinitionIds: Set<string>;
+  definitionCounter: number;
 };
 
 export type CompileMode = "default" | "object-property";
