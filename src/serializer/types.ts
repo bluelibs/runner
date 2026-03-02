@@ -133,6 +133,17 @@ export interface SerializerDeserializeOptions {
   schema?: unknown;
 }
 
+export interface SerializerFieldOptions {
+  from?: string;
+  serialize?: (value: unknown) => unknown;
+  deserialize?: (value: unknown) => unknown;
+}
+
+export type SerializerFieldDecorator = (
+  target: object | Function,
+  propertyKey: string | symbol,
+) => void;
+
 /**
  * Minimal serializer contract used across transports and persistence.
  * Implementations must be able to round-trip JSON-compatible payloads and

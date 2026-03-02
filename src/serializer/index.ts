@@ -16,6 +16,8 @@ export type {
   SerializerLike,
   SerializerSchemaLike,
   SerializerDeserializeOptions,
+  SerializerFieldOptions,
+  SerializerFieldDecorator,
 } from "./types";
 
 export { SymbolPolicy, SymbolPolicyErrorMessage } from "./types";

@@ -31,6 +31,7 @@ export interface GraphSerializerOptions {
   maxDepth: number;
   unsafeKeys: ReadonlySet<string>;
   typeRegistry: TypeRegistry;
+  mapObjectForSerialization?: (value: object) => Record<string, unknown>;
 }
 
 /**
@@ -202,8 +203,12 @@ export const serializeValue = (
     return { __ref: objectId };
   }
 
+  const recordSource = options.mapObjectForSerialization
+    ? options.mapObjectForSerialization(objectValue)
+    : (objectValue as Record<string, unknown>);
+
   const record = serializeRecordEntries(
-    objectValue as Record<string, unknown>,
+    recordSource,
     options.unsafeKeys,
     (nested) => serializeValue(nested, context, state, depth + 1, options),
     escapeReservedMarkerKey,

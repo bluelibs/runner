@@ -13,6 +13,8 @@ import type {
   DeserializationContext,
   SerializerDeserializeOptions,
   SerializerSchemaLike,
+  SerializerFieldDecorator,
+  SerializerFieldOptions,
 } from "./types";
 import { SymbolPolicy } from "./types";
 import { validationError } from "./errors";
@@ -35,6 +37,12 @@ import {
   normalizeMaxDepth,
   normalizeMaxRegExpPatternLength,
 } from "./option-normalizers";
+import {
+  remapObjectForSerialization,
+  remapValueForSchemaDeserialize,
+  setSerializerFieldOptions,
+  type SerializerClassConstructor,
+} from "./field-metadata";
 
 const GRAPH_VERSION = 1;
 const DEFAULT_MAX_DEPTH = 1000;
@@ -97,8 +105,23 @@ function normalizeSchemaOption(schema: unknown): unknown {
     };
   }
 
-  if (isClassConstructor(schema) && hasClassSchemaMetadata(schema)) {
-    return Match.fromSchema(schema);
+  if (isClassConstructor(schema)) {
+    return {
+      parse(input: unknown): unknown {
+        const remapped = remapValueForSchemaDeserialize(
+          input,
+          schema as SerializerClassConstructor,
+        );
+
+        if (hasClassSchemaMetadata(schema)) {
+          return Match.fromSchema(schema as SerializerClassConstructor).parse(
+            remapped,
+          );
+        }
+
+        return check(remapped, schema as never);
+      },
+    };
   }
 
   if (typeof schema === "object" && schema !== null && "parse" in schema) {
@@ -114,6 +137,32 @@ function normalizeSchemaOption(schema: unknown): unknown {
 }
 
 export class Serializer {
+  public static Field(
+    options: SerializerFieldOptions = {},
+  ): SerializerFieldDecorator {
+    return (target, propertyKey) => {
+      if (typeof propertyKey !== "string") {
+        validationError(
+          "Invalid Serializer.Field() usage: only string property names are supported.",
+        );
+      }
+
+      const propertyName = propertyKey as string;
+
+      const ctor = (
+        typeof target === "function" ? target : target.constructor
+      ) as SerializerClassConstructor;
+
+      if (typeof ctor !== "function") {
+        validationError(
+          "Invalid Serializer.Field() usage: decorator target must be a class field.",
+        );
+      }
+
+      setSerializerFieldOptions(ctor, propertyName, options);
+    };
+  }
+
   /** Type registry for managing custom types */
   private readonly typeRegistry: TypeRegistry;
 
@@ -121,6 +170,7 @@ export class Serializer {
     maxDepth: number;
     unsafeKeys: ReadonlySet<string>;
     typeRegistry: TypeRegistry;
+    mapObjectForSerialization: (value: object) => Record<string, unknown>;
   };
 
   /** JSON indentation width when pretty printing is enabled */
@@ -157,6 +207,7 @@ export class Serializer {
       maxDepth: this.maxDepth,
       unsafeKeys: this.unsafeKeys,
       typeRegistry: this.typeRegistry,
+      mapObjectForSerialization: remapObjectForSerialization,
     };
   }
 

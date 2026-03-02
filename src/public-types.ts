@@ -55,6 +55,8 @@ export type {
   DeserializationContext,
   SerializerSchemaLike,
   SerializerDeserializeOptions,
+  SerializerFieldOptions,
+  SerializerFieldDecorator,
 } from "./serializer";
 
 export type {

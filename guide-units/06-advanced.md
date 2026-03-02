@@ -345,6 +345,41 @@ Guidelines:
 - Explicit forms still work: `Match.fromSchema(UserDto)` and `Match.ArrayOf(Match.fromSchema(UserDto))`.
 - Prefer explicit entry schemas at trust boundaries.
 
+#### Field aliasing and transforms (Serializer-only)
+
+Use `Serializer.Field(...)` when payload keys differ from your DTO field names, or when a field needs value transforms.
+
+```typescript
+import { Match, Serializer } from "@bluelibs/runner";
+
+class UserDto {
+  @Serializer.Field({ from: "abc" })
+  id!: string;
+
+  @Serializer.Field({
+    from: "raw_age",
+    deserialize: (value) => Number(value),
+    serialize: (value) => String(value),
+  })
+  age!: number;
+}
+
+Match.Schema()(UserDto);
+Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+Match.Field(Match.Integer)(UserDto.prototype, "age");
+
+const serializer = new Serializer();
+const user = serializer.deserialize('{"abc":"u1","raw_age":"42"}', {
+  schema: UserDto,
+});
+```
+
+Notes:
+
+- `from` aliases apply both during schema-aware deserialization and class-instance serialization.
+- `deserialize` / `serialize` transform only the decorated field value.
+- Field metadata resolution is cached per class constructor to avoid repeated reflection-style work.
+
 ### Custom Types
 
 Teach the serializer about your own classes:

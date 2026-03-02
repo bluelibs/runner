@@ -22,6 +22,7 @@ import {
   resolveReference,
   type DeserializerOptions,
 } from "../../serializer/deserializer";
+import { serializeValue } from "../../serializer/graph-serializer";
 import { TypeRegistry } from "../../serializer/type-registry";
 import type {
   DeserializationContext,
@@ -257,5 +258,39 @@ describe("GraphSerializer coverage", () => {
         deserializerOptions(),
       ),
     ).toThrow(/Unknown type/);
+  });
+
+  it("serializeValue works without mapObjectForSerialization option", () => {
+    const context = {
+      objectIds: new WeakMap<object, string>(),
+      idCounter: 0,
+      nodeCount: 0,
+      nodes: Object.create(null) as Record<string, SerializedNode>,
+    };
+
+    const result = serializeValue(
+      { id: "u1" },
+      context,
+      {
+        serializingValueTypes: new WeakSet(),
+        excludedTypeIds: [],
+      },
+      0,
+      {
+        maxDepth: 10,
+        unsafeKeys: DEFAULT_UNSAFE_KEYS,
+        typeRegistry: new TypeRegistry({
+          allowedTypes: null,
+          regExpValidator: { maxPatternLength: 1024, allowUnsafe: false },
+          symbolPolicy: "allow-all",
+        }),
+      },
+    );
+
+    expect(result).toEqual({ __ref: "obj_1" });
+    expect(context.nodes.obj_1).toEqual({
+      kind: "object",
+      value: { id: "u1" },
+    });
   });
 });

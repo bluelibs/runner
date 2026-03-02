@@ -654,6 +654,12 @@ Schema-aware deserialization is available via `deserialize(payload, { schema })`
 - For arrays, use `schema: Match.ArrayOf(Match.fromSchema(User))`.
 - Prefer explicit entry schemas at trust boundaries.
 
+Serializer field remapping is available via `Serializer.Field(...)` on class properties:
+
+- `Serializer.Field({ from: "abc" })` maps inbound/outbound key aliases for class instances.
+- `Serializer.Field({ serialize, deserialize })` applies per-field value transforms.
+- Metadata resolution is cached per class constructor (no repeated reflection-like scanning per call).
+
 Note: file uploads use `createWebFile`/`createNodeFile` — handled by HTTP RPC transport, not the serializer.
 
 ## Testing
