@@ -407,9 +407,16 @@ function compilePattern(
   if (pattern === Object) return { type: "object" };
   if (pattern === Array) return { type: "array" };
   if (pattern === Function) {
+    if (!context.strict) {
+      return {
+        description:
+          "Function constructor patterns are not representable in strict JSON Schema and are exported as permissive nodes when strict is false.",
+        "x-runner-match-kind": "Function",
+      };
+    }
     throwUnsupported(
       path,
-      "Function constructor patterns are not representable in JSON Schema.",
+      "Function constructor patterns are not representable in strict JSON Schema.",
       pattern,
     );
   }
