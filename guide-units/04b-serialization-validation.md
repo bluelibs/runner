@@ -48,6 +48,34 @@ Two operational modes:
 - Tree mode: `stringify()` / `parse()` (JSON-like API, type-aware)
 - Graph mode: `serialize()` / `deserialize()` (handles circular/self references)
 
+`parse()` ergonomics:
+
+- `serializer.parse(payload)` is an alias of `serializer.deserialize(payload)`.
+- `serializer.parse(payload, { schema })` is an ergonomic shorthand for "deserialize + validate/parse with schema".
+
+```typescript
+import { Match, Serializer } from "@bluelibs/runner";
+
+const serializer = new Serializer();
+const payload = serializer.serialize({ id: "u1", age: 42 });
+
+// Explicit form
+const viaDeserialize = serializer.deserialize(payload, {
+  schema: Match.ObjectStrict({
+    id: Match.NonEmptyString,
+    age: Match.Integer,
+  }),
+});
+
+// Ergonomic alias: same behavior
+const viaParse = serializer.parse(payload, {
+  schema: Match.ObjectStrict({
+    id: Match.NonEmptyString,
+    age: Match.Integer,
+  }),
+});
+```
+
 ### Safety for Untrusted Payloads
 
 When deserializing untrusted data, tighten defaults:
@@ -121,6 +149,43 @@ Notes:
 - Decorated class shorthand works for `schema: UserDto` and `schema: [UserDto]`.
 - If a class is not decorated with `@Match.Schema()`, constructor shorthand uses constructor semantics (`instanceof`) and usually fails for plain deserialized objects.
 - Functional schema style is always available: `schema: Match.fromSchema(UserDto)` and `schema: Match.ArrayOf(Match.fromSchema(UserDto))`.
+- `@Serializer.Field(...)` itself does not require `@Match.Schema()` to register metadata.
+  It affects class-instance serialization in all cases, but schema-aware deserialize class shorthand (`schema: UserDto`) still needs `@Match.Schema()` for validation to pass.
+
+```typescript
+import { Match, Serializer } from "@bluelibs/runner";
+
+class OutboundUser {
+  @Serializer.Field({ from: "user_id" })
+  id!: string;
+}
+
+const serializer = new Serializer();
+const outbound = new OutboundUser();
+outbound.id = "u1";
+
+// Works without @Match.Schema(): outgoing remap still applies
+serializer.stringify(outbound); // {"user_id":"u1"}
+
+class InboundUser {
+  @Serializer.Field({ from: "user_id" })
+  id!: string;
+}
+
+const payload = '{"user_id":"u1"}';
+
+// This usually fails without @Match.Schema() because class shorthand falls back to constructor semantics
+// serializer.deserialize(payload, { schema: InboundUser });
+
+@Match.Schema()
+class ValidatedInboundUser {
+  @Serializer.Field({ from: "user_id" })
+  @Match.Field(Match.NonEmptyString)
+  id!: string;
+}
+
+serializer.deserialize(payload, { schema: ValidatedInboundUser }); // { id: "u1" }
+```
 
 > **Note:** File uploads are handled by Remote Lanes HTTP multipart support, not by the serializer.
 
