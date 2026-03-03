@@ -5,12 +5,11 @@
 !include: 02-core-concepts.md
 !include: 03-runtime-lifecycle.md
 !include: 04-features.md
+!include: 04b-serialization-validation.md
 !include: 05-observability.md
 !include: 06-advanced.md
 !include: 07-developer-experience.md
 !include: 08-real-world-example.md
 !include: 08-testing.md
-!include: 09-troubleshooting.md
-!include: 10-deep-dives.md
 !include: 11-reference.md
 !include: 12-upgrading-to-v6.md

@@ -169,7 +169,4 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Release, Support, and Deprecation Policy](#release-support-and-deprecation-policy) - Upgrade governance
 - [Production Readiness Checklist](#production-readiness-checklist) - Framework-wide deploy checks
 - [Node API Index](#node-api-index) - Node-only exports at a glance
-- [Troubleshooting](#troubleshooting) - Common issues and solutions
-- [Under the Hood](#under-the-hood) - Architecture deep dive
-- [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
