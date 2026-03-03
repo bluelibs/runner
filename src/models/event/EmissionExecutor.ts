@@ -9,6 +9,7 @@ import {
   transactionalMissingUndoClosureError,
   transactionalRollbackFailureError,
 } from "../../errors";
+import { normalizeError } from "../../tools/normalizeError";
 import { IListenerStorage } from "./types";
 
 interface ExecuteOptions {
@@ -18,18 +19,21 @@ interface ExecuteOptions {
   failureMode: EventEmissionFailureMode;
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
 function toListenerError(
   error: unknown,
   listener: IListenerStorage,
 ): IEventListenerError {
-  const errObj: IEventListenerError =
-    error instanceof Error
-      ? (Object.assign(new Error(error.message), error) as IEventListenerError)
-      : error && typeof error === "object"
-        ? ({
-            ...(error as Record<string, unknown>),
-          } as unknown as IEventListenerError)
-        : new Error(String(error));
+  const normalized = normalizeError(error);
+  const payload = isObjectRecord(error) ? error : undefined;
+  const errObj = Object.assign(
+    new Error(normalized.message),
+    normalized,
+    payload,
+  ) as IEventListenerError;
 
   if (typeof errObj.message !== "string") {
     errObj.message = String(error);
@@ -42,6 +46,17 @@ function toListenerError(
     errObj.listenerOrder = listener.order;
   }
   return errObj;
+}
+
+function recordListenerFailure(
+  report: IEventEmitReport,
+  error: unknown,
+  listener: IListenerStorage,
+): IEventListenerError {
+  const listenerError = toListenerError(error, listener);
+  report.failedListeners += 1;
+  report.errors.push(listenerError);
+  return listenerError;
 }
 
 function createReport(totalListeners: number): IEventEmitReport {
@@ -87,9 +102,7 @@ export async function executeSequentially({
         await listener.handler(event);
         report.succeededListeners += 1;
       } catch (error) {
-        const errObj = toListenerError(error, listener);
-        report.failedListeners += 1;
-        report.errors.push(errObj);
+        const errObj = recordListenerFailure(report, error, listener);
         if (failureMode === EventEmissionFailureMode.FailFast) {
           throw errObj;
         }
@@ -161,9 +174,7 @@ export async function executeTransactionally({
       });
       report.succeededListeners += 1;
     } catch (error) {
-      const triggerError = toListenerError(error, listener);
-      report.failedListeners += 1;
-      report.errors.push(triggerError);
+      const triggerError = recordListenerFailure(report, error, listener);
 
       const rollbackErrors =
         await rollbackTransactionalListeners(listenersToRollback);
@@ -213,7 +224,9 @@ export async function executeInParallel({
   let currentBatch: typeof listeners = [];
 
   const executeBatch = async (batch: typeof listeners): Promise<void> => {
-    const results = await Promise.allSettled(
+    const batchErrors: IEventListenerError[] = [];
+
+    await Promise.all(
       batch.map(async (listener) => {
         if (!shouldExecuteListener(listener, event)) {
           report.skippedListeners += 1;
@@ -225,22 +238,16 @@ export async function executeInParallel({
           await listener.handler(event);
           report.succeededListeners += 1;
         } catch (error) {
-          const errObj = toListenerError(error, listener);
-          report.failedListeners += 1;
-          report.errors.push(errObj);
-          throw errObj;
+          const errObj = recordListenerFailure(report, error, listener);
+          batchErrors.push(errObj);
         }
       }),
     );
 
-    const errorsInBatch = results.filter(
-      (result): result is PromiseRejectedResult => result.status === "rejected",
-    ).length;
     if (
-      errorsInBatch > 0 &&
+      batchErrors.length > 0 &&
       failureMode === EventEmissionFailureMode.FailFast
     ) {
-      const batchErrors = report.errors.slice(-errorsInBatch);
       if (batchErrors.length === 1) {
         throw batchErrors[0];
       }

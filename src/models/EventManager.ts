@@ -35,6 +35,8 @@ const nativeAggregateErrorCtor = (
   globalThis as unknown as { AggregateError: AggregateErrorCtor }
 ).AggregateError;
 
+const emptyInterceptorsSnapshot: EventEmissionInterceptor[] = [];
+
 type EventEmissionInternalOptions = IEventEmitOptions & {
   allowLifecycleBypass?: boolean;
 };
@@ -193,7 +195,10 @@ export class EventManager {
     let { data } = params;
     // Snapshot interceptors so in-flight emissions stay deterministic even if
     // dispose() clears interceptor registries mid-emission.
-    const emissionInterceptorsSnapshot = this.emissionInterceptors.slice();
+    const emissionInterceptorsSnapshot =
+      this.emissionInterceptors.length > 0
+        ? this.emissionInterceptors.slice()
+        : emptyInterceptorsSnapshot;
     const isTransactional = Boolean(eventDefinition.transactional);
     const configuredFailureMode = isTransactional
       ? EventEmissionFailureMode.FailFast
@@ -228,14 +233,45 @@ export class EventManager {
     }> => {
       const allListeners = this.registry.getListenersForEmit(eventDefinition);
 
+      if (
+        allListeners.length === 0 &&
+        emissionInterceptorsSnapshot.length === 0
+      ) {
+        const event = new EventEmissionImpl<TInput>(
+          eventDefinition.id,
+          data,
+          new Date(),
+          source,
+          eventDefinition.meta ?? {},
+          Boolean(eventDefinition.transactional),
+          eventDefinition.tags,
+        );
+        return {
+          emission: event as IEventEmission<TInput>,
+          report: {
+            totalListeners: 0,
+            attemptedListeners: 0,
+            skippedListeners: 0,
+            succeededListeners: 0,
+            failedListeners: 0,
+            propagationStopped: event.isPropagationStopped(),
+            errors: [],
+          },
+        };
+      }
+
+      const eventMeta = eventDefinition.meta ? { ...eventDefinition.meta } : {};
+      const eventTags =
+        eventDefinition.tags.length > 0 ? [...eventDefinition.tags] : [];
+
       const event = new EventEmissionImpl<TInput>(
         eventDefinition.id,
         data,
         new Date(),
         source,
-        { ...(eventDefinition.meta || {}) },
+        eventMeta,
         Boolean(eventDefinition.transactional),
-        [...eventDefinition.tags],
+        eventTags,
       );
 
       const context = new EmissionContext<TInput>(

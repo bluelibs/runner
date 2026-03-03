@@ -86,15 +86,9 @@ export class EmissionContext<TInput> {
 
   async baseEmit(eventToEmit: IEventEmission<any>): Promise<IEventEmitReport> {
     if (this.allListeners.length === 0) {
-      return {
-        totalListeners: 0,
-        attemptedListeners: 0,
-        skippedListeners: 0,
-        succeededListeners: 0,
-        failedListeners: 0,
-        propagationStopped: eventToEmit.isPropagationStopped(),
-        errors: [],
-      };
+      this.executionReport.propagationStopped =
+        eventToEmit.isPropagationStopped();
+      return this.executionReport;
     }
 
     if (this.eventDefinition.transactional && this.eventDefinition.parallel) {

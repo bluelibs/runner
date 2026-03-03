@@ -153,4 +153,88 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
 
     expect(resolver.getEverywhereTaskMiddlewares(task)).toEqual([middleware]);
   });
+
+  test("caches applicable task middlewares when store is locked", () => {
+    const local = { id: "mw.local" } as any;
+    const global = { id: "mw.global" } as any;
+    const task: any = { id: "task.locked.cache", middleware: [local] };
+    const store: any = {
+      isLocked: true,
+      tasks: new Map(),
+      taskMiddlewares: new Map(),
+      resourceMiddlewares: new Map(),
+      resources: new Map(),
+      getOwnerResourceId: () => undefined,
+    };
+
+    const resolver = new MiddlewareResolver(store);
+    const spy = jest
+      .spyOn(resolver, "getEverywhereTaskMiddlewares")
+      .mockReturnValue([global]);
+
+    const first = resolver.getApplicableTaskMiddlewares(task);
+    const second = resolver.getApplicableTaskMiddlewares(task);
+
+    expect(first).toEqual([global, local]);
+    expect(second).toBe(first);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  test("caches applicable resource middlewares when store is locked", () => {
+    const local = { id: "mw.resource.local" } as any;
+    const global = { id: "mw.resource.global" } as any;
+    const resource: any = {
+      id: "resource.locked.cache",
+      middleware: [local],
+    };
+    const store: any = {
+      isLocked: true,
+      tasks: new Map(),
+      taskMiddlewares: new Map(),
+      resourceMiddlewares: new Map(),
+      resources: new Map(),
+      getOwnerResourceId: () => undefined,
+    };
+
+    const resolver = new MiddlewareResolver(store);
+    const spy = jest
+      .spyOn(resolver, "getEverywhereResourceMiddlewares")
+      .mockReturnValue([global]);
+
+    const first = resolver.getApplicableResourceMiddlewares(resource);
+    const second = resolver.getApplicableResourceMiddlewares(resource);
+
+    expect(first).toEqual([global, local]);
+    expect(second).toBe(first);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  test("caches rpc allowlist set when store is locked", () => {
+    const task: any = {
+      id: "task.rpc.locked.allow-list",
+      middleware: [],
+      isRpcRouted: true,
+      [symbolRpcLanePolicy]: {
+        middlewareAllowList: ["mw.a"],
+      },
+    };
+    const store: any = {
+      isLocked: true,
+      tasks: new Map([["task.rpc.locked.allow-list", { task }]]),
+      taskMiddlewares: new Map(),
+      resourceMiddlewares: new Map(),
+      resources: new Map(),
+      getOwnerResourceId: () => undefined,
+    };
+    const resolver = new MiddlewareResolver(store);
+    const middlewares = [{ id: "mw.a" }, { id: "mw.b" }] as any[];
+
+    const first = resolver.applyRpcLanePolicyFilter(task, middlewares);
+
+    task[symbolRpcLanePolicy].middlewareAllowList = ["mw.b"];
+    const second = resolver.applyRpcLanePolicyFilter(task, middlewares);
+
+    expect(first).toEqual([{ id: "mw.a" }]);
+    expect(second).toEqual([{ id: "mw.a" }]);
+  });
 });
