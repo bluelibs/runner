@@ -6,6 +6,7 @@ import type {
 import { globalTags } from "../../../globals/globalTags";
 import type { Store } from "../../../models/Store";
 import { resolveRpcLaneAssignments } from "../../rpc-lanes/RpcLaneAssignments";
+import { EVENT_LANES_RESOURCE_ID } from "../../event-lanes/eventLanes.resource";
 
 type EventShape = {
   id: string;
@@ -26,7 +27,7 @@ function createStore(
 ): Store {
   const resources = new Map<string, { config?: unknown }>();
   if (options.eventTopology) {
-    resources.set("globals.resources.node.eventLanes", {
+    resources.set(EVENT_LANES_RESOURCE_ID, {
       config: { topology: options.eventTopology },
     });
   }

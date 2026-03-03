@@ -2,7 +2,7 @@ import { defineEvent } from "../define";
 import { IEvent } from "../defs";
 
 const readyEvent = defineEvent({
-  id: "globals.events.ready",
+  id: "system.events.ready",
   meta: {
     title: "System Ready",
     description:
@@ -20,7 +20,7 @@ export const globalEvents = {
    * Emitted when runtime enters the `disposing` phase.
    */
   disposing: defineEvent({
-    id: "globals.events.disposing",
+    id: "system.events.disposing",
     meta: {
       title: "System Disposing",
       description:
@@ -32,7 +32,7 @@ export const globalEvents = {
    * and right before resource-level `.dispose()` hooks execute.
    */
   drained: defineEvent({
-    id: "globals.events.drained",
+    id: "system.events.drained",
     meta: {
       title: "System Drained",
       description:

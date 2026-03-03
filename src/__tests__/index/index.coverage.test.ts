@@ -29,6 +29,16 @@ describe("package root exports coverage", () => {
     expect(typeof root.r.override).toBe(functionType);
     expect(typeof root.r.middleware.task).toBe("function");
     expect(typeof root.r.middleware.resource).toBe("function");
+    expect(typeof root.r.system.events.ready).toBe("object");
+    expect(typeof root.r.system.tags.internal).toBe("object");
+    expect(typeof root.r.runner.middleware.task.retry).toBe("object");
+    expect(typeof root.r.runner.tags.cron).toBe("object");
+    expect(typeof root.r.debug.levels.verbose).toBe("object");
+    expect(root.r.system.events).toBe(root.system.events);
+    expect(root.r.system.tags.internal).toBe(root.system.tags.internal);
+    expect(root.r.runner.middleware).toBe(root.runner.middleware);
+    expect(root.r.runner.tags).toBe(root.runner.tags);
+    expect(root.r.debug.levels).toBe(root.debug.levels);
 
     // Additional explicit exports
     expect(root.definitions).toBeDefined();

@@ -150,7 +150,9 @@ describe("DependencyProcessor Consistency", () => {
       .build();
 
     const runtime = await run(root);
-    const resEntry = runtime.store.resources.get(resource.id);
+    const resourceId = runtime.store.resolveDefinitionId(resource);
+    expect(resourceId).toBeDefined();
+    const resEntry = runtime.store.resources.get(resourceId!);
 
     const injectedTask = resEntry?.value.task;
     const storedTask = (resEntry?.computedDependencies as any)?.task;

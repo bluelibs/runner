@@ -1,4 +1,4 @@
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import express, { Express, Request, Response } from "express";
 import cors from "cors";
 import { httpTag } from "../tags/http.tag";
@@ -18,7 +18,7 @@ export const expressServerResource = r
   .resource("app.resources.expressServer")
   .dependencies({
     appConfig,
-    logger: globals.resources.logger,
+    logger: r.runner.logger,
   })
   .register([httpTag])
   .init(async (_, { appConfig, logger }): Promise<ExpressServer> => {

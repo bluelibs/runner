@@ -2,7 +2,7 @@
 
 Runner gives you primitives for all three observability signals:
 
-- **Logs**: structured application/runtime events via `globals.resources.logger`
+- **Logs**: structured application/runtime events via `r.runner.logger`
 - **Metrics**: numeric health and performance indicators from your resources/tasks/middleware
 - **Traces**: distributed timing and call-path correlation using your tracing stack (for example OpenTelemetry)
 
@@ -57,11 +57,11 @@ Runner ships a structured logger with consistent fields, onLog hooks, and multip
 ### Basic Logging
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const app = r
   .resource("app")
-  .dependencies({ logger: globals.resources.logger })
+  .dependencies({ logger: r.runner.logger })
   .init(async (_config, { logger }) => {
     logger.info("Starting business process"); //  Visible by default
     logger.warn("This might take a while"); //  Visible by default
@@ -122,7 +122,7 @@ The logger accepts rich, structured data that makes debugging actually useful:
 ```typescript
 const userTask = r
   .task("app.tasks.user.create")
-  .dependencies({ logger: globals.resources.logger })
+  .dependencies({ logger: r.runner.logger })
   .run(async (input, { logger }) => {
     // Basic message
     logger.info("Creating new user");
@@ -173,7 +173,7 @@ const RequestContext = r
 
 const requestHandler = r
   .task("app.tasks.handleRequest")
-  .dependencies({ logger: globals.resources.logger })
+  .dependencies({ logger: r.runner.logger })
   .run(async (requestData, { logger }) => {
     const request = RequestContext.use();
 
@@ -211,7 +211,7 @@ Want to use Winston as your transport? No problem - integrate it seamlessly:
 
 ```typescript
 import winston from "winston";
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // Create Winston logger, put it in a resource if used from various places.
 const winstonLogger = winston.createLogger({
@@ -233,7 +233,7 @@ const winstonLogger = winston.createLogger({
 // Bridge BlueLibs logs to Winston using hooks
 const winstonBridgeResource = r
   .resource("app.resources.winstonBridge")
-  .dependencies({ logger: globals.resources.logger })
+  .dependencies({ logger: r.runner.logger })
   .init(async (_config, { logger }) => {
     // Map log levels (BlueLibs -> Winston)
     const levelMapping = {
@@ -301,7 +301,7 @@ const customLogger = r
   )
   .build();
 
-// Or you could simply add it as "globals.resources.logger" and override the default logger
+// Or you could simply add it as "r.runner.logger" and override the default logger
 ```
 
 ### Log Structure
@@ -356,12 +356,12 @@ run(app, { debug: "verbose" });
 **Custom Configuration**:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const app = r
   .resource("app")
   .register([
-    globals.resources.debug.with({
+    r.runner.debug.with({
       logTaskInput: true,
       logTaskOutput: false,
       logResourceConfig: true,
@@ -376,21 +376,21 @@ const app = r
 
 ### Accessing Debug Levels Programmatically
 
-The debug configuration levels can now be accessed through the globals namespace via `globals.debug.levels`:
+The debug configuration levels can be accessed via `r.runner.debug.levels`:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // Use in custom configurations
 const customConfig = {
-  ...globals.debug.levels.normal, // or .verbose
+  ...r.runner.debug.levels.normal, // or .verbose
   logTaskInput: true, // Override specific settings
 };
 
 // Register with custom configuration
 const app = r
   .resource("app")
-  .register([globals.resources.debug.with(customConfig)])
+  .register([r.runner.debug.with(customConfig)])
   .build();
 ```
 
@@ -399,11 +399,11 @@ const app = r
 Use debug tags to configure debugging on individual components, when you're interested in just a few verbose ones.
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const criticalTask = r
   .task("app.tasks.critical")
-  .tags([globals.tags.debug.with("verbose")])
+  .tags([r.runner.tags.debug.with("verbose")])
   .run(async (input) => {
     // This task will have verbose debug logging
     return await processPayment(input);

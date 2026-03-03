@@ -2,6 +2,7 @@ import { defineEvent, defineResource } from "../../../define";
 import { run } from "../../../run";
 import { r } from "../../../public";
 import { rpcLanesResource } from "../../rpc-lanes";
+import { EVENT_LANES_RESOURCE_ID } from "../../event-lanes/eventLanes.resource";
 
 describe("rpcLanes applyTo cross-source topology checks", () => {
   it("detects event lane assignment from string applyTo ids in topology state", async () => {
@@ -19,7 +20,7 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
       }),
     });
     const fakeEventLanesState = r
-      .resource<any>("globals.resources.node.eventLanes")
+      .resource<any>(EVENT_LANES_RESOURCE_ID)
       .init(async () => null)
       .build();
 
@@ -78,7 +79,7 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
       }),
     });
     const fakeEventLanesState = r
-      .resource<any>("globals.resources.node.eventLanes")
+      .resource<any>(EVENT_LANES_RESOURCE_ID)
       .init(async () => null)
       .build();
 

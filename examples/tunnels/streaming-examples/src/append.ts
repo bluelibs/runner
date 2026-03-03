@@ -5,7 +5,7 @@
  * - Client: Node smart client that auto-detects File sentinels and streams via multipart
  */
 
-import { globals, resource, run, task, InputFile } from "@bluelibs/runner";
+import { resource, run, task, InputFile, r } from "@bluelibs/runner";
 import { Readable, Transform } from "stream";
 import {
   nodeExposure,
@@ -103,7 +103,7 @@ export async function runStreamingAppendExample(): Promise<void> {
     // Discover exposure base URL and create a smart client
     const handlers = await rr.getResourceValue(exposure.resource as any);
     const baseUrl = await getExposureBaseUrl(handlers);
-    const serializer = rr.getResourceValue(globals.resources.serializer);
+    const serializer = rr.getResourceValue(r.runner.serializer);
     const client = createHttpSmartClient({ baseUrl, serializer });
 
     // Client builds a File sentinel with a local Node stream; the client uploads via multipart

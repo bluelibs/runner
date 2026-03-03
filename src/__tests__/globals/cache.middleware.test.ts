@@ -46,6 +46,23 @@ describe("Caching System", () => {
       await run(app);
     });
 
+    it("fails fast when cache provider resource does not return a factory function", async () => {
+      const invalidProviderOverride = r.override(
+        cacheProviderResource,
+        async () => 42 as any,
+      );
+
+      const app = defineResource({
+        id: "cache.invalid-provider.app",
+        register: [cacheResource],
+        overrides: [invalidProviderOverride],
+        dependencies: { cache: cacheResource },
+        init: async () => "ok",
+      });
+
+      await expect(run(app)).rejects.toThrow(/must initialize to a function/i);
+    });
+
     it("should create separate cache instances per task", async () => {
       const testTask = defineTask({
         id: "test.task",

@@ -1,5 +1,5 @@
 import { createMessageError } from "../../../errors";
-import { globals, r, run } from "../../..";
+import { r, run } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
   EventLaneMessage,
@@ -55,7 +55,7 @@ describe("eventLanes applyTo override IoC", () => {
 
     const event = r
       .event<{ value: number }>("tests.event-lanes.apply-to.override-ioc.event")
-      .tags([globals.tags.eventLane.with({ lane: laneA })])
+      .tags([r.runner.tags.eventLane.with({ lane: laneA })])
       .build();
 
     const emitTask = r

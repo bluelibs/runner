@@ -165,6 +165,214 @@ describe("subtreeMiddleware tools", () => {
     ).toThrow(/Duplicate middleware id/);
   });
 
+  it("fails fast for duplicate resource subtree middleware local ids across owners", () => {
+    const rootMiddleware = defineResourceMiddleware({
+      id: "tests.tools.subtree.root.middleware.resource.duplicate",
+      run: async ({ next }) => next(),
+    });
+    const childMiddleware = defineResourceMiddleware({
+      id: "tests.tools.subtree.child.middleware.resource.duplicate",
+      run: async ({ next }) => next(),
+    });
+
+    const rootOwner = defineResource({
+      id: "tests.tools.subtree.resource.duplicate.root",
+      subtree: {
+        resources: {
+          middleware: [
+            {
+              use: {
+                ...rootMiddleware,
+                id: "tests.tools.subtree.resource.duplicate.root.middleware.resource.shared",
+              } as any,
+            },
+          ],
+        },
+      },
+    });
+    const childOwner = defineResource({
+      id: "tests.tools.subtree.resource.duplicate.child",
+      subtree: {
+        resources: {
+          middleware: [
+            {
+              use: {
+                ...childMiddleware,
+                id: "tests.tools.subtree.resource.duplicate.child.middleware.resource.shared",
+              } as any,
+            },
+          ],
+        },
+      },
+    });
+    const targetResource = defineResource({
+      id: "tests.tools.subtree.resource.duplicate.target",
+      init: async () => "ok",
+    });
+
+    const resources = new Map([
+      [rootOwner.id, rootOwner],
+      [childOwner.id, childOwner],
+      [targetResource.id, targetResource],
+    ]);
+
+    expect(() =>
+      resolveApplicableSubtreeResourceMiddlewares(
+        {
+          getOwnerResourceId: (itemId: string) => {
+            if (itemId === targetResource.id) {
+              return childOwner.id;
+            }
+            if (itemId === childOwner.id) {
+              return rootOwner.id;
+            }
+            return undefined;
+          },
+          getResource: (resourceId: string) => resources.get(resourceId),
+        },
+        targetResource,
+      ),
+    ).toThrow(/Duplicate middleware id \"shared\"/);
+  });
+
+  it("fails fast for duplicate task subtree middleware local ids across owners", () => {
+    const rootMiddleware = defineTaskMiddleware({
+      id: "tests.tools.subtree.root.middleware.task.duplicate",
+      run: async ({ next, task }) => next(task.input),
+    });
+    const childMiddleware = defineTaskMiddleware({
+      id: "tests.tools.subtree.child.middleware.task.duplicate",
+      run: async ({ next, task }) => next(task.input),
+    });
+
+    const rootOwner = defineResource({
+      id: "tests.tools.subtree.task.duplicate.root",
+      subtree: {
+        tasks: {
+          middleware: [
+            {
+              use: {
+                ...rootMiddleware,
+                id: "tests.tools.subtree.task.duplicate.root.middleware.task.shared",
+              } as any,
+            },
+          ],
+        },
+      },
+    });
+    const childOwner = defineResource({
+      id: "tests.tools.subtree.task.duplicate.child",
+      subtree: {
+        tasks: {
+          middleware: [
+            {
+              use: {
+                ...childMiddleware,
+                id: "tests.tools.subtree.task.duplicate.child.middleware.task.shared",
+              } as any,
+            },
+          ],
+        },
+      },
+    });
+    const targetTask = defineTask({
+      id: "tests.tools.subtree.task.duplicate.target",
+      run: async () => "ok",
+    });
+
+    const resources = new Map([
+      [rootOwner.id, rootOwner],
+      [childOwner.id, childOwner],
+    ]);
+
+    expect(() =>
+      resolveApplicableSubtreeTaskMiddlewares(
+        {
+          getOwnerResourceId: (itemId: string) => {
+            if (itemId === targetTask.id) {
+              return childOwner.id;
+            }
+            if (itemId === childOwner.id) {
+              return rootOwner.id;
+            }
+            return undefined;
+          },
+          getResource: (resourceId: string) => resources.get(resourceId),
+        },
+        targetTask,
+      ),
+    ).toThrow(/Duplicate middleware id \"shared\"/);
+  });
+
+  it("does not collapse middleware ids from foreign namespaces when resolving duplicates", () => {
+    const rootMiddleware = defineTaskMiddleware({
+      id: "tests.tools.subtree.foreign.root",
+      run: async ({ next, task }) => next(task.input),
+    });
+    const childMiddleware = defineTaskMiddleware({
+      id: "tests.tools.subtree.foreign.child",
+      run: async ({ next, task }) => next(task.input),
+    });
+
+    const rootOwner = defineResource({
+      id: "tests.tools.subtree.foreign.root-owner",
+      subtree: {
+        tasks: {
+          middleware: [
+            {
+              use: {
+                ...rootMiddleware,
+                id: "tests.tools.subtree.somewhere.middleware.task.shared",
+              } as any,
+            },
+          ],
+        },
+      },
+    });
+    const childOwner = defineResource({
+      id: "tests.tools.subtree.foreign.child-owner",
+      subtree: {
+        tasks: {
+          middleware: [
+            {
+              use: {
+                ...childMiddleware,
+                id: "tests.tools.subtree.another.middleware.task.shared",
+              } as any,
+            },
+          ],
+        },
+      },
+    });
+    const targetTask = defineTask({
+      id: "tests.tools.subtree.foreign.target",
+      run: async () => "ok",
+    });
+
+    const resources = new Map([
+      [rootOwner.id, rootOwner],
+      [childOwner.id, childOwner],
+    ]);
+
+    expect(() =>
+      resolveApplicableSubtreeTaskMiddlewares(
+        {
+          getOwnerResourceId: (itemId: string) => {
+            if (itemId === targetTask.id) {
+              return childOwner.id;
+            }
+            if (itemId === childOwner.id) {
+              return rootOwner.id;
+            }
+            return undefined;
+          },
+          getResource: (resourceId: string) => resources.get(resourceId),
+        },
+        targetTask,
+      ),
+    ).not.toThrow();
+  });
+
   it("unwraps direct and conditional subtree middleware entries", () => {
     const taskMiddleware = defineTaskMiddleware({
       id: "tests.tools.subtree.unwrap.task",

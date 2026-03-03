@@ -1,6 +1,6 @@
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { globals } from "../../../../index";
+import { r } from "../../../../index";
 import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
 
@@ -13,7 +13,7 @@ describe("nodeExposure discovery endpoint", () => {
 
     const rpcLanesServer = defineResource({
       id: "discovery.rpc-lanes",
-      tags: [globals.tags.rpcLanes],
+      tags: [r.runner.tags.rpcLanes],
       async init() {
         return {
           serveTaskIds: [t.id],
@@ -103,7 +103,7 @@ describe("nodeExposure discovery endpoint", () => {
 
     const rpcLanesServer = defineResource({
       id: "discovery.disabled.rpc-lanes",
-      tags: [globals.tags.rpcLanes],
+      tags: [r.runner.tags.rpcLanes],
       async init() {
         return {
           serveTaskIds: [t.id],

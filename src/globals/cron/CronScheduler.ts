@@ -30,6 +30,7 @@ export interface CronSchedulerDependencies {
   cronTasks: TagDependencyAccessor<typeof cronTag>["tasks"];
   logger: Logger;
   taskRunner: TaskRunner;
+  resolveDefinitionId?: (entry: string | AnyTask) => string | undefined;
 }
 
 function getCronConfig(
@@ -42,7 +43,7 @@ function getCronConfig(
       taskId: task.id,
       expression: "<missing>",
       message:
-        "Cron tag is missing configuration. Use globals.tags.cron.with({ expression: ... }).",
+        "Cron tag is missing configuration. Use runner.tags.cron.with({ expression: ... }).",
     });
   }
 
@@ -55,7 +56,7 @@ export class CronScheduler {
   private disposed = false;
 
   constructor(private readonly deps: CronSchedulerDependencies) {
-    this.scopedLogger = deps.logger.with({ source: "globals.resources.cron" });
+    this.scopedLogger = deps.logger.with({ source: "runner.cron" });
   }
 
   get schedules(): ReadonlyMap<string, CronScheduledTask> {
@@ -78,7 +79,9 @@ export class CronScheduler {
 
   async start(config: CronResourceConfig): Promise<void> {
     let scheduledTasks = this.deps.cronTasks;
-    const onlySet = config.only ? resolveOnlySet(config.only) : undefined;
+    const onlySet = config.only
+      ? resolveOnlySet(config.only, this.deps.resolveDefinitionId)
+      : undefined;
 
     if (onlySet) {
       const matchedIds = new Set<string>();
@@ -93,7 +96,7 @@ export class CronScheduler {
       for (const id of onlySet) {
         if (!matchedIds.has(id)) {
           await this.scopedLogger.warn(
-            `Cron "only" filter references task "${id}" which is not tagged with globals.tags.cron — ignored.`,
+            `Cron "only" filter references task "${id}" which is not tagged with runner.tags.cron — ignored.`,
             { data: { taskId: id } },
           );
         }
@@ -177,7 +180,7 @@ export class CronScheduler {
 
     try {
       await this.deps.taskRunner.run(state.task, state.config.input, {
-        source: runtimeSource.resource("globals.resources.cron"),
+        source: runtimeSource.resource("runner.cron"),
       });
     } catch (error) {
       if (shutdownLockdownError.is(error)) {

@@ -19,6 +19,26 @@ type MiddlewareWithId = {
   id: string;
 };
 
+const taskMiddlewareScopeMarker = ".middleware.task.";
+const resourceMiddlewareScopeMarker = ".middleware.resource.";
+
+function getSubtreeMiddlewareDuplicateKey(
+  ownerResourceId: string,
+  id: string,
+): string {
+  const taskScopePrefix = `${ownerResourceId}${taskMiddlewareScopeMarker}`;
+  if (id.startsWith(taskScopePrefix)) {
+    return id.slice(taskScopePrefix.length);
+  }
+
+  const resourceScopePrefix = `${ownerResourceId}${resourceMiddlewareScopeMarker}`;
+  if (id.startsWith(resourceScopePrefix)) {
+    return id.slice(resourceScopePrefix.length);
+  }
+
+  return id;
+}
+
 type ResolveSubtreeMiddlewareOptions = {
   targetId: string;
   isResourceTarget: boolean;
@@ -214,16 +234,20 @@ function resolveApplicableSubtreeMiddlewares<
         continue;
       }
 
-      const existing = byMiddlewareId.get(middleware.id);
+      const duplicateKey = getSubtreeMiddlewareDuplicateKey(
+        ownerResourceId,
+        middleware.id,
+      );
+      const existing = byMiddlewareId.get(duplicateKey);
       if (existing) {
         validationError.throw({
           subject: "Subtree middleware",
-          id: middleware.id,
-          originalError: `Duplicate middleware id "${middleware.id}" resolved from resources "${existing.ownerResourceId}" and "${ownerResourceId}".`,
+          id: duplicateKey,
+          originalError: `Duplicate middleware id "${duplicateKey}" resolved from resources "${existing.ownerResourceId}" and "${ownerResourceId}".`,
         });
       }
 
-      byMiddlewareId.set(middleware.id, {
+      byMiddlewareId.set(duplicateKey, {
         middleware,
         order,
         ownerResourceId,

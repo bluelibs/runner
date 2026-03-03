@@ -4,7 +4,7 @@ import { globalResources } from "../../../globals/globalResources";
 import { debugResource } from "../../../globals/resources/debug/debug.resource";
 import { globalTags } from "../../../globals/globalTags";
 
-describe("globals.resources.debug.globalEvent.hook", () => {
+describe("runner.debug.globalEvent.hook", () => {
   it("logs non-system events and includes payload when configured (verbose)", async () => {
     const logs: Array<{ level: string; message: any; data?: any }> = [];
 

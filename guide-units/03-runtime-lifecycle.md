@@ -40,21 +40,21 @@ An object with the following properties and methods:
 | `getRootValue()`            | Read the initialized root resource value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `logger`                    | Logger instance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `store`                     | Runtime store with registered resources, tasks, middleware, events, and runtime internals                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `dispose()`                 | Transitions to `disposing` (stops admitting fresh external work), runs resource `cooldown()` in reverse dependency order, emits `globals.events.disposing` (awaited), waits for in-flight tasks + event hooks to drain (up to `disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`), logs a structured `warn` if drain did not complete in time, transitions to `drained` (blocks all new business task/event admissions), emits `globals.events.drained` (lifecycle-bypassed, awaited), then disposes resources and removes hooks |
+| `dispose()`                 | Transitions to `disposing` (stops admitting fresh external work), runs resource `cooldown()` in reverse dependency order, emits `r.system.events.disposing` (awaited), waits for in-flight tasks + event hooks to drain (up to `disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`), logs a structured `warn` if drain did not complete in time, transitions to `drained` (blocks all new business task/event admissions), emits `r.system.events.drained` (lifecycle-bypassed, awaited), then disposes resources and removes hooks |
 
 Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.
 
-This object is your main interface to interact with the running application. Can also be declared as dependency via `globals.resources.runtime`.
+This object is your main interface to interact with the running application. It can also be declared as a dependency via `r.system.runtime`.
 
 Important bootstrap note: when `runtime` is declared as a dependency inside a resource `init()`, startup may still be in progress. You are guaranteed your current resource dependencies are ready, but not that all registered resources in the app are already initialized.
 
 ### Ready-phase startup orchestration
 
-Use `globals.events.ready` for components that should start only after bootstrap is fully complete.
+Use `r.system.events.ready` for components that should start only after bootstrap is fully complete.
 
 Example:
 
-- In `eventLanesResource` `mode: "network"` (default), Event Lanes consumers attach dequeue workers on `globals.events.ready`.
+- In `eventLanesResource` `mode: "network"` (default), Event Lanes consumers attach dequeue workers on `r.system.events.ready`.
 - This guarantees serializer/resource setup done during `init()` is available before first consumed message is re-emitted.
 - Event Lanes also resolves queue `prefetch` from lane bindings at this phase, before `network`-mode consumers start.
 - RPC Lanes (`rpcLanesResource`) resolve task/event routing + serve allow-list during `init()`; they do not require a separate ready-phase consumer start.
@@ -144,7 +144,7 @@ Runner applies source-aware admission rules during shutdown:
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `running`   | Admit all task/event calls.                                                                                                                                                                                                                            |
 | `disposing` | Reject fresh external admissions (`runtime`, `resource`). Allow in-flight internal continuations (`task`, `hook`, `middleware`) while their originating execution is still active.                                                                     |
-| `drained`   | Reject all new business task/event admissions. Lifecycle events (`globals.events.drained`) are lifecycle-bypassed — their hooks fire, but those hooks cannot start new tasks or emit additional events. Lifecycle flow continues to resource disposal. |
+| `drained`   | Reject all new business task/event admissions. Lifecycle events (`r.system.events.drained`) are lifecycle-bypassed — their hooks fire, but those hooks cannot start new tasks or emit additional events. Lifecycle flow continues to resource disposal. |
 
 Practical effect for HTTP resources:
 
@@ -154,7 +154,7 @@ Practical effect for HTTP resources:
 
 ### Resource `cooldown()` in Shutdown
 
-`resource.cooldown(...)` is a pre-drain ingress-stop hook. It runs right after Runner enters `disposing`, before `globals.events.disposing`, and before drain waiting.
+`resource.cooldown(...)` is a pre-drain ingress-stop hook. It runs right after Runner enters `disposing`, before `r.system.events.disposing`, and before drain waiting.
 
 - Use it to stop intake quickly (for example: stop accepting HTTP requests, mark readiness as false, stop new queue consumption).
 - It can be async, but keep it fast and return promptly. Let Runner's drain phase wait for business work.
@@ -306,13 +306,13 @@ Manual `runtime.dispose()` and signal-based shutdown both follow:
 
 1. transition to `disposing`
 2. resource `cooldown()` (reverse dependency order)
-3. `globals.events.disposing` (awaited)
+3. `r.system.events.disposing` (awaited)
 4. drain wait (`disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`)
 5. transition to `drained`
-6. `globals.events.drained` (lifecycle-bypassed, awaited)
+6. `r.system.events.drained` (lifecycle-bypassed, awaited)
 7. resource disposal (within remaining `disposeBudgetMs`)
 
-Important: hooks registered on `globals.events.drained` **do fire** (the emission is lifecycle-bypassed), but those hooks cannot start new tasks or emit additional events — all regular business admissions are blocked once `drained` begins.
+Important: hooks registered on `r.system.events.drained` **do fire** (the emission is lifecycle-bypassed), but those hooks cannot start new tasks or emit additional events — all regular business admissions are blocked once `drained` begins.
 
 ### Error Boundary Integration
 

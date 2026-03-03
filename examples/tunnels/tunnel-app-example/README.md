@@ -5,9 +5,9 @@ process/runtime over HTTP, while the caller still uses _typed_ task dependencies
 
 What this example demonstrates:
 
-- **Server-side** allow-listing of reachable task ids (`globals.tags.tunnel` in `mode: "server"`).
+- **Server-side** allow-listing of reachable task ids (`r.runner.tags.tunnel` in `mode: "server"`).
 - **Node exposure** via `nodeExposure` (`POST /__runner/task/:id`).
-- **Client-side** routing via a tunnel resource (`globals.tags.tunnel` in `mode: "client"`).
+- **Client-side** routing via a tunnel resource (`r.runner.tags.tunnel` in `mode: "client"`).
 - **Remote task placeholders** (`r.task(...).run(...)`) used only through tunnel routing.
 - **Auth token** for tunnel requests (`RUNNER_EXAMPLE_TOKEN`).
 

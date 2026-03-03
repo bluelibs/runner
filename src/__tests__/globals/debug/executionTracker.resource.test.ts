@@ -1,7 +1,7 @@
 import { executionTrackerResource } from "../../../globals/resources/debug/executionTracker.resource";
 import { globalTags } from "../../../globals/globalTags";
 
-describe("globals.resources.debug.executionTracker", () => {
+describe("runner.debug.executionTracker", () => {
   it("short-circuits system resources in the resource interceptor", async () => {
     let resourceInterceptor: any;
 

@@ -7,19 +7,18 @@ import {
   resolveApplicableSubtreeTaskMiddlewares,
 } from "../../tools/subtreeMiddleware";
 
-const readStringId = (value: unknown): string | undefined => {
-  if (!value || typeof value !== "object") {
-    return undefined;
-  }
-
-  const id = (value as { id?: unknown }).id;
-  return typeof id === "string" ? id : undefined;
+const getDependencyId = (
+  registry: StoreRegistry,
+  dependency: unknown,
+): string | undefined => {
+  const target = isOptional(dependency) ? dependency.inner : dependency;
+  return registry.resolveDefinitionId(target);
 };
 
-const getDependencyId = (dependency: unknown): string | undefined =>
-  readStringId(isOptional(dependency) ? dependency.inner : dependency);
-
-const getTagDependencyId = (dependency: unknown): string | undefined => {
+const getTagDependencyId = (
+  registry: StoreRegistry,
+  dependency: unknown,
+): string | undefined => {
   const raw: unknown = isOptional(dependency) ? dependency.inner : dependency;
   const tagValue: unknown = isTagStartup(raw) ? raw.tag : raw;
 
@@ -27,8 +26,15 @@ const getTagDependencyId = (dependency: unknown): string | undefined => {
     return undefined;
   }
 
-  return tagValue.id;
+  return registry.resolveDefinitionId(tagValue);
 };
+
+function resolveDefinitionId(
+  registry: StoreRegistry,
+  reference: unknown,
+): string | undefined {
+  return registry.resolveDefinitionId(reference);
+}
 
 function resolveTagDependencyNodes(
   registry: StoreRegistry,
@@ -87,7 +93,7 @@ function attachDependency(
   registry: StoreRegistry,
   nodeMap: Map<string, IDependentNode>,
 ): void {
-  const tagId = getTagDependencyId(value);
+  const tagId = getTagDependencyId(registry, value);
   if (tagId) {
     const tagNodes = resolveTagDependencyNodes(
       registry,
@@ -101,7 +107,7 @@ function attachDependency(
     return;
   }
 
-  const depId = getDependencyId(value);
+  const depId = getDependencyId(registry, value);
   if (!depId) {
     return;
   }
@@ -204,29 +210,41 @@ export function buildDependencyGraph(
     // Add local middleware dependencies for tasks (hooks have no middleware)
     const t = task.task;
     for (const middleware of t.middleware) {
-      const middlewareNode = nodeMap.get(middleware.id);
-      if (middlewareNode) {
-        node.dependencies[middleware.id] = middlewareNode;
+      const middlewareId = resolveDefinitionId(registry, middleware);
+      if (!middlewareId) {
+        continue;
       }
+      const middlewareNode = nodeMap.get(middlewareId);
+      if (!middlewareNode) {
+        continue;
+      }
+      node.dependencies[middlewareId] = middlewareNode;
     }
 
     const localMiddlewareIds = new Set(
-      t.middleware.map((middleware) => middleware.id),
+      t.middleware
+        .map((middleware) => resolveDefinitionId(registry, middleware))
+        .filter((middlewareId): middlewareId is string =>
+          Boolean(middlewareId),
+        ),
     );
     for (const middleware of resolveApplicableSubtreeTaskMiddlewares(
       subtreeLookup,
       t,
     )) {
-      if (localMiddlewareIds.has(middleware.id)) {
+      const middlewareId = resolveDefinitionId(registry, middleware);
+      if (!middlewareId) {
+        continue;
+      }
+      if (localMiddlewareIds.has(middlewareId)) {
         continue;
       }
 
-      const middlewareNode = nodeMap.get(middleware.id);
+      const middlewareNode = nodeMap.get(middlewareId);
       if (!middlewareNode) {
         continue;
       }
-
-      node.dependencies[`__subtree.middleware.${middleware.id}`] =
+      node.dependencies[`__subtree.middleware.${middlewareId}`] =
         middlewareNode;
     }
   }
@@ -269,29 +287,41 @@ export function buildDependencyGraph(
 
     // Add local middleware dependencies
     for (const middleware of resource.resource.middleware) {
-      const middlewareNode = nodeMap.get(middleware.id);
-      if (middlewareNode) {
-        node.dependencies[middleware.id] = middlewareNode;
+      const middlewareId = resolveDefinitionId(registry, middleware);
+      if (!middlewareId) {
+        continue;
       }
+      const middlewareNode = nodeMap.get(middlewareId);
+      if (!middlewareNode) {
+        continue;
+      }
+      node.dependencies[middlewareId] = middlewareNode;
     }
 
     const localMiddlewareIds = new Set(
-      resource.resource.middleware.map((middleware) => middleware.id),
+      resource.resource.middleware
+        .map((middleware) => resolveDefinitionId(registry, middleware))
+        .filter((middlewareId): middlewareId is string =>
+          Boolean(middlewareId),
+        ),
     );
     for (const middleware of resolveApplicableSubtreeResourceMiddlewares(
       subtreeLookup,
       resource.resource,
     )) {
-      if (localMiddlewareIds.has(middleware.id)) {
+      const middlewareId = resolveDefinitionId(registry, middleware);
+      if (!middlewareId) {
+        continue;
+      }
+      if (localMiddlewareIds.has(middlewareId)) {
         continue;
       }
 
-      const middlewareNode = nodeMap.get(middleware.id);
+      const middlewareNode = nodeMap.get(middlewareId);
       if (!middlewareNode) {
         continue;
       }
-
-      node.dependencies[`__subtree.middleware.${middleware.id}`] =
+      node.dependencies[`__subtree.middleware.${middlewareId}`] =
         middlewareNode;
     }
   }
@@ -327,9 +357,16 @@ export function buildEventEmissionGraph(
     const listened: string[] = [];
     const on = h.hook.on;
     if (on === "*") continue; // avoid over-reporting for global hooks
-    if (Array.isArray(on))
-      listened.push(...(on as IEvent[]).map((e: IEvent) => e.id));
-    else listened.push((on as IEvent).id);
+    if (Array.isArray(on)) {
+      listened.push(
+        ...(on as IEvent[])
+          .map((event) => resolveDefinitionId(registry, event))
+          .filter((eventId): eventId is string => Boolean(eventId)),
+      );
+    } else {
+      const listenedEventId = resolveDefinitionId(registry, on as IEvent)!;
+      listened.push(listenedEventId);
+    }
 
     // Collect event dependencies from the hook
     const depEvents: string[] = [];
@@ -339,7 +376,8 @@ export function buildEventEmissionGraph(
         // For optional wrappers, extract the inner value
         const candidate = isOptional(value) ? value.inner : value;
         if (candidate && isEvent(candidate)) {
-          depEvents.push(candidate.id);
+          const dependentEventId = resolveDefinitionId(registry, candidate)!;
+          depEvents.push(dependentEventId);
         }
       }
     }

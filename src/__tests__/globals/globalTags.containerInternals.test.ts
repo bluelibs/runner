@@ -1,32 +1,26 @@
 import { globalResources } from "../../globals/globalResources";
 import { globalTags } from "../../globals/globalTags";
 
-describe("globals.tags.containerInternals", () => {
-  it("is available as a built-in global tag", () => {
-    expect(globalTags.containerInternals.id).toBe(
-      "globals.tags.containerInternals",
-    );
+describe("system namespace separation", () => {
+  it("uses system.tags.internal as the built-in internal tag", () => {
+    expect(globalTags.system.id).toBe("system.tags.internal");
+    expect(globalTags.internal.id).toBe("system.tags.internal");
   });
 
-  it("is attached to privileged container resources", () => {
-    const expectedTagId = globalTags.containerInternals.id;
+  it("keeps privileged container resources under the system.* namespace", () => {
+    expect(globalResources.store.id).toBe("system.store");
+    expect(globalResources.taskRunner.id).toBe("system.taskRunner");
+    expect(globalResources.runtime.id).toBe("system.runtime");
+    expect(globalResources.middlewareManager.id).toBe(
+      "system.middlewareManager",
+    );
+    expect(globalResources.eventManager.id).toBe("system.eventManager");
+  });
 
+  it("does not expose the removed containerInternals tag", () => {
     expect(
-      globalResources.store.tags.some((tag) => tag.id === expectedTagId),
-    ).toBe(true);
-    expect(
-      globalResources.taskRunner.tags.some((tag) => tag.id === expectedTagId),
-    ).toBe(true);
-    expect(
-      globalResources.runtime.tags.some((tag) => tag.id === expectedTagId),
-    ).toBe(true);
-    expect(
-      globalResources.middlewareManager.tags.some(
-        (tag) => tag.id === expectedTagId,
-      ),
-    ).toBe(true);
-    expect(
-      globalResources.eventManager.tags.some((tag) => tag.id === expectedTagId),
-    ).toBe(true);
+      "containerInternals" in
+        (globalTags as unknown as Record<string, unknown>),
+    ).toBe(false);
   });
 });

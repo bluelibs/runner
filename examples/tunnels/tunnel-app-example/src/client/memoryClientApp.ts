@@ -1,4 +1,4 @@
-import { globals, r, run } from "@bluelibs/runner/node";
+import { r, run } from "@bluelibs/runner/node";
 
 import { ResourceId, TaskId, TunnelMode } from "../ids.js";
 import type {
@@ -96,7 +96,7 @@ export function buildMemoryClientApp() {
 
   const tunnelClient = r
     .resource(ResourceId.TunnelClient)
-    .tags([globals.tags.tunnel])
+    .tags([r.runner.tags.tunnel])
     .init(
       async (): Promise<MemoryTunnelClientValue> => ({
         mode: TunnelMode.Client,

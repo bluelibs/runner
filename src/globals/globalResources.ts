@@ -20,11 +20,15 @@ import { taskRunnerResource as taskRunner } from "./resources/taskRunner.resourc
 
 export { storeResource as store, serializer };
 
-export const globalResources = {
+export const systemResources = {
   store: storeResource,
   middlewareManager,
   eventManager,
   taskRunner,
+  runtime: runtimeResource,
+} as const;
+
+export const runnerResources = {
   logger,
   debug,
   serializer,
@@ -32,7 +36,6 @@ export const globalResources = {
   cache: cacheResource,
   cron,
   queue: queueResource,
-  runtime: runtimeResource,
   httpClientFactory: httpClientFactory,
 
   // Middleware State Resources
@@ -40,4 +43,9 @@ export const globalResources = {
   circuitBreaker: circuitBreakerResource,
   temporal: temporalResource,
   concurrency: concurrencyResource,
+} as const;
+
+export const globalResources = {
+  ...systemResources,
+  ...runnerResources,
 } as const;

@@ -8,7 +8,6 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
-import { globalTags } from "../../globals/globalTags";
 
 const POLICY_VIOLATION_ID = "runner.errors.isolationViolation";
 const POLICY_UNKNOWN_TARGET_ID = "runner.errors.isolationUnknownTarget";
@@ -464,7 +463,7 @@ describe("run.isolate", () => {
     await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
   });
 
-  it("supports denying container internals via globals.tags.containerInternals", async () => {
+  it("supports denying container internals via system.* id namespace", async () => {
     const consumer = defineTask({
       id: "policy.container-internals.consumer",
       dependencies: { store: globalResources.store },
@@ -475,7 +474,7 @@ describe("run.isolate", () => {
       id: "policy.container-internals.guarded",
       register: [consumer],
       isolate: {
-        deny: [globalTags.containerInternals],
+        deny: ["system.*"],
       },
     });
 
@@ -488,7 +487,7 @@ describe("run.isolate", () => {
     expect(error.message).toContain(`"${globalResources.store.id}"`);
   });
 
-  it("denies middlewareManager when containerInternals is blocked", async () => {
+  it("denies middlewareManager when system.* is blocked", async () => {
     const consumer = defineTask({
       id: "policy.container-internals.middleware-manager.consumer",
       dependencies: {
@@ -501,7 +500,7 @@ describe("run.isolate", () => {
       id: "policy.container-internals.middleware-manager.guarded",
       register: [consumer],
       isolate: {
-        deny: [globalTags.containerInternals],
+        deny: ["system.*"],
       },
     });
 
@@ -516,7 +515,7 @@ describe("run.isolate", () => {
     );
   });
 
-  it("denies eventManager when containerInternals is blocked", async () => {
+  it("denies eventManager when system.* is blocked", async () => {
     const consumer = defineTask({
       id: "policy.container-internals.event-manager.consumer",
       dependencies: {
@@ -529,7 +528,7 @@ describe("run.isolate", () => {
       id: "policy.container-internals.event-manager.guarded",
       register: [consumer],
       isolate: {
-        deny: [globalTags.containerInternals],
+        deny: ["system.*"],
       },
     });
 

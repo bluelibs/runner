@@ -14,7 +14,11 @@ import {
   createContext as oldCreateContext,
 } from "./definers/defineAsyncContext";
 import { globalEvents } from "./globals/globalEvents";
-import { globalResources } from "./globals/globalResources";
+import {
+  globalResources,
+  runnerResources,
+  systemResources,
+} from "./globals/globalResources";
 import { globalMiddlewares } from "./globals/globalMiddleware";
 import { globalTags } from "./globals/globalTags";
 import { debug } from "./globals/debug";
@@ -36,16 +40,43 @@ import { asyncContext as asyncContextFn } from "./definers/builders/asyncContext
 import { override as overrideBuilder } from "./definers/builders/override";
 import { onAnyOf, isOneOf } from "./types/event";
 
-const globals = {
+const rSystem = Object.freeze({
+  ...systemResources,
+  events: globalEvents,
+  tags: Object.freeze({
+    system: globalTags.system,
+    internal: globalTags.internal,
+  }),
+});
+
+const rRunner = Object.freeze({
+  ...runnerResources,
+  middleware: globalMiddlewares,
+  tags: globalTags,
+});
+
+const rDebug = Object.freeze({
+  levels: debug.levels,
+});
+
+/**
+ * @deprecated Use `r.system`, `r.runner`, and `r.debug` instead.
+ * Kept as a compatibility alias and scheduled for removal in the next major version.
+ */
+export const globals = {
   events: globalEvents,
   resources: globalResources,
+  system: rSystem,
+  runner: rRunner,
   middleware: globalMiddlewares,
-  middlewares: globalMiddlewares, // Some people prefer this forced plural, for consistency
+  /** @deprecated Use `middleware` namespace. Kept for backward compatibility. */
+  middlewares: globalMiddlewares,
   tags: globalTags,
-  debug,
+  debug: rDebug,
 };
 
-export { globals };
+export const system = rSystem;
+export const runner = rRunner;
 export {
   defineTask as task,
   defineResource as resource,
@@ -64,7 +95,7 @@ export {
   isOneOf,
 };
 
-// Legacy alias accepted in tests; with optional id support
+// Legacy alias kept for compatibility.
 const createContext = oldCreateContext;
 export { createContext };
 
@@ -101,6 +132,9 @@ export const r = Object.freeze({
     task: taskMiddlewareFn,
     resource: resourceMiddlewareFn,
   }),
+  system: rSystem,
+  runner: rRunner,
+  debug: rDebug,
 });
 
 export * as definitions from "./defs";

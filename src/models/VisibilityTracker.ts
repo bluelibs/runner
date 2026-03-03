@@ -56,6 +56,17 @@ function getItemTypeLabel(registry: StoreRegistry, id: string): string {
   return "Item";
 }
 
+function resolveReferenceId(
+  registry: StoreRegistry,
+  reference: unknown,
+): string | undefined {
+  const resolved = registry.resolveDefinitionId(reference);
+  if (!resolved || resolved.length === 0) {
+    return undefined;
+  }
+  return resolved;
+}
+
 /**
  * Tracks which resource owns (registered) each item and which items
  * are exported by resources that declare an exports list.
@@ -447,8 +458,8 @@ export class VisibilityTracker {
           : depDef;
 
         const depId =
-          dep && typeof dep === "object" && "id" in dep
-            ? (dep as { id: string }).id
+          dep && typeof dep === "object"
+            ? resolveReferenceId(registry, dep)
             : undefined;
 
         if (!depId) continue;
@@ -483,7 +494,7 @@ export class VisibilityTracker {
             ? hook.on
             : [hook.on];
       for (const event of events) {
-        const eventId = event.id;
+        const eventId = resolveReferenceId(registry, event)!;
         const violation = this.getAccessViolation(eventId, hook.id);
         if (!violation) {
           continue;
@@ -506,17 +517,18 @@ export class VisibilityTracker {
   private validateMiddlewareVisibility(registry: StoreRegistry): void {
     for (const { task } of registry.tasks.values()) {
       for (const middlewareAttachment of task.middleware) {
-        const violation = this.getAccessViolation(
-          middlewareAttachment.id,
-          task.id,
-        );
+        const middlewareId = resolveReferenceId(
+          registry,
+          middlewareAttachment,
+        )!;
+        const violation = this.getAccessViolation(middlewareId, task.id);
         if (!violation) {
           continue;
         }
 
         this.throwAccessViolation({
           violation,
-          targetId: middlewareAttachment.id,
+          targetId: middlewareId,
           targetType: "Task middleware",
           consumerId: task.id,
           consumerType: "Task",
@@ -526,17 +538,18 @@ export class VisibilityTracker {
 
     for (const { resource } of registry.resources.values()) {
       for (const middlewareAttachment of resource.middleware) {
-        const violation = this.getAccessViolation(
-          middlewareAttachment.id,
-          resource.id,
-        );
+        const middlewareId = resolveReferenceId(
+          registry,
+          middlewareAttachment,
+        )!;
+        const violation = this.getAccessViolation(middlewareId, resource.id);
         if (!violation) {
           continue;
         }
 
         this.throwAccessViolation({
           violation,
-          targetId: middlewareAttachment.id,
+          targetId: middlewareId,
           targetType: "Resource middleware",
           consumerId: resource.id,
           consumerType: "Resource",
@@ -554,17 +567,18 @@ export class VisibilityTracker {
       for (const middlewareEntry of subtreePolicy.tasks?.middleware ?? []) {
         const middlewareAttachment =
           getSubtreeTaskMiddlewareAttachment(middlewareEntry);
-        const violation = this.getAccessViolation(
-          middlewareAttachment.id,
-          ownerId,
-        );
+        const middlewareId = resolveReferenceId(
+          registry,
+          middlewareAttachment,
+        )!;
+        const violation = this.getAccessViolation(middlewareId, ownerId);
         if (!violation) {
           continue;
         }
 
         this.throwAccessViolation({
           violation,
-          targetId: middlewareAttachment.id,
+          targetId: middlewareId,
           targetType: "Task middleware",
           consumerId: ownerId,
           consumerType: "Resource",
@@ -574,17 +588,18 @@ export class VisibilityTracker {
       for (const middlewareEntry of subtreePolicy.resources?.middleware ?? []) {
         const middlewareAttachment =
           getSubtreeResourceMiddlewareAttachment(middlewareEntry);
-        const violation = this.getAccessViolation(
-          middlewareAttachment.id,
-          ownerId,
-        );
+        const middlewareId = resolveReferenceId(
+          registry,
+          middlewareAttachment,
+        )!;
+        const violation = this.getAccessViolation(middlewareId, ownerId);
         if (!violation) {
           continue;
         }
 
         this.throwAccessViolation({
           violation,
-          targetId: middlewareAttachment.id,
+          targetId: middlewareId,
           targetType: "Resource middleware",
           consumerId: ownerId,
           consumerType: "Resource",

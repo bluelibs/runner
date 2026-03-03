@@ -22,7 +22,7 @@ export class CronParser {
     } catch {
       return validationError.throw({
         subject: "Cron expression",
-        id: "globals.resources.cron",
+        id: "runner.cron",
         originalError: `Invalid cron expression "${expression}".`,
       });
     }

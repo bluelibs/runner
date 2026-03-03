@@ -1,4 +1,5 @@
 import { defineResource } from "../../define";
+import { queueDisposedError } from "../../errors";
 import { Queue } from "../../models/Queue";
 
 const IDLE_QUEUE_EVICTION_MS = 60_000;
@@ -6,7 +7,7 @@ const IDLE_QUEUE_EVICTION_MS = 60_000;
 type CleanupTimer = ReturnType<typeof setTimeout>;
 
 export const queueResource = defineResource({
-  id: "globals.resources.queue",
+  id: "runner.queue",
   context: () => ({
     disposed: false,
     map: new Map<string, Queue>(),
@@ -73,7 +74,7 @@ export const queueResource = defineResource({
         task: (signal: AbortSignal) => Promise<T>,
       ): Promise<T> => {
         if (context.disposed) {
-          return Promise.reject(new Error("Queue resource has been disposed"));
+          return Promise.reject(queueDisposedError.new());
         }
 
         clearCleanupTimer(id);

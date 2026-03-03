@@ -2,7 +2,7 @@ import { defineTask } from "../../definers/defineTask";
 import { defineResource } from "../../define";
 import { run } from "../../run";
 import { error as errorBuilder } from "../../definers/builders/error";
-import { globals } from "../../index";
+import { r } from "../../index";
 import { createMessageError } from "../../errors";
 
 describe("errors as registrable items and dependencies", () => {
@@ -96,7 +96,7 @@ describe("errors as registrable items and dependencies", () => {
       register: [myErr],
     });
     const runtime = await run(app);
-    const store = await runtime.getResourceValue(globals.resources.store);
+    const store = await runtime.getResourceValue(r.system.store);
     expect(store.errors.get(myErr.id)).toBe(myErr);
     await runtime.dispose();
   });

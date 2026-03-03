@@ -30,7 +30,7 @@ function createEvent(
   };
 }
 
-describe("globals.resources.debug.globalEventListener (unit)", () => {
+describe("runner.debug.globalEventListener (unit)", () => {
   it("does not log when emission logging is disabled", async () => {
     const messages: string[] = [];
     const logger = new Logger({

@@ -20,6 +20,7 @@ import {
 } from "../../defs";
 import {
   dependencyNotFoundError,
+  eventNotFoundError,
   interceptAfterLockError,
   unknownItemTypeError,
 } from "../../errors";
@@ -45,7 +46,7 @@ import {
   runtimeSource,
 } from "../../types/runtimeSource";
 
-const MIDDLEWARE_MANAGER_RESOURCE_ID = "globals.resources.middlewareManager";
+const MIDDLEWARE_MANAGER_RESOURCE_ID = "system.middlewareManager";
 
 export class DependencyExtractor {
   private readonly inFlightTaskInitializations = new Map<
@@ -162,14 +163,14 @@ export class DependencyExtractor {
       item = item.tag;
     }
 
-    const itemWithId = item as { id: string };
+    const resolvedItemId = this.store.resolveDefinitionId(item)!;
     const strategy = findDependencyStrategy(item);
     if (!strategy) {
       return unknownItemTypeError.throw({ item });
     }
 
     if (isOpt) {
-      const exists = strategy.getStoreMap(this.store).has(itemWithId.id);
+      const exists = strategy.getStoreMap(this.store).has(resolvedItemId);
       if (!exists) return undefined;
     }
 
@@ -179,10 +180,10 @@ export class DependencyExtractor {
     if (utils.isTag(item)) return this.extractTagDependency(item, source);
 
     if (!isOpt) {
-      const exists = strategy.getStoreMap(this.store).has(itemWithId.id);
+      const exists = strategy.getStoreMap(this.store).has(resolvedItemId);
       if (!exists) {
         const label = utils.isError(item) ? "Error" : "AsyncContext";
-        dependencyNotFoundError.throw({ key: `${label} ${itemWithId.id}` });
+        dependencyNotFoundError.throw({ key: `${label} ${resolvedItemId}` });
       }
     }
 
@@ -191,15 +192,33 @@ export class DependencyExtractor {
 
   extractEventDependency(object: IEvent<any>, source: string) {
     const runtimeCallSource = this.resolveRuntimeCallSource(source);
+    const eventId = this.store.resolveDefinitionId(object);
+    if (!eventId) {
+      return dependencyNotFoundError.throw({ key: `Event ${object.id}` });
+    }
+
+    const eventEntry = this.store.events.get(eventId);
+    if (!eventEntry) {
+      return eventNotFoundError.throw({ id: eventId });
+    }
+
+    const effectiveEvent = eventEntry.event;
+
     return async (input: unknown, options?: IEventEmitOptions) => {
-      return this.eventManager.emit(object, input, runtimeCallSource, options);
+      return this.eventManager.emit(
+        effectiveEvent,
+        input,
+        runtimeCallSource,
+        options,
+      );
     };
   }
 
   async extractTaskDependency(object: ITask<any, any, {}>, source?: string) {
-    const storeTask = this.store.tasks.get(object.id);
+    const taskId = this.store.resolveDefinitionId(object)!;
+    const storeTask = this.store.tasks.get(taskId);
     if (storeTask === undefined) {
-      dependencyNotFoundError.throw({ key: `Task ${object.id}` });
+      dependencyNotFoundError.throw({ key: `Task ${taskId}` });
     }
 
     const st = storeTask!;
@@ -233,9 +252,10 @@ export class DependencyExtractor {
   }
 
   async extractResourceDependency(object: IResource<any, any, any>) {
-    const storeResource = this.store.resources.get(object.id);
+    const resourceId = this.store.resolveDefinitionId(object)!;
+    const storeResource = this.store.resources.get(resourceId);
     if (storeResource === undefined) {
-      dependencyNotFoundError.throw({ key: `Resource ${object.id}` });
+      dependencyNotFoundError.throw({ key: `Resource ${resourceId}` });
     }
 
     const sr = storeResource!;
@@ -248,11 +268,13 @@ export class DependencyExtractor {
     tag: TTag,
     source: string,
   ): Promise<TagDependencyAccessor<TTag>> {
-    if (!this.store.tags.has(tag.id)) {
-      dependencyNotFoundError.throw({ key: `Tag ${tag.id}` });
+    const tagId = this.store.resolveDefinitionId(tag)!;
+    if (!this.store.tags.has(tagId)) {
+      dependencyNotFoundError.throw({ key: `Tag ${tagId}` });
     }
 
-    const baseAccessor = this.store.getTagAccessor(tag, {
+    const effectiveTag = this.store.tags.get(tagId)! as TTag;
+    const baseAccessor = this.store.getTagAccessor(effectiveTag, {
       consumerId: source,
       includeSelf: false,
     });
@@ -398,10 +420,10 @@ export class DependencyExtractor {
     original: ITask<I, O, D>,
     ownerResourceId: string,
   ): TaskDependencyWithIntercept<I, O> {
-    const taskId = original.id;
+    const taskId = this.store.resolveDefinitionId(original)!;
     const fn: (input: I, options?: TaskCallOptions) => O = (input, options) => {
       const storeTask = this.getStoreTaskOrThrow(taskId);
-      const effective: ITask<I, O, D> = storeTask.task;
+      const effective = storeTask.task as ITask<I, O, D>;
       const runtimeCallSource = this.resolveRuntimeCallSource(ownerResourceId);
 
       return this.taskRunner.run(effective, input, {

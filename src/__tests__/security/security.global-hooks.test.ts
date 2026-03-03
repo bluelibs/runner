@@ -1,9 +1,9 @@
-// This suite verifies that events tagged with globals.tags.excludeFromGlobalHooks
+// This suite verifies that events tagged with r.runner.tags.excludeFromGlobalHooks
 // are never dispatched to wildcard ("*") listeners. This is useful to reduce
 // observability noise and to avoid accidental feedback loops from broad listeners.
 import { defineEvent, defineHook, defineResource } from "../../define";
 import { run } from "../../run";
-import { globals } from "../../index";
+import { r } from "../../index";
 
 describe("Security: Global hooks scoping", () => {
   it("excludes events tagged excludeFromGlobalHooks from '*' listeners", async () => {
@@ -11,7 +11,7 @@ describe("Security: Global hooks scoping", () => {
     // The star hook should only see publicEvent.
     const internalEvent = defineEvent<{ msg: string }>({
       id: "sec.events.internal",
-      tags: [globals.tags.excludeFromGlobalHooks],
+      tags: [r.runner.tags.excludeFromGlobalHooks],
     });
 
     const publicEvent = defineEvent<{ msg: string }>({

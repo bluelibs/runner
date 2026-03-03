@@ -14,7 +14,10 @@ import type {
   ResourceMiddlewareAttachmentType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
-import { symbolOverrideDefinition } from "../../../defs";
+import {
+  symbolOverrideDefinition,
+  symbolOverrideTargetDefinition,
+} from "../../../defs";
 import {
   isHook,
   isResource,
@@ -47,7 +50,8 @@ function brandOverride<TBase extends object, TDefinition extends object>(
   const branded = {
     ...(definition as object),
     [symbolOverrideDefinition]: true,
-  } as TDefinition & OverrideDefinitionBrand;
+    [symbolOverrideTargetDefinition]: base,
+  } as unknown as TDefinition & OverrideDefinitionBrand;
   return freezeIfLineageLocked(base, branded);
 }
 

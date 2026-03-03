@@ -1,6 +1,7 @@
 import { defineResource } from "../../define";
 import type { DependencyMapType } from "../../defs";
 import { loggerResource } from "../resources/logger.resource";
+import { storeResource } from "../resources/store.resource";
 import { taskRunnerResource } from "../resources/taskRunner.resource";
 import { globalTags } from "../globalTags";
 import { cronTag } from "./cron.tag";
@@ -11,6 +12,7 @@ import { parseCronResourceConfig } from "./parseCronResourceConfig";
 type CronResourceDependencies = DependencyMapType & {
   cron: typeof cronTag;
   logger: typeof loggerResource;
+  store: typeof storeResource;
   taskRunner: typeof taskRunnerResource;
 };
 
@@ -19,10 +21,11 @@ export const cronResource = defineResource<
   Promise<CronResourceValue>,
   CronResourceDependencies
 >({
-  id: "globals.resources.cron",
+  id: "runner.cron",
   dependencies: {
     cron: cronTag,
     logger: loggerResource,
+    store: storeResource,
     taskRunner: taskRunnerResource,
   },
   configSchema: {
@@ -31,10 +34,11 @@ export const cronResource = defineResource<
   context: () => ({
     scheduler: undefined as CronScheduler | undefined,
   }),
-  init: async (config, { cron, logger, taskRunner }, context) => {
+  init: async (config, { cron, logger, store, taskRunner }, context) => {
     const scheduler = new CronScheduler({
       cronTasks: cron.tasks,
       logger,
+      resolveDefinitionId: (entry) => store.resolveDefinitionId(entry),
       taskRunner,
     });
     context.scheduler = scheduler;
@@ -63,6 +67,6 @@ export const cronResource = defineResource<
   meta: {
     title: "Cron Scheduler",
     description:
-      "Discovers tasks tagged with globals.tags.cron and schedules them with resilient timer-based execution.",
+      "Discovers tasks tagged with runner.tags.cron and schedules them with resilient timer-based execution.",
   },
 });

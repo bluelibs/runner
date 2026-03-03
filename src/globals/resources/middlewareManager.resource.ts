@@ -6,10 +6,10 @@ export const middlewareManagerResource = defineResource<
   void,
   Promise<MiddlewareManager>
 >({
-  id: "globals.resources.middlewareManager",
+  id: "system.middlewareManager",
   meta: {
     title: "Middleware Manager",
     description: "Manages all middleware and middleware interceptors.",
   },
-  tags: [globalTags.system, globalTags.containerInternals],
+  tags: [globalTags.system],
 });

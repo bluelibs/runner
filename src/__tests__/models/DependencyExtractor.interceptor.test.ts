@@ -1,5 +1,5 @@
-import { defineTask, defineResource } from "../../define";
-import { globals } from "../../index";
+import { defineEvent, defineTask, defineResource } from "../../define";
+import { r } from "../../index";
 import { Store } from "../../models/Store";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { MiddlewareManager } from "../../models/MiddlewareManager";
@@ -16,7 +16,7 @@ describe("DependencyExtractor interceptor branches", () => {
 
     const consumer = defineResource({
       id: "extractor.interceptor.no-owner.consumer",
-      dependencies: { task, store: globals.resources.store },
+      dependencies: { task, store: r.system.store },
       init: async (_config, { task, store }) => {
         const typedStore = store as Store;
 
@@ -59,7 +59,7 @@ describe("DependencyExtractor interceptor branches", () => {
     const consumer = defineResource({
       id: "extractor.proxy.unknown-mw.consumer",
       dependencies: {
-        middlewareManager: globals.resources.middlewareManager,
+        middlewareManager: r.system.middlewareManager,
       },
       init: async (_config, { middlewareManager }) => {
         const mgr = middlewareManager as MiddlewareManager;
@@ -196,5 +196,81 @@ describe("DependencyExtractor interceptor branches", () => {
     const runtime = await run(app);
     expect(runtime.value).toBe("payload:business");
     await runtime.dispose();
+  });
+
+  it("throws eventNotFoundError for unregistered event dependencies", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const processor = new DependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+      ResourceInitMode.Sequential,
+    ) as unknown as {
+      dependencyExtractor: {
+        extractDependency: (
+          dependency: unknown,
+          source: string,
+        ) => Promise<any>;
+      };
+    };
+
+    const missingEvent = defineEvent({ id: "extractor.event.missing" });
+
+    await expect(
+      processor.dependencyExtractor.extractDependency(missingEvent, "source"),
+    ).rejects.toThrow(/Event "extractor\.event\.missing" not found/i);
+  });
+
+  it("throws dependencyNotFoundError when event dependency id cannot be resolved", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const processor = new DependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+      ResourceInitMode.Sequential,
+    ) as unknown as {
+      dependencyExtractor: {
+        extractDependency: (
+          dependency: unknown,
+          source: string,
+        ) => Promise<any>;
+      };
+    };
+
+    const unresolvedEvent = defineEvent({ id: "extractor.event.unresolved" });
+    const resolveDefinitionIdSpy = jest.spyOn(store, "resolveDefinitionId");
+    resolveDefinitionIdSpy.mockImplementation((reference: unknown) => {
+      if (reference === unresolvedEvent) {
+        return undefined;
+      }
+      if (
+        reference &&
+        typeof reference === "object" &&
+        "id" in reference &&
+        typeof (reference as { id?: unknown }).id === "string"
+      ) {
+        return (reference as { id: string }).id;
+      }
+      return undefined;
+    });
+
+    await expect(
+      processor.dependencyExtractor.extractDependency(
+        unresolvedEvent,
+        "source",
+      ),
+    ).rejects.toThrow(
+      /Dependency Event extractor\.event\.unresolved not found/i,
+    );
   });
 });

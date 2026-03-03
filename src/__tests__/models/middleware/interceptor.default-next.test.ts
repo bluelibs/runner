@@ -5,6 +5,19 @@ import { TaskMiddlewareComposer } from "../../../models/middleware/TaskMiddlewar
 import { LifecycleAdmissionController } from "../../../models/runtime/LifecycleAdmissionController";
 import { defineResourceMiddleware } from "../../../define";
 
+const resolveDefinitionId = (reference: unknown): string | undefined => {
+  if (typeof reference === "string") {
+    return reference;
+  }
+  if (reference && typeof reference === "object" && "id" in reference) {
+    const id = (reference as { id?: unknown }).id;
+    if (typeof id === "string" && id.length > 0) {
+      return id;
+    }
+  }
+  return undefined;
+};
+
 describe("Middleware interceptor default next() argument branches", () => {
   it("resource global interceptor uses executionInput.next() default config", async () => {
     const store: any = {
@@ -13,6 +26,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       taskMiddlewares: new Map(),
       tasks: new Map(),
       onUnhandledError: jest.fn(),
+      resolveDefinitionId,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
@@ -46,6 +60,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       taskMiddlewares: new Map(),
       tasks: new Map(),
       onUnhandledError: jest.fn(),
+      resolveDefinitionId,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
@@ -94,6 +109,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
       resources: new Map(),
+      resolveDefinitionId,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
@@ -134,6 +150,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       taskMiddlewares: new Map(),
       tasks: new Map(),
       onUnhandledError: jest.fn(),
+      resolveDefinitionId,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
@@ -181,6 +198,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       taskMiddlewares: new Map(),
       tasks: new Map(),
       onUnhandledError: jest.fn(),
+      resolveDefinitionId,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };

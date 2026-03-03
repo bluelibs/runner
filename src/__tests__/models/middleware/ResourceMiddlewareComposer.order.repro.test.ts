@@ -18,6 +18,7 @@ describe("ResourceMiddlewareComposer Order Bug Repro", () => {
       onUnhandledError: jest.fn(),
       taskMiddlewares: new Map(),
       tasks: new Map(),
+      resolveDefinitionId: (reference: any) => reference?.id,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };

@@ -52,11 +52,33 @@ describe("main exports", () => {
     expect(typeof TestContext.provide).toBe("function");
     expect(typeof TestContext.use).toBe("function");
 
-    // Test globals sub-properties for complete coverage
-    expect(typeof mainExports.globals.events).toBe("object");
-    expect(typeof mainExports.globals.resources).toBe("object");
-    expect(typeof mainExports.globals.middleware).toBe("object");
-    expect(typeof mainExports.globals.resources.runtime).toBe("object");
+    // Test namespaced sub-properties for complete coverage
+    expect(typeof mainExports.system.runtime).toBe("object");
+    expect(typeof mainExports.system.events.ready).toBe("object");
+    expect(typeof mainExports.system.tags.internal).toBe("object");
+    expect(typeof mainExports.runner.middleware).toBe("object");
+    expect(typeof mainExports.runner.tags).toBe("object");
+    expect(typeof mainExports.debug.levels).toBe("object");
     expect(typeof (mainExports.r as any).rpcLane).toBe("function");
+    expect(typeof (mainExports.r as any).system.eventManager).toBe("object");
+    expect(typeof (mainExports.r as any).system.events.ready).toBe("object");
+    expect(typeof (mainExports.r as any).system.tags.internal).toBe("object");
+    expect(typeof (mainExports.r as any).runner.cron).toBe("object");
+    expect(typeof (mainExports.r as any).runner.middleware.task).toBe("object");
+    expect(typeof (mainExports.r as any).runner.tags.cron).toBe("object");
+    expect(typeof (mainExports.r as any).debug.levels.normal).toBe("object");
+    expect((mainExports.r as any).system).toBe(mainExports.system);
+    expect((mainExports.r as any).runner).toBe(mainExports.runner);
+    expect((mainExports.r as any).system.events).toBe(
+      mainExports.system.events,
+    );
+    expect((mainExports.r as any).runner.middleware).toBe(
+      mainExports.runner.middleware,
+    );
+    expect((mainExports.r as any).runner.tags).toBe(mainExports.runner.tags);
+    expect((mainExports.r as any).system.tags.internal).toBe(
+      mainExports.system.tags.internal,
+    );
+    expect((mainExports.r as any).debug.levels).toBe(mainExports.debug.levels);
   });
 });

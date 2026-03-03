@@ -20,7 +20,7 @@ export const httpMixedClientFactory = defineResource<
   void,
   Promise<HttpMixedClientFactory>
 >({
-  id: "globals.resources.httpMixedClientFactory",
+  id: "runner.node.httpMixedClientFactory",
   meta: {
     title: "HTTP Mixed Client Factory (Node)",
     description:

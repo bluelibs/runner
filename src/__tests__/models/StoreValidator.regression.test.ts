@@ -1,4 +1,5 @@
 import { StoreValidator } from "../../models/StoreValidator";
+import { defineTag } from "../../define";
 import { createTestFixture } from "../test-utils";
 
 type RegistryLike = {
@@ -55,6 +56,20 @@ describe("StoreValidator regressions", () => {
     );
   });
 
+  it("classifies duplicate ids as Resource when resource map owns the id", () => {
+    const registry = createRegistryStub() as RegistryLike;
+    registry.resources.set("seeded.resource", {});
+    const validator = new StoreValidator(registry as never) as unknown as {
+      checkIfIDExists: (id: string) => void;
+      registeredIds: Set<string>;
+    };
+    validator.registeredIds.add("seeded.resource");
+
+    expect(() => validator.checkIfIDExists("seeded.resource")).toThrow(
+      /Resource .*already registered/i,
+    );
+  });
+
   it("rejects null in storeGenericItem guard", () => {
     const { store } = createTestFixture();
 
@@ -69,5 +84,41 @@ describe("StoreValidator regressions", () => {
     expect(() => store.storeGenericItem(42 as never)).toThrow(
       /unknown item type/i,
     );
+  });
+
+  it("normalizes isolate tag entries to aliased ids", () => {
+    const { store } = createTestFixture();
+    const registry = (store as unknown as { registry: any }).registry;
+    const validator = registry.getValidator() as {
+      normalizeIsolationEntries: (input: {
+        entries: ReadonlyArray<unknown>;
+        onInvalidEntry: (entry: unknown) => never;
+        onUnknownTarget: (targetId: string) => never;
+      }) => Array<{ id: string }>;
+      registeredIds: Set<string>;
+    };
+
+    const tag = defineTag({
+      id: "validator.isolate.alias.tag",
+    });
+    registry.registerDefinitionAlias(
+      tag,
+      "app.tags.validator.isolate.alias.tag",
+    );
+    validator.registeredIds.add("app.tags.validator.isolate.alias.tag");
+
+    const normalized = validator.normalizeIsolationEntries({
+      entries: [tag],
+      onInvalidEntry: (entry) => {
+        throw new Error(`invalid:${String(entry)}`);
+      },
+      onUnknownTarget: (targetId) => {
+        throw new Error(`unknown:${targetId}`);
+      },
+    });
+
+    expect(normalized).toHaveLength(1);
+    expect(normalized[0].id).toBe("app.tags.validator.isolate.alias.tag");
+    expect(normalized[0]).not.toBe(tag);
   });
 });

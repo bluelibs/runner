@@ -20,6 +20,7 @@ import {
   EventStoreElementType,
   HookStoreElementType,
 } from "../defs";
+import { isResourceWithConfig } from "../define";
 import { StoreValidator } from "./StoreValidator";
 import { Store } from "./Store";
 import {
@@ -34,6 +35,7 @@ import { StoreRegistryDefinitionPreparer } from "./store-registry/StoreRegistryD
 import { StoreRegistryTagIndex } from "./store-registry/StoreRegistryTagIndex";
 import { StoreRegistryWriter } from "./store-registry/StoreRegistryWriter";
 import { StoringMode, TagIndexBucket } from "./store-registry/types";
+import { validationError } from "../errors";
 
 export class StoreRegistry {
   public tasks = new LockableMap<string, TaskStoreElementType>("tasks");
@@ -56,6 +58,7 @@ export class StoreRegistry {
   );
   public errors = new LockableMap<string, IErrorHelper<any>>("errors");
   public readonly visibilityTracker = new VisibilityTracker();
+  private readonly definitionAliases = new WeakMap<object, string>();
 
   // Kept on the registry for backward compatibility in tests/tools.
   public readonly tagIndex: Map<string, TagIndexBucket>;
@@ -98,11 +101,76 @@ export class StoreRegistry {
       this.visibilityTracker,
       this.tagIndexer,
       new StoreRegistryDefinitionPreparer(),
+      {
+        registerDefinitionAlias: (reference, canonicalId) =>
+          this.registerDefinitionAlias(reference, canonicalId),
+        resolveDefinitionId: (reference) => this.resolveDefinitionId(reference),
+      },
     );
   }
 
   getValidator(): StoreValidator {
     return this.validator;
+  }
+
+  registerDefinitionAlias(reference: unknown, canonicalId: string): void {
+    if (
+      reference === null ||
+      reference === undefined ||
+      (typeof reference !== "object" && typeof reference !== "function")
+    ) {
+      return;
+    }
+
+    const objectReference = reference as object;
+    const existing = this.definitionAliases.get(objectReference);
+    if (existing && existing !== canonicalId) {
+      validationError.throw({
+        subject: "Definition alias",
+        id: canonicalId,
+        originalError: `Definition reference is already mapped to "${existing}" and cannot be remapped to "${canonicalId}". Use .fork() for distinct registrations.`,
+      });
+    }
+
+    this.definitionAliases.set(objectReference, canonicalId);
+  }
+
+  resolveDefinitionId(reference: unknown): string | undefined {
+    if (typeof reference === "string") {
+      return reference;
+    }
+
+    if (
+      reference === null ||
+      reference === undefined ||
+      (typeof reference !== "object" && typeof reference !== "function")
+    ) {
+      return undefined;
+    }
+
+    const mapped = this.definitionAliases.get(reference as object);
+    if (mapped) {
+      return mapped;
+    }
+
+    if (isResourceWithConfig(reference)) {
+      const byResource = this.definitionAliases.get(
+        reference.resource as unknown as object,
+      );
+      if (byResource) {
+        return byResource;
+      }
+      return reference.resource.id;
+    }
+
+    if ("id" in reference) {
+      const id = (reference as { id?: unknown }).id;
+      if (typeof id === "string" && id.length > 0) {
+        return id;
+      }
+    }
+
+    return undefined;
   }
 
   /** Lock every map in the registry, preventing further mutations. */

@@ -8,7 +8,7 @@ import { hasSystemTag } from "./utils";
 import { ITaskMiddlewareExecutionInput } from "../../../types/taskMiddleware";
 import { IResourceMiddlewareExecutionInput } from "../../../types/resourceMiddleware";
 
-const id = "globals.debug.resources.middlewareInterceptor";
+const id = "runner.debug.resources.middlewareInterceptor";
 export const middlewareInterceptorResource = defineResource({
   id,
   meta: {

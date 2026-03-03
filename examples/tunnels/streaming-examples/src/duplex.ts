@@ -6,7 +6,7 @@
  * - Client uploads slowly; server responds per chunk
  */
 
-import { globals, resource, run, task } from "@bluelibs/runner";
+import { resource, run, task, r } from "@bluelibs/runner";
 import {
   nodeExposure,
   useExposureContext,
@@ -111,7 +111,7 @@ export async function runStreamingDuplexExample(): Promise<void> {
       .map((c) => transformChunk(c))
       .join("");
 
-    const serializer = rr.getResourceValue(globals.resources.serializer);
+    const serializer = rr.getResourceValue(r.runner.serializer);
     const client = createHttpSmartClient({ baseUrl, serializer });
     const res = (await client.task(duplexTask.id, slow)) as Readable;
     await new Promise<void>((resolve, reject) => {

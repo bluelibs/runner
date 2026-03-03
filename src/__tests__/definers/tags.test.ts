@@ -312,7 +312,10 @@ describe("Configurable Tags", () => {
       const result = await run(resource);
       const store = result.getResourceValue(globalResources.store);
       const tags = Array.from(store.tags.values());
-      expect(tags).toHaveLength(Object.values(globalTags).length + 2);
+      const uniqueGlobalTagCount = new Set(
+        Object.values(globalTags).map((globalTag) => globalTag.id),
+      ).size;
+      expect(tags).toHaveLength(uniqueGlobalTagCount + 2);
       expect(tags).toContain(tag);
       expect(tags).toContain(tag2);
     });

@@ -1,11 +1,12 @@
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { defineResource } from "../../definers/defineResource";
-import type { IResource } from "../../defs";
+import { symbolResource, type IResource } from "../../defs";
 import { loggerResource } from "../resources/logger.resource";
 import { LRUCache } from "lru-cache";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { safeStringify } from "../../models/utils/safeStringify";
 import { Match } from "../../tools/check";
+import { validationError } from "../../errors";
 
 export interface ICacheProvider {
   set(key: string, value: unknown): unknown | Promise<unknown>;
@@ -35,7 +36,7 @@ type CacheProviderResource = IResource<
 >;
 
 export const cacheProviderResource = defineResource({
-  id: "globals.resources.cacheProvider",
+  id: "runner.cacheProvider",
   init: async () => {
     const provider: CacheProvider = async (
       options: CacheFactoryOptions,
@@ -61,8 +62,20 @@ const cacheFactoryOptionsPattern = Match.Where(
     value !== null && typeof value === "object",
 );
 
+function isCacheProviderResource(
+  value: unknown,
+): value is CacheProviderResource {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Boolean((value as Record<symbol, unknown>)[symbolResource]) &&
+    typeof (value as { id?: unknown }).id === "string"
+  );
+}
+
 const cacheProviderResourcePattern = Match.Where(
-  (_value: unknown): _value is CacheProviderResource => true,
+  (value: unknown): value is CacheProviderResource =>
+    isCacheProviderResource(value),
 );
 
 const cacheResourceConfigPattern = Match.ObjectIncluding({
@@ -106,11 +119,11 @@ const cacheMiddlewareConfigPattern = Match.ObjectIncluding({
  */
 export const journalKeys = {
   /** Whether the result was served from cache (true) or freshly computed (false) */
-  hit: journalHelper.createKey<boolean>("globals.middleware.task.cache.hit"),
+  hit: journalHelper.createKey<boolean>("runner.middleware.task.cache.hit"),
 } as const;
 
 export const cacheResource = defineResource({
-  id: "globals.resources.cache",
+  id: "runner.cache",
   configSchema: cacheResourceConfigPattern,
   register: (config: CacheResourceConfig) => [
     config?.provider ?? cacheProviderResource,
@@ -119,6 +132,15 @@ export const cacheResource = defineResource({
     cacheProvider: config?.provider ?? cacheProviderResource,
   }),
   init: async (config: CacheResourceConfig, { cacheProvider }) => {
+    if (typeof cacheProvider !== "function") {
+      validationError.throw({
+        subject: "Cache provider",
+        id: "runner.cache",
+        originalError:
+          "Cache provider resource must initialize to a function: (options) => provider instance.",
+      });
+    }
+
     return {
       map: new Map<string, ICacheProvider>(),
       pendingCreates: new Map<string, Promise<ICacheProvider>>(),
@@ -142,8 +164,32 @@ export const cacheResource = defineResource({
 const defaultKeyBuilder = (taskId: string, input: unknown) =>
   `${taskId}-${safeStringify(input)}`;
 
+function assertCacheProviderInstance(
+  provider: unknown,
+  sourceId: string,
+): asserts provider is ICacheProvider {
+  const shape = provider as Partial<ICacheProvider> | null;
+  if (
+    shape === null ||
+    typeof shape !== "object" ||
+    typeof shape.get !== "function" ||
+    typeof shape.set !== "function" ||
+    typeof shape.clear !== "function" ||
+    ("has" in shape &&
+      shape.has !== undefined &&
+      typeof shape.has !== "function")
+  ) {
+    validationError.throw({
+      subject: "Cache provider",
+      id: sourceId,
+      originalError:
+        "Cache provider must return an object with get(key), set(key, value), clear(), and optional has(key).",
+    });
+  }
+}
+
 export const cacheMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.task.cache",
+  id: "runner.middleware.task.cache",
   configSchema: cacheMiddlewareConfigPattern,
   dependencies: { cache: cacheResource, logger: loggerResource.optional() },
   async run({ task, next, journal }, deps, config: CacheMiddlewareConfig) {
@@ -174,6 +220,7 @@ export const cacheMiddleware = defineTaskMiddleware({
         const createPromise = cache
           .cacheProvider(cacheOptions)
           .then((instance: ICacheProvider) => {
+            assertCacheProviderInstance(instance, cacheProviderResource.id);
             cache.map.set(taskId, instance);
             return instance;
           })

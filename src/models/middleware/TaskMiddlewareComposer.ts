@@ -41,11 +41,13 @@ export class TaskMiddlewareComposer {
     parentJournal?: ExecutionJournal,
     source?: RuntimeCallSource,
   ) => Promise<Awaited<TOutput>> {
-    const storeTask = this.store.tasks.get(task.id)!;
+    const taskId = this.store.resolveDefinitionId(task)!;
+    const storeTask = this.store.tasks.get(taskId)!;
+    const storeTaskDefinition = storeTask.task as ITask<TInput, TOutput, TDeps>;
 
     // Determine the effective task definition for this execution.
     // When RPC-routed, the Store task definition carries runtime routing overrides.
-    const runnerTask = this.resolveTaskDefinition(task, storeTask.task);
+    const runnerTask = this.resolveTaskDefinition(task, storeTaskDefinition);
 
     // 1. Base runner with validation (receives input + journal)
     let runner = this.createBaseRunner(runnerTask, storeTask);
@@ -289,9 +291,10 @@ export class TaskMiddlewareComposer {
     // Layer middlewares (global first, then local), closest to the task runs last
     for (let i = middlewares.length - 1; i >= 0; i--) {
       const middleware = middlewares[i];
-      const storeMiddleware = this.store.taskMiddlewares.get(middleware.id)!;
+      const middlewareId = this.store.resolveDefinitionId(middleware)!;
+      const storeMiddleware = this.store.taskMiddlewares.get(middlewareId)!;
       const nextFunction = next;
-      const middlewareSource = runtimeSource.middleware(middleware.id);
+      const middlewareSource = runtimeSource.middleware(middlewareId);
 
       // Create base middleware runner (captures journal from closure)
       const baseMiddlewareRunner = async (
@@ -324,7 +327,7 @@ export class TaskMiddlewareComposer {
 
       // Get and apply per-middleware interceptors
       const middlewareInterceptors =
-        this.interceptorRegistry.getTaskMiddlewareInterceptors(middleware.id);
+        this.interceptorRegistry.getTaskMiddlewareInterceptors(middlewareId);
 
       next = this.wrapWithInterceptors<TInput, TOutput, TDeps>(
         baseMiddlewareRunner as (

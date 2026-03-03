@@ -175,7 +175,7 @@ export class RunResult<V> implements IRuntime<V> {
   ): void {
     const rootId = this.store.root?.resource.id;
     // Root not yet wired in unit-test mocks or rare early-bootstrap injection
-    // via globals.resources.runtime — skip the check; other guards apply.
+    // via system.runtime — skip the check; other guards apply.
     /* istanbul ignore next */
     if (!rootId) return;
 
@@ -252,17 +252,12 @@ export class RunResult<V> implements IRuntime<V> {
   ): TTask extends ITask<any, infer O, any> ? O : Promise<any> => {
     this.ensureRuntimeIsActive();
     const [input, options] = args as [unknown, TaskCallOptions | undefined];
-    let resolvedTask: ITask<any, Promise<any>, any>;
-
-    if (typeof task === "string") {
-      const taskId = task;
-      if (!this.store.tasks.has(taskId)) {
-        runtimeElementNotFoundError.throw({ type: "Task", elementId: taskId });
-      }
-      resolvedTask = this.store.tasks.get(taskId)!.task;
-    } else {
-      resolvedTask = task;
+    const taskId =
+      typeof task === "string" ? task : this.store.resolveDefinitionId(task)!;
+    if (!this.store.tasks.has(taskId)) {
+      runtimeElementNotFoundError.throw({ type: "Task", elementId: taskId });
     }
+    const resolvedTask = this.store.tasks.get(taskId)!.task;
 
     // Violations return a rejected Promise rather than throwing synchronously
     // so callers can always use .catch() / await idioms on the returned Promise.
@@ -308,16 +303,17 @@ export class RunResult<V> implements IRuntime<V> {
   ) => {
     this.ensureRuntimeIsActive();
 
-    if (typeof event === "string") {
-      const eventId = event;
-      if (!this.store.events.has(eventId)) {
-        runtimeElementNotFoundError.throw({
-          type: "Event",
-          elementId: eventId,
-        });
-      }
-      event = this.store.events.get(eventId)!.event;
+    const eventId =
+      typeof event === "string"
+        ? event
+        : this.store.resolveDefinitionId(event)!;
+    if (!this.store.events.has(eventId)) {
+      runtimeElementNotFoundError.throw({
+        type: "Event",
+        elementId: eventId,
+      });
     }
+    event = this.store.events.get(eventId)!.event as IEvent<P>;
 
     // Violations return a rejected Promise rather than throwing synchronously
     // so callers can always use .catch() / await idioms on the returned Promise.
@@ -467,13 +463,15 @@ export class RunResult<V> implements IRuntime<V> {
   ): Config => {
     this.ensureRuntimeIsActive();
 
-    const resourceId = typeof resource === "string" ? resource : resource.id;
+    const resourceId = this.getResourceId(resource);
     if (!this.store.resources.has(resourceId)) {
       runtimeElementNotFoundError.throw({
         type: "Resource",
         elementId: resourceId,
       });
     }
+
+    this.assertRuntimeAccess(resourceId, "Resource");
 
     return this.store.resources.get(resourceId)!.config;
   };
@@ -525,7 +523,11 @@ export class RunResult<V> implements IRuntime<V> {
   private getResourceId(
     resource: string | IResource<any, any, any, any, any>,
   ): string {
-    return typeof resource === "string" ? resource : resource.id;
+    if (typeof resource === "string") {
+      return resource;
+    }
+
+    return this.store.resolveDefinitionId(resource)!;
   }
 
   /**

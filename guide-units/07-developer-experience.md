@@ -43,11 +43,11 @@ async function processRequest(req: Request) {
 The real power comes when you use context inside your tasks:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const auditLog = r
   .task("app.tasks.auditLog")
-  .dependencies({ requestContext, logger: globals.resources.logger })
+  .dependencies({ requestContext, logger: r.runner.logger })
   .run(async (message: string, { requestContext, logger }) => {
     const ctx = requestContext.use();
     await logger.info(message, {
@@ -169,20 +169,20 @@ await run(app);
 Tasks are your business logic with DI, middleware, and validation:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { z } from "zod";
 
 // Assuming: userRepo was defined in the "Building resources" section above
 const createUser = r
   .task("users.create")
-  .dependencies({ userRepo, logger: globals.resources.logger })
+  .dependencies({ userRepo, logger: r.runner.logger })
   .inputSchema(
     z.object({
       name: z.string().min(2),
       email: z.string().email(),
     }),
   )
-  .middleware([globals.middleware.task.retry.with({ retries: 3 })])
+  .middleware([r.runner.middleware.task.retry.with({ retries: 3 })])
   .run(async (input, { userRepo, logger }) => {
     await logger.info("Creating user", { email: input.email });
     return userRepo.create(input);

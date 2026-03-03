@@ -1,7 +1,8 @@
 import { createMessageError } from "../../../errors";
-import { globals, r, run } from "../../..";
+import { r, run } from "../../..";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
+import { EVENT_LANES_RESOURCE_ID } from "../../event-lanes/eventLanes.resource";
 import type {
   EventLaneMessage,
   IEventLaneQueue,
@@ -112,7 +113,7 @@ describe("event-lanes: debug routing logs", () => {
 
     const logCollector = r
       .resource("tests.event-lanes.debug-routing.logCollector")
-      .dependencies({ logger: globals.resources.logger })
+      .dependencies({ logger: r.runner.logger })
       .init(async (_config, { logger }) => {
         logger.onLog((log) => {
           logs.push({
@@ -127,7 +128,7 @@ describe("event-lanes: debug routing logs", () => {
 
     const event = r
       .event<{ id: string }>("tests.event-lanes.debug-routing.event")
-      .tags([globals.tags.eventLane.with({ lane })])
+      .tags([r.runner.tags.eventLane.with({ lane })])
       .build();
 
     let hookCalls = 0;
@@ -187,13 +188,13 @@ describe("event-lanes: debug routing logs", () => {
     await waitUntil(() =>
       logs.some(
         (log) =>
-          log.source === "globals.resources.node.eventLanes" &&
+          log.source === EVENT_LANES_RESOURCE_ID &&
           log.message === "event-lanes.skip-inactive-lane",
       ),
     );
 
     const laneLogs = logs.filter(
-      (log) => log.source === "globals.resources.node.eventLanes",
+      (log) => log.source === EVENT_LANES_RESOURCE_ID,
     );
 
     const enqueueLog = laneLogs.find(
@@ -250,7 +251,7 @@ describe("event-lanes: debug routing logs", () => {
 
     const logCollector = r
       .resource("tests.event-lanes.debug-routing.disabled.logCollector")
-      .dependencies({ logger: globals.resources.logger })
+      .dependencies({ logger: r.runner.logger })
       .init(async (_config, { logger }) => {
         logger.onLog((log) => {
           logs.push({
@@ -265,7 +266,7 @@ describe("event-lanes: debug routing logs", () => {
 
     const event = r
       .event<{ id: string }>("tests.event-lanes.debug-routing.disabled.event")
-      .tags([globals.tags.eventLane.with({ lane })])
+      .tags([r.runner.tags.eventLane.with({ lane })])
       .build();
     const emitTask = r
       .task("tests.event-lanes.debug-routing.disabled.emit")
@@ -299,9 +300,9 @@ describe("event-lanes: debug routing logs", () => {
     await runtime.runTask(emitTask);
 
     await waitUntil(() => queue.enqueued.length >= 1);
-    expect(
-      logs.some((log) => log.source === "globals.resources.node.eventLanes"),
-    ).toBe(false);
+    expect(logs.some((log) => log.source === EVENT_LANES_RESOURCE_ID)).toBe(
+      false,
+    );
 
     await runtime.dispose();
   });

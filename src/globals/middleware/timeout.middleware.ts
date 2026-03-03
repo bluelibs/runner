@@ -42,12 +42,12 @@ export class TimeoutError extends RunnerError<{ message: string }> {
 export const journalKeys = {
   /** The AbortController created by the timeout middleware */
   abortController: journal.createKey<AbortController>(
-    "globals.middleware.timeout.abortController",
+    "runner.middleware.timeout.abortController",
   ),
 } as const;
 
 export const timeoutTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.timeout.task",
+  id: "runner.middleware.timeout.task",
   throws: [middlewareTimeoutError],
   configSchema: timeoutConfigPattern,
   async run({ task, next, journal }, _deps, config: TimeoutMiddlewareConfig) {
@@ -113,7 +113,7 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
 });
 
 export const timeoutResourceMiddleware = defineResourceMiddleware({
-  id: "globals.middleware.timeout.resource",
+  id: "runner.middleware.timeout.resource",
   throws: [middlewareTimeoutError],
   configSchema: timeoutConfigPattern,
   async run({ resource, next }, _deps, config: TimeoutMiddlewareConfig) {

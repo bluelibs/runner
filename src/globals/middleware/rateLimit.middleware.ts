@@ -47,20 +47,20 @@ export interface RateLimitState {
 export const journalKeys = {
   /** Number of remaining requests in the current window */
   remaining: journalHelper.createKey<number>(
-    "globals.middleware.task.rateLimit.remaining",
+    "runner.middleware.task.rateLimit.remaining",
   ),
   /** Timestamp when the current window resets */
   resetTime: journalHelper.createKey<number>(
-    "globals.middleware.task.rateLimit.resetTime",
+    "runner.middleware.task.rateLimit.resetTime",
   ),
   /** Maximum requests allowed per window */
   limit: journalHelper.createKey<number>(
-    "globals.middleware.task.rateLimit.limit",
+    "runner.middleware.task.rateLimit.limit",
   ),
 } as const;
 
 export const rateLimitResource = defineResource({
-  id: "globals.resources.rateLimit",
+  id: "runner.rateLimit",
   tags: [globalTags.system],
   init: async () => {
     return {
@@ -73,7 +73,7 @@ export const rateLimitResource = defineResource({
  * Rate limit middleware: limits the number of executions within a fixed time window.
  */
 export const rateLimitTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.task.rateLimit",
+  id: "runner.middleware.task.rateLimit",
   throws: [middlewareRateLimitExceededError],
   configSchema: rateLimitConfigPattern,
   dependencies: { state: rateLimitResource },

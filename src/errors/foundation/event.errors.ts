@@ -104,7 +104,7 @@ export const transactionalEventLaneConflictError = error<
   )
   .remediation(
     ({ eventId }) =>
-      `Remove .transactional() or remove globals.tags.eventLane from "${eventId}". Transactional events rely on in-process rollback semantics.`,
+      `Remove .transactional() or remove runner.tags.eventLane from "${eventId}". Transactional events rely on in-process rollback semantics.`,
   )
   .build();
 
@@ -121,7 +121,7 @@ export const eventLaneRpcLaneConflictError = error<
   )
   .remediation(
     ({ eventId }) =>
-      `Pick one lane model for "${eventId}": use globals.tags.eventLane for async queue delivery, or globals.tags.rpcLane for synchronous RPC-style delivery.`,
+      `Pick one lane model for "${eventId}": use runner.tags.eventLane for async queue delivery, or runner.tags.rpcLane for synchronous RPC-style delivery.`,
   )
   .build();
 

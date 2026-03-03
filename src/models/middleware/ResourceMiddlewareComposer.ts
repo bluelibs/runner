@@ -42,23 +42,31 @@ export class ResourceMiddlewareComposer {
     dependencies: ResourceDependencyValuesType<TDeps>,
     context: TContext,
   ): Promise<TValue | undefined> {
+    const resourceId = this.store.resolveDefinitionId(resource)!;
+    const storedResource = this.store.resources.get(resourceId);
+    const effectiveResource = (storedResource?.resource ??
+      resource) as IResource<TConfig, TValue, TDeps, TContext>;
+
     // 1. Base init runner with validation
     let runner = this.createBaseInitRunner<TConfig, TValue, TDeps, TContext>(
-      resource,
+      effectiveResource,
       dependencies,
       context,
     );
 
     // 2. Apply middlewares
-    runner = this.applyMiddlewares<TConfig, TValue>(runner, resource);
+    runner = this.applyMiddlewares<TConfig, TValue>(runner, effectiveResource);
 
     // 3. Apply global resource interceptors
-    runner = this.applyGlobalInterceptors<TConfig, TValue>(runner, resource);
+    runner = this.applyGlobalInterceptors<TConfig, TValue>(
+      runner,
+      effectiveResource,
+    );
 
     try {
       return await runner(config);
     } catch (error: unknown) {
-      await this.reportUnhandledResourceInitError(resource.id, error);
+      await this.reportUnhandledResourceInitError(effectiveResource.id, error);
       throw error;
     }
   }
@@ -110,11 +118,10 @@ export class ResourceMiddlewareComposer {
 
     for (let i = middlewares.length - 1; i >= 0; i--) {
       const middleware = middlewares[i];
-      const storeMiddleware = this.store.resourceMiddlewares.get(
-        middleware.id,
-      )!;
+      const middlewareId = this.store.resolveDefinitionId(middleware)!;
+      const storeMiddleware = this.store.resourceMiddlewares.get(middlewareId)!;
       const nextFunction = next;
-      const middlewareSource = runtimeSource.middleware(middleware.id);
+      const middlewareSource = runtimeSource.middleware(middlewareId);
 
       // Create base middleware runner
       const baseMiddlewareRunner = async (cfg: TConfig) => {
@@ -139,7 +146,7 @@ export class ResourceMiddlewareComposer {
       // Get and apply per-middleware interceptors
       const middlewareInterceptors =
         this.interceptorRegistry.getResourceMiddlewareInterceptors(
-          middleware.id,
+          middlewareId,
         );
 
       next = this.wrapWithInterceptors<TConfig, TValue>(

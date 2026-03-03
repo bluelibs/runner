@@ -7,10 +7,10 @@ Modern applications are complex. They integrate with multiple services, have man
 Runner keeps everything as plain functions and objects. You declare dependencies up front, wire them once, and get predictable runtime behavior with no hidden reflection.
 
 ```typescript
-import { r, run, globals } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 import { z } from "zod";
 
-const logger = globals.resources.logger;
+const logger = r.runner.logger;
 
 // resources are singletons with lifecycle management and async construction
 const db = r

@@ -80,7 +80,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - All JSON bodies/responses are serialized with Runner's serializer to preserve types like `Date`, `RegExp`, and custom classes (via `addType`).
 - Files are **not** custom serializer types: use sentinels `{"$runnerFile": "File", "id": "<uuid>", "meta": {...}}` (see Multipart Mode).
 - Charset: UTF-8.
-- Custom Types: Client/server must sync explicit `addType({ id, is, serialize, deserialize, ... })` registrations via DI (`globals.resources.serializer`).
+- Custom Types: Client/server must sync explicit `addType({ id, is, serialize, deserialize, ... })` registrations via DI (`r.runner.serializer`).
 
 ### Authentication
 
@@ -88,7 +88,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - **Lane JWT**: Remote Lanes may use binding-level JWT auth via `binding.auth` (default header `authorization: Bearer <jwt>` unless binding overrides header).
 - **Layering**: `x-runner-token` (or custom `auth.header`) is exposure-level auth; lane JWT is an independent lane authorization layer.
 - **Token**: `auth.token` supports a string or string[] (any match is accepted).
-- **Validators**: If tasks tagged with `globals.tags.authValidator` exist, they are executed (OR logic); any validator returning `{ ok: true }` authenticates the request.
+- **Validators**: If tasks tagged with `r.runner.tags.authValidator` exist, they are executed (OR logic); any validator returning `{ ok: true }` authenticates the request.
 - **Anonymous access**: If no token and no validators exist, RPC lanes HTTP exposure fails closed by default with `500 AUTH_NOT_CONFIGURED`. Set `auth.allowAnonymous: true` to explicitly allow unauthenticated access.
 - **Dynamic headers**: Clients can override per-request via `onRequest({ headers })`.
 - **Allow-Lists**: Server restricts to configured exposure allow-list sources (`rpcLanesResource` serve topology in `mode: "network"`). Unknown IDs → 403 Forbidden.
@@ -131,7 +131,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
   | 500 | STREAM_ERROR | Multipart stream error (sanitized). |
   | 500 | MISSING_FILE_PART | Expected file not in multipart. |
   | 500 | AUTH_NOT_CONFIGURED | No auth is configured and `allowAnonymous` is not enabled. |
-- **Logging**: Server logs errors via `globals.resources.logger` (e.g., "exposure.task.error"), plus auth failures.
+- **Logging**: Server logs errors via `r.runner.logger` (e.g., "exposure.task.error"), plus auth failures.
 - **Correlation ID**: Requests carry/receive `x-runner-request-id` (generated when absent) for end-to-end tracing.
 - **Security headers**: RPC lanes HTTP exposure sets `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` on responses.
 

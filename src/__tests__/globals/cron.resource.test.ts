@@ -1,4 +1,4 @@
-import { globals, r } from "../../public";
+import { r } from "../../public";
 import { run } from "../../run";
 import { CronOnError } from "../../globals/types";
 import type { RegisterableItems } from "../../defs";
@@ -22,7 +22,7 @@ describe("global cron resource", () => {
   const createCronApp = (items: RegisterableItems[] = []) =>
     r
       .resource("app")
-      .register([globals.resources.cron, ...items])
+      .register([r.runner.cron, ...items])
       .build();
 
   it("does not auto-register cron scheduling when resource is not registered", async () => {
@@ -30,7 +30,7 @@ describe("global cron resource", () => {
 
     const scheduledTask = r
       .task("app.tasks.unregistered-cron")
-      .tags([globals.tags.cron.with({ expression: "* * * * *" })])
+      .tags([r.runner.tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         runs += 1;
       })
@@ -43,7 +43,7 @@ describe("global cron resource", () => {
     await flushMicrotasks();
 
     expect(runs).toBe(0);
-    expect(() => runtime.getResourceValue(globals.resources.cron)).toThrow();
+    expect(() => runtime.getResourceValue(r.runner.cron)).toThrow();
 
     await runtime.dispose();
   });
@@ -52,7 +52,7 @@ describe("global cron resource", () => {
     const app = createCronApp();
     const runtime = await run(app);
 
-    const cron = runtime.getResourceValue(globals.resources.cron);
+    const cron = runtime.getResourceValue(r.runner.cron);
     expect(cron).toBeDefined();
     expect(cron.schedules.size).toBe(0);
 
@@ -64,7 +64,7 @@ describe("global cron resource", () => {
 
     const scheduledTask = r
       .task("app.tasks.scheduled")
-      .tags([globals.tags.cron.with({ expression: "* * * * *" })])
+      .tags([r.runner.tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         runs += 1;
       })
@@ -73,7 +73,7 @@ describe("global cron resource", () => {
     const app = createCronApp([scheduledTask]);
     const runtime = await run(app);
 
-    const cron = runtime.getResourceValue(globals.resources.cron);
+    const cron = runtime.getResourceValue(r.runner.cron);
     expect(cron.schedules.size).toBe(1);
     expect(cron.schedules.get("app.tasks.scheduled")?.stopped).toBe(false);
 
@@ -90,7 +90,7 @@ describe("global cron resource", () => {
     const immediateTask = r
       .task("app.tasks.immediate")
       .tags([
-        globals.tags.cron.with({
+        r.runner.tags.cron.with({
           expression: "* * * * *",
           immediate: true,
         }),
@@ -115,7 +115,7 @@ describe("global cron resource", () => {
     const disabledTask = r
       .task("app.tasks.disabled")
       .tags([
-        globals.tags.cron.with({
+        r.runner.tags.cron.with({
           expression: "* * * * *",
           enabled: false,
         }),
@@ -128,7 +128,7 @@ describe("global cron resource", () => {
     const app = createCronApp([disabledTask]);
     const runtime = await run(app);
 
-    const cron = runtime.getResourceValue(globals.resources.cron);
+    const cron = runtime.getResourceValue(r.runner.cron);
     expect(cron.schedules.size).toBe(0);
 
     for (let i = 0; i < 3; i += 1) {
@@ -146,7 +146,7 @@ describe("global cron resource", () => {
     const failingTask = r
       .task("app.tasks.stop-on-error")
       .tags([
-        globals.tags.cron.with({
+        r.runner.tags.cron.with({
           expression: "* * * * *",
           onError: CronOnError.Stop,
         }),
@@ -164,7 +164,7 @@ describe("global cron resource", () => {
     await flushMicrotasks();
 
     expect(attempts).toBe(1);
-    const cron = runtime.getResourceValue(globals.resources.cron);
+    const cron = runtime.getResourceValue(r.runner.cron);
     expect(cron.schedules.get("app.tasks.stop-on-error")?.stopped).toBe(true);
 
     await runtime.dispose();
@@ -176,7 +176,7 @@ describe("global cron resource", () => {
     const immediateStopTask = r
       .task("app.tasks.immediate-stop")
       .tags([
-        globals.tags.cron.with({
+        r.runner.tags.cron.with({
           expression: "* * * * *",
           immediate: true,
           onError: CronOnError.Stop,
@@ -198,7 +198,7 @@ describe("global cron resource", () => {
     expect(attempts).toBe(1);
     expect(
       runtime
-        .getResourceValue(globals.resources.cron)
+        .getResourceValue(r.runner.cron)
         .schedules.get("app.tasks.immediate-stop")?.stopped,
     ).toBe(true);
 
@@ -211,7 +211,7 @@ describe("global cron resource", () => {
     const flakyTask = r
       .task("app.tasks.continue-on-error")
       .tags([
-        globals.tags.cron.with({
+        r.runner.tags.cron.with({
           expression: "* * * * *",
           onError: CronOnError.Continue,
         }),
@@ -229,7 +229,7 @@ describe("global cron resource", () => {
     await flushMicrotasks();
 
     expect(attempts).toBe(1);
-    const cron = runtime.getResourceValue(globals.resources.cron);
+    const cron = runtime.getResourceValue(r.runner.cron);
     expect(cron.schedules.get("app.tasks.continue-on-error")?.stopped).toBe(
       false,
     );
@@ -247,7 +247,7 @@ describe("global cron resource", () => {
 
     const selfDisposingTask = r
       .task("app.tasks.self-dispose")
-      .tags([globals.tags.cron.with({ expression: "* * * * *" })])
+      .tags([r.runner.tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         attempts += 1;
         await runtimeRef.current?.dispose();

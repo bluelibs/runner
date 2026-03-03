@@ -3,6 +3,16 @@ import { run } from "../../../run";
 import { throttleTaskMiddleware } from "../../../globals/middleware/temporal.middleware";
 import { createMessageError } from "../../../errors";
 
+const createTemporalDeps = () => ({
+  state: {
+    isDisposed: false,
+    debounceStates: new WeakMap(),
+    throttleStates: new WeakMap(),
+    trackedDebounceStates: new Set(),
+    trackedThrottleStates: new Set(),
+  },
+});
+
 describe("Temporal Middleware: Throttle", () => {
   it("should throttle task executions", async () => {
     jest.useFakeTimers();
@@ -107,7 +117,7 @@ describe("Temporal Middleware: Throttle", () => {
   it("should reject scheduled callers when the scheduled execution fails", async () => {
     expect.assertions(3);
     const config = { ms: 50 };
-    const deps = { state: { throttleStates: new WeakMap() } };
+    const deps = createTemporalDeps();
 
     const next = async (input?: string) => {
       if (input === "b") {
@@ -169,7 +179,7 @@ describe("Temporal Middleware: Throttle", () => {
     });
 
     try {
-      const deps = { state: { throttleStates: new WeakMap() } };
+      const deps = createTemporalDeps();
       await expect(
         throttleTaskMiddleware.run(inputFor("a") as any, deps as any, config),
       ).resolves.toBe("a");
@@ -213,7 +223,7 @@ describe("Temporal Middleware: Throttle", () => {
       next,
     });
 
-    const deps = { state: { throttleStates: new WeakMap() } };
+    const deps = createTemporalDeps();
     await expect(
       throttleTaskMiddleware.run(inputFor("a") as any, deps as any, config),
     ).resolves.toBe("a");

@@ -54,7 +54,7 @@ const registerUserTask = task({
 // Listens to afterInit event to scan and register routes
 export const routeRegistrationTask = hook({
   id: "app.tasks.routeRegistration",
-  on: globals.events.ready,
+  on: r.system.events.ready,
   run: async () => {
     // Automatically discovers tasks with HTTP tags
     // and registers them as Express routes

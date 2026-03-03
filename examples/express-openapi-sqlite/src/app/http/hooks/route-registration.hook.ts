@@ -1,5 +1,5 @@
 // examples/express-openapi-sqlite/src/tasks/routeRegistration.ts
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { ITask } from "@bluelibs/runner/defs";
 import { Request, Response } from "express";
 import { httpTag } from "../tags/http.tag";
@@ -10,12 +10,12 @@ import { createDocument } from "zod-openapi";
 
 export const routeRegistrationHook = r
   .hook("app.hooks.routeRegistration")
-  .on(globals.events.ready)
+  .on(r.system.events.ready)
   .dependencies({
     httpTag: httpTag.startup(),
-    taskRunner: globals.resources.taskRunner,
+    taskRunner: r.system.taskRunner,
     expressServer: expressServerResource,
-    logger: globals.resources.logger,
+    logger: r.runner.logger,
   })
   .run(async (_, { httpTag, taskRunner, expressServer, logger }) => {
     const { app, port } = expressServer;

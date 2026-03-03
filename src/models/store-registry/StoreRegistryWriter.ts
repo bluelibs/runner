@@ -6,6 +6,7 @@ import {
   IResourceMiddleware,
   IResourceWithConfig,
   ITag,
+  TagType,
   ITask,
   ITaskMiddleware,
   RegisterableItems,
@@ -15,6 +16,8 @@ import {
   ResourceStoreElementType,
   TaskMiddlewareStoreElementType,
   TaskStoreElementType,
+  SubtreeResourceMiddlewareEntry,
+  SubtreeTaskMiddlewareEntry,
   symbolEvent,
   symbolHook,
   symbolResource,
@@ -23,8 +26,9 @@ import {
   symbolTag,
   symbolTask,
   symbolTaskMiddleware,
+  symbolMiddlewareConfiguredFrom,
 } from "../../defs";
-import { unknownItemTypeError } from "../../errors";
+import { unknownItemTypeError, validationError } from "../../errors";
 import { IAsyncContext } from "../../types/asyncContext";
 import { IErrorHelper } from "../../types/error";
 import { HookDependencyState } from "../../types/storeTypes";
@@ -33,6 +37,10 @@ import { VisibilityTracker } from "../VisibilityTracker";
 import { StoreRegistryDefinitionPreparer } from "./StoreRegistryDefinitionPreparer";
 import { StoreRegistryTagIndex } from "./StoreRegistryTagIndex";
 import { IndexedTagCategory, normalizeTags, StoringMode } from "./types";
+import {
+  getSubtreeResourceMiddlewareAttachment,
+  getSubtreeTaskMiddlewareAttachment,
+} from "../../tools/subtreeMiddleware";
 
 type StoreRegistryCollections = {
   tasks: Map<string, TaskStoreElementType>;
@@ -49,6 +57,11 @@ type StoreRegistryCollections = {
 type StoreRegistryValidation = {
   checkIfIDExists: (id: string) => void;
   trackRegisteredId: (id: string) => void;
+};
+
+type StoreRegistryAliasResolver = {
+  registerDefinitionAlias: (reference: unknown, canonicalId: string) => void;
+  resolveDefinitionId: (reference: unknown) => string | undefined;
 };
 
 enum RegisterableKind {
@@ -117,12 +130,23 @@ function resolveRegisterableKind(
 }
 
 export class StoreRegistryWriter {
+  private static readonly RESERVED_LOCAL_NAMES = new Set<string>([
+    "tasks",
+    "events",
+    "hooks",
+    "resources",
+    "tags",
+    "errors",
+    "ctx",
+  ]);
+
   constructor(
     private readonly collections: StoreRegistryCollections,
     private readonly validator: StoreRegistryValidation,
     private readonly visibilityTracker: VisibilityTracker,
     private readonly tagIndex: StoreRegistryTagIndex,
     private readonly definitionPreparer: StoreRegistryDefinitionPreparer,
+    private readonly aliasResolver: StoreRegistryAliasResolver,
   ) {}
 
   storeGenericItem<_C>(item: RegisterableItems) {
@@ -169,8 +193,9 @@ export class StoreRegistryWriter {
   storeError<_C>(item: IErrorHelper<any>) {
     this.validator.checkIfIDExists(item.id);
     this.collections.errors.set(item.id, item);
+    this.aliasResolver.registerDefinitionAlias(item, item.id);
     this.validator.trackRegisteredId(item.id);
-    const tags = normalizeTags(item.tags);
+    const tags = this.normalizeDefinitionTags(item.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Errors,
       item.id,
@@ -182,12 +207,14 @@ export class StoreRegistryWriter {
   storeAsyncContext<_C>(item: IAsyncContext<any>) {
     this.validator.checkIfIDExists(item.id);
     this.collections.asyncContexts.set(item.id, item);
+    this.aliasResolver.registerDefinitionAlias(item, item.id);
     this.validator.trackRegisteredId(item.id);
   }
 
   storeTag(item: ITag<any, any, any>) {
     this.validator.checkIfIDExists(item.id);
     this.collections.tags.set(item.id, item);
+    this.aliasResolver.registerDefinitionAlias(item, item.id);
     this.validator.trackRegisteredId(item.id);
   }
 
@@ -207,8 +234,10 @@ export class StoreRegistryWriter {
       computedDependencies: {},
       dependencyState: HookDependencyState.Pending,
     });
+    this.aliasResolver.registerDefinitionAlias(item, hook.id);
+    this.aliasResolver.registerDefinitionAlias(hook, hook.id);
     this.validator.trackRegisteredId(hook.id);
-    const tags = normalizeTags(hook.tags);
+    const tags = this.normalizeDefinitionTags(hook.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Hooks,
       hook.id,
@@ -236,8 +265,10 @@ export class StoreRegistryWriter {
       computedDependencies: {},
       isInitialized: false,
     });
+    this.aliasResolver.registerDefinitionAlias(item, middleware.id);
+    this.aliasResolver.registerDefinitionAlias(middleware, middleware.id);
     this.validator.trackRegisteredId(middleware.id);
-    const tags = normalizeTags(middleware.tags);
+    const tags = this.normalizeDefinitionTags(middleware.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.TaskMiddlewares,
       middleware.id,
@@ -264,8 +295,10 @@ export class StoreRegistryWriter {
       computedDependencies: {},
       isInitialized: false,
     });
+    this.aliasResolver.registerDefinitionAlias(item, middleware.id);
+    this.aliasResolver.registerDefinitionAlias(middleware, middleware.id);
     this.validator.trackRegisteredId(middleware.id);
-    const tags = normalizeTags(middleware.tags);
+    const tags = this.normalizeDefinitionTags(middleware.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.ResourceMiddlewares,
       middleware.id,
@@ -277,8 +310,9 @@ export class StoreRegistryWriter {
   storeEvent<_C>(item: IEvent<void>) {
     this.validator.checkIfIDExists(item.id);
     this.collections.events.set(item.id, { event: item });
+    this.aliasResolver.registerDefinitionAlias(item, item.id);
     this.validator.trackRegisteredId(item.id);
-    const tags = normalizeTags(item.tags);
+    const tags = this.normalizeDefinitionTags(item.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Events,
       item.id,
@@ -310,10 +344,13 @@ export class StoreRegistryWriter {
       isInitialized: false,
       context: undefined,
     });
+    this.aliasResolver.registerDefinitionAlias(item, prepared.id);
+    this.aliasResolver.registerDefinitionAlias(item.resource, prepared.id);
+    this.aliasResolver.registerDefinitionAlias(prepared, prepared.id);
     this.validator.trackRegisteredId(prepared.id);
     this.visibilityTracker.recordResource(prepared.id);
     this.visibilityTracker.recordIsolation(prepared.id, prepared.isolate);
-    const tags = normalizeTags(prepared.tags);
+    const tags = this.normalizeDefinitionTags(prepared.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Resources,
       prepared.id,
@@ -337,7 +374,11 @@ export class StoreRegistryWriter {
 
     element.register = items;
 
-    for (const item of items) {
+    const scopedItems = items.map((item) =>
+      this.compileOwnedItem(element.id, item),
+    );
+
+    for (const item of scopedItems) {
       this.visibilityTracker.recordOwnership(element.id, item);
       const itemId = this.resolveRegisterableId(item);
       try {
@@ -351,7 +392,185 @@ export class StoreRegistryWriter {
     }
 
     if (element.exports) {
-      this.visibilityTracker.recordExports(element.id, element.exports);
+      this.visibilityTracker.recordExports(
+        element.id,
+        this.resolveExports(element.exports),
+      );
+    }
+  }
+
+  private resolveExports(
+    entries: Array<RegisterableItems | string>,
+  ): Array<RegisterableItems | string> {
+    return entries.map((entry) => {
+      if (typeof entry === "string") {
+        return entry;
+      }
+
+      const resolved = this.aliasResolver.resolveDefinitionId(entry);
+      return resolved ?? entry;
+    });
+  }
+
+  private compileOwnedItem(
+    ownerResourceId: string,
+    item: RegisterableItems,
+  ): RegisterableItems {
+    const kind = resolveRegisterableKind(item);
+    if (!kind) {
+      return item;
+    }
+
+    if (kind === RegisterableKind.ResourceWithConfig) {
+      const withConfig = item as IResourceWithConfig<any, any, any>;
+      const compiledResource = this.compileOwnedDefinition(
+        ownerResourceId,
+        withConfig.resource as RegisterableItems,
+        RegisterableKind.Resource,
+      ) as IResource<any, any, any>;
+      const compiledWithConfig = this.cloneDefinitionWithId(
+        withConfig as IResourceWithConfig<any, any, any> & { id: string },
+        compiledResource.id,
+      ) as IResourceWithConfig<any, any, any>;
+      compiledWithConfig.resource = compiledResource;
+
+      this.aliasResolver.registerDefinitionAlias(item, compiledResource.id);
+      this.aliasResolver.registerDefinitionAlias(
+        withConfig.resource,
+        compiledResource.id,
+      );
+      this.aliasResolver.registerDefinitionAlias(
+        compiledWithConfig,
+        compiledResource.id,
+      );
+      this.aliasResolver.registerDefinitionAlias(
+        compiledWithConfig.resource,
+        compiledResource.id,
+      );
+      return compiledWithConfig;
+    }
+
+    const compiled = this.compileOwnedDefinition(ownerResourceId, item, kind);
+    const resolvedId = this.resolveRegisterableId(compiled)!;
+    this.aliasResolver.registerDefinitionAlias(item, resolvedId);
+    this.aliasResolver.registerDefinitionAlias(compiled, resolvedId);
+    return compiled;
+  }
+
+  private compileOwnedDefinition(
+    ownerResourceId: string,
+    item: RegisterableItems,
+    kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
+  ): RegisterableItems {
+    const currentId = item.id;
+    const nextId = this.computeCanonicalId(ownerResourceId, kind, currentId);
+    if (nextId === currentId) {
+      return item;
+    }
+
+    return this.cloneDefinitionWithId(
+      item as RegisterableItems & { id: string },
+      nextId,
+    );
+  }
+
+  private cloneDefinitionWithId<TDefinition extends { id: string }>(
+    definition: TDefinition,
+    id: string,
+  ): TDefinition {
+    const clone = Object.create(
+      Object.getPrototypeOf(definition),
+    ) as TDefinition;
+    Object.assign(clone, definition);
+    this.assignClonedDefinitionId(clone as object, id);
+    return clone;
+  }
+
+  private assignClonedDefinitionId(target: object, id: string): void {
+    const cloneWithDefinition = target as { definition?: unknown };
+    const internalDefinition = cloneWithDefinition.definition;
+    if (
+      internalDefinition &&
+      typeof internalDefinition === "object" &&
+      "id" in internalDefinition &&
+      typeof (internalDefinition as { id?: unknown }).id === "string"
+    ) {
+      cloneWithDefinition.definition = {
+        ...(internalDefinition as Record<string, unknown>),
+        id,
+      };
+    }
+
+    const descriptor = Object.getOwnPropertyDescriptor(target, "id");
+    if (descriptor?.writable) {
+      (target as { id: string }).id = id;
+      return;
+    }
+
+    Object.defineProperty(target, "id", {
+      value: id,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  private computeCanonicalId(
+    ownerResourceId: string,
+    kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
+    currentId: string,
+  ): string {
+    if (currentId.includes(".")) {
+      // Compatibility path: fully-qualified ids stay as absolute ids.
+      return currentId;
+    }
+
+    this.assertLocalName(ownerResourceId, kind, currentId);
+
+    switch (kind) {
+      case RegisterableKind.Resource:
+        return `${ownerResourceId}.${currentId}`;
+      case RegisterableKind.Task:
+        return `${ownerResourceId}.tasks.${currentId}`;
+      case RegisterableKind.Event:
+        return `${ownerResourceId}.events.${currentId}`;
+      case RegisterableKind.Hook:
+        return `${ownerResourceId}.hooks.${currentId}`;
+      case RegisterableKind.TaskMiddleware:
+        return `${ownerResourceId}.middleware.task.${currentId}`;
+      case RegisterableKind.ResourceMiddleware:
+        return `${ownerResourceId}.middleware.resource.${currentId}`;
+      case RegisterableKind.Tag:
+        return `${ownerResourceId}.tags.${currentId}`;
+      case RegisterableKind.Error:
+        return `${ownerResourceId}.errors.${currentId}`;
+      case RegisterableKind.AsyncContext:
+        return `${ownerResourceId}.ctx.${currentId}`;
+      default:
+        return `${ownerResourceId}.${currentId}`;
+    }
+  }
+
+  private assertLocalName(
+    ownerResourceId: string,
+    kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
+    currentId: string,
+  ) {
+    if (currentId.trim().length === 0) {
+      validationError.throw({
+        subject: "Definition local name",
+        id: `${ownerResourceId}.${kind}`,
+        originalError:
+          "Definition local names must be non-empty strings when using scoped registration.",
+      });
+    }
+
+    if (StoreRegistryWriter.RESERVED_LOCAL_NAMES.has(currentId)) {
+      validationError.throw({
+        subject: "Definition local name",
+        id: `${ownerResourceId}.${kind}.${currentId}`,
+        originalError: `Local name "${currentId}" is reserved by Runner and cannot be used.`,
+      });
     }
   }
 
@@ -384,6 +603,9 @@ export class StoreRegistryWriter {
       mode: overrideMode,
       overrideTargetType: "Resource",
     });
+    prepared.middleware = this.normalizeResourceMiddlewareAttachments(prepared);
+    prepared.subtree =
+      this.normalizeResourceSubtreeMiddlewareAttachments(prepared);
 
     this.collections.resources.set(prepared.id, {
       resource: prepared,
@@ -392,10 +614,12 @@ export class StoreRegistryWriter {
       isInitialized: false,
       context: undefined,
     });
+    this.aliasResolver.registerDefinitionAlias(item, prepared.id);
+    this.aliasResolver.registerDefinitionAlias(prepared, prepared.id);
     this.validator.trackRegisteredId(prepared.id);
     this.visibilityTracker.recordResource(prepared.id);
     this.visibilityTracker.recordIsolation(prepared.id, prepared.isolate);
-    const tags = normalizeTags(prepared.tags);
+    const tags = this.normalizeDefinitionTags(prepared.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Resources,
       prepared.id,
@@ -420,19 +644,259 @@ export class StoreRegistryWriter {
       mode: storingMode,
       overrideTargetType: "Task",
     });
+    task.middleware = this.normalizeTaskMiddlewareAttachments(task);
 
     this.collections.tasks.set(task.id, {
       task,
       computedDependencies: {},
       isInitialized: false,
     });
+    this.aliasResolver.registerDefinitionAlias(item, task.id);
+    this.aliasResolver.registerDefinitionAlias(task, task.id);
     this.validator.trackRegisteredId(task.id);
-    const tags = normalizeTags(task.tags);
+    const tags = this.normalizeDefinitionTags(task.tags);
     this.tagIndex.reindexDefinitionTags(
       IndexedTagCategory.Tasks,
       task.id,
       tags,
     );
     this.visibilityTracker.recordDefinitionTags(task.id, tags);
+  }
+
+  private normalizeTaskMiddlewareAttachments(
+    task: ITask<any, any, {}>,
+  ): ITask<any, any, {}>["middleware"] {
+    if (!Array.isArray(task.middleware) || task.middleware.length === 0) {
+      return task.middleware;
+    }
+
+    const ownerResourceId = this.resolveOwnerResourceIdFromTaskId(task.id);
+    if (!ownerResourceId) {
+      return task.middleware;
+    }
+
+    return task.middleware.map((attachment) =>
+      this.normalizeMiddlewareAttachment(
+        ownerResourceId,
+        RegisterableKind.TaskMiddleware,
+        attachment,
+      ),
+    );
+  }
+
+  private normalizeResourceMiddlewareAttachments(
+    resource: IResource<any, any, any>,
+  ): IResource<any, any, any>["middleware"] {
+    if (
+      !Array.isArray(resource.middleware) ||
+      resource.middleware.length === 0
+    ) {
+      return resource.middleware;
+    }
+
+    return resource.middleware.map((attachment) =>
+      this.normalizeMiddlewareAttachment(
+        resource.id,
+        RegisterableKind.ResourceMiddleware,
+        attachment,
+      ),
+    );
+  }
+
+  private normalizeResourceSubtreeMiddlewareAttachments(
+    resource: IResource<any, any, any>,
+  ): IResource<any, any, any>["subtree"] {
+    const subtree = resource.subtree;
+    if (!subtree) {
+      return subtree;
+    }
+
+    let hasChanges = false;
+    let normalizedTaskPolicy = subtree.tasks;
+    let normalizedResourcePolicy = subtree.resources;
+
+    if (subtree.tasks?.middleware?.length) {
+      const middleware = subtree.tasks.middleware.map((entry) =>
+        this.normalizeSubtreeTaskMiddlewareEntry(resource.id, entry),
+      );
+      if (this.didArrayChange(subtree.tasks.middleware, middleware)) {
+        normalizedTaskPolicy = {
+          ...subtree.tasks,
+          middleware,
+        };
+        hasChanges = true;
+      }
+    }
+
+    if (subtree.resources?.middleware?.length) {
+      const middleware = subtree.resources.middleware.map((entry) =>
+        this.normalizeSubtreeResourceMiddlewareEntry(resource.id, entry),
+      );
+      if (this.didArrayChange(subtree.resources.middleware, middleware)) {
+        normalizedResourcePolicy = {
+          ...subtree.resources,
+          middleware,
+        };
+        hasChanges = true;
+      }
+    }
+
+    if (!hasChanges) {
+      return subtree;
+    }
+
+    return {
+      ...subtree,
+      ...(normalizedTaskPolicy ? { tasks: normalizedTaskPolicy } : {}),
+      ...(normalizedResourcePolicy
+        ? { resources: normalizedResourcePolicy }
+        : {}),
+    };
+  }
+
+  private normalizeSubtreeTaskMiddlewareEntry(
+    ownerResourceId: string,
+    entry: SubtreeTaskMiddlewareEntry,
+  ) {
+    const attachment = getSubtreeTaskMiddlewareAttachment(entry);
+    const normalizedAttachment = this.normalizeMiddlewareAttachment(
+      ownerResourceId,
+      RegisterableKind.TaskMiddleware,
+      attachment,
+    );
+
+    if (normalizedAttachment === attachment) {
+      return entry;
+    }
+
+    if (
+      entry &&
+      typeof entry === "object" &&
+      "use" in (entry as Record<string, unknown>)
+    ) {
+      return {
+        ...(entry as object),
+        use: normalizedAttachment,
+      };
+    }
+
+    return normalizedAttachment;
+  }
+
+  private normalizeSubtreeResourceMiddlewareEntry(
+    ownerResourceId: string,
+    entry: SubtreeResourceMiddlewareEntry,
+  ) {
+    const attachment = getSubtreeResourceMiddlewareAttachment(entry);
+    const normalizedAttachment = this.normalizeMiddlewareAttachment(
+      ownerResourceId,
+      RegisterableKind.ResourceMiddleware,
+      attachment,
+    );
+
+    if (normalizedAttachment === attachment) {
+      return entry;
+    }
+
+    if (
+      entry &&
+      typeof entry === "object" &&
+      "use" in (entry as Record<string, unknown>)
+    ) {
+      return {
+        ...(entry as object),
+        use: normalizedAttachment,
+      };
+    }
+
+    return normalizedAttachment;
+  }
+
+  private normalizeMiddlewareAttachment<TAttachment extends { id: string }>(
+    ownerResourceId: string,
+    kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
+    attachment: TAttachment,
+  ): TAttachment {
+    const configuredFrom = (attachment as unknown as Record<symbol, unknown>)[
+      symbolMiddlewareConfiguredFrom
+    ];
+    const configuredFromId =
+      configuredFrom &&
+      typeof configuredFrom === "object" &&
+      "id" in configuredFrom
+        ? (configuredFrom as { id?: unknown }).id
+        : undefined;
+    const resolvedConfiguredFromCandidate = configuredFrom
+      ? this.aliasResolver.resolveDefinitionId(configuredFrom)
+      : undefined;
+    const resolvedConfiguredFromId =
+      resolvedConfiguredFromCandidate &&
+      resolvedConfiguredFromCandidate !== configuredFromId
+        ? resolvedConfiguredFromCandidate
+        : undefined;
+    const resolvedByAliasCandidate =
+      this.aliasResolver.resolveDefinitionId(attachment);
+    const resolvedByAlias =
+      resolvedByAliasCandidate && resolvedByAliasCandidate !== attachment.id
+        ? resolvedByAliasCandidate
+        : undefined;
+    const resolvedId =
+      resolvedConfiguredFromId ??
+      resolvedByAlias ??
+      this.computeCanonicalId(ownerResourceId, kind, attachment.id);
+
+    if (resolvedId === attachment.id) {
+      return attachment;
+    }
+
+    const normalized = this.cloneDefinitionWithId(
+      attachment as TAttachment & { id: string },
+      resolvedId,
+    );
+    this.aliasResolver.registerDefinitionAlias(attachment, resolvedId);
+    this.aliasResolver.registerDefinitionAlias(normalized, resolvedId);
+    return normalized;
+  }
+
+  private resolveOwnerResourceIdFromTaskId(taskId: string): string | null {
+    const separator = ".tasks.";
+    const separatorIndex = taskId.lastIndexOf(separator);
+    if (separatorIndex < 0) {
+      return null;
+    }
+    return taskId.slice(0, separatorIndex);
+  }
+
+  private didArrayChange<T>(
+    source: ReadonlyArray<T>,
+    next: ReadonlyArray<T>,
+  ): boolean {
+    if (source.length !== next.length) {
+      return true;
+    }
+
+    for (let index = 0; index < source.length; index += 1) {
+      if (source[index] !== next[index]) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private normalizeDefinitionTags(
+    tags: ReadonlyArray<{ id: string }> | undefined,
+  ): TagType[] {
+    return normalizeTags(tags).map((tag) => {
+      const resolvedId = this.aliasResolver.resolveDefinitionId(tag);
+      if (!resolvedId || resolvedId === tag.id) {
+        return tag;
+      }
+
+      return this.cloneDefinitionWithId(
+        tag as TagType & { id: string },
+        resolvedId,
+      );
+    });
   }
 }

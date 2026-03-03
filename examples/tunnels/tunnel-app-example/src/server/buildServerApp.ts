@@ -1,4 +1,4 @@
-import { globals, r, nodeExposure } from "@bluelibs/runner/node";
+import { r, nodeExposure } from "@bluelibs/runner/node";
 
 import {
   HttpConfig,
@@ -31,7 +31,7 @@ export function buildServerApp(options: BuildServerAppOptions) {
 
   const httpExposurePolicy = r
     .resource(ResourceId.HttpExposurePolicy)
-    .tags([globals.tags.tunnel])
+    .tags([r.runner.tags.tunnel])
     .init(async (): Promise<HttpTunnelExposurePolicyValue> => ({
       transport: TunnelTransport.Http,
       mode: TunnelMode.Server,

@@ -24,12 +24,7 @@ import type {
   SubtreeValidationTargetType,
   SubtreeViolation,
 } from "../defs";
-import {
-  isOptional,
-  isResourceWithConfig,
-  isTag,
-  isTagStartup,
-} from "../define";
+import { isOptional, isTag, isTagStartup } from "../define";
 import { StoreRegistry } from "./StoreRegistry";
 import { resolveIsolationSelector } from "./utils/isolationSelectors";
 import {
@@ -98,7 +93,8 @@ export class StoreValidator {
     for (const task of this.registry.tasks.values()) {
       const middlewares = task.task.middleware;
       middlewares.forEach((middlewareAttachment) => {
-        if (!this.registry.taskMiddlewares.has(middlewareAttachment.id)) {
+        const middlewareId = this.resolveReferenceId(middlewareAttachment);
+        if (!middlewareId || !this.registry.taskMiddlewares.has(middlewareId)) {
           middlewareNotRegisteredError.throw({
             type: "task",
             source: task.task.id,
@@ -111,7 +107,11 @@ export class StoreValidator {
     for (const resource of this.registry.resources.values()) {
       const middlewares = resource.resource.middleware;
       middlewares.forEach((middlewareAttachment) => {
-        if (!this.registry.resourceMiddlewares.has(middlewareAttachment.id)) {
+        const middlewareId = this.resolveReferenceId(middlewareAttachment);
+        if (
+          !middlewareId ||
+          !this.registry.resourceMiddlewares.has(middlewareId)
+        ) {
           middlewareNotRegisteredError.throw({
             type: "resource",
             source: resource.resource.id,
@@ -146,7 +146,7 @@ export class StoreValidator {
       }
 
       const hasEventLaneTag = event.tags.some(
-        (tag) => tag.id === globalTags.eventLane.id,
+        (tag) => this.resolveReferenceId(tag) === globalTags.eventLane.id,
       );
       if (hasEventLaneTag) {
         transactionalEventLaneConflictError.throw({
@@ -160,14 +160,14 @@ export class StoreValidator {
   private ensureEventLaneAndRpcLaneAreMutuallyExclusive() {
     for (const { event } of this.registry.events.values()) {
       const hasEventLaneTag = event.tags.some(
-        (tag) => tag.id === globalTags.eventLane.id,
+        (tag) => this.resolveReferenceId(tag) === globalTags.eventLane.id,
       );
       if (!hasEventLaneTag) {
         continue;
       }
 
       const hasRpcLaneTag = event.tags.some(
-        (tag) => tag.id === globalTags.rpcLane.id,
+        (tag) => this.resolveReferenceId(tag) === globalTags.rpcLane.id,
       );
       if (!hasRpcLaneTag) {
         continue;
@@ -195,7 +195,8 @@ export class StoreValidator {
 
       for (const middlewareEntry of subtreePolicy.tasks?.middleware ?? []) {
         const middleware = getSubtreeTaskMiddlewareAttachment(middlewareEntry);
-        if (!this.registry.taskMiddlewares.has(middleware.id)) {
+        const middlewareId = this.resolveReferenceId(middleware);
+        if (!middlewareId || !this.registry.taskMiddlewares.has(middlewareId)) {
           middlewareNotRegisteredError.throw({
             type: "task",
             source: ownerResourceId,
@@ -207,7 +208,11 @@ export class StoreValidator {
       for (const middlewareEntry of subtreePolicy.resources?.middleware ?? []) {
         const middleware =
           getSubtreeResourceMiddlewareAttachment(middlewareEntry);
-        if (!this.registry.resourceMiddlewares.has(middleware.id)) {
+        const middlewareId = this.resolveReferenceId(middleware);
+        if (
+          !middlewareId ||
+          !this.registry.resourceMiddlewares.has(middlewareId)
+        ) {
           middlewareNotRegisteredError.throw({
             type: "resource",
             source: ownerResourceId,
@@ -405,14 +410,15 @@ export class StoreValidator {
       const tags = Array.isArray(definition.tags) ? definition.tags : [];
       const seenTagIds = new Set<string>();
       for (const tag of tags) {
-        if (seenTagIds.has(tag.id)) {
+        const tagId = this.resolveReferenceId(tag)!;
+        if (seenTagIds.has(tagId)) {
           duplicateTagIdOnDefinitionError.throw({
             definitionType,
             definitionId: definition.id,
-            tagId: tag.id,
+            tagId,
           });
         }
-        seenTagIds.add(tag.id);
+        seenTagIds.add(tagId);
       }
     });
   }
@@ -421,8 +427,9 @@ export class StoreValidator {
     this.forEachTaggableEntry(({ definition }) => {
       const tags = Array.isArray(definition.tags) ? definition.tags : [];
       for (const tag of tags) {
-        if (!this.registry.tags.has(tag.id)) {
-          tagNotFoundError.throw({ id: tag.id });
+        const tagId = this.resolveReferenceId(tag)!;
+        if (!this.registry.tags.has(tagId)) {
+          tagNotFoundError.throw({ id: tagId });
         }
       }
     });
@@ -435,7 +442,9 @@ export class StoreValidator {
       }
 
       const ownTagIds = new Set(
-        (Array.isArray(entry.tags) ? entry.tags : []).map((tag) => tag.id),
+        (Array.isArray(entry.tags) ? entry.tags : []).map(
+          (tag) => this.resolveReferenceId(tag)!,
+        ),
       );
       for (const dependency of Object.values(
         entry.dependencies as Record<string, unknown>,
@@ -451,14 +460,16 @@ export class StoreValidator {
           continue;
         }
 
-        if (!ownTagIds.has(maybeTag.id)) {
+        const dependencyTagId = this.resolveReferenceId(maybeTag)!;
+
+        if (!ownTagIds.has(dependencyTagId)) {
           continue;
         }
 
         tagSelfDependencyError.throw({
           definitionType: entry.definitionType,
           definitionId: entry.definitionId,
-          tagId: maybeTag.id,
+          tagId: dependencyTagId,
         });
       }
     });
@@ -618,31 +629,37 @@ export class StoreValidator {
         input.onUnknownTarget(resolvedId);
       }
 
-      normalizedEntries.push(entry as TEntry);
+      if (isTag(entry)) {
+        normalizedEntries.push(
+          (entry.id === resolvedId
+            ? entry
+            : { ...entry, id: resolvedId }) as TEntry,
+        );
+        continue;
+      }
+
+      normalizedEntries.push(resolvedId as unknown as TEntry);
     }
 
     return normalizedEntries;
   }
 
   private resolveIsolationTargetId(entry: unknown): string | null {
-    if (!entry || typeof entry !== "object") {
-      return null;
-    }
-
-    if (isResourceWithConfig(entry)) {
-      return entry.resource.id;
-    }
-
-    if (!("id" in entry)) {
-      return null;
-    }
-
-    const id = (entry as { id?: unknown }).id;
-    return typeof id === "string" && id.length > 0 ? id : null;
+    const resolved = this.resolveReferenceId(entry);
+    return resolved ?? null;
   }
 
   private hasRegisteredId(id: string): boolean {
     return this.registeredIds.has(id);
+  }
+
+  private resolveReferenceId(entry: unknown): string | null {
+    const resolved = this.registry.resolveDefinitionId(entry);
+    if (resolved && resolved.length > 0) {
+      return resolved;
+    }
+
+    return null;
   }
 
   private seedRegisteredIds() {

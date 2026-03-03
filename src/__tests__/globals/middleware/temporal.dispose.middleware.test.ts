@@ -205,7 +205,7 @@ describe("Temporal Middleware: Dispose", () => {
     }
   });
 
-  it("handles temporal resource dispose when tracked sets are missing", async () => {
+  it("fails fast when tracked sets are missing during resource disposal", async () => {
     type TemporalDispose = NonNullable<typeof temporalResource.dispose>;
     type TemporalDisposeArgs = Parameters<TemporalDispose>;
 
@@ -234,7 +234,7 @@ describe("Temporal Middleware: Dispose", () => {
         {} as TemporalDisposeArgs[2],
         {} as TemporalDisposeArgs[3],
       ),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow(/forEach/);
   });
 
   it("rejects tracked debounce/throttle states during resource disposal", async () => {
@@ -278,21 +278,17 @@ describe("Temporal Middleware: Dispose", () => {
     expect(throttleReject).toHaveBeenCalledTimes(1);
   });
 
-  it("recreates tracked debounce state set when missing", async () => {
-    expect.assertions(2);
-    jest.useFakeTimers();
-    try {
-      const state = createTemporalState();
-      Object.defineProperty(state, "trackedDebounceStates", {
-        value: undefined,
-        configurable: true,
-        writable: true,
-      });
-      const deps = { state } as Parameters<
-        typeof debounceTaskMiddleware.run
-      >[1];
+  it("fails fast when tracked debounce state set is missing", async () => {
+    const state = createTemporalState();
+    Object.defineProperty(state, "trackedDebounceStates", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+    const deps = { state } as Parameters<typeof debounceTaskMiddleware.run>[1];
 
-      const pending = debounceTaskMiddleware.run(
+    await expect(
+      debounceTaskMiddleware.run(
         {
           task: {
             definition: { id: "debounce.recreate.tracked-set" } as any,
@@ -302,14 +298,7 @@ describe("Temporal Middleware: Dispose", () => {
         } as any,
         deps,
         { ms: 10 },
-      );
-
-      jest.advanceTimersByTime(10);
-      await Promise.resolve();
-      await expect(pending).resolves.toBe("ok");
-      expect(state.trackedDebounceStates).toBeInstanceOf(Set);
-    } finally {
-      jest.useRealTimers();
-    }
+      ),
+    ).rejects.toThrow(/add/);
   });
 });

@@ -173,4 +173,33 @@ describe("StoreRegistry facade delegates", () => {
       /Unknown item type/,
     );
   });
+
+  it("keeps alias registration as a no-op for primitives and resolves resource-with-config ids", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+    const resource = defineResource<{ enabled: boolean }>({
+      id: "registry.alias.resource",
+      init: async (config) => config.enabled,
+    });
+    const configured = resource.with({ enabled: true });
+
+    expect(() =>
+      registry.registerDefinitionAlias(null, "ignored"),
+    ).not.toThrow();
+    expect(() => registry.registerDefinitionAlias(42, "ignored")).not.toThrow();
+    expect(() =>
+      registry.registerDefinitionAlias("primitive", "ignored"),
+    ).not.toThrow();
+
+    expect(registry.resolveDefinitionId(configured)).toBe(resource.id);
+  });
+
+  it("fails fast when a definition alias is remapped to a different id", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+    const reference = {};
+
+    registry.registerDefinitionAlias(reference, "app.alias.first");
+    expect(() =>
+      registry.registerDefinitionAlias(reference, "app.alias.second"),
+    ).toThrow(/cannot be remapped/i);
+  });
 });

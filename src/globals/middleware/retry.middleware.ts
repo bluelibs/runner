@@ -35,15 +35,15 @@ const retryConfigPattern = Match.ObjectIncluding({
  */
 export const journalKeys = {
   /** Current retry attempt number (0 = first attempt, 1 = first retry, etc.) */
-  attempt: journalHelper.createKey<number>("globals.middleware.retry.attempt"),
+  attempt: journalHelper.createKey<number>("runner.middleware.retry.attempt"),
   /** The last error that caused a retry */
   lastError: journalHelper.createKey<Error>(
-    "globals.middleware.retry.lastError",
+    "runner.middleware.retry.lastError",
   ),
 } as const;
 
 export const retryTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.retry.task",
+  id: "runner.middleware.retry.task",
   configSchema: retryConfigPattern,
   async run({ task, next, journal }, _deps, config: RetryMiddlewareConfig) {
     const input = task?.input;
@@ -96,7 +96,7 @@ export const retryTaskMiddleware = defineTaskMiddleware({
 });
 
 export const retryResourceMiddleware = defineResourceMiddleware({
-  id: "globals.middleware.retry.resource",
+  id: "runner.middleware.retry.resource",
   configSchema: retryConfigPattern,
   async run({ resource, next }, _deps, config: RetryMiddlewareConfig) {
     const input = resource?.config;

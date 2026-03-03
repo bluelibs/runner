@@ -64,7 +64,7 @@ export class UserModule {}
 
 ```typescript
 // users.ts
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { z } from "zod";
 
 const createUser = r
@@ -72,7 +72,7 @@ const createUser = r
   .dependencies({
     db,
     mailer,
-    logger: globals.resources.logger,
+    logger: r.runner.logger,
   })
   .inputSchema(
     z.object({

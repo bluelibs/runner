@@ -264,7 +264,7 @@ The functional approach supports many classic design patterns.
 Use contract tags to discover and select implementations at runtime.
 
 ```ts
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // 1. Define the strategy contract
 const paymentStrategyContract = r
@@ -291,7 +291,7 @@ const paymentProcessor = r
   .resource("app.payment.processor")
   .dependencies({
     paymentStrategyContract,
-    runtime: globals.resources.runtime,
+    runtime: r.system.runtime,
   })
   .init(async (_config, { paymentStrategyContract, runtime }) => ({
     async process(amount: number, method: string) {

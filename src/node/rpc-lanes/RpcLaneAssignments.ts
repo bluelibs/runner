@@ -10,8 +10,7 @@ import {
 import { globalTags } from "../../globals/globalTags";
 import type { Store } from "../../models/Store";
 import { collectEventTopologyLanes } from "../remote-lanes/topologyLanes";
-
-const EVENT_LANES_RESOURCE_ID = "globals.resources.node.eventLanes";
+import { EVENT_LANES_RESOURCE_ID } from "../event-lanes/eventLanes.resource";
 
 type ResolvedTarget =
   | { kind: "task"; id: string }

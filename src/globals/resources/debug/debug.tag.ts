@@ -26,7 +26,7 @@ const debugFriendlyConfigPattern = Match.OneOf(
 );
 
 export const debugTag = defineTag<DebugFriendlyConfig>({
-  id: "globals.tags.debug",
+  id: "runner.tags.debug",
   configSchema: debugFriendlyConfigPattern,
   meta: {
     title: "Debug",

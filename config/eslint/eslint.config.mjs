@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 const ESLINT_CONFIG_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT_DIR = path.resolve(ESLINT_CONFIG_DIR, "../..");
 
-export default tseslint.config(
+export default tseslint.defineConfig(
   // Global ignores
   {
     ignores: [

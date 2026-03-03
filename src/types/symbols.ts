@@ -15,6 +15,13 @@ export const symbolResourceWithConfig: unique symbol = Symbol.for(
 export const symbolOverrideDefinition: unique symbol = Symbol.for(
   "runner.overrideDefinition",
 );
+/**
+ * @internal Stores the original definition reference that an override targets.
+ * This allows runtime systems to resolve the canonical, run-scoped id.
+ */
+export const symbolOverrideTargetDefinition: unique symbol = Symbol.for(
+  "runner.overrideTargetDefinition",
+);
 export const symbolEvent: unique symbol = Symbol.for("runner.event");
 export const symbolEventLane: unique symbol = Symbol.for("runner.eventLane");
 export const symbolRpcLane: unique symbol = Symbol.for("runner.rpcLane");
@@ -30,6 +37,10 @@ export const symbolResourceMiddleware: unique symbol = Symbol.for(
 );
 export const symbolMiddlewareConfigured: unique symbol = Symbol.for(
   "runner.middlewareConfigured",
+);
+/** @internal Points a configured middleware instance to its source definition. */
+export const symbolMiddlewareConfiguredFrom: unique symbol = Symbol.for(
+  "runner.middlewareConfiguredFrom",
 );
 /** Records which rpc-lanes resource owns the task routing patch (exclusivity). */
 export const symbolRpcLaneRoutedBy: unique symbol = Symbol.for(

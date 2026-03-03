@@ -27,7 +27,7 @@ const durableWorkflowConfigPattern = Match.ObjectIncluding({
  * Marks a task as a durable workflow for runtime discovery.
  */
 export const durableWorkflowTag = defineTag<DurableWorkflowTagConfig>({
-  id: "globals.tags.durableWorkflow",
+  id: "runner.tags.durableWorkflow",
   configSchema: durableWorkflowConfigPattern,
   meta: {
     title: "Durable Workflow",

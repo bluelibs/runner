@@ -31,7 +31,7 @@ function createEmission(id: string): HookExecutionEvent {
   };
 }
 
-describe("globals.resources.debug.hookInterceptorResource (unit)", () => {
+describe("runner.debug.hookInterceptorResource (unit)", () => {
   it("logs hook start and completion when enabled", async () => {
     const messages: string[] = [];
     const logger = new Logger({

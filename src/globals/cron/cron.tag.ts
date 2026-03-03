@@ -13,11 +13,11 @@ const cronTagConfigPattern = Match.ObjectIncluding({
 });
 
 export const cronTag = defineTag<CronTagConfig>({
-  id: "globals.tags.cron",
+  id: "runner.tags.cron",
   configSchema: cronTagConfigPattern,
   meta: {
     title: "Cron",
     description:
-      "Marks tasks that should be scheduled by globals.resources.cron using a cron expression.",
+      "Marks tasks that should be scheduled by runner.cron using a cron expression.",
   },
 });

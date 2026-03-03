@@ -63,16 +63,16 @@ export interface CircuitBreakerStatus {
 export const journalKeys = {
   /** Current state of the circuit breaker (CLOSED, OPEN, or HALF_OPEN) */
   state: journalHelper.createKey<CircuitBreakerState>(
-    "globals.middleware.task.circuitBreaker.state",
+    "runner.middleware.task.circuitBreaker.state",
   ),
   /** Current failure count */
   failures: journalHelper.createKey<number>(
-    "globals.middleware.task.circuitBreaker.failures",
+    "runner.middleware.task.circuitBreaker.failures",
   ),
 } as const;
 
 export const circuitBreakerResource = defineResource({
-  id: "globals.resources.circuitBreaker",
+  id: "runner.circuitBreaker",
   tags: [globalTags.system],
   init: async () => {
     return {
@@ -85,7 +85,7 @@ export const circuitBreakerResource = defineResource({
 });
 
 export const circuitBreakerMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.task.circuitBreaker",
+  id: "runner.middleware.task.circuitBreaker",
   throws: [middlewareCircuitBreakerOpenError],
   configSchema: circuitBreakerConfigPattern,
   dependencies: { state: circuitBreakerResource },

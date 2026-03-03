@@ -7,6 +7,7 @@ import type {
 import {
   symbolFilePath,
   symbolMiddlewareConfigured,
+  symbolMiddlewareConfiguredFrom,
   symbolTaskMiddleware,
 } from "../types/symbols";
 import { validationError } from "../errors";
@@ -127,6 +128,10 @@ export function defineTaskMiddleware<
             });
           }
         }
+        const configuredFrom =
+          (current as unknown as Record<symbol, unknown>)[
+            symbolMiddlewareConfiguredFrom
+          ] ?? current;
         const configured = wrap({
           ...current,
           [symbolMiddlewareConfigured]: true,
@@ -137,6 +142,9 @@ export function defineTaskMiddleware<
           TEnforceOutputContract,
           TDependencies
         >);
+        (configured as unknown as Record<symbol, unknown>)[
+          symbolMiddlewareConfiguredFrom
+        ] = configuredFrom;
         return freezeIfLineageLocked(current, configured);
       },
     } as ITaskMiddleware<

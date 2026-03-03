@@ -143,13 +143,13 @@ Available APIs:
 `taskRunner.intercept(...)` is the replacement for old middleware catch-all behavior:
 
 ```typescript
-import { globals, r } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const telemetryInstaller = r
   .resource("app.telemetry")
   .dependencies({
-    taskRunner: globals.resources.taskRunner,
-    logger: globals.resources.logger,
+    taskRunner: r.system.taskRunner,
+    logger: r.runner.logger,
   })
   .init(async (_config, { taskRunner, logger }) => {
     taskRunner.intercept(
@@ -282,7 +282,7 @@ const topology = r.rpcLane.topology({
 
 app = app
   .register([
-    // ... your tasks and events tagged with globals.tags.rpcLane.with({ lane })
+    // ... your tasks and events tagged with r.runner.tags.rpcLane.with({ lane })
     rpcLanesResource.with({
       profile: "client",
       topology,
@@ -341,27 +341,27 @@ A task that calls a remote API might fail due to network blips (needs **Retry**)
 Combine them in the correct order. Like an onion, the outer layers handle broader concerns, while inner layers handle specific execution details.
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const resilientTask = r
   .task("app.tasks.ultimateResilience")
   .middleware([
     // Outer layer: Fallback (the absolute Plan B if everything below fails)
-    globals.middleware.task.fallback.with({
+    r.runner.middleware.task.fallback.with({
       fallback: { status: "offline-mode", data: [] },
     }),
 
     // Next: Rate Limit (check this before wasting resources or retry budget)
-    globals.middleware.task.rateLimit.with({ windowMs: 60000, max: 100 }),
+    r.runner.middleware.task.rateLimit.with({ windowMs: 60000, max: 100 }),
 
     // Next: Circuit Breaker (stop immediately if the service is known to be down)
-    globals.middleware.task.circuitBreaker.with({ failureThreshold: 5 }),
+    r.runner.middleware.task.circuitBreaker.with({ failureThreshold: 5 }),
 
     // Next: Retry (wrap the attempt in a retry loop)
-    globals.middleware.task.retry.with({ retries: 3 }),
+    r.runner.middleware.task.retry.with({ retries: 3 }),
 
     // Inner layer: Timeout (enforce limit on EACH individual attempt)
-    globals.middleware.task.timeout.with({ ttl: 5000 }),
+    r.runner.middleware.task.timeout.with({ ttl: 5000 }),
   ])
   .run(async () => {
     return await fetchDataFromUnreliableSource();
@@ -659,39 +659,48 @@ Overrides are applied after everything is registered. If multiple overrides targ
 
 ## Namespacing
 
-As your app grows, you'll want consistent naming. Here's the convention that won't drive you crazy:
+Runner supports **scoped local names** during registration, then compiles everything to canonical runtime IDs.
 
-| Type                | Format                                        |
-| ------------------- | --------------------------------------------- |
-| Resources           | `{domain}.{noun}`                             |
-| Tasks               | `{domain}.tasks.{verb}`                       |
-| Events              | `{domain}.events.{pastTenseVerbOrNoun}`       |
-| Hooks               | `{domain}.hooks.{name}` (use `onX` for hooks) |
-| Task Middleware     | `{domain}.middleware.task.{name}`             |
-| Resource Middleware | `{domain}.middleware.resource.{name}`         |
-| Errors              | `{domain}.errors.{PascalCaseName}`            |
-| Async Context       | `{domain}.ctx.{noun}`                         |
-| Tags                | `{domain}.tags.{noun}`                        |
-
-Use dot-separated IDs and keep them human-readable. Prefer `camelCase` for the final segment (tasks/events/hooks/middleware/ctx/tags) and `PascalCase` for errors.
-Use verbs for task IDs, past tense for event IDs, and nouns for resources/contexts/tags.
-Kebab-case is still great for file names (for example: `create-user.task.ts`, `auth.task-middleware.ts`, `on-user-created.hook.ts`).
-
-Folders can look like this: `src/app/users/tasks/create-user.task.ts`. Keep the example domain consistent (for example `app.*`) unless you're intentionally showing cross-domain composition.
+You can define local names inside a resource subtree:
 
 ```typescript
-// Helper function for consistency
-function namespaced(id: string) {
-  return `app.${id}`;
-}
-
-const createUserTask = r
-  .task(namespaced("tasks.createUser"))
+const createUser = r
+  .task("createUser")
   .run(async () => null)
+  .build();
+
+const userRegistered = r.event("userRegistered").build();
+const db = r.resource("db").init(async () => ({})).build();
+
+const app = r
+  .resource("app")
+  .register([createUser, userRegistered, db])
   .build();
 ```
 
-> **runtime:** "Naming conventions: aromatherapy for chaos. Lovely lavender labels on a single giant map I maintain anyway. But truly—keep the IDs tidy. Future‑you deserves at least this mercy."
+At runtime/store level, IDs become canonical:
+
+| Kind                | Local name -> Canonical ID                        |
+| ------------------- | ------------------------------------------------- |
+| Resource            | `db` -> `app.db`                                  |
+| Task                | `createUser` -> `app.tasks.createUser`            |
+| Event               | `userRegistered` -> `app.events.userRegistered`   |
+| Hook                | `onUserRegistered` -> `app.hooks.onUserRegistered` |
+| Task Middleware     | `auth` -> `app.middleware.task.auth`              |
+| Resource Middleware | `audit` -> `app.middleware.resource.audit`        |
+| Tag                 | `public` -> `app.tags.public`                     |
+| Error               | `InvalidInput` -> `app.errors.InvalidInput`       |
+| Async Context       | `request` -> `app.ctx.request`                    |
+
+Important behavior:
+
+- Inside `run(...)`, middleware, hooks, lane policies, and validators, `definition.id` is always the canonical runtime ID.
+- Original definition objects are not mutated; per-run compiled definitions are stored internally (run isolation safe).
+- Reference-based wiring remains preferred (`dependencies({ createUser })`, `.register([createUser])`) over string-id wiring.
+- Fully qualified IDs are still supported and treated as absolute IDs.
+- Local names fail fast if they use reserved segments: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `ctx`.
+
+> **runtime:** "You give me short names in your little subtree village. I issue passports with full addresses at the border. Everybody wins, and nobody argues about dots all day."
 
 ## Factory Pattern
 
@@ -861,23 +870,23 @@ const invalidDb = r
 
 We expose the internal services for advanced use cases (but try not to use them unless you really need to):
 
-When you call `run(app)`, Runner creates an isolated runtime for that specific run. During bootstrap, it registers built-in global resources for that app, including `globals.resources.runtime`.
+When you call `run(app)`, Runner creates an isolated runtime for that specific run. During bootstrap, it registers built-in system resources for that app, including `r.system.runtime`.
 
-`globals.resources.runtime` resolves to the same runtime object returned by `run(app)`, scoped to that app only. This lets code running _inside_ the app depend on `runtime` and perform runtime operations (`runTask`, `emitEvent`, `getResourceValue`, root helpers, etc.) without passing the outer runtime object around manually.
+`r.system.runtime` resolves to the same runtime object returned by `run(app)`, scoped to that app only. This lets code running _inside_ the app depend on `runtime` and perform runtime operations (`runTask`, `emitEvent`, `getResourceValue`, root helpers, etc.) without passing the outer runtime object around manually.
 
 Bootstrap timing note: inside resource `init()`, `runtime` is available early, but that does **not** mean every registered resource is initialized yet. Runner guarantees dependency readiness for the currently initializing resource; unrelated resources may still be pending (especially with `lifecycleMode: "parallel"` or `lazy: true`).
 
 ```typescript
-import { globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const advancedTask = r
   .task("app.advanced")
   .dependencies({
     // Available because run(app) provides this resource to the current app.
-    runtime: globals.resources.runtime,
-    store: globals.resources.store,
-    taskRunner: globals.resources.taskRunner,
-    eventManager: globals.resources.eventManager,
+    runtime: r.system.runtime,
+    store: r.system.store,
+    taskRunner: r.system.taskRunner,
+    eventManager: r.system.eventManager,
   })
   .run(async (_param, { runtime, store, taskRunner, eventManager }) => {
     // Direct access to the framework internals

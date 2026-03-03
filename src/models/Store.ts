@@ -154,6 +154,10 @@ export class Store {
     return this.registry.visibilityTracker.getOwnerResourceId(itemId);
   }
 
+  public resolveDefinitionId(reference: unknown): string | undefined {
+    return this.registry.resolveDefinitionId(reference);
+  }
+
   /**
    * Checks whether an item belongs to a resource registration subtree (or is
    * the resource itself).
@@ -311,6 +315,8 @@ export class Store {
     this.registry.visibilityTracker.recordResource(root.id);
     this.registry.visibilityTracker.recordDefinitionTags(root.id, root.tags);
     this.registry.visibilityTracker.recordIsolation(root.id, root.isolate);
+    this.registry.registerDefinitionAlias(rootDefinition, root.id);
+    this.registry.registerDefinitionAlias(root, root.id);
     this.validator.checkIfIDExists(root.id);
     this.validator.trackRegisteredId(root.id);
 

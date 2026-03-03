@@ -1,4 +1,4 @@
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { httpRoute } from "#/http/tags";
 import { fastify } from "./fastify.resource";
 import { fastifyContext } from "#/http/fastify-context";
@@ -23,9 +23,9 @@ export const fastifyRouter = r
   })
   .dependencies({
     httpRoute: httpRoute.startup(),
-    taskRunner: globals.resources.taskRunner,
+    taskRunner: r.system.taskRunner,
     fastify,
-    logger: globals.resources.logger,
+    logger: r.runner.logger,
     auth: authResource,
     db,
   })

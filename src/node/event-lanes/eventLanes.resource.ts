@@ -1,4 +1,4 @@
-import { globals, r } from "../../index";
+import { r } from "../../index";
 import { debugConfig } from "../../globals/resources/debug";
 import type { DebugConfig } from "../../globals/resources/debug";
 import { EventLanesDiagnostics } from "./EventLanesDiagnostics";
@@ -22,14 +22,16 @@ type EventLanesPrivateContext = EventLanesResourceContext & {
   controller?: EventLanesController;
 };
 
+export const EVENT_LANES_RESOURCE_ID = "runner.node.eventLanes";
+
 const eventLanesResourceBase = r
-  .resource<EventLanesResourceConfig>("globals.resources.node.eventLanes")
+  .resource<EventLanesResourceConfig>(EVENT_LANES_RESOURCE_ID)
   .configSchema(eventLanesResourceConfigSchema)
   .dependencies({
-    eventManager: globals.resources.eventManager,
-    serializer: globals.resources.serializer,
-    store: globals.resources.store,
-    logger: globals.resources.logger,
+    eventManager: r.system.eventManager,
+    serializer: r.runner.serializer,
+    store: r.system.store,
+    logger: r.runner.logger,
     debugConfig: debugConfig.optional(),
   })
   .dependencies((config) => collectEventLaneQueueResourceDependencies(config))

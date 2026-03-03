@@ -56,11 +56,11 @@ class UserService {
 Runner wires this class exactly as written — no modifications needed:
 
 ```ts
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const userServiceResource = r
   .resource("app.services.user")
-  .dependencies({ repo: userRepository, logger: globals.resources.logger })
+  .dependencies({ repo: userRepository, logger: r.runner.logger })
   .init(async (_config, { repo, logger }) => new UserService(repo, logger))
   .build();
 ```
@@ -128,7 +128,7 @@ class SmtpMailer implements IMailer {
 Resources are the IoC layer. `init()` is your async constructor — connect, authenticate, hydrate, then return the ready instance. `dispose()` is the paired destructor.
 
 ```ts
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // Infrastructure: database connection
 const databaseResource = r
@@ -155,7 +155,7 @@ const userRepository = r
 const mailerResource = r
   .resource("app.resources.mailer")
   .schema<{ host: string; port: number }>({ parse: (v) => v })
-  .dependencies({ logger: globals.resources.logger })
+  .dependencies({ logger: r.runner.logger })
   .init(async (config, { logger }) => {
     const transport = await SmtpTransport.create(config);
     logger.info("SMTP connected", { host: config.host });
@@ -169,7 +169,7 @@ const mailerResource = r
 // Service: composed from other resources
 const userServiceResource = r
   .resource("app.services.user")
-  .dependencies({ repo: userRepository, logger: globals.resources.logger })
+  .dependencies({ repo: userRepository, logger: r.runner.logger })
   .init(async (_config, { repo, logger }) => new UserService(repo, logger))
   .build();
 ```
@@ -270,7 +270,7 @@ const registerUserCommand = r
     repo: userRepository,
     mailer: mailerResource,
     hasher: passwordHasher,
-    logger: globals.resources.logger,
+    logger: r.runner.logger,
   })
   .init(
     async (_config, deps) =>
@@ -407,8 +407,8 @@ const paymentGateway = r
   .resource("app.resources.payment")
   .dependencies({ client: paymentClient })
   .middleware([
-    globals.middleware.resource.retry.with({ retries: 3, delay: 1000 }),
-    globals.middleware.resource.timeout.with({ ttl: 5000 }),
+    r.runner.middleware.resource.retry.with({ retries: 3, delay: 1000 }),
+    r.runner.middleware.resource.timeout.with({ ttl: 5000 }),
   ])
   .init(async (_config, { client }) => new PaymentGateway(client))
   .build();
@@ -419,7 +419,7 @@ const chargeCustomer = r
   .schema<{ customerId: string; amount: number }>({ parse: (v) => v })
   .dependencies({ gateway: paymentGateway })
   .middleware([
-    globals.middleware.task.rateLimit.with({ max: 100, windowMs: 60_000 }),
+    r.runner.middleware.task.rateLimit.with({ max: 100, windowMs: 60_000 }),
   ])
   .run(async (input, { gateway }) => {
     return gateway.charge(input.amount);

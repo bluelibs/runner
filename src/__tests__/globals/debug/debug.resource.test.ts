@@ -16,7 +16,7 @@ const { verbose: levelVerbose } = debug.levels;
 
 Error.stackTraceLimit = Infinity;
 
-describe("globals.resources.debug", () => {
+describe("runner.debug", () => {
   it("logs non-system events, non-lifecycle events via global event listener", async () => {
     const logs: ILog[] = [];
 

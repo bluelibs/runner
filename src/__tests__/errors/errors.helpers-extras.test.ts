@@ -138,8 +138,8 @@ describe("error helpers extra branches", () => {
         captureMessage(() =>
           eventLaneRpcLaneConflictError.throw({
             eventId: "evt.lanes.invalid",
-            eventLaneTagId: "globals.tags.eventLane",
-            rpcLaneTagId: "globals.tags.rpcLane",
+            eventLaneTagId: "r.runner.tags.eventLane",
+            rpcLaneTagId: "r.runner.tags.rpcLane",
           }),
         ),
       ).toContain('Event "evt.lanes.invalid" cannot define both lane tags');

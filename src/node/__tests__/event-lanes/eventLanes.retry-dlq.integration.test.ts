@@ -1,5 +1,5 @@
 import { createMessageError } from "../../../errors";
-import { globals, r, run } from "../../..";
+import { r, run } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
   EventLaneMessage,
@@ -101,7 +101,7 @@ describe("event-lanes: failure settlement + retries", () => {
 
     const tagged = r
       .event<{ id: string }>("tests.event-lanes.failure.settle.event")
-      .tags([globals.tags.eventLane.with({ lane })])
+      .tags([r.runner.tags.eventLane.with({ lane })])
       .build();
 
     const failingHook = r
@@ -153,7 +153,7 @@ describe("event-lanes: failure settlement + retries", () => {
 
     const tagged = r
       .event<{ id: string }>("tests.event-lanes.failure.primitive.event")
-      .tags([globals.tags.eventLane.with({ lane })])
+      .tags([r.runner.tags.eventLane.with({ lane })])
       .build();
 
     const failingHook = r
@@ -203,7 +203,7 @@ describe("event-lanes: failure settlement + retries", () => {
 
     const tagged = r
       .event<{ id: string }>("tests.event-lanes.retry.multiple.event")
-      .tags([globals.tags.eventLane.with({ lane })])
+      .tags([r.runner.tags.eventLane.with({ lane })])
       .build();
 
     const failingHook = r

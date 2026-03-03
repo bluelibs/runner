@@ -8,7 +8,7 @@ import { getConfig } from "./types";
 import { hasSystemTag } from "./utils";
 import type { IResourceMiddlewareExecutionInput } from "../../../types/resourceMiddleware";
 
-const id = "globals.debug.resources.executionTracker";
+const id = "runner.debug.resources.executionTracker";
 
 export const executionTrackerResource = defineResource({
   id,

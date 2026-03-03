@@ -379,20 +379,25 @@ export class DependencyProcessor {
         if (eventDefinition === "*") {
           this.eventManager.addGlobalListener(handler, { order, id: hook.id });
         } else if (Array.isArray(eventDefinition)) {
-          for (const e of eventDefinition) {
-            if (this.store.events.get(e.id) === undefined) {
-              eventNotFoundError.throw({ id: e.id });
+          const resolvedEvents = (eventDefinition as IEvent[]).map((event) => {
+            const eventId = this.store.resolveDefinitionId(event)!;
+            const storeEvent = this.store.events.get(eventId);
+            if (storeEvent === undefined) {
+              eventNotFoundError.throw({ id: eventId });
             }
-          }
-          this.eventManager.addListener(eventDefinition as IEvent[], handler, {
+            return storeEvent!.event;
+          });
+          this.eventManager.addListener(resolvedEvents, handler, {
             order,
             id: hook.id,
           });
         } else {
-          if (this.store.events.get(eventDefinition.id) === undefined) {
-            eventNotFoundError.throw({ id: eventDefinition.id });
+          const eventId = this.store.resolveDefinitionId(eventDefinition)!;
+          const storeEvent = this.store.events.get(eventId);
+          if (storeEvent === undefined) {
+            eventNotFoundError.throw({ id: eventId });
           }
-          this.eventManager.addListener(eventDefinition as IEvent, handler, {
+          this.eventManager.addListener(storeEvent!.event as IEvent, handler, {
             order,
             id: hook.id,
           });

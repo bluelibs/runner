@@ -3,7 +3,7 @@
  * Shows how to use intercept and interceptHook through the runtime DI instance.
  */
 
-import { event, hook, resource, run, globals } from "@bluelibs/runner";
+import { event, hook, resource, run, r } from "@bluelibs/runner";
 
 // Define an event
 const userActionEvent = event<{ action: string; userId: string }>({
@@ -26,7 +26,7 @@ const userActionHook = hook({
 const app = resource({
   id: "interceptor-example-app",
   register: [userActionEvent, userActionHook],
-  dependencies: { eventManager: globals.resources.eventManager },
+  dependencies: { eventManager: r.system.eventManager },
   init: async (_, { eventManager }) => {
     console.log("App initialized");
     console.log("1. Adding emission interceptors:");

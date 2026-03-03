@@ -20,7 +20,7 @@ Use these terms consistently throughout all documentation:
 | **Hook**                     | A lightweight function subscribed to an event.                                                                    | `const onUserCreated = r.hook("onUserCreated").on(userCreated)...` |
 | **Middleware**               | A wrapper that adds cross-cutting concerns to tasks or resources (caching, retry, timeouts, logging).             | `.middleware([cache.with({ ttl: 60000 })])`                        |
 | **ExecutionJournal**         | A per-execution registry enabling middleware and tasks to share typed state.                                      | `journal.set(key, value)`                                          |
-| **Tag**                      | Metadata attached to components for discovery, filtering, or configuration.                                       | `.tags([globals.tags.debug])`                                      |
+| **Tag**                      | Metadata attached to components for discovery, filtering, or configuration.                                       | `.tags([r.runner.tags.debug])`                                      |
 | **App**                      | The root resource that composes all other components. Always named `app`.                                         | `const app = r.resource("app")...`                                 |
 | **Runtime**                  | The object returned by `run()` containing `runTask`, `emitEvent`, `dispose`, etc.                                 | `const { runTask, dispose } = await run(app)`                      |
 | **Dispose**                  | The cleanup function that gracefully shuts down all resources.                                                    | `await dispose()`                                                  |
@@ -337,11 +337,11 @@ In documentation, always use stable, readable ids and keep them consistent acros
 
 ```typescript
 // Good - explicit imports
-import { r, run, globals } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 
 const task = r.task("example")...
 
-// Bad - assumes globals
+// Bad - assumes ambient imports
 const task = r.task("example")...
 ```
 
@@ -527,7 +527,7 @@ Use bold headings for celebration:
 
 - A full Express API with proper lifecycle management
 - Dependency injection (tasks get what they need automatically)
-- Built-in logging (via `globals.resources.logger`)
+- Built-in logging (via `r.runner.logger`)
 - Graceful shutdown (the `dispose()` method)
 ```
 
@@ -591,11 +591,11 @@ Use backticks for code terms in prose:
 ```markdown
 **Good:**
 The `run()` function returns a `RunResult` object.
-Use `globals.resources.logger` for logging.
+Use `r.runner.logger` for logging.
 
 **Bad:**
 The run function returns a RunResult object.
-Use globals.resources.logger for logging.
+Use r.runner.logger for logging.
 ```
 
 ---
@@ -856,7 +856,7 @@ The "Quick Wins" section is a special format designed for copy-paste solutions. 
 ### 1. Problem Name (with result description)
 
 \`\`\`typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const solution = r
 .task("solution")

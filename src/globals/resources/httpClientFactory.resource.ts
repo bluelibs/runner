@@ -28,7 +28,7 @@ export interface HttpClientFactoryConfig {
 export type HttpClientFactory = (config: HttpClientFactoryConfig) => HttpClient;
 
 export const httpClientFactory = defineResource({
-  id: "globals.resources.httpClientFactory",
+  id: "runner.httpClientFactory",
   meta: {
     title: "HTTP Client Factory",
     description:

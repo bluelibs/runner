@@ -16,7 +16,7 @@ const requireContextConfigPattern = Match.ObjectIncluding({
 });
 
 export const requireContextTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.task.requireContext",
+  id: "runner.middleware.task.requireContext",
   throws: [middlewareContextRequiredError],
   configSchema: requireContextConfigPattern,
   async run({ task, next }, _deps, config: RequireContextMiddlewareConfig) {

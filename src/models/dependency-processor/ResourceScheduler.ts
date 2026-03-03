@@ -217,14 +217,15 @@ export class ResourceScheduler {
       : dependency;
 
     if (isResource(rawDependency)) {
-      const storedResource = this.store.resources.get(rawDependency.id);
+      const resourceId = this.resolveDefinitionId(rawDependency);
+      const storedResource = this.store.resources.get(resourceId);
       if (!storedResource) {
         if (!optionalDependency) {
-          state.resourceIds.add(rawDependency.id);
+          state.resourceIds.add(resourceId);
         }
         return;
       }
-      state.resourceIds.add(rawDependency.id);
+      state.resourceIds.add(resourceId);
       return;
     }
 
@@ -235,7 +236,7 @@ export class ResourceScheduler {
         state.visitedDefinitions.add(key);
         this.traverseDirectDependencies(
           nestedDependencies,
-          (rawDependency as { id: string }).id,
+          this.resolveDefinitionId(rawDependency),
           state,
         );
       }
@@ -257,13 +258,15 @@ export class ResourceScheduler {
     consumerId: string,
     state: DependencyTraversalState,
   ): void {
-    const tagLookupKey = `${consumerId}|${tag.id}`;
+    const tagId = this.resolveDefinitionId(tag);
+    const tagLookupKey = `${consumerId}|${tagId}`;
     if (state.visitedTagLookups.has(tagLookupKey)) {
       return;
     }
     state.visitedTagLookups.add(tagLookupKey);
 
-    const accessor = this.store.getTagAccessor(tag, {
+    const effectiveTag = this.store.tags.get(tagId)! as ITag<any, any, any>;
+    const accessor = this.store.getTagAccessor(effectiveTag, {
       consumerId,
       includeSelf: false,
     });
@@ -363,7 +366,7 @@ export class ResourceScheduler {
         state.visitedDefinitions.add(key);
         this.traverseDependencies(
           nestedDependencies,
-          (rawDependency as { id: string }).id,
+          this.resolveDefinitionId(rawDependency),
           state,
         );
       }
@@ -385,16 +388,17 @@ export class ResourceScheduler {
     optionalDependency: boolean,
     state: DependencyTraversalState,
   ): void {
-    const storedResource = this.store.resources.get(resource.id);
+    const resourceId = this.resolveDefinitionId(resource);
+    const storedResource = this.store.resources.get(resourceId);
     if (!storedResource) {
       if (!optionalDependency) {
-        state.resourceIds.add(resource.id);
+        state.resourceIds.add(resourceId);
       }
       return;
     }
 
-    state.resourceIds.add(resource.id);
-    const key = `resource:${resource.id}`;
+    state.resourceIds.add(resourceId);
+    const key = `resource:${resourceId}`;
     if (state.visitedDefinitions.has(key)) {
       return;
     }
@@ -409,17 +413,20 @@ export class ResourceScheduler {
 
   private getRegisteredDependencies(value: unknown): unknown | undefined {
     if (isTask(value)) {
-      return this.store.tasks.get(value.id)?.task.dependencies;
+      const id = this.resolveDefinitionId(value);
+      return this.store.tasks.get(id)?.task.dependencies;
     }
     if (isHook(value)) {
-      return this.store.hooks.get(value.id)?.hook.dependencies;
+      const id = this.resolveDefinitionId(value);
+      return this.store.hooks.get(id)?.hook.dependencies;
     }
     if (isTaskMiddleware(value)) {
-      return this.store.taskMiddlewares.get(value.id)?.middleware.dependencies;
+      const id = this.resolveDefinitionId(value);
+      return this.store.taskMiddlewares.get(id)?.middleware.dependencies;
     }
     if (isResourceMiddleware(value)) {
-      return this.store.resourceMiddlewares.get(value.id)?.middleware
-        .dependencies;
+      const id = this.resolveDefinitionId(value);
+      return this.store.resourceMiddlewares.get(id)?.middleware.dependencies;
     }
 
     return undefined;
@@ -427,15 +434,16 @@ export class ResourceScheduler {
 
   private getDefinitionVisitKey(value: unknown): string {
     if (isTask(value)) {
-      return `task:${value.id}`;
+      return `task:${this.resolveDefinitionId(value)}`;
     }
     if (isHook(value)) {
-      return `hook:${value.id}`;
+      return `hook:${this.resolveDefinitionId(value)}`;
     }
     if (isTaskMiddleware(value)) {
-      return `taskMiddleware:${value.id}`;
+      return `taskMiddleware:${this.resolveDefinitionId(value)}`;
     }
-    return `resourceMiddleware:${(value as IResourceMiddleware<any, any, any, any>).id}`;
+    const middleware = value as IResourceMiddleware<any, any, any, any>;
+    return `resourceMiddleware:${this.resolveDefinitionId(middleware)}`;
   }
 
   private expandTagDependency(
@@ -443,13 +451,15 @@ export class ResourceScheduler {
     consumerId: string,
     state: DependencyTraversalState,
   ): void {
-    const tagLookupKey = `${consumerId}|${tag.id}`;
+    const tagId = this.resolveDefinitionId(tag);
+    const tagLookupKey = `${consumerId}|${tagId}`;
     if (state.visitedTagLookups.has(tagLookupKey)) {
       return;
     }
     state.visitedTagLookups.add(tagLookupKey);
 
-    const accessor = this.store.getTagAccessor(tag, {
+    const effectiveTag = this.store.tags.get(tagId)! as ITag<any, any, any>;
+    const accessor = this.store.getTagAccessor(effectiveTag, {
       consumerId,
       includeSelf: false,
     });
@@ -493,5 +503,9 @@ export class ResourceScheduler {
         state,
       );
     }
+  }
+
+  private resolveDefinitionId(value: unknown): string {
+    return this.store.resolveDefinitionId(value)!;
   }
 }

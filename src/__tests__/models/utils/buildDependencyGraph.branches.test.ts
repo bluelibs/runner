@@ -12,6 +12,19 @@ import {
   buildEventEmissionGraph,
 } from "../../../models/utils/buildDependencyGraph";
 
+const resolveDefinitionId = (reference: unknown): string | undefined => {
+  if (typeof reference === "string") {
+    return reference;
+  }
+  if (reference && typeof reference === "object" && "id" in reference) {
+    const id = (reference as { id?: unknown }).id;
+    if (typeof id === "string" && id.length > 0) {
+      return id;
+    }
+  }
+  return undefined;
+};
+
 describe("buildDependencyGraph branch coverage", () => {
   it("handles tasks with no dependencies", async () => {
     const task = defineTask({
@@ -109,6 +122,10 @@ describe("buildDependencyGraph branch coverage", () => {
   it("covers defensive branches for missing dependencies and missing node lookups", () => {
     const eventA = defineEvent({ id: "graph.branch.defensive.event.a" });
     const eventB = defineEvent({ id: "graph.branch.defensive.event.b" });
+    const unresolvedTaskMiddlewareId =
+      "graph.branch.defensive.unresolved.task.mw";
+    const unresolvedResourceMiddlewareId =
+      "graph.branch.defensive.unresolved.resource.mw";
 
     const fakeRegistry = {
       tasks: new Map([
@@ -118,7 +135,10 @@ describe("buildDependencyGraph branch coverage", () => {
             task: {
               id: "graph.branch.defensive.task",
               dependencies: undefined,
-              middleware: [{ id: "graph.branch.defensive.missing.task.mw" }],
+              middleware: [
+                { id: "graph.branch.defensive.missing.task.mw" },
+                { id: unresolvedTaskMiddlewareId },
+              ],
             },
           },
         ],
@@ -163,6 +183,7 @@ describe("buildDependencyGraph branch coverage", () => {
               dependencies: undefined,
               middleware: [
                 { id: "graph.branch.defensive.missing.resource.mw" },
+                { id: unresolvedResourceMiddlewareId },
               ],
             },
           },
@@ -203,6 +224,16 @@ describe("buildDependencyGraph branch coverage", () => {
         getOwnerResourceId: () => undefined,
         isWithinResourceSubtree: () => false,
       },
+      resolveDefinitionId: (reference: unknown) => {
+        const id = resolveDefinitionId(reference);
+        if (
+          id === unresolvedTaskMiddlewareId ||
+          id === unresolvedResourceMiddlewareId
+        ) {
+          return undefined;
+        }
+        return id;
+      },
     };
 
     expect(() =>
@@ -222,8 +253,12 @@ describe("buildDependencyGraph branch coverage", () => {
   it("covers subtree middleware dedupe and missing-node guards", () => {
     const taskSubtreeDuplicate = { id: "graph.subtree.task.duplicate" };
     const taskSubtreeMissing = { id: "graph.subtree.task.missing" };
+    const taskSubtreeUnresolved = { id: "graph.subtree.task.unresolved" };
     const resourceSubtreeDuplicate = { id: "graph.subtree.resource.duplicate" };
     const resourceSubtreeMissing = { id: "graph.subtree.resource.missing" };
+    const resourceSubtreeUnresolved = {
+      id: "graph.subtree.resource.unresolved",
+    };
 
     const ownerResource = {
       id: "graph.subtree.owner",
@@ -231,11 +266,19 @@ describe("buildDependencyGraph branch coverage", () => {
       dependencies: undefined,
       subtree: {
         tasks: {
-          middleware: [taskSubtreeDuplicate, taskSubtreeMissing],
+          middleware: [
+            taskSubtreeDuplicate,
+            taskSubtreeMissing,
+            taskSubtreeUnresolved,
+          ],
           validate: [],
         },
         resources: {
-          middleware: [resourceSubtreeDuplicate, resourceSubtreeMissing],
+          middleware: [
+            resourceSubtreeDuplicate,
+            resourceSubtreeMissing,
+            resourceSubtreeUnresolved,
+          ],
           validate: [],
         },
       },
@@ -302,6 +345,16 @@ describe("buildDependencyGraph branch coverage", () => {
           }
           return undefined;
         },
+      },
+      resolveDefinitionId: (reference: unknown) => {
+        const id = resolveDefinitionId(reference);
+        if (
+          id === taskSubtreeUnresolved.id ||
+          id === resourceSubtreeUnresolved.id
+        ) {
+          return undefined;
+        }
+        return id;
       },
     };
 

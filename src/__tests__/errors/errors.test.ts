@@ -180,7 +180,7 @@ describe("Errors", () => {
     await expect(run(app)).rejects.toThrow(/Resource error/);
   });
 
-  it("should throw an ambigous one", async () => {
+  it("allows resource/event local-name collisions by using scoped ids", async () => {
     const res1 = defineResource({
       id: "res1",
     });
@@ -194,9 +194,11 @@ describe("Errors", () => {
       register: [res1, ev1],
     });
 
-    await expect(run(app)).rejects.toThrow(
-      "Resource \"res1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
-    );
+    const runtime = await run(app);
+    expect(runtime.store.resources.has("app.res1")).toBe(true);
+    expect(runtime.store.events.has("app.events.res1")).toBe(true);
+    expect("app.res1").not.toBe("app.events.res1");
+    await runtime.dispose();
   });
 
   it("Should throw duplicate error for tags with the same id", async () => {
@@ -213,7 +215,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Tag \"tag1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Tag \"app.tags.tag1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -238,7 +240,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Hook \"hook1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Hook \"app.hooks.hook1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -258,7 +260,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Middleware \"middlewarex\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Middleware \"app.middleware.task.middlewarex\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -276,7 +278,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Event \"ev1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Event \"app.events.ev1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -506,11 +508,11 @@ describe("Errors", () => {
       const txLane = capture(() =>
         transactionalEventLaneConflictError.throw({
           eventId: "events.tx.lane.invalid",
-          tagId: "globals.tags.eventLane",
+          tagId: "r.runner.tags.eventLane",
         }),
       );
       expect(txLane.message).toContain(
-        'Event "events.tx.lane.invalid" cannot be transactional while using lane tag "globals.tags.eventLane".',
+        'Event "events.tx.lane.invalid" cannot be transactional while using lane tag "r.runner.tags.eventLane".',
       );
       expect(transactionalEventLaneConflictError.is(txLane)).toBe(true);
 

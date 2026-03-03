@@ -34,10 +34,10 @@ BlueLibs Runner is a TypeScript-first dependency injection framework built aroun
 **Here's what explicit wiring looks like in practice:**
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
-// Built-in middleware from globals
-const { cache, retry } = globals.middleware.task;
+// Built-in middleware from Runner
+const { cache, retry } = r.runner.middleware.task;
 
 // Assuming: db is a resource defined elsewhere, and mockDb is its test double
 // ONE LINE to add caching with TTL
@@ -277,7 +277,7 @@ npm install @bluelibs/runner express zod
 
 ```typescript
 import express from "express";
-import { r, run, globals } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 import { z } from "zod";
 
 // A resource is anything you want to share across your app, a singleton
@@ -302,7 +302,7 @@ const server = r
 // Tasks are your business logic - easily testable functions
 const createUser = r
   .task("app.tasks.createUser")
-  .dependencies({ server, logger: globals.resources.logger })
+  .dependencies({ server, logger: r.runner.logger })
   .inputSchema(z.object({ name: z.string() }))
   .run(async (input, { logger }) => {
     await logger.info(`Creating ${input.name}`);
@@ -346,7 +346,7 @@ Creating Ada
 
 - A full Express API with proper lifecycle management
 - Dependency injection (tasks get what they need automatically)
-- Built-in logging (via `globals.resources.logger`)
+- Built-in logging (via `r.runner.logger`)
 - Schema validation with Zod
 - Graceful shutdown (the `dispose()` method -- idempotent, safe to call twice)
 - Type-safe everything (TypeScript has your back)
@@ -519,24 +519,24 @@ const app = r
   .build();
 ```
 
-### Pattern 6: Built-in Globals
+### Pattern 6: Built-in APIs
 
 Runner provides commonly-used resources and middleware out of the box:
 
 ```typescript
-import { globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const myTask = r
   .task("myTask")
-  .dependencies({ logger: globals.resources.logger }) // Built-in logger
-  .middleware([globals.middleware.task.cache.with({ ttl: 60000 })]) // Built-in cache
+  .dependencies({ logger: r.runner.logger }) // Built-in logger
+  .middleware([r.runner.middleware.task.cache.with({ ttl: 60000 })]) // Built-in cache
   .run(async (input, { logger }) => {
     await logger.info("Processing...");
   })
   .build();
 ```
 
-See [Quick Wins](#quick-wins-copy-paste-solutions) for ready-to-use examples with globals.
+See [Quick Wins](#quick-wins-copy-paste-solutions) for ready-to-use examples with built-in Runner APIs.
 
 ### Pattern 7: Typed Errors
 

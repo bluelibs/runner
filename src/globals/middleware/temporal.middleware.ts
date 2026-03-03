@@ -78,7 +78,7 @@ function rejectThrottleState(state: ThrottleState, error: Error) {
 }
 
 export const temporalResource = defineResource({
-  id: "globals.resources.temporal",
+  id: "runner.temporal",
   tags: [globalTags.system],
   init: async (): Promise<TemporalResourceState> => {
     return {
@@ -92,10 +92,8 @@ export const temporalResource = defineResource({
   dispose: async (state: TemporalResourceState) => {
     state.isDisposed = true;
     const disposeError = createTemporalDisposedError();
-    const trackedDebounceStates =
-      state.trackedDebounceStates ?? new Set<DebounceState>();
-    const trackedThrottleStates =
-      state.trackedThrottleStates ?? new Set<ThrottleState>();
+    const trackedDebounceStates = state.trackedDebounceStates;
+    const trackedThrottleStates = state.trackedThrottleStates;
 
     trackedDebounceStates.forEach((debounceState) => {
       rejectDebounceState(debounceState, disposeError);
@@ -116,7 +114,7 @@ export const temporalResource = defineResource({
  * and all callers receive the same result.
  */
 export const debounceTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.task.debounce",
+  id: "runner.middleware.task.debounce",
   throws: [middlewareTemporalDisposedError],
   configSchema: temporalConfigPattern,
   dependencies: { state: temporalResource },
@@ -126,9 +124,7 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
     }
 
     const debounceStates = state.debounceStates;
-    const trackedDebounceStates =
-      state.trackedDebounceStates ??
-      (state.trackedDebounceStates = new Set<DebounceState>());
+    const trackedDebounceStates = state.trackedDebounceStates;
     let debounceState = debounceStates.get(config);
     if (!debounceState) {
       debounceState = {
@@ -186,7 +182,7 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
  * If calls occur within the window, the last one is scheduled for the end of the window.
  */
 export const throttleTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.task.throttle",
+  id: "runner.middleware.task.throttle",
   throws: [middlewareTemporalDisposedError],
   configSchema: temporalConfigPattern,
   dependencies: { state: temporalResource },
@@ -196,9 +192,7 @@ export const throttleTaskMiddleware = defineTaskMiddleware({
     }
 
     const throttleStates = state.throttleStates;
-    const trackedThrottleStates =
-      state.trackedThrottleStates ??
-      (state.trackedThrottleStates = new Set<ThrottleState>());
+    const trackedThrottleStates = state.trackedThrottleStates;
     let throttleState = throttleStates.get(config);
     if (!throttleState) {
       throttleState = {

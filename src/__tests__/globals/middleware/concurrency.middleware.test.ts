@@ -199,19 +199,11 @@ describe("Concurrency Middleware", () => {
     );
   });
 
-  it("should proceed normally if no limit or semaphore is provided", async () => {
-    let activeTasks = 0;
-    let maxActiveTasks = 0;
-
+  it("fails fast when no limit or semaphore is provided", async () => {
     const task = defineTask({
       id: "concurrency.noLimit",
       middleware: [concurrencyTaskMiddleware.with({})],
-      run: async () => {
-        activeTasks++;
-        maxActiveTasks = Math.max(maxActiveTasks, activeTasks);
-        await sleep(10);
-        activeTasks--;
-      },
+      run: async () => undefined,
     });
 
     const app = defineResource({
@@ -219,13 +211,60 @@ describe("Concurrency Middleware", () => {
       register: [task],
       dependencies: { task },
       async init(_, { task }) {
-        await Promise.all([task(), task(), task()]);
+        await task();
       },
     });
 
-    await run(app);
+    await expect(run(app)).rejects.toThrow(
+      /requires either "limit" or "semaphore"/i,
+    );
+  });
 
-    expect(maxActiveTasks).toBe(3);
+  it("fails fast when key is provided without limit", async () => {
+    const task = defineTask({
+      id: "concurrency.key-no-limit",
+      middleware: [concurrencyTaskMiddleware.with({ key: "shared" } as never)],
+      run: async () => undefined,
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await task();
+      },
+    });
+
+    await expect(run(app)).rejects.toThrow(/key" requires "limit"/i);
+  });
+
+  it("fails fast when semaphore is mixed with limit/key config", async () => {
+    const semaphore = new Semaphore(1);
+    const task = defineTask({
+      id: "concurrency.ambiguous-config",
+      middleware: [
+        concurrencyTaskMiddleware.with({
+          semaphore,
+          limit: 1,
+          key: "ambiguous",
+        } as never),
+      ],
+      run: async () => undefined,
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await task();
+      },
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      /use either \{ semaphore \} or \{ limit, key\? \}/i,
+    );
   });
 
   it("should release permit when task fails", async () => {

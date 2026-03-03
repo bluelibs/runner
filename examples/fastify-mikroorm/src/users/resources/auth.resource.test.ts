@@ -1,6 +1,6 @@
 import { buildTestRunner } from "#/general/test/utils";
 import { auth, AuthConfig, AuthValue } from "./auth.resource";
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 describe("auth resource", () => {
   const ORIG_ENV = { ...process.env };
@@ -313,7 +313,7 @@ describe("auth resource", () => {
       const authWithEmptyEnv = r
         .resource<AuthConfig>("test.auth.empty.env")
         .dependencies({
-          logger: globals.resources.logger,
+          logger: r.runner.logger,
           env: mockEnv,
         })
         .init(async (cfg, { logger, env }): Promise<AuthValue> => {
@@ -365,7 +365,7 @@ describe("auth resource", () => {
       const authWithoutEnv = r
         .resource<AuthConfig>("test.auth.without.env")
         .dependencies({
-          logger: globals.resources.logger,
+          logger: r.runner.logger,
         })
         .init(async (cfg, { logger }): Promise<AuthValue> => {
           const secret =

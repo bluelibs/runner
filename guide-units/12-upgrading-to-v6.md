@@ -15,7 +15,7 @@ Before code changes:
   - `r.override.task/resource/hook/taskMiddleware/resourceMiddleware`
   - `middleware.everywhere`
   - `defineEventLanesTopology`, `toEventLanesResourceConfig`
-  - `globals.tags.eventLaneHook`
+  - `r.runner.tags.eventLaneHook`
   - string event sources in low-level custom event emission code
 
 ### 2. Replace Legacy Override Builders
@@ -69,21 +69,21 @@ If you intended a second component (not replacement), use a different id or `.fo
 
 ### 2.2. Migrate Cache Customization to `cacheProvider`
 
-`globals.tasks.cacheFactory` is removed.
-Use `globals.resources.cacheProvider` as the extension seam (via cache config).
+Legacy 5.x cache factory task id is removed.
+Use `r.runner.cacheProvider` as the extension seam (via cache config).
 
-Before:
+Before (5.x legacy):
 
 ```typescript
 const redisCacheFactory = r
-  .task("globals.tasks.cacheFactory")
+  .task("legacy.tasks.cacheFactory")
   .dependencies({ redis })
   .run(async (_options, { redis }) => new RedisCache(redis))
   .build();
 
 const app = r
   .resource("app")
-  .register([redis, globals.resources.cache])
+  .register([redis, r.runner.cache])
   .overrides([redisCacheFactory])
   .build();
 ```
@@ -105,7 +105,7 @@ const app = r
   .resource("app")
   .register([
     redis,
-    globals.resources.cache.with({ provider: redisCacheProvider }),
+    r.runner.cache.with({ provider: redisCacheProvider }),
   ])
   .build();
 ```
@@ -142,7 +142,7 @@ After (global catch-all interception):
 ```typescript
 const app = r
   .resource("app")
-  .dependencies({ taskRunner: globals.resources.taskRunner })
+  .dependencies({ taskRunner: r.system.taskRunner })
   .init(async (_config, { taskRunner }) => {
     taskRunner.intercept(async (next, input) => next(input));
   })
@@ -171,7 +171,7 @@ Removed:
 
 - `defineEventLanesTopology(...)`
 - `toEventLanesResourceConfig(...)`
-- `globals.tags.eventLaneHook`
+- `r.runner.tags.eventLaneHook`
 
 Use canonical config:
 
@@ -292,7 +292,7 @@ If you opt in, enforce:
 
 - Every participating hook returns an async undo closure.
 - `transactional + parallel` is invalid.
-- `transactional + globals.tags.eventLane` is invalid.
+- `transactional + r.runner.tags.eventLane` is invalid.
 
 ### 9. Switch Tag Discovery to Tag Dependencies
 
@@ -357,7 +357,7 @@ npm run qa
 Smoke test checklist:
 
 - Runtime startup completes without subtree/isolation violations.
-- Shutdown sequence emits `globals.events.disposing` then `globals.events.drained`.
+- Shutdown sequence emits `r.system.events.disposing` then `r.system.events.drained`.
 - Task and event admissions are blocked during disposal as expected.
 - Event Lanes consume only lanes for the active profile.
 - Public runtime API calls succeed only for exported ids.

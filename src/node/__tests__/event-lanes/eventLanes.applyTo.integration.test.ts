@@ -1,5 +1,5 @@
 import { createMessageError } from "../../../errors";
-import { globals, r, run } from "../../..";
+import { r, run } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
   EventLaneMessage,
@@ -100,7 +100,7 @@ describe("eventLanes applyTo", () => {
     const lane = r.eventLane("tests.event-lanes.apply-to.same-lane").build();
     const event = r
       .event<{ value: number }>("tests.event-lanes.apply-to.same-lane.event")
-      .tags([globals.tags.eventLane.with({ lane })])
+      .tags([r.runner.tags.eventLane.with({ lane })])
       .build();
     const configuredLane = r.eventLane(lane.id).applyTo([event]).build();
     const emitTask = r
@@ -220,7 +220,7 @@ describe("eventLanes applyTo", () => {
 
     const event = r
       .event("tests.event-lanes.apply-to.override-ioc.event")
-      .tags([globals.tags.eventLane.with({ lane: laneA })])
+      .tags([r.runner.tags.eventLane.with({ lane: laneA })])
       .build();
 
     const app = r

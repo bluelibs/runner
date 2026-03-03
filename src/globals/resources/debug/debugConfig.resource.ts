@@ -27,7 +27,7 @@ const debugFriendlyConfigPattern = Match.OneOf(
 );
 
 export const debugConfig = defineResource({
-  id: "globals.debug.resources.config",
+  id: "runner.debug.resources.config",
   configSchema: debugFriendlyConfigPattern,
   meta: {
     title: "Debug Config",

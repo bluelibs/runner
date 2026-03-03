@@ -9,7 +9,5 @@
 !include: 05-observability.md
 !include: 06-advanced.md
 !include: 07-developer-experience.md
-!include: 08-real-world-example.md
 !include: 08-testing.md
-!include: 11-reference.md
 !include: 12-upgrading-to-v6.md

@@ -3,7 +3,7 @@ import type { SerializerLike as Serializer } from "../../serializer";
 import { globalTags } from "../globalTags";
 
 export const serializerResource = defineResource<void, Promise<Serializer>>({
-  id: "globals.resources.serializer",
+  id: "runner.serializer",
   meta: {
     title: "Serializer",
     description:

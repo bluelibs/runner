@@ -12,7 +12,7 @@ import {
   defineTask,
 } from "../../define";
 import { run } from "../../run";
-import { globals } from "../../index";
+import { r } from "../../index";
 import { runtimeSource } from "../../types/runtimeSource";
 
 describe("Security: Hackish circumvention attempts", () => {
@@ -47,7 +47,7 @@ describe("Security: Hackish circumvention attempts", () => {
 
     const emitWithSpoof = defineTask<{ msg: string }>({
       id: "sec.hack.emitWithSpoof",
-      dependencies: { eventManager: globals.resources.eventManager },
+      dependencies: { eventManager: r.system.eventManager },
       run: async (input, { eventManager }) => {
         await eventManager.emit(e, input, runtimeSource.runtime(h1.id)); // spoof source as h1
       },
@@ -78,7 +78,7 @@ describe("Security: Hackish circumvention attempts", () => {
     const h = defineHook({
       id: "sec.hack.h",
       on: e,
-      dependencies: { eventManager: globals.resources.eventManager },
+      dependencies: { eventManager: r.system.eventManager },
       run: async (ev, { eventManager }) => {
         countH++;
         if (ev.data.step === 0) {

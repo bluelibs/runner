@@ -8,7 +8,7 @@ import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
 import { RunResult } from "../../models/RunResult";
 
-describe("globals.resources.runtime", () => {
+describe("system.runtime", () => {
   it("works inside resource init and after boot with task/event/resource/root helpers", async () => {
     const double = defineTask({
       id: "runtime.double",

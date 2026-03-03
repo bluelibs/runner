@@ -1,4 +1,4 @@
-import { globals, r, run } from "../../..";
+import { r, run } from "../../..";
 import { DurableExecutionError } from "../../durable/core/DurableService";
 import { durableResource } from "../../durable/core/resource";
 import { durableEvents } from "../../durable/events";
@@ -33,7 +33,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     const app = r.resource("app").register([durableRegistration, task]).build();
     const runtime = await run(app, { logs: { printThreshold: null } });
 
-    const taskRunner = runtime.getResourceValue(globals.resources.taskRunner);
+    const taskRunner = runtime.getResourceValue(r.system.taskRunner);
     const spy = jest
       .spyOn(taskRunner, "run")
       .mockResolvedValue(Promise.resolve("ok"));
@@ -60,7 +60,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     const app = r.resource("app").register([durableRegistration, task]).build();
     const runtime = await run(app, { logs: { printThreshold: null } });
 
-    const taskRunner = runtime.getResourceValue(globals.resources.taskRunner);
+    const taskRunner = runtime.getResourceValue(r.system.taskRunner);
     const spy = jest.spyOn(taskRunner, "run").mockResolvedValue(undefined);
 
     const d = runtime.getResourceValue(durable);

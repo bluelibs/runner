@@ -7,6 +7,19 @@ import {
 } from "../../define";
 import { VisibilityTracker } from "../../models/VisibilityTracker";
 
+const resolveDefinitionId = (reference: unknown): string | undefined => {
+  if (typeof reference === "string") {
+    return reference;
+  }
+  if (reference && typeof reference === "object" && "id" in reference) {
+    const id = (reference as { id?: unknown }).id;
+    if (typeof id === "string" && id.length > 0) {
+      return id;
+    }
+  }
+  return undefined;
+};
+
 describe("VisibilityTracker", () => {
   let tracker: VisibilityTracker;
 
@@ -530,6 +543,7 @@ describe("VisibilityTracker", () => {
             },
           ],
         ]),
+        resolveDefinitionId,
       };
 
       expect(() => tracker.validateVisibility(registry as any)).toThrow(
@@ -582,6 +596,7 @@ describe("VisibilityTracker", () => {
             },
           ],
         ]),
+        resolveDefinitionId,
       };
 
       expect(() => tracker.validateVisibility(registry as any)).toThrow(
@@ -608,6 +623,7 @@ describe("VisibilityTracker", () => {
         taskMiddlewares: new Map(),
         resourceMiddlewares: new Map(),
         resources: new Map(),
+        resolveDefinitionId,
       };
 
       expect(() => tracker.validateVisibility(registry as any)).not.toThrow();

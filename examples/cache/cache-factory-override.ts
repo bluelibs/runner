@@ -1,4 +1,4 @@
-import { task, resource, run, globals } from "@bluelibs/runner";
+import { task, resource, run, r } from "@bluelibs/runner";
 
 // Custom cache implementation (could be Redis, Memcached, etc.)
 class CustomCache {
@@ -49,7 +49,7 @@ const customCacheFactory = task({
 // Create some tasks that use caching
 const expensiveCalculation = task({
   id: "app.tasks.expensiveCalculation",
-  middleware: [globals.middleware.task.cache.with({ ttl: 3000 })],
+  middleware: [r.runner.middleware.task.cache.with({ ttl: 3000 })],
   run: async (input: { number: number }) => {
     console.log(`🔢 Performing expensive calculation for ${input.number}`);
     // Simulate expensive work
@@ -60,7 +60,7 @@ const expensiveCalculation = task({
 
 const fetchUserData = task({
   id: "app.tasks.fetchUserData",
-  middleware: [globals.middleware.task.cache.with({ ttl: 2000 })],
+  middleware: [r.runner.middleware.task.cache.with({ ttl: 2000 })],
   run: async (input: { userId: string }) => {
     console.log(`👤 Fetching user data for ${input.userId}`);
     // Simulate API call
@@ -77,7 +77,7 @@ const fetchUserData = task({
 const app = resource({
   id: "app",
   register: [
-    globals.resources.cache, // Register the cache resource
+    r.runner.cache, // Register the cache resource
     expensiveCalculation,
     fetchUserData,
   ],

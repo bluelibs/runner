@@ -25,7 +25,7 @@ The goal is simple: keep dependencies explicit, keep lifecycle predictable, and 
 </p>
 
 ```typescript
-import { r, run, globals } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 import { z } from "zod";
 
 // resources are singletons with lifecycle management and async construction
@@ -50,7 +50,7 @@ const mailer = r
 const createUser = r
   .task("users.create")
   .dependencies({ db, mailer })
-  .middleware([globals.middleware.task.retry.with({ retries: 3 })])
+  .middleware([r.runner.middleware.task.retry.with({ retries: 3 })])
   .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
   .run(async (input, { db, mailer }) => {
     const user = await db.users.insert(input);

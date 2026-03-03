@@ -4,13 +4,13 @@ import { globalTags } from "../globalTags";
 
 export const eventManagerResource = defineResource<void, Promise<EventManager>>(
   {
-    id: "globals.resources.eventManager",
+    id: "system.eventManager",
     meta: {
       title: "Event Manager",
       description:
         "Manages all events and event listeners. This is meant to be used internally for most use-cases.",
     },
-    tags: [globalTags.system, globalTags.containerInternals],
+    tags: [globalTags.system],
     dispose: async (eventManager) => {
       eventManager.dispose();
     },

@@ -36,7 +36,7 @@ export function computeRpcLaneAllowList(store: Store): RpcLaneAllowList {
     readonly string[] | undefined
   >();
 
-  const resourceEntries = Array.from(store.resources?.values() ?? []);
+  const resourceEntries = Array.from(store.resources.values());
   const rpcLaneEntries = resourceEntries.filter((e: ResourceStoreElementType) =>
     e.resource.tags?.some((t: ITag) => t?.id === globalTags.rpcLanes.id),
   );

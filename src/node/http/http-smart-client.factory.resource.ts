@@ -19,7 +19,7 @@ export const httpSmartClientFactory = defineResource<
   void,
   Promise<HttpSmartClientFactory>
 >({
-  id: "globals.resources.httpSmartClientFactory",
+  id: "runner.node.httpSmartClientFactory",
   meta: {
     title: "HTTP Smart Client Factory (Node)",
     description:

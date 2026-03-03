@@ -38,11 +38,11 @@ const fallbackConfigPattern = Match.ObjectIncluding({
 export const journalKeys = {
   /** Whether the fallback path was taken (true) or primary succeeded (false) */
   active: journalHelper.createKey<boolean>(
-    "globals.middleware.task.fallback.active",
+    "runner.middleware.task.fallback.active",
   ),
   /** The error that triggered the fallback (only set when active is true) */
   error: journalHelper.createKey<Error>(
-    "globals.middleware.task.fallback.error",
+    "runner.middleware.task.fallback.error",
   ),
 } as const;
 
@@ -50,7 +50,7 @@ export const journalKeys = {
  * Fallback middleware: provides a backup value or execution if the main task fails.
  */
 export const fallbackTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.task.fallback",
+  id: "runner.middleware.task.fallback",
   configSchema: fallbackConfigPattern,
   dependencies: {
     taskRunner: globalResources.taskRunner,
@@ -75,7 +75,7 @@ export const fallbackTaskMiddleware = defineTaskMiddleware({
       if (isTask(fallback)) {
         // If it's a task, run it with the same input using the taskRunner
         return await taskRunner.run(fallback, task.input, {
-          source: runtimeSource.middleware("globals.middleware.task.fallback"),
+          source: runtimeSource.middleware("runner.middleware.task.fallback"),
         });
       }
 

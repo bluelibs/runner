@@ -546,7 +546,7 @@ Transactional behavior:
 - If a hook fails (throws), previously completed hooks are rolled back in reverse completion order.
 - Rollback continues even if one undo fails; Runner throws an aggregated transactional rollback error.
 - Transactional execution is always fail-fast.
-- Runtime sanity constraints: `transactional + parallel` and `transactional + globals.tags.eventLane` are invalid.
+- Runtime sanity constraints: `transactional + parallel` and `transactional + r.runner.tags.eventLane` are invalid.
 - `run(app)` API does not change; only hook return behavior changes for transactional emissions.
 
 #### Parallel Event Execution
@@ -650,12 +650,12 @@ const logAllEventsHook = r
 Sometimes you have internal or system events that should not be picked up by wildcard hooks. Use the `excludeFromGlobalHooks` tag to prevent events from being sent to `"*"` hooks:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // Internal event that won't be seen by global hooks
 const internalEvent = r
   .event("app.events.internal")
-  .tags([globals.tags.excludeFromGlobalHooks])
+  .tags([r.runner.tags.excludeFromGlobalHooks])
   .build();
 ```
 
@@ -750,11 +750,11 @@ Hooks are perfect for:
 The framework exposes a minimal system-level event for observability:
 
 ```typescript
-import { globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const systemReadyHook = r
   .hook("app.hooks.systemReady")
-  .on(globals.events.ready)
+  .on(r.system.events.ready)
   .run(async () => {
     console.log("System is ready and operational!");
   })
@@ -763,9 +763,9 @@ const systemReadyHook = r
 
 Available system events:
 
-- `globals.events.ready` - System has completed initialization
-- `globals.events.disposing` - Runtime entered `disposing`; fresh `runtime`/`resource` admissions are blocked while in-flight business work drains
-- `globals.events.drained` - Drain completed (or grace timed out); hooks registered on this event fire (lifecycle-bypassed), but cannot start new tasks or emit additional events — all regular business admissions are blocked before resource disposal
+- `r.system.events.ready` - System has completed initialization
+- `r.system.events.disposing` - Runtime entered `disposing`; fresh `runtime`/`resource` admissions are blocked while in-flight business work drains
+- `r.system.events.drained` - Drain completed (or grace timed out); hooks registered on this event fire (lifecycle-bypassed), but cannot start new tasks or emit additional events — all regular business admissions are blocked before resource disposal
   // Note: use run({ onUnhandledError }) for unhandled error handling
 
 #### stopPropagation()
@@ -884,11 +884,11 @@ const adminTask = r
 Want logging or auth across a whole subtree? Attach middleware at the owning resource:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const logTaskMiddleware = r.middleware
   .task("app.middleware.log.task")
-  .dependencies({ logger: globals.resources.logger })
+  .dependencies({ logger: r.runner.logger })
   .run(async ({ task, next }, { logger }) => {
     logger.info(`Executing: ${String(task!.definition.id)}`);
     const result = await next(task!.input);
@@ -1264,13 +1264,13 @@ const taskWithTags = r
 The core power of tags is runtime discovery. Depend on tags directly and Runner injects a typed accessor:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // Assuming: httpTag and cacheableTag are defined and registered
 // Auto-register HTTP routes based on tags
 const routeRegistration = r
   .hook("app.hooks.registerRoutes")
-  .on(globals.events.ready)
+  .on(r.system.events.ready)
   .dependencies({
     server: expressServer,
     httpTag, // use the runtime accessor because we execute matched tasks via entry.run(...)
@@ -1388,28 +1388,28 @@ const performanceMiddleware = r.middleware
 Built-in tags for framework behavior:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const internalTask = r
   .task("app.internal.cleanup")
   .tags([
-    globals.tags.system, // Excludes from debug logs
-    globals.tags.debug.with({ logTaskInput: true }), // Per-component debug config
+    r.system.tags.internal, // system.tags.internal
+    r.runner.tags.debug.with({ logTaskInput: true }), // Per-component debug config
   ])
   .run(async () => performCleanup())
   .build();
 
 const internalEvent = r
   .event("app.events.internal")
-  .tags([globals.tags.excludeFromGlobalHooks]) // Won't trigger wildcard hooks
+  .tags([r.runner.tags.excludeFromGlobalHooks]) // Won't trigger wildcard hooks
   .build();
 
 // Deny privileged internal resources inside a boundary
 const secureModule = r
   .resource("app.secure")
-  .isolate({ deny: [globals.tags.containerInternals] })
+  .isolate({ deny: ["system.*"] })
   .build();
-// If you're using runner-dev, which uses containerInternals, make sure it's a sibling of your app. top-level -> app, runner-dev
+// Keep tooling resources outside the isolated app boundary when they need internal access.
 ```
 
 #### Contract Tags

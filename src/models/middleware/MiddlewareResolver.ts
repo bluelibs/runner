@@ -31,6 +31,10 @@ export class MiddlewareResolver {
 
   constructor(private readonly store: Store) {}
 
+  private resolveDefinitionId(reference: unknown): string | undefined {
+    return this.store.resolveDefinitionId(reference);
+  }
+
   private isStoreLocked(): boolean {
     return this.store.isLocked;
   }
@@ -51,16 +55,18 @@ export class MiddlewareResolver {
    * Gets all applicable middlewares for a task (global + local, deduplicated)
    */
   getApplicableTaskMiddlewares(task: ITask<any, any, any>): ITaskMiddleware[] {
+    const taskId = this.resolveDefinitionId(task)!;
+    const effectiveTask = this.store.tasks.get(taskId)?.task ?? task;
     if (this.isStoreLocked()) {
-      const cached = this.taskMiddlewareCache.get(task.id);
+      const cached = this.taskMiddlewareCache.get(taskId);
       if (cached) {
         return cached;
       }
     }
 
-    const local = task.middleware;
-    const globalMiddlewares = this.getEverywhereTaskMiddlewares(task);
-    const localIds = new Set(local.map((m) => m.id));
+    const local = effectiveTask.middleware;
+    const globalMiddlewares = this.getEverywhereTaskMiddlewares(effectiveTask);
+    const localIds = new Set(local.map((middleware) => middleware.id));
 
     const globalFiltered = globalMiddlewares.filter((m) => !localIds.has(m.id));
 
@@ -70,7 +76,7 @@ export class MiddlewareResolver {
     const result = [...globalFiltered, ...local];
 
     if (this.isStoreLocked()) {
-      this.taskMiddlewareCache.set(task.id, result);
+      this.taskMiddlewareCache.set(taskId, result);
     }
 
     return result;
@@ -82,23 +88,27 @@ export class MiddlewareResolver {
   getApplicableResourceMiddlewares(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
+    const resourceId = this.resolveDefinitionId(resource)!;
+    const effectiveResource =
+      this.store.resources.get(resourceId)?.resource ?? resource;
     if (this.isStoreLocked()) {
-      const cached = this.resourceMiddlewareCache.get(resource.id);
+      const cached = this.resourceMiddlewareCache.get(resourceId);
       if (cached) {
         return cached;
       }
     }
 
-    const local = resource.middleware;
-    const globalMiddlewares = this.getEverywhereResourceMiddlewares(resource);
-    const localIds = new Set(local.map((m) => m.id));
+    const local = effectiveResource.middleware;
+    const globalMiddlewares =
+      this.getEverywhereResourceMiddlewares(effectiveResource);
+    const localIds = new Set(local.map((middleware) => middleware.id));
 
     const globalFiltered = globalMiddlewares.filter((m) => !localIds.has(m.id));
 
     const result = [...globalFiltered, ...local];
 
     if (this.isStoreLocked()) {
-      this.resourceMiddlewareCache.set(resource.id, result);
+      this.resourceMiddlewareCache.set(resourceId, result);
     }
 
     return result;
@@ -112,9 +122,10 @@ export class MiddlewareResolver {
     task: ITask<any, any, any>,
     middlewares: ITaskMiddleware[],
   ): ITaskMiddleware[] {
-    const entry = this.store.tasks.get(task.id);
+    const taskId = this.resolveDefinitionId(task)!;
+    const entry = this.store.tasks.get(taskId);
     if (!entry) {
-      return taskNotRegisteredError.throw({ taskId: task.id });
+      return taskNotRegisteredError.throw({ taskId });
     }
     const tDef = entry.task;
     const isRpcRouted = tDef.isRpcRouted;
@@ -128,13 +139,13 @@ export class MiddlewareResolver {
     // Use the Store definition to avoid relying on object-identity.
     // Consumers can pass a different task object with the same id.
     const policy = tDef[symbolRpcLanePolicy];
-    const allowSet = this.getRpcLaneAllowSet(task.id, policy);
+    const allowSet = this.getRpcLaneAllowSet(taskId, policy);
 
     if (!allowSet) {
       return [];
     }
 
-    return middlewares.filter((m) => allowSet.has(m.id));
+    return middlewares.filter((middleware) => allowSet.has(middleware.id));
   }
 
   private getRpcLaneAllowSet(
@@ -149,8 +160,7 @@ export class MiddlewareResolver {
     }
 
     const allowList = getMiddlewareAllowList(policy);
-    const toId = (x: string | { id: string }) =>
-      typeof x === "string" ? x : x?.id;
+    const toId = (x: string | { id: string }) => this.resolveDefinitionId(x);
     const allowSet = Array.isArray(allowList)
       ? new Set(allowList.map(toId).filter((id): id is string => !!id))
       : null;
@@ -169,12 +179,15 @@ export class MiddlewareResolver {
   public getEverywhereTaskMiddlewares(
     task: ITask<any, any, any>,
   ): ITaskMiddleware[] {
+    const taskId = this.resolveDefinitionId(task)!;
+    const effectiveTask = this.store.tasks.get(taskId)?.task ?? task;
+
     return resolveApplicableSubtreeTaskMiddlewares(
       {
         getOwnerResourceId: (itemId) => this.getOwnerResourceId(itemId),
         getResource: (resourceId) => this.getResource(resourceId),
       },
-      task,
+      effectiveTask,
     );
   }
 
@@ -185,12 +198,16 @@ export class MiddlewareResolver {
   public getEverywhereResourceMiddlewares(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
+    const resourceId = this.resolveDefinitionId(resource)!;
+    const effectiveResource =
+      this.store.resources.get(resourceId)?.resource ?? resource;
+
     return resolveApplicableSubtreeResourceMiddlewares(
       {
         getOwnerResourceId: (itemId) => this.getOwnerResourceId(itemId),
         getResource: (resourceId) => this.getResource(resourceId),
       },
-      resource,
+      effectiveResource,
     );
   }
 }

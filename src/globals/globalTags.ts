@@ -4,21 +4,25 @@ import type { IEventLaneDefinition, IRpcLaneDefinition } from "../defs";
 import { cronTag } from "./cron/cron.tag";
 import { debugTag } from "./resources/debug/debug.tag";
 
+const internalTag = defineTag<{
+  metadata?: Record<string, any>;
+}>({
+  id: "system.tags.internal",
+  meta: {
+    title: "System Internal",
+    description:
+      "Marks framework-owned internals and infrastructure definitions.",
+  },
+});
+
 const globalTagsBase = {
-  system: defineTag<{
-    metadata?: Record<string, any>;
-  }>({
-    id: "globals.tags.system",
-    meta: {
-      title: "System",
-      description:
-        "System-wide tags. Used for filtering out noise when you're focusing on your application.",
-    },
-  }),
+  system: internalTag,
+  /** @deprecated Use `globalTags.system`. Kept for backward compatibility. */
+  internal: internalTag,
   excludeFromGlobalHooks: defineTag<{
     metadata?: Record<string, any>;
   }>({
-    id: "globals.tags.excludeFromGlobalHooks",
+    id: "runner.tags.excludeFromGlobalHooks",
     meta: {
       title: "Exclude Event From Global Hooks",
       description:
@@ -27,7 +31,7 @@ const globalTagsBase = {
   }),
   eventLane: tagBuilder<{
     lane: IEventLaneDefinition;
-  }>("globals.tags.eventLane")
+  }>("runner.tags.eventLane")
     .for("events")
     .meta({
       title: "Event Lane",
@@ -37,7 +41,7 @@ const globalTagsBase = {
     .build(),
   rpcLane: tagBuilder<{
     lane: IRpcLaneDefinition;
-  }>("globals.tags.rpcLane")
+  }>("runner.tags.rpcLane")
     .for(["tasks", "events"])
     .meta({
       title: "RPC Lane",
@@ -46,7 +50,7 @@ const globalTagsBase = {
     })
     .build(),
   rpcLanes: tagBuilder<{ metadata?: Record<string, any> }>(
-    "globals.tags.rpcLanes",
+    "runner.tags.rpcLanes",
   )
     .for("resources")
     .meta({
@@ -55,19 +59,9 @@ const globalTagsBase = {
         "Marks resources that apply rpcLane topology and optional server exposure.",
     })
     .build(),
-  containerInternals: defineTag<{
-    metadata?: Record<string, any>;
-  }>({
-    id: "globals.tags.containerInternals",
-    meta: {
-      title: "Container Internals",
-      description:
-        "Marks privileged container resources (store, taskRunner, middlewareManager, eventManager, runtime) so isolation boundaries can deny access by tag.",
-    },
-  }),
   debug: debugTag,
   cron: cronTag,
-  authValidator: tagBuilder("globals.tags.authValidator")
+  authValidator: tagBuilder("runner.tags.authValidator")
     .for("tasks")
     .meta({
       title: "Auth Validator",

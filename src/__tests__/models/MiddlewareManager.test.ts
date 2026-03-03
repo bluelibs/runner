@@ -327,7 +327,7 @@ describe("MiddlewareManager", () => {
   it("getEverywhereMiddlewareForTasks fails fast on duplicate subtree middleware ids", () => {
     const task = defineTask({ id: "task.dep", run: async () => 0 });
     const baseMw = defineTaskMiddleware({
-      id: "mw",
+      id: "mw.shared",
       dependencies: { t: task },
       run: async ({ next, task }) => next(task?.input),
     });
@@ -352,7 +352,7 @@ describe("MiddlewareManager", () => {
     });
     store.storeGenericItem(owner);
     expect(() => manager.getEverywhereMiddlewareForTasks(task)).toThrow(
-      'Duplicate middleware id "mw"',
+      'Duplicate middleware id "mw.shared"',
     );
   });
 

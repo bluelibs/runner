@@ -1,6 +1,6 @@
 import { middlewareInterceptorResource } from "../../globals/resources/debug/middleware.hook";
 
-describe("globals.resources.debug.middlewareInterceptorResource (unit)", () => {
+describe("runner.debug.middlewareInterceptorResource (unit)", () => {
   it("logs before and after for resource and task middleware via interceptors", async () => {
     const messages: string[] = [];
 

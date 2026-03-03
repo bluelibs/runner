@@ -1,4 +1,4 @@
-import { globals, r } from "../../public";
+import { r } from "../../public";
 import { run } from "../../run";
 import type { RegisterableItems } from "../../defs";
 
@@ -34,13 +34,13 @@ describe("global cron resource (additional)", () => {
   const createCronApp = (items: RegisterableItems[] = []) =>
     r
       .resource("app")
-      .register([globals.resources.cron, ...items])
+      .register([r.runner.cron, ...items])
       .build();
 
   it("fails fast when cron expression is invalid", async () => {
     const invalidTask = r
       .task("app.tasks.invalid-cron")
-      .tags([globals.tags.cron.with({ expression: "invalid" })])
+      .tags([r.runner.tags.cron.with({ expression: "invalid" })])
       .run(async () => undefined)
       .build();
 
@@ -57,7 +57,7 @@ describe("global cron resource (additional)", () => {
     const flakyTask = r
       .task("app.tasks.non-error-failure")
       .tags([
-        globals.tags.cron.with({
+        r.runner.tags.cron.with({
           expression: "* * * * *",
         }),
       ])
@@ -76,7 +76,7 @@ describe("global cron resource (additional)", () => {
     expect(attempts).toBe(1);
     expect(
       runtime
-        .getResourceValue(globals.resources.cron)
+        .getResourceValue(r.runner.cron)
         .schedules.get("app.tasks.non-error-failure")?.stopped,
     ).toBe(false);
 
@@ -87,22 +87,22 @@ describe("global cron resource (additional)", () => {
     const duplicateCronTask = r
       .task("app.tasks.duplicate-cron")
       .tags([
-        globals.tags.cron.with({ expression: "* * * * *" }),
-        globals.tags.cron.with({ expression: "*/5 * * * *" }),
+        r.runner.tags.cron.with({ expression: "* * * * *" }),
+        r.runner.tags.cron.with({ expression: "*/5 * * * *" }),
       ])
       .run(async () => undefined)
       .build();
 
     const app = createCronApp([duplicateCronTask]);
     await expect(run(app)).rejects.toThrow(
-      /duplicate tag "globals\.tags\.cron"/i,
+      /duplicate tag "runner\.tags\.cron"/i,
     );
   });
 
   it("fails when cron tag is present without configuration", async () => {
     const missingConfigTask = r
       .task("app.tasks.missing-cron-config")
-      .tags([globals.tags.cron as never])
+      .tags([r.runner.tags.cron as never])
       .run(async () => undefined)
       .build();
 
@@ -118,7 +118,7 @@ describe("global cron resource (additional)", () => {
 
     const scheduledTask = r
       .task("app.tasks.cleanup")
-      .tags([globals.tags.cron.with({ expression: "* * * * *" })])
+      .tags([r.runner.tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         attempts += 1;
       })
@@ -126,7 +126,7 @@ describe("global cron resource (additional)", () => {
 
     const app = createCronApp([scheduledTask]);
     const runtime = await run(app);
-    const cron = runtime.getResourceValue(globals.resources.cron);
+    const cron = runtime.getResourceValue(r.runner.cron);
 
     expect(cron.schedules.size).toBe(1);
     await runtime.dispose();
@@ -159,7 +159,7 @@ describe("global cron resource (additional)", () => {
 
     const shutdownAwareCronTask = r
       .task("app.tasks.shutdown.cron")
-      .tags([globals.tags.cron.with({ expression: "* * * * *" })])
+      .tags([r.runner.tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         cronRuns += 1;
       })
@@ -170,7 +170,7 @@ describe("global cron resource (additional)", () => {
       disposeBudgetMs: 1_000_000,
       disposeDrainBudgetMs: 1_000_000,
     });
-    const cron = runtime.getResourceValue(globals.resources.cron);
+    const cron = runtime.getResourceValue(r.runner.cron);
 
     const blockerRun = runtime.runTask(blockerTask);
     await flushMicrotasks();
@@ -215,7 +215,7 @@ describe("global cron resource (additional)", () => {
     const silentTask = r
       .task("app.tasks.silent")
       .tags([
-        globals.tags.cron.with({
+        r.runner.tags.cron.with({
           expression: "* * * * *",
           silent: true,
         }),
@@ -255,7 +255,7 @@ describe("global cron resource (additional)", () => {
     const disabledSilentTask = r
       .task("app.tasks.disabled-silent")
       .tags([
-        globals.tags.cron.with({
+        r.runner.tags.cron.with({
           expression: "* * * * *",
           enabled: false,
           silent: true,
@@ -284,7 +284,7 @@ describe("global cron resource (additional)", () => {
     const immediateTask = r
       .task("app.tasks.immediate-single-stream")
       .tags([
-        globals.tags.cron.with({
+        r.runner.tags.cron.with({
           expression: "* * * * *",
           immediate: true,
         }),
@@ -318,7 +318,7 @@ describe("global cron resource (additional)", () => {
     const immediateTask = r
       .task("app.tasks.multi.immediate")
       .tags([
-        globals.tags.cron.with({
+        r.runner.tags.cron.with({
           expression: "* * * * *",
           immediate: true,
         }),
@@ -330,7 +330,7 @@ describe("global cron resource (additional)", () => {
 
     const regularTask = r
       .task("app.tasks.multi.regular")
-      .tags([globals.tags.cron.with({ expression: "* * * * *" })])
+      .tags([r.runner.tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         regularRuns += 1;
       })

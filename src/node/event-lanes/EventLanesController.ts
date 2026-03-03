@@ -1,4 +1,4 @@
-import { globals } from "../../index";
+import { r } from "../../index";
 import { runtimeSource } from "../../types/runtimeSource";
 import { eventLaneEventNotRegisteredError } from "../../errors";
 import type { EventManager } from "../../models/EventManager";
@@ -199,7 +199,7 @@ export class EventLanesController {
 
   private registerConsumersOnReady() {
     this.dependencies.eventManager.addListener(
-      globals.events.ready,
+      r.system.events.ready,
       async () => {
         if (this.context.started || this.context.disposed) {
           return;

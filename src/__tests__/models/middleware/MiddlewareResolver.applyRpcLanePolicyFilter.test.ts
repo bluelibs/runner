@@ -1,6 +1,19 @@
 import { MiddlewareResolver } from "../../../models/middleware/MiddlewareResolver";
 import { symbolRpcLanePolicy } from "../../../defs";
 
+const resolveDefinitionId = (reference: unknown): string | undefined => {
+  if (typeof reference === "string") {
+    return reference;
+  }
+  if (reference && typeof reference === "object" && "id" in reference) {
+    const id = (reference as { id?: unknown }).id;
+    if (typeof id === "string" && id.length > 0) {
+      return id;
+    }
+  }
+  return undefined;
+};
+
 describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
   test("throws when task is not registered", () => {
     const store: any = {
@@ -8,6 +21,7 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
       resources: new Map(),
+      resolveDefinitionId,
       getOwnerResourceId: () => undefined,
     };
 
@@ -33,6 +47,7 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
       resources: new Map(),
+      resolveDefinitionId,
       getOwnerResourceId: () => undefined,
     };
     const resolver = new MiddlewareResolver(store);
@@ -54,6 +69,7 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
       resources: new Map(),
+      resolveDefinitionId,
       getOwnerResourceId: () => undefined,
     };
     const resolver = new MiddlewareResolver(store);
@@ -76,6 +92,7 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
       resources: new Map(),
+      resolveDefinitionId,
       getOwnerResourceId: () => undefined,
     };
     const resolver = new MiddlewareResolver(store);
@@ -99,6 +116,7 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
       taskMiddlewares: new Map([[middleware.id, { middleware }]]),
       resourceMiddlewares: new Map(),
       resources: new Map(),
+      resolveDefinitionId,
       getOwnerResourceId: () => undefined,
       isItemWithinResourceSubtree: () => false,
       isItemVisibleToConsumer: () => true,
@@ -142,6 +160,7 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
       taskMiddlewares: new Map([[middleware.id, { middleware }]]),
       resourceMiddlewares: new Map(),
       resources: new Map([[ownerResource.id, { resource: ownerResource }]]),
+      resolveDefinitionId,
       getOwnerResourceId: () => ownerResource.id,
     };
 
@@ -164,6 +183,7 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
       resources: new Map(),
+      resolveDefinitionId,
       getOwnerResourceId: () => undefined,
     };
 
@@ -193,6 +213,7 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
       resources: new Map(),
+      resolveDefinitionId,
       getOwnerResourceId: () => undefined,
     };
 
@@ -224,6 +245,7 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
       resources: new Map(),
+      resolveDefinitionId,
       getOwnerResourceId: () => undefined,
     };
     const resolver = new MiddlewareResolver(store);

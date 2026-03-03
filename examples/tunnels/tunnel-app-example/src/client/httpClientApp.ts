@@ -1,4 +1,4 @@
-import { globals, r } from "@bluelibs/runner/node";
+import { r } from "@bluelibs/runner/node";
 
 import { ResourceId, TaskId, TunnelMode, TunnelTransport } from "../ids.js";
 import { demoTask } from "./demoTask.js";
@@ -24,8 +24,8 @@ export type BuildHttpClientAppOptions = {
 export function buildHttpClientApp(options: BuildHttpClientAppOptions) {
   const tunnelClient = r
     .resource(ResourceId.TunnelClient)
-    .tags([globals.tags.tunnel])
-    .dependencies({ clientFactory: globals.resources.httpClientFactory })
+    .tags([r.runner.tags.tunnel])
+    .dependencies({ clientFactory: r.runner.httpClientFactory })
     .init(async (_cfg, deps): Promise<HttpTunnelClientValue> => {
       const client = deps.clientFactory({
         baseUrl: options.baseUrl,

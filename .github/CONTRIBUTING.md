@@ -24,12 +24,6 @@ A minimal repro makes bugs fixable. Create single file reproduce-ables ([repomix
 
 If you can't isolate it, share what you tried — we'll help.
 
-## Security Issues
-
-Please do NOT open a public issue. Follow the steps in SECURITY.md:
-
-- ./SECURITY.md
-
 ## Pull Requests (optional but welcome)
 
 If you're opening a PR:

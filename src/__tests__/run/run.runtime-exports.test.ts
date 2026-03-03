@@ -360,6 +360,42 @@ describe("run.runtime-exports", () => {
     });
   });
 
+  // ─── getResourceConfig ─────────────────────────────────────────────────
+
+  describe("getResourceConfig", () => {
+    it("allows reading config for an exported resource", async () => {
+      const inner = defineResource<{ flag: boolean }>({
+        id: "runtime.exports.getCfg.exported",
+      });
+      const root = defineResource({
+        id: "runtime.exports.getCfg.root",
+        register: [inner.with({ flag: true })],
+        isolate: { exports: [inner.id] },
+      });
+
+      const runtime = await run(root, { shutdownHooks: false });
+      expect(runtime.getResourceConfig(inner)).toEqual({ flag: true });
+      await runtime.dispose();
+    });
+
+    it("blocks reading config for non-exported resources", async () => {
+      const inner = defineResource<{ flag: boolean }>({
+        id: "runtime.exports.getCfg.private",
+      });
+      const root = defineResource({
+        id: "runtime.exports.getCfg.blocked.root",
+        register: [inner.with({ flag: true })],
+        isolate: { exports: "none" },
+      });
+
+      const runtime = await run(root, { shutdownHooks: false });
+      expect(() => runtime.getResourceConfig(inner)).toThrow(
+        expect.objectContaining({ id: "runner.errors.runtimeAccessViolation" }),
+      );
+      await runtime.dispose();
+    });
+  });
+
   // ─── getLazyResourceValue ─────────────────────────────────────────────
 
   describe("getLazyResourceValue", () => {

@@ -16,12 +16,12 @@ Production-ready patterns you can use today. Each example is complete and tested
 ### Add Caching to Any Task (with automatic invalidation)
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const getUser = r
   .task("users.get")
   .middleware([
-    globals.middleware.task.cache.with({
+    r.runner.middleware.task.cache.with({
       ttl: 60 * 1000, // 1 minute
       keyBuilder: (taskId, input) => `user:${input.id}`,
     }),
@@ -42,7 +42,7 @@ const getUser = r
 const callExternalAPI = r
   .task("api.external")
   .middleware([
-    globals.middleware.task.retry.with({
+    r.runner.middleware.task.retry.with({
       retries: 3,
       delayStrategy: (attempt) => 100 * Math.pow(2, attempt), // 100ms, 200ms, 400ms
       stopRetryIf: (error) => error.status === 404, // Don't retry not found
@@ -65,7 +65,7 @@ const callExternalAPI = r
 const slowOperation = r
   .task("operations.slow")
   .middleware([
-    globals.middleware.task.timeout.with({ ttl: 5000 }), // 5 second max
+    r.runner.middleware.task.timeout.with({ ttl: 5000 }), // 5 second max
   ])
   .run(async () => {
     // This will throw TimeoutError if it takes > 5s
@@ -77,8 +77,8 @@ const slowOperation = r
 const robustTask = r
   .task("operations.robust")
   .middleware([
-    globals.middleware.task.retry.with({ retries: 3 }),
-    globals.middleware.task.timeout.with({ ttl: 10000 }), // Each retry gets 10s
+    r.runner.middleware.task.retry.with({ retries: 3 }),
+    r.runner.middleware.task.timeout.with({ ttl: 10000 }), // Each retry gets 10s
   ])
   .run(async () => await unreliableOperation())
   .build();
@@ -128,7 +128,7 @@ The built-in queue provides in-process named locks - no Redis needed, but only w
 ```typescript
 const writeConfig = r
   .task("config.write")
-  .dependencies({ queue: globals.resources.queue })
+  .dependencies({ queue: r.runner.queue })
   .run(async (input: { key: string; value: string }, { queue }) => {
     // Only one write per key at a time within this process
     return await queue.run(`config:${input.key}`, async (signal) => {
@@ -149,7 +149,7 @@ const writeConfig = r
 ```typescript
 const processPayment = r
   .task("payments.process")
-  .dependencies({ logger: globals.resources.logger })
+  .dependencies({ logger: r.runner.logger })
   .run(async (input: { orderId: string; amount: number }, { logger }) => {
     // Logs are automatically structured and include task context
     await logger.info("Processing payment", {

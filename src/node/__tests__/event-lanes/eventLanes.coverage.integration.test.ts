@@ -1,5 +1,5 @@
 import { createMessageError } from "../../../errors";
-import { globals, r, run } from "../../..";
+import { r, run } from "../../..";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
@@ -77,7 +77,7 @@ describe("event-lanes: additional coverage", () => {
     const queue = new ManualCoverageQueue();
     const event = r
       .event<{ id: string }>("tests.event-lanes.malformed-relay.event")
-      .tags([globals.tags.eventLane.with({ lane: laneA })])
+      .tags([r.runner.tags.eventLane.with({ lane: laneA })])
       .build();
 
     let callsA = 0;
@@ -99,7 +99,7 @@ describe("event-lanes: additional coverage", () => {
 
     const emitMalformedRelay = r
       .task("tests.event-lanes.malformed-relay.emit")
-      .dependencies({ eventManager: globals.resources.eventManager })
+      .dependencies({ eventManager: r.system.eventManager })
       .run(async (_input, deps) => {
         await deps.eventManager.emit(
           event,
@@ -140,7 +140,7 @@ describe("event-lanes: additional coverage", () => {
     const queue = new ManualCoverageQueue();
     const event = r
       .event("tests.event-lanes.prefetch.invalid.event")
-      .tags([globals.tags.eventLane.with({ lane })])
+      .tags([r.runner.tags.eventLane.with({ lane })])
       .build();
     const laneHook = r
       .hook("tests.event-lanes.prefetch.invalid.hook")
@@ -149,10 +149,10 @@ describe("event-lanes: additional coverage", () => {
       .build();
     const triggerReadyAgain = r
       .task("tests.event-lanes.prefetch.invalid.ready-again")
-      .dependencies({ eventManager: globals.resources.eventManager })
+      .dependencies({ eventManager: r.system.eventManager })
       .run(async (_input, deps) => {
         await deps.eventManager.emit(
-          globals.events.ready,
+          r.system.events.ready,
           undefined,
           runtimeSource.runtime("tests.event-lanes.ready.again"),
         );

@@ -8,7 +8,7 @@ import { hookInterceptorResource } from "./hook.hook";
 import { executionTrackerResource } from "./executionTracker.resource";
 
 export const debugResource = defineResource({
-  id: "globals.resources.debug",
+  id: "runner.debug",
   register: (config: DebugFriendlyConfig) => {
     return [
       debugConfig.with(config),

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
-import { r, run, globals } from "../../index";
+import { r, run } from "../../index";
 import { Serializer } from "../../serializer";
 import { createHttpSmartClient, createHttpMixedClient } from "../../node";
 import type { RunResult } from "../../models/RunResult";
@@ -17,17 +17,13 @@ describe("httpClientFactory", () => {
   });
 
   it("should inject httpClientFactory from globals", async () => {
-    const factory = await runtime.getResourceValue(
-      globals.resources.httpClientFactory,
-    );
+    const factory = await runtime.getResourceValue(r.runner.httpClientFactory);
     expect(factory).toBeDefined();
     expect(typeof factory).toBe("function");
   });
 
   it("should automatically inject serializer into created clients", async () => {
-    const factory = await runtime.getResourceValue(
-      globals.resources.httpClientFactory,
-    );
+    const factory = await runtime.getResourceValue(r.runner.httpClientFactory);
 
     const client = factory({
       baseUrl: "http://localhost:9999/__runner",
@@ -51,10 +47,8 @@ describe("httpClientFactory", () => {
 
     const rt = await run(appWithError);
 
-    const factory = await rt.getResourceValue(
-      globals.resources.httpClientFactory,
-    );
-    const store = await rt.getResourceValue(globals.resources.store);
+    const factory = await rt.getResourceValue(r.runner.httpClientFactory);
+    const store = await rt.getResourceValue(r.system.store);
 
     // Verify error is in store
     expect(store.errors.has(TestError.id)).toBe(true);
@@ -77,10 +71,8 @@ describe("httpClientFactory", () => {
 
     const rt = await run(appWithContext);
 
-    const factory = await rt.getResourceValue(
-      globals.resources.httpClientFactory,
-    );
-    const store = await rt.getResourceValue(globals.resources.store);
+    const factory = await rt.getResourceValue(r.runner.httpClientFactory);
+    const store = await rt.getResourceValue(r.system.store);
 
     // Verify context is in store
     expect(store.asyncContexts.has(requestContext.id)).toBe(true);
@@ -94,7 +86,7 @@ describe("httpClientFactory", () => {
   it("should work as a dependency in tasks", async () => {
     const myTask = r
       .task("test.tasks.useFactory")
-      .dependencies({ factory: globals.resources.httpClientFactory })
+      .dependencies({ factory: r.runner.httpClientFactory })
       .run(async (_, { factory }) => {
         const client = factory({
           baseUrl: "http://example.com/__runner",
@@ -121,7 +113,7 @@ describe("httpClientFactory", () => {
   ) {
     it("should provide createSmartClient in Node environment via node entry", async () => {
       const serializer = (await runtime.getResourceValue(
-        globals.resources.serializer,
+        r.runner.serializer,
       )) as Serializer;
       const smartClient = createHttpSmartClient({
         baseUrl: "http://localhost:9999/__runner",
@@ -135,7 +127,7 @@ describe("httpClientFactory", () => {
 
     it("should provide createMixedClient in Node environment via node entry", async () => {
       const serializer = (await runtime.getResourceValue(
-        globals.resources.serializer,
+        r.runner.serializer,
       )) as Serializer;
       const mixedClient = createHttpMixedClient({
         baseUrl: "http://localhost:9999/__runner",
