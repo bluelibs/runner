@@ -85,7 +85,7 @@ describe("run.overrides", () => {
     expect(result.value).toBe("Task overridden");
   });
 
-  it("should apply resource overrides with config via .with()", async () => {
+  it("should apply resource overrides while keeping registered config", async () => {
     const baseResource = defineResource<{ test: string }, Promise<string>>({
       id: "resource",
       init: async (config) => `base:${config.test}`,
@@ -99,7 +99,7 @@ describe("run.overrides", () => {
     const app = defineResource({
       id: "app",
       register: [baseResource.with({ test: "base" })],
-      overrides: [resourceOverride.with({ test: "override" })],
+      overrides: [resourceOverride],
       dependencies: { baseResource },
       async init(_, deps) {
         return deps.baseResource;
@@ -107,7 +107,7 @@ describe("run.overrides", () => {
     });
 
     const result = await run(app);
-    expect(result.value).toBe("override:override");
+    expect(result.value).toBe("override:base");
   });
 
   it("should work overriding a middleware (task and resource)", async () => {
@@ -193,28 +193,25 @@ describe("run.overrides", () => {
     );
   });
 
-  it("should throw, when you try to override something unregistered but with resources with config", async () => {
-    const r1 = defineResource({
-      id: "override",
-      init: async () => "Task executed",
+  it("should throw when .overrides receives a configured override resource", async () => {
+    const baseResource = defineResource<{ mode: string }, Promise<string>>({
+      id: "configured.override.base",
+      init: async (config) => config.mode,
     });
-    const r2 = defineResource({
-      id: "override2",
-      init: async () => "Task executed",
-    });
-    const r2Override = r.override(r2, async () => "Task overridden");
+    const configuredOverride = r.override(
+      baseResource,
+      async (config) => `override:${config.mode}`,
+    );
 
     const app = defineResource({
-      id: "app",
-      dependencies: { r1 },
-      overrides: [r2Override.with()],
-      async init(_, deps) {
-        return deps.r1;
-      },
+      id: "configured.override.app",
+      register: [baseResource.with({ mode: "base" })],
+      overrides: [configuredOverride.with({ mode: "override" }) as any],
+      init: async () => undefined,
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Override target Resource "override2" is not registered, so it cannot be overridden.',
+      ".overrides([...]) accepts only definitions produced by r.override(...) / override(...).",
     );
   });
 
@@ -348,7 +345,7 @@ describe("run.overrides", () => {
     );
   });
 
-  it("should override if I have a previously registered normal resource with a resource with config", async () => {
+  it("should override if I have a previously registered normal resource", async () => {
     const r1 = defineResource({
       id: "override",
       init: async () => "Task executed",
@@ -359,7 +356,7 @@ describe("run.overrides", () => {
       id: "app",
       dependencies: { r1 },
       register: [r1],
-      overrides: [r2.with()],
+      overrides: [r2],
       async init(_, deps) {
         return deps.r1;
       },
@@ -369,7 +366,7 @@ describe("run.overrides", () => {
     expect(result.value).toBe("Task overriden.");
   });
 
-  it("should override if I have a previously registered resource-with-config with another resource-with-config", async () => {
+  it("should override if I have a previously registered resource-with-config", async () => {
     const r1 = defineResource<{ name: string }, Promise<string>>({
       id: "override",
       init: async (config) => `Task executed ${config.name}`,
@@ -384,7 +381,7 @@ describe("run.overrides", () => {
       id: "app",
       dependencies: { r1 },
       register: [r1.with({ name: "ok" })],
-      overrides: [r2.with({ name: "ok" })],
+      overrides: [r2],
       async init(_, deps) {
         return deps.r1;
       },
@@ -394,7 +391,7 @@ describe("run.overrides", () => {
     expect(result.value).toBe("Task overriden ok.");
   });
 
-  it("should override something deeply registered, with a with config", async () => {
+  it("should override something deeply registered", async () => {
     const r1 = defineResource({
       id: "override",
       init: async () => "Task executed",
@@ -416,7 +413,7 @@ describe("run.overrides", () => {
       id: "app",
       dependencies: { r1 },
       register: [middle2],
-      overrides: [r2.with()],
+      overrides: [r2],
       async init(_, deps) {
         return deps.r1;
       },

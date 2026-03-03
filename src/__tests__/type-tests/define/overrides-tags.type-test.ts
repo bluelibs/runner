@@ -57,7 +57,17 @@ import {
   defineResource({
     id: "resource.valid.override.with.config",
     register: [baseConfigResource.with({ name: "base" })],
-    overrides: [validConfigOverride.with({ name: "ok" })],
+    overrides: [validConfigOverride],
+    init: async () => "ok",
+  });
+
+  defineResource({
+    id: "resource.invalid.override.with.config",
+    register: [baseConfigResource.with({ name: "base" })],
+    overrides: [
+      // @ts-expect-error configured resources are not valid override entries
+      validConfigOverride.with({ name: "ok" }),
+    ],
     init: async () => "ok",
   });
 }

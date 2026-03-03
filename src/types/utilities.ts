@@ -81,16 +81,6 @@ export type OverridableDefinition =
   | (IResourceMiddleware<any, any, any, any> & OverrideDefinitionBrand)
   | (IHook<any, any, any> & OverrideDefinitionBrand);
 
-export type OverridableResourceWithConfig = IResourceWithConfig<
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any
->;
-
 /**
  * The reason we accept null and undefined is because we want to be able to offer beautiful DX:
  * overrides: [
@@ -99,7 +89,6 @@ export type OverridableResourceWithConfig = IResourceWithConfig<
  */
 export type OverridableElements =
   | OverridableDefinition
-  | OverridableResourceWithConfig
   | undefined
   | null;
 

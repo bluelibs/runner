@@ -2,7 +2,6 @@ import {
   IHook,
   IResource,
   IResourceMiddleware,
-  IResourceWithConfig,
   ITask,
   ITaskMiddleware,
   RegisterableItems,
@@ -29,7 +28,6 @@ type SupportedOverride =
   | IResource
   | ITaskMiddleware
   | IResourceMiddleware
-  | IResourceWithConfig
   | IHook;
 
 export class OverrideManager {
@@ -54,7 +52,6 @@ export class OverrideManager {
       utils.isResource(override) ||
       utils.isTaskMiddleware(override) ||
       utils.isResourceMiddleware(override) ||
-      utils.isResourceWithConfig(override) ||
       utils.isHook(override)
     ) {
       return override;
@@ -68,15 +65,12 @@ export class OverrideManager {
   }
 
   private getOverrideId(override: SupportedOverride): string {
-    if (utils.isResourceWithConfig(override)) {
-      return override.resource.id;
-    }
     return override.id;
   }
 
   private getOverrideType(override: SupportedOverride): OverrideTargetType {
     if (utils.isTask(override)) return "Task";
-    if (utils.isResource(override) || utils.isResourceWithConfig(override)) {
+    if (utils.isResource(override)) {
       return "Resource";
     }
     if (utils.isTaskMiddleware(override)) return "Task middleware";
@@ -85,15 +79,11 @@ export class OverrideManager {
   }
 
   private getOverrideTargetReference(override: SupportedOverride): unknown {
-    const definition = utils.isResourceWithConfig(override)
-      ? override.resource
-      : override;
-
-    const maybeTarget = (definition as unknown as Record<symbol, unknown>)[
+    const maybeTarget = (override as unknown as Record<symbol, unknown>)[
       symbolOverrideTargetDefinition
     ];
 
-    return maybeTarget ?? definition;
+    return maybeTarget ?? override;
   }
 
   private getOverrideTargetId(
@@ -131,16 +121,10 @@ export class OverrideManager {
   }
 
   private isOverrideBranded(override: RegisterableItems): boolean {
-    if (utils.isResourceWithConfig(override)) {
-      return utils.isOverrideDefinition(override.resource);
-    }
     return utils.isOverrideDefinition(override);
   }
 
   private getMaybeOverrideId(override: RegisterableItems): string | undefined {
-    if (utils.isResourceWithConfig(override)) {
-      return override.resource.id;
-    }
     if (override && typeof override === "object" && "id" in override) {
       return (override as { id: string }).id;
     }
@@ -171,8 +155,6 @@ export class OverrideManager {
       const supportedOverride = this.toSupportedOverride(override);
       if (utils.isResource(supportedOverride)) {
         this.storeOverridesDeeply(supportedOverride, visited);
-      } else if (utils.isResourceWithConfig(supportedOverride)) {
-        this.storeOverridesDeeply(supportedOverride.resource, visited);
       }
 
       const targetId = this.getOverrideTargetId(element.id, supportedOverride);
@@ -253,18 +235,6 @@ export class OverrideManager {
         const middlewareOverride = supportedOverride as IResourceMiddleware;
         this.registry.storeResourceMiddleware(
           { ...middlewareOverride, id: targetId },
-          "override",
-        );
-        continue;
-      }
-      if (utils.isResourceWithConfig(supportedOverride)) {
-        const resourceOverride = supportedOverride as IResourceWithConfig;
-        this.registry.storeResourceWithConfig(
-          {
-            ...resourceOverride,
-            id: targetId,
-            resource: { ...resourceOverride.resource, id: targetId },
-          },
           "override",
         );
         continue;

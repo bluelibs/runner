@@ -595,12 +595,19 @@ export class StoreRegistryWriter {
     overrideMode: StoringMode = "normal",
   ) {
     overrideMode === "normal" && this.validator.checkIfIDExists(item.id);
+    const existingResourceEntry =
+      overrideMode === "override"
+        ? this.collections.resources.get(item.id)
+        : undefined;
+    const configForResource =
+      overrideMode === "override" ? existingResourceEntry!.config : {};
 
     const prepared = this.definitionPreparer.prepareFreshValue({
       item,
       collection: this.collections.resources,
       key: "resource",
       mode: overrideMode,
+      config: configForResource,
       overrideTargetType: "Resource",
     });
     prepared.middleware = this.normalizeResourceMiddlewareAttachments(prepared);
@@ -609,7 +616,7 @@ export class StoreRegistryWriter {
 
     this.collections.resources.set(prepared.id, {
       resource: prepared,
-      config: {},
+      config: configForResource,
       value: undefined,
       isInitialized: false,
       context: undefined,
@@ -627,7 +634,7 @@ export class StoreRegistryWriter {
     );
     this.visibilityTracker.recordDefinitionTags(prepared.id, tags);
 
-    this.computeRegistrationDeeply(prepared, {});
+    this.computeRegistrationDeeply(prepared, configForResource as _C);
     return prepared as AnyResource;
   }
 
