@@ -21,7 +21,7 @@ const eventLanesProfilePattern = Match.ObjectIncluding({
 const eventLanesResourceConfigPattern = Match.ObjectIncluding({
   profile: String,
   topology: Match.ObjectIncluding({
-    profiles: Match.RecordOf(eventLanesProfilePattern),
+    profiles: Match.MapOf(eventLanesProfilePattern),
     bindings: Match.ArrayOf(
       Match.ObjectIncluding({
         lane: laneReferencePattern,

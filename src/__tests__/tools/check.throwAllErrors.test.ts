@@ -98,4 +98,35 @@ describe("tools/check throwAllErrors", () => {
       }),
     ).toThrow(MatchError);
   });
+
+  it("aggregates nested failures for Match.ObjectStrict and Match.MapOf", () => {
+    try {
+      checkRuntime(
+        {
+          lanes: {
+            worker: { id: 1 },
+            api: { id: 2 },
+          },
+          extra: true,
+        },
+        Match.ObjectStrict({
+          lanes: Match.MapOf({
+            id: String,
+          }),
+        }),
+        { throwAllErrors: true },
+      );
+      throw new Error("Expected MatchError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MatchError);
+      const matchError = error as MatchError;
+      expect(matchError.failures.map((failure) => failure.path)).toEqual(
+        expect.arrayContaining([
+          "$.extra",
+          "$.lanes.worker.id",
+          "$.lanes.api.id",
+        ]),
+      );
+    }
+  });
 });

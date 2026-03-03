@@ -3104,8 +3104,10 @@ All supported Match patterns:
 - Constructor patterns: `String`, `Number`, `Boolean`, `Function`, `Object`, `Array`, and class constructors (for example `Date`, `MyCustomClass`)
 - Literal patterns: exact value matches for `string`, `number`, `boolean`, `bigint`, `symbol`, `null`, `undefined`
 - Array item pattern: `[pattern]` means an array where every element matches that single pattern
-- Strict object pattern: `{ a: String, b: Number }` (unknown keys are rejected)
+- Strict object pattern: `{ a: String, b: Number }` (unknown keys are rejected, same as `Match.ObjectStrict({ a: String, b: Number })`)
+- `Match.ObjectStrict({ ... })`: explicit strict object validation (unknown keys rejected)
 - `Match.ObjectIncluding({ ... })`: object partial match (unknown keys allowed)
+- `Match.MapOf(valuePattern)`: validates dynamic-key plain objects where each value matches `valuePattern`
 - `Match.Any`: accepts any value
 - `Match.Integer`: accepts signed 32-bit integers
 - `Match.NonEmptyString`: accepts non-empty strings
@@ -3131,6 +3133,7 @@ Schema interoperability:
 - `Match` helpers/patterns expose `.parse(input)`, so they can be used directly in `.inputSchema(...)`, `.resultSchema(...)`, and `.configSchema(...)`.
 - `check()` also accepts any schema-like object with `parse(input): T` (optionally `toJSONSchema(): Record<string, unknown>` for tooling/serialization use-cases).
 - Schema precedence in Runner definition APIs is: explicit `parse(input)` schema first; if absent, Runner validates via `check(pattern)` fallback.
+- Plain object patterns are strict by default (`check(value, { ... })` behaves like `Match.ObjectStrict({ ... })`).
 - Class shorthand (for example `.configSchema(User)`) is supported when the class has `Match.Schema()` metadata.
 - For a single reusable contract shape, use `Match.compile(pattern)` and pass the returned object wherever a schema is expected.
 
@@ -3182,6 +3185,20 @@ check(
 check(
   { id: "u_1", extra: true },
   Match.ObjectIncluding({
+    id: Match.NonEmptyString,
+  }),
+);
+
+check(
+  { id: "u_1" },
+  Match.ObjectStrict({
+    id: Match.NonEmptyString,
+  }),
+);
+
+check(
+  { worker: { id: "lane.worker" } },
+  Match.MapOf({
     id: Match.NonEmptyString,
   }),
 );
@@ -3308,7 +3325,9 @@ Supported conversion highlights:
 - Literal patterns: `string`, `number`, `boolean`, `null`
 - Array patterns: `[pattern]`, `Match.NonEmptyArray()`, `Match.NonEmptyArray(pattern)`
 - Object patterns with strict `additionalProperties: false`
+- `Match.ObjectStrict(...)` with `additionalProperties: false`
 - `Match.ObjectIncluding(...)` with `additionalProperties: true`
+- `Match.MapOf(...)` with `additionalProperties: <value schema>`
 - `Match.OneOf(...)` -> `anyOf`
 
 Unsupported in strict mode (fail-fast):

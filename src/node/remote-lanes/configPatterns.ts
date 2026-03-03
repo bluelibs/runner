@@ -27,7 +27,7 @@ const remoteLaneBindingAuthJwtAsymmetricPattern = Match.ObjectIncluding({
   privateKey: Match.Optional(String),
   privateKeyKid: Match.Optional(String),
   publicKey: Match.Optional(String),
-  publicKeysByKid: Match.Optional(Match.RecordOf(String)),
+  publicKeysByKid: Match.Optional(Match.MapOf(String)),
 });
 
 export const remoteLanesModePattern = Match.OneOf(...remoteLanesModes);

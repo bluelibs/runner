@@ -32,7 +32,7 @@ describe("tools/check schema support", () => {
   });
 
   it("allows Match patterns to behave as schemas via parse()", () => {
-    const schema = Match.ObjectIncluding({
+    const schema = Match.ObjectStrict({
       id: Match.NonEmptyString,
       retries: Match.Optional(Match.Integer),
     });
@@ -77,15 +77,24 @@ describe("tools/check schema support", () => {
       {
         worker: { id: "lane.worker" },
       },
-      Match.RecordOf(
+      Match.MapOf(
         Match.ObjectIncluding({
           id: String,
         }),
       ),
     );
     expect(map.worker.id).toBe("lane.worker");
+    expect(
+      Match.MapOf(
+        Match.ObjectIncluding({
+          id: String,
+        }),
+      ).parse({
+        worker: { id: "lane.worker" },
+      }).worker.id,
+    ).toBe("lane.worker");
     expect(() =>
-      check({ worker: { id: 123 } }, Match.RecordOf({ id: String })),
+      check({ worker: { id: 123 } }, Match.MapOf({ id: String })),
     ).toThrow(MatchError);
 
     expect(Match.RegExp(/^ok$/).parse("ok")).toBe("ok");
@@ -145,6 +154,22 @@ describe("tools/check schema support", () => {
       },
       required: ["id"],
       additionalProperties: true,
+    });
+    expect(
+      Match.ObjectStrict({ id: Match.NonEmptyString }).toJSONSchema(),
+    ).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      properties: {
+        id: { type: "string", minLength: 1 },
+      },
+      required: ["id"],
+      additionalProperties: false,
+    });
+    expect(Match.MapOf(String).toJSONSchema()).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      additionalProperties: { type: "string" },
     });
     expect(Match.OneOf(String, Number).toJSONSchema()).toEqual({
       $schema: "https://json-schema.org/draft/2020-12/schema",

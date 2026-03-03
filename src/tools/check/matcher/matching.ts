@@ -3,9 +3,11 @@ import { getClassSchemaDefinition } from "../classSchema";
 import {
   ClassPattern,
   LazyPattern,
+  MapOfPattern,
   MaybePattern,
   NonEmptyArrayPattern,
   ObjectIncludingPattern,
+  ObjectStrictPattern,
   OneOfPattern,
   OptionalPattern,
   RegExpPattern,
@@ -123,6 +125,32 @@ export function matchesPattern(
         `Failed Match.OneOf validation at ${formatPath(path)}.`,
       );
     }
+    if (pattern instanceof MapOfPattern) {
+      if (!isPlainObject(value)) {
+        return fail(
+          context,
+          path,
+          "plain object (Record)",
+          value,
+          `Expected a plain object for Match.MapOf at ${formatPath(path)}.`,
+        );
+      }
+      let allMatch = true;
+      for (const [key, entryValue] of Object.entries(value)) {
+        if (
+          !matchesPattern(
+            entryValue,
+            pattern.pattern,
+            context,
+            appendPath(path, key),
+          )
+        ) {
+          allMatch = false;
+          if (!context.collectAll) break;
+        }
+      }
+      return allMatch;
+    }
     if (pattern instanceof WherePattern) {
       try {
         if (pattern.condition(value)) return true;
@@ -176,6 +204,16 @@ export function matchesPattern(
         context,
         path,
         true,
+        matchesPattern,
+      );
+    }
+    if (pattern instanceof ObjectStrictPattern) {
+      return matchesObjectPattern(
+        value,
+        pattern.pattern,
+        context,
+        path,
+        false,
         matchesPattern,
       );
     }
@@ -259,6 +297,7 @@ export function matchesPattern(
       return context.failures.length === startFailures;
     }
     if (isPlainObject(pattern)) {
+      // Plain object patterns use ObjectStrict semantics by default.
       return matchesObjectPattern(
         value,
         pattern,

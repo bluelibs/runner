@@ -201,6 +201,24 @@ describe("tools/check toJSONSchema", () => {
     });
   });
 
+  it("converts Match.ObjectStrict with additional properties disabled", () => {
+    const schema = Match.toJSONSchema(
+      Match.ObjectStrict({
+        id: String,
+      }),
+    );
+
+    expect(schema).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "object",
+      properties: {
+        id: { type: "string" },
+      },
+      required: ["id"],
+      additionalProperties: false,
+    });
+  });
+
   it("omits required when all object keys are optional wrappers", () => {
     const schema = Match.toJSONSchema({
       retries: Match.Optional(Match.Integer),
@@ -273,11 +291,10 @@ describe("tools/check toJSONSchema", () => {
       additionalProperties: false,
     });
 
-    expect(Match.toJSONSchema(Match.RecordOf(String))).toEqual({
+    expect(Match.toJSONSchema(Match.MapOf(String))).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
-      description:
-        "Custom runtime predicate from Match.Where; not representable in strict JSON Schema.",
-      "x-runner-match-kind": "Match.Where",
+      type: "object",
+      additionalProperties: { type: "string" },
     });
   });
 
@@ -297,11 +314,11 @@ describe("tools/check toJSONSchema", () => {
     expect(whereError.reason).toContain("Match.Where");
     expect(whereError.patternKind).toBe("Match.Where");
 
-    const recordOfError = expectSchemaError(() =>
-      Match.toJSONSchema(Match.RecordOf(String), { strict: true }),
-    );
-    expect(recordOfError.path).toBe("$");
-    expect(recordOfError.reason).toContain("Match.Where");
+    expect(Match.toJSONSchema(Match.MapOf(String), { strict: true })).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "object",
+      additionalProperties: { type: "string" },
+    });
   });
 
   it("fails fast for Optional/Maybe outside object properties", () => {
@@ -377,6 +394,27 @@ describe("tools/check toJSONSchema", () => {
     );
     expect(objectIncludingError.path).toBe("$");
     expect(objectIncludingError.reason).toContain("plain object pattern");
+
+    const invalidObjectStrict = {
+      kind: "Match.ObjectStrictPattern",
+      parse: () => undefined,
+      pattern: 123,
+    };
+    const objectStrictError = expectSchemaError(() =>
+      Match.toJSONSchema(invalidObjectStrict as never),
+    );
+    expect(objectStrictError.path).toBe("$");
+    expect(objectStrictError.reason).toContain("plain object pattern");
+
+    const invalidMapOf = {
+      kind: "Match.MapOfPattern",
+      parse: () => undefined,
+    };
+    expect(Match.toJSONSchema(invalidMapOf as never)).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "object",
+      additionalProperties: {},
+    });
 
     const invalidRegExpPattern = {
       kind: "Match.RegExpPattern",

@@ -1,6 +1,7 @@
 import {
   ClassPattern,
   LazyPattern,
+  MapOfPattern,
   MaybePattern,
   matchAnyToken,
   matchEmailToken,
@@ -12,6 +13,7 @@ import {
   matchUuidToken,
   NonEmptyArrayPattern,
   ObjectIncludingPattern,
+  ObjectStrictPattern,
   OneOfPattern,
   OptionalPattern,
   RegExpPattern,
@@ -190,9 +192,11 @@ export type MatchPattern =
   | MaybePattern<unknown>
   | OneOfPattern<readonly unknown[]>
   | WherePattern<unknown>
+  | MapOfPattern<unknown>
   | RegExpPattern<RegExp>
   | LazyPattern<unknown>
   | ClassPattern<MatchClassConstructor>
+  | ObjectStrictPattern<MatchPatternObject>
   | ObjectIncludingPattern<MatchPatternObject>
   | readonly unknown[]
   | MatchPatternObject;
@@ -235,28 +239,34 @@ export type InferMatchPattern<TPattern> = TPattern extends typeof matchAnyToken
                         ? InferMatchPattern<TCandidates[number]>
                         : TPattern extends WherePattern<infer TGuarded>
                           ? TGuarded
-                          : TPattern extends RegExpPattern<RegExp>
-                            ? string
-                            : TPattern extends LazyPattern<infer TLazyPattern>
-                              ? InferMatchPattern<TLazyPattern>
-                              : TPattern extends ClassPattern<infer TCtor>
-                                ? InstanceType<TCtor>
-                                : TPattern extends ObjectIncludingPattern<
-                                      infer TObjectPattern
-                                    >
-                                  ? InferMatchObject<TObjectPattern> &
-                                      Record<string, unknown>
-                                  : TPattern extends readonly (infer TArrayPattern)[]
-                                    ? InferMatchPattern<TArrayPattern>[]
-                                    : TPattern extends MatchPrimitiveLiteral
-                                      ? TPattern
-                                      : TPattern extends MatchConstructorPattern
-                                        ? InferMatchConstructor<TPattern>
-                                        : TPattern extends MatchCallablePattern
-                                          ? unknown
-                                          : TPattern extends MatchPatternObject
-                                            ? InferMatchObject<TPattern>
-                                            : unknown;
+                          : TPattern extends MapOfPattern<infer TValuePattern>
+                            ? Record<string, InferMatchPattern<TValuePattern>>
+                            : TPattern extends RegExpPattern<RegExp>
+                              ? string
+                              : TPattern extends LazyPattern<infer TLazyPattern>
+                                ? InferMatchPattern<TLazyPattern>
+                                : TPattern extends ClassPattern<infer TCtor>
+                                  ? InstanceType<TCtor>
+                                  : TPattern extends ObjectIncludingPattern<
+                                        infer TObjectPattern
+                                      >
+                                    ? InferMatchObject<TObjectPattern> &
+                                        Record<string, unknown>
+                                    : TPattern extends ObjectStrictPattern<
+                                          infer TObjectPattern
+                                        >
+                                      ? InferMatchObject<TObjectPattern>
+                                      : TPattern extends readonly (infer TArrayPattern)[]
+                                        ? InferMatchPattern<TArrayPattern>[]
+                                        : TPattern extends MatchPrimitiveLiteral
+                                          ? TPattern
+                                          : TPattern extends MatchConstructorPattern
+                                            ? InferMatchConstructor<TPattern>
+                                            : TPattern extends MatchCallablePattern
+                                              ? unknown
+                                              : TPattern extends MatchPatternObject
+                                                ? InferMatchObject<TPattern>
+                                                : unknown;
 
 export type EnsurePatternOverlap<TValue, TExpected> =
   IsAny<TValue> extends true

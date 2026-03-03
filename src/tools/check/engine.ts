@@ -17,9 +17,11 @@ import {
   matchNonEmptyStringToken,
   matchUrlToken,
   matchUuidToken,
+  MapOfPattern,
   MaybePattern,
   NonEmptyArrayPattern,
   ObjectIncludingPattern,
+  ObjectStrictPattern,
   OneOfPattern,
   OptionalPattern,
   RegExpPattern,
@@ -76,6 +78,8 @@ function isCheckSchemaLike(value: unknown): value is CheckSchemaLike<unknown> {
     value instanceof OneOfPattern ||
     value instanceof WherePattern ||
     value instanceof ObjectIncludingPattern ||
+    value instanceof ObjectStrictPattern ||
+    value instanceof MapOfPattern ||
     value instanceof NonEmptyArrayPattern ||
     value instanceof RegExpPattern ||
     value instanceof LazyPattern ||
@@ -272,20 +276,20 @@ function fieldDecorator<TPattern extends MatchPattern>(
   };
 }
 
-function recordOf<TPattern extends MatchPattern>(
+function mapOf<TPattern extends MatchPattern>(
   pattern: TPattern,
-): WherePattern<Record<string, InferMatchPattern<TPattern>>> {
-  return where(
-    (value: unknown): value is Record<string, InferMatchPattern<TPattern>> => {
-      if (!isPlainObject(value)) return false;
-      for (const entryValue of Object.values(value)) {
-        if (collectMatchFailures(entryValue, pattern, false).length > 0) {
-          return false;
-        }
-      }
-      return true;
-    },
+): MapOfPattern<TPattern> {
+  return new MapOfPattern(pattern);
+}
+
+function objectStrict<const TObjectPattern extends Record<string, unknown>>(
+  pattern: TObjectPattern,
+): ObjectStrictPattern<TObjectPattern> {
+  assertPattern(
+    isPlainObject(pattern),
+    "Bad pattern: Match.ObjectStrict requires a plain object pattern.",
   );
+  return new ObjectStrictPattern(pattern);
 }
 
 export const Match = Object.freeze({
@@ -303,7 +307,7 @@ export const Match = Object.freeze({
   fromClass: fromSchema,
   Class: schemaDecorator,
   Field: fieldDecorator,
-  RecordOf: recordOf,
+  MapOf: mapOf,
   URL: matchUrlToken,
   UUID: matchUuidToken,
   NonEmptyArray: nonEmptyArray,
@@ -332,6 +336,7 @@ export const Match = Object.freeze({
     );
     return new ObjectIncludingPattern(pattern);
   },
+  ObjectStrict: objectStrict,
   compile: <TPattern extends MatchPattern>(
     pattern: TPattern,
   ): MatchCompiledSchema<TPattern> => compileMatchPattern(pattern),

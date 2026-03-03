@@ -143,6 +143,51 @@ describe("tools/check", () => {
     ).not.toThrow();
   });
 
+  it("supports Match.ObjectStrict as explicit strict object shorthand", () => {
+    expect(() =>
+      checkRuntime(
+        { id: "1" },
+        Match.ObjectStrict({
+          id: String,
+        }),
+      ),
+    ).not.toThrow();
+
+    expect(() =>
+      checkRuntime(
+        { id: "1", extra: true },
+        Match.ObjectStrict({
+          id: String,
+        }),
+      ),
+    ).toThrow(Match.Error);
+  });
+
+  it("supports Match.MapOf for dynamic-key object values", () => {
+    expect(() =>
+      checkRuntime(
+        {
+          a: { id: "lane.a" },
+          b: { id: "lane.b" },
+        },
+        Match.MapOf({
+          id: String,
+        }),
+      ),
+    ).not.toThrow();
+
+    expect(() =>
+      checkRuntime(
+        {
+          a: { id: 1 },
+        },
+        Match.MapOf({
+          id: String,
+        }),
+      ),
+    ).toThrow(Match.Error);
+  });
+
   it("requires required object keys even when the pattern is Match.Any", () => {
     expect(() =>
       checkRuntime(

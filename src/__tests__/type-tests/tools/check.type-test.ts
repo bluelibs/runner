@@ -232,7 +232,7 @@ import {
 {
   const map = check(
     { a: { id: "lane.a" } },
-    Match.RecordOf(
+    Match.MapOf(
       Match.ObjectIncluding({
         id: String,
       }),
@@ -240,6 +240,20 @@ import {
   );
   const laneId: string = map.a.id;
   void laneId;
+}
+
+{
+  const strict = check(
+    { id: "lane.a", retries: 1 },
+    Match.ObjectStrict({
+      id: String,
+      retries: Match.Optional(Number),
+    }),
+  );
+  const id: string = strict.id;
+  void id;
+  // @ts-expect-error ObjectStrict should not expose unknown keys
+  strict.extra;
 }
 
 {

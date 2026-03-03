@@ -2,9 +2,11 @@ export { collectMatchFailures } from "./matcher/core";
 export {
   ClassPattern,
   LazyPattern,
+  MapOfPattern,
   MaybePattern,
   NonEmptyArrayPattern,
   ObjectIncludingPattern,
+  ObjectStrictPattern,
   OneOfPattern,
   OptionalPattern,
   RegExpPattern,

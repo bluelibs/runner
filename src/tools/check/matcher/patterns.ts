@@ -193,6 +193,45 @@ export class ObjectIncludingPattern<
   }
 }
 
+export class ObjectStrictPattern<
+  TObjectPattern extends Record<string, unknown> = Record<string, unknown>,
+> {
+  public readonly kind = "Match.ObjectStrictPattern";
+
+  constructor(public readonly pattern: TObjectPattern) {}
+
+  parse(value: unknown): InferMatchPattern<TObjectPattern> {
+    return parsePatternValue(
+      value,
+      this as ObjectStrictPattern<TObjectPattern>,
+    ) as InferMatchPattern<TObjectPattern>;
+  }
+
+  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
+    return matchToJsonSchema(
+      this as ObjectStrictPattern<TObjectPattern>,
+      options,
+    );
+  }
+}
+
+export class MapOfPattern<TPattern = unknown> {
+  public readonly kind = "Match.MapOfPattern";
+
+  constructor(public readonly pattern: TPattern) {}
+
+  parse(value: unknown): Record<string, InferMatchPattern<TPattern>> {
+    return parsePatternValue(value, this as MapOfPattern<TPattern>) as Record<
+      string,
+      InferMatchPattern<TPattern>
+    >;
+  }
+
+  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
+    return matchToJsonSchema(this as MapOfPattern<TPattern>, options);
+  }
+}
+
 export class NonEmptyArrayPattern<TPattern = undefined> {
   public readonly kind = "Match.NonEmptyArrayPattern";
 

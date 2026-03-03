@@ -21,7 +21,7 @@ const rpcLaneProfilePattern = {
 const rpcLanesResourceConfigPattern = Match.ObjectIncluding({
   profile: String,
   topology: Match.ObjectIncluding({
-    profiles: Match.RecordOf(rpcLaneProfilePattern),
+    profiles: Match.MapOf(rpcLaneProfilePattern),
     bindings: Match.ArrayOf(
       Match.ObjectIncluding({
         lane: laneReferencePattern,

@@ -499,8 +499,14 @@ Main patterns/helpers:
 
 - Constructors/literals/object/array patterns (`String`, `{ a: String }`, `[String]`, etc.)
 - `Match.Any`, `Match.Integer`, `Match.NonEmptyString`, `Match.Email`, `Match.UUID`, `Match.URL`, `Match.IsoDateString`, `Match.RegExp(re)`
-- `Match.Optional`, `Match.Maybe`, `Match.OneOf`, `Match.Where`, `Match.ObjectIncluding`, `Match.NonEmptyArray`, `Match.ArrayOf`
+- `Match.Optional`, `Match.Maybe`, `Match.OneOf`, `Match.Where`, `Match.ObjectStrict`, `Match.ObjectIncluding`, `Match.MapOf`, `Match.NonEmptyArray`, `Match.ArrayOf`
 - `Match.compile(pattern)` and `Match.test(value, pattern)`
+
+Object matching defaults:
+
+- Plain object patterns (for example `{ a: { b: String } }`) are strict by default and equivalent to `Match.ObjectStrict({ ... })`.
+- Use `Match.ObjectIncluding({ ... })` when unknown keys must be allowed.
+- Use `Match.MapOf(valuePattern)` for dynamic-key records where each value must match the same pattern.
 
 Recursive/class schemas:
 
@@ -517,6 +523,8 @@ JSON Schema (`Match.toJSONSchema(pattern, { strict? })`):
 - `strict: true`: `Match.Where` fails fast (`runner.errors.check.jsonSchemaUnsupportedPattern`).
 - `Match.RegExp(re)` exports `type: "string"` + `pattern: re.source`; flags are exported as metadata.
 - `Match.fromSchema(...)` exports recursive class graphs via `$defs/$ref`.
+- `Match.ObjectStrict(...)` exports strict object schemas (`additionalProperties: false`).
+- `Match.MapOf(...)` exports dictionary schemas via `additionalProperties: <value schema>`.
 
 ## Errors
 

@@ -34,7 +34,9 @@ const MATCH_KIND = {
   RegExpPattern: "Match.RegExpPattern",
   ClassPattern: "Match.ClassPattern",
   ObjectIncludingPattern: "Match.ObjectIncludingPattern",
+  ObjectStrictPattern: "Match.ObjectStrictPattern",
   NonEmptyArrayPattern: "Match.NonEmptyArrayPattern",
+  MapOfPattern: "Match.MapOfPattern",
 } as const;
 
 type MatchKindValue = (typeof MATCH_KIND)[keyof typeof MATCH_KIND];
@@ -352,6 +354,19 @@ function compilePattern(
       return compileObjectPattern(innerPattern, context, path, true);
     });
   }
+  if (isKindPattern(pattern, MATCH_KIND.ObjectStrictPattern)) {
+    return withCycleGuard(pattern, context, path, () => {
+      const innerPattern = readPatternField(pattern);
+      if (!isPlainObject(innerPattern)) {
+        throwUnsupported(
+          path,
+          "Match.ObjectStrict requires a plain object pattern.",
+          pattern,
+        );
+      }
+      return compileObjectPattern(innerPattern, context, path, false);
+    });
+  }
   if (isKindPattern(pattern, MATCH_KIND.NonEmptyArrayPattern)) {
     return withCycleGuard(pattern, context, path, () => {
       const schema: MatchJsonSchema = { type: "array", minItems: 1 };
@@ -365,6 +380,24 @@ function compilePattern(
         );
       }
       return schema;
+    });
+  }
+  if (isKindPattern(pattern, MATCH_KIND.MapOfPattern)) {
+    return withCycleGuard(pattern, context, path, () => {
+      const valuePattern = readPatternField(pattern);
+      const additionalProperties =
+        valuePattern !== undefined
+          ? compilePattern(
+              valuePattern,
+              context,
+              appendKey(path, "[*]"),
+              "default",
+            )
+          : {};
+      return {
+        type: "object",
+        additionalProperties,
+      };
     });
   }
 
