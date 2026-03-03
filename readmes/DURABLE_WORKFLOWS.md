@@ -1964,16 +1964,30 @@ Expose durable task execution over HTTP using Runner's remote lanes pattern:
 
 ```typescript
 import { createHttpClient } from "@bluelibs/runner";
-import { nodeExposure } from "@bluelibs/runner/node";
+import { rpcLanesResource } from "@bluelibs/runner/node";
+
+const durableLane = r
+  .rpcLane("app.rpc.durable")
+  .applyTo([processOrder])
+  .build();
+
+const topology = r.rpcLane.topology({
+  profiles: { worker: { serve: [durableLane] } },
+  bindings: [{ lane: durableLane, communicator: r.rpcLane.http() }],
+});
 
 const app = r
   .resource("app")
   .register([
     durable,
     processOrder,
-    // Expose tasks over HTTP
-    nodeExposure.with({
-      http: { basePath: "/__runner", listen: { port: 7070 } },
+    rpcLanesResource.with({
+      profile: "worker",
+      mode: "network",
+      topology,
+      exposure: {
+        http: { basePath: "/__runner", listen: { port: 7070 } },
+      },
     }),
   ])
   .build();

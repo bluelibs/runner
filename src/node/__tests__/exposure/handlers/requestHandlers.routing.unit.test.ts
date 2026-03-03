@@ -1,11 +1,10 @@
 import { Readable } from "stream";
 import { createRequestHandlers } from "../../../exposure/requestHandlers";
 import { createAllowListGuard } from "../../../exposure/allowList";
-import { globalTags } from "../../../../globals/globalTags";
 import { Serializer } from "../../../../serializer";
 import { defineResource, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import {
   createReqRes,
   HeaderName,
@@ -175,18 +174,7 @@ describe("requestHandlers - routing and dispatching", () => {
       const store = {
         tasks: new Map([["task.a", { task: { id: "task.a" } }]]),
         events: new Map(),
-        resources: new Map([
-          [
-            "rpc",
-            {
-              resource: { id: "rpc", tags: [globalTags.rpcLanes] },
-              value: {
-                serveTaskIds: ["task.a"],
-                serveEventIds: [],
-              },
-            },
-          ],
-        ]),
+        resources: new Map(),
         asyncContexts: new Map(),
       } as any;
 
@@ -204,6 +192,15 @@ describe("requestHandlers - routing and dispatching", () => {
         },
         cors: undefined,
         serializer,
+        policy: {
+          enabled: true,
+          taskIds: ["task.a"],
+          eventIds: [],
+          taskAllowAsyncContext: {},
+          eventAllowAsyncContext: {},
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
       };
       const { handleDiscovery } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
@@ -267,23 +264,21 @@ describe("requestHandlers - routing and dispatching", () => {
     });
 
     it("returns 403 when task/event blocked by allow-list", async () => {
+      const policy = {
+        enabled: true,
+        taskIds: ["allowed.task"],
+        eventIds: ["allowed.event"],
+        taskAllowAsyncContext: {},
+        eventAllowAsyncContext: {},
+        taskAsyncContextAllowList: {},
+        eventAsyncContextAllowList: {},
+      } as const;
       const store: any = {
         tasks: new Map([["allowed.task", { task: { id: "allowed.task" } }]]),
         events: new Map([
           ["allowed.event", { event: { id: "allowed.event" } }],
         ]),
-        resources: new Map([
-          [
-            "srv",
-            {
-              resource: { id: "srv", tags: [globalTags.rpcLanes] },
-              value: {
-                serveTaskIds: ["allowed.task"],
-                serveEventIds: ["allowed.event"],
-              },
-            },
-          ],
-        ]),
+        resources: new Map(),
         asyncContexts: new Map(),
       };
 
@@ -297,7 +292,7 @@ describe("requestHandlers - routing and dispatching", () => {
           error: async () => {},
         },
         authenticator: async () => ({ ok: true }),
-        allowList: createAllowListGuard(store),
+        allowList: createAllowListGuard(policy),
         router: {
           basePath: "/api",
           extract: () => ({ kind: "task", id: "blocked.task" }),
@@ -305,6 +300,7 @@ describe("requestHandlers - routing and dispatching", () => {
         },
         cors: undefined,
         serializer,
+        policy,
       };
 
       const { handleTask, handleEvent } = createRequestHandlers(deps);
@@ -330,23 +326,21 @@ describe("requestHandlers - routing and dispatching", () => {
     });
 
     it("serializes blocked event responses with the configured serializer", async () => {
+      const policy = {
+        enabled: true,
+        taskIds: [],
+        eventIds: ["allowed.event"],
+        taskAllowAsyncContext: {},
+        eventAllowAsyncContext: {},
+        taskAsyncContextAllowList: {},
+        eventAsyncContextAllowList: {},
+      } as const;
       const store: any = {
         tasks: new Map(),
         events: new Map([
           ["allowed.event", { event: { id: "allowed.event" } }],
         ]),
-        resources: new Map([
-          [
-            "srv",
-            {
-              resource: { id: "srv", tags: [globalTags.rpcLanes] },
-              value: {
-                serveTaskIds: [],
-                serveEventIds: ["allowed.event"],
-              },
-            },
-          ],
-        ]),
+        resources: new Map(),
         asyncContexts: new Map(),
       };
       const customSerializer = {
@@ -365,7 +359,7 @@ describe("requestHandlers - routing and dispatching", () => {
         eventManager: { emit: async () => {} },
         logger: { info: () => {}, warn: () => {}, error: () => {} },
         authenticator: async () => ({ ok: true }),
-        allowList: createAllowListGuard(store),
+        allowList: createAllowListGuard(policy),
         router: {
           basePath: "/api",
           extract: () => ({ kind: "event", id: "blocked.event" }),
@@ -373,6 +367,7 @@ describe("requestHandlers - routing and dispatching", () => {
         },
         cors: undefined,
         serializer: customSerializer,
+        policy,
       };
 
       const { handleEvent } = createRequestHandlers(deps);
@@ -389,6 +384,15 @@ describe("requestHandlers - routing and dispatching", () => {
     });
 
     it("returns 403 when exposure is disabled", async () => {
+      const policy = {
+        enabled: false,
+        taskIds: [],
+        eventIds: [],
+        taskAllowAsyncContext: {},
+        eventAllowAsyncContext: {},
+        taskAsyncContextAllowList: {},
+        eventAsyncContextAllowList: {},
+      } as const;
       const store: any = {
         tasks: new Map([["t", { task: { id: "t" } }]]),
         events: new Map(),
@@ -405,7 +409,7 @@ describe("requestHandlers - routing and dispatching", () => {
           error: async () => {},
         },
         authenticator: async () => ({ ok: true }),
-        allowList: createAllowListGuard(store),
+        allowList: createAllowListGuard(policy),
         router: {
           basePath: "/api",
           extract: () => ({ kind: "task", id: "t" }),
@@ -413,6 +417,7 @@ describe("requestHandlers - routing and dispatching", () => {
         },
         cors: undefined,
         serializer,
+        policy,
       };
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
@@ -434,7 +439,7 @@ describe("requestHandlers - routing and dispatching", () => {
       const ev = defineEvent<{ payload?: unknown }>({
         id: "tests.routing.abort",
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -446,7 +451,7 @@ describe("requestHandlers - routing and dispatching", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const req: any = new Readable({ read() {} });
         req.method = "POST";
         req.url = `/__runner/event/${encodeURIComponent(ev.id)}`;

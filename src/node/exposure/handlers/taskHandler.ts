@@ -53,6 +53,7 @@ interface TaskHandlerDeps {
     req: IncomingMessage,
     taskId: string,
   ) => Promise<JsonResponse | null> | JsonResponse | null;
+  sourceResourceId?: string;
 }
 
 export const createTaskHandler = (deps: TaskHandlerDeps) => {
@@ -69,6 +70,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     allowAsyncContext = () => true,
     resolveAsyncContextAllowList = () => undefined,
     authorizeTask = () => null,
+    sourceResourceId = "platform.node.resources.rpcLanes",
   } = deps;
 
   const isReadableStream = (value: unknown): value is NodeJS.ReadableStream =>
@@ -79,9 +81,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     typeof value === "object" &&
     "stream" in value &&
     isReadableStream((value as { stream?: unknown }).stream);
-  const exposureSource = runtimeSource.resource(
-    "platform.node.resources.exposure",
-  );
+  const exposureSource = runtimeSource.resource(sourceResourceId);
 
   return async (
     req: IncomingMessage,

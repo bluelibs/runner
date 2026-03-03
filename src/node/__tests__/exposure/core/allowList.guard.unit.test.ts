@@ -1,24 +1,25 @@
-import type { Store } from "../../../../models/Store";
 import { createAllowListGuard } from "../../../exposure/allowList";
-import { globalTags } from "../../../../globals/globalTags";
+import type { NodeExposurePolicySnapshot } from "../../../exposure/policy";
 
 describe("allowList guard (open exposure override)", () => {
-  const store = {
-    tasks: new Map([["t", { task: { id: "t" } }]]),
-    events: new Map([["e", { event: { id: "e" } }]]),
-    resources: new Map(),
-    asyncContexts: new Map(),
-    errors: new Map(),
-  } as unknown as Store;
+  const emptyPolicy: NodeExposurePolicySnapshot = {
+    enabled: false,
+    taskIds: [],
+    eventIds: [],
+    taskAllowAsyncContext: {},
+    eventAllowAsyncContext: {},
+    taskAsyncContextAllowList: {},
+    eventAsyncContextAllowList: {},
+  };
 
   it("returns null when open exposure is enabled without served rpc lanes", () => {
-    const guard = createAllowListGuard(store, true);
+    const guard = createAllowListGuard(emptyPolicy, true);
     expect(guard.ensureTask("t")).toBeNull();
     expect(guard.ensureEvent("e")).toBeNull();
   });
 
   it("returns 403 when open exposure is disabled without served rpc lanes", () => {
-    const guard = createAllowListGuard(store, false);
+    const guard = createAllowListGuard(emptyPolicy, false);
     const taskResponse = guard.ensureTask("t");
     const eventResponse = guard.ensureEvent("e");
     expect(taskResponse?.status).toBe(403);
@@ -26,26 +27,16 @@ describe("allowList guard (open exposure override)", () => {
   });
 
   it("uses served rpc lane ids for allow-list decisions", () => {
-    const storeWithRpcAllowList = {
-      tasks: new Map([["t", { task: { id: "t" } }]]),
-      events: new Map([["e", { event: { id: "e" } }]]),
-      resources: new Map([
-        [
-          "rpc",
-          {
-            resource: { id: "rpc", tags: [globalTags.rpcLanes] },
-            value: {
-              serveTaskIds: ["t"],
-              serveEventIds: ["e"],
-            },
-          },
-        ],
-      ]),
-      asyncContexts: new Map(),
-      errors: new Map(),
-    } as unknown as Store;
-
-    const guard = createAllowListGuard(storeWithRpcAllowList, false);
+    const servedPolicy: NodeExposurePolicySnapshot = {
+      enabled: true,
+      taskIds: ["t"],
+      eventIds: ["e"],
+      taskAllowAsyncContext: {},
+      eventAllowAsyncContext: {},
+      taskAsyncContextAllowList: {},
+      eventAsyncContextAllowList: {},
+    };
+    const guard = createAllowListGuard(servedPolicy, false);
     expect(guard.ensureTask("t")).toBeNull();
     expect(guard.ensureEvent("e")).toBeNull();
   });

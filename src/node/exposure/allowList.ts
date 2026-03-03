@@ -1,8 +1,4 @@
-import {
-  computeRpcLaneAllowList,
-  type RpcLaneAllowList,
-} from "../rpc-lanes/allowList";
-import type { Store } from "../../models/Store";
+import type { NodeExposurePolicySnapshot } from "./policy";
 import type { Logger } from "../../models/Logger";
 
 import { jsonErrorResponse } from "./httpResponse";
@@ -17,24 +13,23 @@ enum AllowListErrorMessage {
 }
 
 export function createAllowListGuard(
-  store: Store,
+  policy: NodeExposurePolicySnapshot,
   allowOpen: boolean = false,
   logger?: Logger,
 ): AllowListGuard {
-  let cachedAllowList: RpcLaneAllowList | null = null;
-  const allowList = (): RpcLaneAllowList => {
-    if (cachedAllowList) return cachedAllowList;
+  const taskIds = new Set(policy.taskIds);
+  const eventIds = new Set(policy.eventIds);
+
+  const isEnabled = (): boolean => {
     if (logger) {
       // Keep logger dependency used for symmetry with other guards and future diagnostics.
     }
-    cachedAllowList = computeRpcLaneAllowList(store);
-    return cachedAllowList;
+    return policy.enabled;
   };
 
   return {
     ensureTask(id) {
-      const list = allowList();
-      if (!list.enabled) {
+      if (!isEnabled()) {
         if (allowOpen) return null;
         return jsonErrorResponse(
           403,
@@ -42,7 +37,7 @@ export function createAllowListGuard(
           AllowListErrorCode.Forbidden,
         );
       }
-      if (!list.taskIds.has(id)) {
+      if (!taskIds.has(id)) {
         return jsonErrorResponse(
           403,
           `Task ${id} not exposed`,
@@ -52,8 +47,7 @@ export function createAllowListGuard(
       return null;
     },
     ensureEvent(id) {
-      const list = allowList();
-      if (!list.enabled) {
+      if (!isEnabled()) {
         if (allowOpen) return null;
         return jsonErrorResponse(
           403,
@@ -61,7 +55,7 @@ export function createAllowListGuard(
           AllowListErrorCode.Forbidden,
         );
       }
-      if (!list.eventIds.has(id)) {
+      if (!eventIds.has(id)) {
         return jsonErrorResponse(
           403,
           `Event ${id} not exposed`,

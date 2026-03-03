@@ -1,7 +1,7 @@
 import type { ServerResponse } from "http";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import {
   makeReqRes,
   createBaseReq,
@@ -14,7 +14,7 @@ describe("nodeExposure - more multipart coverage", () => {
       id: "exposer.more.echo",
       run: async ({ n }) => n,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "T", allowAnonymous: true },
@@ -25,7 +25,7 @@ describe("nodeExposure - more multipart coverage", () => {
       register: [echo, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----moreBoundary1";
     const manifest = JSON.stringify({ input: { n: 7 } });
@@ -52,7 +52,7 @@ describe("nodeExposure - more multipart coverage", () => {
       id: "exposer.more.emptyname",
       run: async ({ n }) => n,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "T", allowAnonymous: true },
@@ -63,7 +63,7 @@ describe("nodeExposure - more multipart coverage", () => {
       register: [echo, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----moreBoundary1b";
     const manifest = JSON.stringify({ input: { n: 9 } });
@@ -90,7 +90,7 @@ describe("nodeExposure - more multipart coverage", () => {
       id: "exposer.more.busboy.error",
       run: async ({ name }) => name,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "T", allowAnonymous: true },
@@ -101,7 +101,7 @@ describe("nodeExposure - more multipart coverage", () => {
       register: [fileTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----moreBoundary5";
     const req = createBaseReq();

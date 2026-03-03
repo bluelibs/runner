@@ -1,7 +1,7 @@
 import { defineResource, defineTask, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
-import { globalTags } from "../../../../globals/globalTags";
+import { r } from "../../../../public";
+import { rpcLanesResource } from "../../../rpc-lanes";
 import { createMockReqRes } from "./resource.http.testkit";
 
 describe("nodeExposure auto-discovery (rpc lanes)", () => {
@@ -24,7 +24,7 @@ describe("nodeExposure auto-discovery (rpc lanes)", () => {
     return rrMock;
   }
 
-  it("allows only rpc-lane-allowlisted ids and uses store.resources.get() values", async () => {
+  it("allows only rpc-lane-allowlisted ids from served lanes", async () => {
     const allowed = defineTask<{ v: number }, Promise<number>>({
       id: "auto.disc.allowed",
       run: async ({ v }) => v,
@@ -36,29 +36,58 @@ describe("nodeExposure auto-discovery (rpc lanes)", () => {
     const allowedEvent = defineEvent<{ n: number }>({
       id: "auto.disc.allowed.ev",
     });
-
-    const srvRpcLanes = defineResource({
-      id: "auto.disc.rpc-lanes",
-      tags: [globalTags.rpcLanes],
+    const servedLane = r
+      .rpcLane("tests.auto-discovery.served")
+      .applyTo([allowed, allowedEvent])
+      .build();
+    const unservedLane = r
+      .rpcLane("tests.auto-discovery.unserved")
+      .applyTo([notAllowed])
+      .build();
+    const communicator = defineResource({
+      id: "tests.auto-discovery.communicator",
       init: async () => ({
-        serveTaskIds: [allowed.id],
-        serveEventIds: [allowedEvent.id],
+        task: async () => 1,
+        event: async () => undefined,
       }),
     });
-
-    const exposure = nodeExposure.with({
-      http: {
-        basePath: "/__runner",
-        auth: { token: "T", allowAnonymous: true },
+    const lanes = rpcLanesResource.with({
+      profile: "server",
+      mode: "network",
+      topology: r.rpcLane.topology({
+        profiles: {
+          server: { serve: [servedLane] },
+        },
+        bindings: [
+          {
+            lane: servedLane,
+            communicator,
+          },
+          {
+            lane: unservedLane,
+            communicator,
+          },
+        ],
+      }),
+      exposure: {
+        http: {
+          basePath: "/__runner",
+          auth: { token: "T", allowAnonymous: true },
+        },
       },
     });
 
     const app = defineResource({
       id: "auto.disc.app",
-      register: [srvRpcLanes, allowed, notAllowed, allowedEvent, exposure],
+      register: [allowed, notAllowed, allowedEvent, communicator, lanes],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource);
+    const lanesValue = await rr.getResourceValue(lanes.resource as any);
+    const handlers = lanesValue.exposure?.getHandlers?.();
+    expect(handlers).toBeTruthy();
+    if (!handlers) {
+      return;
+    }
 
     // Allowed task -> 200
     {

@@ -1,6 +1,6 @@
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 
 function createReqRes(init: {
   method?: string;
@@ -76,7 +76,7 @@ describe("exposure CORS - more branches", () => {
         return 42;
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         cors: {
@@ -92,7 +92,7 @@ describe("exposure CORS - more branches", () => {
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
 
       // Preflight (lowercase origin header path)
       const pre = createReqRes({
@@ -140,7 +140,7 @@ describe("exposure CORS - more branches", () => {
         return "ok";
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         cors: {
@@ -155,7 +155,7 @@ describe("exposure CORS - more branches", () => {
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
 
       // Preflight with pre-existing Vary header; should append without dupes
       const pre = createReqRes({

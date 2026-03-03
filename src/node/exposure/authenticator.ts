@@ -41,11 +41,10 @@ export function createAuthenticator(
     Promise<AuthValidatorResult>,
     any
   >[],
+  sourceResourceId: string = "platform.node.resources.rpcLanes",
 ): Authenticator {
   const headerName = (authCfg?.header ?? "x-runner-token").toLowerCase();
-  const exposureSource = runtimeSource.resource(
-    "platform.node.resources.exposure",
-  );
+  const exposureSource = runtimeSource.resource(sourceResourceId);
 
   return async (req) => {
     const providedToken = headerValue(req.headers[headerName]);

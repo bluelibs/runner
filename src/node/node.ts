@@ -6,7 +6,6 @@ registerRpcLaneHttpPresetsForNode();
 
 export * from "../public";
 
-export { nodeExposure } from "./exposure";
 export {
   hasExposureContext,
   useExposureContext,

@@ -1,11 +1,8 @@
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { defineTask } from "../../../../definers/defineTask";
-import {
-  nodeExposure,
-  useExposureContext,
-  hasExposureContext,
-} from "../../../index";
+import { useExposureContext, hasExposureContext } from "../../../index";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { ExposureRequestContext } from "../../../exposure/requestContext";
 import { storage } from "../../../../definers/defineAsyncContext";
 import { createMessageError } from "../../../../errors";
@@ -31,7 +28,7 @@ describe("nodeExposure request context (raw-body)", () => {
       },
     });
 
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -42,7 +39,7 @@ describe("nodeExposure request context (raw-body)", () => {
       register: [rawTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     // Create raw-body request with content-type application/octet-stream
     const body = "streamme";

@@ -8,6 +8,10 @@ import type {
   NodeExposureDeps,
   NodeExposureHandlers,
 } from "./resourceTypes";
+import {
+  EMPTY_NODE_EXPOSURE_POLICY,
+  type NodeExposurePolicySnapshot,
+} from "./policy";
 import type { AuthValidatorInput, AuthValidatorResult } from "./types";
 import type { ITask } from "../../defs";
 import type { IncomingMessage } from "http";
@@ -24,10 +28,16 @@ export interface NodeExposureAuthorizationOptions {
   ) => Promise<JsonResponse | null> | JsonResponse | null;
 }
 
+export interface CreateNodeExposureOptions {
+  authorization?: NodeExposureAuthorizationOptions;
+  policy?: NodeExposurePolicySnapshot;
+  sourceResourceId?: string;
+}
+
 export async function createNodeExposure(
   cfg: NodeExposureConfig | undefined,
   deps: NodeExposureDeps,
-  authorization?: NodeExposureAuthorizationOptions,
+  options?: CreateNodeExposureOptions,
 ): Promise<NodeExposureHandlers> {
   const {
     store,
@@ -42,7 +52,7 @@ export async function createNodeExposure(
   const router = createRouter(basePath);
   // Keep a single explicit opt-in for unmanaged/open exposure when no allow-list source is active.
   const allowList = createAllowListGuard(
-    store,
+    options?.policy ?? EMPTY_NODE_EXPOSURE_POLICY,
     httpConfig?.auth?.allowAnonymous === true,
     logger,
   );
@@ -67,6 +77,7 @@ export async function createNodeExposure(
     httpConfig?.auth,
     taskRunner,
     validatorTasks,
+    options?.sourceResourceId,
   );
 
   const { handleTask, handleEvent, handleDiscovery, handleRequest } =
@@ -82,8 +93,10 @@ export async function createNodeExposure(
       serializer,
       limits: httpConfig?.limits,
       disableDiscovery: httpConfig?.disableDiscovery,
-      authorizeTask: authorization?.authorizeTask,
-      authorizeEvent: authorization?.authorizeEvent,
+      authorizeTask: options?.authorization?.authorizeTask,
+      authorizeEvent: options?.authorization?.authorizeEvent,
+      policy: options?.policy ?? EMPTY_NODE_EXPOSURE_POLICY,
+      sourceResourceId: options?.sourceResourceId,
     });
 
   const serverControls = await createExposureServer({

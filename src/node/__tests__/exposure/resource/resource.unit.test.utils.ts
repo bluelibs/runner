@@ -4,7 +4,7 @@ import { defineResource } from "../../../../define";
 import { defineTask } from "../../../../definers/defineTask";
 import { defineEvent } from "../../../../definers/defineEvent";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createMessageError } from "../../../../errors";
 
 export const TOKEN = "unit-secret";
@@ -26,7 +26,7 @@ export const noInputTask = defineTask<void, Promise<number>>({
 });
 
 export async function startExposureServer() {
-  const exposure = nodeExposure.with({
+  const exposure = rpcExposure.with({
     http: {
       basePath: "/__runner",
       listen: { port: 0 },
@@ -38,7 +38,7 @@ export async function startExposureServer() {
     register: [testTask, noInputTask, testEvent, exposure],
   });
   const rr = await run(app);
-  const handlers = await rr.getResourceValue(exposure.resource as any);
+  const handlers = await rr.getResourceValue(exposure as any);
   const addr = handlers.server?.address();
   if (!addr || typeof addr === "string")
     throw createMessageError("No server address");

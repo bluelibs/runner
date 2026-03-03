@@ -525,7 +525,7 @@ Node-only entrypoint: `@bluelibs/runner/node`.
 
 | Export                                                | Purpose                                                                                                                  |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `nodeExposure`                                        | Expose tasks/events over HTTP                                                                                            |
+| `rpcLanesResource`                                    | Node RPC lanes runtime (routing + optional HTTP exposure via `exposure.http`)                                            |
 | `createHttpMixedClient`, `createHttpSmartClient`      | Node remote lane clients (JSON + multipart + streaming modes)                                                            |
 | `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart remote lane calls                                                                   |
 | `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path                                                          |

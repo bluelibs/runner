@@ -2,7 +2,8 @@ import { Readable } from "stream";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { defineTask } from "../../../../definers/defineTask";
-import { nodeExposure, useExposureContext } from "../../../index";
+import { useExposureContext } from "../../../index";
+import { rpcExposure } from "../testkit/rpcExposure";
 
 describe("nodeExposure multipart hijack", () => {
   it("skips JSON when multipart task writes to res directly", async () => {
@@ -18,7 +19,7 @@ describe("nodeExposure multipart hijack", () => {
       },
     });
 
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -29,7 +30,7 @@ describe("nodeExposure multipart hijack", () => {
       register: [t, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----jest-boundary";
     const manifest = JSON.stringify({ input: { any: "ok" } });

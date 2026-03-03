@@ -5,7 +5,6 @@
 ```ts
 import express from "express";
 import { r, run, globals } from "@bluelibs/runner";
-import { nodeExposure } from "@bluelibs/runner/node";
 
 const server = r
   .resource<{ port: number }>("app.server")
@@ -39,9 +38,6 @@ const api = r
   .resource("app.api")
   .register([
     server.with({ port: 3000 }),
-    nodeExposure.with({
-      http: { basePath: "/__runner", listen: { port: 3000 } },
-    }),
     createUser,
   ])
   .dependencies({ server, createUser })
@@ -63,7 +59,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 ```
 
 - `.with(config)` exists on configurable built definitions (resources, middleware, tags); fluent builders chain methods plus `.build()`.
-- `nodeExposure` uses `http.listen` for managed HTTP bootstrap. For existing servers, attach manually via the returned handlers (`handlers.attachTo(server)`).
+- RPC HTTP exposure is owned by `rpcLanesResource.with({ exposure: { http: ... } })` in `mode: "network"`.
 - Direct `define*()` outputs and fluent `.build()` outputs are deep-frozen (immutable); so are `.with(config)` and `.fork(...)` outputs.
 - `r.resource<Config>(id)` / `r.task<Input>(id)` seed typing before explicit schema; config-only resources can omit `.init()`.
 - Resource lifecycle split: use `cooldown()` to stop ingress quickly at shutdown start, then use `dispose()` for final teardown after runtime drain. `cooldown()` can be async, but should return promptly by contract. Treat it as an ingress hook (HTTP/tRPC/consumer boundaries), not a teardown phase for support resources like databases.
@@ -519,8 +515,9 @@ Recursive/class schemas:
 JSON Schema (`Match.toJSONSchema(pattern, { strict? })`):
 
 - Draft 2020-12 output.
-- `strict: false` (default): `Match.Where` exports permissive metadata node.
-- `strict: true`: `Match.Where` fails fast (`runner.errors.check.jsonSchemaUnsupportedPattern`).
+- Runtime-only patterns (currently `Match.Where` and `Function`) use one shared policy:
+  - `strict: false` (default): export permissive metadata nodes with `x-runner-match-kind`.
+  - `strict: true`: fail fast (`runner.errors.check.jsonSchemaUnsupportedPattern`).
 - `Match.RegExp(re)` exports `type: "string"` + `pattern: re.source`; flags are exported as metadata.
 - `Match.fromSchema(...)` exports recursive class graphs via `$defs/$ref`.
 - `Match.ObjectStrict(...)` exports strict object schemas (`additionalProperties: false`).

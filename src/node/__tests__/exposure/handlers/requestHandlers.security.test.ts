@@ -1,6 +1,6 @@
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { error } from "../../../../definers/builders/error";
 import { useExposureContext } from "../../../exposure/requestContext";
 import { cancellationError, createMessageError } from "../../../../errors";
@@ -15,7 +15,7 @@ describe("requestHandlers - Security", () => {
           return "should not reach here";
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: { basePath: "/__runner" },
       });
       const app = defineResource({
@@ -24,7 +24,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -46,7 +46,7 @@ describe("requestHandlers - Security", () => {
           return "allowed";
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -58,7 +58,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -80,7 +80,7 @@ describe("requestHandlers - Security", () => {
           return "authenticated";
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { token: "secret-token-123", allowAnonymous: true },
@@ -92,7 +92,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -117,7 +117,7 @@ describe("requestHandlers - Security", () => {
           return "should not reach";
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { token: "correct-token", allowAnonymous: true },
@@ -129,7 +129,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -154,7 +154,7 @@ describe("requestHandlers - Security", () => {
           return "ok";
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: { auth: { token: "secret", allowAnonymous: true } },
       });
       const app = defineResource({
@@ -163,7 +163,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
           headers: {
@@ -188,7 +188,7 @@ describe("requestHandlers - Security", () => {
           return "ok";
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -201,7 +201,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -227,7 +227,7 @@ describe("requestHandlers - Security", () => {
           return "ok";
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -240,7 +240,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -271,7 +271,7 @@ describe("requestHandlers - Security", () => {
           return "ok";
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -283,7 +283,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const largeBody = JSON.stringify({
           data: "a".repeat(2 * 1024 * 1024 + 1),
         });
@@ -308,7 +308,7 @@ describe("requestHandlers - Security", () => {
           return x;
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           limits: { json: { maxSize: 100 } },
           auth: { allowAnonymous: true },
@@ -320,7 +320,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const { req, res } = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -344,7 +344,7 @@ describe("requestHandlers - Security", () => {
           return "ok";
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           limits: { multipart: { fileSize: 10 } },
           auth: { allowAnonymous: true },
@@ -356,7 +356,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
           headers: { "content-type": "multipart/form-data; boundary=---X" },
@@ -385,7 +385,7 @@ describe("requestHandlers - Security", () => {
           throw createMessageError("SECRET_DATA");
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -397,7 +397,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -421,7 +421,7 @@ describe("requestHandlers - Security", () => {
           MyError.throw({ reason: "valid" });
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -433,7 +433,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -458,7 +458,7 @@ describe("requestHandlers - Security", () => {
           MyError.throw({ message: "Safe User Message" });
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -470,7 +470,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -494,7 +494,7 @@ describe("requestHandlers - Security", () => {
           throw err;
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -506,7 +506,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -528,7 +528,7 @@ describe("requestHandlers - Security", () => {
           throw createMessageError("plain");
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           auth: { allowAnonymous: true },
         },
@@ -539,7 +539,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -561,7 +561,7 @@ describe("requestHandlers - Security", () => {
           return "ok";
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           auth: { allowAnonymous: true },
         },
@@ -572,7 +572,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
           headers: { "content-type": "multipart/form-data; boundary=---X" },
@@ -606,7 +606,7 @@ describe("requestHandlers - Security", () => {
           return x + 1;
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -618,7 +618,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -662,7 +662,7 @@ describe("requestHandlers - Security", () => {
           });
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -674,7 +674,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -697,7 +697,7 @@ describe("requestHandlers - Security", () => {
           return "OK";
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -709,7 +709,7 @@ describe("requestHandlers - Security", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -736,7 +736,7 @@ describe("requestHandlers - Security", () => {
           return "ok";
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           limits,
           auth: { allowAnonymous: true },
@@ -744,7 +744,7 @@ describe("requestHandlers - Security", () => {
       });
       const app = defineResource({ id: "app.lim", register: [t, exposure] });
       const rr = await run(app);
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
       return { handlers, rr, tId: t.id };
     };
 

@@ -1,7 +1,7 @@
 import * as http from "http";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import {
   startExposureServer,
   request,
@@ -133,7 +133,7 @@ D("nodeExposure - unit server", () => {
     await new Promise<void>((resolve) =>
       externalServer.listen(0, "127.0.0.1", resolve),
     );
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: { auth: { token: TOKEN, allowAnonymous: true } },
     });
     const app = defineResource({
@@ -141,7 +141,7 @@ D("nodeExposure - unit server", () => {
       register: [testTask, testEvent, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
     expect(handlers.server).toBeNull();
     handlers.attachTo(externalServer);
     const addr = externalServer.address();

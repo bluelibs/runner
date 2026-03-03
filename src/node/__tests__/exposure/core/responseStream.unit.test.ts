@@ -1,7 +1,7 @@
 import { Readable } from "node:stream";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 
 function createReqRes(init: {
   method?: string;
@@ -77,7 +77,7 @@ describe("nodeExposure - task returned stream", () => {
       },
     });
 
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -89,7 +89,7 @@ describe("nodeExposure - task returned stream", () => {
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
       const transport = createReqRes({
         method: "POST",
         url: `/__runner/task/${encodeURIComponent(streamTask.id)}`,
@@ -125,7 +125,7 @@ describe("nodeExposure - task returned stream", () => {
       },
     });
 
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -137,7 +137,7 @@ describe("nodeExposure - task returned stream", () => {
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
       const transport = createReqRes({
         method: "POST",
         url: `/__runner/task/${encodeURIComponent(streamTask.id)}`,

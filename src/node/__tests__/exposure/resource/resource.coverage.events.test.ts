@@ -1,13 +1,13 @@
 import { defineEvent, defineHook, defineResource } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
 import { createMessageError } from "../../../../errors";
 
 describe("nodeExposure Coverage - Events", () => {
   it("covers event not-found branches", async () => {
     const okEvent = defineEvent<{ v?: number }>({ id: "ok.event" });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "T", allowAnonymous: true },
@@ -18,7 +18,7 @@ describe("nodeExposure Coverage - Events", () => {
       register: [okEvent, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     // method not allowed
     {
@@ -37,7 +37,7 @@ describe("nodeExposure Coverage - Events", () => {
         headers: { "x-runner-token": "T" },
       });
       await handlers.handleEvent(rrMock.req, rrMock.res);
-      expect(rrMock.status).toBe(404);
+      expect(rrMock.status).toBe(403);
     }
 
     await rr.dispose();
@@ -52,7 +52,7 @@ describe("nodeExposure Coverage - Events", () => {
         throw createMessageError("emit failure");
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "EVERR", allowAnonymous: true },
@@ -63,7 +63,7 @@ describe("nodeExposure Coverage - Events", () => {
       register: [evt, hook, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const container = createReqRes({
       url: `/__runner/event/${encodeURIComponent(evt.id)}`,

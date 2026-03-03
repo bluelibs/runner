@@ -125,7 +125,8 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
   - `local-simulated` for local transport-shape simulation.
 - In `transparent` and `local-simulated`, profile `serve` is ignored for routing decisions.
 - Exposure behavior:
-  - HTTP exposure starts only when the active profile serves at least one lane.
+  - HTTP exposure starts only when the active profile resolves at least one served task/event endpoint.
+  - If `exposure.http` is configured but nothing is served, startup skips exposure and logs `rpc-lanes.exposure.skipped`.
   - `serve` lanes derive server allow-list automatically for lane-assigned tasks/events.
   - Auth remains fail-closed unless explicitly configured otherwise.
   - Lane JWT authorization is validated per served lane before task/event execution.

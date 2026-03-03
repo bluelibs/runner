@@ -1,6 +1,6 @@
 # Runner Remote Lanes HTTP Protocol Policy (v1.0)
 
-> **Status**: Draft spec derived from Runner implementation. This document formalizes the wire protocol used by HTTP RPC communicators (`rpcLane` presets and HTTP clients), enabling interoperability, debugging, and future extensions. It is not a normative standard but reflects the current behavior of `nodeExposure` and fetch-based clients like `createHttpClient`. For usage, see [REMOTE_LANES.md](REMOTE_LANES.md).
+> **Status**: Draft spec derived from Runner implementation. This document formalizes the wire protocol used by HTTP RPC communicators (`rpcLane` presets and HTTP clients), enabling interoperability, debugging, and future extensions. It is not a normative standard but reflects the current behavior of RPC-lanes-owned HTTP exposure (`rpcLanesResource.with({ exposure: { http: ... } })`) and fetch-based clients like `createHttpClient`. For usage, see [REMOTE_LANES.md](REMOTE_LANES.md).
 
 > **Boundary**: This protocol is intended for inter-runner/service-to-service communication, not as a public web API contract for untrusted internet clients.
 
@@ -71,7 +71,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - `ok`: Boolean.
 - `result`: Task output (serialized; omitted for events).
 - `error`: Details on failure (HTTP status is provided by the HTTP response status code; `error.code` is a string).
-- `meta` (optional/reserved): Present in the shared `ProtocolEnvelope` shape but currently not emitted by `nodeExposure`.
+- `meta` (optional/reserved): Present in the shared `ProtocolEnvelope` shape but currently not emitted by the RPC lanes HTTP exposure runtime.
 
 ## Common Elements
 
@@ -84,12 +84,12 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 
 ### Authentication
 
-- **Header**: Default `x-runner-token: <token>` (configurable via `auth.header` in `nodeExposure` and in clients).
+- **Header**: Default `x-runner-token: <token>` (configurable via `exposure.http.auth.header` and in clients).
 - **Lane JWT**: Remote Lanes may use binding-level JWT auth via `binding.auth` (default header `authorization: Bearer <jwt>` unless binding overrides header).
 - **Layering**: `x-runner-token` (or custom `auth.header`) is exposure-level auth; lane JWT is an independent lane authorization layer.
 - **Token**: `auth.token` supports a string or string[] (any match is accepted).
 - **Validators**: If tasks tagged with `globals.tags.authValidator` exist, they are executed (OR logic); any validator returning `{ ok: true }` authenticates the request.
-- **Anonymous access**: If no token and no validators exist, `nodeExposure` fails closed by default with `500 AUTH_NOT_CONFIGURED`. Set `auth.allowAnonymous: true` to explicitly allow unauthenticated access.
+- **Anonymous access**: If no token and no validators exist, RPC lanes HTTP exposure fails closed by default with `500 AUTH_NOT_CONFIGURED`. Set `auth.allowAnonymous: true` to explicitly allow unauthenticated access.
 - **Dynamic headers**: Clients can override per-request via `onRequest({ headers })`.
 - **Allow-Lists**: Server restricts to configured exposure allow-list sources (`rpcLanesResource` serve topology in `mode: "network"`). Unknown IDs → 403 Forbidden.
 - **Lane authorization**: For served RPC lanes with binding auth enabled, token verification is lane-specific and happens before task/event execution.
@@ -111,7 +111,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 
 - **HTTP Status**: 200 (OK/success), 4xx (client errors), 5xx (server errors).
 - **JSON Errors**: Enveloped when the response has not started yet; once a stream/response is written, subsequent errors are best-effort only.
-- **Sanitization**: For `500` errors, `nodeExposure` sanitizes the payload to avoid leaking sensitive internals:
+- **Sanitization**: For `500` errors, RPC lanes HTTP exposure sanitizes the payload to avoid leaking sensitive internals:
   - `error.message` becomes `"Internal Error"` unless the server recognized a typed error.
   - typed errors may preserve `error.id`, `error.data`, and the typed error message.
 - **Common Codes**:
@@ -133,12 +133,12 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
   | 500 | AUTH_NOT_CONFIGURED | No auth is configured and `allowAnonymous` is not enabled. |
 - **Logging**: Server logs errors via `globals.resources.logger` (e.g., "exposure.task.error"), plus auth failures.
 - **Correlation ID**: Requests carry/receive `x-runner-request-id` (generated when absent) for end-to-end tracing.
-- **Security headers**: `nodeExposure` sets `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` on responses.
+- **Security headers**: RPC lanes HTTP exposure sets `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` on responses.
 
 ### CORS
 
 - Configurable via exposure (`http.cors`).
-- Defaults: If `http.cors` is omitted, `nodeExposure` sets `Access-Control-Allow-Origin: *`.
+- Defaults: If `http.cors` is omitted, RPC lanes HTTP exposure sets `Access-Control-Allow-Origin: *`.
 - Credentials: If `credentials: true`, you must also set an explicit `origin`; otherwise no `Access-Control-Allow-Origin` is sent (browsers will block cross-origin access).
 - Preflight (OPTIONS): Auto-handled with `204`.
 - Headers: Defaults `Access-Control-Allow-Methods: POST, OPTIONS`; allowed headers echo `Access-Control-Request-Headers` unless `allowedHeaders` is provided; `Vary: Origin` is appended when needed.

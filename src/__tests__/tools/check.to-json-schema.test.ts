@@ -115,6 +115,12 @@ describe("tools/check toJSONSchema", () => {
       $schema: DRAFT_2020_12_SCHEMA,
       type: "array",
     });
+    expect(Match.toJSONSchema(Function)).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      description:
+        "Function constructor patterns are not representable in strict JSON Schema and are exported as permissive nodes when strict is false.",
+      "x-runner-match-kind": "Function",
+    });
     expect(Match.toJSONSchema("ok")).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
       const: "ok",
@@ -263,11 +269,12 @@ describe("tools/check toJSONSchema", () => {
     });
   });
 
-  it("represents Match.Where using custom JSON Schema metadata by default", () => {
+  it("represents Match.Where and Function using custom JSON Schema metadata by default", () => {
     expect(
       Match.toJSONSchema({
         profile: {
           custom: Match.Where((value: unknown) => typeof value === "string"),
+          processor: Function,
         },
       }),
     ).toEqual({
@@ -282,8 +289,13 @@ describe("tools/check toJSONSchema", () => {
                 "Custom runtime predicate from Match.Where; not representable in strict JSON Schema.",
               "x-runner-match-kind": "Match.Where",
             },
+            processor: {
+              description:
+                "Function constructor patterns are not representable in strict JSON Schema and are exported as permissive nodes when strict is false.",
+              "x-runner-match-kind": "Function",
+            },
           },
-          required: ["custom"],
+          required: ["custom", "processor"],
           additionalProperties: false,
         },
       },
@@ -313,6 +325,20 @@ describe("tools/check toJSONSchema", () => {
     expect(whereError.path).toBe("$.profile.custom");
     expect(whereError.reason).toContain("Match.Where");
     expect(whereError.patternKind).toBe("Match.Where");
+
+    const functionError = expectSchemaError(() =>
+      Match.toJSONSchema(
+        {
+          profile: {
+            processor: Function,
+          },
+        },
+        { strict: true },
+      ),
+    );
+    expect(functionError.path).toBe("$.profile.processor");
+    expect(functionError.reason).toContain("Function");
+    expect(functionError.patternKind).toBe("Function");
 
     expect(Match.toJSONSchema(Match.MapOf(String), { strict: true })).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
@@ -345,9 +371,11 @@ describe("tools/check toJSONSchema", () => {
     expect(
       expectSchemaError(() => Match.toJSONSchema(Symbol("x") as never)).path,
     ).toBe("$");
-    expect(expectSchemaError(() => Match.toJSONSchema(Function)).path).toBe(
-      "$",
+    const functionError = expectSchemaError(() =>
+      Match.toJSONSchema(Function, { strict: true }),
     );
+    expect(functionError.path).toBe("$");
+    expect(functionError.patternKind).toBe("Function");
 
     class User {}
     const constructorError = expectSchemaError(() => Match.toJSONSchema(User));

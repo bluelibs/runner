@@ -1,6 +1,6 @@
 import { defineTask, defineResource } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
 
 describe("nodeExposure Coverage - Multipart", () => {
@@ -12,7 +12,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       id: "ok.file.task",
       run: async ({ file }) => ({ name: file.name, type: file.type }),
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "T", allowAnonymous: true },
@@ -23,7 +23,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       register: [fileTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----covboundaryOK";
     const manifest = JSON.stringify({
@@ -64,7 +64,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       id: "ok.file.extra.task",
       run: async ({ file }) => ({ extra: file.extra }),
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "T", allowAnonymous: true },
@@ -75,7 +75,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       register: [fileTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----covboundaryExtra";
     const manifest = JSON.stringify({
@@ -112,7 +112,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       id: "missing.file.task",
       run: async () => {},
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "T", allowAnonymous: true },
@@ -123,7 +123,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       register: [fileTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----covboundaryMissing";
     const manifest = JSON.stringify({
@@ -153,7 +153,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       id: "ok.array.files.task",
       run: async ({ files }) => files.map((f) => f.name),
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "T", allowAnonymous: true },
@@ -164,7 +164,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       register: [fileTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----covboundaryArray";
     const manifest = JSON.stringify({

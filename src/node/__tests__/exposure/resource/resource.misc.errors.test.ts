@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineResource, defineTask, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
 import { createMessageError } from "../../../../errors";
 
@@ -16,7 +16,7 @@ describe("nodeExposure - misc error branches", () => {
   });
 
   it("readJson branch: accepts non-Buffer chunks (string)", async () => {
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: TOKEN, allowAnonymous: true },
@@ -27,7 +27,7 @@ describe("nodeExposure - misc error branches", () => {
       register: [noInputTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
 
     const rrMock = createReqRes({
@@ -54,7 +54,7 @@ describe("nodeExposure - misc error branches", () => {
       inputSchema: z.object({ v: z.number() }).strict(),
       run: async ({ v }) => v,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: TOKEN, allowAnonymous: true },
@@ -68,7 +68,7 @@ describe("nodeExposure - misc error branches", () => {
     (rr.logger as any).error = () => {
       throw createMessageError("logger-fail");
     };
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
 
     const rrMock = createReqRes({
@@ -82,7 +82,7 @@ describe("nodeExposure - misc error branches", () => {
   });
 
   it("swallows logger errors inside catch blocks (event)", async () => {
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: TOKEN, allowAnonymous: true },
@@ -96,7 +96,7 @@ describe("nodeExposure - misc error branches", () => {
     (rr.logger as any).error = () => {
       throw createMessageError("logger-fail");
     };
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
     const req: any = {
       method: "POST",

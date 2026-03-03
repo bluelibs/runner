@@ -39,6 +39,7 @@ interface EventHandlerDeps {
     req: IncomingMessage,
     eventId: string,
   ) => Promise<JsonResponse | null> | JsonResponse | null;
+  sourceResourceId?: string;
 }
 
 export const createEventHandler = (deps: EventHandlerDeps) => {
@@ -54,10 +55,9 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     allowAsyncContext = () => true,
     resolveAsyncContextAllowList = () => undefined,
     authorizeEvent = () => null,
+    sourceResourceId = "platform.node.resources.rpcLanes",
   } = deps;
-  const exposureSource = runtimeSource.resource(
-    "platform.node.resources.exposure",
-  );
+  const exposureSource = runtimeSource.resource(sourceResourceId);
 
   return async (
     req: IncomingMessage,

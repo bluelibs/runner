@@ -59,7 +59,8 @@ describe("rpcLanesResource exposure auth callbacks", () => {
     const callbackAssertions = jest.fn();
     jest
       .spyOn(exposureModule, "createNodeExposure")
-      .mockImplementation(async (_cfg, _deps, authorization) => {
+      .mockImplementation(async (_cfg, _deps, options) => {
+        const authorization = options?.authorization;
         const unknownTask = await authorization?.authorizeTask?.(
           { headers: {} } as any,
           "tests.rpc-lanes.authz-callbacks.unknown-task",

@@ -1,23 +1,7 @@
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 
-describe("nodeExposure definition (unit)", () => {
-  it("dispose handles values without close()", async () => {
-    await expect(
-      nodeExposure.dispose?.(
-        {} as never,
-        undefined as never,
-        undefined as never,
-        undefined as never,
-      ),
-    ).resolves.toBeUndefined();
-
-    await expect(
-      nodeExposure.dispose?.(
-        undefined as never,
-        undefined as never,
-        undefined as never,
-        undefined as never,
-      ),
-    ).resolves.toBeUndefined();
+describe("rpcExposure test harness definition (unit)", () => {
+  it("exposes a with() factory", () => {
+    expect(typeof rpcExposure.with).toBe("function");
   });
 });

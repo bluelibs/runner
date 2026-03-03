@@ -20,12 +20,13 @@ import type {
   NodeExposureHttpCorsConfig,
 } from "./resourceTypes";
 import { applyCorsActual, handleCorsPreflight } from "./cors";
-import { computeRpcLaneAllowList } from "../rpc-lanes/allowList";
 import { createTaskHandler } from "./handlers/taskHandler";
 import { createEventHandler } from "./handlers/eventHandler";
 import { safeLogWarn } from "./logging";
 import { ensureRequestId, getRequestId } from "./requestIdentity";
 import type { MultipartLimits } from "./multipart";
+import type { NodeExposurePolicySnapshot } from "./policy";
+import { EMPTY_NODE_EXPOSURE_POLICY } from "./policy";
 
 enum ExposureAuditLogKey {
   AuthFailure = "exposure.auth.failure",
@@ -46,6 +47,8 @@ export interface RequestProcessingDeps {
     multipart?: MultipartLimits;
   };
   disableDiscovery?: boolean;
+  policy?: NodeExposurePolicySnapshot;
+  sourceResourceId?: string;
   authorizeTask?: (
     req: IncomingMessage,
     taskId: string,
@@ -76,6 +79,7 @@ export function createRequestHandlers(
     router,
     limits,
   } = deps;
+  const policy = deps.policy ?? EMPTY_NODE_EXPOSURE_POLICY;
   const serializer = deps.serializer;
   const cors = deps.cors;
 
@@ -107,29 +111,25 @@ export function createRequestHandlers(
   };
 
   const resolveTaskAllowAsyncContext = (taskId: string): boolean => {
-    const list = computeRpcLaneAllowList(store);
-    const decision = list.taskAcceptsAsyncContext.get(taskId);
+    const decision = policy.taskAllowAsyncContext[taskId];
     return decision ?? true;
   };
 
   const resolveTaskAsyncContextAllowList = (
     taskId: string,
   ): readonly string[] | undefined => {
-    const list = computeRpcLaneAllowList(store);
-    return list.taskAsyncContextAllowList.get(taskId);
+    return policy.taskAsyncContextAllowList[taskId];
   };
 
   const resolveEventAllowAsyncContext = (eventId: string): boolean => {
-    const list = computeRpcLaneAllowList(store);
-    const decision = list.eventAcceptsAsyncContext.get(eventId);
+    const decision = policy.eventAllowAsyncContext[eventId];
     return decision ?? true;
   };
 
   const resolveEventAsyncContextAllowList = (
     eventId: string,
   ): readonly string[] | undefined => {
-    const list = computeRpcLaneAllowList(store);
-    return list.eventAsyncContextAllowList.get(eventId);
+    return policy.eventAsyncContextAllowList[eventId];
   };
 
   const processTaskRequest = createTaskHandler({
@@ -145,6 +145,7 @@ export function createRequestHandlers(
     allowAsyncContext: resolveTaskAllowAsyncContext,
     resolveAsyncContextAllowList: resolveTaskAsyncContextAllowList,
     authorizeTask: deps.authorizeTask,
+    sourceResourceId: deps.sourceResourceId,
   });
 
   const processEventRequest = createEventHandler({
@@ -159,6 +160,7 @@ export function createRequestHandlers(
     allowAsyncContext: resolveEventAllowAsyncContext,
     resolveAsyncContextAllowList: resolveEventAsyncContextAllowList,
     authorizeEvent: deps.authorizeEvent,
+    sourceResourceId: deps.sourceResourceId,
   });
 
   const handleTask = async (req: IncomingMessage, res: ServerResponse) => {
@@ -206,16 +208,15 @@ export function createRequestHandlers(
       respondJson(res, auth.response, serializer);
       return;
     }
-    const list = computeRpcLaneAllowList(store);
     applyCorsActual(req, res, cors);
     respondJson(
       res,
       jsonOkResponse({
         result: {
           allowList: {
-            enabled: list.enabled,
-            tasks: Array.from(list.taskIds),
-            events: Array.from(list.eventIds),
+            enabled: policy.enabled,
+            tasks: [...policy.taskIds],
+            events: [...policy.eventIds],
           },
         },
       }),

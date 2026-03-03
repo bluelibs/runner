@@ -1,7 +1,7 @@
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
 import { globals } from "../../../../index";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
 
 describe("nodeExposure discovery endpoint", () => {
@@ -22,7 +22,7 @@ describe("nodeExposure discovery endpoint", () => {
       },
     });
 
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "T", allowAnonymous: true },
@@ -34,7 +34,7 @@ describe("nodeExposure discovery endpoint", () => {
       register: [t, rpcLanesServer, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     // Success: GET /discovery with correct token
     {
@@ -112,7 +112,7 @@ describe("nodeExposure discovery endpoint", () => {
       },
     });
 
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "T", allowAnonymous: true },
@@ -125,7 +125,7 @@ describe("nodeExposure discovery endpoint", () => {
       register: [t, rpcLanesServer, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const rrMock = createReqRes({
       method: "GET",

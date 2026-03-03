@@ -1,7 +1,7 @@
 import * as http from "http";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import {
   startExposureServer,
   request,
@@ -105,7 +105,7 @@ D("nodeExposure - unit core", () => {
   });
 
   it("allows requests without auth when token is not configured", async () => {
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: { basePath: "/__runner", listen: { port: 0 } },
     });
     const app = defineResource({
@@ -113,7 +113,7 @@ D("nodeExposure - unit core", () => {
       register: [testEvent, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
     const addr = handlers.server?.address();
     if (!addr || typeof addr === "string")
       throw createMessageError("No server address");
@@ -128,7 +128,7 @@ D("nodeExposure - unit core", () => {
   });
 
   it("supports custom auth header name", async () => {
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         listen: { port: 0 },
@@ -144,7 +144,7 @@ D("nodeExposure - unit core", () => {
       register: [testEvent, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
     const addr = handlers.server?.address();
     if (!addr || typeof addr === "string")
       throw createMessageError("No server address");

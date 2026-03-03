@@ -1,7 +1,7 @@
 import { Readable } from "stream";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./streaming.test.utils";
 
 describe("requestHandlers - streaming", () => {
@@ -12,7 +12,7 @@ describe("requestHandlers - streaming", () => {
         return "nope";
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -24,7 +24,7 @@ describe("requestHandlers - streaming", () => {
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
       const transport = createReqRes({
         method: "GET",
         url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -55,7 +55,7 @@ describe("requestHandlers - streaming", () => {
           return { stream, contentType: "text/plain; charset=utf-8" };
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -67,7 +67,7 @@ describe("requestHandlers - streaming", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -96,7 +96,7 @@ describe("requestHandlers - streaming", () => {
           });
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -108,7 +108,7 @@ describe("requestHandlers - streaming", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -157,7 +157,7 @@ describe("requestHandlers - streaming", () => {
           });
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -169,7 +169,7 @@ describe("requestHandlers - streaming", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const req = getMultipartReq("boundary1", JSON.stringify({ input: {} }));
         req.url = `/__runner/task/${encodeURIComponent(t.id)}`;
         const transport = createReqRes({ method: "POST", url: req.url });
@@ -201,7 +201,7 @@ describe("requestHandlers - streaming", () => {
           return { stream, contentType: "text/plain; charset=utf-8" };
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -213,7 +213,7 @@ describe("requestHandlers - streaming", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const req = getMultipartReq("boundary2", JSON.stringify({ input: {} }));
         req.url = `/__runner/task/${encodeURIComponent(t.id)}`;
         const transport = createReqRes({ method: "POST", url: req.url });

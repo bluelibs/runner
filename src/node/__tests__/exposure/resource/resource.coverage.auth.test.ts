@@ -1,13 +1,13 @@
 import { defineEvent, defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
 import { globalTags } from "../../../../globals/globalTags";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
 
 describe("nodeExposure Coverage - Auth", () => {
   it("auth header override works and missing header rejects", async () => {
     const okEvent = defineEvent<{ v?: number }>({ id: "ok.event.custom" });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "ABC", header: "x-custom-token", allowAnonymous: true },
@@ -18,7 +18,7 @@ describe("nodeExposure Coverage - Auth", () => {
       register: [okEvent, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     {
       const rrMock = createReqRes({
@@ -42,7 +42,7 @@ describe("nodeExposure Coverage - Auth", () => {
 
   it("accepts auth tokens provided as array headers", async () => {
     const evt = defineEvent<void>({ id: "coverage.header.arr" });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "ARR", allowAnonymous: true },
@@ -53,7 +53,7 @@ describe("nodeExposure Coverage - Auth", () => {
       register: [evt, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const { req, res } = createReqRes({
       url: `/__runner/event/${encodeURIComponent(evt.id)}`,
@@ -75,7 +75,7 @@ describe("nodeExposure Coverage - Auth", () => {
       tags: [globalTags.authValidator],
       run: async () => ({ ok: true }),
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -86,7 +86,7 @@ describe("nodeExposure Coverage - Auth", () => {
       register: [evt, validatorTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const { req, res } = createReqRes({
       url: `/__runner/event/${encodeURIComponent(evt.id)}`,

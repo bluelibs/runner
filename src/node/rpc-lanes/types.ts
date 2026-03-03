@@ -4,6 +4,7 @@ import type {
   IRpcLaneTopologyProfile,
 } from "../../defs";
 import type { NodeExposureHttpConfig } from "../exposure/resourceTypes";
+import type { NodeExposureHandlers } from "../exposure/resourceTypes";
 import type { RemoteLanesMode } from "../remote-lanes/mode";
 
 export type RpcLanesTopology = IRpcLanesTopology;
@@ -37,5 +38,8 @@ export interface RpcLanesResourceValue {
   taskAsyncContextAllowList: Readonly<Record<string, readonly string[]>>;
   eventAsyncContextAllowList: Readonly<Record<string, readonly string[]>>;
   communicatorByLaneId: ReadonlyMap<string, IRpcLaneCommunicator>;
-  exposure?: { close: () => Promise<void> } | null;
+  exposure?: {
+    close: () => Promise<void>;
+    getHandlers?: () => NodeExposureHandlers | null;
+  } | null;
 }

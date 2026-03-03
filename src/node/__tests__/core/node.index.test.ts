@@ -2,7 +2,7 @@ import * as nodeExports from "../../index";
 
 describe("node index exports", () => {
   it("exports Node APIs and the full public surface", () => {
-    expect(typeof (nodeExports as any).nodeExposure).toBe("object");
+    expect((nodeExports as any).nodeExposure).toBeUndefined();
     expect(typeof (nodeExports as any).run).toBe("function");
     expect(typeof (nodeExports as any).tag).toBe("function");
     expect(typeof (nodeExports as any).task).toBe("function");

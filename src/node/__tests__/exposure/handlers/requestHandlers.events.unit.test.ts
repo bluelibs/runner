@@ -3,7 +3,7 @@ import { defineError } from "../../../../definers/defineError";
 import { Serializer } from "../../../../serializer";
 import { defineResource, defineEvent, defineHook } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import * as requestBody from "../../../exposure/requestBody";
 import { cancellationError, createMessageError } from "../../../../errors";
 import { globalTags } from "../../../../globals/globalTags";
@@ -68,6 +68,44 @@ describe("requestHandlers - event handling", () => {
     expect(emitSpy).not.toHaveBeenCalled();
   });
 
+  it("returns not found when event id is allowed but missing from store", async () => {
+    const emitSpy = jest.fn(async () => undefined);
+    const deps: any = {
+      store: {
+        events: new Map(),
+        errors: new Map(),
+      },
+      taskRunner: {} as any,
+      eventManager: { emit: emitSpy },
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      authenticator: async () => ({ ok: true }),
+      allowList: { ensureTask: () => null, ensureEvent: () => null },
+      router: {
+        basePath: "/api",
+        extract: (_p: string) => ({ kind: "event", id: "e.missing" }),
+        isUnderBase: () => true,
+      },
+      cors: undefined,
+      serializer,
+    };
+
+    const { handleEvent } = createRequestHandlers(deps);
+    const { req, res } = createReqRes({
+      method: HttpMethod.Post,
+      url: "/api/event/e.missing",
+      headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
+      body: JSON.stringify({ payload: { x: 1 } }),
+    });
+    await handleEvent(req, res);
+
+    expect(res._status).toBe(404);
+    const json = res._buf
+      ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+      : undefined;
+    expect(json?.error?.code).toBe("NOT_FOUND");
+    expect(emitSpy).not.toHaveBeenCalled();
+  });
+
   describe("Application Errors and Sanitization", () => {
     it("includes id and data for known application errors", async () => {
       const AppError = defineError<{ code: number; message: string }>({
@@ -95,6 +133,17 @@ describe("requestHandlers - event handling", () => {
         },
         cors: undefined,
         serializer,
+        policy: {
+          enabled: true,
+          taskIds: [],
+          eventIds: ["e.ctx.disabled"],
+          taskAllowAsyncContext: {},
+          eventAllowAsyncContext: {
+            "e.ctx.disabled": false,
+          },
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
       };
 
       const { handleEvent } = createRequestHandlers(deps);
@@ -140,6 +189,17 @@ describe("requestHandlers - event handling", () => {
         },
         cors: undefined,
         serializer,
+        policy: {
+          enabled: true,
+          taskIds: [],
+          eventIds: ["e.ctx.policy"],
+          taskAllowAsyncContext: {},
+          eventAllowAsyncContext: {
+            "e.ctx.policy": false,
+          },
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
       };
 
       const { handleEvent } = createRequestHandlers(deps);
@@ -367,6 +427,17 @@ describe("requestHandlers - event handling", () => {
         },
         cors: undefined,
         serializer,
+        policy: {
+          enabled: true,
+          taskIds: [],
+          eventIds: ["e.ctx.disabled"],
+          taskAllowAsyncContext: {},
+          eventAllowAsyncContext: {
+            "e.ctx.disabled": false,
+          },
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
       };
 
       const { handleEvent } = createRequestHandlers(deps);
@@ -445,6 +516,17 @@ describe("requestHandlers - event handling", () => {
         },
         cors: undefined,
         serializer,
+        policy: {
+          enabled: true,
+          taskIds: [],
+          eventIds: ["e.ctx.policy"],
+          taskAllowAsyncContext: {},
+          eventAllowAsyncContext: {
+            "e.ctx.policy": false,
+          },
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
       };
 
       const { handleEvent } = createRequestHandlers(deps);
@@ -542,6 +624,17 @@ describe("requestHandlers - event handling", () => {
         },
         cors: undefined,
         serializer,
+        policy: {
+          enabled: true,
+          taskIds: [],
+          eventIds: ["e.ctx.rpc"],
+          taskAllowAsyncContext: {},
+          eventAllowAsyncContext: { "e.ctx.rpc": true },
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {
+            "e.ctx.rpc": [allowedCtx.id],
+          },
+        },
       };
 
       const { handleEvent } = createRequestHandlers(deps);
@@ -735,7 +828,7 @@ describe("requestHandlers - event handling", () => {
           throw createMessageError("boom");
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
           basePath: "/__runner",
           auth: { allowAnonymous: true },
@@ -747,7 +840,7 @@ describe("requestHandlers - event handling", () => {
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const { req, res } = createReqRes({
           method: HttpMethod.Post,
           url: `/__runner/event/${encodeURIComponent(ev.id)}`,

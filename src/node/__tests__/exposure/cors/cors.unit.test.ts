@@ -1,6 +1,6 @@
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 
 function createReqRes(init: {
   method?: string;
@@ -75,7 +75,7 @@ describe("exposure CORS", () => {
         return 1;
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -87,7 +87,7 @@ describe("exposure CORS", () => {
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
 
       // Preflight
       const pre = createReqRes({
@@ -131,7 +131,7 @@ describe("exposure CORS", () => {
         return "ok";
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         cors: {
@@ -149,7 +149,7 @@ describe("exposure CORS", () => {
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
 
       const pre = createReqRes({
         method: "OPTIONS",
@@ -195,7 +195,7 @@ describe("exposure CORS", () => {
         return 10;
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         cors: {
@@ -211,7 +211,7 @@ describe("exposure CORS", () => {
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
       const tr = createReqRes({
         method: "POST",
         url: `/__runner/task/${encodeURIComponent(t.id)}`,

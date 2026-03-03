@@ -18,6 +18,7 @@ import {
 import { collectRpcTopologyLanes } from "../remote-lanes/topologyLanes";
 import { resolveRpcLaneAssignments } from "./RpcLaneAssignments";
 import { resolveLaneAsyncContextAllowList } from "../remote-lanes/asyncContextAllowlist";
+import type { NodeExposurePolicySnapshot } from "../exposure/policy";
 
 const RPC_LANE_COMMUNICATOR_DEPENDENCY_PREFIX = "__rpcLaneCommunicator__:";
 
@@ -201,6 +202,59 @@ export function toRpcLanesResourceValue(
     ),
     communicatorByLaneId: resolved.communicatorByLaneId,
     exposure: exposure ?? null,
+  };
+}
+
+export function toRpcLanesExposurePolicy(
+  resolved: RpcLaneResolvedState,
+): NodeExposurePolicySnapshot {
+  const taskAllowAsyncContext = Object.freeze(
+    Array.from(resolved.taskAllowAsyncContext.entries()).reduce<
+      Record<string, boolean>
+    >((acc, [taskId, allow]) => {
+      acc[taskId] = allow;
+      return acc;
+    }, {}),
+  );
+  const eventAllowAsyncContext = Object.freeze(
+    Array.from(resolved.eventAllowAsyncContext.entries()).reduce<
+      Record<string, boolean>
+    >((acc, [eventId, allow]) => {
+      acc[eventId] = allow;
+      return acc;
+    }, {}),
+  );
+  const taskAsyncContextAllowList = Object.freeze(
+    Array.from(resolved.taskAsyncContextAllowList.entries()).reduce<
+      Record<string, readonly string[]>
+    >((acc, [taskId, allowList]) => {
+      if (allowList !== undefined) {
+        acc[taskId] = allowList;
+      }
+      return acc;
+    }, {}),
+  );
+  const eventAsyncContextAllowList = Object.freeze(
+    Array.from(resolved.eventAsyncContextAllowList.entries()).reduce<
+      Record<string, readonly string[]>
+    >((acc, [eventId, allowList]) => {
+      if (allowList !== undefined) {
+        acc[eventId] = allowList;
+      }
+      return acc;
+    }, {}),
+  );
+  const taskIds = Object.freeze(Array.from(resolved.serveTaskIds));
+  const eventIds = Object.freeze(Array.from(resolved.serveEventIds));
+
+  return {
+    enabled: taskIds.length > 0 || eventIds.length > 0,
+    taskIds,
+    eventIds,
+    taskAllowAsyncContext,
+    eventAllowAsyncContext,
+    taskAsyncContextAllowList,
+    eventAsyncContextAllowList,
   };
 }
 

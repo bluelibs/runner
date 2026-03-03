@@ -686,7 +686,7 @@ Key rules:
 
 ## Security and Exposure
 
-RPC lane HTTP exposure is available through `rpcLanesResource.with({ exposure: { http: ... } })` in `mode: "network"` only. Attempting to use `exposure.http` in other modes fails fast at startup. Exposure HTTP is only started when the active profile serves at least one RPC lane.
+RPC lane HTTP exposure is available through `rpcLanesResource.with({ exposure: { http: ... } })` in `mode: "network"` only. Attempting to use `exposure.http` in other modes fails fast at startup. Exposure HTTP starts only when the active profile resolves at least one served RPC task/event endpoint; if `exposure.http` is configured but nothing is served, startup skips exposure and logs `rpc-lanes.exposure.skipped`.
 
 Security defaults:
 

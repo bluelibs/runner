@@ -1,6 +1,6 @@
 import { defineTask, defineResource } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
 
 describe("nodeExposure Coverage - JSON and Buffers", () => {
@@ -9,7 +9,7 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
       id: "ok.task.buffer",
       run: async ({ n = 1 }) => n,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -20,7 +20,7 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
       register: [okTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const rrMock = createReqRes({
       url: `/__runner/task/${encodeURIComponent(okTask.id)}`,
@@ -42,7 +42,7 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
       id: "coverage.json.fail",
       run: async ({ v }) => v,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "ARR", allowAnonymous: true },
@@ -53,7 +53,7 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
       register: [echo, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const rrMock = createReqRes({
       url: `/__runner/task/${encodeURIComponent(echo.id)}`,
@@ -76,7 +76,7 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
       id: "coverage.abort.task",
       run: async () => 1,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "AB", allowAnonymous: true },
@@ -87,7 +87,7 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
       register: [echo, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const rrMock = createReqRes({
       url: `/__runner/task/${encodeURIComponent(echo.id)}`,

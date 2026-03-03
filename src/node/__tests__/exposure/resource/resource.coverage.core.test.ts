@@ -1,7 +1,7 @@
 import * as http from "http";
 import { defineTask, defineResource } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
 
 describe("nodeExposure Coverage - Core Routing", () => {
@@ -10,7 +10,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
       id: "ok.task",
       run: async () => 42,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "T", allowAnonymous: true },
@@ -21,7 +21,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
       register: [okTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     // handleTask: non-base path -> 404
     {
@@ -63,7 +63,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
       id: "hr.task",
       run: async () => 1,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "T", allowAnonymous: true },
@@ -74,7 +74,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
       register: [okTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     {
       const rrMock = createReqRes({
@@ -99,7 +99,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
   });
 
   it("attachTo and detachTo coverage", async () => {
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "DET", allowAnonymous: true },
@@ -110,7 +110,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
       register: [exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const listeners = new Map<string, Function[]>();
     const fakeServer: any = {
@@ -143,7 +143,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
       id: "coverage.router.task",
       run: async () => 1,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { token: "R", allowAnonymous: true },
@@ -154,7 +154,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
       register: [okTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
     const headers = { "x-runner-token": "R" };
 
     {

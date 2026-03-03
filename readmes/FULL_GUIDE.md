@@ -3295,14 +3295,16 @@ const schema = Match.toJSONSchema({
 Default behavior:
 
 - `options.strict` defaults to `false`.
-- When `strict` is `false`, `Match.Where(...)` is represented as a permissive schema node annotated with:
-  - `description: "Custom runtime predicate from Match.Where; not representable in strict JSON Schema."`
-  - `"x-runner-match-kind": "Match.Where"`
+- Runtime-only patterns that are not representable in strict JSON Schema are handled with one shared rule.
+- Current runtime-only patterns are `Match.Where(...)` and `Function`.
+- When `strict` is `false`, each runtime-only pattern exports a permissive schema node annotated with:
+  - `description: "<runtime-only pattern note>"`
+  - `"x-runner-match-kind": "<pattern kind>"`
 
 Strict fail-fast behavior (`{ strict: true }`):
 
-- `Match.Where(...)` throws a `RunnerError` with id `runner.errors.check.jsonSchemaUnsupportedPattern`.
-- All other unsupported constructs still throw in both modes.
+- Runtime-only patterns (`Match.Where(...)`, `Function`) throw a `RunnerError` with id `runner.errors.check.jsonSchemaUnsupportedPattern`.
+- Other unsupported constructs still throw in both modes.
 - Error data includes `path`, `reason`, and `patternKind` to identify the exact unsupported node.
 
 `Match.RegExp(...)` JSON Schema behavior:
@@ -9264,7 +9266,7 @@ Node-only entrypoint: `@bluelibs/runner/node`.
 
 | Export                                                | Purpose                                                                                                                  |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `nodeExposure`                                        | Expose tasks/events over HTTP                                                                                            |
+| `rpcLanesResource`                                    | Node RPC lanes runtime (routing + optional HTTP exposure via `exposure.http`)                                            |
 | `createHttpMixedClient`, `createHttpSmartClient`      | Node remote lane clients (JSON + multipart + streaming modes)                                                            |
 | `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart remote lane calls                                                                   |
 | `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path                                                          |

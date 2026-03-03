@@ -2,7 +2,8 @@ import { Readable } from "stream";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { defineTask } from "../../../../definers/defineTask";
-import { nodeExposure, useExposureContext } from "../../../index";
+import { useExposureContext } from "../../../index";
+import { rpcExposure } from "../testkit/rpcExposure";
 
 describe("nodeExposure response hijack (duplex)", () => {
   it("skips JSON envelope when task writes to res (raw-body)", async () => {
@@ -38,7 +39,7 @@ describe("nodeExposure response hijack (duplex)", () => {
       },
     });
 
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -49,7 +50,7 @@ describe("nodeExposure response hijack (duplex)", () => {
       register: [duplexTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     // Fake raw-body request
     const body = "abc";

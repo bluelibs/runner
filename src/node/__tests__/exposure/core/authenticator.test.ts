@@ -121,7 +121,7 @@ describe("node exposure - authenticator", () => {
         task,
         expect.objectContaining({ url: "/", method: "GET" }),
         expect.objectContaining({
-          source: { kind: "resource", id: "platform.node.resources.exposure" },
+          source: { kind: "resource", id: "platform.node.resources.rpcLanes" },
         }),
       );
       expect(result).toEqual({ ok: true });

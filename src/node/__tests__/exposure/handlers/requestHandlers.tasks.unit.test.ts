@@ -90,6 +90,17 @@ describe("requestHandlers - task handling", () => {
         },
         cors: undefined,
         serializer,
+        policy: {
+          enabled: true,
+          taskIds: ["t.ctx.disabled"],
+          eventIds: [],
+          taskAllowAsyncContext: {
+            "t.ctx.disabled": false,
+          },
+          eventAllowAsyncContext: {},
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
       };
 
       const { handleTask } = createRequestHandlers(deps);
@@ -135,6 +146,17 @@ describe("requestHandlers - task handling", () => {
         },
         cors: undefined,
         serializer,
+        policy: {
+          enabled: true,
+          taskIds: ["t.ctx.policy"],
+          eventIds: [],
+          taskAllowAsyncContext: {
+            "t.ctx.policy": false,
+          },
+          eventAllowAsyncContext: {},
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
       };
 
       const { handleTask } = createRequestHandlers(deps);
@@ -333,6 +355,17 @@ describe("requestHandlers - task handling", () => {
         },
         cors: undefined,
         serializer,
+        policy: {
+          enabled: true,
+          taskIds: ["t.ctx.disabled"],
+          eventIds: [],
+          taskAllowAsyncContext: {
+            "t.ctx.disabled": false,
+          },
+          eventAllowAsyncContext: {},
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
       };
 
       const { handleTask } = createRequestHandlers(deps);
@@ -414,6 +447,17 @@ describe("requestHandlers - task handling", () => {
         },
         cors: undefined,
         serializer,
+        policy: {
+          enabled: true,
+          taskIds: ["t.ctx.policy"],
+          eventIds: [],
+          taskAllowAsyncContext: {
+            "t.ctx.policy": false,
+          },
+          eventAllowAsyncContext: {},
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
       };
 
       const { handleTask } = createRequestHandlers(deps);
@@ -512,6 +556,17 @@ describe("requestHandlers - task handling", () => {
         },
         cors: undefined,
         serializer,
+        policy: {
+          enabled: true,
+          taskIds: ["t.ctx.rpc"],
+          eventIds: [],
+          taskAllowAsyncContext: { "t.ctx.rpc": true },
+          eventAllowAsyncContext: {},
+          taskAsyncContextAllowList: {
+            "t.ctx.rpc": [allowedCtx.id],
+          },
+          eventAsyncContextAllowList: {},
+        },
       };
 
       const { handleTask } = createRequestHandlers(deps);

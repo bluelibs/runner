@@ -3,12 +3,12 @@ import { defineEvent, defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { globalResources } from "../../../globals/globalResources";
 import { globalTags } from "../../../globals/globalTags";
-import { computeRpcLaneAllowList } from "../../rpc-lanes";
 import { rpcLanesResource } from "../../rpc-lanes";
 import { r } from "../../../public";
 import { symbolRpcLaneRoutedBy } from "../../../types/symbols";
 import { runtimeSource } from "../../../types/runtimeSource";
 import * as exposureModule from "../../exposure/createNodeExposure";
+import * as exposureLoggingModule from "../../exposure/logging";
 
 describe("rpcLanesResource", () => {
   afterEach(() => {
@@ -604,24 +604,18 @@ describe("rpcLanesResource", () => {
       },
       bindings: [{ lane, communicator, allowAsyncContext: false }],
     });
+    const lanes = rpcLanesResource.with({ profile: "server", topology });
     const app = defineResource({
       id: "tests.rpc-lanes.serve.app",
-      register: [
-        task,
-        event,
-        communicator,
-        rpcLanesResource.with({ profile: "server", topology }),
-      ],
+      register: [task, event, communicator, lanes],
     });
 
     const rr = await run(app);
-    const store = await rr.getResourceValue(globalResources.store as any);
-    const allowList = computeRpcLaneAllowList(store);
-    expect(allowList.enabled).toBe(true);
-    expect(allowList.taskIds.has(task.id)).toBe(true);
-    expect(allowList.taskAcceptsAsyncContext.get(task.id)).toBe(false);
-    expect(allowList.eventIds.has(event.id)).toBe(true);
-    expect(allowList.eventAcceptsAsyncContext.get(event.id)).toBe(false);
+    const lanesValue = await rr.getResourceValue(lanes.resource as any);
+    expect(lanesValue.serveTaskIds).toContain(task.id);
+    expect(lanesValue.taskAllowAsyncContext[task.id]).toBe(false);
+    expect(lanesValue.serveEventIds).toContain(event.id);
+    expect(lanesValue.eventAllowAsyncContext[event.id]).toBe(false);
     await rr.dispose();
   });
 
@@ -657,24 +651,18 @@ describe("rpcLanesResource", () => {
         { lane: laneAllowed, communicator },
       ],
     });
+    const lanes = rpcLanesResource.with({ profile: "server", topology });
     const app = defineResource({
       id: "tests.rpc-lanes.serve.ctx.app",
-      register: [
-        allowedCtx,
-        defaultTask,
-        allowedTask,
-        communicator,
-        rpcLanesResource.with({ profile: "server", topology }),
-      ],
+      register: [allowedCtx, defaultTask, allowedTask, communicator, lanes],
     });
 
     const rr = await run(app);
-    const store = await rr.getResourceValue(globalResources.store as any);
-    const allowList = computeRpcLaneAllowList(store);
-    expect(allowList.taskAcceptsAsyncContext.get(defaultTask.id)).toBe(false);
-    expect(allowList.taskAsyncContextAllowList.get(defaultTask.id)).toEqual([]);
-    expect(allowList.taskAcceptsAsyncContext.get(allowedTask.id)).toBe(true);
-    expect(allowList.taskAsyncContextAllowList.get(allowedTask.id)).toEqual([
+    const lanesValue = await rr.getResourceValue(lanes.resource as any);
+    expect(lanesValue.taskAllowAsyncContext[defaultTask.id]).toBe(false);
+    expect(lanesValue.taskAsyncContextAllowList[defaultTask.id]).toEqual([]);
+    expect(lanesValue.taskAllowAsyncContext[allowedTask.id]).toBe(true);
+    expect(lanesValue.taskAsyncContextAllowList[allowedTask.id]).toEqual([
       allowedCtx.id,
     ]);
     await rr.dispose();
@@ -704,23 +692,18 @@ describe("rpcLanesResource", () => {
       },
       bindings: [{ lane, communicator, allowAsyncContext: true }],
     });
+    const lanes = rpcLanesResource.with({ profile: "server", topology });
     const app = defineResource({
       id: "tests.rpc-lanes.serve.legacy-context-all.app",
-      register: [
-        task,
-        event,
-        communicator,
-        rpcLanesResource.with({ profile: "server", topology }),
-      ],
+      register: [task, event, communicator, lanes],
     });
 
     const rr = await run(app);
-    const store = await rr.getResourceValue(globalResources.store as any);
-    const allowList = computeRpcLaneAllowList(store);
-    expect(allowList.taskAcceptsAsyncContext.get(task.id)).toBe(true);
-    expect(allowList.taskAsyncContextAllowList.get(task.id)).toBeUndefined();
-    expect(allowList.eventAcceptsAsyncContext.get(event.id)).toBe(true);
-    expect(allowList.eventAsyncContextAllowList.get(event.id)).toBeUndefined();
+    const lanesValue = await rr.getResourceValue(lanes.resource as any);
+    expect(lanesValue.taskAllowAsyncContext[task.id]).toBe(true);
+    expect(lanesValue.taskAsyncContextAllowList[task.id]).toBeUndefined();
+    expect(lanesValue.eventAllowAsyncContext[event.id]).toBe(true);
+    expect(lanesValue.eventAsyncContextAllowList[event.id]).toBeUndefined();
     await rr.dispose();
   });
 
@@ -774,6 +757,7 @@ describe("rpcLanesResource", () => {
 
   it("does not start exposure when active profile serves no lanes", async () => {
     const createExposureSpy = jest.spyOn(exposureModule, "createNodeExposure");
+    const warnSpy = jest.spyOn(exposureLoggingModule, "safeLogWarn");
     const lane = r.rpcLane("tests.rpc-lanes.exposure.not-served.lane").build();
     const task = defineTask({
       id: "tests.rpc-lanes.exposure.not-served.task",
@@ -809,6 +793,13 @@ describe("rpcLanesResource", () => {
 
     const rr = await run(app);
     expect(createExposureSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      "rpc-lanes.exposure.skipped",
+      expect.objectContaining({
+        reason: "no-served-task-or-event",
+      }),
+    );
     await rr.dispose();
   });
 
