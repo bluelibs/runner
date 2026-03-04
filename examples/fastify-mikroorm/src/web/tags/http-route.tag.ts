@@ -3,7 +3,7 @@
  * - Namespace: http
  * - File: src/http/tags/http-route.tag.ts
  */
-import { r } from "@bluelibs/runner";
+import { r, Match as M } from "@bluelibs/runner";
 
 export interface HttpRouteConfig {
   // Optional config carried by the tag (available via extract())
@@ -18,7 +18,22 @@ export interface HttpRouteConfig {
 
 export const httpRoute = r
   .tag("http.tags.httpRoute")
-  .configSchema<HttpRouteConfig>({ parse: (x: any) => x })
+  .configSchema(
+    M.compile({
+      method: M.OneOf(
+        "get",
+        "post",
+        "put",
+        "delete",
+        "patch",
+        "options",
+        "head",
+      ),
+      path: String,
+      inputFrom: M.Optional(M.OneOf("body", "merged")),
+      auth: M.Optional(M.OneOf("public", "optional", "required")),
+    }),
+  )
   .meta({
     title: "HTTP Route Tag",
     description:

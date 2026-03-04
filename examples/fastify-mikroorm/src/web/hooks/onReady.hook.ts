@@ -1,5 +1,5 @@
 import { r } from "@bluelibs/runner";
-import { fastify } from "#/http/resources/fastify.resource";
+import { fastify } from "#/web/resources/fastify.resource";
 import { env } from "#/general/resources/env.resource";
 
 // We start the server once all the hooks and resources have been registered.

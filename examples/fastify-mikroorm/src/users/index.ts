@@ -8,7 +8,7 @@ import {
   getUserById,
 } from "./tasks";
 import { auth } from "./resources";
-import { authorize } from "#/http/middleware/authorize.middleware";
+import { authorize } from "#/web/middleware/authorize.middleware";
 
 export const users = r
   .resource("users")

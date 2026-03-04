@@ -1,6 +1,6 @@
 import { r } from "@bluelibs/runner";
 import { z } from "zod";
-import { httpRoute } from "#/http/tags";
+import { httpRoute } from "#/web/tags";
 import { db } from "#/db/resources";
 
 export const readyz = r

@@ -28,7 +28,7 @@
     "zod": "^4.0.17"
   },
   "devDependencies": {
-    "@bluelibs/runner-dev": "^5.0.0",
+    "@bluelibs/runner-dev": "../../../runner-dev",
     "@mikro-orm/cli": "^6.5.2",
     "@types/jest": "^29.5.12",
     "jest": "^29.7.0",

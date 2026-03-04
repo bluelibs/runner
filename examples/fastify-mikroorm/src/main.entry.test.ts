@@ -30,7 +30,7 @@ describe("main entry", () => {
         dev: { with: identity },
       }));
       jest.doMock("./db/resources", () => ({ db: {}, fixtures: {} }));
-      jest.doMock("./http", () => ({ http: {} }));
+      jest.doMock("./web", () => ({ http: {} }));
       jest.doMock("./users", () => ({ users: {} }));
       jest.doMock("./general", () => ({ env: {} }));
       // Importing main should not throw
@@ -54,7 +54,7 @@ describe("main entry", () => {
           dev: { with: identity },
         }));
         jest.doMock("./db/resources", () => ({ db: {}, fixtures: {} }));
-        jest.doMock("./http", () => ({ http: {} }));
+        jest.doMock("./web", () => ({ http: {} }));
         jest.doMock("./users", () => ({ users: {} }));
         jest.doMock("./general", () => ({ env: {} }));
         require("./main");

@@ -1,12 +1,12 @@
 import { r } from "@bluelibs/runner";
-import { httpRoute } from "#/http/tags";
+import { httpRoute } from "#/web/tags";
 import { fastify } from "./fastify.resource";
-import { fastifyContext } from "#/http/fastify-context";
+import { fastifyContext } from "#/web/fastify-context";
 import { randomUUID } from "crypto";
 import { auth as authResource } from "#/users/resources/auth.resource";
 import { db } from "#/db/resources";
 import { extractToken } from "#/users/http-auth";
-import type { AuthenticatedUser } from "#/http/fastify-context";
+import type { AuthenticatedUser } from "#/web/fastify-context";
 import { buildRouteSchema } from "./helpers/buildRouteSchema";
 import { extractAuthUser } from "./helpers/extractAuthUser";
 import { buildTaskInput } from "./helpers/buildTaskInput";

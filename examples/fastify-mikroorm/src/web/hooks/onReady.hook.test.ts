@@ -33,7 +33,7 @@ jest.mock("@fastify/swagger-ui", () => ({
 }));
 
 import { onReady } from "./onReady.hook";
-import { fastify } from "#/http/resources/fastify.resource";
+import { fastify } from "#/web/resources/fastify.resource";
 
 describe("onReady hook", () => {
   it("runs without real network listen", async () => {

@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import { HTTPError } from "#/http/http-error";
+import { HTTPError } from "#/web/http-error";
 import { Errors } from "@bluelibs/runner";
 
 export function createErrorHandler() {

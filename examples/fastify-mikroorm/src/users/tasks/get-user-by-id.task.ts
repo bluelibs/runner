@@ -1,8 +1,8 @@
 import { r } from "@bluelibs/runner";
 import { z } from "zod";
-import { httpRoute } from "#/http/tags";
+import { httpRoute } from "#/web/tags";
 import { db } from "#/db/resources";
-import { HTTPError } from "#/http/http-error";
+import { HTTPError } from "#/web/http-error";
 
 export const getUserById = r
   .task("getUserById")

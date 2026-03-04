@@ -1,7 +1,7 @@
 import { run, r } from "@bluelibs/runner";
 import { dev } from "@bluelibs/runner-dev";
 import { db, fixtures } from "./db/resources";
-import { http } from "./http";
+import { http } from "./web";
 import { users } from "./users";
 import { env } from "./general";
 

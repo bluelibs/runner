@@ -1,6 +1,6 @@
 import { r } from "@bluelibs/runner";
-import { fastifyContext } from "#/http/fastify-context";
-import { HTTPError } from "#/http/http-error";
+import { fastifyContext } from "#/web/fastify-context";
+import { HTTPError } from "#/web/http-error";
 
 export type AuthorizeConfig = {
   required?: boolean; // default true: user must be present

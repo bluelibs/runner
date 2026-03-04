@@ -1,10 +1,10 @@
 import { r } from "@bluelibs/runner";
 import { z } from "zod";
-import { httpRoute } from "#/http/tags";
+import { httpRoute } from "#/web/tags";
 import { db } from "#/db/resources";
 import { auth as authResource } from "#/users/resources/auth.resource";
-import { fastifyContext } from "#/http/fastify-context";
-import { HTTPError } from "#/http/http-error";
+import { fastifyContext } from "#/web/fastify-context";
+import { HTTPError } from "#/web/http-error";
 
 export const loginUser = r
   .task("login")
