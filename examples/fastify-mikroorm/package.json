@@ -39,6 +39,9 @@
     "typescript": "^5.6.3",
     "@mikro-orm/better-sqlite": "^6.6.6"
   },
+  "overrides": {
+    "@rushstack/node-core-library": "5.20.3"
+  },
   "mikro-orm": {
     "useTsNode": true,
     "configPaths": [
