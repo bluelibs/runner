@@ -2,6 +2,8 @@ import {
   RegisterableItems,
   IResourceWithConfig,
   IsolationPolicy,
+  IsolationSubtreeFilter,
+  ItemType,
 } from "../defs";
 import * as utils from "../define";
 import { isolateViolationError, visibilityViolationError } from "../errors";
@@ -14,11 +16,15 @@ import {
 type CompiledIsolationPolicy = {
   denyIds: Set<string>;
   denyTagIds: Set<string>;
+  // Structural subtree filters for deny rules — resolved lazily from this.subtrees
+  // at violation-check time so overridable ids and late-registered children are included.
+  denySubtreeFilters: IsolationSubtreeFilter[];
   // onlyMode=true means the policy uses "only" semantics (allowlist).
-  // When true, external deps not in onlyIds/onlyTagIds are blocked.
+  // When true, external deps not in onlyIds/onlyTagIds/onlySubtreeFilters are blocked.
   onlyMode: boolean;
   onlyIds: Set<string>;
   onlyTagIds: Set<string>;
+  onlySubtreeFilters: IsolationSubtreeFilter[];
 };
 
 type AccessViolation =
@@ -30,9 +36,26 @@ type AccessViolation =
   | {
       kind: "isolate";
       policyResourceId: string;
-      matchedRuleType: "id" | "tag" | "only";
+      matchedRuleType: "id" | "tag" | "only" | "subtree";
       matchedRuleId: string;
     };
+
+/**
+ * Maps a registerable item to its Runner ItemType string.
+ * Needed so subtreeOf({ types: ["task"] }) can filter by item kind at violation-check time.
+ */
+function deriveItemType(item: RegisterableItems): ItemType | undefined {
+  if (utils.isTask(item)) return "task";
+  if (utils.isResource(item) || utils.isResourceWithConfig(item))
+    return "resource";
+  if (utils.isEvent(item) || utils.isEventLane(item) || utils.isRpcLane(item))
+    return "event";
+  if (utils.isTag(item)) return "tag";
+  if (utils.isHook(item)) return "hook";
+  if (utils.isTaskMiddleware(item)) return "taskMiddleware";
+  if (utils.isResourceMiddleware(item)) return "resourceMiddleware";
+  return undefined;
+}
 
 /**
  * Extracts the string id from any registerable item.
@@ -116,6 +139,12 @@ export class VisibilityTracker {
    */
   private readonly definitionTagIds = new Map<string, Set<string>>();
 
+  /**
+   * Definition id -> its Runner item type (task, event, resource, etc.).
+   * Used to evaluate `subtreeOf()` type filters without needing the registry.
+   */
+  private readonly itemTypes = new Map<string, ItemType>();
+
   recordResource(resourceId: string): void {
     this.knownResources.add(resourceId);
   }
@@ -146,14 +175,23 @@ export class VisibilityTracker {
 
     const denyIds = new Set<string>();
     const denyTagIds = new Set<string>();
+    const denySubtreeFilters: IsolationSubtreeFilter[] = [];
     const onlyIds = new Set<string>();
     const onlyTagIds = new Set<string>();
+    const onlySubtreeFilters: IsolationSubtreeFilter[] = [];
 
     const resolveEntry = (
       entry: unknown,
       ids: Set<string>,
       tagIds: Set<string>,
+      subtreeFilters: IsolationSubtreeFilter[],
     ) => {
+      // Structural subtree references are stored separately — they are resolved
+      // lazily against this.subtrees at violation-check time.
+      if (utils.isSubtreeFilter(entry)) {
+        subtreeFilters.push(entry);
+        return;
+      }
       if (typeof entry === "string") {
         ids.add(entry);
         return;
@@ -169,22 +207,24 @@ export class VisibilityTracker {
 
     if (hasDeny) {
       for (const entry of policy!.deny!) {
-        resolveEntry(entry, denyIds, denyTagIds);
+        resolveEntry(entry, denyIds, denyTagIds, denySubtreeFilters);
       }
     }
 
     if (onlyPresent) {
       for (const entry of policy!.only!) {
-        resolveEntry(entry, onlyIds, onlyTagIds);
+        resolveEntry(entry, onlyIds, onlyTagIds, onlySubtreeFilters);
       }
     }
 
     this.isolationPolicies.set(resourceId, {
       denyIds,
       denyTagIds,
+      denySubtreeFilters,
       onlyMode: onlyPresent,
       onlyIds,
       onlyTagIds,
+      onlySubtreeFilters,
     });
   }
 
@@ -203,6 +243,9 @@ export class VisibilityTracker {
     }
 
     this.ownership.set(id, ownerResourceId);
+
+    const type = deriveItemType(item);
+    if (type) this.itemTypes.set(id, type);
 
     // Add to owner's subtree and all ancestor subtrees
     const visitedOwners = new Set<string>();
@@ -659,6 +702,25 @@ export class VisibilityTracker {
         }
       }
 
+      // --- deny subtree filters ---
+      for (const filter of policy.denySubtreeFilters) {
+        const filterSubtree = this.subtrees.get(filter.resourceId);
+        // The resource itself is not in its own subtrees map, so check both.
+        const inFilterSubtree =
+          targetId === filter.resourceId || filterSubtree?.has(targetId);
+        if (!inFilterSubtree) continue;
+        if (filter.types && filter.types.length > 0) {
+          const targetType = this.itemTypes.get(targetId);
+          if (!targetType || !filter.types.includes(targetType)) continue;
+        }
+        return {
+          kind: "isolate",
+          policyResourceId,
+          matchedRuleType: "subtree",
+          matchedRuleId: filter.resourceId,
+        };
+      }
+
       // --- only rules: internal items (within the policy resource's subtree) are always allowed ---
       if (!policy.onlyMode) {
         continue;
@@ -672,14 +734,26 @@ export class VisibilityTracker {
         continue;
       }
 
-      // External target must match the only list (by id or by tag).
+      // External target must match the only list (by id, tag, or subtree filter).
       const matchedByOnlyId = policy.onlyIds.has(targetId);
       const matchedByOnlyTag =
         policy.onlyTagIds.has(targetId) ||
         (targetTags !== undefined &&
           [...targetTags].some((tagId) => policy.onlyTagIds.has(tagId)));
+      const matchedByOnlySubtree = policy.onlySubtreeFilters.some((filter) => {
+        const filterSubtree = this.subtrees.get(filter.resourceId);
+        // The resource itself is not in its own subtrees map, so check both.
+        const inFilterSubtree =
+          targetId === filter.resourceId || filterSubtree?.has(targetId);
+        if (!inFilterSubtree) return false;
+        if (filter.types && filter.types.length > 0) {
+          const targetType = this.itemTypes.get(targetId);
+          if (!targetType || !filter.types.includes(targetType)) return false;
+        }
+        return true;
+      });
 
-      if (!matchedByOnlyId && !matchedByOnlyTag) {
+      if (!matchedByOnlyId && !matchedByOnlyTag && !matchedByOnlySubtree) {
         return {
           kind: "isolate",
           policyResourceId,
@@ -812,6 +886,7 @@ export class VisibilityTracker {
       this.knownResources.delete(id);
       this.isolationPolicies.delete(id);
       this.definitionTagIds.delete(id);
+      this.itemTypes.delete(id);
     }
 
     for (const subtree of this.subtrees.values()) {

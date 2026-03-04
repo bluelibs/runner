@@ -1512,6 +1512,56 @@ const payments = r
   - Parent `only: [A1, A2, A3]` + child `only: [A1, A4]` + grandchild consumer -> external access collapses to `A1` only (assuming all are external to both parent and child boundaries).
 - Denied references fail during `run(app)` sanity checks with a `isolateViolationError`.
 
+**Structural subtree filters with `subtreeOf()`:**
+
+String id selectors (`"agent.*"`) match against literal ids, which breaks when items have overridable ids or are registered by nested child resources with arbitrary names. `subtreeOf()` solves this by binding to the resource object itself — all items in its registration subtree are matched by ownership, not by id pattern.
+
+```typescript
+import { r, subtreeOf } from "@bluelibs/runner";
+
+const agentTask = r
+  .task("any.random.id")
+  .run(async () => "agent")
+  .build();
+const agentEvent = r.event("agent.events.status").build();
+
+const agentResource = r
+  .resource("agent")
+  .register([agentTask, agentEvent])
+  .build();
+
+// Deny all items from agentResource's subtree
+const strict = r
+  .resource("strict.boundary")
+  .register([consumerTask])
+  .isolate({ deny: [subtreeOf(agentResource)] })
+  .build();
+
+// Deny only tasks; events remain accessible
+const selective = r
+  .resource("selective.boundary")
+  .register([hookConsumer])
+  .isolate({ deny: [subtreeOf(agentResource, { types: ["task"] })] })
+  .build();
+
+// Allow only event listeners from events registered by agentResource (plus internal items)
+const eventOnly = r
+  .resource("event.only.boundary")
+  .register([listenerTask])
+  .isolate({ only: [subtreeOf(agentResource, { types: ["event"] })] })
+  .build();
+```
+
+**`subtreeOf()` semantics:**
+
+- Accepts any resource definition and an optional `{ types }` array to narrow which item kinds are matched.
+- Valid types: `"task"`, `"hook"`, `"event"`, `"tag"`, `"resource"`, `"taskMiddleware"`, `"resourceMiddleware"`.
+- Omitting `types` matches all item kinds in the subtree.
+- Works in both `deny` and `only` arrays.
+- The referenced resource must be registered in the same runtime graph — unknown targets fail fast with `isolationUnknownTarget`.
+- Deeply nested items (registered by child resources of the referenced resource) are also matched.
+- Also available as `r.subtreeOf()`.
+
 **Events and middleware follow the same rules:**
 
 ```typescript
@@ -6015,7 +6065,10 @@ const createUser = r
   .build();
 
 const userRegistered = r.event("userRegistered").build();
-const db = r.resource("db").init(async () => ({})).build();
+const db = r
+  .resource("db")
+  .init(async () => ({}))
+  .build();
 
 const app = r
   .resource("app")
@@ -6025,17 +6078,17 @@ const app = r
 
 At runtime/store level, IDs become canonical:
 
-| Kind                | Local name -> Canonical ID                        |
-| ------------------- | ------------------------------------------------- |
-| Resource            | `db` -> `app.db`                                  |
-| Task                | `createUser` -> `app.tasks.createUser`            |
-| Event               | `userRegistered` -> `app.events.userRegistered`   |
+| Kind                | Local name -> Canonical ID                         |
+| ------------------- | -------------------------------------------------- |
+| Resource            | `db` -> `app.db`                                   |
+| Task                | `createUser` -> `app.tasks.createUser`             |
+| Event               | `userRegistered` -> `app.events.userRegistered`    |
 | Hook                | `onUserRegistered` -> `app.hooks.onUserRegistered` |
-| Task Middleware     | `auth` -> `app.middleware.task.auth`              |
-| Resource Middleware | `audit` -> `app.middleware.resource.audit`        |
-| Tag                 | `public` -> `app.tags.public`                     |
-| Error               | `InvalidInput` -> `app.errors.InvalidInput`       |
-| Async Context       | `request` -> `app.ctx.request`                    |
+| Task Middleware     | `auth` -> `app.middleware.task.auth`               |
+| Resource Middleware | `audit` -> `app.middleware.resource.audit`         |
+| Tag                 | `public` -> `app.tags.public`                      |
+| Error               | `InvalidInput` -> `app.errors.InvalidInput`        |
+| Async Context       | `request` -> `app.ctx.request`                     |
 
 Important behavior:
 

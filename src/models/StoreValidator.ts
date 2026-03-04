@@ -24,7 +24,7 @@ import type {
   SubtreeValidationTargetType,
   SubtreeViolation,
 } from "../defs";
-import { isOptional, isTag, isTagStartup } from "../define";
+import { isOptional, isTag, isTagStartup, isSubtreeFilter } from "../define";
 import { StoreRegistry } from "./StoreRegistry";
 import { resolveIsolationSelector } from "./utils/isolationSelectors";
 import {
@@ -606,6 +606,16 @@ export class StoreValidator {
     };
 
     for (const entry of input.entries) {
+      // Structural subtree filters bypass the id-resolution path — we only
+      // verify that the referenced resource is actually registered.
+      if (isSubtreeFilter(entry)) {
+        if (!this.hasRegisteredId(entry.resourceId)) {
+          input.onUnknownTarget(entry.resourceId);
+        }
+        normalizedEntries.push(entry as unknown as TEntry);
+        continue;
+      }
+
       if (typeof entry === "string") {
         if (entry.length === 0) {
           input.onInvalidEntry(entry);

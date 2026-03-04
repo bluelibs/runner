@@ -28,6 +28,7 @@ import {
   ITagStartupDependency,
   symbolOverrideDefinition,
 } from "../defs";
+import type { IsolationSubtreeFilter } from "../types/resource";
 import { IErrorHelper } from "../types/error";
 import { symbolAsyncContext, symbolError } from "../types/symbols";
 import type { IAsyncContext } from "../types/asyncContext";
@@ -150,4 +151,19 @@ export function isAsyncContext(
 /** Type guard: checks if a definition is an override produced by override APIs. */
 export function isOverrideDefinition(definition: unknown): boolean {
   return hasBrand(definition, symbolOverrideDefinition);
+}
+
+/**
+ * Type guard: checks if a value is an `IsolationSubtreeFilter` created by `subtreeOf()`.
+ * Used in the wiring validation path to distinguish structural resource references
+ * from flat id strings or tag definitions in deny/only policy entries.
+ */
+export function isSubtreeFilter(
+  definition: unknown,
+): definition is IsolationSubtreeFilter {
+  return (
+    typeof definition === "object" &&
+    definition !== null &&
+    (definition as IsolationSubtreeFilter)._subtreeFilter === true
+  );
 }

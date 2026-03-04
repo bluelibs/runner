@@ -39,6 +39,7 @@ import { error as errorFn } from "./definers/builders/error";
 import { asyncContext as asyncContextFn } from "./definers/builders/asyncContext";
 import { override as overrideBuilder } from "./definers/builders/override";
 import { onAnyOf, isOneOf } from "./types/event";
+import { subtreeOf as subtreeOfFn } from "./tools/subtreeOf";
 
 const rSystem = Object.freeze({
   ...systemResources,
@@ -93,6 +94,7 @@ export {
   createTestResource,
   onAnyOf,
   isOneOf,
+  subtreeOfFn as subtreeOf,
 };
 
 // Legacy alias kept for compatibility.
@@ -128,6 +130,7 @@ export const r = Object.freeze({
   override: overrideBuilder,
   asyncContext: asyncContextFn,
   error: errorFn,
+  subtreeOf: subtreeOfFn,
   middleware: Object.freeze({
     task: taskMiddlewareFn,
     resource: resourceMiddlewareFn,

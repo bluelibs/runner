@@ -84,7 +84,39 @@ export interface ResourceForkInfo {
 }
 
 export type IsolationSelector = string;
-export type IsolationTarget = RegisterableItems | IsolationSelector;
+
+/**
+ * The definition types recognised by Runner's isolation engine.
+ * Used by `subtreeOf()` to narrow which items inside a resource subtree
+ * are matched by a deny/only filter.
+ */
+export type ItemType =
+  | "task"
+  | "hook"
+  | "event"
+  | "tag"
+  | "resource"
+  | "taskMiddleware"
+  | "resourceMiddleware";
+
+/**
+ * A structural subtree filter created by `subtreeOf(resource, { types })`.
+ *
+ * Unlike string selectors (which match against literal ids) this reference
+ * binds to the resource object itself.  At bootstrap, Runner resolves
+ * "all items owned by that resource's registration subtree" — so overridable
+ * ids and deeply-nested children are all caught automatically.
+ */
+export interface IsolationSubtreeFilter {
+  readonly _subtreeFilter: true;
+  readonly resourceId: string;
+  readonly types?: ReadonlyArray<ItemType>;
+}
+
+export type IsolationTarget =
+  | RegisterableItems
+  | IsolationSelector
+  | IsolationSubtreeFilter;
 export type IsolationExportsTarget = RegisterableItems | IsolationSelector;
 
 export type IsolationExportsConfig =

@@ -27,4 +27,5 @@ export {
   isError,
   isAsyncContext,
   isOverrideDefinition,
+  isSubtreeFilter,
 } from "./definers/tools";

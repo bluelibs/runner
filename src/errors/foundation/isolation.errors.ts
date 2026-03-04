@@ -102,7 +102,7 @@ export const isolateViolationError = error<
     consumerId: string;
     consumerType: string;
     policyResourceId: string;
-    matchedRuleType: "id" | "tag" | "only";
+    matchedRuleType: "id" | "tag" | "only" | "subtree";
     matchedRuleId: string;
   } & DefaultErrorType
 >("runner.errors.isolationViolation")
@@ -122,6 +122,9 @@ export const isolateViolationError = error<
   .remediation(({ policyResourceId, matchedRuleType, matchedRuleId }) => {
     if (matchedRuleType === "only") {
       return `Target is not in the "only" list. Add it to the "only" list on "${policyResourceId}", or move the consumer outside that resource subtree.`;
+    }
+    if (matchedRuleType === "subtree") {
+      return `Denied by subtreeOf("${matchedRuleId}") filter on "${policyResourceId}". Remove or narrow the subtreeOf() filter, or move the consumer outside that resource subtree.`;
     }
     const rule =
       matchedRuleType === "tag"
