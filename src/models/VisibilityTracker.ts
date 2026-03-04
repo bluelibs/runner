@@ -704,15 +704,7 @@ export class VisibilityTracker {
 
       // --- deny subtree filters ---
       for (const filter of policy.denySubtreeFilters) {
-        const filterSubtree = this.subtrees.get(filter.resourceId);
-        // The resource itself is not in its own subtrees map, so check both.
-        const inFilterSubtree =
-          targetId === filter.resourceId || filterSubtree?.has(targetId);
-        if (!inFilterSubtree) continue;
-        if (filter.types && filter.types.length > 0) {
-          const targetType = this.itemTypes.get(targetId);
-          if (!targetType || !filter.types.includes(targetType)) continue;
-        }
+        if (!this.matchesSubtreeFilter(targetId, filter)) continue;
         return {
           kind: "isolate",
           policyResourceId,
@@ -740,18 +732,9 @@ export class VisibilityTracker {
         policy.onlyTagIds.has(targetId) ||
         (targetTags !== undefined &&
           [...targetTags].some((tagId) => policy.onlyTagIds.has(tagId)));
-      const matchedByOnlySubtree = policy.onlySubtreeFilters.some((filter) => {
-        const filterSubtree = this.subtrees.get(filter.resourceId);
-        // The resource itself is not in its own subtrees map, so check both.
-        const inFilterSubtree =
-          targetId === filter.resourceId || filterSubtree?.has(targetId);
-        if (!inFilterSubtree) return false;
-        if (filter.types && filter.types.length > 0) {
-          const targetType = this.itemTypes.get(targetId);
-          if (!targetType || !filter.types.includes(targetType)) return false;
-        }
-        return true;
-      });
+      const matchedByOnlySubtree = policy.onlySubtreeFilters.some((filter) =>
+        this.matchesSubtreeFilter(targetId, filter),
+      );
 
       if (!matchedByOnlyId && !matchedByOnlyTag && !matchedByOnlySubtree) {
         return {
@@ -764,6 +747,26 @@ export class VisibilityTracker {
     }
 
     return null;
+  }
+
+  /**
+   * Checks whether `targetId` falls within a subtree filter's scope,
+   * accounting for the resource itself and optional type narrowing.
+   */
+  private matchesSubtreeFilter(
+    targetId: string,
+    filter: IsolationSubtreeFilter,
+  ): boolean {
+    const filterSubtree = this.subtrees.get(filter.resourceId);
+    // The resource itself is not in its own subtrees map, so check both.
+    const inFilterSubtree =
+      targetId === filter.resourceId || filterSubtree?.has(targetId);
+    if (!inFilterSubtree) return false;
+    if (filter.types && filter.types.length > 0) {
+      const targetType = this.itemTypes.get(targetId);
+      if (!targetType || !filter.types.includes(targetType)) return false;
+    }
+    return true;
   }
 
   private getConsumerResourceChain(consumerId: string): string[] {
