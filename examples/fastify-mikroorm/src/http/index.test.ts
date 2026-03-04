@@ -8,7 +8,7 @@ import { readyz } from "./tasks/readyz.task";
 
 describe("http module resource", () => {
   it("exposes id and registers expected parts", () => {
-    expect(http.id).toBe("app.http.resources.http");
+    expect(http.id).toBe("http");
     // Minimal sanity: ensure it wires together our pieces
     const reg = http.register as any[];
     expect(reg).toEqual(

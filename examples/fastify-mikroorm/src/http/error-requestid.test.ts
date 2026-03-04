@@ -11,7 +11,7 @@ import { HTTPError } from "./http-error";
 describe("error handler and request id", () => {
   it("maps HTTPError and sets x-request-id", async () => {
     const failing = task({
-      id: "app.tests.http.failing",
+      id: "failing",
       meta: { title: "Failing", description: "Throws HTTPError" },
       inputSchema: z.object({ ok: z.boolean().optional() }).optional(),
       tags: [httpRoute.with({ method: "post", path: "/fail" })],

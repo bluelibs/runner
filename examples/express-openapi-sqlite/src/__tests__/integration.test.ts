@@ -1,13 +1,15 @@
-import { resource, run } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
+import type { Express } from "express";
 import request from "supertest";
-import { app } from "../index";
 import { db } from "../app/db/resources/database";
 import { expressServerResource } from "../app/http/resources/express.resource";
+import { appConfig } from "../app/app.config";
+import { http } from "../app/http";
+import { users } from "../app/users";
 
 describe("Express OpenAPI SQLite Integration", () => {
-  let appInstance: any;
-  let dispose: any;
-  let server: any;
+  let dispose: () => Promise<void>;
+  let server: Express;
 
   // Test user data - email will be randomized for each test
   const testUser = {
@@ -18,19 +20,20 @@ describe("Express OpenAPI SQLite Integration", () => {
 
   beforeAll(async () => {
     // Start the application
-    const testApp = resource({
-      id: "tests.harness.express",
-      register: [app],
-      overrides: [
+    const testApp = r
+      .resource("expressHarness")
+      .register([
+        appConfig,
         db.with({
           filename: ":memory:",
           verbose: true,
         }),
-      ],
-    });
+        http,
+        users,
+      ])
+      .build();
 
     const rr = await run(testApp);
-    appInstance = rr.value;
     dispose = rr.dispose;
     server = rr.getResourceValue(expressServerResource).app;
   });

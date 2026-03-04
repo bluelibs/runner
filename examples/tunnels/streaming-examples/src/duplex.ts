@@ -1,34 +1,49 @@
 /**
- * Duplex streaming (raw-body in, streamed response out).
+ * Duplex streaming over RPC Lanes HTTP transport.
  *
- * - nodeExposure serves an ephemeral HTTP server
- * - Task uses useExposureContext() to read req and write to res
- * - Client uploads slowly; server responds per chunk
+ * - Server: rpcLanes HTTP exposure
+ * - Task uses useExposureContext() to read request body and stream response
+ * - Client: rpcLane smart communicator uploads a slow stream and reads streamed response
  */
 
-import { resource, run, task, r } from "@bluelibs/runner";
-import {
-  nodeExposure,
-  useExposureContext,
-  createHttpSmartClient,
-} from "@bluelibs/runner/node";
+import { r, run } from "@bluelibs/runner";
+import { rpcLanesResource, useExposureContext } from "@bluelibs/runner/node";
 import { Readable, Transform } from "stream";
-import { createSlowReadable } from "./utils";
 
-const BASE_PATH = "/__runner" as const;
+import { createSlowReadable, getExposureBaseUrl } from "./utils";
 
-function transformChunk(s: string): string {
-  // Uppercase + add '!'
-  return s.toUpperCase() + "!";
+const RPC_PROFILE = {
+  client: "client",
+  server: "server",
+} as const;
+
+const IDS = {
+  // Shared app id keeps fully-qualified task ids aligned across client/server.
+  app: "duplexApp",
+  task: "duplexTask",
+  communicator: {
+    server: "duplexServerCommunicator",
+    client: "duplexClientCommunicator",
+  },
+  rpcLanes: {
+    server: "duplexServerRpcLanes",
+    client: "duplexClientRpcLanes",
+  },
+} as const;
+const RPC_BASE_PATH = "/__runner";
+
+const duplexLane = r.rpcLane("duplexLane").build();
+
+function transformChunk(value: string): string {
+  return `${value.toUpperCase()}!`;
 }
-
-const createSlowStream = createSlowReadable;
 
 async function respondDuplex(
   opts: { contentType?: string } = {},
   transform: (chunk: Buffer) => string,
 ): Promise<void> {
   const { req, res } = useExposureContext();
+
   res.statusCode = 200;
   res.setHeader(
     "content-type",
@@ -37,15 +52,16 @@ async function respondDuplex(
 
   await new Promise<void>((resolve, reject) => {
     req
-      .on("data", (c: any) => {
-        const buf = Buffer.isBuffer(c) ? c : Buffer.from(String(c));
-        // Required demo logs
+      .on("data", (chunk: Buffer | string) => {
+        const buffer = Buffer.isBuffer(chunk)
+          ? chunk
+          : Buffer.from(chunk, "utf8");
 
-        console.log("receive", buf.toString("utf8"));
-        const out = transform(buf);
+        console.log("receive", buffer.toString("utf8"));
+        const output = transform(buffer);
 
-        console.log("sent-back", out);
-        res.write(out);
+        console.log("sent-back", output);
+        res.write(output);
       })
       .on("end", () => {
         res.end();
@@ -55,45 +71,114 @@ async function respondDuplex(
   });
 }
 
-const duplexTask = task({
-  id: "examples.streaming.duplexTask",
-  meta: {
+const duplexTask = r
+  .task<Readable>(IDS.task)
+  .tags([r.runner.tags.rpcLane.with({ lane: duplexLane })])
+  .meta({
     title: "Duplex demo",
     description: "Streams request -> transforms -> streams response",
-  },
-  run: async () => {
-    await respondDuplex({ contentType: "text/plain; charset=utf-8" }, (buf) =>
-      transformChunk(buf.toString("utf8")),
+  })
+  .run(async (): Promise<string> => {
+    await respondDuplex({ contentType: "text/plain; charset=utf-8" }, (chunk) =>
+      transformChunk(chunk.toString("utf8")),
     );
-    return "IGNORED_BY_EXPOSURE";
-  },
-});
 
-const exposure = nodeExposure.with({
-  http: {
-    dangerouslyAllowOpenExposure: true,
-    auth: { allowAnonymous: true },
-    listen: { port: 0 },
-    basePath: BASE_PATH,
-  },
-});
-const app = resource({
-  id: "examples.streaming.duplex.app",
-  register: [duplexTask, exposure],
-});
+    return "IGNORED_BY_EXPOSURE";
+  })
+  .build();
+
+const duplexRemoteTask = r
+  .task<Readable>(IDS.task)
+  .tags([r.runner.tags.rpcLane.with({ lane: duplexLane })])
+  .run(async (): Promise<string> => {
+    throw new Error("This task must be routed through rpcLanes.");
+  })
+  .build();
+
+function createTopology(communicator: ReturnType<typeof r.resource<void>>) {
+  return r.rpcLane.topology({
+    profiles: {
+      [RPC_PROFILE.client]: { serve: [] },
+      [RPC_PROFILE.server]: { serve: [duplexLane] },
+    },
+    bindings: [{ lane: duplexLane, communicator }],
+  });
+}
+
+function buildServerApp() {
+  const communicator = r
+    .resource<void>(IDS.communicator.server)
+    .init(async () => ({
+      task: async (): Promise<never> => {
+        throw new Error("Unexpected remote task call on server communicator.");
+      },
+      event: async (): Promise<never> => {
+        throw new Error("Unexpected remote event call on server communicator.");
+      },
+      eventWithResult: async (): Promise<never> => {
+        throw new Error("Unexpected remote event call on server communicator.");
+      },
+    }))
+    .build();
+
+  const rpcLanes = rpcLanesResource.fork(IDS.rpcLanes.server).with({
+    profile: RPC_PROFILE.server,
+    mode: "network",
+    topology: createTopology(communicator),
+    exposure: {
+      http: {
+        auth: { allowAnonymous: true },
+        basePath: RPC_BASE_PATH,
+        listen: { host: "127.0.0.1", port: 0 },
+      },
+    },
+  });
+
+  return {
+    app: r.resource(IDS.app).register([duplexTask, communicator, rpcLanes]).build(),
+    rpcLanes,
+  };
+}
+
+function buildClientApp(baseUrl: string) {
+  const communicator = r
+    .resource<void>(IDS.communicator.client)
+    .init(
+      r.rpcLane.httpClient({
+        client: "smart",
+        baseUrl,
+      }),
+    )
+    .build();
+
+  const rpcLanes = rpcLanesResource.fork(IDS.rpcLanes.client).with({
+    profile: RPC_PROFILE.client,
+    mode: "network",
+    topology: createTopology(communicator),
+  });
+
+  return r
+    .resource(IDS.app)
+    .register([duplexRemoteTask, communicator, rpcLanes])
+    .build();
+}
 
 export async function runStreamingDuplexExample(): Promise<void> {
-  const rr = await run(app);
+  const { app: serverApp, rpcLanes: serverRpcLanes } = buildServerApp();
+  const serverRuntime = await run(serverApp);
+
+  let clientRuntime: Awaited<ReturnType<typeof run>> | null = null;
+
   try {
-    const handlers = await rr.getResourceValue(exposure.resource as any);
-    const addr = handlers.server?.address();
-    if (!addr || typeof addr === "string") throw new Error("No server address");
-    const origin = `http://127.0.0.1:${addr.port}`;
-    const baseUrl = `${origin}${BASE_PATH}`;
+    const serverRpcLanesValue = await serverRuntime.getResourceValue(serverRpcLanes);
+    const baseUrl = getExposureBaseUrl(serverRpcLanesValue);
     console.log(`Exposure listening at ${baseUrl}`);
 
+    const clientApp = buildClientApp(baseUrl);
+    clientRuntime = await run(clientApp);
+
     const payload = "Runner streaming demo";
-    const slow = createSlowStream(payload, 20).pipe(
+    const slowInput = createSlowReadable(payload, 20).pipe(
       new Transform({
         transform(chunk, _enc, cb) {
           const text = Buffer.isBuffer(chunk)
@@ -108,41 +193,49 @@ export async function runStreamingDuplexExample(): Promise<void> {
 
     const expected = payload
       .split("")
-      .map((c) => transformChunk(c))
+      .map((char) => transformChunk(char))
       .join("");
 
-    const serializer = rr.getResourceValue(r.runner.serializer);
-    const client = createHttpSmartClient({ baseUrl, serializer });
-    const res = (await client.task(duplexTask.id, slow)) as Readable;
+    const response = (await clientRuntime.runTask(
+      duplexRemoteTask,
+      slowInput,
+    )) as Readable;
+
     await new Promise<void>((resolve, reject) => {
       const chunks: Buffer[] = [];
-      res
-        .on("data", (c: any) => {
-          const buf = Buffer.isBuffer(c) ? c : Buffer.from(String(c));
 
-          console.log("received-back", buf.toString("utf8"));
-          chunks.push(buf);
+      response
+        .on("data", (chunk: Buffer | string) => {
+          const buffer = Buffer.isBuffer(chunk)
+            ? chunk
+            : Buffer.from(chunk, "utf8");
+
+          console.log("received-back", buffer.toString("utf8"));
+          chunks.push(buffer);
         })
         .on("end", () => {
-          const out = Buffer.concat(chunks as readonly Uint8Array[]).toString(
-            "utf8",
-          );
-          if (out !== expected)
-            return reject(new Error(`Unexpected response: ${out}`));
+          const output = Buffer.concat(chunks).toString("utf8");
+          if (output !== expected) {
+            reject(new Error(`Unexpected response: ${output}`));
+            return;
+          }
           resolve();
         })
         .on("error", reject);
     });
   } finally {
-    await rr.dispose();
+    if (clientRuntime) {
+      await clientRuntime.dispose();
+    }
+    await serverRuntime.dispose();
   }
 }
 
 if (require.main === module) {
-  runStreamingDuplexExample().catch((err) => {
-    console.error(err);
+  runStreamingDuplexExample().catch((error) => {
+    console.error(error);
     process.exitCode = 1;
   });
 }
 
-export { app as duplexStreamingServer, duplexTask };
+export { duplexTask };

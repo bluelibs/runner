@@ -29,7 +29,7 @@ export interface OnboardingResult {
 }
 
 export const userOnboarding = r
-  .task("example.tasks.userOnboarding")
+  .task("userOnboarding")
   .dependencies({ durable })
   .run(
     async (input: OnboardingInput, { durable }): Promise<OnboardingResult> => {

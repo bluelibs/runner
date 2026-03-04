@@ -10,7 +10,7 @@ export const UserSchema = z.object({
 export type User = z.infer<typeof UserSchema>;
 
 export const UserSessionSchema = z.object({
-  userId: z.string(),
+  id: z.string(),
   email: z.string(),
   name: z.string(),
 });

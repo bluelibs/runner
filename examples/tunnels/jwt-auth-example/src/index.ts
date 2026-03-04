@@ -1,4 +1,4 @@
-// Runs the JWT auth tunnel example using the local Runner source.
+// Runs the JWT auth rpcLanes example using the local Runner source.
 // Keep imports relative to the repo per project conventions.
 
 import { runJwtAuthExample } from "./example.js";

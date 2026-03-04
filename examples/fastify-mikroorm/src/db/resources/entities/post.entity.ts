@@ -10,7 +10,7 @@ export class Post extends BaseEntity {
 }
 
 export const postEntity = r
-  .resource("app.db.entities.resources.post")
+  .resource("post")
   .meta({
     title: "Post Entity Schema",
     description:

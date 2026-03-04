@@ -306,12 +306,12 @@ describe("auth resource", () => {
       process.env.NODE_ENV = "production";
 
       const mockEnv = r
-        .resource("test.mock.env")
+        .resource("mockEnv")
         .init(async () => ({ NODE_ENV: "" })) // Empty string (falsy)
         .build();
 
       const authWithEmptyEnv = r
-        .resource<AuthConfig>("test.auth.empty.env")
+        .resource<AuthConfig>("emptyEnvAuth")
         .dependencies({
           logger: r.runner.logger,
           env: mockEnv,
@@ -363,7 +363,7 @@ describe("auth resource", () => {
       process.env.NODE_ENV = "development";
 
       const authWithoutEnv = r
-        .resource<AuthConfig>("test.auth.without.env")
+        .resource<AuthConfig>("noEnvAuth")
         .dependencies({
           logger: r.runner.logger,
         })

@@ -15,7 +15,7 @@ export interface ExpressServer {
 }
 
 export const expressServerResource = r
-  .resource("app.resources.expressServer")
+  .resource("expressServer")
   .dependencies({
     appConfig,
     logger: r.runner.logger,
@@ -34,7 +34,7 @@ export const expressServerResource = r
     // Request context middleware
     app.use((req: Request, res: Response, next) => {
       const requestData: RequestData = {
-        requestId: generateId(),
+        id: generateId(),
         ip: req.ip || req.socket.remoteAddress || "unknown",
         userAgent: req.get("User-Agent") || "unknown",
         timestamp: new Date(),

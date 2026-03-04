@@ -13,7 +13,7 @@ export interface DbConfig {
 }
 
 export const db = r
-  .resource<DbConfig>("app.db.resources.db")
+  .resource<DbConfig>("db")
   .meta({
     title: "Database Connection",
     description:

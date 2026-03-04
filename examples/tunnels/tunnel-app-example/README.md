@@ -1,15 +1,15 @@
 # @runner-examples/tunnel-app
 
-Small, end-to-end tunnel demo that proves Runner tasks can be executed in another
-process/runtime over HTTP, while the caller still uses _typed_ task dependencies.
+End-to-end `rpcLanes` demo that proves Runner tasks can execute in another runtime
+over HTTP while callers keep typed task dependencies.
 
 What this example demonstrates:
 
-- **Server-side** allow-listing of reachable task ids (`r.runner.tags.tunnel` in `mode: "server"`).
-- **Node exposure** via `nodeExposure` (`POST /__runner/task/:id`).
-- **Client-side** routing via a tunnel resource (`r.runner.tags.tunnel` in `mode: "client"`).
-- **Remote task placeholders** (`r.task(...).run(...)`) used only through tunnel routing.
-- **Auth token** for tunnel requests (`RUNNER_EXAMPLE_TOKEN`).
+- Server-side lane serving via `rpcLanesResource` (`profile: "server"`).
+- Client-side remote routing via `rpcLanesResource` (`profile: "client"`).
+- HTTP RPC communication through `r.rpcLane.httpClient`.
+- Remote task placeholders that fail-fast if lane routing is not active.
+- JWT lane auth (`binding.auth`) plus HTTP exposure auth (`exposure.http.auth`).
 
 ## Install
 
@@ -18,66 +18,42 @@ cd examples/tunnels/tunnel-app-example
 npm install
 ```
 
-Notes:
-
-- This example depends on `@bluelibs/runner` from npm.
-- Run `npm install` to fetch all dependencies.
-
 ## Run
 
 ```bash
 npm run start
 ```
 
-This will:
+This starts:
 
-- Start a **SERVER runtime** that owns in-memory state (notes + audits) and exposes allow-listed tasks via `nodeExposure`.
-- Start a **CLIENT runtime** that calls remote task placeholders; the tunnel middleware routes them over HTTP.
-- Log server-side mutations and verify `Date` round-tripping.
+- A server runtime that owns in-memory state (notes + audits) and serves lane-assigned tasks.
+- A client runtime that calls placeholder tasks; `rpcLanes` routes them over HTTP.
 
 ## Test
 
-In-memory (no HTTP, always runs):
+In-memory (no HTTP socket bind):
 
 ```bash
 npm test
 ```
 
-Networked (real HTTP + `nodeExposure`):
+Networked (real HTTP exposure):
 
 ```bash
 npm run test:net
 ```
 
 If you see `listen EPERM: operation not permitted 127.0.0.1`, your environment
-is blocking local socket binds (common in hardened sandboxes). Run the net test
-in a normal shell/CI environment that allows binding to localhost.
+blocks local socket binds. Run network tests in an environment that allows localhost binding.
 
 ## Environment Variables
 
-- `RUNNER_EXAMPLE_TOKEN` (default: `dev-secret`): shared token for server exposure and client calls.
-- `RUNNER_TEST_NET=1`: enables the real HTTP integration test (`npm run test:net`).
+- `RUNNER_EXAMPLE_TOKEN` (default: `dev-secret`): shared secret used for exposure auth and lane JWT.
+- `RUNNER_TEST_NET=1`: enables real HTTP integration test (`npm run test:net`).
 
 ## File Layout
 
-- `src/server/*`: server state + tasks + `nodeExposure` allow-list policy
-- `src/client/*`: remote task placeholders + tunnel client resource + demo task
-- `src/example.ts`: orchestration helpers used by `src/index.ts` and tests
-- `src/tunnel-app-example.test.ts`: memory test + opt-in net test
-
-## Why `moduleResolution: Node16`
-
-Runner uses package `exports` and separate entrypoints (`@bluelibs/runner` vs `@bluelibs/runner/node`).
-TypeScript needs Node16 resolution to correctly resolve types through `exports`.
-
-```bash
-npm run test
-```
-
-This runs the in-memory tunnel test (no HTTP).
-
-To run the real networked tunnel test (HTTP + `nodeExposure`):
-
-```bash
-RUNNER_TEST_NET=1 npm run test
-```
+- `src/server/*`: server state + served lane tasks + rpc lanes exposure wiring.
+- `src/client/*`: remote placeholders + communicators + client task orchestration.
+- `src/example.ts`: orchestration helpers for CLI and tests.
+- `src/tunnel-app-example.test.ts`: in-memory and optional network integration tests.

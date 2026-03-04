@@ -9,7 +9,7 @@ import { readyz } from "./tasks/readyz.task";
 export * from "./resources/fastify.resource";
 
 export const http = r
-  .resource("app.http.resources.http")
+  .resource("http")
   .meta({
     title: "HTTP Module",
     description:

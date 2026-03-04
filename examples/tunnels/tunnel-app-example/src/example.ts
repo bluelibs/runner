@@ -1,8 +1,8 @@
 /**
- * Tunnel App Example: Two separate runtimes communicating over real HTTP.
+ * RPC Lanes App Example: Two separate runtimes communicating over real HTTP.
  *
- * - SERVER runtime: owns state and exposes allow-listed tasks via nodeExposure.
- * - CLIENT runtime: uses remote task placeholders routed through a tunnel resource.
+ * - SERVER runtime: owns state and serves a lane-protected task set.
+ * - CLIENT runtime: uses placeholder task contracts routed through rpcLanes.
  */
 
 import { run } from "@bluelibs/runner/node";
@@ -30,13 +30,11 @@ export async function runTunnelAppExample(): Promise<DemoResult> {
   console.log("Starting SERVER runtime...");
   console.log(LogSeparator.Line);
 
-  const { app: serverApp, serverExposure } = buildServerApp({ authToken });
+  const { app: serverApp, rpcLanes } = buildServerApp({ authToken });
   const serverRuntime = await run(serverApp);
 
-  const exposureHandlers = serverRuntime.getResourceValue(
-    serverExposure.resource,
-  );
-  const baseUrl = getExposureBaseUrl(exposureHandlers);
+  const rpcLanesValue = serverRuntime.getResourceValue(rpcLanes.resource);
+  const baseUrl = getExposureBaseUrl(rpcLanesValue);
   console.log(`Server listening at: ${baseUrl}\n`);
 
   console.log(LogSeparator.Line);

@@ -11,7 +11,7 @@ import { User, UserSchema } from "../types";
  * Get all users (protected admin route)
  */
 export const getAllUsersTask = r
-  .task("app.tasks.users.getAll")
+  .task("getAll")
   .dependencies({ userService: usersRepository })
   .middleware([authMiddleware.with({ requiresAuth: true })])
   .tags([

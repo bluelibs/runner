@@ -3,7 +3,7 @@ import { User } from "../types";
 import { db } from "../../db/resources/database";
 
 export const usersRepository = r
-  .resource("app.resources.userService")
+  .resource("userService")
   .dependencies({ database: db })
   .init(async (_, { database }) => {
     return {

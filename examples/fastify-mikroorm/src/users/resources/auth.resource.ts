@@ -57,7 +57,7 @@ function b64urlDecode(input: string): Buffer {
 }
 
 export const auth = r
-  .resource<AuthConfig>("users.resources.auth")
+  .resource<AuthConfig>("auth")
   .meta({
     title: "Authentication Service",
     description:

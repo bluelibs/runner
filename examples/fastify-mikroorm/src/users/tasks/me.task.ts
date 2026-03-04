@@ -7,7 +7,7 @@ import { fastifyContext } from "#/http/fastify-context";
 import { HTTPError } from "#/http/http-error";
 
 export const currentUser = r
-  .task("app.users.tasks.me")
+  .task("me")
   .meta({
     title: "Get Current User",
     description:

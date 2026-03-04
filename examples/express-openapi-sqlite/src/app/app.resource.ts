@@ -9,7 +9,7 @@ const ENABLE_DEV = process.env.NODE_ENV === "development";
 const extra = ENABLE_DEV ? [dev.with({ port: 1337 })] : [];
 
 export const app = r
-  .resource("app.main")
+  .resource("main")
   .register([
     appConfig,
     db.with({

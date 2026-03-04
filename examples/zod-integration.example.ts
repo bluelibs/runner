@@ -23,7 +23,7 @@ const UserSchema = z.object({
 });
 
 const createUserTask = defineTask({
-  id: "task.createUserWithZod",
+  id: "createUserWithZod",
   inputSchema: UserSchema, // Works directly!
   run: async (userData) => {
     // userData is properly typed and validated
@@ -38,7 +38,7 @@ const DatabaseConfigSchema = z.object({
 });
 
 const databaseResource = defineResource({
-  id: "resource.databaseWithZod",
+  id: "databaseWithZod",
   configSchema: DatabaseConfigSchema, // Works directly!
   init: async (config) => {
     // config is properly typed with defaults applied
@@ -55,7 +55,7 @@ const EventPayloadSchema = z.object({
 });
 
 const userActionEvent = defineEvent({
-  id: "event.userActionWithZod",
+  id: "userActionWithZod",
   payloadSchema: EventPayloadSchema, // Works directly!
 });
 
@@ -65,7 +65,7 @@ const TimingConfigSchema = z.object({
 });
 
 const timingMiddleware = defineMiddleware({
-  id: "middleware.timingWithZod",
+  id: "timingWithZod",
   configSchema: TimingConfigSchema, // Works directly!
   run: async ({ next }, _, config) => {
     const start = Date.now();
@@ -90,7 +90,7 @@ const timingMiddleware = defineMiddleware({
 const StringToNumberSchema = z.string().transform((val) => parseInt(val, 10));
 
 const mathTask = defineTask({
-  id: "task.mathWithZodTransform",
+  id: "mathWithZodTransform",
   inputSchema: StringToNumberSchema,
   run: async (input: number) => {
     // input is transformed to number
@@ -117,7 +117,7 @@ const customSchema = new CustomValidator<{ value: string }>(
 );
 
 const customTask = defineTask({
-  id: "task.customValidation",
+  id: "customValidation",
   inputSchema: customSchema,
   run: async (input) => {
     return `Received: ${input.value}`;

@@ -10,7 +10,7 @@ import { z } from "zod";
 describe("fastify error handler branches", () => {
   it("handles validation error (400), statusCode errors, and fallback 500", async () => {
     const badInput = task({
-      id: "tests.http.badInput",
+      id: "badInput",
       meta: { title: "BadInput", description: "validation" },
       inputSchema: z.object({ must: z.string() }),
       tags: [httpRoute.with({ method: "post", path: "/bad-input" })],
@@ -18,7 +18,7 @@ describe("fastify error handler branches", () => {
     });
 
     const statusErr = task({
-      id: "tests.http.status",
+      id: "status",
       meta: { title: "StatusErr", description: "status code" },
       inputSchema: z.undefined(),
       tags: [httpRoute.with({ method: "get", path: "/status-err" })],
@@ -30,7 +30,7 @@ describe("fastify error handler branches", () => {
     });
 
     const boom = task({
-      id: "tests.http.boom",
+      id: "boom",
       meta: { title: "Boom", description: "generic" },
       inputSchema: z.undefined(),
       tags: [httpRoute.with({ method: "get", path: "/boom" })],
@@ -40,7 +40,7 @@ describe("fastify error handler branches", () => {
     });
 
     const nameValidationErr = task({
-      id: "tests.http.nameValidation",
+      id: "nameValidation",
       meta: {
         title: "NameValidation",
         description: "name === ValidationError",

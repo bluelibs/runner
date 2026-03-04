@@ -12,7 +12,7 @@ import swaggerUi from "@fastify/swagger-ui";
 import { createErrorHandler } from "./helpers/createErrorHandler";
 
 export const fastify = r
-  .resource("app.http.resources.fastify")
+  .resource("fastify")
   .meta({
     title: "Fastify HTTP Server",
     description:

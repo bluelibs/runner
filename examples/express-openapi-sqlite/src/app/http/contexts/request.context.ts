@@ -4,12 +4,12 @@ import { r } from "@bluelibs/runner";
  * Contains request ID, IP, user agent, etc.
  */
 export interface RequestData {
-  requestId: string;
+  id: string;
   ip: string;
   userAgent?: string;
   timestamp: Date;
 }
 
 export const RequestContext = r
-  .asyncContext<RequestData>("request.data")
+  .asyncContext<RequestData>("request")
   .build();

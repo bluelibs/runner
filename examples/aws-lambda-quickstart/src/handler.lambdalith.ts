@@ -6,14 +6,15 @@ import {
   errorToResponse,
   APIGatewayProxyResult,
 } from "./http";
+import { AnyApiGatewayEvent, LambdaContextLike } from "./types/aws";
 import { z } from "zod";
 
 const CreateUserSchema = z.object({ name: z.string().min(1) });
 const GetUserSchema = z.object({ id: z.string().min(1) });
 
 export const handler = async (
-  event: unknown,
-  context: { awsRequestId?: string },
+  event: AnyApiGatewayEvent,
+  context: LambdaContextLike,
 ): Promise<APIGatewayProxyResult> => {
   const { method, path, headers, body } = parseEvent<{ name?: string }>(event);
 

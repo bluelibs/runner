@@ -18,7 +18,7 @@ export const demoTask = r
     listAudits: listAuditsRemoteTask,
   })
   .run(async (_input: void, deps): Promise<DemoResult> => {
-    console.log("\n[client] Starting demo - calling services via tunnel\n");
+    console.log("\n[client] Starting demo - calling services via rpcLanes\n");
 
     const note1 = await deps.createNote({
       title: "Hello",

@@ -9,7 +9,7 @@ import swaggerUi from "swagger-ui-express";
 import { createDocument } from "zod-openapi";
 
 export const routeRegistrationHook = r
-  .hook("app.hooks.routeRegistration")
+  .hook("routeRegistration")
   .on(r.system.events.ready)
   .dependencies({
     httpTag: httpTag.startup(),

@@ -2,7 +2,7 @@
   "name": "@runner-examples/jwt-auth",
   "version": "0.1.0",
   "private": true,
-  "description": "JWT auth over Runner tunnels (example package)",
+  "description": "JWT auth over Runner rpcLanes (example package)",
   "type": "commonjs",
   "scripts": {
     "build": "tsc -p .",

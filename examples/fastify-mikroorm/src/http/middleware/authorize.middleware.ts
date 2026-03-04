@@ -17,7 +17,7 @@ export type AuthorizeConfig = {
  * - Fallback to request header `x-user-role`
  */
 export const authorize = r.middleware
-  .task("http.middleware.task.authorize")
+  .task("authorize")
   .configSchema<AuthorizeConfig>({ parse: (x: unknown) => x as AuthorizeConfig })
   .run(async ({ task, next }, _deps, config) => {
     const { user, request } = fastifyContext.use();

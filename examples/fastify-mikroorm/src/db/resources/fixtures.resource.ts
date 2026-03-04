@@ -6,7 +6,7 @@ import { randomUUID } from "crypto";
 import { auth as authResource } from "#/users/resources/auth.resource";
 
 export const fixtures = r
-  .resource("app.db.resources.fixtures")
+  .resource("fixtures")
   .meta({
     title: "Database Fixtures",
     description:

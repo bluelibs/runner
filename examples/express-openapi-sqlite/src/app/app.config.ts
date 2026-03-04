@@ -1,7 +1,7 @@
 import { r } from "@bluelibs/runner";
 
 export const appConfig = r
-  .resource("app.modules.config")
+  .resource("config")
   .dependencies({ logger: r.runner.logger })
   .init(async (_, { logger }) => {
     const isTest = process.env.NODE_ENV === "test";

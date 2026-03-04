@@ -3,7 +3,7 @@ import { z } from "zod";
 import { httpRoute } from "#/http/tags";
 
 export const healthz = r
-  .task("app.http.tasks.healthz")
+  .task("healthz")
   .meta({
     title: "Health Check",
     description: "Liveness probe endpoint",

@@ -6,4 +6,4 @@ import { UserSession } from "../types";
  * This allows tasks to access the current authenticated user
  * throughout the request lifecycle.
  */
-export const UserContext = r.asyncContext<UserSession>("user.session").build();
+export const UserContext = r.asyncContext<UserSession>("session").build();

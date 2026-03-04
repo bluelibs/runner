@@ -7,7 +7,7 @@ import { fastifyContext } from "#/http/fastify-context";
 import { HTTPError } from "#/http/http-error";
 
 export const loginUser = r
-  .task("app.users.tasks.login")
+  .task("login")
   .meta({
     title: "User Login",
     description:

@@ -4,7 +4,7 @@ import { httpRoute } from "#/http/tags";
 import { db } from "#/db/resources";
 
 export const readyz = r
-  .task("app.http.tasks.readyz")
+  .task("readyz")
   .meta({
     title: "Readiness Check",
     description: "Readiness probe endpoint (checks DB)",

@@ -10,7 +10,7 @@ export interface AuthMiddlewareConfig {
 }
 
 export const authMiddleware = r.middleware
-  .task<AuthMiddlewareConfig>("app.middleware.auth")
+  .task<AuthMiddlewareConfig>("auth")
   .dependencies({ userService: usersRepository, appConfig })
   .run(async ({ task, next }, { userService, appConfig }, config) => {
     const { jwtSecret } = appConfig;
@@ -38,10 +38,10 @@ export const authMiddleware = r.middleware
     if (token) {
       try {
         // Verify JWT token
-        const decoded = jwt.verify(token, jwtSecret) as { userId: string };
+        const decoded = jwt.verify(token, jwtSecret) as { id: string };
 
         // Get user from database
-        const user = await userService.getUserById(decoded.userId);
+        const user = await userService.getUserById(decoded.id);
 
         if (!user) {
           throw new Error("User not found");
@@ -49,7 +49,7 @@ export const authMiddleware = r.middleware
 
         // Create user session
         const userSession: UserSession = {
-          userId: user.id,
+          id: user.id,
           email: user.email,
           name: user.name,
         };

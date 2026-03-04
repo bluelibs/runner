@@ -17,7 +17,7 @@ export interface HttpRouteConfig {
 }
 
 export const httpRoute = r
-  .tag("app.http.tags.http-route")
+  .tag("http.tags.httpRoute")
   .configSchema<HttpRouteConfig>({ parse: (x: any) => x })
   .meta({
     title: "HTTP Route Tag",

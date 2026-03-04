@@ -18,7 +18,7 @@ export interface ListAllUsersResult {
 }
 
 export const listAllUsers = r
-  .task("app.users.tasks.list-all-users")
+  .task("listAllUsers")
   .meta({
     title: "List All Users",
     description: "Retrieve all users from the database for admin purposes",

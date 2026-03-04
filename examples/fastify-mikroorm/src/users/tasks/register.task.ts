@@ -8,7 +8,7 @@ import { fastifyContext } from "#/http/fastify-context";
 import { HTTPError } from "#/http/http-error";
 
 export const registerUser = r
-  .task("app.users.tasks.register")
+  .task("register")
   .meta({
     title: "User Registration",
     description:

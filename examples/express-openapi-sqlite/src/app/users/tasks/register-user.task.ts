@@ -22,7 +22,7 @@ const registerSchema = z.object({
  * User registration task
  */
 export const registerUserTask = r
-  .task("app.tasks.auth.register")
+  .task("register")
   .dependencies({ appConfig, createUserTask })
   .tags([
     httpRoute.post("/api/auth/register", {
@@ -51,7 +51,7 @@ export const registerUserTask = r
         const user = await createUserTask(userData);
 
         // Generate JWT token
-        const token = jwt.sign({ userId: user.id }, appConfig.jwtSecret, {
+        const token = jwt.sign({ id: user.id }, appConfig.jwtSecret, {
           expiresIn: "24h",
         });
 

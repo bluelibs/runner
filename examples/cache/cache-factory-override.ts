@@ -48,7 +48,7 @@ const customCacheFactory = task({
 
 // Create some tasks that use caching
 const expensiveCalculation = task({
-  id: "app.tasks.expensiveCalculation",
+  id: "expensiveCalculation",
   middleware: [r.runner.middleware.task.cache.with({ ttl: 3000 })],
   run: async (input: { number: number }) => {
     console.log(`🔢 Performing expensive calculation for ${input.number}`);
@@ -59,7 +59,7 @@ const expensiveCalculation = task({
 });
 
 const fetchUserData = task({
-  id: "app.tasks.fetchUserData",
+  id: "fetchUserData",
   middleware: [r.runner.middleware.task.cache.with({ ttl: 2000 })],
   run: async (input: { userId: string }) => {
     console.log(`👤 Fetching user data for ${input.userId}`);

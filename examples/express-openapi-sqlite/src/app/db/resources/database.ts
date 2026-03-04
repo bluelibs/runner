@@ -22,7 +22,7 @@ export interface Database {
 }
 
 export const db = r
-  .resource<DatabaseConfig>("app.resources.database")
+  .resource<DatabaseConfig>("database")
   .dependencies({ logger: r.runner.logger })
   .init(async (config, { logger }): Promise<Database> => {
     const { filename = ":memory:", verbose = false } = config;

@@ -5,7 +5,7 @@ import { db } from "#/db/resources";
 import { HTTPError } from "#/http/http-error";
 
 export const getUserById = r
-  .task("app.users.tasks.get-user-by-id")
+  .task("getUserById")
   .meta({
     title: "Get User By ID",
     description: "Retrieve a single user by its unique identifier",

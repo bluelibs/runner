@@ -17,7 +17,7 @@ const schema = z.object({
 });
 
 export const createUserTask = r
-  .task("app.tasks.users.createUser")
+  .task("createUser")
   .inputSchema(schema)
   .dependencies({ db })
   .run(async (userData: CreateUserInput, { db }) => {

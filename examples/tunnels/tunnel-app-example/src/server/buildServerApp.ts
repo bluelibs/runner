@@ -1,48 +1,63 @@
-import { r, nodeExposure } from "@bluelibs/runner/node";
+import { r } from "@bluelibs/runner";
+import { rpcLanesResource } from "@bluelibs/runner/node";
 
-import {
-  HttpConfig,
-  ResourceId,
-  TaskId,
-  TunnelMode,
-  TunnelTransport,
-} from "../ids.js";
+import { HttpConfig, ResourceId, RpcProfile } from "../ids.js";
+import { appRpcLane } from "../rpcLane.js";
 import { auditStore, listAudits, logAudit } from "./audit.js";
 import { createNote, listNotes, notesStore } from "./notes.js";
 
+enum ErrorMessage {
+  UnexpectedRemoteTask = "Server communicator should not run remote tasks for served lanes.",
+  UnexpectedRemoteEvent = "Server communicator should not run remote events for served lanes.",
+}
+
 export type BuildServerAppOptions = {
   authToken: string;
-};
-
-type HttpTunnelExposurePolicyValue = {
-  transport: TunnelTransport;
-  mode: TunnelMode;
-  tasks: TaskId[];
+  port?: number;
 };
 
 export function buildServerApp(options: BuildServerAppOptions) {
-  const serverExposure = nodeExposure.fork(ResourceId.ServerExposure).with({
-    http: {
-      basePath: HttpConfig.BasePath,
-      listen: { port: 0, host: HttpConfig.Host },
-      auth: { token: options.authToken },
-    },
-  });
-
-  const httpExposurePolicy = r
-    .resource(ResourceId.HttpExposurePolicy)
-    .tags([r.runner.tags.tunnel])
-    .init(async (): Promise<HttpTunnelExposurePolicyValue> => ({
-      transport: TunnelTransport.Http,
-      mode: TunnelMode.Server,
-      tasks: [
-        TaskId.CreateNote,
-        TaskId.ListNotes,
-        TaskId.LogAudit,
-        TaskId.ListAudits,
-      ],
+  const communicator = r
+    .resource<void>(ResourceId.ServerCommunicator)
+    .init(async () => ({
+      task: async (): Promise<never> => {
+        throw new Error(ErrorMessage.UnexpectedRemoteTask);
+      },
+      event: async (): Promise<never> => {
+        throw new Error(ErrorMessage.UnexpectedRemoteEvent);
+      },
+      eventWithResult: async (): Promise<never> => {
+        throw new Error(ErrorMessage.UnexpectedRemoteEvent);
+      },
     }))
     .build();
+
+  const topology = r.rpcLane.topology({
+    profiles: {
+      [RpcProfile.Client]: { serve: [] },
+      [RpcProfile.Server]: { serve: [appRpcLane] },
+    },
+    bindings: [
+      {
+        lane: appRpcLane,
+        communicator,
+        auth: { mode: "jwt_hmac", secret: options.authToken },
+      },
+    ],
+  });
+
+  const rpcLanes = rpcLanesResource.fork(ResourceId.ServerRpcLanes).with({
+    profile: RpcProfile.Server,
+    mode: "network",
+    topology,
+    exposure: {
+      http: {
+        basePath: HttpConfig.BasePath,
+        listen: { port: options.port ?? 0, host: HttpConfig.Host },
+        auth: { token: options.authToken },
+      },
+    },
+  });
 
   const app = r
     .resource(ResourceId.ServerApp)
@@ -53,10 +68,10 @@ export function buildServerApp(options: BuildServerAppOptions) {
       auditStore,
       logAudit,
       listAudits,
-      httpExposurePolicy,
-      serverExposure,
+      communicator,
+      rpcLanes,
     ])
     .build();
 
-  return { app, serverExposure };
+  return { app, rpcLanes };
 }

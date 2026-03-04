@@ -15,7 +15,7 @@ import { runTaskWithHttpContext } from "./helpers/runTaskWithHttpContext";
 import type { TaskWithSchemas } from "./helpers/types";
 
 export const fastifyRouter = r
-  .resource("app.http.resources.fastify-router")
+  .resource("fastifyRouter")
   .meta({
     title: "Fastify HTTP Router",
     description:

@@ -4,7 +4,7 @@ import { env } from "#/general/resources/env.resource";
 
 // We start the server once all the hooks and resources have been registered.
 export const onReady = r
-  .hook("app.http.hooks.onReady")
+  .hook("onReady")
   .meta({
     title: "HTTP Server Ready Hook",
     description:
