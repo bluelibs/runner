@@ -17,9 +17,7 @@ run(app, {
   logs: {
     printThreshold: "info",
   },
-})
-  .then(({ logger }) => {})
-  .catch((err) => {
-    console.error("From main run: " + err);
-    process.exit(1);
-  });
+}).catch((err) => {
+  console.error("From main run: " + err);
+  process.exit(1);
+});

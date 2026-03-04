@@ -670,7 +670,10 @@ const createUser = r
   .build();
 
 const userRegistered = r.event("userRegistered").build();
-const db = r.resource("db").init(async () => ({})).build();
+const db = r
+  .resource("db")
+  .init(async () => ({}))
+  .build();
 
 const app = r
   .resource("app")
@@ -680,24 +683,24 @@ const app = r
 
 At runtime/store level, IDs become canonical:
 
-| Kind                | Local name -> Canonical ID                        |
-| ------------------- | ------------------------------------------------- |
-| Resource            | `db` -> `app.db`                                  |
-| Task                | `createUser` -> `app.tasks.createUser`            |
-| Event               | `userRegistered` -> `app.events.userRegistered`   |
+| Kind                | Local name -> Canonical ID                         |
+| ------------------- | -------------------------------------------------- |
+| Resource            | `db` -> `app.db`                                   |
+| Task                | `createUser` -> `app.tasks.createUser`             |
+| Event               | `userRegistered` -> `app.events.userRegistered`    |
 | Hook                | `onUserRegistered` -> `app.hooks.onUserRegistered` |
-| Task Middleware     | `auth` -> `app.middleware.task.auth`              |
-| Resource Middleware | `audit` -> `app.middleware.resource.audit`        |
-| Tag                 | `public` -> `app.tags.public`                     |
-| Error               | `InvalidInput` -> `app.errors.InvalidInput`       |
-| Async Context       | `request` -> `app.ctx.request`                    |
+| Task Middleware     | `auth` -> `app.middleware.task.auth`               |
+| Resource Middleware | `audit` -> `app.middleware.resource.audit`         |
+| Tag                 | `public` -> `app.tags.public`                      |
+| Error               | `InvalidInput` -> `app.errors.InvalidInput`        |
+| Async Context       | `request` -> `app.ctx.request`                     |
 
 Important behavior:
 
 - Inside `run(...)`, middleware, hooks, lane policies, and validators, `definition.id` is always the canonical runtime ID.
 - Original definition objects are not mutated; per-run compiled definitions are stored internally (run isolation safe).
 - Reference-based wiring remains preferred (`dependencies({ createUser })`, `.register([createUser])`) over string-id wiring.
-- Fully qualified IDs are still supported and treated as absolute IDs.
+- **Fully qualified IDs** (any id containing a `.`) are treated as absolute and bypass parent prefixing entirely. The detection rule is simple: if `id.includes(".")`, the id stays as-is regardless of which resource registers it. This means a child can "escape" its parent's namespace — useful for library resources that own their own id namespace (e.g., `runner-dev.resources.dev` stays exactly that even when registered inside `root`).
 - Local names fail fast if they use reserved segments: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `ctx`.
 - All definition ids fail fast when they start/end with `.`, contain empty segments (`..`), or equal a reserved standalone local name.
 

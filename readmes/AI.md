@@ -725,7 +725,7 @@ test("sends welcome email", async () => {
 - Runtime/store internals always expose canonical IDs (`definition.id`), while original definition objects remain unchanged.
 - Fail-fast reserved local names: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `ctx`.
 - Fail-fast id shape checks are centralized for all definition types: ids cannot start/end with `.`, cannot contain `..`, and cannot be a reserved standalone local name.
-- Fully qualified IDs are still supported and treated as absolute IDs.
+- Fully qualified IDs (any id containing a `.`) are treated as absolute: they bypass parent prefixing entirely. The detection is simple — if `id.includes(".")`, it stays as-is. This means a child resource can escape its parent's namespace (e.g., `resource("runner-dev.resources.dev")` registered under `root` keeps its own namespace instead of becoming `root.runner-dev.resources.dev`). This is intentional for library/framework resources that own their own namespace.
 - Runtime validation: `inputSchema`, `resultSchema`, `payloadSchema`, `configSchema` share the same `parse(input)` contract; config validation happens on `.with()`, task/event validation happens on call/emit. Use `.schema()` as a unified alias (input/payload/schema/data) for simplicity.
 
 ## File Structure
