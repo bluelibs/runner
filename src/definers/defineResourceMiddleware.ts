@@ -16,6 +16,7 @@ import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { normalizeThrows } from "../tools/throws";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import { assertDefinitionId } from "./assertDefinitionId";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 export function defineResourceMiddleware<
@@ -37,6 +38,7 @@ export function defineResourceMiddleware<
   TDependencies
 > {
   const filePath = getCallerFile();
+  assertDefinitionId("Resource middleware", middlewareDef.id);
   const configSchema = normalizeOptionalValidationSchema(
     middlewareDef.configSchema,
     {

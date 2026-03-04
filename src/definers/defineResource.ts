@@ -22,6 +22,7 @@ import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 import { resolveForkedRegisterAndDependencies } from "./resourceFork";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import { assertDefinitionId } from "./assertDefinitionId";
 import { normalizeResourceSubtreePolicy } from "./subtreePolicy";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
@@ -65,6 +66,7 @@ export function defineResource<
    */
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
   const id = constConfig.id;
+  assertDefinitionId("Resource", id);
   const configSchema = normalizeOptionalValidationSchema(
     constConfig.configSchema,
     {

@@ -15,6 +15,7 @@ import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import { assertDefinitionId } from "./assertDefinitionId";
 import { normalizeThrows } from "../tools/throws";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
@@ -37,6 +38,7 @@ export function defineTaskMiddleware<
   TDependencies
 > {
   const filePath = getCallerFile();
+  assertDefinitionId("Task middleware", middlewareDef.id);
   const configSchema = normalizeOptionalValidationSchema(
     middlewareDef.configSchema,
     {

@@ -9,6 +9,7 @@ import {
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import { assertDefinitionId } from "./assertDefinitionId";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 export function defineEvent<
@@ -29,6 +30,7 @@ export function defineEvent<TPayload = void>(
 ): IEvent<TPayload> {
   const callerFilePath = getCallerFile();
   const eventConfig = config;
+  assertDefinitionId("Event", eventConfig.id);
   const payloadSchema = normalizeOptionalValidationSchema(
     eventConfig.payloadSchema,
     {

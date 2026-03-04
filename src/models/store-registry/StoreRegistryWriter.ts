@@ -41,6 +41,7 @@ import {
   getSubtreeResourceMiddlewareAttachment,
   getSubtreeTaskMiddlewareAttachment,
 } from "../../tools/subtreeMiddleware";
+import { isReservedDefinitionLocalName } from "../../definers/assertDefinitionId";
 
 type StoreRegistryCollections = {
   tasks: Map<string, TaskStoreElementType>;
@@ -130,16 +131,6 @@ function resolveRegisterableKind(
 }
 
 export class StoreRegistryWriter {
-  private static readonly RESERVED_LOCAL_NAMES = new Set<string>([
-    "tasks",
-    "events",
-    "hooks",
-    "resources",
-    "tags",
-    "errors",
-    "ctx",
-  ]);
-
   constructor(
     private readonly collections: StoreRegistryCollections,
     private readonly validator: StoreRegistryValidation,
@@ -565,7 +556,7 @@ export class StoreRegistryWriter {
       });
     }
 
-    if (StoreRegistryWriter.RESERVED_LOCAL_NAMES.has(currentId)) {
+    if (isReservedDefinitionLocalName(currentId)) {
       validationError.throw({
         subject: "Definition local name",
         id: `${ownerResourceId}.${kind}.${currentId}`,

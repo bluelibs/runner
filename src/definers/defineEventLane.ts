@@ -7,11 +7,13 @@ import {
 import { eventLaneInvalidIdError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze } from "../tools/deepFreeze";
+import { assertDefinitionId } from "./assertDefinitionId";
 
 export function defineEventLane(config: IEventLaneDefinition): IEventLane {
   if (typeof config.id !== "string" || config.id.trim().length === 0) {
     eventLaneInvalidIdError.throw({ id: String(config.id) });
   }
+  assertDefinitionId("eventLane", config.id);
 
   const callerFilePath = getCallerFile();
   return deepFreeze({

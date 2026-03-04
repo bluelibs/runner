@@ -16,6 +16,7 @@ import {
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
+import { assertDefinitionId } from "./assertDefinitionId";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 /**
@@ -47,6 +48,7 @@ export function defineTag<
   TAllowedTargets
 > {
   const id = definition.id;
+  assertDefinitionId("Tag", id);
   const filePath = getCallerFile();
   const configSchema = normalizeOptionalValidationSchema(
     definition.configSchema,

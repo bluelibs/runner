@@ -12,6 +12,7 @@ import {
 } from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
+import { assertDefinitionId } from "./assertDefinitionId";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 export { contextError as ContextError };
@@ -40,6 +41,7 @@ export function defineAsyncContext<T>(
   }
 
   const ctxId = def.id;
+  assertDefinitionId("Async context", ctxId);
   const configSchema = normalizeOptionalValidationSchema(def.configSchema, {
     definitionId: ctxId,
     subject: "Async context config",

@@ -87,10 +87,7 @@ export type OverridableDefinition =
  *    process.env.NODE_ENV === 'production' ? prodEmailer : null,
  * ]
  */
-export type OverridableElements =
-  | OverridableDefinition
-  | undefined
-  | null;
+export type OverridableElements = OverridableDefinition | undefined | null;
 
 /**
  * A mapping of dependency keys to Runner definitions. Used in `dependencies`

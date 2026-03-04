@@ -6044,6 +6044,7 @@ Important behavior:
 - Reference-based wiring remains preferred (`dependencies({ createUser })`, `.register([createUser])`) over string-id wiring.
 - Fully qualified IDs are still supported and treated as absolute IDs.
 - Local names fail fast if they use reserved segments: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `ctx`.
+- All definition ids fail fast when they start/end with `.`, contain empty segments (`..`), or equal a reserved standalone local name.
 
 > **runtime:** "You give me short names in your little subtree village. I issue passports with full addresses at the border. Everybody wins, and nobody argues about dots all day."
 

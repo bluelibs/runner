@@ -16,6 +16,7 @@ import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import { assertDefinitionId } from "./assertDefinitionId";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 /**
@@ -44,6 +45,7 @@ export function defineTask<
 ): ITask<Input, Output, Deps, TMeta, TTags, TMiddleware> {
   const filePath = getCallerFile();
   const id = taskConfig.id;
+  assertDefinitionId("Task", id);
   const inputSchema = normalizeOptionalValidationSchema(
     taskConfig.inputSchema,
     {

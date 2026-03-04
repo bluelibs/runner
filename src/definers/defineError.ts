@@ -15,6 +15,7 @@ import {
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import { assertDefinitionId } from "./assertDefinitionId";
 import type {
   IValidationSchema,
   ValidationSchemaInput,
@@ -225,6 +226,8 @@ export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
   definition: IErrorDefinition<TData>,
   filePath?: string,
 ) {
+  assertDefinitionId("Error", definition.id);
+
   if (definition.httpCode !== undefined) {
     assertHttpCode(definition.httpCode);
   }
