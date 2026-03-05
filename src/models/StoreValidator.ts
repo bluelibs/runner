@@ -24,7 +24,15 @@ import type {
   SubtreeValidationTargetType,
   SubtreeViolation,
 } from "../defs";
-import { isOptional, isTag, isTagStartup, isSubtreeFilter } from "../define";
+import {
+  isOptional,
+  isTag,
+  isTagStartup,
+  isSubtreeFilter,
+  isIsolationScope,
+} from "../define";
+import type { IsolationScope, IsolationScopeTarget } from "../tools/scope";
+import { scope } from "../tools/scope";
 import { StoreRegistry } from "./StoreRegistry";
 import { resolveIsolationSelector } from "./utils/isolationSelectors";
 import {
@@ -531,20 +539,19 @@ export class StoreValidator {
       }
 
       if (Array.isArray(policy.exports)) {
-        normalizedPolicy.exports =
-          this.normalizeIsolationEntries<IsolationExportsTarget>({
-            entries: policy.exports,
-            onInvalidEntry: (entry) =>
-              isolateInvalidExportsError.throw({
-                policyResourceId: resource.id,
-                entry,
-              }),
-            onUnknownTarget: (targetId) =>
-              isolateExportsUnknownTargetError.throw({
-                policyResourceId: resource.id,
-                targetId,
-              }),
-          });
+        normalizedPolicy.exports = this.normalizeExportEntries({
+          entries: policy.exports,
+          onInvalidEntry: (entry) =>
+            isolateInvalidExportsError.throw({
+              policyResourceId: resource.id,
+              entry,
+            }),
+          onUnknownTarget: (targetId) =>
+            isolateExportsUnknownTargetError.throw({
+              policyResourceId: resource.id,
+              targetId,
+            }),
+        });
       } else if (policy.exports === "none") {
         normalizedPolicy.exports = "none";
       }
@@ -555,6 +562,7 @@ export class StoreValidator {
         const normalizedEntries =
           this.normalizeIsolationEntries<IsolationTarget>({
             entries,
+            policyResourceId: resource.id,
             onInvalidEntry: (entry) =>
               isolateInvalidEntryError.throw({
                 policyResourceId: resource.id,
@@ -591,21 +599,29 @@ export class StoreValidator {
 
   private normalizeIsolationEntries<TEntry extends string | object>(input: {
     entries: ReadonlyArray<unknown>;
+    policyResourceId: string;
     onInvalidEntry: (entry: unknown) => never;
     onUnknownTarget: (targetId: string) => never;
   }): Array<TEntry> {
     const normalizedEntries: Array<TEntry> = [];
-    const seenStringTargets = new Set<string>();
-
-    const addStringTarget = (id: string) => {
-      if (seenStringTargets.has(id)) {
-        return;
-      }
-      seenStringTargets.add(id);
-      normalizedEntries.push(id as TEntry);
-    };
 
     for (const entry of input.entries) {
+      // scope() entries — validate inner targets and expand wildcards so the
+      // compiled policy contains only concrete ids.
+      if (isIsolationScope(entry)) {
+        const scopeEntry = entry as IsolationScope;
+        const expandedTargets = this.expandScopeTargets({
+          targets: scopeEntry.targets,
+          policyResourceId: input.policyResourceId,
+          onInvalidEntry: input.onInvalidEntry,
+          onUnknownTarget: input.onUnknownTarget,
+        });
+        // Re-create the scope with expanded targets (originals are frozen)
+        const expandedScope = scope(expandedTargets, scopeEntry.channels);
+        normalizedEntries.push(expandedScope as unknown as TEntry);
+        continue;
+      }
+
       // Structural subtree filters bypass the id-resolution path — we only
       // verify that the referenced resource is actually registered.
       if (isSubtreeFilter(entry)) {
@@ -616,28 +632,16 @@ export class StoreValidator {
         continue;
       }
 
+      // Bare strings are not valid in deny/only — use scope("pattern") instead.
       if (typeof entry === "string") {
-        if (entry.length === 0) {
-          input.onInvalidEntry(entry);
-        }
-
-        const resolvedIds = resolveIsolationSelector(entry, this.registeredIds);
-        if (resolvedIds.length === 0) {
-          input.onUnknownTarget(entry);
-        }
-
-        for (const resolvedId of resolvedIds) {
-          addStringTarget(resolvedId);
-        }
-        continue;
-      }
-
-      const resolvedId = this.resolveIsolationTargetId(entry);
-      if (!resolvedId) {
         input.onInvalidEntry(entry);
-      } else if (!this.hasRegisteredId(resolvedId)) {
-        input.onUnknownTarget(resolvedId);
       }
+
+      const resolvedId = this.resolveKnownIsolationTargetId({
+        entry,
+        onInvalidEntry: input.onInvalidEntry,
+        onUnknownTarget: input.onUnknownTarget,
+      });
 
       if (isTag(entry)) {
         normalizedEntries.push(
@@ -648,15 +652,157 @@ export class StoreValidator {
         continue;
       }
 
-      normalizedEntries.push(resolvedId as unknown as TEntry);
+      // Push the original definition object when available so the normalized
+      // policy remains valid if re-processed (strings are no longer valid
+      // IsolationTarget entries). Fall back to the id only for edge cases
+      // where the entry is a plain object without a branded definition.
+      const isDefinitionObject =
+        typeof entry === "object" && entry !== null && "id" in entry;
+      normalizedEntries.push(
+        (isDefinitionObject ? entry : resolvedId) as unknown as TEntry,
+      );
     }
 
     return normalizedEntries;
   }
 
+  /**
+   * Validates and expands the inner targets of a scope() entry.
+   * Wildcard strings are expanded to concrete IDs; definitions and subtree
+   * filters are validated and passed through.
+   */
+  private expandScopeTargets(input: {
+    targets: ReadonlyArray<IsolationScopeTarget>;
+    policyResourceId: string;
+    onInvalidEntry: (entry: unknown) => never;
+    onUnknownTarget: (targetId: string) => never;
+  }): IsolationScopeTarget[] {
+    const expanded: IsolationScopeTarget[] = [];
+
+    for (const target of input.targets) {
+      if (isSubtreeFilter(target)) {
+        if (!this.hasRegisteredId(target.resourceId)) {
+          input.onUnknownTarget(target.resourceId);
+        }
+        expanded.push(target);
+        continue;
+      }
+
+      if (typeof target === "string") {
+        const resolvedIds = this.resolveSelectorTargetIds({
+          selector: target,
+          onInvalidEntry: input.onInvalidEntry,
+          onUnknownTarget: input.onUnknownTarget,
+        });
+        // Replace wildcard with concrete ids so the compiled policy is exact
+        for (const id of resolvedIds) {
+          expanded.push(id);
+        }
+        continue;
+      }
+
+      this.resolveKnownIsolationTargetId({
+        entry: target,
+        onInvalidEntry: input.onInvalidEntry,
+        onUnknownTarget: input.onUnknownTarget,
+      });
+      // Keep the original definition so re-normalization is idempotent
+      expanded.push(target);
+    }
+
+    return expanded;
+  }
+
   private resolveIsolationTargetId(entry: unknown): string | null {
     const resolved = this.resolveReferenceId(entry);
     return resolved ?? null;
+  }
+
+  private resolveKnownIsolationTargetId(input: {
+    entry: unknown;
+    onInvalidEntry: (entry: unknown) => never;
+    onUnknownTarget: (targetId: string) => never;
+  }): string {
+    const resolvedId = this.resolveIsolationTargetId(input.entry);
+    if (!resolvedId) {
+      input.onInvalidEntry(input.entry);
+    }
+    if (!this.hasRegisteredId(resolvedId)) {
+      input.onUnknownTarget(resolvedId);
+    }
+    return resolvedId;
+  }
+
+  private resolveSelectorTargetIds(input: {
+    selector: string;
+    onInvalidEntry: (entry: unknown) => never;
+    onUnknownTarget: (targetId: string) => never;
+  }): string[] {
+    if (input.selector.length === 0) {
+      input.onInvalidEntry(input.selector);
+    }
+
+    const resolvedIds = resolveIsolationSelector(
+      input.selector,
+      this.registeredIds,
+    );
+    if (resolvedIds.length === 0) {
+      input.onUnknownTarget(input.selector);
+    }
+
+    return resolvedIds;
+  }
+
+  /**
+   * Normalizes export entries — keeps string support since exports is a
+   * visibility list, not an access policy.
+   */
+  private normalizeExportEntries(input: {
+    entries: ReadonlyArray<unknown>;
+    onInvalidEntry: (entry: unknown) => never;
+    onUnknownTarget: (targetId: string) => never;
+  }): Array<IsolationExportsTarget> {
+    const normalizedEntries: Array<IsolationExportsTarget> = [];
+    const seenStringTargets = new Set<string>();
+
+    const addStringTarget = (id: string) => {
+      if (seenStringTargets.has(id)) return;
+      seenStringTargets.add(id);
+      normalizedEntries.push(id);
+    };
+
+    for (const entry of input.entries) {
+      if (typeof entry === "string") {
+        const resolvedIds = this.resolveSelectorTargetIds({
+          selector: entry,
+          onInvalidEntry: input.onInvalidEntry,
+          onUnknownTarget: input.onUnknownTarget,
+        });
+        for (const resolvedId of resolvedIds) {
+          addStringTarget(resolvedId);
+        }
+        continue;
+      }
+
+      const resolvedId = this.resolveKnownIsolationTargetId({
+        entry,
+        onInvalidEntry: input.onInvalidEntry,
+        onUnknownTarget: input.onUnknownTarget,
+      });
+
+      if (isTag(entry)) {
+        normalizedEntries.push(
+          (entry.id === resolvedId
+            ? entry
+            : { ...entry, id: resolvedId }) as IsolationExportsTarget,
+        );
+        continue;
+      }
+
+      normalizedEntries.push(resolvedId as unknown as IsolationExportsTarget);
+    }
+
+    return normalizedEntries;
   }
 
   private hasRegisteredId(id: string): boolean {

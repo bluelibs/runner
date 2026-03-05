@@ -1,5 +1,6 @@
 import { error } from "../../definers/builders/error";
 import type { DefaultErrorType } from "../../types/error";
+import type { IsolationChannel } from "../../tools/scope";
 
 export const isolateConflictError = error<
   {
@@ -28,7 +29,7 @@ export const isolateInvalidEntryError = error<
   )
   .remediation(
     ({ policyResourceId }) =>
-      `Use .isolate({ deny: [...] }) or .isolate({ only: [...] }) with string ids/selectors or Runner definitions only. Review "${policyResourceId}" and remove malformed entries.`,
+      `Use .isolate({ deny: [...] }) or .isolate({ only: [...] }) with Runner definitions, subtreeOf() filters, or scope() entries. Bare strings are not allowed — use scope("pattern") instead. Review "${policyResourceId}" and fix malformed entries.`,
   )
   .build();
 
@@ -104,6 +105,7 @@ export const isolateViolationError = error<
     policyResourceId: string;
     matchedRuleType: "id" | "tag" | "only" | "subtree";
     matchedRuleId: string;
+    channel: IsolationChannel;
   } & DefaultErrorType
 >("runner.errors.isolationViolation")
   .format(
@@ -114,24 +116,27 @@ export const isolateViolationError = error<
       consumerType,
       policyResourceId,
       matchedRuleType,
+      channel,
     }) =>
       matchedRuleType === "only"
-        ? `${targetType} "${targetId}" is not allowed by isolate "only" rule on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`
-        : `${targetType} "${targetId}" is denied by isolate policy on resource "${policyResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`,
+        ? `${targetType} "${targetId}" is not allowed by isolate "only" rule on resource "${policyResourceId}" (channel: ${channel}) and cannot be referenced by ${consumerType} "${consumerId}".`
+        : `${targetType} "${targetId}" is denied by isolate policy on resource "${policyResourceId}" (channel: ${channel}) and cannot be referenced by ${consumerType} "${consumerId}".`,
   )
-  .remediation(({ policyResourceId, matchedRuleType, matchedRuleId }) => {
-    if (matchedRuleType === "only") {
-      return `Target is not in the "only" list. Add it to the "only" list on "${policyResourceId}", or move the consumer outside that resource subtree.`;
-    }
-    if (matchedRuleType === "subtree") {
-      return `Denied by subtreeOf("${matchedRuleId}") filter on "${policyResourceId}". Remove or narrow the subtreeOf() filter, or move the consumer outside that resource subtree.`;
-    }
-    const rule =
-      matchedRuleType === "tag"
-        ? `Denied tag rule "${matchedRuleId}".`
-        : `Denied id rule "${matchedRuleId}".`;
-    return `${rule} Remove or narrow the deny rule on "${policyResourceId}", or move the consumer outside that resource subtree.`;
-  })
+  .remediation(
+    ({ policyResourceId, matchedRuleType, matchedRuleId, channel }) => {
+      if (matchedRuleType === "only") {
+        return `Target is not in the "only" list for "channel: ${channel}". Add it to the "only" list on "${policyResourceId}", or move the consumer outside that resource subtree.`;
+      }
+      if (matchedRuleType === "subtree") {
+        return `Denied by subtreeOf("${matchedRuleId}") filter on "${policyResourceId}" (channel: ${channel}). Remove or narrow the subtreeOf() filter, or move the consumer outside that resource subtree.`;
+      }
+      const rule =
+        matchedRuleType === "tag"
+          ? `Denied tag rule "${matchedRuleId}".`
+          : `Denied id rule "${matchedRuleId}".`;
+      return `${rule} Channel: "${channel}". Remove or narrow the deny rule on "${policyResourceId}", or move the consumer outside that resource subtree.`;
+    },
+  )
   .build();
 
 export const subtreeValidationFailedError = error<

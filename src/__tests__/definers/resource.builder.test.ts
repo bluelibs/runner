@@ -278,11 +278,11 @@ describe("resource builder", () => {
     const resourceWithPolicy = r
       .resource("tests.builder.policy.resource")
       .isolate({ deny: [denyTaskA] })
-      .isolate({ deny: [denyTaskB.id] })
+      .isolate({ deny: [denyTaskB] })
       .build();
 
     expect(resourceWithPolicy.isolate).toEqual({
-      deny: [denyTaskA, denyTaskB.id],
+      deny: [denyTaskA, denyTaskB],
     });
   });
 
@@ -297,12 +297,12 @@ describe("resource builder", () => {
       .resource("tests.builder.policy.only.resource")
       .isolate({ only: [onlyTag] })
       .isolate({})
-      .isolate({ only: [onlyTask.id] })
+      .isolate({ only: [onlyTask] })
       .isolate({})
       .build();
 
     expect(resourceWithPolicy.isolate).toEqual({
-      only: [onlyTag, onlyTask.id],
+      only: [onlyTag, onlyTask],
     });
   });
 
@@ -319,8 +319,8 @@ describe("resource builder", () => {
     // deny+only in the same .isolate() call
     expect(() => {
       r.resource("tests.builder.policy.conflict.resource").isolate({
-        only: [onlyTask.id],
-        deny: [denyTask.id],
+        only: [onlyTask],
+        deny: [denyTask],
       });
     }).toThrow(
       expect.objectContaining({ id: "runner.errors.isolationConflict" }),
@@ -329,8 +329,8 @@ describe("resource builder", () => {
     // deny+only via separate chained calls
     expect(() => {
       r.resource("tests.builder.policy.conflict.chained.resource")
-        .isolate({ only: [onlyTask.id] })
-        .isolate({ deny: [denyTask.id] });
+        .isolate({ only: [onlyTask] })
+        .isolate({ deny: [denyTask] });
     }).toThrow(
       expect.objectContaining({ id: "runner.errors.isolationConflict" }),
     );

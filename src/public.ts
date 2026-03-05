@@ -40,6 +40,7 @@ import { asyncContext as asyncContextFn } from "./definers/builders/asyncContext
 import { override as overrideBuilder } from "./definers/builders/override";
 import { onAnyOf, isOneOf } from "./types/event";
 import { subtreeOf as subtreeOfFn } from "./tools/subtreeOf";
+import { scope as scopeFn } from "./tools/scope";
 
 const rSystem = Object.freeze({
   ...systemResources,
@@ -95,6 +96,7 @@ export {
   onAnyOf,
   isOneOf,
   subtreeOfFn as subtreeOf,
+  scopeFn as scope,
 };
 
 // Legacy alias kept for compatibility.
@@ -131,6 +133,7 @@ export const r = Object.freeze({
   asyncContext: asyncContextFn,
   error: errorFn,
   subtreeOf: subtreeOfFn,
+  scope: scopeFn,
   middleware: Object.freeze({
     task: taskMiddlewareFn,
     resource: resourceMiddlewareFn,
@@ -138,6 +141,8 @@ export const r = Object.freeze({
   system: rSystem,
   runner: rRunner,
   debug: rDebug,
+  /** Shorthand for `r.runner.logger`. See {@link loggerResource} for full documentation. */
+  logger: runnerResources.logger,
 });
 
 export * as definitions from "./defs";

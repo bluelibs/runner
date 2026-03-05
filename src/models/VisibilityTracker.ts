@@ -4,7 +4,9 @@ import {
   IsolationPolicy,
   IsolationSubtreeFilter,
   ItemType,
+  IsolationChannel,
 } from "../defs";
+import type { IsolationScope, IsolationScopeTarget } from "../tools/scope";
 import * as utils from "../define";
 import { isolateViolationError, visibilityViolationError } from "../errors";
 import { StoreRegistry } from "./StoreRegistry";
@@ -13,18 +15,52 @@ import {
   getSubtreeTaskMiddlewareAttachment,
 } from "../tools/subtreeMiddleware";
 
+/**
+ * Per-channel set of concrete ids, tag ids, and subtree filters
+ * that a single deny or only axis has accumulated.
+ */
+type CompiledChannelSets = {
+  ids: Set<string>;
+  tagIds: Set<string>;
+  subtreeFilters: IsolationSubtreeFilter[];
+};
+
+const ALL_CHANNELS: readonly IsolationChannel[] = [
+  "dependencies",
+  "listening",
+  "tagging",
+  "middleware",
+] as const;
+
+function emptyChannelSets(): CompiledChannelSets {
+  return { ids: new Set(), tagIds: new Set(), subtreeFilters: [] };
+}
+
+function emptyChannelRecord(): Record<IsolationChannel, CompiledChannelSets> {
+  return {
+    dependencies: emptyChannelSets(),
+    listening: emptyChannelSets(),
+    tagging: emptyChannelSets(),
+    middleware: emptyChannelSets(),
+  };
+}
+
+function forEachEnabledChannel(
+  channels: Readonly<Record<IsolationChannel, boolean>>,
+  run: (channel: IsolationChannel) => void,
+): void {
+  for (const channel of ALL_CHANNELS) {
+    if (!channels[channel]) {
+      continue;
+    }
+    run(channel);
+  }
+}
+
 type CompiledIsolationPolicy = {
-  denyIds: Set<string>;
-  denyTagIds: Set<string>;
-  // Structural subtree filters for deny rules — resolved lazily from this.subtrees
-  // at violation-check time so overridable ids and late-registered children are included.
-  denySubtreeFilters: IsolationSubtreeFilter[];
-  // onlyMode=true means the policy uses "only" semantics (allowlist).
-  // When true, external deps not in onlyIds/onlyTagIds/onlySubtreeFilters are blocked.
+  deny: Record<IsolationChannel, CompiledChannelSets>;
   onlyMode: boolean;
-  onlyIds: Set<string>;
-  onlyTagIds: Set<string>;
-  onlySubtreeFilters: IsolationSubtreeFilter[];
+  only: Record<IsolationChannel, CompiledChannelSets>;
 };
 
 type AccessViolation =
@@ -38,6 +74,7 @@ type AccessViolation =
       policyResourceId: string;
       matchedRuleType: "id" | "tag" | "only" | "subtree";
       matchedRuleId: string;
+      channel: IsolationChannel;
     };
 
 /**
@@ -173,58 +210,99 @@ export class VisibilityTracker {
       return;
     }
 
-    const denyIds = new Set<string>();
-    const denyTagIds = new Set<string>();
-    const denySubtreeFilters: IsolationSubtreeFilter[] = [];
-    const onlyIds = new Set<string>();
-    const onlyTagIds = new Set<string>();
-    const onlySubtreeFilters: IsolationSubtreeFilter[] = [];
+    const deny = emptyChannelRecord();
+    const only = emptyChannelRecord();
+
+    /**
+     * Resolves a single target into the appropriate channel sets.
+     * Targets are either ids (strings), tag ids, or subtree filters.
+     */
+    const addTarget = (
+      target: IsolationScopeTarget,
+      channels: Readonly<Record<IsolationChannel, boolean>>,
+      channelRecord: Record<IsolationChannel, CompiledChannelSets>,
+    ) => {
+      // Structural subtree filters are resolved lazily at violation-check time
+      // so overridable ids and late-registered children are included.
+      if (utils.isSubtreeFilter(target)) {
+        forEachEnabledChannel(channels, (channel) => {
+          channelRecord[channel].subtreeFilters.push(target);
+        });
+        return;
+      }
+      if (typeof target === "string") {
+        forEachEnabledChannel(channels, (channel) => {
+          channelRecord[channel].ids.add(target);
+        });
+        return;
+      }
+      const maybeId = getItemId(target as RegisterableItems);
+      if (!maybeId) return;
+      if (utils.isTag(target)) {
+        forEachEnabledChannel(channels, (channel) => {
+          channelRecord[channel].tagIds.add(maybeId);
+        });
+      } else {
+        forEachEnabledChannel(channels, (channel) => {
+          channelRecord[channel].ids.add(maybeId);
+        });
+      }
+    };
+
+    const allOn = {
+      dependencies: true,
+      listening: true,
+      tagging: true,
+      middleware: true,
+    } as const;
 
     const resolveEntry = (
       entry: unknown,
-      ids: Set<string>,
-      tagIds: Set<string>,
-      subtreeFilters: IsolationSubtreeFilter[],
+      channelRecord: Record<IsolationChannel, CompiledChannelSets>,
     ) => {
-      // Structural subtree references are stored separately — they are resolved
-      // lazily against this.subtrees at violation-check time.
+      // Scope entries — channel-scoped targets created by scope()
+      if (utils.isIsolationScope(entry)) {
+        const scopeEntry = entry as IsolationScope;
+        for (const target of scopeEntry.targets) {
+          addTarget(target, scopeEntry.channels, channelRecord);
+        }
+        return;
+      }
+      // Subtree filters — implicit all-channels
       if (utils.isSubtreeFilter(entry)) {
-        subtreeFilters.push(entry);
+        addTarget(entry, allOn, channelRecord);
         return;
       }
-      if (typeof entry === "string") {
-        ids.add(entry);
-        return;
-      }
+      // Bare definitions — implicit all-channels
       const maybeId = getItemId(entry as RegisterableItems);
       if (!maybeId) return;
       if (utils.isTag(entry)) {
-        tagIds.add(maybeId);
+        forEachEnabledChannel(allOn, (channel) => {
+          channelRecord[channel].tagIds.add(maybeId);
+        });
       } else {
-        ids.add(maybeId);
+        forEachEnabledChannel(allOn, (channel) => {
+          channelRecord[channel].ids.add(maybeId);
+        });
       }
     };
 
     if (hasDeny) {
       for (const entry of policy!.deny!) {
-        resolveEntry(entry, denyIds, denyTagIds, denySubtreeFilters);
+        resolveEntry(entry, deny);
       }
     }
 
     if (onlyPresent) {
       for (const entry of policy!.only!) {
-        resolveEntry(entry, onlyIds, onlyTagIds, onlySubtreeFilters);
+        resolveEntry(entry, only);
       }
     }
 
     this.isolationPolicies.set(resourceId, {
-      denyIds,
-      denyTagIds,
-      denySubtreeFilters,
+      deny,
       onlyMode: onlyPresent,
-      onlyIds,
-      onlyTagIds,
-      onlySubtreeFilters,
+      only,
     });
   }
 
@@ -311,13 +389,18 @@ export class VisibilityTracker {
    * 2. The consumer is inside the same registration subtree as the target, OR
    * 3. The target is in the owner resource's export set (transitively up).
    */
-  isAccessible(targetId: string, consumerId: string): boolean {
-    return this.getAccessViolation(targetId, consumerId) === null;
+  isAccessible(
+    targetId: string,
+    consumerId: string,
+    channel: IsolationChannel = "dependencies",
+  ): boolean {
+    return this.getAccessViolation(targetId, consumerId, channel) === null;
   }
 
   getAccessViolation(
     targetId: string,
     consumerId: string,
+    channel: IsolationChannel = "dependencies",
   ): AccessViolation | null {
     const targetOwner = this.ownership.get(targetId);
 
@@ -339,7 +422,7 @@ export class VisibilityTracker {
       }
     }
 
-    return this.findIsolationViolation(targetId, consumerId);
+    return this.findIsolationViolation(targetId, consumerId, channel);
   }
 
   private isAccessibleFromOwnerChain(
@@ -441,6 +524,7 @@ export class VisibilityTracker {
   validateVisibility(registry: StoreRegistry): void {
     this.validateItemDependencies(registry);
     this.validateHookEventVisibility(registry);
+    this.validateTaggingVisibility(registry);
     this.validateMiddlewareVisibility(registry);
   }
 
@@ -507,7 +591,11 @@ export class VisibilityTracker {
 
         if (!depId) continue;
 
-        const violation = this.getAccessViolation(depId, consumerId);
+        const violation = this.getAccessViolation(
+          depId,
+          consumerId,
+          "dependencies",
+        );
         if (!violation) {
           continue;
         }
@@ -538,7 +626,11 @@ export class VisibilityTracker {
             : [hook.on];
       for (const event of events) {
         const eventId = resolveReferenceId(registry, event)!;
-        const violation = this.getAccessViolation(eventId, hook.id);
+        const violation = this.getAccessViolation(
+          eventId,
+          hook.id,
+          "listening",
+        );
         if (!violation) {
           continue;
         }
@@ -555,6 +647,91 @@ export class VisibilityTracker {
   }
 
   /**
+   * Validates that tag attachments are visible to the attaching definition.
+   */
+  private validateTaggingVisibility(registry: StoreRegistry): void {
+    const entries: Array<{
+      consumerId: string;
+      consumerType: string;
+      tags: unknown;
+    }> = [];
+
+    for (const { task } of registry.tasks.values()) {
+      entries.push({
+        consumerId: task.id,
+        consumerType: "Task",
+        tags: task.tags,
+      });
+    }
+
+    for (const { resource } of registry.resources.values()) {
+      entries.push({
+        consumerId: resource.id,
+        consumerType: "Resource",
+        tags: resource.tags,
+      });
+    }
+
+    for (const { event } of registry.events.values()) {
+      entries.push({
+        consumerId: event.id,
+        consumerType: "Event",
+        tags: event.tags,
+      });
+    }
+
+    for (const { hook } of registry.hooks.values()) {
+      entries.push({
+        consumerId: hook.id,
+        consumerType: "Hook",
+        tags: hook.tags,
+      });
+    }
+
+    for (const { middleware } of registry.taskMiddlewares.values()) {
+      entries.push({
+        consumerId: middleware.id,
+        consumerType: "Task middleware",
+        tags: middleware.tags,
+      });
+    }
+
+    for (const { middleware } of registry.resourceMiddlewares.values()) {
+      entries.push({
+        consumerId: middleware.id,
+        consumerType: "Resource middleware",
+        tags: middleware.tags,
+      });
+    }
+
+    for (const { consumerId, consumerType, tags } of entries) {
+      if (!Array.isArray(tags) || tags.length === 0) {
+        continue;
+      }
+
+      for (const tagReference of tags) {
+        const tagId = resolveReferenceId(registry, tagReference);
+        if (!tagId) {
+          continue;
+        }
+
+        const violation = this.getAccessViolation(tagId, consumerId, "tagging");
+        if (!violation) {
+          continue;
+        }
+
+        this.throwAccessViolation({
+          violation,
+          targetId: tagId,
+          targetType: "Tag",
+          consumerId,
+          consumerType,
+        });
+      }
+    }
+  }
+
+  /**
    * Validates that middleware attachments are visible.
    */
   private validateMiddlewareVisibility(registry: StoreRegistry): void {
@@ -564,7 +741,11 @@ export class VisibilityTracker {
           registry,
           middlewareAttachment,
         )!;
-        const violation = this.getAccessViolation(middlewareId, task.id);
+        const violation = this.getAccessViolation(
+          middlewareId,
+          task.id,
+          "middleware",
+        );
         if (!violation) {
           continue;
         }
@@ -585,7 +766,11 @@ export class VisibilityTracker {
           registry,
           middlewareAttachment,
         )!;
-        const violation = this.getAccessViolation(middlewareId, resource.id);
+        const violation = this.getAccessViolation(
+          middlewareId,
+          resource.id,
+          "middleware",
+        );
         if (!violation) {
           continue;
         }
@@ -614,7 +799,11 @@ export class VisibilityTracker {
           registry,
           middlewareAttachment,
         )!;
-        const violation = this.getAccessViolation(middlewareId, ownerId);
+        const violation = this.getAccessViolation(
+          middlewareId,
+          ownerId,
+          "middleware",
+        );
         if (!violation) {
           continue;
         }
@@ -635,7 +824,11 @@ export class VisibilityTracker {
           registry,
           middlewareAttachment,
         )!;
-        const violation = this.getAccessViolation(middlewareId, ownerId);
+        const violation = this.getAccessViolation(
+          middlewareId,
+          ownerId,
+          "middleware",
+        );
         if (!violation) {
           continue;
         }
@@ -654,6 +847,7 @@ export class VisibilityTracker {
   private findIsolationViolation(
     targetId: string,
     consumerId: string,
+    channel: IsolationChannel,
   ): Extract<AccessViolation, { kind: "isolate" }> | null {
     const chain = this.getConsumerResourceChain(consumerId);
     if (chain.length === 0) {
@@ -668,28 +862,32 @@ export class VisibilityTracker {
         continue;
       }
 
-      // --- deny rules ---
-      if (policy.denyIds.has(targetId)) {
+      const denySets = policy.deny[channel];
+
+      // --- deny rules (channel-scoped) ---
+      if (denySets.ids.has(targetId)) {
         return {
           kind: "isolate",
           policyResourceId,
           matchedRuleType: "id",
           matchedRuleId: targetId,
+          channel,
         };
       }
 
-      if (policy.denyTagIds.has(targetId)) {
+      if (denySets.tagIds.has(targetId)) {
         return {
           kind: "isolate",
           policyResourceId,
           matchedRuleType: "tag",
           matchedRuleId: targetId,
+          channel,
         };
       }
 
       if (targetTags) {
         for (const tagId of targetTags) {
-          if (!policy.denyTagIds.has(tagId)) {
+          if (!denySets.tagIds.has(tagId)) {
             continue;
           }
 
@@ -698,18 +896,20 @@ export class VisibilityTracker {
             policyResourceId,
             matchedRuleType: "tag",
             matchedRuleId: tagId,
+            channel,
           };
         }
       }
 
       // --- deny subtree filters ---
-      for (const filter of policy.denySubtreeFilters) {
+      for (const filter of denySets.subtreeFilters) {
         if (!this.matchesSubtreeFilter(targetId, filter)) continue;
         return {
           kind: "isolate",
           policyResourceId,
           matchedRuleType: "subtree",
           matchedRuleId: filter.resourceId,
+          channel,
         };
       }
 
@@ -726,13 +926,15 @@ export class VisibilityTracker {
         continue;
       }
 
+      const onlySets = policy.only[channel];
+
       // External target must match the only list (by id, tag, or subtree filter).
-      const matchedByOnlyId = policy.onlyIds.has(targetId);
+      const matchedByOnlyId = onlySets.ids.has(targetId);
       const matchedByOnlyTag =
-        policy.onlyTagIds.has(targetId) ||
+        onlySets.tagIds.has(targetId) ||
         (targetTags !== undefined &&
-          [...targetTags].some((tagId) => policy.onlyTagIds.has(tagId)));
-      const matchedByOnlySubtree = policy.onlySubtreeFilters.some((filter) =>
+          [...targetTags].some((tagId) => onlySets.tagIds.has(tagId)));
+      const matchedByOnlySubtree = onlySets.subtreeFilters.some((filter) =>
         this.matchesSubtreeFilter(targetId, filter),
       );
 
@@ -742,6 +944,7 @@ export class VisibilityTracker {
           policyResourceId,
           matchedRuleType: "only",
           matchedRuleId: targetId,
+          channel,
         };
       }
     }
@@ -813,6 +1016,7 @@ export class VisibilityTracker {
         policyResourceId: violation.policyResourceId,
         matchedRuleType: violation.matchedRuleType,
         matchedRuleId: violation.matchedRuleId,
+        channel: violation.channel,
       });
     }
   }

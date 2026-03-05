@@ -97,10 +97,32 @@ const app = r
 await run(app); // throws aggregated subtreeValidationFailedError if violations exist
 ```
 
-- `.isolate({ deny: [...] })` blocks listed ids/tags; `{ only: [...] }` is a boundary-scoped external allowlist (internal subtree items remain reachable). String entries support id selectors with segment wildcard `*` (for example: `app.resources.*.test`). Policies are additive across ancestors (effective external access is the intersection of ancestor `only` lists); Runner fails fast on violations or unmatched selectors at bootstrap.
-- **`subtreeOf(resource, { types? })`** is a structural filter usable in both `deny` and `only`. It matches all items owned by the resource's registration subtree (instead of matching by id string), so overridable ids and deeply-nested child registrations are caught automatically. `types` narrows which item kinds are matched (`"task" | "hook" | "event" | "tag" | "resource" | "taskMiddleware" | "resourceMiddleware"`). Available as a named export and as `r.subtreeOf()`. The referenced resource must be registered in the same runtime graph or bootstrap fails with `isolationUnknownTarget`.
-- Tag object entries and tag-id string entries are intentionally different: `deny: [myTag]` / `only: [myTag]` match the tag dependency and all tagged carriers; `deny: [myTag.id]` / `only: [myTag.id]` match only the exact id string.
-- Isolation/visibility enforcement covers dependency wiring plus hook event subscriptions and middleware attachments (task + resource middleware), so the same rules apply to events and middleware too.
+- Isolation quick reference:
+  - `isolate.exports` controls visibility across resource boundaries.
+  - `isolate.deny` / `isolate.only` control wiring permissions by channel.
+  - Bare strings are invalid in `deny` / `only`; use `scope("pattern.*")`.
+  - Policies are additive through ancestors; effective external `only` behaves like intersection (internal subtree exemption still applies).
+
+| Target Form | What it matches | Use when |
+| --- | --- | --- |
+| `definition` (task/resource/event/hook/middleware/tag) | Exact definition id (tag definitions also match carriers) | You already have a stable definition reference |
+| `scope("selector.*")` | Id selectors expanded at bootstrap | You want pattern-based targeting |
+| `subtreeOf(resource, { types? })` | Resource ownership subtree (optionally by type) | Ids are overridable/nested and structural ownership is safer |
+| `scope([...], channels)` | Applies same channel options to mixed targets | You want one channel policy across selectors/definitions/subtrees |
+
+- **`subtreeOf(resource, { types? })`** is structural and works in both `deny` and `only`. It matches items by ownership (not id string), including deeply nested descendants. `types` narrows to `"task" | "hook" | "event" | "tag" | "resource" | "taskMiddleware" | "resourceMiddleware"`. The referenced resource must be registered in the same runtime graph or bootstrap fails with `isolationUnknownTarget`.
+- **`scope(target, channels?)`** wraps one or more targets with channel precision (`dependencies`, `listening`, `tagging`, `middleware`). Same `channels` options apply to every target inside that `scope(...)` entry. Available as a named export and `r.scope()`.
+- Channel options table (default for each option is `true`):
+
+| Option | Controls |
+| --- | --- |
+| `dependencies` | Dependency wiring and dependency-surface runtime access. |
+| `listening` | Hook `.on(...)` event subscriptions. |
+| `tagging` | `.tags([tag])` attachments on definitions. |
+| `middleware` | `.middleware([...])` and subtree middleware attachments. |
+
+- Tag object entries and id selector entries are intentionally different: `deny: [myTag]` / `only: [myTag]` match the tag dependency and all tagged carriers; `deny: [scope(myTag.id)]` / `only: [scope(myTag.id)]` match only the exact id string.
+- Isolation/visibility enforcement covers dependency wiring plus hook event subscriptions, tag attachments (`.tags([...])`), and middleware attachments (task + resource middleware), so the same rules apply to events, tags, and middleware too.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
 - For a tag-driven backend toolkit example (HTTP + auth + tenancy + MikroORM migrations), see `examples/runner-x/README.md`.
@@ -336,7 +358,7 @@ Use `tag.startup()` when startup ordering matters; treat that accessor as metada
 - Scope tags with `.for([...])` to specific definition kinds (`"tasks"`, `"resources"`, `"events"`, `"hooks"`, `"taskMiddlewares"`, `"resourceMiddlewares"`, `"errors"`). Wrong usage is rejected by TypeScript in `.tags([...])` and also fails fast at runtime (useful when `any`/casts bypass TS).
 - Contract tags (a "smart tag"): define type contracts for task input/output (or resource config/value) via `r.tag<TConfig, TInputContract, TOutputContract>(id)`. They don't change runtime behavior; they shape the inferred types and compose with contract middleware.
 - Smart tags: built-in tags like `r.system.tags.internal` (id: `system.tags.internal`), `r.runner.tags.debug`, and `r.runner.tags.excludeFromGlobalHooks` change framework behavior.
-- Internal container resources are namespaced under `system.*` and accessible through `r.system.*` (`store`, `taskRunner`, `middlewareManager`, `eventManager`, `runtime`); deny them by id selectors such as `.isolate({ deny: ["system.*"] })` when needed.
+- Internal container resources are namespaced under `system.*` and accessible through `r.system.*` (`store`, `taskRunner`, `middlewareManager`, `eventManager`, `runtime`); deny them by id selectors such as `.isolate({ deny: [scope("system.*")] })` when needed.
 
 ```ts
 type Input = { id: string };
@@ -654,7 +676,7 @@ const app = r
   ```ts
   .middleware([r.runner.middleware.task.timeout.with({ ttl: 5000 })])
   ```
-- **Logging & Debug**: `r.runner.logger` and `r.runner.debug`.
+- **Logging & Debug**: `r.logger` (alias `r.runner.logger`) and `r.runner.debug`.
   ```ts
   // Verbose debug logging for a specific task
   .tags([r.runner.tags.debug])
@@ -706,9 +728,11 @@ test("sends welcome email", async () => {
 ## Observability & Debugging
 
 - Pass `{ debug: "verbose" }` to `run` for structured logs about registration, middleware, and lifecycle events.
-- `r.runner.logger` exposes the framework logger; register your own logger resource and override it at the root to capture logs centrally.
+- `r.logger` (shorthand for `r.runner.logger`) exposes the framework logger. Inject it as a dependency to access the `Logger` instance at runtime.
 - Hooks and tasks emit metadata through `r.system.store`. Query it for dashboards or editor plugins.
 - Use middleware for tracing (`r.middleware.task("...").run(...)`) to wrap every task call.
+- **Silence stdout**: `run(app, { logs: { printThreshold: null } })` — disables all console output. Also accepts `printStrategy: "pretty" | "json"`.
+- **Intercept the log stream**: inject `r.logger` and call `logger.onLog(async (log) => { ... })`. The `ILog` payload includes `level`, `message`, `data`, `context`, `error`, `source`, and `timestamp`. Listeners fire before printing, buffered startup logs are replayed in order, and listener errors are swallowed (won't crash the runtime). Use this for PII scrubbing, forwarding to external APIs, or filtering.
 
 ## Namespacing & IDs
 

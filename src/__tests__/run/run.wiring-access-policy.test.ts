@@ -8,6 +8,7 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
+import { scope } from "../../public";
 
 const POLICY_VIOLATION_ID = "runner.errors.isolationViolation";
 const POLICY_UNKNOWN_TARGET_ID = "runner.errors.isolationUnknownTarget";
@@ -45,7 +46,7 @@ describe("run.isolate", () => {
       id: "policy.id.resource",
       register: [deniedTask, consumer],
       isolate: {
-        deny: [deniedTask.id],
+        deny: [deniedTask],
       },
     });
 
@@ -75,7 +76,7 @@ describe("run.isolate", () => {
       id: "policy.compound.child",
       register: [consumer],
       isolate: {
-        deny: [consumer.id],
+        deny: [consumer],
       },
     });
 
@@ -215,7 +216,7 @@ describe("run.isolate", () => {
       id: "policy.filter.resource",
       register: [denyTag, queryTag, hiddenTask, visibleTask, inspect],
       isolate: {
-        deny: [denyTag],
+        deny: [scope(denyTag, { tagging: false })],
       },
     });
 
@@ -235,7 +236,7 @@ describe("run.isolate", () => {
     const guarded = defineResource({
       id: "policy.unknown.resource",
       isolate: {
-        deny: ["policy.unknown.missing"],
+        deny: [scope("policy.unknown.missing")],
       },
     });
 
@@ -265,7 +266,7 @@ describe("run.isolate", () => {
       id: "policy.wildcard.deny.resource",
       register: [deniedTask, consumer],
       isolate: {
-        deny: ["policy.wildcard.deny.*"],
+        deny: [scope("policy.wildcard.deny.*")],
       },
     });
 
@@ -293,7 +294,7 @@ describe("run.isolate", () => {
       id: "policy.wildcard.deny.safe.resource",
       register: [task, consumer],
       isolate: {
-        deny: ["policy.wildcard.deny.no-match.*"],
+        deny: [scope("policy.wildcard.deny.no-match.*")],
       },
     });
 
@@ -326,7 +327,7 @@ describe("run.isolate", () => {
       id: "policy.wildcard.scope.resource",
       register: [denyTag, taggedTask, consumer],
       isolate: {
-        deny: ["policy.wildcard.scope.tag-*"],
+        deny: [scope("policy.wildcard.scope.tag-*", { tagging: false })],
       },
     });
 
@@ -391,7 +392,7 @@ describe("run.isolate", () => {
     const guarded = defineResource({
       id: "policy.invalid.empty-string.resource",
       isolate: {
-        deny: [""],
+        deny: [scope("")],
       },
     });
 
@@ -455,7 +456,7 @@ describe("run.isolate", () => {
         cron: globalResources.cron,
       },
       isolate: {
-        deny: [globalResources.cron.id],
+        deny: [globalResources.cron],
       },
       init: async (_input, deps) => deps.cron,
     });
@@ -474,7 +475,7 @@ describe("run.isolate", () => {
       id: "policy.container-internals.guarded",
       register: [consumer],
       isolate: {
-        deny: ["system.*"],
+        deny: [scope("system.*")],
       },
     });
 
@@ -500,7 +501,7 @@ describe("run.isolate", () => {
       id: "policy.container-internals.middleware-manager.guarded",
       register: [consumer],
       isolate: {
-        deny: ["system.*"],
+        deny: [scope("system.*")],
       },
     });
 
@@ -528,7 +529,7 @@ describe("run.isolate", () => {
       id: "policy.container-internals.event-manager.guarded",
       register: [consumer],
       isolate: {
-        deny: ["system.*"],
+        deny: [scope("system.*")],
       },
     });
 
@@ -698,7 +699,7 @@ describe("run.isolate (only mode)", () => {
   it("fails fast when only contains an unknown target", async () => {
     const guarded = defineResource({
       id: "only.unknown.resource",
-      isolate: { only: ["does.not.exist"] },
+      isolate: { only: [scope("does.not.exist")] },
     });
 
     const app = defineResource({ id: "only.unknown.app", register: [guarded] });
@@ -720,7 +721,7 @@ describe("run.isolate (only mode)", () => {
     const guarded = defineResource({
       id: "only.wildcard.allowed.resource",
       register: [consumer],
-      isolate: { only: ["only.wildcard.allowed.*"] },
+      isolate: { only: [scope("only.wildcard.allowed.*")] },
     });
 
     const app = defineResource({
@@ -752,7 +753,7 @@ describe("run.isolate (only mode)", () => {
     const guarded = defineResource({
       id: "only.wildcard.blocked.resource",
       register: [consumer],
-      isolate: { only: ["only.wildcard.allowed.*"] },
+      isolate: { only: [scope("only.wildcard.allowed.*")] },
     });
 
     const app = defineResource({
@@ -783,7 +784,7 @@ describe("run.isolate (only mode)", () => {
     const guarded = defineResource({
       id: "only.wildcard.internal.resource",
       register: [internal, consumer],
-      isolate: { only: ["only.wildcard.allowed.*"] },
+      isolate: { only: [scope("only.wildcard.allowed.*")] },
     });
 
     const app = defineResource({
@@ -798,7 +799,7 @@ describe("run.isolate (only mode)", () => {
   it("fails fast when only wildcard matches nothing", async () => {
     const guarded = defineResource({
       id: "only.wildcard.unknown.resource",
-      isolate: { only: ["only.wildcard.missing.*"] },
+      isolate: { only: [scope("only.wildcard.missing.*")] },
     });
 
     const app = defineResource({
@@ -900,13 +901,13 @@ describe("run.isolate (only mode)", () => {
     const child = defineResource({
       id: "only.wildcard.intersection.child",
       register: [consumer],
-      isolate: { only: ["only.wildcard.intersection.alpha"] },
+      isolate: { only: [scope("only.wildcard.intersection.alpha")] },
     });
 
     const parent = defineResource({
       id: "only.wildcard.intersection.parent",
       register: [child],
-      isolate: { only: ["only.wildcard.intersection.*"] },
+      isolate: { only: [scope("only.wildcard.intersection.*")] },
     });
 
     const app = defineResource({
@@ -932,7 +933,7 @@ describe("run.isolate (only mode)", () => {
     const guarded = defineResource({
       id: "only.dedupe.resource",
       register: [consumer],
-      isolate: { only: ["only.dedupe.*", "only.dedupe.allowed"] },
+      isolate: { only: [scope("only.dedupe.*"), scope("only.dedupe.allowed")] },
     });
 
     const app = defineResource({

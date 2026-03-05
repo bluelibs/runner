@@ -167,3 +167,18 @@ export function isSubtreeFilter(
     (definition as IsolationSubtreeFilter)._subtreeFilter === true
   );
 }
+
+/**
+ * Type guard: checks if a value is an `IsolationScope` created by `scope()`.
+ * Used in the wiring validation path to distinguish channel-scoped entries
+ * from bare definitions or subtree filters in deny/only policy entries.
+ */
+export function isIsolationScope(
+  definition: unknown,
+): definition is import("../tools/scope").IsolationScope {
+  return (
+    typeof definition === "object" &&
+    definition !== null &&
+    (definition as { _isolationScope?: boolean })._isolationScope === true
+  );
+}

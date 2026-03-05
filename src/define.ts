@@ -28,4 +28,5 @@ export {
   isAsyncContext,
   isOverrideDefinition,
   isSubtreeFilter,
+  isIsolationScope,
 } from "./definers/tools";

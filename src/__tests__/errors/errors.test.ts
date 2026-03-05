@@ -474,6 +474,7 @@ describe("Errors", () => {
           policyResourceId: "resources.boundary",
           matchedRuleType: "tag",
           matchedRuleId: "tags.secret",
+          channel: "dependencies",
         }),
       );
       expect(policyViolation.message).toContain(
@@ -489,6 +490,7 @@ describe("Errors", () => {
           policyResourceId: "resources.boundary",
           matchedRuleType: "only",
           matchedRuleId: "tasks.secret",
+          channel: "dependencies",
         }),
       );
       expect(policyOnlyViolation.message).toContain(

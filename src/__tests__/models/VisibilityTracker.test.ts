@@ -5,6 +5,7 @@ import {
   defineTaskMiddleware,
   defineResourceMiddleware,
 } from "../../define";
+import { scope, subtreeOf } from "../../public";
 import { VisibilityTracker } from "../../models/VisibilityTracker";
 
 const resolveDefinitionId = (reference: unknown): string | undefined => {
@@ -339,7 +340,7 @@ describe("VisibilityTracker", () => {
       tracker.recordOwnership(owner.id, blockedTask);
       tracker.recordOwnership(owner.id, consumerTask);
       tracker.recordIsolation(owner.id, {
-        deny: [blockedTask.id],
+        deny: [blockedTask],
       });
 
       expect(tracker.isAccessible(blockedTask.id, consumerTask.id)).toBeFalsy();
@@ -394,6 +395,104 @@ describe("VisibilityTracker", () => {
 
       expect(tracker.isAccessible(task.id, consumer.id)).toBe(true);
     });
+
+    it("ignores scope targets without resolvable ids", () => {
+      const owner = defineResource({
+        id: "tracker.policy.scope.invalid.owner",
+      });
+      const task = defineTask({
+        id: "tracker.policy.scope.invalid.task",
+        run: async () => "ok",
+      });
+      const consumer = defineTask({
+        id: "tracker.policy.scope.invalid.consumer",
+        run: async () => "ok",
+      });
+
+      tracker.recordResource(owner.id);
+      tracker.recordOwnership(owner.id, task);
+      tracker.recordOwnership(owner.id, consumer);
+      tracker.recordIsolation(owner.id, {
+        deny: [scope({ nonResolvable: true } as never)],
+      });
+
+      expect(tracker.isAccessible(task.id, consumer.id)).toBe(true);
+    });
+
+    it("supports per-channel scope toggles for subtree, string, tag, and id targets", () => {
+      const owner = defineResource({
+        id: "tracker.policy.channel.owner",
+      });
+      const child = defineResource({
+        id: "tracker.policy.channel.child",
+      });
+      const directTask = defineTask({
+        id: "tracker.policy.channel.direct-task",
+        run: async () => "ok",
+      });
+      const directIdTask = defineTask({
+        id: "tracker.policy.channel.direct-id-task",
+        run: async () => "ok",
+      });
+      const childTask = defineTask({
+        id: "tracker.policy.channel.child-task",
+        run: async () => "ok",
+      });
+      const taggedTask = defineTask({
+        id: "tracker.policy.channel.tagged-task",
+        run: async () => "ok",
+      });
+      const denyTag = defineTag({
+        id: "tracker.policy.channel.tag",
+      });
+      const consumer = defineTask({
+        id: "tracker.policy.channel.consumer",
+        run: async () => "ok",
+      });
+
+      tracker.recordResource(owner.id);
+      tracker.recordOwnership(owner.id, child);
+      tracker.recordOwnership(owner.id, directTask);
+      tracker.recordOwnership(owner.id, directIdTask);
+      tracker.recordOwnership(child.id, childTask);
+      tracker.recordOwnership(owner.id, taggedTask);
+      tracker.recordOwnership(owner.id, consumer);
+      tracker.recordDefinitionTags(taggedTask.id, [denyTag]);
+
+      tracker.recordIsolation(owner.id, {
+        deny: [
+          scope(subtreeOf(child), { dependencies: false }),
+          scope(directIdTask.id, { listening: false }),
+          scope(denyTag, { middleware: false }),
+          scope(directTask, { tagging: false }),
+        ],
+      });
+
+      expect(
+        tracker.isAccessible(childTask.id, consumer.id, "dependencies"),
+      ).toBe(true);
+      expect(tracker.isAccessible(childTask.id, consumer.id, "listening")).toBe(
+        false,
+      );
+      expect(
+        tracker.isAccessible(directIdTask.id, consumer.id, "dependencies"),
+      ).toBe(false);
+      expect(
+        tracker.isAccessible(directIdTask.id, consumer.id, "listening"),
+      ).toBe(true);
+      expect(tracker.isAccessible(directTask.id, consumer.id, "tagging")).toBe(
+        true,
+      );
+      expect(
+        tracker.isAccessible(directTask.id, consumer.id, "dependencies"),
+      ).toBe(false);
+      expect(
+        tracker.isAccessible(taggedTask.id, consumer.id, "middleware"),
+      ).toBe(true);
+      expect(
+        tracker.isAccessible(taggedTask.id, consumer.id, "dependencies"),
+      ).toBe(false);
+    });
   });
 
   describe("isolate (only mode)", () => {
@@ -410,7 +509,7 @@ describe("VisibilityTracker", () => {
 
       tracker.recordResource(owner.id);
       tracker.recordOwnership(owner.id, consumer);
-      tracker.recordIsolation(owner.id, { only: [allowed.id] });
+      tracker.recordIsolation(owner.id, { only: [allowed] });
 
       expect(tracker.isAccessible(allowed.id, consumer.id)).toBe(true);
     });
@@ -521,6 +620,7 @@ describe("VisibilityTracker", () => {
 
       const registry = {
         tasks: new Map(),
+        events: new Map(),
         hooks: new Map(),
         taskMiddlewares: new Map([
           [hiddenTaskMiddleware.id, { middleware: hiddenTaskMiddleware }],
@@ -571,6 +671,7 @@ describe("VisibilityTracker", () => {
 
       const registry = {
         tasks: new Map(),
+        events: new Map(),
         hooks: new Map(),
         taskMiddlewares: new Map(),
         resourceMiddlewares: new Map([
@@ -605,10 +706,146 @@ describe("VisibilityTracker", () => {
     });
   });
 
+  describe("tagging visibility checks", () => {
+    it("throws when a tag attachment is not visible to the attaching definition", () => {
+      const hiddenOwner = defineResource({
+        id: "tracker.tagging.hidden-owner",
+      });
+      const policyOwner = defineResource({
+        id: "tracker.tagging.policy-owner",
+      });
+      const hiddenTag = defineTag({
+        id: "tracker.tagging.hidden-tag",
+      });
+      const taggedTask = defineTask({
+        id: "tracker.tagging.consumer-task",
+        tags: [hiddenTag],
+        run: async () => "ok",
+      });
+
+      tracker.recordResource("root");
+      tracker.recordOwnership("root", hiddenOwner);
+      tracker.recordOwnership("root", policyOwner);
+      tracker.recordOwnership(hiddenOwner.id, hiddenTag);
+      tracker.recordOwnership(policyOwner.id, taggedTask);
+      tracker.recordExports(hiddenOwner.id, []);
+
+      const registry = {
+        tasks: new Map([[taggedTask.id, { task: taggedTask }]]),
+        events: new Map(),
+        hooks: new Map(),
+        taskMiddlewares: new Map(),
+        resourceMiddlewares: new Map(),
+        resources: new Map([
+          [hiddenOwner.id, { resource: hiddenOwner }],
+          [policyOwner.id, { resource: policyOwner }],
+        ]),
+        resolveDefinitionId,
+      };
+
+      expect(() => tracker.validateVisibility(registry as any)).toThrow(
+        /internal to resource/,
+      );
+    });
+
+    it("allows a denied tag target when the tagging channel is disabled", () => {
+      const tagOwner = defineResource({
+        id: "tracker.tagging.allow.tag-owner",
+      });
+      const policyOwner = defineResource({
+        id: "tracker.tagging.allow.policy-owner",
+      });
+      const sharedTag = defineTag({
+        id: "tracker.tagging.allow.shared-tag",
+      });
+      const taggedTask = defineTask({
+        id: "tracker.tagging.allow.task",
+        tags: [sharedTag],
+        run: async () => "ok",
+      });
+
+      tracker.recordResource("root");
+      tracker.recordOwnership("root", tagOwner);
+      tracker.recordOwnership("root", policyOwner);
+      tracker.recordOwnership(tagOwner.id, sharedTag);
+      tracker.recordOwnership(policyOwner.id, taggedTask);
+      tracker.recordIsolation(policyOwner.id, {
+        deny: [scope(sharedTag, { tagging: false })],
+      });
+
+      const registry = {
+        tasks: new Map([[taggedTask.id, { task: taggedTask }]]),
+        events: new Map(),
+        hooks: new Map(),
+        taskMiddlewares: new Map(),
+        resourceMiddlewares: new Map(),
+        resources: new Map([
+          [tagOwner.id, { resource: tagOwner }],
+          [policyOwner.id, { resource: policyOwner }],
+        ]),
+        resolveDefinitionId,
+      };
+
+      expect(() => tracker.validateVisibility(registry as any)).not.toThrow();
+    });
+
+    it("skips unresolved tag references during tagging validation", () => {
+      const policyOwner = defineResource({
+        id: "tracker.tagging.unresolved.policy-owner",
+      });
+
+      const taggedTask = defineTask({
+        id: "tracker.tagging.unresolved.task",
+        tags: [{ unresolved: true } as any],
+        run: async () => "ok",
+      });
+
+      tracker.recordResource("root");
+      tracker.recordOwnership("root", policyOwner);
+      tracker.recordOwnership(policyOwner.id, taggedTask);
+
+      const registry = {
+        tasks: new Map([[taggedTask.id, { task: taggedTask }]]),
+        events: new Map(),
+        hooks: new Map(),
+        taskMiddlewares: new Map(),
+        resourceMiddlewares: new Map(),
+        resources: new Map([[policyOwner.id, { resource: policyOwner }]]),
+        resolveDefinitionId,
+      };
+
+      expect(() => tracker.validateVisibility(registry as any)).not.toThrow();
+    });
+  });
+
   describe("regression branches", () => {
+    it("uses dependencies channel by default in getAccessViolation()", () => {
+      const owner = defineResource({ id: "tracker.default-channel.owner" });
+      const blocked = defineTask({
+        id: "tracker.default-channel.blocked",
+        run: async () => "blocked",
+      });
+      const consumer = defineTask({
+        id: "tracker.default-channel.consumer",
+        run: async () => "consumer",
+      });
+
+      tracker.recordResource(owner.id);
+      tracker.recordOwnership(owner.id, blocked);
+      tracker.recordOwnership(owner.id, consumer);
+      tracker.recordIsolation(owner.id, { deny: [blocked] });
+
+      const violation = tracker.getAccessViolation(blocked.id, consumer.id);
+      expect(violation).toMatchObject({
+        kind: "isolate",
+        channel: "dependencies",
+      });
+    });
+
     it("skips hooks without an `on` target during visibility validation", () => {
       const registry = {
         tasks: new Map(),
+        events: new Map(),
         hooks: new Map([
           [
             "tracker.hook.no-on",

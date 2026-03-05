@@ -1437,7 +1437,7 @@ const billing = r
 - No isolate `exports` means backward-compatible behavior: everything remains public
 - `isolate: { exports: [] }` / `isolate: { exports: "none" }` means nothing from that resource is public outside its registration subtree
 - `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
-- Visibility checks cover dependency references, hook `.on(event)` subscriptions, and middleware attachment
+- Visibility checks cover dependency references, hook `.on(event)` subscriptions, tag attachments (`.tags([...])`), and middleware attachment
 - Subtree middleware follows owner subtree boundaries; non-exported middleware still cannot cross isolate visibility
 - If a resource exports a child resource, that child's own exported surface is visible transitively
 - Validation happens at `run(app)` initialization, not at declaration time
@@ -1458,8 +1458,28 @@ const billing = r
 
 Use `.isolate({ deny: [...] })` (blocklist) or `.isolate({ only: [...] })` (boundary-scoped external allowlist) when a resource subtree must have restricted dependency access, even if visibility would otherwise allow it.
 
+**`scope(..., options)` channel options (all default to `true`):**
+
+| Option         | What it controls                                                                                                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dependencies` | Dependency wiring and runtime access through dependency surfaces (for example task dependencies, event emitters injected as dependencies, tag accessors injected as dependencies). |
+| `listening`    | Hook event subscriptions through `.on(event)` / `.on([events])` / `.on("*")` resolution.                                                                                           |
+| `tagging`      | Tag attachments via `.tags([tag])` on definitions.                                                                                                                                 |
+| `middleware`   | Middleware attachments via `.middleware([...])` and subtree middleware declarations.                                                                                               |
+
+Setting an option to `false` excludes that channel from the current `scope(...)` rule while keeping the other channels active.
+
+**Pick the target form by intent:**
+
+| Target form                           | What it matches                                              | Best for                                                                  |
+| ------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `definition`                          | Exact definition id (tags also match carriers)               | Stable in-module references                                               |
+| `scope("selector.*")`                 | Id selectors resolved at bootstrap                           | Pattern-based policies across many ids                                    |
+| `subtreeOf(resource, { types? })`     | Structural ownership subtree (optionally narrowed by `type`) | Nested/overridable ids where ownership is safer than id patterns          |
+| `scope([mixedTargets], { channels })` | One channel config applied to multiple target kinds          | Keeping one consistent rule across definitions, selectors, and subtrees   |
+
 ```typescript
-import { r } from "@bluelibs/runner";
+import { r, scope } from "@bluelibs/runner";
 
 // --- deny: block specific ids or tagged items ---
 const internalDb = r
@@ -1473,7 +1493,7 @@ const billing = r
   .register([internalDb, internalOnlyTag])
   .isolate({
     deny: [internalDb, internalOnlyTag], // block by id or definition (tags match all carriers)
-    // deny: ["billing.resources.*.test"] // string id selector (segment wildcard)
+    // deny: [scope("billing.resources.*.test")] // selector + optional channel options
   })
   .build();
 
@@ -1488,7 +1508,7 @@ const payments = r
   .register([allowedService])
   .isolate({
     only: [allowedService], // nothing else from outside is reachable
-    // only: ["payments.public.*"] // string id selector (segment wildcard)
+    // only: [scope("payments.public.*", { middleware: false })] // restrict middleware channel only
   })
   .build();
 ```
@@ -1496,15 +1516,16 @@ const payments = r
 **Semantics:**
 
 - A resource uses **either** `deny` **or** `only` — providing both (even `deny: []` alongside `only`) throws `isolateConflictError` at bootstrap.
-- `deny` / `only` accept string ids, string id selectors (`*` matches one dot-segment), definitions (tasks/resources/events/hooks/middleware/tags/errors/async contexts), or tag definitions; tags match any item carrying that tag.
-- String selectors match **definition ids only** (they do not expand tag rules to tagged carriers).
-- Tag definition entries and tag-id string entries are intentionally different:
+- `deny` / `only` accept definitions, `subtreeOf(...)`, or `scope(...)` entries.
+- Bare strings are invalid in `deny` / `only`; use `scope("id.or.selector.*", options)` for id-selector targets.
+- Tag definition entries and tag-id selector entries are intentionally different:
   - `deny: [internalOnlyTag]` / `only: [internalOnlyTag]` apply tag semantics (tag dependency itself + all definitions carrying that tag).
-  - `deny: [internalOnlyTag.id]` / `only: [internalOnlyTag.id]` are exact-id matches only (no carrier expansion).
+  - `deny: [scope(internalOnlyTag.id)]` / `only: [scope(internalOnlyTag.id)]` are exact-id matches only (no carrier expansion).
+- `scope(target, options)` applies the same channel options to every wrapped target, including combinations like `scope([paymentsApi, subtreeOf(agentResource), "system.*"], { dependencies: false })`.
 - **`only` automatically exempts internal items**: anything registered by the resource or its children is always accessible without being listed. `only: []` blocks all external dependencies while keeping internal ones reachable.
 - **`only` is checked at every ancestor boundary** for the consumer. For external dependencies, effective access behaves like the intersection of ancestor `only` lists (with the internal-subtree exemption still applied at each boundary).
 - Rules are validated at bootstrap; unknown, malformed, or unmatched wildcard selectors fail fast.
-- Enforcement scope includes dependency wiring, hook `.on(event)` subscriptions, and middleware attachments, so the same policy semantics apply when targets are events or middleware definitions.
+- Enforcement scope includes dependency wiring, hook `.on(event)` subscriptions, tag attachments (`.tags([...])`), and middleware attachments, so the same policy semantics apply when targets are events, tags, or middleware definitions.
 - **Parent and child policies compose additively**; children cannot relax parent restrictions:
   - Parent `deny: [A]` + child `deny: [B]` → neither A nor B accessible inside child.
   - Parent `only: [A]` + child `only: [A, B]` → only A accessible (parent blocks B).
@@ -1512,12 +1533,18 @@ const payments = r
   - Parent `only: [A1, A2, A3]` + child `only: [A1, A4]` + grandchild consumer -> external access collapses to `A1` only (assuming all are external to both parent and child boundaries).
 - Denied references fail during `run(app)` sanity checks with a `isolateViolationError`.
 
+**Evaluation order (mental model):**
+
+1. Visibility gate first: `isolate.exports`.
+2. Channel gate second: `deny` / `only` for the current channel.
+3. `only` external guard last: internal subtree items are always exempt.
+
 **Structural subtree filters with `subtreeOf()`:**
 
 String id selectors (`"agent.*"`) match against literal ids, which breaks when items have overridable ids or are registered by nested child resources with arbitrary names. `subtreeOf()` solves this by binding to the resource object itself — all items in its registration subtree are matched by ownership, not by id pattern.
 
 ```typescript
-import { r, subtreeOf } from "@bluelibs/runner";
+import { r, scope, subtreeOf } from "@bluelibs/runner";
 
 const agentTask = r
   .task("any.random.id")
@@ -1541,7 +1568,13 @@ const strict = r
 const selective = r
   .resource("selective.boundary")
   .register([hookConsumer])
-  .isolate({ deny: [subtreeOf(agentResource, { types: ["task"] })] })
+  .isolate({
+    deny: [
+      scope(subtreeOf(agentResource, { types: ["task"] }), {
+        listening: false,
+      }),
+    ],
+  })
   .build();
 
 // Allow only event listeners from events registered by agentResource (plus internal items)
@@ -1549,6 +1582,16 @@ const eventOnly = r
   .resource("event.only.boundary")
   .register([listenerTask])
   .isolate({ only: [subtreeOf(agentResource, { types: ["event"] })] })
+  .build();
+
+// Same channel options applied to a mixed target list
+const mixed = r
+  .resource("mixed.boundary")
+  .isolate({
+    deny: [
+      scope([subtreeOf(agentResource), "system.*"], { dependencies: false }),
+    ],
+  })
   .build();
 ```
 
@@ -2565,7 +2608,7 @@ const internalEvent = r
 // Deny privileged internal resources inside a boundary
 const secureModule = r
   .resource("app.secure")
-  .isolate({ deny: ["system.*"] })
+  .isolate({ deny: [r.scope("system.*")] })
   .build();
 // Keep tooling resources outside the isolated app boundary when they need internal access.
 ```

@@ -14,6 +14,12 @@ import {
 import { ResourceTagType } from "./tag";
 import { IResourceMeta } from "./meta";
 import type { ThrowsList } from "./error";
+import type { IsolationScope } from "../tools/scope";
+export type {
+  IsolationScope,
+  IsolationChannels,
+  IsolationChannel,
+} from "../tools/scope";
 import {
   symbolFilePath,
   symbolForkedFrom,
@@ -113,10 +119,23 @@ export interface IsolationSubtreeFilter {
   readonly types?: ReadonlyArray<ItemType>;
 }
 
+/**
+ * Valid targets for `.isolate({ deny: [...], only: [...] })`.
+ *
+ * - **RegisterableItems** — bare definitions (task, resource, event, tag, etc.).
+ *   Treated as `scope(item)` with all channels = `true`.
+ * - **IsolationSubtreeFilter** — created by `subtreeOf(resource, { types? })`.
+ *   Treated as `scope(subtreeOf(x))` with all channels = `true`.
+ * - **IsolationScope** — created by `scope(target, { channels })` for
+ *   fine‑grained per-channel control.
+ *
+ * Raw strings are **not** valid here.  Use `scope("pattern")` instead,
+ * which makes the channel options explicit.
+ */
 export type IsolationTarget =
   | RegisterableItems
-  | IsolationSelector
-  | IsolationSubtreeFilter;
+  | IsolationSubtreeFilter
+  | IsolationScope;
 export type IsolationExportsTarget = RegisterableItems | IsolationSelector;
 
 export type IsolationExportsConfig =
@@ -127,13 +146,13 @@ export interface IsolationPolicy {
   /**
    * Denied targets for this resource boundary.
    * Denials are additive across nested resources.
-   * String targets may be exact ids or wildcard selectors (`*` per dot-segment).
+   * Use `scope("pattern", { ... })` for string selectors with channel control.
    */
   deny?: ReadonlyArray<IsolationTarget>;
   /**
    * Allowed targets for this resource boundary.
    * When provided, only these targets (and internal items) can be referenced.
-   * String targets may be exact ids or wildcard selectors (`*` per dot-segment).
+   * Use `scope("pattern", { ... })` for string selectors with channel control.
    */
   only?: ReadonlyArray<IsolationTarget>;
   /**

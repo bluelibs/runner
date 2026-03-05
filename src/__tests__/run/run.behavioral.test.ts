@@ -1,4 +1,5 @@
 import { defineResource } from "../../define";
+import { r } from "../../public";
 import { run } from "../../run";
 import { ResourceInitMode, ResourceLifecycleMode } from "../../types/runner";
 import { createMessageError } from "../../errors";
@@ -250,5 +251,51 @@ describe("run behavioral scenarios", () => {
         "init.mode.parallel.fail.second",
       ]),
     );
+  });
+
+  it("should isolate AsyncContext between parallel run() calls (50 runtimes)", async () => {
+    const RUNTIME_COUNT = 50;
+
+    // Shared async context definition — same object registered in all runtimes
+    const requestContext = r
+      .asyncContext<{ runtimeId: number }>("test.parallel.ctx")
+      .build();
+
+    // Task that captures and returns the context value
+    const captureTask = r
+      .task<void>("test.parallel.capture")
+      .run(async () => {
+        const ctx = requestContext.use();
+        return ctx.runtimeId;
+      })
+      .build();
+
+    // Spin up 50 parallel runtimes
+    const runtimes = await Promise.all(
+      Array.from({ length: RUNTIME_COUNT }, (_, i) =>
+        run(
+          r
+            .resource(`test.parallel.app.${i}`)
+            .register([requestContext, captureTask])
+            .build(),
+          { shutdownHooks: false },
+        ),
+      ),
+    );
+
+    // Execute task in each runtime with its own context value
+    const results = await Promise.all(
+      runtimes.map((rt, i) =>
+        requestContext.provide({ runtimeId: i }, () => rt.runTask(captureTask)),
+      ),
+    );
+
+    // Verify each runtime saw only its own context value
+    for (let i = 0; i < RUNTIME_COUNT; i++) {
+      expect(results[i]).toBe(i);
+    }
+
+    // Cleanup
+    await Promise.all(runtimes.map((rt) => rt.dispose()));
   });
 });
