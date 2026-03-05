@@ -6,7 +6,7 @@ import { run } from "../../../../run";
 import { rpcExposure } from "../testkit/rpcExposure";
 import * as requestBody from "../../../exposure/requestBody";
 import { cancellationError, createMessageError } from "../../../../errors";
-import { globalTags } from "../../../../globals/globalTags";
+import { createRequestHandlersDeps } from "./requestHandlers.deps.test.utils";
 import {
   createReqRes,
   HeaderName,
@@ -25,7 +25,7 @@ describe("requestHandlers - event handling", () => {
 
   it("returns authorization error when authorizeEvent blocks request", async () => {
     const emitSpy = jest.fn(async () => undefined);
-    const deps: any = {
+    const deps = createRequestHandlersDeps(serializer, {
       store: {
         events: new Map([["e.authz", { event: { id: "e.authz" } }]]),
         errors: new Map(),
@@ -41,7 +41,6 @@ describe("requestHandlers - event handling", () => {
         isUnderBase: () => true,
       },
       cors: undefined,
-      serializer,
       authorizeEvent: async () => ({
         status: 401,
         body: {
@@ -49,7 +48,7 @@ describe("requestHandlers - event handling", () => {
           error: { code: "UNAUTHORIZED", message: "Unauthorized" },
         },
       }),
-    };
+    });
 
     const { handleEvent } = createRequestHandlers(deps);
     const { req, res } = createReqRes({
@@ -70,7 +69,7 @@ describe("requestHandlers - event handling", () => {
 
   it("returns not found when event id is allowed but missing from store", async () => {
     const emitSpy = jest.fn(async () => undefined);
-    const deps: any = {
+    const deps = createRequestHandlersDeps(serializer, {
       store: {
         events: new Map(),
         errors: new Map(),
@@ -86,8 +85,7 @@ describe("requestHandlers - event handling", () => {
         isUnderBase: () => true,
       },
       cors: undefined,
-      serializer,
-    };
+    });
 
     const { handleEvent } = createRequestHandlers(deps);
     const { req, res } = createReqRes({
@@ -112,7 +110,7 @@ describe("requestHandlers - event handling", () => {
         id: "tests.errors.app.ev",
         httpCode: 410,
       });
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           events: new Map([["e.app", { event: { id: "e.app" } }]]),
           errors: new Map([[AppError.id, AppError]]),
@@ -132,7 +130,6 @@ describe("requestHandlers - event handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
         policy: {
           enabled: true,
           taskIds: [],
@@ -144,7 +141,7 @@ describe("requestHandlers - event handling", () => {
           taskAsyncContextAllowList: {},
           eventAsyncContextAllowList: {},
         },
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
@@ -168,7 +165,7 @@ describe("requestHandlers - event handling", () => {
         id: "tests.errors.non-string-name.ev",
         is: (_e: unknown): _e is { name: number; data: unknown } => true,
       };
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           events: new Map([["e.app", { event: { id: "e.app" } }]]),
           errors: new Map([[helper.id, helper]]),
@@ -188,7 +185,6 @@ describe("requestHandlers - event handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
         policy: {
           enabled: true,
           taskIds: [],
@@ -200,7 +196,7 @@ describe("requestHandlers - event handling", () => {
           taskAsyncContextAllowList: {},
           eventAsyncContextAllowList: {},
         },
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
@@ -219,7 +215,7 @@ describe("requestHandlers - event handling", () => {
     });
 
     it("returns 500 with generic message when hook throws a string (displayMessage fallback)", async () => {
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           events: new Map([["e.str", { event: { id: "e.str" } }]]),
           errors: new Map(),
@@ -239,8 +235,7 @@ describe("requestHandlers - event handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
@@ -273,7 +268,7 @@ describe("requestHandlers - event handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           events: new Map([["e.ctx", { event: { id: "e.ctx" } }]]),
           errors: new Map(),
@@ -294,8 +289,7 @@ describe("requestHandlers - event handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const headers = {
@@ -329,7 +323,7 @@ describe("requestHandlers - event handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           events: new Map([["e.ctx.arr", { event: { id: "e.ctx.arr" } }]]),
           errors: new Map(),
@@ -350,8 +344,7 @@ describe("requestHandlers - event handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const headerText = serializer.stringify({
@@ -388,25 +381,10 @@ describe("requestHandlers - event handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           events: new Map([
             ["e.ctx.disabled", { event: { id: "e.ctx.disabled" } }],
-          ]),
-          resources: new Map([
-            [
-              "srv",
-              {
-                resource: { id: "srv", tags: [globalTags.rpcLanes] },
-                value: {
-                  serveTaskIds: [],
-                  serveEventIds: ["e.ctx.disabled"],
-                  eventAllowAsyncContext: {
-                    "e.ctx.disabled": false,
-                  },
-                },
-              },
-            ],
           ]),
           errors: new Map(),
           asyncContexts: new Map([[ctx.id, ctx]]),
@@ -426,7 +404,6 @@ describe("requestHandlers - event handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
         policy: {
           enabled: true,
           taskIds: [],
@@ -438,7 +415,7 @@ describe("requestHandlers - event handling", () => {
           taskAsyncContextAllowList: {},
           eventAsyncContextAllowList: {},
         },
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const headers = {
@@ -476,26 +453,11 @@ describe("requestHandlers - event handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map(),
           events: new Map([
             ["e.ctx.policy", { event: { id: "e.ctx.policy" } }],
-          ]),
-          resources: new Map([
-            [
-              "srv",
-              {
-                resource: { id: "srv", tags: [globalTags.rpcLanes] },
-                value: {
-                  serveTaskIds: [],
-                  serveEventIds: ["e.ctx.policy"],
-                  eventAllowAsyncContext: {
-                    "e.ctx.policy": false,
-                  },
-                },
-              },
-            ],
           ]),
           errors: new Map(),
           asyncContexts: new Map([[ctx.id, ctx]]),
@@ -515,7 +477,6 @@ describe("requestHandlers - event handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
         policy: {
           enabled: true,
           taskIds: [],
@@ -527,7 +488,7 @@ describe("requestHandlers - event handling", () => {
           taskAsyncContextAllowList: {},
           eventAsyncContextAllowList: {},
         },
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const headers = {
@@ -579,28 +540,10 @@ describe("requestHandlers - event handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map(),
           events: new Map([["e.ctx.rpc", { event: { id: "e.ctx.rpc" } }]]),
-          resources: new Map([
-            [
-              "rpc.lanes",
-              {
-                resource: { id: "rpc.lanes", tags: [globalTags.rpcLanes] },
-                value: {
-                  serveTaskIds: [],
-                  serveEventIds: ["e.ctx.rpc"],
-                  taskAllowAsyncContext: {},
-                  eventAllowAsyncContext: { "e.ctx.rpc": true },
-                  taskAsyncContextAllowList: {},
-                  eventAsyncContextAllowList: {
-                    "e.ctx.rpc": [allowedCtx.id],
-                  },
-                },
-              },
-            ],
-          ]),
           errors: new Map(),
           asyncContexts: new Map([
             [allowedCtx.id, allowedCtx],
@@ -623,7 +566,6 @@ describe("requestHandlers - event handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
         policy: {
           enabled: true,
           taskIds: [],
@@ -635,7 +577,7 @@ describe("requestHandlers - event handling", () => {
             "e.ctx.rpc": [allowedCtx.id],
           },
         },
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const headers = {
@@ -672,7 +614,7 @@ describe("requestHandlers - event handling", () => {
       })();
       jest.spyOn(requestBody, "readJsonBody").mockRejectedValue(cancellation);
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: { events: new Map([["e.id", { event: { id: "e.id" } }]]) },
         taskRunner: {} as any,
         eventManager: { emit: async () => {} },
@@ -685,7 +627,7 @@ describe("requestHandlers - event handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
@@ -705,7 +647,7 @@ describe("requestHandlers - event handling", () => {
     });
 
     it("handles abort via req 'aborted' signal", async () => {
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: { events: new Map([["e.id", { event: { id: "e.id" } }]]) },
         taskRunner: {} as any,
         eventManager: { emit: async () => {} },
@@ -718,7 +660,7 @@ describe("requestHandlers - event handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
@@ -741,7 +683,7 @@ describe("requestHandlers - event handling", () => {
   describe("Return Payload", () => {
     it("responds with result when returnPayload is true", async () => {
       const emitWithResult = jest.fn(async () => ({ x: 2 }));
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           events: new Map([["e.ret", { event: { id: "e.ret" } }]]),
           errors: new Map(),
@@ -758,8 +700,7 @@ describe("requestHandlers - event handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
@@ -777,7 +718,7 @@ describe("requestHandlers - event handling", () => {
     });
 
     it("returns 400 when event is parallel and returnPayload is requested", async () => {
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           events: new Map([
             ["e.par", { event: { id: "e.par", parallel: true } }],
@@ -799,8 +740,7 @@ describe("requestHandlers - event handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
@@ -866,7 +806,7 @@ describe("requestHandlers - event handling", () => {
       const {
         createRequestHandlers: createHandlersMocked,
       } = require("../../../exposure/requestHandlers");
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map(),
           events: new Map([["e", { event: { id: "e" } }]]),
@@ -887,9 +827,8 @@ describe("requestHandlers - event handling", () => {
           extract: () => ({ kind: "event", id: "e" }),
           isUnderBase: () => true,
         },
-        serializer,
         cors: undefined,
-      };
+      });
 
       const { handleRequest } = createHandlersMocked(deps);
       const { req, res } = createReqRes({

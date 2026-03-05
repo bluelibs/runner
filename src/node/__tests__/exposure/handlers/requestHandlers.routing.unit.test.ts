@@ -5,6 +5,7 @@ import { Serializer } from "../../../../serializer";
 import { defineResource, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
 import { rpcExposure } from "../testkit/rpcExposure";
+import { createRequestHandlersDeps } from "./requestHandlers.deps.test.utils";
 import {
   createReqRes,
   HeaderName,
@@ -21,20 +22,14 @@ describe("requestHandlers - routing and dispatching", () => {
 
   describe("Method and URL Routing", () => {
     it("handleTask responds 405 for non-POST", async () => {
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: { tasks: new Map([["t.id", { task: async () => 1 }]]) },
         taskRunner: { run: async () => 1 },
-        eventManager: {} as any,
-        logger: { info: () => {}, warn: () => {}, error: () => {} },
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        eventManager: {},
         router: {
-          basePath: "/api",
           extract: () => ({ kind: "task", id: "t.id" }),
-          isUnderBase: () => true,
         },
-        cors: undefined,
-      };
+      });
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: "GET",
@@ -50,20 +45,12 @@ describe("requestHandlers - routing and dispatching", () => {
     });
 
     it("handleRequest returns false for paths outside basePath", async () => {
-      const deps: any = {
-        store: { tasks: new Map(), events: new Map() },
-        taskRunner: {} as any,
-        eventManager: {} as any,
-        logger: { info: () => {}, warn: () => {}, error: () => {} },
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
+      const deps = createRequestHandlersDeps(serializer, {
         router: {
-          basePath: "/api",
           extract: () => null,
           isUnderBase: () => false,
         },
-        cors: undefined,
-      };
+      });
       const { handleRequest } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Get,
@@ -74,20 +61,12 @@ describe("requestHandlers - routing and dispatching", () => {
     });
 
     it("handleRequest returns true and 404 JSON when under base but no target", async () => {
-      const deps: any = {
-        store: { tasks: new Map(), events: new Map() },
-        taskRunner: {} as any,
-        eventManager: {} as any,
-        logger: { info: () => {}, warn: () => {}, error: () => {} },
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
+      const deps = createRequestHandlersDeps(serializer, {
         router: {
-          basePath: "/api",
           extract: () => null,
           isUnderBase: () => true,
         },
-        cors: undefined,
-      };
+      });
       const { handleRequest } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Get,
@@ -103,25 +82,12 @@ describe("requestHandlers - routing and dispatching", () => {
     });
 
     it("handleRequest returns true for unknown extracted target kinds without dispatch", async () => {
-      const deps: any = {
-        store: {
-          tasks: new Map(),
-          events: new Map(),
-          asyncContexts: new Map(),
-        },
-        taskRunner: {} as any,
-        eventManager: {} as any,
-        logger: { info: () => {}, warn: () => {}, error: () => {} },
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
+      const deps = createRequestHandlersDeps(serializer, {
         router: {
-          basePath: "/api",
           extract: () => ({ kind: "other", id: "x" }),
           isUnderBase: () => true,
         },
-        cors: undefined,
-        serializer,
-      };
+      });
       const { handleRequest } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
@@ -132,7 +98,7 @@ describe("requestHandlers - routing and dispatching", () => {
     });
 
     it("returns 404 when task id missing from store", async () => {
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map(),
           events: new Map(),
@@ -146,16 +112,10 @@ describe("requestHandlers - routing and dispatching", () => {
           warn: async () => {},
           error: async () => {},
         },
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
-          basePath: "/api",
           extract: () => ({ kind: "task", id: "missing" }),
-          isUnderBase: () => true,
         },
-        cors: undefined,
-        serializer,
-      };
+      });
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
@@ -178,20 +138,14 @@ describe("requestHandlers - routing and dispatching", () => {
         asyncContexts: new Map(),
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store,
         taskRunner: { run: async () => 1 },
         eventManager: { emit: async () => {} },
         logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
-          basePath: "/api",
           extract: () => ({ kind: "discovery" }),
-          isUnderBase: () => true,
         },
-        cors: undefined,
-        serializer,
         policy: {
           enabled: true,
           taskIds: ["task.a"],
@@ -201,7 +155,7 @@ describe("requestHandlers - routing and dispatching", () => {
           taskAsyncContextAllowList: {},
           eventAsyncContextAllowList: {},
         },
-      };
+      });
       const { handleDiscovery } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Get,
@@ -220,12 +174,7 @@ describe("requestHandlers - routing and dispatching", () => {
 
   describe("Authentication and Authorization", () => {
     it("returns auth error when authenticator fails", async () => {
-      const deps: any = {
-        store: {
-          tasks: new Map(),
-          events: new Map(),
-          asyncContexts: new Map(),
-        },
+      const deps = createRequestHandlersDeps(serializer, {
         taskRunner: { run: async () => 1 },
         eventManager: { emit: async () => {} },
         logger: {
@@ -240,15 +189,10 @@ describe("requestHandlers - routing and dispatching", () => {
             body: { ok: false, error: { code: "UNAUTHORIZED" } },
           },
         }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
-          basePath: "/api",
           extract: () => ({ kind: "task", id: "t.id" }),
-          isUnderBase: () => true,
         },
-        cors: undefined,
-        serializer,
-      };
+      });
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
@@ -282,7 +226,7 @@ describe("requestHandlers - routing and dispatching", () => {
         asyncContexts: new Map(),
       };
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store,
         taskRunner: { run: async () => 1 },
         eventManager: { emit: async () => {} },
@@ -291,17 +235,12 @@ describe("requestHandlers - routing and dispatching", () => {
           warn: async () => {},
           error: async () => {},
         },
-        authenticator: async () => ({ ok: true }),
         allowList: createAllowListGuard(policy),
         router: {
-          basePath: "/api",
           extract: () => ({ kind: "task", id: "blocked.task" }),
-          isUnderBase: () => true,
         },
-        cors: undefined,
-        serializer,
         policy,
-      };
+      });
 
       const { handleTask, handleEvent } = createRequestHandlers(deps);
 
@@ -353,22 +292,18 @@ describe("requestHandlers - routing and dispatching", () => {
           ),
         ),
       };
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store,
         taskRunner: { run: async () => 1 },
         eventManager: { emit: async () => {} },
         logger: { info: () => {}, warn: () => {}, error: () => {} },
-        authenticator: async () => ({ ok: true }),
         allowList: createAllowListGuard(policy),
         router: {
-          basePath: "/api",
           extract: () => ({ kind: "event", id: "blocked.event" }),
-          isUnderBase: () => true,
         },
-        cors: undefined,
         serializer: customSerializer,
         policy,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
@@ -399,7 +334,7 @@ describe("requestHandlers - routing and dispatching", () => {
         asyncContexts: new Map(),
         resources: new Map(),
       };
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store,
         taskRunner: { run: async () => 1 },
         eventManager: { emit: async () => {} },
@@ -408,17 +343,12 @@ describe("requestHandlers - routing and dispatching", () => {
           warn: async () => {},
           error: async () => {},
         },
-        authenticator: async () => ({ ok: true }),
         allowList: createAllowListGuard(policy),
         router: {
-          basePath: "/api",
           extract: () => ({ kind: "task", id: "t" }),
-          isUnderBase: () => true,
         },
-        cors: undefined,
-        serializer,
         policy,
-      };
+      });
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,

@@ -305,6 +305,18 @@ export const rpcLanesExposureModeError = error<
   )
   .build();
 
+export const rpcLanesExposureOwnerInvalidError = error<
+  { ownerResourceId: string } & DefaultErrorType
+>(RunnerErrorId.RpcLaneExposureOwnerInvalid)
+  .format(
+    ({ ownerResourceId }) =>
+      `RPC HTTP exposure can only be owned by "platform.node.resources.rpcLanes". Received owner "${ownerResourceId}".`,
+  )
+  .remediation(
+    "Start RPC HTTP exposure only through rpcLanesResource.with({ exposure: { http: ... } }) in network mode.",
+  )
+  .build();
+
 export const remoteLaneAuthSignerMissingError = error<
   { laneId: string; mode: string } & DefaultErrorType
 >("runner.errors.remoteLanes.auth.signerMissing")

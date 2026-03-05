@@ -3,7 +3,7 @@ import { defineError } from "../../../../definers/defineError";
 import { Serializer } from "../../../../serializer";
 import * as requestBody from "../../../exposure/requestBody";
 import { cancellationError } from "../../../../errors";
-import { globalTags } from "../../../../globals/globalTags";
+import { createRequestHandlersDeps } from "./requestHandlers.deps.test.utils";
 import {
   createReqRes,
   HeaderName,
@@ -21,7 +21,7 @@ describe("requestHandlers - task handling", () => {
 
   it("returns authorizeTask response before task execution", async () => {
     const runSpy = jest.fn(async () => "ok");
-    const deps: any = {
+    const deps = createRequestHandlersDeps(serializer, {
       store: {
         tasks: new Map([["t.authz", { task: { id: "t.authz" } }]]),
         errors: new Map(),
@@ -29,17 +29,10 @@ describe("requestHandlers - task handling", () => {
       taskRunner: {
         run: runSpy,
       },
-      eventManager: {} as any,
-      logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: async () => ({ ok: true }),
-      allowList: { ensureTask: () => null, ensureEvent: () => null },
+      eventManager: {},
       router: {
-        basePath: "/api",
         extract: () => ({ kind: "task", id: "t.authz" }),
-        isUnderBase: () => true,
       },
-      cors: undefined,
-      serializer,
       authorizeTask: async () => ({
         status: 401,
         body: {
@@ -47,7 +40,7 @@ describe("requestHandlers - task handling", () => {
           error: { code: "UNAUTHORIZED", message: "Unauthorized" },
         },
       }),
-    };
+    });
 
     const { handleTask } = createRequestHandlers(deps);
     const { req, res } = createReqRes({
@@ -71,7 +64,7 @@ describe("requestHandlers - task handling", () => {
         id: "tests.errors.app",
         httpCode: 409,
       });
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map([["t.app", { task: { id: "t.app" } }]]),
           errors: new Map([[AppError.id, AppError]]),
@@ -79,17 +72,10 @@ describe("requestHandlers - task handling", () => {
         taskRunner: {
           run: async () => AppError.throw({ code: 7, message: "Nope" }),
         },
-        eventManager: {} as any,
-        logger: { info: () => {}, warn: () => {}, error: () => {} },
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        eventManager: {},
         router: {
-          basePath: "/api",
           extract: (_p: string) => ({ kind: "task", id: "t.app" }),
-          isUnderBase: () => true,
         },
-        cors: undefined,
-        serializer,
         policy: {
           enabled: true,
           taskIds: ["t.ctx.disabled"],
@@ -101,7 +87,7 @@ describe("requestHandlers - task handling", () => {
           taskAsyncContextAllowList: {},
           eventAsyncContextAllowList: {},
         },
-      };
+      });
 
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
@@ -125,7 +111,7 @@ describe("requestHandlers - task handling", () => {
         id: "tests.errors.non-string-name",
         is: (_e: unknown): _e is { name: number; data: unknown } => true,
       };
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map([["t.app", { task: { id: "t.app" } }]]),
           errors: new Map([[helper.id, helper]]),
@@ -135,17 +121,10 @@ describe("requestHandlers - task handling", () => {
             throw { name: 123, data: { reason: "x" } };
           },
         },
-        eventManager: {} as any,
-        logger: { info: () => {}, warn: () => {}, error: () => {} },
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        eventManager: {},
         router: {
-          basePath: "/api",
           extract: (_p: string) => ({ kind: "task", id: "t.app" }),
-          isUnderBase: () => true,
         },
-        cors: undefined,
-        serializer,
         policy: {
           enabled: true,
           taskIds: ["t.ctx.policy"],
@@ -157,7 +136,7 @@ describe("requestHandlers - task handling", () => {
           taskAsyncContextAllowList: {},
           eventAsyncContextAllowList: {},
         },
-      };
+      });
 
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
@@ -191,7 +170,7 @@ describe("requestHandlers - task handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map([["t.ctx", { task: { id: "t.ctx" } }]]),
           errors: new Map(),
@@ -213,8 +192,7 @@ describe("requestHandlers - task handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+      });
 
       const { handleTask } = createRequestHandlers(deps);
       const headers = {
@@ -252,7 +230,7 @@ describe("requestHandlers - task handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map([["t.ctx.arr", { task: { id: "t.ctx.arr" } }]]),
           errors: new Map(),
@@ -274,8 +252,7 @@ describe("requestHandlers - task handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+      });
       const { handleTask } = createRequestHandlers(deps);
       const headerText = serializer.stringify({
         [ctx.id]: ctx.serialize({ v: 2 }),
@@ -315,25 +292,10 @@ describe("requestHandlers - task handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map([
             ["t.ctx.disabled", { task: { id: "t.ctx.disabled" } }],
-          ]),
-          resources: new Map([
-            [
-              "srv",
-              {
-                resource: { id: "srv", tags: [globalTags.rpcLanes] },
-                value: {
-                  serveTaskIds: ["t.ctx.disabled"],
-                  serveEventIds: [],
-                  taskAllowAsyncContext: {
-                    "t.ctx.disabled": false,
-                  },
-                },
-              },
-            ],
           ]),
           errors: new Map(),
           asyncContexts: new Map([[ctx.id, ctx]]),
@@ -354,7 +316,6 @@ describe("requestHandlers - task handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
         policy: {
           enabled: true,
           taskIds: ["t.ctx.disabled"],
@@ -366,7 +327,7 @@ describe("requestHandlers - task handling", () => {
           taskAsyncContextAllowList: {},
           eventAsyncContextAllowList: {},
         },
-      };
+      });
 
       const { handleTask } = createRequestHandlers(deps);
       const headers = {
@@ -408,25 +369,10 @@ describe("requestHandlers - task handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map([["t.ctx.policy", { task: { id: "t.ctx.policy" } }]]),
           events: new Map(),
-          resources: new Map([
-            [
-              "srv",
-              {
-                resource: { id: "srv", tags: [globalTags.rpcLanes] },
-                value: {
-                  serveTaskIds: ["t.ctx.policy"],
-                  serveEventIds: [],
-                  taskAllowAsyncContext: {
-                    "t.ctx.policy": false,
-                  },
-                },
-              },
-            ],
-          ]),
           errors: new Map(),
           asyncContexts: new Map([[ctx.id, ctx]]),
         },
@@ -446,7 +392,6 @@ describe("requestHandlers - task handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
         policy: {
           enabled: true,
           taskIds: ["t.ctx.policy"],
@@ -458,7 +403,7 @@ describe("requestHandlers - task handling", () => {
           taskAsyncContextAllowList: {},
           eventAsyncContextAllowList: {},
         },
-      };
+      });
 
       const { handleTask } = createRequestHandlers(deps);
       const headers = {
@@ -510,28 +455,10 @@ describe("requestHandlers - task handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map([["t.ctx.rpc", { task: { id: "t.ctx.rpc" } }]]),
           events: new Map(),
-          resources: new Map([
-            [
-              "rpc.lanes",
-              {
-                resource: { id: "rpc.lanes", tags: [globalTags.rpcLanes] },
-                value: {
-                  serveTaskIds: ["t.ctx.rpc"],
-                  serveEventIds: [],
-                  taskAllowAsyncContext: { "t.ctx.rpc": true },
-                  eventAllowAsyncContext: {},
-                  taskAsyncContextAllowList: {
-                    "t.ctx.rpc": [allowedCtx.id],
-                  },
-                  eventAsyncContextAllowList: {},
-                },
-              },
-            ],
-          ]),
           errors: new Map(),
           asyncContexts: new Map([
             [allowedCtx.id, allowedCtx],
@@ -555,7 +482,6 @@ describe("requestHandlers - task handling", () => {
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
         policy: {
           enabled: true,
           taskIds: ["t.ctx.rpc"],
@@ -567,7 +493,7 @@ describe("requestHandlers - task handling", () => {
           },
           eventAsyncContextAllowList: {},
         },
-      };
+      });
 
       const { handleTask } = createRequestHandlers(deps);
       const headers = {
@@ -604,20 +530,15 @@ describe("requestHandlers - task handling", () => {
       })();
       jest.spyOn(requestBody, "readJsonBody").mockRejectedValue(cancellation);
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: { tasks: new Map([["t.id", { task: { id: "t.id" } }]]) },
         taskRunner: { run: async () => {} },
         eventManager: { emit: async () => {} },
-        logger: { info: () => {}, warn: () => {}, error: () => {} },
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
-          basePath: "/api",
           extract: (_p: string) => ({ kind: "task", id: "t.id" }),
-          isUnderBase: () => true,
         },
         cors: undefined,
-      };
+      });
 
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({

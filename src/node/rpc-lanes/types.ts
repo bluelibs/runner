@@ -3,9 +3,12 @@ import type {
   IRpcLanesTopology,
   IRpcLaneTopologyProfile,
 } from "../../defs";
-import type { NodeExposureHttpConfig } from "../exposure/resourceTypes";
-import type { NodeExposureHandlers } from "../exposure/resourceTypes";
+import type {
+  NodeExposureHandlers,
+  NodeExposureHttpConfig,
+} from "../exposure/resourceTypes";
 import type { RemoteLanesMode } from "../remote-lanes/mode";
+import type { ExposureRequestContextValue } from "../exposure/requestContext";
 
 export type RpcLanesTopology = IRpcLanesTopology;
 
@@ -43,3 +46,5 @@ export interface RpcLanesResourceValue {
     getHandlers?: () => NodeExposureHandlers | null;
   } | null;
 }
+
+export type RpcLaneRequestContextValue = ExposureRequestContextValue;

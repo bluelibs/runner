@@ -151,7 +151,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - **Auth**: Required.
 - **Allow-List**: Checked against server exposure policies (`rpcLanesResource` serve topology).
 - **Body Modes**: See [Request Modes](#request-modes).
-- **Context**: Task receives `useExposureContext()` (Node-only: `{ req, res, url, headers, method, signal }`).
+- **Context**: Task receives `useRpcLaneRequestContext()` (Node-only: `{ req, res, url, headers, method, signal }`).
 - **Response**:
   - Success: 200 + JSON envelope or stream (see [Response Modes](#response-modes)).
   - Errors: 4xx/5xx + JSON envelope.
@@ -165,7 +165,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - **Response**:
   - default: 200 + `{ ok: true }` (fire-and-forget behavior)
   - if `returnPayload: true`: 200 + `{ ok: true, result: <payload> }` (RPC-style event result; not supported when the event is marked `parallel`).
-- **No Context**: Events don't provide `useExposureContext()`.
+- **No Context**: Events don't provide `useRpcLaneRequestContext()`.
 
 ### Discovery (`GET|POST /discovery`)
 
@@ -226,7 +226,7 @@ Server routes by `Content-Type`.
 - **When**: Input is raw `Readable` (Node duplex, client-detected).
 - **Content-Type**: `application/octet-stream`
 - **Body**: Raw binary (piped stream).
-- **Handling**: No parsing; request body is not pre-consumed and the task accesses bytes via `useExposureContext().req` (IncomingMessage stream).
+- **Handling**: No parsing; request body is not pre-consumed and the task accesses bytes via `useRpcLaneRequestContext().req` (IncomingMessage stream).
 - **Async context**: `x-runner-context` still applies (it is a header, independent of body mode).
 - **Limitations**: Node-only; no JSON input (wrap in File sentinel + multipart if needed).
 
@@ -246,7 +246,7 @@ Server routes by `Content-Type`.
 ### Abort and Timeouts
 
 - **Client**: Set `timeoutMs` → `AbortController` (signal aborts request).
-- **Server**: Wires signal to task (`useExposureContext().signal`); aborts streams.
+- **Server**: Wires signal to task (`useRpcLaneRequestContext().signal`); aborts streams.
 - **Response**: 499/REQUEST_ABORTED on abort.
 - **Hook**: Tasks check `signal.aborted` or listen for "abort".
 
@@ -319,7 +319,7 @@ Response: `{"ok": true}`
 
 - [AI.md](./AI.md): High-level fluent API.
 - [REMOTE_LANES.md](REMOTE_LANES.md): Usage, examples, troubleshooting.
-- Code: `src/node/exposure/` (server), `src/node/http/http-smart-client.model.ts` (clients).
+- Code: `src/node/rpc-lanes/rpcLanes.exposure.ts` and `src/node/exposure/` (server), `src/node/http/http-smart-client.model.ts` (clients).
 - Standards: HTTP/1.1 (RFC 7230), Multipart (RFC 7578), JSON.
 
 ---

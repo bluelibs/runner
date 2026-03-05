@@ -54,7 +54,6 @@ export async function createNodeExposure(
   const allowList = createAllowListGuard(
     options?.policy ?? EMPTY_NODE_EXPOSURE_POLICY,
     httpConfig?.auth?.allowAnonymous === true,
-    logger,
   );
 
   // Discover auth validator tasks

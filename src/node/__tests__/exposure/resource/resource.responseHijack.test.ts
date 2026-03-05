@@ -2,7 +2,7 @@ import { Readable } from "stream";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { defineTask } from "../../../../definers/defineTask";
-import { useExposureContext } from "../../../index";
+import { useRpcLaneRequestContext } from "../../../index";
 import { rpcExposure } from "../testkit/rpcExposure";
 
 describe("nodeExposure response hijack (duplex)", () => {
@@ -10,7 +10,7 @@ describe("nodeExposure response hijack (duplex)", () => {
     const duplexTask = defineTask<void, Promise<string>>({
       id: "ctx.raw.duplex",
       run: async () => {
-        const { req, res } = useExposureContext();
+        const { req, res } = useRpcLaneRequestContext();
 
         // Prepare a streaming/plain response
         res.statusCode = 200;

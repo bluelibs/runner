@@ -16,6 +16,7 @@ export enum RunnerErrorId {
   RpcLaneBindingNotFound = "runner.errors.rpcLane.bindingNotFound",
   RpcLaneCommunicatorResourceInvalid = "runner.errors.rpcLane.communicatorResourceInvalid",
   RpcLaneOwnershipConflict = "runner.errors.rpcLane.ownershipConflict",
+  RpcLaneExposureOwnerInvalid = "runner.errors.rpcLane.exposureOwnerInvalid",
   ResourceForkInvalidId = "runner.errors.resourceFork.invalidId",
   BuilderInvalidHttpCode = "runner.errors.builder.invalidHttpCode",
   OverrideUnsupportedBase = "runner.errors.override.unsupportedBase",

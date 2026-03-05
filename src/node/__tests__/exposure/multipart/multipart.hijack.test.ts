@@ -2,7 +2,7 @@ import { Readable } from "stream";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { defineTask } from "../../../../definers/defineTask";
-import { useExposureContext } from "../../../index";
+import { useRpcLaneRequestContext } from "../../../index";
 import { rpcExposure } from "../testkit/rpcExposure";
 
 describe("nodeExposure multipart hijack", () => {
@@ -10,7 +10,7 @@ describe("nodeExposure multipart hijack", () => {
     const t = defineTask<{ any?: string }, Promise<string>>({
       id: "multipart.hijack",
       run: async () => {
-        const { res } = useExposureContext();
+        const { res } = useRpcLaneRequestContext();
         res.statusCode = 200;
         res.setHeader("content-type", "text/plain");
         res.write("X");

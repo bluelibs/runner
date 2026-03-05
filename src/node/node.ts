@@ -5,12 +5,6 @@ import { registerRpcLaneHttpPresetsForNode } from "./rpc-lanes/registerRpcLaneHt
 registerRpcLaneHttpPresetsForNode();
 
 export * from "../public";
-
-export {
-  hasExposureContext,
-  useExposureContext,
-} from "./exposure/requestContext";
-export type * from "./exposure/resourceTypes";
 export { createNodeFile, NodeInputFile } from "./files";
 export type { NodeReadable } from "./files";
 export { readInputFileToBuffer, writeInputFileToPath } from "./files";

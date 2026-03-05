@@ -110,27 +110,10 @@ export function createRequestHandlers(
     ensureRequestId(req, res);
   };
 
-  const resolveTaskAllowAsyncContext = (taskId: string): boolean => {
-    const decision = policy.taskAllowAsyncContext[taskId];
-    return decision ?? true;
-  };
-
-  const resolveTaskAsyncContextAllowList = (
-    taskId: string,
-  ): readonly string[] | undefined => {
-    return policy.taskAsyncContextAllowList[taskId];
-  };
-
-  const resolveEventAllowAsyncContext = (eventId: string): boolean => {
-    const decision = policy.eventAllowAsyncContext[eventId];
-    return decision ?? true;
-  };
-
-  const resolveEventAsyncContextAllowList = (
-    eventId: string,
-  ): readonly string[] | undefined => {
-    return policy.eventAsyncContextAllowList[eventId];
-  };
+  const resolveAllowAsyncContext = (
+    id: string,
+    decisions: Readonly<Record<string, boolean>>,
+  ): boolean => decisions[id] ?? true;
 
   const processTaskRequest = createTaskHandler({
     store,
@@ -142,8 +125,10 @@ export function createRequestHandlers(
     cors,
     serializer,
     limits,
-    allowAsyncContext: resolveTaskAllowAsyncContext,
-    resolveAsyncContextAllowList: resolveTaskAsyncContextAllowList,
+    allowAsyncContext: (taskId) =>
+      resolveAllowAsyncContext(taskId, policy.taskAllowAsyncContext),
+    resolveAsyncContextAllowList: (taskId) =>
+      policy.taskAsyncContextAllowList[taskId],
     authorizeTask: deps.authorizeTask,
     sourceResourceId: deps.sourceResourceId,
   });
@@ -157,8 +142,10 @@ export function createRequestHandlers(
     cors,
     serializer,
     limits,
-    allowAsyncContext: resolveEventAllowAsyncContext,
-    resolveAsyncContextAllowList: resolveEventAsyncContextAllowList,
+    allowAsyncContext: (eventId) =>
+      resolveAllowAsyncContext(eventId, policy.eventAllowAsyncContext),
+    resolveAsyncContextAllowList: (eventId) =>
+      policy.eventAsyncContextAllowList[eventId],
     authorizeEvent: deps.authorizeEvent,
     sourceResourceId: deps.sourceResourceId,
   });
