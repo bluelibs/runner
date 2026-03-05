@@ -455,7 +455,14 @@ export class Store {
     this.markDisposed();
   }
 
-  private async cooldownWave(wave: DisposeWave): Promise<Error[]> {
+  /**
+   * Executes a lifecycle wave (cooldown or dispose) on all resources in the wave,
+   * honoring the parallel flag. Returns any errors encountered without throwing.
+   */
+  private async executeWave(
+    wave: DisposeWave,
+    action: (resource: ResourceStoreElementType) => Promise<void>,
+  ): Promise<Error[]> {
     const normalizeError = (error: unknown): Error =>
       error instanceof Error ? error : new Error(String(error));
     const collectWaveErrors = (
@@ -470,7 +477,7 @@ export class Store {
 
     if (wave.parallel) {
       const results = await Promise.allSettled(
-        wave.resources.map((resource) => this.cooldownResource(resource)),
+        wave.resources.map((resource) => action(resource)),
       );
       return collectWaveErrors(results);
     }
@@ -478,7 +485,7 @@ export class Store {
     const errors: Error[] = [];
     for (const resource of wave.resources) {
       try {
-        await this.cooldownResource(resource);
+        await action(resource);
       } catch (error) {
         errors.push(normalizeError(error));
       }
@@ -486,35 +493,12 @@ export class Store {
     return errors;
   }
 
+  private async cooldownWave(wave: DisposeWave): Promise<Error[]> {
+    return this.executeWave(wave, (r) => this.cooldownResource(r));
+  }
+
   private async disposeWave(wave: DisposeWave): Promise<Error[]> {
-    const normalizeError = (error: unknown): Error =>
-      error instanceof Error ? error : new Error(String(error));
-    const collectWaveErrors = (
-      results: readonly PromiseSettledResult<void>[],
-    ): Error[] =>
-      results
-        .filter(
-          (result): result is PromiseRejectedResult =>
-            result.status === "rejected",
-        )
-        .map((result) => normalizeError(result.reason));
-
-    if (wave.parallel) {
-      const results = await Promise.allSettled(
-        wave.resources.map((resource) => this.disposeResource(resource)),
-      );
-      return collectWaveErrors(results);
-    }
-
-    const errors: Error[] = [];
-    for (const resource of wave.resources) {
-      try {
-        await this.disposeResource(resource);
-      } catch (error) {
-        errors.push(normalizeError(error));
-      }
-    }
-    return errors;
+    return this.executeWave(wave, (r) => this.disposeResource(r));
   }
 
   private async disposeResource(

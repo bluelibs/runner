@@ -2,6 +2,7 @@ import { r } from "../..";
 import {
   mergeArray,
   mergeDepsNoConfig,
+  mergeDepsWithConfig,
   cloneState,
 } from "../../definers/builders/utils";
 import { mergeArray as mergeErrorBuilderArray } from "../../definers/builders/error/utils";
@@ -59,6 +60,46 @@ describe("definers builders utils", () => {
 
     const overridden = mergeDepsNoConfig(eObj, aObj, true);
     expect(overridden).toEqual({ b });
+  });
+
+  it("mergeDepsWithConfig merges objects and/or config-aware functions", () => {
+    const a = r
+      .task("tests.depwc.a")
+      .run(async () => "a")
+      .build();
+    const b = r
+      .task("tests.depwc.b")
+      .run(async () => "b")
+      .build();
+
+    type Cfg = { prefix: string };
+    const eObj = { a };
+    const aObj = { b };
+    expect(
+      mergeDepsWithConfig<Cfg, typeof eObj, typeof aObj>(eObj, aObj, false),
+    ).toEqual({ a, b });
+
+    const eFn = (_c: Cfg) => ({ a });
+    const aFn = (_c: Cfg) => ({ b });
+    const mergedFnFn = mergeDepsWithConfig(eFn, aFn, false) as (c: Cfg) => {
+      a: typeof a;
+      b: typeof b;
+    };
+    expect(mergedFnFn({ prefix: "ab" })).toEqual({ a, b });
+
+    const mergedFnObj = mergeDepsWithConfig(eFn, aObj, false) as (c: Cfg) => {
+      a: typeof a;
+      b: typeof b;
+    };
+    expect(mergedFnObj({ prefix: "ab" })).toEqual({ a, b });
+
+    const mergedObjFn = mergeDepsWithConfig(eObj, aFn, false) as (c: Cfg) => {
+      a: typeof a;
+      b: typeof b;
+    };
+    expect(mergedObjFn({ prefix: "ab" })).toEqual({ a, b });
+
+    expect(mergeDepsWithConfig(eObj, aObj, true)).toEqual({ b });
   });
 });
 

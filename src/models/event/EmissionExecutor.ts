@@ -10,6 +10,7 @@ import {
   transactionalRollbackFailureError,
 } from "../../errors";
 import { normalizeError } from "../../tools/normalizeError";
+import { isObjectRecord } from "../../tools/typeChecks";
 import { IListenerStorage } from "./types";
 
 interface ExecuteOptions {
@@ -17,10 +18,6 @@ interface ExecuteOptions {
   event: IEventEmission<any>;
   isPropagationStopped?: () => boolean;
   failureMode: EventEmissionFailureMode;
-}
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object";
 }
 
 function toListenerError(

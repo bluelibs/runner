@@ -16,6 +16,11 @@ import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
+import {
+  isClassConstructor,
+  hasParseFunction,
+  isObjectRecord,
+} from "../tools/typeChecks";
 import type {
   IValidationSchema,
   ValidationSchemaInput,
@@ -51,31 +56,6 @@ export const matchesRunnerErrorData = <
   }
 
   return true;
-};
-
-const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object";
-
-const isClassConstructor = (
-  value: unknown,
-): value is abstract new (...args: never[]) => unknown => {
-  if (typeof value !== "function") return false;
-
-  const prototype = (value as { prototype?: unknown }).prototype;
-  if (!prototype || typeof prototype !== "object") return false;
-
-  return (prototype as { constructor?: unknown }).constructor === value;
-};
-
-const hasParseFunction = <T>(value: unknown): value is IValidationSchema<T> => {
-  if (
-    (typeof value !== "object" && typeof value !== "function") ||
-    value === null
-  ) {
-    return false;
-  }
-
-  return typeof (value as { parse?: unknown }).parse === "function";
 };
 
 const normalizeErrorDataSchema = <TData extends DefaultErrorType>(

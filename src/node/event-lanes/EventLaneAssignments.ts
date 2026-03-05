@@ -1,4 +1,4 @@
-import type { IEventLaneDefinition, IRpcLanesTopology } from "../../defs";
+import type { IEventLaneDefinition } from "../../defs";
 import {
   eventLaneApplyToInvalidTargetError,
   eventLaneApplyToTargetNotFoundError,
@@ -9,6 +9,11 @@ import {
 import { globalTags } from "../../globals/globalTags";
 import type { Store } from "../../models/Store";
 import { collectRpcTopologyLanes } from "../remote-lanes/topologyLanes";
+import {
+  readTargetId,
+  isRegisteredDefinitionId,
+  collectCrossLaneApplyToEventIds,
+} from "../remote-lanes/laneAssignmentUtils";
 
 const RPC_LANES_RESOURCE_ID = "platform.node.resources.rpcLanes";
 
@@ -135,7 +140,11 @@ function resolveEventLaneTarget(
   laneId: string,
   store: Store,
 ): string {
-  const targetId = readTargetId(target, laneId);
+  const targetId = readTargetId(
+    target,
+    laneId,
+    eventLaneApplyToInvalidTargetError,
+  );
   if (store.events.has(targetId)) {
     return targetId;
   }
@@ -153,93 +162,12 @@ function resolveEventLaneTarget(
   });
 }
 
-function readTargetId(target: unknown, laneId: string): string {
-  if (typeof target === "string" && target.length > 0) {
-    return target;
-  }
-
-  if (
-    target &&
-    typeof target === "object" &&
-    typeof (target as { id?: unknown }).id === "string" &&
-    (target as { id: string }).id.length > 0
-  ) {
-    return (target as { id: string }).id;
-  }
-
-  return eventLaneApplyToInvalidTargetError.throw({
-    laneId,
-  });
-}
-
-function isRegisteredDefinitionId(store: Store, id: string): boolean {
-  const collections = [
-    store.tasks,
-    store.resources,
-    store.hooks,
-    store.taskMiddlewares,
-    store.resourceMiddlewares,
-    store.errors,
-    store.tags,
-    store.asyncContexts,
-  ];
-
-  for (const collection of collections) {
-    if (collection.has(id)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function collectRpcLaneApplyToEventIds(store: Store): Set<string> {
-  const eventIds = new Set<string>();
-  const rpcLanesEntry = store.resources.get(RPC_LANES_RESOURCE_ID);
-  const topology = (rpcLanesEntry?.config as { topology?: IRpcLanesTopology })
-    ?.topology;
-  if (!topology) {
-    return eventIds;
-  }
-
-  const lanes = collectRpcTopologyLanes(topology);
-  for (const lane of lanes) {
-    const applyTo = lane.applyTo;
-    if (applyTo === undefined) continue;
-
-    if (typeof applyTo === "function") {
-      for (const eventEntry of store.events.values()) {
-        if (applyTo(eventEntry.event)) {
-          eventIds.add(eventEntry.event.id);
-        }
-      }
-      continue;
-    }
-
-    if (!Array.isArray(applyTo)) continue;
-    for (const target of applyTo) {
-      const targetId = extractTargetId(target);
-      if (typeof targetId === "string" && store.events.has(targetId)) {
-        eventIds.add(targetId);
-      }
-    }
-  }
-
-  return eventIds;
-}
-
-function extractTargetId(target: unknown): string | undefined {
-  if (typeof target === "string") {
-    return target;
-  }
-
-  if (
-    target &&
-    typeof target === "object" &&
-    typeof (target as { id?: unknown }).id === "string"
-  ) {
-    return (target as { id: string }).id;
-  }
-
-  return undefined;
+  return collectCrossLaneApplyToEventIds(
+    store,
+    RPC_LANES_RESOURCE_ID,
+    collectRpcTopologyLanes as (
+      topology: unknown,
+    ) => readonly { applyTo?: unknown }[],
+  );
 }

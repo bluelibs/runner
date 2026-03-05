@@ -1,5 +1,8 @@
 import { CheckJsonSchemaPatternError } from "./errors";
+import { isPlainObject } from "../typeChecks";
 import type { MatchJsonSchema } from "./types";
+
+export { isPlainObject };
 
 export type CompileContext = {
   activePatterns: WeakSet<object>;
@@ -11,14 +14,6 @@ export type CompileContext = {
 };
 
 export type CompileMode = "default" | "object-property";
-
-export function isPlainObject(
-  value: unknown,
-): value is Record<string, unknown> {
-  if (value === null || typeof value !== "object") return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
 
 function isIdentifier(value: string): boolean {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value);

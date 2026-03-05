@@ -179,4 +179,25 @@ describe("event-lanes: MemoryEventLaneQueue", () => {
     await new Promise((resolve) => setTimeout(resolve, 25));
     expect(attempts).toEqual([1]);
   });
+
+  it("drops message permanently when nacked with requeue=false", async () => {
+    const queue = new MemoryEventLaneQueue();
+    const attempts: number[] = [];
+
+    await queue.enqueue({
+      laneId: "lane.nack-drop",
+      eventId: "event.nack-drop",
+      payload: "{}",
+      source: { kind: "runtime", id: "tests" },
+      maxAttempts: 5,
+    });
+
+    await queue.consume(async (message) => {
+      attempts.push(message.attempts);
+      await queue.nack(message.id, false);
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(attempts).toEqual([1]);
+  });
 });

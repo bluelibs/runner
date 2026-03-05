@@ -1,10 +1,7 @@
+import { isPlainObject } from "./typeChecks";
+
 const isObjectLike = (value: unknown): value is object | Function =>
   (typeof value === "object" && value !== null) || typeof value === "function";
-
-const isPlainObject = (value: object): value is Record<string, unknown> => {
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-};
 
 const shouldFreezeRecursively = (value: object | Function): boolean =>
   typeof value === "function" || Array.isArray(value) || isPlainObject(value);

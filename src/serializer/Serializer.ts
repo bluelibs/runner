@@ -43,12 +43,11 @@ import {
   setSerializerFieldOptions,
   type SerializerClassConstructor,
 } from "./field-metadata";
+import { isClassConstructor } from "../tools/typeChecks";
 
 const GRAPH_VERSION = 1;
 const DEFAULT_MAX_DEPTH = 1000;
 const DEFAULT_MAX_REGEXP_PATTERN_LENGTH = 1024;
-
-type ClassConstructor = abstract new (...args: never[]) => unknown;
 
 function parseJsonPayload(payload: string): unknown {
   try {
@@ -70,16 +69,6 @@ function parseWithSchema<TParsed>(
   }
 
   return check(value, schema as never) as TParsed;
-}
-
-function isClassConstructor(value: unknown): value is ClassConstructor {
-  if (typeof value !== "function") return false;
-
-  const prototype = (value as { prototype?: unknown }).prototype;
-  if (!prototype || typeof prototype !== "object") return false;
-
-  const constructor = (prototype as { constructor?: unknown }).constructor;
-  return constructor === value;
 }
 
 function normalizeSchemaOption(schema: unknown): unknown {

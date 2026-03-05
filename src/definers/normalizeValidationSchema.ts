@@ -1,9 +1,9 @@
 import { validationError } from "../errors";
 import { check, Match } from "../tools/check";
 import { hasClassSchemaMetadata } from "../tools/check/classSchema";
+import { isClassConstructor, hasParseFunction } from "../tools/typeChecks";
 import type {
   IValidationSchema,
-  ValidationSchemaClassConstructor,
   ValidationSchemaInput,
 } from "../types/utilities";
 
@@ -11,28 +11,6 @@ type NormalizationContext = {
   definitionId: string;
   subject: string;
 };
-
-function isClassConstructor(
-  value: unknown,
-): value is ValidationSchemaClassConstructor {
-  if (typeof value !== "function") return false;
-
-  const prototype = (value as { prototype?: unknown }).prototype;
-  if (!prototype || typeof prototype !== "object") return false;
-
-  return (prototype as { constructor?: unknown }).constructor === value;
-}
-
-function hasParseFunction<T>(value: unknown): value is IValidationSchema<T> {
-  if (
-    (typeof value !== "object" && typeof value !== "function") ||
-    value === null
-  ) {
-    return false;
-  }
-
-  return typeof (value as { parse?: unknown }).parse === "function";
-}
 
 export function normalizeValidationSchema<T>(
   input: ValidationSchemaInput<T>,

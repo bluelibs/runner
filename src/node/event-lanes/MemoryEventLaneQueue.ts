@@ -1,36 +1,26 @@
-import { randomUUID } from "node:crypto";
-import {
+import { BaseMemoryQueue } from "../queue/BaseMemoryQueue";
+import type {
   EventLaneMessage,
   EventLaneMessageHandler,
   IEventLaneQueue,
 } from "./types";
 
-export class MemoryEventLaneQueue implements IEventLaneQueue {
-  private queue: EventLaneMessage[] = [];
-  private handler: EventLaneMessageHandler | null = null;
-  private isProcessing = false;
+export class MemoryEventLaneQueue
+  extends BaseMemoryQueue<EventLaneMessage>
+  implements IEventLaneQueue
+{
   private acceptingWork = true;
-  private readonly inFlight = new Map<string, EventLaneMessage>();
 
   async enqueue(
     message: Omit<EventLaneMessage, "id" | "createdAt" | "attempts">,
   ): Promise<string> {
-    const id = randomUUID();
-    const fullMessage: EventLaneMessage = {
-      ...message,
-      id,
-      createdAt: new Date(),
-      attempts: 0,
-    };
-    this.queue.push(fullMessage);
-    setImmediate(() => void this.processNext());
-    return id;
+    return this.enqueueMessage(message);
   }
 
   async consume(handler: EventLaneMessageHandler): Promise<void> {
-    this.handler = handler;
+    this.messageHandler = handler;
     this.acceptingWork = true;
-    setImmediate(() => void this.processNext());
+    this.scheduleProcessing();
   }
 
   async cooldown(): Promise<void> {
@@ -38,17 +28,11 @@ export class MemoryEventLaneQueue implements IEventLaneQueue {
   }
 
   async ack(messageId: string): Promise<void> {
-    this.inFlight.delete(messageId);
-    setImmediate(() => void this.processNext());
+    return this.ackMessage(messageId);
   }
 
   async nack(messageId: string, requeue: boolean = true): Promise<void> {
-    const msg = this.inFlight.get(messageId);
-    this.inFlight.delete(messageId);
-    if (msg && this.shouldRequeue(msg, requeue)) {
-      this.queue.push(msg);
-    }
-    setImmediate(() => void this.processNext());
+    return this.nackMessage(messageId, requeue);
   }
 
   async setPrefetch(_count: number): Promise<void> {
@@ -56,59 +40,13 @@ export class MemoryEventLaneQueue implements IEventLaneQueue {
   }
 
   async dispose(): Promise<void> {
-    this.handler = null;
+    this.messageHandler = null;
     this.acceptingWork = false;
     this.queue = [];
     this.inFlight.clear();
   }
 
-  private async processNext(): Promise<void> {
-    if (
-      this.isProcessing ||
-      !this.acceptingWork ||
-      !this.handler ||
-      this.queue.length === 0
-    ) {
-      return;
-    }
-
-    this.isProcessing = true;
-    try {
-      while (this.queue.length > 0) {
-        const msg = this.queue.shift()!;
-        const next = this.withIncrementedAttempts(msg);
-
-        if (!this.shouldAttemptDelivery(next)) {
-          continue;
-        }
-
-        this.inFlight.set(next.id, next);
-        try {
-          await this.handler(next);
-        } catch {
-          this.inFlight.delete(next.id);
-          if (this.shouldRequeue(next, true)) {
-            this.queue.push(next);
-          }
-        }
-      }
-    } finally {
-      this.isProcessing = false;
-    }
-  }
-
-  private withIncrementedAttempts(message: EventLaneMessage): EventLaneMessage {
-    return {
-      ...message,
-      attempts: message.attempts + 1,
-    };
-  }
-
-  private shouldAttemptDelivery(message: EventLaneMessage): boolean {
-    return message.attempts <= message.maxAttempts;
-  }
-
-  private shouldRequeue(message: EventLaneMessage, requeue: boolean): boolean {
-    return requeue && message.attempts < message.maxAttempts;
+  protected override canProcess(): boolean {
+    return this.acceptingWork && super.canProcess();
   }
 }

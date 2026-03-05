@@ -1,4 +1,5 @@
 import { MatchPatternError } from "./errors";
+import { isClassConstructor, getClassChain } from "../typeChecks";
 
 type ClassConstructor = abstract new (...args: never[]) => unknown;
 
@@ -53,13 +54,6 @@ function bumpSchemaMetadataVersion(): void {
   classSchemaMetadataVersion += 1;
 }
 
-function isClassConstructor(value: unknown): value is ClassConstructor {
-  return (
-    typeof value === "function" &&
-    typeof (value as { prototype?: unknown }).prototype === "object"
-  );
-}
-
 function resolveSchemaBase(
   baseOption: MatchSchemaBase,
   owner: Function,
@@ -76,20 +70,6 @@ function resolveSchemaBase(
   }
 
   return resolved;
-}
-
-function getClassChain(target: Function): Function[] {
-  const chain: Function[] = [];
-  let currentPrototype = target.prototype;
-
-  while (currentPrototype && currentPrototype !== Object.prototype) {
-    const constructor = currentPrototype.constructor as Function;
-    if (typeof constructor !== "function") break;
-    chain.push(constructor);
-    currentPrototype = Object.getPrototypeOf(currentPrototype);
-  }
-
-  return chain.reverse();
 }
 
 export function setClassSchemaOptions(

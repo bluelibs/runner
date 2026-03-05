@@ -103,41 +103,31 @@ export function normalizeResourceSubtreePolicy(
   return normalized;
 }
 
-function mergeSubtreeTasksBranch(
-  existing: NormalizedResourceSubtreePolicy["tasks"],
-  incoming: NonNullable<NormalizedResourceSubtreePolicy["tasks"]>,
+function mergeSubtreeMiddlewareBranch<
+  TBranch extends {
+    middleware: unknown[];
+    validate: unknown[];
+  },
+>(
+  existing: TBranch | undefined,
+  incoming: TBranch,
   override: boolean,
-): NonNullable<NormalizedResourceSubtreePolicy["tasks"]> {
+): TBranch {
   if (!existing || override) {
     return {
       middleware: [...incoming.middleware],
       validate: [...incoming.validate],
-    };
+    } as TBranch;
   }
 
   return {
     middleware: [...existing.middleware, ...incoming.middleware],
     validate: [...existing.validate, ...incoming.validate],
-  };
+  } as TBranch;
 }
 
-function mergeSubtreeResourcesBranch(
-  existing: NormalizedResourceSubtreePolicy["resources"],
-  incoming: NonNullable<NormalizedResourceSubtreePolicy["resources"]>,
-  override: boolean,
-): NonNullable<NormalizedResourceSubtreePolicy["resources"]> {
-  if (!existing || override) {
-    return {
-      middleware: [...incoming.middleware],
-      validate: [...incoming.validate],
-    };
-  }
-
-  return {
-    middleware: [...existing.middleware, ...incoming.middleware],
-    validate: [...existing.validate, ...incoming.validate],
-  };
-}
+const mergeSubtreeTasksBranch = mergeSubtreeMiddlewareBranch;
+const mergeSubtreeResourcesBranch = mergeSubtreeMiddlewareBranch;
 
 function mergeSubtreeValidateOnlyBranch<
   TBranch extends {

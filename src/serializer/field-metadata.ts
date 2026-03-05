@@ -27,26 +27,14 @@ const SERIALIZER_FIELD_METADATA = new WeakMap<
   Function,
   Map<string, NormalizedSerializerFieldOptions>
 >();
+import { getClassChain } from "../tools/typeChecks";
+
 const SERIALIZER_FIELD_PLAN_CACHE = new WeakMap<
   Function,
   CachedSerializerFieldPlan
 >();
 
 let serializerFieldMetadataVersion = 0;
-
-function getClassChain(target: Function): Function[] {
-  const chain: Function[] = [];
-  let currentPrototype = target.prototype;
-
-  while (currentPrototype && currentPrototype !== Object.prototype) {
-    const constructor = currentPrototype.constructor as Function;
-    if (typeof constructor !== "function") break;
-    chain.push(constructor);
-    currentPrototype = Object.getPrototypeOf(currentPrototype);
-  }
-
-  return chain.reverse();
-}
 
 function readFieldOptions(
   options: SerializerFieldOptions,
