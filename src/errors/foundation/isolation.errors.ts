@@ -1,4 +1,4 @@
-import { error } from "../../definers/builders/error";
+import { frameworkError as error } from "../../definers/builders/error";
 import type { DefaultErrorType } from "../../types/error";
 import type { IsolationChannel } from "../../tools/scope";
 

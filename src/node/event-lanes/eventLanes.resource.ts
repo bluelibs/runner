@@ -25,7 +25,9 @@ type EventLanesPrivateContext = EventLanesResourceContext & {
 export const EVENT_LANES_RESOURCE_ID = "runner.node.eventLanes";
 
 const eventLanesResourceBase = r
-  .resource<EventLanesResourceConfig>(EVENT_LANES_RESOURCE_ID)
+  .resource<EventLanesResourceConfig>(EVENT_LANES_RESOURCE_ID, {
+    frameworkOwned: true,
+  })
   .configSchema(eventLanesResourceConfigSchema)
   .dependencies({
     eventManager: resources.eventManager,

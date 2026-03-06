@@ -8,6 +8,7 @@ import { eventLaneInvalidIdError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze } from "../tools/deepFreeze";
 import { assertDefinitionId } from "./assertDefinitionId";
+import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 
 export function defineEventLane(config: IEventLaneDefinition): IEventLane {
   if (typeof config.id !== "string" || config.id.trim().length === 0) {
@@ -15,7 +16,7 @@ export function defineEventLane(config: IEventLaneDefinition): IEventLane {
   }
   const callerFilePath = getCallerFile();
   assertDefinitionId("eventLane", config.id, {
-    callerFilePath: callerFilePath,
+    allowReservedDottedNamespace: isFrameworkDefinitionMarked(config),
   });
   return deepFreeze({
     ...config,

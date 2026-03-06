@@ -1,4 +1,5 @@
-import { defineTaskMiddleware, isTask } from "../../define";
+import { isTask } from "../../define";
+import { defineFrameworkTaskMiddleware } from "../../definers/frameworkDefinition";
 import type { ITask } from "../../defs";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalResources } from "../globalResources";
@@ -49,7 +50,7 @@ export const journalKeys = {
 /**
  * Fallback middleware: provides a backup value or execution if the main task fails.
  */
-export const fallbackTaskMiddleware = defineTaskMiddleware({
+export const fallbackTaskMiddleware = defineFrameworkTaskMiddleware({
   id: "runner.middleware.task.fallback",
   configSchema: fallbackConfigPattern,
   dependencies: {

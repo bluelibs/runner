@@ -1,4 +1,3 @@
-import * as path from "path";
 import {
   defineEvent,
   defineEventLane,
@@ -13,6 +12,13 @@ import {
 import { defineAsyncContext } from "../../definers/defineAsyncContext";
 import { assertDefinitionId } from "../../definers/assertDefinitionId";
 import { defineError } from "../../definers/defineError";
+import { frameworkError } from "../../definers/builders/error";
+import { frameworkTag } from "../../definers/builders/tag";
+import {
+  defineFrameworkEvent,
+  defineFrameworkResource,
+  defineFrameworkTag,
+} from "../../definers/frameworkDefinition";
 
 type DefinitionFactory = {
   label: string;
@@ -143,7 +149,7 @@ describe("definition id validation", () => {
   );
 
   it.each(definitionFactories)(
-    "rejects reserved framework dotted namespaces for non-framework callers for $label",
+    "rejects reserved framework dotted namespaces for non-framework definitions for $label",
     ({ create }) => {
       expect(() => create("runner.tags.userDefined")).toThrow(
         /cannot contain "\."/i,
@@ -154,71 +160,48 @@ describe("definition id validation", () => {
     },
   );
 
-  it("allows runner/system dotted ids for framework-owned source files", () => {
-    const sourceCallerFilePath = path.resolve(
-      __dirname,
-      "../../globals/globalTags.ts",
-    );
-    const distCallerFilePath = path.resolve(
-      __dirname,
-      "../../../dist/universal/globals/globalEvents.js",
-    );
-
+  it("allows reserved runner/system dotted ids only when explicitly authorized", () => {
     expect(() =>
       assertDefinitionId("Tag", "runner.tags.internal", {
-        callerFilePath: sourceCallerFilePath,
+        allowReservedDottedNamespace: true,
       }),
     ).not.toThrow();
 
     expect(() =>
       assertDefinitionId("Event", "system.events.ready", {
-        callerFilePath: distCallerFilePath,
+        allowReservedDottedNamespace: true,
       }),
     ).not.toThrow();
-  });
-
-  it("rejects runner/system dotted ids when caller file path is missing", () => {
-    expect(() => assertDefinitionId("Tag", "runner.tags.internal")).toThrow(
-      /cannot contain "\."/i,
-    );
-  });
-
-  it("rejects runner/system dotted ids for callers outside the package", () => {
-    const externalCallerFilePath = path.resolve(
-      __dirname,
-      "../../../../external.ts",
-    );
 
     expect(() =>
-      assertDefinitionId("Tag", "runner.tags.internal", {
-        callerFilePath: externalCallerFilePath,
+      assertDefinitionId("Tag", "app.tags.custom", {
+        allowReservedDottedNamespace: true,
       }),
     ).toThrow(/cannot contain "\."/i);
   });
 
-  it("rejects runner/system dotted ids for relative caller paths", () => {
+  it("allows framework helpers to define reserved runner/system ids", () => {
     expect(() =>
-      assertDefinitionId("Tag", "runner.tags.internal", {
-        callerFilePath: "src/globals/globalTags.ts",
+      defineFrameworkTag({
+        id: "runner.tags.internal",
       }),
-    ).toThrow(/cannot contain "\."/i);
-  });
-
-  it("rejects runner/system dotted ids for parent-relative caller paths", () => {
-    expect(() =>
-      assertDefinitionId("Tag", "runner.tags.internal", {
-        callerFilePath: "../external.ts",
-      }),
-    ).toThrow(/cannot contain "\."/i);
-  });
-
-  it("rejects runner/system dotted ids when caller path points at the package root", () => {
-    const packageRootPath = path.resolve(__dirname, "../../..");
+    ).not.toThrow();
 
     expect(() =>
-      assertDefinitionId("Tag", "runner.tags.internal", {
-        callerFilePath: packageRootPath,
+      defineFrameworkEvent({
+        id: "system.events.ready",
       }),
-    ).toThrow(/cannot contain "\."/i);
+    ).not.toThrow();
+
+    expect(() =>
+      defineFrameworkResource({
+        id: "runner.cache",
+      }),
+    ).not.toThrow();
+
+    expect(() => frameworkTag("runner.tags.cron").build()).not.toThrow();
+    expect(() =>
+      frameworkError("runner.errors.validation").build(),
+    ).not.toThrow();
   });
 });

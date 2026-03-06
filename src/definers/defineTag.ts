@@ -18,6 +18,7 @@ import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertDefinitionId } from "./assertDefinitionId";
+import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 /**
@@ -50,7 +51,9 @@ export function defineTag<
 > {
   const filePath = getCallerFile();
   const id = definition.id;
-  assertDefinitionId("Tag", id, { callerFilePath: filePath });
+  assertDefinitionId("Tag", id, {
+    allowReservedDottedNamespace: isFrameworkDefinitionMarked(definition),
+  });
   const configSchema = normalizeOptionalValidationSchema(
     definition.configSchema,
     {

@@ -11,6 +11,7 @@ import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
+import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import { normalizeThrows } from "../tools/throws";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
@@ -50,7 +51,7 @@ export function defineMiddlewareCore<TConfig, TDeps extends DependencyMapType>(
   middlewareDef: MiddlewareDefCore<TConfig, TDeps>,
 ): Record<string | symbol, unknown> {
   assertDefinitionId(variant.label, middlewareDef.id, {
-    callerFilePath: filePath,
+    allowReservedDottedNamespace: isFrameworkDefinitionMarked(middlewareDef),
   });
 
   const configSchema = normalizeOptionalValidationSchema(

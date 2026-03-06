@@ -16,6 +16,7 @@ import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
+import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import {
   isClassConstructor,
   hasParseFunction,
@@ -208,7 +209,7 @@ export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
 ) {
   const resolvedFilePath = filePath ?? getCallerFile();
   assertDefinitionId("Error", definition.id, {
-    callerFilePath: resolvedFilePath,
+    allowReservedDottedNamespace: isFrameworkDefinitionMarked(definition),
   });
 
   if (definition.httpCode !== undefined) {

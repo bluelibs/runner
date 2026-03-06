@@ -1,4 +1,7 @@
-import { defineTaskMiddleware, defineResourceMiddleware } from "../../define";
+import {
+  defineFrameworkResourceMiddleware,
+  defineFrameworkTaskMiddleware,
+} from "../../definers/frameworkDefinition";
 import { journal } from "../../models/ExecutionJournal";
 import { RunnerError } from "../../definers/defineError";
 import { middlewareTimeoutError, RunnerErrorId } from "../../errors";
@@ -46,7 +49,7 @@ export const journalKeys = {
   ),
 } as const;
 
-export const timeoutTaskMiddleware = defineTaskMiddleware({
+export const timeoutTaskMiddleware = defineFrameworkTaskMiddleware({
   id: "runner.middleware.timeout.task",
   throws: [middlewareTimeoutError],
   configSchema: timeoutConfigPattern,
@@ -112,7 +115,7 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
   },
 });
 
-export const timeoutResourceMiddleware = defineResourceMiddleware({
+export const timeoutResourceMiddleware = defineFrameworkResourceMiddleware({
   id: "runner.middleware.timeout.resource",
   throws: [middlewareTimeoutError],
   configSchema: timeoutConfigPattern,

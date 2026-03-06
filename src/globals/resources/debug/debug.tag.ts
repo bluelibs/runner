@@ -1,4 +1,4 @@
-import { defineTag } from "../../../define";
+import { defineFrameworkTag } from "../../../definers/frameworkDefinition";
 import { DebugFriendlyConfig } from "./types";
 import { Match } from "../../../tools/check";
 
@@ -25,7 +25,7 @@ const debugFriendlyConfigPattern = Match.OneOf(
   debugConfigPattern,
 );
 
-export const debugTag = defineTag<DebugFriendlyConfig>({
+export const debugTag = defineFrameworkTag<DebugFriendlyConfig>({
   id: "runner.tags.debug",
   configSchema: debugFriendlyConfigPattern,
   meta: {

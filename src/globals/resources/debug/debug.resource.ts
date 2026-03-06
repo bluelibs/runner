@@ -1,4 +1,4 @@
-import { defineResource } from "../../../define";
+import { defineFrameworkResource } from "../../../definers/frameworkDefinition";
 import { debugConfig } from "./debugConfig.resource";
 import { DebugFriendlyConfig } from "./types";
 import { globalEventListener } from "./globalEvent.hook";
@@ -7,7 +7,7 @@ import { middlewareInterceptorResource } from "./middleware.hook";
 import { hookInterceptorResource } from "./hook.hook";
 import { executionTrackerResource } from "./executionTracker.resource";
 
-export const debugResource = defineResource({
+export const debugResource = defineFrameworkResource({
   id: "runner.debug",
   register: (config: DebugFriendlyConfig) => {
     return [

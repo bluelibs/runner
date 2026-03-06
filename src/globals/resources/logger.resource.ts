@@ -1,4 +1,4 @@
-import { defineResource } from "../../define";
+import { defineFrameworkResource } from "../../definers/frameworkDefinition";
 import type { Logger } from "../../models/Logger";
 import { globalTags } from "../globalTags";
 
@@ -51,7 +51,7 @@ import { globalTags } from "../globalTags";
  * Preferred access: `resources.logger`.
  * Legacy shorthand: `r.logger`.
  */
-export const loggerResource = defineResource<void, Promise<Logger>>({
+export const loggerResource = defineFrameworkResource<void, Promise<Logger>>({
   id: "runner.logger",
   meta: {
     // We skip system tag for logger because it's part of the utility toolkit.

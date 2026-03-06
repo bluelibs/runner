@@ -27,6 +27,7 @@ import { normalizeThrows } from "../tools/throws";
 import { resolveForkedRegisterAndDependencies } from "./resourceFork";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
+import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import { normalizeResourceSubtreePolicy } from "./subtreePolicy";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
@@ -70,7 +71,9 @@ export function defineResource<
    */
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
   const id = constConfig.id;
-  assertDefinitionId("Resource", id, { callerFilePath: filePath });
+  assertDefinitionId("Resource", id, {
+    allowReservedDottedNamespace: isFrameworkDefinitionMarked(constConfig),
+  });
   const configSchema = normalizeOptionalValidationSchema(
     constConfig.configSchema,
     {

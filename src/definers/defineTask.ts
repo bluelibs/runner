@@ -17,6 +17,7 @@ import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
+import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 /**
@@ -45,7 +46,9 @@ export function defineTask<
 ): ITask<Input, Output, Deps, TMeta, TTags, TMiddleware> {
   const filePath = getCallerFile();
   const id = taskConfig.id;
-  assertDefinitionId("Task", id, { callerFilePath: filePath });
+  assertDefinitionId("Task", id, {
+    allowReservedDottedNamespace: isFrameworkDefinitionMarked(taskConfig),
+  });
   const inputSchema = normalizeOptionalValidationSchema(
     taskConfig.inputSchema,
     {

@@ -1,4 +1,7 @@
-import { defineTaskMiddleware, defineResource } from "../../define";
+import {
+  defineFrameworkResource,
+  defineFrameworkTaskMiddleware,
+} from "../../definers/frameworkDefinition";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
@@ -71,7 +74,7 @@ export const journalKeys = {
   ),
 } as const;
 
-export const circuitBreakerResource = defineResource({
+export const circuitBreakerResource = defineFrameworkResource({
   id: "runner.circuitBreaker",
   tags: [globalTags.system],
   init: async () => {
@@ -84,7 +87,7 @@ export const circuitBreakerResource = defineResource({
   },
 });
 
-export const circuitBreakerMiddleware = defineTaskMiddleware({
+export const circuitBreakerMiddleware = defineFrameworkTaskMiddleware({
   id: "runner.middleware.task.circuitBreaker",
   throws: [middlewareCircuitBreakerOpenError],
   configSchema: circuitBreakerConfigPattern,

@@ -10,6 +10,7 @@ import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
+import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 export function defineEvent<
@@ -31,7 +32,7 @@ export function defineEvent<TPayload = void>(
   const callerFilePath = getCallerFile();
   const eventConfig = config;
   assertDefinitionId("Event", eventConfig.id, {
-    callerFilePath: callerFilePath,
+    allowReservedDottedNamespace: isFrameworkDefinitionMarked(eventConfig),
   });
   const payloadSchema = normalizeOptionalValidationSchema(
     eventConfig.payloadSchema,

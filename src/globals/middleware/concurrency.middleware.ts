@@ -1,4 +1,7 @@
-import { defineTaskMiddleware, defineResource } from "../../define";
+import {
+  defineFrameworkResource,
+  defineFrameworkTaskMiddleware,
+} from "../../definers/frameworkDefinition";
 import { Semaphore } from "../../models/Semaphore";
 import { globalTags } from "../globalTags";
 import {
@@ -70,7 +73,7 @@ function assertConcurrencyConfig(config: ConcurrencyMiddlewareConfig): void {
   }
 }
 
-export const concurrencyResource = defineResource({
+export const concurrencyResource = defineFrameworkResource({
   id: "runner.concurrency",
   tags: [globalTags.system],
   init: async () => ({
@@ -90,7 +93,7 @@ export const concurrencyResource = defineResource({
 /**
  * Middleware that limits concurrency of task executions using a Semaphore.
  */
-export const concurrencyTaskMiddleware = defineTaskMiddleware({
+export const concurrencyTaskMiddleware = defineFrameworkTaskMiddleware({
   id: "runner.middleware.task.concurrency",
   throws: [middlewareConcurrencyConflictError],
   configSchema: concurrencyConfigPattern,

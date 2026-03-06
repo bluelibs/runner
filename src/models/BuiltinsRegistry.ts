@@ -1,3 +1,4 @@
+import type { RegisterableItems } from "../defs";
 import { globalEventsArray } from "../globals/globalEvents";
 import { globalResources } from "../globals/globalResources";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
@@ -28,7 +29,6 @@ import {
   circuitBreakerResource,
 } from "../globals/middleware/circuitBreaker.middleware";
 import { globalTags } from "../globals/globalTags";
-import type { StoreRegistry } from "./StoreRegistry";
 import {
   durableExecutionError,
   middlewareCircuitBreakerOpenError,
@@ -36,23 +36,38 @@ import {
   middlewareTimeoutError,
 } from "../errors";
 
-export function registerStoreBuiltins(registry: StoreRegistry): void {
-  registry.storeGenericItem(globalResources.queue);
+function collectUniqueTags(): RegisterableItems[] {
+  const uniqueTags: RegisterableItems[] = [];
+  const seenIds = new Set<string>();
 
-  const seenGlobalTagIds = new Set<string>();
-  Object.values(globalTags).forEach((tag) => {
-    if (seenGlobalTagIds.has(tag.id)) {
-      return;
+  for (const tag of Object.values(globalTags)) {
+    if (seenIds.has(tag.id)) {
+      continue;
     }
-    seenGlobalTagIds.add(tag.id);
-    registry.storeGenericItem(tag);
-  });
+    seenIds.add(tag.id);
+    uniqueTags.push(tag);
+  }
 
-  globalEventsArray.forEach((event) => {
-    registry.storeGenericItem(event);
-  });
+  return uniqueTags;
+}
 
-  const builtInTaskMiddlewares = [
+export const SYSTEM_FRAMEWORK_ITEMS: readonly RegisterableItems[] =
+  Object.freeze([
+    globalResources.store,
+    globalResources.eventManager,
+    globalResources.taskRunner,
+    globalResources.middlewareManager,
+    globalResources.runtime,
+    ...collectUniqueTags().filter((tag) => tag.id.startsWith("system.")),
+    ...globalEventsArray,
+  ]);
+
+export const RUNNER_FRAMEWORK_ITEMS: readonly RegisterableItems[] =
+  Object.freeze([
+    globalResources.logger,
+    globalResources.serializer,
+    globalResources.queue,
+    ...collectUniqueTags().filter((tag) => tag.id.startsWith("runner.")),
     requireContextTaskMiddleware,
     retryTaskMiddleware,
     timeoutTaskMiddleware,
@@ -62,36 +77,14 @@ export function registerStoreBuiltins(registry: StoreRegistry): void {
     fallbackTaskMiddleware,
     rateLimitTaskMiddleware,
     circuitBreakerMiddleware,
-  ];
-  builtInTaskMiddlewares.forEach((middleware) => {
-    registry.storeGenericItem(middleware);
-  });
-
-  const builtInResourceMiddlewares = [
     retryResourceMiddleware,
     timeoutResourceMiddleware,
-  ];
-  builtInResourceMiddlewares.forEach((middleware) => {
-    registry.storeGenericItem(middleware);
-  });
-
-  const builtInResources = [
     rateLimitResource,
     circuitBreakerResource,
     temporalResource,
     concurrencyResource,
-  ];
-  builtInResources.forEach((resource) => {
-    registry.storeGenericItem(resource);
-  });
-
-  const builtInErrors = [
     middlewareTimeoutError,
     middlewareCircuitBreakerOpenError,
     middlewareRateLimitExceededError,
     durableExecutionError,
-  ];
-  builtInErrors.forEach((helper) => {
-    registry.storeGenericItem(helper);
-  });
-}
+  ]);

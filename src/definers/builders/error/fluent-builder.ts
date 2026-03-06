@@ -6,6 +6,7 @@ import type {
 } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineError } from "../../defineError";
+import { markFrameworkDefinition } from "../../markFrameworkDefinition";
 import type { ErrorFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
 import { clone, mergeArray } from "./utils";
@@ -83,17 +84,29 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
     build() {
       return deepFreeze(
         defineError<TData>(
-          {
-            id: state.id,
-            httpCode: state.httpCode,
-            serialize: state.serialize,
-            parse: state.parse,
-            dataSchema: state.dataSchema,
-            format: state.format,
-            remediation: state.remediation,
-            meta: state.meta,
-            tags: state.tags,
-          },
+          state.frameworkOwned
+            ? markFrameworkDefinition({
+                id: state.id,
+                httpCode: state.httpCode,
+                serialize: state.serialize,
+                parse: state.parse,
+                dataSchema: state.dataSchema,
+                format: state.format,
+                remediation: state.remediation,
+                meta: state.meta,
+                tags: state.tags,
+              })
+            : {
+                id: state.id,
+                httpCode: state.httpCode,
+                serialize: state.serialize,
+                parse: state.parse,
+                dataSchema: state.dataSchema,
+                format: state.format,
+                remediation: state.remediation,
+                meta: state.meta,
+                tags: state.tags,
+              },
           state.filePath,
         ),
       );

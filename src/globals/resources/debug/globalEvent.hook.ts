@@ -1,11 +1,11 @@
-import { defineHook } from "../../../define";
+import { defineFrameworkHook } from "../../../definers/frameworkDefinition";
 import { loggerResource as logger } from "../logger.resource";
 import { globalTags } from "../../globalTags";
 import { hasSystemTag } from "./utils";
 import { debugConfig } from "./debugConfig.resource";
 import { getConfig } from "./types";
 
-export const globalEventListener = defineHook({
+export const globalEventListener = defineFrameworkHook({
   id: "runner.debug.hooks.onAnyEvent",
   on: "*",
   dependencies: {

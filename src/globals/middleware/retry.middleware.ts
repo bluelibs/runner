@@ -1,4 +1,7 @@
-import { defineTaskMiddleware, defineResourceMiddleware } from "../../define";
+import {
+  defineFrameworkResourceMiddleware,
+  defineFrameworkTaskMiddleware,
+} from "../../definers/frameworkDefinition";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { journalKeys as timeoutJournalKeys } from "./timeout.middleware";
 import { Match } from "../../tools/check";
@@ -42,7 +45,7 @@ export const journalKeys = {
   ),
 } as const;
 
-export const retryTaskMiddleware = defineTaskMiddleware({
+export const retryTaskMiddleware = defineFrameworkTaskMiddleware({
   id: "runner.middleware.retry.task",
   configSchema: retryConfigPattern,
   async run({ task, next, journal }, _deps, config: RetryMiddlewareConfig) {
@@ -95,7 +98,7 @@ export const retryTaskMiddleware = defineTaskMiddleware({
   },
 });
 
-export const retryResourceMiddleware = defineResourceMiddleware({
+export const retryResourceMiddleware = defineFrameworkResourceMiddleware({
   id: "runner.middleware.retry.resource",
   configSchema: retryConfigPattern,
   async run({ resource, next }, _deps, config: RetryMiddlewareConfig) {

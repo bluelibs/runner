@@ -1,4 +1,4 @@
-import { defineResource } from "../../define";
+import { defineFrameworkResource } from "../../definers/frameworkDefinition";
 import type { DependencyMapType } from "../../defs";
 import { loggerResource } from "../resources/logger.resource";
 import { storeResource } from "../resources/store.resource";
@@ -16,7 +16,7 @@ type CronResourceDependencies = DependencyMapType & {
   taskRunner: typeof taskRunnerResource;
 };
 
-export const cronResource = defineResource<
+export const cronResource = defineFrameworkResource<
   CronResourceConfig,
   Promise<CronResourceValue>,
   CronResourceDependencies

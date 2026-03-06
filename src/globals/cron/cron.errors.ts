@@ -1,4 +1,4 @@
-import { error } from "../../definers/builders/error";
+import { frameworkError as error } from "../../definers/builders/error";
 
 export const cronExecutionError = error<{
   taskId: string;

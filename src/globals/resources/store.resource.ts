@@ -1,8 +1,8 @@
-import { defineResource } from "../../define";
+import { defineFrameworkResource } from "../../definers/frameworkDefinition";
 import type { Store } from "../../models/Store";
 import { globalTags } from "../globalTags";
 
-export const storeResource = defineResource<void, Promise<Store>>({
+export const storeResource = defineFrameworkResource<void, Promise<Store>>({
   id: "system.store",
   meta: {
     title: "Store",

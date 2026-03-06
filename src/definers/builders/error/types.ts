@@ -12,6 +12,7 @@ import type {
 export type BuilderState<TData extends DefaultErrorType> = Readonly<{
   id: string;
   filePath: string;
+  frameworkOwned?: boolean;
   httpCode?: number;
   format?: (data: TData) => string;
   remediation?: string | ((data: TData) => string);

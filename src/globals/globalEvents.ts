@@ -1,7 +1,7 @@
-import { defineEvent } from "../define";
+import { defineFrameworkEvent } from "../definers/frameworkDefinition";
 import { IEvent } from "../defs";
 
-const readyEvent = defineEvent({
+const readyEvent = defineFrameworkEvent({
   id: "system.events.ready",
   meta: {
     title: "System Ready",
@@ -19,7 +19,7 @@ export const globalEvents = {
   /**
    * Emitted when runtime enters the `disposing` phase.
    */
-  disposing: defineEvent({
+  disposing: defineFrameworkEvent({
     id: "system.events.disposing",
     meta: {
       title: "System Disposing",
@@ -31,7 +31,7 @@ export const globalEvents = {
    * Emitted when runtime.dispose() has entered shutdown lockdown
    * and right before resource-level `.dispose()` hooks execute.
    */
-  drained: defineEvent({
+  drained: defineFrameworkEvent({
     id: "system.events.drained",
     meta: {
       title: "System Drained",

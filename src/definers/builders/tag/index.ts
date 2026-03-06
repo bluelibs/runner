@@ -19,6 +19,7 @@ export function tagBuilder<
   TAllowedTargets extends TagTarget | void = void,
 >(
   id: string,
+  options?: { frameworkOwned?: boolean },
 ): TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets> {
   const filePath = getCallerFile();
   const initial: BuilderState<
@@ -29,6 +30,7 @@ export function tagBuilder<
   > = Object.freeze({
     id,
     filePath,
+    frameworkOwned: options?.frameworkOwned === true,
     meta: {} as BuilderState<
       TConfig,
       TEnforceIn,
@@ -59,3 +61,16 @@ export function tagBuilder<
 }
 
 export const tag = tagBuilder;
+
+export function frameworkTag<
+  TConfig = void,
+  TEnforceIn = void,
+  TEnforceOut = void,
+  TAllowedTargets extends TagTarget | void = void,
+>(
+  id: string,
+): TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets> {
+  return tagBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets>(id, {
+    frameworkOwned: true,
+  });
+}

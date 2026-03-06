@@ -1,4 +1,4 @@
-import { defineResource } from "../../../define";
+import { defineFrameworkResource } from "../../../definers/frameworkDefinition";
 import { DebugFriendlyConfig, getConfig } from "./types";
 import { globalTags } from "../../../globals/globalTags";
 import { Match } from "../../../tools/check";
@@ -26,7 +26,7 @@ const debugFriendlyConfigPattern = Match.OneOf(
   debugConfigPattern,
 );
 
-export const debugConfig = defineResource({
+export const debugConfig = defineFrameworkResource({
   id: "runner.debug.resources.config",
   configSchema: debugFriendlyConfigPattern,
   meta: {

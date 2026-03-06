@@ -41,12 +41,13 @@ import {
   getResourcesInReadyWaves as computeReadyWaves,
 } from "./utils/disposeOrder";
 import { RunResult } from "./RunResult";
-import { registerStoreBuiltins } from "./BuiltinsRegistry";
 import type { RuntimeCallSource } from "../types/runtimeSource";
 import {
   LifecycleAdmissionController,
   RuntimeLifecyclePhase,
 } from "./runtime/LifecycleAdmissionController";
+import { createFrameworkRootGateway } from "./createFrameworkRootGateway";
+import type { DebugFriendlyConfig } from "../globals/resources/debug";
 
 // Re-export types for backward compatibility
 export type {
@@ -274,7 +275,7 @@ export class Store {
     }
   }
 
-  private registerGlobalComponents(runtimeResult: RunResult<unknown>) {
+  private bindFrameworkResourceValues(runtimeResult: RunResult<unknown>) {
     if (!this.taskRunner) {
       taskRunnerNotSetError.throw();
     }
@@ -295,74 +296,40 @@ export class Store {
     builtInResourcesMap.set(globalResources.runtime, runtimeResult);
 
     for (const [resource, value] of builtInResourcesMap.entries()) {
-      this.registry.storeGenericItem(resource);
       const entry = this.resources.get(resource.id);
-      if (entry) {
-        entry.value = value;
-        entry.isInitialized = true;
-        this.recordResourceInitialized(resource.id);
+      if (!entry) {
+        continue;
       }
+
+      entry.value = value;
+      entry.isInitialized = true;
+      this.recordResourceInitialized(resource.id);
     }
-    registerStoreBuiltins(this.registry);
   }
 
   public setTaskRunner(taskRunner: TaskRunner) {
     this.taskRunner = taskRunner;
   }
 
-  private setupRootResource(rootDefinition: IResource<any>, config: unknown) {
-    const resolvedDependencies =
-      typeof rootDefinition.dependencies === "function"
-        ? rootDefinition.dependencies(config)
-        : rootDefinition.dependencies;
+  private resolveRootEntry(
+    rootDefinition: IResource<any>,
+  ): ResourceStoreElementType {
+    const rootId =
+      this.registry.resolveDefinitionId(rootDefinition) ?? rootDefinition.id;
+    const rootEntry = this.resources.get(rootId);
 
-    if (
-      resolvedDependencies !== undefined &&
-      (resolvedDependencies === null ||
-        typeof resolvedDependencies !== "object" ||
-        Array.isArray(resolvedDependencies))
-    ) {
-      validationError.throw({
-        subject: "Dependencies",
-        id: rootDefinition.id,
-        originalError:
-          "Dependencies must be an object map. If you use dependencies as a function, it must return an object.",
-      });
+    if (rootEntry) {
+      return rootEntry;
     }
 
-    const dependenciesObject = (resolvedDependencies || {}) as Record<
-      string,
-      unknown
-    >;
+    validationError.throw({
+      subject: "Root resource",
+      id: rootDefinition.id,
+      originalError:
+        "Root resource was not registered during framework bootstrap. This indicates an inconsistent runtime setup.",
+    });
 
-    // Clone the root definition so per-run dependency/register resolution
-    // never mutates the reusable user definition object.
-    const root: IResource<any> = {
-      ...rootDefinition,
-      dependencies: dependenciesObject,
-      subtree: rootDefinition.subtree,
-    };
-
-    this.root = {
-      resource: root,
-      computedDependencies: undefined,
-      config,
-      value: undefined,
-      isInitialized: false,
-      context: {},
-    };
-
-    this.registry.visibilityTracker.recordResource(root.id);
-    this.registry.visibilityTracker.recordDefinitionTags(root.id, root.tags);
-    this.registry.visibilityTracker.recordIsolation(root.id, root.isolate);
-    this.registry.registerDefinitionAlias(rootDefinition, root.id);
-    this.registry.registerDefinitionAlias(root, root.id);
-    this.validator.checkIfIDExists(root.id);
-    this.validator.trackRegisteredId(root.id);
-
-    this.registry.computeRegistrationDeeply(root, config);
-
-    this.registry.resources.set(root.id, this.root);
+    return undefined as never;
   }
 
   public validateDependencyGraph() {
@@ -386,13 +353,23 @@ export class Store {
     root: IResource<any, any, any, any, any>,
     config: unknown,
     runtimeResult: RunResult<unknown>,
+    options?: {
+      debug?: DebugFriendlyConfig;
+    },
   ) {
     if (this.#isInitialized) {
       storeAlreadyInitializedError.throw();
     }
 
-    this.registerGlobalComponents(runtimeResult);
-    this.setupRootResource(root, config);
+    const frameworkRoot = createFrameworkRootGateway({
+      rootItem: root.with(config as any),
+      debug: options?.debug,
+    });
+
+    this.registry.computeRegistrationDeeply(frameworkRoot);
+    this.bindFrameworkResourceValues(runtimeResult);
+    const rootEntry = this.resolveRootEntry(root);
+    this.root = rootEntry;
     this.validator.runSanityChecks();
 
     const overrideTraversalVisited = new Set<string>();

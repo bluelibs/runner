@@ -12,6 +12,7 @@ import { deepFreeze } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
+import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 
 /**
  * Define a hook (event listeners).
@@ -24,7 +25,9 @@ export function defineHook<
   TMeta extends ITaskMeta = any,
 >(hookDef: IHookDefinition<D, TOn, TMeta>): IHook<D, TOn, TMeta> {
   const filePath = getCallerFile();
-  assertDefinitionId("Hook", hookDef.id, { callerFilePath: filePath });
+  assertDefinitionId("Hook", hookDef.id, {
+    allowReservedDottedNamespace: isFrameworkDefinitionMarked(hookDef),
+  });
   assertTagTargetsApplicableTo("hooks", "Hook", hookDef.id, hookDef.tags);
   return deepFreeze({
     [symbolHook]: true,

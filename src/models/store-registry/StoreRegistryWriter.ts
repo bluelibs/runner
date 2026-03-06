@@ -353,16 +353,12 @@ export class StoreRegistryWriter {
   }
 
   computeRegistrationDeeply<_C>(element: IResource<_C>, config?: _C) {
-    let items =
+    const registerEntries =
       typeof element.register === "function"
         ? element.register(config as _C)
         : element.register;
-
-    if (!items) {
-      items = [];
-    }
-
-    element.register = items;
+    const items = registerEntries ?? [];
+    this.assignNormalizedRegisterEntries(element, items);
 
     const scopedItems = items.map((item) =>
       this.compileOwnedItem(element.id, element.gateway === true, item),
@@ -400,6 +396,19 @@ export class StoreRegistryWriter {
       const resolved = this.aliasResolver.resolveDefinitionId(entry);
       return resolved ?? entry;
     });
+  }
+
+  private assignNormalizedRegisterEntries<_C>(
+    element: IResource<_C>,
+    items: RegisterableItems[],
+  ): void {
+    const descriptor = Object.getOwnPropertyDescriptor(element, "register");
+
+    if (descriptor && descriptor.writable === false) {
+      return;
+    }
+
+    element.register = items;
   }
 
   private compileOwnedItem(
@@ -525,6 +534,10 @@ export class StoreRegistryWriter {
     currentId: string,
   ): string {
     this.assertLocalName(ownerResourceId, kind, currentId);
+
+    if (currentId.startsWith(`${ownerResourceId}.`)) {
+      return currentId;
+    }
 
     if (ownerIsGateway) {
       switch (kind) {

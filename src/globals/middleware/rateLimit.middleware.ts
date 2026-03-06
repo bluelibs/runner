@@ -1,4 +1,7 @@
-import { defineResource, defineTaskMiddleware } from "../../define";
+import {
+  defineFrameworkResource,
+  defineFrameworkTaskMiddleware,
+} from "../../definers/frameworkDefinition";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
@@ -59,7 +62,7 @@ export const journalKeys = {
   ),
 } as const;
 
-export const rateLimitResource = defineResource({
+export const rateLimitResource = defineFrameworkResource({
   id: "runner.rateLimit",
   tags: [globalTags.system],
   init: async () => {
@@ -72,7 +75,7 @@ export const rateLimitResource = defineResource({
 /**
  * Rate limit middleware: limits the number of executions within a fixed time window.
  */
-export const rateLimitTaskMiddleware = defineTaskMiddleware({
+export const rateLimitTaskMiddleware = defineFrameworkTaskMiddleware({
   id: "runner.middleware.task.rateLimit",
   throws: [middlewareRateLimitExceededError],
   configSchema: rateLimitConfigPattern,

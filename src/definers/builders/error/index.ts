@@ -15,11 +15,13 @@ export * from "./utils";
  */
 export function errorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
   id: string,
+  options?: { frameworkOwned?: boolean },
 ): ErrorFluentBuilder<TData> {
   const filePath = getCallerFile();
   const initial: BuilderState<TData> = Object.freeze({
     id,
     filePath,
+    frameworkOwned: options?.frameworkOwned === true,
     httpCode: undefined,
     serialize: undefined,
     parse: undefined,
@@ -58,3 +60,9 @@ function isRunnerError(
 export const error = Object.assign(errorBuilder, {
   is: isRunnerError,
 });
+
+export function frameworkError<
+  TData extends DefaultErrorType = DefaultErrorType,
+>(id: string): ErrorFluentBuilder<TData> {
+  return errorBuilder<TData>(id, { frameworkOwned: true });
+}

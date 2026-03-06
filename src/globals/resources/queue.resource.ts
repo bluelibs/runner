@@ -1,4 +1,4 @@
-import { defineResource } from "../../define";
+import { defineFrameworkResource } from "../../definers/frameworkDefinition";
 import { queueDisposedError } from "../../errors";
 import { Queue } from "../../models/Queue";
 
@@ -6,7 +6,7 @@ const IDLE_QUEUE_EVICTION_MS = 60_000;
 
 type CleanupTimer = ReturnType<typeof setTimeout>;
 
-export const queueResource = defineResource({
+export const queueResource = defineFrameworkResource({
   id: "runner.queue",
   context: () => ({
     disposed: false,

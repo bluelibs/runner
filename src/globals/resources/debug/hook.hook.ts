@@ -1,4 +1,4 @@
-import { defineResource } from "../../../define";
+import { defineFrameworkResource } from "../../../definers/frameworkDefinition";
 import { loggerResource as logger } from "../logger.resource";
 import { eventManagerResource as eventManager } from "../eventManager.resource";
 import { globalTags } from "../../globalTags";
@@ -6,7 +6,7 @@ import { hasSystemTag } from "./utils";
 import { debugConfig } from "./debugConfig.resource";
 import { getConfig } from "./types";
 
-export const hookInterceptorResource = defineResource({
+export const hookInterceptorResource = defineFrameworkResource({
   id: "runner.debug.resources.hookInterceptor",
   meta: {
     title: "Hook Interceptor",

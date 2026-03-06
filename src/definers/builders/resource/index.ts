@@ -17,6 +17,7 @@ export * from "./types";
  */
 export type ResourceBuilderOptions = {
   gateway?: boolean;
+  frameworkOwned?: boolean;
 };
 
 export function resourceBuilder<TConfig = void>(
@@ -43,6 +44,7 @@ export function resourceBuilder<TConfig = void>(
   > = Object.freeze({
     id,
     gateway: options?.gateway === true,
+    frameworkOwned: options?.frameworkOwned === true,
     filePath,
     dependencies: undefined,
     register: undefined,

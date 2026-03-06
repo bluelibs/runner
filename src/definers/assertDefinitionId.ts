@@ -23,84 +23,11 @@ export function isReservedDefinitionLocalName(name: string): boolean {
   return reservedDefinitionLocalNameSet.has(name);
 }
 
-function isFrameworkOwnedCallerFile(
-  callerFilePath: string | undefined,
-): boolean {
-  if (!callerFilePath) {
-    return false;
-  }
-
-  const packageRoot = normalizeFilePath(`${__dirname}/../..`);
-  const normalizedCallerPath = normalizeFilePath(callerFilePath);
-  const relativeCallerPath = getRelativePackagePath(
-    packageRoot,
-    normalizedCallerPath,
-  );
-
-  if (!relativeCallerPath) {
-    return false;
-  }
-
-  if (
-    relativeCallerPath.startsWith("__tests__/") ||
-    relativeCallerPath.includes("/__tests__/")
-  ) {
-    return false;
-  }
-
-  return (
-    relativeCallerPath.startsWith("src/") ||
-    relativeCallerPath.startsWith("dist/")
-  );
-}
-
-function normalizeFilePath(filePath: string): string {
-  const normalizedSeparators = filePath.replace(/\\/g, "/");
-  const isAbsolute = normalizedSeparators.startsWith("/");
-  const parts = normalizedSeparators.split("/");
-  const normalizedParts: string[] = [];
-
-  for (const part of parts) {
-    if (!part || part === ".") {
-      continue;
-    }
-
-    if (part === "..") {
-      const lastPart = normalizedParts[normalizedParts.length - 1];
-      if (lastPart && lastPart !== ".." && !lastPart.endsWith(":")) {
-        normalizedParts.pop();
-        continue;
-      }
-    }
-
-    normalizedParts.push(part);
-  }
-
-  const normalizedPath = normalizedParts.join("/");
-  return isAbsolute ? `/${normalizedPath}` : normalizedPath;
-}
-
-function getRelativePackagePath(
-  packageRoot: string,
-  callerFilePath: string,
-): string | null {
-  if (callerFilePath === packageRoot) {
-    return "";
-  }
-
-  const packageRootPrefix = `${packageRoot}/`;
-  if (!callerFilePath.startsWith(packageRootPrefix)) {
-    return null;
-  }
-
-  return callerFilePath.slice(packageRootPrefix.length);
-}
-
 function canUseFrameworkDottedId(
   definitionId: string,
-  callerFilePath: string | undefined,
+  allowReservedDottedNamespace: boolean | undefined,
 ): boolean {
-  if (!isFrameworkOwnedCallerFile(callerFilePath)) {
+  if (!allowReservedDottedNamespace) {
     return false;
   }
 
@@ -132,7 +59,7 @@ function requireStringId(definitionType: string, id: unknown): string {
 export function assertDefinitionId(
   definitionType: string,
   id: unknown,
-  options?: { callerFilePath?: string },
+  options?: { allowReservedDottedNamespace?: boolean },
 ): asserts id is string {
   const definitionId = requireStringId(definitionType, id);
 
@@ -146,7 +73,10 @@ export function assertDefinitionId(
 
   if (
     definitionId.includes(".") &&
-    !canUseFrameworkDottedId(definitionId, options?.callerFilePath)
+    !canUseFrameworkDottedId(
+      definitionId,
+      options?.allowReservedDottedNamespace,
+    )
   ) {
     validationError.throw({
       subject: `${definitionType} id`,

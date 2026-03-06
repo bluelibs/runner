@@ -8,6 +8,7 @@ import { rpcLaneInvalidIdError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze } from "../tools/deepFreeze";
 import { assertDefinitionId } from "./assertDefinitionId";
+import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 
 export function defineRpcLane(config: IRpcLaneDefinition): IRpcLane {
   if (typeof config.id !== "string" || config.id.trim().length === 0) {
@@ -15,7 +16,7 @@ export function defineRpcLane(config: IRpcLaneDefinition): IRpcLane {
   }
   const callerFilePath = getCallerFile();
   assertDefinitionId("rpcLane", config.id, {
-    callerFilePath: callerFilePath,
+    allowReservedDottedNamespace: isFrameworkDefinitionMarked(config),
   });
   return deepFreeze({
     ...config,

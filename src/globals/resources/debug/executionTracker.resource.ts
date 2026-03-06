@@ -1,4 +1,4 @@
-import { defineResource } from "../../../define";
+import { defineFrameworkResource } from "../../../definers/frameworkDefinition";
 import { globalTags } from "../../globalTags";
 import { loggerResource as logger } from "../logger.resource";
 import { taskRunnerResource as taskRunner } from "../taskRunner.resource";
@@ -10,7 +10,7 @@ import type { IResourceMiddlewareExecutionInput } from "../../../types/resourceM
 
 const id = "runner.debug.resources.executionTracker";
 
-export const executionTrackerResource = defineResource({
+export const executionTrackerResource = defineFrameworkResource({
   id,
   meta: {
     title: "Execution Tracker",

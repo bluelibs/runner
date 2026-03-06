@@ -1,4 +1,4 @@
-import { error } from "../../definers/builders/error";
+import { frameworkError as error } from "../../definers/builders/error";
 import type { DefaultErrorType } from "../../types/error";
 
 // RPC lane ownership conflict (exclusive owner per task)

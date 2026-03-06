@@ -1,4 +1,7 @@
-import { defineTaskMiddleware, defineResource } from "../../define";
+import {
+  defineFrameworkResource,
+  defineFrameworkTaskMiddleware,
+} from "../../definers/frameworkDefinition";
 import { globalTags } from "../globalTags";
 import { middlewareTemporalDisposedError } from "../../errors";
 import { Match } from "../../tools/check";
@@ -77,7 +80,7 @@ function rejectThrottleState(state: ThrottleState, error: Error) {
   });
 }
 
-export const temporalResource = defineResource({
+export const temporalResource = defineFrameworkResource({
   id: "runner.temporal",
   tags: [globalTags.system],
   init: async (): Promise<TemporalResourceState> => {
@@ -113,7 +116,7 @@ export const temporalResource = defineResource({
  * If multiple calls occur within the window, only the last one is executed,
  * and all callers receive the same result.
  */
-export const debounceTaskMiddleware = defineTaskMiddleware({
+export const debounceTaskMiddleware = defineFrameworkTaskMiddleware({
   id: "runner.middleware.task.debounce",
   throws: [middlewareTemporalDisposedError],
   configSchema: temporalConfigPattern,
@@ -181,7 +184,7 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
  * Throttle middleware: ensures execution at most once every `ms`.
  * If calls occur within the window, the last one is scheduled for the end of the window.
  */
-export const throttleTaskMiddleware = defineTaskMiddleware({
+export const throttleTaskMiddleware = defineFrameworkTaskMiddleware({
   id: "runner.middleware.task.throttle",
   throws: [middlewareTemporalDisposedError],
   configSchema: temporalConfigPattern,

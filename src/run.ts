@@ -6,7 +6,6 @@ import { globalEvents } from "./globals/globalEvents";
 import { Store } from "./models/Store";
 import { Logger } from "./models/Logger";
 import { isResourceWithConfig } from "./define";
-import { debugResource } from "./globals/resources/debug";
 import {
   registerProcessLevelSafetyNets,
   registerShutdownHook,
@@ -219,12 +218,8 @@ export async function run<C, V extends Promise<any>>(
   }
 
   try {
-    if (debug) {
-      store.storeGenericItem(debugResource.with(debug));
-    }
-
     // In the registration phase we register deeply all the resources, tasks, middleware and events
-    store.initializeStore(resource, config, runtimeResult);
+    store.initializeStore(resource, config, runtimeResult, { debug });
     throwIfBootstrapShutdownRequested("store initialization");
 
     // the overrides that were registered now will override the other registered resources

@@ -1,4 +1,4 @@
-import { defineTag } from "../../define";
+import { defineFrameworkTag } from "../../definers/frameworkDefinition";
 import { Match } from "../../tools/check";
 import { CronOnError, CronTagConfig } from "./types";
 
@@ -12,7 +12,7 @@ const cronTagConfigPattern = Match.ObjectIncluding({
   silent: Match.Optional(Boolean),
 });
 
-export const cronTag = defineTag<CronTagConfig>({
+export const cronTag = defineFrameworkTag<CronTagConfig>({
   id: "runner.tags.cron",
   configSchema: cronTagConfigPattern,
   meta: {

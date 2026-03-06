@@ -1,10 +1,10 @@
-import { defineTag } from "../define";
-import { tag as tagBuilder } from "../definers/builders/tag";
+import { defineFrameworkTag } from "../definers/frameworkDefinition";
+import { frameworkTag as tagBuilder } from "../definers/builders/tag";
 import type { IEventLaneDefinition, IRpcLaneDefinition } from "../defs";
 import { cronTag } from "./cron/cron.tag";
 import { debugTag } from "./resources/debug/debug.tag";
 
-const internalTag = defineTag<{
+const internalTag = defineFrameworkTag<{
   metadata?: Record<string, any>;
 }>({
   id: "system.tags.internal",
@@ -19,7 +19,7 @@ const globalTagsBase = {
   system: internalTag,
   /** @deprecated Use `globalTags.system`. Kept for backward compatibility. */
   internal: internalTag,
-  excludeFromGlobalHooks: defineTag<{
+  excludeFromGlobalHooks: defineFrameworkTag<{
     metadata?: Record<string, any>;
   }>({
     id: "runner.tags.excludeFromGlobalHooks",

@@ -1,5 +1,7 @@
-import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
-import { defineResource } from "../../definers/defineResource";
+import {
+  defineFrameworkResource,
+  defineFrameworkTaskMiddleware,
+} from "../../definers/frameworkDefinition";
 import { symbolResource, type IResource } from "../../defs";
 import { loggerResource } from "../resources/logger.resource";
 import { LRUCache } from "lru-cache";
@@ -35,7 +37,7 @@ type CacheProviderResource = IResource<
   any
 >;
 
-export const cacheProviderResource = defineResource({
+export const cacheProviderResource = defineFrameworkResource({
   id: "runner.cacheProvider",
   init: async () => {
     const provider: CacheProvider = async (
@@ -122,7 +124,7 @@ export const journalKeys = {
   hit: journalHelper.createKey<boolean>("runner.middleware.task.cache.hit"),
 } as const;
 
-export const cacheResource = defineResource({
+export const cacheResource = defineFrameworkResource({
   id: "runner.cache",
   configSchema: cacheResourceConfigPattern,
   register: (config: CacheResourceConfig) => [
@@ -188,7 +190,7 @@ function assertCacheProviderInstance(
   }
 }
 
-export const cacheMiddleware = defineTaskMiddleware({
+export const cacheMiddleware = defineFrameworkTaskMiddleware({
   id: "runner.middleware.task.cache",
   configSchema: cacheMiddlewareConfigPattern,
   dependencies: { cache: cacheResource, logger: loggerResource.optional() },

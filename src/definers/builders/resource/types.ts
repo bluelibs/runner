@@ -26,6 +26,7 @@ export type BuilderState<
 > = Readonly<{
   id: string;
   gateway: boolean;
+  frameworkOwned: boolean;
   filePath: string;
   dependencies?: TDeps | ((config: TConfig) => TDeps);
   register?:

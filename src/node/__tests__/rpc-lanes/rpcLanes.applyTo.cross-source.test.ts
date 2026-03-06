@@ -20,7 +20,9 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
       }),
     });
     const fakeEventLanesState = r
-      .resource<any>(EVENT_LANES_RESOURCE_ID)
+      .resource<any>(EVENT_LANES_RESOURCE_ID, {
+        frameworkOwned: true,
+      })
       .init(async () => null)
       .build();
 
@@ -79,7 +81,9 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
       }),
     });
     const fakeEventLanesState = r
-      .resource<any>(EVENT_LANES_RESOURCE_ID)
+      .resource<any>(EVENT_LANES_RESOURCE_ID, {
+        frameworkOwned: true,
+      })
       .init(async () => null)
       .build();
 

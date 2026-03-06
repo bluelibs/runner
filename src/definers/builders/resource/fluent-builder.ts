@@ -18,6 +18,7 @@ import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { defineResource } from "../../defineResource";
+import { markFrameworkDefinition } from "../../markFrameworkDefinition";
 import type {
   ResourceFluentBuilder,
   ResourceFluentBuilderAfterInit,
@@ -568,7 +569,9 @@ export function makeResourceBuilder<
         isolate: state.isolate,
         subtree: state.subtree,
       };
-      const resource = defineResource(definition);
+      const resource = defineResource(
+        state.frameworkOwned ? markFrameworkDefinition(definition) : definition,
+      );
       return deepFreeze({
         ...resource,
         [symbolFilePath]: state.filePath,
