@@ -16,7 +16,11 @@ import {
   symbolOptionalDependency,
   symbolResourceWithConfig,
 } from "../types/symbols";
-import { isolateExportsConflictError, validationError } from "../errors";
+import {
+  isolateExportsConflictError,
+  resourceForkGatewayUnsupportedError,
+  validationError,
+} from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
@@ -249,6 +253,9 @@ export function defineResource<
 
   base.fork = function (newId: string, options?: ResourceForkOptions) {
     const current = resolveCurrent(this);
+    if (current.gateway === true) {
+      resourceForkGatewayUnsupportedError.throw({ id: current.id });
+    }
     const forkCallerFilePath = getCallerFile();
     const forkedParts = resolveForkedRegisterAndDependencies({
       register: current.register,

@@ -276,12 +276,15 @@ const app = r.resource("app").register([base, forked]).build();
 
 > **Note:** `register: "deep"` clones only **resources**; tasks, events, hooks, middleware, tags, errors, and async contexts are not cloned. Dependencies pointing to deep-forked resources are remapped inside the cloned tree.
 
+> **Note:** Gateway resources cannot be forked. They suppress their own namespace segment, so forked gateway instances would make their registered children collide.
+
 ##### Key Points
 
 - **`.fork()` returns a built `IResource`** — no need to call `.build()` again
 - **Tags, middleware, and type parameters are inherited**
 - **Each fork gets independent runtime** — no shared state
 - **`register` defaults to `"keep"`**
+- **Gateway resources cannot be forked**
 - **Export forked resources** to use them as typed dependencies
 
 #### Resource Exports and Isolation Boundaries
@@ -328,13 +331,13 @@ const billing = r
 
 - No isolate `exports` means backward-compatible behavior: everything remains public
 - `isolate: { exports: [] }` / `isolate: { exports: "none" }` means nothing from that resource is public outside its registration subtree
-- `isolate: { exports: ["billing.public.*"] }` supports string id selectors (`*` = one dot-segment) and selectors must match at least one id at bootstrap
+- `isolate: { exports: [...] }` accepts only explicit Runner definition/resource references
 - Visibility checks cover dependency references, hook `.on(event)` subscriptions, tag attachments (`.tags([...])`), and middleware attachment
 - Subtree middleware follows owner subtree boundaries; non-exported middleware still cannot cross isolate visibility
 - If a resource exports a child resource, that child's own exported surface is visible transitively
 - Validation happens at `run(app)` initialization, not at declaration time
 - IDs remain globally unique even for private items; visibility does not bypass duplicate-id checks
-- `runtime.runTask(task)` / `runtime.runTask("task.id")` remains allowed even for private tasks (runtime is an operator surface)
+- Runtime operator APIs are gated only by the root resource's `isolate.exports` surface; nested child privacy does not add extra runtime restrictions on its own
 
 **Nested export chain rule (`A -> B -> C`):**
 
@@ -344,7 +347,7 @@ const billing = r
 **Wildcard hooks note:**
 
 - Explicit hook event references are visibility-checked
-- Wildcard hooks (`.on("*")`) are global by design; use explicit events when you need strict boundary enforcement
+- Wildcard hooks (`.on("*")`) are also visibility-checked against every registered event; use explicit events when you need narrower intent or clearer diagnostics
 
 #### Wiring Access Policy
 
@@ -363,12 +366,11 @@ Setting an option to `false` excludes that channel from the current `scope(...)`
 
 **Pick the target form by intent:**
 
-| Target form                           | What it matches                                              | Best for                                                                  |
-| ------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `definition`                          | Exact definition id (tags also match carriers)               | Stable in-module references                                               |
-| `scope("selector.*")`                 | Id selectors resolved at bootstrap                           | Pattern-based policies across many ids                                    |
-| `subtreeOf(resource, { types? })`     | Structural ownership subtree (optionally narrowed by `type`) | Nested/overridable ids where ownership is safer than id patterns          |
-| `scope([mixedTargets], { channels })` | One channel config applied to multiple target kinds          | Keeping one consistent rule across definitions, selectors, and subtrees   |
+| Target form                           | What it matches                                              | Best for                                                                   |
+| ------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `definition`                          | Exact definition id (tags also match carriers)               | Stable in-module references                                                |
+| `subtreeOf(resource, { types? })`     | Structural ownership subtree (optionally narrowed by `type`) | Nested/overridable ids where ownership is safer than id patterns           |
+| `scope([mixedTargets], { channels })` | One channel config applied to multiple target kinds          | Keeping one consistent rule across definitions and structural subtree refs |
 
 ```typescript
 import { r, scope } from "@bluelibs/runner";
@@ -385,7 +387,7 @@ const billing = r
   .register([internalDb, internalOnlyTag])
   .isolate({
     deny: [internalDb, internalOnlyTag], // block by id or definition (tags match all carriers)
-    // deny: [scope("billing.resources.*.test")] // selector + optional channel options
+    // deny: [scope([internalDb, internalOnlyTag], { tagging: false })]
   })
   .build();
 
@@ -400,7 +402,7 @@ const payments = r
   .register([allowedService])
   .isolate({
     only: [allowedService], // nothing else from outside is reachable
-    // only: [scope("payments.public.*", { middleware: false })] // restrict middleware channel only
+    // only: [scope([allowedService], { middleware: false })] // restrict middleware channel only
   })
   .build();
 ```
@@ -409,14 +411,14 @@ const payments = r
 
 - A resource uses **either** `deny` **or** `only` — providing both (even `deny: []` alongside `only`) throws `isolateConflictError` at bootstrap.
 - `deny` / `only` accept definitions, `subtreeOf(...)`, or `scope(...)` entries.
-- Bare strings are invalid in `deny` / `only`; use `scope("id.or.selector.*", options)` for id-selector targets.
+- Bare strings are invalid in `deny` / `only`; string selectors are supported only in `isolate.exports`.
 - Tag definition entries and tag-id selector entries are intentionally different:
   - `deny: [internalOnlyTag]` / `only: [internalOnlyTag]` apply tag semantics (tag dependency itself + all definitions carrying that tag).
-  - `deny: [scope(internalOnlyTag.id)]` / `only: [scope(internalOnlyTag.id)]` are exact-id matches only (no carrier expansion).
+  - `deny: [scope([internalOnlyTag], { tagging: false })]` / `only: [scope([internalOnlyTag], { tagging: false })]` still use tag semantics, just with channel precision.
 - `scope(target, options)` applies the same channel options to every wrapped target, including combinations like `scope([paymentsApi, subtreeOf(agentResource), tags.system], { dependencies: false })`.
 - **`only` automatically exempts internal items**: anything registered by the resource or its children is always accessible without being listed. `only: []` blocks all external dependencies while keeping internal ones reachable.
 - **`only` is checked at every ancestor boundary** for the consumer. For external dependencies, effective access behaves like the intersection of ancestor `only` lists (with the internal-subtree exemption still applied at each boundary).
-- Rules are validated at bootstrap; unknown, malformed, or unmatched wildcard selectors fail fast.
+- Rules are validated at bootstrap; malformed export entries and unknown object references fail fast.
 - Enforcement scope includes dependency wiring, hook `.on(event)` subscriptions, tag attachments (`.tags([...])`), and middleware attachments, so the same policy semantics apply when targets are events, tags, or middleware definitions.
 - **Parent and child policies compose additively**; children cannot relax parent restrictions:
   - Parent `deny: [A]` + child `deny: [B]` → neither A nor B accessible inside child.
@@ -1500,6 +1502,7 @@ const performanceMiddleware = r.middleware
 #### System Tags
 
 Built-in tags for framework behavior:
+
 - `tags.system` is shorthand for `tags.system`.
 
 ```typescript
@@ -1710,7 +1713,3 @@ The core concepts above cover most use cases. For specialized features:
 - **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](../readmes/SERIALIZER_PROTOCOL.md).
 
 ---
-
-
-
-

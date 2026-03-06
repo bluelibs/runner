@@ -10,11 +10,15 @@ import type {
   IsolationPolicy,
   IsolationSubtreeFilter,
   IsolationTarget,
+  ItemType,
 } from "../../defs";
 import { isTag, isSubtreeFilter, isIsolationScope } from "../../define";
 import type { IsolationScope, IsolationScopeTarget } from "../../tools/scope";
 import { scope } from "../../tools/scope";
-import { resolveIsolationSelector } from "../utils/isolationSelectors";
+import {
+  getSubtreeFilterResourceReference,
+  isSubtreeFilterItemType,
+} from "../../tools/subtreeOf";
 import type { ValidatorContext } from "./ValidatorContext";
 
 /** Input for normalization functions */
@@ -174,11 +178,9 @@ export function normalizeIsolationEntries<TEntry extends object>(
     if (isSubtreeFilter(entry)) {
       const normalizedFilter = normalizeSubtreeFilterResourceId(ctx, {
         filter: entry,
+        onInvalidEntry: input.onInvalidEntry,
         onUnknownTarget: input.onUnknownTarget,
       });
-      if (!ctx.hasRegisteredId(normalizedFilter.resourceId)) {
-        input.onUnknownTarget(normalizedFilter.resourceId);
-      }
       normalizedEntries.push(normalizedFilter as unknown as TEntry);
       continue;
     }
@@ -230,11 +232,9 @@ function expandScopeTargets(
     if (isSubtreeFilter(target)) {
       const normalizedFilter = normalizeSubtreeFilterResourceId(ctx, {
         filter: target,
+        onInvalidEntry: input.onInvalidEntry,
         onUnknownTarget: input.onUnknownTarget,
       });
-      if (!ctx.hasRegisteredId(normalizedFilter.resourceId)) {
-        input.onUnknownTarget(normalizedFilter.resourceId);
-      }
       expanded.push(normalizedFilter);
       continue;
     }
@@ -318,38 +318,31 @@ function resolveKnownIsolationTargetId(
   return resolvedId;
 }
 
-function resolveSelectorTargetIds(
-  ctx: ValidatorContext,
-  input: {
-    selector: string;
-    onInvalidEntry: (entry: unknown) => never;
-    onUnknownTarget: (targetId: string) => never;
-  },
-): string[] {
-  if (input.selector.length === 0) {
-    input.onInvalidEntry(input.selector);
-  }
-
-  const resolvedIds = resolveIsolationSelector(
-    input.selector,
-    ctx.getRegisteredIds(),
-  );
-  if (resolvedIds.length === 0) {
-    input.onUnknownTarget(input.selector);
-  }
-
-  return resolvedIds;
-}
-
 function normalizeSubtreeFilterResourceId(
   ctx: ValidatorContext,
   input: {
     filter: IsolationSubtreeFilter;
+    onInvalidEntry: (entry: unknown) => never;
     onUnknownTarget: (targetId: string) => never;
   },
 ) {
+  if (
+    typeof input.filter.resourceId !== "string" ||
+    input.filter.resourceId.length === 0
+  ) {
+    input.onInvalidEntry(input.filter);
+  }
+
+  const filterTypes = input.filter.types;
+  if (!validateSubtreeFilterTypes(filterTypes)) {
+    input.onInvalidEntry(input.filter);
+  }
+
+  const resourceReference = getSubtreeFilterResourceReference(input.filter);
   const resolvedResourceId =
-    ctx.resolveReferenceId(input.filter.resourceId) ?? input.filter.resourceId;
+    (resourceReference ? ctx.resolveReferenceId(resourceReference) : null) ??
+    ctx.resolveReferenceId(input.filter.resourceId) ??
+    input.filter.resourceId;
 
   if (!ctx.hasRegisteredId(resolvedResourceId)) {
     input.onUnknownTarget(resolvedResourceId);
@@ -365,6 +358,20 @@ function normalizeSubtreeFilterResourceId(
   };
 }
 
+function validateSubtreeFilterTypes(
+  types: ReadonlyArray<unknown> | undefined,
+): types is ReadonlyArray<ItemType> {
+  if (types === undefined) {
+    return true;
+  }
+
+  if (!Array.isArray(types)) {
+    return false;
+  }
+
+  return types.every((type) => isSubtreeFilterItemType(type));
+}
+
 /**
  * Normalizes export entries - exported for testing purposes.
  */
@@ -377,25 +384,10 @@ export function normalizeExportEntries(
   },
 ): Array<IsolationExportsTarget> {
   const normalizedEntries: Array<IsolationExportsTarget> = [];
-  const seenStringTargets = new Set<string>();
-
-  const addStringTarget = (id: string) => {
-    if (seenStringTargets.has(id)) return;
-    seenStringTargets.add(id);
-    normalizedEntries.push(id);
-  };
 
   for (const entry of input.entries) {
     if (typeof entry === "string") {
-      const resolvedIds = resolveSelectorTargetIds(ctx, {
-        selector: entry,
-        onInvalidEntry: input.onInvalidEntry,
-        onUnknownTarget: input.onUnknownTarget,
-      });
-      for (const resolvedId of resolvedIds) {
-        addStringTarget(resolvedId);
-      }
-      continue;
+      input.onInvalidEntry(entry);
     }
 
     const resolvedId = resolveKnownIsolationTargetId(ctx, {
@@ -413,7 +405,13 @@ export function normalizeExportEntries(
       continue;
     }
 
-    normalizedEntries.push(resolvedId as unknown as IsolationExportsTarget);
+    normalizedEntries.push(
+      normalizeResolvedDefinitionEntry<IsolationExportsTarget>(
+        entry,
+        resolvedId,
+        input.onInvalidEntry,
+      ),
+    );
   }
 
   return normalizedEntries;

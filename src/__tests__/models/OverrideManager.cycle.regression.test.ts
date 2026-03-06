@@ -269,4 +269,30 @@ describe("OverrideManager override graph recursion", () => {
     ).not.toThrow();
     expect(manager.overrides.size).toBe(0);
   });
+
+  it("fails fast when a child override targets a parent-owned definition", () => {
+    const fixture = createTestFixture();
+    const { store } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+    const runtimeResult = fixture.createRuntimeResult(taskRunner);
+
+    const baseTask = defineTask({
+      id: "override.parent.target.base",
+      run: async () => "base",
+    });
+    const childOverride = r.override(baseTask, async () => "child");
+    const child = defineResource({
+      id: "override.parent.target.child",
+      overrides: [childOverride],
+    });
+    const root = defineResource({
+      id: "override.parent.target.root",
+      register: [baseTask, child],
+    });
+
+    expect(() => store.initializeStore(root, {}, runtimeResult)).toThrow(
+      /outside that resource's registration subtree/,
+    );
+  });
 });

@@ -5,13 +5,11 @@ import {
   isolateInvalidEntryError,
   isolateUnknownTargetError,
   isolateInvalidExportsError,
-  isolateExportsUnknownTargetError,
 } from "../../errors";
 
 const POLICY_INVALID_ENTRY_ID = isolateInvalidEntryError.id;
 const POLICY_UNKNOWN_TARGET_ID = isolateUnknownTargetError.id;
 const EXPORTS_INVALID_ID = isolateInvalidExportsError.id;
-const EXPORTS_UNKNOWN_TARGET_ID = isolateExportsUnknownTargetError.id;
 
 async function expectRunnerErrorId(
   promise: Promise<unknown>,
@@ -105,18 +103,18 @@ describe("isolation entry normalization coverage", () => {
       await expectRunnerErrorId(run(resource), EXPORTS_INVALID_ID);
     });
 
-    it("throws isolateExportsUnknownTargetError for export wildcard resolving to zero IDs", async () => {
+    it("throws isolateInvalidExportsError for wildcard string exports", async () => {
       const task = defineTask({
         id: "coverage.isolate.zero-export-match.task",
         run: async () => 42,
       });
       const resource = defineResource({
         id: "coverage.isolate.zero-export-match.resource",
-        isolate: { exports: ["no.such.export.pattern.*"] },
+        isolate: { exports: ["no.such.export.pattern.*"] as any },
         register: [task],
       });
 
-      await expectRunnerErrorId(run(resource), EXPORTS_UNKNOWN_TARGET_ID);
+      await expectRunnerErrorId(run(resource), EXPORTS_INVALID_ID);
     });
 
     it("allows valid exports without throwing", async () => {

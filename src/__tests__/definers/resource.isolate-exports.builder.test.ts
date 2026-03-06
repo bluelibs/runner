@@ -119,10 +119,10 @@ describe("resource builder: isolate.exports", () => {
     expect(res.isolate).toEqual({ exports: [a] });
   });
 
-  it("deprecated .exports() accepts wildcard string selectors", () => {
+  it("deprecated .exports() still stores string entries until runtime validation", () => {
     const res = r
       .resource("tests.isolate.exports.deprecated.selector.resource")
-      .exports(["tests.isolate.exports.deprecated.selector.*"])
+      .exports(["tests.isolate.exports.deprecated.selector.*"] as any)
       .build();
 
     expect(res.isolate).toEqual({

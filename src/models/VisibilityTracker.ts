@@ -14,6 +14,7 @@ import {
   getSubtreeResourceMiddlewareAttachment,
   getSubtreeTaskMiddlewareAttachment,
 } from "../tools/subtreeMiddleware";
+import { validationError } from "../errors";
 
 /**
  * Per-channel set of concrete ids, tag ids, and subtree filters
@@ -31,6 +32,29 @@ const ALL_CHANNELS: readonly IsolationChannel[] = [
   "tagging",
   "middleware",
 ] as const;
+
+type ItemTypeRegistryKey =
+  | "tasks"
+  | "resources"
+  | "events"
+  | "hooks"
+  | "taskMiddlewares"
+  | "resourceMiddlewares"
+  | "tags"
+  | "errors"
+  | "asyncContexts";
+
+const ITEM_TYPE_REGISTRY_KEYS = [
+  ["tasks", "Task"],
+  ["resources", "Resource"],
+  ["events", "Event"],
+  ["hooks", "Hook"],
+  ["taskMiddlewares", "Task middleware"],
+  ["resourceMiddlewares", "Resource middleware"],
+  ["tags", "Tag"],
+  ["errors", "Error"],
+  ["asyncContexts", "Async context"],
+] as const satisfies ReadonlyArray<readonly [ItemTypeRegistryKey, string]>;
 
 function emptyChannelSets(): CompiledChannelSets {
   return { ids: new Set(), tagIds: new Set(), subtreeFilters: [] };
@@ -111,9 +135,18 @@ function getItemId(item: RegisterableItems): string | undefined {
  * Determines the human-readable type label for a registerable item.
  */
 function getItemTypeLabel(registry: StoreRegistry, id: string): string {
-  void registry;
-  void id;
-  return "Item";
+  for (const [registryKey, label] of ITEM_TYPE_REGISTRY_KEYS) {
+    if (registry[registryKey].has(id)) {
+      return label;
+    }
+  }
+
+  throw validationError.new({
+    subject: "VisibilityTracker target type",
+    id,
+    originalError:
+      "Unable to resolve a registered item type label for the target id. This indicates an inconsistent visibility-validation state.",
+  });
 }
 
 function resolveReferenceId(

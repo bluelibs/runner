@@ -514,4 +514,83 @@ describe("run.overrides", () => {
       'Override target "task.same" is declared more than once.',
     );
   });
+
+  it("blocks overrides that try to replace a parent's registration", async () => {
+    const baseTask = defineTask({
+      id: "override.parent.owned.task",
+      run: async () => "base",
+    });
+
+    const childOverride = r.override(baseTask, async () => "child");
+
+    const child = defineResource({
+      id: "override.parent.owned.child",
+      overrides: [childOverride],
+    });
+
+    const app = defineResource({
+      id: "override.parent.owned.app",
+      register: [baseTask, child],
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      /cannot override Task "override\.parent\.owned\.task" because it is outside that resource's registration subtree/,
+    );
+  });
+
+  it("blocks overrides that target a sibling subtree", async () => {
+    const siblingTask = defineTask({
+      id: "override.sibling.task",
+      run: async () => "base",
+    });
+
+    const sibling = defineResource({
+      id: "override.sibling.owner",
+      register: [siblingTask],
+    });
+
+    const childOverride = r.override(siblingTask, async () => "child");
+
+    const otherChild = defineResource({
+      id: "override.sibling.other.child",
+      overrides: [childOverride],
+    });
+
+    const app = defineResource({
+      id: "override.sibling.app",
+      register: [sibling, otherChild],
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      /cannot override Task "override\.sibling\.task" because it is outside that resource's registration subtree/,
+    );
+  });
+
+  it("still allows overrides declared from an ancestor resource", async () => {
+    const baseTask = defineTask({
+      id: "override.downstream.task",
+      run: async () => "base",
+    });
+
+    const middle = defineResource({
+      id: "override.downstream.middle",
+      register: [baseTask],
+    });
+
+    const rootOverride = r.override(baseTask, async () => "root");
+
+    const app = defineResource({
+      id: "override.downstream.app",
+      register: [middle],
+      overrides: [rootOverride],
+      dependencies: { task: baseTask },
+      async init(_, deps) {
+        return deps.task();
+      },
+    });
+
+    const result = await run(app);
+    expect(result.value).toBe("root");
+    await result.dispose();
+  });
 });

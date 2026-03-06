@@ -118,7 +118,7 @@ describe("run.exports-visibility", () => {
       } catch (e: any) {
         expect(e.id).toBe("runner.errors.visibilityViolation");
         expect(e.message).toContain(
-          'Item "exports.error.private" is internal to resource "exports.error.child"',
+          'Task "exports.error.private" is internal to resource "exports.error.child"',
         );
         expect(e.message).toContain(
           'cannot be referenced by Resource "exports.error.root"',

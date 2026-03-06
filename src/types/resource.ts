@@ -84,8 +84,6 @@ export interface ResourceForkInfo {
   readonly fromId: string;
 }
 
-export type IsolationSelector = string;
-
 /**
  * The definition types recognised by Runner's isolation engine.
  * Used by `subtreeOf()` to narrow which items inside a resource subtree
@@ -131,8 +129,7 @@ export type IsolationTarget =
   | IsolationScope;
 export type IsolationExportsTarget =
   | RegisterableItems
-  | IResource<any, any, any, any, any, any, any>
-  | IsolationSelector;
+  | IResource<any, any, any, any, any, any, any>;
 
 export type IsolationExportsConfig =
   | ReadonlyArray<IsolationExportsTarget>
@@ -153,9 +150,9 @@ export interface IsolationPolicy {
    * Declares which registered items are visible outside this resource's
    * registration subtree.
    *
-   * String targets may be exact ids or wildcard selectors (`*` per dot-segment).
    * - Omit `exports` => everything is public (default)
    * - `exports: []` or `exports: "none"` => nothing is public
+   * - Array entries must be explicit Runner definition/resource references
    */
   exports?: IsolationExportsConfig;
 }
@@ -434,6 +431,8 @@ export interface IResource<
    * Create a new resource with a different id but the same definition.
    * Useful for creating multiple instances of a "template" resource.
    * The forked resource should be exported and used as a dependency.
+   * Gateway resources cannot be forked because they suppress their own
+   * namespace segment, which makes forked registrations collide.
    */
   fork(
     newId: string,

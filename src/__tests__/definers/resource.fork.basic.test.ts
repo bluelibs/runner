@@ -200,4 +200,12 @@ describe("IResource.fork() (basic)", () => {
     const forked = base.fork("test.keep.forked", { register: "keep" });
     expect(forked.register).toBe(base.register);
   });
+
+  it("rejects forking gateway resources", () => {
+    const gateway = r.resource("test.gateway", { gateway: true }).build();
+
+    expect(() => gateway.fork("test.gateway.fork")).toThrow(
+      /cannot be forked because gateway resources suppress their own namespace segment/i,
+    );
+  });
 });

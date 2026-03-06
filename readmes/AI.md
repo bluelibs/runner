@@ -1,765 +1,703 @@
-# BlueLibs Runner: Fluent Builder Field Guide
+# BlueLibs Runner: AI Field Guide
 
-## Resources
+This is the minimal mental model for Runner. It is not the full manual.
+
+Use this file to understand how Runner is composed, what the core contracts are, and where to look next. If you need option-by-option coverage, edge-case matrices, or transport-specific detail, use the dedicated docs.
+
+## Mental Model
+
+- `resource`: a singleton with lifecycle (`init`, `ready`, `cooldown`, `dispose`)
+- `task`: a typed business action with DI, middleware, and validation
+- `event`: a typed signal
+- `hook`: a listener for an event
+- `middleware`: a wrapper around a task or resource
+- `tag`: metadata you can attach and query later
+- `error`: a typed Runner error helper
+- `run(app)`: bootstraps the graph and returns the runtime API
+
+Prefer the flat globals for built-ins:
+
+- `resources.*`
+- `events.*`
+- `tags.*`
+- `middleware.*`
+- `debug.levels`
+
+## Quick Start
 
 ```ts
-import express from "express";
 import { resources, r, run } from "@bluelibs/runner";
 
-const server = r
-  .resource<{ port: number }>("server")
-  .context(() => ({ app: express(), isReady: true as boolean }))
-  .schema(z.object({ port: z.number().default(3000) }))
-  .init(async ({ port }, _deps, ctx) => {
-    ctx.app.use(express.json());
-    const listener = ctx.app.listen(port);
-    return { ...ctx, listener };
-  })
-  .cooldown(async ({ listener }, _config, _deps, ctx) => {
-    // Intake stop phase: quickly stop new requests.
-    ctx.isReady = false;
-    listener.close();
-  })
-  .dispose(async ({ listener }) => listener.close())
+const userCreated = r
+  .event<{ id: string; email: string }>("userCreated")
+  .build();
+
+const userStore = r
+  .resource("userStore")
+  .init(async () => new Map<string, { id: string; email: string }>())
   .build();
 
 const createUser = r
-  .task("createUser")
-  .dependencies({ logger: resources.logger })
-  .schema<{ name: string }>({ parse: (value) => value }) // parses the input
-  .resultSchema<{ id: string; name: string }>({ parse: (value) => value }) // parses the response
-  .run(async (input, { logger }) => {
-    await logger.info(`Creating user ${input.name}`);
-    return { id: "user-1", name: input.name };
+  .task<{ email: string }>("createUser")
+  .dependencies({
+    userCreated,
+    userStore,
+    logger: resources.logger,
   })
-  .build();
-
-const api = r
-  .resource("app")
-  .register([server.with({ port: 3000 }), createUser])
-  .dependencies({ server, createUser })
-  .init(async (_config, { server, createUser }) => {
-    server.listener.on("listening", () => {
-      console.log("Runner HTTP server ready on port 3000");
-    });
-
-    server.app.post("/users", async (req, res) => {
-      const user = await createUser(req.body);
-      res.json(user);
-    });
-  })
-  .build();
-
-const runtime = await run(api);
-await runtime.runTask(createUser, { name: "Ada" });
-// runtime.dispose() when you are done.
-```
-
-- Use flat globals for framework internals: `resources.*`, `events.*`, `tags.*`, `middleware.*`, and `debug.levels`.
-
-- `.with(config)` exists on configurable built definitions (resources, middleware, tags); fluent builders chain methods plus `.build()`.
-- RPC HTTP exposure is owned by `rpcLanesResource.with({ exposure: { http: ... } })` in `mode: "network"`.
-- RPC HTTP exposure internals are RPC-lanes-owned; do not depend on `src/node/exposure/*` as public API.
-- Node request context for RPC HTTP handlers is exposed as `useRpcLaneRequestContext()` / `hasRpcLaneRequestContext()` from `@bluelibs/runner/node`.
-- `r.resource<Config>(id)` / `r.task<Input>(id)` seed typing before explicit schema; config-only resources can omit `.init()`.
-- Resource lifecycle split: use `ready()` to start ingress only after startup lock, `cooldown()` to stop ingress quickly at shutdown start, then `dispose()` for final teardown after runtime drain. `ready()` and `cooldown()` can be async; keep both short and intent-focused ingress hooks (HTTP/tRPC/consumer boundaries), not teardown phases for support resources like databases.
-- `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` clones a resource under a new id with a separate runtime instance. `"drop"` clears nested items; `"deep"` deep-forks the resource tree and remaps dependencies.
-- Dependency maps are fail-fast validated: when `dependencies` is a function, Runner resolves it during bootstrap and it must return an object map (not `null`, array, or primitive).
-- `.isolate({ exports: [...] })` narrows visibility: omit = everything public; `exports: []` / `exports: "none"` = nothing public (private subtree). String entries support id selectors with segment wildcard `*` (for example: `app.resources.*`) and must match at least one id at bootstrap.
-- `.subtree(policy)` supports `tasks.middleware`, `resources.middleware`, and a top-level `validate(element, ownerConfig)` function for dynamic policy checks.
-- Subtree validators are **return-based**: return `SubtreeViolation[]` from `validate(...)` (do not throw for normal policy failures). Runner aggregates all returned violations and throws one `subtreeValidationFailedError` during bootstrap. If a validator throws or returns a non-array, Runner records an `invalid-definition` violation and still throws the aggregated subtree error.
-
-```ts
-import { r, run } from "@bluelibs/runner";
-
-type SubtreeViolation = {
-  code: string;
-  message: string;
-};
-
-const app = r
-  .resource("app")
-  .subtree({
-    tasks: {
-      validate: (taskDef): SubtreeViolation[] => {
-        if (taskDef.meta?.title) return [];
-        return [
-          {
-            code: "missing-meta-title",
-            message: `Task "${taskDef.id}" must define meta.title`,
-          },
-        ];
-      },
-    },
-  })
-  .build();
-
-await run(app); // throws aggregated subtreeValidationFailedError if violations exist
-```
-
-- Isolation quick reference:
-  - `isolate.exports` controls visibility across resource boundaries.
-  - `isolate.deny` / `isolate.only` control wiring permissions by channel.
-  - Bare strings are invalid in `deny` / `only`; use definition refs, `subtreeOf(resource)`, or `scope([...])`.
-  - Policies are additive through ancestors; effective external `only` behaves like intersection (internal subtree exemption still applies).
-
-| Target Form                                            | What it matches                                           | Use when                                                     |
-| ------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------ |
-| `definition` (task/resource/event/hook/middleware/tag) | Exact definition id (tag definitions also match carriers) | You already have a stable definition reference               |
-| `scope([definition, subtreeOf(resource)], channels)`   | Channel-scoped matching for mixed non-string targets      | You need one channel policy across multiple target kinds     |
-| `subtreeOf(resource, { types? })`                      | Resource ownership subtree (optionally by type)           | Ids are overridable/nested and structural ownership is safer |
-
-- **`subtreeOf(resource, { types? })`** is structural and works in both `deny` and `only`. It matches items by ownership (not id string), including deeply nested descendants. `types` narrows to `"task" | "hook" | "event" | "tag" | "resource" | "taskMiddleware" | "resourceMiddleware"`. The referenced resource must be registered in the same runtime graph or bootstrap fails with `isolationUnknownTarget`.
-- **`scope(target, channels?)`** wraps one or more targets with channel precision (`dependencies`, `listening`, `tagging`, `middleware`). Same `channels` options apply to every target inside that `scope(...)` entry. Available as a named export and `r.scope()`.
-- Channel options table (default for each option is `true`):
-
-| Option         | Controls                                                 |
-| -------------- | -------------------------------------------------------- |
-| `dependencies` | Dependency wiring and dependency-surface runtime access. |
-| `listening`    | Hook `.on(...)` event subscriptions.                     |
-| `tagging`      | `.tags([tag])` attachments on definitions.               |
-| `middleware`   | `.middleware([...])` and subtree middleware attachments. |
-
-- Isolation/visibility enforcement covers dependency wiring plus hook event subscriptions, tag attachments (`.tags([...])`), and middleware attachments (task + resource middleware), so the same rules apply to events, tags, and middleware too.
-- `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
-- Enable verbose logging with `run(root, { debug: "verbose" })`.
-- For a tag-driven backend toolkit example (HTTP + auth + tenancy + MikroORM migrations), see `examples/runner-x/README.md`.
-
-## Tasks
-
-Tasks are your business actions. They are plain async functions with DI, middleware, and validation.
-
-```ts
-import { resources, r } from "@bluelibs/runner";
-
-// Assuming: userService, loggingMiddleware, and tracingMiddleware are defined elsewhere
-const sendEmail = r
-  .task("sendEmail")
-  .schema<{ to: string; subject: string; body: string }>({
-    parse: (value) => value,
-  })
-  .dependencies({ emailer: userService })
-  .middleware([loggingMiddleware.with({ label: "email" }), tracingMiddleware])
-  .run(async (input, { emailer }) => {
-    await emailer.send(input);
-    return { delivered: true };
-  })
-  .build();
-```
-
-**Builder composition rules (applies to tasks, resources, hooks, middleware):**
-
-- All list builders (`dependencies`, `middleware`, `tags`, `register`, `overrides`, `exports`) append by default; pass `{ override: true }` to replace.
-- `.schema()` is a unified alias for `inputSchema`, `configSchema`, `payloadSchema`, and `dataSchema` (errors). For tasks, maps to `inputSchema` only; use `.resultSchema()` for output validation.
-- Schema resolution precedence is: explicit `parse(input)` schema first; otherwise Runner falls back to pattern validation (`check(...)`).
-- Decorator class shorthand is supported across fluent and non-fluent schema APIs (for example `.configSchema(User)`), but class shorthand requires `Match.Schema()` metadata.
-- Entry generic `r.task<Input>(id)` / `r.resource<Config>(id)` seeds typing before explicit schema declarations.
-- All builders support `.meta({ ... })` for documentation and tooling metadata.
-- Strict chain constraints are enforced on `r.*` builders:
-  - `task`: after `.run()`, you cannot call `dependencies`, `inputSchema/schema`, `resultSchema`, `middleware`, or `tags`. `.meta()`, `.throws()`, `.build()` remain valid.
-  - `hook`: `.run()` is available only after `.on(...)`; after `.run()`, `on`, `dependencies`, and `tags` are locked. `.build()` requires both `.on()` and `.run()`.
-  - `task/resource middleware`: after `.run()`, `dependencies`, `configSchema/schema`, and `tags` are locked. `.build()` requires `.run()`.
-  - `resource`: after `.init()`, `dependencies`, `configSchema/schema`, `resultSchema`, `middleware`, `tags`, and `context` are locked. `.init()` is optional, and `.build()` remains available.
-
-## Events and Hooks
-
-Events are strongly typed signals. Hooks listen to them with predictable execution order.
-
-```ts
-import { r } from "@bluelibs/runner";
-
-const userRegistered = r
-  .event("userRegistered")
-  .payloadSchema<{ userId: string; email: string }>({ parse: (v) => v })
-  .build();
-
-// Type-only alternative (no runtime payload validation):
-// const userRegistered = r.event<{ userId: string; email: string }>("userRegistered").build();
-
-// Assuming: userService and sendEmail are defined elsewhere
-const registerUser = r
-  .task("registerUser")
-  .dependencies({ userRegistered, userService })
   .run(async (input, deps) => {
-    const user = await deps.userService.create(input);
-    await deps.userRegistered({ userId: user.id, email: user.email });
+    const user = { id: "user-1", email: input.email };
+
+    deps.userStore.set(user.id, user);
+    await deps.logger.info(`Created user ${user.email}`);
+    await deps.userCreated(user);
+
     return user;
   })
   .build();
 
 const sendWelcomeEmail = r
-  .hook("app.hooks.sendWelcomeEmail")
-  .on(userRegistered)
-  .dependencies({ mailer: sendEmail })
-  .run(async (event, { mailer }) => {
-    await mailer({
-      to: event.data.email,
-      subject: "Welcome",
-      body: "Welcome!",
-    });
+  .hook("sendWelcomeEmail")
+  .on(userCreated)
+  .run(async (event) => {
+    console.log(`Welcome ${event.data.email}`);
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([userStore, createUser, sendWelcomeEmail])
+  .build();
+
+const runtime = await run(app);
+
+await runtime.runTask(createUser, { email: "ada@example.com" });
+await runtime.dispose();
+```
+
+## Core Builder Rules
+
+- Fluent builders chain methods and end with `.build()`.
+- Configurable built definitions expose `.with(config)`.
+- `r.task<Input>(id)` and `r.resource<Config>(id)` seed typing before explicit schemas.
+- `.schema()` is the unified alias:
+  - task -> input schema
+  - resource -> config schema
+  - event -> payload schema
+  - error -> data schema
+- Explicit builder methods still exist when you want readability:
+  - `.inputSchema(...)`
+  - `.configSchema(...)`
+  - `.payloadSchema(...)`
+  - `.dataSchema(...)`
+- Tasks use `.resultSchema()` for output validation.
+- Schema resolution prefers `parse(input)` when present; otherwise Runner falls back to pattern validation (`check(...)`).
+- Builder schema slots accept plain Match patterns, compiled Match schemas, decorator-backed classes, or any schema object exposing `parse(...)`.
+- For the strongest TypeScript inference in docs and user code, prefer `Match.compile(...)`, decorator-backed classes, or explicit builder generics such as `r.event<T>()`.
+- List builders append by default. Pass `{ override: true }` to replace.
+- `.meta({ ... })` is available across builders for docs and tooling.
+- Builder order is enforced. After terminal methods like `.run()` or `.init()`, mutation surfaces are intentionally reduced.
+
+Schema quick guide:
+
+```ts
+import { Match, r } from "@bluelibs/runner";
+
+const userInput = Match.compile({
+  email: Match.Email,
+  age: Match.Optional(Match.Integer),
+});
+
+const appConfig = Match.compile({
+  env: Match.OneOf("dev", "test", "prod"),
+  featureFlags: Match.Optional(Match.MapOf(Boolean)),
+});
+
+const createUser = r
+  .task("createUser")
+  .inputSchema(userInput) // same as .schema(userInput)
+  .run(async (input) => ({ id: "u1", ...input }))
+  .resultSchema({ id: Match.NonEmptyString, email: Match.Email })
+  .build();
+
+const app = r
+  .resource("app")
+  .configSchema(appConfig) // same as .schema(appConfig)
+  .register([createUser])
+  .build();
+
+const userCreated = r
+  .event("userCreated")
+  .payloadSchema(
+    Match.compile({ id: Match.NonEmptyString, email: Match.Email }),
+  )
+  .build();
+
+// Compiled Match schemas expose:
+userInput.pattern; // original Match pattern
+userInput.parse({ email: "ada@example.com" }); // validate + return typed value
+userInput.test({ email: "ada@example.com" }); // boolean type guard
+userInput.toJSONSchema(); // machine-readable contract for tooling
+```
+
+## Resources
+
+Resources model shared services and state.
+
+- `init(config, deps, context)` creates the value.
+- `ready(value, config, deps, context)` starts ingress after startup lock.
+- `cooldown(value, config, deps, context)` stops ingress quickly at shutdown start.
+- `dispose(value, config, deps, context)` performs final teardown after drain.
+- Config-only resources can omit `.init()`.
+- `r.resource(id, { gateway: true })` prevents the resource from adding its own namespace segment.
+- Gateway resources cannot be forked with `.fork()` because multiple gateway instances would compile the same child canonical ids.
+- `.context(() => initialContext)` can hold mutable resource-local state used across lifecycle phases.
+
+Use the lifecycle intentionally:
+
+- `ready()` for starting HTTP listeners, consumers, schedulers, and similar ingress
+- `cooldown()` for stopping new work immediately
+- `dispose()` for final cleanup
+
+Do not use `cooldown()` as a general teardown phase for support resources like databases.
+
+## Tasks
+
+Tasks are your main business actions.
+
+- Tasks are async functions with DI, middleware, validation, and typed output.
+- Dependency maps are fail-fast validated. If `dependencies` is a function, it must resolve to an object map.
+- Optional dependencies are explicit: `someResource.optional()`.
+- `.throws([...])` declares error contracts for docs and tooling.
+- Task `run(..., deps, context)` receives auto-injected execution context:
+  - `journal`: per-task typed state
+  - `source`: `{ kind, id }`
+
+Example:
+
+```ts
+const sendEmail = r
+  .task<{ to: string; body: string }>("sendEmail")
+  .dependencies({ logger: resources.logger })
+  .run(async (input, { logger }) => {
+    // Logger comes with the correct source prepare.
+    await logger.info(`Sending email to ${input.to}`);
+    return { delivered: true };
   })
   .build();
 ```
 
-- Use `.on(onAnyOf(...))` to listen to several events while keeping inference. Import `onAnyOf` from `@bluelibs/runner/defs` (or `@bluelibs/runner` if you already re-export it in your local facade).
-- Hooks can set `.order(priority)`; lower numbers run first. Call `event.stopPropagation()` inside `run` to cancel downstream hooks.
-- Wildcard hooks use `.on("*")` and receive every emission except events tagged with `tags.excludeFromGlobalHooks`.
-- Use `.transactional(true)` on events when listeners must be reversible:
-  - Transactional is event metadata (`event.transactional` on emission info), not hook metadata.
-  - Every executed listener must return an async undo closure: `async () => { ... }`.
-  - If a listener fails, previously completed listeners are rolled back in reverse completion order.
-  - Rollback still continues if one undo fails; Runner throws an aggregated transactional rollback error.
-  - `run(root)` API is unchanged. This affects hook/listener `run(...)` return behavior for transactional emissions only.
-- Transactional constraints (fail-fast runtime sanity checks):
-  - `transactional + parallel` is invalid.
-  - `transactional + tags.eventLane` is invalid.
-- Use `.parallel(true)` on event definitions: same-`order` listeners run concurrently, batches execute sequentially by ascending priority; if any batch throws, subsequent batches are skipped.
-- Event emitters (dependency-injected or `runtime.emitEvent`) support options:
-  - `failureMode: "fail-fast" | "aggregate"`
-  - `throwOnError` (default `true`)
-  - `report` (when `true`, returns `IEventEmitReport`)
-- Pass `{ report: true, throwOnError: false, failureMode: "aggregate" }` to get an `IEventEmitReport` (with `failedListeners`) instead of throwing.
+## Events and Hooks
 
-## Middleware
-
-Middleware wraps tasks or resources. Fluent builders live under `r.middleware`.
+Events decouple producers from listeners. Hooks subscribe to events.
 
 ```ts
-import { r } from "@bluelibs/runner";
+import { onAnyOf, r } from "@bluelibs/runner";
 
-const auditTasks = r.middleware
+const userRegistered = r.event<{ userId: string }>("userRegistered").build();
+
+const userDeleted = r.event<{ userId: string }>("userDeleted").build();
+
+const auditUserChanges = r
+  .hook("auditUserChanges")
+  .on(onAnyOf(userRegistered, userDeleted))
+  .run(async (event) => {
+    console.log(event.definition.id, event.data.userId);
+  })
+  .build();
+```
+
+Key rules:
+
+- Hooks listen with `.on(event)` or `.on(onAnyOf(...))`.
+- `.order(priority)` controls execution order. Lower numbers run first.
+- `event.stopPropagation()` prevents downstream hooks from running.
+- `.on("*")` listens to all visible events except those tagged with `tags.excludeFromGlobalHooks`.
+- Use `.parallel(true)` on the event definition when same-priority listeners may run concurrently.
+- Use `.transactional(true)` on the event definition when listeners must be reversible.
+- In transactional mode, every executed hook must return an async undo closure:
+  - `return async () => { ...rollback... }`
+- Transactional behavior is event-level metadata, not hook-level metadata.
+- If one hook fails, previously completed hooks are rolled back in reverse completion order.
+- Rollback continues even if one undo fails; Runner throws an aggregated rollback error.
+- `run(app)` does not change for transactional events. What changes is the hook contract.
+- Transactional constraints are fail-fast:
+  - `transactional + parallel` is invalid
+  - `transactional + tags.eventLane` is invalid
+- Emitters support:
+  - `failureMode: "fail-fast" | "aggregate"`
+  - `throwOnError`
+  - `report`
+
+Transactional hook example:
+
+```ts
+const orderPlaced = r
+  .event<{ orderId: string }>("orderPlaced")
+  .transactional()
+  .build();
+
+const reserveInventory = r
+  .hook("reserveInventory")
+  .on(orderPlaced)
+  .run(async (event) => {
+    await inventory.reserve(event.data.orderId);
+
+    return async () => {
+      await inventory.release(event.data.orderId);
+    };
+  })
+  .build();
+```
+
+## Middleware and ExecutionJournal
+
+Middleware wraps tasks or resources.
+
+```ts
+const audit = r.middleware
   .task("audit")
   .dependencies({ logger: resources.logger })
   .run(async ({ task, next }, { logger }) => {
-    logger.info(`→ ${task.definition.id}`);
+    await logger.info(`-> ${task.definition.id}`);
     const result = await next(task.input);
-    logger.info(`← ${task.definition.id}`);
+    await logger.info(`<- ${task.definition.id}`);
     return result;
   })
   .build();
-
-const cacheResources = r.middleware
-  .resource("app.middleware.cache")
-  .configSchema<{ ttl: number }>({ parse: (value) => value })
-  .run(async ({ value, next }, _deps, config) => {
-    if (value.current) {
-      return value.current;
-    }
-    const computed = await next();
-    value.current = computed;
-    setTimeout(() => (value.current = null), config.ttl);
-    return computed;
-  })
-  .build();
 ```
 
-Attach middleware using `.middleware([auditTasks])` on the definition that owns it. For owner-scoped auto-application, declare middleware in `resource.subtree({ tasks/resources: { middleware: [...] } })` (supports conditional entries via `{ use, when }`).
+Key rules:
 
-- Stacking order matters (first listed = outermost wrapper)
-- Use `taskRunner.intercept(interceptor, { when? })` for cross-cutting catch-all task interception.
-- Contract middleware: middleware can declare `Config`, `Input`, `Output` generics; tasks using it must conform (contracts intersect across `.middleware([...])` and `.tags([...])`). Collisions surface as `InputContractViolationError` / `OutputContractViolationError` in TypeScript; if you add `.inputSchema()`, ensure the schema's inferred type includes the contract shape.
-- Entry generic convenience is available for middleware too: `r.middleware.task<Config>(id)` seeds middleware config typing and `r.middleware.resource<Config>(id)` seeds middleware config typing. Use the explicit multi-generic form (`<Config, Input, Output>`) when you need task input/output contracts.
+- Create task middleware with `r.middleware.task(id)`.
+- Create resource middleware with `r.middleware.resource(id)`.
+- Attach middleware with `.middleware([...])`.
+- First listed middleware is the outermost wrapper.
+- Runner validates the target:
+  - task middleware can attach only to tasks or `subtree.tasks.middleware`
+  - resource middleware can attach only to resources or `subtree.resources.middleware`
+- Owner-scoped auto-application is available through `resource.subtree({ tasks/resources: { middleware: [...] } })`.
+- Contract middleware can constrain task input and output types.
+- Built-in middleware covers common reliability concerns such as retry, cache, timeout, fallback, circuit breaker, rate limit, debounce, and concurrency.
+- `taskRunner.intercept(...)` can wrap task executions globally at runtime.
+
+Task vs resource middleware:
+
+- Task middleware wraps task execution.
+- Resource middleware wraps resource initialization and resource value resolution.
+- Task middleware receives execution input shaped around `{ task, next, journal }`.
+- Resource middleware receives execution input shaped around `{ resource, next }`.
+- Task middleware is where you usually apply auth, retry, cache, rate limit, fallback, tracing, and request-scoped policies.
+- Resource middleware is where you usually apply retry or timeout around expensive startup or resource creation.
+- Canonical ids differ:
+  - task middleware -> `app.middleware.task.name`
+  - resource middleware -> `app.middleware.resource.name`
+
+### Built-in Resilience Middleware
+
+Runner ships with these resilience-focused built-ins.
+
+Task middleware:
+
+- `middleware.task.cache.with({ ttl, max, ttlAutopurge, keyBuilder })`
+  - caches task results by task id + input
+  - requires `resources.cache` to be registered
+- `middleware.task.concurrency.with({ limit, key?, semaphore? })`
+  - limits concurrent executions
+  - use `key` to share a semaphore across middleware instances
+  - use `semaphore` when you want explicit coordination
+- `middleware.task.circuitBreaker.with({ failureThreshold, resetTimeout })`
+  - opens after repeated failures and fails fast until recovery window
+- `middleware.task.debounce.with({ ms })`
+  - runs only after inactivity for `ms`
+- `middleware.task.throttle.with({ ms })`
+  - runs at most once per `ms`
+- `middleware.task.fallback.with({ fallback })`
+  - uses a static value, function, or another task when the primary fails
+- `middleware.task.rateLimit.with({ windowMs, max })`
+  - fixed-window execution limit per middleware instance
+- `middleware.task.retry.with({ retries, stopRetryIf, delayStrategy })`
+  - retries transient failures with configurable stop and delay logic
+- `middleware.task.timeout.with({ ttl })`
+  - aborts long-running executions with `AbortController`
+
+Resource middleware:
+
+- `middleware.resource.retry.with({ retries, stopRetryIf, delayStrategy })`
+  - retries resource initialization
+- `middleware.resource.timeout.with({ ttl })`
+  - prevents resource initialization from hanging indefinitely
+
+Non-resilience but commonly paired:
+
+- `middleware.task.requireContext.with({ context })`
+  - enforces that an async context exists before task execution
+
+Quick usage examples:
 
 ```ts
-type AuthConfig = { requiredRole: string };
-type AuthInput = { user: { role: string } };
-type AuthOutput = { ok: true };
+const cachedTask = r
+  .task("cachedTask")
+  .middleware([
+    middleware.task.cache.with({
+      ttl: 60_000,
+      keyBuilder: (taskId, input) => `${taskId}:${JSON.stringify(input)}`,
+    }),
+  ])
+  .run(async (input) => expensiveCall(input))
+  .build();
 
-const auth = r.middleware
-  .task<AuthConfig, AuthInput, AuthOutput>("app.middleware.auth")
-  .run(async ({ task, next }) => next(task.input))
+const resilientTask = r
+  .task("resilientTask")
+  .middleware([
+    middleware.task.fallback.with({ fallback: "default" }),
+    middleware.task.retry.with({ retries: 3 }),
+    middleware.task.timeout.with({ ttl: 5_000 }),
+    middleware.task.circuitBreaker.with({
+      failureThreshold: 5,
+      resetTimeout: 30_000,
+    }),
+  ])
+  .run(async () => unreliableCall())
+  .build();
+
+const protectedTask = r
+  .task("protectedTask")
+  .middleware([
+    middleware.task.rateLimit.with({ windowMs: 60_000, max: 10 }),
+    middleware.task.concurrency.with({ limit: 5, key: "shared-api-budget" }),
+  ])
+  .run(async () => externalCall())
+  .build();
+
+const startupResource = r
+  .resource("startupResource")
+  .middleware([
+    middleware.resource.retry.with({ retries: 2 }),
+    middleware.resource.timeout.with({ ttl: 15_000 }),
+  ])
+  .init(async () => connectBroker())
   .build();
 ```
+
+Composition guidance:
+
+- Put fallback outermost when it should catch the final failure after retry, timeout, or circuit-breaker logic.
+- Put timeout inside retry when each retry attempt should get its own budget.
+- Use rate limiting to control admission count over time.
+- Use concurrency to control simultaneous work in flight.
+- Use circuit breaker when repeated failures should turn into fail-fast behavior.
+- Use cache only for idempotent or acceptably stale reads.
+- Use debounce and throttle for bursty event-like task calls, not for general request-response logic.
+
+Built-in journal keys exist for several task middleware:
+
+- `middleware.task.cache.journalKeys.hit`
+- `middleware.task.retry.journalKeys.attempt`
+- `middleware.task.retry.journalKeys.lastError`
+- `middleware.task.circuitBreaker.journalKeys.state`
+- `middleware.task.circuitBreaker.journalKeys.failures`
+- `middleware.task.rateLimit.journalKeys.remaining`
+- `middleware.task.rateLimit.journalKeys.resetTime`
+- `middleware.task.rateLimit.journalKeys.limit`
+- `middleware.task.fallback.journalKeys.active`
+- `middleware.task.fallback.journalKeys.error`
+- `middleware.task.timeout.journalKeys.abortController`
 
 ### ExecutionJournal
 
-**ExecutionJournal** is a typed key-value store scoped to a single task execution, enabling middleware and tasks to share state. It has **fail-fast semantics**: calling `set()` on an existing key throws an error (prevents silent bugs from middleware clobbering each other). Use `{ override: true }` to intentionally update.
+`ExecutionJournal` is typed state scoped to a single task execution.
+
+- Use it when middleware and tasks need to share execution-local state.
+- `journal.set(key, value)` fails if the key already exists.
+- Pass `{ override: true }` when replacement is intentional.
+- Create custom keys with `journal.createKey<T>(id)`.
+- Task context includes `journal` and `source`.
+
+## Isolation, Subtrees, Forks, and Overrides
+
+Runner treats composition boundaries as first-class.
+
+- `.isolate({ exports: [...] })` controls what a resource exposes outside its subtree.
+- `exports: []` or `exports: "none"` makes a subtree private.
+- `exports` array entries must be explicit Runner definition or resource references.
+- `deny` and `only` control cross-boundary wiring by channel.
+- Use definition refs, `subtreeOf(resource)`, or `scope(target, channels?)`.
+- Bare strings are invalid in `deny` and `only`.
+- Isolation rules are additive through ancestors.
+- Unknown isolation targets fail fast at bootstrap.
+- Runtime operator APIs are gated only by the root resource's `isolate.exports` surface.
+- `subtreeOf(resource)` matches by ownership subtree instead of id string matching.
+- `scope(target, channels?)` applies channel-specific isolation rules such as `dependencies`, `listening`, `tagging`, or `middleware`.
 
 ```ts
-import { journal, middleware, r } from "@bluelibs/runner";
-
-const abortControllerKey = middleware.task.timeout.journalKeys.abortController;
-
-// Middleware accesses journal via execution input
-const auditMiddleware = r.middleware
-  .task("audit")
-  .run(async ({ task, next, journal }) => {
-    // Access typed values from journal
-    const ctrl = journal.get(abortControllerKey);
-    if (journal.has(abortControllerKey)) {
-      /* ... */
-    }
-    return next(task.input);
-  })
-  .build();
-
-// Task accesses journal via context
-const myTask = r
-  .task("app.tasks.myTask")
-  .run(async (input, deps, { journal, source }) => {
-    journal.set(abortControllerKey, new AbortController());
-    // Task invocation source metadata: { kind, id }
-    const kind = source.kind;
-    // To update existing: journal.set(key, newValue, { override: true });
-    return "done";
-  })
-  .build();
-
-// Create custom keys
-const myKey = journal.createKey<{ startedAt: Date }>("app.middleware.timing");
+.isolate({
+  deny: [subtreeOf(adminResource), scope([internalEvent], { listening: false })],
+})
 ```
 
-**Built-in Middleware Journal Keys**: Global middlewares (`retry`, `cache`, `circuitBreaker`, `rateLimit`, `fallback`, `timeout`) expose runtime state via typed journal keys at `middleware.task.<name>.journalKeys`. For example, `retry` exposes `attempt` and `lastError`; `cache` exposes `hit`; `circuitBreaker` exposes `state` and `failures`. Access these via `journal.get(key)` without deep imports.
+Subtrees:
 
-Task `run(..., deps, context)` context includes both `journal` and `source` (both auto-injected): `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
+- `.subtree(policy)` can auto-attach middleware to nested tasks/resources.
+- Subtrees can validate contained definitions.
+- Validators are return-based:
+  - return `SubtreeViolation[]` for normal policy failures
+  - do not throw for expected validation failures
 
-## Tags
+Forks and overrides:
 
-Tags let you annotate definitions with metadata that can be queried later.
+- `resource.fork(newId, { register, reId })` clones a resource definition under a new id.
+- `register` controls what happens to the resource's registered children:
+  - `"keep"`: keep the same registered items in the forked resource
+  - `"drop"`: clear registered items from the fork
+  - `"deep"`: deep-fork registered resources too
+- `register` defaults to `"keep"`.
+- `reId` is used only with `register: "deep"`.
+- `reId` receives each deep-forked resource id and must return the new id for that cloned resource.
+- If `reId` is omitted, Runner defaults to prefixing with the fork id.
+- `register: "deep"` clones only resources.
+- Tasks, events, hooks, middleware, tags, errors, and async contexts are not deep-cloned.
+- When deep-forking, dependencies pointing to forked resources are remapped inside the cloned resource tree.
+- Use `.fork(...)` when you need another instance.
+- `.fork()` is not supported for gateway resources.
+- `.fork()` returns a built resource. You do not call `.build()` again.
+- Use `r.override(base, fn)` when you need to replace behavior while preserving the original id.
+- `.overrides([...])` applies override definitions during bootstrap.
+- Override direction is downstream-only: declare overrides from the resource that owns the target subtree or from one of its ancestors. Child resources cannot replace parent-owned or sibling-owned definitions.
+- Override targets must already exist in the graph.
+
+Fork quick guide:
+
+- `fork("new.id")`: same resource behavior, new id, keep registered children
+- `fork("new.id", { register: "drop" })`: new resource instance without the original registered subtree
+- `fork("new.id", { register: "deep", reId })`: clone the resource tree for isolated variants such as tenant-specific resources
+
+## Tags and Scheduling
+
+Tags are Runner's typed discovery system. They attach metadata to definitions, can influence framework behavior, and can also be consumed as dependencies to discover matching definitions at runtime.
 
 ```ts
-import { r } from "@bluelibs/runner";
+import { Match, r } from "@bluelibs/runner";
 
-const httpRouteTag = r
-  .tag("app.tags.httpRoute")
-  .for(["tasks"]) // optional: restrict where this tag can be attached
-  .configSchema<{ method: "GET" | "POST"; path: string }>({
-    parse: (value) => value,
-  })
+const httpRoute = r
+  .tag("httpRoute")
+  .for(["tasks"])
+  .configSchema(
+    Match.compile({
+      method: Match.OneOf("GET", "POST"),
+      path: Match.NonEmptyString,
+    }),
+  )
   .build();
 
 const getHealth = r
-  .task("app.tasks.getHealth")
-  .tags([httpRouteTag.with({ method: "GET", path: "/health" })])
-  .run(async () => ({ status: "ok" }))
+  .task("getHealth")
+  .tags([httpRoute.with({ method: "GET", path: "/health" })])
+  .run(async () => ({ ok: true }))
   .build();
 ```
 
-Retrieve tagged items by depending on the tag directly. Runner injects a typed accessor with `tasks`, `resources`, `events`, `hooks`, `taskMiddlewares`, `resourceMiddlewares`, and `errors`.
+Key rules:
 
-```ts
-const inspectRoutes = r
-  .task("app.tasks.inspectRoutes")
-  .dependencies({ httpRouteTag })
-  .run(async (_input, { httpRouteTag }) => {
-    return httpRouteTag.tasks.map((entry) => ({
-      id: entry.definition.id,
-      config: entry.config,
-    }));
-  })
-  .build();
-```
+- Depending on a tag injects a typed accessor over matching definitions.
+- `.for([...])` restricts which definition kinds can receive the tag.
+- Tag configs are typed and validated like any other config surface, so `.configSchema(...)` accepts Match patterns, `Match.compile(...)`, class schemas, or any `parse(...)` schema.
+- Contract tags shape task or resource typing without changing runtime behavior.
+- Built-in tags such as `tags.system`, `tags.debug`, and `tags.excludeFromGlobalHooks` affect framework behavior.
+- Tags are often the cleanest way to implement auto-discovery such as HTTP route registration, cron scheduling, cache warmers, or internal policies without manual registries.
 
-Use `tag.startup()` when startup ordering matters; treat that accessor as metadata-first (runtime helpers like `tasks[].run` may be unavailable there).
+Cron:
 
-- Scope tags with `.for([...])` to specific definition kinds (`"tasks"`, `"resources"`, `"events"`, `"hooks"`, `"taskMiddlewares"`, `"resourceMiddlewares"`, `"errors"`). Wrong usage is rejected by TypeScript in `.tags([...])` and also fails fast at runtime (useful when `any`/casts bypass TS).
-- Contract tags (a "smart tag"): define type contracts for task input/output (or resource config/value) via `r.tag<TConfig, TInputContract, TOutputContract>(id)`. They don't change runtime behavior; they shape the inferred types and compose with contract middleware.
-- Smart tags: built-in tags like `tags.internal` / `tags.system` (id: `system.tags.internal`), `tags.debug`, and `tags.excludeFromGlobalHooks` change framework behavior.
-- Internal container resources are namespaced under `system.*` and exposed as flat globals (`resources.store`, `resources.taskRunner`, `resources.middlewareManager`, `resources.eventManager`, `resources.runtime`). Prefer tag-based gates such as `.isolate({ deny: [tags.system] })`.
+- `tags.cron` schedules tasks with cron expressions.
+- Cron runs only when `resources.cron` is registered.
+- One cron tag per task is supported.
+- If `resources.cron` is not registered, cron tags remain metadata only.
 
-```ts
-type Input = { id: string };
-type Output = { name: string };
-const userContract = r.tag<void, Input, Output>("contract.user").build();
+## Async Context, Queue, and Remote Lanes
 
-const getUser = r
-  .task("getUser")
-  .tags([userContract])
-  .run(async (input) => ({ name: input.id }))
-  .build();
-```
+These are important features, but the full detail lives elsewhere.
 
-## Cron Scheduling
+Async Context:
 
-Use `tags.cron` to schedule tasks with cron expressions. The scheduler lives in `resources.cron`, and it is opt-in: cron schedules run only when you explicitly register this resource.
+- Defines request-local state on platforms that support `AsyncLocalStorage`.
+- Use `r.asyncContext(...)` or `defineAsyncContext(...)`.
+- Contexts can be provided, required by middleware, or injected as dependencies.
+- If custom `serialize` and `parse` are omitted, Runner uses its default serializer.
 
-```ts
-import { resources, r, tags } from "@bluelibs/runner";
+Queue:
 
-const cleanupTask = r
-  .task("app.tasks.cleanup")
-  .tags([
-    tags.cron.with({
-      expression: "*/5 * * * *",
-      immediate: true,
-      onError: "continue",
-    }),
-  ])
-  .run(async () => {
-    // cleanup logic
-  })
-  .build();
+- `resources.queue` provides named FIFO queues.
+- Each queue id gets its own isolated queue instance.
+- `queue.run(id, task)` schedules work sequentially for that queue id.
+- Disposal can cancel in-flight work via `AbortSignal`.
 
-const app = r
-  .resource("app")
-  .register([
-    resources.cron.with({
-      // Optional: restrict scheduling to selected task ids/definitions.
-      only: [cleanupTask],
-    }),
-    cleanupTask,
-  ])
-  .build();
-```
+Remote Lanes (Node):
 
-`tags.cron.with({...})` options:
-
-- `expression` (required): 5-field cron expression
-- `input`: static input passed to the task on each run
-- `timezone`: timezone for scheduling
-- `immediate`: run once immediately at startup, then continue schedule
-- `enabled`: disable schedule when `false`
-- `onError`: `"continue"` (default) or `"stop"`
-- `silent`: suppress all cron log output for this task when `true` (default `false`)
-
-`resources.cron.with({...})` options:
-
-- `only`: optional array of task ids or task definitions; when set, only those cron-tagged tasks are scheduled.
-
-Notes:
-
-- One cron tag per task is supported. If you need multiple schedules, use task forking and tag each fork.
-- If `resources.cron` is not registered, cron tags are treated as metadata and no schedules are started.
-- Cron startup logs are emitted through `resources.logger`.
-- On `events.disposing`, cron stops all pending schedules immediately (no new timer-driven runs), while already in-flight cron task executions drain with normal shutdown budgets.
-
-## Async Context
-
-Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node, and Deno when `AsyncLocalStorage` is available). Use `r.asyncContext(...)` or `defineAsyncContext({ ... })`.
-
-> **Platform Note**: Async Context requires `AsyncLocalStorage`. It is available in Node.js and Deno (when exposed), and unavailable in browser runtimes.
-
-```ts
-import { r } from "@bluelibs/runner";
-
-const requestContext = r
-  .asyncContext<{ requestId: string }>("app.ctx.request")
-  // below is optional
-  .configSchema(z.object({ ... }))
-  // mostly for remote lane HTTP propagation
-  .serialize((data) => JSON.stringify(data))
-  .parse((raw) => JSON.parse(raw))
-  .build();
-
-// Provide and read within an async boundary
-await requestContext.provide({ requestId: "abc" }, async () => {
-  const ctx = requestContext.use(); // { requestId: "abc" }
-});
-
-// Require middleware for tasks that need the context
-r.task("task").middleware([requestContext.require()]);
-```
-
-- Recommended ids: `{domain}.ctx.{noun}` (for example: `app.ctx.request`).
-- `.configSchema(schema)` (optional) validates the value passed to `provide(...)`.
-- If you don't provide `serialize`/`parse`, Runner uses its default serializer to preserve Dates, RegExp, etc.
-- You can also inject async contexts as dependencies; the injected value is the helper itself. Contexts must be registered to be used.
-- Optional dependencies: `dependencies({ requestContext: requestContext.optional() })` injects `undefined` if the context isn't registered.
-
-```ts
-const whoAmI = r
-  .task("app.tasks.whoAmI")
-  .dependencies({ requestContext })
-  .run(async (_input, { requestContext }) => requestContext.use().requestId)
-  .build();
-
-const app = r.resource("app").register([requestContext, whoAmI]).build();
-```
-
-## Queue
-
-`Queue` is a cooperative FIFO task queue. Tasks run one-after-another, with dead-lock detection and graceful disposal.
-
-The global resource `resources.queue` provides a named queue factory — each `id` gets its own isolated `Queue` instance.
-
-**Key methods:**
-
-- `queue.run(id, task)` — schedule `task` (receives an `AbortSignal`) on the queue identified by `id`; creates the queue lazily.
-
-**Event lifecycle:** `enqueue` → `start` → `finish` | `error`. On disposal: `disposed`. On cancel: `cancel`.
-
-```ts
-import { resources, r, run } from "@bluelibs/runner";
-
-const processOrder = r
-  .task("processOrder")
-  .dependencies({ queue: resources.queue })
-  .run(async (input: { orderId: string }, { queue }) => {
-    // Tasks with the same orderId run sequentially
-    return queue.run(input.orderId, async (signal) => {
-      if (signal.aborted) return;
-      // ... process order
-      return { processed: true };
-    });
-  })
-  .build();
-```
-
-For advanced usage, import `Queue` directly and use `on(type, handler)` / `once(type, handler)` to observe lifecycle events. Call `dispose({ cancel: true })` to abort in-flight work via the `AbortSignal`.
-
-## Remote Lanes (Node)
-
-Remote Lanes connect multiple Runner runtimes through named lanes and topology bindings.
-
-- **Event Lanes**: async fire-and-forget routing for lane-assigned events. Producers enqueue; consumers dequeue and re-emit locally so hooks run on the receiving side. Common adapters: `MemoryEventLaneQueue`, `RabbitMQEventLaneQueue`.
-- **RPC Lanes**: synchronous cross-runner task/event calls routed by profile/topology `serve` + binding rules. Use when caller must await result.
-- Both lane types support `mode: "network" | "transparent" | "local-simulated"`:
-  - `network`: real transport routing
-  - `transparent`: bypass transport and run locally
-  - `local-simulated`: local serializer/auth simulation boundary
-- Lane assignment can be tag-based or explicit with `.applyTo([...])` on lane definitions (`eventLane` or `rpcLane`), and `applyTo` is authoritative when present.
-- RPC async-context propagation is explicit allowlist policy via `.asyncContexts([...])`; omitted contexts are not forwarded.
+- Event lanes are async fire-and-forget routing for events.
+- RPC lanes are synchronous cross-runner task or event calls.
+- Supported modes:
+  - `network`
+  - `transparent`
+  - `local-simulated`
+- Async-context propagation over RPC lanes is allowlist-based.
 
 References:
 
-- AI quick reference: `readmes/REMOTE_LANES_AI.md`
-- Full guide: `readmes/REMOTE_LANES.md`
+- `readmes/REMOTE_LANES_AI.md`
+- `readmes/REMOTE_LANES.md`
 
-## check() and Match (Meteor-inspired)
+## Validation, Errors, and Serialization
 
-Use `check(value, patternOrSchema)` for runtime validation.
+Validation:
 
-- Pattern mode: returns the same value (typed by pattern), throws `Match.Error` on mismatch.
-- Schema mode: calls `schema.parse(value)` and returns validated output or throws.
+- Use `check(value, patternOrSchema)` for runtime validation.
+- Plain object patterns are strict by default.
+- `Match.compile(pattern)` converts a pattern into a reusable schema object with `parse(...)`, `test(...)`, and JSON Schema export support.
+- Use `Match.ObjectIncluding(...)` when unknown keys are allowed.
+- Use `Match.MapOf(...)` for dynamic-key records.
+- `Match.Lazy(...)` supports recursive patterns.
+- `Match.Schema()` and `Match.Field()` support class-decorator schemas.
+- `Match.fromSchema(Class)` is useful when consuming class-backed contracts.
+- `Match.toJSONSchema(...)` exports JSON Schema for supported patterns.
+- Builder schema slots accept the same validation sources everywhere: task input, task output, resource config, event payload, tag config, middleware config, and error data.
 
-Main patterns/helpers:
+Errors:
 
-- Constructors/literals/object/array patterns (`String`, `{ a: String }`, `[String]`, etc.)
-- `Match.Any`, `Match.Integer`, `Match.NonEmptyString`, `Match.Email`, `Match.UUID`, `Match.URL`, `Match.IsoDateString`, `Match.RegExp(re)`
-- `Match.Optional`, `Match.Maybe`, `Match.OneOf`, `Match.Where`, `Match.ObjectStrict`, `Match.ObjectIncluding`, `Match.MapOf`, `Match.NonEmptyArray`, `Match.ArrayOf`
-- `Match.compile(pattern)` and `Match.test(value, pattern)`
+- Use `r.error(...)` to define typed Runner errors.
+- Helpers expose `new`, `create`, `throw`, and `is`.
+- `.httpCode(...)` and `.remediation(...)` enrich errors for transport and operator feedback.
+- `r.error.is(err)` checks whether something is any Runner error.
 
-Object matching defaults:
+Serialization:
 
-- Plain object patterns (for example `{ a: { b: String } }`) are strict by default and equivalent to `Match.ObjectStrict({ ... })`.
-- Use `Match.ObjectIncluding({ ... })` when unknown keys must be allowed.
-- Use `Match.MapOf(valuePattern)` for dynamic-key records where each value must match the same pattern.
+- Runner ships with a serializer that round-trips common non-JSON shapes like `Date` and `RegExp`.
+- Register custom types through `resources.serializer`.
+- `@Serializer.Field(...)` lets class-based DTOs remap field names and transform wire values during serialize/deserialize.
+- `@Serializer.Field(...)` composes well with `@Match.Schema()` and `@Match.Field(...)` when you want one DTO to both validate and map payloads.
+- Prefer explicit schemas at trust boundaries.
+- File uploads are handled by HTTP RPC transport helpers, not the generic serializer.
 
-Recursive/class schemas:
-
-- `Match.Lazy(() => pattern)` for recursive/forward references.
-- `Match.Schema(options?)` + `Match.Field(pattern)` for optional decorator-based class schemas.
-- `Match.Schema({ base: BaseClass | () => BaseClass })` composes class schemas even when classes do not use `extends`.
-- `Match.fromSchema(Class, { exact? })` returns a schema-like matcher (default class behavior is ObjectIncluding-style).
-- Use `Match.Schema()` + `Match.Field()` when defining a class you control (decorator style); use `Match.fromSchema(Class)` when consuming an existing class or when you need an inline schema without decorators.
-- Runtime handles cyclic input graphs for recursive patterns.
-
-JSON Schema (`Match.toJSONSchema(pattern, { strict? })`):
-
-- Draft 2020-12 output.
-- Runtime-only patterns (currently `Match.Where` and `Function`) use one shared policy:
-  - `strict: false` (default): export permissive metadata nodes with `x-runner-match-kind`.
-  - `strict: true`: fail fast (`runner.errors.check.jsonSchemaUnsupportedPattern`).
-- `Match.RegExp(re)` exports `type: "string"` + `pattern: re.source`; flags are exported as metadata.
-- `Match.fromSchema(...)` exports recursive class graphs via `$defs/$ref`.
-- `Match.ObjectStrict(...)` exports strict object schemas (`additionalProperties: false`).
-- `Match.MapOf(...)` exports dictionary schemas via `additionalProperties: <value schema>`.
-
-## Errors
-
-Define typed, namespaced errors with a fluent builder. Built helpers expose `new`, `create` (alias), `throw`, and `is`:
+Serializer + Match example:
 
 ```ts
-import { r } from "@bluelibs/runner";
+import { Match, Serializer } from "@bluelibs/runner";
 
-// Fluent builder
-const AppError = r
-  .error<{ code: number; message: string }>("AppError")
-  .httpCode(400)
-  // .schema is an alias for .dataSchema in errors
-  .schema(z.object({ code: z.number(), message: z.string() }))
-  .format((d) => `[${d.code}] ${d.message}`)
-  .remediation("Check the request payload and retry with valid data.")
-  .tags([criticalTag])
-  .build();
+@Match.Schema()
+class UserDto {
+  @Serializer.Field({ from: "user_id" })
+  @Match.Field(Match.NonEmptyString)
+  id!: string;
 
-try {
-  AppError.throw({ code: 400, message: "Oops" });
-} catch (err) {
-  if (AppError.is(err, { code: 400 })) {
-    // err.httpCode -> 400, err.message includes remediation
-  }
+  @Serializer.Field({
+    from: "created_at",
+    deserialize: (value) => new Date(String(value)),
+  })
+  @Match.Field(Date)
+  createdAt!: Date;
 }
 
-const error = AppError.new({ code: 400, message: "Oops" });
-throw error;
+const serializer = new Serializer();
+const user = serializer.deserialize(
+  '{"user_id":"u1","created_at":"2026-03-06T10:00:00.000Z"}',
+  { schema: UserDto },
+  // serializer.parse(...) does deserialization + validation
+);
 ```
 
-- The thrown `Error` has `name = id` and `message = format(data)` (default: `JSON.stringify(data)`).
-- `.httpCode(number)` sets an HTTP status on the error helper and thrown instances.
-- `.remediation(stringOrFn)` attaches fix-it advice appended to `error.message`; raw text also at `error.remediation`.
-- `helper.new(data)` constructs and returns a typed `RunnerError` without throwing.
-- `helper.is(err, partialData?)` performs shallow strict matching (`===`) on each provided key.
-- Declare a task/resource error contract with `.throws([AppError])` (or ids). Declarative only, does not imply DI. Available on hooks and middleware builders too.
-- Use `r.error.is(err)` to check if an error is _any_ Runner error (not just a specific one). This type guard narrows to `RunnerError` with `id`, `data`, `httpCode`, and `remediation` properties. Useful in catch blocks or error filters:
-  ```ts
-  if (r.error.is(err, { code: 400 })) {
-    console.error(`Runner error: ${err.id} (${err.httpCode || "N/A"})`);
-  }
-  ```
+Practical rule:
 
-## Overrides
+- Use `Match.compile(...)` for most contracts when you want both runtime validation and strong builder inference.
+- Use plain Match patterns when runtime validation is enough or when the payload type is already explicit through builder generics.
+- Use class DTOs when field remapping or reusable serializer transforms become central.
 
-Override a task/resource/hook/middleware while preserving `id`:
+## Runtime, Lifecycle, Testing, and IDs
 
-```ts
-const mockMailer = r.override(realMailer, async () => new MockMailer());
+Runtime:
 
-const app = r
-  .resource("app")
-  .register([realMailer])
-  .overrides([mockMailer])
-  .build();
-```
+- `run(app, options?)` wires dependencies, initializes resources, emits lifecycle events, and returns the runtime API.
+- Main runtime helpers:
+  - `runTask`
+  - `emitEvent`
+  - `getResourceValue`
+  - `getLazyResourceValue`
+  - `getResourceConfig`
+  - `getRootId`
+  - `getRootConfig`
+  - `getRootValue`
+  - `dispose`
+- Use `run(app, { debug: "verbose" })` for structured debug output.
+- Use `run(app, { logs: { printThreshold: null } })` to silence console output.
+- `dryRun: true` validates the graph without starting resources.
+- `lazy: true` defers startup-unused resources until on-demand access.
+- `lifecycleMode: "parallel"` enables dependency-safe parallel startup and disposal waves.
 
-- `r.override(base, fn)` and `defineOverride(base, fn)` share the same typed behavior for swaps:
-  - task/hook/task-middleware/resource-middleware: replaces `run`
-  - resource: replaces `init`
-- `r.override(...)` / `defineOverride(...)` create replacement definitions; `.overrides([...])` applies them in a specific container during bootstrap.
-- `.overrides([...])` accepts only definitions produced by `r.override(...)` or `defineOverride(...)` (plus `null` / `undefined`).
-- Registering only the replacement definition is valid; registering both base and replacement in `.register([...])` causes duplicate-id errors.
-- `.overrides([...])` requires the target id to already be present in the graph; if you wanted a second resource instance instead of replacement, use `.fork("new.id")`.
-- Hook overrides keep the same `.on` target; shorthand only replaces `run`.
-- Boundary/topology changes are not override concerns; use `.fork("new.id")` for separate instances.
+Lifecycle:
 
-## Runtime & Lifecycle
+- Startup order:
+  - wire dependencies
+  - `init` resources
+  - lock runtime mutation surfaces
+  - run `ready()`
+  - emit `events.ready`
+- Shutdown order:
+  - run `cooldown()`
+  - emit `events.disposing`
+  - drain in-flight work
+  - emit `events.drained`
+  - run `dispose()`
 
-- `run(root, options)` wires dependencies, initializes resources, and returns the runtime object: `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, `store`, `logger`, and `dispose`. `getLazyResourceValue` is available only when `run(..., { lazy: true })` is enabled.
-- `emitEvent(event, payload, options?)` accepts the same emission options (`failureMode`, `throwOnError`, `report`) as dependency emitters.
-- `.isolate({ exports: [...] })` on the root restricts `runTask`, `emitEvent`, `getResourceValue`, and `getLazyResourceValue` to exported ids; omit for full open surface.
-- Run options: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `disposeBudgetMs` (total), `disposeDrainBudgetMs` (drain wait), `dryRun`, `lazy`, `lifecycleMode` (`"sequential"` or `"parallel"`).
-- Startup: wire deps -> init resources (dependency order) -> lock runtime mutation surfaces -> run resource `ready()` hooks (dependency order) -> emit `events.ready` -> return runtime. Signals during bootstrap cancel and roll back.
-- Shutdown phases: (1) `cooldown()` on resources (reverse dep order) — fast ingress stop; (2) emit `events.disposing`; (3) drain in-flight tasks/events up to `disposeDrainBudgetMs`; (4) transition to `drained`, emit `events.drained`, block new admissions; (5) `dispose()` resources with remaining budget.
-- Lifecycle usage reminder: use `ready()` for ingress start, `cooldown()` for ingress stop, and `dispose()` for final teardown (see Resources section for the contract details).
-- Event source model: `IEventEmission.source` is object-based end-to-end: `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
-- Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime.
+Testing:
 
-## Reliability & Performance
+- In unit tests, build the smallest root resource that expresses the contract you care about.
+- Run it with `await run(app)`.
+- Assert through `runTask`, `emitEvent`, `getResourceValue`, or `getResourceConfig`.
+- `r.override(base, fn)` is the standard way to swap behavior in tests while preserving ids.
 
-- **Concurrency**: Limit parallel execution using a shared or local `Semaphore`.
-  ```ts
-  .middleware([middleware.task.concurrency.with({ limit: 5 })])
-  ```
-- **Circuit Breaker**: Trip after failures to prevent cascading downstream pressure.
-  ```ts
-  .middleware([middleware.task.circuitBreaker.with({ failureThreshold: 5, resetTimeout: 30000 })])
-  ```
-- **Rate Limit**: Protect APIs with fixed-window request counting.
-  ```ts
-  .middleware([middleware.task.rateLimit.with({ windowMs: 60000, max: 100 })])
-  ```
-- **Temporal (Debounce/Throttle)**: Control execution frequency.
-  ```ts
-  .middleware([middleware.task.debounce.with({ ms: 300 })])
-  ```
-- **Fallback**: Provide a Plan B (value, function, or another task) when the primary fails.
-  ```ts
-  // Recommended: Fallback should be outer (on top) of Retry to catch final failures
-  .middleware([
-    middleware.task.fallback.with({ fallback: "Guest User" }),
-    middleware.task.retry.with({ attempts: 3 })
-  ])
-  ```
-- **Retry/Backoff**: `middleware.task.retry` and `middleware.resource.retry` for transient failures.
-  ```ts
-  .middleware([middleware.task.retry.with({ retries: 3 })])
-  ```
-- **Caching**: `middleware.task.cache` plus `resources.cache`.
-  ```ts
-  .middleware([middleware.task.cache.with({ ttl: 60000 })])
-  ```
-- **Timeouts**: `middleware.task.timeout` / `middleware.resource.timeout` using `AbortController`.
-  ```ts
-  .middleware([middleware.task.timeout.with({ ttl: 5000 })])
-  ```
-- **Logging & Debug**: `resources.logger` and `resources.debug`.
-  ```ts
-  // Verbose debug logging for a specific task
-  .tags([tags.debug])
-  ```
+IDs:
 
-## Serialization
-
-Runner ships with a serializer that round-trips Dates, RegExp, binary, and custom shapes across Node and web.
-
-Register custom types via `serializer.addType({ id, is, serialize, deserialize, strategy })` (inject `resources.serializer`). Use `new Serializer()` for a standalone instance.
-
-Schema-aware deserialization is available via `deserialize(payload, { schema })` (or `parse(payload, { schema })`):
-
-- Decorated classes support shorthand: `schema: User` and `schema: [User]` when the class has `@Match.Schema()` metadata.
-- If a class is not decorated with `@Match.Schema()`, constructor shorthand keeps constructor semantics (`instanceof`), which usually fails for plain deserialized objects.
-- Schema-like parsers support shorthand arrays: `schema: [mySchema]`.
-- Use `schema: Match.fromSchema(User)` for class-backed contracts.
-- For arrays, use `schema: Match.ArrayOf(Match.fromSchema(User))`.
-- Prefer explicit entry schemas at trust boundaries.
-
-Serializer field remapping is available via `Serializer.Field(...)` on class properties:
-
-- `Serializer.Field({ from: "abc" })` maps inbound/outbound key aliases for class instances.
-- `Serializer.Field({ serialize, deserialize })` applies per-field value transforms.
-- Metadata resolution is cached per class constructor (no repeated reflection-like scanning per call).
-
-Note: file uploads use `createWebFile`/`createNodeFile` — handled by HTTP RPC transport, not the serializer.
-
-## Testing
-
-- In unit tests, prefer running a minimal root resource and call `await run(root)` to get `runTask`, `emitEvent`, `getResourceValue`, or `getResourceConfig`.
-- The Jest runner has a watchdog (`JEST_WATCHDOG_MS`, default 10 minutes) to avoid "hung test run" situations.
-- For durable workflow tests, use `createDurableTestSetup` from `@bluelibs/runner/node` for fast, in-memory execution.
-
-```ts
-import { run } from "@bluelibs/runner";
-
-test("sends welcome email", async () => {
-  const app = r
-    .resource("spec.app")
-    .register([sendWelcomeEmail, registerUser])
-    .build();
-  const runtime = await run(app);
-  await runtime.runTask(registerUser, { email: "user@example.com" });
-  await runtime.dispose();
-});
-```
-
-## Observability & Debugging
-
-- Pass `{ debug: "verbose" }` to `run` for structured logs about registration, middleware, and lifecycle events.
-- `resources.logger` exposes the framework logger. Inject it as a dependency to access the `Logger` instance at runtime.
-- Hooks and tasks emit metadata through `resources.store`. Query it for dashboards or editor plugins.
-- Use middleware for tracing (`r.middleware.task("...").run(...)`) to wrap every task call.
-- **Silence stdout**: `run(app, { logs: { printThreshold: null } })` — disables all console output. Also accepts `printStrategy: "pretty" | "json"`.
-- **Intercept the log stream**: inject `resources.logger` and call `logger.onLog(async (log) => { ... })`. The `ILog` payload includes `level`, `message`, `data`, `context`, `error`, `source`, and `timestamp`. Listeners fire before printing, buffered startup logs are replayed in order, and listener errors are swallowed (won't crash the runtime). Use this for PII scrubbing, forwarding to external APIs, or filtering.
-
-## Namespacing & IDs
-
-- Meta: `.meta({ title, description })` on tasks/resources/events/middleware for human-friendly docs and tooling; extend meta types via module augmentation when needed.
-- Scoped names: definitions can use local names when registered under a resource subtree (for example `task("createUser")` under `resource("app")`).
-- Prefer local names in definitions (`task("createUser")`, `event("userRegistered")`); `run()` composes canonical IDs from ownership automatically.
-- Canonical runtime IDs are compiled from the owner subtree:
-  - task `createUser` -> `app.tasks.createUser`
-  - event `userRegistered` -> `app.events.userRegistered`
-  - resource `db` -> `app.db` (nested registers inherit 'app.db' as prefix)
-  - hook `onUserRegistered` -> `app.hooks.onUserRegistered`
-  - task middleware `auth` -> `app.middleware.task.auth`
-  - resource middleware `audit` -> `app.middleware.resource.audit`
-  - tag `public` -> `app.tags.public`
-  - error `InvalidInput` -> `app.errors.InvalidInput`
-  - async context `request` -> `app.ctx.request`
-- Runtime/store internals always expose canonical IDs (`definition.id`), while original definition objects remain unchanged.
-- Fail-fast reserved local names: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `ctx`.
-- Fail-fast id shape checks are centralized for all definition types: ids cannot start/end with `.`, cannot contain `..`, and cannot be a reserved standalone local name.
-- Namespace composition is structural and deterministic: local ids are canonicalized by their owner subtree.
-- Use `r.resource(id, { gateway: true })` when a resource should not add its own namespace segment.
-- Runtime validation: `inputSchema`, `resultSchema`, `payloadSchema`, `configSchema` share the same `parse(input)` contract; config validation happens on `.with()`, task/event validation happens on call/emit. Use `.schema()` as a unified alias (input/payload/schema/data) for simplicity.
+- Prefer local names in definitions such as `task("createUser")`.
+- Runner composes canonical ids from the owner subtree at runtime.
+- Runtime and store internals always expose canonical ids.
+- Reserved local names fail fast:
+  - `tasks`
+  - `resources`
+  - `events`
+  - `hooks`
+  - `tags`
+  - `errors`
+  - `ctx`
+- Ids cannot start or end with `.`, and cannot contain `..`.
 
 ## File Structure
 
-- Prefer co-locating definitions by domain in a feature-driven folder structure (for example: `src/domains/users/tasks/createUser.task.ts`).
-- Prefer naming files by item type (`*.task.ts`, `*.resource.ts`, `*.event.ts`) for fast navigation and better AI retrieval.
+- Prefer feature-driven folders.
+- Prefer naming by Runner item type:
+  - `*.task.ts`
+  - `*.resource.ts`
+  - `*.event.ts`
+  - `*.hook.ts`
+  - `*.middleware.ts`
+  - `*.tag.ts`
+  - `*.error.ts`
 
-## Advanced Patterns
+## Observability
 
-- **Optional dependencies:** `analytics: analyticsService.optional()` injects `undefined` when the resource is absent.
-- **Conditional registration:** `.register((config) => (config.enableFeature ? [featureResource] : []))`.
-- **Event safety:** Runner detects event emission cycles and throws an `EventCycleError` with the offending chain.
-- **Internal runtime:** `resources.runtime` resolves to the same `IRuntime` returned by `run(...)`. When injected inside `init()`, only that resource's dependencies are guaranteed initialized.
+- `resources.logger` is the built-in structured logger.
+- Loggers support `trace`, `debug`, `info`, `warn`, `error`, and `critical`.
+- `logger.with({ source, additionalContext })` creates contextual child loggers that share the same root listeners and buffering.
+- `logger.onLog(async (log) => { ... })` lets you forward, redact, or collect logs without routing them through the event system.
+- `run(app, { logs: { printThreshold, printStrategy, bufferLogs } })` controls printing and startup buffering.
+- Prefer stable `source` ids and low-cardinality context fields such as `requestId`, `taskId`, or `tenantId`.
+
+## When To Leave This File
+
+Use the dedicated docs when you need:
+
+- deeper isolation policy behavior
+- override edge cases and precedence rules
+- full observability guidance
+- full Remote Lanes behavior
+- transport-specific RPC HTTP details
+- exhaustive cron options
+- the full `Match` pattern catalog
+- serializer customization detail
+- platform-specific Node helpers

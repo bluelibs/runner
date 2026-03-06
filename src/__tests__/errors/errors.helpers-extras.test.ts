@@ -22,8 +22,10 @@ import {
   eventLaneRpcLaneConflictError,
   eventLaneAssignmentConflictError,
   rpcLaneTaskAssignmentConflictError,
+  overrideOutOfScopeError,
   remoteLaneAuthSignerMissingError,
   remoteLaneAuthVerifierMissingError,
+  resourceForkGatewayUnsupportedError,
 } from "../../errors";
 
 describe("error helpers extra branches", () => {
@@ -74,6 +76,23 @@ describe("error helpers extra branches", () => {
       fail("Expected throw");
     } catch (e: any) {
       expect(String(e?.message)).toContain("Platform function not supported");
+    }
+  });
+
+  it("overrideOutOfScopeError omits owner details when ownerResourceId is absent", () => {
+    expect.assertions(2);
+    try {
+      overrideOutOfScopeError.throw({
+        sourceId: "tests.override.source",
+        targetId: "tests.override.target",
+        targetType: "Task",
+      });
+      fail("Expected throw");
+    } catch (e: any) {
+      expect(String(e?.message)).toContain(
+        'Resource "tests.override.source" cannot override Task "tests.override.target" because it is outside that resource\'s registration subtree.',
+      );
+      expect(String(e?.message)).not.toContain("It belongs to resource");
     }
   });
 
@@ -244,6 +263,18 @@ describe("error helpers extra branches", () => {
         expect(e.message).toContain("tests.app");
         expect(e.remediation).toContain(".register([...])");
         expect(e.remediation).toContain('.fork("new.id")');
+      }
+    });
+
+    it("includes fork remediation for gateway-resource fork failures", () => {
+      expect.assertions(3);
+      try {
+        resourceForkGatewayUnsupportedError.throw({ id: "http.gateway" });
+        fail("Expected throw");
+      } catch (e: any) {
+        expect(e.message).toContain('Resource "http.gateway" cannot be forked');
+        expect(e.message).toContain("namespace segment");
+        expect(e.remediation).toContain("Do not call .fork()");
       }
     });
 

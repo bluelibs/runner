@@ -159,6 +159,17 @@ describe("scope()", () => {
       expect(Object.isFrozen(result)).toBe(true);
     });
 
+    it("clones and freezes the targets array", () => {
+      const targets: IsolationScopeTarget[] = [exampleTask, exampleEvent];
+      const result = scope(targets);
+
+      targets.push(exampleResource);
+
+      expect(result.targets).toEqual([exampleTask, exampleEvent]);
+      expect(result.targets).not.toBe(targets);
+      expect(Object.isFrozen(result.targets)).toBe(true);
+    });
+
     it("has frozen channels", () => {
       const result = scope(exampleTask, { dependencies: false });
       expect(Object.isFrozen(result.channels)).toBe(true);

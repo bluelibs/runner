@@ -84,3 +84,8 @@ export const symbolFilePath: unique symbol = Symbol.for("runner.filePath");
 export const symbolAsyncContext: unique symbol = Symbol.for(
   "runner.asyncContext",
 );
+
+/** @internal Preserves the original resource reference captured by subtreeOf(). */
+export const symbolIsolationSubtreeResource: unique symbol = Symbol.for(
+  "runner.isolationSubtreeResource",
+);

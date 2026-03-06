@@ -11,6 +11,7 @@ import * as utils from "../define";
 import {
   overrideDefinitionRequiredError,
   overrideDuplicateTargetError,
+  overrideOutOfScopeError,
   overrideTargetNotRegisteredError,
   unknownItemTypeError,
 } from "../errors";
@@ -120,6 +121,49 @@ export class OverrideManager {
     return Array.from(sources.values());
   }
 
+  private hasRegisteredOverrideTarget(
+    targetId: string,
+    override: SupportedOverride,
+  ): boolean {
+    const targetType = this.getOverrideType(override);
+
+    switch (targetType) {
+      case "Task":
+        return this.registry.tasks.has(targetId);
+      case "Resource":
+        return this.registry.resources.has(targetId);
+      case "Task middleware":
+        return this.registry.taskMiddlewares.has(targetId);
+      case "Resource middleware":
+        return this.registry.resourceMiddlewares.has(targetId);
+      case "Hook":
+        return this.registry.hooks.has(targetId);
+    }
+  }
+
+  private assertOverrideWithinDeclaringSubtree(
+    sourceResourceId: string,
+    targetId: string,
+    override: SupportedOverride,
+  ): void {
+    if (
+      this.registry.visibilityTracker.isWithinResourceSubtree(
+        sourceResourceId,
+        targetId,
+      )
+    ) {
+      return;
+    }
+
+    overrideOutOfScopeError.throw({
+      sourceId: sourceResourceId,
+      targetId: this.getOverrideId(override),
+      targetType: this.getOverrideType(override),
+      ownerResourceId:
+        this.registry.visibilityTracker.getOwnerResourceId(targetId),
+    });
+  }
+
   private isOverrideBranded(override: RegisterableItems): boolean {
     return utils.isOverrideDefinition(override);
   }
@@ -158,6 +202,13 @@ export class OverrideManager {
       }
 
       const targetId = this.getOverrideTargetId(element.id, supportedOverride);
+      if (this.hasRegisteredOverrideTarget(targetId, supportedOverride)) {
+        this.assertOverrideWithinDeclaringSubtree(
+          element.id,
+          targetId,
+          supportedOverride,
+        );
+      }
       this.overrideRequests.add({ source: element.id, override });
       if (this.overrides.has(targetId)) {
         overrideDuplicateTargetError.throw({
@@ -177,24 +228,10 @@ export class OverrideManager {
     for (const [targetId, override] of this.overrides.entries()) {
       const supportedOverride = this.toSupportedOverride(override);
       const targetType = this.getOverrideType(supportedOverride);
-      let hasAnyItem: boolean;
-      switch (targetType) {
-        case "Task":
-          hasAnyItem = this.registry.tasks.has(targetId);
-          break;
-        case "Resource":
-          hasAnyItem = this.registry.resources.has(targetId);
-          break;
-        case "Task middleware":
-          hasAnyItem = this.registry.taskMiddlewares.has(targetId);
-          break;
-        case "Resource middleware":
-          hasAnyItem = this.registry.resourceMiddlewares.has(targetId);
-          break;
-        case "Hook":
-          hasAnyItem = this.registry.hooks.has(targetId);
-          break;
-      }
+      const hasAnyItem = this.hasRegisteredOverrideTarget(
+        targetId,
+        supportedOverride,
+      );
 
       if (!hasAnyItem) {
         overrideTargetNotRegisteredError.throw({

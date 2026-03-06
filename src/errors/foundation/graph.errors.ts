@@ -78,6 +78,32 @@ export const overrideDuplicateTargetError = error<
   )
   .build();
 
+export const overrideOutOfScopeError = error<
+  {
+    sourceId: string;
+    targetId: string;
+    targetType:
+      | "Task"
+      | "Resource"
+      | "Task middleware"
+      | "Resource middleware"
+      | "Hook";
+    ownerResourceId?: string;
+  } & DefaultErrorType
+>("runner.errors.overrideOutOfScope")
+  .format(({ sourceId, targetId, targetType, ownerResourceId }) => {
+    const ownerDetails = ownerResourceId
+      ? ` It belongs to resource "${ownerResourceId}".`
+      : "";
+
+    return `Resource "${sourceId}" cannot override ${targetType} "${targetId}" because it is outside that resource's registration subtree.${ownerDetails}`;
+  })
+  .remediation(
+    ({ sourceId }) =>
+      `Declare the override from a parent resource that owns the target subtree, or move the target registration under "${sourceId}" if that resource should control it. Overrides are only allowed downstream within the declaring resource's subtree.`,
+  )
+  .build();
+
 export const overrideDefinitionRequiredError = error<
   {
     sourceId: string;

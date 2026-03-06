@@ -79,8 +79,8 @@ export function scope(
   channels?: IsolationChannels,
 ): IsolationScope {
   const targets: ReadonlyArray<IsolationScopeTarget> = Array.isArray(target)
-    ? target
-    : [target];
+    ? Object.freeze([...target])
+    : Object.freeze([target]);
 
   const resolved: Readonly<Required<IsolationChannels>> = channels
     ? Object.freeze({

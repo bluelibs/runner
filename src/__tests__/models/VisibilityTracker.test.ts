@@ -874,6 +874,36 @@ describe("VisibilityTracker", () => {
       expect(() => tracker.validateVisibility(registry as any)).not.toThrow();
     });
 
+    it("fails fast when visibility validation resolves a target id that is not present in any registry bucket", () => {
+      const policyOwner = defineResource({
+        id: "tracker.missing-type.policy-owner",
+        dependencies: {
+          phantom: { id: "tracker.missing-type.target" } as any,
+        },
+      });
+
+      tracker.recordResource(policyOwner.id);
+      tracker.recordIsolation(policyOwner.id, { only: [] });
+
+      const registry = {
+        tasks: new Map(),
+        events: new Map(),
+        hooks: new Map(),
+        taskMiddlewares: new Map(),
+        resourceMiddlewares: new Map(),
+        resources: new Map([[policyOwner.id, { resource: policyOwner }]]),
+        asyncContexts: new Map(),
+        errors: new Map(),
+        tags: new Map(),
+        resolveDefinitionId,
+        getDisplayId,
+      };
+
+      expect(() => tracker.validateVisibility(registry as any)).toThrow(
+        expect.objectContaining({ id: "runner.errors.validation" }),
+      );
+    });
+
     it("rolls back ownership transitively for descendants of a failed registration", () => {
       const childResource = defineResource({
         id: "tracker.rollback.child",

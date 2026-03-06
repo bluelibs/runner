@@ -371,6 +371,19 @@ export const resourceForkInvalidIdError = error<
   )
   .build();
 
+export const resourceForkGatewayUnsupportedError = error<
+  { id: string } & DefaultErrorType
+>(RunnerErrorId.ResourceForkGatewayUnsupported)
+  .format(
+    ({ id }) =>
+      `Resource "${id}" cannot be forked because gateway resources suppress their own namespace segment.`,
+  )
+  .remediation(
+    ({ id }) =>
+      `Do not call .fork() on gateway resource "${id}". Register a distinct non-gateway resource, or compose separate gateway resources with unique registered children instead.`,
+  )
+  .build();
+
 export const builderInvalidHttpCodeError = error<
   { value: number } & DefaultErrorType
 >(RunnerErrorId.BuilderInvalidHttpCode)

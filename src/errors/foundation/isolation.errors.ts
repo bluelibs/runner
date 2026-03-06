@@ -76,7 +76,7 @@ export const isolateInvalidExportsError = error<
   )
   .remediation(
     ({ policyResourceId }) =>
-      `Use .isolate({ exports: [...] }) or .isolate({ exports: "none" }) on "${policyResourceId}". Export entries must be Runner definitions or string ids/selectors.`,
+      `Use .isolate({ exports: [...] }) or .isolate({ exports: "none" }) on "${policyResourceId}". Export entries must be explicit Runner definition or resource references.`,
   )
   .build();
 

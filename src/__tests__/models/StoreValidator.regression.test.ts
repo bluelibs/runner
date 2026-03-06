@@ -232,7 +232,7 @@ describe("StoreValidator regressions", () => {
     ).toThrow("unknown");
   });
 
-  it("deduplicates overlapping string exports after wildcard expansion", () => {
+  it("rejects string exports during normalization", () => {
     const { store } = createTestFixture();
     const registry = (store as unknown as { registry: any }).registry;
     const validator = registry.getValidator() as {
@@ -241,22 +241,19 @@ describe("StoreValidator regressions", () => {
         onInvalidEntry: (entry: unknown) => never;
         onUnknownTarget: (targetId: string) => never;
       }) => Array<unknown>;
-      registeredIds: Set<string>;
     };
 
-    validator.registeredIds.add("validator.exports.dedupe.task");
-
-    const normalized = validator.normalizeExportEntries({
-      entries: ["validator.exports.dedupe.*", "validator.exports.dedupe.task"],
-      onInvalidEntry: () => {
-        throw new Error("invalid");
-      },
-      onUnknownTarget: () => {
-        throw new Error("unknown");
-      },
-    });
-
-    expect(normalized).toEqual(["validator.exports.dedupe.task"]);
+    expect(() =>
+      validator.normalizeExportEntries({
+        entries: ["validator.exports.invalid"],
+        onInvalidEntry: () => {
+          throw new Error("invalid");
+        },
+        onUnknownTarget: () => {
+          throw new Error("unknown");
+        },
+      }),
+    ).toThrow("invalid");
   });
 
   it("reports unknown object exports", () => {

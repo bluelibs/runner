@@ -18,7 +18,7 @@ describe("run.isolate exports", () => {
     });
   });
 
-  it("fails fast when isolate.exports references an unknown target id", async () => {
+  it("fails fast when isolate.exports contains string ids", async () => {
     const child = defineResource({
       id: "isolate.exports.unknown-target.child",
       isolate: { exports: ["does.not.exist"] as any },
@@ -30,14 +30,16 @@ describe("run.isolate exports", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      id: "runner.errors.isolateExportsUnknownTarget",
+      id: "runner.errors.isolateInvalidExports",
     });
   });
 
-  it("fails fast when isolate.exports wildcard matches no ids", async () => {
+  it("fails fast when isolate.exports contains wildcard strings", async () => {
     const child = defineResource({
       id: "isolate.exports.unknown-selector.child",
-      isolate: { exports: ["isolate.exports.unknown-selector.missing.*"] },
+      isolate: {
+        exports: ["isolate.exports.unknown-selector.missing.*"] as any,
+      },
     });
 
     const app = defineResource({
@@ -46,7 +48,7 @@ describe("run.isolate exports", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      id: "runner.errors.isolateExportsUnknownTarget",
+      id: "runner.errors.isolateInvalidExports",
     });
   });
 
@@ -89,7 +91,7 @@ describe("run.isolate exports", () => {
     });
   });
 
-  it("rejects legacy exports selectors (deprecated string wildcard ids)", async () => {
+  it("rejects legacy exports string entries (deprecated)", async () => {
     const publicTask = defineTask({
       id: "isolate.exports.legacy-selector.api.public",
       run: async () => "ok",
@@ -102,7 +104,7 @@ describe("run.isolate exports", () => {
     const boundary = defineResource({
       id: "isolate.exports.legacy-selector.boundary",
       register: [publicTask, privateTask],
-      exports: ["isolate.exports.legacy-selector.api.*"],
+      exports: ["isolate.exports.legacy-selector.api.*"] as any,
     });
 
     const app = defineResource({
@@ -113,11 +115,11 @@ describe("run.isolate exports", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      id: "runner.errors.isolateExportsUnknownTarget",
+      id: "runner.errors.isolateInvalidExports",
     });
   });
 
-  it("rejects isolate.exports wildcard selectors", async () => {
+  it("rejects isolate.exports wildcard string entries", async () => {
     const publicTask = defineTask({
       id: "isolate.exports.selector.api.public",
       run: async () => "ok",
@@ -130,7 +132,7 @@ describe("run.isolate exports", () => {
     const child = defineResource({
       id: "isolate.exports.selector.child",
       register: [publicTask, privateTask],
-      isolate: { exports: ["isolate.exports.selector.api.*"] },
+      isolate: { exports: ["isolate.exports.selector.api.*"] as any },
     });
 
     const app = defineResource({
@@ -141,7 +143,7 @@ describe("run.isolate exports", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      id: "runner.errors.isolateExportsUnknownTarget",
+      id: "runner.errors.isolateInvalidExports",
     });
   });
 

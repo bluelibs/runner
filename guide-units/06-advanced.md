@@ -504,6 +504,8 @@ Sometimes you need to replace a component entirely. Maybe you're doing integrati
 
 Use `r.override(base, fn)` for behavior swaps while preserving the same `id`.
 
+Override direction is downstream-only: declare `.overrides([...])` from the resource that owns the target subtree, or from one of its ancestors. Child resources cannot silently replace definitions owned by a parent or a sibling subtree.
+
 ```typescript
 import { r } from "@bluelibs/runner";
 
