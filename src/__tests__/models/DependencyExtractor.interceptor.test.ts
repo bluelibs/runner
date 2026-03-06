@@ -10,19 +10,19 @@ import { createTestFixture } from "../test-utils";
 describe("DependencyExtractor interceptor branches", () => {
   it("skips interceptors without ownerResourceId in getInterceptingResourceIds", async () => {
     const task = defineTask({
-      id: "extractor.interceptor.no-owner.task",
+      id: "extractor-interceptor-no-owner-task",
       run: async () => "intercepted",
     });
 
     const consumer = defineResource({
-      id: "extractor.interceptor.no-owner.consumer",
+      id: "extractor-interceptor-no-owner-consumer",
       dependencies: { task, store: resources.store },
       init: async (_config, { task, store }) => {
         const typedStore = store as Store;
 
         // Inject an interceptor WITHOUT ownerResourceId directly onto the store task
         const storeTask = typedStore.tasks.get(
-          "extractor.interceptor.no-owner.task",
+          "extractor-interceptor-no-owner-task",
         );
         if (storeTask) {
           if (!storeTask.interceptors) storeTask.interceptors = [];
@@ -43,7 +43,7 @@ describe("DependencyExtractor interceptor branches", () => {
     });
 
     const app = defineResource({
-      id: "extractor.interceptor.no-owner.app",
+      id: "extractor-interceptor-no-owner-app",
       register: [task, consumer],
       dependencies: { consumer },
       init: async (_config, { consumer }) => consumer,
@@ -57,7 +57,7 @@ describe("DependencyExtractor interceptor branches", () => {
 
   it("silently ignores unrecognized middleware in interceptMiddleware proxy", async () => {
     const consumer = defineResource({
-      id: "extractor.proxy.unknown-mw.consumer",
+      id: "extractor-proxy-unknown-mw-consumer",
       dependencies: {
         middlewareManager: resources.middlewareManager,
       },
@@ -73,7 +73,7 @@ describe("DependencyExtractor interceptor branches", () => {
     });
 
     const app = defineResource({
-      id: "extractor.proxy.unknown-mw.app",
+      id: "extractor-proxy-unknown-mw-app",
       register: [consumer],
       dependencies: { consumer },
       init: async (_config, { consumer }) => consumer,
@@ -91,11 +91,11 @@ describe("DependencyExtractor interceptor branches", () => {
     store.setTaskRunner(taskRunner);
 
     const depTask = defineTask({
-      id: "extractor.inflight.dep.task",
+      id: "extractor-inflight-dep-task",
       run: async () => "dep",
     });
     const task = defineTask({
-      id: "extractor.inflight.task",
+      id: "extractor-inflight-task",
       dependencies: { depTask },
       run: async () => "ok",
     });
@@ -103,7 +103,7 @@ describe("DependencyExtractor interceptor branches", () => {
     store.storeGenericItem(depTask);
     store.storeGenericItem(task);
     store.root = {
-      resource: defineResource({ id: "extractor.inflight.root" }),
+      resource: defineResource({ id: "extractor-inflight-root" }),
       config: undefined,
       value: undefined,
       context: {},
@@ -148,18 +148,18 @@ describe("DependencyExtractor interceptor branches", () => {
 
   it("treats an empty object argument as task input", async () => {
     const dependencyTask = defineTask({
-      id: "extractor.options.empty-object.dependency",
+      id: "extractor-options-empty-object-dependency",
       run: async (input) => (input === undefined ? "no-input" : "has-input"),
     });
 
     const consumerTask = defineTask({
-      id: "extractor.options.empty-object.consumer",
+      id: "extractor-options-empty-object-consumer",
       dependencies: { dependencyTask },
       run: async (_input, { dependencyTask }) => dependencyTask({} as any),
     });
 
     const app = defineResource({
-      id: "extractor.options.empty-object.app",
+      id: "extractor-options-empty-object-app",
       register: [dependencyTask, consumerTask],
       dependencies: { consumerTask },
       init: async (_config, { consumerTask }) => consumerTask(),
@@ -175,19 +175,19 @@ describe("DependencyExtractor interceptor branches", () => {
       journal: string;
       source: string;
     }>({
-      id: "extractor.options.journal-shaped-input.dependency",
+      id: "extractor-options-journal-shaped-input-dependency",
       run: async (input) => `${input.journal}:${input.source}`,
     });
 
     const consumerTask = defineTask({
-      id: "extractor.options.journal-shaped-input.consumer",
+      id: "extractor-options-journal-shaped-input-consumer",
       dependencies: { dependencyTask },
       run: async (_input, { dependencyTask }) =>
         dependencyTask({ journal: "payload", source: "business" }),
     });
 
     const app = defineResource({
-      id: "extractor.options.journal-shaped-input.app",
+      id: "extractor-options-journal-shaped-input-app",
       register: [dependencyTask, consumerTask],
       dependencies: { consumerTask },
       init: async (_config, { consumerTask }) => consumerTask(),
@@ -219,11 +219,11 @@ describe("DependencyExtractor interceptor branches", () => {
       };
     };
 
-    const missingEvent = defineEvent({ id: "extractor.event.missing" });
+    const missingEvent = defineEvent({ id: "extractor-event-missing" });
 
     await expect(
       processor.dependencyExtractor.extractDependency(missingEvent, "source"),
-    ).rejects.toThrow(/Event "extractor\.event\.missing" not found/i);
+    ).rejects.toThrow(/Event "extractor-event-missing" not found/i);
   });
 
   it("throws dependencyNotFoundError when event dependency id cannot be resolved", async () => {
@@ -247,7 +247,7 @@ describe("DependencyExtractor interceptor branches", () => {
       };
     };
 
-    const unresolvedEvent = defineEvent({ id: "extractor.event.unresolved" });
+    const unresolvedEvent = defineEvent({ id: "extractor-event-unresolved" });
     const resolveDefinitionIdSpy = jest.spyOn(store, "resolveDefinitionId");
     resolveDefinitionIdSpy.mockImplementation((reference: unknown) => {
       if (reference === unresolvedEvent) {
@@ -269,8 +269,6 @@ describe("DependencyExtractor interceptor branches", () => {
         unresolvedEvent,
         "source",
       ),
-    ).rejects.toThrow(
-      /Dependency Event extractor\.event\.unresolved not found/i,
-    );
+    ).rejects.toThrow(/Dependency Event extractor-event-unresolved not found/i);
   });
 });

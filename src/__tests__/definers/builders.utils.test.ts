@@ -34,11 +34,11 @@ describe("definers builders utils", () => {
 
   it("mergeDepsNoConfig merges objects and/or functions", () => {
     const a = r
-      .task("tests.dep.a")
+      .task("tests-dep-a")
       .run(async () => "a")
       .build();
     const b = r
-      .task("tests.dep.b")
+      .task("tests-dep-b")
       .run(async () => "b")
       .build();
 
@@ -64,11 +64,11 @@ describe("definers builders utils", () => {
 
   it("mergeDepsWithConfig merges objects and/or config-aware functions", () => {
     const a = r
-      .task("tests.depwc.a")
+      .task("tests-depwc-a")
       .run(async () => "a")
       .build();
     const b = r
-      .task("tests.depwc.b")
+      .task("tests-depwc-b")
       .run(async () => "b")
       .build();
 
@@ -106,7 +106,7 @@ describe("definers builders utils", () => {
 describe("error fluent builder + defineError", () => {
   it("makeErrorBuilder builds via defineError", () => {
     const helper = makeErrorBuilder({
-      id: "tests.errors.fluent",
+      id: "tests-errors-fluent",
       filePath: "tests/builders.utils.test.ts",
       serialize: (d: { message: string }) => JSON.stringify(d),
       parse: (s: string) => JSON.parse(s),
@@ -117,14 +117,14 @@ describe("error fluent builder + defineError", () => {
       .meta({ title: "t2" })
       .build();
 
-    expect(helper.id).toBe("tests.errors.fluent");
+    expect(helper.id).toBe("tests-errors-fluent");
     expect(() => helper.throw({ message: "Boom" })).toThrow();
   });
 
   it("defineError defaults format when missing", () => {
     expect.assertions(1);
     const E = defineError<{ message: string }>({
-      id: "tests.errors.defaultFormat",
+      id: "tests-errors-defaultFormat",
       dataSchema: { parse: (v: unknown) => v as { message: string } },
     });
 
@@ -137,7 +137,7 @@ describe("error fluent builder + defineError", () => {
 
   it("defineError meta getter falls back for nullish meta", () => {
     const E = defineError({
-      id: "tests.errors.nullMeta",
+      id: "tests-errors-nullMeta",
       format: () => "x",
       meta: null as unknown as Record<string, never>,
     });

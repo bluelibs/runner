@@ -6,15 +6,15 @@ describe("tags.rpcLane", () => {
     expect(globalTags.rpcLane.targets).toEqual(["tasks", "events"]);
     expect(Object.isFrozen(globalTags.rpcLane.targets)).toBe(true);
 
-    const lane = r.rpcLane("tests.global-tags.rpc-lane").build();
+    const lane = r.rpcLane("tests-global-tags-rpc-lane").build();
 
     const task = r
-      .task("tests.global-tags.rpc-lane.task")
+      .task("tests-global-tags-rpc-lane-task")
       .tags([globalTags.rpcLane.with({ lane })])
       .run(async () => "ok")
       .build();
     const event = r
-      .event("tests.global-tags.rpc-lane.event")
+      .event("tests-global-tags-rpc-lane-event")
       .tags([globalTags.rpcLane.with({ lane })])
       .build();
 
@@ -27,7 +27,7 @@ describe("tags.rpcLane", () => {
     expect(Object.isFrozen(globalTags.rpcLanes.targets)).toBe(true);
 
     const resource = r
-      .resource("tests.global-tags.rpc-lanes.resource")
+      .resource("tests-global-tags-rpc-lanes-resource")
       .tags([globalTags.rpcLanes])
       .build();
 

@@ -34,7 +34,7 @@ describe("global cron resource config", () => {
     let excludedRuns = 0;
 
     const includedTask = r
-      .task("app.tasks.only.included")
+      .task("app-tasks-only-included")
       .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         includedRuns += 1;
@@ -42,7 +42,7 @@ describe("global cron resource config", () => {
       .build();
 
     const excludedTask = r
-      .task("app.tasks.only.excluded")
+      .task("app-tasks-only-excluded")
       .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         excludedRuns += 1;
@@ -92,7 +92,7 @@ describe("global cron resource config", () => {
     let runs = 0;
 
     const task = r
-      .task("app.tasks.only.empty")
+      .task("app-tasks-only-empty")
       .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         runs += 1;
@@ -120,7 +120,7 @@ describe("global cron resource config", () => {
     const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
     const task = r
-      .task("app.tasks.only.warn")
+      .task("app-tasks-only-warn")
       .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => undefined)
       .build();

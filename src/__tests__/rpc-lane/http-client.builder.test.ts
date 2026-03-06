@@ -185,7 +185,7 @@ describe("r.rpcLane.httpClient helper", () => {
     });
 
     const runtime = await run(
-      defineResource({ id: "tests.rpc-lane.fetch.store", register: [] }) as any,
+      defineResource({ id: "tests-rpc-lane-fetch-store", register: [] }) as any,
     );
     const store = await runtime.getResourceValue(globalResources.store as any);
 

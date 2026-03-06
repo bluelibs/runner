@@ -13,53 +13,53 @@ import { run } from "../../run";
 describe("Tag dependencies", () => {
   it("injects a typed accessor with all tagged definition categories", async () => {
     const featureTag = defineTag<{ group: string }>({
-      id: "tests.tags.feature",
+      id: "tests-tags-feature",
     });
 
     const taggedEvent = defineEvent({
-      id: "tests.events.feature",
+      id: "tests-events-feature",
       tags: [featureTag.with({ group: "alpha" })],
     });
 
     const taggedHook = defineHook({
-      id: "tests.hooks.feature",
+      id: "tests-hooks-feature",
       on: taggedEvent,
       tags: [featureTag.with({ group: "alpha" })],
       run: async () => undefined,
     });
 
     const taggedTaskMiddleware = defineTaskMiddleware({
-      id: "tests.middleware.task.feature",
+      id: "tests-middleware-task-feature",
       tags: [featureTag.with({ group: "alpha" })],
       run: async ({ next, task }) => next(task.input),
     });
 
     const taggedResourceMiddleware = defineResourceMiddleware({
-      id: "tests.middleware.resource.feature",
+      id: "tests-middleware-resource-feature",
       tags: [featureTag.with({ group: "alpha" })],
       run: async ({ next }) => next(),
     });
 
     const taggedTask = defineTask({
-      id: "tests.tasks.feature",
+      id: "tests-tasks-feature",
       tags: [featureTag.with({ group: "alpha" })],
       run: async () => "ok",
     });
 
     const taggedResource = defineResource({
-      id: "tests.resources.feature",
+      id: "tests-resources-feature",
       tags: [featureTag.with({ group: "alpha" })],
       init: async () => "value",
     });
 
     const taggedError = defineError({
-      id: "tests.errors.feature",
+      id: "tests-errors-feature",
       tags: [featureTag.with({ group: "alpha" })],
       format: () => "boom",
     });
 
     const inspectorTask = defineTask({
-      id: "tests.tasks.inspectFeatureTag",
+      id: "tests-tasks-inspectFeatureTag",
       dependencies: { featureTag },
       run: async (_input, deps) => {
         return {
@@ -98,7 +98,7 @@ describe("Tag dependencies", () => {
     });
 
     const app = defineResource({
-      id: "tests.resources.feature.app",
+      id: "tests-resources-feature-app",
       register: [
         featureTag,
         taggedEvent,
@@ -118,43 +118,43 @@ describe("Tag dependencies", () => {
     expect(runtime.value).toEqual({
       tasks: [
         {
-          id: "tests.resources.feature.app.tasks.tests.tasks.feature",
+          id: "tests-resources-feature-app.tasks.tests-tasks-feature",
           config: "alpha",
         },
       ],
       resources: [
         {
-          id: "tests.resources.feature.app.tests.resources.feature",
+          id: "tests-resources-feature-app.tests-resources-feature",
           config: "alpha",
         },
       ],
       events: [
         {
-          id: "tests.resources.feature.app.events.tests.events.feature",
+          id: "tests-resources-feature-app.events.tests-events-feature",
           config: "alpha",
         },
       ],
       hooks: [
         {
-          id: "tests.resources.feature.app.hooks.tests.hooks.feature",
+          id: "tests-resources-feature-app.hooks.tests-hooks-feature",
           config: "alpha",
         },
       ],
       taskMiddlewares: [
         {
-          id: "tests.resources.feature.app.middleware.task.tests.middleware.task.feature",
+          id: "tests-resources-feature-app.middleware.task.tests-middleware-task-feature",
           config: "alpha",
         },
       ],
       resourceMiddlewares: [
         {
-          id: "tests.resources.feature.app.middleware.resource.tests.middleware.resource.feature",
+          id: "tests-resources-feature-app.middleware.resource.tests-middleware-resource-feature",
           config: "alpha",
         },
       ],
       errors: [
         {
-          id: "tests.resources.feature.app.errors.tests.errors.feature",
+          id: "tests-resources-feature-app.errors.tests-errors-feature",
           config: "alpha",
         },
       ],
@@ -164,30 +164,30 @@ describe("Tag dependencies", () => {
 
   it("filters tag accessor matches based on visibility", async () => {
     const privateTag = defineTag({
-      id: "tests.tags.visibility",
+      id: "tests-tags-visibility",
     });
 
     const privateTask = defineTask({
-      id: "tests.tasks.private.visibility",
+      id: "tests-tasks-private-visibility",
       tags: [privateTag],
       run: async () => "private",
     });
 
     const moduleBoundary = defineResource({
-      id: "tests.resources.module.visibility",
+      id: "tests-resources-module-visibility",
       register: [privateTask],
       isolate: { exports: "none" },
     });
 
     const consumerTask = defineTask({
-      id: "tests.tasks.consumer.visibility",
+      id: "tests-tasks-consumer-visibility",
       dependencies: { privateTag },
       run: async (_input, deps) =>
         deps.privateTag.tasks.map((item) => item.definition.id),
     });
 
     const app = defineResource({
-      id: "tests.resources.visibility.app",
+      id: "tests-resources-visibility-app",
       register: [privateTag, moduleBoundary, consumerTask],
       dependencies: { consumerTask },
       init: async (_config, { consumerTask }) => consumerTask(),
@@ -200,17 +200,17 @@ describe("Tag dependencies", () => {
 
   it("resolves optional missing tag dependencies to undefined", async () => {
     const missingTag = defineTag({
-      id: "tests.tags.missing.optional",
+      id: "tests-tags-missing-optional",
     });
 
     const checkTask = defineTask({
-      id: "tests.tasks.missing.optional",
+      id: "tests-tasks-missing-optional",
       dependencies: { maybeMissingTag: missingTag.optional() },
       run: async (_input, deps) => deps.maybeMissingTag === undefined,
     });
 
     const app = defineResource({
-      id: "tests.resources.missing.optional.app",
+      id: "tests-resources-missing-optional-app",
       register: [checkTask],
       dependencies: { checkTask },
       init: async (_config, { checkTask }) => checkTask(),
@@ -223,11 +223,11 @@ describe("Tag dependencies", () => {
 
   it("resolves optional missing startup tag dependencies to undefined", async () => {
     const missingTag = defineTag({
-      id: "tests.tags.beforeInit.missing.optional",
+      id: "tests-tags-beforeInit-missing-optional",
     });
 
     const checkTask = defineTask({
-      id: "tests.tasks.beforeInit.missing.optional",
+      id: "tests-tasks-beforeInit-missing-optional",
       dependencies: {
         maybeMissingTag: missingTag.startup().optional(),
       },
@@ -235,7 +235,7 @@ describe("Tag dependencies", () => {
     });
 
     const app = defineResource({
-      id: "tests.resources.beforeInit.missing.optional.app",
+      id: "tests-resources-beforeInit-missing-optional-app",
       register: [checkTask],
       dependencies: { checkTask },
       init: async (_config, { checkTask }) => checkTask(),
@@ -248,40 +248,40 @@ describe("Tag dependencies", () => {
 
   it("throws for non-optional missing tag dependencies", async () => {
     const missingTag = defineTag({
-      id: "tests.tags.missing.required",
+      id: "tests-tags-missing-required",
     });
 
     const task = defineTask({
-      id: "tests.tasks.missing.required",
+      id: "tests-tasks-missing-required",
       dependencies: { missingTag },
       run: async () => "never",
     });
 
     const app = defineResource({
-      id: "tests.resources.missing.required.app",
+      id: "tests-resources-missing-required-app",
       register: [task],
       dependencies: { task },
       init: async (_config, { task }) => task(),
     });
 
     await expect(run(app)).rejects.toThrow(
-      /Dependency Tag tests\.tags\.missing\.required not found/i,
+      /Dependency Tag tests-tags-missing-required not found/i,
     );
   });
 
   it("injects tag accessor when using startup() wrapper", async () => {
     const featureTag = defineTag<{ kind: string }>({
-      id: "tests.tags.beforeInit.accessor",
+      id: "tests-tags-beforeInit-accessor",
     });
 
     const taggedTask = defineTask({
-      id: "tests.tasks.beforeInit.accessor.tagged",
+      id: "tests-tasks-beforeInit-accessor-tagged",
       tags: [featureTag.with({ kind: "route" })],
       run: async () => "ok",
     });
 
     const consumerTask = defineTask({
-      id: "tests.tasks.beforeInit.accessor.consumer",
+      id: "tests-tasks-beforeInit-accessor-consumer",
       dependencies: { featureTag: featureTag.startup() },
       run: async (_input, deps) =>
         deps.featureTag.tasks.map((entry) => ({
@@ -291,7 +291,7 @@ describe("Tag dependencies", () => {
     });
 
     const app = defineResource({
-      id: "tests.resources.beforeInit.accessor.app",
+      id: "tests-resources-beforeInit-accessor-app",
       register: [featureTag, taggedTask, consumerTask],
       dependencies: { consumerTask },
       init: async (_config, { consumerTask }) => consumerTask(),
@@ -300,7 +300,7 @@ describe("Tag dependencies", () => {
     const runtime = await run(app);
     expect(runtime.value).toEqual([
       {
-        id: "tests.resources.beforeInit.accessor.app.tasks.tests.tasks.beforeInit.accessor.tagged",
+        id: "tests-resources-beforeInit-accessor-app.tasks.tests-tasks-beforeInit-accessor-tagged",
         kind: "route",
       },
     ]);
@@ -309,23 +309,23 @@ describe("Tag dependencies", () => {
 
   it("exposes runtime helpers on tag accessor task/resource matches", async () => {
     const featureTag = defineTag({
-      id: "tests.tags.runtime.accessor",
+      id: "tests-tags-runtime-accessor",
     });
 
     const taggedTask = defineTask({
-      id: "tests.tasks.runtime.accessor.tagged",
+      id: "tests-tasks-runtime-accessor-tagged",
       tags: [featureTag],
       run: async () => "task-result",
     });
 
     const taggedResource = defineResource({
-      id: "tests.resources.runtime.accessor.tagged",
+      id: "tests-resources-runtime-accessor-tagged",
       tags: [featureTag],
       init: async () => "resource-value",
     });
 
     const inspectorTask = defineTask({
-      id: "tests.tasks.runtime.accessor.inspector",
+      id: "tests-tasks-runtime-accessor-inspector",
       dependencies: { featureTag },
       run: async (_input, deps) => {
         const taskEntry = deps.featureTag.tasks[0];
@@ -342,7 +342,7 @@ describe("Tag dependencies", () => {
     });
 
     const app = defineResource({
-      id: "tests.resources.runtime.accessor.app",
+      id: "tests-resources-runtime-accessor-app",
       register: [featureTag, taggedTask, taggedResource, inspectorTask],
       dependencies: { inspectorTask, taggedResource },
       init: async (_config, { inspectorTask }) => inspectorTask(),
@@ -358,17 +358,17 @@ describe("Tag dependencies", () => {
 
   it("exposes intercept helpers for tag task matches in resource dependency context", async () => {
     const featureTag = defineTag({
-      id: "tests.tags.runtime.accessor.intercept",
+      id: "tests-tags-runtime-accessor-intercept",
     });
 
     const taggedTask = defineTask({
-      id: "tests.tasks.runtime.accessor.intercept.tagged",
+      id: "tests-tasks-runtime-accessor-intercept-tagged",
       tags: [featureTag],
       run: async (input: { value: number }) => ({ value: input.value }),
     });
 
     const app = defineResource({
-      id: "tests.resources.runtime.accessor.intercept.app",
+      id: "tests-resources-runtime-accessor-intercept-app",
       register: [featureTag, taggedTask],
       dependencies: { featureTag },
       init: async (_config, deps) => {
@@ -394,24 +394,24 @@ describe("Tag dependencies", () => {
 
   it("expands tag dependencies into cycle detection edges", async () => {
     const httpTag = defineTag({
-      id: "tests.tags.http.routes",
+      id: "tests-tags-http-routes",
     });
 
     const registerHttpRoutes = defineTask({
-      id: "tests.tasks.registerHttpRoutes",
+      id: "tests-tasks-registerHttpRoutes",
       dependencies: { httpTag },
       run: async () => undefined,
     });
 
     const userRoute = defineTask({
-      id: "tests.tasks.httpRoute.user",
+      id: "tests-tasks-httpRoute-user",
       tags: [httpTag],
       dependencies: { registerHttpRoutes },
       run: async () => undefined,
     });
 
     const app = defineResource({
-      id: "tests.resources.http.routes.app",
+      id: "tests-resources-http-routes-app",
       register: [httpTag, registerHttpRoutes, userRoute],
     });
 
@@ -420,24 +420,24 @@ describe("Tag dependencies", () => {
 
   it("expands startup() tag dependencies into cycle detection edges", async () => {
     const httpTag = defineTag({
-      id: "tests.tags.http.routes.beforeInit",
+      id: "tests-tags-http-routes-beforeInit",
     });
 
     const registerHttpRoutes = defineTask({
-      id: "tests.tasks.registerHttpRoutes.beforeInit",
+      id: "tests-tasks-registerHttpRoutes-beforeInit",
       dependencies: { httpTag: httpTag.startup() },
       run: async () => undefined,
     });
 
     const userRoute = defineTask({
-      id: "tests.tasks.httpRoute.user.beforeInit",
+      id: "tests-tasks-httpRoute-user-beforeInit",
       tags: [httpTag],
       dependencies: { registerHttpRoutes },
       run: async () => undefined,
     });
 
     const app = defineResource({
-      id: "tests.resources.http.routes.beforeInit.app",
+      id: "tests-resources-http-routes-beforeInit-app",
       register: [httpTag, registerHttpRoutes, userRoute],
     });
 

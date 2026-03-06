@@ -206,7 +206,10 @@ export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
   definition: IErrorDefinition<TData>,
   filePath?: string,
 ) {
-  assertDefinitionId("Error", definition.id);
+  const resolvedFilePath = filePath ?? getCallerFile();
+  assertDefinitionId("Error", definition.id, {
+    callerFilePath: resolvedFilePath,
+  });
 
   if (definition.httpCode !== undefined) {
     assertHttpCode(definition.httpCode);
@@ -216,7 +219,6 @@ export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
     definition.format = (data) => `${JSON.stringify(data)}`;
   }
 
-  const resolvedFilePath = filePath ?? getCallerFile();
   assertTagTargetsApplicableTo(
     "errors",
     "Error",

@@ -45,16 +45,16 @@ describe("eventLanes applyTo", () => {
   it("routes applyTo event targets through lane producer transport without explicit tags", async () => {
     const queue = new RecordingQueue();
     const event = r
-      .event<{ value: number }>("tests.event-lanes.apply-to.producer.event")
+      .event<{ value: number }>("tests-event-lanes-apply-to-producer-event")
       .build();
     const lane = r
-      .eventLane("tests.event-lanes.apply-to.producer.lane")
+      .eventLane("tests-event-lanes-apply-to-producer-lane")
       .applyTo([event])
       .build();
 
     let localHookRuns = 0;
     const hook = r
-      .hook("tests.event-lanes.apply-to.producer.hook")
+      .hook("tests-event-lanes-apply-to-producer-hook")
       .on(event)
       .run(async () => {
         localHookRuns += 1;
@@ -62,7 +62,7 @@ describe("eventLanes applyTo", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.apply-to.producer.emit")
+      .task("tests-event-lanes-apply-to-producer-emit")
       .dependencies({ event })
       .run(async (_input, deps) => {
         await deps.event({ value: 1 });
@@ -70,7 +70,7 @@ describe("eventLanes applyTo", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.apply-to.producer.app")
+      .resource("tests-event-lanes-apply-to-producer-app")
       .register([
         event,
         hook,
@@ -97,19 +97,19 @@ describe("eventLanes applyTo", () => {
 
   it("allows same-lane event tag + applyTo without re-assignment conflicts", async () => {
     const queue = new RecordingQueue();
-    const lane = r.eventLane("tests.event-lanes.apply-to.same-lane").build();
+    const lane = r.eventLane("tests-event-lanes-apply-to-same-lane").build();
     const event = r
-      .event<{ value: number }>("tests.event-lanes.apply-to.same-lane.event")
+      .event<{ value: number }>("tests-event-lanes-apply-to-same-lane-event")
       .tags([tags.eventLane.with({ lane })])
       .build();
     const configuredLane = r.eventLane(lane.id).applyTo([event]).build();
     const emitTask = r
-      .task("tests.event-lanes.apply-to.same-lane.emit")
+      .task("tests-event-lanes-apply-to-same-lane-emit")
       .dependencies({ event })
       .run(async (_input, deps) => deps.event({ value: 2 }))
       .build();
     const app = r
-      .resource("tests.event-lanes.apply-to.same-lane.app")
+      .resource("tests-event-lanes-apply-to-same-lane-app")
       .register([
         event,
         emitTask,
@@ -131,16 +131,16 @@ describe("eventLanes applyTo", () => {
 
   it("fails fast when eventLane applyTo target resolves to task id", async () => {
     const task = r
-      .task("tests.event-lanes.apply-to.invalid.task")
+      .task("tests-event-lanes-apply-to-invalid-task")
       .run(async () => "ok")
       .build();
     const lane = r
-      .eventLane("tests.event-lanes.apply-to.invalid.lane")
+      .eventLane("tests-event-lanes-apply-to-invalid-lane")
       .applyTo([task.id])
       .build();
 
     const app = r
-      .resource("tests.event-lanes.apply-to.invalid.app")
+      .resource("tests-event-lanes-apply-to-invalid-app")
       .register([
         task,
         eventLanesResource.with({
@@ -161,12 +161,12 @@ describe("eventLanes applyTo", () => {
 
   it("fails fast when eventLane applyTo string target does not exist", async () => {
     const lane = r
-      .eventLane("tests.event-lanes.apply-to.missing-target.lane")
+      .eventLane("tests-event-lanes-apply-to-missing-target-lane")
       .applyTo(["tests.event-lanes.apply-to.missing-target.event"])
       .build();
 
     const app = r
-      .resource("tests.event-lanes.apply-to.missing-target.app")
+      .resource("tests-event-lanes-apply-to-missing-target-app")
       .register([
         eventLanesResource.with({
           profile: "worker",
@@ -186,12 +186,12 @@ describe("eventLanes applyTo", () => {
 
   it("fails fast when eventLane applyTo receives an invalid target value", async () => {
     const lane = r
-      .eventLane("tests.event-lanes.apply-to.invalid-shape.lane")
+      .eventLane("tests-event-lanes-apply-to-invalid-shape-lane")
       .applyTo([{} as any])
       .build();
 
     const app = r
-      .resource("tests.event-lanes.apply-to.invalid-shape.app")
+      .resource("tests-event-lanes-apply-to-invalid-shape-app")
       .register([
         eventLanesResource.with({
           profile: "worker",
@@ -211,19 +211,19 @@ describe("eventLanes applyTo", () => {
 
   it("lets applyTo override tag-based event lane assignment (IoC)", async () => {
     const laneA = r
-      .eventLane("tests.event-lanes.apply-to.override-ioc.a")
+      .eventLane("tests-event-lanes-apply-to-override-ioc-a")
       .build();
     const event = r
-      .event("tests.event-lanes.apply-to.override-ioc.event")
+      .event("tests-event-lanes-apply-to-override-ioc-event")
       .tags([tags.eventLane.with({ lane: laneA })])
       .build();
     const laneB = r
-      .eventLane("tests.event-lanes.apply-to.override-ioc.b")
+      .eventLane("tests-event-lanes-apply-to-override-ioc-b")
       .applyTo([event])
       .build();
 
     const app = r
-      .resource("tests.event-lanes.apply-to.override-ioc.app")
+      .resource("tests-event-lanes-apply-to-override-ioc-app")
       .register([
         event,
         eventLanesResource.with({
@@ -243,25 +243,25 @@ describe("eventLanes applyTo", () => {
 
   it("fails when eventLane applyTo collides with rpcLane applyTo on the same event", async () => {
     const event = r
-      .event("tests.event-lanes.apply-to.cross-lane.event")
+      .event("tests-event-lanes-apply-to-cross-lane-event")
       .build();
     const lane = r
-      .eventLane("tests.event-lanes.apply-to.cross-lane.event-lane")
+      .eventLane("tests-event-lanes-apply-to-cross-lane-event-lane")
       .applyTo([event])
       .build();
     const rpc = r
-      .rpcLane("tests.event-lanes.apply-to.cross-lane.rpc-lane")
+      .rpcLane("tests-event-lanes-apply-to-cross-lane-rpc-lane")
       .applyTo([event])
       .build();
     const communicator = r
-      .resource("tests.event-lanes.apply-to.cross-lane.communicator")
+      .resource("tests-event-lanes-apply-to-cross-lane-communicator")
       .init(async () => ({
         event: async () => undefined,
       }))
       .build();
 
     const app = r
-      .resource("tests.event-lanes.apply-to.cross-lane.app")
+      .resource("tests-event-lanes-apply-to-cross-lane-app")
       .register([
         event,
         communicator,

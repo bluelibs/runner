@@ -19,13 +19,13 @@ describe("OverrideManager override graph recursion", () => {
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
     const baseTask = defineTask({
-      id: "override.default-visited.base",
+      id: "override-default-visited-base",
       run: async () => "base",
     });
     const overrideTask = r.override(baseTask, async () => "override");
 
     const root = defineResource({
-      id: "override.default-visited.root",
+      id: "override-default-visited-root",
       register: [baseTask],
       overrides: [overrideTask],
     });
@@ -47,18 +47,18 @@ describe("OverrideManager override graph recursion", () => {
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
     const baseHook = defineHook({
-      id: "override.hook.base",
+      id: "override-hook-base",
       on: "*",
       run: async () => undefined,
     });
     const hookOverride = defineHook({
-      id: "override.hook.base",
+      id: "override-hook-base",
       on: "*",
       run: async () => undefined,
     });
 
     const root = defineResource({
-      id: "override.hook.root",
+      id: "override-hook-root",
       register: [baseHook],
     });
     store.initializeStore(root, {}, runtimeResult);
@@ -71,12 +71,12 @@ describe("OverrideManager override graph recursion", () => {
     expect(registry.hooks.has(hookOverride.id)).toBe(true);
 
     const missingHookOverride = defineHook({
-      id: "override.hook.missing",
+      id: "override-hook-missing",
       on: "*",
       run: async () => undefined,
     });
     const unrelatedOverride = defineHook({
-      id: "override.hook.unrelated",
+      id: "override-hook-unrelated",
       on: "*",
       run: async () => undefined,
     });
@@ -84,17 +84,15 @@ describe("OverrideManager override graph recursion", () => {
     const manager2 = new OverrideManager(registry);
     manager2.overrides.set(missingHookOverride.id, missingHookOverride);
     manager2.overrideRequests.add({
-      source: "source.matching",
+      source: "source-matching",
       override: missingHookOverride,
     });
     manager2.overrideRequests.add({
-      source: "source.unrelated",
+      source: "source-unrelated",
       override: unrelatedOverride,
     });
 
-    expect(() => manager2.processOverrides()).toThrow(
-      /override\.hook\.missing/,
-    );
+    expect(() => manager2.processOverrides()).toThrow(/override-hook-missing/);
   });
 
   it("fails fast when an unknown override shape is encountered during validation", () => {
@@ -105,14 +103,14 @@ describe("OverrideManager override graph recursion", () => {
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
     const root = defineResource({
-      id: "override.unknown.shape.root",
+      id: "override-unknown-shape-root",
     });
     store.initializeStore(root, {}, runtimeResult);
 
     const registry = (store as any).registry as any;
     const manager = new OverrideManager(registry);
-    manager.overrides.set("override.unknown.shape", {
-      id: "override.unknown.shape",
+    manager.overrides.set("override-unknown-shape", {
+      id: "override-unknown-shape",
     } as any);
 
     expect(() => manager.processOverrides()).toThrow(/Unknown item type/);
@@ -126,11 +124,11 @@ describe("OverrideManager override graph recursion", () => {
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
     const baseTask = defineTask({
-      id: "override.unknown.shape.writer.base",
+      id: "override-unknown-shape-writer-base",
       run: async () => "base",
     });
     const root = defineResource({
-      id: "override.unknown.shape.writer.root",
+      id: "override-unknown-shape-writer-root",
       register: [baseTask],
     });
     store.initializeStore(root, {}, runtimeResult);
@@ -140,7 +138,7 @@ describe("OverrideManager override graph recursion", () => {
       id: baseTask.id,
       run: async () => "override",
     });
-    const invalidOverride = { id: "override.unknown.shape.writer.invalid" };
+    const invalidOverride = { id: "override-unknown-shape-writer-invalid" };
 
     const manager = new OverrideManager(registry);
     let valuesReadCount = 0;
@@ -162,14 +160,14 @@ describe("OverrideManager override graph recursion", () => {
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
     const baseTask = defineTask({
-      id: "override.duplicate.target.base",
+      id: "override-duplicate-target-base",
       run: async () => "base",
     });
 
     const overrideA = r.override(baseTask, async () => "a");
     const overrideB = r.override(baseTask, async () => "b");
     const root = defineResource({
-      id: "override.duplicate.target.root",
+      id: "override-duplicate-target-root",
       register: [baseTask],
       overrides: [overrideA, overrideB],
     });
@@ -187,7 +185,7 @@ describe("OverrideManager override graph recursion", () => {
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
     const baseTask = defineTask({
-      id: "override.unresolved.target.base",
+      id: "override-unresolved-target-base",
       run: async () => "base",
     });
 
@@ -197,7 +195,7 @@ describe("OverrideManager override graph recursion", () => {
     } as any;
 
     const root = defineResource({
-      id: "override.unresolved.target.root",
+      id: "override-unresolved-target-root",
       register: [baseTask],
       overrides: [unresolvedOverride],
     });
@@ -215,15 +213,15 @@ describe("OverrideManager override graph recursion", () => {
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
     const taskMiddleware = defineTaskMiddleware({
-      id: "override.middleware.task.base",
+      id: "override-middleware-task-base",
       run: async ({ next, task }) => next(task.input),
     });
     const resourceMiddleware = defineResourceMiddleware({
-      id: "override.middleware.resource.base",
+      id: "override-middleware-resource-base",
       run: async ({ next }) => next(),
     });
     const root = defineResource({
-      id: "override.middleware.root",
+      id: "override-middleware-root",
       register: [taskMiddleware, resourceMiddleware],
     });
     store.initializeStore(root, {}, runtimeResult);
@@ -258,7 +256,7 @@ describe("OverrideManager override graph recursion", () => {
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
     const root = defineResource({
-      id: "override.visited.root",
+      id: "override-visited-root",
     });
     store.initializeStore(root, {}, runtimeResult);
 
@@ -278,16 +276,16 @@ describe("OverrideManager override graph recursion", () => {
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
     const baseTask = defineTask({
-      id: "override.parent.target.base",
+      id: "override-parent-target-base",
       run: async () => "base",
     });
     const childOverride = r.override(baseTask, async () => "child");
     const child = defineResource({
-      id: "override.parent.target.child",
+      id: "override-parent-target-child",
       overrides: [childOverride],
     });
     const root = defineResource({
-      id: "override.parent.target.root",
+      id: "override-parent-target-root",
       register: [baseTask, child],
     });
 

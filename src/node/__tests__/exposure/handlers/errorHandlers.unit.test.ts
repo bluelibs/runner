@@ -223,7 +223,7 @@ describe("errorHandlers", () => {
       body: {
         ok: false,
         error: {
-          id: "tests.errors.http",
+          id: "tests-errors-http",
           message: "Typed",
           code: ErrorCode.Internal,
           httpCode: 409,
@@ -274,7 +274,7 @@ describe("errorHandlers", () => {
       },
     } as unknown as ServerResponse;
     const error = new Error("Boom");
-    (error as unknown as { name: string }).name = "tests.errors.http";
+    (error as unknown as { name: string }).name = "tests-errors-http";
     (error as unknown as { data: unknown }).data = { reason: "x" };
     (error as unknown as { httpCode: number }).httpCode = 409;
 
@@ -330,7 +330,7 @@ describe("errorHandlers", () => {
       },
     } as unknown as ServerResponse;
     const error = new Error("Boom");
-    (error as unknown as { name: string }).name = "tests.errors.http";
+    (error as unknown as { name: string }).name = "tests-errors-http";
     (error as unknown as { data: unknown }).data = { reason: "x" };
 
     handleRequestError({
@@ -351,9 +351,9 @@ describe("errorHandlers", () => {
     const store = {
       errors: new Map([
         [
-          "tests.errors.raw-id",
+          "tests-errors-raw-id",
           {
-            id: "tests.errors.raw-id",
+            id: "tests-errors-raw-id",
             httpCode: 409,
             is: () => false,
           },
@@ -377,7 +377,7 @@ describe("errorHandlers", () => {
       },
     } as unknown as ServerResponse;
     const error = new Error("Boom");
-    (error as unknown as { name: string }).name = "tests.errors.raw-id";
+    (error as unknown as { name: string }).name = "tests-errors-raw-id";
 
     handleRequestError({
       error,

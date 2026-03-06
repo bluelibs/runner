@@ -96,16 +96,16 @@ async function waitUntil(
 
 describe("event-lanes: eventLanesResource", () => {
   it("queues tagged events and prevents local propagation on producer path", async () => {
-    const lane = r.eventLane("tests.event-lanes.producer").build();
+    const lane = r.eventLane("tests-event-lanes-producer").build();
     const queue = new TestEventLaneQueue();
     const tagged = r
-      .event<{ value: string }>("tests.event-lanes.producer.event")
+      .event<{ value: string }>("tests-event-lanes-producer-event")
       .tags([tags.eventLane.with({ lane })])
       .build();
 
     let localHookCalls = 0;
     const hook = r
-      .hook("tests.event-lanes.producer.hook")
+      .hook("tests-event-lanes-producer-hook")
       .on(tagged)
       .run(async () => {
         localHookCalls += 1;
@@ -113,7 +113,7 @@ describe("event-lanes: eventLanesResource", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.producer.emit")
+      .task("tests-event-lanes-producer-emit")
       .dependencies({ tagged })
       .run(async (_input, { tagged }) => {
         await tagged({ value: "x" });
@@ -121,7 +121,7 @@ describe("event-lanes: eventLanesResource", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.producer.app")
+      .resource("tests-event-lanes-producer-app")
       .register([
         tagged,
         hook,
@@ -148,15 +148,15 @@ describe("event-lanes: eventLanesResource", () => {
   });
 
   it("uses binding maxAttempts on producer-enqueued messages", async () => {
-    const lane = r.eventLane("tests.event-lanes.producer.max-attempts").build();
+    const lane = r.eventLane("tests-event-lanes-producer-max-attempts").build();
     const queue = new TestEventLaneQueue();
     const tagged = r
-      .event("tests.event-lanes.producer.max-attempts.event")
+      .event("tests-event-lanes-producer-max-attempts-event")
       .tags([tags.eventLane.with({ lane })])
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.producer.max-attempts.emit")
+      .task("tests-event-lanes-producer-max-attempts-emit")
       .dependencies({ tagged })
       .run(async (_input, { tagged }) => {
         await tagged();
@@ -164,7 +164,7 @@ describe("event-lanes: eventLanesResource", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.producer.max-attempts.app")
+      .resource("tests-event-lanes-producer-max-attempts-app")
       .register([
         tagged,
         emitTask,
@@ -186,40 +186,40 @@ describe("event-lanes: eventLanesResource", () => {
   });
 
   it("consumes by profile lane references and keeps untagged events local", async () => {
-    const laneA = r.eventLane("tests.event-lanes.profile.laneA").build();
-    const laneB = r.eventLane("tests.event-lanes.profile.laneB").build();
+    const laneA = r.eventLane("tests-event-lanes-profile-laneA").build();
+    const laneB = r.eventLane("tests-event-lanes-profile-laneB").build();
     const queueA = new TestEventLaneQueue();
     const queueB = new TestEventLaneQueue();
 
     const taggedA = r
-      .event<{ id: string }>("tests.event-lanes.profile.taggedA")
+      .event<{ id: string }>("tests-event-lanes-profile-taggedA")
       .tags([tags.eventLane.with({ lane: laneA })])
       .build();
     const taggedB = r
-      .event<{ id: string }>("tests.event-lanes.profile.taggedB")
+      .event<{ id: string }>("tests-event-lanes-profile-taggedB")
       .tags([tags.eventLane.with({ lane: laneB })])
       .build();
     const untagged = r
-      .event<{ id: string }>("tests.event-lanes.profile.local")
+      .event<{ id: string }>("tests-event-lanes-profile-local")
       .build();
 
     const seen: string[] = [];
     const hookA = r
-      .hook("tests.event-lanes.profile.hookA")
+      .hook("tests-event-lanes-profile-hookA")
       .on(taggedA)
       .run(async (event) => {
         seen.push(`A:${event.data.id}`);
       })
       .build();
     const hookB = r
-      .hook("tests.event-lanes.profile.hookB")
+      .hook("tests-event-lanes-profile-hookB")
       .on(taggedB)
       .run(async (event) => {
         seen.push(`B:${event.data.id}`);
       })
       .build();
     const hookLocal = r
-      .hook("tests.event-lanes.profile.hookLocal")
+      .hook("tests-event-lanes-profile-hookLocal")
       .on(untagged)
       .run(async (event) => {
         seen.push(`L:${event.data.id}`);
@@ -227,7 +227,7 @@ describe("event-lanes: eventLanesResource", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.profile.emit")
+      .task("tests-event-lanes-profile-emit")
       .dependencies({ taggedA, taggedB, untagged })
       .run(async (_input, deps) => {
         await deps.taggedA({ id: "1" });
@@ -237,7 +237,7 @@ describe("event-lanes: eventLanesResource", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.profile.app")
+      .resource("tests-event-lanes-profile-app")
       .register([
         taggedA,
         taggedB,
@@ -271,18 +271,18 @@ describe("event-lanes: eventLanesResource", () => {
   });
 
   it("validates one binding for multiple events assigned to the same lane", async () => {
-    const lane = r.eventLane("tests.event-lanes.shared-lane").build();
+    const lane = r.eventLane("tests-event-lanes-shared-lane").build();
     const queue = new TestEventLaneQueue();
     const eventA = r
-      .event<{ id: string }>("tests.event-lanes.shared-lane.eventA")
+      .event<{ id: string }>("tests-event-lanes-shared-lane-eventA")
       .tags([tags.eventLane.with({ lane })])
       .build();
     const eventB = r
-      .event<{ id: string }>("tests.event-lanes.shared-lane.eventB")
+      .event<{ id: string }>("tests-event-lanes-shared-lane-eventB")
       .tags([tags.eventLane.with({ lane })])
       .build();
     const emitTask = r
-      .task("tests.event-lanes.shared-lane.emit")
+      .task("tests-event-lanes-shared-lane-emit")
       .dependencies({ eventA, eventB })
       .run(async (_input, deps) => {
         await deps.eventA({ id: "a" });
@@ -291,7 +291,7 @@ describe("event-lanes: eventLanesResource", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.shared-lane.app")
+      .resource("tests-event-lanes-shared-lane-app")
       .register([
         eventA,
         eventB,
@@ -313,21 +313,21 @@ describe("event-lanes: eventLanesResource", () => {
   });
 
   it("uses runtime serializer for transport and avoids relay loops", async () => {
-    const lane = r.eventLane("tests.event-lanes.serializer").build();
+    const lane = r.eventLane("tests-event-lanes-serializer").build();
     const queue = new TestEventLaneQueue();
     const tagged = r
       .event<{ date: Date; pattern: RegExp; custom: CustomPayload }>(
-        "tests.event-lanes.serializer.event",
+        "tests-event-lanes-serializer-event",
       )
       .tags([tags.eventLane.with({ lane })])
       .build();
 
     const serializerSetup = r
-      .resource("tests.event-lanes.serializer.setup")
+      .resource("tests-event-lanes-serializer-setup")
       .dependencies({ serializer: resources.serializer })
       .init(async (_config, { serializer }) => {
         serializer.addType?.({
-          id: "tests.customPayload",
+          id: "tests-customPayload",
           is: (value): value is CustomPayload => value instanceof CustomPayload,
           serialize: (value) => ({ value: value.value }),
           deserialize: (value) =>
@@ -342,7 +342,7 @@ describe("event-lanes: eventLanesResource", () => {
       custom: CustomPayload;
     }> = [];
     const hook = r
-      .hook("tests.event-lanes.serializer.hook")
+      .hook("tests-event-lanes-serializer-hook")
       .on(tagged)
       .run(async (event) => {
         payloads.push(event.data);
@@ -350,7 +350,7 @@ describe("event-lanes: eventLanesResource", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.serializer.emit")
+      .task("tests-event-lanes-serializer-emit")
       .dependencies({ tagged })
       .run(async (_input, { tagged }) => {
         await tagged({
@@ -362,7 +362,7 @@ describe("event-lanes: eventLanesResource", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.serializer.app")
+      .resource("tests-event-lanes-serializer-app")
       .register([
         serializerSetup,
         tagged,
@@ -391,19 +391,19 @@ describe("event-lanes: eventLanesResource", () => {
   });
 
   it("fails fast when tagged lane has no binding", async () => {
-    const lane = r.eventLane("tests.event-lanes.missing-binding").build();
+    const lane = r.eventLane("tests-event-lanes-missing-binding").build();
     const tagged = r
-      .event("tests.event-lanes.missing-binding.event")
+      .event("tests-event-lanes-missing-binding-event")
       .tags([tags.eventLane.with({ lane })])
       .build();
     const emitTask = r
-      .task("tests.event-lanes.missing-binding.emit")
+      .task("tests-event-lanes-missing-binding-emit")
       .dependencies({ tagged })
       .run(async (_input, { tagged }) => tagged())
       .build();
 
     const app = r
-      .resource("tests.event-lanes.missing-binding.app")
+      .resource("tests-event-lanes-missing-binding-app")
       .register([
         tagged,
         emitTask,
@@ -423,11 +423,11 @@ describe("event-lanes: eventLanesResource", () => {
   });
 
   it("fails fast when maxAttempts is invalid", async () => {
-    const lane = r.eventLane("tests.event-lanes.invalid-max-attempts").build();
+    const lane = r.eventLane("tests-event-lanes-invalid-max-attempts").build();
     const queue = new TestEventLaneQueue();
 
     const app = r
-      .resource("tests.event-lanes.invalid-max-attempts.app")
+      .resource("tests-event-lanes-invalid-max-attempts-app")
       .register([
         eventLanesResource.with({
           profile: "producer",
@@ -443,11 +443,11 @@ describe("event-lanes: eventLanesResource", () => {
   });
 
   it("fails fast when retryDelayMs is invalid", async () => {
-    const lane = r.eventLane("tests.event-lanes.invalid-retry-delay").build();
+    const lane = r.eventLane("tests-event-lanes-invalid-retry-delay").build();
     const queue = new TestEventLaneQueue();
 
     const app = r
-      .resource("tests.event-lanes.invalid-retry-delay.app")
+      .resource("tests-event-lanes-invalid-retry-delay-app")
       .register([
         eventLanesResource.with({
           profile: "producer",
@@ -463,29 +463,29 @@ describe("event-lanes: eventLanesResource", () => {
   });
 
   it("supports centralized topology config with many lanes mapped to one queue", async () => {
-    const laneA = r.eventLane("tests.event-lanes.topology.laneA").build();
-    const laneB = r.eventLane("tests.event-lanes.topology.laneB").build();
+    const laneA = r.eventLane("tests-event-lanes-topology-laneA").build();
+    const laneB = r.eventLane("tests-event-lanes-topology-laneB").build();
     const sharedQueue = new TestEventLaneQueue();
 
     const eventA = r
-      .event<{ id: string }>("tests.event-lanes.topology.eventA")
+      .event<{ id: string }>("tests-event-lanes-topology-eventA")
       .tags([tags.eventLane.with({ lane: laneA })])
       .build();
     const eventB = r
-      .event<{ id: string }>("tests.event-lanes.topology.eventB")
+      .event<{ id: string }>("tests-event-lanes-topology-eventB")
       .tags([tags.eventLane.with({ lane: laneB })])
       .build();
 
     const seen: string[] = [];
     const hookA = r
-      .hook("tests.event-lanes.topology.hookA")
+      .hook("tests-event-lanes-topology-hookA")
       .on(eventA)
       .run(async (event) => {
         seen.push(`A:${event.data.id}`);
       })
       .build();
     const hookB = r
-      .hook("tests.event-lanes.topology.hookB")
+      .hook("tests-event-lanes-topology-hookB")
       .on(eventB)
       .run(async (event) => {
         seen.push(`B:${event.data.id}`);
@@ -493,7 +493,7 @@ describe("event-lanes: eventLanesResource", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.topology.emit")
+      .task("tests-event-lanes-topology-emit")
       .dependencies({ eventA, eventB })
       .run(async (_input, deps) => {
         await deps.eventA({ id: "1" });
@@ -510,7 +510,7 @@ describe("event-lanes: eventLanesResource", () => {
     });
 
     const app = r
-      .resource("tests.event-lanes.topology.app")
+      .resource("tests-event-lanes-topology-app")
       .register([
         eventA,
         eventB,
@@ -535,12 +535,12 @@ describe("event-lanes: eventLanesResource", () => {
   });
 
   it("fails fast when the same lane is bound multiple times", async () => {
-    const lane = r.eventLane("tests.event-lanes.duplicate-binding").build();
+    const lane = r.eventLane("tests-event-lanes-duplicate-binding").build();
     const queueA = new TestEventLaneQueue();
     const queueB = new TestEventLaneQueue();
 
     const app = r
-      .resource("tests.event-lanes.duplicate-binding.app")
+      .resource("tests-event-lanes-duplicate-binding-app")
       .register([
         eventLanesResource.with({
           profile: "worker",

@@ -6,11 +6,11 @@ import { createMessageError } from "../../../errors";
 describe("durable: describe() defaults", () => {
   it("uses durableWorkflowTag.defaults when describe() input is omitted", async () => {
     const durable = memoryDurableResource.fork(
-      "durable.tests.recorder.defaults",
+      "durable-tests-recorder-defaults",
     );
 
     const task = r
-      .task("durable.tests.recorder.task.defaults")
+      .task("durable-tests-recorder-task-defaults")
       .dependencies({ durable })
       .tags([
         durableWorkflowTag.with({
@@ -31,7 +31,7 @@ describe("durable: describe() defaults", () => {
       .build();
 
     const app = r
-      .resource("durable.tests.recorder.app.defaults")
+      .resource("durable-tests-recorder-app-defaults")
       .register([durable.with({}), task])
       .build();
 
@@ -48,11 +48,11 @@ describe("durable: describe() defaults", () => {
 
   it("prefers explicit describe() input over durableWorkflowTag.defaults", async () => {
     const durable = memoryDurableResource.fork(
-      "durable.tests.recorder.defaults.override",
+      "durable-tests-recorder-defaults-override",
     );
 
     const task = r
-      .task("durable.tests.recorder.task.defaults.override")
+      .task("durable-tests-recorder-task-defaults-override")
       .dependencies({ durable })
       .tags([
         durableWorkflowTag.with({
@@ -70,7 +70,7 @@ describe("durable: describe() defaults", () => {
       .build();
 
     const app = r
-      .resource("durable.tests.recorder.app.defaults.override")
+      .resource("durable-tests-recorder-app-defaults-override")
       .register([durable.with({}), task])
       .build();
 
@@ -87,11 +87,11 @@ describe("durable: describe() defaults", () => {
 
   it("clones durableWorkflowTag.defaults for each describe() call", async () => {
     const durable = memoryDurableResource.fork(
-      "durable.tests.recorder.defaults.clone",
+      "durable-tests-recorder-defaults-clone",
     );
 
     const task = r
-      .task("durable.tests.recorder.task.defaults.clone")
+      .task("durable-tests-recorder-task-defaults-clone")
       .dependencies({ durable })
       .tags([
         durableWorkflowTag.with({
@@ -118,7 +118,7 @@ describe("durable: describe() defaults", () => {
       .build();
 
     const app = r
-      .resource("durable.tests.recorder.app.defaults.clone")
+      .resource("durable-tests-recorder-app-defaults-clone")
       .register([durable.with({}), task])
       .build();
 
@@ -143,11 +143,11 @@ describe("durable: describe() defaults", () => {
 
   it("fails fast when durableWorkflowTag.defaults cannot be cloned", async () => {
     const durable = memoryDurableResource.fork(
-      "durable.tests.recorder.defaults.uncloneable",
+      "durable-tests-recorder-defaults-uncloneable",
     );
 
     const task = r
-      .task("durable.tests.recorder.task.defaults.uncloneable")
+      .task("durable-tests-recorder-task-defaults-uncloneable")
       .dependencies({ durable })
       .tags([
         durableWorkflowTag.with({
@@ -162,7 +162,7 @@ describe("durable: describe() defaults", () => {
       .build();
 
     const app = r
-      .resource("durable.tests.recorder.app.defaults.uncloneable")
+      .resource("durable-tests-recorder-app-defaults-uncloneable")
       .register([durable.with({}), task])
       .build();
 
@@ -178,11 +178,11 @@ describe("durable: describe() defaults", () => {
 
   it("surfaces non-Error clone failures from structuredClone", async () => {
     const durable = memoryDurableResource.fork(
-      "durable.tests.recorder.defaults.nonerror-clone-failure",
+      "durable-tests-recorder-defaults-nonerror-clone-failure",
     );
 
     const task = r
-      .task("durable.tests.recorder.task.defaults.nonerror-clone-failure")
+      .task("durable-tests-recorder-task-defaults-nonerror-clone-failure")
       .dependencies({ durable })
       .tags([
         durableWorkflowTag.with({
@@ -197,7 +197,7 @@ describe("durable: describe() defaults", () => {
       .build();
 
     const app = r
-      .resource("durable.tests.recorder.app.defaults.nonerror-clone-failure")
+      .resource("durable-tests-recorder-app-defaults-nonerror-clone-failure")
       .register([durable.with({}), task])
       .build();
 
@@ -222,11 +222,11 @@ describe("durable: describe() defaults", () => {
 
   it("surfaces Error clone failures from structuredClone", async () => {
     const durable = memoryDurableResource.fork(
-      "durable.tests.recorder.defaults.error-clone-failure",
+      "durable-tests-recorder-defaults-error-clone-failure",
     );
 
     const task = r
-      .task("durable.tests.recorder.task.defaults.error-clone-failure")
+      .task("durable-tests-recorder-task-defaults-error-clone-failure")
       .dependencies({ durable })
       .tags([
         durableWorkflowTag.with({
@@ -241,7 +241,7 @@ describe("durable: describe() defaults", () => {
       .build();
 
     const app = r
-      .resource("durable.tests.recorder.app.defaults.error-clone-failure")
+      .resource("durable-tests-recorder-app-defaults-error-clone-failure")
       .register([durable.with({}), task])
       .build();
 

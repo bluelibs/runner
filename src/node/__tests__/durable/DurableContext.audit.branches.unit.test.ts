@@ -72,8 +72,8 @@ describe("durable: DurableContext audit branches", () => {
       received.push(evt.type);
     });
 
-    const Evt1 = defineEvent<{ a: number }>({ id: "evt.1" });
+    const Evt1 = defineEvent<{ a: number }>({ id: "evt-1" });
     await expect(ctx.emit(Evt1, { a: 1 })).resolves.toBeUndefined();
-    expect(received).toEqual(["evt.1"]);
+    expect(received).toEqual(["evt-1"]);
   });
 });

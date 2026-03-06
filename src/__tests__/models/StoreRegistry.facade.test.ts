@@ -24,17 +24,17 @@ describe("StoreRegistry facade delegates", () => {
   it("forwards direct registry writer calls to the writer services", () => {
     const registry = (store as unknown as { registry: any }).registry;
 
-    const tag = defineTag({ id: "registry.delegate.tag" });
+    const tag = defineTag({ id: "registry-delegate-tag" });
     registry.storeTag(tag);
 
     const event = defineEvent({
-      id: "registry.delegate.event",
+      id: "registry-delegate-event",
       tags: [tag],
     });
     registry.storeEvent(event);
 
     const hook = defineHook({
-      id: "registry.delegate.hook",
+      id: "registry-delegate-hook",
       on: event,
       tags: [tag],
       run: async () => undefined,
@@ -51,7 +51,7 @@ describe("StoreRegistry facade delegates", () => {
     );
 
     const taskMiddleware = defineTaskMiddleware({
-      id: "registry.delegate.task-middleware",
+      id: "registry-delegate-task-middleware",
       tags: [tag],
       run: async ({ next, task }) => next(task.input),
     });
@@ -66,7 +66,7 @@ describe("StoreRegistry facade delegates", () => {
     );
 
     const resourceMiddleware = defineResourceMiddleware({
-      id: "registry.delegate.resource-middleware",
+      id: "registry-delegate-resource-middleware",
       tags: [tag],
       run: async ({ next }) => next(),
     });
@@ -81,7 +81,7 @@ describe("StoreRegistry facade delegates", () => {
     );
 
     const task = defineTask({
-      id: "registry.delegate.task",
+      id: "registry-delegate-task",
       tags: [tag],
       run: async () => "task",
     });
@@ -96,7 +96,7 @@ describe("StoreRegistry facade delegates", () => {
     );
 
     const resource = defineResource({
-      id: "registry.delegate.resource",
+      id: "registry-delegate-resource",
       tags: [tag],
       init: async () => "resource",
     });
@@ -111,7 +111,7 @@ describe("StoreRegistry facade delegates", () => {
     );
 
     const withConfigResource = defineResource<{ enabled: boolean }>({
-      id: "registry.delegate.resource.with-config",
+      id: "registry-delegate-resource-with-config",
       tags: [tag],
       init: async (config) => config.enabled,
     });
@@ -124,14 +124,14 @@ describe("StoreRegistry facade delegates", () => {
     );
 
     const typedError = defineError({
-      id: "registry.delegate.error",
+      id: "registry-delegate-error",
       tags: [tag],
       format: () => "error",
     });
     registry.storeError(typedError);
 
     const asyncContext = defineAsyncContext<{ requestId: string }>({
-      id: "registry.delegate.async-context",
+      id: "registry-delegate-async-context",
     });
     registry.storeAsyncContext(asyncContext);
 
@@ -161,7 +161,7 @@ describe("StoreRegistry facade delegates", () => {
   it("handles writer registration failures for id-less items without rollback lookup", () => {
     const registry = (store as unknown as { registry: any }).registry;
     const root = {
-      id: "registry.delegate.invalid-item.root",
+      id: "registry-delegate-invalid-item-root",
       register: [123 as any],
       dependencies: {},
       middleware: [],
@@ -178,7 +178,7 @@ describe("StoreRegistry facade delegates", () => {
   it("keeps alias registration as a no-op for primitives and resolves resource-with-config ids", () => {
     const registry = (store as unknown as { registry: any }).registry;
     const resource = defineResource<{ enabled: boolean }>({
-      id: "registry.alias.resource",
+      id: "registry-alias-resource",
       init: async (config) => config.enabled,
     });
     const configured = resource.with({ enabled: true });
@@ -198,24 +198,24 @@ describe("StoreRegistry facade delegates", () => {
     const registry = (store as unknown as { registry: any }).registry;
     const reference = {};
 
-    registry.registerDefinitionAlias(reference, "app.alias.first");
+    registry.registerDefinitionAlias(reference, "app-alias-first");
     expect(() =>
-      registry.registerDefinitionAlias(reference, "app.alias.second"),
+      registry.registerDefinitionAlias(reference, "app-alias-second"),
     ).toThrow(/cannot be remapped/i);
   });
 
   it("covers alias fallback helpers and consumer-id normalization fallbacks", () => {
     const registry = (store as unknown as { registry: any }).registry;
     const tag = defineTag({
-      id: "registry.coverage.tag",
+      id: "registry-coverage-tag",
     });
     const task = defineTask({
-      id: "registry.coverage.task",
+      id: "registry-coverage-task",
       tags: [tag],
       run: async () => "ok",
     });
     const resource = defineResource({
-      id: "registry.coverage.resource",
+      id: "registry-coverage-resource",
       tags: [tag],
       init: async () => "ok",
     });
@@ -232,28 +232,28 @@ describe("StoreRegistry facade delegates", () => {
     ).toBeUndefined();
 
     expect(() =>
-      (registry as any).recordSourceIdAlias(123, "registry.coverage.primitive"),
+      (registry as any).recordSourceIdAlias(123, "registry-coverage-primitive"),
     ).not.toThrow();
     expect(() =>
       (registry as any).recordCanonicalSourceId(
         undefined,
-        "registry.coverage.primitive",
+        "registry-coverage-primitive",
       ),
     ).not.toThrow();
     expect(() =>
       (registry as any).recordCanonicalSourceId(
         () => undefined,
-        "registry.coverage.function",
+        "registry-coverage-function",
       ),
     ).not.toThrow();
     expect(() =>
       registry.registerDefinitionAlias(
         { id: 123 } as any,
-        "registry.coverage.invalid-id",
+        "registry-coverage-invalid-id",
       ),
     ).not.toThrow();
 
-    (registry as any).definitionAliasesBySourceId.set("registry.coverage.raw", {
+    (registry as any).definitionAliasesBySourceId.set("registry-coverage-raw", {
       size: 1,
       values: () => ({
         next: () => ({
@@ -261,24 +261,24 @@ describe("StoreRegistry facade delegates", () => {
         }),
       }),
     });
-    expect(registry.resolveDefinitionId("registry.coverage.raw")).toBe(
-      "registry.coverage.raw",
+    expect(registry.resolveDefinitionId("registry-coverage-raw")).toBe(
+      "registry-coverage-raw",
     );
 
-    (registry as any).sourceIdsByCanonicalId.set("registry.coverage.same", {
+    (registry as any).sourceIdsByCanonicalId.set("registry-coverage-same", {
       size: 2,
       values: () => ({
         next: () => ({
-          value: "registry.coverage.same",
+          value: "registry-coverage-same",
         }),
       }),
       [Symbol.iterator]: function* () {
-        yield "registry.coverage.same";
-        yield "registry.coverage.same";
+        yield "registry-coverage-same";
+        yield "registry-coverage-same";
       },
     });
-    expect(registry.getDisplayId("registry.coverage.same")).toBe(
-      "registry.coverage.same",
+    expect(registry.getDisplayId("registry-coverage-same")).toBe(
+      "registry-coverage-same",
     );
 
     const accessor = registry.getTagAccessor(tag, {

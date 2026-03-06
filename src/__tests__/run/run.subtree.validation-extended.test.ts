@@ -19,38 +19,38 @@ import { run } from "../../run";
 describe("subtree validation extended targets", () => {
   it("validates hooks, middleware, events, and tags using compiled definitions", async () => {
     const policyTag = defineTag({
-      id: "tests.subtree.validators.tag",
+      id: "tests-subtree-validators-tag",
     });
 
     const policyEvent = defineEvent<{ value: string }>({
-      id: "tests.subtree.validators.event",
+      id: "tests-subtree-validators-event",
     });
 
     const policyTaskMiddleware = defineTaskMiddleware({
-      id: "tests.subtree.validators.taskMiddleware",
+      id: "tests-subtree-validators-taskMiddleware",
       run: async ({ next }) => next(),
     });
 
     const policyResourceMiddleware = defineResourceMiddleware({
-      id: "tests.subtree.validators.resourceMiddleware",
+      id: "tests-subtree-validators-resourceMiddleware",
       run: async ({ next }) => next(),
     });
 
     const policyTask = defineTask({
-      id: "tests.subtree.validators.task",
+      id: "tests-subtree-validators-task",
       tags: [policyTag],
       middleware: [policyTaskMiddleware],
       run: async () => "ok",
     });
 
     const policyHook = defineHook({
-      id: "tests.subtree.validators.hook",
+      id: "tests-subtree-validators-hook",
       on: policyEvent,
       run: async () => undefined,
     });
 
     const policyResource = defineResource({
-      id: "tests.subtree.validators.resource",
+      id: "tests-subtree-validators-resource",
       tags: [policyTag],
       middleware: [policyResourceMiddleware],
       async init() {
@@ -67,7 +67,7 @@ describe("subtree validation extended targets", () => {
     };
 
     const app = defineResource({
-      id: "tests.subtree.validators.app",
+      id: "tests-subtree-validators-app",
       register: [
         policyTag,
         policyEvent,

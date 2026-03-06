@@ -7,11 +7,11 @@ import { r } from "../..";
 describe("mergeResourceSubtreePolicy", () => {
   it("appends resources subtree entries when override is disabled", () => {
     const middlewareA = r.middleware
-      .resource("tests.subtree.merge.resource.middleware.a")
+      .resource("tests-subtree-merge-resource-middleware-a")
       .run(async ({ next, resource }) => next(resource.config))
       .build();
     const middlewareB = r.middleware
-      .resource("tests.subtree.merge.resource.middleware.b")
+      .resource("tests-subtree-merge-resource-middleware-b")
       .run(async ({ next, resource }) => next(resource.config))
       .build();
     const validateA = jest.fn(() => []);

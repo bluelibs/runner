@@ -16,53 +16,53 @@ import { defineError } from "../../../definers/defineError";
     { tenantId: string },
     { ok: boolean }
   >({
-    id: "types.tags.feature",
+    id: "types-tags-feature",
   });
 
   const taggedTask = defineTask({
-    id: "types.tasks.feature",
+    id: "types-tasks-feature",
     tags: [featureTag.with({ group: "alpha" })],
     run: async (input) => ({ ok: input.tenantId.length > 0 }),
   });
 
   const taggedResource = defineResource({
-    id: "types.resources.feature",
+    id: "types-resources-feature",
     tags: [featureTag.with({ group: "alpha" })],
     init: async (config) => ({ ok: config.tenantId.length > 0 }),
   });
 
   const taggedEvent = defineEvent({
-    id: "types.events.feature",
+    id: "types-events-feature",
     tags: [featureTag.with({ group: "alpha" })],
   });
 
   const taggedHook = defineHook({
-    id: "types.hooks.feature",
+    id: "types-hooks-feature",
     on: taggedEvent,
     tags: [featureTag.with({ group: "alpha" })],
     run: async () => undefined,
   });
 
   const taggedTaskMiddleware = defineTaskMiddleware({
-    id: "types.middleware.task.feature",
+    id: "types-middleware-task-feature",
     tags: [featureTag.with({ group: "alpha" })],
     run: async ({ next, task }) => next(task.input),
   });
 
   const taggedResourceMiddleware = defineResourceMiddleware({
-    id: "types.middleware.resource.feature",
+    id: "types-middleware-resource-feature",
     tags: [featureTag.with({ group: "alpha" })],
     run: async ({ next }) => next(),
   });
 
   const taggedError = defineError({
-    id: "types.errors.feature",
+    id: "types-errors-feature",
     tags: [featureTag.with({ group: "alpha" })],
     format: () => "boom",
   });
 
   defineResource({
-    id: "types.resources.feature.user",
+    id: "types-resources-feature-user",
     register: [
       featureTag,
       taggedTask,

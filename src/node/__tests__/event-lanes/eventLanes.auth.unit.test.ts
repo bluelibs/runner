@@ -18,7 +18,7 @@ function expectRunnerErrorId(fn: () => unknown, errorId: string): void {
 
 describe("eventLanes auth helpers", () => {
   it("resolves binding auth map and fallback lookup", () => {
-    const lane = { id: "lane.auth" } as any;
+    const lane = { id: "lane-auth" } as any;
     const config = {
       profile: "p",
       topology: {
@@ -39,7 +39,7 @@ describe("eventLanes auth helpers", () => {
   });
 
   it("enforces readiness for network/local-simulated and no-ops transparent", () => {
-    const lane = { id: "lane.ready" } as any;
+    const lane = { id: "lane-ready" } as any;
     const context = {
       eventRouteByEventId: new Map([["e", { lane }]]),
       activeBindingsByQueue: new Map([[{}, new Set([lane.id])]]),

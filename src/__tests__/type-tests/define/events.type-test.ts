@@ -6,7 +6,7 @@ import type { HookRevertFn } from "../../../types/hook";
 
 // Scenario: hooks should enforce event payload and dependency access.
 {
-  const hookEvent = defineEvent<{ message: string }>({ id: "hook.event" });
+  const hookEvent = defineEvent<{ message: string }>({ id: "hook-event" });
 
   const task = defineTask({
     id: "task",
@@ -14,7 +14,7 @@ import type { HookRevertFn } from "../../../types/hook";
   });
 
   defineHook({
-    id: "test.resource",
+    id: "test-resource",
     dependencies: { task },
     on: hookEvent,
     run: async (event, deps) => {
@@ -28,7 +28,7 @@ import type { HookRevertFn } from "../../../types/hook";
   });
 
   defineHook({
-    id: "test.resource",
+    id: "test-resource",
     dependencies: { task },
     on: "*",
     run: async (event, deps) => {
@@ -44,17 +44,17 @@ import type { HookRevertFn } from "../../../types/hook";
 // Scenario: defineEvent transactional flag propagates to hook run typing where known.
 {
   const txEvent = defineEvent({
-    id: "define.tx.event",
+    id: "define-tx-event",
     payloadSchema: { parse: (value: unknown) => value as { id: string } },
     transactional: true,
   });
   const nonTxEvent = defineEvent({
-    id: "define.non-tx.event",
+    id: "define-non-tx-event",
     payloadSchema: { parse: (value: unknown) => value as { id: string } },
   });
 
   defineHook({
-    id: "define.tx.hook.ok",
+    id: "define-tx-hook-ok",
     on: txEvent,
     run: async () => {
       const revert: HookRevertFn = async () => {};
@@ -63,32 +63,32 @@ import type { HookRevertFn } from "../../../types/hook";
   });
 
   defineHook({
-    id: "define.tx.hook.non-tx",
+    id: "define-tx-hook-non-tx",
     on: nonTxEvent,
     run: async () => {},
   });
 
   defineHook({
-    id: "define.tx.hook.mixed.ok",
+    id: "define-tx-hook-mixed-ok",
     on: [txEvent, nonTxEvent] as const,
     run: async () => async () => {},
   });
 
   defineHook({
-    id: "define.tx.hook.wildcard.runtime",
+    id: "define-tx-hook-wildcard-runtime",
     on: "*",
     run: async () => {},
   });
 
   defineHook({
-    id: "define.tx.hook.fail",
+    id: "define-tx-hook-fail",
     on: txEvent,
     // @ts-expect-error transactional hooks must return undo closure
     run: async () => {},
   });
 
   defineHook({
-    id: "define.tx.hook.mixed.fail",
+    id: "define-tx-hook-mixed-fail",
     on: [txEvent, nonTxEvent] as const,
     // @ts-expect-error mixed subscriptions including transactional events must return undo closure
     run: async () => {},
@@ -111,7 +111,7 @@ import type { HookRevertFn } from "../../../types/hook";
   }>({ id: "e3" });
 
   defineHook({
-    id: "hook.common",
+    id: "hook-common",
     on: [e1, e2, e3],
     run: async (event) => {
       event.data.a;
@@ -124,7 +124,7 @@ import type { HookRevertFn } from "../../../types/hook";
   });
 
   defineHook({
-    id: "hook.helper",
+    id: "hook-helper",
     on: onAnyOf(e1, e3),
     run: async (event) => {
       event.data.a;
@@ -137,7 +137,7 @@ import type { HookRevertFn } from "../../../types/hook";
   });
 
   defineHook({
-    id: "hook.guard",
+    id: "hook-guard",
     on: [e1, e2],
     run: async (event) => {
       if (isOneOf(event, [e2, e1])) {

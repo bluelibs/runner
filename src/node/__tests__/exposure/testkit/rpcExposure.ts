@@ -12,18 +12,18 @@ let exposureCounter = 0;
 
 function nextExposureId(): string {
   exposureCounter += 1;
-  return `tests.rpc.exposure.harness.${exposureCounter}`;
+  return `tests-rpc-exposure-harness-${exposureCounter}`;
 }
 
 export const rpcExposure = {
   with(config: NodeExposureConfig = {}) {
     const id = nextExposureId();
     const lane = r
-      .rpcLane(`${id}.lane`)
+      .rpcLane(`${id}-lane`)
       .applyTo(() => true)
       .build();
     const communicator = defineResource({
-      id: `${id}.communicator`,
+      id: `${id}-communicator`,
       init: async () => ({
         task: async () => {
           throw createMessageError(
@@ -58,7 +58,7 @@ export const rpcExposure = {
     });
 
     return defineResource({
-      id: `${id}.wrapper`,
+      id: `${id}-wrapper`,
       register: [communicator, rpcExposure] as any,
       dependencies: {
         rpcExposure: rpcLanesResource,

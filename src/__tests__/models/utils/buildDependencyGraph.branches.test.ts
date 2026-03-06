@@ -29,12 +29,12 @@ const resolveDefinitionId = (reference: unknown): string | undefined => {
 describe("buildDependencyGraph branch coverage", () => {
   it("handles tasks with no dependencies", async () => {
     const task = defineTask({
-      id: "graph.branch.no-deps.task",
+      id: "graph-branch-no-deps-task",
       run: async () => "ok",
     });
 
     const app = defineResource({
-      id: "graph.branch.no-deps.app",
+      id: "graph-branch-no-deps-app",
       register: [task],
     });
 
@@ -44,18 +44,18 @@ describe("buildDependencyGraph branch coverage", () => {
 
   it("handles task middleware with no dependencies", async () => {
     const mw = defineTaskMiddleware({
-      id: "graph.branch.no-deps.task-mw",
+      id: "graph-branch-no-deps-task-mw",
       run: async ({ next, task }) => next(task.input),
     });
 
     const task = defineTask({
-      id: "graph.branch.no-deps.task-mw.task",
+      id: "graph-branch-no-deps-task-mw-task",
       middleware: [mw],
       run: async () => "ok",
     });
 
     const app = defineResource({
-      id: "graph.branch.no-deps.task-mw.app",
+      id: "graph-branch-no-deps-task-mw-app",
       register: [mw, task],
     });
 
@@ -65,18 +65,18 @@ describe("buildDependencyGraph branch coverage", () => {
 
   it("handles resource middleware with no dependencies", async () => {
     const mw = defineResourceMiddleware({
-      id: "graph.branch.no-deps.resource-mw",
+      id: "graph-branch-no-deps-resource-mw",
       run: async ({ next }) => next(),
     });
 
     const child = defineResource({
-      id: "graph.branch.no-deps.resource-mw.child",
+      id: "graph-branch-no-deps-resource-mw-child",
       middleware: [mw],
       init: async () => "ok",
     });
 
     const app = defineResource({
-      id: "graph.branch.no-deps.resource-mw.app",
+      id: "graph-branch-no-deps-resource-mw-app",
       register: [mw, child],
     });
 
@@ -85,16 +85,16 @@ describe("buildDependencyGraph branch coverage", () => {
   });
 
   it("handles hooks with no dependencies", async () => {
-    const event = defineEvent({ id: "graph.branch.no-deps.hook.event" });
+    const event = defineEvent({ id: "graph-branch-no-deps-hook-event" });
 
     const hook = defineHook({
-      id: "graph.branch.no-deps.hook",
+      id: "graph-branch-no-deps-hook",
       on: event,
       run: async () => undefined,
     });
 
     const app = defineResource({
-      id: "graph.branch.no-deps.hook.app",
+      id: "graph-branch-no-deps-hook-app",
       register: [event, hook],
     });
 
@@ -103,16 +103,16 @@ describe("buildDependencyGraph branch coverage", () => {
   });
 
   it("handles hooks listening to events without emitting events", async () => {
-    const eventA = defineEvent({ id: "graph.branch.emission.a" });
+    const eventA = defineEvent({ id: "graph-branch-emission-a" });
 
     const hook = defineHook({
-      id: "graph.branch.emission.hook",
+      id: "graph-branch-emission-hook",
       on: eventA,
       run: async () => undefined,
     });
 
     const app = defineResource({
-      id: "graph.branch.emission.app",
+      id: "graph-branch-emission-app",
       register: [eventA, hook],
     });
 
@@ -121,23 +121,23 @@ describe("buildDependencyGraph branch coverage", () => {
   });
 
   it("covers defensive branches for missing dependencies and missing node lookups", () => {
-    const eventA = defineEvent({ id: "graph.branch.defensive.event.a" });
-    const eventB = defineEvent({ id: "graph.branch.defensive.event.b" });
+    const eventA = defineEvent({ id: "graph-branch-defensive-event-a" });
+    const eventB = defineEvent({ id: "graph-branch-defensive-event-b" });
     const unresolvedTaskMiddlewareId =
-      "graph.branch.defensive.unresolved.task.mw";
+      "graph-branch-defensive-unresolved-task-mw";
     const unresolvedResourceMiddlewareId =
-      "graph.branch.defensive.unresolved.resource.mw";
+      "graph-branch-defensive-unresolved-resource-mw";
 
     const fakeRegistry = {
       tasks: new Map([
         [
-          "graph.branch.defensive.task",
+          "graph-branch-defensive-task",
           {
             task: {
-              id: "graph.branch.defensive.task",
+              id: "graph-branch-defensive-task",
               dependencies: undefined,
               middleware: [
-                { id: "graph.branch.defensive.missing.task.mw" },
+                { id: "graph-branch-defensive-missing-task-mw" },
                 { id: unresolvedTaskMiddlewareId },
               ],
             },
@@ -146,19 +146,19 @@ describe("buildDependencyGraph branch coverage", () => {
       ]),
       taskMiddlewares: new Map([
         [
-          "graph.branch.defensive.task.mw",
+          "graph-branch-defensive-task-mw",
           {
             middleware: {
-              id: "graph.branch.defensive.task.mw",
+              id: "graph-branch-defensive-task-mw",
               dependencies: undefined,
             },
           },
         ],
         [
-          "graph.branch.defensive.task.subtree-mw",
+          "graph-branch-defensive-task-subtree-mw",
           {
             middleware: {
-              id: "graph.branch.defensive.task.subtree-mw",
+              id: "graph-branch-defensive-task-subtree-mw",
               dependencies: undefined,
             },
           },
@@ -166,10 +166,10 @@ describe("buildDependencyGraph branch coverage", () => {
       ]),
       resourceMiddlewares: new Map([
         [
-          "graph.branch.defensive.resource.mw",
+          "graph-branch-defensive-resource-mw",
           {
             middleware: {
-              id: "graph.branch.defensive.resource.mw",
+              id: "graph-branch-defensive-resource-mw",
               dependencies: undefined,
             },
           },
@@ -177,13 +177,13 @@ describe("buildDependencyGraph branch coverage", () => {
       ]),
       resources: new Map([
         [
-          "graph.branch.defensive.resource",
+          "graph-branch-defensive-resource",
           {
             resource: {
-              id: "graph.branch.defensive.resource",
+              id: "graph-branch-defensive-resource",
               dependencies: undefined,
               middleware: [
-                { id: "graph.branch.defensive.missing.resource.mw" },
+                { id: "graph-branch-defensive-missing-resource-mw" },
                 { id: unresolvedResourceMiddlewareId },
               ],
             },
@@ -192,20 +192,20 @@ describe("buildDependencyGraph branch coverage", () => {
       ]),
       hooks: new Map([
         [
-          "graph.branch.defensive.hook.no-deps",
+          "graph-branch-defensive-hook-no-deps",
           {
             hook: {
-              id: "graph.branch.defensive.hook.no-deps",
+              id: "graph-branch-defensive-hook-no-deps",
               on: eventA,
               dependencies: undefined,
             },
           },
         ],
         [
-          "graph.branch.defensive.hook.unknown-target",
+          "graph-branch-defensive-hook-unknown-target",
           {
             hook: {
-              id: "graph.branch.defensive.hook.unknown-target",
+              id: "graph-branch-defensive-hook-unknown-target",
               on: eventA,
               dependencies: { eventB },
             },
@@ -253,16 +253,16 @@ describe("buildDependencyGraph branch coverage", () => {
 
   it("falls back to raw tag ids when tagged definitions cannot be alias-resolved", () => {
     const tag = defineTag({
-      id: "graph.branch.raw-tag.tag",
+      id: "graph-branch-raw-tag-tag",
     });
     const carriedTag = tag.with(undefined);
     const consumerTask = defineTask({
-      id: "graph.branch.raw-tag.consumer",
+      id: "graph-branch-raw-tag-consumer",
       dependencies: { feature: tag },
       run: async () => "consumer",
     });
     const taggedTask = defineTask({
-      id: "graph.branch.raw-tag.target",
+      id: "graph-branch-raw-tag-target",
       tags: [carriedTag],
       run: async () => "target",
     });
@@ -298,17 +298,17 @@ describe("buildDependencyGraph branch coverage", () => {
   });
 
   it("covers subtree middleware dedupe and missing-node guards", () => {
-    const taskSubtreeDuplicate = { id: "graph.subtree.task.duplicate" };
-    const taskSubtreeMissing = { id: "graph.subtree.task.missing" };
-    const taskSubtreeUnresolved = { id: "graph.subtree.task.unresolved" };
-    const resourceSubtreeDuplicate = { id: "graph.subtree.resource.duplicate" };
-    const resourceSubtreeMissing = { id: "graph.subtree.resource.missing" };
+    const taskSubtreeDuplicate = { id: "graph-subtree-task-duplicate" };
+    const taskSubtreeMissing = { id: "graph-subtree-task-missing" };
+    const taskSubtreeUnresolved = { id: "graph-subtree-task-unresolved" };
+    const resourceSubtreeDuplicate = { id: "graph-subtree-resource-duplicate" };
+    const resourceSubtreeMissing = { id: "graph-subtree-resource-missing" };
     const resourceSubtreeUnresolved = {
-      id: "graph.subtree.resource.unresolved",
+      id: "graph-subtree-resource-unresolved",
     };
 
     const ownerResource = {
-      id: "graph.subtree.owner",
+      id: "graph-subtree-owner",
       middleware: [],
       dependencies: undefined,
       subtree: {
@@ -334,10 +334,10 @@ describe("buildDependencyGraph branch coverage", () => {
     const fakeRegistry = {
       tasks: new Map([
         [
-          "graph.subtree.task",
+          "graph-subtree-task",
           {
             task: {
-              id: "graph.subtree.task",
+              id: "graph-subtree-task",
               dependencies: undefined,
               middleware: [taskSubtreeDuplicate],
             },
@@ -369,10 +369,10 @@ describe("buildDependencyGraph branch coverage", () => {
       resources: new Map([
         [ownerResource.id, { resource: ownerResource }],
         [
-          "graph.subtree.resource",
+          "graph-subtree-resource",
           {
             resource: {
-              id: "graph.subtree.resource",
+              id: "graph-subtree-resource",
               dependencies: undefined,
               middleware: [resourceSubtreeDuplicate],
             },
@@ -385,8 +385,8 @@ describe("buildDependencyGraph branch coverage", () => {
         isAccessible: () => true,
         getOwnerResourceId: (itemId: string) => {
           if (
-            itemId === "graph.subtree.task" ||
-            itemId === "graph.subtree.resource"
+            itemId === "graph-subtree-task" ||
+            itemId === "graph-subtree-resource"
           ) {
             return ownerResource.id;
           }
@@ -406,8 +406,8 @@ describe("buildDependencyGraph branch coverage", () => {
     };
 
     const result = buildDependencyGraph(fakeRegistry as any);
-    expect(result.some((node) => node.id === "graph.subtree.task")).toBe(true);
-    expect(result.some((node) => node.id === "graph.subtree.resource")).toBe(
+    expect(result.some((node) => node.id === "graph-subtree-task")).toBe(true);
+    expect(result.some((node) => node.id === "graph-subtree-resource")).toBe(
       true,
     );
   });

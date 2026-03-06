@@ -20,17 +20,17 @@ describe("LifecycleAdmissionController", () => {
     controller.beginDisposing();
     controller.beginDrained();
 
-    expect(controller.canAdmitTask(runtimeSource.task("task.a"))).toBe(false);
-    expect(controller.canAdmitEvent(runtimeSource.hook("hook.a"))).toBe(false);
+    expect(controller.canAdmitTask(runtimeSource.task("task-a"))).toBe(false);
+    expect(controller.canAdmitEvent(runtimeSource.hook("hook-a"))).toBe(false);
     expect(
-      controller.canAdmitEvent(runtimeSource.runtime("runtime.lifecycle"), {
+      controller.canAdmitEvent(runtimeSource.runtime("runtime-lifecycle"), {
         allowLifecycleBypass: true,
       }),
     ).toBe(true);
 
     controller.markDisposed();
 
-    expect(controller.canAdmitTask(runtimeSource.task("task.a"))).toBe(false);
-    expect(controller.canAdmitEvent(runtimeSource.hook("hook.a"))).toBe(false);
+    expect(controller.canAdmitTask(runtimeSource.task("task-a"))).toBe(false);
+    expect(controller.canAdmitEvent(runtimeSource.hook("hook-a"))).toBe(false);
   });
 });

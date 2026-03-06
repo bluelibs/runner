@@ -12,7 +12,7 @@ describe("EmissionExecutor branches", () => {
     const report = await executeSequentially({
       listeners: [
         {
-          id: "listener.actual",
+          id: "listener-actual",
           order: 1,
           isGlobal: false,
           handler: async () => {
@@ -21,10 +21,10 @@ describe("EmissionExecutor branches", () => {
         },
       ],
       event: {
-        id: "event.id",
+        id: "event-id",
         data: undefined,
         timestamp: new Date(),
-        source: runtimeSource.runtime("test.source"),
+        source: runtimeSource.runtime("test-source"),
         meta: {},
         transactional: false,
         isPropagationStopped: () => false,
@@ -43,7 +43,7 @@ describe("EmissionExecutor branches", () => {
     const report = await executeSequentially({
       listeners: [
         {
-          id: "listener.object-message",
+          id: "listener-object-message",
           order: 1,
           isGlobal: false,
           handler: async () => {
@@ -52,10 +52,10 @@ describe("EmissionExecutor branches", () => {
         },
       ],
       event: {
-        id: "event.id.object-message",
+        id: "event-id-object-message",
         data: undefined,
         timestamp: new Date(),
-        source: runtimeSource.runtime("test.source.object-message"),
+        source: runtimeSource.runtime("test-source-object-message"),
         meta: {},
         transactional: false,
         isPropagationStopped: () => false,

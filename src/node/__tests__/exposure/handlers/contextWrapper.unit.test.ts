@@ -17,12 +17,12 @@ function createStore(asyncContexts: Map<string, unknown>) {
 describe("contextWrapper", () => {
   it("withExposureContext handles array context header and bad per-context parse", async () => {
     const goodCtx = {
-      id: "ctx.good",
+      id: "ctx-good",
       parse: (value: string) => JSON.parse(value),
       provide: async (_value: unknown, fn: () => Promise<string>) => fn(),
     };
     const badCtx = {
-      id: "ctx.bad",
+      id: "ctx-bad",
       parse: () => {
         throw new Error("bad parse");
       },
@@ -75,7 +75,7 @@ describe("contextWrapper", () => {
       async (_value: unknown, fn: () => Promise<string>) => fn(),
     );
     const ctx = {
-      id: "ctx.disabled",
+      id: "ctx-disabled",
       parse: parseSpy,
       provide: provideSpy,
     };
@@ -109,7 +109,7 @@ describe("contextWrapper", () => {
       async (_value: unknown, fn: () => Promise<string>) => fn(),
     );
     const ctx = {
-      id: "ctx.non-string",
+      id: "ctx-non-string",
       parse: parseSpy,
       provide: provideSpy,
     };
@@ -167,12 +167,12 @@ describe("contextWrapper", () => {
       async (_value: unknown, fn: () => Promise<string>) => fn(),
     );
     const firstCtx = {
-      id: "ctx.first",
+      id: "ctx-first",
       parse: firstParse,
       provide: firstProvide,
     };
     const secondCtx = {
-      id: "ctx.second",
+      id: "ctx-second",
       parse: secondParse,
       provide: secondProvide,
     };
@@ -214,7 +214,7 @@ describe("contextWrapper", () => {
       async (_value: unknown, fn: () => Promise<string>) => fn(),
     );
     const ctx = {
-      id: "ctx.raw-allowlist",
+      id: "ctx-raw-allowlist",
       parse: parseSpy,
       provide: provideSpy,
     };

@@ -19,7 +19,7 @@ describe("durable: DurableService.handleTimer branch edges", () => {
   it("handles one-off scheduled timers without claimTimer support", async () => {
     const base = new MemoryStore();
     const store = createBareStore(base);
-    const task = okTask("t.oneoff.no-claim");
+    const task = okTask("t-oneoff-no-claim");
     const service = new DurableService({
       store,
       tasks: [task],
@@ -101,7 +101,7 @@ describe("durable: DurableService.handleTimer branch edges", () => {
     }
 
     const store = new FlakyScheduleStore();
-    const task = okTask("t.schedule.recheck");
+    const task = okTask("t-schedule-recheck");
     const service = new DurableService({
       store,
       tasks: [task],

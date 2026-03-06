@@ -10,10 +10,10 @@ import {
 describe("resource builder", () => {
   it("build() returns branded resource with id", () => {
     const res = r
-      .resource("tests.builder.r1")
+      .resource("tests-builder-r1")
       .init(async () => Promise.resolve(1))
       .build();
-    expect(res.id).toBe("tests.builder.r1");
+    expect(res.id).toBe("tests-builder-r1");
     // brand
     expect(
       (res as unknown as { [definitions.symbolResource]: boolean })[
@@ -29,15 +29,15 @@ describe("resource builder", () => {
 
   it("register appends by default and overrides when requested", () => {
     const shared = defineResource({
-      id: "tests.builder.append.shared",
+      id: "tests-builder-append-shared",
       init: async () => 1,
     });
     const extra = defineResource({
-      id: "tests.builder.append.extra",
+      id: "tests-builder-append-extra",
       init: async () => 2,
     });
     const append = r
-      .resource("tests.builder.append")
+      .resource("tests-builder-append")
       .register(shared)
       .register([extra])
       .build();
@@ -51,7 +51,7 @@ describe("resource builder", () => {
     }
 
     const override = r
-      .resource("tests.builder.override")
+      .resource("tests-builder-override")
       .register([shared, extra])
       .register(shared, { override: true })
       .build();
@@ -64,16 +64,16 @@ describe("resource builder", () => {
 
   it("register merges dynamic callbacks into a single function", () => {
     const alpha = defineResource({
-      id: "tests.builder.fn.alpha",
+      id: "tests-builder-fn-alpha",
       init: async () => 1,
     });
     const beta = defineResource({
-      id: "tests.builder.fn.beta",
+      id: "tests-builder-fn-beta",
       init: async () => 2,
     });
 
     const composed = r
-      .resource("tests.builder.registerfn")
+      .resource("tests-builder-registerfn")
       .register(() => [alpha])
       .register(beta)
       .build();
@@ -87,12 +87,12 @@ describe("resource builder", () => {
 
   it("supports config-driven register without init", () => {
     const enabled = defineResource({
-      id: "tests.builder.config-only.enabled",
+      id: "tests-builder-config-only-enabled",
       init: async () => true,
     });
 
     const configOnly = r
-      .resource<{ enabled: boolean }>("tests.builder.config-only")
+      .resource<{ enabled: boolean }>("tests-builder-config-only")
       .register((config) => (config.enabled ? [enabled] : []))
       .build();
 
@@ -107,16 +107,16 @@ describe("resource builder", () => {
 
   it("register merges array base with lazy callbacks", () => {
     const alpha = defineResource({
-      id: "tests.builder.fnfn.alpha",
+      id: "tests-builder-fnfn-alpha",
       init: async () => 1,
     });
     const beta = defineResource({
-      id: "tests.builder.fnfn.beta",
+      id: "tests-builder-fnfn-beta",
       init: async () => 2,
     });
 
     const composed = r
-      .resource("tests.builder.register.array-fn")
+      .resource("tests-builder-register-array-fn")
       .register([alpha])
       .register(() => [beta])
       .build();
@@ -129,10 +129,10 @@ describe("resource builder", () => {
   });
 
   it("chains dependencies, tags, middleware, meta, overrides, register, context", () => {
-    const a = defineResource({ id: "tests.a", init: async () => 1 });
-    const b = defineResource({ id: "tests.b", init: async () => 2 });
+    const a = defineResource({ id: "tests-a", init: async () => 1 });
+    const b = defineResource({ id: "tests-b", init: async () => 2 });
     const app = r
-      .resource("tests.builder.app")
+      .resource("tests-builder-app")
       .dependencies({ a, b })
       .register([a, b])
       .tags([])
@@ -161,16 +161,16 @@ describe("resource builder", () => {
 
   it("resource middleware appends by default and overrides when requested", () => {
     const rmw1 = r.middleware
-      .resource("tests.builder.rm.append.1")
+      .resource("tests-builder-rm-append-1")
       .run(async ({ next }) => next())
       .build();
     const rmw2 = r.middleware
-      .resource("tests.builder.rm.append.2")
+      .resource("tests-builder-rm-append-2")
       .run(async ({ next }) => next())
       .build();
 
     const appended = r
-      .resource("tests.builder.app.mw.append")
+      .resource("tests-builder-app-mw-append")
       .register([rmw1, rmw2])
       .middleware([rmw1])
       .middleware([rmw2])
@@ -180,7 +180,7 @@ describe("resource builder", () => {
     expect(appended.middleware.map((m) => m.id)).toEqual([rmw1.id, rmw2.id]);
 
     const overridden = r
-      .resource("tests.builder.app.mw.override")
+      .resource("tests-builder-app-mw-override")
       .register([rmw1, rmw2])
       .middleware([rmw1])
       .middleware([rmw2], { override: true })
@@ -192,18 +192,18 @@ describe("resource builder", () => {
 
   it("resource overrides append by default and overrides when requested", () => {
     const baseA = defineResource({
-      id: "tests.builder.override.a",
+      id: "tests-builder-override-a",
       init: async () => 1,
     });
     const baseB = defineResource({
-      id: "tests.builder.override.b",
+      id: "tests-builder-override-b",
       init: async () => 2,
     });
     const a = r.override(baseA, async () => 11);
     const b = r.override(baseB, async () => 22);
 
     const appended = r
-      .resource("tests.builder.overrides.append")
+      .resource("tests-builder-overrides-append")
       .overrides([a])
       .overrides([b])
       .init(async () => Promise.resolve("OK"))
@@ -212,7 +212,7 @@ describe("resource builder", () => {
     expect(appended.overrides.map((x) => x?.id)).toEqual([a.id, b.id]);
 
     const overridden = r
-      .resource("tests.builder.overrides.override")
+      .resource("tests-builder-overrides-override")
       .overrides([a])
       .overrides([b], { override: true })
       .init(async () => Promise.resolve("OK"))
@@ -222,9 +222,9 @@ describe("resource builder", () => {
   });
 
   it("init propagates dependencies and context through the classic signature", async () => {
-    const a = defineResource({ id: "tests.a2", init: async () => 5 });
+    const a = defineResource({ id: "tests-a2", init: async () => 5 });
     const app = r
-      .resource("tests.builder.app2")
+      .resource("tests-builder-app2")
       .register([a])
       .dependencies({ a })
       .context(() => ({ hits: 0 }))
@@ -242,7 +242,7 @@ describe("resource builder", () => {
 
   it("infers config type from init signature when unspecified", () => {
     const res = r
-      .resource("tests.builder.app.config-infer")
+      .resource("tests-builder-app-config-infer")
       .init(async (cfg: { flag: boolean }) => {
         return Promise.resolve(cfg.flag ? "Y" : "N");
       })
@@ -254,7 +254,7 @@ describe("resource builder", () => {
 
   it("supports configSchema, resultSchema and meta", () => {
     const res = r
-      .resource("tests.builder.r3")
+      .resource("tests-builder-r3")
       .configSchema<{ foo: number }>({
         parse: (x: unknown) => x as { foo: number },
       })
@@ -263,32 +263,32 @@ describe("resource builder", () => {
       .meta({ title: "Configured" } as unknown as IResourceMeta)
       .build();
 
-    expect(res.id).toBe("tests.builder.r3");
+    expect(res.id).toBe("tests-builder-r3");
     expect(res.meta).toEqual({ title: "Configured" });
   });
 
   it("supports throws contracts without DI", () => {
-    const err = r.error("tests.builder.resource.throws.err").build();
+    const err = r.error("tests-builder-resource-throws-err").build();
     const res = r
-      .resource("tests.builder.resource.throws")
-      .throws([err, "tests.builder.resource.throws.other", err])
+      .resource("tests-builder-resource-throws")
+      .throws([err, "tests-builder-resource-throws-other", err])
       .init(async () => Promise.resolve("OK"))
       .build();
-    expect(res.throws).toEqual([err.id, "tests.builder.resource.throws.other"]);
+    expect(res.throws).toEqual([err.id, "tests-builder-resource-throws-other"]);
   });
 
   it("isolate is additive across repeated calls", () => {
     const denyTaskA = r
-      .task("tests.builder.policy.task.a")
+      .task("tests-builder-policy-task-a")
       .run(async () => 1)
       .build();
     const denyTaskB = r
-      .task("tests.builder.policy.task.b")
+      .task("tests-builder-policy-task-b")
       .run(async () => 2)
       .build();
 
     const resourceWithPolicy = r
-      .resource("tests.builder.policy.resource")
+      .resource("tests-builder-policy-resource")
       .isolate({ deny: [denyTaskA] })
       .isolate({ deny: [denyTaskB] })
       .build();
@@ -299,14 +299,14 @@ describe("resource builder", () => {
   });
 
   it("isolate preserves and merges only rules across calls", () => {
-    const onlyTag = r.tag("tests.builder.policy.only.tag").build();
+    const onlyTag = r.tag("tests-builder-policy-only-tag").build();
     const onlyTask = r
-      .task("tests.builder.policy.only.task")
+      .task("tests-builder-policy-only-task")
       .run(async () => 1)
       .build();
 
     const resourceWithPolicy = r
-      .resource("tests.builder.policy.only.resource")
+      .resource("tests-builder-policy-only-resource")
       .isolate({ only: [onlyTag] })
       .isolate({})
       .isolate({ only: [onlyTask] })
@@ -320,17 +320,17 @@ describe("resource builder", () => {
 
   it("isolate throws immediately when deny and only would coexist (fail-fast)", () => {
     const onlyTask = r
-      .task("tests.builder.policy.conflict.only")
+      .task("tests-builder-policy-conflict-only")
       .run(async () => 1)
       .build();
     const denyTask = r
-      .task("tests.builder.policy.conflict.deny")
+      .task("tests-builder-policy-conflict-deny")
       .run(async () => 2)
       .build();
 
     // deny+only in the same .isolate() call
     expect(() => {
-      r.resource("tests.builder.policy.conflict.resource").isolate({
+      r.resource("tests-builder-policy-conflict-resource").isolate({
         only: [onlyTask],
         deny: [denyTask],
       });
@@ -340,7 +340,7 @@ describe("resource builder", () => {
 
     // deny+only via separate chained calls
     expect(() => {
-      r.resource("tests.builder.policy.conflict.chained.resource")
+      r.resource("tests-builder-policy-conflict-chained-resource")
         .isolate({ only: [onlyTask] })
         .isolate({ deny: [denyTask] });
     }).toThrow(
@@ -351,7 +351,7 @@ describe("resource builder", () => {
   it("throws on invalid throws entries", () => {
     expect(() =>
       r
-        .resource("tests.builder.resource.throws.invalid")
+        .resource("tests-builder-resource-throws-invalid")
         .throws([{} as unknown as string])
         .init(async () => Promise.resolve("OK"))
         .build(),
@@ -360,7 +360,7 @@ describe("resource builder", () => {
 
   it("resource middleware built via builder wraps init result", async () => {
     const rmw = r.middleware
-      .resource("tests.builder.rm.wrap")
+      .resource("tests-builder-rm-wrap")
       .run(async ({ next }) => {
         const result = await next();
         return `MW:${String(result)}`;
@@ -368,7 +368,7 @@ describe("resource builder", () => {
       .build();
 
     const app = r
-      .resource("tests.builder.app.mw")
+      .resource("tests-builder-app-mw")
       .register([rmw])
       .middleware([rmw])
       .init(async () => Promise.resolve("OK"))
@@ -381,7 +381,7 @@ describe("resource builder", () => {
 
   it("task middleware built via builder applies when task is called in init", async () => {
     const tmw = r.middleware
-      .task("tests.builder.tm.wrap")
+      .task("tests-builder-tm-wrap")
       .run(async ({ next }) => {
         const out = await next();
         return `MW:${String(out)}`;
@@ -389,13 +389,13 @@ describe("resource builder", () => {
       .build();
 
     const task = r
-      .task("tests.builder.task.mw")
+      .task("tests-builder-task-mw")
       .middleware([tmw])
       .run(async () => Promise.resolve("ok"))
       .build();
 
     const app = defineResource({
-      id: "tests.builder.app.taskmw",
+      id: "tests-builder-app-taskmw",
       register: [tmw, task],
       dependencies: { task },
       async init(_, { task }) {
@@ -409,10 +409,10 @@ describe("resource builder", () => {
   });
 
   it("resource tags are accessible in middleware during init", async () => {
-    const tg = defineTag({ id: "tests.builder.tag" });
+    const tg = defineTag({ id: "tests-builder-tag" });
     const seen: string[] = [];
     const rmw = r.middleware
-      .resource("tests.builder.rm.tags")
+      .resource("tests-builder-rm-tags")
       .run(async ({ next, resource }) => {
         if (resource?.definition.tags) {
           for (const t of resource.definition.tags) {
@@ -424,7 +424,7 @@ describe("resource builder", () => {
       .build();
 
     const app = r
-      .resource("tests.builder.app.tags")
+      .resource("tests-builder-app-tags")
       .register([rmw, tg])
       .tags([tg])
       .middleware([rmw])
@@ -438,16 +438,16 @@ describe("resource builder", () => {
 
   it("register merges function + function and supports override", () => {
     const gamma = defineResource({
-      id: "tests.builder.fnfn.gamma",
+      id: "tests-builder-fnfn-gamma",
       init: async () => 3,
     });
     const delta = defineResource({
-      id: "tests.builder.fnfn.delta",
+      id: "tests-builder-fnfn-delta",
       init: async () => 4,
     });
 
     const merged = r
-      .resource("tests.builder.fnfn")
+      .resource("tests-builder-fnfn")
       .register(() => [gamma])
       .register(() => [delta])
       .build();
@@ -459,7 +459,7 @@ describe("resource builder", () => {
     }
 
     const overridden = r
-      .resource("tests.builder.fnfn.override")
+      .resource("tests-builder-fnfn-override")
       .register(() => [gamma])
       .register(() => [delta], { override: true })
       .build();
@@ -473,17 +473,17 @@ describe("resource builder", () => {
 
   it("resource dependencies covers function+function and object+function branches", async () => {
     const a = defineResource({
-      id: "tests.builder.resdeps.ff.a",
+      id: "tests-builder-resdeps-ff-a",
       init: async () => 10,
     });
     const b = defineResource({
-      id: "tests.builder.resdeps.ff.b",
+      id: "tests-builder-resdeps-ff-b",
       init: async () => 20,
     });
 
     // function + function
     const res1 = r
-      .resource("tests.builder.resdeps.ff")
+      .resource("tests-builder-resdeps-ff")
       .register([a, b])
       .dependencies(() => ({ a }))
       .dependencies(() => ({ b }))
@@ -495,7 +495,7 @@ describe("resource builder", () => {
 
     // object + function
     const res2 = r
-      .resource("tests.builder.resdeps.of")
+      .resource("tests-builder-resdeps-of")
       .register([a, b])
       .dependencies({ a })
       .dependencies(() => ({ b }))

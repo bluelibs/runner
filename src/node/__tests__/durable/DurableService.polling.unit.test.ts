@@ -19,7 +19,7 @@ import { Logger, type ILog } from "../../../models/Logger";
 describe("durable: DurableService — polling & lifecycle (unit)", () => {
   it("polls timers and handles schedule timers end-to-end", async () => {
     const store = new MemoryStore();
-    const task = okTask("t.run");
+    const task = okTask("t-run");
 
     const service = await initDurableService({
       store,

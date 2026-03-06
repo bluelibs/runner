@@ -5,11 +5,11 @@ import { rpcExposure } from "../testkit/rpcExposure";
 describe("nodeExposure - misc routing branches", () => {
   const TOKEN = "unit-secret";
   const noInputTask = defineTask<void, Promise<number>>({
-    id: "unit.exposure.misc.noInputTask",
+    id: "unit-exposure-misc-noInputTask",
     run: async () => 123,
   });
   const dummyEvent = defineEvent<{ x?: number }>({
-    id: "unit.exposure.misc.event",
+    id: "unit-exposure-misc-event",
   });
 
   it("direct handlers: extractTarget returns null for non-base paths and url fallback with undefined", async () => {
@@ -17,7 +17,7 @@ describe("nodeExposure - misc routing branches", () => {
       http: { auth: { token: TOKEN, allowAnonymous: true } },
     });
     const app = defineResource({
-      id: "unit.exposure.misc.app5",
+      id: "unit-exposure-misc-app5",
       register: [noInputTask, dummyEvent, exposure],
     });
     const rr = await run(app);
@@ -71,7 +71,7 @@ describe("nodeExposure - misc routing branches", () => {
       http: { auth: { token: TOKEN, allowAnonymous: true } },
     });
     const app = defineResource({
-      id: "unit.exposure.misc.app7",
+      id: "unit-exposure-misc-app7",
       register: [noInputTask, exposure],
     });
     const rr = await run(app);
@@ -107,7 +107,7 @@ describe("nodeExposure - misc routing branches", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.misc.app8",
+      id: "unit-exposure-misc-app8",
       register: [dummyEvent, exposure],
     });
     const rr = await run(app);

@@ -12,7 +12,7 @@ import type { ITask } from "../../../types/task";
 import { createMessageError } from "../../../errors";
 
 enum TaskId {
-  T = "durable.tests.executionManager.t",
+  T = "durable-tests-executionManager-t",
 }
 
 enum IdempotencyKey {
@@ -283,7 +283,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const requestedAt = new Date("2024-01-01T00:00:00.000Z");
 
     const exec: Execution = {
-      id: "e.cancel.defaults",
+      id: "e-cancel-defaults",
       taskId: TaskId.T,
       input: undefined,
       status: ExecutionStatus.Running,
@@ -655,7 +655,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     );
 
     await manager.notifyExecutionFinished({
-      id: "e.notify",
+      id: "e-notify",
       taskId: TaskId.T,
       input: undefined,
       status: ExecutionStatus.Completed,
@@ -668,7 +668,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     });
 
     expect(published).toEqual([
-      { channel: "execution:e.notify", type: "finished" },
+      { channel: "execution:e-notify", type: "finished" },
     ]);
   });
 
@@ -708,7 +708,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     await expect(
       manager.notifyExecutionFinished({
-        id: "e.notify.noop",
+        id: "e-notify-noop",
         taskId: TaskId.T,
         input: undefined,
         status: ExecutionStatus.Completed,

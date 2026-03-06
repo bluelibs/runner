@@ -60,13 +60,13 @@ describe("remote lanes http protocol", () => {
       code: "BAD_REQUEST",
       message: "bad",
       httpCode: 400,
-      id: "tests.error.id",
+      id: "tests-error-id",
       data: { code: 12 },
     });
     expect(withMetadata).toMatchObject({
       code: "BAD_REQUEST",
       httpCode: 400,
-      id: "tests.error.id",
+      id: "tests-error-id",
       data: { code: 12 },
       message: "bad",
     });
@@ -89,7 +89,7 @@ describe("remote lanes http protocol", () => {
   it("delegates run and emit helpers to runner callbacks", async () => {
     const runCalls: Array<{ taskId: string; input: unknown }> = [];
     const emitCalls: Array<{ id: string; data: unknown }> = [];
-    const task = { id: "tests.remote-lanes.protocol.task" } as ITask<
+    const task = { id: "tests-remote-lanes-protocol-task" } as ITask<
       any,
       any,
       any,
@@ -98,7 +98,7 @@ describe("remote lanes http protocol", () => {
       any
     >;
     const emission = {
-      id: "tests.remote-lanes.protocol.event",
+      id: "tests-remote-lanes-protocol-event",
       data: { x: 1 },
     } as IEventEmission<any>;
 
@@ -118,10 +118,10 @@ describe("remote lanes http protocol", () => {
 
     expect(runResult).toBe(7);
     expect(runCalls).toEqual([
-      { taskId: "tests.remote-lanes.protocol.task", input: { a: 1 } },
+      { taskId: "tests-remote-lanes-protocol-task", input: { a: 1 } },
     ]);
     expect(emitCalls).toEqual([
-      { id: "tests.remote-lanes.protocol.event", data: { x: 1 } },
+      { id: "tests-remote-lanes-protocol-event", data: { x: 1 } },
     ]);
   });
 });

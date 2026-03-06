@@ -12,45 +12,45 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
   describe("hooks and events", () => {
     it("blocks hooks from listening to non-exported events", async () => {
       const secretEvent = defineEvent<{ value: string }>({
-        id: "exports.strict.events.secret",
+        id: "exports-strict-events-secret",
       });
 
       const child = defineResource({
-        id: "exports.strict.events.child",
+        id: "exports-strict-events-child",
         register: [secretEvent],
         isolate: { exports: "none" },
       });
 
       const hook = defineHook({
-        id: "exports.strict.events.hook",
+        id: "exports-strict-events-hook",
         on: secretEvent,
         run: async () => {},
       });
 
       const root = defineResource({
-        id: "exports.strict.events.root",
+        id: "exports-strict-events-root",
         register: [child, hook],
       });
 
       await expect(run(root)).rejects.toThrow(
-        /exports\.strict\.events\.secret.*internal.*exports\.strict\.events\.child/,
+        /exports-strict-events-secret.*internal.*exports-strict-events-child/,
       );
     });
 
     it("allows hooks to listen to exported events", async () => {
       const secretEvent = defineEvent<{ value: string }>({
-        id: "exports.strict.events-ok.secret",
+        id: "exports-strict-events-ok-secret",
       });
       const hookCalled = jest.fn();
 
       const child = defineResource({
-        id: "exports.strict.events-ok.child",
+        id: "exports-strict-events-ok-child",
         register: [secretEvent],
         isolate: { exports: [secretEvent] },
       });
 
       const hook = defineHook({
-        id: "exports.strict.events-ok.hook",
+        id: "exports-strict-events-ok-hook",
         on: secretEvent,
         run: async (event) => {
           hookCalled(event.data.value);
@@ -58,7 +58,7 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       });
 
       const emitter = defineTask({
-        id: "exports.strict.events-ok.emitter",
+        id: "exports-strict-events-ok-emitter",
         dependencies: { secretEvent },
         run: async (_, deps) => {
           await deps.secretEvent({ value: "ok" });
@@ -67,7 +67,7 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       });
 
       const root = defineResource({
-        id: "exports.strict.events-ok.root",
+        id: "exports-strict-events-ok-root",
         register: [child, hook, emitter],
         dependencies: { emitter },
         async init(_, deps) {
@@ -85,52 +85,52 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
   describe("middleware", () => {
     it("blocks tasks from using non-exported task middleware", async () => {
       const internalMiddleware = defineTaskMiddleware({
-        id: "exports.strict.taskmw.internal",
+        id: "exports-strict-taskmw-internal",
         run: async ({ next }) => next(),
       });
 
       const child = defineResource({
-        id: "exports.strict.taskmw.child",
+        id: "exports-strict-taskmw-child",
         register: [internalMiddleware],
         isolate: { exports: "none" },
       });
 
       const task = defineTask({
-        id: "exports.strict.taskmw.consumer",
+        id: "exports-strict-taskmw-consumer",
         middleware: [internalMiddleware],
         run: async () => "done",
       });
 
       const root = defineResource({
-        id: "exports.strict.taskmw.root",
+        id: "exports-strict-taskmw-root",
         register: [child, task],
       });
 
       await expect(run(root)).rejects.toThrow(
-        /exports\.strict\.taskmw\.internal.*internal.*exports\.strict\.taskmw\.child/,
+        /exports-strict-taskmw-internal.*internal.*exports-strict-taskmw-child/,
       );
     });
 
     it("allows tasks to use exported task middleware", async () => {
       const internalMiddleware = defineTaskMiddleware({
-        id: "exports.strict.taskmw-ok.internal",
+        id: "exports-strict-taskmw-ok-internal",
         run: async ({ next }) => next(),
       });
 
       const child = defineResource({
-        id: "exports.strict.taskmw-ok.child",
+        id: "exports-strict-taskmw-ok-child",
         register: [internalMiddleware],
         isolate: { exports: [internalMiddleware] },
       });
 
       const task = defineTask({
-        id: "exports.strict.taskmw-ok.consumer",
+        id: "exports-strict-taskmw-ok-consumer",
         middleware: [internalMiddleware],
         run: async () => "done",
       });
 
       const root = defineResource({
-        id: "exports.strict.taskmw-ok.root",
+        id: "exports-strict-taskmw-ok-root",
         register: [child, task],
         dependencies: { task },
         async init(_, deps) {
@@ -145,18 +145,18 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
 
     it("blocks resources from using non-exported resource middleware", async () => {
       const internalResourceMiddleware = defineResourceMiddleware({
-        id: "exports.strict.resmw.internal",
+        id: "exports-strict-resmw-internal",
         run: async ({ next }) => next(),
       });
 
       const child = defineResource({
-        id: "exports.strict.resmw.child",
+        id: "exports-strict-resmw-child",
         register: [internalResourceMiddleware],
         isolate: { exports: "none" },
       });
 
       const consumer = defineResource({
-        id: "exports.strict.resmw.consumer",
+        id: "exports-strict-resmw-consumer",
         middleware: [internalResourceMiddleware],
         async init() {
           return "done";
@@ -164,18 +164,18 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       });
 
       const root = defineResource({
-        id: "exports.strict.resmw.root",
+        id: "exports-strict-resmw-root",
         register: [child, consumer],
       });
 
       await expect(run(root)).rejects.toThrow(
-        /exports\.strict\.resmw\.internal.*internal.*exports\.strict\.resmw\.child/,
+        /exports-strict-resmw-internal.*internal.*exports-strict-resmw-child/,
       );
     });
 
     it("scopes private everywhere task middleware to its subtree", async () => {
       const internalEverywhere = defineTaskMiddleware({
-        id: "exports.strict.everywhere.task.internal",
+        id: "exports-strict-everywhere-task-internal",
         run: async ({ next }) => {
           const result = await next();
           return `mw:${result}`;
@@ -183,16 +183,16 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       });
 
       const internalTask = defineTask({
-        id: "exports.strict.everywhere.task.internal-task",
+        id: "exports-strict-everywhere-task-internal-task",
         run: async () => "internal",
       });
       const externalTask = defineTask({
-        id: "exports.strict.everywhere.task.external-task",
+        id: "exports-strict-everywhere-task-external-task",
         run: async () => "external",
       });
 
       const child = defineResource({
-        id: "exports.strict.everywhere.task.child",
+        id: "exports-strict-everywhere-task-child",
         subtree: {
           tasks: {
             middleware: [internalEverywhere],
@@ -207,7 +207,7 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       });
 
       const root = defineResource({
-        id: "exports.strict.everywhere.task.root",
+        id: "exports-strict-everywhere-task-root",
         register: [child, externalTask],
         dependencies: { child, externalTask },
         async init(_, deps) {
@@ -228,11 +228,11 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
 
     it("scopes private everywhere resource middleware to its subtree", async () => {
       const internalEverywhere = defineResourceMiddleware({
-        id: "exports.strict.everywhere.resource.internal",
+        id: "exports-strict-everywhere-resource-internal",
         run: async ({ resource, next }) => {
           if (
             resource.definition.id !==
-            "exports.strict.everywhere.resource.internal-resource"
+            "exports-strict-everywhere-resource-internal-resource"
           ) {
             return next();
           }
@@ -242,20 +242,20 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       });
 
       const internalResource = defineResource({
-        id: "exports.strict.everywhere.resource.internal-resource",
+        id: "exports-strict-everywhere-resource-internal-resource",
         async init() {
           return "internal";
         },
       });
       const externalResource = defineResource({
-        id: "exports.strict.everywhere.resource.external-resource",
+        id: "exports-strict-everywhere-resource-external-resource",
         async init() {
           return "external";
         },
       });
 
       const child = defineResource({
-        id: "exports.strict.everywhere.resource.child",
+        id: "exports-strict-everywhere-resource-child",
         subtree: {
           resources: {
             middleware: [internalEverywhere],
@@ -270,7 +270,7 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
       });
 
       const root = defineResource({
-        id: "exports.strict.everywhere.resource.root",
+        id: "exports-strict-everywhere-resource-root",
         register: [child, externalResource],
         dependencies: { child, externalResource },
         async init(_, deps) {
@@ -293,34 +293,34 @@ describe("run.exports-visibility cross-cutting surfaces (strict privacy)", () =>
   describe("hook dependencies", () => {
     it("blocks hooks from depending on non-exported tasks", async () => {
       const privateTask = defineTask({
-        id: "exports.strict.hookdep.private",
+        id: "exports-strict-hookdep-private",
         run: async () => "private",
       });
 
       const event = defineEvent<void>({
-        id: "exports.strict.hookdep.event",
+        id: "exports-strict-hookdep-event",
       });
 
       const child = defineResource({
-        id: "exports.strict.hookdep.child",
+        id: "exports-strict-hookdep-child",
         register: [privateTask],
         isolate: { exports: "none" },
       });
 
       const hook = defineHook({
-        id: "exports.strict.hookdep.hook",
+        id: "exports-strict-hookdep-hook",
         on: event,
         dependencies: { privateTask },
         run: async () => {},
       });
 
       const root = defineResource({
-        id: "exports.strict.hookdep.root",
+        id: "exports-strict-hookdep-root",
         register: [child, event, hook],
       });
 
       await expect(run(root)).rejects.toThrow(
-        /exports\.strict\.hookdep\.private.*internal.*exports\.strict\.hookdep\.child/,
+        /exports-strict-hookdep-private.*internal.*exports-strict-hookdep-child/,
       );
     });
   });

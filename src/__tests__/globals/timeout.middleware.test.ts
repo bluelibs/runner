@@ -24,7 +24,7 @@ describe("Timeout Middleware", () => {
 
     const promise = timeoutMiddleware.run(
       {
-        task: { definition: { id: "spec.task" } as any, input: "x" },
+        task: { definition: { id: "spec-task" } as any, input: "x" },
         journal: journalInstance as any,
         next: () => nextPromise,
       },
@@ -47,7 +47,7 @@ describe("Timeout Middleware", () => {
 
     const result = await timeoutMiddleware.run(
       {
-        task: { definition: { id: "spec.task" } as any, input: "x" },
+        task: { definition: { id: "spec-task" } as any, input: "x" },
         journal: journalInstance as any,
         next: async () => "ok",
       },
@@ -65,7 +65,7 @@ describe("Timeout Middleware", () => {
 
     const result = await timeoutMiddleware.run(
       {
-        task: { definition: { id: "spec.task" } as any, input: "x" },
+        task: { definition: { id: "spec-task" } as any, input: "x" },
         journal: journalInstance as any,
         next: () => Promise.resolve("ok"),
       },
@@ -91,7 +91,7 @@ describe("Timeout Middleware", () => {
 
     const promise = timeoutResourceMiddleware.run(
       {
-        resource: { definition: { id: "spec.resource" }, config: {} } as any,
+        resource: { definition: { id: "spec-resource" }, config: {} } as any,
         next: () => nextPromise,
       },
       {},
@@ -109,7 +109,7 @@ describe("Timeout Middleware", () => {
   it("uses default ttl when resource middleware config omits ttl", async () => {
     const result = await timeoutResourceMiddleware.run(
       {
-        resource: { definition: { id: "spec.resource" }, config: {} } as any,
+        resource: { definition: { id: "spec-resource" }, config: {} } as any,
         next: async () => "ready",
       },
       {},
@@ -121,7 +121,7 @@ describe("Timeout Middleware", () => {
 
   it("should abort long-running tasks after ttl", async () => {
     const slowTask = defineTask({
-      id: "timeout.slowTask",
+      id: "timeout-slowTask",
       middleware: [timeoutMiddleware.with({ ttl: 20 })],
       run: async () => {
         await sleep(50);
@@ -143,7 +143,7 @@ describe("Timeout Middleware", () => {
 
   it("should allow tasks to complete before ttl", async () => {
     const fastTask = defineTask({
-      id: "timeout.fastTask",
+      id: "timeout-fastTask",
       middleware: [timeoutMiddleware.with({ ttl: 50 })],
       run: async () => {
         await sleep(10);
@@ -165,7 +165,7 @@ describe("Timeout Middleware", () => {
 
   it("should timeout resource initialization", async () => {
     const slowResource = defineResource({
-      id: "timeout.slowResource",
+      id: "timeout-slowResource",
       middleware: [timeoutResourceMiddleware.with({ ttl: 20 })],
       async init() {
         await sleep(50);
@@ -183,7 +183,7 @@ describe("Timeout Middleware", () => {
 
   it("should throw immediately when ttl is 0", async () => {
     const task = defineTask({
-      id: "timeout.immediate",
+      id: "timeout-immediate",
       middleware: [timeoutMiddleware.with({ ttl: 0 })],
       run: async () => "never",
     });
@@ -202,7 +202,7 @@ describe("Timeout Middleware", () => {
 
   it("should throw immediately when ttl is 0 for resource", async () => {
     const slowResource = defineResource({
-      id: "timeout.immediate.resource",
+      id: "timeout-immediate-resource",
       middleware: [timeoutResourceMiddleware.with({ ttl: 0 })],
       async init() {
         return "never";
@@ -219,7 +219,7 @@ describe("Timeout Middleware", () => {
 
   it("should respect abort controller (task aborts early)", async () => {
     const abortingMiddleware = defineTaskMiddleware({
-      id: "timeout.abort.trigger",
+      id: "timeout-abort-trigger",
       async run({ task, journal, next }) {
         const controller = journal.get(timeoutJournalKeys.abortController);
         if (!controller) {
@@ -231,7 +231,7 @@ describe("Timeout Middleware", () => {
     });
 
     const slowTask = defineTask({
-      id: "timeout.abortTask",
+      id: "timeout-abortTask",
       middleware: [timeoutMiddleware.with({ ttl: 50 }), abortingMiddleware],
       async run() {
         await sleep(40);
@@ -253,7 +253,7 @@ describe("Timeout Middleware", () => {
 
   it("should propagate errors thrown inside wrapped task", async () => {
     const failingTask = defineTask({
-      id: "timeout.errorTask",
+      id: "timeout-errorTask",
       middleware: [timeoutMiddleware.with({ ttl: 100 })],
       async run() {
         throw createMessageError("boom");
@@ -274,7 +274,7 @@ describe("Timeout Middleware", () => {
 
   it("should propagate resource init errors through timeout middleware", async () => {
     const brokenResource = defineResource({
-      id: "timeout.errorResource",
+      id: "timeout-errorResource",
       middleware: [timeoutResourceMiddleware.with({ ttl: 100 })],
       async init() {
         throw createMessageError("kaboom");
@@ -296,7 +296,7 @@ describe("Timeout Middleware", () => {
     try {
       const promise = timeoutMiddleware.run(
         {
-          task: { definition: { id: "spec.task" } as any, input: "x" },
+          task: { definition: { id: "spec-task" } as any, input: "x" },
           journal: journalInstance as any,
           next: () =>
             new Promise(() => {
@@ -319,7 +319,7 @@ describe("Timeout Middleware", () => {
     try {
       const promise = timeoutResourceMiddleware.run(
         {
-          resource: { definition: { id: "spec.resource" }, config: {} } as any,
+          resource: { definition: { id: "spec-resource" }, config: {} } as any,
           next: () =>
             new Promise(() => {
               /* never resolves */
@@ -337,7 +337,7 @@ describe("Timeout Middleware", () => {
 
   it("should resolve resource init when within ttl", async () => {
     const quickResource = defineResource({
-      id: "timeout.quickResource",
+      id: "timeout-quickResource",
       middleware: [timeoutResourceMiddleware.with({ ttl: 50 })],
       async init() {
         await sleep(10);

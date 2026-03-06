@@ -13,7 +13,7 @@ import { createMessageError } from "../../../../errors";
 describe("nodeExposure request context (raw-body)", () => {
   it("provides req/res via useRpcLaneRequestContext() and allows raw-body streaming when content-type is application/octet-stream", async () => {
     const rawTask = defineTask<void, Promise<string>>({
-      id: "ctx.raw.task",
+      id: "ctx-raw-task",
       run: async () => {
         const { req, basePath, url, method, headers } =
           useRpcLaneRequestContext();
@@ -39,7 +39,7 @@ describe("nodeExposure request context (raw-body)", () => {
       },
     });
     const app = defineResource({
-      id: "ctx.raw.app",
+      id: "ctx-raw-app",
       register: [rawTask, exposure],
     });
     const rr = await run(app);

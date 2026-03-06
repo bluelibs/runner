@@ -13,9 +13,10 @@ export function defineRpcLane(config: IRpcLaneDefinition): IRpcLane {
   if (typeof config.id !== "string" || config.id.trim().length === 0) {
     rpcLaneInvalidIdError.throw({ id: String(config.id) });
   }
-  assertDefinitionId("rpcLane", config.id);
-
   const callerFilePath = getCallerFile();
+  assertDefinitionId("rpcLane", config.id, {
+    callerFilePath: callerFilePath,
+  });
   return deepFreeze({
     ...config,
     id: config.id,

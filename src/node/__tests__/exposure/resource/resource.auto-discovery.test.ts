@@ -26,26 +26,26 @@ describe("nodeExposure auto-discovery (rpc lanes)", () => {
 
   it("allows only rpc-lane-allowlisted ids from served lanes", async () => {
     const allowed = defineTask<{ v: number }, Promise<number>>({
-      id: "auto.disc.allowed",
+      id: "auto-disc-allowed",
       run: async ({ v }) => v,
     });
     const notAllowed = defineTask<{ v: number }, Promise<number>>({
-      id: "auto.disc.notAllowed",
+      id: "auto-disc-notAllowed",
       run: async ({ v }) => v,
     });
     const allowedEvent = defineEvent<{ n: number }>({
-      id: "auto.disc.allowed.ev",
+      id: "auto-disc-allowed-ev",
     });
     const servedLane = r
-      .rpcLane("tests.auto-discovery.served")
+      .rpcLane("tests-auto-discovery-served")
       .applyTo([allowed, allowedEvent])
       .build();
     const unservedLane = r
-      .rpcLane("tests.auto-discovery.unserved")
+      .rpcLane("tests-auto-discovery-unserved")
       .applyTo([notAllowed])
       .build();
     const communicator = defineResource({
-      id: "tests.auto-discovery.communicator",
+      id: "tests-auto-discovery-communicator",
       init: async () => ({
         task: async () => 1,
         event: async () => undefined,
@@ -78,7 +78,7 @@ describe("nodeExposure auto-discovery (rpc lanes)", () => {
     });
 
     const app = defineResource({
-      id: "auto.disc.app",
+      id: "auto-disc-app",
       register: [allowed, notAllowed, allowedEvent, communicator, lanes],
     });
     const rr = await run(app);

@@ -30,8 +30,8 @@ import {
 
 describe("Errors", () => {
   it("should throw duplicateRegistration error", async () => {
-    const task1 = defineTask({ id: "test.task", run: async () => {} });
-    const task2 = defineTask({ id: "test.task", run: async () => {} });
+    const task1 = defineTask({ id: "test-task", run: async () => {} });
+    const task2 = defineTask({ id: "test-task", run: async () => {} });
 
     const app = defineResource({
       id: "app",
@@ -39,13 +39,13 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Task \"test.task\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Task \"test-task\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
   it("should throw unknown item type error at task level", async () => {
     const task = defineTask({
-      id: "test.task",
+      id: "test-task",
       // @ts-expect-error Testing invalid dependency type
       dependencies: { nonExistentDep: {} },
       run: async () => {},
@@ -100,10 +100,10 @@ describe("Errors", () => {
   });
 
   it("should throw eventNotFound error", async () => {
-    const nonExistentEvent = { id: "non.existent.event" };
+    const nonExistentEvent = { id: "non-existent-event" };
 
     const task = defineHook({
-      id: "test.task",
+      id: "test-task",
       on: nonExistentEvent,
       run: async () => {},
     });
@@ -114,13 +114,13 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Event "non.existent.event" not found. Did you forget to register it?',
+      'Event "non-existent-event" not found. Did you forget to register it?',
     );
   });
 
   it("should throw EventEmissionCycleError on A->B->A via hooks (dry-run)", async () => {
-    const A = defineEvent<void>({ id: "err.A" });
-    const B = defineEvent<void>({ id: "err.B" });
+    const A = defineEvent<void>({ id: "err-A" });
+    const B = defineEvent<void>({ id: "err-B" });
 
     const h1 = defineHook({
       id: "h1",
@@ -135,7 +135,7 @@ describe("Errors", () => {
       async run() {},
     });
 
-    const app = defineResource({ id: "err.app", register: [A, B, h1, h2] });
+    const app = defineResource({ id: "err-app", register: [A, B, h1, h2] });
 
     await expect(run(app, { dryRun: true })).rejects.toThrow(
       /Event emission cycles/i,
@@ -144,7 +144,7 @@ describe("Errors", () => {
 
   it("should throw taskError", async () => {
     const errorTask = defineTask({
-      id: "error.task",
+      id: "error-task",
       run: async () => {
         throw createMessageError("Task error");
       },
@@ -164,7 +164,7 @@ describe("Errors", () => {
 
   it("should throw resourceError", async () => {
     const errorResource = defineResource({
-      id: "error.resource",
+      id: "error-resource",
       init: async () => {
         if (true === true) {
           throw createMessageError("Resource error");
@@ -284,14 +284,14 @@ describe("Errors", () => {
 
   it("should throw an error when a task depends on a non-registered task", async () => {
     const offTheGrid = defineTask({
-      id: "test.off.the.grid",
+      id: "test-off-the-grid",
       // @ts-expect-error Testing invalid dependency definition
       dependencies: { nonExistentTask: { id: "non" } },
       run: async () => {},
     });
 
     const task = defineTask({
-      id: "test.task",
+      id: "test-task",
       dependencies: { offTheGrid },
       run: async (_, _deps) => {
         throw "Should not even be here";
@@ -308,18 +308,18 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Dependency Task test.off.the.grid not found. Did you forget to register it through a resource?",
+      "Dependency Task test-off-the-grid not found. Did you forget to register it through a resource?",
     );
   });
 
   it("should throw when a task depends on a non-registered resource", async () => {
     const offTheGrid = defineResource({
-      id: "test.off.the.grid",
+      id: "test-off-the-grid",
       init: async () => {},
     });
 
     const task = defineTask({
-      id: "test.task",
+      id: "test-task",
       dependencies: { offTheGrid },
       run: async () => {
         throw "Should not even be here";
@@ -336,14 +336,14 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Dependency Resource test.off.the.grid not found. Did you forget to register it through a resource?",
+      "Dependency Resource test-off-the-grid not found. Did you forget to register it through a resource?",
     );
   });
 
   it("should throw error when a task depends on a non-registered middleware", async () => {
     const mw = defineTaskMiddleware({ id: "mw", run: async () => {} });
     const task = defineTask({
-      id: "test.task",
+      id: "test-task",
       middleware: [mw],
       run: async () => {},
     });
@@ -358,7 +358,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Middleware inside task "test.task" depends on "mw" but it\'s not registered. Did you forget to register it?',
+      'Middleware inside task "test-task" depends on "mw" but it\'s not registered. Did you forget to register it?',
     );
   });
 

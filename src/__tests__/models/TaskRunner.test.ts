@@ -83,7 +83,7 @@ describe("TaskRunner", () => {
 
   it("should recompose task runner before store lock so new interceptors are applied", async () => {
     const task = defineTask({
-      id: "taskRunner.recompose.beforeLock",
+      id: "taskRunner-recompose-beforeLock",
       run: async (input: number) => input,
     });
 
@@ -150,7 +150,7 @@ describe("TaskRunner", () => {
     const onUnhandledErrorSpy = jest.spyOn(store, "onUnhandledError");
 
     const task = defineTask({
-      id: "testTask.unhandled",
+      id: "testTask-unhandled",
       run: async () => {
         throw error;
       },
@@ -168,7 +168,7 @@ describe("TaskRunner", () => {
 
   it("injects the default task source into task run context", async () => {
     const task = defineTask({
-      id: "testTask.source.default",
+      id: "testTask-source-default",
       run: async (_input: void, _deps, context) => context?.source,
     });
 
@@ -181,13 +181,13 @@ describe("TaskRunner", () => {
     const result = await taskRunner.run(task, undefined);
     expect(result).toEqual({
       kind: "runtime",
-      id: "runtime.internal.taskRunner",
+      id: "runtime-internal-taskRunner",
     });
   });
 
   it("injects explicit task-call source into task run context", async () => {
     const task = defineTask({
-      id: "testTask.source.explicit",
+      id: "testTask-source-explicit",
       run: async (_input: void, _deps, context) => context?.source,
     });
 
@@ -197,7 +197,7 @@ describe("TaskRunner", () => {
       isInitialized: false,
     });
 
-    const explicitSource = runtimeSource.resource("tests.resource.owner");
+    const explicitSource = runtimeSource.resource("tests-resource-owner");
     const result = await taskRunner.run(task, undefined, {
       source: explicitSource,
     });
@@ -207,7 +207,7 @@ describe("TaskRunner", () => {
 
   it("rejects new task runs when shutdown lockdown is active", async () => {
     const task = defineTask({
-      id: "testTask.lockdown",
+      id: "testTask-lockdown",
       run: async () => "ok",
     });
 

@@ -21,19 +21,19 @@ describe("DependencyProcessor Delegation", () => {
     const extractedValue = { ok: true };
     extractor.extractDependency = jest.fn().mockResolvedValue(extractedValue);
     await expect(
-      processor.extractDependency({ id: "dep" }, "test.source"),
+      processor.extractDependency({ id: "dep" }, "test-source"),
     ).resolves.toBe(extractedValue);
 
     const emitFn = jest.fn();
     extractor.extractEventDependency = jest.fn().mockReturnValue(emitFn);
     expect(
-      processor.extractEventDependency({ id: "event.id" } as any, "source"),
+      processor.extractEventDependency({ id: "event-id" } as any, "source"),
     ).toBe(emitFn);
 
     const taskFn = jest.fn();
     extractor.extractTaskDependency = jest.fn().mockResolvedValue(taskFn);
     await expect(
-      processor.extractTaskDependency({ id: "task.id" } as any),
+      processor.extractTaskDependency({ id: "task-id" } as any),
     ).resolves.toBe(taskFn);
   });
 });

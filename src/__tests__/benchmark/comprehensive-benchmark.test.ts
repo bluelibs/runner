@@ -95,13 +95,13 @@ describe("Comprehensive Performance Benchmarks", () => {
   it("should benchmark basic task execution", async () => {
     const iterations = 1000;
     const task = defineTask({
-      id: "benchmark.basic.task",
+      id: "benchmark-basic-task",
       run: async (n: number) => n * 2,
     });
 
     const runBenchmark = async () => {
       const app = defineResource({
-        id: "benchmark.basic.app",
+        id: "benchmark-basic-app",
         register: [task],
         dependencies: { task },
         async init(_, { task: _task }) {},
@@ -165,7 +165,7 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const middlewares = Array.from({ length: middlewareCount }, (_, idx) =>
       defineTaskMiddleware({
-        id: `benchmark.middleware.${idx}`,
+        id: `benchmark-middleware-${idx}`,
         run: async ({ next, task }) => {
           // Simple pass-through with minimal overhead
           return next(task?.input);
@@ -174,13 +174,13 @@ describe("Comprehensive Performance Benchmarks", () => {
     );
 
     const task = defineTask({
-      id: "benchmark.middleware.task",
+      id: "benchmark-middleware-task",
       middleware: middlewares,
       run: async (n: number) => n * 2,
     });
 
     const app = defineResource({
-      id: "benchmark.middleware.app",
+      id: "benchmark-middleware-app",
       register: [...middlewares, task],
       dependencies: { task },
       async init(_, { task }) {
@@ -221,13 +221,13 @@ describe("Comprehensive Performance Benchmarks", () => {
     const resourceCount = 100;
     const resources = Array.from({ length: resourceCount }, (_, idx) =>
       defineResource({
-        id: `benchmark.resource.${idx}`,
+        id: `benchmark-resource-${idx}`,
         init: async () => ({ value: idx, timestamp: Date.now() }),
       }),
     );
 
     const app = defineResource({
-      id: "benchmark.resource.app",
+      id: "benchmark-resource-app",
       register: resources,
       dependencies: Object.fromEntries(
         resources.map((r, idx) => [`resource${idx}`, r]),
@@ -260,11 +260,11 @@ describe("Comprehensive Performance Benchmarks", () => {
     let eventHandlerCallCount = 0;
 
     const testEvent = defineEvent<{ value: number }>({
-      id: "benchmark.event",
+      id: "benchmark-event",
     });
 
     const eventHandler = defineHook({
-      id: "benchmark.event.handler",
+      id: "benchmark-event-handler",
       on: testEvent,
       run: async ({ data }) => {
         eventHandlerCallCount++;
@@ -273,7 +273,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     });
 
     const emitterTask = defineTask({
-      id: "benchmark.event.emitter",
+      id: "benchmark-event-emitter",
       dependencies: { testEvent },
       run: async (value: number, { testEvent }) => {
         await testEvent({ value });
@@ -282,7 +282,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     });
 
     const app = defineResource({
-      id: "benchmark.event.app",
+      id: "benchmark-event-app",
       register: [testEvent, eventHandler, emitterTask],
       dependencies: { emitterTask },
       async init(_, { emitterTask }) {
@@ -324,14 +324,14 @@ describe("Comprehensive Performance Benchmarks", () => {
       if (idx === 0) {
         deps.push(
           defineResource({
-            id: `benchmark.dep.${idx}`,
+            id: `benchmark-dep-${idx}`,
             init: async () => ({ level: idx, value: `base-${idx}` }),
           }),
         );
       } else {
         deps.push(
           defineResource({
-            id: `benchmark.dep.${idx}`,
+            id: `benchmark-dep-${idx}`,
             dependencies: { prev: deps[idx - 1] },
             init: async (_, { prev }) => ({
               level: idx,
@@ -343,7 +343,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     }
 
     const finalResource = defineResource({
-      id: "benchmark.dep.final",
+      id: "benchmark-dep-final",
       dependencies: { finalDep: deps[chainDepth - 1] },
       init: async (_, { finalDep }) => finalDep,
     });
@@ -351,7 +351,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     const iterations = 100;
     const apps = Array.from({ length: iterations }, (_, idx) =>
       defineResource({
-        id: `benchmark.dep.app.${idx}`,
+        id: `benchmark-dep-app-${idx}`,
         register: [...deps, finalResource],
         dependencies: { finalResource },
         init: async (_, { finalResource }) => finalResource,
@@ -383,7 +383,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     const cacheHitIterations = 100;
 
     const expensiveTask = defineTask({
-      id: "benchmark.cache.expensive",
+      id: "benchmark-cache-expensive",
       middleware: [middleware.task.cache.with({ ttl: 5000 })],
       run: async (n: number) => {
         // Simulate expensive computation
@@ -396,7 +396,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     });
 
     const app = defineResource({
-      id: "benchmark.cache.app",
+      id: "benchmark-cache-app",
       register: [expensiveTask, middleware.task.cache, resources.cache],
       dependencies: { expensiveTask },
       async init(_, { expensiveTask }) {
@@ -460,7 +460,7 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const resources = Array.from({ length: resourceCount }, (_, idx) =>
       defineResource({
-        id: `memory.resource.${idx}`,
+        id: `memory-resource-${idx}`,
         init: async () => ({
           data: new Array(1000).fill(idx),
           timestamp: Date.now(),
@@ -470,7 +470,7 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const tasks = Array.from({ length: taskCount }, (_, idx) =>
       defineTask({
-        id: `memory.task.${idx}`,
+        id: `memory-task-${idx}`,
         dependencies: { resource: resources[idx % resourceCount] },
         run: async (input: number, { resource }) => {
           return resource.data.reduce((sum, val) => sum + val + input, 0);
@@ -479,7 +479,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     );
 
     const app = defineResource({
-      id: "memory.app",
+      id: "memory-app",
       register: [...resources, ...tasks],
       dependencies: Object.fromEntries([
         ...resources.map((r, idx) => [`resource${idx}`, r]),

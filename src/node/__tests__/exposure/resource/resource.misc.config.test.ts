@@ -5,7 +5,7 @@ import { rpcExposure } from "../testkit/rpcExposure";
 describe("nodeExposure - misc config branches", () => {
   const TOKEN = "unit-secret";
   const dummyEvent = defineEvent<{ x?: number }>({
-    id: "unit.exposure.misc.event",
+    id: "unit-exposure-misc-event",
   });
 
   it("normalizes basePath (ensure leading slash + trim trailing)", async () => {
@@ -16,7 +16,7 @@ describe("nodeExposure - misc config branches", () => {
       },
     });
     const app1 = defineResource({
-      id: "unit.exposure.misc.app1",
+      id: "unit-exposure-misc-app1",
       register: [dummyEvent, exposure1],
     });
     const rr1 = await run(app1);
@@ -31,7 +31,7 @@ describe("nodeExposure - misc config branches", () => {
       },
     });
     const app2 = defineResource({
-      id: "unit.exposure.misc.app2",
+      id: "unit-exposure-misc-app2",
       register: [dummyEvent, exposure2],
     });
     const rr2 = await run(app2);
@@ -43,7 +43,7 @@ describe("nodeExposure - misc config branches", () => {
   it("init handles undefined http config and defaults basePath", async () => {
     const exposure = rpcExposure.with({});
     const app = defineResource({
-      id: "unit.exposure.misc.app4",
+      id: "unit-exposure-misc-app4",
       register: [dummyEvent, exposure],
     });
     const rr = await run(app);

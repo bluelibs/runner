@@ -15,7 +15,7 @@ export type DurableResourceRuntimeConfig = RunnerDurableRuntimeConfig;
  * - Register it via `durable.with({ store, queue, eventBus, ... })`
  */
 export const durableResource = r
-  .resource<DurableResourceRuntimeConfig>("base.durable")
+  .resource<DurableResourceRuntimeConfig>("base-durable")
   .register([durableWorkflowTag, ...durableEventsArray])
   .dependencies({
     taskRunner: resources.taskRunner,

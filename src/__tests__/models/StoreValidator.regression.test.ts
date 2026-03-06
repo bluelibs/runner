@@ -36,10 +36,10 @@ function createRegistryStub(seedTaskId?: string): RegistryLike {
 
 describe("StoreValidator regressions", () => {
   it("seeds pre-existing registry IDs into duplicate checks", () => {
-    const seededRegistry = createRegistryStub("seeded.task");
+    const seededRegistry = createRegistryStub("seeded-task");
     const validator = new StoreValidator(seededRegistry as never);
 
-    expect(() => validator.checkIfIDExists("seeded.task")).toThrow(
+    expect(() => validator.checkIfIDExists("seeded-task")).toThrow(
       /already registered/i,
     );
   });
@@ -50,23 +50,23 @@ describe("StoreValidator regressions", () => {
       checkIfIDExists: (id: string) => void;
       registeredIds: Set<string>;
     };
-    validator.registeredIds.add("ghost.id");
+    validator.registeredIds.add("ghost-id");
 
-    expect(() => validator.checkIfIDExists("ghost.id")).toThrow(
+    expect(() => validator.checkIfIDExists("ghost-id")).toThrow(
       /already registered/i,
     );
   });
 
   it("classifies duplicate ids as Resource when resource map owns the id", () => {
     const registry = createRegistryStub() as RegistryLike;
-    registry.resources.set("seeded.resource", {});
+    registry.resources.set("seeded-resource", {});
     const validator = new StoreValidator(registry as never) as unknown as {
       checkIfIDExists: (id: string) => void;
       registeredIds: Set<string>;
     };
-    validator.registeredIds.add("seeded.resource");
+    validator.registeredIds.add("seeded-resource");
 
-    expect(() => validator.checkIfIDExists("seeded.resource")).toThrow(
+    expect(() => validator.checkIfIDExists("seeded-resource")).toThrow(
       /Resource .*already registered/i,
     );
   });
@@ -100,13 +100,13 @@ describe("StoreValidator regressions", () => {
     };
 
     const tag = defineTag({
-      id: "validator.isolate.alias.tag",
+      id: "validator-isolate-alias-tag",
     });
     registry.registerDefinitionAlias(
       tag,
-      "app.tags.validator.isolate.alias.tag",
+      "app-tags-validator-isolate-alias-tag",
     );
-    validator.registeredIds.add("app.tags.validator.isolate.alias.tag");
+    validator.registeredIds.add("app-tags-validator-isolate-alias-tag");
 
     const normalized = validator.normalizeIsolationEntries({
       entries: [tag],
@@ -119,7 +119,7 @@ describe("StoreValidator regressions", () => {
     });
 
     expect(normalized).toHaveLength(1);
-    expect(normalized[0].id).toBe("app.tags.validator.isolate.alias.tag");
+    expect(normalized[0].id).toBe("app-tags-validator-isolate-alias-tag");
     expect(normalized[0]).not.toBe(tag);
   });
 
@@ -136,7 +136,7 @@ describe("StoreValidator regressions", () => {
     };
 
     const resource = {
-      id: "validator.scope.subtree.owner",
+      id: "validator-scope-subtree-owner",
     };
     validator.registeredIds.add(resource.id);
 
@@ -167,7 +167,7 @@ describe("StoreValidator regressions", () => {
     };
 
     const functionReference = Object.assign(() => undefined, {
-      id: "validator.scope.function-ref",
+      id: "validator-scope-function-ref",
     });
     validator.registeredIds.add(functionReference.id);
 
@@ -221,7 +221,7 @@ describe("StoreValidator regressions", () => {
 
     expect(() =>
       validator.normalizeIsolationEntries({
-        entries: [scope({ id: "validator.scope.unknown" } as never)],
+        entries: [scope({ id: "validator-scope-unknown" } as never)],
         onInvalidEntry: () => {
           throw new Error("invalid");
         },
@@ -245,7 +245,7 @@ describe("StoreValidator regressions", () => {
 
     expect(() =>
       validator.normalizeExportEntries({
-        entries: ["validator.exports.invalid"],
+        entries: ["validator-exports-invalid"],
         onInvalidEntry: () => {
           throw new Error("invalid");
         },
@@ -269,7 +269,7 @@ describe("StoreValidator regressions", () => {
 
     expect(() =>
       validator.normalizeExportEntries({
-        entries: [{ id: "validator.exports.unknown" }],
+        entries: [{ id: "validator-exports-unknown" }],
         onInvalidEntry: () => {
           throw new Error("invalid");
         },
@@ -293,13 +293,13 @@ describe("StoreValidator regressions", () => {
     };
 
     const tag = defineTag({
-      id: "validator.exports.alias.tag",
+      id: "validator-exports-alias-tag",
     });
     registry.registerDefinitionAlias(
       tag,
-      "app.tags.validator.exports.alias.tag",
+      "app-tags-validator-exports-alias-tag",
     );
-    validator.registeredIds.add("app.tags.validator.exports.alias.tag");
+    validator.registeredIds.add("app-tags-validator-exports-alias-tag");
 
     const normalized = validator.normalizeExportEntries({
       entries: [tag],
@@ -312,7 +312,7 @@ describe("StoreValidator regressions", () => {
     });
 
     expect(normalized).toHaveLength(1);
-    expect(normalized[0].id).toBe("app.tags.validator.exports.alias.tag");
+    expect(normalized[0].id).toBe("app-tags-validator-exports-alias-tag");
     expect(normalized[0]).not.toBe(tag);
   });
 });

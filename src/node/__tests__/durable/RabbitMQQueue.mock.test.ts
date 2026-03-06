@@ -350,7 +350,7 @@ describe("durable: RabbitMQQueue", () => {
   it("supports passive queue assertions and custom publish options", async () => {
     const configured = new RabbitMQQueue({
       queue: {
-        name: "durable.passive",
+        name: "durable-passive",
         assert: "passive",
       },
       publishOptions: {
@@ -359,7 +359,7 @@ describe("durable: RabbitMQQueue", () => {
     });
 
     await configured.init();
-    expect(channelMock.checkQueue).toHaveBeenCalledWith("durable.passive");
+    expect(channelMock.checkQueue).toHaveBeenCalledWith("durable-passive");
     expect(channelMock.assertQueue).not.toHaveBeenCalled();
 
     await configured.enqueue({
@@ -369,7 +369,7 @@ describe("durable: RabbitMQQueue", () => {
     });
 
     expect(channelMock.sendToQueue).toHaveBeenCalledWith(
-      "durable.passive",
+      "durable-passive",
       expect.any(Buffer),
       expect.objectContaining({ persistent: false }),
     );

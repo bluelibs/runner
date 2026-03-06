@@ -34,14 +34,14 @@ describe("rpcLanes auth", () => {
   };
 
   it("enforces lane auth in local-simulated mode", async () => {
-    const lane = r.rpcLane("tests.rpc-lanes.auth.local-simulated.lane").build();
+    const lane = r.rpcLane("tests-rpc-lanes-auth-local-simulated-lane").build();
     const task = defineTask<{ value: number }>({
-      id: "tests.rpc-lanes.auth.local-simulated.task",
+      id: "tests-rpc-lanes-auth-local-simulated-task",
       tags: [globalTags.rpcLane.with({ lane })],
       run: async (input) => input.value + 1,
     });
     const communicator = defineResource({
-      id: "tests.rpc-lanes.auth.local-simulated.communicator",
+      id: "tests-rpc-lanes-auth-local-simulated-communicator",
       init: async () => ({
         task: async () => 1,
       }),
@@ -54,7 +54,7 @@ describe("rpcLanes auth", () => {
     });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.auth.local-simulated.app",
+      id: "tests-rpc-lanes-auth-local-simulated-app",
       register: [
         task,
         rpcLanesResource.with({
@@ -72,15 +72,15 @@ describe("rpcLanes auth", () => {
 
   it("fails fast in local-simulated mode when signer material is missing", async () => {
     const lane = r
-      .rpcLane("tests.rpc-lanes.auth.local-simulated.missing.lane")
+      .rpcLane("tests-rpc-lanes-auth-local-simulated-missing-lane")
       .build();
     const task = defineTask({
-      id: "tests.rpc-lanes.auth.local-simulated.missing.task",
+      id: "tests-rpc-lanes-auth-local-simulated-missing-task",
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => "ok",
     });
     const communicator = defineResource({
-      id: "tests.rpc-lanes.auth.local-simulated.missing.communicator",
+      id: "tests-rpc-lanes-auth-local-simulated-missing-communicator",
       init: async () => ({
         task: async () => "remote",
       }),
@@ -92,7 +92,7 @@ describe("rpcLanes auth", () => {
       bindings: [{ lane, communicator, auth: {} }],
     });
     const app = defineResource({
-      id: "tests.rpc-lanes.auth.local-simulated.missing.app",
+      id: "tests-rpc-lanes-auth-local-simulated-missing-app",
       register: [
         task,
         rpcLanesResource.with({
@@ -109,26 +109,26 @@ describe("rpcLanes auth", () => {
   });
 
   it("enforces served-lane JWT in network exposure", async () => {
-    const lane = r.rpcLane("tests.rpc-lanes.auth.network.lane").build();
+    const lane = r.rpcLane("tests-rpc-lanes-auth-network-lane").build();
     const event = defineEvent<{ value: number }>({
-      id: "tests.rpc-lanes.auth.network.event",
+      id: "tests-rpc-lanes-auth-network-event",
       tags: [globalTags.rpcLane.with({ lane })],
     });
     let eventRuns = 0;
     const hook = r
-      .hook("tests.rpc-lanes.auth.network.event.hook")
+      .hook("tests-rpc-lanes-auth-network-event-hook")
       .on(event)
       .run(async () => {
         eventRuns += 1;
       })
       .build();
     const task = defineTask({
-      id: "tests.rpc-lanes.auth.network.task",
+      id: "tests-rpc-lanes-auth-network-task",
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => "secured",
     });
     const communicator = defineResource({
-      id: "tests.rpc-lanes.auth.network.communicator",
+      id: "tests-rpc-lanes-auth-network-communicator",
       init: async () => ({
         task: async () => "remote",
       }),
@@ -153,7 +153,7 @@ describe("rpcLanes auth", () => {
       },
     });
     const app = defineResource({
-      id: "tests.rpc-lanes.auth.network.app",
+      id: "tests-rpc-lanes-auth-network-app",
       register: [event, hook, task, communicator, lanes],
     });
 
@@ -218,7 +218,7 @@ describe("rpcLanes auth", () => {
   });
 
   it("forwards lane JWT headers for network outbound task/event communicator calls", async () => {
-    const lane = r.rpcLane("tests.rpc-lanes.auth.network.forward.lane").build();
+    const lane = r.rpcLane("tests-rpc-lanes-auth-network-forward-lane").build();
     const remoteTask = jest.fn(
       async (_id: string, _input?: unknown, _options?: RpcLaneRequestOptions) =>
         "remote-ok",
@@ -231,26 +231,26 @@ describe("rpcLanes auth", () => {
       ) => undefined,
     );
     const event = defineEvent<{ value: number }>({
-      id: "tests.rpc-lanes.auth.network.forward.event",
+      id: "tests-rpc-lanes-auth-network-forward-event",
       tags: [globalTags.rpcLane.with({ lane })],
     });
     const task = defineTask({
-      id: "tests.rpc-lanes.auth.network.forward.task",
+      id: "tests-rpc-lanes-auth-network-forward-task",
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => "local",
     });
     const emitTask = defineTask({
-      id: "tests.rpc-lanes.auth.network.forward.emit-task",
+      id: "tests-rpc-lanes-auth-network-forward-emit-task",
       dependencies: { eventManager: globalResources.eventManager },
       run: async (_input, deps) =>
         deps.eventManager.emit(
           event,
           { value: 1 },
-          runtimeSource.task("tests.rpc-lanes.auth.network.forward.emit-task"),
+          runtimeSource.task("tests-rpc-lanes-auth-network-forward-emit-task"),
         ),
     });
     const communicator = defineResource({
-      id: "tests.rpc-lanes.auth.network.forward.communicator",
+      id: "tests-rpc-lanes-auth-network-forward-communicator",
       init: async () => ({
         task: remoteTask,
         event: remoteEvent,
@@ -261,7 +261,7 @@ describe("rpcLanes auth", () => {
       bindings: [{ lane, communicator, auth: { secret: "forward-secret" } }],
     });
     const app = defineResource({
-      id: "tests.rpc-lanes.auth.network.forward.app",
+      id: "tests-rpc-lanes-auth-network-forward-app",
       register: [
         task,
         event,
@@ -284,10 +284,10 @@ describe("rpcLanes auth", () => {
 
   it("forwards lane JWT headers for network eventWithResult communicator calls", async () => {
     const lane = r
-      .rpcLane("tests.rpc-lanes.auth.network.forward-result.lane")
+      .rpcLane("tests-rpc-lanes-auth-network-forward-result-lane")
       .build();
     const event = defineEvent<{ value: number }>({
-      id: "tests.rpc-lanes.auth.network.forward-result.event",
+      id: "tests-rpc-lanes-auth-network-forward-result-event",
       tags: [globalTags.rpcLane.with({ lane })],
     });
     const remoteEventWithResult = jest.fn(
@@ -300,19 +300,19 @@ describe("rpcLanes auth", () => {
       }),
     );
     const emitTask = defineTask({
-      id: "tests.rpc-lanes.auth.network.forward-result.emit-task",
+      id: "tests-rpc-lanes-auth-network-forward-result-emit-task",
       dependencies: { eventManager: globalResources.eventManager },
       run: async (_input, deps) =>
         deps.eventManager.emitWithResult(
           event,
           { value: 1 },
           runtimeSource.task(
-            "tests.rpc-lanes.auth.network.forward-result.emit-task",
+            "tests-rpc-lanes-auth-network-forward-result-emit-task",
           ),
         ),
     });
     const communicator = defineResource({
-      id: "tests.rpc-lanes.auth.network.forward-result.communicator",
+      id: "tests-rpc-lanes-auth-network-forward-result-communicator",
       init: async () => ({
         eventWithResult: remoteEventWithResult,
       }),
@@ -324,7 +324,7 @@ describe("rpcLanes auth", () => {
       ],
     });
     const app = defineResource({
-      id: "tests.rpc-lanes.auth.network.forward-result.app",
+      id: "tests-rpc-lanes-auth-network-forward-result-app",
       register: [
         event,
         emitTask,
@@ -344,33 +344,33 @@ describe("rpcLanes auth", () => {
 
   it("enforces lane auth in local-simulated event flow", async () => {
     const lane = r
-      .rpcLane("tests.rpc-lanes.auth.local-simulated.event.lane")
+      .rpcLane("tests-rpc-lanes-auth-local-simulated-event-lane")
       .build();
     const event = defineEvent<{ value: number }>({
-      id: "tests.rpc-lanes.auth.local-simulated.event",
+      id: "tests-rpc-lanes-auth-local-simulated-event",
       tags: [globalTags.rpcLane.with({ lane })],
     });
     const hook = r
-      .hook("tests.rpc-lanes.auth.local-simulated.event.hook")
+      .hook("tests-rpc-lanes-auth-local-simulated-event-hook")
       .on(event)
       .run(async (emission) => {
         emission.data.value += 1;
       })
       .build();
     const emitTask = defineTask({
-      id: "tests.rpc-lanes.auth.local-simulated.event.emit-task",
+      id: "tests-rpc-lanes-auth-local-simulated-event-emit-task",
       dependencies: { eventManager: globalResources.eventManager },
       run: async (_input, deps) =>
         deps.eventManager.emitWithResult(
           event,
           { value: 1 },
           runtimeSource.task(
-            "tests.rpc-lanes.auth.local-simulated.event.emit-task",
+            "tests-rpc-lanes-auth-local-simulated-event-emit-task",
           ),
         ),
     });
     const communicator = defineResource({
-      id: "tests.rpc-lanes.auth.local-simulated.event.communicator",
+      id: "tests-rpc-lanes-auth-local-simulated-event-communicator",
       init: async () => ({ event: async () => undefined }),
     });
     const topology = r.rpcLane.topology({
@@ -378,7 +378,7 @@ describe("rpcLanes auth", () => {
       bindings: [{ lane, communicator, auth: { secret: "sim-event-secret" } }],
     });
     const app = defineResource({
-      id: "tests.rpc-lanes.auth.local-simulated.event.app",
+      id: "tests-rpc-lanes-auth-local-simulated-event-app",
       register: [
         event,
         hook,

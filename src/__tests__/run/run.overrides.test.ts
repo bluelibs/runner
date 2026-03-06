@@ -8,7 +8,7 @@ import {
 import { run } from "../../run";
 import { r } from "../..";
 
-describe("run.overrides", () => {
+describe("run-overrides", () => {
   it("should work with a simple override", async () => {
     const task = defineTask({
       id: "task",
@@ -112,14 +112,14 @@ describe("run.overrides", () => {
 
   it("should work overriding a middleware (task and resource)", async () => {
     const mw = defineTaskMiddleware({
-      id: "middleware.task",
+      id: "middleware-task",
       run: async ({ next }) => {
         return `Middleware: ${await next()}`;
       },
     });
 
     const mwr = defineResourceMiddleware({
-      id: "middleware.resource",
+      id: "middleware-resource",
       run: async ({ next }) => {
         return `Middleware: ${await next()}`;
       },
@@ -195,7 +195,7 @@ describe("run.overrides", () => {
 
   it("should throw when .overrides receives a configured override resource", async () => {
     const baseResource = defineResource<{ mode: string }, Promise<string>>({
-      id: "configured.override.base",
+      id: "configured-override-base",
       init: async (config) => config.mode,
     });
     const configuredOverride = r.override(
@@ -204,7 +204,7 @@ describe("run.overrides", () => {
     );
 
     const app = defineResource({
-      id: "configured.override.app",
+      id: "configured-override-app",
       register: [baseResource.with({ mode: "base" })],
       overrides: [configuredOverride.with({ mode: "override" }) as any],
       init: async () => undefined,
@@ -217,7 +217,7 @@ describe("run.overrides", () => {
 
   it("should throw an override-specific error for unregistered resource overrides", async () => {
     const missingResource = defineResource({
-      id: "missing.resource.override",
+      id: "missing-resource-override",
       init: async () => "base",
     });
     const missingResourceOverride = r.override(
@@ -226,49 +226,49 @@ describe("run.overrides", () => {
     );
 
     const app = defineResource({
-      id: "app.missing.resource.override",
+      id: "app-missing-resource-override",
       overrides: [missingResourceOverride],
       init: async () => undefined,
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Override target Resource "missing.resource.override" is not registered, so it cannot be overridden.',
+      'Override target Resource "missing-resource-override" is not registered, so it cannot be overridden.',
     );
   });
 
   it("should throw an override-specific error for unregistered hook overrides", async () => {
     const hookEvent = defineTask({
-      id: "missing.hook.override.event.task",
+      id: "missing-hook-override-event-task",
       run: async () => undefined,
     });
     const hookEventResource = defineResource({
-      id: "missing.hook.override.event.resource",
+      id: "missing-hook-override-event-resource",
       register: [hookEvent],
       dependencies: { hookEvent },
       init: async (_, deps) => deps.hookEvent,
     });
     const missingHook = defineHook({
-      id: "missing.hook.override",
+      id: "missing-hook-override",
       on: "*",
       run: async () => undefined,
     });
     const missingHookOverride = r.override(missingHook, async () => undefined);
 
     const app = defineResource({
-      id: "app.missing.hook.override",
+      id: "app-missing-hook-override",
       register: [hookEventResource],
       overrides: [missingHookOverride],
       init: async () => undefined,
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Override target Hook "missing.hook.override" is not registered, so it cannot be overridden.',
+      'Override target Hook "missing-hook-override" is not registered, so it cannot be overridden.',
     );
   });
 
   it("should throw an override-specific error for unregistered task middleware overrides", async () => {
     const missingMiddleware = defineTaskMiddleware({
-      id: "missing.task.middleware.override",
+      id: "missing-task-middleware-override",
       run: async ({ next }) => next(),
     });
     const missingMiddlewareOverride = r.override(
@@ -277,19 +277,19 @@ describe("run.overrides", () => {
     );
 
     const app = defineResource({
-      id: "app.missing.task.middleware.override",
+      id: "app-missing-task-middleware-override",
       overrides: [missingMiddlewareOverride],
       init: async () => undefined,
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Override target Task middleware "missing.task.middleware.override" is not registered, so it cannot be overridden.',
+      'Override target Task middleware "missing-task-middleware-override" is not registered, so it cannot be overridden.',
     );
   });
 
   it("should throw an override-specific error for unregistered resource middleware overrides", async () => {
     const missingMiddleware = defineResourceMiddleware({
-      id: "missing.resource.middleware.override",
+      id: "missing-resource-middleware-override",
       run: async ({ next }) => next(),
     });
     const missingMiddlewareOverride = r.override(
@@ -298,13 +298,13 @@ describe("run.overrides", () => {
     );
 
     const app = defineResource({
-      id: "app.missing.resource.middleware.override",
+      id: "app-missing-resource-middleware-override",
       overrides: [missingMiddlewareOverride],
       init: async () => undefined,
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Override target Resource middleware "missing.resource.middleware.override" is not registered, so it cannot be overridden.',
+      'Override target Resource middleware "missing-resource-middleware-override" is not registered, so it cannot be overridden.',
     );
   });
 
@@ -325,7 +325,7 @@ describe("run.overrides", () => {
     const override2 = r.override(task, async () => "Task super-overridden");
 
     const middle = defineResource({
-      id: "app.middle",
+      id: "app-middle",
       register: [task],
       overrides: [missingTaskOverride],
     });
@@ -398,12 +398,12 @@ describe("run.overrides", () => {
     });
 
     const middle = defineResource({
-      id: "app.m1",
+      id: "app-m1",
       register: [r1],
     });
 
     const middle2 = defineResource({
-      id: "app.m2",
+      id: "app-m2",
       register: [middle],
     });
 
@@ -425,16 +425,16 @@ describe("run.overrides", () => {
 
   it("should throw when .overrides receives a raw task definition", async () => {
     const baseTask = defineTask({
-      id: "raw.task.base",
+      id: "raw-task-base",
       run: async () => "base",
     });
     const rawTask = defineTask({
-      id: "raw.task.base",
+      id: "raw-task-base",
       run: async () => "raw",
     });
 
     const app = defineResource({
-      id: "raw.task.app",
+      id: "raw-task-app",
       register: [baseTask],
       overrides: [rawTask as any],
       init: async () => undefined,
@@ -447,16 +447,16 @@ describe("run.overrides", () => {
 
   it("should throw when .overrides receives a raw resource-with-config", async () => {
     const baseResource = defineResource<{ mode: string }, Promise<string>>({
-      id: "raw.resource.base",
+      id: "raw-resource-base",
       init: async (config) => config.mode,
     });
     const rawResource = defineResource<{ mode: string }, Promise<string>>({
-      id: "raw.resource.base",
+      id: "raw-resource-base",
       init: async () => "raw",
     });
 
     const app = defineResource({
-      id: "raw.resource.app",
+      id: "raw-resource-app",
       register: [baseResource.with({ mode: "base" })],
       overrides: [rawResource.with({ mode: "raw" }) as any],
       init: async () => undefined,
@@ -469,12 +469,12 @@ describe("run.overrides", () => {
 
   it("should throw when .overrides receives a non-definition object", async () => {
     const baseTask = defineTask({
-      id: "raw.object.base",
+      id: "raw-object-base",
       run: async () => "base",
     });
 
     const app = defineResource({
-      id: "raw.object.app",
+      id: "raw-object-app",
       register: [baseTask],
       overrides: [{} as any],
       init: async () => undefined,
@@ -487,7 +487,7 @@ describe("run.overrides", () => {
 
   it("should choose precedence when two overrides target the same id", async () => {
     const baseTask = defineTask({
-      id: "task.same",
+      id: "task-same",
       run: async () => "Original",
     });
 
@@ -511,76 +511,76 @@ describe("run.overrides", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Override target "task.same" is declared more than once.',
+      'Override target "task-same" is declared more than once.',
     );
   });
 
   it("blocks overrides that try to replace a parent's registration", async () => {
     const baseTask = defineTask({
-      id: "override.parent.owned.task",
+      id: "override-parent-owned-task",
       run: async () => "base",
     });
 
     const childOverride = r.override(baseTask, async () => "child");
 
     const child = defineResource({
-      id: "override.parent.owned.child",
+      id: "override-parent-owned-child",
       overrides: [childOverride],
     });
 
     const app = defineResource({
-      id: "override.parent.owned.app",
+      id: "override-parent-owned-app",
       register: [baseTask, child],
     });
 
     await expect(run(app)).rejects.toThrow(
-      /cannot override Task "override\.parent\.owned\.task" because it is outside that resource's registration subtree/,
+      /cannot override Task "override-parent-owned-task" because it is outside that resource's registration subtree/,
     );
   });
 
   it("blocks overrides that target a sibling subtree", async () => {
     const siblingTask = defineTask({
-      id: "override.sibling.task",
+      id: "override-sibling-task",
       run: async () => "base",
     });
 
     const sibling = defineResource({
-      id: "override.sibling.owner",
+      id: "override-sibling-owner",
       register: [siblingTask],
     });
 
     const childOverride = r.override(siblingTask, async () => "child");
 
     const otherChild = defineResource({
-      id: "override.sibling.other.child",
+      id: "override-sibling-other-child",
       overrides: [childOverride],
     });
 
     const app = defineResource({
-      id: "override.sibling.app",
+      id: "override-sibling-app",
       register: [sibling, otherChild],
     });
 
     await expect(run(app)).rejects.toThrow(
-      /cannot override Task "override\.sibling\.task" because it is outside that resource's registration subtree/,
+      /cannot override Task "override-sibling-task" because it is outside that resource's registration subtree/,
     );
   });
 
   it("still allows overrides declared from an ancestor resource", async () => {
     const baseTask = defineTask({
-      id: "override.downstream.task",
+      id: "override-downstream-task",
       run: async () => "base",
     });
 
     const middle = defineResource({
-      id: "override.downstream.middle",
+      id: "override-downstream-middle",
       register: [baseTask],
     });
 
     const rootOverride = r.override(baseTask, async () => "root");
 
     const app = defineResource({
-      id: "override.downstream.app",
+      id: "override-downstream-app",
       register: [middle],
       overrides: [rootOverride],
       dependencies: { task: baseTask },

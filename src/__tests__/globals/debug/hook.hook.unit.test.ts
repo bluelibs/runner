@@ -46,7 +46,7 @@ describe("runner.debug.hookInterceptorResource (unit)", () => {
     let nextCalls = 0;
     let interceptionDone: Promise<void> | undefined;
     const hook = defineHook({
-      id: "tests.hook.unit",
+      id: "tests-hook-unit",
       on: "*",
       run: async () => undefined,
     });
@@ -77,10 +77,10 @@ describe("runner.debug.hookInterceptorResource (unit)", () => {
 
     expect(nextCalls).toBe(1);
     expect(
-      messages.some((m) => m.includes("Hook triggered for tests.hook.unit")),
+      messages.some((m) => m.includes("Hook triggered for tests-hook-unit")),
     ).toBe(true);
     expect(
-      messages.some((m) => m.includes("Hook completed for tests.hook.unit")),
+      messages.some((m) => m.includes("Hook completed for tests-hook-unit")),
     ).toBe(true);
   });
 
@@ -98,13 +98,13 @@ describe("runner.debug.hookInterceptorResource (unit)", () => {
     let nextCalls = 0;
     let interceptionDone: Promise<void> | undefined;
     const systemHook = defineHook({
-      id: "tests.hook.system",
+      id: "tests-hook-system",
       on: "*",
       run: async () => undefined,
       tags: [globalTags.system],
     });
     const disabledHook = defineHook({
-      id: "tests.hook.disabled",
+      id: "tests-hook-disabled",
       on: "*",
       run: async () => undefined,
     });

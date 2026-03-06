@@ -55,7 +55,7 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     allowAsyncContext = () => true,
     resolveAsyncContextAllowList = () => undefined,
     authorizeEvent = () => null,
-    sourceResourceId = "platform.node.resources.rpcLanes",
+    sourceResourceId = "platform-node-resources-rpcLanes",
   } = deps;
   const exposureSource = runtimeSource.resource(sourceResourceId);
 

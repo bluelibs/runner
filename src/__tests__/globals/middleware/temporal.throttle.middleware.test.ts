@@ -18,7 +18,7 @@ describe("Temporal Middleware: Throttle", () => {
     jest.useFakeTimers();
     let callCount = 0;
     const task = defineTask({
-      id: "throttle.task",
+      id: "throttle-task",
       middleware: [throttleTaskMiddleware.with({ ms: 100 })],
       run: async (val: string) => {
         callCount++;
@@ -59,7 +59,7 @@ describe("Temporal Middleware: Throttle", () => {
     jest.useFakeTimers();
     let callCount = 0;
     const task = defineTask({
-      id: "throttle.immediate",
+      id: "throttle-immediate",
       middleware: [throttleTaskMiddleware.with({ ms: 50 })],
       run: async (val: string) => {
         callCount++;
@@ -90,7 +90,7 @@ describe("Temporal Middleware: Throttle", () => {
   it("should handle errors in throttled task", async () => {
     let callCount = 0;
     const task = defineTask({
-      id: "throttle.error",
+      id: "throttle-error",
       middleware: [throttleTaskMiddleware.with({ ms: 50 })],
       run: async () => {
         callCount++;
@@ -128,7 +128,7 @@ describe("Temporal Middleware: Throttle", () => {
 
     const inputFor = (input: string) => ({
       task: {
-        definition: { id: "throttle.unit.scheduled.fail" } as any,
+        definition: { id: "throttle-unit-scheduled-fail" } as any,
         input,
       },
       next,
@@ -172,7 +172,7 @@ describe("Temporal Middleware: Throttle", () => {
     };
     const inputFor = (input: string) => ({
       task: {
-        definition: { id: "throttle.unit" } as any,
+        definition: { id: "throttle-unit" } as any,
         input,
       },
       next,
@@ -217,7 +217,7 @@ describe("Temporal Middleware: Throttle", () => {
     };
     const inputFor = (input: string) => ({
       task: {
-        definition: { id: "throttle.unit.fail" } as any,
+        definition: { id: "throttle-unit-fail" } as any,
         input,
       },
       next,
@@ -272,7 +272,7 @@ describe("Temporal Middleware: Throttle", () => {
       ({
         task: {
           definition: {
-            id: "throttle.unit.latest-input",
+            id: "throttle-unit-latest-input",
           } as unknown as ThrottleRunInput["task"]["definition"],
           input,
         },

@@ -99,24 +99,24 @@ async function waitUntil(
 
 describe("event-lanes: hook relay behavior + prefetch", () => {
   it("runs all matching hooks on relay emissions and applies binding prefetch", async () => {
-    const laneA = r.eventLane("tests.event-lanes.hook-lane.a").build();
+    const laneA = r.eventLane("tests-event-lanes-hook-lane-a").build();
     const queue = new CoverageQueue();
     const event = r
-      .event<{ id: string }>("tests.event-lanes.hook-lane.event")
+      .event<{ id: string }>("tests-event-lanes-hook-lane-event")
       .tags([tags.eventLane.with({ lane: laneA })])
       .build();
 
     let callsA = 0;
     let callsB = 0;
     const hookA = r
-      .hook("tests.event-lanes.hook-lane.hookA")
+      .hook("tests-event-lanes-hook-lane-hookA")
       .on(event)
       .run(async () => {
         callsA += 1;
       })
       .build();
     const hookB = r
-      .hook("tests.event-lanes.hook-lane.hookB")
+      .hook("tests-event-lanes-hook-lane-hookB")
       .on(event)
       .run(async () => {
         callsB += 1;
@@ -124,7 +124,7 @@ describe("event-lanes: hook relay behavior + prefetch", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.hook-lane.emit")
+      .task("tests-event-lanes-hook-lane-emit")
       .dependencies({ event })
       .run(async (_input, deps) => {
         await deps.event({ id: "1" });
@@ -132,7 +132,7 @@ describe("event-lanes: hook relay behavior + prefetch", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.hook-lane.app")
+      .resource("tests-event-lanes-hook-lane-app")
       .register([
         event,
         hookA,
@@ -160,10 +160,10 @@ describe("event-lanes: hook relay behavior + prefetch", () => {
   });
 
   it("does not start consumers in transparent mode", async () => {
-    const lane = r.eventLane("tests.event-lanes.mode.producer.lane").build();
+    const lane = r.eventLane("tests-event-lanes-mode-producer-lane").build();
     const queue = new CoverageQueue();
     const app = r
-      .resource("tests.event-lanes.mode.producer.app")
+      .resource("tests-event-lanes-mode-producer-app")
       .register([
         eventLanesResource.with({
           profile: "worker",
@@ -184,11 +184,11 @@ describe("event-lanes: hook relay behavior + prefetch", () => {
   });
 
   it("fails fast when profile does not exist", async () => {
-    const lane = r.eventLane("tests.event-lanes.profile-missing.lane").build();
+    const lane = r.eventLane("tests-event-lanes-profile-missing-lane").build();
     const queue = new CoverageQueue();
     const missingProfile = "missing" as unknown as "default";
     const app = r
-      .resource("tests.event-lanes.profile-missing.app")
+      .resource("tests-event-lanes-profile-missing-app")
       .register([
         eventLanesResource.with({
           // Intentional runtime-invalid profile: cast to bypass compile-time key narrowing.

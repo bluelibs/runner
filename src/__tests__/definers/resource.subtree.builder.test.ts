@@ -4,12 +4,12 @@ import { getSubtreeTaskMiddlewareAttachment } from "../../tools/subtreeMiddlewar
 describe("resource builder subtree()", () => {
   it("applies subtree policy and keeps chaining", () => {
     const taskMiddleware = r.middleware
-      .task("tests.resourceSubtreeBuilder.taskMiddleware")
+      .task("tests-resourceSubtreeBuilder-taskMiddleware")
       .run(async ({ next, task }) => next(task.input))
       .build();
 
     const built = r
-      .resource("tests.resourceSubtreeBuilder.resource")
+      .resource("tests-resourceSubtreeBuilder-resource")
       .subtree({
         tasks: {
           middleware: [taskMiddleware],

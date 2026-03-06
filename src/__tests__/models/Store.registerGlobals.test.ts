@@ -15,7 +15,7 @@ describe("Store registerGlobalComponents defensive guard", () => {
       .spyOn(store["registry"], "storeGenericItem")
       .mockImplementation(() => undefined as any);
 
-    const root = defineResource({ id: "store.guard.root" });
+    const root = defineResource({ id: "store-guard-root" });
     // initializeStore calls registerGlobalComponents internally
     store.initializeStore(root, {}, runtimeResult);
 

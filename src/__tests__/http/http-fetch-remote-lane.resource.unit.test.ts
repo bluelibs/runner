@@ -45,10 +45,10 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
       auth: { token: "T" },
       serializer: new Serializer(),
     });
-    const out = await client.task("t.id", { a: 1 });
+    const out = await client.task("t-id", { a: 1 });
     expect(out).toBe(42);
     expect(calls.length).toBe(1);
-    expect(calls[0].url).toBe("http://api/task/t.id");
+    expect(calls[0].url).toBe("http://api/task/t-id");
     expect(calls[0].init.method).toBe("POST");
     // AbortController branch should have attached a signal
     expect(calls[0].init.signal).toBeDefined();
@@ -69,7 +69,7 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
       fetchImpl: fetchErrMsg,
       serializer: new Serializer(),
     });
-    await expect(c1.event("e.id", { x: 1 })).rejects.toThrow(/boom/);
+    await expect(c1.event("e-id", { x: 1 })).rejects.toThrow(/boom/);
 
     // Then, with default message fallback
     const fetchNoMsg: typeof fetch = (async () => ({
@@ -80,7 +80,7 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
       fetchImpl: fetchNoMsg,
       serializer: new Serializer(),
     });
-    await expect(c2.event("e.id", { y: 1 })).rejects.toThrow(
+    await expect(c2.event("e-id", { y: 1 })).rejects.toThrow(
       /Remote lane event error/,
     );
   });
@@ -94,7 +94,7 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
       fetchImpl: fetchEmpty,
       serializer: new Serializer(),
     });
-    await expect(c.event("e.id", { y: 2 })).rejects.toThrow(
+    await expect(c.event("e-id", { y: 2 })).rejects.toThrow(
       /Remote lane event error/,
     );
   });
@@ -117,9 +117,9 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
     });
 
     expect(typeof c.eventWithResult).toBe("function");
-    const out = await c.eventWithResult!("e.id", { x: 1 });
+    const out = await c.eventWithResult!("e-id", { x: 1 });
     expect(out).toEqual({ x: 2 });
-    expect(calls[0].url).toBe("http://api/event/e.id");
+    expect(calls[0].url).toBe("http://api/event/e-id");
     expect(calls[0].body).toEqual({ payload: { x: 1 }, returnPayload: true });
   });
 
@@ -134,7 +134,7 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
       serializer,
     });
 
-    await expect(c.eventWithResult!("e.id", { x: 1 })).rejects.toThrow(
+    await expect(c.eventWithResult!("e-id", { x: 1 })).rejects.toThrow(
       /did not include result/i,
     );
   });
@@ -148,14 +148,14 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
           error: {
             code: "INTERNAL_ERROR",
             message: "boom",
-            id: "tests.errors.evr",
+            id: "tests-errors-evr",
             data: { code: 12 },
           },
         }),
     })) as unknown as typeof fetch;
 
     const helper = {
-      id: "tests.errors.evr",
+      id: "tests-errors-evr",
       throw: (data: any) => {
         throw createMessageError("typed-evr:" + String(data?.code));
       },
@@ -167,10 +167,10 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
       baseUrl: "http://api",
       fetchImpl,
       serializer,
-      errorRegistry: new Map([["tests.errors.evr", helper]]),
+      errorRegistry: new Map([["tests-errors-evr", helper]]),
     });
 
-    await expect(c.eventWithResult!("e.id", { x: 1 })).rejects.toThrow(
+    await expect(c.eventWithResult!("e-id", { x: 1 })).rejects.toThrow(
       /typed-evr:12/,
     );
   });
@@ -186,7 +186,7 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
       serializer,
     });
 
-    await expect(c.eventWithResult!("e.id", { x: 1 })).rejects.toThrow(
+    await expect(c.eventWithResult!("e-id", { x: 1 })).rejects.toThrow(
       /Remote lane event error/,
     );
   });
@@ -200,7 +200,7 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
       fetchImpl: fetchNoMsg,
       serializer: new Serializer(),
     });
-    await expect(c.task("t.id", { z: 1 })).rejects.toThrow(
+    await expect(c.task("t-id", { z: 1 })).rejects.toThrow(
       /Remote lane task error/,
     );
   });
@@ -219,8 +219,8 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
       fetchImpl: stubFetch,
       serializer: new Serializer(),
     });
-    await client.task("t.id");
-    expect(calls[0].url).toBe("http://api/task/t.id");
+    await client.task("t-id");
+    expect(calls[0].url).toBe("http://api/task/t-id");
   });
 
   it("createExposureFetch: defaults to Serializer for requests and responses", async () => {
@@ -243,7 +243,7 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
       serializer,
     });
     const result = await client.task<{ seenAt: Date }, { seenAt: Date }>(
-      "task.id",
+      "task-id",
       {
         seenAt: requestDate,
       },
@@ -289,7 +289,7 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
       serializer,
     });
 
-    const out = await client.task<{ foo: string }, number>("task.id", {
+    const out = await client.task<{ foo: string }, number>("task-id", {
       foo: "bar",
     });
 

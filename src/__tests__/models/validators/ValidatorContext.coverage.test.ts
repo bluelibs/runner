@@ -35,27 +35,27 @@ describe("ValidatorContext coverage", () => {
   it("returns the seeded ids and stays in sync with tracked registrations", () => {
     const context = new ValidatorContext(
       createValidatorRegistry({
-        tasks: ["validator.context.task"],
-        tags: ["validator.context.tag"],
-        hooks: ["validator.context.hook"],
+        tasks: ["validator-context-task"],
+        tags: ["validator-context-tag"],
+        hooks: ["validator-context-hook"],
       }),
     );
 
     const registeredIds = context.getRegisteredIds();
 
     expect([...registeredIds].sort()).toEqual([
-      "validator.context.hook",
-      "validator.context.tag",
-      "validator.context.task",
+      "validator-context-hook",
+      "validator-context-tag",
+      "validator-context-task",
     ]);
 
-    context.trackRegisteredId("validator.context.manual");
+    context.trackRegisteredId("validator-context-manual");
 
     expect([...registeredIds].sort()).toEqual([
-      "validator.context.hook",
-      "validator.context.manual",
-      "validator.context.tag",
-      "validator.context.task",
+      "validator-context-hook",
+      "validator-context-manual",
+      "validator-context-tag",
+      "validator-context-task",
     ]);
   });
 });

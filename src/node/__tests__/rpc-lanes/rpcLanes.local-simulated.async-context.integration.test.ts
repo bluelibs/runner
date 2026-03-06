@@ -9,16 +9,16 @@ import { rpcLanesResource } from "../../rpc-lanes";
 describe("rpcLanes local-simulated async-context policy", () => {
   it("defaults to forwarding no async contexts for local-simulated tasks", async () => {
     const allowedContext = r
-      .asyncContext<{ value: string }>("tests.rpc-lanes.simulated.ctx.allowed")
+      .asyncContext<{ value: string }>("tests-rpc-lanes-simulated-ctx-allowed")
       .build();
     const blockedContext = r
-      .asyncContext<{ value: string }>("tests.rpc-lanes.simulated.ctx.blocked")
+      .asyncContext<{ value: string }>("tests-rpc-lanes-simulated-ctx-blocked")
       .build();
     const lane = r
-      .rpcLane("tests.rpc-lanes.simulated.ctx.default-none")
+      .rpcLane("tests-rpc-lanes-simulated-ctx-default-none")
       .build();
     const task = defineTask({
-      id: "tests.rpc-lanes.simulated.ctx.default-none.task",
+      id: "tests-rpc-lanes-simulated-ctx-default-none-task",
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => {
         const readAllowed = () => {
@@ -49,7 +49,7 @@ describe("rpcLanes local-simulated async-context policy", () => {
       bindings: [],
     });
     const app = defineResource({
-      id: "tests.rpc-lanes.simulated.ctx.default-none.app",
+      id: "tests-rpc-lanes-simulated-ctx-default-none-app",
       register: [
         allowedContext,
         blockedContext,
@@ -80,19 +80,19 @@ describe("rpcLanes local-simulated async-context policy", () => {
     const allowedContext = r
       .asyncContext<{
         value: string;
-      }>("tests.rpc-lanes.simulated.event.ctx.allowed")
+      }>("tests-rpc-lanes-simulated-event-ctx-allowed")
       .build();
     const blockedContext = r
       .asyncContext<{
         value: string;
-      }>("tests.rpc-lanes.simulated.event.ctx.blocked")
+      }>("tests-rpc-lanes-simulated-event-ctx-blocked")
       .build();
     const lane = r
-      .rpcLane("tests.rpc-lanes.simulated.event.ctx.allowlisted")
+      .rpcLane("tests-rpc-lanes-simulated-event-ctx-allowlisted")
       .asyncContexts([allowedContext.id])
       .build();
     const event = defineEvent<{ value: number }>({
-      id: "tests.rpc-lanes.simulated.event.ctx.allowlisted.event",
+      id: "tests-rpc-lanes-simulated-event-ctx-allowlisted-event",
       tags: [globalTags.rpcLane.with({ lane })],
     });
     const seen = {
@@ -100,7 +100,7 @@ describe("rpcLanes local-simulated async-context policy", () => {
       blocked: "missing",
     };
     const hook = r
-      .hook("tests.rpc-lanes.simulated.event.ctx.allowlisted.hook")
+      .hook("tests-rpc-lanes-simulated-event-ctx-allowlisted-hook")
       .on(event)
       .run(async () => {
         try {
@@ -116,7 +116,7 @@ describe("rpcLanes local-simulated async-context policy", () => {
       })
       .build();
     const emitTask = defineTask({
-      id: "tests.rpc-lanes.simulated.event.ctx.allowlisted.emit-task",
+      id: "tests-rpc-lanes-simulated-event-ctx-allowlisted-emit-task",
       dependencies: {
         eventManager: globalResources.eventManager,
       },
@@ -125,7 +125,7 @@ describe("rpcLanes local-simulated async-context policy", () => {
           event,
           { value: 1 },
           runtimeSource.task(
-            "tests.rpc-lanes.simulated.event.ctx.allowlisted.emit-task",
+            "tests-rpc-lanes-simulated-event-ctx-allowlisted-emit-task",
           ),
         ),
     });
@@ -137,7 +137,7 @@ describe("rpcLanes local-simulated async-context policy", () => {
       bindings: [],
     });
     const app = defineResource({
-      id: "tests.rpc-lanes.simulated.event.ctx.allowlisted.app",
+      id: "tests-rpc-lanes-simulated-event-ctx-allowlisted-app",
       register: [
         allowedContext,
         blockedContext,
@@ -168,14 +168,14 @@ describe("rpcLanes local-simulated async-context policy", () => {
 
   it("forwards all async contexts in local-simulated mode when legacy allowAsyncContext is true", async () => {
     const firstContext = r
-      .asyncContext<{ value: string }>("tests.rpc-lanes.simulated.ctx.first")
+      .asyncContext<{ value: string }>("tests-rpc-lanes-simulated-ctx-first")
       .build();
     const secondContext = r
-      .asyncContext<{ value: string }>("tests.rpc-lanes.simulated.ctx.second")
+      .asyncContext<{ value: string }>("tests-rpc-lanes-simulated-ctx-second")
       .build();
-    const lane = r.rpcLane("tests.rpc-lanes.simulated.ctx.legacy-all").build();
+    const lane = r.rpcLane("tests-rpc-lanes-simulated-ctx-legacy-all").build();
     const task = defineTask({
-      id: "tests.rpc-lanes.simulated.ctx.legacy-all.task",
+      id: "tests-rpc-lanes-simulated-ctx-legacy-all-task",
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => {
         const readFirst = () => {
@@ -199,7 +199,7 @@ describe("rpcLanes local-simulated async-context policy", () => {
       },
     });
     const communicator = defineResource({
-      id: "tests.rpc-lanes.simulated.ctx.legacy-all.communicator",
+      id: "tests-rpc-lanes-simulated-ctx-legacy-all-communicator",
       init: async () => ({
         task: async () => "remote",
       }),
@@ -212,7 +212,7 @@ describe("rpcLanes local-simulated async-context policy", () => {
       bindings: [{ lane, communicator, allowAsyncContext: true }],
     });
     const app = defineResource({
-      id: "tests.rpc-lanes.simulated.ctx.legacy-all.app",
+      id: "tests-rpc-lanes-simulated-ctx-legacy-all-app",
       register: [
         firstContext,
         secondContext,

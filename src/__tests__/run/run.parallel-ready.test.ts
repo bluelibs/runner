@@ -14,7 +14,7 @@ describe("run parallel ready lifecycle", () => {
     let maxConcurrentReadyCount = 0;
 
     const sharedDepA = defineResource({
-      id: "parallel.ready.wave.a",
+      id: "parallel-ready-wave-a",
       async init() {
         return "a";
       },
@@ -32,7 +32,7 @@ describe("run parallel ready lifecycle", () => {
     });
 
     const sharedDepB = defineResource({
-      id: "parallel.ready.wave.b",
+      id: "parallel-ready-wave-b",
       async init() {
         return "b";
       },
@@ -50,7 +50,7 @@ describe("run parallel ready lifecycle", () => {
     });
 
     const dependent = defineResource({
-      id: "parallel.ready.wave.dependent",
+      id: "parallel-ready-wave-dependent",
       dependencies: { sharedDepA, sharedDepB },
       async init() {
         return "dependent";
@@ -61,7 +61,7 @@ describe("run parallel ready lifecycle", () => {
     });
 
     const app = defineResource({
-      id: "parallel.ready.wave.app",
+      id: "parallel-ready-wave-app",
       register: [sharedDepA, sharedDepB, dependent],
       dependencies: { dependent },
       async init() {

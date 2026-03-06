@@ -134,7 +134,7 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext();
     const event = defineEvent<{ value: number }>({
-      id: "tests.local-simulated.present",
+      id: "tests-local-simulated-present",
     });
     const store = {
       events: new Map([[event.id, { event }]]),
@@ -169,7 +169,7 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext();
     const event = defineEvent<{ value: number }>({
-      id: "tests.local-simulated.parse-failure",
+      id: "tests-local-simulated-parse-failure",
     });
     const serializer = new Serializer();
     jest.spyOn(serializer, "parse").mockImplementation(() => {
@@ -211,7 +211,7 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const context = createContext();
     const laneId = "tests.local-simulated.fallback-auth.lane";
     const event = defineEvent<{ value: number }>({
-      id: "tests.local-simulated.fallback-auth.event",
+      id: "tests-local-simulated-fallback-auth-event",
     });
     context.eventRouteByEventId.set(event.id, {
       lane: { id: laneId },
@@ -257,10 +257,10 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext();
     const event = defineEvent<{ value: number }>({
-      id: "tests.local-simulated.policy-miss.event",
+      id: "tests-local-simulated-policy-miss-event",
     });
     context.eventRouteByEventId.set(event.id, {
-      lane: { id: "tests.local-simulated.policy-miss.other-lane" },
+      lane: { id: "tests-local-simulated-policy-miss-other-lane" },
     } as any);
     const store = {
       events: new Map([[event.id, { event }]]),
@@ -295,8 +295,8 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const diagnostics = {
       logEnqueue: jest.fn(async () => undefined),
     };
-    context.eventRouteByEventId.set("tests.local-simulated.raw-id", {
-      lane: { id: "tests.local-simulated.raw-id.lane" },
+    context.eventRouteByEventId.set("tests-local-simulated-raw-id", {
+      lane: { id: "tests-local-simulated-raw-id-lane" },
     } as any);
 
     const transport = new LocalSimulatedEventLaneTransport(
@@ -323,9 +323,9 @@ describe("LocalSimulatedEventLaneTransport", () => {
     await interceptor(
       jest.fn(async () => "next-result"),
       {
-        id: "tests.local-simulated.raw-id",
+        id: "tests-local-simulated-raw-id",
         data: { value: 1 },
-        source: runtimeSource.task("tests.local-simulated.raw-id.source"),
+        source: runtimeSource.task("tests-local-simulated-raw-id.source"),
         stopPropagation,
       },
     );

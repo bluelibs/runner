@@ -7,7 +7,7 @@ import { createReqRes } from "./resource.test.utils";
 describe("nodeExposure Coverage - Core Routing", () => {
   it("covers extractTarget fallback, method 405/401, and not-found branches for task", async () => {
     const okTask = defineTask<void, Promise<number>>({
-      id: "ok.task",
+      id: "ok-task",
       run: async () => 42,
     });
     const exposure = rpcExposure.with({
@@ -17,7 +17,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.core.app1",
+      id: "unit-exposure-coverage-core-app1",
       register: [okTask, exposure],
     });
     const rr = await run(app);
@@ -60,7 +60,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
 
   it("handleRequest dispatches correctly and returns false outside base", async () => {
     const okTask = defineTask<void, Promise<number>>({
-      id: "hr.task",
+      id: "hr-task",
       run: async () => 1,
     });
     const exposure = rpcExposure.with({
@@ -70,7 +70,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.core.app2",
+      id: "unit-exposure-coverage-core-app2",
       register: [okTask, exposure],
     });
     const rr = await run(app);
@@ -106,7 +106,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
       },
     });
     const app = defineResource({
-      id: "coverage.detach.app",
+      id: "coverage-detach-app",
       register: [exposure],
     });
     const rr = await run(app);
@@ -140,7 +140,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
 
   it("handleTask handles malformed paths via router guard branches", async () => {
     const okTask = defineTask<void, Promise<number>>({
-      id: "coverage.router.task",
+      id: "coverage-router-task",
       run: async () => 1,
     });
     const exposure = rpcExposure.with({
@@ -150,7 +150,7 @@ describe("nodeExposure Coverage - Core Routing", () => {
       },
     });
     const app = defineResource({
-      id: "coverage.router.app",
+      id: "coverage-router-app",
       register: [okTask, exposure],
     });
     const rr = await run(app);

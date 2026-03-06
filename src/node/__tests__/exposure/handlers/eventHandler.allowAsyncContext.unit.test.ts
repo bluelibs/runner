@@ -29,7 +29,7 @@ describe("eventHandler allowAsyncContext option", () => {
   it("disables user async-context hydration when allowAsyncContext resolver returns false", async () => {
     const serializer = new Serializer();
     const ctx = {
-      id: "ctx.event.disabled",
+      id: "ctx-event-disabled",
       parse: jest.fn((value: string) => JSON.parse(value)),
       provide: jest.fn(async (_value: unknown, fn: () => Promise<unknown>) =>
         fn(),
@@ -70,7 +70,7 @@ describe("eventHandler allowAsyncContext option", () => {
   it("hydrates user async-context when allowAsyncContext is omitted", async () => {
     const serializer = new Serializer();
     const ctx = {
-      id: "ctx.event.default",
+      id: "ctx-event-default",
       parse: jest.fn((value: string) => JSON.parse(value)),
       provide: jest.fn(async (_value: unknown, fn: () => Promise<unknown>) =>
         fn(),

@@ -6,11 +6,11 @@ import { rpcLanesResource } from "../../rpc-lanes";
 describe("rpcLanes applyTo validation", () => {
   it("fails fast when applyTo string target does not exist", async () => {
     const lane = r
-      .rpcLane("tests.rpc-lanes.apply-to.missing-target.lane")
+      .rpcLane("tests-rpc-lanes-apply-to-missing-target-lane")
       .applyTo(["tests.rpc-lanes.apply-to.missing-target.task"])
       .build();
     const communicator = defineResource({
-      id: "tests.rpc-lanes.apply-to.missing-target.communicator",
+      id: "tests-rpc-lanes-apply-to-missing-target-communicator",
       init: async () => ({
         task: async () => "remote",
       }),
@@ -22,7 +22,7 @@ describe("rpcLanes applyTo validation", () => {
       bindings: [{ lane, communicator }],
     });
     const app = defineResource({
-      id: "tests.rpc-lanes.apply-to.missing-target.app",
+      id: "tests-rpc-lanes-apply-to-missing-target-app",
       register: [
         communicator,
         rpcLanesResource.with({ profile: "client", topology }),
@@ -36,11 +36,11 @@ describe("rpcLanes applyTo validation", () => {
 
   it("fails fast when applyTo receives an invalid target value", async () => {
     const lane = r
-      .rpcLane("tests.rpc-lanes.apply-to.invalid-shape.lane")
+      .rpcLane("tests-rpc-lanes-apply-to-invalid-shape-lane")
       .applyTo([{} as any])
       .build();
     const communicator = defineResource({
-      id: "tests.rpc-lanes.apply-to.invalid-shape.communicator",
+      id: "tests-rpc-lanes-apply-to-invalid-shape-communicator",
       init: async () => ({
         task: async () => "remote",
       }),
@@ -52,7 +52,7 @@ describe("rpcLanes applyTo validation", () => {
       bindings: [{ lane, communicator }],
     });
     const app = defineResource({
-      id: "tests.rpc-lanes.apply-to.invalid-shape.app",
+      id: "tests-rpc-lanes-apply-to-invalid-shape-app",
       register: [
         communicator,
         rpcLanesResource.with({ profile: "client", topology }),
@@ -66,24 +66,24 @@ describe("rpcLanes applyTo validation", () => {
 
   it("fails when two rpc lanes applyTo the same event", async () => {
     const event = defineEvent({
-      id: "tests.rpc-lanes.apply-to.reassign.event",
+      id: "tests-rpc-lanes-apply-to-reassign-event",
     });
     const laneA = r
-      .rpcLane("tests.rpc-lanes.apply-to.reassign.event.a")
+      .rpcLane("tests-rpc-lanes-apply-to-reassign-event-a")
       .applyTo([event])
       .build();
     const laneB = r
-      .rpcLane("tests.rpc-lanes.apply-to.reassign.event.b")
+      .rpcLane("tests-rpc-lanes-apply-to-reassign-event-b")
       .applyTo([event.id])
       .build();
     const communicator = defineResource({
-      id: "tests.rpc-lanes.apply-to.reassign.event.communicator",
+      id: "tests-rpc-lanes-apply-to-reassign-event-communicator",
       init: async () => ({
         event: async () => undefined,
       }),
     });
     const app = defineResource({
-      id: "tests.rpc-lanes.apply-to.reassign.event.app",
+      id: "tests-rpc-lanes-apply-to-reassign-event-app",
       register: [
         event,
         communicator,

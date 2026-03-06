@@ -10,13 +10,13 @@ describe("getResourceDependencyIds", () => {
 
   it("collects direct and optional resource dependencies", () => {
     const dbResource = defineResource({
-      id: "deps.resources.db",
+      id: "deps-resources-db",
     });
     const cacheResource = defineResource({
-      id: "deps.resources.cache",
+      id: "deps-resources-cache",
     });
     const nonResourceTask = defineTask({
-      id: "deps.tasks.non-resource",
+      id: "deps-tasks-non-resource",
       run: async () => undefined,
     });
 

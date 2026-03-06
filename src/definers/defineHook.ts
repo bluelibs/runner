@@ -24,7 +24,7 @@ export function defineHook<
   TMeta extends ITaskMeta = any,
 >(hookDef: IHookDefinition<D, TOn, TMeta>): IHook<D, TOn, TMeta> {
   const filePath = getCallerFile();
-  assertDefinitionId("Hook", hookDef.id);
+  assertDefinitionId("Hook", hookDef.id, { callerFilePath: filePath });
   assertTagTargetsApplicableTo("hooks", "Hook", hookDef.id, hookDef.tags);
   return deepFreeze({
     [symbolHook]: true,

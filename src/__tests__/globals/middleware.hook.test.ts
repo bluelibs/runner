@@ -23,7 +23,7 @@ describe("runner.debug.middlewareInterceptorResource (unit)", () => {
             async (_input: any) =>
               new Promise((resolve) => setTimeout(() => resolve(undefined), 0)),
             {
-              resource: { definition: { id: "tests.resource" }, config: {} },
+              resource: { definition: { id: "tests-resource" }, config: {} },
               next: async () => undefined,
             },
           );
@@ -32,7 +32,7 @@ describe("runner.debug.middlewareInterceptorResource (unit)", () => {
             async (_input: any) =>
               new Promise((resolve) => setTimeout(() => resolve(undefined), 0)),
             {
-              task: { definition: { id: "tests.task" }, input: {} },
+              task: { definition: { id: "tests-task" }, input: {} },
               next: async () => undefined,
             },
           );
@@ -55,17 +55,17 @@ describe("runner.debug.middlewareInterceptorResource (unit)", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const joined = messages.join("\n");
-    expect(joined.includes("Middleware triggered for task tests.task")).toBe(
+    expect(joined.includes("Middleware triggered for task tests-task")).toBe(
       true,
     );
-    expect(joined.includes("Middleware completed for task tests.task")).toBe(
+    expect(joined.includes("Middleware completed for task tests-task")).toBe(
       true,
     );
     expect(
-      joined.includes("Middleware triggered for resource tests.resource"),
+      joined.includes("Middleware triggered for resource tests-resource"),
     ).toBe(true);
     expect(
-      joined.includes("Middleware completed for resource tests.resource"),
+      joined.includes("Middleware completed for resource tests-resource"),
     ).toBe(true);
 
     // Ensure both intercept registrations were attempted

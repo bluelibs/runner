@@ -17,7 +17,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       let callCount = 0;
 
       const failOnceTask = defineTask({
-        id: "test.journal.retry.failOnce",
+        id: "test-journal-retry-failOnce",
         middleware: [
           middleware.task.retry.with({
             retries: 3,
@@ -37,7 +37,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       });
 
       const app = defineResource({
-        id: "test.journal.retry.app",
+        id: "test-journal-retry-app",
         register: [failOnceTask],
       });
       const runtime = await run(app);
@@ -56,7 +56,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       let capturedAttempt: number | undefined;
 
       const successTask = defineTask({
-        id: "test.journal.retry.success",
+        id: "test-journal-retry-success",
         middleware: [
           middleware.task.retry.with({
             retries: 3,
@@ -70,7 +70,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       });
 
       const app = defineResource({
-        id: "test.journal.retry.app2",
+        id: "test-journal-retry-app2",
         register: [successTask],
       });
       const runtime = await run(app);
@@ -88,7 +88,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       const hitStatuses: boolean[] = [];
 
       const cacheHitObserver = defineTaskMiddleware({
-        id: "test.journal.cache.hitObserver",
+        id: "test-journal-cache-hitObserver",
         async run({ task, next, journal }) {
           const result = await next(task.input);
           hitStatuses.push(journal.get(cacheJournalKeys.hit) ?? false);
@@ -97,7 +97,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       });
 
       const cachedTask = defineTask({
-        id: "test.journal.cache.task",
+        id: "test-journal-cache-task",
         middleware: [
           cacheHitObserver,
           middleware.task.cache.with({ ttl: 60000 }),
@@ -106,7 +106,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       });
 
       const app = defineResource({
-        id: "test.journal.cache.app",
+        id: "test-journal-cache-app",
         register: [
           resources.cache,
           middleware.task.cache,
@@ -130,7 +130,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       let callCount = 0;
 
       const task = defineTask({
-        id: "test.journal.cache.retry.noThrow",
+        id: "test-journal-cache-retry-noThrow",
         middleware: [
           middleware.task.retry.with({
             retries: 2,
@@ -150,7 +150,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       });
 
       const app = defineResource({
-        id: "test.journal.cache.retry.app",
+        id: "test-journal-cache-retry-app",
         register: [resources.cache, middleware.task.cache, task],
       });
       const runtime = await run(app);

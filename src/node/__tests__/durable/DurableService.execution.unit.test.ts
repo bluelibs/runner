@@ -41,7 +41,7 @@ describe("durable: DurableService — execution (unit)", () => {
       tasks: [],
     });
 
-    const task = okTask("t.kickoff-failsafe.success");
+    const task = okTask("t-kickoff-failsafe-success");
     await service.start(task);
 
     const timers = await store.getReadyTimers(new Date(Date.now() + 60_000));
@@ -63,7 +63,7 @@ describe("durable: DurableService — execution (unit)", () => {
       tasks: [],
     });
 
-    const task = okTask("t.kickoff-failsafe.failure");
+    const task = okTask("t-kickoff-failsafe-failure");
     await expect(service.start(task)).rejects.toThrow("queue-down");
 
     const [execution] = await store.listIncompleteExecutions();
@@ -89,7 +89,7 @@ describe("durable: DurableService — execution (unit)", () => {
   it("resolves a task by id string for startAndWait/schedule", async () => {
     const store = new MemoryStore();
     const task = r
-      .task("t.by-id")
+      .task("t-by-id")
       .run(async (input: { v: number }) => ({ v: input.v * 2 }))
       .build();
 
@@ -134,16 +134,16 @@ describe("durable: DurableService — execution (unit)", () => {
       tasks: [],
     });
 
-    await expect(service.start("missing.task.id")).rejects.toThrow(
-      'DurableService.start() could not resolve task id "missing.task.id"',
+    await expect(service.start("missing-task-id")).rejects.toThrow(
+      'DurableService.start() could not resolve task id "missing-task-id"',
     );
     await expect(
-      service.ensureSchedule("missing.task.id", undefined, {
-        id: "s.missing",
+      service.ensureSchedule("missing-task-id", undefined, {
+        id: "s-missing",
         interval: 1000,
       }),
     ).rejects.toThrow(
-      'DurableService.ensureSchedule() could not resolve task id "missing.task.id"',
+      'DurableService.ensureSchedule() could not resolve task id "missing-task-id"',
     );
   });
 
@@ -165,7 +165,7 @@ describe("durable: DurableService — execution (unit)", () => {
     expect(typeof noopBus.subscribe).toBe("function");
     expect(typeof noopBus.unsubscribe).toBe("function");
 
-    const task = okTask("t.register");
+    const task = okTask("t-register");
     serviceWithoutBus.registerTask(task);
     expect(serviceWithoutBus.findTask(task.id)).toBe(task);
 
@@ -175,7 +175,7 @@ describe("durable: DurableService — execution (unit)", () => {
 
   it("executes typed tasks via startAndWait()", async () => {
     const store = new MemoryStore();
-    const task = okTask("t.strict");
+    const task = okTask("t-strict");
 
     const service = new DurableService({
       store,
@@ -205,7 +205,7 @@ describe("durable: DurableService — execution (unit)", () => {
 
   it("processes executions even when the store does not implement locks", async () => {
     const base = new MemoryStore();
-    const task = okTask("t.no-lock-store");
+    const task = okTask("t-no-lock-store");
 
     const service = new DurableService({
       store: createBareStore(base),
@@ -223,7 +223,7 @@ describe("durable: DurableService — execution (unit)", () => {
   it("retries failing executions and eventually fails", async () => {
     const store = new MemoryStore();
     const task = r
-      .task("t.fail")
+      .task("t-fail")
       .run(async () => {
         throw createMessageError("x");
       })
@@ -262,7 +262,7 @@ describe("durable: DurableService — execution (unit)", () => {
   it("throws DurableExecutionError for failed executions via startAndWait()", async () => {
     const store = new MemoryStore();
     const task = r
-      .task("t.throw")
+      .task("t-throw")
       .run(async () => {
         throw createMessageError("boom");
       })
@@ -286,7 +286,7 @@ describe("durable: DurableService — execution (unit)", () => {
   it("resolves undefined if completed without result", async () => {
     const store = new MemoryStore();
     const task = r
-      .task("t.void")
+      .task("t-void")
       .run(async () => undefined)
       .build();
     const service = new DurableService({
@@ -307,7 +307,7 @@ describe("durable: DurableService — execution (unit)", () => {
   it("sets execution to sleeping on SuspensionSignal", async () => {
     const store = new MemoryStore();
     const task = r
-      .task("t.sleep")
+      .task("t-sleep")
       .run(async () => {
         throw new SuspensionSignal("sleep");
       })
@@ -330,7 +330,7 @@ describe("durable: DurableService — execution (unit)", () => {
 
   it("returns early if execution is missing or already terminal", async () => {
     const store = new MemoryStore();
-    const task = okTask("t.ok");
+    const task = okTask("t-ok");
     const service = new DurableService({
       store,
       taskExecutor: createTaskExecutor({}),
@@ -352,7 +352,7 @@ describe("durable: DurableService — execution (unit)", () => {
   it("returns early if lock cannot be acquired", async () => {
     const store = new MemoryStore();
     store.acquireLock = async () => null;
-    const task = okTask("t.ok");
+    const task = okTask("t-ok");
 
     const service = new DurableService({
       store,
@@ -373,7 +373,7 @@ describe("durable: DurableService — execution (unit)", () => {
       acquireLock: async () => "lock-no-renew",
       releaseLock,
     });
-    const task = okTask("t.no-renew-lock");
+    const task = okTask("t-no-renew-lock");
 
     const service = new DurableService({
       store,
@@ -405,7 +405,7 @@ describe("durable: DurableService — execution (unit)", () => {
     try {
       const store = new MemoryStore();
       const renewLockSpy = jest.spyOn(store, "renewLock");
-      const task = okTask("t.long-running");
+      const task = okTask("t-long-running");
 
       const service = new DurableService({
         store,
@@ -443,7 +443,7 @@ describe("durable: DurableService — execution (unit)", () => {
       const renewLockSpy = jest
         .spyOn(store, "renewLock")
         .mockRejectedValueOnce(new Error("renew failed"));
-      const task = okTask("t.renew-reject");
+      const task = okTask("t-renew-reject");
 
       const service = new DurableService({
         store,
@@ -476,7 +476,7 @@ describe("durable: DurableService — execution (unit)", () => {
       releaseLock: base.releaseLock.bind(base),
     });
 
-    const task = okTask("t.no-renew-lock");
+    const task = okTask("t-no-renew-lock");
     const service = new DurableService({
       store,
       taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
@@ -496,7 +496,7 @@ describe("durable: DurableService — execution (unit)", () => {
       const store = new MemoryStore();
       jest.spyOn(store, "renewLock").mockRejectedValue(new Error("renew-fail"));
 
-      const task = okTask("t.renew-fails");
+      const task = okTask("t-renew-fails");
       const service = new DurableService({
         store,
         taskExecutor: createTaskExecutor({
@@ -521,7 +521,7 @@ describe("durable: DurableService — execution (unit)", () => {
 
   it("throws if processExecution runs without a taskExecutor", async () => {
     const store = new MemoryStore();
-    const task = okTask("t.ok");
+    const task = okTask("t-ok");
     const service = new DurableService({ store, tasks: [task] });
 
     await store.saveExecution(pendingExecution({ taskId: task.id }));
@@ -533,7 +533,7 @@ describe("durable: DurableService — execution (unit)", () => {
 
   it("times out waitForResult when queued but no worker runs", async () => {
     const store = new MemoryStore();
-    const task = okTask("t.ok");
+    const task = okTask("t-ok");
 
     const service = new DurableService({
       store,
@@ -553,7 +553,7 @@ describe("durable: DurableService — execution (unit)", () => {
   it("covers timeout and non-Error failure shapes", async () => {
     const store = new MemoryStore();
     const slow = r
-      .task("t.slow")
+      .task("t-slow")
       .run(
         async () =>
           await new Promise<string>((resolve) =>
@@ -562,7 +562,7 @@ describe("durable: DurableService — execution (unit)", () => {
       )
       .build();
     const nonError = r
-      .task("t.nonerror")
+      .task("t-nonerror")
       .run(async () => {
         throw "boom";
       })
@@ -604,7 +604,7 @@ describe("durable: DurableService — execution (unit)", () => {
 
   it("fails immediately when an execution timeout has already elapsed", async () => {
     const store = new MemoryStore();
-    const task = okTask("t.fast");
+    const task = okTask("t-fast");
 
     const service = new DurableService({
       store,
@@ -628,7 +628,7 @@ describe("durable: DurableService — execution (unit)", () => {
 
   it("covers no-lock stores and waitForResult missing execution", async () => {
     const store = new MemoryStore();
-    const task = okTask("t.ok");
+    const task = okTask("t-ok");
 
     const service = new DurableService({
       store: createBareStore(store),
@@ -648,7 +648,7 @@ describe("durable: DurableService — execution (unit)", () => {
   it("recovers incomplete executions", async () => {
     const store = new MemoryStore();
     const queue = new SpyQueue();
-    const task = okTask("t.ok");
+    const task = okTask("t-ok");
 
     const service = new DurableService({
       store,

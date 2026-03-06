@@ -26,7 +26,7 @@ describe("runner.debug.executionTracker", () => {
     const result = await resourceInterceptor(async () => "ok", {
       resource: {
         definition: {
-          id: "tests.debug.system.resource",
+          id: "tests-debug-system-resource",
           tags: [globalTags.system],
         },
         config: {},
@@ -68,7 +68,7 @@ describe("runner.debug.executionTracker", () => {
         {
           resource: {
             definition: {
-              id: "tests.debug.non-system.resource",
+              id: "tests-debug-non-system-resource",
               tags: [],
             },
             config: { value: 1 },
@@ -112,7 +112,7 @@ describe("runner.debug.executionTracker", () => {
         {
           resource: {
             definition: {
-              id: "tests.debug.non-system.resource.logger-fails",
+              id: "tests-debug-non-system-resource-logger-fails",
               tags: [],
             },
             config: {},

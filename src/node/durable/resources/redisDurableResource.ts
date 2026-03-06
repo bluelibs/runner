@@ -38,7 +38,7 @@ interface RedisDurableResourceContext {
 }
 
 export const redisDurableResource = r
-  .resource<RedisDurableResourceConfig>("base.durable.redis")
+  .resource<RedisDurableResourceConfig>("base-durable-redis")
   .register([durableWorkflowTag, ...durableEventsArray])
   .dependencies({
     taskRunner: resources.taskRunner,

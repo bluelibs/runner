@@ -10,14 +10,14 @@ describe("Store coverage", () => {
       }
     ).eventDefinitionResolver;
     const event = defineEvent({
-      id: "store.coverage.event",
+      id: "store-coverage-event",
     });
     const resolveSpy = jest.spyOn(store, "resolveDefinitionId");
 
     resolveSpy.mockReturnValueOnce(undefined);
     expect(resolver(event)).toBe(event);
 
-    resolveSpy.mockReturnValueOnce("store.coverage.event.missing");
+    resolveSpy.mockReturnValueOnce("store-coverage-event-missing");
     expect(resolver(event)).toBe(event);
   });
 
@@ -31,8 +31,8 @@ describe("Store coverage", () => {
 
     jest.spyOn(store, "resolveDefinitionId").mockReturnValue(undefined);
 
-    expect(store.getOwnerResourceId("store.coverage.raw")).toBeUndefined();
-    expect(ownerSpy).toHaveBeenCalledWith("store.coverage.raw");
+    expect(store.getOwnerResourceId("store-coverage-raw")).toBeUndefined();
+    expect(ownerSpy).toHaveBeenCalledWith("store-coverage-raw");
     expect(() => store.toPublicId({ invalid: true } as any)).toThrow(
       /Unable to resolve a definition id/,
     );

@@ -320,11 +320,11 @@ describe("Queue", () => {
         eventManager: { registry: { listeners: Map<string, unknown[]> } };
       }
     ).eventManager.registry.listeners;
-    expect(listeners.get("queue.events.finish")).toHaveLength(1);
+    expect(listeners.get("queue-events-finish")).toHaveLength(1);
 
     unsubscribe();
 
-    expect(listeners.get("queue.events.finish")).toBeUndefined();
+    expect(listeners.get("queue-events-finish")).toBeUndefined();
   });
 
   it("hard-removes once() listeners from EventManager storage after first fire", async () => {
@@ -336,12 +336,12 @@ describe("Queue", () => {
         eventManager: { registry: { listeners: Map<string, unknown[]> } };
       }
     ).eventManager.registry.listeners;
-    expect(listeners.get("queue.events.finish")).toHaveLength(1);
+    expect(listeners.get("queue-events-finish")).toHaveLength(1);
 
     await q.run(async () => "ok");
     await flushMicroTasks();
 
-    expect(listeners.get("queue.events.finish")).toBeUndefined();
+    expect(listeners.get("queue-events-finish")).toBeUndefined();
   });
 
   it("ignores stale listener callbacks after active listener id is removed", async () => {
@@ -355,7 +355,7 @@ describe("Queue", () => {
       eventManager: { registry: { listeners: Map<string, Array<any>> } };
     };
     const listeners = internals.eventManager.registry.listeners.get(
-      "queue.events.finish",
+      "queue-events-finish",
     );
     if (!listeners?.[0]) {
       throw new Error("Expected queue finish listener to be registered");
@@ -402,7 +402,7 @@ describe("Queue", () => {
       eventManager: { registry: { listeners: Map<string, Array<any>> } };
     };
     const listeners = internals.eventManager.registry.listeners.get(
-      "queue.events.finish",
+      "queue-events-finish",
     );
     if (!listeners?.[0]) {
       throw new Error("Expected queue finish listener to be registered");

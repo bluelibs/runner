@@ -19,14 +19,14 @@ async function waitUntil(
 
 describe("durable: signals integration", () => {
   const Paid = defineEvent<{ paidAt: number }>({
-    id: "durable.tests.signals.paid",
+    id: "durable-tests-signals-paid",
   });
 
   it("waits for a signal and resumes the workflow", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.tests.signals.durable");
+    const durable = durableResource.fork("durable-tests-signals-durable");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -34,7 +34,7 @@ describe("durable: signals integration", () => {
     });
 
     const task = r
-      .task("durable.test.waitForSignal")
+      .task("durable-test-waitForSignal")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -71,7 +71,7 @@ describe("durable: signals integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.tests.signals.durable.twice");
+    const durable = durableResource.fork("durable-tests-signals-durable-twice");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -79,7 +79,7 @@ describe("durable: signals integration", () => {
     });
 
     const task = r
-      .task("durable.test.waitForSignal.twice")
+      .task("durable-test-waitForSignal-twice")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -112,7 +112,7 @@ describe("durable: signals integration", () => {
         const exec = await store.getExecution(executionId);
         const secondWait = await store.getStepResult(
           executionId,
-          "__signal:durable.tests.signals.paid:1",
+          "__signal:durable-tests-signals-paid:1",
         );
 
         return (

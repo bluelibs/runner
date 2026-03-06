@@ -14,28 +14,28 @@ import {
 describe("subtreeMiddleware tools", () => {
   it("resolves task subtree middleware for always/conditional entries", () => {
     const alwaysMiddleware = defineTaskMiddleware<{ label: string }>({
-      id: "tests.tools.subtree.task.always",
+      id: "tests-tools-subtree-task-always",
       run: async ({ next, task }) => next(task.input),
     });
     const conditionalMiddleware = defineTaskMiddleware({
-      id: "tests.tools.subtree.task.conditional",
+      id: "tests-tools-subtree-task-conditional",
       run: async ({ next, task }) => next(task.input),
     });
 
     const targetTask = defineTask({
-      id: "tests.tools.subtree.task.target.critical",
+      id: "tests-tools-subtree-task-target-critical",
       run: async () => "ok",
     });
 
     const ownerResource = defineResource({
-      id: "tests.tools.subtree.task.owner",
+      id: "tests-tools-subtree-task-owner",
       subtree: {
         tasks: {
           middleware: [
             { use: alwaysMiddleware.with({ label: "always" }) },
             {
               use: conditionalMiddleware,
-              when: (task) => task.id.endsWith(".critical"),
+              when: (task) => task.id.endsWith("-critical"),
             },
             {
               use: alwaysMiddleware.with({ label: "never" }),
@@ -71,28 +71,28 @@ describe("subtreeMiddleware tools", () => {
 
   it("resolves resource subtree middleware for conditional entries", () => {
     const alwaysMiddleware = defineResourceMiddleware<{ label: string }>({
-      id: "tests.tools.subtree.resource.always",
+      id: "tests-tools-subtree-resource-always",
       run: async ({ next }) => next(),
     });
     const conditionalMiddleware = defineResourceMiddleware({
-      id: "tests.tools.subtree.resource.conditional",
+      id: "tests-tools-subtree-resource-conditional",
       run: async ({ next }) => next(),
     });
 
     const targetResource = defineResource({
-      id: "tests.tools.subtree.resource.target.critical",
+      id: "tests-tools-subtree-resource-target-critical",
       init: async () => "ok",
     });
 
     const ownerResource = defineResource({
-      id: "tests.tools.subtree.resource.owner",
+      id: "tests-tools-subtree-resource-owner",
       subtree: {
         resources: {
           middleware: [
             { use: alwaysMiddleware.with({ label: "always" }) },
             {
               use: conditionalMiddleware,
-              when: (resource) => resource.id.endsWith(".critical"),
+              when: (resource) => resource.id.endsWith("-critical"),
             },
           ],
         },
@@ -124,16 +124,16 @@ describe("subtreeMiddleware tools", () => {
 
   it("fails fast when duplicate middleware ids are applicable", () => {
     const middleware = defineTaskMiddleware<{ label: string }>({
-      id: "tests.tools.subtree.duplicate.middleware",
+      id: "tests-tools-subtree-duplicate-middleware",
       run: async ({ next, task }) => next(task.input),
     });
     const targetTask = defineTask({
-      id: "tests.tools.subtree.duplicate.target",
+      id: "tests-tools-subtree-duplicate-target",
       run: async () => "ok",
     });
 
     const ownerResource = defineResource({
-      id: "tests.tools.subtree.duplicate.owner",
+      id: "tests-tools-subtree-duplicate-owner",
       subtree: {
         tasks: {
           middleware: [
@@ -167,23 +167,23 @@ describe("subtreeMiddleware tools", () => {
 
   it("fails fast for duplicate resource subtree middleware local ids across owners", () => {
     const rootMiddleware = defineResourceMiddleware({
-      id: "tests.tools.subtree.root.middleware.resource.duplicate",
+      id: "tests-tools-subtree-root-middleware-resource-duplicate",
       run: async ({ next }) => next(),
     });
     const childMiddleware = defineResourceMiddleware({
-      id: "tests.tools.subtree.child.middleware.resource.duplicate",
+      id: "tests-tools-subtree-child-middleware-resource-duplicate",
       run: async ({ next }) => next(),
     });
 
     const rootOwner = defineResource({
-      id: "tests.tools.subtree.resource.duplicate.root",
+      id: "tests-tools-subtree-resource-duplicate-root",
       subtree: {
         resources: {
           middleware: [
             {
               use: {
                 ...rootMiddleware,
-                id: "tests.tools.subtree.resource.duplicate.root.middleware.resource.shared",
+                id: "tests-tools-subtree-resource-duplicate-root.middleware.resource.shared",
               } as any,
             },
           ],
@@ -191,14 +191,14 @@ describe("subtreeMiddleware tools", () => {
       },
     });
     const childOwner = defineResource({
-      id: "tests.tools.subtree.resource.duplicate.child",
+      id: "tests-tools-subtree-resource-duplicate-child",
       subtree: {
         resources: {
           middleware: [
             {
               use: {
                 ...childMiddleware,
-                id: "tests.tools.subtree.resource.duplicate.child.middleware.resource.shared",
+                id: "tests-tools-subtree-resource-duplicate-child.middleware.resource.shared",
               } as any,
             },
           ],
@@ -206,7 +206,7 @@ describe("subtreeMiddleware tools", () => {
       },
     });
     const targetResource = defineResource({
-      id: "tests.tools.subtree.resource.duplicate.target",
+      id: "tests-tools-subtree-resource-duplicate-target",
       init: async () => "ok",
     });
 
@@ -237,23 +237,23 @@ describe("subtreeMiddleware tools", () => {
 
   it("fails fast for duplicate task subtree middleware local ids across owners", () => {
     const rootMiddleware = defineTaskMiddleware({
-      id: "tests.tools.subtree.root.middleware.task.duplicate",
+      id: "tests-tools-subtree-root-middleware-task-duplicate",
       run: async ({ next, task }) => next(task.input),
     });
     const childMiddleware = defineTaskMiddleware({
-      id: "tests.tools.subtree.child.middleware.task.duplicate",
+      id: "tests-tools-subtree-child-middleware-task-duplicate",
       run: async ({ next, task }) => next(task.input),
     });
 
     const rootOwner = defineResource({
-      id: "tests.tools.subtree.task.duplicate.root",
+      id: "tests-tools-subtree-task-duplicate-root",
       subtree: {
         tasks: {
           middleware: [
             {
               use: {
                 ...rootMiddleware,
-                id: "tests.tools.subtree.task.duplicate.root.middleware.task.shared",
+                id: "tests-tools-subtree-task-duplicate-root.middleware.task.shared",
               } as any,
             },
           ],
@@ -261,14 +261,14 @@ describe("subtreeMiddleware tools", () => {
       },
     });
     const childOwner = defineResource({
-      id: "tests.tools.subtree.task.duplicate.child",
+      id: "tests-tools-subtree-task-duplicate-child",
       subtree: {
         tasks: {
           middleware: [
             {
               use: {
                 ...childMiddleware,
-                id: "tests.tools.subtree.task.duplicate.child.middleware.task.shared",
+                id: "tests-tools-subtree-task-duplicate-child.middleware.task.shared",
               } as any,
             },
           ],
@@ -276,7 +276,7 @@ describe("subtreeMiddleware tools", () => {
       },
     });
     const targetTask = defineTask({
-      id: "tests.tools.subtree.task.duplicate.target",
+      id: "tests-tools-subtree-task-duplicate-target",
       run: async () => "ok",
     });
 
@@ -306,23 +306,23 @@ describe("subtreeMiddleware tools", () => {
 
   it("fails fast when foreign namespaces resolve to the same middleware local id", () => {
     const rootMiddleware = defineTaskMiddleware({
-      id: "tests.tools.subtree.foreign.root",
+      id: "tests-tools-subtree-foreign-root",
       run: async ({ next, task }) => next(task.input),
     });
     const childMiddleware = defineTaskMiddleware({
-      id: "tests.tools.subtree.foreign.child",
+      id: "tests-tools-subtree-foreign-child",
       run: async ({ next, task }) => next(task.input),
     });
 
     const rootOwner = defineResource({
-      id: "tests.tools.subtree.foreign.root-owner",
+      id: "tests-tools-subtree-foreign-root-owner",
       subtree: {
         tasks: {
           middleware: [
             {
               use: {
                 ...rootMiddleware,
-                id: "tests.tools.subtree.somewhere.middleware.task.shared",
+                id: "tests-tools-subtree-somewhere.middleware.task.shared",
               } as any,
             },
           ],
@@ -330,14 +330,14 @@ describe("subtreeMiddleware tools", () => {
       },
     });
     const childOwner = defineResource({
-      id: "tests.tools.subtree.foreign.child-owner",
+      id: "tests-tools-subtree-foreign-child-owner",
       subtree: {
         tasks: {
           middleware: [
             {
               use: {
                 ...childMiddleware,
-                id: "tests.tools.subtree.another.middleware.task.shared",
+                id: "tests-tools-subtree-another.middleware.task.shared",
               } as any,
             },
           ],
@@ -345,7 +345,7 @@ describe("subtreeMiddleware tools", () => {
       },
     });
     const targetTask = defineTask({
-      id: "tests.tools.subtree.foreign.target",
+      id: "tests-tools-subtree-foreign-target",
       run: async () => "ok",
     });
 
@@ -375,11 +375,11 @@ describe("subtreeMiddleware tools", () => {
 
   it("unwraps direct and conditional subtree middleware entries", () => {
     const taskMiddleware = defineTaskMiddleware({
-      id: "tests.tools.subtree.unwrap.task",
+      id: "tests-tools-subtree-unwrap-task",
       run: async ({ next, task }) => next(task.input),
     });
     const resourceMiddleware = defineResourceMiddleware({
-      id: "tests.tools.subtree.unwrap.resource",
+      id: "tests-tools-subtree-unwrap-resource",
       run: async ({ next }) => next(),
     });
 
@@ -416,25 +416,25 @@ describe("subtreeMiddleware tools", () => {
 
   it("fails fast on invalid conditional-shaped entries when resolving middleware lists", () => {
     const taskMiddleware = defineTaskMiddleware({
-      id: "tests.tools.subtree.invalid-entry.task.middleware",
+      id: "tests-tools-subtree-invalid-entry-task-middleware",
       run: async ({ next, task }) => next(task.input),
     });
     const resourceMiddleware = defineResourceMiddleware({
-      id: "tests.tools.subtree.invalid-entry.resource.middleware",
+      id: "tests-tools-subtree-invalid-entry-resource-middleware",
       run: async ({ next }) => next(),
     });
 
     const targetTask = defineTask({
-      id: "tests.tools.subtree.invalid-entry.task.target",
+      id: "tests-tools-subtree-invalid-entry-task-target",
       run: async () => "ok",
     });
     const targetResource = defineResource({
-      id: "tests.tools.subtree.invalid-entry.resource.target",
+      id: "tests-tools-subtree-invalid-entry-resource-target",
       init: async () => "ok",
     });
 
     const ownerResource = defineResource({
-      id: "tests.tools.subtree.invalid-entry.owner",
+      id: "tests-tools-subtree-invalid-entry-owner",
       subtree: {
         tasks: {
           middleware: [{ nope: true } as any, taskMiddleware],

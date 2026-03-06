@@ -9,9 +9,9 @@ import { rpcLanesResource } from "../../rpc-lanes";
 
 describe("rpcLanesResource modes", () => {
   it("transparent mode bypasses rpc lane transport and executes tagged tasks locally", async () => {
-    const lane = r.rpcLane("tests.rpc-lanes.mode.transparent.lane").build();
+    const lane = r.rpcLane("tests-rpc-lanes-mode-transparent-lane").build();
     const task = defineTask({
-      id: "tests.rpc-lanes.mode.transparent.task",
+      id: "tests-rpc-lanes-mode-transparent-task",
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => "local",
     });
@@ -24,7 +24,7 @@ describe("rpcLanesResource modes", () => {
     });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.mode.transparent.app",
+      id: "tests-rpc-lanes-mode-transparent-app",
       register: [
         task,
         rpcLanesResource.with({
@@ -41,9 +41,9 @@ describe("rpcLanesResource modes", () => {
   });
 
   it("local-simulated mode roundtrips task input/output through serializer boundaries", async () => {
-    const lane = r.rpcLane("tests.rpc-lanes.mode.simulated.task.lane").build();
+    const lane = r.rpcLane("tests-rpc-lanes-mode-simulated-task-lane").build();
     const task = defineTask<{ nested: { count: number } }>({
-      id: "tests.rpc-lanes.mode.simulated.task",
+      id: "tests-rpc-lanes-mode-simulated-task",
       tags: [globalTags.rpcLane.with({ lane })],
       run: async (input) => {
         input.nested.count = 99;
@@ -59,7 +59,7 @@ describe("rpcLanesResource modes", () => {
     });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.mode.simulated.task.app",
+      id: "tests-rpc-lanes-mode-simulated-task-app",
       register: [
         task,
         rpcLanesResource.with({
@@ -80,14 +80,14 @@ describe("rpcLanesResource modes", () => {
   });
 
   it("local-simulated mode roundtrips rpc-lane event payloads through serializer boundaries", async () => {
-    const lane = r.rpcLane("tests.rpc-lanes.mode.simulated.event.lane").build();
+    const lane = r.rpcLane("tests-rpc-lanes-mode-simulated-event-lane").build();
     const event = defineEvent<{ value: number }>({
-      id: "tests.rpc-lanes.mode.simulated.event",
+      id: "tests-rpc-lanes-mode-simulated-event",
       tags: [globalTags.rpcLane.with({ lane })],
     });
 
     const mutateHook = r
-      .hook("tests.rpc-lanes.mode.simulated.event.hook")
+      .hook("tests-rpc-lanes-mode-simulated-event-hook")
       .on(event)
       .run(async (emission) => {
         emission.data.value += 1;
@@ -95,7 +95,7 @@ describe("rpcLanesResource modes", () => {
       .build();
 
     const emitTask = defineTask<{ value: number }, Promise<{ value: number }>>({
-      id: "tests.rpc-lanes.mode.simulated.event.emit-task",
+      id: "tests-rpc-lanes-mode-simulated-event-emit-task",
       dependencies: {
         eventManager: globalResources.eventManager,
       },
@@ -103,7 +103,7 @@ describe("rpcLanesResource modes", () => {
         deps.eventManager.emitWithResult(
           event,
           input,
-          runtimeSource.task("tests.rpc-lanes.mode.simulated.event.emit-task"),
+          runtimeSource.task("tests-rpc-lanes-mode-simulated-event-emit-task"),
         ),
     });
 
@@ -115,7 +115,7 @@ describe("rpcLanesResource modes", () => {
     });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.mode.simulated.event.app",
+      id: "tests-rpc-lanes-mode-simulated-event-app",
       register: [
         event,
         mutateHook,
@@ -139,16 +139,16 @@ describe("rpcLanesResource modes", () => {
 
   it("local-simulated mode fails when task is already routed by another resource", async () => {
     const lane = r
-      .rpcLane("tests.rpc-lanes.mode.simulated.ownership.lane")
+      .rpcLane("tests-rpc-lanes-mode-simulated-ownership-lane")
       .build();
     const task = defineTask({
-      id: "tests.rpc-lanes.mode.simulated.ownership.task",
+      id: "tests-rpc-lanes-mode-simulated-ownership-task",
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => "local",
     });
 
     const markOwnershipResource = defineResource({
-      id: "tests.rpc-lanes.mode.simulated.ownership.marker",
+      id: "tests-rpc-lanes-mode-simulated-ownership-marker",
       dependencies: {
         store: globalResources.store,
       },
@@ -171,7 +171,7 @@ describe("rpcLanesResource modes", () => {
     });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.mode.simulated.ownership.app",
+      id: "tests-rpc-lanes-mode-simulated-ownership-app",
       register: [
         task,
         markOwnershipResource,

@@ -33,7 +33,7 @@ describe("http smart/mixed client typed errors", () => {
   const baseUrl = "http://127.0.0.1:3333/__runner";
   const serializer = new Serializer();
   const helper = {
-    id: "tests.errors.node",
+    id: "tests-errors-node",
     throw: (data: any) => {
       throw createMessageError("typed:" + String(data?.code));
     },
@@ -182,7 +182,7 @@ describe("http smart/mixed client typed errors", () => {
         error: {
           code: "INTERNAL_ERROR",
           message: "boom",
-          id: "unknown.helper",
+          id: "unknown-helper",
           data: { code: 32 },
         },
       };
@@ -203,7 +203,7 @@ describe("http smart/mixed client typed errors", () => {
 
     await expect(client.task("t.json", { a: 1 } as any)).rejects.toMatchObject({
       name: "RemoteLaneTransportError",
-      id: "unknown.helper",
+      id: "unknown-helper",
       data: { code: 32 },
     });
   });

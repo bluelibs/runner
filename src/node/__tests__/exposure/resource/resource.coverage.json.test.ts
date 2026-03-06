@@ -6,7 +6,7 @@ import { createReqRes } from "./resource.test.utils";
 describe("nodeExposure Coverage - JSON and Buffers", () => {
   it("readJson buffer branch and success: task JSON body succeeds", async () => {
     const okTask = defineTask<{ n?: number }, Promise<number>>({
-      id: "ok.task.buffer",
+      id: "ok-task-buffer",
       run: async ({ n = 1 }) => n,
     });
     const exposure = rpcExposure.with({
@@ -16,7 +16,7 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.json.app5",
+      id: "unit-exposure-coverage-json-app5",
       register: [okTask, exposure],
     });
     const rr = await run(app);
@@ -39,7 +39,7 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
 
   it("returns 400 when task JSON parsing fails", async () => {
     const echo = defineTask<{ v: number }, Promise<number>>({
-      id: "coverage.json.fail",
+      id: "coverage-json-fail",
       run: async ({ v }) => v,
     });
     const exposure = rpcExposure.with({
@@ -49,7 +49,7 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
       },
     });
     const app = defineResource({
-      id: "coverage.json.app",
+      id: "coverage-json-app",
       register: [echo, exposure],
     });
     const rr = await run(app);
@@ -73,7 +73,7 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
 
   it("rejects JSON body when request is aborted", async () => {
     const echo = defineTask<void, Promise<number>>({
-      id: "coverage.abort.task",
+      id: "coverage-abort-task",
       run: async () => 1,
     });
     const exposure = rpcExposure.with({
@@ -83,7 +83,7 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
       },
     });
     const app = defineResource({
-      id: "coverage.abort.app",
+      id: "coverage-abort-app",
       register: [echo, exposure],
     });
     const rr = await run(app);

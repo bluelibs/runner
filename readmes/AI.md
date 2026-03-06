@@ -79,6 +79,8 @@ await runtime.dispose();
 - Fluent builders chain methods and end with `.build()`.
 - Configurable built definitions expose `.with(config)`.
 - `r.task<Input>(id)` and `r.resource<Config>(id)` seed typing before explicit schemas.
+- User-specified definition ids are local ids and cannot contain `.`. Use `send-email`, not `app.tasks.sendEmail`.
+- Dotted `runner.*` and `system.*` ids are reserved for framework-owned internals.
 - `.schema()` is the unified alias:
   - task -> input schema
   - resource -> config schema
@@ -453,7 +455,7 @@ Forks and overrides:
 - `register` defaults to `"keep"`.
 - `reId` is used only with `register: "deep"`.
 - `reId` receives each deep-forked resource id and must return the new id for that cloned resource.
-- If `reId` is omitted, Runner defaults to prefixing with the fork id.
+- If `reId` is omitted, Runner defaults to prefixing with the fork id using `-`.
 - `register: "deep"` clones only resources.
 - Tasks, events, hooks, middleware, tags, errors, and async contexts are not deep-cloned.
 - When deep-forking, dependencies pointing to forked resources are remapped inside the cloned resource tree.
@@ -467,9 +469,9 @@ Forks and overrides:
 
 Fork quick guide:
 
-- `fork("new.id")`: same resource behavior, new id, keep registered children
-- `fork("new.id", { register: "drop" })`: new resource instance without the original registered subtree
-- `fork("new.id", { register: "deep", reId })`: clone the resource tree for isolated variants such as tenant-specific resources
+- `fork("new-id")`: same resource behavior, new id, keep registered children
+- `fork("new-id", { register: "drop" })`: new resource instance without the original registered subtree
+- `fork("new-id", { register: "deep", reId })`: clone the resource tree for isolated variants such as tenant-specific resources
 
 ## Tags and Scheduling
 

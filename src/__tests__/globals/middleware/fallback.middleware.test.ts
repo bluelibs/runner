@@ -10,7 +10,7 @@ describe("Fallback Middleware", () => {
 
   it("should return fallback value when task fails", async () => {
     const task = defineTask({
-      id: "fallback.value",
+      id: "fallback-value",
       middleware: [fallbackTaskMiddleware.with({ fallback: "fallback-value" })],
       run: async () => {
         throw createMessageError("Original error");
@@ -33,7 +33,7 @@ describe("Fallback Middleware", () => {
 
   it("should return original result when task succeeds", async () => {
     const task = defineTask({
-      id: "fallback.success",
+      id: "fallback-success",
       middleware: [fallbackTaskMiddleware.with({ fallback: "fallback-value" })],
       run: async () => {
         return "success";
@@ -56,7 +56,7 @@ describe("Fallback Middleware", () => {
 
   it("should execute fallback function when task fails", async () => {
     const task = defineTask({
-      id: "fallback.function",
+      id: "fallback-function",
       middleware: [
         fallbackTaskMiddleware.with({
           fallback: (err: Error, input: string) =>
@@ -89,7 +89,7 @@ describe("Fallback Middleware", () => {
     });
 
     const task = defineTask({
-      id: "fallback.task",
+      id: "fallback-task",
       middleware: [fallbackTaskMiddleware.with({ fallback: planB })],
       run: async (_input: string) => {
         throw createMessageError("fail");

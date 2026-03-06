@@ -27,7 +27,7 @@ describe("run behavioral scenarios", () => {
 
     const isolatedResource = (id: string) =>
       defineResource({
-        id: `isolated.${id}`,
+        id: `isolated-${id}`,
         async init() {
           shared.counter++;
           await new Promise((resolve) => setTimeout(resolve, 50));
@@ -89,7 +89,7 @@ describe("run behavioral scenarios", () => {
     let dependencyDisposed = false;
 
     const dependency = defineResource({
-      id: "ready.failure.rollback.dependency",
+      id: "ready-failure-rollback-dependency",
       async init() {
         return "dependency";
       },
@@ -99,7 +99,7 @@ describe("run behavioral scenarios", () => {
     });
 
     const failing = defineResource({
-      id: "ready.failure.rollback.failing",
+      id: "ready-failure-rollback-failing",
       dependencies: { dependency },
       async init() {
         return "failing";
@@ -110,7 +110,7 @@ describe("run behavioral scenarios", () => {
     });
 
     const app = defineResource({
-      id: "ready.failure.rollback.app",
+      id: "ready-failure-rollback-app",
       register: [dependency, failing],
       dependencies: { failing },
       async init() {
@@ -161,7 +161,7 @@ describe("run behavioral scenarios", () => {
     let secondStarted = false;
 
     const first = defineResource({
-      id: "init.mode.default.sequential.first",
+      id: "init-mode-default-sequential-first",
       async init() {
         firstStarted = true;
         await firstInitGate;
@@ -170,7 +170,7 @@ describe("run behavioral scenarios", () => {
     });
 
     const second = defineResource({
-      id: "init.mode.default.sequential.second",
+      id: "init-mode-default-sequential-second",
       async init() {
         secondStarted = true;
         return "second";
@@ -178,7 +178,7 @@ describe("run behavioral scenarios", () => {
     });
 
     const app = defineResource({
-      id: "init.mode.default.sequential.app",
+      id: "init-mode-default-sequential-app",
       register: [first, second],
       async init() {
         return "ok";
@@ -204,7 +204,7 @@ describe("run behavioral scenarios", () => {
     let secondStarted = false;
 
     const first = defineResource({
-      id: "init.mode.parallel.first",
+      id: "init-mode-parallel-first",
       async init() {
         firstStarted = true;
         await gate;
@@ -213,7 +213,7 @@ describe("run behavioral scenarios", () => {
     });
 
     const second = defineResource({
-      id: "init.mode.parallel.second",
+      id: "init-mode-parallel-second",
       async init() {
         secondStarted = true;
         await gate;
@@ -222,7 +222,7 @@ describe("run behavioral scenarios", () => {
     });
 
     const app = defineResource({
-      id: "init.mode.parallel.app",
+      id: "init-mode-parallel-app",
       register: [first, second],
       async init() {
         return "ok";
@@ -245,21 +245,21 @@ describe("run behavioral scenarios", () => {
     expect.assertions(3);
 
     const first = defineResource({
-      id: "init.mode.parallel.fail.first",
+      id: "init-mode-parallel-fail-first",
       async init() {
         throw createMessageError("first failed");
       },
     });
 
     const second = defineResource({
-      id: "init.mode.parallel.fail.second",
+      id: "init-mode-parallel-fail-second",
       async init() {
         throw createMessageError("second failed");
       },
     });
 
     const app = defineResource({
-      id: "init.mode.parallel.fail.app",
+      id: "init-mode-parallel-fail-app",
       register: [first, second],
       async init() {
         return "ok";
@@ -286,8 +286,8 @@ describe("run behavioral scenarios", () => {
       aggregate.errors.map((error) => Reflect.get(error, "resourceId")),
     ).toEqual(
       expect.arrayContaining([
-        "init.mode.parallel.fail.first",
-        "init.mode.parallel.fail.second",
+        "init-mode-parallel-fail-first",
+        "init-mode-parallel-fail-second",
       ]),
     );
   });
@@ -297,12 +297,12 @@ describe("run behavioral scenarios", () => {
 
     // Shared async context definition — same object registered in all runtimes
     const requestContext = r
-      .asyncContext<{ runtimeId: number }>("test.parallel.ctx")
+      .asyncContext<{ runtimeId: number }>("test-parallel-ctx")
       .build();
 
     // Task that captures and returns the context value
     const captureTask = r
-      .task<void>("test.parallel.capture")
+      .task<void>("test-parallel-capture")
       .run(async () => {
         const ctx = requestContext.use();
         return ctx.runtimeId;
@@ -314,7 +314,7 @@ describe("run behavioral scenarios", () => {
       Array.from({ length: RUNTIME_COUNT }, (_, i) =>
         run(
           r
-            .resource(`test.parallel.app.${i}`)
+            .resource(`test-parallel-app-${i}`)
             .register([requestContext, captureTask])
             .build(),
           { shutdownHooks: false },

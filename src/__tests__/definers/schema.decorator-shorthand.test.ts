@@ -30,13 +30,13 @@ describe("decorator schema shorthand", () => {
     }));
 
     const task = defineTask({
-      id: "tests.decorator.precedence.task",
+      id: "tests-decorator-precedence-task",
       inputSchema: { parse },
       run: async (input) => input,
     });
 
     const app = defineResource({
-      id: "tests.decorator.precedence.app",
+      id: "tests-decorator-precedence-app",
       register: [task],
     });
     const runtime = await run(app);
@@ -51,7 +51,7 @@ describe("decorator schema shorthand", () => {
   it("rejects undecorated class shorthand fail-fast", () => {
     expect(() =>
       defineTask({
-        id: "tests.decorator.fail-fast.task",
+        id: "tests-decorator-fail-fast-task",
         inputSchema: UndecoratedSchema,
         run: async (_input) => undefined,
       }),
@@ -60,47 +60,47 @@ describe("decorator schema shorthand", () => {
 
   it("normalizes class shorthand for all non-fluent and fluent schema surfaces", async () => {
     const task = defineTask({
-      id: "tests.decorator.nonfluent.task",
+      id: "tests-decorator-nonfluent-task",
       inputSchema: DecoratedSchema,
       run: async (input: { value: string }) => input.value,
     });
 
     const event = defineEvent({
-      id: "tests.decorator.nonfluent.event",
+      id: "tests-decorator-nonfluent-event",
       payloadSchema: DecoratedSchema,
     });
 
     const taskMw = defineTaskMiddleware({
-      id: "tests.decorator.nonfluent.task-mw",
+      id: "tests-decorator-nonfluent-task-mw",
       configSchema: DecoratedSchema,
       run: async ({ next, task: taskInput }) => next(taskInput.input),
     });
 
     const resourceMw = defineResourceMiddleware({
-      id: "tests.decorator.nonfluent.resource-mw",
+      id: "tests-decorator-nonfluent-resource-mw",
       configSchema: DecoratedSchema,
       run: async ({ next, resource: resourceInput }) =>
         next(resourceInput.config),
     });
 
     const tag = defineTag({
-      id: "tests.decorator.nonfluent.tag",
+      id: "tests-decorator-nonfluent-tag",
       configSchema: DecoratedSchema,
     });
 
     const asyncContext = defineAsyncContext({
-      id: "tests.decorator.nonfluent.ctx",
+      id: "tests-decorator-nonfluent-ctx",
       configSchema: DecoratedSchema,
     });
 
     const TypedError = defineError<{ value: string }>({
-      id: "tests.decorator.nonfluent.error",
+      id: "tests-decorator-nonfluent-error",
       dataSchema: DecoratedSchema,
       format: (data) => data.value,
     });
 
     const cfgResource = defineResource({
-      id: "tests.decorator.nonfluent.resource",
+      id: "tests-decorator-nonfluent-resource",
       configSchema: DecoratedSchema,
       init: async (config: { value: string }) => config.value,
     });
@@ -123,13 +123,13 @@ describe("decorator schema shorthand", () => {
     expect(() => cfgResource.with({ value: 1 } as any)).toThrow();
 
     const hook = r
-      .hook("tests.decorator.nonfluent.hook")
+      .hook("tests-decorator-nonfluent-hook")
       .on(event)
       .run(async () => undefined)
       .build();
 
     const app = defineResource({
-      id: "tests.decorator.nonfluent.app",
+      id: "tests-decorator-nonfluent-app",
       register: [task, event, hook],
     });
     const runtime = await run(app);
@@ -145,30 +145,30 @@ describe("decorator schema shorthand", () => {
     ).rejects.toThrow();
 
     const fluentTask = r
-      .task("tests.decorator.fluent.task")
+      .task("tests-decorator-fluent-task")
       .inputSchema(DecoratedSchema)
       .run(async (input: { value: string }) => input.value)
       .build();
 
     const fluentResource = r
-      .resource("tests.decorator.fluent.resource")
+      .resource("tests-decorator-fluent-resource")
       .configSchema(DecoratedSchema)
       .init(async (config: { value: string }) => config.value)
       .build();
 
     const fluentEvent = r
-      .event("tests.decorator.fluent.event")
+      .event("tests-decorator-fluent-event")
       .payloadSchema(DecoratedSchema)
       .build();
 
     const fluentTaskMw = r.middleware
-      .task("tests.decorator.fluent.task-mw")
+      .task("tests-decorator-fluent-task-mw")
       .configSchema(DecoratedSchema)
       .run(async ({ next, task: taskInput }) => next(taskInput.input))
       .build();
 
     const fluentResourceMw = r.middleware
-      .resource("tests.decorator.fluent.resource-mw")
+      .resource("tests-decorator-fluent-resource-mw")
       .configSchema(DecoratedSchema)
       .run(async ({ next, resource: resourceInput }) =>
         next(resourceInput.config),
@@ -176,17 +176,17 @@ describe("decorator schema shorthand", () => {
       .build();
 
     const fluentTag = r
-      .tag("tests.decorator.fluent.tag")
+      .tag("tests-decorator-fluent-tag")
       .configSchema(DecoratedSchema)
       .build();
 
     const fluentAsyncContext = r
-      .asyncContext<{ value: string }>("tests.decorator.fluent.ctx")
+      .asyncContext<{ value: string }>("tests-decorator-fluent-ctx")
       .configSchema(DecoratedSchema)
       .build();
 
     const FluentError = r
-      .error<{ value: string }>("tests.decorator.fluent.error")
+      .error<{ value: string }>("tests-decorator-fluent-error")
       .dataSchema(DecoratedSchema)
       .format((data) => data.value)
       .build();

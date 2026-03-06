@@ -7,7 +7,7 @@ describe("Context System", () => {
 
   test("useContext throws when missing", async () => {
     const r = defineResource({
-      id: "test.context.use",
+      id: "test-context-use",
       register: [TestContext],
       init: async () => TestContext.use(),
     });

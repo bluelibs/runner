@@ -109,7 +109,7 @@ D("nodeExposure - unit core", () => {
       http: { basePath: "/__runner", listen: { port: 0 } },
     });
     const app = defineResource({
-      id: "unit.exposure.noauth.app",
+      id: "unit-exposure-noauth-app",
       register: [testEvent, exposure],
     });
     const rr = await run(app);
@@ -140,7 +140,7 @@ D("nodeExposure - unit core", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.custom-header.app",
+      id: "unit-exposure-custom-header-app",
       register: [testEvent, exposure],
     });
     const rr = await run(app);

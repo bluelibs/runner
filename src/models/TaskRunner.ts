@@ -25,7 +25,7 @@ type CachedTaskRunner = (
 
 const defaultTaskSource: RuntimeCallSource = {
   kind: RuntimeCallSourceKind.Runtime,
-  id: "runtime.internal.taskRunner",
+  id: "runtime-internal-taskRunner",
 };
 
 /**

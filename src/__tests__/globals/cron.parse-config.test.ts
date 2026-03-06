@@ -7,25 +7,25 @@ import {
 describe("cron parse config helpers", () => {
   it("keeps explicit ids when no resolver is provided", () => {
     const task = defineTask({
-      id: "cron.parse.helpers.task",
+      id: "cron-parse-helpers-task",
       run: async () => undefined,
     });
 
-    const onlySet = resolveOnlySet([task, "cron.parse.helpers.raw.id"]);
+    const onlySet = resolveOnlySet([task, "cron-parse-helpers-raw-id"]);
     expect(Array.from(onlySet.values()).sort()).toEqual([
-      "cron.parse.helpers.raw.id",
-      "cron.parse.helpers.task",
+      "cron-parse-helpers-raw-id",
+      "cron-parse-helpers-task",
     ]);
   });
 
   it("falls back to entry ids when resolver returns undefined", () => {
     const task = defineTask({
-      id: "cron.parse.helpers.resolver-fallback.task",
+      id: "cron-parse-helpers-resolver-fallback-task",
       run: async () => undefined,
     });
 
     const onlySet = resolveOnlySet(
-      [task, "cron.parse.helpers.resolver-fallback.raw"],
+      [task, "cron-parse-helpers-resolver-fallback-raw"],
       (entry) => {
         if (typeof entry === "string") {
           return undefined;
@@ -35,14 +35,14 @@ describe("cron parse config helpers", () => {
     );
 
     expect(Array.from(onlySet.values()).sort()).toEqual([
-      "cron.parse.helpers.resolver-fallback.raw",
-      "resolved:cron.parse.helpers.resolver-fallback.task",
+      "cron-parse-helpers-resolver-fallback-raw",
+      "resolved:cron-parse-helpers-resolver-fallback-task",
     ]);
   });
 
   it("fails fast when entries resolve to empty ids", () => {
     const task = defineTask({
-      id: "cron.parse.helpers.empty-id.task",
+      id: "cron-parse-helpers-empty-id-task",
       run: async () => undefined,
     });
 
@@ -53,7 +53,7 @@ describe("cron parse config helpers", () => {
 
   it("fails fast when task entries cannot be resolved by resolver", () => {
     const task = defineTask({
-      id: "cron.parse.helpers.unresolved.task",
+      id: "cron-parse-helpers-unresolved-task",
       run: async () => undefined,
     });
 

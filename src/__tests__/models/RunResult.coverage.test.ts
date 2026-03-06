@@ -9,7 +9,7 @@ describe("RunResult coverage", () => {
     store.setTaskRunner(taskRunner);
     const runtime = fixture.createRuntimeResult(taskRunner);
     const resource = defineResource<{ enabled: boolean }>({
-      id: "run-result.coverage.resource",
+      id: "run-result-coverage-resource",
       init: async (config) => config.enabled,
     });
 
@@ -41,7 +41,7 @@ describe("RunResult coverage", () => {
         runtime as unknown as {
           resolveRuntimeElementId: (reference: string) => string;
         }
-      ).resolveRuntimeElementId("run-result.coverage.raw-id"),
-    ).toBe("run-result.coverage.raw-id");
+      ).resolveRuntimeElementId("run-result-coverage-raw-id"),
+    ).toBe("run-result-coverage-raw-id");
   });
 });

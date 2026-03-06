@@ -28,18 +28,18 @@ async function expectRunnerErrorId(
 describe("run.isolate channels (deny mode)", () => {
   it("denies dependency wiring when dependencies channel is enabled", async () => {
     const deniedTask = defineTask({
-      id: "channels.deny.dependencies.target",
+      id: "channels-deny-dependencies-target",
       run: async () => "denied",
     });
 
     const consumer = defineTask({
-      id: "channels.deny.dependencies.consumer",
+      id: "channels-deny-dependencies-consumer",
       dependencies: { deniedTask },
       run: async (_input, deps) => deps.deniedTask(),
     });
 
     const boundary = defineResource({
-      id: "channels.deny.dependencies.boundary",
+      id: "channels-deny-dependencies-boundary",
       register: [consumer],
       isolate: {
         deny: [
@@ -54,7 +54,7 @@ describe("run.isolate channels (deny mode)", () => {
     });
 
     const app = defineResource({
-      id: "channels.deny.dependencies.app",
+      id: "channels-deny-dependencies-app",
       register: [deniedTask, boundary],
     });
 
@@ -64,17 +64,17 @@ describe("run.isolate channels (deny mode)", () => {
 
   it("allows hook subscriptions when listening channel is disabled", async () => {
     const event = defineEvent({
-      id: "channels.deny.listening.allowed.event",
+      id: "channels-deny-listening-allowed-event",
     });
 
     const hook = defineHook({
-      id: "channels.deny.listening.allowed.hook",
+      id: "channels-deny-listening-allowed-hook",
       on: event,
       run: async () => undefined,
     });
 
     const boundary = defineResource({
-      id: "channels.deny.listening.allowed.boundary",
+      id: "channels-deny-listening-allowed-boundary",
       register: [hook],
       isolate: {
         deny: [scope(event, { listening: false })],
@@ -82,7 +82,7 @@ describe("run.isolate channels (deny mode)", () => {
     });
 
     const app = defineResource({
-      id: "channels.deny.listening.allowed.app",
+      id: "channels-deny-listening-allowed-app",
       register: [event, boundary],
     });
 
@@ -92,17 +92,17 @@ describe("run.isolate channels (deny mode)", () => {
 
   it("denies hook subscriptions when listening channel is enabled", async () => {
     const event = defineEvent({
-      id: "channels.deny.listening.blocked.event",
+      id: "channels-deny-listening-blocked-event",
     });
 
     const hook = defineHook({
-      id: "channels.deny.listening.blocked.hook",
+      id: "channels-deny-listening-blocked-hook",
       on: event,
       run: async () => undefined,
     });
 
     const boundary = defineResource({
-      id: "channels.deny.listening.blocked.boundary",
+      id: "channels-deny-listening-blocked-boundary",
       register: [hook],
       isolate: {
         deny: [
@@ -117,7 +117,7 @@ describe("run.isolate channels (deny mode)", () => {
     });
 
     const app = defineResource({
-      id: "channels.deny.listening.blocked.app",
+      id: "channels-deny-listening-blocked-app",
       register: [event, boundary],
     });
 
@@ -127,18 +127,18 @@ describe("run.isolate channels (deny mode)", () => {
 
   it("denies middleware attachments when middleware channel is enabled", async () => {
     const deniedMiddleware = defineTaskMiddleware({
-      id: "channels.deny.middleware.blocked.middleware",
+      id: "channels-deny-middleware-blocked-middleware",
       run: async ({ task, next }) => next(task.input),
     });
 
     const task = defineTask({
-      id: "channels.deny.middleware.blocked.task",
+      id: "channels-deny-middleware-blocked-task",
       middleware: [deniedMiddleware],
       run: async () => "ok",
     });
 
     const boundary = defineResource({
-      id: "channels.deny.middleware.blocked.boundary",
+      id: "channels-deny-middleware-blocked-boundary",
       register: [task],
       isolate: {
         deny: [
@@ -153,7 +153,7 @@ describe("run.isolate channels (deny mode)", () => {
     });
 
     const app = defineResource({
-      id: "channels.deny.middleware.blocked.app",
+      id: "channels-deny-middleware-blocked-app",
       register: [deniedMiddleware, boundary],
     });
 
@@ -163,17 +163,17 @@ describe("run.isolate channels (deny mode)", () => {
 
   it("denies tag attachments when tagging channel is enabled", async () => {
     const deniedTag = defineTag({
-      id: "channels.deny.tagging.blocked.tag",
+      id: "channels-deny-tagging-blocked-tag",
     });
 
     const taggedTask = defineTask({
-      id: "channels.deny.tagging.blocked.task",
+      id: "channels-deny-tagging-blocked-task",
       tags: [deniedTag],
       run: async () => "ok",
     });
 
     const boundary = defineResource({
-      id: "channels.deny.tagging.blocked.boundary",
+      id: "channels-deny-tagging-blocked-boundary",
       register: [taggedTask],
       isolate: {
         deny: [
@@ -188,7 +188,7 @@ describe("run.isolate channels (deny mode)", () => {
     });
 
     const app = defineResource({
-      id: "channels.deny.tagging.blocked.app",
+      id: "channels-deny-tagging-blocked-app",
       register: [deniedTag, boundary],
     });
 
@@ -200,18 +200,18 @@ describe("run.isolate channels (deny mode)", () => {
 describe("run.isolate channels (only mode)", () => {
   it("allows dependencies while other channels are disabled on the same scope entry", async () => {
     const allowedTask = defineTask({
-      id: "channels.only.dependencies.allowed.task",
+      id: "channels-only-dependencies-allowed-task",
       run: async () => "allowed",
     });
 
     const consumer = defineTask({
-      id: "channels.only.dependencies.allowed.consumer",
+      id: "channels-only-dependencies-allowed-consumer",
       dependencies: { allowedTask },
       run: async (_input, deps) => deps.allowedTask(),
     });
 
     const boundary = defineResource({
-      id: "channels.only.dependencies.allowed.boundary",
+      id: "channels-only-dependencies-allowed-boundary",
       register: [consumer],
       isolate: {
         only: [
@@ -226,7 +226,7 @@ describe("run.isolate channels (only mode)", () => {
     });
 
     const app = defineResource({
-      id: "channels.only.dependencies.allowed.app",
+      id: "channels-only-dependencies-allowed-app",
       register: [allowedTask, boundary],
     });
 
@@ -237,22 +237,22 @@ describe("run.isolate channels (only mode)", () => {
 
   it("blocks listening when only scope entry disables listening channel", async () => {
     const allowedTask = defineTask({
-      id: "channels.only.listening.blocked.anchor-task",
+      id: "channels-only-listening-blocked-anchor-task",
       run: async () => "allowed",
     });
 
     const blockedEvent = defineEvent({
-      id: "channels.only.listening.blocked.event",
+      id: "channels-only-listening-blocked-event",
     });
 
     const hook = defineHook({
-      id: "channels.only.listening.blocked.hook",
+      id: "channels-only-listening-blocked-hook",
       on: blockedEvent,
       run: async () => undefined,
     });
 
     const boundary = defineResource({
-      id: "channels.only.listening.blocked.boundary",
+      id: "channels-only-listening-blocked-boundary",
       register: [hook],
       isolate: {
         only: [
@@ -267,7 +267,7 @@ describe("run.isolate channels (only mode)", () => {
     });
 
     const app = defineResource({
-      id: "channels.only.listening.blocked.app",
+      id: "channels-only-listening-blocked-app",
       register: [allowedTask, blockedEvent, boundary],
     });
 

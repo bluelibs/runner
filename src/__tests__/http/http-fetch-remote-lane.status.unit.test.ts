@@ -121,14 +121,14 @@ describe("http-fetch-remote-lane.resource - HTTP status handling", () => {
             error: {
               code: "INTERNAL_ERROR",
               message: "boom",
-              id: "tests.errors.status",
+              id: "tests-errors-status",
               data: { code: 17 },
             },
           }),
       }) as unknown as Response) as unknown as typeof fetch;
 
     const helper = {
-      id: "tests.errors.status",
+      id: "tests-errors-status",
       throw: (data: any) => {
         throw createMessageError("typed-status:" + String(data?.code));
       },
@@ -140,7 +140,7 @@ describe("http-fetch-remote-lane.resource - HTTP status handling", () => {
       baseUrl: "http://api",
       fetchImpl,
       serializer,
-      errorRegistry: new Map([["tests.errors.status", helper]]),
+      errorRegistry: new Map([["tests-errors-status", helper]]),
     });
 
     await expect(client.task("t.id", { a: 1 })).rejects.toThrow(

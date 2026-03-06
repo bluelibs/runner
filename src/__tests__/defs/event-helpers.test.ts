@@ -5,11 +5,11 @@ import { runtimeSource } from "../../types/runtimeSource";
 
 describe("event helpers", () => {
   it("isOneOf checks membership by id", () => {
-    const e1 = defineEvent<{ a: string }>({ id: "ev.a" });
-    const e2 = defineEvent<{ b: number }>({ id: "ev.b" });
+    const e1 = defineEvent<{ a: string }>({ id: "ev-a" });
+    const e2 = defineEvent<{ b: number }>({ id: "ev-b" });
 
     const emissionA: IEventEmission<{ a: string }> = {
-      id: "ev.a",
+      id: "ev-a",
       data: { a: "x" },
       timestamp: new Date(),
       source: runtimeSource.runtime("test"),
@@ -23,7 +23,7 @@ describe("event helpers", () => {
     };
 
     const emissionC: IEventEmission<{ c: boolean }> = {
-      id: "ev.c",
+      id: "ev-c",
       data: { c: true },
       timestamp: new Date(),
       source: runtimeSource.runtime("test"),

@@ -132,40 +132,44 @@ describe("StoreRegistryWriter branches", () => {
     });
 
     const normalizedTaskEntry = writer.normalizeSubtreeTaskMiddlewareEntry(
-      "app.owner",
+      "app-owner",
       { use: taskMiddleware },
     ) as { use: { id: string } };
     expect(normalizedTaskEntry.use.id).toBe(
-      "app.owner.middleware.task.localTaskMw",
+      "app-owner.middleware.task.localTaskMw",
     );
 
     const normalizedResourceEntry =
-      writer.normalizeSubtreeResourceMiddlewareEntry("app.owner", {
+      writer.normalizeSubtreeResourceMiddlewareEntry("app-owner", {
         use: resourceMiddleware,
       }) as { use: { id: string } };
     expect(normalizedResourceEntry.use.id).toBe(
-      "app.owner.middleware.resource.localResourceMw",
+      "app-owner.middleware.resource.localResourceMw",
     );
 
     const normalizedDirectResource =
       writer.normalizeSubtreeResourceMiddlewareEntry(
-        "app.owner",
+        "app-owner",
         resourceMiddleware,
       ) as { id: string };
     expect(normalizedDirectResource.id).toBe(
-      "app.owner.middleware.resource.localResourceMw",
+      "app-owner.middleware.resource.localResourceMw",
     );
   });
 
   it("normalizes resource subtree policies for both local and dotted middleware ids", () => {
-    const writer = getWriter();
+    const { store } = createTestFixture();
+    const registry = (store as unknown as { registry: any }).registry;
+    const writer = registry.writer as {
+      normalizeResourceSubtreeMiddlewareAttachments: (resource: any) => unknown;
+    };
     const middleware = defineResourceMiddleware({
       id: "localSubtreeMw",
       run: async ({ next }) => next(),
     });
 
     const changedResource = defineResource({
-      id: "app.owner",
+      id: "app-owner",
       subtree: {
         resources: {
           middleware: [{ use: middleware }],
@@ -178,19 +182,25 @@ describe("StoreRegistryWriter branches", () => {
       resources?: { middleware?: Array<{ use: { id: string } }> };
     };
     expect(changed.resources?.middleware?.[0]?.use.id).toBe(
-      "app.owner.middleware.resource.localSubtreeMw",
+      "app-owner.middleware.resource.localSubtreeMw",
     );
 
+    const canonicalMiddleware = {
+      ...defineResourceMiddleware({
+        id: "absolute",
+        run: async ({ next }) => next(),
+      }),
+      id: "app-owner.middleware.resource.absolute",
+    };
+    registry.storeResourceMiddleware(canonicalMiddleware);
+
     const unchangedResource = defineResource({
-      id: "app.owner",
+      id: "app-owner",
       subtree: {
         resources: {
           middleware: [
             {
-              use: defineResourceMiddleware({
-                id: "app.owner.middleware.resource.absolute",
-                run: async ({ next }) => next(),
-              }),
+              use: canonicalMiddleware,
             },
           ],
         },
@@ -200,7 +210,7 @@ describe("StoreRegistryWriter branches", () => {
       writer.normalizeResourceSubtreeMiddlewareAttachments(unchangedResource);
     const normalizedUnchanged = unchanged as ResourceSubtreeWithMiddlewareIds;
     expect(normalizedUnchanged.resources?.middleware?.[0]?.use.id).toBe(
-      "app.owner.middleware.resource.app.owner.middleware.resource.absolute",
+      "app-owner.middleware.resource.absolute",
     );
   });
 
@@ -212,7 +222,7 @@ describe("StoreRegistryWriter branches", () => {
     });
 
     const resource = defineResource({
-      id: "app.owner",
+      id: "app-owner",
       subtree: {
         tasks: {
           middleware: [middleware],
@@ -228,7 +238,7 @@ describe("StoreRegistryWriter branches", () => {
     };
 
     expect(normalized.tasks?.middleware?.[0]?.id).toBe(
-      "app.owner.middleware.task.localTaskSubtreeMw",
+      "app-owner.middleware.task.localTaskSubtreeMw",
     );
     expect(normalized.resources).toBeUndefined();
   });
@@ -236,11 +246,11 @@ describe("StoreRegistryWriter branches", () => {
   it("keeps top-level task middleware unchanged when task ids are not resource-owned", () => {
     const writer = getWriter();
     const middleware = defineTaskMiddleware({
-      id: "shared.task.middleware",
+      id: "shared-task-middleware",
       run: async ({ next, task }) => next(task.input),
     });
     const task = defineTask({
-      id: "top.level.task",
+      id: "top-level-task",
       middleware: [middleware],
       run: async () => "ok",
     });
@@ -264,10 +274,10 @@ describe("StoreRegistryWriter branches", () => {
     const tag = defineTag({
       id: "localTag",
     });
-    registry.registerDefinitionAlias(tag, "app.tags.localTag");
+    registry.registerDefinitionAlias(tag, "app-tags-localTag");
 
     const normalizedTags = writer.normalizeDefinitionTags([tag]);
-    expect(normalizedTags[0].id).toBe("app.tags.localTag");
+    expect(normalizedTags[0].id).toBe("app-tags-localTag");
 
     expect(writer.didArrayChange([1], [1, 2])).toBe(true);
     expect(writer.didArrayChange([1], [2])).toBe(true);
@@ -303,7 +313,7 @@ describe("StoreRegistryWriter branches", () => {
       format: () => "boom",
     });
     const ownerDefinition = defineResource({
-      id: "app.owner",
+      id: "app-owner",
       register: [localError],
     });
     expect(Array.isArray(ownerDefinition.register)).toBe(true);
@@ -317,11 +327,11 @@ describe("StoreRegistryWriter branches", () => {
 
     registry.computeRegistrationDeeply(owner, {});
 
-    const stored = store.errors.get("app.owner.errors.boom");
+    const stored = store.errors.get("app-owner.errors.boom");
     expect(stored).toBeDefined();
     expect(typeof stored?.throw).toBe("function");
     expect(typeof stored?.new).toBe("function");
-    expect(stored?.new({}).id).toBe("app.owner.errors.boom");
+    expect(stored?.new({}).id).toBe("app-owner.errors.boom");
   });
 
   it("returns the original subtree and entries when middleware ids are already canonical", () => {
@@ -340,11 +350,11 @@ describe("StoreRegistryWriter branches", () => {
     };
 
     const taskMiddleware = defineTaskMiddleware({
-      id: "shared.task.middleware",
+      id: "shared-task-middleware",
       run: async ({ next, task }) => next(task.input),
     });
     const resourceMiddleware = defineResourceMiddleware({
-      id: "shared.resource.middleware",
+      id: "shared-resource-middleware",
       run: async ({ next }) => next(),
     });
     registry.storeTaskMiddleware(taskMiddleware);
@@ -353,7 +363,7 @@ describe("StoreRegistryWriter branches", () => {
     const taskEntry = { use: taskMiddleware };
     const resourceEntry = { use: resourceMiddleware };
     const resource = defineResource({
-      id: "app.owner",
+      id: "app-owner",
       subtree: {
         tasks: {
           middleware: [taskEntry],
@@ -365,11 +375,11 @@ describe("StoreRegistryWriter branches", () => {
     });
 
     expect(
-      writer.normalizeSubtreeTaskMiddlewareEntry("app.owner", taskEntry),
+      writer.normalizeSubtreeTaskMiddlewareEntry("app-owner", taskEntry),
     ).toBe(taskEntry);
     expect(
       writer.normalizeSubtreeResourceMiddlewareEntry(
-        "app.owner",
+        "app-owner",
         resourceEntry,
       ),
     ).toBe(resourceEntry);

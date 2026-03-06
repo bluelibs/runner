@@ -25,18 +25,18 @@ describe("run source-admission during shutdown drain", () => {
   it("blocks new runtime calls during disposing", async () => {
     const blocker = createGate();
     const slowTask = defineTask({
-      id: "tests.source.runtime.blocker",
+      id: "tests-source-runtime-blocker",
       run: async () => {
         await blocker.wait;
       },
     });
     const quickTask = defineTask({
-      id: "tests.source.runtime.quick",
+      id: "tests-source-runtime-quick",
       run: async () => "ok",
     });
 
     const app = defineResource({
-      id: "tests.source.runtime.app",
+      id: "tests-source-runtime-app",
       register: [slowTask, quickTask],
     });
 
@@ -63,19 +63,19 @@ describe("run source-admission during shutdown drain", () => {
   it("blocks resource-origin calls during disposing", async () => {
     const blocker = createGate();
     const slowTask = defineTask({
-      id: "tests.source.resource.blocker",
+      id: "tests-source-resource-blocker",
       run: async () => {
         await blocker.wait;
       },
     });
     const childTask = defineTask({
-      id: "tests.source.resource.child",
+      id: "tests-source-resource-child",
       run: async () => "ok",
     });
 
     let resourceCaller: (() => Promise<unknown>) | undefined;
     const callerResource = defineResource({
-      id: "tests.source.resource.caller",
+      id: "tests-source-resource-caller",
       dependencies: {
         runChildTask: childTask,
       },
@@ -86,7 +86,7 @@ describe("run source-admission during shutdown drain", () => {
     });
 
     const app = defineResource({
-      id: "tests.source.resource.app",
+      id: "tests-source-resource-app",
       register: [slowTask, childTask, callerResource],
     });
 
@@ -118,20 +118,20 @@ describe("run source-admission during shutdown drain", () => {
     });
 
     const blockerTask = defineTask({
-      id: "tests.source.task.blocker",
+      id: "tests-source-task-blocker",
       run: async () => {
         await blocker.wait;
       },
     });
 
     const childTask = defineTask({
-      id: "tests.source.task.child",
+      id: "tests-source-task-child",
       run: async () => "child-ok",
     });
 
     let continuation: (() => Promise<unknown>) | undefined;
     const parentTask = defineTask({
-      id: "tests.source.task.parent",
+      id: "tests-source-task-parent",
       dependencies: {
         runChildTask: childTask,
       },
@@ -144,7 +144,7 @@ describe("run source-admission during shutdown drain", () => {
     });
 
     const app = defineResource({
-      id: "tests.source.task.app",
+      id: "tests-source-task-app",
       register: [blockerTask, childTask, parentTask],
     });
 
@@ -178,16 +178,16 @@ describe("run source-admission during shutdown drain", () => {
     });
 
     const triggerEvent = defineEvent<void>({
-      id: "tests.source.hook.event",
+      id: "tests-source-hook-event",
     });
     const childTask = defineTask({
-      id: "tests.source.hook.child",
+      id: "tests-source-hook-child",
       run: async () => "hook-child-ok",
     });
 
     let continuation: (() => Promise<unknown>) | undefined;
     const hook = defineHook({
-      id: "tests.source.hook.listener",
+      id: "tests-source-hook-listener",
       on: triggerEvent,
       dependencies: {
         runChildTask: childTask,
@@ -200,7 +200,7 @@ describe("run source-admission during shutdown drain", () => {
     });
 
     const app = defineResource({
-      id: "tests.source.hook.app",
+      id: "tests-source-hook-app",
       register: [triggerEvent, childTask, hook],
     });
 
@@ -231,13 +231,13 @@ describe("run source-admission during shutdown drain", () => {
     });
 
     const childTask = defineTask({
-      id: "tests.source.middleware.child",
+      id: "tests-source-middleware-child",
       run: async () => "middleware-child-ok",
     });
 
     let continuation: (() => Promise<unknown>) | undefined;
     const middleware = defineTaskMiddleware({
-      id: "tests.source.middleware.layer",
+      id: "tests-source-middleware-layer",
       dependencies: {
         runChildTask: childTask,
       },
@@ -250,13 +250,13 @@ describe("run source-admission during shutdown drain", () => {
     });
 
     const parentTask = defineTask({
-      id: "tests.source.middleware.parent",
+      id: "tests-source-middleware-parent",
       middleware: [middleware],
       run: async () => "ok",
     });
 
     const app = defineResource({
-      id: "tests.source.middleware.app",
+      id: "tests-source-middleware-app",
       register: [childTask, middleware, parentTask],
     });
 
@@ -282,20 +282,20 @@ describe("run source-admission during shutdown drain", () => {
   it("blocks stale task continuation callbacks after source execution completes", async () => {
     const blocker = createGate();
     const blockerTask = defineTask({
-      id: "tests.source.stale.blocker",
+      id: "tests-source-stale-blocker",
       run: async () => {
         await blocker.wait;
       },
     });
 
     const childTask = defineTask({
-      id: "tests.source.stale.child",
+      id: "tests-source-stale-child",
       run: async () => "child-ok",
     });
 
     let staleContinuation: (() => Promise<unknown>) | undefined;
     const parentTask = defineTask({
-      id: "tests.source.stale.parent",
+      id: "tests-source-stale-parent",
       dependencies: {
         runChildTask: childTask,
       },
@@ -306,7 +306,7 @@ describe("run source-admission during shutdown drain", () => {
     });
 
     const app = defineResource({
-      id: "tests.source.stale.app",
+      id: "tests-source-stale-app",
       register: [blockerTask, childTask, parentTask],
     });
 

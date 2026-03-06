@@ -417,7 +417,7 @@ describe("durable: DurableService — signals (unit)", () => {
   it("processes executions directly when no queue is configured (signal resume)", async () => {
     const store = new MemoryStore();
     const task = r
-      .task("t.signal.process")
+      .task("t-signal-process")
       .run(async () => "ok")
       .build();
 

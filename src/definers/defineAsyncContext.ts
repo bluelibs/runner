@@ -40,13 +40,15 @@ export function defineAsyncContext<T>(
     });
   }
 
+  const resolvedFilePath = filePath ?? getCallerFile();
   const ctxId = def.id;
-  assertDefinitionId("Async context", ctxId);
+  assertDefinitionId("Async context", ctxId, {
+    callerFilePath: resolvedFilePath,
+  });
   const configSchema = normalizeOptionalValidationSchema(def.configSchema, {
     definitionId: ctxId,
     subject: "Async context config",
   });
-  const resolvedFilePath = filePath ?? getCallerFile();
 
   /* istanbul ignore next */
   const use = (): T => {
@@ -114,6 +116,6 @@ export type { IAsyncContext } from "../types/asyncContext";
 /* istanbul ignore next */
 export function createContext<T>(name?: string): IAsyncContext<T> {
   const id =
-    name ?? `context.${Math.random().toString(36).slice(2)}.${Date.now()}`;
+    name ?? `context-${Math.random().toString(36).slice(2)}-${Date.now()}`;
   return defineAsyncContext<T>({ id });
 }

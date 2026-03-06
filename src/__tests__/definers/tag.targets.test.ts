@@ -8,11 +8,11 @@ import { tagTargetNotAllowedError } from "../../errors";
 describe("tag target scopes", () => {
   it("stores targets on built tags and preserves them on configured tags", () => {
     const taskTag = r
-      .tag<{ label: string }>("tests.tag.targets.taskOnly")
+      .tag<{ label: string }>("tests-tag-targets-taskOnly")
       .for(["tasks"])
       .build();
     const resourceTag = r
-      .tag("tests.tag.targets.resourceOnly")
+      .tag("tests-tag-targets-resourceOnly")
       .for("resources")
       .build();
 
@@ -28,13 +28,13 @@ describe("tag target scopes", () => {
 
   it("fails fast when a scoped tag is attached to the wrong definition kind", () => {
     const taskOnlyTag = r
-      .tag("tests.tag.targets.integration.taskOnly")
+      .tag("tests-tag-targets-integration-taskOnly")
       .for(["tasks"])
       .build();
 
     expect(() =>
       r
-        .resource("tests.tag.targets.integration.resource")
+        .resource("tests-tag-targets-integration-resource")
         .tags([taskOnlyTag as never])
         .build(),
     ).toThrow(/Allowed targets: tasks/);
@@ -42,13 +42,13 @@ describe("tag target scopes", () => {
 
   it("validates error tags too (defineError path)", () => {
     const eventOnlyTag = defineTag({
-      id: "tests.tag.targets.error.eventOnly",
+      id: "tests-tag-targets-error-eventOnly",
       targets: ["events"] as const,
     });
 
     let thrown: unknown;
     try {
-      r.error("tests.tag.targets.error.helper")
+      r.error("tests-tag-targets-error-helper")
         .format(() => "nope")
         .tags([eventOnlyTag as never])
         .build();
@@ -64,7 +64,7 @@ describe("tag target scopes", () => {
     expect(() =>
       assertTagTargetsApplicable({
         definitionType: "Task",
-        definitionId: "tests.tag.targets.helper.none",
+        definitionId: "tests-tag-targets-helper-none",
         target: "tasks",
         tags: undefined,
       }),
@@ -72,14 +72,14 @@ describe("tag target scopes", () => {
     expect(() =>
       assertTagTargetsApplicable({
         definitionType: "Task",
-        definitionId: "tests.tag.targets.helper.empty",
+        definitionId: "tests-tag-targets-helper-empty",
         target: "tasks",
         tags: [],
       }),
     ).not.toThrow();
 
     const taskTag = defineTag({
-      id: "tests.tag.targets.helper.task",
+      id: "tests-tag-targets-helper-task",
       targets: ["tasks"] as const,
     });
 
@@ -87,7 +87,7 @@ describe("tag target scopes", () => {
       assertTagTargetsApplicableTo(
         "tasks",
         "Task",
-        "tests.tag.targets.helper.wrapper",
+        "tests-tag-targets-helper-wrapper",
         [taskTag],
       ),
     ).not.toThrow();
@@ -95,13 +95,13 @@ describe("tag target scopes", () => {
     expect(() =>
       assertTagTargetsApplicable({
         definitionType: "Task",
-        definitionId: "tests.tag.targets.helper.skip",
+        definitionId: "tests-tag-targets-helper-skip",
         target: "tasks",
         tags: [
           123,
-          { id: "no.targets" },
-          { id: "mixed.targets", targets: ["tasks", 1] },
-          { id: "bad.targets", targets: 1 },
+          { id: "no-targets" },
+          { id: "mixed-targets", targets: ["tasks", 1] },
+          { id: "bad-targets", targets: 1 },
         ],
       }),
     ).toThrow(/Allowed targets:/);
@@ -109,7 +109,7 @@ describe("tag target scopes", () => {
     expect(() =>
       assertTagTargetsApplicable({
         definitionType: "Task",
-        definitionId: "tests.tag.targets.helper.unknown",
+        definitionId: "tests-tag-targets-helper-unknown",
         target: "tasks",
         tags: [{ targets: ["resources"] }],
       }),

@@ -96,16 +96,16 @@ async function waitUntil(
 
 describe("event-lanes: failure settlement + retries", () => {
   it("nacks without requeue after final failure", async () => {
-    const lane = r.eventLane("tests.event-lanes.failure.settle.lane").build();
+    const lane = r.eventLane("tests-event-lanes-failure-settle-lane").build();
     const queue = new TestQueue();
 
     const tagged = r
-      .event<{ id: string }>("tests.event-lanes.failure.settle.event")
+      .event<{ id: string }>("tests-event-lanes-failure-settle-event")
       .tags([tags.eventLane.with({ lane })])
       .build();
 
     const failingHook = r
-      .hook("tests.event-lanes.failure.settle.failing-hook")
+      .hook("tests-event-lanes-failure-settle-failing-hook")
       .on(tagged)
       .run(async () => {
         throw createMessageError("hook failed");
@@ -113,7 +113,7 @@ describe("event-lanes: failure settlement + retries", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.failure.settle.emit")
+      .task("tests-event-lanes-failure-settle-emit")
       .dependencies({ tagged })
       .run(async (_input, { tagged }) => {
         await tagged({ id: "evt-1" });
@@ -121,7 +121,7 @@ describe("event-lanes: failure settlement + retries", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.failure.settle.app")
+      .resource("tests-event-lanes-failure-settle-app")
       .register([
         tagged,
         failingHook,
@@ -147,17 +147,17 @@ describe("event-lanes: failure settlement + retries", () => {
 
   it("normalizes primitive failures and still settles with nack(false)", async () => {
     const lane = r
-      .eventLane("tests.event-lanes.failure.primitive.lane")
+      .eventLane("tests-event-lanes-failure-primitive-lane")
       .build();
     const queue = new TestQueue();
 
     const tagged = r
-      .event<{ id: string }>("tests.event-lanes.failure.primitive.event")
+      .event<{ id: string }>("tests-event-lanes-failure-primitive-event")
       .tags([tags.eventLane.with({ lane })])
       .build();
 
     const failingHook = r
-      .hook("tests.event-lanes.failure.primitive.failing-hook")
+      .hook("tests-event-lanes-failure-primitive-failing-hook")
       .on(tagged)
       .run(async () => {
         throw "primitive-failure";
@@ -165,7 +165,7 @@ describe("event-lanes: failure settlement + retries", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.failure.primitive.emit")
+      .task("tests-event-lanes-failure-primitive-emit")
       .dependencies({ tagged })
       .run(async (_input, { tagged }) => {
         await tagged({ id: "evt-primitive" });
@@ -173,7 +173,7 @@ describe("event-lanes: failure settlement + retries", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.failure.primitive.app")
+      .resource("tests-event-lanes-failure-primitive-app")
       .register([
         tagged,
         failingHook,
@@ -198,16 +198,16 @@ describe("event-lanes: failure settlement + retries", () => {
   });
 
   it("retries before final nack(false) when maxAttempts is greater than one", async () => {
-    const lane = r.eventLane("tests.event-lanes.retry.multiple.lane").build();
+    const lane = r.eventLane("tests-event-lanes-retry-multiple-lane").build();
     const queue = new TestQueue();
 
     const tagged = r
-      .event<{ id: string }>("tests.event-lanes.retry.multiple.event")
+      .event<{ id: string }>("tests-event-lanes-retry-multiple-event")
       .tags([tags.eventLane.with({ lane })])
       .build();
 
     const failingHook = r
-      .hook("tests.event-lanes.retry.multiple.failing-hook")
+      .hook("tests-event-lanes-retry-multiple-failing-hook")
       .on(tagged)
       .run(async () => {
         throw createMessageError("hook failed on retry");
@@ -215,7 +215,7 @@ describe("event-lanes: failure settlement + retries", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.retry.multiple.emit")
+      .task("tests-event-lanes-retry-multiple-emit")
       .dependencies({ tagged })
       .run(async (_input, { tagged }) => {
         await tagged({ id: "evt-retry" });
@@ -223,7 +223,7 @@ describe("event-lanes: failure settlement + retries", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.retry.multiple.app")
+      .resource("tests-event-lanes-retry-multiple-app")
       .register([
         tagged,
         failingHook,

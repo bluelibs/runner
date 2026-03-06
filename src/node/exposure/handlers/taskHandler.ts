@@ -64,7 +64,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     allowAsyncContext = () => true,
     resolveAsyncContextAllowList = () => undefined,
     authorizeTask = () => null,
-    sourceResourceId = "platform.node.resources.rpcLanes",
+    sourceResourceId = "platform-node-resources-rpcLanes",
   } = deps;
 
   const exposureSource = runtimeSource.resource(sourceResourceId);

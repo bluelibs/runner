@@ -6,7 +6,7 @@ import { createMessageError } from "../../../../errors";
 
 describe("nodeExposure Coverage - Events", () => {
   it("covers event not-found branches", async () => {
-    const okEvent = defineEvent<{ v?: number }>({ id: "ok.event" });
+    const okEvent = defineEvent<{ v?: number }>({ id: "ok-event" });
     const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
@@ -14,7 +14,7 @@ describe("nodeExposure Coverage - Events", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.events.app1",
+      id: "unit-exposure-coverage-events-app1",
       register: [okEvent, exposure],
     });
     const rr = await run(app);
@@ -44,9 +44,9 @@ describe("nodeExposure Coverage - Events", () => {
   });
 
   it("processEventRequest handles non-Error and Error from emit failures", async () => {
-    const evt = defineEvent<void>({ id: "coverage.event.error" });
+    const evt = defineEvent<void>({ id: "coverage-event-error" });
     const hook = defineHook({
-      id: "coverage.event.error.hook",
+      id: "coverage-event-error-hook",
       on: evt,
       run: async () => {
         throw createMessageError("emit failure");
@@ -59,7 +59,7 @@ describe("nodeExposure Coverage - Events", () => {
       },
     });
     const app = defineResource({
-      id: "coverage.event.error.app",
+      id: "coverage-event-error-app",
       register: [evt, hook, exposure],
     });
     const rr = await run(app);

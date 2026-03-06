@@ -15,7 +15,7 @@ describe("Rate Limit Middleware", () => {
   it("should allow requests within limit", async () => {
     let callCount = 0;
     const task = defineTask({
-      id: "rateLimit.allow",
+      id: "rateLimit-allow",
       middleware: [rateLimitTaskMiddleware.with({ windowMs: 1000, max: 2 })],
       run: async () => {
         callCount++;
@@ -40,7 +40,7 @@ describe("Rate Limit Middleware", () => {
 
   it("should throw RateLimitError when exceeding limit", async () => {
     const task = defineTask({
-      id: "rateLimit.exceed",
+      id: "rateLimit-exceed",
       middleware: [rateLimitTaskMiddleware.with({ windowMs: 1000, max: 1 })],
       run: async () => "ok",
     });
@@ -63,7 +63,7 @@ describe("Rate Limit Middleware", () => {
     let callCount = 0;
     const config = { windowMs: 100, max: 1 };
     const task = defineTask({
-      id: "rateLimit.reset",
+      id: "rateLimit-reset",
       middleware: [rateLimitTaskMiddleware.with(config)],
       run: async () => {
         callCount++;
@@ -98,7 +98,7 @@ describe("Rate Limit Middleware", () => {
     let callCount = 0;
     const config = { windowMs: 100, max: 1 };
     const task = defineTask({
-      id: "rateLimit.boundary",
+      id: "rateLimit-boundary",
       middleware: [rateLimitTaskMiddleware.with(config)],
       run: async () => {
         callCount += 1;
@@ -107,7 +107,7 @@ describe("Rate Limit Middleware", () => {
     });
 
     const app = defineResource({
-      id: "app.boundary",
+      id: "app-boundary",
       register: [task],
       dependencies: { task },
       async init(_, { task }) {

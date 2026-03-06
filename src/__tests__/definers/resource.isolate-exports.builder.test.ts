@@ -3,12 +3,12 @@ import { r } from "../..";
 describe("resource builder: isolate.exports", () => {
   it("deprecated .exports() maps to isolate.exports", () => {
     const publicTask = r
-      .task("tests.isolate.exports.deprecated.public")
+      .task("tests-isolate-exports-deprecated-public")
       .run(async () => undefined)
       .build();
 
     const res = r
-      .resource("tests.isolate.exports.deprecated.resource")
+      .resource("tests-isolate-exports-deprecated-resource")
       .register([publicTask])
       .exports([publicTask])
       .build();
@@ -18,16 +18,16 @@ describe("resource builder: isolate.exports", () => {
 
   it("appends isolate.exports arrays by default", () => {
     const a = r
-      .task("tests.isolate.exports.append.a")
+      .task("tests-isolate-exports-append-a")
       .run(async () => undefined)
       .build();
     const b = r
-      .task("tests.isolate.exports.append.b")
+      .task("tests-isolate-exports-append-b")
       .run(async () => undefined)
       .build();
 
     const res = r
-      .resource("tests.isolate.exports.append.resource")
+      .resource("tests-isolate-exports-append-resource")
       .register([a, b])
       .isolate({ exports: [a] })
       .isolate({ exports: [b] })
@@ -38,16 +38,16 @@ describe("resource builder: isolate.exports", () => {
 
   it("supports isolate.exports override mode", () => {
     const a = r
-      .task("tests.isolate.exports.override.a")
+      .task("tests-isolate-exports-override-a")
       .run(async () => undefined)
       .build();
     const b = r
-      .task("tests.isolate.exports.override.b")
+      .task("tests-isolate-exports-override-b")
       .run(async () => undefined)
       .build();
 
     const res = r
-      .resource("tests.isolate.exports.override.resource")
+      .resource("tests-isolate-exports-override-resource")
       .register([a, b])
       .isolate({ exports: [a] })
       .isolate({ exports: [b] }, { override: true })
@@ -58,12 +58,12 @@ describe("resource builder: isolate.exports", () => {
 
   it('supports isolate.exports = "none"', () => {
     const a = r
-      .task("tests.isolate.exports.none.a")
+      .task("tests-isolate-exports-none-a")
       .run(async () => undefined)
       .build();
 
     const res = r
-      .resource("tests.isolate.exports.none.resource")
+      .resource("tests-isolate-exports-none-resource")
       .register([a])
       .isolate({ exports: "none" })
       .build();
@@ -73,12 +73,12 @@ describe("resource builder: isolate.exports", () => {
 
   it('replaces isolate.exports when prior value is "none"', () => {
     const a = r
-      .task("tests.isolate.exports.none-replace.a")
+      .task("tests-isolate-exports-none-replace-a")
       .run(async () => undefined)
       .build();
 
     const res = r
-      .resource("tests.isolate.exports.none-replace.resource")
+      .resource("tests-isolate-exports-none-replace-resource")
       .register([a])
       .isolate({ exports: "none" })
       .isolate({ exports: [a] })
@@ -89,12 +89,12 @@ describe("resource builder: isolate.exports", () => {
 
   it("keeps existing isolate.exports when isolate call omits exports", () => {
     const a = r
-      .task("tests.isolate.exports.keep.a")
+      .task("tests-isolate-exports-keep-a")
       .run(async () => undefined)
       .build();
 
     const res = r
-      .resource("tests.isolate.exports.keep.resource")
+      .resource("tests-isolate-exports-keep-resource")
       .register([a])
       .isolate({ exports: [a] })
       .isolate({ deny: [] })
@@ -105,12 +105,12 @@ describe("resource builder: isolate.exports", () => {
 
   it("treats unexpected existing isolate.exports type as replace-on-next-array", () => {
     const a = r
-      .task("tests.isolate.exports.unexpected.a")
+      .task("tests-isolate-exports-unexpected-a")
       .run(async () => undefined)
       .build();
 
     const res = r
-      .resource("tests.isolate.exports.unexpected.resource")
+      .resource("tests-isolate-exports-unexpected-resource")
       .register([a])
       .isolate({ exports: 123 as any })
       .isolate({ exports: [a] })
@@ -121,7 +121,7 @@ describe("resource builder: isolate.exports", () => {
 
   it("deprecated .exports() still stores string entries until runtime validation", () => {
     const res = r
-      .resource("tests.isolate.exports.deprecated.selector.resource")
+      .resource("tests-isolate-exports-deprecated-selector-resource")
       .exports(["tests.isolate.exports.deprecated.selector.*"] as any)
       .build();
 

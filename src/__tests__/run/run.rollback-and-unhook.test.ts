@@ -7,7 +7,7 @@ describe("run.ts rollback and unhooking", () => {
     const disposeCalls: string[] = [];
 
     const dep = defineResource({
-      id: "tests.rollback.dep",
+      id: "tests-rollback-dep",
       async init() {
         return "dep" as const;
       },
@@ -17,7 +17,7 @@ describe("run.ts rollback and unhooking", () => {
     });
 
     const bad = defineResource({
-      id: "tests.rollback.bad",
+      id: "tests-rollback-bad",
       dependencies: { dep },
       async init() {
         throw createMessageError("init failed");
@@ -29,14 +29,14 @@ describe("run.ts rollback and unhooking", () => {
 
     // Also register a resource that is never initialized
     const never = defineResource({
-      id: "tests.rollback.never",
+      id: "tests-rollback-never",
       async dispose() {
         disposeCalls.push("never");
       },
     });
 
     const app = defineResource({
-      id: "tests.rollback.app",
+      id: "tests-rollback-app",
       dependencies: { bad, never },
       register: [dep, bad, never],
       async init() {
@@ -57,7 +57,7 @@ describe("run.ts rollback and unhooking", () => {
   it("unhooks shutdown listeners on dispose() (global dispatcher)", async () => {
     const calls: number[] = [];
     const app = defineResource({
-      id: "tests.unhook.shutdown",
+      id: "tests-unhook-shutdown",
       async init() {
         return "ok" as const;
       },
@@ -97,7 +97,7 @@ describe("run.ts rollback and unhooking", () => {
 
   it("unhooks process safety nets on dispose() when errorBoundary is true (global dispatcher)", async () => {
     const app = defineResource({
-      id: "tests.unhook.process",
+      id: "tests-unhook-process",
       async init() {
         return "ok" as const;
       },

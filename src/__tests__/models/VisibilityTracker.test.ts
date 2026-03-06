@@ -33,137 +33,137 @@ describe("VisibilityTracker", () => {
   describe("recordOwnership", () => {
     it("should track item ownership", () => {
       const task = defineTask({
-        id: "tracker.task",
+        id: "tracker-task",
         run: async () => "done",
       });
 
-      tracker.recordOwnership("resource.owner", task);
-      expect(tracker.getOwnership().get("tracker.task")).toBe("resource.owner");
+      tracker.recordOwnership("resource-owner", task);
+      expect(tracker.getOwnership().get("tracker-task")).toBe("resource-owner");
     });
 
     it("should ignore items without id", () => {
       // passing something that has no id — should be no-op
-      tracker.recordOwnership("resource.owner", null as any);
+      tracker.recordOwnership("resource-owner", null as any);
       expect(tracker.getOwnership().size).toBe(0);
     });
 
     it("should build subtree chains up to ancestors", () => {
       const parentResource = defineResource({
-        id: "tracker.parent",
+        id: "tracker-parent",
         register: [],
       });
 
       const childTask = defineTask({
-        id: "tracker.child-task",
+        id: "tracker-child-task",
         run: async () => "done",
       });
 
       // Parent resource is owned by root
       tracker.recordOwnership("root", parentResource);
       // Child task is owned by parent resource
-      tracker.recordOwnership("tracker.parent", childTask);
+      tracker.recordOwnership("tracker-parent", childTask);
 
       // Child task should be in both parent subtree and root subtree
       const ownership = tracker.getOwnership();
-      expect(ownership.get("tracker.child-task")).toBe("tracker.parent");
-      expect(ownership.get("tracker.parent")).toBe("root");
+      expect(ownership.get("tracker-child-task")).toBe("tracker-parent");
+      expect(ownership.get("tracker-parent")).toBe("root");
     });
 
     it("should ignore duplicate ownership attempts to avoid cycles", () => {
       const resourceA = defineResource({
-        id: "tracker.cycle.a",
+        id: "tracker-cycle-a",
         register: [],
       });
       const resourceB = defineResource({
-        id: "tracker.cycle.b",
+        id: "tracker-cycle-b",
         register: [],
       });
 
       tracker.recordOwnership("root", resourceA);
-      tracker.recordOwnership("tracker.cycle.a", resourceB);
-      tracker.recordOwnership("tracker.cycle.b", resourceA);
+      tracker.recordOwnership("tracker-cycle-a", resourceB);
+      tracker.recordOwnership("tracker-cycle-b", resourceA);
 
       const ownership = tracker.getOwnership();
-      expect(ownership.get("tracker.cycle.a")).toBe("root");
-      expect(ownership.get("tracker.cycle.b")).toBe("tracker.cycle.a");
+      expect(ownership.get("tracker-cycle-a")).toBe("root");
+      expect(ownership.get("tracker-cycle-b")).toBe("tracker-cycle-a");
     });
   });
 
   describe("recordExports", () => {
     it("should store export ids", () => {
       const task1 = defineTask({
-        id: "tracker.export.t1",
+        id: "tracker-export-t1",
         run: async () => "one",
       });
 
       const task2 = defineTask({
-        id: "tracker.export.t2",
+        id: "tracker-export-t2",
         run: async () => "two",
       });
 
-      tracker.recordExports("resource.id", [task1, task2]);
+      tracker.recordExports("resource-id", [task1, task2]);
 
       const exportSets = tracker.getExportSets();
-      const exportSet = exportSets.get("resource.id");
+      const exportSet = exportSets.get("resource-id");
       expect(exportSet).toBeDefined();
-      expect(exportSet!.has("tracker.export.t1")).toBe(true);
-      expect(exportSet!.has("tracker.export.t2")).toBe(true);
+      expect(exportSet!.has("tracker-export-t1")).toBe(true);
+      expect(exportSet!.has("tracker-export-t2")).toBe(true);
     });
 
     it("should handle empty exports array", () => {
-      tracker.recordExports("resource.id", []);
+      tracker.recordExports("resource-id", []);
       const exportSets = tracker.getExportSets();
-      const exportSet = exportSets.get("resource.id");
+      const exportSet = exportSets.get("resource-id");
       expect(exportSet).toBeDefined();
       expect(exportSet!.size).toBe(0);
     });
 
     it("should skip items without extractable id", () => {
       const task = defineTask({
-        id: "tracker.export.valid",
+        id: "tracker-export-valid",
         run: async () => "ok",
       });
 
       // A bare function has no id — getItemId returns undefined
-      tracker.recordExports("resource.id", [task, (() => {}) as any]);
-      const exportSet = tracker.getExportSets().get("resource.id");
+      tracker.recordExports("resource-id", [task, (() => {}) as any]);
+      const exportSet = tracker.getExportSets().get("resource-id");
       expect(exportSet).toBeDefined();
       expect(exportSet!.size).toBe(1);
-      expect(exportSet!.has("tracker.export.valid")).toBe(true);
+      expect(exportSet!.has("tracker-export-valid")).toBe(true);
     });
 
     it("stores string export ids directly", () => {
-      tracker.recordExports("resource.id", ["tracker.export.direct"]);
-      const exportSet = tracker.getExportSets().get("resource.id");
+      tracker.recordExports("resource-id", ["tracker-export-direct"]);
+      const exportSet = tracker.getExportSets().get("resource-id");
       expect(exportSet).toBeDefined();
-      expect(exportSet!.has("tracker.export.direct")).toBe(true);
+      expect(exportSet!.has("tracker-export-direct")).toBe(true);
     });
   });
 
   describe("isAccessible", () => {
     it("should return true for untracked items", () => {
-      expect(tracker.isAccessible("unknown.item", "consumer")).toBe(true);
+      expect(tracker.isAccessible("unknown-item", "consumer")).toBe(true);
     });
 
     it("should allow access when no exports declared", () => {
       const task = defineTask({
-        id: "tracker.access.task",
+        id: "tracker-access-task",
         run: async () => "done",
       });
 
       tracker.recordOwnership("owner", task);
-      expect(tracker.isAccessible("tracker.access.task", "external")).toBe(
+      expect(tracker.isAccessible("tracker-access-task", "external")).toBe(
         true,
       );
     });
 
     it("should allow access for items in same subtree", () => {
       const task1 = defineTask({
-        id: "tracker.same-sub.t1",
+        id: "tracker-same-sub-t1",
         run: async () => "one",
       });
       const task2 = defineTask({
-        id: "tracker.same-sub.t2",
+        id: "tracker-same-sub-t2",
         run: async () => "two",
       });
 
@@ -173,34 +173,34 @@ describe("VisibilityTracker", () => {
 
       // task2 is in the same subtree as task1
       expect(
-        tracker.isAccessible("tracker.same-sub.t1", "tracker.same-sub.t2"),
+        tracker.isAccessible("tracker-same-sub-t1", "tracker-same-sub-t2"),
       ).toBe(true);
     });
 
     it("should allow owner resource access to its own non-exported items", () => {
       const task = defineTask({
-        id: "tracker.owner-scope.task",
+        id: "tracker-owner-scope-task",
         run: async () => "value",
       });
 
-      tracker.recordOwnership("tracker.owner-scope.resource", task);
-      tracker.recordExports("tracker.owner-scope.resource", []);
+      tracker.recordOwnership("tracker-owner-scope-resource", task);
+      tracker.recordExports("tracker-owner-scope-resource", []);
 
       expect(
         tracker.isAccessible(
-          "tracker.owner-scope.task",
-          "tracker.owner-scope.resource",
+          "tracker-owner-scope-task",
+          "tracker-owner-scope-resource",
         ),
       ).toBe(true);
     });
 
     it("should deny access for non-exported items from outside", () => {
       const exported = defineTask({
-        id: "tracker.deny.exported",
+        id: "tracker-deny-exported",
         run: async () => "e",
       });
       const internal = defineTask({
-        id: "tracker.deny.internal",
+        id: "tracker-deny-internal",
         run: async () => "i",
       });
 
@@ -209,63 +209,63 @@ describe("VisibilityTracker", () => {
       tracker.recordExports("owner", [exported]);
 
       // External consumer should see exported
-      expect(tracker.isAccessible("tracker.deny.exported", "external")).toBe(
+      expect(tracker.isAccessible("tracker-deny-exported", "external")).toBe(
         true,
       );
       // External consumer should NOT see internal
-      expect(tracker.isAccessible("tracker.deny.internal", "external")).toBe(
+      expect(tracker.isAccessible("tracker-deny-internal", "external")).toBe(
         false,
       );
     });
 
     it("should allow transitive visibility via exported resources", () => {
       const deepTask = defineTask({
-        id: "tracker.nested.deep",
+        id: "tracker-nested-deep",
         run: async () => "deep",
       });
 
       const middleResource = defineResource({
-        id: "tracker.nested.middle",
+        id: "tracker-nested-middle",
         register: [],
       });
 
       // Root owns middle, middle owns deep
       tracker.recordOwnership("root", middleResource);
-      tracker.recordOwnership("tracker.nested.middle", deepTask);
+      tracker.recordOwnership("tracker-nested-middle", deepTask);
 
       // Middle exports deep
-      tracker.recordExports("tracker.nested.middle", [deepTask]);
+      tracker.recordExports("tracker-nested-middle", [deepTask]);
 
       // Root has no exports, so deep stays publicly visible.
-      expect(tracker.isAccessible("tracker.nested.deep", "external")).toBe(
+      expect(tracker.isAccessible("tracker-nested-deep", "external")).toBe(
         true,
       );
 
       // Root exports the child resource; this should surface the child's exports.
       tracker.recordExports("root", [middleResource]);
-      expect(tracker.isAccessible("tracker.nested.deep", "external")).toBe(
+      expect(tracker.isAccessible("tracker-nested-deep", "external")).toBe(
         true,
       );
     });
 
     it("should block transitive visibility when child resource does not export target", () => {
       const deepTask = defineTask({
-        id: "tracker.nested.blocked.deep",
+        id: "tracker-nested-blocked-deep",
         run: async () => "deep",
       });
       const middleResource = defineResource({
-        id: "tracker.nested.blocked.middle",
+        id: "tracker-nested-blocked-middle",
         register: [],
       });
 
       tracker.recordOwnership("root", middleResource);
-      tracker.recordOwnership("tracker.nested.blocked.middle", deepTask);
+      tracker.recordOwnership("tracker-nested-blocked-middle", deepTask);
 
-      tracker.recordExports("tracker.nested.blocked.middle", []);
+      tracker.recordExports("tracker-nested-blocked-middle", []);
       tracker.recordExports("root", [middleResource]);
 
       expect(
-        tracker.isAccessible("tracker.nested.blocked.deep", "external"),
+        tracker.isAccessible("tracker-nested-blocked-deep", "external"),
       ).toBe(false);
     });
   });
@@ -273,7 +273,7 @@ describe("VisibilityTracker", () => {
   describe("resource with config in exports", () => {
     it("should resolve id from resource-with-config", () => {
       const res = defineResource<{ port: number }>({
-        id: "tracker.rwc.res",
+        id: "tracker-rwc-res",
         async init() {
           return "val" as any;
         },
@@ -283,32 +283,32 @@ describe("VisibilityTracker", () => {
       tracker.recordExports("owner", [configured]);
 
       const exportSets = tracker.getExportSets();
-      expect(exportSets.get("owner")!.has("tracker.rwc.res")).toBe(true);
+      expect(exportSets.get("owner")!.has("tracker-rwc-res")).toBe(true);
     });
   });
 
   describe("internal guards", () => {
     it("should skip already-seen traversal keys", () => {
       const deepTask = defineTask({
-        id: "tracker.guard.deep",
+        id: "tracker-guard-deep",
         run: async () => "deep",
       });
       const middleResource = defineResource({
-        id: "tracker.guard.middle",
+        id: "tracker-guard-middle",
         register: [],
       });
 
       tracker.recordOwnership("root", middleResource);
-      tracker.recordOwnership("tracker.guard.middle", deepTask);
-      tracker.recordExports("tracker.guard.middle", [deepTask]);
+      tracker.recordOwnership("tracker-guard-middle", deepTask);
+      tracker.recordExports("tracker-guard-middle", [deepTask]);
       tracker.recordExports("root", [middleResource]);
 
       const seenPaths = new Set([
-        "root::tracker.guard.middle::tracker.guard.deep",
+        "root::tracker-guard-middle::tracker-guard-deep",
       ]);
 
       const isAllowed = (tracker as any).isTargetAllowedByExports(
-        "tracker.guard.deep",
+        "tracker-guard-deep",
         "root",
         seenPaths,
       );
@@ -317,8 +317,8 @@ describe("VisibilityTracker", () => {
 
     it("should return an empty export set when no gating set exists in chain", () => {
       const gatingSet = (tracker as any).findGatingExportSet(
-        "tracker.guard.none",
-        "tracker.guard.owner.none",
+        "tracker-guard-none",
+        "tracker-guard-owner-none",
       ) as Set<string>;
       expect(gatingSet.size).toBe(0);
     });
@@ -327,14 +327,14 @@ describe("VisibilityTracker", () => {
   describe("isolate", () => {
     it("denies by id for resources in policy scope", () => {
       const owner = defineResource({
-        id: "tracker.policy.owner",
+        id: "tracker-policy-owner",
       });
       const blockedTask = defineTask({
-        id: "tracker.policy.task.blocked",
+        id: "tracker-policy-task-blocked",
         run: async () => "blocked",
       });
       const consumerTask = defineTask({
-        id: "tracker.policy.task.consumer",
+        id: "tracker-policy-task-consumer",
         run: async () => "consumer",
       });
 
@@ -350,17 +350,17 @@ describe("VisibilityTracker", () => {
 
     it("denies by tag for tagged targets and tag dependencies", () => {
       const owner = defineResource({
-        id: "tracker.policy.tag.owner",
+        id: "tracker-policy-tag-owner",
       });
       const denyTag = defineTag({
-        id: "tracker.policy.tag.deny",
+        id: "tracker-policy-tag-deny",
       });
       const blockedTask = defineTask({
-        id: "tracker.policy.tag.task",
+        id: "tracker-policy-tag-task",
         run: async () => "blocked",
       });
       const consumerTask = defineTask({
-        id: "tracker.policy.tag.consumer",
+        id: "tracker-policy-tag-consumer",
         run: async () => "consumer",
       });
 
@@ -378,14 +378,14 @@ describe("VisibilityTracker", () => {
 
     it("removes policy when deny list is empty", () => {
       const owner = defineResource({
-        id: "tracker.policy.clear.owner",
+        id: "tracker-policy-clear-owner",
       });
       const task = defineTask({
-        id: "tracker.policy.clear.task",
+        id: "tracker-policy-clear-task",
         run: async () => "ok",
       });
       const consumer = defineTask({
-        id: "tracker.policy.clear.consumer",
+        id: "tracker-policy-clear-consumer",
         run: async () => "ok",
       });
 
@@ -400,14 +400,14 @@ describe("VisibilityTracker", () => {
 
     it("ignores scope targets without resolvable ids", () => {
       const owner = defineResource({
-        id: "tracker.policy.scope.invalid.owner",
+        id: "tracker-policy-scope-invalid-owner",
       });
       const task = defineTask({
-        id: "tracker.policy.scope.invalid.task",
+        id: "tracker-policy-scope-invalid-task",
         run: async () => "ok",
       });
       const consumer = defineTask({
-        id: "tracker.policy.scope.invalid.consumer",
+        id: "tracker-policy-scope-invalid-consumer",
         run: async () => "ok",
       });
 
@@ -423,32 +423,32 @@ describe("VisibilityTracker", () => {
 
     it("supports per-channel scope toggles for subtree, string, tag, and id targets", () => {
       const owner = defineResource({
-        id: "tracker.policy.channel.owner",
+        id: "tracker-policy-channel-owner",
       });
       const child = defineResource({
-        id: "tracker.policy.channel.child",
+        id: "tracker-policy-channel-child",
       });
       const directTask = defineTask({
-        id: "tracker.policy.channel.direct-task",
+        id: "tracker-policy-channel-direct-task",
         run: async () => "ok",
       });
       const directIdTask = defineTask({
-        id: "tracker.policy.channel.direct-id-task",
+        id: "tracker-policy-channel-direct-id-task",
         run: async () => "ok",
       });
       const childTask = defineTask({
-        id: "tracker.policy.channel.child-task",
+        id: "tracker-policy-channel-child-task",
         run: async () => "ok",
       });
       const taggedTask = defineTask({
-        id: "tracker.policy.channel.tagged-task",
+        id: "tracker-policy-channel-tagged-task",
         run: async () => "ok",
       });
       const denyTag = defineTag({
-        id: "tracker.policy.channel.tag",
+        id: "tracker-policy-channel-tag",
       });
       const consumer = defineTask({
-        id: "tracker.policy.channel.consumer",
+        id: "tracker-policy-channel-consumer",
         run: async () => "ok",
       });
 
@@ -499,13 +499,13 @@ describe("VisibilityTracker", () => {
 
   describe("isolate (only mode)", () => {
     it("allows a target that is in the only list", () => {
-      const owner = defineResource({ id: "tracker.only.allow.owner" });
+      const owner = defineResource({ id: "tracker-only-allow-owner" });
       const allowed = defineTask({
-        id: "tracker.only.allow.task",
+        id: "tracker-only-allow-task",
         run: async () => {},
       });
       const consumer = defineTask({
-        id: "tracker.only.allow.consumer",
+        id: "tracker-only-allow-consumer",
         run: async () => {},
       });
 
@@ -517,13 +517,13 @@ describe("VisibilityTracker", () => {
     });
 
     it("blocks a target that is not in the only list", () => {
-      const owner = defineResource({ id: "tracker.only.block.owner" });
+      const owner = defineResource({ id: "tracker-only-block-owner" });
       const forbidden = defineTask({
-        id: "tracker.only.block.task",
+        id: "tracker-only-block-task",
         run: async () => {},
       });
       const consumer = defineTask({
-        id: "tracker.only.block.consumer",
+        id: "tracker-only-block-consumer",
         run: async () => {},
       });
 
@@ -536,13 +536,13 @@ describe("VisibilityTracker", () => {
     });
 
     it("allows internal items even when they are not in the only list", () => {
-      const owner = defineResource({ id: "tracker.only.internal.owner" });
+      const owner = defineResource({ id: "tracker-only-internal-owner" });
       const internal = defineTask({
-        id: "tracker.only.internal.task",
+        id: "tracker-only-internal-task",
         run: async () => {},
       });
       const consumer = defineTask({
-        id: "tracker.only.internal.consumer",
+        id: "tracker-only-internal-consumer",
         run: async () => {},
       });
 
@@ -557,14 +557,14 @@ describe("VisibilityTracker", () => {
     });
 
     it("allows an only-listed tag and targets carrying that tag", () => {
-      const owner = defineResource({ id: "tracker.only.tag.owner" });
-      const allowedTag = defineTag({ id: "tracker.only.tag.allowed" });
+      const owner = defineResource({ id: "tracker-only-tag-owner" });
+      const allowedTag = defineTag({ id: "tracker-only-tag-allowed" });
       const taggedTask = defineTask({
-        id: "tracker.only.tag.task",
+        id: "tracker-only-tag-task",
         run: async () => {},
       });
       const consumer = defineTask({
-        id: "tracker.only.tag.consumer",
+        id: "tracker-only-tag-consumer",
         run: async () => {},
       });
 
@@ -580,15 +580,15 @@ describe("VisibilityTracker", () => {
     });
 
     it("blocks a task whose tag is not in the only list", () => {
-      const owner = defineResource({ id: "tracker.only.tag.block.owner" });
-      const allowedTag = defineTag({ id: "tracker.only.tag.block.allowed" });
-      const notAllowedTag = defineTag({ id: "tracker.only.tag.block.denied" });
+      const owner = defineResource({ id: "tracker-only-tag-block-owner" });
+      const allowedTag = defineTag({ id: "tracker-only-tag-block-allowed" });
+      const notAllowedTag = defineTag({ id: "tracker-only-tag-block-denied" });
       const blockedTask = defineTask({
-        id: "tracker.only.tag.block.task",
+        id: "tracker-only-tag-block-task",
         run: async () => {},
       });
       const consumer = defineTask({
-        id: "tracker.only.tag.block.consumer",
+        id: "tracker-only-tag-block-consumer",
         run: async () => {},
       });
 
@@ -604,13 +604,13 @@ describe("VisibilityTracker", () => {
   describe("subtree middleware visibility checks", () => {
     it("throws when subtree task middleware is not visible to the policy owner", () => {
       const hiddenOwner = defineResource({
-        id: "tracker.subtree.hidden.owner.task",
+        id: "tracker-subtree-hidden-owner-task",
       });
       const policyOwner = defineResource({
-        id: "tracker.subtree.policy.owner.task",
+        id: "tracker-subtree-policy-owner-task",
       });
       const hiddenTaskMiddleware = defineTaskMiddleware({
-        id: "tracker.subtree.hidden.task.middleware",
+        id: "tracker-subtree-hidden-task-middleware",
         run: async ({ next, task }) => next(task.input),
       });
 
@@ -656,13 +656,13 @@ describe("VisibilityTracker", () => {
 
     it("throws when subtree resource middleware is not visible to the policy owner", () => {
       const hiddenOwner = defineResource({
-        id: "tracker.subtree.hidden.owner.resource",
+        id: "tracker-subtree-hidden-owner-resource",
       });
       const policyOwner = defineResource({
-        id: "tracker.subtree.policy.owner.resource",
+        id: "tracker-subtree-policy-owner-resource",
       });
       const hiddenResourceMiddleware = defineResourceMiddleware({
-        id: "tracker.subtree.hidden.resource.middleware",
+        id: "tracker-subtree-hidden-resource-middleware",
         run: async ({ next }) => next(),
       });
 
@@ -713,16 +713,16 @@ describe("VisibilityTracker", () => {
   describe("tagging visibility checks", () => {
     it("throws when a tag attachment is not visible to the attaching definition", () => {
       const hiddenOwner = defineResource({
-        id: "tracker.tagging.hidden-owner",
+        id: "tracker-tagging-hidden-owner",
       });
       const policyOwner = defineResource({
-        id: "tracker.tagging.policy-owner",
+        id: "tracker-tagging-policy-owner",
       });
       const hiddenTag = defineTag({
-        id: "tracker.tagging.hidden-tag",
+        id: "tracker-tagging-hidden-tag",
       });
       const taggedTask = defineTask({
-        id: "tracker.tagging.consumer-task",
+        id: "tracker-tagging-consumer-task",
         tags: [hiddenTag],
         run: async () => "ok",
       });
@@ -755,16 +755,16 @@ describe("VisibilityTracker", () => {
 
     it("allows a denied tag target when the tagging channel is disabled", () => {
       const tagOwner = defineResource({
-        id: "tracker.tagging.allow.tag-owner",
+        id: "tracker-tagging-allow-tag-owner",
       });
       const policyOwner = defineResource({
-        id: "tracker.tagging.allow.policy-owner",
+        id: "tracker-tagging-allow-policy-owner",
       });
       const sharedTag = defineTag({
-        id: "tracker.tagging.allow.shared-tag",
+        id: "tracker-tagging-allow-shared-tag",
       });
       const taggedTask = defineTask({
-        id: "tracker.tagging.allow.task",
+        id: "tracker-tagging-allow-task",
         tags: [sharedTag],
         run: async () => "ok",
       });
@@ -797,11 +797,11 @@ describe("VisibilityTracker", () => {
 
     it("skips unresolved tag references during tagging validation", () => {
       const policyOwner = defineResource({
-        id: "tracker.tagging.unresolved.policy-owner",
+        id: "tracker-tagging-unresolved-policy-owner",
       });
 
       const taggedTask = defineTask({
-        id: "tracker.tagging.unresolved.task",
+        id: "tracker-tagging-unresolved-task",
         tags: [{ unresolved: true } as any],
         run: async () => "ok",
       });
@@ -827,13 +827,13 @@ describe("VisibilityTracker", () => {
 
   describe("regression branches", () => {
     it("uses dependencies channel by default in getAccessViolation()", () => {
-      const owner = defineResource({ id: "tracker.default-channel.owner" });
+      const owner = defineResource({ id: "tracker-default-channel-owner" });
       const blocked = defineTask({
-        id: "tracker.default-channel.blocked",
+        id: "tracker-default-channel-blocked",
         run: async () => "blocked",
       });
       const consumer = defineTask({
-        id: "tracker.default-channel.consumer",
+        id: "tracker-default-channel-consumer",
         run: async () => "consumer",
       });
 
@@ -855,10 +855,10 @@ describe("VisibilityTracker", () => {
         events: new Map(),
         hooks: new Map([
           [
-            "tracker.hook.no-on",
+            "tracker-hook-no-on",
             {
               hook: {
-                id: "tracker.hook.no-on",
+                id: "tracker-hook-no-on",
                 on: undefined,
               },
             },
@@ -876,9 +876,9 @@ describe("VisibilityTracker", () => {
 
     it("fails fast when visibility validation resolves a target id that is not present in any registry bucket", () => {
       const policyOwner = defineResource({
-        id: "tracker.missing-type.policy-owner",
+        id: "tracker-missing-type-policy-owner",
         dependencies: {
-          phantom: { id: "tracker.missing-type.target" } as any,
+          phantom: { id: "tracker-missing-type-target" } as any,
         },
       });
 
@@ -906,14 +906,14 @@ describe("VisibilityTracker", () => {
 
     it("rolls back ownership transitively for descendants of a failed registration", () => {
       const childResource = defineResource({
-        id: "tracker.rollback.child",
+        id: "tracker-rollback-child",
       });
       const nestedTask = defineTask({
-        id: "tracker.rollback.nested-task",
+        id: "tracker-rollback-nested-task",
         run: async () => "ok",
       });
 
-      tracker.recordOwnership("tracker.rollback.root", childResource);
+      tracker.recordOwnership("tracker-rollback-root", childResource);
       tracker.recordOwnership(childResource.id, nestedTask);
 
       expect(tracker.getOwnership().has(childResource.id)).toBe(true);
@@ -927,15 +927,15 @@ describe("VisibilityTracker", () => {
 
     it("returns early when rollback is requested for an unknown id", () => {
       const task = defineTask({
-        id: "tracker.rollback.safe-task",
+        id: "tracker-rollback-safe-task",
         run: async () => "ok",
       });
-      tracker.recordOwnership("tracker.rollback.owner", task);
+      tracker.recordOwnership("tracker-rollback-owner", task);
 
-      tracker.rollbackOwnershipTree("tracker.rollback.missing");
+      tracker.rollbackOwnershipTree("tracker-rollback-missing");
 
       expect(tracker.getOwnership().get(task.id)).toBe(
-        "tracker.rollback.owner",
+        "tracker-rollback-owner",
       );
     });
   });
@@ -943,8 +943,8 @@ describe("VisibilityTracker", () => {
   it("treats a resource as inside its own subtree", () => {
     expect(
       tracker.isWithinResourceSubtree(
-        "tracker.subtree.self",
-        "tracker.subtree.self",
+        "tracker-subtree-self",
+        "tracker-subtree-self",
       ),
     ).toBe(true);
   });

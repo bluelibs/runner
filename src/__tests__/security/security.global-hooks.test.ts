@@ -10,23 +10,23 @@ describe("Security: Global hooks scoping", () => {
     // internalEvent carries the exclusion tag; publicEvent does not.
     // The star hook should only see publicEvent.
     const internalEvent = defineEvent<{ msg: string }>({
-      id: "sec.events.internal",
+      id: "sec-events-internal",
       tags: [tags.excludeFromGlobalHooks],
     });
 
     const publicEvent = defineEvent<{ msg: string }>({
-      id: "sec.events.public",
+      id: "sec-events-public",
     });
 
     const seen: string[] = [];
     const star = defineHook({
-      id: "sec.hooks.star",
+      id: "sec-hooks-star",
       on: "*",
       run: async (ev) => seen.push(ev.id),
     });
 
     const app = defineResource({
-      id: "sec.app",
+      id: "sec-app",
       register: [internalEvent, publicEvent, star],
       init: async () => "ok",
     });
@@ -35,8 +35,8 @@ describe("Security: Global hooks scoping", () => {
     await rr.emitEvent(publicEvent, { msg: "hello" });
     await rr.emitEvent(internalEvent, { msg: "secret" });
 
-    expect(seen).toContain("sec.events.public");
-    expect(seen).not.toContain("sec.events.internal");
+    expect(seen).toContain("sec-events-public");
+    expect(seen).not.toContain("sec-events-internal");
     await rr.dispose();
   });
 });

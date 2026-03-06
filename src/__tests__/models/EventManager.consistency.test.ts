@@ -8,7 +8,7 @@ describe("EventManager Consistency", () => {
     it("should prevent listeners from being added during emission", async () => {
       const mgr = new EventManager();
       const event = defineEvent<void>({
-        id: "test.event",
+        id: "test-event",
         parallel: false,
       });
       let listenerCallCount = 0;
@@ -43,11 +43,11 @@ describe("EventManager Consistency", () => {
   describe("Cycle Detection", () => {
     it("should strictly prevent infinite recursion even if hook re-emits same event", async () => {
       const mgr = new EventManager({ runtimeEventCycleDetection: true });
-      const event = defineEvent<void>({ id: "loop.event" });
+      const event = defineEvent<void>({ id: "loop-event" });
 
       let callCount = 0;
       const hook = {
-        id: "test.hook",
+        id: "test-hook",
         run: async () => {
           callCount++;
           if (callCount > 5)
@@ -56,7 +56,7 @@ describe("EventManager Consistency", () => {
             );
           // Emit same event, claiming to be this hook (source=hook.id)
           // This previously triggered the "safeReEmitBySameHook" bypass in CycleContext
-          await mgr.emit(event, undefined, runtimeSource.runtime("test.hook"));
+          await mgr.emit(event, undefined, runtimeSource.runtime("test-hook"));
         },
       };
 

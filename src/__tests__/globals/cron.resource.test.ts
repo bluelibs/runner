@@ -40,7 +40,7 @@ describe("global cron resource", () => {
     let runs = 0;
 
     const scheduledTask = r
-      .task("app.tasks.unregistered-cron")
+      .task("app-tasks-unregistered-cron")
       .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         runs += 1;
@@ -74,7 +74,7 @@ describe("global cron resource", () => {
     let runs = 0;
 
     const scheduledTask = r
-      .task("app.tasks.scheduled")
+      .task("app-tasks-scheduled")
       .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         runs += 1;
@@ -99,7 +99,7 @@ describe("global cron resource", () => {
     let runs = 0;
 
     const immediateTask = r
-      .task("app.tasks.immediate")
+      .task("app-tasks-immediate")
       .tags([
         tags.cron.with({
           expression: "* * * * *",
@@ -124,7 +124,7 @@ describe("global cron resource", () => {
     let runs = 0;
 
     const disabledTask = r
-      .task("app.tasks.disabled")
+      .task("app-tasks-disabled")
       .tags([
         tags.cron.with({
           expression: "* * * * *",
@@ -155,7 +155,7 @@ describe("global cron resource", () => {
     let attempts = 0;
 
     const failingTask = r
-      .task("app.tasks.stop-on-error")
+      .task("app-tasks-stop-on-error")
       .tags([
         tags.cron.with({
           expression: "* * * * *",
@@ -184,7 +184,7 @@ describe("global cron resource", () => {
     let attempts = 0;
 
     const immediateStopTask = r
-      .task("app.tasks.immediate-stop")
+      .task("app-tasks-immediate-stop")
       .tags([
         tags.cron.with({
           expression: "* * * * *",
@@ -215,7 +215,7 @@ describe("global cron resource", () => {
     let attempts = 0;
 
     const flakyTask = r
-      .task("app.tasks.continue-on-error")
+      .task("app-tasks-continue-on-error")
       .tags([
         tags.cron.with({
           expression: "* * * * *",
@@ -249,7 +249,7 @@ describe("global cron resource", () => {
     };
 
     const selfDisposingTask = r
-      .task("app.tasks.self-dispose")
+      .task("app-tasks-self-dispose")
       .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         attempts += 1;

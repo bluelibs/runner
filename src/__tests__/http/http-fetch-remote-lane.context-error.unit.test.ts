@@ -16,7 +16,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
         error: {
           code: "INTERNAL_ERROR",
           message: "boom",
-          id: "tests.errors.app",
+          id: "tests-errors-app",
           data: { code: 3, message: "X" },
         },
       };
@@ -27,7 +27,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
 
     const contexts = [
       {
-        id: "ctx.demo",
+        id: "ctx-demo",
         use: () => ({ a: 1 }),
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
@@ -36,7 +36,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
       },
     ];
     const helper = {
-      id: "tests.errors.app",
+      id: "tests-errors-app",
       throw: (data: any) => {
         throw createMessageError("typed:" + String(data?.code));
       },
@@ -49,7 +49,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
       serializer,
       fetchImpl: fetchImpl as unknown as typeof fetch,
       contexts: contexts as unknown as any[],
-      errorRegistry: new Map([["tests.errors.app", helper]]),
+      errorRegistry: new Map([["tests-errors-app", helper]]),
     });
 
     await expect(client.task("t.id", { a: 1 })).rejects.toThrow(/typed:3/);
@@ -59,8 +59,8 @@ describe("createExposureFetch - context header and typed rethrow", () => {
     const hdr = calls[0]?.headers?.["x-runner-context"];
     expect(typeof hdr).toBe("string");
     const map = serializer.parse<Record<string, string>>(hdr!);
-    expect(typeof map["ctx.demo"]).toBe("string");
-    expect(JSON.parse(map["ctx.demo"]).a).toBe(1);
+    expect(typeof map["ctx-demo"]).toBe("string");
+    expect(JSON.parse(map["ctx-demo"]).a).toBe(1);
   });
 
   it("omits x-runner-context header when contexts are provided but inactive", async () => {
@@ -75,7 +75,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
     });
     const contexts = [
       {
-        id: "ctx.none",
+        id: "ctx-none",
         use: () => {
           throw createMessageError("no ctx");
         },

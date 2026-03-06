@@ -72,7 +72,7 @@ export class TaskMiddlewareComposer {
     ) => {
       const journal = parentJournal ?? new ExecutionJournalImpl();
       const executionSource =
-        source ?? runtimeSource.runtime("runtime.internal.taskRunner");
+        source ?? runtimeSource.runtime("runtime-internal-taskRunner");
       return journaledRunner(input, journal, executionSource);
     }) as (
       input: TInput,

@@ -60,10 +60,10 @@ async function waitUntil(
         });
 
         await queue.enqueue({
-          laneId: "tests.event-lanes.integration.lane",
-          eventId: "tests.event-lanes.integration.event",
+          laneId: "tests-event-lanes-integration.lane",
+          eventId: "tests-event-lanes-integration.event",
           payload: '{"ok":true}',
-          source: { kind: "runtime", id: "tests.event-lanes.integration" },
+          source: { kind: "runtime", id: "tests-event-lanes-integration" },
           maxAttempts: 3,
         });
 

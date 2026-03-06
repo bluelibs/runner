@@ -8,14 +8,14 @@ import { rpcLanesResource } from "../../rpc-lanes";
 
 describe("rpcLanesResource event routing edge cases", () => {
   it("fails when a tagged rpc lane event has no binding", async () => {
-    const lane = r.rpcLane("tests.rpc-lanes.event.unbound.lane").build();
+    const lane = r.rpcLane("tests-rpc-lanes-event-unbound-lane").build();
     const event = defineEvent<{ value: number }>({
-      id: "tests.rpc-lanes.event.unbound.event",
+      id: "tests-rpc-lanes-event-unbound-event",
       tags: [globalTags.rpcLane.with({ lane })],
     });
 
     const emitTask = defineTask({
-      id: "tests.rpc-lanes.event.unbound.emit-task",
+      id: "tests-rpc-lanes-event-unbound-emit-task",
       dependencies: {
         eventManager: globalResources.eventManager,
       },
@@ -23,7 +23,7 @@ describe("rpcLanesResource event routing edge cases", () => {
         deps.eventManager.emit(
           event,
           { value: 5 },
-          runtimeSource.task("tests.rpc-lanes.event.unbound.emit-task"),
+          runtimeSource.task("tests-rpc-lanes-event-unbound-emit-task"),
         ),
     });
 
@@ -35,7 +35,7 @@ describe("rpcLanesResource event routing edge cases", () => {
     } as any);
 
     const app = defineResource({
-      id: "tests.rpc-lanes.event.unbound.app",
+      id: "tests-rpc-lanes-event-unbound-app",
       register: [
         event,
         emitTask,
@@ -50,15 +50,15 @@ describe("rpcLanesResource event routing edge cases", () => {
 
   it("handles eventWithResult returning undefined without mutating emission result", async () => {
     const lane = r
-      .rpcLane("tests.rpc-lanes.event.undefined-return.lane")
+      .rpcLane("tests-rpc-lanes-event-undefined-return-lane")
       .build();
     const event = defineEvent<{ value: number }>({
-      id: "tests.rpc-lanes.event.undefined-return.event",
+      id: "tests-rpc-lanes-event-undefined-return-event",
       tags: [globalTags.rpcLane.with({ lane })],
     });
 
     const communicator = defineResource({
-      id: "tests.rpc-lanes.event.undefined-return.communicator",
+      id: "tests-rpc-lanes-event-undefined-return-communicator",
       init: async () => ({
         eventWithResult: async () => undefined,
       }),
@@ -66,7 +66,7 @@ describe("rpcLanesResource event routing edge cases", () => {
 
     let localHookRuns = 0;
     const localHook = r
-      .hook("tests.rpc-lanes.event.undefined-return.local-hook")
+      .hook("tests-rpc-lanes-event-undefined-return-local-hook")
       .on(event)
       .run(async () => {
         localHookRuns += 1;
@@ -74,7 +74,7 @@ describe("rpcLanesResource event routing edge cases", () => {
       .build();
 
     const emitTask = defineTask({
-      id: "tests.rpc-lanes.event.undefined-return.emit-task",
+      id: "tests-rpc-lanes-event-undefined-return-emit-task",
       dependencies: {
         eventManager: globalResources.eventManager,
       },
@@ -83,7 +83,7 @@ describe("rpcLanesResource event routing edge cases", () => {
           event,
           { value: 11 },
           runtimeSource.task(
-            "tests.rpc-lanes.event.undefined-return.emit-task",
+            "tests-rpc-lanes-event-undefined-return-emit-task",
           ),
         ),
     });
@@ -96,7 +96,7 @@ describe("rpcLanesResource event routing edge cases", () => {
     });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.event.undefined-return.app",
+      id: "tests-rpc-lanes-event-undefined-return-app",
       register: [
         event,
         communicator,

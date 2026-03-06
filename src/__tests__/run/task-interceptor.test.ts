@@ -5,14 +5,14 @@ import { run } from "../../run";
 describe("Per-task interceptors inside resources", () => {
   it("tracks the resource id that registers a local task interceptor", async () => {
     const adder = defineTask({
-      id: "tests.tasks.adder",
+      id: "tests-tasks-adder",
       run: async (input: { value: number }) => {
         return { value: input.value + 1 } as const;
       },
     });
 
     const installer = defineResource({
-      id: "tests.resources.installer",
+      id: "tests-resources-installer",
       register: [adder],
       dependencies: { adder },
       async init(_, deps) {
@@ -26,7 +26,7 @@ describe("Per-task interceptors inside resources", () => {
     });
 
     const appHarness = defineResource({
-      id: "tests.interceptors.harness",
+      id: "tests-interceptors-harness",
       register: [installer],
     });
     const rr = await run(appHarness);
@@ -43,14 +43,14 @@ describe("Per-task interceptors inside resources", () => {
 
   it("returns unique intercepting resource ids in registration order", async () => {
     const adder = defineTask({
-      id: "tests.tasks.adder.multiple",
+      id: "tests-tasks-adder-multiple",
       run: async (input: { value: number }) => {
         return { value: input.value + 1 } as const;
       },
     });
 
     const firstInstaller = defineResource({
-      id: "tests.resources.installer.first",
+      id: "tests-resources-installer-first",
       register: [adder],
       dependencies: { adder },
       async init(_, deps) {
@@ -62,7 +62,7 @@ describe("Per-task interceptors inside resources", () => {
     });
 
     const secondInstaller = defineResource({
-      id: "tests.resources.installer.second",
+      id: "tests-resources-installer-second",
       dependencies: { adder, firstInstaller },
       async init(_, deps) {
         deps.adder.intercept(async (next, input) => {
@@ -73,7 +73,7 @@ describe("Per-task interceptors inside resources", () => {
     });
 
     const appHarness = defineResource({
-      id: "tests.interceptors.harness.multiple",
+      id: "tests-interceptors-harness-multiple",
       register: [firstInstaller, secondInstaller],
     });
 
@@ -94,12 +94,12 @@ describe("Per-task interceptors inside resources", () => {
 describe("taskRunner.intercept()", () => {
   it("applies globally even when registered from a private resource subtree", async () => {
     const outsideTask = defineTask({
-      id: "tests.taskRunnerIntercept.global.outsideTask",
+      id: "tests-taskRunnerIntercept-global-outsideTask",
       run: async () => "outside",
     });
 
     const privateInstaller = defineResource({
-      id: "tests.taskRunnerIntercept.global.privateInstaller",
+      id: "tests-taskRunnerIntercept-global-privateInstaller",
       isolate: { exports: "none" },
       dependencies: { taskRunner: globalResources.taskRunner },
       async init(_, deps) {
@@ -112,7 +112,7 @@ describe("taskRunner.intercept()", () => {
     });
 
     const app = defineResource({
-      id: "tests.taskRunnerIntercept.global.app",
+      id: "tests-taskRunnerIntercept-global-app",
       register: [privateInstaller, outsideTask],
       async init() {
         return "ok";
@@ -128,17 +128,17 @@ describe("taskRunner.intercept()", () => {
 
   it("supports optional when() filtering", async () => {
     const matchedTask = defineTask({
-      id: "tests.taskRunnerIntercept.when.matchedTask",
+      id: "tests-taskRunnerIntercept-when-matchedTask",
       run: async () => "matched",
     });
 
     const untouchedTask = defineTask({
-      id: "tests.taskRunnerIntercept.when.untouchedTask",
+      id: "tests-taskRunnerIntercept-when-untouchedTask",
       run: async () => "untouched",
     });
 
     const installer = defineResource({
-      id: "tests.taskRunnerIntercept.when.installer",
+      id: "tests-taskRunnerIntercept-when-installer",
       dependencies: { taskRunner: globalResources.taskRunner },
       async init(_, deps) {
         deps.taskRunner.intercept(
@@ -155,7 +155,7 @@ describe("taskRunner.intercept()", () => {
     });
 
     const app = defineResource({
-      id: "tests.taskRunnerIntercept.when.app",
+      id: "tests-taskRunnerIntercept-when-app",
       register: [installer, matchedTask, untouchedTask],
       async init() {
         return "ok";

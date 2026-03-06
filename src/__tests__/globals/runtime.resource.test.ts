@@ -6,12 +6,12 @@ import { RunResult } from "../../models/RunResult";
 describe("system.runtime", () => {
   it("works inside resource init and after boot with task/event/resource/root helpers", async () => {
     const double = defineTask({
-      id: "runtime.double",
+      id: "runtime-double",
       run: async (input: number) => input * 2,
     });
 
     const acc = defineResource<{ seed: number }, Promise<{ value: number }>>({
-      id: "runtime.acc",
+      id: "runtime-acc",
       init: async (config) => ({ value: config.seed }),
     });
 
@@ -24,7 +24,7 @@ describe("system.runtime", () => {
     } = {};
 
     const probe = defineResource({
-      id: "runtime.probe",
+      id: "runtime-probe",
       dependencies: {
         runtime: globalResources.runtime,
         acc,
@@ -38,7 +38,7 @@ describe("system.runtime", () => {
         snapshot.rootConfig = runtime.getRootConfig<{ mode: string }>();
 
         expect(() => runtime.getRootValue()).toThrow(
-          'Root resource "runtime.app" is not initialized yet.',
+          'Root resource "runtime-app" is not initialized yet.',
         );
 
         return "probe-ready";
@@ -50,14 +50,14 @@ describe("system.runtime", () => {
       Promise<string>,
       { probe: typeof probe; runtime: typeof globalResources.runtime }
     >({
-      id: "runtime.app",
+      id: "runtime-app",
       register: [double, acc.with({ seed: 10 }), probe],
       dependencies: {
         probe,
         runtime: globalResources.runtime,
       },
       init: async (config, { probe, runtime }) => {
-        expect(runtime.getRootId()).toBe("runtime.app");
+        expect(runtime.getRootId()).toBe("runtime-app");
         expect(runtime.getRootConfig<{ mode: string }>()).toEqual({
           mode: config.mode,
         });
@@ -71,13 +71,13 @@ describe("system.runtime", () => {
       byDefinition: 42,
       accValue: 10,
       accConfig: { seed: 10 },
-      rootId: "runtime.app",
+      rootId: "runtime-app",
       rootConfig: { mode: "alpha" },
     });
 
     const runtime = runtimeResult.getResourceValue(globalResources.runtime);
     expect(runtime).toBe(runtimeResult);
-    expect(runtime.getRootId()).toBe("runtime.app");
+    expect(runtime.getRootId()).toBe("runtime-app");
     expect(runtime.getRootConfig<{ mode: string }>()).toEqual({
       mode: "alpha",
     });
@@ -87,7 +87,7 @@ describe("system.runtime", () => {
   });
 
   it("throws RunResult-aligned not-found errors for missing ids", async () => {
-    const app = defineResource({ id: "runtime.empty" });
+    const app = defineResource({ id: "runtime-empty" });
     const runtimeResult = await run(app);
     const runtime = runtimeResult.getResourceValue(globalResources.runtime);
 
@@ -110,12 +110,12 @@ describe("system.runtime", () => {
   it("fails fast for registered but uninitialized resources in lazy mode", async () => {
     const lazyInit = jest.fn(async () => ({ ready: true }));
     const lazyOnly = defineResource({
-      id: "runtime.lazy.only",
+      id: "runtime-lazy-only",
       init: lazyInit,
     });
 
     const app = defineResource({
-      id: "runtime.lazy.app",
+      id: "runtime-lazy-app",
       register: [lazyOnly],
       dependencies: { runtime: globalResources.runtime },
       init: async (_, { runtime }) => {
@@ -161,7 +161,7 @@ describe("system.runtime", () => {
 
   it("blocks dispose during bootstrap from injected runtime", async () => {
     const probe = defineResource({
-      id: "runtime.dispose.probe",
+      id: "runtime-dispose-probe",
       dependencies: { runtime: globalResources.runtime },
       init: async (_config, { runtime }) => {
         expect(() => runtime.dispose()).toThrow(
@@ -172,7 +172,7 @@ describe("system.runtime", () => {
     });
 
     const app = defineResource({
-      id: "runtime.dispose.app",
+      id: "runtime-dispose-app",
       register: [probe],
       init: async () => "ready",
     });

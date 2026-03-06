@@ -28,7 +28,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
   it("installs process safety nets and calls onUnhandledError for uncaughtException", async () => {
     const app = defineResource({
-      id: "tests.app.safety",
+      id: "tests-app-safety",
       async init() {
         return "ok" as const;
       },
@@ -58,7 +58,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
   it("calls onUnhandledError on unhandledRejection", async () => {
     const app = defineResource({
-      id: "tests.app.unhandledRejection",
+      id: "tests-app-unhandledRejection",
       async init() {
         return "ok" as const;
       },
@@ -91,7 +91,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     expect.assertions(2);
     const disposed: string[] = [];
     const app = defineResource({
-      id: "tests.app.shutdown",
+      id: "tests-app-shutdown",
       async init() {
         return "ok" as const;
       },
@@ -126,7 +126,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const slowChild = defineResource({
-      id: "tests.app.shutdown.bootstrap.child",
+      id: "tests-app-shutdown-bootstrap-child",
       async init() {
         await childInitGate;
         return "child";
@@ -137,7 +137,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.shutdown.bootstrap",
+      id: "tests-app-shutdown-bootstrap",
       register: [slowChild],
       async init() {
         return "root";
@@ -175,7 +175,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
     let disposed = false;
     const emitShutdownOnInit = defineHook({
-      id: "tests.app.shutdown.bootstrap.late-signal.hook",
+      id: "tests-app-shutdown-bootstrap-late-signal-hook",
       on: globalEvents.ready,
       async run() {
         process.emit("SIGTERM");
@@ -183,7 +183,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.shutdown.bootstrap.late-signal",
+      id: "tests-app-shutdown-bootstrap-late-signal",
       register: [emitShutdownOnInit],
       async init() {
         return "ok";
@@ -208,7 +208,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
   it("exits with code 1 when shutdown disposers fail", async () => {
     expect.assertions(2);
     const app = defineResource({
-      id: "tests.app.shutdown.fail",
+      id: "tests-app-shutdown-fail",
       async init() {
         return "ok" as const;
       },
@@ -250,7 +250,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const slowTask = defineTask({
-      id: "tests.app.shutdown.lockdown.task",
+      id: "tests-app-shutdown-lockdown-task",
       async run() {
         await taskGate;
         return "done";
@@ -258,11 +258,11 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const slowEvent = defineEvent({
-      id: "tests.app.shutdown.lockdown.event",
+      id: "tests-app-shutdown-lockdown-event",
     });
 
     const slowHook = defineHook({
-      id: "tests.app.shutdown.lockdown.hook",
+      id: "tests-app-shutdown-lockdown-hook",
       on: slowEvent,
       async run() {
         await eventGate;
@@ -271,7 +271,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
     let disposed = false;
     const app = defineResource({
-      id: "tests.app.shutdown.lockdown",
+      id: "tests-app-shutdown-lockdown",
       register: [slowTask, slowEvent, slowHook],
       async init() {
         return "ok" as const;
@@ -323,7 +323,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
   it("continues shutdown without waiting for drain budget", async () => {
     const neverTask = defineTask({
-      id: "tests.app.shutdown.timeout.task",
+      id: "tests-app-shutdown-timeout-task",
       async run() {
         return new Promise<never>(() => undefined);
       },
@@ -331,7 +331,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
     let disposed = false;
     const app = defineResource({
-      id: "tests.app.shutdown.timeout",
+      id: "tests-app-shutdown-timeout",
       register: [neverTask],
       async init() {
         return "ok" as const;
@@ -377,7 +377,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const slowTask = defineTask({
-      id: "tests.app.manual-dispose.lockdown.task",
+      id: "tests-app-manual-dispose-lockdown-task",
       async run() {
         await taskGate;
         return "done";
@@ -385,11 +385,11 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const slowEvent = defineEvent({
-      id: "tests.app.manual-dispose.lockdown.event",
+      id: "tests-app-manual-dispose-lockdown-event",
     });
 
     const slowHook = defineHook({
-      id: "tests.app.manual-dispose.lockdown.hook",
+      id: "tests-app-manual-dispose-lockdown-hook",
       on: slowEvent,
       async run() {
         await eventGate;
@@ -398,7 +398,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
     let disposed = false;
     const app = defineResource({
-      id: "tests.app.manual-dispose.lockdown",
+      id: "tests-app-manual-dispose-lockdown",
       register: [slowTask, slowEvent, slowHook],
       async init() {
         return "ok" as const;
@@ -451,7 +451,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
   it("manual dispose proceeds without waiting for drain budget", async () => {
     const neverTask = defineTask({
-      id: "tests.app.manual-dispose.timeout.task",
+      id: "tests-app-manual-dispose-timeout-task",
       async run() {
         return new Promise<never>(() => undefined);
       },
@@ -459,7 +459,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
     let disposed = false;
     const app = defineResource({
-      id: "tests.app.manual-dispose.timeout",
+      id: "tests-app-manual-dispose-timeout",
       register: [neverTask],
       async init() {
         return "ok" as const;
@@ -492,7 +492,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
     try {
       const neverTask = defineTask({
-        id: "tests.app.shutdown.dispose-budget-cap.task",
+        id: "tests-app-shutdown-dispose-budget-cap-task",
         async run() {
           return new Promise<never>(() => undefined);
         },
@@ -500,7 +500,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
       let disposed = false;
       const app = defineResource({
-        id: "tests.app.shutdown.dispose-budget-cap",
+        id: "tests-app-shutdown-dispose-budget-cap",
         register: [neverTask],
         async init() {
           return "ok" as const;
@@ -537,7 +537,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
   it("does not wait for resource disposal when dispose budget is zero", async () => {
     let disposeCalls = 0;
     const app = defineResource({
-      id: "tests.app.shutdown.dispose-budget.zero",
+      id: "tests-app-shutdown-dispose-budget-zero",
       async init() {
         return "ok" as const;
       },
@@ -568,7 +568,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
       let disposeCompleted = false;
 
       const app = defineResource({
-        id: "tests.app.shutdown.dispose-budget.resource-timeout",
+        id: "tests-app-shutdown-dispose-budget-resource-timeout",
         async init() {
           return "ok" as const;
         },
@@ -619,12 +619,12 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
   it("process signal emits disposing and allows its in-flight continuations before drain", async () => {
     const postDisposingEvent = defineEvent({
-      id: "tests.app.shutdown.signal-disposing.event",
+      id: "tests-app-shutdown-signal-disposing-event",
     });
 
     const postDisposingHandler = jest.fn();
     const postDisposingHook = defineHook({
-      id: "tests.app.shutdown.signal-disposing.handler",
+      id: "tests-app-shutdown-signal-disposing-handler",
       on: postDisposingEvent,
       async run() {
         postDisposingHandler();
@@ -632,7 +632,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const disposingHook = defineHook({
-      id: "tests.app.shutdown.signal-disposing.lifecycle-hook",
+      id: "tests-app-shutdown-signal-disposing-lifecycle-hook",
       on: globalEvents.disposing,
       dependencies: {
         emitPostDisposingEvent: postDisposingEvent,
@@ -643,7 +643,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.shutdown.signal-disposing",
+      id: "tests-app-shutdown-signal-disposing",
       register: [postDisposingEvent, postDisposingHook, disposingHook],
       async init() {
         return "ok";
@@ -665,11 +665,11 @@ describe("run.ts shutdown hooks & error boundary", () => {
   it("manual dispose emits disposing then drained then resource dispose", async () => {
     const lifecycleOrder: string[] = [];
     const postDisposingEvent = defineEvent({
-      id: "tests.app.dispose.lifecycle.post-disposing.event",
+      id: "tests-app-dispose-lifecycle-post-disposing-event",
     });
 
     const postDisposingHandler = defineHook({
-      id: "tests.app.dispose.lifecycle.post-disposing.handler",
+      id: "tests-app-dispose-lifecycle-post-disposing-handler",
       on: postDisposingEvent,
       async run() {
         lifecycleOrder.push("post-disposing-event");
@@ -677,7 +677,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const disposingHook = defineHook({
-      id: "tests.app.dispose.lifecycle.disposing-hook",
+      id: "tests-app-dispose-lifecycle-disposing-hook",
       on: globalEvents.disposing,
       dependencies: {
         emitPostDisposingEvent: postDisposingEvent,
@@ -689,7 +689,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const drainedHook = defineHook({
-      id: "tests.app.dispose.lifecycle.drained-hook",
+      id: "tests-app-dispose-lifecycle-drained-hook",
       on: globalEvents.drained,
       async run() {
         lifecycleOrder.push("drained");
@@ -697,7 +697,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.dispose.lifecycle",
+      id: "tests-app-dispose-lifecycle",
       register: [
         postDisposingEvent,
         postDisposingHandler,
@@ -731,7 +731,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const lifecycleOrder: string[] = [];
 
     const disposingHook = defineHook({
-      id: "tests.app.dispose.cooldown-order.disposing-hook",
+      id: "tests-app-dispose-cooldown-order-disposing-hook",
       on: globalEvents.disposing,
       async run() {
         lifecycleOrder.push("disposing");
@@ -739,7 +739,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const drainedHook = defineHook({
-      id: "tests.app.dispose.cooldown-order.drained-hook",
+      id: "tests-app-dispose-cooldown-order-drained-hook",
       on: globalEvents.drained,
       async run() {
         lifecycleOrder.push("drained");
@@ -747,7 +747,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.dispose.cooldown-order",
+      id: "tests-app-dispose-cooldown-order",
       register: [disposingHook, drainedHook],
       async init() {
         return "ok";
@@ -784,7 +784,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     let disposed = false;
 
     const slowTask = defineTask({
-      id: "tests.app.dispose.cooldown-before-drain.task",
+      id: "tests-app-dispose-cooldown-before-drain-task",
       async run() {
         await taskGate;
         return "done";
@@ -792,7 +792,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.dispose.cooldown-before-drain",
+      id: "tests-app-dispose-cooldown-before-drain",
       register: [slowTask],
       async init() {
         return "ok";
@@ -834,7 +834,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     let disposeCalled = false;
 
     const app = defineResource({
-      id: "tests.app.dispose.cooldown-errors",
+      id: "tests-app-dispose-cooldown-errors",
       async init() {
         return "ok";
       },
@@ -873,7 +873,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const dispose = jest.fn(async () => undefined);
 
     const app = defineResource({
-      id: "tests.app.dispose.cooldown.manual-once",
+      id: "tests-app-dispose-cooldown-manual-once",
       async init() {
         return "ok";
       },
@@ -900,7 +900,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     let secondDisposed = false;
 
     const first = defineResource({
-      id: "tests.app.dispose.cooldown.non-error.parallel.first",
+      id: "tests-app-dispose-cooldown-non-error-parallel-first",
       async init() {
         return "first";
       },
@@ -913,7 +913,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const second = defineResource({
-      id: "tests.app.dispose.cooldown.non-error.parallel.second",
+      id: "tests-app-dispose-cooldown-non-error-parallel-second",
       async init() {
         return "second";
       },
@@ -926,7 +926,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.dispose.cooldown.non-error.parallel.app",
+      id: "tests-app-dispose-cooldown-non-error-parallel-app",
       register: [first, second],
       async init() {
         return "app";

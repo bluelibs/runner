@@ -23,7 +23,7 @@ import {
   const validOverride = defineOverride(task, async () => "Task overridden");
 
   defineResource({
-    id: "resource.valid.override",
+    id: "resource-valid-override",
     register: [task],
     overrides: [validOverride],
     init: async () => "ok",
@@ -35,7 +35,7 @@ import {
   });
 
   defineResource({
-    id: "resource.invalid.override.raw.task",
+    id: "resource-invalid-override-raw-task",
     register: [task],
     overrides: [
       // @ts-expect-error .overrides([...]) accepts only override-produced definitions
@@ -45,7 +45,7 @@ import {
   });
 
   const baseConfigResource = defineResource<{ name: string }, Promise<string>>({
-    id: "resource.with.config.base",
+    id: "resource-with-config-base",
     init: async (config) => config.name,
   });
 
@@ -55,14 +55,14 @@ import {
   );
 
   defineResource({
-    id: "resource.valid.override.with.config",
+    id: "resource-valid-override-with-config",
     register: [baseConfigResource.with({ name: "base" })],
     overrides: [validConfigOverride],
     init: async () => "ok",
   });
 
   defineResource({
-    id: "resource.invalid.override.with.config",
+    id: "resource-invalid-override-with-config",
     register: [baseConfigResource.with({ name: "base" })],
     overrides: [
       // @ts-expect-error configured resources are not valid override entries
@@ -88,7 +88,7 @@ import {
   });
 
   defineTask({
-    id: "task.tagged",
+    id: "task-tagged",
     tags: [
       tag,
       // @ts-expect-error

@@ -11,7 +11,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
 
 // Scenario: task entry generic should seed input typing.
 {
-  r.task<{ id: string }>("types.schema.task.entry-generic")
+  r.task<{ id: string }>("types-schema-task-entry-generic")
     .run(async (input) => {
       input.id;
       // @ts-expect-error property does not exist on entry-generic input
@@ -23,7 +23,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
 
 // Scenario: later schema typing should override earlier entry generic typing.
 {
-  r.task<{ seeded: number }>("types.schema.task.entry-precedence")
+  r.task<{ seeded: number }>("types-schema-task-entry-precedence")
     .schema<{ fromSchema: string }>({ parse: (x: any) => x })
     .run(async (input) => {
       input.fromSchema;
@@ -36,9 +36,9 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
 
 // Scenario: resource entry generic should type config usage even without init.
 {
-  const child = r.resource("types.schema.resource.entry-generic.child").build();
+  const child = r.resource("types-schema-resource-entry-generic-child").build();
 
-  r.resource<{ enabled: boolean }>("types.schema.resource.entry-generic")
+  r.resource<{ enabled: boolean }>("types-schema-resource-entry-generic")
     .register((config) => {
       config.enabled;
       // @ts-expect-error property does not exist on entry-generic config
@@ -52,7 +52,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
 {
   const mw = r.middleware
     .task<{ requiresAuth: boolean }>(
-      "types.schema.middleware.task.entry-generic",
+      "types-schema-middleware-task-entry-generic",
     )
     .run(async ({ next, task }, _deps, config) => {
       config.requiresAuth;
@@ -71,7 +71,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
 {
   r.middleware
     .task<{ requiresAuth: boolean }, { user: { id: string } }>(
-      "types.schema.middleware.task.entry-generic.input-contract",
+      "types-schema-middleware-task-entry-generic-input-contract",
     )
     .run(async ({ next, task }, _deps, config) => {
       config.requiresAuth;
@@ -87,7 +87,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
 {
   r.middleware
     .resource<{ retries: number }>(
-      "types.schema.middleware.resource.entry-generic",
+      "types-schema-middleware-resource-entry-generic",
     )
     .run(async ({ next }, _deps, config) => {
       config.retries;
@@ -100,7 +100,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
 
 // Scenario: task.schema should map to task input schema typing.
 {
-  r.task("types.schema.task")
+  r.task("types-schema-task")
     .schema<{ id: string }>({ parse: (x: any) => x })
     .resultSchema<{ ok: true }>({ parse: (x: any) => x })
     .run(async (input) => {
@@ -115,11 +115,11 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
 // Scenario: resource/event schema aliases should type config and payload.
 {
   const event = r
-    .event("types.schema.event")
+    .event("types-schema-event")
     .schema<{ name: string }>({ parse: (x: any) => x })
     .build();
 
-  r.resource("types.schema.resource")
+  r.resource("types-schema-resource")
     .schema<{ port: number }>({ parse: (x: any) => x })
     .dependencies({ event })
     .init(async (config, deps) => {
@@ -132,7 +132,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
     })
     .build();
 
-  r.hook("types.schema.hook")
+  r.hook("types-schema-hook")
     .on(event)
     .run(async (emission) => {
       emission.data.name;
@@ -145,7 +145,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
 // Scenario: middleware/schema aliases should type middleware config.
 {
   r.middleware
-    .task("types.schema.task.middleware")
+    .task("types-schema-task-middleware")
     .schema<{ ttl: number }>({ parse: (x: any) => x })
     .run(async ({ next, task }, _deps, config) => {
       config.ttl;
@@ -156,7 +156,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
     .build();
 
   r.middleware
-    .resource("types.schema.resource.middleware")
+    .resource("types-schema-resource-middleware")
     .schema<{ retries: number }>({ parse: (x: any) => x })
     .run(async ({ next }, _deps, config) => {
       config.retries;
@@ -170,7 +170,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
 // Scenario: asyncContext/error/tag schema aliases should remain valid and typed.
 {
   const requestContext = r
-    .asyncContext<{ requestId: string }>("types.schema.ctx")
+    .asyncContext<{ requestId: string }>("types-schema-ctx")
     .schema({ parse: (x: any) => x })
     .build();
 
@@ -182,7 +182,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
   });
 
   const AppError = r
-    .error<{ code: number }>("types.schema.error")
+    .error<{ code: number }>("types-schema-error")
     .schema({ parse: (x: any) => x })
     .build();
 
@@ -191,7 +191,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
   AppError.throw({ invalid: true });
 
   const featureTag = r
-    .tag<{ scope: string }>("types.schema.tag")
+    .tag<{ scope: string }>("types-schema-tag")
     .schema<{ scope: string }>({ parse: (x: any) => x })
     .build();
 
@@ -202,7 +202,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
 
 // Scenario: decorator class shorthand should be accepted in fluent schema APIs.
 {
-  r.task("types.schema.decorator.task")
+  r.task("types-schema-decorator-task")
     .schema(DecoratedSchema)
     .run(async (input) => {
       input.scope;
@@ -213,7 +213,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
     .build();
 
   const decoratedTag = r
-    .tag<{ scope: string }>("types.schema.decorator.tag")
+    .tag<{ scope: string }>("types-schema-decorator-tag")
     .configSchema(DecoratedSchema)
     .build();
 

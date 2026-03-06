@@ -7,7 +7,7 @@ import { runtimeSource } from "../../types/runtimeSource";
 describe("EventManager regressions", () => {
   it("dispose clears listeners and interceptors even after lock", async () => {
     const eventManager = new EventManager({ runtimeEventCycleDetection: true });
-    const event = defineEvent<string>({ id: "reg.dispose" });
+    const event = defineEvent<string>({ id: "reg-dispose" });
     const listener = jest.fn();
     const interceptor = jest.fn(async (next, e) => next(e));
     const hookInterceptor = jest.fn(async (next, hook, e) => next(hook, e));
@@ -33,7 +33,7 @@ describe("EventManager regressions", () => {
 
   it("keeps using interceptor snapshot when dispose happens mid-emission", async () => {
     const eventManager = new EventManager({ runtimeEventCycleDetection: true });
-    const event = defineEvent<string>({ id: "reg.dispose.snapshot" });
+    const event = defineEvent<string>({ id: "reg-dispose-snapshot" });
     const executionOrder: string[] = [];
 
     let releaseFirstInterceptor: (() => void) | undefined;
@@ -84,7 +84,7 @@ describe("EventManager regressions", () => {
 
   it("rejects new emissions when shutdown lockdown is active", async () => {
     const eventManager = new EventManager({ runtimeEventCycleDetection: true });
-    const event = defineEvent<string>({ id: "reg.shutdown-lockdown" });
+    const event = defineEvent<string>({ id: "reg-shutdown-lockdown" });
 
     eventManager.enterShutdownLockdown();
 
@@ -98,7 +98,7 @@ describe("EventManager regressions", () => {
   it("emission snapshots meta and tags to avoid mutating event definition", async () => {
     const eventManager = new EventManager({ runtimeEventCycleDetection: true });
     const event = defineEvent<string>({
-      id: "reg.snapshot",
+      id: "reg-snapshot",
       meta: { title: "base" },
       tags: [globalTags.system],
     });
@@ -117,7 +117,7 @@ describe("EventManager regressions", () => {
 
   it("rejects interceptor overrides of propagation methods", async () => {
     const eventManager = new EventManager({ runtimeEventCycleDetection: true });
-    const event = defineEvent<string>({ id: "reg.stop-prop", parallel: false });
+    const event = defineEvent<string>({ id: "reg-stop-prop", parallel: false });
     const secondListener = jest.fn();
 
     eventManager.intercept(async (next, emission) => {
@@ -142,14 +142,14 @@ describe("EventManager regressions", () => {
     await expect(
       eventManager.emit(event, "data", runtimeSource.runtime("src")),
     ).rejects.toThrow(
-      "Event interceptor validation failed for reg.stop-prop: Interceptors cannot override stopPropagation/isPropagationStopped",
+      "Event interceptor validation failed for reg-stop-prop: Interceptors cannot override stopPropagation/isPropagationStopped",
     );
     expect(secondListener).not.toHaveBeenCalled();
   });
 
   it("rejects interceptor payloads that drop propagation methods", async () => {
     const eventManager = new EventManager({ runtimeEventCycleDetection: true });
-    const event = defineEvent<string>({ id: "reg.restore-prop" });
+    const event = defineEvent<string>({ id: "reg-restore-prop" });
 
     eventManager.intercept(async (next, emission) => {
       const { stopPropagation, isPropagationStopped, ...unsafeEvent } =
@@ -165,13 +165,13 @@ describe("EventManager regressions", () => {
     await expect(
       eventManager.emit(event, "data", runtimeSource.runtime("src")),
     ).rejects.toThrow(
-      "Event interceptor validation failed for reg.restore-prop: Interceptors cannot override stopPropagation/isPropagationStopped",
+      "Event interceptor validation failed for reg-restore-prop: Interceptors cannot override stopPropagation/isPropagationStopped",
     );
   });
 
   it("allows interceptor replacement when propagation methods are preserved", async () => {
     const eventManager = new EventManager({ runtimeEventCycleDetection: true });
-    const event = defineEvent<string>({ id: "reg.keep-prop", parallel: false });
+    const event = defineEvent<string>({ id: "reg-keep-prop", parallel: false });
     const secondListener = jest.fn();
 
     eventManager.intercept(async (next, emission) => {
@@ -199,7 +199,7 @@ describe("EventManager regressions", () => {
 
   it("rejects interceptors that call next() more than once", async () => {
     const eventManager = new EventManager({ runtimeEventCycleDetection: true });
-    const event = defineEvent<string>({ id: "reg.next-once" });
+    const event = defineEvent<string>({ id: "reg-next-once" });
 
     eventManager.intercept(async (next, emission) => {
       await next(emission);

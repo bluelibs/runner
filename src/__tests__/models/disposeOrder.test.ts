@@ -11,10 +11,10 @@ describe("disposeOrder waves", () => {
     const fixture = createTestFixture();
     const { store } = fixture;
 
-    const first = defineResource({ id: "dispose.waves.first" });
-    const second = defineResource({ id: "dispose.waves.second" });
-    const third = defineResource({ id: "dispose.waves.third" });
-    const fourth = defineResource({ id: "dispose.waves.fourth" });
+    const first = defineResource({ id: "dispose-waves-first" });
+    const second = defineResource({ id: "dispose-waves-second" });
+    const third = defineResource({ id: "dispose-waves-third" });
+    const fourth = defineResource({ id: "dispose-waves-fourth" });
 
     for (const resource of [first, second, third, fourth]) {
       store.storeGenericItem(resource);
@@ -44,9 +44,9 @@ describe("disposeOrder waves", () => {
     const fixture = createTestFixture();
     const { store } = fixture;
 
-    const dep = defineResource({ id: "dispose.waves.fallback.dep" });
+    const dep = defineResource({ id: "dispose-waves-fallback-dep" });
     const app = defineResource({
-      id: "dispose.waves.fallback.app",
+      id: "dispose-waves-fallback-app",
       dependencies: { dep },
     });
 
@@ -77,11 +77,11 @@ describe("disposeOrder waves", () => {
     const aDeps: any = {};
     const bDeps: any = {};
     const a = defineResource({
-      id: "dispose.waves.cycle.a",
+      id: "dispose-waves-cycle-a",
       dependencies: () => aDeps,
     });
     const b = defineResource({
-      id: "dispose.waves.cycle.b",
+      id: "dispose-waves-cycle-b",
       dependencies: () => bDeps,
     });
 
@@ -109,9 +109,9 @@ describe("disposeOrder waves", () => {
     const fixture = createTestFixture();
     const { store } = fixture;
 
-    const first = defineResource({ id: "ready.waves.first" });
-    const second = defineResource({ id: "ready.waves.second" });
-    const third = defineResource({ id: "ready.waves.third" });
+    const first = defineResource({ id: "ready-waves-first" });
+    const second = defineResource({ id: "ready-waves-second" });
+    const third = defineResource({ id: "ready-waves-third" });
 
     for (const resource of [first, second, third]) {
       store.storeGenericItem(resource);
@@ -139,9 +139,9 @@ describe("disposeOrder waves", () => {
     const fixture = createTestFixture();
     const { store } = fixture;
 
-    const dep = defineResource({ id: "ready.waves.fallback.dep" });
+    const dep = defineResource({ id: "ready-waves-fallback-dep" });
     const app = defineResource({
-      id: "ready.waves.fallback.app",
+      id: "ready-waves-fallback-app",
       dependencies: { dep },
     });
 
@@ -170,11 +170,11 @@ describe("disposeOrder waves", () => {
     const aDeps: any = {};
     const bDeps: any = {};
     const a = defineResource({
-      id: "ready.waves.cycle.a",
+      id: "ready-waves-cycle-a",
       dependencies: () => aDeps,
     });
     const b = defineResource({
-      id: "ready.waves.cycle.b",
+      id: "ready-waves-cycle-b",
       dependencies: () => bDeps,
     });
 

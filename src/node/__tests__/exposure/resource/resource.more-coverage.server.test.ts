@@ -43,7 +43,7 @@ describe("nodeExposure - more server coverage", () => {
     }) as typeof http.createServer;
 
     const t = defineTask<void, Promise<void>>({
-      id: "exposer.more.server",
+      id: "exposer-more-server",
       run: async () => {},
     });
     const exposure = rpcExposure.with({
@@ -54,7 +54,7 @@ describe("nodeExposure - more server coverage", () => {
       },
     });
     const app = defineResource({
-      id: "exposer.more.app4",
+      id: "exposer-more-app4",
       register: [t, exposure],
     });
     const rr = await run(app);

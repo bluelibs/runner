@@ -70,7 +70,7 @@ export function defineResource<
    */
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
   const id = constConfig.id;
-  assertDefinitionId("Resource", id);
+  assertDefinitionId("Resource", id, { callerFilePath: filePath });
   const configSchema = normalizeOptionalValidationSchema(
     constConfig.configSchema,
     {

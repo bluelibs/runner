@@ -67,12 +67,12 @@ function eventLane(
 
 describe("RpcLaneAssignments", () => {
   it("fails when two rpc lanes assign the same task id", () => {
-    const task = { id: "tests.rpc-lane.assignments.task" };
+    const task = { id: "tests-rpc-lane-assignments-task" };
     const store = createStore({ tasks: [task] });
     const lanes = [rpcLane("rpc.a", [task.id]), rpcLane("rpc.b", [task.id])];
 
     expect(() => resolveRpcLaneAssignments(store, lanes)).toThrow(
-      'Task "tests.rpc-lane.assignments.task" is already assigned to rpcLane "rpc.a". Cannot also assign rpcLane "rpc.b" via applyTo().',
+      'Task "tests-rpc-lane-assignments-task" is already assigned to rpcLane "rpc.a". Cannot also assign rpcLane "rpc.b" via applyTo().',
     );
   });
 
@@ -88,7 +88,7 @@ describe("RpcLaneAssignments", () => {
   it("skips rpc event-tag routing when event-lane applyTo explicitly owns the event", () => {
     const rpcTagLane = rpcLane("rpc.tagged");
     const event = {
-      id: "tests.rpc-lane.tag-skip.event",
+      id: "tests-rpc-lane-tag-skip-event",
       tags: [globalTags.rpcLane.with({ lane: rpcTagLane })],
     };
     const eventFunctionLane = eventLane(
@@ -116,7 +116,7 @@ describe("RpcLaneAssignments", () => {
     const rpcTagLane = rpcLane("rpc.tagged");
     const eventTagLane = eventLane("event.tagged");
     const event = {
-      id: "tests.rpc-lane.tag-conflict.event",
+      id: "tests-rpc-lane-tag-conflict-event",
       tags: [
         globalTags.rpcLane.with({ lane: rpcTagLane }),
         globalTags.eventLane.with({ lane: eventTagLane }),
@@ -125,12 +125,12 @@ describe("RpcLaneAssignments", () => {
     const store = createStore({ events: [event] });
 
     expect(() => resolveRpcLaneAssignments(store, [])).toThrow(
-      'Event "tests.rpc-lane.tag-conflict.event" cannot be assigned to rpcLane "rpc.tagged" because it is already assigned to an event lane.',
+      'Event "tests-rpc-lane-tag-conflict-event" cannot be assigned to rpcLane "rpc.tagged" because it is already assigned to an event lane.',
     );
   });
 
   it("allows duplicate task applyTo declarations when they use the same lane id", () => {
-    const task = { id: "tests.rpc-lane.same-id.task", tags: [] };
+    const task = { id: "tests-rpc-lane-same-id-task", tags: [] };
     const store = createStore({ tasks: [task] });
     const lanes = [
       rpcLane("rpc.same", [task.id]),
@@ -142,7 +142,7 @@ describe("RpcLaneAssignments", () => {
   });
 
   it("allows duplicate event applyTo declarations when they use the same lane id", () => {
-    const event = { id: "tests.rpc-lane.same-id.event", tags: [] };
+    const event = { id: "tests-rpc-lane-same-id-event", tags: [] };
     const store = createStore({ events: [event] });
     const lanes = [
       rpcLane("rpc.same", [event.id]),
@@ -156,11 +156,11 @@ describe("RpcLaneAssignments", () => {
   it("collects event-lane applyTo function targets selectively", () => {
     const rpcLaneDefinition = rpcLane("rpc.tagged");
     const selected = {
-      id: "tests.rpc-lane.event-selective.selected",
+      id: "tests-rpc-lane-event-selective-selected",
       tags: [globalTags.rpcLane.with({ lane: rpcLaneDefinition })],
     };
     const ignored = {
-      id: "tests.rpc-lane.event-selective.ignored",
+      id: "tests-rpc-lane-event-selective-ignored",
       tags: [globalTags.rpcLane.with({ lane: rpcLaneDefinition })],
     };
     const eventFunctionLane = eventLane(

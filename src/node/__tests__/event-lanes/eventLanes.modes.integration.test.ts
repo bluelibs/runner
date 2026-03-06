@@ -47,17 +47,17 @@ async function waitUntil(
 
 describe("event-lanes: mode-first routing", () => {
   it("transparent mode bypasses lane transport and keeps tagged emits local", async () => {
-    const lane = r.eventLane("tests.event-lanes.mode.transparent.lane").build();
+    const lane = r.eventLane("tests-event-lanes-mode-transparent-lane").build();
     const queue = new TrackingQueue();
     let hookRuns = 0;
 
     const tagged = r
-      .event<{ value: number }>("tests.event-lanes.mode.transparent.event")
+      .event<{ value: number }>("tests-event-lanes-mode-transparent-event")
       .tags([tags.eventLane.with({ lane })])
       .build();
 
     const hook = r
-      .hook("tests.event-lanes.mode.transparent.hook")
+      .hook("tests-event-lanes-mode-transparent-hook")
       .on(tagged)
       .run(async () => {
         hookRuns += 1;
@@ -65,7 +65,7 @@ describe("event-lanes: mode-first routing", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.mode.transparent.emit")
+      .task("tests-event-lanes-mode-transparent-emit")
       .dependencies({ tagged })
       .run(async (_input, deps) => {
         await deps.tagged({ value: 1 });
@@ -73,7 +73,7 @@ describe("event-lanes: mode-first routing", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.mode.transparent.app")
+      .resource("tests-event-lanes-mode-transparent-app")
       .register([
         tagged,
         hook,
@@ -100,16 +100,16 @@ describe("event-lanes: mode-first routing", () => {
   });
 
   it("local-simulated mode ignores consume profile and relays tagged events asynchronously", async () => {
-    const lane = r.eventLane("tests.event-lanes.mode.simulated.lane").build();
+    const lane = r.eventLane("tests-event-lanes-mode-simulated-lane").build();
     let hookRuns = 0;
 
     const tagged = r
-      .event<{ value: number }>("tests.event-lanes.mode.simulated.event")
+      .event<{ value: number }>("tests-event-lanes-mode-simulated-event")
       .tags([tags.eventLane.with({ lane })])
       .build();
 
     const hook = r
-      .hook("tests.event-lanes.mode.simulated.hook")
+      .hook("tests-event-lanes-mode-simulated-hook")
       .on(tagged)
       .run(async (emission) => {
         hookRuns += 1;
@@ -118,7 +118,7 @@ describe("event-lanes: mode-first routing", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.mode.simulated.emit")
+      .task("tests-event-lanes-mode-simulated-emit")
       .dependencies({ tagged })
       .run(async (input: { value: number }, deps) => {
         await deps.tagged(input);
@@ -127,7 +127,7 @@ describe("event-lanes: mode-first routing", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.mode.simulated.app")
+      .resource("tests-event-lanes-mode-simulated-app")
       .register([
         tagged,
         hook,

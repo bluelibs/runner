@@ -239,7 +239,7 @@ describe("error helpers extra branches", () => {
     it("includes data-dependent remediation for duplicateRegistration", () => {
       expect.assertions(2);
       try {
-        duplicateRegistrationError.throw({ type: "Task", id: "test.task" });
+        duplicateRegistrationError.throw({ type: "Task", id: "test-task" });
         fail("Expected throw");
       } catch (e: any) {
         expect(e.remediation).toContain("Task");
@@ -269,10 +269,10 @@ describe("error helpers extra branches", () => {
     it("includes fork remediation for gateway-resource fork failures", () => {
       expect.assertions(3);
       try {
-        resourceForkGatewayUnsupportedError.throw({ id: "http.gateway" });
+        resourceForkGatewayUnsupportedError.throw({ id: "http-gateway" });
         fail("Expected throw");
       } catch (e: any) {
-        expect(e.message).toContain('Resource "http.gateway" cannot be forked');
+        expect(e.message).toContain('Resource "http-gateway" cannot be forked');
         expect(e.message).toContain("namespace segment");
         expect(e.remediation).toContain("Do not call .fork()");
       }

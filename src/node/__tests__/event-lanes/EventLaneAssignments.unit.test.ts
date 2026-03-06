@@ -20,7 +20,7 @@ function createStore(options: {
 }): Store {
   const resources = new Map<string, { config?: unknown }>();
   if (options.rpcTopology) {
-    resources.set("platform.node.resources.rpcLanes", {
+    resources.set("platform-node-resources-rpcLanes", {
       config: { topology: options.rpcTopology },
     });
   }
@@ -58,7 +58,7 @@ function rpcLane(
 
 describe("EventLaneAssignments", () => {
   it("fails when two function-based lanes target the same event", () => {
-    const event = { id: "tests.event-lane.assignments.event" };
+    const event = { id: "tests-event-lane-assignments-event" };
     const store = createStore({ events: [event] });
     const lanes = [
       eventLane("lane.a", () => true),
@@ -66,12 +66,12 @@ describe("EventLaneAssignments", () => {
     ];
 
     expect(() => resolveEventLaneAssignments(store, lanes)).toThrow(
-      'Event "tests.event-lane.assignments.event" is already assigned to eventLane "lane.a". Cannot also assign eventLane "lane.b" via applyTo().',
+      'Event "tests-event-lane-assignments-event" is already assigned to eventLane "lane.a". Cannot also assign eventLane "lane.b" via applyTo().',
     );
   });
 
   it("fails when two id-list lanes target the same event", () => {
-    const event = { id: "tests.event-lane.assignments.by-id.event" };
+    const event = { id: "tests-event-lane-assignments-by-id-event" };
     const store = createStore({ events: [event] });
     const lanes = [
       eventLane("lane.a", [event.id]),
@@ -79,12 +79,12 @@ describe("EventLaneAssignments", () => {
     ];
 
     expect(() => resolveEventLaneAssignments(store, lanes)).toThrow(
-      'Event "tests.event-lane.assignments.by-id.event" is already assigned to eventLane "lane.a". Cannot also assign eventLane "lane.b" via applyTo().',
+      'Event "tests-event-lane-assignments-by-id-event" is already assigned to eventLane "lane.a". Cannot also assign eventLane "lane.b" via applyTo().',
     );
   });
 
   it("fails fast when applyTo is not a function or array", () => {
-    const store = createStore({ events: [{ id: "tests.event-lane.invalid" }] });
+    const store = createStore({ events: [{ id: "tests-event-lane-invalid" }] });
     const lanes = [eventLane("lane.invalid", 42 as unknown as string[])];
 
     expect(() => resolveEventLaneAssignments(store, lanes)).toThrow(
@@ -95,7 +95,7 @@ describe("EventLaneAssignments", () => {
   it("skips tag-based event-lane routing when rpc applyTo explicitly targets the event", () => {
     const eventLaneDefinition = eventLane("lane.tagged");
     const event = {
-      id: "tests.event-lane.tag-skip.event",
+      id: "tests-event-lane-tag-skip-event",
       tags: [globalTags.eventLane.with({ lane: eventLaneDefinition })],
     };
     const rpcFunctionLane = rpcLane(
@@ -122,7 +122,7 @@ describe("EventLaneAssignments", () => {
     const eventLaneDefinition = eventLane("lane.tagged");
     const rpcLaneDefinition = rpcLane("rpc.tagged");
     const event = {
-      id: "tests.event-lane.tag-conflict.event",
+      id: "tests-event-lane-tag-conflict-event",
       tags: [
         globalTags.eventLane.with({ lane: eventLaneDefinition }),
         globalTags.rpcLane.with({ lane: rpcLaneDefinition }),
@@ -131,12 +131,12 @@ describe("EventLaneAssignments", () => {
     const store = createStore({ events: [event] });
 
     expect(() => resolveEventLaneAssignments(store, [])).toThrow(
-      'Event "tests.event-lane.tag-conflict.event" cannot be assigned to eventLane "lane.tagged" because it is already assigned to an rpcLane.',
+      'Event "tests-event-lane-tag-conflict-event" cannot be assigned to eventLane "lane.tagged" because it is already assigned to an rpcLane.',
     );
   });
 
   it("allows duplicate function applyTo declarations when they use the same lane id", () => {
-    const event = { id: "tests.event-lane.same-id.function.event", tags: [] };
+    const event = { id: "tests-event-lane-same-id-function-event", tags: [] };
     const store = createStore({ events: [event] });
     const lanes = [
       eventLane("lane.same", () => true),
@@ -148,7 +148,7 @@ describe("EventLaneAssignments", () => {
   });
 
   it("allows duplicate id-list applyTo declarations when they use the same lane id", () => {
-    const event = { id: "tests.event-lane.same-id.list.event", tags: [] };
+    const event = { id: "tests-event-lane-same-id-list-event", tags: [] };
     const store = createStore({ events: [event] });
     const lanes = [
       eventLane("lane.same", [event.id]),
@@ -160,8 +160,8 @@ describe("EventLaneAssignments", () => {
   });
 
   it("collects rpc applyTo function targets selectively", () => {
-    const selected = { id: "tests.event-lane.rpc-select.selected" };
-    const ignored = { id: "tests.event-lane.rpc-select.ignored" };
+    const selected = { id: "tests-event-lane-rpc-select-selected" };
+    const ignored = { id: "tests-event-lane-rpc-select-ignored" };
     const eventLaneDefinition = eventLane("lane.tagged");
 
     const store = createStore({

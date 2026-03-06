@@ -3,7 +3,7 @@ import { eventLanesResourceConfigSchema } from "../../event-lanes/configSchema";
 
 describe("eventLanes resource config schema", () => {
   it("accepts valid event-lanes config shape", () => {
-    const lane = { id: "lane.valid" };
+    const lane = { id: "lane-valid" };
     const config = {
       profile: "worker",
       topology: {
@@ -30,7 +30,7 @@ describe("eventLanes resource config schema", () => {
   });
 
   it("rejects non-object profiles shape", () => {
-    const lane = { id: "lane.invalid.profiles" };
+    const lane = { id: "lane-invalid-profiles" };
 
     expect(() =>
       eventLanesResourceConfigSchema.parse({
@@ -54,7 +54,7 @@ describe("eventLanes resource config schema", () => {
   });
 
   it("rejects profiles entries without consume lane array", () => {
-    const lane = { id: "lane.invalid.consume" };
+    const lane = { id: "lane-invalid-consume" };
 
     expect(() =>
       eventLanesResourceConfigSchema.parse({

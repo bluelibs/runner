@@ -9,7 +9,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       { file: any },
       Promise<{ name: string; type: string }>
     >({
-      id: "ok.file.task",
+      id: "ok-file-task",
       run: async ({ file }) => ({ name: file.name, type: file.type }),
     });
     const exposure = rpcExposure.with({
@@ -19,7 +19,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.multipart.app3",
+      id: "unit-exposure-coverage-multipart-app3",
       register: [fileTask, exposure],
     });
     const rr = await run(app);
@@ -61,7 +61,7 @@ describe("nodeExposure Coverage - Multipart", () => {
 
   it("multipart meta.extra overrides and is exposed to task", async () => {
     const fileTask = defineTask<{ file: any }, Promise<{ extra: any }>>({
-      id: "ok.file.extra.task",
+      id: "ok-file-extra-task",
       run: async ({ file }) => ({ extra: file.extra }),
     });
     const exposure = rpcExposure.with({
@@ -71,7 +71,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.multipart.app12",
+      id: "unit-exposure-coverage-multipart-app12",
       register: [fileTask, exposure],
     });
     const rr = await run(app);
@@ -109,7 +109,7 @@ describe("nodeExposure Coverage - Multipart", () => {
 
   it("multipart error: missing file part referenced in manifest triggers 500", async () => {
     const fileTask = defineTask<{ file: any }, Promise<void>>({
-      id: "missing.file.task",
+      id: "missing-file-task",
       run: async () => {},
     });
     const exposure = rpcExposure.with({
@@ -119,7 +119,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.multipart.app4",
+      id: "unit-exposure-coverage-multipart-app4",
       register: [fileTask, exposure],
     });
     const rr = await run(app);
@@ -150,7 +150,7 @@ describe("nodeExposure Coverage - Multipart", () => {
 
   it("hydrate array of files coverage", async () => {
     const fileTask = defineTask<{ files: any[] }, Promise<string[]>>({
-      id: "ok.array.files.task",
+      id: "ok-array-files-task",
       run: async ({ files }) => files.map((f) => f.name),
     });
     const exposure = rpcExposure.with({
@@ -160,7 +160,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.multipart.app7",
+      id: "unit-exposure-coverage-multipart-app7",
       register: [fileTask, exposure],
     });
     const rr = await run(app);

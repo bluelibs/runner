@@ -7,20 +7,20 @@ import { r, tags } from "../../index";
 describe("Security: Mutation footgun prevention", () => {
   it("blocks mutating direct-defined event tags at runtime", async () => {
     const internal = defineEvent<{ x: number }>({
-      id: "sec.mut.internal",
+      id: "sec-mut-internal",
       tags: [],
     });
     const seen: string[] = [];
 
     const star = defineHook({
-      id: "sec.mut.star",
+      id: "sec-mut-star",
       on: "*",
       run: async (ev) => {
         seen.push(ev.id);
       },
     });
     const app = defineResource({
-      id: "sec.mut.app",
+      id: "sec-mut-app",
       register: [internal, star],
     });
 
@@ -28,7 +28,7 @@ describe("Security: Mutation footgun prevention", () => {
 
     // First emit: no star exclusion tag, star should see it currently (baseline)
     await rr.emitEvent(internal, { x: 1 });
-    expect(seen).toContain("sec.mut.internal");
+    expect(seen).toContain("sec-mut-internal");
 
     const previousTags = internal.tags;
     try {
@@ -41,14 +41,14 @@ describe("Security: Mutation footgun prevention", () => {
     expect(internal.tags).toBe(previousTags);
 
     await rr.emitEvent(internal, { x: 2 });
-    const count = seen.filter((id) => id === "sec.mut.internal").length;
+    const count = seen.filter((id) => id === "sec-mut-internal").length;
     expect(count).toBe(2);
 
     await rr.dispose();
   });
 
   it("fluent-built events are immutable and prevent the same mutation footgun", () => {
-    const internal = r.event<{ x: number }>("sec.mut.fluent.internal").build();
+    const internal = r.event<{ x: number }>("sec-mut-fluent-internal").build();
     const previousTags = internal.tags;
 
     expect(Object.isFrozen(internal)).toBe(true);

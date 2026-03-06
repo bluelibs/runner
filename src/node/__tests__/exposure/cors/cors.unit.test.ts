@@ -70,7 +70,7 @@ function createReqRes(init: {
 describe("exposure CORS", () => {
   it("default permissive: OPTIONS returns 204 with wildcard and echoes request headers", async () => {
     const t = defineTask<{ x?: number }, Promise<number>>({
-      id: "tests.cors.default",
+      id: "tests-cors-default",
       async run() {
         return 1;
       },
@@ -82,7 +82,7 @@ describe("exposure CORS", () => {
       },
     });
     const app = defineResource({
-      id: "tests.app.cors.default",
+      id: "tests-app-cors-default",
       register: [t, exposure],
     });
     const rr = await run(app);
@@ -126,7 +126,7 @@ describe("exposure CORS", () => {
 
   it("respects configured origin array and credentials on preflight", async () => {
     const t = defineTask<void, Promise<string>>({
-      id: "tests.cors.allowed",
+      id: "tests-cors-allowed",
       async run() {
         return "ok";
       },
@@ -144,7 +144,7 @@ describe("exposure CORS", () => {
       },
     });
     const app = defineResource({
-      id: "tests.app.cors.config",
+      id: "tests-app-cors-config",
       register: [t, exposure],
     });
     const rr = await run(app);
@@ -190,7 +190,7 @@ describe("exposure CORS", () => {
 
   it("actual response sets expose headers and credentials when configured", async () => {
     const t = defineTask<void, Promise<number>>({
-      id: "tests.cors.actual",
+      id: "tests-cors-actual",
       async run() {
         return 10;
       },
@@ -206,7 +206,7 @@ describe("exposure CORS", () => {
       },
     });
     const app = defineResource({
-      id: "tests.app.cors.actual",
+      id: "tests-app-cors-actual",
       register: [t, exposure],
     });
     const rr = await run(app);

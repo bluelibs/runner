@@ -59,7 +59,7 @@ describe("durable: memoryDurableResource (config-only)", () => {
 
     const ctx = { runtimeConfig: null as any };
     const durable = await memoryDurableResource.init!.call(
-      { id: "tenantA.durable" },
+      { id: "tenantA-durable" },
       { worker: true },
       deps as any,
       ctx as any,
@@ -101,7 +101,7 @@ describe("durable: memoryDurableResource (config-only)", () => {
     });
 
     await memoryDurableResource.init!.call(
-      { id: "tenantA.durable" },
+      { id: "tenantA-durable" },
       {},
       deps as any,
       { runtimeConfig: null } as any,

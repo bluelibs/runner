@@ -68,11 +68,11 @@ describe("httpResponse helpers", () => {
 
   it("jsonErrorResponse merges extra fields into error payload", () => {
     const res = jsonErrorResponse(500, "Oops", "INTERNAL_ERROR", {
-      id: "tests.errors.app",
+      id: "tests-errors-app",
       data: { code: 1, message: "Oops" },
     });
     const err = (res.body as any).error;
-    expect(err.id).toBe("tests.errors.app");
+    expect(err.id).toBe("tests-errors-app");
     expect(err.data).toEqual({ code: 1, message: "Oops" });
   });
 

@@ -7,7 +7,7 @@ import {
 describe("isolationSelectors", () => {
   it("detects wildcard selectors", () => {
     expect(isWildcardSelector("app.resources.*")).toBe(true);
-    expect(isWildcardSelector("app.resources.db")).toBe(false);
+    expect(isWildcardSelector("app-resources-db")).toBe(false);
   });
 
   it("compiles segment wildcard selectors", () => {

@@ -6,15 +6,15 @@ import { IndexedTagCategory } from "../../../models/store-registry/types";
 describe("StoreRegistryTagIndex", () => {
   it("supports deprecated task and resource wrapper accessors", () => {
     const tag = defineTag({
-      id: "tag-index.coverage.tag",
+      id: "tag-index-coverage-tag",
     });
     const task = defineTask({
-      id: "tag-index.coverage.task",
+      id: "tag-index-coverage-task",
       tags: [tag],
       run: async () => "ok",
     });
     const resource = defineResource({
-      id: "tag-index.coverage.resource",
+      id: "tag-index-coverage-resource",
       tags: [tag],
       init: async () => "ok",
     });

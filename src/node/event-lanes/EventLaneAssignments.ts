@@ -16,7 +16,7 @@ import {
   toPublicPredicateCandidate,
 } from "../remote-lanes/laneAssignmentUtils";
 
-const RPC_LANES_RESOURCE_ID = "platform.node.resources.rpcLanes";
+const RPC_LANES_RESOURCE_ID = "platform-node-resources-rpcLanes";
 
 export interface EventLaneRoute {
   lane: IEventLaneDefinition;

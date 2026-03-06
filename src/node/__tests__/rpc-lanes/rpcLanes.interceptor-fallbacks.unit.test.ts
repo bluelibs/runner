@@ -7,7 +7,7 @@ describe("rpc-lanes interceptor fallback branches", () => {
   it("routes local-simulated events by raw emission ids when store lookup misses", async () => {
     const intercept = jest.fn();
     const serializer = new Serializer();
-    const lane = { id: "rpc-lanes.local-simulated.raw-id" };
+    const lane = { id: "rpc-lanes-local-simulated-raw-id" };
     const context = {
       config: {
         topology: {
@@ -16,7 +16,7 @@ describe("rpc-lanes interceptor fallback branches", () => {
       },
       resolved: {
         taskLaneByTaskId: new Map(),
-        eventLaneByEventId: new Map([["raw.event", lane]]),
+        eventLaneByEventId: new Map([["raw-event", lane]]),
       },
       dependencies: {
         store: {
@@ -26,7 +26,7 @@ describe("rpc-lanes interceptor fallback branches", () => {
         eventManager: { intercept },
         serializer,
       },
-      resourceId: "platform.node.resources.rpcLanes",
+      resourceId: "platform-node-resources-rpcLanes",
     };
 
     applyLocalSimulatedModeRouting(context as any);
@@ -36,9 +36,9 @@ describe("rpc-lanes interceptor fallback branches", () => {
       return "next-result";
     });
     const emission = {
-      id: "raw.event",
+      id: "raw-event",
       data: { value: 1 },
-      source: runtimeSource.task("rpc-lanes.local-simulated.raw-id.source"),
+      source: runtimeSource.task("rpc-lanes-local-simulated-raw-id.source"),
     };
 
     await expect(interceptor(next, emission)).resolves.toBeUndefined();
@@ -51,11 +51,11 @@ describe("rpc-lanes interceptor fallback branches", () => {
     const communicator = {
       event: jest.fn(async () => undefined),
     };
-    const lane = { id: "rpc-lanes.network.raw-id", policy: {} };
+    const lane = { id: "rpc-lanes-network-raw-id", policy: {} };
     const context = {
       resolved: {
         taskLaneByTaskId: new Map(),
-        eventLaneByEventId: new Map([["raw.event", lane]]),
+        eventLaneByEventId: new Map([["raw-event", lane]]),
         bindingsByLaneId: new Map([
           [
             lane.id,
@@ -77,7 +77,7 @@ describe("rpc-lanes interceptor fallback branches", () => {
         eventManager: { intercept },
         serializer: new Serializer(),
       },
-      resourceId: "platform.node.resources.rpcLanes",
+      resourceId: "platform-node-resources-rpcLanes",
     };
 
     applyNetworkModeRouting(context as any);
@@ -86,12 +86,12 @@ describe("rpc-lanes interceptor fallback branches", () => {
 
     await expect(
       interceptor(next, {
-        id: "raw.event",
+        id: "raw-event",
         data: { value: 1 },
-        source: runtimeSource.task("rpc-lanes.network.raw-id.source"),
+        source: runtimeSource.task("rpc-lanes-network-raw-id.source"),
       }),
     ).resolves.toBeUndefined();
-    expect(communicator.event).toHaveBeenCalledWith("raw.event", { value: 1 });
+    expect(communicator.event).toHaveBeenCalledWith("raw-event", { value: 1 });
     expect(next).not.toHaveBeenCalled();
   });
 });

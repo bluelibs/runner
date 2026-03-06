@@ -12,7 +12,7 @@ describe("EventManager transactional execution", () => {
 
   it("runs listeners successfully without automatic rollback", async () => {
     const event = defineEvent<string>({
-      id: "tx.success",
+      id: "tx-success",
       transactional: true,
     });
     const execution: string[] = [];
@@ -50,7 +50,7 @@ describe("EventManager transactional execution", () => {
 
   it("throws when a transactional event is also marked parallel", async () => {
     const invalidEvent = defineEvent<void>({
-      id: "tx.invalid.parallel",
+      id: "tx-invalid-parallel",
       transactional: true,
       parallel: true,
     });
@@ -72,7 +72,7 @@ describe("EventManager transactional execution", () => {
 
   it("rolls back completed listeners in reverse order when a listener fails", async () => {
     const event = defineEvent<void>({
-      id: "tx.rollback.reverse",
+      id: "tx-rollback-reverse",
       transactional: true,
     });
     const execution: string[] = [];
@@ -130,7 +130,7 @@ describe("EventManager transactional execution", () => {
 
   it("treats missing undo closure as listener failure and triggers rollback", async () => {
     const event = defineEvent<void>({
-      id: "tx.missing.undo",
+      id: "tx-missing-undo",
       transactional: true,
     });
     const execution: string[] = [];
@@ -167,7 +167,7 @@ describe("EventManager transactional execution", () => {
 
   it("continues rollback when rollback handlers fail and throws transactional rollback aggregate error", async () => {
     const event = defineEvent<void>({
-      id: "tx.rollback.failures",
+      id: "tx-rollback-failures",
       transactional: true,
     });
     const execution: string[] = [];
@@ -233,7 +233,7 @@ describe("EventManager transactional execution", () => {
 
   it("does not rollback on propagation stop when no failure occurs", async () => {
     const event = defineEvent<void>({
-      id: "tx.stop.propagation",
+      id: "tx-stop-propagation",
       transactional: true,
     });
     const execution: string[] = [];
@@ -266,7 +266,7 @@ describe("EventManager transactional execution", () => {
 
   it("skipped listeners are not added to rollback stack", async () => {
     const event = defineEvent<void>({
-      id: "tx.skip.rollback",
+      id: "tx-skip-rollback",
       transactional: true,
     });
     const execution: string[] = [];
@@ -311,7 +311,7 @@ describe("EventManager transactional execution", () => {
 
   it("forces fail-fast semantics even when aggregate mode is requested", async () => {
     const event = defineEvent<void>({
-      id: "tx.fail-fast",
+      id: "tx-fail-fast",
       transactional: true,
     });
     const execution: string[] = [];
@@ -346,7 +346,7 @@ describe("EventManager transactional execution", () => {
 
   it("exposes transactional flag on event emission info", async () => {
     const event = defineEvent<void>({
-      id: "tx.emission.info",
+      id: "tx-emission-info",
       transactional: true,
     });
     const seen: boolean[] = [];

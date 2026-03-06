@@ -4,13 +4,13 @@ import { run } from "../../run";
 describe("run dependency map validation", () => {
   it("fails fast when a task dependency factory returns a non-object", async () => {
     const invalidTask = defineTask({
-      id: "run.dependency.validation.task.invalid",
+      id: "run-dependency-validation-task-invalid",
       dependencies: (() => "bad-shape") as any,
       run: async () => "ok",
     });
 
     const app = defineResource({
-      id: "run.dependency.validation.task.app",
+      id: "run-dependency-validation-task-app",
       register: [invalidTask],
       init: async () => "never",
     });
@@ -22,7 +22,7 @@ describe("run dependency map validation", () => {
 
   it("fails fast when root dependency factory returns a non-object", async () => {
     const app = defineResource({
-      id: "run.dependency.validation.root.app",
+      id: "run-dependency-validation-root-app",
       dependencies: (() => "bad-root-shape") as any,
       init: async () => "never",
     });
@@ -33,16 +33,16 @@ describe("run dependency map validation", () => {
   });
 
   it("exposes normalized dependency maps to subtree validators", async () => {
-    const appId = "run.dependency.validation.subtree.app";
+    const appId = "run-dependency-validation-subtree-app";
     const event = defineEvent({
-      id: "run.dependency.validation.subtree.event",
+      id: "run-dependency-validation-subtree-event",
     });
     const expectedEventId = `${appId}.events.${event.id}`;
 
     let sawNormalizedDependencies = false;
 
     const task = defineTask({
-      id: "run.dependency.validation.subtree.task",
+      id: "run-dependency-validation-subtree-task",
       dependencies: () => ({ event }),
       run: async () => "ok",
     });
@@ -55,7 +55,7 @@ describe("run dependency map validation", () => {
           if (
             !isTask(definition) ||
             !definition.id.endsWith(
-              ".tasks.run.dependency.validation.subtree.task",
+              ".tasks.run-dependency-validation-subtree-task",
             )
           ) {
             return [];

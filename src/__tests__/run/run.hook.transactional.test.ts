@@ -6,12 +6,12 @@ describe("run transactional hooks", () => {
   it("rolls back transactional hooks in reverse order and reports failing hook id", async () => {
     const steps: string[] = [];
     const txEvent = defineEvent<void>({
-      id: "run.tx.event.rollback",
+      id: "run-tx-event-rollback",
       transactional: true,
     });
 
     const hook1 = defineHook({
-      id: "run.tx.hook.one",
+      id: "run-tx-hook-one",
       on: txEvent,
       order: 0,
       run: async () => {
@@ -23,7 +23,7 @@ describe("run transactional hooks", () => {
     });
 
     const hook2 = defineHook({
-      id: "run.tx.hook.two",
+      id: "run-tx-hook-two",
       on: txEvent,
       order: 1,
       run: async () => {
@@ -35,7 +35,7 @@ describe("run transactional hooks", () => {
     });
 
     const hookFail = defineHook({
-      id: "run.tx.hook.fail",
+      id: "run-tx-hook-fail",
       on: txEvent,
       order: 2,
       run: async () => {
@@ -45,7 +45,7 @@ describe("run transactional hooks", () => {
     });
 
     const app = defineResource({
-      id: "run.tx.app.rollback",
+      id: "run-tx-app-rollback",
       register: [txEvent, hook1, hook2, hookFail],
       init: async () => "ok",
     });
@@ -58,7 +58,7 @@ describe("run transactional hooks", () => {
     } catch (error: unknown) {
       const normalized = error as { message?: string; listenerId?: string };
       expect(normalized.message ?? "").toContain("hook failure");
-      expect(normalized.listenerId ?? "").toContain("run.tx.hook.fail");
+      expect(normalized.listenerId ?? "").toContain("run-tx-hook-fail");
     } finally {
       await runtime.dispose();
     }
@@ -75,15 +75,15 @@ describe("run transactional hooks", () => {
   it("enforces runtime undo rule for wildcard hooks when a transactional event is emitted", async () => {
     const seen: string[] = [];
     const nonTransactionalEvent = defineEvent<void>({
-      id: "run.tx.runtime.non-tx",
+      id: "run-tx-runtime-non-tx",
     });
     const transactionalEvent = defineEvent<void>({
-      id: "run.tx.runtime.tx",
+      id: "run-tx-runtime-tx",
       transactional: true,
     });
 
     const wildcardHook = defineHook({
-      id: "run.tx.runtime.wildcard",
+      id: "run-tx-runtime-wildcard",
       on: "*",
       run: async (event) => {
         seen.push(event.id);
@@ -91,7 +91,7 @@ describe("run transactional hooks", () => {
     });
 
     const app = defineResource({
-      id: "run.tx.runtime.app",
+      id: "run-tx-runtime-app",
       register: [nonTransactionalEvent, transactionalEvent, wildcardHook],
       init: async () => "ok",
     });
@@ -106,11 +106,11 @@ describe("run transactional hooks", () => {
       runtime.emitEvent(transactionalEvent, undefined),
     ).rejects.toMatchObject({
       id: "runner.errors.transactionalMissingUndoClosure",
-      listenerId: expect.stringContaining("run.tx.runtime.wildcard"),
+      listenerId: expect.stringContaining("run-tx-runtime-wildcard"),
     });
 
     expect(seen).toEqual(
-      expect.arrayContaining(["run.tx.runtime.non-tx", "run.tx.runtime.tx"]),
+      expect.arrayContaining(["run-tx-runtime-non-tx", "run-tx-runtime-tx"]),
     );
     await runtime.dispose();
   });
@@ -118,11 +118,11 @@ describe("run transactional hooks", () => {
   it("skips hook self-emitted events by source id to avoid re-entry", async () => {
     const seen: string[] = [];
     const loopEvent = defineEvent<void>({
-      id: "run.tx.runtime.self-source",
+      id: "run-tx-runtime-self-source",
     });
 
     const selfEmittingHook = defineHook({
-      id: "run.tx.runtime.self-source.hook",
+      id: "run-tx-runtime-self-source-hook",
       on: loopEvent,
       dependencies: { loopEvent },
       run: async (_event, deps) => {
@@ -132,7 +132,7 @@ describe("run transactional hooks", () => {
     });
 
     const app = defineResource({
-      id: "run.tx.runtime.self-source.app",
+      id: "run-tx-runtime-self-source-app",
       register: [loopEvent, selfEmittingHook],
       init: async () => "ok",
     });

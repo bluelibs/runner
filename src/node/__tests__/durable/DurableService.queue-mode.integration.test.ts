@@ -10,7 +10,7 @@ describe("durable: queue mode integration", () => {
     const queue = new MemoryQueue();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.tests.queue.durable");
+    const durable = durableResource.fork("durable-tests-queue-durable");
     const durableRegistration = durable.with({
       store,
       queue,
@@ -19,7 +19,7 @@ describe("durable: queue mode integration", () => {
     });
 
     const task = r
-      .task("durable.test.queue")
+      .task("durable-test-queue")
       .dependencies({ durable })
       .run(async (input: { v: number }, { durable }) => {
         const ctx = durable.use();

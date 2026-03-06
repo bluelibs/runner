@@ -2,7 +2,7 @@ import { defineResource, defineTask } from "../../define";
 import { bResource } from "./b.resource";
 
 export const aResource = defineResource({
-  id: "a.resource",
+  id: "a-resource",
   dependencies: {
     b: bResource,
   },
@@ -14,7 +14,7 @@ export const aResource = defineResource({
 });
 
 export const aTask = defineTask({
-  id: "a.task",
+  id: "a-task",
   dependencies: {
     a: aResource,
   },

@@ -128,7 +128,7 @@ describe("Retry Middleware", () => {
       });
 
       const app = defineResource({
-        id: "app.zeroDelayRetryTask",
+        id: "app-zeroDelayRetryTask",
         register: [task],
         dependencies: { task },
         async init(_, { task }) {
@@ -407,7 +407,7 @@ describe("Retry Middleware", () => {
       });
 
       const app = defineResource({
-        id: "app.zeroDelayRetryResource",
+        id: "app-zeroDelayRetryResource",
         register: [resource],
       });
 
@@ -476,7 +476,7 @@ describe("Retry Middleware", () => {
       });
 
       const app = defineResource({
-        id: "app.abort.retry",
+        id: "app-abort-retry",
         register: [task],
         dependencies: { task },
         async init(_, { task }) {
@@ -510,7 +510,7 @@ describe("Retry Middleware", () => {
       });
 
       const app = defineResource({
-        id: "app.abort.normal",
+        id: "app-abort-normal",
         register: [task],
         dependencies: { task },
         async init(_, { task }) {

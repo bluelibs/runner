@@ -15,12 +15,12 @@ describe("Security: Event cycle detection", () => {
     // Two events that emit into each other via hooks are a classic cycle.
     // The first re-emit will push the same event id back onto the stack,
     // and the manager must throw an EventCycleError.
-    const e1 = defineEvent<{ v: number }>({ id: "sec.events.e1" });
-    const e2 = defineEvent<{ v: number }>({ id: "sec.events.e2" });
+    const e1 = defineEvent<{ v: number }>({ id: "sec-events-e1" });
+    const e2 = defineEvent<{ v: number }>({ id: "sec-events-e2" });
 
     // e1 emits e2; e2 emits e1 -> cycle
     const onE1 = defineHook({
-      id: "sec.hooks.onE1",
+      id: "sec-hooks-onE1",
       dependencies: { eventManager: resources.eventManager },
       on: e1,
       run: async (ev, { eventManager }) => {
@@ -33,7 +33,7 @@ describe("Security: Event cycle detection", () => {
     });
 
     const onE2 = defineHook({
-      id: "sec.hooks.onE2",
+      id: "sec-hooks-onE2",
       dependencies: { eventManager: resources.eventManager },
       on: e2,
       run: async (ev, { eventManager }) => {
@@ -46,7 +46,7 @@ describe("Security: Event cycle detection", () => {
     });
 
     const app = defineResource({
-      id: "sec.app",
+      id: "sec-app",
       register: [e1, e2, onE1, onE2],
       init: async () => "ok",
     });

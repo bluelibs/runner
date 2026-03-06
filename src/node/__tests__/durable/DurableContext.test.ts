@@ -10,7 +10,7 @@ import { MemoryStore } from "../../durable/store/MemoryStore";
 import { createMessageError } from "../../../errors";
 
 describe("durable: DurableContext", () => {
-  const Paid = defineEvent<{ paidAt: number }>({ id: "durable.tests.paid" });
+  const Paid = defineEvent<{ paidAt: number }>({ id: "durable-tests-paid" });
   const createContext = (
     executionId = "e1",
     attempt = 1,
@@ -252,7 +252,7 @@ describe("durable: DurableContext", () => {
     const { store, bus } = createContext();
     const ctx1 = new DurableContext(store, bus, "e1", 1);
 
-    const Create = createDurableStepId<string>("steps.create");
+    const Create = createDurableStepId<string>("steps-create");
 
     let runs = 0;
     const v1 = await ctx1.step(Create, async () => {
@@ -280,9 +280,9 @@ describe("durable: DurableContext", () => {
       received.push({ type: evt.type, payload: evt.payload });
     });
 
-    const E1 = defineEvent<{ a: number }>({ id: "event.1" });
-    const E2 = defineEvent<{ b: number }>({ id: "event.2" });
-    const E3 = defineEvent<{ c: number }>({ id: "event.3" });
+    const E1 = defineEvent<{ a: number }>({ id: "event-1" });
+    const E2 = defineEvent<{ b: number }>({ id: "event-2" });
+    const E3 = defineEvent<{ c: number }>({ id: "event-3" });
 
     await ctx.emit(E1, { a: 1 });
     await ctx.emit(E1, { a: 2 });
@@ -290,10 +290,10 @@ describe("durable: DurableContext", () => {
     await ctx.emit(E3, { c: 3 });
 
     expect(received).toEqual([
-      { type: "event.1", payload: { a: 1 } },
-      { type: "event.1", payload: { a: 2 } },
-      { type: "event.2", payload: { b: 2 } },
-      { type: "event.3", payload: { c: 3 } },
+      { type: "event-1", payload: { a: 1 } },
+      { type: "event-1", payload: { a: 2 } },
+      { type: "event-2", payload: { b: 2 } },
+      { type: "event-3", payload: { c: 3 } },
     ]);
   });
 
@@ -315,7 +315,7 @@ describe("durable: DurableContext", () => {
       SuspensionSignal,
     );
     expect(
-      (await store.getStepResult("e1", "__signal:durable.tests.paid"))?.result,
+      (await store.getStepResult("e1", "__signal:durable-tests-paid"))?.result,
     ).toEqual(expect.objectContaining({ state: "waiting", signalId: Paid.id }));
   });
 
@@ -324,7 +324,7 @@ describe("durable: DurableContext", () => {
 
     await store.saveStepResult({
       executionId: "e1",
-      stepId: "__signal:durable.tests.paid",
+      stepId: "__signal:durable-tests-paid",
       result: { state: "waiting" },
       completedAt: new Date(),
     });
@@ -339,7 +339,7 @@ describe("durable: DurableContext", () => {
 
     await store.saveStepResult({
       executionId: "e1",
-      stepId: "__signal:durable.tests.paid",
+      stepId: "__signal:durable-tests-paid",
       result: { state: "completed", payload: { paidAt: 1 } },
       completedAt: new Date(),
     });
@@ -351,7 +351,7 @@ describe("durable: DurableContext", () => {
       SuspensionSignal,
     );
     expect(
-      (await store.getStepResult("e1", "__signal:durable.tests.paid:1"))
+      (await store.getStepResult("e1", "__signal:durable-tests-paid:1"))
         ?.result,
     ).toEqual(expect.objectContaining({ state: "waiting", signalId: Paid.id }));
 
@@ -393,7 +393,7 @@ describe("durable: DurableContext", () => {
 
     const waiting = await store.getStepResult(
       "e1",
-      "__signal:durable.tests.paid",
+      "__signal:durable-tests-paid",
     );
     expect(waiting?.result).toEqual(
       expect.objectContaining({
@@ -410,7 +410,7 @@ describe("durable: DurableContext", () => {
 
     await store.saveStepResult({
       executionId: "e1",
-      stepId: "__signal:durable.tests.paid",
+      stepId: "__signal:durable-tests-paid",
       result: { state: "timed_out" },
       completedAt: new Date(),
     });
@@ -426,7 +426,7 @@ describe("durable: DurableContext", () => {
 
     await store.saveStepResult({
       executionId: "e1",
-      stepId: "__signal:durable.tests.paid",
+      stepId: "__signal:durable-tests-paid",
       result: { state: "timed_out" },
       completedAt: new Date(),
     });
@@ -439,7 +439,7 @@ describe("durable: DurableContext", () => {
 
     await store.saveStepResult({
       executionId: "e1",
-      stepId: "__signal:durable.tests.paid",
+      stepId: "__signal:durable-tests-paid",
       result: { state: "waiting" },
       completedAt: new Date(),
     });
@@ -458,7 +458,7 @@ describe("durable: DurableContext", () => {
 
     await store.saveStepResult({
       executionId: "e1",
-      stepId: "__signal:durable.tests.paid",
+      stepId: "__signal:durable-tests-paid",
       result: 123,
       completedAt: new Date(),
     });
@@ -473,7 +473,7 @@ describe("durable: DurableContext", () => {
 
     await store.saveStepResult({
       executionId: "e1",
-      stepId: "__signal:durable.tests.paid",
+      stepId: "__signal:durable-tests-paid",
       result: { state: "something-else", payload: { paidAt: 1 } },
       completedAt: new Date(),
     });
@@ -488,7 +488,7 @@ describe("durable: DurableContext", () => {
 
     await store.saveStepResult({
       executionId: "e1",
-      stepId: "__signal:durable.tests.paid",
+      stepId: "__signal:durable-tests-paid",
       result: { state: "waiting", signalId: 123 },
       completedAt: new Date(),
     });
@@ -503,7 +503,7 @@ describe("durable: DurableContext", () => {
 
     await store.saveStepResult({
       executionId: "e1",
-      stepId: "__signal:durable.tests.paid",
+      stepId: "__signal:durable-tests-paid",
       result: { state: "waiting", signalId: "other-signal" },
       completedAt: new Date(),
     });
@@ -595,7 +595,7 @@ describe("durable: DurableContext", () => {
       }),
     );
 
-    const Stable = defineEvent<{ ok: boolean }>({ id: "event.stable" });
+    const Stable = defineEvent<{ ok: boolean }>({ id: "event-stable" });
     await ctx.emit(Stable, { ok: true }, { stepId: "stable-emit" });
     expect(await store.getStepResult("e1", "__emit:stable-emit")).toEqual(
       expect.objectContaining({

@@ -46,19 +46,19 @@ describe("main exports", () => {
 
     // Test tag exports work
     const testTag = mainExports.defineTag<{ value: number }>({
-      id: "test.tag",
+      id: "test-tag",
     });
     const testTag2 = mainExports.defineTag<{ name: string }>({
-      id: "test.tag2",
+      id: "test-tag2",
     });
 
-    expect(testTag.id).toBe("test.tag");
-    expect(testTag2.id).toBe("test.tag2");
+    expect(testTag.id).toBe("test-tag");
+    expect(testTag2.id).toBe("test-tag2");
     expect(typeof testTag.with).toBe("function");
     expect(typeof testTag2.extract).toBe("function");
 
     // Test createContext export
-    const TestContext = mainExports.createContext<string>("test.context");
+    const TestContext = mainExports.createContext<string>("test-context");
     expect(typeof TestContext.provide).toBe("function");
     expect(typeof TestContext.use).toBe("function");
 

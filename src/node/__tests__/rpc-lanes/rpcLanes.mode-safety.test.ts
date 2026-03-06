@@ -6,14 +6,14 @@ import { r } from "../../../public";
 
 describe("rpcLanesResource mode safety", () => {
   it("transparent mode does not require communicator dependency resolution", async () => {
-    const lane = r.rpcLane("tests.rpc-lanes.transparent.no-deps.lane").build();
+    const lane = r.rpcLane("tests-rpc-lanes-transparent-no-deps-lane").build();
     const task = defineTask({
-      id: "tests.rpc-lanes.transparent.no-deps.task",
+      id: "tests-rpc-lanes-transparent-no-deps-task",
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => "local",
     });
     const communicator = defineResource({
-      id: "tests.rpc-lanes.transparent.no-deps.communicator",
+      id: "tests-rpc-lanes-transparent-no-deps-communicator",
       init: async () => ({
         task: async () => "remote",
       }),
@@ -27,7 +27,7 @@ describe("rpcLanesResource mode safety", () => {
     });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.transparent.no-deps.app",
+      id: "tests-rpc-lanes-transparent-no-deps-app",
       register: [
         task,
         rpcLanesResource.with({
@@ -44,9 +44,9 @@ describe("rpcLanesResource mode safety", () => {
   });
 
   it("local-simulated mode does not require communicator dependency resolution", async () => {
-    const lane = r.rpcLane("tests.rpc-lanes.simulated.no-deps.lane").build();
+    const lane = r.rpcLane("tests-rpc-lanes-simulated-no-deps-lane").build();
     const task = defineTask<{ count: number }>({
-      id: "tests.rpc-lanes.simulated.no-deps.task",
+      id: "tests-rpc-lanes-simulated-no-deps-task",
       tags: [globalTags.rpcLane.with({ lane })],
       run: async (input) => {
         input.count += 1;
@@ -54,7 +54,7 @@ describe("rpcLanesResource mode safety", () => {
       },
     });
     const communicator = defineResource({
-      id: "tests.rpc-lanes.simulated.no-deps.communicator",
+      id: "tests-rpc-lanes-simulated-no-deps-communicator",
       init: async () => ({
         task: async () => "remote",
       }),
@@ -68,7 +68,7 @@ describe("rpcLanesResource mode safety", () => {
     });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.simulated.no-deps.app",
+      id: "tests-rpc-lanes-simulated-no-deps-app",
       register: [
         task,
         rpcLanesResource.with({
@@ -87,21 +87,21 @@ describe("rpcLanesResource mode safety", () => {
   });
 
   it("fails fast when rpc lane topology binds the same lane multiple times", async () => {
-    const lane = r.rpcLane("tests.rpc-lanes.duplicate-binding.lane").build();
+    const lane = r.rpcLane("tests-rpc-lanes-duplicate-binding-lane").build();
     const task = defineTask({
-      id: "tests.rpc-lanes.duplicate-binding.task",
+      id: "tests-rpc-lanes-duplicate-binding-task",
       tags: [globalTags.rpcLane.with({ lane })],
       run: async () => "local",
     });
 
     const communicatorA = defineResource({
-      id: "tests.rpc-lanes.duplicate-binding.communicator.a",
+      id: "tests-rpc-lanes-duplicate-binding-communicator-a",
       init: async () => ({
         task: async () => "remote-a",
       }),
     });
     const communicatorB = defineResource({
-      id: "tests.rpc-lanes.duplicate-binding.communicator.b",
+      id: "tests-rpc-lanes-duplicate-binding-communicator-b",
       init: async () => ({
         task: async () => "remote-b",
       }),
@@ -118,7 +118,7 @@ describe("rpcLanesResource mode safety", () => {
     });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.duplicate-binding.app",
+      id: "tests-rpc-lanes-duplicate-binding-app",
       register: [
         task,
         communicatorA,
@@ -141,7 +141,7 @@ describe("rpcLanesResource mode safety", () => {
     });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.mode.exposure-conflict.app",
+      id: "tests-rpc-lanes-mode-exposure-conflict-app",
       register: [
         rpcLanesResource.with({
           profile: "client",

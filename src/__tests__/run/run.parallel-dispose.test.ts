@@ -22,7 +22,7 @@ describe("run parallel disposal lifecycle", () => {
     let maxConcurrentDisposals = 0;
 
     const sharedDepA = defineResource({
-      id: "parallel.dispose.wave.a",
+      id: "parallel-dispose-wave-a",
       async init() {
         return "a";
       },
@@ -51,7 +51,7 @@ describe("run parallel disposal lifecycle", () => {
     });
 
     const sharedDepB = defineResource({
-      id: "parallel.dispose.wave.b",
+      id: "parallel-dispose-wave-b",
       async init() {
         return "b";
       },
@@ -80,7 +80,7 @@ describe("run parallel disposal lifecycle", () => {
     });
 
     const upperWave = defineResource({
-      id: "parallel.dispose.wave.upper",
+      id: "parallel-dispose-wave-upper",
       dependencies: { sharedDepA, sharedDepB },
       async init() {
         return "upper";
@@ -94,7 +94,7 @@ describe("run parallel disposal lifecycle", () => {
     });
 
     const app = defineResource({
-      id: "parallel.dispose.wave.app",
+      id: "parallel-dispose-wave-app",
       register: [sharedDepA, sharedDepB, upperWave],
       dependencies: { upperWave },
       async init() {
@@ -134,7 +134,7 @@ describe("run parallel disposal lifecycle", () => {
     const calls: string[] = [];
 
     const sharedDepA = defineResource({
-      id: "parallel.dispose.failure.a",
+      id: "parallel-dispose-failure-a",
       async init() {
         return "a";
       },
@@ -145,7 +145,7 @@ describe("run parallel disposal lifecycle", () => {
     });
 
     const sharedDepB = defineResource({
-      id: "parallel.dispose.failure.b",
+      id: "parallel-dispose-failure-b",
       async init() {
         return "b";
       },
@@ -155,7 +155,7 @@ describe("run parallel disposal lifecycle", () => {
     });
 
     const upperWave = defineResource({
-      id: "parallel.dispose.failure.upper",
+      id: "parallel-dispose-failure-upper",
       dependencies: { sharedDepA, sharedDepB },
       async init() {
         return "upper";
@@ -166,7 +166,7 @@ describe("run parallel disposal lifecycle", () => {
     });
 
     const app = defineResource({
-      id: "parallel.dispose.failure.app",
+      id: "parallel-dispose-failure-app",
       register: [sharedDepA, sharedDepB, upperWave],
       dependencies: { upperWave },
       async init() {
@@ -187,7 +187,7 @@ describe("run parallel disposal lifecycle", () => {
     const calls: string[] = [];
 
     const first = defineResource({
-      id: "parallel.dispose.sequential.first",
+      id: "parallel-dispose-sequential-first",
       async init() {
         return "first";
       },
@@ -200,7 +200,7 @@ describe("run parallel disposal lifecycle", () => {
     });
 
     const second = defineResource({
-      id: "parallel.dispose.sequential.second",
+      id: "parallel-dispose-sequential-second",
       async init() {
         return "second";
       },
@@ -213,7 +213,7 @@ describe("run parallel disposal lifecycle", () => {
     });
 
     const app = defineResource({
-      id: "parallel.dispose.sequential.app",
+      id: "parallel-dispose-sequential-app",
       register: [first, second],
       async init() {
         return "app";
@@ -243,7 +243,7 @@ describe("run parallel disposal lifecycle", () => {
     let secondStarted = false;
 
     const first = defineResource({
-      id: "parallel.dispose.alias.first",
+      id: "parallel-dispose-alias-first",
       async init() {
         firstStarted = true;
         await gate;
@@ -252,7 +252,7 @@ describe("run parallel disposal lifecycle", () => {
     });
 
     const second = defineResource({
-      id: "parallel.dispose.alias.second",
+      id: "parallel-dispose-alias-second",
       async init() {
         secondStarted = true;
         await gate;
@@ -261,7 +261,7 @@ describe("run parallel disposal lifecycle", () => {
     });
 
     const app = defineResource({
-      id: "parallel.dispose.alias.app",
+      id: "parallel-dispose-alias-app",
       register: [first, second],
       async init() {
         return "app";

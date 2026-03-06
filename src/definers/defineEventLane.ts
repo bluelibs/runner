@@ -13,9 +13,10 @@ export function defineEventLane(config: IEventLaneDefinition): IEventLane {
   if (typeof config.id !== "string" || config.id.trim().length === 0) {
     eventLaneInvalidIdError.throw({ id: String(config.id) });
   }
-  assertDefinitionId("eventLane", config.id);
-
   const callerFilePath = getCallerFile();
+  assertDefinitionId("eventLane", config.id, {
+    callerFilePath: callerFilePath,
+  });
   return deepFreeze({
     ...config,
     id: config.id,

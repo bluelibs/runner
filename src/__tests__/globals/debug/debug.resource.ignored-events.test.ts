@@ -11,7 +11,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
     const logs: ILog[] = [];
 
     const collector = defineResource({
-      id: "tests.collector.ignored",
+      id: "tests-collector-ignored",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -22,7 +22,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.ignored",
+      id: "tests-app-ignored",
       register: [debugResource.with("verbose"), collector],
       async init() {
         return "ok" as const;
@@ -50,7 +50,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
     const messages: string[] = [];
 
     const collector = defineResource({
-      id: "tests.collector.ignored.task",
+      id: "tests-collector-ignored-task",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -61,7 +61,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
     });
 
     const systemTask = defineTask({
-      id: "tests.system.task",
+      id: "tests-system-task",
       tags: [globalTags.system],
       async run() {
         return "ok" as const;
@@ -69,7 +69,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.ignored.task",
+      id: "tests-app-ignored-task",
       register: [debugResource.with("verbose"), collector, systemTask],
       dependencies: { systemTask },
       async init(_, { systemTask }) {
@@ -82,17 +82,17 @@ describe("debug resource - ignored system/lifecycle events", () => {
 
     // Ensure middleware did not log task start/completed lines for system-tagged task
     const joined = messages.join("\n");
-    expect(joined.includes("[task] tests.system.task starting to run")).toBe(
+    expect(joined.includes("[task] tests-system-task starting to run")).toBe(
       false,
     );
-    expect(joined.includes("[task] tests.system.task completed")).toBe(false);
+    expect(joined.includes("[task] tests-system-task completed")).toBe(false);
   });
 
   it("does not log hook triggered/completed messages (system-tagged observability events are skipped)", async () => {
     const messages: string[] = [];
 
     const collector = defineResource({
-      id: "tests.collector.hooks.ignored",
+      id: "tests-collector-hooks-ignored",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -102,11 +102,11 @@ describe("debug resource - ignored system/lifecycle events", () => {
       },
     });
 
-    const userEvent = defineEvent<{ n: number }>({ id: "tests.user.event" });
+    const userEvent = defineEvent<{ n: number }>({ id: "tests-user-event" });
 
     // A normal hook listening to a user event
     const userHook = defineHook({
-      id: "tests.user.hook",
+      id: "tests-user-hook",
       on: userEvent,
       async run() {
         // no-op
@@ -114,7 +114,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.hooks.ignored",
+      id: "tests-app-hooks-ignored",
       register: [debugResource.with("verbose"), collector, userEvent, userHook],
       dependencies: { userEvent },
       async init(_, { userEvent }) {
@@ -126,15 +126,15 @@ describe("debug resource - ignored system/lifecycle events", () => {
     await run(app);
 
     const joined = messages.join("\n");
-    expect(joined.includes("[hook] tests.user.hook triggered")).toBe(false);
-    expect(joined.includes("[hook] tests.user.hook completed")).toBe(false);
+    expect(joined.includes("[hook] tests-user-hook triggered")).toBe(false);
+    expect(joined.includes("[hook] tests-user-hook completed")).toBe(false);
   });
 
   it("does not log system-tagged events via global event listener", async () => {
     const messages: string[] = [];
 
     const collector = defineResource({
-      id: "tests.collector.system.event",
+      id: "tests-collector-system-event",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -145,12 +145,12 @@ describe("debug resource - ignored system/lifecycle events", () => {
     });
 
     const systemEvent = defineEvent<{ v: number }>({
-      id: "tests.system.event",
+      id: "tests-system-event",
       tags: [globalTags.system],
     });
 
     const emitSystemEvent = defineTask({
-      id: "tests.emit.system.event",
+      id: "tests-emit-system-event",
       dependencies: { systemEvent },
       async run(_input, { systemEvent }) {
         await systemEvent({ v: 1 });
@@ -159,7 +159,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.system.event",
+      id: "tests-app-system-event",
       register: [
         debugResource.with("verbose"),
         collector,
@@ -176,6 +176,6 @@ describe("debug resource - ignored system/lifecycle events", () => {
     await rr.runTask(emitSystemEvent);
 
     const joined = messages.join("\n");
-    expect(joined.includes("Event tests.system.event emitted")).toBe(false);
+    expect(joined.includes("Event tests-system-event emitted")).toBe(false);
   });
 });

@@ -146,8 +146,8 @@ describe("CycleContext", () => {
     };
 
     const deepStack = Array.from({ length: 1000 }, () => ({
-      id: "evt.previous",
-      source: runtimeSource.runtime("deep.stack"),
+      id: "evt-previous",
+      source: runtimeSource.runtime("deep-stack"),
     }));
 
     jest.spyOn(internals.emissionStack, "getStore").mockReturnValue(deepStack);
@@ -155,7 +155,7 @@ describe("CycleContext", () => {
     expect(() =>
       ctx.runEmission(
         {
-          id: "evt.overflow",
+          id: "evt-overflow",
           source: runtimeSource.runtime("overflow"),
         },
         async () => undefined,

@@ -3,7 +3,7 @@ import { definitions } from "../..";
 import { ThrowsList, IErrorHelper } from "../../types/error";
 
 describe("normalizeThrows()", () => {
-  const owner = { kind: "task" as const, id: "spec.task" };
+  const owner = { kind: "task" as const, id: "spec-task" };
 
   it("returns undefined when not provided", () => {
     expect(normalizeThrows(owner, undefined)).toBeUndefined();
@@ -11,12 +11,12 @@ describe("normalizeThrows()", () => {
 
   it("normalizes ids and deduplicates", () => {
     const err = {
-      id: "spec.errors.fake",
+      id: "spec-errors-fake",
       [definitions.symbolError]: true,
     } as unknown as IErrorHelper;
     expect(normalizeThrows(owner, ["a", err, "a"])).toEqual([
       "a",
-      "spec.errors.fake",
+      "spec-errors-fake",
     ]);
   });
 
@@ -47,14 +47,14 @@ describe("normalizeThrows()", () => {
   });
 
   it("works with hook ThrowOwner kind", () => {
-    const hookOwner = { kind: "hook" as const, id: "spec.hook" };
+    const hookOwner = { kind: "hook" as const, id: "spec-hook" };
     expect(normalizeThrows(hookOwner, ["err.id"])).toEqual(["err.id"]);
   });
 
   it("works with task-middleware ThrowOwner kind", () => {
     const mwOwner = {
       kind: "task-middleware" as const,
-      id: "spec.tmw",
+      id: "spec-tmw",
     };
     expect(normalizeThrows(mwOwner, ["err.id"])).toEqual(["err.id"]);
     expect(() => normalizeThrows(mwOwner, ["   "])).toThrow(
@@ -65,7 +65,7 @@ describe("normalizeThrows()", () => {
   it("works with resource-middleware ThrowOwner kind", () => {
     const mwOwner = {
       kind: "resource-middleware" as const,
-      id: "spec.rmw",
+      id: "spec-rmw",
     };
     expect(normalizeThrows(mwOwner, ["err.id"])).toEqual(["err.id"]);
     expect(() => normalizeThrows(mwOwner, ["   "])).toThrow(

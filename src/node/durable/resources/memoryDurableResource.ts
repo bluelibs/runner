@@ -27,7 +27,7 @@ interface MemoryDurableResourceContext {
 }
 
 export const memoryDurableResource = r
-  .resource<MemoryDurableResourceConfig>("base.durable.memory")
+  .resource<MemoryDurableResourceConfig>("base-durable-memory")
   .register([durableWorkflowTag, ...durableEventsArray])
   .dependencies({
     taskRunner: resources.taskRunner,

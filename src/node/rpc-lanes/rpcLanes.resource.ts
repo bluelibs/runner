@@ -19,7 +19,7 @@ export const rpcLanesResource = defineResource<
   RpcLanesResourceConfig,
   Promise<RpcLanesResourceValue>
 >({
-  id: "platform.node.resources.rpcLanes",
+  id: "platform-node-resources-rpcLanes",
   tags: [globalTags.rpcLanes],
   configSchema: rpcLanesResourceConfigSchema,
   dependencies: (config) => ({
@@ -35,7 +35,7 @@ export const rpcLanesResource = defineResource<
     const typedDependencies = dependencies as RpcLanesDependencies;
     const store = typedDependencies.store;
     const resolved = resolveRpcLaneState(config, typedDependencies, store);
-    const resourceId = "platform.node.resources.rpcLanes";
+    const resourceId = "platform-node-resources-rpcLanes";
     enforceRpcLaneAuthReadiness(config, resolved);
 
     applyRpcLanesModeRouting({

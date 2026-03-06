@@ -11,7 +11,7 @@ import {
 describe("override() helper", () => {
   it("should preserve id and override run for tasks", async () => {
     const base = defineTask({
-      id: "test.task",
+      id: "test-task",
       run: async () => "base",
     });
 
@@ -25,7 +25,7 @@ describe("override() helper", () => {
 
   it("should preserve id and override init for resources", async () => {
     const base = defineResource({
-      id: "test.resource",
+      id: "test-resource",
       init: async () => 1,
     });
 
@@ -42,7 +42,7 @@ describe("override() helper", () => {
 
   it("should preserve id and override run for task middleware", async () => {
     const mw = defineTaskMiddleware({
-      id: "test.middleware",
+      id: "test-middleware",
       run: async ({ next }) => {
         return next();
       },
@@ -68,11 +68,11 @@ describe("override() helper", () => {
   });
 
   it("should preserve id and override run for hooks", async () => {
-    const myEvent = defineEvent({ id: "test.event" });
+    const myEvent = defineEvent({ id: "test-event" });
 
     let value = 0;
     const hook = defineHook({
-      id: "test.hook",
+      id: "test-hook",
       on: myEvent,
       run: async () => (value = 1),
     });
@@ -103,11 +103,11 @@ describe("override() helper", () => {
 
   it("should keep middleware overrides when configuring with .with()", async () => {
     const taskMiddleware = defineTaskMiddleware<{ label: string }>({
-      id: "test.middleware.with.task",
+      id: "test-middleware-with-task",
       run: async ({ next }) => `base:${await next()}`,
     });
     const resourceMiddleware = defineResourceMiddleware<{ label: string }>({
-      id: "test.middleware.with.resource",
+      id: "test-middleware-with-resource",
       run: async ({ next }) => `base:${await next()}`,
     });
 
@@ -147,33 +147,33 @@ describe("override() helper", () => {
 
   it("should behave like r.override for task overrides", async () => {
     const baseTask = r
-      .task("test.alias.task")
+      .task("test-alias-task")
       .run(async () => "base")
       .build();
     const viaAlias = override(baseTask, async () => "alias");
     const viaNamespace = r.override(baseTask, async () => "namespace");
 
     const app = r
-      .resource("test.alias.app")
+      .resource("test-alias-app")
       .register([baseTask])
       .overrides([viaAlias, viaNamespace])
       .build();
 
     await expect(run(app)).rejects.toThrow(
-      'Override target "test.alias.task" is declared more than once.',
+      'Override target "test-alias-task" is declared more than once.',
     );
   });
 
   it("should ignore null and undefined overrides", async () => {
     const base = defineTask({
-      id: "test.task.nullable",
+      id: "test-task-nullable",
       run: async () => "base",
     });
 
     const changed = override(base, async () => "changed");
 
     const app = defineResource({
-      id: "app.nullable.overrides",
+      id: "app-nullable-overrides",
       register: [base],
       overrides: [changed, null, undefined],
       dependencies: { base },
@@ -186,7 +186,7 @@ describe("override() helper", () => {
 
   it("should reject patch-form usage at runtime", () => {
     const base = defineTask({
-      id: "test.task.runtime.patch.rejected",
+      id: "test-task-runtime-patch-rejected",
       run: async () => "base",
     });
 
@@ -204,7 +204,7 @@ describe("override() helper", () => {
 
   it("should reject patch-form defineOverride usage at runtime", () => {
     const base = defineTask({
-      id: "test.task.runtime.patch.rejected.define",
+      id: "test-task-runtime-patch-rejected-define",
       run: async () => "base",
     });
 
@@ -227,7 +227,7 @@ describe("override() helper", () => {
 
   it("supports defineOverride as the same override contract as r.override", async () => {
     const baseTask = defineTask({
-      id: "test.override.define-equals-r.base",
+      id: "test-override-define-equals-r-base",
       run: async () => "base",
     });
     const highLevelOverride = defineOverride(baseTask, async () => "changed");
@@ -235,7 +235,7 @@ describe("override() helper", () => {
     expect(await highLevelOverride.run(undefined, {})).toBe("changed");
 
     const app = defineResource({
-      id: "test.override.define-equals-r.app",
+      id: "test-override-define-equals-r-app",
       register: [baseTask],
       overrides: [highLevelOverride],
       dependencies: { baseTask },

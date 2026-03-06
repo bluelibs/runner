@@ -75,7 +75,7 @@ describe("tools/check schema support", () => {
 
     const map = check(
       {
-        worker: { id: "lane.worker" },
+        worker: { id: "lane-worker" },
       },
       Match.MapOf(
         Match.ObjectIncluding({
@@ -83,16 +83,16 @@ describe("tools/check schema support", () => {
         }),
       ),
     );
-    expect(map.worker.id).toBe("lane.worker");
+    expect(map.worker.id).toBe("lane-worker");
     expect(
       Match.MapOf(
         Match.ObjectIncluding({
           id: String,
         }),
       ).parse({
-        worker: { id: "lane.worker" },
+        worker: { id: "lane-worker" },
       }).worker.id,
-    ).toBe("lane.worker");
+    ).toBe("lane-worker");
     expect(() =>
       check({ worker: { id: 123 } }, Match.MapOf({ id: String })),
     ).toThrow(MatchError);

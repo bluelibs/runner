@@ -11,10 +11,10 @@ import { run, definitions } from "../../index";
 describe("Optional dependencies", () => {
   test("task.optional() missing should resolve to undefined in resource deps", async () => {
     const app = defineResource({
-      id: "tests.optional.task.missing",
+      id: "tests-optional-task-missing",
       dependencies: {
         maybeTask: defineTask({
-          id: "tests.optional.task",
+          id: "tests-optional-task",
           async run() {
             return "unused" as const;
           },
@@ -32,14 +32,14 @@ describe("Optional dependencies", () => {
 
   test("task.optional() present should resolve to callable with intercept()", async () => {
     const t = defineTask({
-      id: "tests.optional.present.task",
+      id: "tests-optional-present-task",
       async run() {
         return "result" as const;
       },
     });
 
     const registrar = defineResource({
-      id: "tests.optional.task.registrar",
+      id: "tests-optional-task-registrar",
       register: [t],
       async init() {
         return "ready" as const;
@@ -47,7 +47,7 @@ describe("Optional dependencies", () => {
     });
 
     const app = defineResource({
-      id: "tests.optional.task.user",
+      id: "tests-optional-task-user",
       register: [registrar],
       dependencies: {
         maybeTask: t.optional(),
@@ -86,10 +86,10 @@ describe("Optional dependencies", () => {
   });
 
   test("resource.optional() missing should resolve to undefined in resource deps", async () => {
-    const res = defineResource({ id: "tests.optional.resource" });
+    const res = defineResource({ id: "tests-optional-resource" });
 
     const app = defineResource({
-      id: "tests.optional.resource.user",
+      id: "tests-optional-resource-user",
       dependencies: {
         maybeRes: res.optional(),
       },
@@ -105,14 +105,14 @@ describe("Optional dependencies", () => {
 
   test("resource.optional() present should resolve to resource value", async () => {
     const res = defineResource({
-      id: "tests.optional.resource.present",
+      id: "tests-optional-resource-present",
       async init() {
         return 42 as const;
       },
     });
 
     const registrar = defineResource({
-      id: "tests.optional.resource.registrar",
+      id: "tests-optional-resource-registrar",
       register: [res],
       async init() {
         return "ready" as const;
@@ -120,7 +120,7 @@ describe("Optional dependencies", () => {
     });
 
     const app = defineResource({
-      id: "tests.optional.resource.user2",
+      id: "tests-optional-resource-user2",
       register: [registrar],
       dependencies: {
         maybeRes: res.optional(),
@@ -137,14 +137,14 @@ describe("Optional dependencies", () => {
 
   test("fails fast when subtree middleware depends on an optional-wrapped target task", async () => {
     const target = defineTask({
-      id: "tests.optional.middleware.target",
+      id: "tests-optional-middleware-target",
       async run() {
         return "x" as const;
       },
     });
 
     const mw = defineTaskMiddleware({
-      id: "tests.optional.middleware",
+      id: "tests-optional-middleware",
       dependencies: {
         target: target.optional(),
       },
@@ -157,7 +157,7 @@ describe("Optional dependencies", () => {
     });
 
     const app = defineResource({
-      id: "tests.optional.middleware.app",
+      id: "tests-optional-middleware-app",
       subtree: {
         tasks: {
           middleware: [mw],
@@ -170,9 +170,9 @@ describe("Optional dependencies", () => {
   });
 
   test("event.optional() missing should resolve to undefined", async () => {
-    const ev = defineEvent({ id: "tests.optional.event.missing" });
+    const ev = defineEvent({ id: "tests-optional-event-missing" });
     const app = defineResource({
-      id: "tests.optional.event.user",
+      id: "tests-optional-event-user",
       dependencies: {
         maybeEvent: ev.optional(),
       },
@@ -187,17 +187,17 @@ describe("Optional dependencies", () => {
 
   test("event.optional() present should resolve to emit function", async () => {
     const ev = defineEvent<{ v: number }>({
-      id: "tests.optional.event.present",
+      id: "tests-optional-event-present",
     });
     const registrar = defineResource({
-      id: "tests.optional.event.registrar",
+      id: "tests-optional-event-registrar",
       register: [ev],
       async init() {
         return "rdy" as const;
       },
     });
     const app = defineResource({
-      id: "tests.optional.event.user2",
+      id: "tests-optional-event-user2",
       register: [registrar],
       dependencies: { maybeEvent: ev.optional() },
       async init(_config, deps) {
@@ -217,7 +217,7 @@ describe("Optional dependencies", () => {
     };
 
     const app = defineResource({
-      id: "tests.optional.invalid",
+      id: "tests-optional-invalid",
       dependencies: {
         // @ts-expect-error
         bad: badWrapper,
@@ -232,22 +232,22 @@ describe("Optional dependencies", () => {
 
   test("getDependentNodes accounts for optional deps in tasks and resources", async () => {
     const depTask = defineTask({
-      id: "tests.optional.graph.depTask",
+      id: "tests-optional-graph-depTask",
       async run() {
         return "y" as const;
       },
     });
     const usesTask = defineTask({
-      id: "tests.optional.graph.usesTask",
+      id: "tests-optional-graph-usesTask",
       dependencies: { dep: depTask.optional() },
       async run() {
         return "x" as const;
       },
     });
 
-    const depRes = defineResource({ id: "tests.optional.graph.depRes" });
+    const depRes = defineResource({ id: "tests-optional-graph-depRes" });
     const usesRes = defineResource({
-      id: "tests.optional.graph.usesRes",
+      id: "tests-optional-graph-usesRes",
       dependencies: { r: depRes.optional() },
       async init() {
         return "ok" as const;
@@ -255,14 +255,14 @@ describe("Optional dependencies", () => {
     });
 
     const app = defineResource({
-      id: "tests.optional.graph.app",
+      id: "tests-optional-graph-app",
       register: [depTask, usesTask, depRes, usesRes],
       async init() {
         return "ready" as const;
       },
     });
     const harness = defineResource({
-      id: "tests.optional.graph.harness",
+      id: "tests-optional-graph-harness",
       register: [app],
     });
     const rr = await run(harness);
@@ -275,25 +275,25 @@ describe("Optional dependencies", () => {
 
   it("task middleware should be able to depend on optional dependencies", async () => {
     const nonRegisteredResource = defineResource({
-      id: "non.registered.resource",
+      id: "non-registered-resource",
       init: async () => true,
     });
     const nonRegisteredTask = defineTask({
-      id: "non.registered.task",
+      id: "non-registered-task",
       run: async () => "Task executed",
     });
 
     const registeredResource = defineResource({
-      id: "registered.resource",
+      id: "registered-resource",
       init: async () => true,
     });
     const registeredTask = defineTask({
-      id: "registered.task",
+      id: "registered-task",
       run: async () => "Task executed",
     });
 
     const mw = defineTaskMiddleware({
-      id: "everywhere.middleware",
+      id: "everywhere-middleware",
       dependencies: {
         registeredResource,
         registeredTask,
@@ -310,12 +310,12 @@ describe("Optional dependencies", () => {
     });
 
     const middlewarableTask = defineTask({
-      id: "middlewarable.task",
+      id: "middlewarable-task",
       run: async (input: string) => input,
     });
 
     const scopedTasksResource = defineResource({
-      id: "app.scoped.tasks",
+      id: "app-scoped-tasks",
       subtree: {
         tasks: {
           middleware: [mw],
@@ -336,25 +336,25 @@ describe("Optional dependencies", () => {
 
   it("resource middleware should be able to depend on optional dependencies", async () => {
     const nonRegisteredResource = defineResource({
-      id: "non.registered.resource",
+      id: "non-registered-resource",
       init: async () => true,
     });
     const nonRegisteredTask = defineTask({
-      id: "non.registered.task",
+      id: "non-registered-task",
       run: async () => "Task executed",
     });
 
     const registeredResource = defineResource({
-      id: "registered.resource",
+      id: "registered-resource",
       init: async () => true,
     });
     const registeredTask = defineTask({
-      id: "registered.task",
+      id: "registered-task",
       run: async () => "Task executed",
     });
 
     const mw = defineResourceMiddleware({
-      id: "everywhere.middleware",
+      id: "everywhere-middleware",
       dependencies: {
         registeredResource,
         registeredTask,
@@ -379,12 +379,12 @@ describe("Optional dependencies", () => {
     });
 
     const middlewarableResource = defineResource({
-      id: "middlewarable.resource",
+      id: "middlewarable-resource",
       init: async () => "Hello",
     });
 
     const scopedResourcesResource = defineResource({
-      id: "app.scoped.resources",
+      id: "app-scoped-resources",
       subtree: {
         resources: {
           middleware: [mw],
@@ -410,12 +410,12 @@ describe("Optional dependencies", () => {
 
   it("hooks should be able to depend on optional dependencies", async () => {
     const nonRegisteredResource = defineResource({
-      id: "non.registered.resource",
+      id: "non-registered-resource",
       init: async () => true,
     });
 
     const registeredResource = defineResource({
-      id: "registered.resource",
+      id: "registered-resource",
       init: async () => true,
     });
 

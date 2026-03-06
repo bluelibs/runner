@@ -10,7 +10,7 @@ describe("asyncContext allowlist helpers", () => {
       resolveLaneAsyncContextAllowList({ legacyAllowAsyncContext: true }),
     ).toBeUndefined();
 
-    const contextRef = { id: "ctx.object" } as any;
+    const contextRef = { id: "ctx-object" } as any;
     expect(
       resolveLaneAsyncContextAllowList({
         laneAsyncContexts: [
@@ -21,7 +21,7 @@ describe("asyncContext allowlist helpers", () => {
           contextRef,
         ],
       }),
-    ).toEqual(["ctx.string", "ctx.object"]);
+    ).toEqual(["ctx.string", "ctx-object"]);
   });
 
   it("builds context header for allowlisted/all contexts and skips unavailable ones", () => {
@@ -29,12 +29,12 @@ describe("asyncContext allowlist helpers", () => {
       stringify: (value: unknown) => JSON.stringify(value),
     } as any;
     const goodCtx = {
-      id: "ctx.good",
+      id: "ctx-good",
       use: () => ({ ok: true }),
       serialize: (value: unknown) => JSON.stringify(value),
     } as any;
     const badCtx = {
-      id: "ctx.bad",
+      id: "ctx-bad",
       use: () => {
         throw new Error("missing");
       },

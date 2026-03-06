@@ -11,7 +11,7 @@ import {
 describe("nodeExposure - more multipart coverage", () => {
   it("multipart: unknown file field triggers stream.resume() path", async () => {
     const echo = defineTask<{ n: number }, Promise<number>>({
-      id: "exposer.more.echo",
+      id: "exposer-more-echo",
       run: async ({ n }) => n,
     });
     const exposure = rpcExposure.with({
@@ -21,7 +21,7 @@ describe("nodeExposure - more multipart coverage", () => {
       },
     });
     const app = defineResource({
-      id: "exposer.more.app1",
+      id: "exposer-more-app1",
       register: [echo, exposure],
     });
     const rr = await run(app);
@@ -50,7 +50,7 @@ describe("nodeExposure - more multipart coverage", () => {
 
   it("multipart: file part with empty name is ignored (stream.resume path)", async () => {
     const echo = defineTask<{ n: number }, Promise<number>>({
-      id: "exposer.more.emptyname",
+      id: "exposer-more-emptyname",
       run: async ({ n }) => n,
     });
     const exposure = rpcExposure.with({
@@ -60,7 +60,7 @@ describe("nodeExposure - more multipart coverage", () => {
       },
     });
     const app = defineResource({
-      id: "exposer.more.app1b",
+      id: "exposer-more-app1b",
       register: [echo, exposure],
     });
     const rr = await run(app);
@@ -89,7 +89,7 @@ describe("nodeExposure - more multipart coverage", () => {
 
   it("multipart: request stream error triggers 499 (busboy error path)", async () => {
     const fileTask = defineTask<{ name: string }, Promise<string>>({
-      id: "exposer.more.busboy.error",
+      id: "exposer-more-busboy-error",
       run: async ({ name }) => name,
     });
     const exposure = rpcExposure.with({
@@ -99,7 +99,7 @@ describe("nodeExposure - more multipart coverage", () => {
       },
     });
     const app = defineResource({
-      id: "exposer.more.app6",
+      id: "exposer-more-app6",
       register: [fileTask, exposure],
     });
     const rr = await run(app);

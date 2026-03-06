@@ -8,7 +8,7 @@ describe("Temporal Middleware: Debounce", () => {
     jest.useFakeTimers();
     let callCount = 0;
     const task = defineTask({
-      id: "debounce.task",
+      id: "debounce-task",
       middleware: [debounceTaskMiddleware.with({ ms: 50 })],
       run: async (val: string) => {
         callCount++;
@@ -41,7 +41,7 @@ describe("Temporal Middleware: Debounce", () => {
     jest.useFakeTimers();
     let callCount = 0;
     const task = defineTask({
-      id: "debounce.cycles",
+      id: "debounce-cycles",
       middleware: [debounceTaskMiddleware.with({ ms: 50 })],
       run: async (val: string) => {
         callCount++;
@@ -83,7 +83,7 @@ describe("Temporal Middleware: Debounce", () => {
     jest.useFakeTimers();
     let callCount = 0;
     const task = defineTask({
-      id: "debounce.error",
+      id: "debounce-error",
       middleware: [debounceTaskMiddleware.with({ ms: 50 })],
       run: async () => {
         callCount++;

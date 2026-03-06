@@ -4,7 +4,7 @@ import { runtimeSource } from "../../../types/runtimeSource";
 describe("EventLanesFailureHandler", () => {
   const baseMessage = {
     id: "m1",
-    laneId: "lane.a",
+    laneId: "lane-a",
     eventId: "event.a",
     payload: "{}",
     source: runtimeSource.runtime("tests"),
@@ -24,7 +24,7 @@ describe("EventLanesFailureHandler", () => {
     await handleEventLaneConsumerFailure({
       queue,
       binding: {
-        lane: { id: "lane.a" },
+        lane: { id: "lane-a" },
         queue: {} as any,
       } as any,
       message: baseMessage,
@@ -54,7 +54,7 @@ describe("EventLanesFailureHandler", () => {
     await handleEventLaneConsumerFailure({
       queue,
       binding: {
-        lane: { id: "lane.a" },
+        lane: { id: "lane-a" },
         queue: {} as any,
         retryDelayMs: 0,
       } as any,
@@ -93,7 +93,7 @@ describe("EventLanesFailureHandler", () => {
     await handleEventLaneConsumerFailure({
       queue,
       binding: {
-        lane: { id: "lane.a" },
+        lane: { id: "lane-a" },
         queue: {} as any,
         retryDelayMs: 25,
       } as any,

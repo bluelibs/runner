@@ -30,7 +30,9 @@ export function defineEvent<TPayload = void>(
 ): IEvent<TPayload> {
   const callerFilePath = getCallerFile();
   const eventConfig = config;
-  assertDefinitionId("Event", eventConfig.id);
+  assertDefinitionId("Event", eventConfig.id, {
+    callerFilePath: callerFilePath,
+  });
   const payloadSchema = normalizeOptionalValidationSchema(
     eventConfig.payloadSchema,
     {

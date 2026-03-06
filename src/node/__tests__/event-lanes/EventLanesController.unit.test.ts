@@ -77,9 +77,9 @@ describe("EventLanesController unit coverage", () => {
         store: {
           events: new Map([
             [
-              "unit.event",
+              "unit-event",
               {
-                event: { id: "unit.event" },
+                event: { id: "unit-event" },
               },
             ],
           ]),
@@ -94,9 +94,9 @@ describe("EventLanesController unit coverage", () => {
         activeBindingsByQueue: new Map(),
         bindingsByLaneId: new Map([
           [
-            "lane.unit",
+            "lane-unit",
             {
-              lane: { id: "lane.unit" },
+              lane: { id: "lane-unit" },
               queue,
             },
           ],
@@ -115,11 +115,11 @@ describe("EventLanesController unit coverage", () => {
 
     await (controller as any).consumeQueueMessage(
       queue,
-      new Set(["lane.unit"]),
+      new Set(["lane-unit"]),
       {
         id: "message-1",
-        laneId: "lane.unit",
-        eventId: "unit.event",
+        laneId: "lane-unit",
+        eventId: "unit-event",
         payload: JSON.stringify({ ok: true }),
         source: runtimeSource.runtime("tests.event-lanes.unit"),
         createdAt: new Date(),
@@ -132,8 +132,8 @@ describe("EventLanesController unit coverage", () => {
     expect(logger.error).toHaveBeenCalledWith(
       "Event lane consumer failed.",
       expect.objectContaining({
-        laneId: "lane.unit",
-        eventId: "unit.event",
+        laneId: "lane-unit",
+        eventId: "unit-event",
         error: emitError,
         data: expect.objectContaining({
           attempts: 1,
@@ -167,9 +167,9 @@ describe("EventLanesController unit coverage", () => {
         store: {
           events: new Map([
             [
-              "unit.event.retry",
+              "unit-event-retry",
               {
-                event: { id: "unit.event.retry" },
+                event: { id: "unit-event-retry" },
               },
             ],
           ]),
@@ -184,9 +184,9 @@ describe("EventLanesController unit coverage", () => {
         activeBindingsByQueue: new Map(),
         bindingsByLaneId: new Map([
           [
-            "lane.unit.retry",
+            "lane-unit-retry",
             {
-              lane: { id: "lane.unit.retry" },
+              lane: { id: "lane-unit-retry" },
               queue,
               retryDelayMs: 1,
             },
@@ -206,11 +206,11 @@ describe("EventLanesController unit coverage", () => {
 
     await (controller as any).consumeQueueMessage(
       queue,
-      new Set(["lane.unit.retry"]),
+      new Set(["lane-unit-retry"]),
       {
         id: "message-retry",
-        laneId: "lane.unit.retry",
-        eventId: "unit.event.retry",
+        laneId: "lane-unit-retry",
+        eventId: "unit-event-retry",
         payload: JSON.stringify({ ok: true }),
         source: runtimeSource.runtime("tests.event-lanes.unit.retry"),
         createdAt: new Date(),
@@ -261,18 +261,18 @@ describe("EventLanesController unit coverage", () => {
         activeBindingsByQueue: new Map(),
         bindingsByLaneId: new Map([
           [
-            "lane.unit.raw",
+            "lane-unit-raw",
             {
-              lane: { id: "lane.unit.raw" },
+              lane: { id: "lane-unit-raw" },
               queue,
             },
           ],
         ]),
         eventRouteByEventId: new Map([
           [
-            "unit.raw.event",
+            "unit-raw-event",
             {
-              lane: { id: "lane.unit.raw" },
+              lane: { id: "lane-unit-raw" },
             },
           ],
         ]),
@@ -293,7 +293,7 @@ describe("EventLanesController unit coverage", () => {
     const stopPropagation = jest.fn();
 
     await interceptor(next, {
-      id: "unit.raw.event",
+      id: "unit-raw-event",
       data: { ok: true },
       source: runtimeSource.runtime("tests.event-lanes.unit.raw"),
       stopPropagation,

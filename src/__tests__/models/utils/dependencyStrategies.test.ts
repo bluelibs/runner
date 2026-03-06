@@ -12,15 +12,15 @@ import { defineError } from "../../../definers/defineError";
 import { defineAsyncContext } from "../../../definers/defineAsyncContext";
 
 // Fixtures
-const resource = defineResource({ id: "test.resource", init: async () => 42 });
-const task = defineTask({ id: "test.task", run: async () => "ok" });
-const event = defineEvent<string>({ id: "test.event" });
-const tag = defineTag({ id: "test.tag" });
+const resource = defineResource({ id: "test-resource", init: async () => 42 });
+const task = defineTask({ id: "test-task", run: async () => "ok" });
+const event = defineEvent<string>({ id: "test-event" });
+const tag = defineTag({ id: "test-tag" });
 const errorHelper = defineError({
-  id: "test.error",
+  id: "test-error",
   format: () => "boom",
 });
-const asyncCtx = defineAsyncContext<number>({ id: "test.asyncCtx" });
+const asyncCtx = defineAsyncContext<number>({ id: "test-asyncCtx" });
 
 describe("dependencyStrategies", () => {
   describe("strategies list", () => {

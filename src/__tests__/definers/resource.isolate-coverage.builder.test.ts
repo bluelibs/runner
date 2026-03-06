@@ -29,12 +29,12 @@ describe("isolation entry normalization coverage", () => {
   describe("deny/only entry validation", () => {
     it("throws isolateInvalidEntryError for bare strings in deny array", async () => {
       const task = defineTask({
-        id: "coverage.isolate.deny-string.task",
+        id: "coverage-isolate-deny-string-task",
         run: async () => 42,
       });
       const resource = defineResource({
-        id: "coverage.isolate.deny-string.resource",
-        isolate: { deny: ["task.id.string" as never] },
+        id: "coverage-isolate-deny-string-resource",
+        isolate: { deny: ["task-id-string" as never] },
         register: [task],
       });
 
@@ -43,15 +43,15 @@ describe("isolation entry normalization coverage", () => {
 
     it("throws isolateUnknownTargetError for scope with non-existent subtree resourceId", async () => {
       const task = defineTask({
-        id: "coverage.isolate.unknown-subtree.task",
+        id: "coverage-isolate-unknown-subtree-task",
         run: async () => 42,
       });
       const unknownSubtree = subtreeOf({
-        id: "non.existent.resource",
+        id: "non-existent-resource",
       } as never);
 
       const resource = defineResource({
-        id: "coverage.isolate.unknown-subtree.resource",
+        id: "coverage-isolate-unknown-subtree-resource",
         isolate: { deny: [scope(unknownSubtree)] },
         register: [task],
       });
@@ -61,11 +61,11 @@ describe("isolation entry normalization coverage", () => {
 
     it("throws isolateInvalidEntryError for scope with empty string target", async () => {
       const task = defineTask({
-        id: "coverage.isolate.empty-scope-target.task",
+        id: "coverage-isolate-empty-scope-target-task",
         run: async () => 42,
       });
       const resource = defineResource({
-        id: "coverage.isolate.empty-scope-target.resource",
+        id: "coverage-isolate-empty-scope-target-resource",
         isolate: { deny: [scope("" as unknown as never)] },
         register: [task],
       });
@@ -75,11 +75,11 @@ describe("isolation entry normalization coverage", () => {
 
     it("throws isolateInvalidEntryError for scope string targets", async () => {
       const task = defineTask({
-        id: "coverage.isolate.zero-match-wildcard.task",
+        id: "coverage-isolate-zero-match-wildcard-task",
         run: async () => 42,
       });
       const resource = defineResource({
-        id: "coverage.isolate.zero-match-wildcard.resource",
+        id: "coverage-isolate-zero-match-wildcard-resource",
         isolate: { deny: [scope("no.such.pattern.*" as unknown as never)] },
         register: [task],
       });
@@ -91,11 +91,11 @@ describe("isolation entry normalization coverage", () => {
   describe("exports entry validation", () => {
     it("throws isolateInvalidExportsError for empty string in exports", async () => {
       const task = defineTask({
-        id: "coverage.isolate.empty-export.task",
+        id: "coverage-isolate-empty-export-task",
         run: async () => 42,
       });
       const resource = defineResource({
-        id: "coverage.isolate.empty-export.resource",
+        id: "coverage-isolate-empty-export-resource",
         isolate: { exports: ["" as never] },
         register: [task],
       });
@@ -105,11 +105,11 @@ describe("isolation entry normalization coverage", () => {
 
     it("throws isolateInvalidExportsError for wildcard string exports", async () => {
       const task = defineTask({
-        id: "coverage.isolate.zero-export-match.task",
+        id: "coverage-isolate-zero-export-match-task",
         run: async () => 42,
       });
       const resource = defineResource({
-        id: "coverage.isolate.zero-export-match.resource",
+        id: "coverage-isolate-zero-export-match-resource",
         isolate: { exports: ["no.such.export.pattern.*"] as any },
         register: [task],
       });
@@ -119,11 +119,11 @@ describe("isolation entry normalization coverage", () => {
 
     it("allows valid exports without throwing", async () => {
       const task = defineTask({
-        id: "coverage.isolate.valid-export.task",
+        id: "coverage-isolate-valid-export-task",
         run: async () => 42,
       });
       const resource = defineResource({
-        id: "coverage.isolate.valid-export.resource",
+        id: "coverage-isolate-valid-export-resource",
         isolate: { exports: [task] },
         register: [task],
       });
@@ -135,20 +135,20 @@ describe("isolation entry normalization coverage", () => {
 
   describe("tag handling in isolation", () => {
     it("allows tags in deny", async () => {
-      const tag = defineTag({ id: "coverage.isolate.tag-deny.tag" });
+      const tag = defineTag({ id: "coverage-isolate-tag-deny-tag" });
       const taggedTask = defineTask({
-        id: "coverage.isolate.tag-deny.tagged-task",
+        id: "coverage-isolate-tag-deny-tagged-task",
         run: async () => 42,
         tags: [tag],
       });
       const consumerTask = defineTask({
-        id: "coverage.isolate.tag-deny.consumer-task",
+        id: "coverage-isolate-tag-deny-consumer-task",
         dependencies: { taggedTask },
         run: async (_input, deps) => deps.taggedTask(),
       });
 
       const resource = defineResource({
-        id: "coverage.isolate.tag-deny.resource",
+        id: "coverage-isolate-tag-deny-resource",
         isolate: { deny: [scope(tag)] },
         register: [tag, taggedTask, consumerTask],
       });
@@ -167,15 +167,15 @@ describe("isolation entry normalization coverage", () => {
     });
 
     it("allows tags in exports", async () => {
-      const tag = defineTag({ id: "coverage.isolate.tag-export.tag" });
+      const tag = defineTag({ id: "coverage-isolate-tag-export-tag" });
       const taggedTask = defineTask({
-        id: "coverage.isolate.tag-export.tagged-task",
+        id: "coverage-isolate-tag-export-tagged-task",
         run: async () => 100,
         tags: [tag],
       });
 
       const resource = defineResource({
-        id: "coverage.isolate.tag-export.resource",
+        id: "coverage-isolate-tag-export-resource",
         isolate: { exports: [tag] },
         register: [tag, taggedTask],
       });
@@ -188,21 +188,21 @@ describe("isolation entry normalization coverage", () => {
   describe("non-tag definitions in scope", () => {
     it("scope(taskDef) covers the non-tag branch in addTarget", async () => {
       const deniedTask = defineTask({
-        id: "coverage.isolate.scope-task.denied",
+        id: "coverage-isolate-scope-task-denied",
         run: async () => 42,
       });
       const allowedTask = defineTask({
-        id: "coverage.isolate.scope-task.allowed",
+        id: "coverage-isolate-scope-task-allowed",
         run: async () => 100,
       });
       const consumerTask = defineTask({
-        id: "coverage.isolate.scope-task.consumer",
+        id: "coverage-isolate-scope-task-consumer",
         dependencies: { deniedTask },
         run: async (_input, deps) => deps.deniedTask(),
       });
 
       const resource = defineResource({
-        id: "coverage.isolate.scope-task.resource",
+        id: "coverage-isolate-scope-task-resource",
         // Use scope() with a task definition (not a tag)
         isolate: { deny: [scope(deniedTask)] },
         register: [deniedTask, allowedTask, consumerTask],
@@ -222,16 +222,16 @@ describe("isolation entry normalization coverage", () => {
 
     it("scope([taskDef, eventDef]) covers multiple non-tag definitions", async () => {
       const deniedTask = defineTask({
-        id: "coverage.isolate.scope-multi.denied-task",
+        id: "coverage-isolate-scope-multi-denied-task",
         run: async () => 42,
       });
       const allowedTask = defineTask({
-        id: "coverage.isolate.scope-multi.allowed",
+        id: "coverage-isolate-scope-multi-allowed",
         run: async () => 100,
       });
 
       const resource = defineResource({
-        id: "coverage.isolate.scope-multi.resource",
+        id: "coverage-isolate-scope-multi-resource",
         // Use scope() with an array of non-tag definitions
         isolate: { only: [scope([deniedTask, allowedTask])] },
         register: [deniedTask, allowedTask],

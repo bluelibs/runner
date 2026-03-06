@@ -1,7 +1,7 @@
 import { r } from "../../..";
 
 {
-  const laneA = r.eventLane("types.event-lane.topology.a").build();
+  const laneA = r.eventLane("types-event-lane-topology-a").build();
 
   r.eventLane.topology({
     profiles: {
@@ -14,7 +14,7 @@ import { r } from "../../..";
     profiles: {
       worker: {
         // @ts-expect-error consume expects lane references, not plain strings.
-        consume: ["types.event-lane.topology.a"],
+        consume: ["types-event-lane-topology-a"],
       },
     },
     bindings: [{ lane: laneA, queue: { id: "queue-a" } }],

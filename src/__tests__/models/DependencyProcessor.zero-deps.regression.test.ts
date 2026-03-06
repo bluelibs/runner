@@ -21,7 +21,7 @@ describe("DependencyProcessor zero-dependency caching", () => {
     store.setTaskRunner(taskRunner);
 
     const resource = defineResource({
-      id: "dependency.processor.zero.deps.resource",
+      id: "dependency-processor-zero-deps-resource",
     });
 
     store.storeGenericItem(resource);
@@ -49,12 +49,12 @@ describe("DependencyProcessor zero-dependency caching", () => {
     store.setTaskRunner(taskRunner);
 
     const dependencyTask = defineTask({
-      id: "dependency.processor.missing.task.dep",
+      id: "dependency-processor-missing-task-dep",
       run: async (input: number | undefined) => input ?? 0,
     });
 
     const consumerResource = defineResource({
-      id: "dependency.processor.missing.task.consumer",
+      id: "dependency-processor-missing-task-consumer",
       dependencies: {
         dependencyTask,
       },
@@ -90,15 +90,15 @@ describe("DependencyProcessor zero-dependency caching", () => {
     store.tasks.delete(dependencyTask.id);
 
     expect(() => wrappedTaskDependency(1)).toThrow(
-      /Dependency Task dependency\.processor\.missing\.task\.dep not found/,
+      /Dependency Task dependency-processor-missing-task-dep not found/,
     );
     expect(() =>
       wrappedTaskDependency.intercept(async (_next, input) => input ?? 0),
     ).toThrow(
-      /Dependency Task dependency\.processor\.missing\.task\.dep not found/,
+      /Dependency Task dependency-processor-missing-task-dep not found/,
     );
     expect(() => wrappedTaskDependency.getInterceptingResourceIds()).toThrow(
-      /Dependency Task dependency\.processor\.missing\.task\.dep not found/,
+      /Dependency Task dependency-processor-missing-task-dep not found/,
     );
   });
 
@@ -114,7 +114,7 @@ describe("DependencyProcessor zero-dependency caching", () => {
     });
 
     const resource = defineResource({
-      id: "dependency.processor.single.flight.resource",
+      id: "dependency-processor-single-flight-resource",
       init: initSpy,
     });
 
@@ -159,7 +159,7 @@ describe("DependencyProcessor zero-dependency caching", () => {
       {
         maybeMiddlewareManager: middlewareManager,
       },
-      "tests.resources.owner.optionalMiddlewareManager",
+      "tests-resources-owner-optionalMiddlewareManager",
     ) as {
       maybeMiddlewareManager: {
         intercept: (
@@ -183,7 +183,7 @@ describe("DependencyProcessor zero-dependency caching", () => {
     expect(
       wrapped.maybeMiddlewareManager.getInterceptorOwnerSnapshot()
         .globalTaskInterceptorOwnerIds,
-    ).toEqual(["tests.resources.owner.optionalMiddlewareManager"]);
+    ).toEqual(["tests-resources-owner-optionalMiddlewareManager"]);
   });
 
   it("returns original value when owner-aware middleware wrapping is not possible", () => {
@@ -209,7 +209,7 @@ describe("DependencyProcessor zero-dependency caching", () => {
     expect(
       extractor.makeOwnerAwareMiddlewareManager(
         primitiveValue,
-        "tests.resources.owner.primitive",
+        "tests-resources-owner-primitive",
       ),
     ).toBe(primitiveValue);
 
@@ -220,7 +220,7 @@ describe("DependencyProcessor zero-dependency caching", () => {
     expect(
       extractor.makeOwnerAwareMiddlewareManager(
         plainObject,
-        "tests.resources.owner.plainObject",
+        "tests-resources-owner-plainObject",
       ),
     ).toBe(plainObject);
   });
@@ -232,10 +232,10 @@ describe("DependencyProcessor zero-dependency caching", () => {
     store.setTaskRunner(taskRunner);
 
     const tag = defineTag({
-      id: "dependency.extractor.tag.resource.value",
+      id: "dependency-extractor-tag-resource-value",
     });
     const taggedResource = defineResource({
-      id: "dependency.extractor.tag.resource.value.resource",
+      id: "dependency-extractor-tag-resource-value-resource",
       tags: [tag],
       init: async () => "ready",
     });
@@ -253,7 +253,7 @@ describe("DependencyProcessor zero-dependency caching", () => {
 
     const accessor = await extractor.extractTagDependency(
       tag,
-      "dependency.extractor.tag.resource.value.consumer",
+      "dependency-extractor-tag-resource-value-consumer",
     );
     const match = accessor.resources[0]!;
     expect(match.value).toBeUndefined();

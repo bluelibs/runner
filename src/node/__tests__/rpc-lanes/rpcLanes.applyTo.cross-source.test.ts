@@ -7,14 +7,14 @@ import { EVENT_LANES_RESOURCE_ID } from "../../event-lanes/eventLanes.resource";
 describe("rpcLanes applyTo cross-source topology checks", () => {
   it("detects event lane assignment from string applyTo ids in topology state", async () => {
     const event = defineEvent({
-      id: "tests.rpc-lanes.apply-to.event-lane-string.event",
+      id: "tests-rpc-lanes-apply-to-event-lane-string-event",
     });
     const lane = r
-      .rpcLane("tests.rpc-lanes.apply-to.event-lane-string.rpc")
+      .rpcLane("tests-rpc-lanes-apply-to-event-lane-string-rpc")
       .applyTo([event])
       .build();
     const communicator = defineResource({
-      id: "tests.rpc-lanes.apply-to.event-lane-string.communicator",
+      id: "tests-rpc-lanes-apply-to-event-lane-string-communicator",
       init: async () => ({
         event: async () => undefined,
       }),
@@ -25,7 +25,7 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
       .build();
 
     const app = defineResource({
-      id: "tests.rpc-lanes.apply-to.event-lane-string.app",
+      id: "tests-rpc-lanes-apply-to-event-lane-string-app",
       register: [
         event,
         communicator,
@@ -36,7 +36,7 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
               {
                 lane: r
                   .eventLane(
-                    "tests.rpc-lanes.apply-to.event-lane-string.event-lane",
+                    "tests-rpc-lanes-apply-to-event-lane-string-event-lane",
                   )
                   .applyTo([event.id])
                   .build(),
@@ -61,19 +61,19 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
 
   it("ignores non-event event-lane applyTo entries while collecting cross-lane assignments", async () => {
     const task = defineResource({
-      id: "tests.rpc-lanes.apply-to.event-lane-invalid.task-resource",
+      id: "tests-rpc-lanes-apply-to-event-lane-invalid-task-resource",
       init: async () => "ok",
     });
     const callableTask = r
-      .task("tests.rpc-lanes.apply-to.event-lane-invalid.task")
+      .task("tests-rpc-lanes-apply-to-event-lane-invalid-task")
       .run(async () => "local")
       .build();
     const lane = r
-      .rpcLane("tests.rpc-lanes.apply-to.event-lane-invalid.rpc")
+      .rpcLane("tests-rpc-lanes-apply-to-event-lane-invalid-rpc")
       .applyTo([callableTask])
       .build();
     const communicator = defineResource({
-      id: "tests.rpc-lanes.apply-to.event-lane-invalid.communicator",
+      id: "tests-rpc-lanes-apply-to-event-lane-invalid-communicator",
       init: async () => ({
         task: async () => "remote",
       }),
@@ -84,7 +84,7 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
       .build();
 
     const app = defineResource({
-      id: "tests.rpc-lanes.apply-to.event-lane-invalid.app",
+      id: "tests-rpc-lanes-apply-to-event-lane-invalid-app",
       register: [
         task,
         callableTask,
@@ -96,14 +96,14 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
               {
                 lane: r
                   .eventLane(
-                    "tests.rpc-lanes.apply-to.event-lane-invalid.empty",
+                    "tests-rpc-lanes-apply-to-event-lane-invalid-empty",
                   )
                   .build(),
               },
               {
                 lane: r
                   .eventLane(
-                    "tests.rpc-lanes.apply-to.event-lane-invalid.shape",
+                    "tests-rpc-lanes-apply-to-event-lane-invalid-shape",
                   )
                   .applyTo([{} as any])
                   .build(),

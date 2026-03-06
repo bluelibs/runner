@@ -28,7 +28,7 @@ describe("schema normalization helpers", () => {
     const schema = { parse };
 
     const normalized = normalizeValidationSchema(schema, {
-      definitionId: "tests.normalize.parse",
+      definitionId: "tests-normalize-parse",
       subject: "Task input",
     });
 
@@ -38,7 +38,7 @@ describe("schema normalization helpers", () => {
 
     expect(
       normalizeOptionalValidationSchema(undefined, {
-        definitionId: "tests.normalize.optional",
+        definitionId: "tests-normalize-optional",
         subject: "Task input",
       }),
     ).toBeUndefined();
@@ -46,7 +46,7 @@ describe("schema normalization helpers", () => {
 
   it("normalizes class and pattern schemas and rejects undecorated class shorthand", () => {
     const classSchema = normalizeValidationSchema(DecoratedSchema, {
-      definitionId: "tests.normalize.class",
+      definitionId: "tests-normalize-class",
       subject: "Task input",
     });
 
@@ -56,7 +56,7 @@ describe("schema normalization helpers", () => {
     const objectSchema = normalizeValidationSchema(
       { value: String },
       {
-        definitionId: "tests.normalize.object",
+        definitionId: "tests-normalize-object",
         subject: "Task input",
       },
     );
@@ -67,7 +67,7 @@ describe("schema normalization helpers", () => {
     const functionSchema = normalizeValidationSchema(
       ((value: unknown) => typeof value === "string") as any,
       {
-        definitionId: "tests.normalize.function",
+        definitionId: "tests-normalize-function",
         subject: "Task input",
       },
     );
@@ -76,13 +76,13 @@ describe("schema normalization helpers", () => {
 
     expect(() =>
       normalizeValidationSchema(UndecoratedSchema as any, {
-        definitionId: "tests.normalize.undecorated",
+        definitionId: "tests-normalize-undecorated",
         subject: "Task input",
       }),
     ).toThrow(RunnerError);
 
     const nullPatternSchema = normalizeValidationSchema(null as any, {
-      definitionId: "tests.normalize.null-pattern",
+      definitionId: "tests-normalize-null-pattern",
       subject: "Task input",
     });
     expect(nullPatternSchema.parse(null)).toBeNull();
@@ -90,7 +90,7 @@ describe("schema normalization helpers", () => {
     const parseKeyPatternSchema = normalizeValidationSchema(
       { parse: 1 } as any,
       {
-        definitionId: "tests.normalize.parse-key-pattern",
+        definitionId: "tests-normalize-parse-key-pattern",
         subject: "Task input",
       },
     );
@@ -102,7 +102,7 @@ describe("schema normalization helpers", () => {
           value!: string;
         } as any,
         {
-          definitionId: "tests.normalize.undecorated.anonymous",
+          definitionId: "tests-normalize-undecorated-anonymous",
           subject: "Task input",
         },
       ),
@@ -113,7 +113,7 @@ describe("schema normalization helpers", () => {
 describe("defineError schema normalization", () => {
   it("prefers parse-capable function schemas and validates pattern shorthand", () => {
     const staticParseError = defineError<{ value: string }>({
-      id: "tests.error.schema.static-parse",
+      id: "tests-error-schema-static-parse",
       dataSchema: StaticParseSchema as any,
       format: (data) => data.value,
     });
@@ -123,7 +123,7 @@ describe("defineError schema normalization", () => {
     });
 
     const patternError = defineError<{ value: string }>({
-      id: "tests.error.schema.pattern",
+      id: "tests-error-schema-pattern",
       dataSchema: { value: String } as any,
       format: (data) => data.value,
     });
@@ -134,7 +134,7 @@ describe("defineError schema normalization", () => {
 
   it("supports decorated classes and rejects undecorated class shorthand", () => {
     const decoratedError = defineError<{ value: string }>({
-      id: "tests.error.schema.decorated",
+      id: "tests-error-schema-decorated",
       dataSchema: DecoratedSchema,
       format: (data) => data.value,
     });
@@ -144,7 +144,7 @@ describe("defineError schema normalization", () => {
 
     expect(() =>
       defineError<{ value: string }>({
-        id: "tests.error.schema.undecorated",
+        id: "tests-error-schema-undecorated",
         dataSchema: UndecoratedSchema as any,
         format: (data) => data.value,
       }),
@@ -154,7 +154,7 @@ describe("defineError schema normalization", () => {
 
     expect(() =>
       defineError<{ value: string }>({
-        id: "tests.error.schema.undecorated.anonymous",
+        id: "tests-error-schema-undecorated-anonymous",
         dataSchema: trulyAnonymousClass as any,
         format: (data) => data.value,
       }),
@@ -163,15 +163,15 @@ describe("defineError schema normalization", () => {
 
   it("handles null and parse-key pattern fallbacks", () => {
     const nullSchemaError = defineError<any>({
-      id: "tests.error.schema.null-pattern",
+      id: "tests-error-schema-null-pattern",
       dataSchema: null as any,
       format: () => "ok",
     });
 
-    expect(nullSchemaError.id).toBe("tests.error.schema.null-pattern");
+    expect(nullSchemaError.id).toBe("tests-error-schema-null-pattern");
 
     const parseKeyPatternError = defineError<any>({
-      id: "tests.error.schema.parse-key-pattern",
+      id: "tests-error-schema-parse-key-pattern",
       dataSchema: { parse: 1 } as any,
       format: (data) => String(data.parse),
     });
@@ -179,11 +179,11 @@ describe("defineError schema normalization", () => {
     expect(parseKeyPatternError.new({ parse: 1 }).data).toEqual({ parse: 1 });
 
     const functionPatternError = defineError<any>({
-      id: "tests.error.schema.function-pattern",
+      id: "tests-error-schema-function-pattern",
       dataSchema: ((value: unknown) => typeof value === "string") as any,
       format: () => "ok",
     });
 
-    expect(functionPatternError.id).toBe("tests.error.schema.function-pattern");
+    expect(functionPatternError.id).toBe("tests-error-schema-function-pattern");
   });
 });

@@ -19,19 +19,19 @@ describe("DependencyProcessor parallel init internals", () => {
     store.setTaskRunner(taskRunner);
 
     const depA = defineResource({
-      id: "parallel.wave.record.dep.a",
+      id: "parallel-wave-record-dep-a",
       async init() {
         return "dep-a";
       },
     });
     const depB = defineResource({
-      id: "parallel.wave.record.dep.b",
+      id: "parallel-wave-record-dep-b",
       async init() {
         return "dep-b";
       },
     });
     const consumer = defineResource({
-      id: "parallel.wave.record.consumer",
+      id: "parallel-wave-record-consumer",
       dependencies: {
         depA,
         depB,
@@ -45,7 +45,7 @@ describe("DependencyProcessor parallel init internals", () => {
     store.storeGenericItem(depB);
     store.storeGenericItem(consumer);
     store.root = {
-      resource: defineResource({ id: "parallel.wave.record.root" }),
+      resource: defineResource({ id: "parallel-wave-record-root" }),
       config: undefined,
       value: undefined,
       context: {},
@@ -77,10 +77,10 @@ describe("DependencyProcessor parallel init internals", () => {
     store.setTaskRunner(taskRunner);
 
     const missing = defineResource({
-      id: "parallel.wave.missing.dep",
+      id: "parallel-wave-missing-dep",
     });
     const pending = defineResource({
-      id: "parallel.wave.pending",
+      id: "parallel-wave-pending",
       dependencies: { missing },
       async init() {
         return "pending";
@@ -89,7 +89,7 @@ describe("DependencyProcessor parallel init internals", () => {
 
     store.storeGenericItem(pending);
     store.root = {
-      resource: defineResource({ id: "parallel.wave.root" }),
+      resource: defineResource({ id: "parallel-wave-root" }),
       config: undefined,
       value: undefined,
       context: {},
@@ -120,13 +120,13 @@ describe("DependencyProcessor parallel init internals", () => {
     store.setTaskRunner(taskRunner);
 
     const first = defineResource({
-      id: "parallel.wave.first",
+      id: "parallel-wave-first",
       async init() {
         return "first";
       },
     });
     const second = defineResource({
-      id: "parallel.wave.second",
+      id: "parallel-wave-second",
       async init() {
         return "second";
       },
@@ -135,7 +135,7 @@ describe("DependencyProcessor parallel init internals", () => {
     store.storeGenericItem(first);
     store.storeGenericItem(second);
     store.root = {
-      resource: defineResource({ id: "parallel.wave.root.2" }),
+      resource: defineResource({ id: "parallel-wave-root-2" }),
       config: undefined,
       value: undefined,
       context: {},
@@ -177,7 +177,7 @@ describe("DependencyProcessor parallel init internals", () => {
     store.setTaskRunner(taskRunner);
 
     store.root = {
-      resource: defineResource({ id: "parallel.lazy.empty.root" }),
+      resource: defineResource({ id: "parallel-lazy-empty-root" }),
       config: undefined,
       value: undefined,
       context: {},
@@ -210,17 +210,17 @@ describe("DependencyProcessor parallel init internals", () => {
     store.setTaskRunner(taskRunner);
 
     const existing = defineResource({
-      id: "parallel.lazy.collect.existing",
+      id: "parallel-lazy-collect-existing",
     });
     const missing = defineResource({
-      id: "parallel.lazy.collect.missing",
+      id: "parallel-lazy-collect-missing",
     });
     const event = defineEvent({
-      id: "parallel.lazy.collect.event",
+      id: "parallel-lazy-collect-event",
     });
 
     const hook = defineHook({
-      id: "parallel.lazy.collect.hook",
+      id: "parallel-lazy-collect-hook",
       on: event,
       dependencies: {
         existing,
@@ -230,7 +230,7 @@ describe("DependencyProcessor parallel init internals", () => {
     });
 
     const task = defineTask({
-      id: "parallel.lazy.collect.task",
+      id: "parallel-lazy-collect-task",
       dependencies: {
         existing,
         missing: missing.optional(),
@@ -247,7 +247,7 @@ describe("DependencyProcessor parallel init internals", () => {
 
     store.root = {
       resource: defineResource({
-        id: "parallel.lazy.collect.root",
+        id: "parallel-lazy-collect-root",
         dependencies: { existing },
       }),
       config: undefined,
@@ -291,20 +291,20 @@ describe("DependencyProcessor parallel init internals", () => {
     store.setTaskRunner(taskRunner);
 
     const aggregateTag = defineTag({
-      id: "parallel.lazy.collect.tag.aggregate",
+      id: "parallel-lazy-collect-tag-aggregate",
     });
 
     const taggedResource = defineResource({
-      id: "parallel.lazy.collect.tag.resource",
+      id: "parallel-lazy-collect-tag-resource",
       tags: [aggregateTag],
     });
 
     const nestedTaskResource = defineResource({
-      id: "parallel.lazy.collect.tag.task.dep.resource",
+      id: "parallel-lazy-collect-tag-task-dep-resource",
     });
 
     const taggedTask = defineTask({
-      id: "parallel.lazy.collect.tag.task",
+      id: "parallel-lazy-collect-tag-task",
       tags: [aggregateTag],
       dependencies: {
         nestedTaskResource,
@@ -315,7 +315,7 @@ describe("DependencyProcessor parallel init internals", () => {
     });
 
     const consumer = defineResource({
-      id: "parallel.lazy.collect.tag.consumer",
+      id: "parallel-lazy-collect-tag-consumer",
       dependencies: {
         aggregateTag,
       },
@@ -332,7 +332,7 @@ describe("DependencyProcessor parallel init internals", () => {
 
     store.root = {
       resource: defineResource({
-        id: "parallel.lazy.collect.tag.root",
+        id: "parallel-lazy-collect-tag-root",
         dependencies: { consumer },
       }),
       config: undefined,
@@ -363,11 +363,11 @@ describe("DependencyProcessor parallel init internals", () => {
     store.setTaskRunner(taskRunner);
 
     const aggregateTag = defineTag({
-      id: "parallel.wave.tag.prereq",
+      id: "parallel-wave-tag-prereq",
     });
 
     const dependency = defineResource({
-      id: "parallel.wave.tag.prereq.resource",
+      id: "parallel-wave-tag-prereq-resource",
       tags: [aggregateTag],
       async init() {
         return "dep";
@@ -375,7 +375,7 @@ describe("DependencyProcessor parallel init internals", () => {
     });
 
     const consumer = defineResource({
-      id: "parallel.wave.tag.prereq.consumer",
+      id: "parallel-wave-tag-prereq-consumer",
       dependencies: {
         aggregateTag,
       },
@@ -388,7 +388,7 @@ describe("DependencyProcessor parallel init internals", () => {
     store.storeGenericItem(dependency);
     store.storeGenericItem(consumer);
     store.root = {
-      resource: defineResource({ id: "parallel.wave.tag.prereq.root" }),
+      resource: defineResource({ id: "parallel-wave-tag-prereq-root" }),
       config: undefined,
       value: undefined,
       context: {},
@@ -430,11 +430,11 @@ describe("DependencyProcessor parallel init internals", () => {
     store.setTaskRunner(taskRunner);
 
     const aggregateTag = defineTag({
-      id: "parallel.wave.tag.beforeInit.prereq",
+      id: "parallel-wave-tag-beforeInit-prereq",
     });
 
     const dependency = defineResource({
-      id: "parallel.wave.tag.beforeInit.prereq.resource",
+      id: "parallel-wave-tag-beforeInit-prereq-resource",
       tags: [aggregateTag],
       async init() {
         return "dep";
@@ -442,7 +442,7 @@ describe("DependencyProcessor parallel init internals", () => {
     });
 
     const consumer = defineResource({
-      id: "parallel.wave.tag.beforeInit.prereq.consumer",
+      id: "parallel-wave-tag-beforeInit-prereq-consumer",
       dependencies: {
         aggregateTag: aggregateTag.startup(),
       },
@@ -456,7 +456,7 @@ describe("DependencyProcessor parallel init internals", () => {
     store.storeGenericItem(consumer);
     store.root = {
       resource: defineResource({
-        id: "parallel.wave.tag.beforeInit.prereq.root",
+        id: "parallel-wave-tag-beforeInit-prereq-root",
       }),
       config: undefined,
       value: undefined,
@@ -499,36 +499,36 @@ describe("DependencyProcessor parallel init internals", () => {
     store.setTaskRunner(taskRunner);
 
     const aggregateTag = defineTag({
-      id: "parallel.collect.tag.full-graph",
+      id: "parallel-collect-tag-full-graph",
     });
 
     const event = defineEvent({
-      id: "parallel.collect.tag.full-graph.event",
+      id: "parallel-collect-tag-full-graph-event",
     });
 
     const taggedResource = defineResource({
-      id: "parallel.collect.tag.full-graph.resource",
+      id: "parallel-collect-tag-full-graph-resource",
       tags: [aggregateTag],
     });
 
     const taskDependencyResource = defineResource({
-      id: "parallel.collect.tag.full-graph.task.dep.resource",
+      id: "parallel-collect-tag-full-graph-task-dep-resource",
     });
 
     const hookDependencyResource = defineResource({
-      id: "parallel.collect.tag.full-graph.hook.dep.resource",
+      id: "parallel-collect-tag-full-graph-hook-dep-resource",
     });
 
     const taskMiddlewareDependencyResource = defineResource({
-      id: "parallel.collect.tag.full-graph.task.middleware.dep.resource",
+      id: "parallel-collect-tag-full-graph-task-middleware-dep-resource",
     });
 
     const resourceMiddlewareDependencyResource = defineResource({
-      id: "parallel.collect.tag.full-graph.resource.middleware.dep.resource",
+      id: "parallel-collect-tag-full-graph-resource-middleware-dep-resource",
     });
 
     const taggedTask = defineTask({
-      id: "parallel.collect.tag.full-graph.task",
+      id: "parallel-collect-tag-full-graph-task",
       tags: [aggregateTag],
       dependencies: {
         taskDependencyResource,
@@ -539,7 +539,7 @@ describe("DependencyProcessor parallel init internals", () => {
     });
 
     const taggedHook = defineHook({
-      id: "parallel.collect.tag.full-graph.hook",
+      id: "parallel-collect-tag-full-graph-hook",
       on: event,
       tags: [aggregateTag],
       dependencies: {
@@ -549,7 +549,7 @@ describe("DependencyProcessor parallel init internals", () => {
     });
 
     const taggedTaskMiddleware = defineTaskMiddleware({
-      id: "parallel.collect.tag.full-graph.task.middleware",
+      id: "parallel-collect-tag-full-graph-task-middleware",
       tags: [aggregateTag],
       dependencies: {
         taskMiddlewareDependencyResource,
@@ -560,7 +560,7 @@ describe("DependencyProcessor parallel init internals", () => {
     });
 
     const taggedResourceMiddleware = defineResourceMiddleware({
-      id: "parallel.collect.tag.full-graph.resource.middleware",
+      id: "parallel-collect-tag-full-graph-resource-middleware",
       tags: [aggregateTag],
       dependencies: {
         resourceMiddlewareDependencyResource,
@@ -571,7 +571,7 @@ describe("DependencyProcessor parallel init internals", () => {
     });
 
     const consumer = defineResource({
-      id: "parallel.collect.tag.full-graph.consumer",
+      id: "parallel-collect-tag-full-graph-consumer",
       dependencies: {
         firstTagLookup: aggregateTag,
         secondTagLookup: aggregateTag,
@@ -601,7 +601,7 @@ describe("DependencyProcessor parallel init internals", () => {
 
     store.root = {
       resource: defineResource({
-        id: "parallel.collect.tag.full-graph.root",
+        id: "parallel-collect-tag-full-graph-root",
         dependencies: {
           consumer,
         },
@@ -637,33 +637,33 @@ describe("DependencyProcessor parallel init internals", () => {
     store.setTaskRunner(taskRunner);
 
     const event = defineEvent({
-      id: "parallel.collect.missing.entries.event",
+      id: "parallel-collect-missing-entries-event",
     });
     const missingRequiredResource = defineResource({
-      id: "parallel.collect.missing.entries.required.resource",
+      id: "parallel-collect-missing-entries-required-resource",
     });
     const missingOptionalResource = defineResource({
-      id: "parallel.collect.missing.entries.optional.resource",
+      id: "parallel-collect-missing-entries-optional-resource",
     });
     const missingTask = defineTask({
-      id: "parallel.collect.missing.entries.task",
+      id: "parallel-collect-missing-entries-task",
       async run() {
         return "ok";
       },
     });
     const missingHook = defineHook({
-      id: "parallel.collect.missing.entries.hook",
+      id: "parallel-collect-missing-entries-hook",
       on: event,
       async run() {},
     });
     const missingTaskMiddleware = defineTaskMiddleware({
-      id: "parallel.collect.missing.entries.task.middleware",
+      id: "parallel-collect-missing-entries-task-middleware",
       async run({ next, task }) {
         return next(task.input);
       },
     });
     const missingResourceMiddleware = defineResourceMiddleware({
-      id: "parallel.collect.missing.entries.resource.middleware",
+      id: "parallel-collect-missing-entries-resource-middleware",
       async run({ next }) {
         return next();
       },
@@ -671,7 +671,7 @@ describe("DependencyProcessor parallel init internals", () => {
 
     store.root = {
       resource: defineResource({
-        id: "parallel.collect.missing.entries.root",
+        id: "parallel-collect-missing-entries-root",
         dependencies: {
           missingRequiredResource,
           missingOptionalResource: missingOptionalResource.optional(),

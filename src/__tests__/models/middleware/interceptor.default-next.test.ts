@@ -44,7 +44,7 @@ describe("Middleware interceptor default next() argument branches", () => {
     });
 
     const resource: any = {
-      id: "tests.resource.default-next",
+      id: "tests-resource-default-next",
       init: async (config: string) => config,
       middleware: [],
       resultSchema: undefined,
@@ -79,7 +79,7 @@ describe("Middleware interceptor default next() argument branches", () => {
     });
 
     const resource: any = {
-      id: "tests.resource.override-next",
+      id: "tests-resource-override-next",
       init: async (config: string) => config,
       middleware: [],
       resultSchema: undefined,
@@ -91,7 +91,7 @@ describe("Middleware interceptor default next() argument branches", () => {
 
   it("task global interceptor uses executionInput.next() default input", async () => {
     const task: any = {
-      id: "tests.task.default-next",
+      id: "tests-task-default-next",
       run: async (input: string) => input,
       middleware: [],
       inputSchema: undefined,
@@ -134,7 +134,7 @@ describe("Middleware interceptor default next() argument branches", () => {
 
   it("resource per-middleware interceptor uses executionInput.next() pass-through config", async () => {
     const middleware = defineResourceMiddleware({
-      id: "tests.resource.per-middleware.default-next",
+      id: "tests-resource-per-middleware-default-next",
       run: async ({ next, resource }) => next(resource.config),
     });
 
@@ -171,7 +171,7 @@ describe("Middleware interceptor default next() argument branches", () => {
     );
 
     const resource: any = {
-      id: "tests.resource.per-middleware.default-next.target",
+      id: "tests-resource-per-middleware-default-next-target",
       middleware: [middleware],
       init: async (config: string) => config,
       resultSchema: undefined,
@@ -183,7 +183,7 @@ describe("Middleware interceptor default next() argument branches", () => {
 
   it("resource per-middleware interceptor preserves explicit undefined for executionInput.next(undefined)", async () => {
     const middleware = defineResourceMiddleware({
-      id: "tests.resource.per-middleware.explicit-undefined",
+      id: "tests-resource-per-middleware-explicit-undefined",
       run: async ({ next }) => next(undefined),
     });
 
@@ -220,7 +220,7 @@ describe("Middleware interceptor default next() argument branches", () => {
     );
 
     const resource: any = {
-      id: "tests.resource.per-middleware.explicit-undefined.target",
+      id: "tests-resource-per-middleware-explicit-undefined-target",
       middleware: [middleware],
       init: async (config: string | undefined) => config,
       resultSchema: undefined,

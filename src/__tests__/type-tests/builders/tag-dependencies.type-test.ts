@@ -7,16 +7,16 @@ import { r } from "../../../";
       { group: string },
       { tenantId: string },
       { ok: boolean }
-    >("types.builders.tags.feature")
+    >("types-builders-tags-feature")
     .build();
 
   const taggedTask = r
-    .task("types.builders.tasks.feature")
+    .task("types-builders-tasks-feature")
     .tags([featureTag.with({ group: "alpha" })])
     .run(async (input) => ({ ok: input.tenantId.length > 0 }))
     .build();
 
-  r.resource("types.builders.resources.feature.user")
+  r.resource("types-builders-resources-feature-user")
     .register([featureTag, taggedTask])
     .dependencies({
       featureTag,

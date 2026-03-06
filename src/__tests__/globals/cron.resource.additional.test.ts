@@ -39,7 +39,7 @@ describe("global cron resource (additional)", () => {
 
   it("fails fast when cron expression is invalid", async () => {
     const invalidTask = r
-      .task("app.tasks.invalid-cron")
+      .task("app-tasks-invalid-cron")
       .tags([tags.cron.with({ expression: "invalid" })])
       .run(async () => undefined)
       .build();
@@ -55,7 +55,7 @@ describe("global cron resource (additional)", () => {
     let attempts = 0;
 
     const flakyTask = r
-      .task("app.tasks.non-error-failure")
+      .task("app-tasks-non-error-failure")
       .tags([
         tags.cron.with({
           expression: "* * * * *",
@@ -84,7 +84,7 @@ describe("global cron resource (additional)", () => {
 
   it("fails when a task declares multiple cron tags", async () => {
     const duplicateCronTask = r
-      .task("app.tasks.duplicate-cron")
+      .task("app-tasks-duplicate-cron")
       .tags([
         tags.cron.with({ expression: "* * * * *" }),
         tags.cron.with({ expression: "*/5 * * * *" }),
@@ -100,7 +100,7 @@ describe("global cron resource (additional)", () => {
 
   it("fails when cron tag is present without configuration", async () => {
     const missingConfigTask = r
-      .task("app.tasks.missing-cron-config")
+      .task("app-tasks-missing-cron-config")
       .tags([tags.cron as never])
       .run(async () => undefined)
       .build();
@@ -116,7 +116,7 @@ describe("global cron resource (additional)", () => {
       .mockImplementation(() => undefined);
 
     const scheduledTask = r
-      .task("app.tasks.cleanup")
+      .task("app-tasks-cleanup")
       .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         attempts += 1;
@@ -150,14 +150,14 @@ describe("global cron resource (additional)", () => {
       .mockImplementation(() => undefined);
 
     const blockerTask = r
-      .task("app.tasks.shutdown.blocker")
+      .task("app-tasks-shutdown-blocker")
       .run(async () => {
         await blockerGate;
       })
       .build();
 
     const shutdownAwareCronTask = r
-      .task("app.tasks.shutdown.cron")
+      .task("app-tasks-shutdown-cron")
       .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         cronRuns += 1;
@@ -196,7 +196,7 @@ describe("global cron resource (additional)", () => {
       args.some(
         (value) =>
           typeof value === "string" &&
-          value.includes("app.tasks.shutdown.cron"),
+          value.includes("app-tasks-shutdown-cron"),
       ),
     );
     expect(cronErrors).toHaveLength(0);
@@ -216,7 +216,7 @@ describe("global cron resource (additional)", () => {
     let attempts = 0;
 
     const silentTask = r
-      .task("app.tasks.silent")
+      .task("app-tasks-silent")
       .tags([
         tags.cron.with({
           expression: "* * * * *",
@@ -242,7 +242,7 @@ describe("global cron resource (additional)", () => {
       ...warnSpy.mock.calls,
       ...errorSpy.mock.calls,
     ].filter((args) =>
-      args.some((a) => typeof a === "string" && a.includes("app.tasks.silent")),
+      args.some((a) => typeof a === "string" && a.includes("app-tasks-silent")),
     );
     expect(cronLogs).toHaveLength(0);
 
@@ -256,7 +256,7 @@ describe("global cron resource (additional)", () => {
     const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
 
     const disabledSilentTask = r
-      .task("app.tasks.disabled-silent")
+      .task("app-tasks-disabled-silent")
       .tags([
         tags.cron.with({
           expression: "* * * * *",
@@ -272,7 +272,7 @@ describe("global cron resource (additional)", () => {
 
     const cronLogs = logSpy.mock.calls.filter((args) =>
       args.some(
-        (a) => typeof a === "string" && a.includes("app.tasks.disabled-silent"),
+        (a) => typeof a === "string" && a.includes("app-tasks-disabled-silent"),
       ),
     );
     expect(cronLogs).toHaveLength(0);
@@ -285,7 +285,7 @@ describe("global cron resource (additional)", () => {
     let runs = 0;
 
     const immediateTask = r
-      .task("app.tasks.immediate-single-stream")
+      .task("app-tasks-immediate-single-stream")
       .tags([
         tags.cron.with({
           expression: "* * * * *",
@@ -319,7 +319,7 @@ describe("global cron resource (additional)", () => {
     let regularRuns = 0;
 
     const immediateTask = r
-      .task("app.tasks.multi.immediate")
+      .task("app-tasks-multi-immediate")
       .tags([
         tags.cron.with({
           expression: "* * * * *",
@@ -332,7 +332,7 @@ describe("global cron resource (additional)", () => {
       .build();
 
     const regularTask = r
-      .task("app.tasks.multi.regular")
+      .task("app-tasks-multi-regular")
       .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         regularRuns += 1;

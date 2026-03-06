@@ -9,25 +9,25 @@ import { run } from "../../run";
 describe("run.exports-visibility privileged surfaces", () => {
   it("allows runtime.runTask() to execute a private task by definition and id", async () => {
     const privateTask = defineTask({
-      id: "exports.privileged.runtime.private-task",
+      id: "exports-privileged-runtime-private-task",
       run: async () => "secret",
     });
 
     const child = defineResource({
-      id: "exports.privileged.runtime.child",
+      id: "exports-privileged-runtime-child",
       register: [privateTask],
       isolate: { exports: "none" },
     });
 
     const root = defineResource({
-      id: "exports.privileged.runtime.root",
+      id: "exports-privileged-runtime-root",
       register: [child],
     });
 
     const runtime = await run(root);
     expect(await runtime.runTask(privateTask)).toBe("secret");
     expect(
-      await runtime.runTask("exports.privileged.runtime.private-task"),
+      await runtime.runTask("exports-privileged-runtime-private-task"),
     ).toBe("secret");
     await runtime.dispose();
   });
@@ -36,11 +36,11 @@ describe("run.exports-visibility privileged surfaces", () => {
     const seenEventIds: string[] = [];
 
     const privateEvent = defineEvent<{ value: string }>({
-      id: "exports.privileged.wildcard.private-event",
+      id: "exports-privileged-wildcard-private-event",
     });
 
     const wildcardHook = defineHook({
-      id: "exports.privileged.wildcard.hook",
+      id: "exports-privileged-wildcard-hook",
       on: "*",
       run: async (event) => {
         seenEventIds.push(event.id);
@@ -48,7 +48,7 @@ describe("run.exports-visibility privileged surfaces", () => {
     });
 
     const child = defineResource({
-      id: "exports.privileged.wildcard.child",
+      id: "exports-privileged-wildcard-child",
       register: [privateEvent],
       isolate: { exports: "none" },
       dependencies: { privateEvent },
@@ -59,7 +59,7 @@ describe("run.exports-visibility privileged surfaces", () => {
     });
 
     const root = defineResource({
-      id: "exports.privileged.wildcard.root",
+      id: "exports-privileged-wildcard-root",
       register: [child, wildcardHook],
       dependencies: { child },
       async init(_, deps) {

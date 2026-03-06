@@ -1058,7 +1058,7 @@ describe("EventManager", () => {
 
   it("validates payload with schema: success and failure", async () => {
     const schemaEvent = defineEvent<any>({
-      id: "schema.event",
+      id: "schema-event",
       payloadSchema: {
         parse: (data: any) => {
           if (!data || typeof data.x !== "number") {
@@ -1086,7 +1086,7 @@ describe("EventManager", () => {
 
   it("wraps non-Error thrown by payload schema into ValidationError", async () => {
     const schemaEvent = defineEvent<any>({
-      id: "schema.event.nonError",
+      id: "schema-event-nonError",
       payloadSchema: {
         parse: (_data: any) => {
           throw "String error";
@@ -1259,7 +1259,7 @@ describe("EventManager", () => {
         eventManager.emitLifecycle(
           eventDefinition,
           "orig",
-          runtimeSource.runtime("runtime.lifecycle"),
+          runtimeSource.runtime("runtime-lifecycle"),
         ),
       ).resolves.toBeUndefined();
 
@@ -1273,7 +1273,7 @@ describe("EventManager", () => {
       const report = await eventManager.emitLifecycle(
         eventDefinition,
         "orig",
-        runtimeSource.runtime("runtime.lifecycle"),
+        runtimeSource.runtime("runtime-lifecycle"),
         {
           report: true,
           throwOnError: false,
@@ -1338,11 +1338,11 @@ describe("EventManager", () => {
       eventManager.interceptHook(interceptor2);
 
       const mockHook = {
-        id: "hook.add.interceptor",
+        id: "hook-add-interceptor",
         run: jest.fn().mockResolvedValue(undefined),
       };
       const mockEvent = {
-        id: "event.add.interceptor",
+        id: "event-add-interceptor",
         data: "data",
         timestamp: new Date(),
         source: "source",
@@ -1686,7 +1686,7 @@ describe("EventManager", () => {
 
   it("should still run emission interceptors for events tagged excludeFromGlobalHooks", async () => {
     const taggedEvent = defineEvent<string>({
-      id: "observ.event",
+      id: "observ-event",
       tags: [globalTags.excludeFromGlobalHooks],
     });
 

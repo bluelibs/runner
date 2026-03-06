@@ -15,17 +15,17 @@ import { run } from "../../run";
  * same contract so callers cannot bypass encapsulation by holding a
  * reference to the IRuntime object.
  */
-describe("run.runtime-exports", () => {
+describe("run-runtime-exports", () => {
   // ─── backward compatibility ──────────────────────────────────────────────
 
   describe("when root has no exports declaration", () => {
     it("allows runTask for any registered task", async () => {
       const inner = defineTask({
-        id: "runtime.exports.compat.task",
+        id: "runtime-exports-compat-task",
         run: async () => "ok",
       });
       const root = defineResource({
-        id: "runtime.exports.compat.root",
+        id: "runtime-exports-compat-root",
         register: [inner],
       });
 
@@ -37,17 +37,17 @@ describe("run.runtime-exports", () => {
     it("allows emitEvent for any registered event", async () => {
       let hookRan = false;
       const evt = defineEvent<{ v: string }>({
-        id: "runtime.exports.compat.event",
+        id: "runtime-exports-compat-event",
       });
       const hook = defineHook({
-        id: "runtime.exports.compat.hook",
+        id: "runtime-exports-compat-hook",
         on: evt,
         run: async () => {
           hookRan = true;
         },
       });
       const root = defineResource({
-        id: "runtime.exports.compat.evt.root",
+        id: "runtime-exports-compat-evt-root",
         register: [evt, hook],
       });
 
@@ -59,13 +59,13 @@ describe("run.runtime-exports", () => {
 
     it("allows getResourceValue for any registered resource", async () => {
       const inner = defineResource({
-        id: "runtime.exports.compat.resource",
+        id: "runtime-exports-compat-resource",
         async init() {
           return "inner-value";
         },
       });
       const root = defineResource({
-        id: "runtime.exports.compat.res.root",
+        id: "runtime-exports-compat-res-root",
         register: [inner],
       });
 
@@ -80,16 +80,16 @@ describe("run.runtime-exports", () => {
   describe("runTask", () => {
     it("allows running an exported task", async () => {
       const exported = defineTask({
-        id: "runtime.exports.runTask.exported",
+        id: "runtime-exports-runTask-exported",
         run: async () => "exported-result",
       });
       const internal = defineTask({
-        id: "runtime.exports.runTask.internal",
+        id: "runtime-exports-runTask-internal",
         run: async () => "internal-result",
       });
 
       const root = defineResource({
-        id: "runtime.exports.runTask.root",
+        id: "runtime-exports-runTask-root",
         register: [exported, internal],
         isolate: { exports: [exported] },
       });
@@ -101,16 +101,16 @@ describe("run.runtime-exports", () => {
 
     it("allows running explicitly exported tasks and blocks hidden ones", async () => {
       const exported = defineTask({
-        id: "runtime.exports.runTask.selector.api.task",
+        id: "runtime-exports-runTask-selector-api-task",
         run: async () => "selector-result",
       });
       const hidden = defineTask({
-        id: "runtime.exports.runTask.selector.internal.task",
+        id: "runtime-exports-runTask-selector-internal-task",
         run: async () => "hidden-result",
       });
 
       const root = defineResource({
-        id: "runtime.exports.runTask.selector.root",
+        id: "runtime-exports-runTask-selector-root",
         register: [exported, hidden],
         isolate: { exports: [exported] },
       });
@@ -125,11 +125,11 @@ describe("run.runtime-exports", () => {
 
     it("blocks running a non-exported task", async () => {
       const internal = defineTask({
-        id: "runtime.exports.runTask.blocked.internal",
+        id: "runtime-exports-runTask-blocked-internal",
         run: async () => "nope",
       });
       const root = defineResource({
-        id: "runtime.exports.runTask.blocked.root",
+        id: "runtime-exports-runTask-blocked-root",
         register: [internal],
         isolate: { exports: "none" },
       });
@@ -143,11 +143,11 @@ describe("run.runtime-exports", () => {
 
     it("blocks by string id when task is not exported", async () => {
       const internal = defineTask({
-        id: "runtime.exports.runTask.str.internal",
+        id: "runtime-exports-runTask-str-internal",
         run: async () => "nope",
       });
       const root = defineResource({
-        id: "runtime.exports.runTask.str.root",
+        id: "runtime-exports-runTask-str-root",
         register: [internal],
         isolate: { exports: "none" },
       });
@@ -164,15 +164,15 @@ describe("run.runtime-exports", () => {
       expect.assertions(5);
 
       const taskA = defineTask({
-        id: "runtime.exports.runTask.err.a",
+        id: "runtime-exports-runTask-err-a",
         run: async () => "a",
       });
       const taskB = defineTask({
-        id: "runtime.exports.runTask.err.b",
+        id: "runtime-exports-runTask-err-b",
         run: async () => "b",
       });
       const root = defineResource({
-        id: "runtime.exports.runTask.err.root",
+        id: "runtime-exports-runTask-err-root",
         register: [taskA, taskB],
         isolate: { exports: [taskA] },
       });
@@ -183,16 +183,16 @@ describe("run.runtime-exports", () => {
       } catch (e: any) {
         expect(e.id).toBe("runner.errors.runtimeAccessViolation");
         expect(String(e.data.targetId)).toMatch(
-          /runtime\.exports\.runTask\.err\.b$/,
+          /runtime-exports-runTask-err-b$/,
         );
-        expect(e.data.rootId).toBe("runtime.exports.runTask.err.root");
+        expect(e.data.rootId).toBe("runtime-exports-runTask-err-root");
         expect(
           (e.data.exportedIds as string[]).some((id) =>
-            id.endsWith("runtime.exports.runTask.err.a"),
+            id.endsWith("runtime-exports-runTask-err-a"),
           ),
         ).toBe(true);
         expect(String(e.remediation)).toContain(
-          "runtime.exports.runTask.err.b",
+          "runtime-exports-runTask-err-b",
         );
       }
       await runtime.dispose();
@@ -204,10 +204,10 @@ describe("run.runtime-exports", () => {
   describe("emitEvent", () => {
     it("allows emitting an exported event", async () => {
       const exportedEvt = defineEvent<undefined>({
-        id: "runtime.exports.emit.exported",
+        id: "runtime-exports-emit-exported",
       });
       const root = defineResource({
-        id: "runtime.exports.emit.root",
+        id: "runtime-exports-emit-root",
         register: [exportedEvt],
         isolate: { exports: [exportedEvt] },
       });
@@ -221,14 +221,14 @@ describe("run.runtime-exports", () => {
 
     it("allows emitting explicitly exported events and blocks private ones", async () => {
       const publicEvt = defineEvent<undefined>({
-        id: "runtime.exports.emit.selector.public.event",
+        id: "runtime-exports-emit-selector-public-event",
       });
       const privateEvt = defineEvent<undefined>({
-        id: "runtime.exports.emit.selector.private.event",
+        id: "runtime-exports-emit-selector-private-event",
       });
 
       const root = defineResource({
-        id: "runtime.exports.emit.selector.root",
+        id: "runtime-exports-emit-selector-root",
         register: [publicEvt, privateEvt],
         isolate: { exports: [publicEvt] },
       });
@@ -245,10 +245,10 @@ describe("run.runtime-exports", () => {
 
     it("blocks emitting a non-exported event", async () => {
       const privateEvt = defineEvent<undefined>({
-        id: "runtime.exports.emit.private",
+        id: "runtime-exports-emit-private",
       });
       const root = defineResource({
-        id: "runtime.exports.emit.blocked.root",
+        id: "runtime-exports-emit-blocked-root",
         register: [privateEvt],
         isolate: { exports: "none" },
       });
@@ -262,10 +262,10 @@ describe("run.runtime-exports", () => {
 
     it("blocks emitting by string id when event is not exported", async () => {
       const privateEvt = defineEvent<undefined>({
-        id: "runtime.exports.emit.str.private",
+        id: "runtime-exports-emit-str-private",
       });
       const root = defineResource({
-        id: "runtime.exports.emit.str.root",
+        id: "runtime-exports-emit-str-root",
         register: [privateEvt],
         isolate: { exports: "none" },
       });
@@ -286,13 +286,13 @@ describe("run.runtime-exports", () => {
   describe("getResourceValue", () => {
     it("allows accessing an exported resource", async () => {
       const inner = defineResource({
-        id: "runtime.exports.getRes.exported",
+        id: "runtime-exports-getRes-exported",
         async init() {
           return "exported-val";
         },
       });
       const root = defineResource({
-        id: "runtime.exports.getRes.root",
+        id: "runtime-exports-getRes-root",
         register: [inner],
         isolate: { exports: [inner] },
       });
@@ -304,19 +304,19 @@ describe("run.runtime-exports", () => {
 
     it("allows explicitly exported resources and blocks hidden ones", async () => {
       const exported = defineResource({
-        id: "runtime.exports.getRes.selector.group.public",
+        id: "runtime-exports-getRes-selector-group-public",
         async init() {
           return "public";
         },
       });
       const hidden = defineResource({
-        id: "runtime.exports.getRes.selector.private",
+        id: "runtime-exports-getRes-selector-private",
         async init() {
           return "private";
         },
       });
       const root = defineResource({
-        id: "runtime.exports.getRes.selector.root",
+        id: "runtime-exports-getRes-selector-root",
         register: [exported, hidden],
         isolate: { exports: [exported] },
       });
@@ -331,13 +331,13 @@ describe("run.runtime-exports", () => {
 
     it("blocks accessing a non-exported resource", async () => {
       const inner = defineResource({
-        id: "runtime.exports.getRes.private",
+        id: "runtime-exports-getRes-private",
         async init() {
           return "secret";
         },
       });
       const root = defineResource({
-        id: "runtime.exports.getRes.blocked.root",
+        id: "runtime-exports-getRes-blocked-root",
         register: [inner],
         isolate: { exports: "none" },
       });
@@ -351,13 +351,13 @@ describe("run.runtime-exports", () => {
 
     it("blocks by string id when resource is not exported", async () => {
       const inner = defineResource({
-        id: "runtime.exports.getRes.str.private",
+        id: "runtime-exports-getRes-str-private",
         async init() {
           return "secret";
         },
       });
       const root = defineResource({
-        id: "runtime.exports.getRes.str.root",
+        id: "runtime-exports-getRes-str-root",
         register: [inner],
         isolate: { exports: "none" },
       });
@@ -376,10 +376,10 @@ describe("run.runtime-exports", () => {
   describe("getResourceConfig", () => {
     it("allows reading config for an exported resource", async () => {
       const inner = defineResource<{ flag: boolean }>({
-        id: "runtime.exports.getCfg.exported",
+        id: "runtime-exports-getCfg-exported",
       });
       const root = defineResource({
-        id: "runtime.exports.getCfg.root",
+        id: "runtime-exports-getCfg-root",
         register: [inner.with({ flag: true })],
         isolate: { exports: [inner] },
       });
@@ -391,10 +391,10 @@ describe("run.runtime-exports", () => {
 
     it("blocks reading config for non-exported resources", async () => {
       const inner = defineResource<{ flag: boolean }>({
-        id: "runtime.exports.getCfg.private",
+        id: "runtime-exports-getCfg-private",
       });
       const root = defineResource({
-        id: "runtime.exports.getCfg.blocked.root",
+        id: "runtime-exports-getCfg-blocked-root",
         register: [inner.with({ flag: true })],
         isolate: { exports: "none" },
       });
@@ -412,13 +412,13 @@ describe("run.runtime-exports", () => {
   describe("getLazyResourceValue", () => {
     it("allows accessing an exported resource in lazy mode", async () => {
       const inner = defineResource({
-        id: "runtime.exports.lazy.exported",
+        id: "runtime-exports-lazy-exported",
         async init() {
           return "lazy-val";
         },
       });
       const root = defineResource({
-        id: "runtime.exports.lazy.root",
+        id: "runtime-exports-lazy-root",
         register: [inner],
         isolate: { exports: [inner] },
       });
@@ -432,19 +432,19 @@ describe("run.runtime-exports", () => {
 
     it("allows lazy access through explicitly exported resources only", async () => {
       const exported = defineResource({
-        id: "runtime.exports.lazy.selector.group.public",
+        id: "runtime-exports-lazy-selector-group-public",
         async init() {
           return "public";
         },
       });
       const hidden = defineResource({
-        id: "runtime.exports.lazy.selector.private",
+        id: "runtime-exports-lazy-selector-private",
         async init() {
           return "private";
         },
       });
       const root = defineResource({
-        id: "runtime.exports.lazy.selector.root",
+        id: "runtime-exports-lazy-selector-root",
         register: [exported, hidden],
         isolate: { exports: [exported] },
       });
@@ -461,13 +461,13 @@ describe("run.runtime-exports", () => {
 
     it("blocks accessing a non-exported resource in lazy mode", async () => {
       const inner = defineResource({
-        id: "runtime.exports.lazy.private",
+        id: "runtime-exports-lazy-private",
         async init() {
           return "secret";
         },
       });
       const root = defineResource({
-        id: "runtime.exports.lazy.blocked.root",
+        id: "runtime-exports-lazy-blocked-root",
         register: [inner],
         isolate: { exports: "none" },
       });
@@ -485,21 +485,21 @@ describe("run.runtime-exports", () => {
   describe("empty exports list locks the entire runtime surface", () => {
     it("blocks all four methods when root exports nothing", async () => {
       const task = defineTask({
-        id: "runtime.exports.empty.task",
+        id: "runtime-exports-empty-task",
         run: async () => "t",
       });
       const evt = defineEvent<undefined>({
-        id: "runtime.exports.empty.event",
+        id: "runtime-exports-empty-event",
       });
       const res = defineResource({
-        id: "runtime.exports.empty.resource",
+        id: "runtime-exports-empty-resource",
         async init() {
           return "r";
         },
       });
 
       const root = defineResource({
-        id: "runtime.exports.empty.root",
+        id: "runtime-exports-empty-root",
         register: [task, evt, res],
         isolate: { exports: "none" },
       });

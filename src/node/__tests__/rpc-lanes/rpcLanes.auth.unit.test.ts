@@ -8,7 +8,7 @@ import {
 
 describe("rpcLanes auth helpers", () => {
   it("resolves binding auth and enforces readiness across modes", () => {
-    const lane = { id: "lane.rpc.auth" } as any;
+    const lane = { id: "lane-rpc-auth" } as any;
     const config = {
       profile: "p",
       topology: {
@@ -42,14 +42,14 @@ describe("rpcLanes auth helpers", () => {
   });
 
   it("builds auth headers and authorizes request variants", () => {
-    const lane = { id: "lane.rpc.authz" } as any;
+    const lane = { id: "lane-rpc-authz" } as any;
     const bindingAuth = { secret: "authz-secret" };
     const headers = buildRpcLaneAuthHeaders(lane, bindingAuth);
     expect(headers).toBeTruthy();
     expect(headers?.authorization).toContain("Bearer ");
 
     expect(
-      buildRpcLaneAuthHeaders({ id: "lane.none" } as any, { mode: "none" }),
+      buildRpcLaneAuthHeaders({ id: "lane-none" } as any, { mode: "none" }),
     ).toBeUndefined();
 
     const validToken = issueRemoteLaneToken({
@@ -79,7 +79,7 @@ describe("rpcLanes auth helpers", () => {
     });
 
     expect(
-      authorizeRpcLaneRequest(reqWithoutToken, { id: "lane.none" } as any, {
+      authorizeRpcLaneRequest(reqWithoutToken, { id: "lane-none" } as any, {
         mode: "none",
       }),
     ).toBeNull();

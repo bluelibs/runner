@@ -43,7 +43,7 @@ describe("http-client branches coverage", () => {
 
   it("rethrows typed errors via error registry helper when mapping exists", async () => {
     const AppError = defineError<{ code: string; message: string }>({
-      id: "tests.http-client.mapped.error",
+      id: "tests-http-client-mapped-error",
       format: (data) => `${data.code}:${data.message}`,
     });
     const fetchMock = async () => {
@@ -69,7 +69,7 @@ describe("http-client branches coverage", () => {
 
   it("falls back to original thrown typed error when registry has no helper", async () => {
     const thrown = {
-      id: "tests.http-client.unmapped.error",
+      id: "tests-http-client-unmapped-error",
       data: { reason: "no-helper" },
     };
     const fetchMock = async () => {

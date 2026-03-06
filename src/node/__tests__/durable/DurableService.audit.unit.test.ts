@@ -21,7 +21,7 @@ describe("durable: DurableService — audit (unit)", () => {
       tasks: [],
     });
 
-    const task = okTask("t.audit.no-store-support");
+    const task = okTask("t-audit-no-store-support");
     const executionId = await service.start(task);
     expect(queue.enqueued).toEqual([
       { type: "execute", payload: { executionId } },
@@ -45,7 +45,7 @@ describe("durable: DurableService — audit (unit)", () => {
       tasks: [],
     });
 
-    const task = okTask("t.audit.store-throws");
+    const task = okTask("t-audit-store-throws");
     const executionId = await service.start(task);
     expect(queue.enqueued).toEqual([
       { type: "execute", payload: { executionId } },
@@ -69,7 +69,7 @@ describe("durable: DurableService — audit (unit)", () => {
       tasks: [],
     });
 
-    const task = okTask("t.audit.emitter-throws");
+    const task = okTask("t-audit-emitter-throws");
     const executionId = await service.start(task);
     expect(queue.enqueued).toEqual([
       { type: "execute", payload: { executionId } },

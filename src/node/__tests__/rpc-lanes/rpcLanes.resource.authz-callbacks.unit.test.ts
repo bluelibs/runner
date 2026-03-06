@@ -12,27 +12,27 @@ describe("rpcLanesResource exposure auth callbacks", () => {
 
   it("returns null for unknown task/event ids and enforces JWT on served events", async () => {
     const servedLane = r
-      .rpcLane("tests.rpc-lanes.authz-callbacks.served-lane")
+      .rpcLane("tests-rpc-lanes-authz-callbacks-served-lane")
       .build();
     const unservedLane = r
-      .rpcLane("tests.rpc-lanes.authz-callbacks.unserved-lane")
+      .rpcLane("tests-rpc-lanes-authz-callbacks-unserved-lane")
       .build();
     const task = defineTask({
-      id: "tests.rpc-lanes.authz-callbacks.task",
+      id: "tests-rpc-lanes-authz-callbacks-task",
       tags: [globalTags.rpcLane.with({ lane: servedLane })],
       run: async () => "ok",
     });
     const unservedTask = defineTask({
-      id: "tests.rpc-lanes.authz-callbacks.unserved-task",
+      id: "tests-rpc-lanes-authz-callbacks-unserved-task",
       tags: [globalTags.rpcLane.with({ lane: unservedLane })],
       run: async () => "ok",
     });
     const event = defineEvent({
-      id: "tests.rpc-lanes.authz-callbacks.event",
+      id: "tests-rpc-lanes-authz-callbacks-event",
       tags: [globalTags.rpcLane.with({ lane: servedLane })],
     });
     const communicator = defineResource({
-      id: "tests.rpc-lanes.authz-callbacks.communicator",
+      id: "tests-rpc-lanes-authz-callbacks-communicator",
       init: async () => ({
         task: async () => "remote",
         event: async () => undefined,
@@ -104,7 +104,7 @@ describe("rpcLanesResource exposure auth callbacks", () => {
       });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.authz-callbacks.app",
+      id: "tests-rpc-lanes-authz-callbacks-app",
       register: [
         task,
         unservedTask,
@@ -138,19 +138,19 @@ describe("rpcLanesResource exposure auth callbacks", () => {
 
   it("falls back to raw ids when auth callbacks cannot resolve served task or event aliases", async () => {
     const servedLane = r
-      .rpcLane("tests.rpc-lanes.authz-fallback.served-lane")
+      .rpcLane("tests-rpc-lanes-authz-fallback-served-lane")
       .build();
     const task = defineTask({
-      id: "tests.rpc-lanes.authz-fallback.task",
+      id: "tests-rpc-lanes-authz-fallback-task",
       tags: [globalTags.rpcLane.with({ lane: servedLane })],
       run: async () => "ok",
     });
     const event = defineEvent({
-      id: "tests.rpc-lanes.authz-fallback.event",
+      id: "tests-rpc-lanes-authz-fallback-event",
       tags: [globalTags.rpcLane.with({ lane: servedLane })],
     });
     const communicator = defineResource({
-      id: "tests.rpc-lanes.authz-fallback.communicator",
+      id: "tests-rpc-lanes-authz-fallback-communicator",
       init: async () => ({
         task: async () => "remote",
         event: async () => undefined,
@@ -192,10 +192,10 @@ describe("rpcLanesResource exposure auth callbacks", () => {
 
         const authorization = options?.authorization;
         const storedTaskId = Array.from(deps.store.tasks.keys()).find((id) =>
-          id.endsWith(".task"),
+          id.endsWith(task.id),
         )!;
         const storedEventId = Array.from(deps.store.events.keys()).find((id) =>
-          id.endsWith(".event"),
+          id.endsWith(event.id),
         )!;
         const unauthorizedServedTask = await authorization?.authorizeTask?.(
           { headers: {} } as any,
@@ -223,7 +223,7 @@ describe("rpcLanesResource exposure auth callbacks", () => {
       });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.authz-fallback.app",
+      id: "tests-rpc-lanes-authz-fallback-app",
       register: [
         task,
         event,

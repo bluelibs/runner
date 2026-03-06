@@ -8,7 +8,7 @@ import { rpcExposure } from "../testkit/rpcExposure";
 describe("nodeExposure multipart hijack", () => {
   it("skips JSON when multipart task writes to res directly", async () => {
     const t = defineTask<{ any?: string }, Promise<string>>({
-      id: "multipart.hijack",
+      id: "multipart-hijack",
       run: async () => {
         const { res } = useRpcLaneRequestContext();
         res.statusCode = 200;
@@ -26,7 +26,7 @@ describe("nodeExposure multipart hijack", () => {
       },
     });
     const app = defineResource({
-      id: "multipart.hijack.app",
+      id: "multipart-hijack-app",
       register: [t, exposure],
     });
     const rr = await run(app);

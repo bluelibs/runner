@@ -6,10 +6,10 @@ describe("tags.eventLane", () => {
     expect(globalTags.eventLane.targets).toEqual(["events"]);
     expect(Object.isFrozen(globalTags.eventLane.targets)).toBe(true);
 
-    const lane = r.eventLane("tests.global-tags.event-lane").build();
+    const lane = r.eventLane("tests-global-tags-event-lane").build();
 
     const event = r
-      .event("tests.global-tags.event-lane.event")
+      .event("tests-global-tags-event-lane-event")
       .tags([
         globalTags.eventLane.with({
           lane,
@@ -24,9 +24,9 @@ describe("tags.eventLane", () => {
   });
 
   it("does not extract lane config from hooks", () => {
-    const event = r.event("tests.global-tags.event-lane.hook.event").build();
+    const event = r.event("tests-global-tags-event-lane-hook-event").build();
     const hook = r
-      .hook("tests.global-tags.event-lane.hook.definition")
+      .hook("tests-global-tags-event-lane-hook-definition")
       .on(event)
       .run(async () => {})
       .build();

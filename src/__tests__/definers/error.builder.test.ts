@@ -6,16 +6,16 @@ describe("error builder", () => {
     expect(() =>
       builderIncompleteError.throw({
         type: "task",
-        builderId: "tests.errors.builderIncomplete.task",
+        builderId: "tests-errors-builderIncomplete-task",
         missingFields: ["run"],
       }),
-    ).toThrow(/Task "tests\.errors\.builderIncomplete\.task" is incomplete/);
+    ).toThrow(/Task "tests-errors-builderIncomplete-task" is incomplete/);
   });
 
   it("build() returns an ErrorHelper that can throw and type-narrow via is()", () => {
     expect.assertions(4);
     const AppError = r
-      .error<{ code: number; message: string }>("tests.errors.app")
+      .error<{ code: number; message: string }>("tests-errors-app")
       .dataSchema({
         parse(input: unknown) {
           const d = input as { code: number; message: string };
@@ -41,17 +41,17 @@ describe("error builder", () => {
         throw createMessageError("Expected an Error instance");
       }
       // Name and message should reflect id and data.message
-      expect(err.name).toBe("tests.errors.app");
+      expect(err.name).toBe("tests-errors-app");
       expect(err.message).toBe('{"code":123,"message":"Boom"}');
       expect(err.toString()).toBe(
-        'tests.errors.app: {"code":123,"message":"Boom"}',
+        'tests-errors-app: {"code":123,"message":"Boom"}',
       );
     }
   });
 
   it("new() constructs a typed RunnerError without throwing", () => {
     const AppError = r
-      .error<{ code: number; message: string }>("tests.errors.new")
+      .error<{ code: number; message: string }>("tests-errors-new")
       .httpCode(409)
       .format((d) => `[${d.code}] ${d.message}`)
       .remediation((d) => `Resolve conflict for code ${d.code}.`)
@@ -60,8 +60,8 @@ describe("error builder", () => {
     const error = AppError.new({ code: 409, message: "Conflict" });
 
     expect(error).toBeInstanceOf(RunnerError);
-    expect(error.name).toBe("tests.errors.new");
-    expect(error.id).toBe("tests.errors.new");
+    expect(error.name).toBe("tests-errors-new");
+    expect(error.id).toBe("tests-errors-new");
     expect(error.httpCode).toBe(409);
     expect(error.data).toEqual({ code: 409, message: "Conflict" });
     expect(error.remediation).toBe("Resolve conflict for code 409.");
@@ -74,21 +74,21 @@ describe("error builder", () => {
 
   it("create() is an alias for new()", () => {
     const AppError = r
-      .error<{ code: number }>("tests.errors.create.alias")
+      .error<{ code: number }>("tests-errors-create-alias")
       .format((d) => `Code ${d.code}`)
       .build();
 
     const createdError = AppError.create({ code: 7 });
 
     expect(createdError).toBeInstanceOf(RunnerError);
-    expect(createdError.id).toBe("tests.errors.create.alias");
+    expect(createdError.id).toBe("tests-errors-create-alias");
     expect(createdError.message).toBe("Code 7");
     expect(AppError.is(createdError, { code: 7 })).toBe(true);
   });
 
   it("applies dataSchema.parse on new() and create()", () => {
     const TypedError = r
-      .error<{ code: number; message: string }>("tests.errors.new.schema")
+      .error<{ code: number; message: string }>("tests-errors-new-schema")
       .dataSchema({
         parse(input: unknown) {
           const d = input as { code: number; message: string };
@@ -110,7 +110,7 @@ describe("error builder", () => {
 
   it("allows zero-arg new()/create() when data has no required keys", () => {
     const OptionalError = r
-      .error<{ code?: number }>("tests.errors.new.optional")
+      .error<{ code?: number }>("tests-errors-new-optional")
       .build();
 
     const fromNew = OptionalError.new();
@@ -123,7 +123,7 @@ describe("error builder", () => {
   it("is() narrows unknown to a typed runner error shape", () => {
     expect.assertions(2);
     const E = r
-      .error<{ code: number }>("tests.errors.narrowing")
+      .error<{ code: number }>("tests-errors-narrowing")
       .format((d) => `Code: ${d.code}`)
       .remediation("Use a valid code.")
       .build();
@@ -147,7 +147,7 @@ describe("error builder", () => {
         type: string;
         code: number;
         nested: { level: number };
-      }>("tests.errors.partial.match")
+      }>("tests-errors-partial-match")
       .build();
 
     let caught: unknown;
@@ -172,7 +172,7 @@ describe("error builder", () => {
 
   it("validates data via dataSchema.parse before throwing", () => {
     const TypedError = r
-      .error<{ code: number; message: string }>("tests.errors.typed")
+      .error<{ code: number; message: string }>("tests-errors-typed")
       .dataSchema({
         parse(input: unknown) {
           const d = input as { code: number; message: string };
@@ -191,7 +191,7 @@ describe("error builder", () => {
   it("accepts format in builder chain (smoke)", () => {
     expect.assertions(1);
     const E = r
-      .error<{ message: string }>("tests.errors.display")
+      .error<{ message: string }>("tests-errors-display")
       .format((d) => d.message)
       .build();
     try {
@@ -204,7 +204,7 @@ describe("error builder", () => {
   it("accepts meta in builder chain (smoke)", () => {
     expect.assertions(1);
     const E = r
-      .error<{ message: string }>("tests.errors.meta")
+      .error<{ message: string }>("tests-errors-meta")
       .meta({ title: "Test Error", description: "A test error" })
       .build();
     try {
@@ -215,7 +215,7 @@ describe("error builder", () => {
   });
 
   it("captures symbolFilePath from the caller location", () => {
-    const E = r.error<{ message: string }>("tests.errors.filePath").build();
+    const E = r.error<{ message: string }>("tests-errors-filePath").build();
 
     expect(
       (E as unknown as Record<symbol, any>)[definitions.symbolFilePath],
@@ -228,7 +228,7 @@ describe("error builder", () => {
   it("supports httpCode in builder and exposes it on helper and thrown error", () => {
     expect.assertions(3);
     const E = r
-      .error<{ reason: string }>("tests.errors.httpCode")
+      .error<{ reason: string }>("tests-errors-httpCode")
       .httpCode(404)
       .format((d) => d.reason)
       .build();
@@ -248,20 +248,20 @@ describe("error builder", () => {
   });
 
   it("fails fast when httpCode is below range", () => {
-    expect(() => r.error("tests.errors.httpCode.low").httpCode(99)).toThrow(
+    expect(() => r.error("tests-errors-httpCode-low").httpCode(99)).toThrow(
       /httpCode must be an integer between 100 and 599/i,
     );
   });
 
   it("fails fast when httpCode is above range", () => {
-    expect(() => r.error("tests.errors.httpCode.high").httpCode(600)).toThrow(
+    expect(() => r.error("tests-errors-httpCode-high").httpCode(600)).toThrow(
       /httpCode must be an integer between 100 and 599/i,
     );
   });
 
   it("fails fast when httpCode is not an integer", () => {
     expect(() =>
-      r.error("tests.errors.httpCode.float").httpCode(400.5),
+      r.error("tests-errors-httpCode-float").httpCode(400.5),
     ).toThrow(/httpCode must be an integer between 100 and 599/i);
   });
 
@@ -269,7 +269,7 @@ describe("error builder", () => {
     it("appends static remediation advice to message and toString()", () => {
       expect.assertions(3);
       const E = r
-        .error<{ code: number }>("tests.errors.remediation.static")
+        .error<{ code: number }>("tests-errors-remediation-static")
         .format((d) => `Error code ${d.code}`)
         .remediation("Try restarting the service.")
         .build();
@@ -284,7 +284,7 @@ describe("error builder", () => {
           "Error code 42\n\nRemediation: Try restarting the service.",
         );
         expect(err.toString()).toBe(
-          "tests.errors.remediation.static: Error code 42\n\nRemediation: Try restarting the service.",
+          "tests-errors-remediation-static: Error code 42\n\nRemediation: Try restarting the service.",
         );
       }
     });
@@ -292,7 +292,7 @@ describe("error builder", () => {
     it("supports data-dependent remediation function", () => {
       expect.assertions(2);
       const E = r
-        .error<{ field: string }>("tests.errors.remediation.dynamic")
+        .error<{ field: string }>("tests-errors-remediation-dynamic")
         .format((d) => `Missing field: ${d.field}`)
         .remediation((d) => `Provide the "${d.field}" field in your input.`)
         .build();
@@ -312,7 +312,7 @@ describe("error builder", () => {
     it("omits remediation from message when not provided", () => {
       expect.assertions(2);
       const E = r
-        .error<{ code: number }>("tests.errors.remediation.none")
+        .error<{ code: number }>("tests-errors-remediation-none")
         .format((d) => `Error ${d.code}`)
         .build();
 
@@ -329,7 +329,7 @@ describe("error builder", () => {
     it("exposes remediation as a property on the thrown error", () => {
       expect.assertions(1);
       const E = r
-        .error<{ code: number }>("tests.errors.remediation.prop")
+        .error<{ code: number }>("tests-errors-remediation-prop")
         .format((d) => `Error ${d.code}`)
         .remediation("Check the logs.")
         .build();
@@ -345,7 +345,7 @@ describe("error builder", () => {
     it("remediation property is undefined when not provided", () => {
       expect.assertions(1);
       const E = r
-        .error<{ code: number }>("tests.errors.remediation.undefined")
+        .error<{ code: number }>("tests-errors-remediation-undefined")
         .format((d) => `Error ${d.code}`)
         .build();
 
@@ -360,7 +360,7 @@ describe("error builder", () => {
     it("appends remediation label even when remediation is an empty string", () => {
       expect.assertions(1);
       const E = r
-        .error<{ code: number }>("tests.errors.remediation.empty")
+        .error<{ code: number }>("tests-errors-remediation-empty")
         .format((d) => `Error ${d.code}`)
         .remediation("")
         .build();
@@ -378,10 +378,10 @@ describe("error builder", () => {
   describe("r.error.is() static method", () => {
     it("detects any Runner error regardless of specific type", () => {
       const ErrorA = r
-        .error<{ code: number }>("tests.errors.static.is.a")
+        .error<{ code: number }>("tests-errors-static-is-a")
         .build();
       const ErrorB = r
-        .error<{ message: string }>("tests.errors.static.is.b")
+        .error<{ message: string }>("tests-errors-static-is-b")
         .build();
 
       let caughtA: unknown;
@@ -405,13 +405,13 @@ describe("error builder", () => {
 
       // Type narrowing works
       if (r.error.is(caughtA)) {
-        expect(caughtA.id).toBe("tests.errors.static.is.a");
-        expect(caughtA.name).toBe("tests.errors.static.is.a");
+        expect(caughtA.id).toBe("tests-errors-static-is-a");
+        expect(caughtA.name).toBe("tests-errors-static-is-a");
       }
 
       if (r.error.is(caughtB)) {
-        expect(caughtB.id).toBe("tests.errors.static.is.b");
-        expect(caughtB.name).toBe("tests.errors.static.is.b");
+        expect(caughtB.id).toBe("tests-errors-static-is-b");
+        expect(caughtB.name).toBe("tests-errors-static-is-b");
       }
     });
 
@@ -436,7 +436,7 @@ describe("error builder", () => {
           type: string;
           code: number;
           nested: { level: number };
-        }>("tests.errors.static.is.partial")
+        }>("tests-errors-static-is-partial")
         .build();
 
       let caught: unknown;
@@ -463,7 +463,7 @@ describe("error builder", () => {
     it("narrows to RunnerError type with accessible properties", () => {
       expect.assertions(6);
       const E = r
-        .error<{ field: string }>("tests.errors.static.is.narrow")
+        .error<{ field: string }>("tests-errors-static-is-narrow")
         .httpCode(400)
         .format((d) => `Invalid ${d.field}`)
         .remediation("Provide a valid field.")
@@ -475,8 +475,8 @@ describe("error builder", () => {
       } catch (err) {
         if (r.error.is(err)) {
           // TypeScript should recognize these properties
-          expect(err.id).toBe("tests.errors.static.is.narrow");
-          expect(err.name).toBe("tests.errors.static.is.narrow");
+          expect(err.id).toBe("tests-errors-static-is-narrow");
+          expect(err.name).toBe("tests-errors-static-is-narrow");
           expect(err.httpCode).toBe(400);
           expect(err.remediation).toBe("Provide a valid field.");
           expect(err.message).toContain("Invalid email");
@@ -490,7 +490,7 @@ describe("error builder", () => {
     it("works with RunnerError class directly for instanceof checks", () => {
       expect.assertions(2);
       const E = r
-        .error<{ code: number }>("tests.errors.static.is.instanceof")
+        .error<{ code: number }>("tests-errors-static-is-instanceof")
         .build();
 
       try {
@@ -503,7 +503,7 @@ describe("error builder", () => {
 
     it("can be used to filter mixed error types", () => {
       const AppError = r
-        .error<{ code: number }>("tests.errors.static.is.filter")
+        .error<{ code: number }>("tests-errors-static-is-filter")
         .build();
 
       const errors: unknown[] = [
@@ -528,8 +528,8 @@ describe("error builder", () => {
       const runnerErrors = errors.filter(r.error.is);
 
       expect(runnerErrors).toHaveLength(2);
-      expect(runnerErrors[0].id).toBe("tests.errors.static.is.filter");
-      expect(runnerErrors[1].id).toBe("tests.errors.static.is.filter");
+      expect(runnerErrors[0].id).toBe("tests-errors-static-is-filter");
+      expect(runnerErrors[1].id).toBe("tests-errors-static-is-filter");
     });
   });
 });

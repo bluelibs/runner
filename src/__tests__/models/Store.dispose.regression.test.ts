@@ -11,14 +11,14 @@ describe("Store disposal regressions", () => {
     const disposeOrder: string[] = [];
 
     const safeResource = defineResource({
-      id: "store.dispose.safe",
+      id: "store-dispose-safe",
       async dispose() {
         disposeOrder.push("safe");
       },
     });
 
     const failingResource = defineResource({
-      id: "store.dispose.failing",
+      id: "store-dispose-failing",
       async dispose() {
         disposeOrder.push("failing");
         throw createMessageError("failing dispose");
@@ -44,7 +44,7 @@ describe("Store disposal regressions", () => {
     store.setTaskRunner(fixture.createTaskRunner());
 
     const resource = defineResource({
-      id: "store.dispose.cleanup",
+      id: "store-dispose-cleanup",
       async dispose() {
         return;
       },
@@ -75,14 +75,14 @@ describe("Store disposal regressions", () => {
     store.setTaskRunner(fixture.createTaskRunner());
 
     const stringThrowingResource = defineResource({
-      id: "store.dispose.string.failure",
+      id: "store-dispose-string-failure",
       async dispose() {
         throw "string failure";
       },
     });
 
     const errorThrowingResource = defineResource({
-      id: "store.dispose.error.failure",
+      id: "store-dispose-error-failure",
       async dispose() {
         throw createMessageError("error failure");
       },
@@ -125,7 +125,7 @@ describe("Store disposal regressions", () => {
     store.setTaskRunner(fixture.createTaskRunner());
 
     const resource = defineResource({
-      id: "store.cooldown.missing-computed-deps",
+      id: "store-cooldown-missing-computed-deps",
       async cooldown(_value, _config, deps) {
         expect(deps).toEqual({});
       },
@@ -147,14 +147,14 @@ describe("Store disposal regressions", () => {
     store.setTaskRunner(fixture.createTaskRunner());
 
     const failing = defineResource({
-      id: "store.ready.parallel.failure.failing",
+      id: "store-ready-parallel-failure-failing",
       async ready() {
         throw "ready-string-failure";
       },
     });
 
     const sibling = defineResource({
-      id: "store.ready.parallel.failure.sibling",
+      id: "store-ready-parallel-failure-sibling",
       async ready() {
         return;
       },
@@ -179,14 +179,14 @@ describe("Store disposal regressions", () => {
 
     const readyFailure = new Error("ready-error-failure");
     const failing = defineResource({
-      id: "store.ready.parallel.failure.error",
+      id: "store-ready-parallel-failure-error",
       async ready() {
         throw readyFailure;
       },
     });
 
     const sibling = defineResource({
-      id: "store.ready.parallel.failure.error.sibling",
+      id: "store-ready-parallel-failure-error-sibling",
       async ready() {
         return;
       },
@@ -210,7 +210,7 @@ describe("Store disposal regressions", () => {
     store.setTaskRunner(fixture.createTaskRunner());
 
     const failing = defineResource({
-      id: "store.ready.sequential.failure.failing",
+      id: "store-ready-sequential-failure-failing",
       async ready() {
         throw "ready-sequential-string-failure";
       },
@@ -230,7 +230,7 @@ describe("Store disposal regressions", () => {
     const { store } = fixture;
     store.setTaskRunner(fixture.createTaskRunner());
 
-    await expect(store.readyResource("store.ready.unknown")).resolves.toBe(
+    await expect(store.readyResource("store-ready-unknown")).resolves.toBe(
       undefined,
     );
   });

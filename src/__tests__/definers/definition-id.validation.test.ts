@@ -1,3 +1,4 @@
+import * as path from "path";
 import {
   defineEvent,
   defineEventLane,
@@ -10,6 +11,7 @@ import {
   defineTaskMiddleware,
 } from "../../define";
 import { defineAsyncContext } from "../../definers/defineAsyncContext";
+import { assertDefinitionId } from "../../definers/assertDefinitionId";
 import { defineError } from "../../definers/defineError";
 
 type DefinitionFactory = {
@@ -127,23 +129,9 @@ describe("definition id validation", () => {
   });
 
   it.each(definitionFactories)(
-    "rejects ids that start with a dot for $label",
+    'rejects ids that contain "." for $label',
     ({ create }) => {
-      expect(() => create(".bad.id")).toThrow(/cannot start or end with/i);
-    },
-  );
-
-  it.each(definitionFactories)(
-    "rejects ids that end with a dot for $label",
-    ({ create }) => {
-      expect(() => create("bad.id.")).toThrow(/cannot start or end with/i);
-    },
-  );
-
-  it.each(definitionFactories)(
-    "rejects ids with empty segments for $label",
-    ({ create }) => {
-      expect(() => create("bad..id")).toThrow(/empty dot-separated segments/i);
+      expect(() => create("bad.id")).toThrow(/cannot contain "\."/i);
     },
   );
 
@@ -153,4 +141,84 @@ describe("definition id validation", () => {
       expect(() => create("resources")).toThrow(/reserved by Runner/i);
     },
   );
+
+  it.each(definitionFactories)(
+    "rejects reserved framework dotted namespaces for non-framework callers for $label",
+    ({ create }) => {
+      expect(() => create("runner.tags.userDefined")).toThrow(
+        /cannot contain "\."/i,
+      );
+      expect(() => create("system.events.userDefined")).toThrow(
+        /cannot contain "\."/i,
+      );
+    },
+  );
+
+  it("allows runner/system dotted ids for framework-owned source files", () => {
+    const sourceCallerFilePath = path.resolve(
+      __dirname,
+      "../../globals/globalTags.ts",
+    );
+    const distCallerFilePath = path.resolve(
+      __dirname,
+      "../../../dist/universal/globals/globalEvents.js",
+    );
+
+    expect(() =>
+      assertDefinitionId("Tag", "runner.tags.internal", {
+        callerFilePath: sourceCallerFilePath,
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      assertDefinitionId("Event", "system.events.ready", {
+        callerFilePath: distCallerFilePath,
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects runner/system dotted ids when caller file path is missing", () => {
+    expect(() => assertDefinitionId("Tag", "runner.tags.internal")).toThrow(
+      /cannot contain "\."/i,
+    );
+  });
+
+  it("rejects runner/system dotted ids for callers outside the package", () => {
+    const externalCallerFilePath = path.resolve(
+      __dirname,
+      "../../../../external.ts",
+    );
+
+    expect(() =>
+      assertDefinitionId("Tag", "runner.tags.internal", {
+        callerFilePath: externalCallerFilePath,
+      }),
+    ).toThrow(/cannot contain "\."/i);
+  });
+
+  it("rejects runner/system dotted ids for relative caller paths", () => {
+    expect(() =>
+      assertDefinitionId("Tag", "runner.tags.internal", {
+        callerFilePath: "src/globals/globalTags.ts",
+      }),
+    ).toThrow(/cannot contain "\."/i);
+  });
+
+  it("rejects runner/system dotted ids for parent-relative caller paths", () => {
+    expect(() =>
+      assertDefinitionId("Tag", "runner.tags.internal", {
+        callerFilePath: "../external.ts",
+      }),
+    ).toThrow(/cannot contain "\."/i);
+  });
+
+  it("rejects runner/system dotted ids when caller path points at the package root", () => {
+    const packageRootPath = path.resolve(__dirname, "../../..");
+
+    expect(() =>
+      assertDefinitionId("Tag", "runner.tags.internal", {
+        callerFilePath: packageRootPath,
+      }),
+    ).toThrow(/cannot contain "\."/i);
+  });
 });

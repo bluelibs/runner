@@ -35,44 +35,44 @@ import { defineError } from "../../definers/defineError";
 describe("public barrel coverage", () => {
   it("exposes callable guards for public definition types", () => {
     const task = defineTask({
-      id: "public.coverage.task",
+      id: "public-coverage-task",
       run: async () => "ok",
     });
     const resource = defineResource<{ enabled: boolean }>({
-      id: "public.coverage.resource",
+      id: "public-coverage-resource",
       init: async (config) => config.enabled,
     });
     const event = defineEvent({
-      id: "public.coverage.event",
+      id: "public-coverage-event",
     });
     const eventLane = defineEventLane({
-      id: "public.coverage.event-lane",
+      id: "public-coverage-event-lane",
     });
     const rpcLane = defineRpcLane({
-      id: "public.coverage.rpc-lane",
+      id: "public-coverage-rpc-lane",
     });
     const hook = defineHook({
-      id: "public.coverage.hook",
+      id: "public-coverage-hook",
       on: event,
       run: async () => undefined,
     });
     const taskMiddleware = defineTaskMiddleware({
-      id: "public.coverage.task-middleware",
+      id: "public-coverage-task-middleware",
       run: async ({ next, task: currentTask }) => next(currentTask.input),
     });
     const resourceMiddleware = defineResourceMiddleware({
-      id: "public.coverage.resource-middleware",
+      id: "public-coverage-resource-middleware",
       run: async ({ next }) => next(),
     });
     const tag = defineTag<{ scope: string }>({
-      id: "public.coverage.tag",
+      id: "public-coverage-tag",
     });
     const typedError = defineError({
-      id: "public.coverage.error",
+      id: "public-coverage-error",
       format: () => "boom",
     });
     const asyncContext = defineAsyncContext<{ requestId: string }>({
-      id: "public.coverage.ctx",
+      id: "public-coverage-ctx",
     });
     const override = r.override(task, async () => "override");
     const filter = subtreeOf(resource);

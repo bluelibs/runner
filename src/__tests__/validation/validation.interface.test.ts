@@ -106,7 +106,7 @@ describe("Generic Validation Interface", () => {
       });
 
       const createUserTask = defineTask({
-        id: "task.createUser",
+        id: "task-createUser",
         inputSchema: userSchema,
         run: async (input) => {
           return `Created user ${(input as { name: string }).name}`;
@@ -146,7 +146,7 @@ describe("Generic Validation Interface", () => {
       });
 
       const createUserTask = defineTask({
-        id: "task.createUser.invalid",
+        id: "task-createUser-invalid",
         inputSchema: userSchema,
         run: async (input) => {
           return `Created user ${(input as { name: string }).name}`;
@@ -175,7 +175,7 @@ describe("Generic Validation Interface", () => {
       );
 
       const mathTask = defineTask({
-        id: "task.math",
+        id: "task-math",
         inputSchema: stringToNumberSchema,
         run: async (input: number) => {
           expect(typeof input).toBe("number");
@@ -215,7 +215,7 @@ describe("Generic Validation Interface", () => {
       });
 
       const databaseResource = defineResource({
-        id: "resource.database",
+        id: "resource-database",
         configSchema: configSchema,
         init: async (config) => {
           return {
@@ -244,7 +244,7 @@ describe("Generic Validation Interface", () => {
       });
 
       const databaseResource = defineResource({
-        id: "resource.database.valid",
+        id: "resource-database-valid",
         configSchema: configSchema,
         init: async (config) => {
           return {
@@ -288,13 +288,13 @@ describe("Generic Validation Interface", () => {
       });
 
       const testEvent = defineEvent({
-        id: "event.test",
+        id: "event-test",
         payloadSchema: payloadSchema,
       });
 
       let receivedMessage = "";
       const listenerTask = defineHook({
-        id: "task.listener",
+        id: "task-listener",
         on: testEvent,
         run: async (event) => {
           receivedMessage = (event.data as { message: string }).message;
@@ -336,7 +336,7 @@ describe("Generic Validation Interface", () => {
       });
 
       const timingMiddleware = defineTaskMiddleware({
-        id: "middleware.timing",
+        id: "middleware-timing",
         configSchema: configSchema,
         run: async ({ next }, _, _config) => {
           return next();
@@ -359,7 +359,7 @@ describe("Generic Validation Interface", () => {
       });
 
       const timingMiddleware = defineTaskMiddleware({
-        id: "middleware.timing.valid",
+        id: "middleware-timing-valid",
         configSchema: configSchema,
         run: async ({ next }, _, config) => {
           const start = Date.now();
@@ -371,7 +371,7 @@ describe("Generic Validation Interface", () => {
       });
 
       const testTask = defineTask({
-        id: "task.test",
+        id: "task-test",
         middleware: [timingMiddleware.with({ timeout: 5000 })],
         run: async () => {
           return "success";
@@ -396,25 +396,25 @@ describe("Generic Validation Interface", () => {
   describe("No Validation (Backward Compatibility)", () => {
     it("should work without any validation schemas", async () => {
       const task = defineTask({
-        id: "task.noValidation",
+        id: "task-noValidation",
         run: async (input: any) => {
           return `Received: ${JSON.stringify(input)}`;
         },
       });
 
       const resource = defineResource({
-        id: "resource.noValidation",
+        id: "resource-noValidation",
         init: async (config: any) => {
           return { config };
         },
       });
 
       const event = defineEvent<any>({
-        id: "event.noValidation",
+        id: "event-noValidation",
       });
 
       const middleware = defineTaskMiddleware({
-        id: "middleware.noValidation",
+        id: "middleware-noValidation",
         run: async ({ next }) => next(),
       });
 

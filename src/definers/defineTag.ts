@@ -48,9 +48,9 @@ export function defineTag<
   TEnforceOutputContract,
   TAllowedTargets
 > {
-  const id = definition.id;
-  assertDefinitionId("Tag", id);
   const filePath = getCallerFile();
+  const id = definition.id;
+  assertDefinitionId("Tag", id, { callerFilePath: filePath });
   const configSchema = normalizeOptionalValidationSchema(
     definition.configSchema,
     {

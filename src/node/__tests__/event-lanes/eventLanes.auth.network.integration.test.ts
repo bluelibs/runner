@@ -17,9 +17,9 @@ function createAsymmetricKeys() {
 describe("eventLanes auth in network mode", () => {
   it("fails fast for producer-only profile when signer material is missing", async () => {
     const keys = createAsymmetricKeys();
-    const lane = r.eventLane("tests.event-lanes.auth.network.producer").build();
+    const lane = r.eventLane("tests-event-lanes-auth-network-producer").build();
     const event = defineEvent({
-      id: "tests.event-lanes.auth.network.producer.event",
+      id: "tests-event-lanes-auth-network-producer-event",
       tags: [globalTags.eventLane.with({ lane })],
     });
     const topology = {
@@ -38,7 +38,7 @@ describe("eventLanes auth in network mode", () => {
       ],
     } as const;
     const app = defineResource({
-      id: "tests.event-lanes.auth.network.producer.app",
+      id: "tests-event-lanes-auth-network-producer-app",
       register: [
         event,
         eventLanesResource.with({
@@ -56,9 +56,9 @@ describe("eventLanes auth in network mode", () => {
 
   it("fails fast for consumer profile when verifier material is missing", async () => {
     const keys = createAsymmetricKeys();
-    const lane = r.eventLane("tests.event-lanes.auth.network.consumer").build();
+    const lane = r.eventLane("tests-event-lanes-auth-network-consumer").build();
     const event = defineEvent({
-      id: "tests.event-lanes.auth.network.consumer.event",
+      id: "tests-event-lanes-auth-network-consumer-event",
       tags: [globalTags.eventLane.with({ lane })],
     });
     const topology = {
@@ -77,7 +77,7 @@ describe("eventLanes auth in network mode", () => {
       ],
     } as const;
     const app = defineResource({
-      id: "tests.event-lanes.auth.network.consumer.app",
+      id: "tests-event-lanes-auth-network-consumer-app",
       register: [
         event,
         eventLanesResource.with({
@@ -96,10 +96,10 @@ describe("eventLanes auth in network mode", () => {
   it("allows consumer-only profile to start with public-key verifier only", async () => {
     const keys = createAsymmetricKeys();
     const lane = r
-      .eventLane("tests.event-lanes.auth.network.consumer.public-only")
+      .eventLane("tests-event-lanes-auth-network-consumer-public-only")
       .build();
     const event = defineEvent({
-      id: "tests.event-lanes.auth.network.consumer.public-only.event",
+      id: "tests-event-lanes-auth-network-consumer-public-only-event",
       tags: [globalTags.eventLane.with({ lane })],
     });
     const topology = {
@@ -118,7 +118,7 @@ describe("eventLanes auth in network mode", () => {
       ],
     } as const;
     const app = defineResource({
-      id: "tests.event-lanes.auth.network.consumer.public-only.app",
+      id: "tests-event-lanes-auth-network-consumer-public-only-app",
       register: [
         event,
         eventLanesResource.with({
@@ -136,14 +136,14 @@ describe("eventLanes auth in network mode", () => {
   it("denies producer path on consumer profile that only has public verifier material", async () => {
     const keys = createAsymmetricKeys();
     const lane = r
-      .eventLane("tests.event-lanes.auth.network.consumer.public-only.produce")
+      .eventLane("tests-event-lanes-auth-network-consumer-public-only-produce")
       .build();
     const event = defineEvent({
-      id: "tests.event-lanes.auth.network.consumer.public-only.produce.event",
+      id: "tests-event-lanes-auth-network-consumer-public-only-produce-event",
       tags: [globalTags.eventLane.with({ lane })],
     });
     const emitTask = defineTask({
-      id: "tests.event-lanes.auth.network.consumer.public-only.produce.task",
+      id: "tests-event-lanes-auth-network-consumer-public-only-produce-task",
       dependencies: { event },
       run: async (_input, deps) => {
         await deps.event({});
@@ -165,7 +165,7 @@ describe("eventLanes auth in network mode", () => {
       ],
     } as const;
     const app = defineResource({
-      id: "tests.event-lanes.auth.network.consumer.public-only.produce.app",
+      id: "tests-event-lanes-auth-network-consumer-public-only-produce-app",
       register: [
         event,
         emitTask,

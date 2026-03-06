@@ -179,7 +179,7 @@ describe("durable: RedisStore", () => {
   it("preserves serializer marker payloads through updateExecution merge roundtrips", async () => {
     const initialExecution: Execution = {
       id: "lua-safe-1",
-      taskId: "task.lua-safe",
+      taskId: "task-lua-safe",
       input: undefined,
       status: ExecutionStatus.Running,
       attempt: 1,

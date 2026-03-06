@@ -5,14 +5,14 @@ import type { IsolationScope, IsolationScopeTarget } from "../../tools/scope";
 
 describe("scope()", () => {
   const exampleTask = defineTask({
-    id: "scope.test.task",
+    id: "scope-test-task",
     run: async () => 42,
   });
   const exampleEvent = defineEvent<string>({
-    id: "scope.test.event",
+    id: "scope-test-event",
   });
   const exampleResource = defineResource({
-    id: "scope.test.resource",
+    id: "scope-test-resource",
   });
 
   describe("target normalization", () => {

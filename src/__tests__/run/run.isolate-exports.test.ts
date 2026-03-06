@@ -4,12 +4,12 @@ import { run } from "../../run";
 describe("run.isolate exports", () => {
   it("fails fast when isolate.exports has an invalid shape", async () => {
     const child = defineResource({
-      id: "isolate.exports.invalid-shape.child",
+      id: "isolate-exports-invalid-shape-child",
       isolate: { exports: "not-valid" as any },
     });
 
     const app = defineResource({
-      id: "isolate.exports.invalid-shape.app",
+      id: "isolate-exports-invalid-shape-app",
       register: [child],
     });
 
@@ -20,12 +20,12 @@ describe("run.isolate exports", () => {
 
   it("fails fast when isolate.exports contains string ids", async () => {
     const child = defineResource({
-      id: "isolate.exports.unknown-target.child",
-      isolate: { exports: ["does.not.exist"] as any },
+      id: "isolate-exports-unknown-target-child",
+      isolate: { exports: ["does-not-exist"] as any },
     });
 
     const app = defineResource({
-      id: "isolate.exports.unknown-target.app",
+      id: "isolate-exports-unknown-target-app",
       register: [child],
     });
 
@@ -36,14 +36,14 @@ describe("run.isolate exports", () => {
 
   it("fails fast when isolate.exports contains wildcard strings", async () => {
     const child = defineResource({
-      id: "isolate.exports.unknown-selector.child",
+      id: "isolate-exports-unknown-selector-child",
       isolate: {
         exports: ["isolate.exports.unknown-selector.missing.*"] as any,
       },
     });
 
     const app = defineResource({
-      id: "isolate.exports.unknown-selector.app",
+      id: "isolate-exports-unknown-selector-app",
       register: [child],
     });
 
@@ -54,12 +54,12 @@ describe("run.isolate exports", () => {
 
   it("fails fast when isolate.exports contains an invalid entry", async () => {
     const child = defineResource({
-      id: "isolate.exports.invalid-entry.child",
+      id: "isolate-exports-invalid-entry-child",
       isolate: { exports: [{} as any] },
     });
 
     const app = defineResource({
-      id: "isolate.exports.invalid-entry.app",
+      id: "isolate-exports-invalid-entry-app",
       register: [child],
     });
 
@@ -70,18 +70,18 @@ describe("run.isolate exports", () => {
 
   it("supports legacy exports (deprecated) by mapping to isolate.exports", async () => {
     const task = defineTask({
-      id: "isolate.exports.legacy.task",
+      id: "isolate-exports-legacy-task",
       run: async () => "ok",
     });
 
     const boundary = defineResource({
-      id: "isolate.exports.legacy.boundary",
+      id: "isolate-exports-legacy-boundary",
       register: [task],
       exports: [],
     });
 
     const app = defineResource({
-      id: "isolate.exports.legacy.app",
+      id: "isolate-exports-legacy-app",
       register: [boundary],
       dependencies: { task },
     });
@@ -93,22 +93,22 @@ describe("run.isolate exports", () => {
 
   it("rejects legacy exports string entries (deprecated)", async () => {
     const publicTask = defineTask({
-      id: "isolate.exports.legacy-selector.api.public",
+      id: "isolate-exports-legacy-selector-api-public",
       run: async () => "ok",
     });
     const privateTask = defineTask({
-      id: "isolate.exports.legacy-selector.internal.private",
+      id: "isolate-exports-legacy-selector-internal-private",
       run: async () => "secret",
     });
 
     const boundary = defineResource({
-      id: "isolate.exports.legacy-selector.boundary",
+      id: "isolate-exports-legacy-selector-boundary",
       register: [publicTask, privateTask],
       exports: ["isolate.exports.legacy-selector.api.*"] as any,
     });
 
     const app = defineResource({
-      id: "isolate.exports.legacy-selector.app",
+      id: "isolate-exports-legacy-selector-app",
       register: [boundary],
       dependencies: { publicTask },
       init: async (_cfg, deps) => deps.publicTask(),
@@ -121,22 +121,22 @@ describe("run.isolate exports", () => {
 
   it("rejects isolate.exports wildcard string entries", async () => {
     const publicTask = defineTask({
-      id: "isolate.exports.selector.api.public",
+      id: "isolate-exports-selector-api-public",
       run: async () => "ok",
     });
     const privateTask = defineTask({
-      id: "isolate.exports.selector.internal.private",
+      id: "isolate-exports-selector-internal-private",
       run: async () => "secret",
     });
 
     const child = defineResource({
-      id: "isolate.exports.selector.child",
+      id: "isolate-exports-selector-child",
       register: [publicTask, privateTask],
       isolate: { exports: ["isolate.exports.selector.api.*"] as any },
     });
 
     const app = defineResource({
-      id: "isolate.exports.selector.app",
+      id: "isolate-exports-selector-app",
       register: [child],
       dependencies: { publicTask },
       init: async (_config, deps) => deps.publicTask(),
@@ -149,13 +149,13 @@ describe("run.isolate exports", () => {
 
   it("supports legacy exports alongside isolate deny/only in a single definition", async () => {
     const boundary = defineResource({
-      id: "isolate.exports.legacy-with-isolate.boundary",
+      id: "isolate-exports-legacy-with-isolate-boundary",
       exports: [],
       isolate: { deny: [] },
     });
 
     const app = defineResource({
-      id: "isolate.exports.legacy-with-isolate.app",
+      id: "isolate-exports-legacy-with-isolate-app",
       register: [boundary],
     });
 
@@ -165,13 +165,13 @@ describe("run.isolate exports", () => {
 
   it("throws when both legacy exports and isolate exports are declared", () => {
     const task = defineTask({
-      id: "isolate.exports.conflict.task",
+      id: "isolate-exports-conflict-task",
       run: async () => "ok",
     });
 
     try {
       defineResource({
-        id: "isolate.exports.conflict.resource",
+        id: "isolate-exports-conflict-resource",
         register: [task],
         exports: [],
         isolate: { exports: "none" },

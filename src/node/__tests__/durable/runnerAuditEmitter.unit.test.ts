@@ -9,7 +9,7 @@ describe("durable: createDurableRunnerAuditEmitter", () => {
     const eventManager = new EventManager();
     const emitter = createDurableRunnerAuditEmitter({
       eventManager,
-      source: runtimeSource.resource("durable.tests"),
+      source: runtimeSource.resource("durable-tests"),
     });
 
     const appended: Array<{
@@ -137,7 +137,7 @@ describe("durable: createDurableRunnerAuditEmitter", () => {
       ...base,
       kind: "emit_published",
       stepId: "__emit:0",
-      eventId: "x.y",
+      eventId: "x-y",
     });
     await emitter.emit({
       ...base,
@@ -149,7 +149,7 @@ describe("durable: createDurableRunnerAuditEmitter", () => {
     expect(appended).toHaveLength(9);
     expect(
       appended.every(
-        (e) => e.source.kind === "resource" && e.source.id === "durable.tests",
+        (e) => e.source.kind === "resource" && e.source.id === "durable-tests",
       ),
     ).toBe(true);
 

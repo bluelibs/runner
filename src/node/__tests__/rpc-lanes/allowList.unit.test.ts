@@ -8,10 +8,10 @@ function createStore(
   return {
     resources: new Map(
       resources.map((resource, index) => [
-        `tests.rpc-lanes.allow-list.resource.${index}`,
+        `tests-rpc-lanes-allow-list-resource-${index}`,
         {
           resource: {
-            id: `tests.rpc-lanes.allow-list.resource.${index}`,
+            id: `tests-rpc-lanes-allow-list-resource-${index}`,
             tags: resource.tags ?? [],
           },
           value: resource.value,
@@ -37,8 +37,8 @@ describe("computeRpcLaneAllowList", () => {
   });
 
   it("builds task/event and async-context policy maps from served ids", () => {
-    const taskId = "tests.rpc-lanes.allow-list.task";
-    const eventId = "tests.rpc-lanes.allow-list.event";
+    const taskId = "tests-rpc-lanes-allow-list-task";
+    const eventId = "tests-rpc-lanes-allow-list-event";
     const store = createStore([
       {
         tags: [globalTags.rpcLanes],
@@ -47,8 +47,8 @@ describe("computeRpcLaneAllowList", () => {
           serveEventIds: [eventId],
           taskAllowAsyncContext: { [taskId]: false },
           eventAllowAsyncContext: { [eventId]: true },
-          taskAsyncContextAllowList: { [taskId]: ["ctx.a"] },
-          eventAsyncContextAllowList: { [eventId]: ["ctx.b"] },
+          taskAsyncContextAllowList: { [taskId]: ["ctx-a"] },
+          eventAsyncContextAllowList: { [eventId]: ["ctx-b"] },
         },
       },
     ]);
@@ -59,9 +59,9 @@ describe("computeRpcLaneAllowList", () => {
     expect(allowList.eventIds.has(eventId)).toBe(true);
     expect(allowList.taskAcceptsAsyncContext.get(taskId)).toBe(false);
     expect(allowList.eventAcceptsAsyncContext.get(eventId)).toBe(true);
-    expect(allowList.taskAsyncContextAllowList.get(taskId)).toEqual(["ctx.a"]);
+    expect(allowList.taskAsyncContextAllowList.get(taskId)).toEqual(["ctx-a"]);
     expect(allowList.eventAsyncContextAllowList.get(eventId)).toEqual([
-      "ctx.b",
+      "ctx-b",
     ]);
   });
 

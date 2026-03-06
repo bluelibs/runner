@@ -8,15 +8,15 @@ import { rpcLanesResource } from "../../rpc-lanes";
 describe("rpcLanes applyTo predicate", () => {
   it("routes predicate-matched tasks remotely without explicit rpcLane tags", async () => {
     const task = defineTask({
-      id: "tests.rpc-lanes.apply-to.predicate.task",
+      id: "tests-rpc-lanes-apply-to-predicate-task",
       run: async () => "local",
     });
     const lane = r
-      .rpcLane("tests.rpc-lanes.apply-to.predicate.lane")
+      .rpcLane("tests-rpc-lanes-apply-to-predicate-lane")
       .applyTo((candidate) => "run" in candidate && candidate.id === task.id)
       .build();
     const communicator = defineResource({
-      id: "tests.rpc-lanes.apply-to.predicate.communicator",
+      id: "tests-rpc-lanes-apply-to-predicate-communicator",
       init: async () => ({
         task: async () => "remote",
       }),
@@ -28,7 +28,7 @@ describe("rpcLanes applyTo predicate", () => {
     });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.apply-to.predicate.app",
+      id: "tests-rpc-lanes-apply-to-predicate-app",
       register: [
         task,
         communicator,
@@ -43,10 +43,10 @@ describe("rpcLanes applyTo predicate", () => {
 
   it("routes predicate-matched events remotely without explicit rpcLane tags", async () => {
     const event = defineEvent<{ value: number }>({
-      id: "tests.rpc-lanes.apply-to.predicate.event",
+      id: "tests-rpc-lanes-apply-to-predicate-event",
     });
     const lane = r
-      .rpcLane("tests.rpc-lanes.apply-to.predicate.event.lane")
+      .rpcLane("tests-rpc-lanes-apply-to-predicate-event-lane")
       .applyTo((candidate) => candidate.id === event.id)
       .build();
     const eventCapture = jest.fn(async (_id: string, _payload?: unknown) => {
@@ -54,13 +54,13 @@ describe("rpcLanes applyTo predicate", () => {
       void _payload;
     });
     const communicator = defineResource({
-      id: "tests.rpc-lanes.apply-to.predicate.event.communicator",
+      id: "tests-rpc-lanes-apply-to-predicate-event-communicator",
       init: async () => ({
         event: eventCapture,
       }),
     });
     const emitTask = defineTask({
-      id: "tests.rpc-lanes.apply-to.predicate.event.emit",
+      id: "tests-rpc-lanes-apply-to-predicate-event-emit",
       dependencies: {
         eventManager: globalResources.eventManager,
       },
@@ -68,7 +68,7 @@ describe("rpcLanes applyTo predicate", () => {
         deps.eventManager.emit(
           event,
           { value: 7 },
-          runtimeSource.task("tests.rpc-lanes.apply-to.predicate.event.emit"),
+          runtimeSource.task("tests-rpc-lanes-apply-to-predicate-event-emit"),
         ),
     });
 
@@ -78,7 +78,7 @@ describe("rpcLanes applyTo predicate", () => {
     });
 
     const app = defineResource({
-      id: "tests.rpc-lanes.apply-to.predicate.event.app",
+      id: "tests-rpc-lanes-apply-to-predicate-event-app",
       register: [
         event,
         emitTask,

@@ -167,8 +167,8 @@ describe("tools/check", () => {
     expect(() =>
       checkRuntime(
         {
-          a: { id: "lane.a" },
-          b: { id: "lane.b" },
+          a: { id: "lane-a" },
+          b: { id: "lane-b" },
         },
         Match.MapOf({
           id: String,
@@ -239,8 +239,8 @@ describe("tools/check", () => {
           topology: {
             bindings: [
               {
-                lane: { id: "lane.ok" },
-                communicator: { id: "comm.ok" },
+                lane: { id: "lane-ok" },
+                communicator: { id: "comm-ok" },
               },
             ],
           },
@@ -256,7 +256,7 @@ describe("tools/check", () => {
             bindings: [
               {
                 lane: { id: 123 },
-                communicator: { id: "comm.bad" },
+                communicator: { id: "comm-bad" },
               },
             ],
           },

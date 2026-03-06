@@ -122,7 +122,7 @@ describe("httpFetchRemoteLane & createExposureFetch - additional coverage", () =
       error: {
         code: "APP_ERROR",
         message: "boom",
-        id: "tests.unmapped.error",
+        id: "tests-unmapped-error",
         data: { x: 1 },
       },
     });
@@ -136,12 +136,12 @@ describe("httpFetchRemoteLane & createExposureFetch - additional coverage", () =
 
     await expect(client.task("task.unmapped", {})).rejects.toMatchObject({
       name: "RemoteLaneTransportError",
-      id: "tests.unmapped.error",
+      id: "tests-unmapped-error",
       data: { x: 1 },
     });
     await expect(client.event("event.unmapped", {})).rejects.toMatchObject({
       name: "RemoteLaneTransportError",
-      id: "tests.unmapped.error",
+      id: "tests-unmapped-error",
       data: { x: 1 },
     });
     expect(client.eventWithResult).toBeDefined();
@@ -149,7 +149,7 @@ describe("httpFetchRemoteLane & createExposureFetch - additional coverage", () =
       client.eventWithResult!("event.unmapped.result", {}),
     ).rejects.toMatchObject({
       name: "RemoteLaneTransportError",
-      id: "tests.unmapped.error",
+      id: "tests-unmapped-error",
       data: { x: 1 },
     });
   });

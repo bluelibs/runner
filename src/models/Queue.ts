@@ -20,12 +20,12 @@ export type QueueEventType =
 
 // Event definitions for Queue
 const QueueEvents = {
-  enqueue: defineEvent<QueueEvent>({ id: "queue.events.enqueue" }),
-  start: defineEvent<QueueEvent>({ id: "queue.events.start" }),
-  finish: defineEvent<QueueEvent>({ id: "queue.events.finish" }),
-  error: defineEvent<QueueEvent>({ id: "queue.events.error" }),
-  cancel: defineEvent<QueueEvent>({ id: "queue.events.cancel" }),
-  disposed: defineEvent<QueueEvent>({ id: "queue.events.disposed" }),
+  enqueue: defineEvent<QueueEvent>({ id: "queue-events-enqueue" }),
+  start: defineEvent<QueueEvent>({ id: "queue-events-start" }),
+  finish: defineEvent<QueueEvent>({ id: "queue-events-finish" }),
+  error: defineEvent<QueueEvent>({ id: "queue-events-error" }),
+  cancel: defineEvent<QueueEvent>({ id: "queue-events-cancel" }),
+  disposed: defineEvent<QueueEvent>({ id: "queue-events-disposed" }),
 } as const satisfies Record<QueueEventType, IEventDefinition<QueueEvent>>;
 
 export type QueueEvent = {

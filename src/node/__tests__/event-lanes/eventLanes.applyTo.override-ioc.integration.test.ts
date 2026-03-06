@@ -46,25 +46,25 @@ describe("eventLanes applyTo override IoC", () => {
     const queueB = new RecordingQueue();
 
     const laneA = r
-      .eventLane("tests.event-lanes.apply-to.override-ioc.a")
+      .eventLane("tests-event-lanes-apply-to-override-ioc-a")
       .build();
     const event = r
-      .event<{ value: number }>("tests.event-lanes.apply-to.override-ioc.event")
+      .event<{ value: number }>("tests-event-lanes-apply-to-override-ioc-event")
       .tags([tags.eventLane.with({ lane: laneA })])
       .build();
     const laneB = r
-      .eventLane("tests.event-lanes.apply-to.override-ioc.b")
+      .eventLane("tests-event-lanes-apply-to-override-ioc-b")
       .applyTo([event])
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.apply-to.override-ioc.emit")
+      .task("tests-event-lanes-apply-to-override-ioc-emit")
       .dependencies({ event })
       .run(async (_input, deps) => deps.event({ value: 1 }))
       .build();
 
     const app = r
-      .resource("tests.event-lanes.apply-to.override-ioc.app")
+      .resource("tests-event-lanes-apply-to-override-ioc-app")
       .register([
         event,
         emitTask,

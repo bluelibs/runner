@@ -123,7 +123,7 @@ describe("global cron resource shutdown semantics", () => {
       const scheduler = new CronScheduler({
         cronTasks: [
           {
-            definition: { id: "app.tasks.timer-dispose" } as never,
+            definition: { id: "app-tasks-timer-dispose" } as never,
             config: { expression: "* * * * *" },
           },
         ],

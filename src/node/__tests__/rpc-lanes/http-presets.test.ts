@@ -17,7 +17,7 @@ describe("rpcLane node http preset registration", () => {
     });
 
     const runtime = await run(
-      defineResource({ id: "tests.rpc-preset.mixed.app", register: [] }) as any,
+      defineResource({ id: "tests-rpc-preset-mixed-app", register: [] }) as any,
     );
     const store = await runtime.getResourceValue(globalResources.store as any);
     const serializer = await runtime.getResourceValue(
@@ -108,7 +108,7 @@ describe("rpcLane node http preset registration", () => {
 
     const runtime = await run(
       defineResource({
-        id: "tests.rpc-preset.mixed.no-serializer.app",
+        id: "tests-rpc-preset-mixed-no-serializer-app",
         register: [],
       }) as any,
     );

@@ -19,14 +19,14 @@ async function waitUntil(
 
 describe("durable: signal timeout integration", () => {
   const Paid = defineEvent<{ paidAt: number }>({
-    id: "durable.tests.timeout.paid",
+    id: "durable-tests-timeout-paid",
   });
 
   it("returns timeout when no signal arrives before deadline", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.tests.timeout.durable");
+    const durable = durableResource.fork("durable-tests-timeout-durable");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -34,7 +34,7 @@ describe("durable: signal timeout integration", () => {
     });
 
     const task = r
-      .task("durable.test.waitForSignalOrTimeout")
+      .task("durable-test-waitForSignalOrTimeout")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -70,7 +70,7 @@ describe("durable: signal timeout integration", () => {
     const bus = new MemoryEventBus();
 
     const durable = durableResource.fork(
-      "durable.tests.timeout.durable.signal",
+      "durable-tests-timeout-durable-signal",
     );
     const durableRegistration = durable.with({
       store,
@@ -79,7 +79,7 @@ describe("durable: signal timeout integration", () => {
     });
 
     const task = r
-      .task("durable.test.waitForSignalOrTimeout.signal")
+      .task("durable-test-waitForSignalOrTimeout-signal")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();

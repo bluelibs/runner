@@ -123,7 +123,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
 
     const contexts = [
       {
-        id: "ctx.demo",
+        id: "ctx-demo",
         use: () => ({ k: 1 }),
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
@@ -143,7 +143,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
     const map = new Serializer().parse<Record<string, string>>(
       hdrs["x-runner-context"],
     );
-    expect(JSON.parse(map["ctx.demo"]).k).toBe(1);
+    expect(JSON.parse(map["ctx-demo"]).k).toBe(1);
   });
 
   it("fails fast when JSON context serialization fails", async () => {
@@ -156,7 +156,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
       serializer: new Serializer(),
       contexts: [
         {
-          id: "ctx.bad",
+          id: "ctx-bad",
           use: () => {
             throw "missing context";
           },
@@ -169,7 +169,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
     });
 
     await expect(client.task("t.json.bad", { a: 1 } as any)).rejects.toThrow(
-      /Failed to serialize async context "ctx.bad"/,
+      /Failed to serialize async context "ctx-bad"/,
     );
     expect(requestSpy).not.toHaveBeenCalled();
   });

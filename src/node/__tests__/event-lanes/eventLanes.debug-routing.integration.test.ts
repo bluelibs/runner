@@ -106,12 +106,12 @@ type CapturedLog = {
 
 describe("event-lanes: debug routing logs", () => {
   it("logs enqueue, relay, and inactive-lane skip when debug event logging is enabled", async () => {
-    const lane = r.eventLane("tests.event-lanes.debug-routing.lane").build();
+    const lane = r.eventLane("tests-event-lanes-debug-routing-lane").build();
     const queue = new DebugRoutingQueue();
     const logs: CapturedLog[] = [];
 
     const logCollector = r
-      .resource("tests.event-lanes.debug-routing.logCollector")
+      .resource("tests-event-lanes-debug-routing-logCollector")
       .dependencies({ logger: resources.logger })
       .init(async (_config, { logger }) => {
         logger.onLog((log) => {
@@ -126,13 +126,13 @@ describe("event-lanes: debug routing logs", () => {
       .build();
 
     const event = r
-      .event<{ id: string }>("tests.event-lanes.debug-routing.event")
+      .event<{ id: string }>("tests-event-lanes-debug-routing-event")
       .tags([tags.eventLane.with({ lane })])
       .build();
 
     let hookCalls = 0;
     const hook = r
-      .hook("tests.event-lanes.debug-routing.hook")
+      .hook("tests-event-lanes-debug-routing-hook")
       .on(event)
       .run(async () => {
         hookCalls += 1;
@@ -140,7 +140,7 @@ describe("event-lanes: debug routing logs", () => {
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.debug-routing.emit")
+      .task("tests-event-lanes-debug-routing-emit")
       .dependencies({ event })
       .run(async (_input, deps) => {
         await deps.event({ id: "evt-1" });
@@ -148,7 +148,7 @@ describe("event-lanes: debug routing logs", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.debug-routing.app")
+      .resource("tests-event-lanes-debug-routing-app")
       .register([
         logCollector,
         event,
@@ -217,7 +217,7 @@ describe("event-lanes: debug routing logs", () => {
       laneId: lane.id,
       profile: "worker",
       relaySourceId:
-        "runner.event-lanes.relay:worker:tests.event-lanes.debug-routing.lane",
+        "runner.event-lanes.relay:worker:tests-event-lanes-debug-routing-lane",
     });
 
     expect(skipLog).toBeTruthy();
@@ -239,13 +239,13 @@ describe("event-lanes: debug routing logs", () => {
 
   it("does not log lane diagnostics when logEventEmissionOnRun is false", async () => {
     const lane = r
-      .eventLane("tests.event-lanes.debug-routing.disabled.lane")
+      .eventLane("tests-event-lanes-debug-routing-disabled-lane")
       .build();
     const queue = new DebugRoutingQueue();
     const logs: CapturedLog[] = [];
 
     const logCollector = r
-      .resource("tests.event-lanes.debug-routing.disabled.logCollector")
+      .resource("tests-event-lanes-debug-routing-disabled-logCollector")
       .dependencies({ logger: resources.logger })
       .init(async (_config, { logger }) => {
         logger.onLog((log) => {
@@ -260,11 +260,11 @@ describe("event-lanes: debug routing logs", () => {
       .build();
 
     const event = r
-      .event<{ id: string }>("tests.event-lanes.debug-routing.disabled.event")
+      .event<{ id: string }>("tests-event-lanes-debug-routing-disabled-event")
       .tags([tags.eventLane.with({ lane })])
       .build();
     const emitTask = r
-      .task("tests.event-lanes.debug-routing.disabled.emit")
+      .task("tests-event-lanes-debug-routing-disabled-emit")
       .dependencies({ event })
       .run(async (_input, deps) => {
         await deps.event({ id: "evt-disabled" });
@@ -272,7 +272,7 @@ describe("event-lanes: debug routing logs", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.debug-routing.disabled.app")
+      .resource("tests-event-lanes-debug-routing-disabled-app")
       .register([
         logCollector,
         event,

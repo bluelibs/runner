@@ -10,11 +10,11 @@ import { run } from "../../run";
 describe("run subtree middleware predicates", () => {
   it("applies different configs of the same task middleware id by predicate", async () => {
     const criticalTag = defineTag({
-      id: "tests.subtree.predicate.task.critical-tag",
+      id: "tests-subtree-predicate-task-critical-tag",
     });
 
     const labelMiddleware = defineTaskMiddleware<{ label: string }>({
-      id: "tests.subtree.predicate.task.label-middleware",
+      id: "tests-subtree-predicate-task-label-middleware",
       run: async ({ task, next }, _deps, config) => {
         const value = await next(task.input);
         return `${config.label}:${String(value)}`;
@@ -22,18 +22,18 @@ describe("run subtree middleware predicates", () => {
     });
 
     const criticalTask = defineTask({
-      id: "tests.subtree.predicate.task.critical",
+      id: "tests-subtree-predicate-task-critical",
       tags: [criticalTag],
       run: async () => "value",
     });
 
     const standardTask = defineTask({
-      id: "tests.subtree.predicate.task.standard",
+      id: "tests-subtree-predicate-task-standard",
       run: async () => "value",
     });
 
     const app = defineResource({
-      id: "tests.subtree.predicate.task.app",
+      id: "tests-subtree-predicate-task-app",
       subtree: {
         tasks: {
           middleware: [
@@ -70,11 +70,11 @@ describe("run subtree middleware predicates", () => {
 
   it("applies different configs of the same resource middleware id by predicate", async () => {
     const criticalTag = defineTag({
-      id: "tests.subtree.predicate.resource.critical-tag",
+      id: "tests-subtree-predicate-resource-critical-tag",
     });
 
     const labelMiddleware = defineResourceMiddleware<{ label: string }>({
-      id: "tests.subtree.predicate.resource.label-middleware",
+      id: "tests-subtree-predicate-resource-label-middleware",
       run: async ({ next }, _deps, config) => {
         const value = await next();
         return `${config.label}:${String(value)}`;
@@ -82,18 +82,18 @@ describe("run subtree middleware predicates", () => {
     });
 
     const criticalResource = defineResource({
-      id: "tests.subtree.predicate.resource.critical",
+      id: "tests-subtree-predicate-resource-critical",
       tags: [criticalTag],
       init: async () => "value",
     });
 
     const standardResource = defineResource({
-      id: "tests.subtree.predicate.resource.standard",
+      id: "tests-subtree-predicate-resource-standard",
       init: async () => "value",
     });
 
     const app = defineResource({
-      id: "tests.subtree.predicate.resource.app",
+      id: "tests-subtree-predicate-resource-app",
       subtree: {
         resources: {
           middleware: [
@@ -133,7 +133,7 @@ describe("run subtree middleware predicates", () => {
 
   it("fails fast when duplicate subtree middleware ids are applicable to the same task", async () => {
     const middleware = defineTaskMiddleware<{ label: string }>({
-      id: "tests.subtree.predicate.duplicate.task.middleware",
+      id: "tests-subtree-predicate-duplicate-task-middleware",
       run: async ({ task, next }, _deps, config) => {
         const value = await next(task.input);
         return `${config.label}:${String(value)}`;
@@ -141,12 +141,12 @@ describe("run subtree middleware predicates", () => {
     });
 
     const task = defineTask({
-      id: "tests.subtree.predicate.duplicate.task",
+      id: "tests-subtree-predicate-duplicate-task",
       run: async () => "value",
     });
 
     const app = defineResource({
-      id: "tests.subtree.predicate.duplicate.app",
+      id: "tests-subtree-predicate-duplicate-app",
       subtree: {
         tasks: {
           middleware: [

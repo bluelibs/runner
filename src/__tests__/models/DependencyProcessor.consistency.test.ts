@@ -8,9 +8,9 @@ import { runtimeSource } from "../../types/runtimeSource";
 import type { RuntimeCallSource } from "../../types/runtimeSource";
 
 enum ResourceId {
-  Broken = "broken.resource",
-  BrokenWithMeta = "broken.resource.meta",
-  BrokenViaDependency = "broken.resource.dependency",
+  Broken = "broken-resource",
+  BrokenWithMeta = "broken-resource-meta",
+  BrokenViaDependency = "broken-resource-dependency",
   Root = "root",
   Task = "task",
   Resource = "res",
@@ -19,14 +19,14 @@ enum ResourceId {
   Hook = "hook",
   Emitter = "emitter",
   Consumer = "consumer",
-  DependencyTask = "task.dependency",
-  TaskConsumer = "resource.taskConsumer",
-  TaskInitConsumer = "resource.taskInitConsumer",
+  DependencyTask = "task-dependency",
+  TaskConsumer = "resource-taskConsumer",
+  TaskInitConsumer = "resource-taskInitConsumer",
 }
 
 enum ErrorMessage {
   Boom = "boom",
-  WithResource = "broken.resource.meta boom",
+  WithResource = "broken-resource-meta boom",
 }
 
 describe("DependencyProcessor Consistency", () => {
@@ -45,7 +45,7 @@ describe("DependencyProcessor Consistency", () => {
       .build();
 
     await expect(run(root)).rejects.toThrow(
-      /Resource "broken\.resource" initialization failed: boom/,
+      /Resource "broken-resource" initialization failed: boom/,
     );
   });
 
@@ -214,10 +214,10 @@ describe("DependencyProcessor Consistency", () => {
   it("should deliver events emitted while hook dependencies are still computing", async () => {
     const seen: string[] = [];
 
-    const event = r.event<{ ok: true }>("hook.buffer.event").build();
+    const event = r.event<{ ok: true }>("hook-buffer-event").build();
 
     const earlyEmitter = r
-      .resource("hook.buffer.emitter")
+      .resource("hook-buffer-emitter")
       .dependencies({ event })
       .init(async (_config, { event }) => {
         await event({ ok: true });
@@ -227,12 +227,12 @@ describe("DependencyProcessor Consistency", () => {
       .build();
 
     const secondaryDep = r
-      .resource("hook.buffer.dep")
+      .resource("hook-buffer-dep")
       .init(async () => ({ value: "dep" }))
       .build();
 
     const hookA = r
-      .hook("hook.buffer.hookA")
+      .hook("hook-buffer-hookA")
       .on(event)
       .dependencies({ earlyEmitter })
       .run(async () => {
@@ -241,7 +241,7 @@ describe("DependencyProcessor Consistency", () => {
       .build();
 
     const hookB = r
-      .hook("hook.buffer.hookB")
+      .hook("hook-buffer-hookB")
       .on(event)
       .dependencies({ secondaryDep })
       .run(async (_input, { secondaryDep }) => {
@@ -250,7 +250,7 @@ describe("DependencyProcessor Consistency", () => {
       .build();
 
     const root = r
-      .resource("hook.buffer.root")
+      .resource("hook-buffer-root")
       .register([hookA, hookB, earlyEmitter, secondaryDep, event])
       .init(async () => "root")
       .build();
@@ -353,15 +353,15 @@ describe("DependencyProcessor Consistency", () => {
     store.setTaskRunner(taskRunner);
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
-    const event = r.event<{ ok: true }>("hook.pending.event").build();
+    const event = r.event<{ ok: true }>("hook-pending-event").build();
     const runHook = jest.fn(async () => undefined);
     const hook = r
-      .hook("hook.pending.hook")
+      .hook("hook-pending-hook")
       .on(event)
       .run(async () => runHook())
       .build();
     const root = r
-      .resource("hook.pending.root")
+      .resource("hook-pending-root")
       .register([event, hook])
       .build();
 
@@ -386,7 +386,7 @@ describe("DependencyProcessor Consistency", () => {
     store.setTaskRunner(taskRunner);
 
     const event = r
-      .event<{ ok: boolean }>("tests.dependency.source.fallback")
+      .event<{ ok: boolean }>("tests-dependency-source-fallback")
       .build();
     store.storeGenericItem(event);
 
@@ -404,7 +404,7 @@ describe("DependencyProcessor Consistency", () => {
 
     const emitFromUnknownOwner = processor.extractEventDependency(
       event,
-      "unknown.owner.id",
+      "unknown-owner-id",
     );
 
     await emitFromUnknownOwner({ ok: true });
@@ -412,7 +412,7 @@ describe("DependencyProcessor Consistency", () => {
     expect(seenSources).toEqual([
       {
         kind: "runtime",
-        id: "unknown.owner.id",
+        id: "unknown-owner-id",
       },
     ]);
   });
@@ -445,7 +445,7 @@ describe("DependencyProcessor Consistency", () => {
     const internals = processor as unknown as DependencyProcessorInternals;
 
     const hook = {
-      id: "test.hook.flush",
+      id: "test-hook-flush",
       run: jest.fn(async () => undefined),
     };
     const hookStoreElement = {
@@ -522,7 +522,7 @@ describe("DependencyProcessor Consistency", () => {
     const internals = processor as unknown as DependencyProcessorInternals;
 
     const hook = {
-      id: "test.hook.loop",
+      id: "test-hook-loop",
       run: jest.fn(async () => undefined),
     };
     const hookStoreElement = {

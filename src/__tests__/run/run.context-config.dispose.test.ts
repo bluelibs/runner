@@ -3,7 +3,7 @@ import { run } from "../../run";
 
 enum ResourceId {
   App = "app",
-  ContextConfig = "resource.context.config",
+  ContextConfig = "resource-context-config",
 }
 
 enum ConfigMode {
@@ -60,7 +60,7 @@ describe("provides context for config resources without init and uses it in disp
       | undefined;
 
     const appResource = defineResource({
-      id: "resource.context.config.dependency",
+      id: "resource-context-config-dependency",
       async init() {
         return "dependency";
       },
@@ -71,7 +71,7 @@ describe("provides context for config resources without init and uses it in disp
       Promise<void>,
       { appResource: typeof appResource }
     >({
-      id: "resource.context.config.cooldown",
+      id: "resource-context-config-cooldown",
       dependencies: { appResource },
       context: () => ({ cleanup: [CleanupToken.Task1], cooled: false }),
       cooldown: async (value, config, deps, context) => {
@@ -112,7 +112,7 @@ describe("provides context for config resources without init and uses it in disp
 
     const contextResource = defineResource<{ mode: ConfigMode }, Promise<void>>(
       {
-        id: "resource.context.config.cooldown.no-deps",
+        id: "resource-context-config-cooldown-no-deps",
         context: () => ({ cleanup: [CleanupToken.Task1], cooled: false }),
         cooldown: async (_value, _config, deps, context) => {
           context.cooled = true;

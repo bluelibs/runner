@@ -7,17 +7,17 @@ describe("Dynamic Register and Dependencies", () => {
   describe("Dynamic Dependencies", () => {
     it("should support function-based dependencies", async () => {
       const serviceA = defineResource({
-        id: "service.a",
+        id: "service-a",
         init: async () => "Service A",
       });
 
       const serviceB = defineResource({
-        id: "service.b",
+        id: "service-b",
         init: async () => "Service B",
       });
 
       const dynamicService = defineResource({
-        id: "service.dynamic",
+        id: "service-dynamic",
         dependencies: () => ({
           a: serviceA,
           b: serviceB,
@@ -41,12 +41,12 @@ describe("Dynamic Register and Dependencies", () => {
 
     it("should support conditional dependencies based on environment", async () => {
       const prodService = defineResource({
-        id: "service.prod",
+        id: "service-prod",
         init: async () => "Production Service",
       });
 
       const devService = defineResource({
-        id: "service.dev",
+        id: "service-dev",
         init: async () => "Development Service",
       });
 
@@ -54,7 +54,7 @@ describe("Dynamic Register and Dependencies", () => {
       process.env.NODE_ENV = "production";
 
       const conditionalService = defineResource({
-        id: "service.conditional",
+        id: "service-conditional",
         dependencies: () => ({
           service:
             process.env.NODE_ENV === "production" ? prodService : devService,
@@ -77,7 +77,7 @@ describe("Dynamic Register and Dependencies", () => {
       process.env.NODE_ENV = "development";
 
       const conditionalServiceDev = defineResource({
-        id: "service.conditional.dev",
+        id: "service-conditional-dev",
         dependencies: () => ({
           service:
             process.env.NODE_ENV === "production" ? prodService : devService,
@@ -86,7 +86,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const appDev = defineResource({
-        id: "app.dev",
+        id: "app-dev",
         register: [prodService, devService, conditionalServiceDev],
         dependencies: { conditionalService: conditionalServiceDev },
         init: async (_, { conditionalService }) => {
@@ -103,13 +103,13 @@ describe("Dynamic Register and Dependencies", () => {
     it("should support forward references in function dependencies", async () => {
       // Define resourceB first, which depends on resourceA (defined later)
       const resourceB = defineResource({
-        id: "resource.b",
+        id: "resource-b",
         dependencies: () => ({ a: resourceA }), // Forward reference
         init: async (_, { a }) => `B depends on ${a}`,
       });
 
       const resourceA = defineResource({
-        id: "resource.a",
+        id: "resource-a",
         init: async () => "A",
       });
 
@@ -129,13 +129,13 @@ describe("Dynamic Register and Dependencies", () => {
       type ServiceConfig = { name: string; version: number };
 
       const baseService = defineResource({
-        id: "service.base",
+        id: "service-base",
         init: async (config: ServiceConfig) =>
           `${config.name} v${config.version}`,
       });
 
       const dynamicService = defineResource({
-        id: "service.dynamic",
+        id: "service-dynamic",
         register: [baseService.with({ name: "Dynamic Base", version: 2 })],
         dependencies: { baseService },
         init: async (_, { baseService }) =>
@@ -158,17 +158,17 @@ describe("Dynamic Register and Dependencies", () => {
   describe("Dynamic Register", () => {
     it("should support function-based register", async () => {
       const serviceA = defineResource({
-        id: "service.a",
+        id: "service-a",
         init: async () => "Service A",
       });
 
       const serviceB = defineResource({
-        id: "service.b",
+        id: "service-b",
         init: async () => "Service B",
       });
 
       const dynamicApp = defineResource({
-        id: "app.dynamic",
+        id: "app-dynamic",
         register: () => [serviceA, serviceB],
         dependencies: { serviceA, serviceB },
         init: async (_, { serviceA, serviceB }) => {
@@ -198,12 +198,12 @@ describe("Dynamic Register and Dependencies", () => {
 
     it("should support conditional registration based on environment", async () => {
       const prodService = defineResource({
-        id: "service.prod",
+        id: "service-prod",
         init: async () => "Production Service",
       });
 
       const devService = defineResource({
-        id: "service.dev",
+        id: "service-dev",
         init: async () => "Development Service",
       });
 
@@ -211,7 +211,7 @@ describe("Dynamic Register and Dependencies", () => {
       process.env.NODE_ENV = "production";
 
       const conditionalApp = defineResource({
-        id: "app.conditional",
+        id: "app-conditional",
         register: () => [
           process.env.NODE_ENV === "production" ? prodService : devService,
         ],
@@ -230,7 +230,7 @@ describe("Dynamic Register and Dependencies", () => {
       process.env.NODE_ENV = "development";
 
       const conditionalAppDev = defineResource({
-        id: "app.conditional.dev",
+        id: "app-conditional-dev",
         register: () => [
           process.env.NODE_ENV === "production" ? prodService : devService,
         ],
@@ -282,7 +282,7 @@ describe("Dynamic Register and Dependencies", () => {
       process.env.DB_PORT = "3306";
 
       const appWithEnv = defineResource({
-        id: "app.env",
+        id: "app-env",
         register: () => [
           database.with({
             host: process.env.DB_HOST || "localhost",
@@ -351,7 +351,7 @@ describe("Dynamic Register and Dependencies", () => {
       type ApiConfig = { baseUrl: string; timeout: number };
 
       const apiService = defineResource({
-        id: "api.service",
+        id: "api-service",
         init: async (config: ApiConfig) => ({
           baseUrl: config.baseUrl,
           timeout: config.timeout,
@@ -361,7 +361,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const dynamicService = defineResource({
-        id: "service.dynamic",
+        id: "service-dynamic",
         register: () => [
           apiService.with({
             baseUrl: process.env.API_URL || "https://localhost:3000",
@@ -394,14 +394,14 @@ describe("Dynamic Register and Dependencies", () => {
       type ValidationConfig = { schema: string; strict: boolean };
 
       const loggerResource = defineResource({
-        id: "logger.validation",
+        id: "logger-validation",
         init: async () => ({
           log: (message: string) => `LOG: ${message}`,
         }),
       });
 
       const validationMiddleware = defineTaskMiddleware({
-        id: "middleware.validation",
+        id: "middleware-validation",
         dependencies: {
           logger: loggerResource,
         },
@@ -415,7 +415,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const testTask = defineTask({
-        id: "task.test",
+        id: "task-test",
         middleware: [
           validationMiddleware.with({ schema: "user", strict: true }),
         ],
@@ -439,7 +439,7 @@ describe("Dynamic Register and Dependencies", () => {
       type RetryConfig = { maxAttempts: number; delay: number };
 
       const retryMiddleware = defineTaskMiddleware({
-        id: "middleware.retry",
+        id: "middleware-retry",
         run: async ({ next }, _, config: RetryConfig) => {
           let attempts = 0;
           let lastError: Error | null = null;
@@ -463,7 +463,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const retryableTask = defineTask({
-        id: "task.retryable",
+        id: "task-retryable",
         middleware: [
           retryMiddleware.with({
             maxAttempts: parseInt(process.env.MAX_RETRIES || "3"),
@@ -510,7 +510,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const cachingMiddleware = defineTaskMiddleware({
-        id: "middleware.caching",
+        id: "middleware-caching",
         dependencies: { cache, logger },
         run: async (
           { next },
@@ -532,7 +532,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const cachedTask = defineTask({
-        id: "task.cached",
+        id: "task-cached",
         middleware: [cachingMiddleware.with({ enabled: true })],
         run: async () => "Task result",
       });
@@ -605,17 +605,17 @@ describe("Dynamic Register and Dependencies", () => {
 
     it("should handle complex conditional dependencies and registrations", async () => {
       const mockService = defineResource({
-        id: "service.mock",
+        id: "service-mock",
         init: async () => "Mock Service",
       });
 
       const realService = defineResource({
-        id: "service.real",
+        id: "service-real",
         init: async () => "Real Service",
       });
 
       const featureToggle = defineResource({
-        id: "feature.toggle",
+        id: "feature-toggle",
         init: async () => ({
           isEnabled: (feature: string) =>
             process.env[`FEATURE_${feature}`] === "true",
@@ -627,7 +627,7 @@ describe("Dynamic Register and Dependencies", () => {
       process.env.NODE_ENV = "development";
 
       const complexApp = defineResource({
-        id: "app.complex",
+        id: "app-complex",
         register: () => {
           const services: Array<
             typeof featureToggle | typeof realService | typeof mockService
@@ -671,7 +671,7 @@ describe("Dynamic Register and Dependencies", () => {
       process.env.FEATURE_ADVANCED = "false";
 
       const complexAppDisabled = defineResource({
-        id: "app.complex.disabled",
+        id: "app-complex-disabled",
         register: () => {
           const services: Array<
             typeof featureToggle | typeof realService | typeof mockService
@@ -717,7 +717,7 @@ describe("Dynamic Register and Dependencies", () => {
   describe("Dynamic Dependencies and Register with Config", () => {
     it("should pass config to dependencies function in resource", async () => {
       const loggerService = defineResource({
-        id: "service.logger",
+        id: "service-logger",
         init: async (config: { level: string; prefix: string }) => ({
           log: (message: string) =>
             `[${config.level}] ${config.prefix}: ${message}`,
@@ -725,7 +725,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const cacheService = defineResource({
-        id: "service.cache",
+        id: "service-cache",
         init: async (config: { ttl: number; size: number }) => ({
           get: (key: string) => `cached-${key}-ttl:${config.ttl}`,
           set: (key: string, _value: any) => `set-${key}-size:${config.size}`,
@@ -733,7 +733,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const dynamicService = defineResource({
-        id: "service.dynamic",
+        id: "service-dynamic",
         dependencies: (config: { useCache: boolean; logLevel: string }) => ({
           logger: loggerService,
           ...(config.useCache && { cache: cacheService }),
@@ -773,7 +773,7 @@ describe("Dynamic Register and Dependencies", () => {
 
     it("should pass config to register function in resource", async () => {
       const emailService = defineResource({
-        id: "service.email",
+        id: "service-email",
         init: async (config: { provider: string; apiKey: string }) => ({
           send: (to: string, subject: string) =>
             `${config.provider}:${config.apiKey} -> ${to}: ${subject}`,
@@ -781,7 +781,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const smsService = defineResource({
-        id: "service.sms",
+        id: "service-sms",
         init: async (config: { provider: string; apiKey: string }) => ({
           send: (to: string, message: string) =>
             `${config.provider}:${config.apiKey} -> ${to}: ${message}`,
@@ -789,7 +789,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const notificationService = defineResource({
-        id: "service.notification",
+        id: "service-notification",
         register: (config: {
           enableEmail: boolean;
           enableSms: boolean;
@@ -881,7 +881,7 @@ describe("Dynamic Register and Dependencies", () => {
 
     it("should pass config to middleware dependencies function", async () => {
       const auditService = defineResource({
-        id: "service.audit",
+        id: "service-audit",
         init: async (config: { enabled: boolean; level: string }) => ({
           log: (action: string, user: string) =>
             config.enabled
@@ -891,7 +891,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const authService = defineResource({
-        id: "service.auth",
+        id: "service-auth",
         init: async (config: { requireRole: string }) => ({
           validateRole: (userRole: string) => userRole === config.requireRole,
           getRequiredRole: () => config.requireRole,
@@ -899,7 +899,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const authMiddleware = defineTaskMiddleware({
-        id: "middleware.auth",
+        id: "middleware-auth",
         dependencies: (_config: {
           auditEnabled: boolean;
           requiredRole: string;
@@ -932,7 +932,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const protectedTask = defineTask({
-        id: "task.protected",
+        id: "task-protected",
         middleware: [
           authMiddleware.with({ auditEnabled: true, requiredRole: "admin" }),
         ],
@@ -972,7 +972,7 @@ describe("Dynamic Register and Dependencies", () => {
 
     it("should handle complex config-driven dependency resolution", async () => {
       const primaryDb = defineResource({
-        id: "db.primary",
+        id: "db-primary",
         init: async (config: { host: string; port: number }) => ({
           query: (sql: string) =>
             `primary-${config.host}:${config.port} -> ${sql}`,
@@ -980,7 +980,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const secondaryDb = defineResource({
-        id: "db.secondary",
+        id: "db-secondary",
         init: async (config: { host: string; port: number }) => ({
           query: (sql: string) =>
             `secondary-${config.host}:${config.port} -> ${sql}`,
@@ -988,7 +988,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const cacheLayer = defineResource({
-        id: "cache.layer",
+        id: "cache-layer",
         init: async (config: { redis: boolean; memory: boolean }) => ({
           get: (key: string) =>
             config.redis
@@ -1001,7 +1001,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const complexService = defineResource({
-        id: "service.complex",
+        id: "service-complex",
         register: (config: {
           environment: "dev" | "prod";
           features: { caching: boolean; readReplica: boolean };
@@ -1107,7 +1107,7 @@ describe("Dynamic Register and Dependencies", () => {
 
     it("should support nested config-driven dependencies and registrations", async () => {
       const configService = defineResource({
-        id: "service.config",
+        id: "service-config",
         init: async (baseConfig: { app: string; version: number }) => ({
           get: (key: string) =>
             `${baseConfig.app}-v${baseConfig.version}-${key}`,
@@ -1117,7 +1117,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const metricsService = defineResource({
-        id: "service.metrics",
+        id: "service-metrics",
         init: async (config: { enabled: boolean; endpoint: string }) => ({
           track: (event: string) =>
             config.enabled
@@ -1127,7 +1127,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const parentService = defineResource({
-        id: "service.parent",
+        id: "service-parent",
         register: (config: {
           appName: string;
           enableMetrics: boolean;
@@ -1174,7 +1174,7 @@ describe("Dynamic Register and Dependencies", () => {
       });
 
       const childService = defineResource({
-        id: "service.child",
+        id: "service-child",
         dependencies: (_config: {
           parentConfig: {
             appName: string;

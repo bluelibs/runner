@@ -6,7 +6,7 @@ import { rpcExposure } from "../testkit/rpcExposure";
 describe("nodeExposure - multipart early abort via signal", () => {
   it("returns 499 when AbortSignal is already aborted before parsing", async () => {
     const t = defineTask<{ n: number }, Promise<number>>({
-      id: "exposer.abort.multipart",
+      id: "exposer-abort-multipart",
       run: async ({ n }) => n,
     });
     const exposure = rpcExposure.with({
@@ -16,7 +16,7 @@ describe("nodeExposure - multipart early abort via signal", () => {
       },
     });
     const app = defineResource({
-      id: "exposer.abort.app",
+      id: "exposer-abort-app",
       register: [t, exposure],
     });
     const rr = await run(app);

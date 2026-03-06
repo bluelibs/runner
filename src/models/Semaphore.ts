@@ -20,12 +20,12 @@ export type SemaphoreEventType =
 
 // Event definitions for Semaphore
 const SemaphoreEvents = {
-  queued: defineEvent<SemaphoreEvent>({ id: "semaphore.events.queued" }),
-  acquired: defineEvent<SemaphoreEvent>({ id: "semaphore.events.acquired" }),
-  released: defineEvent<SemaphoreEvent>({ id: "semaphore.events.released" }),
-  timeout: defineEvent<SemaphoreEvent>({ id: "semaphore.events.timeout" }),
-  aborted: defineEvent<SemaphoreEvent>({ id: "semaphore.events.aborted" }),
-  disposed: defineEvent<SemaphoreEvent>({ id: "semaphore.events.disposed" }),
+  queued: defineEvent<SemaphoreEvent>({ id: "semaphore-events-queued" }),
+  acquired: defineEvent<SemaphoreEvent>({ id: "semaphore-events-acquired" }),
+  released: defineEvent<SemaphoreEvent>({ id: "semaphore-events-released" }),
+  timeout: defineEvent<SemaphoreEvent>({ id: "semaphore-events-timeout" }),
+  aborted: defineEvent<SemaphoreEvent>({ id: "semaphore-events-aborted" }),
+  disposed: defineEvent<SemaphoreEvent>({ id: "semaphore-events-disposed" }),
 } as const satisfies Record<
   SemaphoreEventType,
   IEventDefinition<SemaphoreEvent>

@@ -61,7 +61,7 @@ describe("createHttpSmartClient - octet-stream source error", () => {
 
     const contexts = [
       {
-        id: "ctx.os",
+        id: "ctx-os",
         use: () => ({ z: 9 }),
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
@@ -94,7 +94,7 @@ describe("createHttpSmartClient - octet-stream source error", () => {
       serializer: new Serializer(),
       contexts: [
         {
-          id: "ctx.bad",
+          id: "ctx-bad",
           use: () => {
             throw createMessageError("missing context");
           },
@@ -113,7 +113,7 @@ describe("createHttpSmartClient - octet-stream source error", () => {
     });
 
     await expect(client.task("duplex.bad", src as any)).rejects.toThrow(
-      /Failed to serialize async context "ctx.bad"/,
+      /Failed to serialize async context "ctx-bad"/,
     );
     expect(requestSpy).not.toHaveBeenCalled();
   });

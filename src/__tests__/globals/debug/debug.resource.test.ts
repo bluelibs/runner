@@ -21,7 +21,7 @@ describe("runner.debug", () => {
     const logs: ILog[] = [];
 
     const collector = defineResource({
-      id: "tests.collector",
+      id: "tests-collector",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -31,10 +31,10 @@ describe("runner.debug", () => {
       },
     });
 
-    const testEvent = defineEvent<{ foo: string }>({ id: "tests.event" });
+    const testEvent = defineEvent<{ foo: string }>({ id: "tests-event" });
 
     const emitter = defineTask({
-      id: "tests.emitter",
+      id: "tests-emitter",
       dependencies: { testEvent },
       async run(_input, { testEvent }) {
         await testEvent({ foo: "bar" });
@@ -43,7 +43,7 @@ describe("runner.debug", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.events",
+      id: "tests-app-events",
       register: [debugResource.with("verbose"), collector, testEvent, emitter],
       async init() {
         return "done";
@@ -51,7 +51,7 @@ describe("runner.debug", () => {
     });
 
     const harness = defineResource({
-      id: "tests.harness.events",
+      id: "tests-harness-events",
       register: [app],
     });
     const rr = await run(harness);
@@ -61,7 +61,7 @@ describe("runner.debug", () => {
     const infoLogs = logs.filter((l) => l.level === "info");
     expect(
       infoLogs.some((l) =>
-        /Event .*tests\.event emitted/.test(String(l.message)),
+        /Event .*tests-event emitted/.test(String(l.message)),
       ),
     ).toBe(true);
   });
@@ -70,7 +70,7 @@ describe("runner.debug", () => {
     const messages: string[] = [];
 
     const collector = defineResource({
-      id: "tests.collector.middleware",
+      id: "tests-collector-middleware",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -81,14 +81,14 @@ describe("runner.debug", () => {
     });
 
     const localMiddleware = defineTaskMiddleware({
-      id: "tests.local.middleware",
+      id: "tests-local-middleware",
       async run({ next }) {
         return next();
       },
     });
 
     const testTask = defineTask({
-      id: "tests.task",
+      id: "tests-task",
       middleware: [localMiddleware],
       async run() {
         return "result";
@@ -96,14 +96,14 @@ describe("runner.debug", () => {
     });
 
     const subResource = defineResource({
-      id: "tests.sub.resource",
+      id: "tests-sub-resource",
       async init() {
         return "sub";
       },
     });
 
     const app = defineResource({
-      id: "tests.app.middleware",
+      id: "tests-app-middleware",
       register: [
         debugResource.with("verbose"),
         collector,
@@ -121,19 +121,19 @@ describe("runner.debug", () => {
     await result.runTask(testTask);
 
     // Task/resource tracker messages (assert present during boot)
-    expect(messages.some((m) => /Task .*tests\.task is running/.test(m))).toBe(
+    expect(messages.some((m) => /Task .*tests-task is running/.test(m))).toBe(
       true,
     );
-    expect(messages.some((m) => /Task .*tests\.task completed/.test(m))).toBe(
+    expect(messages.some((m) => /Task .*tests-task completed/.test(m))).toBe(
       true,
     );
     // Middleware observability messages
     // Allow for either ordering due to interleaving; just assert presence
     const joined = messages.join("\n");
-    expect(/Middleware triggered for task .*tests\.task/.test(joined)).toBe(
+    expect(/Middleware triggered for task .*tests-task/.test(joined)).toBe(
       true,
     );
-    expect(/Middleware completed for task .*tests\.task/.test(joined)).toBe(
+    expect(/Middleware completed for task .*tests-task/.test(joined)).toBe(
       true,
     );
     // Resource logs are implementation-defined depending on eager/lazy init.
@@ -144,7 +144,7 @@ describe("runner.debug", () => {
     const logs: ILog[] = [];
 
     const collector = defineResource({
-      id: "tests.collector.options.debug",
+      id: "tests-collector-options-debug",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -155,11 +155,11 @@ describe("runner.debug", () => {
     });
 
     const testEvent = defineEvent<{ foo: string }>({
-      id: "tests.event.options",
+      id: "tests-event-options",
     });
 
     const emitter = defineTask({
-      id: "tests.emitter.options",
+      id: "tests-emitter-options",
       dependencies: { testEvent },
       async run(_input, { testEvent }) {
         await testEvent({ foo: "bar" });
@@ -168,7 +168,7 @@ describe("runner.debug", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.options",
+      id: "tests-app-options",
       register: [collector, testEvent, emitter],
       async init() {
         return "done";
@@ -176,7 +176,7 @@ describe("runner.debug", () => {
     });
 
     const harness = defineResource({
-      id: "tests.harness.options",
+      id: "tests-harness-options",
       register: [app],
     });
     const rr = await run(harness, {
@@ -188,14 +188,14 @@ describe("runner.debug", () => {
       .filter((l) => l.level === "info")
       .map((l) => String(l.message));
     expect(
-      infoLogs.some((m) => /Event .*tests\.event\.options emitted/.test(m)),
+      infoLogs.some((m) => /Event .*tests-event-options emitted/.test(m)),
     ).toBe(true);
   });
 
   it("should ensure that the config of the resource is printted if the conig exists", async () => {
     const logs: ILog[] = [];
     const collector = defineResource({
-      id: "tests.collector.options.debug",
+      id: "tests-collector-options-debug",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -206,14 +206,14 @@ describe("runner.debug", () => {
     });
 
     const myResourceWithConfig = defineResource({
-      id: "tests.resource.with.config",
+      id: "tests-resource-with-config",
       async init(c: { name: string }) {
         return c.name;
       },
     });
 
     const app = defineResource({
-      id: "tests.app.options",
+      id: "tests-app-options",
       register: [
         collector,
         debugResource.with("verbose"),
@@ -227,7 +227,7 @@ describe("runner.debug", () => {
     await run(app);
 
     const resourceLogs = logs.filter((l) =>
-      /Resource .*tests\.resource\.with\.config/.test(String(l.message)),
+      /Resource .*tests-resource-with-config/.test(String(l.message)),
     );
     expect(resourceLogs).toHaveLength(2);
     expect(resourceLogs[0].data).toEqual({ config: { name: "test" } });
@@ -237,7 +237,7 @@ describe("runner.debug", () => {
     const messages: string[] = [];
 
     const collector = defineResource({
-      id: "tests.collector.locked",
+      id: "tests-collector-locked",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -248,21 +248,21 @@ describe("runner.debug", () => {
     });
 
     const failingTask = defineTask({
-      id: "tests.failing.task",
+      id: "tests-failing-task",
       async run() {
         throw createMessageError("boom");
       },
     });
 
     const simpleTask = defineTask({
-      id: "tests.simple.task",
+      id: "tests-simple-task",
       async run() {
         return "ok";
       },
     });
 
     const app = defineResource({
-      id: "tests.app.locked",
+      id: "tests-app-locked",
       register: [
         debugResource.with("verbose"),
         collector,
@@ -279,7 +279,7 @@ describe("runner.debug", () => {
     });
 
     const harness = defineResource({
-      id: "tests.harness.locked",
+      id: "tests-harness-locked",
       register: [app],
     });
     const rr = await run(harness);
@@ -292,9 +292,9 @@ describe("runner.debug", () => {
     // No new task start/completed messages should be added post-lock
     const newMessages = messages.slice(before, after).join("\n");
     expect(
-      newMessages.includes("[task] tests.simple.task starting to run"),
+      newMessages.includes("[task] tests-simple-task starting to run"),
     ).toBe(false);
-    expect(newMessages.includes("[task] tests.simple.task completed")).toBe(
+    expect(newMessages.includes("[task] tests-simple-task completed")).toBe(
       false,
     );
 
@@ -306,7 +306,7 @@ describe("runner.debug", () => {
     const messages: string[] = [];
 
     const collector = defineResource({
-      id: "tests.collector.resource.error",
+      id: "tests-collector-resource-error",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -317,14 +317,14 @@ describe("runner.debug", () => {
     });
 
     const failingResource = defineResource({
-      id: "tests.failing.resource",
+      id: "tests-failing-resource",
       async init() {
         throw createMessageError("resource-bad");
       },
     });
 
     const app = defineResource({
-      id: "tests.app.resource.error",
+      id: "tests-app-resource-error",
       register: [debugResource.with("verbose"), collector, failingResource],
       // Ensure collector is initialized before failing resource so it can subscribe to logs
       dependencies: { collector, failingResource },
@@ -343,7 +343,7 @@ describe("runner.debug", () => {
     const logs: ILog[] = [];
 
     const collector = defineResource({
-      id: "tests.collector.options.debug",
+      id: "tests-collector-options-debug",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -354,14 +354,14 @@ describe("runner.debug", () => {
     });
 
     const testTask = defineTask({
-      id: "tests.task",
+      id: "tests-task",
       async run() {
         return "result";
       },
     });
 
     const app = defineResource({
-      id: "tests.app.events",
+      id: "tests-app-events",
       register: [debugResource.with("normal"), collector, testTask],
       async init() {
         return "done";
@@ -369,7 +369,7 @@ describe("runner.debug", () => {
     });
 
     const harness = defineResource({
-      id: "tests.harness.events.simple",
+      id: "tests-harness-events-simple",
       register: [app],
     });
     const rr = await run(harness);
@@ -389,7 +389,7 @@ describe("runner.debug", () => {
     }> = [];
 
     const collector = defineResource({
-      id: "tests.collector.flags",
+      id: "tests-collector-flags",
       dependencies: { logger: globalResources.logger },
       async init(_c: { value: string }, { logger }) {
         logger.onLog((log) => {
@@ -399,10 +399,10 @@ describe("runner.debug", () => {
       },
     });
 
-    const testEvent = defineEvent<{ foo: string }>({ id: "tests.flags.event" });
+    const testEvent = defineEvent<{ foo: string }>({ id: "tests-flags-event" });
 
     const testTask = defineTask({
-      id: "tests.flags.task",
+      id: "tests-flags-task",
       dependencies: { testEvent },
       async run(_input: { name: string }, { testEvent }) {
         await testEvent({ foo: "bar" });
@@ -421,7 +421,7 @@ describe("runner.debug", () => {
     } as const;
 
     const app = defineResource({
-      id: "tests.app.flags",
+      id: "tests-app-flags",
       register: [collector.with({ value: "test" }), testEvent, testTask],
       dependencies: { testTask, collector },
       async init(_c) {
@@ -430,7 +430,7 @@ describe("runner.debug", () => {
     });
 
     const harness = defineResource({
-      id: "tests.harness.flags",
+      id: "tests-harness-flags",
       register: [app],
     });
     const rr = await run(harness, {
@@ -445,23 +445,23 @@ describe("runner.debug", () => {
 
     // Ensure the messages we're targeting exist
     expect(
-      messages.some((m) => /Task .*tests\.flags\.task is running/.test(m)),
+      messages.some((m) => /Task .*tests-flags-task is running/.test(m)),
     ).toBe(true);
     expect(
-      messages.some((m) => /Task .*tests\.flags\.task completed/.test(m)),
+      messages.some((m) => /Task .*tests-flags-task completed/.test(m)),
     ).toBe(true);
     expect(
-      messages.some((m) => /Event .*tests\.flags\.event emitted/.test(m)),
+      messages.some((m) => /Event .*tests-flags-event emitted/.test(m)),
     ).toBe(true);
 
     // Now validate the attached data payloads are omitted according to flags
     const taskStart = logs.find((l) =>
-      /Task .*tests\.flags\.task is running/.test(String(l.message)),
+      /Task .*tests-flags-task is running/.test(String(l.message)),
     );
     expect(taskStart?.data).toBeUndefined();
 
     const taskComplete = logs.find((l) =>
-      /Task .*tests\.flags\.task completed/.test(String(l.message)),
+      /Task .*tests-flags-task completed/.test(String(l.message)),
     );
     expect(taskComplete?.data).toBeUndefined();
 
@@ -478,14 +478,14 @@ describe("runner.debug", () => {
     expect(resourceComplete?.data).toBeUndefined();
 
     const eventLog = logs.find((l) =>
-      /Event .*tests\.flags\.event emitted/.test(String(l.message)),
+      /Event .*tests-flags-event emitted/.test(String(l.message)),
     );
     expect(eventLog?.data).toBeUndefined();
   });
 
   it("does not swallow the original task error if the logger throws an error", async () => {
     const badLoggerResource = defineResource({
-      id: "tests.badLogger",
+      id: "tests-badLogger",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         jest.spyOn(logger, "error").mockImplementationOnce(() => {
@@ -495,14 +495,14 @@ describe("runner.debug", () => {
     });
 
     const failingTask = defineTask({
-      id: "tests.failing.task.swallow",
+      id: "tests-failing-task-swallow",
       async run() {
         throw createMessageError("Original Task Error");
       },
     });
 
     const app = defineResource({
-      id: "tests.app.swallow",
+      id: "tests-app-swallow",
       register: [debugResource.with("verbose"), badLoggerResource, failingTask],
       dependencies: { badLoggerResource },
       async init() {
@@ -511,7 +511,7 @@ describe("runner.debug", () => {
     });
 
     const harness = defineResource({
-      id: "tests.harness.swallow",
+      id: "tests-harness-swallow",
       register: [app],
     });
 

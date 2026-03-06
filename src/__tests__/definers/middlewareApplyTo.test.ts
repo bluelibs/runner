@@ -6,11 +6,11 @@ import {
 
 describe("subtree policy normalization", () => {
   const taskMw = defineTaskMiddleware({
-    id: "tests.subtree.task.mw",
+    id: "tests-subtree-task-mw",
     run: async ({ next }) => next(),
   });
   const resourceMw = defineResourceMiddleware({
-    id: "tests.subtree.resource.mw",
+    id: "tests-subtree-resource-mw",
     run: async ({ next }) => next(),
   });
 

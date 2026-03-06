@@ -20,7 +20,7 @@ function resolveReId(
   forkId: string,
   options: ResourceForkOptions | undefined,
 ): (id: string) => string {
-  const fallback = (id: string) => `${forkId}.${id}`;
+  const fallback = (id: string) => `${forkId}-${id}`;
   const reId = options?.reId ?? fallback;
   return (id: string) => {
     const next = reId(id);

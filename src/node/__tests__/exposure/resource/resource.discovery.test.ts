@@ -7,12 +7,12 @@ import { createReqRes } from "./resource.test.utils";
 describe("nodeExposure discovery endpoint", () => {
   it("returns allow-list derived from rpc lanes and enforces auth/methods", async () => {
     const t = defineTask<void, Promise<number>>({
-      id: "discovery.ok.task",
+      id: "discovery-ok-task",
       run: async () => 1,
     });
 
     const rpcLanesServer = defineResource({
-      id: "discovery.rpc-lanes",
+      id: "discovery-rpc-lanes",
       tags: [tags.rpcLanes],
       async init() {
         return {
@@ -30,7 +30,7 @@ describe("nodeExposure discovery endpoint", () => {
     });
 
     const app = defineResource({
-      id: "discovery.app",
+      id: "discovery-app",
       register: [t, rpcLanesServer, exposure],
     });
     const rr = await run(app);
@@ -97,12 +97,12 @@ describe("nodeExposure discovery endpoint", () => {
 
   it("returns 404 when disableDiscovery is set", async () => {
     const t = defineTask<void, Promise<number>>({
-      id: "discovery.disabled.task",
+      id: "discovery-disabled-task",
       run: async () => 42,
     });
 
     const rpcLanesServer = defineResource({
-      id: "discovery.disabled.rpc-lanes",
+      id: "discovery-disabled-rpc-lanes",
       tags: [tags.rpcLanes],
       async init() {
         return {
@@ -121,7 +121,7 @@ describe("nodeExposure discovery endpoint", () => {
     });
 
     const app = defineResource({
-      id: "discovery.disabled.app",
+      id: "discovery-disabled-app",
       register: [t, rpcLanesServer, exposure],
     });
     const rr = await run(app);

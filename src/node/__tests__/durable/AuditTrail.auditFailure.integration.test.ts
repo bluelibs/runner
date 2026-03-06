@@ -15,7 +15,7 @@ describe("durable: audit trail failure tolerance (integration)", () => {
     const store = new ThrowingAuditStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.tests.audit.failure.durable");
+    const durable = durableResource.fork("durable-tests-audit-failure-durable");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -24,7 +24,7 @@ describe("durable: audit trail failure tolerance (integration)", () => {
     });
 
     const task = r
-      .task("durable.test.audit.failure")
+      .task("durable-test-audit-failure")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();

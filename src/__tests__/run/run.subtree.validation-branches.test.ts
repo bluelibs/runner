@@ -5,10 +5,10 @@ import { isResource, isTask } from "../../definers/tools";
 describe("run subtree validation branches", () => {
   it("fails fast when subtree task middleware is not registered", async () => {
     const app = defineResource({
-      id: "tests.subtree.missing.task.middleware.app",
+      id: "tests-subtree-missing-task-middleware-app",
       subtree: {
         tasks: {
-          middleware: [{ id: "tests.subtree.missing.task.middleware" } as any],
+          middleware: [{ id: "tests-subtree-missing-task-middleware" } as any],
         },
       },
       async init() {
@@ -21,13 +21,13 @@ describe("run subtree validation branches", () => {
 
   it("fails fast when conditional subtree task middleware is not registered", async () => {
     const app = defineResource({
-      id: "tests.subtree.missing.conditional.task.middleware.app",
+      id: "tests-subtree-missing-conditional-task-middleware-app",
       subtree: {
         tasks: {
           middleware: [
             {
               use: {
-                id: "tests.subtree.missing.conditional.task.middleware",
+                id: "tests-subtree-missing-conditional-task-middleware",
               } as any,
               when: () => true,
             },
@@ -44,11 +44,11 @@ describe("run subtree validation branches", () => {
 
   it("fails fast when subtree resource middleware is not registered", async () => {
     const app = defineResource({
-      id: "tests.subtree.missing.resource.middleware.app",
+      id: "tests-subtree-missing-resource-middleware-app",
       subtree: {
         resources: {
           middleware: [
-            { id: "tests.subtree.missing.resource.middleware" } as any,
+            { id: "tests-subtree-missing-resource-middleware" } as any,
           ],
         },
       },
@@ -62,13 +62,13 @@ describe("run subtree validation branches", () => {
 
   it("fails fast when conditional subtree resource middleware is not registered", async () => {
     const app = defineResource({
-      id: "tests.subtree.missing.conditional.resource.middleware.app",
+      id: "tests-subtree-missing-conditional-resource-middleware-app",
       subtree: {
         resources: {
           middleware: [
             {
               use: {
-                id: "tests.subtree.missing.conditional.resource.middleware",
+                id: "tests-subtree-missing-conditional-resource-middleware",
               } as any,
               when: () => true,
             },
@@ -90,21 +90,21 @@ describe("run subtree validation branches", () => {
     };
 
     const task = defineTask({
-      id: "tests.subtree.branches.validator.task",
+      id: "tests-subtree-branches-validator-task",
       async run() {
         return "ok";
       },
     });
 
     const child = defineResource({
-      id: "tests.subtree.branches.validator.child",
+      id: "tests-subtree-branches-validator-child",
       async init() {
         return "ok";
       },
     });
 
     const app = defineResource({
-      id: "tests.subtree.branches.validator.app",
+      id: "tests-subtree-branches-validator-app",
       register: [task, child],
       subtree: {
         validate: (definition) => {
@@ -132,14 +132,14 @@ describe("run subtree validation branches", () => {
 
   it("converts invalid validator outputs into invalid-definition violations", async () => {
     const task = defineTask({
-      id: "tests.subtree.branches.invalid-validator.task",
+      id: "tests-subtree-branches-invalid-validator-task",
       async run() {
         return "ok";
       },
     });
 
     const app = defineResource({
-      id: "tests.subtree.branches.invalid-validator.app",
+      id: "tests-subtree-branches-invalid-validator-app",
       register: [task],
       subtree: {
         validate: [

@@ -85,7 +85,7 @@ describe("durable: DurableResource", () => {
     const durable = new DurableResource(service, storage);
 
     const task = r
-      .task("durable.tests.resource.describe.task")
+      .task("durable-tests-resource-describe-task")
       .run(async () => "ok")
       .build();
 
@@ -109,13 +109,13 @@ describe("durable: DurableResource", () => {
     const storage = new AsyncLocalStorage<IDurableContext>();
 
     const taggedTask = r
-      .task("durable.tests.resource.tagged")
+      .task("durable-tests-resource-tagged")
       .tags([durableWorkflowTag.with({ category: "orders" })])
       .run(async () => "ok")
       .build();
 
     const untaggedTask = r
-      .task("durable.tests.resource.untagged")
+      .task("durable-tests-resource-untagged")
       .run(async () => "ok")
       .build();
 
@@ -153,7 +153,7 @@ describe("durable: DurableResource", () => {
     const service = createMockService();
     const storage = new AsyncLocalStorage<IDurableContext>();
     const task = r
-      .task("durable.tests.resource.describe.task.missing-deps")
+      .task("durable-tests-resource-describe-task-missing-deps")
       .run(async () => "ok")
       .build();
 
@@ -168,7 +168,7 @@ describe("durable: DurableResource", () => {
     );
 
     await expect(durable.describe(task)).rejects.toThrow(
-      'Cannot describe task "durable.tests.resource.describe.task.missing-deps": task dependencies are not available in the runtime store.',
+      'Cannot describe task "durable-tests-resource-describe-task-missing-deps": task dependencies are not available in the runtime store.',
     );
   });
 
@@ -179,11 +179,11 @@ describe("durable: DurableResource", () => {
     const durable = new DurableResource(service, storage);
 
     const task = r
-      .task("durable.tests.resource.task")
+      .task("durable-tests-resource-task")
       .run(async (_input: { a: number }) => "ok")
       .build();
     const signalDef = defineEvent<{ a: number }>({
-      id: "durable.tests.resource.signal",
+      id: "durable-tests-resource-signal",
     });
 
     expect(await durable.start(task, { a: 1 })).toBe("e1");

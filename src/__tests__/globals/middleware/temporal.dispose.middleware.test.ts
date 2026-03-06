@@ -22,7 +22,7 @@ describe("Temporal Middleware: Dispose", () => {
   it("rejects pending debounce callers when runtime is disposed", async () => {
     let callCount = 0;
     const task = defineTask({
-      id: "debounce.dispose.task",
+      id: "debounce-dispose-task",
       middleware: [debounceTaskMiddleware.with({ ms: 1000 })],
       run: async (input: string) => {
         callCount += 1;
@@ -31,7 +31,7 @@ describe("Temporal Middleware: Dispose", () => {
     });
 
     const app = defineResource({
-      id: "debounce.dispose.app",
+      id: "debounce-dispose-app",
       register: [task],
     });
 
@@ -51,7 +51,7 @@ describe("Temporal Middleware: Dispose", () => {
   it("rejects pending throttle callers when runtime is disposed", async () => {
     let callCount = 0;
     const task = defineTask({
-      id: "throttle.dispose.task",
+      id: "throttle-dispose-task",
       middleware: [throttleTaskMiddleware.with({ ms: 1000 })],
       run: async (input: string) => {
         callCount += 1;
@@ -60,7 +60,7 @@ describe("Temporal Middleware: Dispose", () => {
     });
 
     const app = defineResource({
-      id: "throttle.dispose.app",
+      id: "throttle-dispose-app",
       register: [task],
     });
 
@@ -87,7 +87,7 @@ describe("Temporal Middleware: Dispose", () => {
       debounceTaskMiddleware.run(
         {
           task: {
-            definition: { id: "debounce.disposed" } as any,
+            definition: { id: "debounce-disposed" } as any,
             input: "x",
           },
           next: async () => "ok",
@@ -107,7 +107,7 @@ describe("Temporal Middleware: Dispose", () => {
       throttleTaskMiddleware.run(
         {
           task: {
-            definition: { id: "throttle.disposed" } as any,
+            definition: { id: "throttle-disposed" } as any,
             input: "x",
           },
           next: async () => "ok",
@@ -134,7 +134,7 @@ describe("Temporal Middleware: Dispose", () => {
       const pending = debounceTaskMiddleware.run(
         {
           task: {
-            definition: { id: "debounce.dispose.callback" } as any,
+            definition: { id: "debounce-dispose-callback" } as any,
             input: "x",
           },
           next: async () => "ok",
@@ -172,7 +172,7 @@ describe("Temporal Middleware: Dispose", () => {
         throttleTaskMiddleware.run(
           {
             task: {
-              definition: { id: "throttle.dispose.callback" } as any,
+              definition: { id: "throttle-dispose-callback" } as any,
               input: "a",
             },
             next: async (input?: string) => input,
@@ -185,7 +185,7 @@ describe("Temporal Middleware: Dispose", () => {
       const pending = throttleTaskMiddleware.run(
         {
           task: {
-            definition: { id: "throttle.dispose.callback" } as any,
+            definition: { id: "throttle-dispose-callback" } as any,
             input: "b",
           },
           next: async (input?: string) => input,
@@ -291,7 +291,7 @@ describe("Temporal Middleware: Dispose", () => {
       debounceTaskMiddleware.run(
         {
           task: {
-            definition: { id: "debounce.recreate.tracked-set" } as any,
+            definition: { id: "debounce-recreate-tracked-set" } as any,
             input: "x",
           },
           next: async () => "ok",

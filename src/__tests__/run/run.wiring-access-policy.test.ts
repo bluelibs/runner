@@ -29,7 +29,7 @@ async function expectRunnerErrorId(
   }
 }
 
-describe("run.isolate", () => {
+describe("run-isolate", () => {
   it("fails when a denied id is used as a dependency", async () => {
     const deniedTask = defineTask({
       id: "policy-id-denied",
@@ -508,7 +508,7 @@ describe("run.isolate", () => {
   });
 });
 
-describe("run.isolate (only mode)", () => {
+describe("run-isolate (only mode)", () => {
   it("allows a dependency that is in the only list", async () => {
     const allowed = defineTask({
       id: "only-allowed-task",

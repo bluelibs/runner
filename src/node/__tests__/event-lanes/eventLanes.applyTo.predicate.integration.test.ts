@@ -44,15 +44,15 @@ describe("eventLanes applyTo predicate", () => {
   it("routes predicate-matched events through lane producer transport", async () => {
     const queue = new RecordingQueue();
     const event = r
-      .event<{ value: number }>("tests.event-lanes.apply-to.predicate.event")
+      .event<{ value: number }>("tests-event-lanes-apply-to-predicate-event")
       .build();
     const lane = r
-      .eventLane("tests.event-lanes.apply-to.predicate.lane")
+      .eventLane("tests-event-lanes-apply-to-predicate-lane")
       .applyTo((candidate) => candidate.id.endsWith(event.id))
       .build();
 
     const emitTask = r
-      .task("tests.event-lanes.apply-to.predicate.emit")
+      .task("tests-event-lanes-apply-to-predicate-emit")
       .dependencies({ event })
       .run(async (_input, deps) => {
         await deps.event({ value: 1 });
@@ -60,7 +60,7 @@ describe("eventLanes applyTo predicate", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.apply-to.predicate.app")
+      .resource("tests-event-lanes-apply-to-predicate-app")
       .register([
         event,
         emitTask,

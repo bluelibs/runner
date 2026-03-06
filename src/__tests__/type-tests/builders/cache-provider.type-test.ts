@@ -7,7 +7,7 @@ import type {
 // Type-only tests for cache provider wiring through resources.cache.with(...)
 {
   const validProvider = r
-    .resource("types.cache.provider.valid")
+    .resource("types-cache-provider-valid")
     .init(async (): Promise<CacheProvider> => {
       return async (_options): Promise<ICacheProvider> => ({
         get: async (_key: string) => undefined,
@@ -21,7 +21,7 @@ import type {
   resources.cache.with({ provider: validProvider });
 
   const invalidProviderResource = r
-    .resource("types.cache.provider.invalid.resource")
+    .resource("types-cache-provider-invalid-resource")
     .init(async () => 123)
     .build();
 
@@ -31,7 +31,7 @@ import type {
   });
 
   const invalidFactoryProvider = r
-    .resource("types.cache.provider.invalid.factory")
+    .resource("types-cache-provider-invalid-factory")
     .init(async () => async (_options: Record<string, unknown>) => ({
       get: async (_key: string) => undefined,
       set: async (_key: string, _value: unknown) => undefined,
@@ -45,7 +45,7 @@ import type {
   });
 
   const invalidHasProvider = r
-    .resource("types.cache.provider.invalid.has")
+    .resource("types-cache-provider-invalid-has")
     .init(async () => async (_options: Record<string, unknown>) => ({
       get: async (_key: string) => undefined,
       set: async (_key: string, _value: unknown) => undefined,

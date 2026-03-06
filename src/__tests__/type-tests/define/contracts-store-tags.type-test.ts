@@ -78,11 +78,11 @@ import type { Store } from "../../../models/Store";
   });
 
   const resourceTag = defineTag<void, void, { name: string }>({
-    id: "resource.tag",
+    id: "resource-tag",
   });
 
   defineResource({
-    id: "resource.user",
+    id: "resource-user",
     tags: [resourceTag],
     // @ts-expect-error should throw invalid because of missing name as response resource contract
     init: async () => {
@@ -109,7 +109,7 @@ import type { Store } from "../../../models/Store";
   const tags = [tag.with({ value: 123 }), tag2] satisfies TagType[];
 
   defineResource({
-    id: "resource.ok",
+    id: "resource-ok",
     tags,
     init: async () => {
       return {
@@ -120,7 +120,7 @@ import type { Store } from "../../../models/Store";
   });
 
   defineResource({
-    id: "resource.bad1",
+    id: "resource-bad1",
     tags,
     // @ts-expect-error
     init: async () => {
@@ -132,7 +132,7 @@ import type { Store } from "../../../models/Store";
   });
 
   defineResource({
-    id: "resource.bad2",
+    id: "resource-bad2",
     tags,
     // @ts-expect-error
     init: async () => {
@@ -146,7 +146,7 @@ import type { Store } from "../../../models/Store";
   const store = null as unknown as Store;
 
   const contractTag = defineTag<void, { tenantId: string }, { ok: boolean }>({
-    id: "types.tag.contract",
+    id: "types-tag-contract",
   });
 
   const taggedTasks = store.getTasksWithTag(contractTag);

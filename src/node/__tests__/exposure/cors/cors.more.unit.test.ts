@@ -71,7 +71,7 @@ function createReqRes(init: {
 describe("exposure CORS - more branches", () => {
   it("supports regex origin, uppercase Origin header, and varyOrigin=false", async () => {
     const t = defineTask<void, Promise<number>>({
-      id: "tests.cors.regex",
+      id: "tests-cors-regex",
       async run() {
         return 42;
       },
@@ -87,7 +87,7 @@ describe("exposure CORS - more branches", () => {
       },
     });
     const app = defineResource({
-      id: "tests.app.cors.regex",
+      id: "tests-app-cors-regex",
       register: [t, exposure],
     });
     const rr = await run(app);
@@ -135,7 +135,7 @@ describe("exposure CORS - more branches", () => {
 
   it("supports function origin and Vary header de-duplication", async () => {
     const t = defineTask<void, Promise<string>>({
-      id: "tests.cors.fn",
+      id: "tests-cors-fn",
       async run() {
         return "ok";
       },
@@ -150,7 +150,7 @@ describe("exposure CORS - more branches", () => {
       },
     });
     const app = defineResource({
-      id: "tests.app.cors.fn",
+      id: "tests-app-cors-fn",
       register: [t, exposure],
     });
     const rr = await run(app);

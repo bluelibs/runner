@@ -7,7 +7,7 @@ import { createReqRes } from "./streaming.test.utils";
 describe("requestHandlers - streaming", () => {
   it("handles content-type as array and returns 405 for wrong method", async () => {
     const t = defineTask<void, Promise<string>>({
-      id: "tests.streaming.405",
+      id: "tests-streaming-405",
       async run() {
         return "nope";
       },
@@ -19,7 +19,7 @@ describe("requestHandlers - streaming", () => {
       },
     });
     const app = defineResource({
-      id: "tests.app.streaming.405",
+      id: "tests-app-streaming-405",
       register: [t, exposure],
     });
     const rr = await run(app);
@@ -43,7 +43,7 @@ describe("requestHandlers - streaming", () => {
         void,
         Promise<{ stream: NodeJS.ReadableStream; contentType: string }>
       >({
-        id: "tests.streaming.wrapper.json",
+        id: "tests-streaming-wrapper-json",
         async run() {
           let i = 0;
           const stream = new Readable({
@@ -62,7 +62,7 @@ describe("requestHandlers - streaming", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.streaming.json",
+        id: "tests-app-streaming-json",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -85,7 +85,7 @@ describe("requestHandlers - streaming", () => {
 
     it("streams plain Readable on octet-stream path", async () => {
       const t = defineTask<void, Promise<NodeJS.ReadableStream>>({
-        id: "tests.streaming.readable.octet",
+        id: "tests-streaming-readable-octet",
         async run() {
           let i = 0;
           return new Readable({
@@ -103,7 +103,7 @@ describe("requestHandlers - streaming", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.streaming.octet",
+        id: "tests-app-streaming-octet",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -146,7 +146,7 @@ describe("requestHandlers - streaming", () => {
 
     it("streams plain Readable when task returns Readable", async () => {
       const t = defineTask<void, Promise<NodeJS.ReadableStream>>({
-        id: "tests.streaming.multipart.plain",
+        id: "tests-streaming-multipart-plain",
         async run() {
           let i = 0;
           return new Readable({
@@ -164,7 +164,7 @@ describe("requestHandlers - streaming", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.streaming.mp.plain",
+        id: "tests-app-streaming-mp-plain",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -189,7 +189,7 @@ describe("requestHandlers - streaming", () => {
         void,
         Promise<{ stream: NodeJS.ReadableStream; contentType: string }>
       >({
-        id: "tests.streaming.multipart.wrapper",
+        id: "tests-streaming-multipart-wrapper",
         async run() {
           let i = 0;
           const stream = new Readable({
@@ -208,7 +208,7 @@ describe("requestHandlers - streaming", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.streaming.mp.wrapper",
+        id: "tests-app-streaming-mp-wrapper",
         register: [t, exposure],
       });
       const rr = await run(app);

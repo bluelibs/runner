@@ -16,12 +16,12 @@ import { runtimeSource } from "../../types/runtimeSource";
 describe("RunResult", () => {
   it("exposes runTask, emitEvent, getResourceValue, getResourceConfig, logger and they work", async () => {
     const double = defineTask({
-      id: "helpers.double",
+      id: "helpers-double",
       run: async (x: number) => x * 2,
     });
 
     const acc = defineResource({
-      id: "helpers.acc",
+      id: "helpers-acc",
       configSchema: {
         parse(input) {
           return input as { label: string };
@@ -32,10 +32,10 @@ describe("RunResult", () => {
       },
     });
 
-    const ping = defineEvent<{ n: number }>({ id: "helpers.ping" });
+    const ping = defineEvent<{ n: number }>({ id: "helpers-ping" });
 
     const onPing = defineHook({
-      id: "helpers.onPing",
+      id: "helpers-onPing",
       on: ping,
       dependencies: { acc },
       async run(e, deps) {
@@ -44,7 +44,7 @@ describe("RunResult", () => {
     });
 
     const app = defineResource({
-      id: "helpers.app",
+      id: "helpers-app",
       register: [double, acc.with({ label: "main" }), ping, onPing],
       async init() {
         return "ready" as const;
@@ -65,7 +65,7 @@ describe("RunResult", () => {
     await r.emitEvent(ping, { n: 2 });
     await r.emitEvent(ping, { n: 3 });
 
-    const value = r.getResourceValue("helpers.acc");
+    const value = r.getResourceValue("helpers-acc");
     expect(value.calls).toBe(5);
 
     const value2 = r.getResourceValue(acc);
@@ -74,7 +74,7 @@ describe("RunResult", () => {
     const config = r.getResourceConfig(acc);
     expect(config).toEqual({ label: "main" });
 
-    const config2 = r.getResourceConfig("helpers.acc");
+    const config2 = r.getResourceConfig("helpers-acc");
     expect(config2).toEqual({ label: "main" });
 
     await r.dispose();
@@ -82,7 +82,7 @@ describe("RunResult", () => {
 
   it("supports string ids for runTask, emitEvent, getResourceValue, and getResourceConfig", async () => {
     const acc = defineResource({
-      id: "rr.acc",
+      id: "rr-acc",
       configSchema: {
         parse(input) {
           return input as { seed: number };
@@ -94,17 +94,17 @@ describe("RunResult", () => {
     });
 
     const inc = defineTask<{ by: number }, Promise<void>>({
-      id: "rr.inc",
+      id: "rr-inc",
       dependencies: { acc },
       async run(i, d) {
         d.acc.value += i.by;
       },
     });
 
-    const ping = defineEvent<{ n: number }>({ id: "rr.ping" });
+    const ping = defineEvent<{ n: number }>({ id: "rr-ping" });
 
     const onPing = defineHook({
-      id: "rr.onPing",
+      id: "rr-onPing",
       on: ping,
       dependencies: { acc },
       async run(e, d) {
@@ -113,7 +113,7 @@ describe("RunResult", () => {
     });
 
     const app = defineResource({
-      id: "rr.app",
+      id: "rr-app",
       register: [acc.with({ seed: 123 }), inc, ping, onPing],
       async init() {
         return "ready" as const;
@@ -122,11 +122,11 @@ describe("RunResult", () => {
 
     const r = await run(app);
 
-    await r.runTask("rr.inc", { by: 2 });
-    await r.emitEvent("rr.ping", { n: 3 });
-    const value = r.getResourceValue("rr.acc");
+    await r.runTask("rr-inc", { by: 2 });
+    await r.emitEvent("rr-ping", { n: 3 });
+    const value = r.getResourceValue("rr-acc");
     expect(value.value).toBe(5);
-    const config = r.getResourceConfig("rr.acc");
+    const config = r.getResourceConfig("rr-acc");
     expect(config).toEqual({ seed: 123 });
 
     await r.dispose();
@@ -137,7 +137,7 @@ describe("RunResult", () => {
     const seenSources: unknown[] = [];
 
     const noInputTask = defineTask<void, Promise<string>>({
-      id: "rr.options.noInputTask",
+      id: "rr-options-noInputTask",
       run: async (_input, _deps, context) => {
         seenJournals.push(context?.journal);
         seenSources.push(context?.source);
@@ -146,7 +146,7 @@ describe("RunResult", () => {
     });
 
     const app = defineResource({
-      id: "rr.options.app",
+      id: "rr-options-app",
       register: [noInputTask],
       dependencies: { noInputTask },
       init: async () => "ready",
@@ -167,7 +167,7 @@ describe("RunResult", () => {
     const seenChildSources: unknown[] = [];
 
     const child = defineTask<void, Promise<string>>({
-      id: "rr.source.child",
+      id: "rr-source-child",
       run: async (_input, _deps, context) => {
         seenChildSources.push(context?.source);
         return "child";
@@ -175,13 +175,13 @@ describe("RunResult", () => {
     });
 
     const parent = defineTask<void, Promise<string>>({
-      id: "rr.source.parent",
+      id: "rr-source-parent",
       dependencies: { runChild: child },
       run: async (_input, { runChild }) => runChild(),
     });
 
     const app = defineResource({
-      id: "rr.source.app",
+      id: "rr-source-app",
       register: [parent, child],
       async init() {
         return "ready";
@@ -197,10 +197,10 @@ describe("RunResult", () => {
   });
 
   it("emitEvent supports report mode for aggregated listener failures", async () => {
-    const ping = defineEvent<{ n: number }>({ id: "rr.report.ping" });
+    const ping = defineEvent<{ n: number }>({ id: "rr-report-ping" });
 
     const failFirst = defineHook({
-      id: "rr.report.failFirst",
+      id: "rr-report-failFirst",
       on: ping,
       run: async () => {
         throw createMessageError("first");
@@ -208,7 +208,7 @@ describe("RunResult", () => {
     });
 
     const failSecond = defineHook({
-      id: "rr.report.failSecond",
+      id: "rr-report-failSecond",
       on: ping,
       run: async () => {
         throw createMessageError("second");
@@ -216,7 +216,7 @@ describe("RunResult", () => {
     });
 
     const app = defineResource({
-      id: "rr.report.app",
+      id: "rr-report-app",
       register: [ping, failFirst, failSecond],
       async init() {
         return "ok" as const;
@@ -240,20 +240,20 @@ describe("RunResult", () => {
   });
 
   it("throws helpful errors for missing string ids", async () => {
-    const app = defineResource({ id: "rr.empty" });
+    const app = defineResource({ id: "rr-empty" });
     const r = await run(app);
 
-    expect(() => r.runTask("nope.task")).toThrow('Task "nope.task" not found.');
-    expect(() => r.emitEvent("nope.event")).toThrow(
-      'Event "nope.event" not found.',
+    expect(() => r.runTask("nope-task")).toThrow('Task "nope-task" not found.');
+    expect(() => r.emitEvent("nope-event")).toThrow(
+      'Event "nope-event" not found.',
     );
-    expect(() => r.getResourceValue("nope.res")).toThrow(
-      'Resource "nope.res" not found.',
+    expect(() => r.getResourceValue("nope-res")).toThrow(
+      'Resource "nope-res" not found.',
     );
-    expect(() => r.getResourceConfig("nope.res")).toThrow(
-      'Resource "nope.res" not found.',
+    expect(() => r.getResourceConfig("nope-res")).toThrow(
+      'Resource "nope-res" not found.',
     );
-    await expect(r.getLazyResourceValue("nope.res")).rejects.toThrow(
+    await expect(r.getLazyResourceValue("nope-res")).rejects.toThrow(
       /only available when run\(\.\.\., \{ lazy: true \}\)/,
     );
 
@@ -263,12 +263,12 @@ describe("RunResult", () => {
   it("supports explicit lazy resource access and blocks getResourceValue for startup-unused resources", async () => {
     const lazyInit = jest.fn(async () => ({ lazy: true }));
     const lazyOnly = defineResource({
-      id: "rr.lazy.only",
+      id: "rr-lazy-only",
       init: lazyInit,
     });
 
     const app = defineResource({
-      id: "rr.lazy.app",
+      id: "rr-lazy-app",
       register: [lazyOnly],
       async init() {
         return "ready";
@@ -296,13 +296,13 @@ describe("RunResult", () => {
 
   it("fails fast when getLazyResourceValue is called outside lazy mode", async () => {
     const only = defineResource({
-      id: "rr.lazy.dryrun.only",
+      id: "rr-lazy-dryrun-only",
       async init() {
         return "ready";
       },
     });
     const app = defineResource({
-      id: "rr.lazy.dryrun.app",
+      id: "rr-lazy-dryrun-app",
       register: [only],
       async init() {
         return "app";
@@ -324,8 +324,8 @@ describe("RunResult", () => {
     runtime.setLazyOptions({ lazyMode: true });
 
     await expect(
-      runtime.getLazyResourceValue("rr.lazy.missing"),
-    ).rejects.toThrow('Resource "rr.lazy.missing" not found.');
+      runtime.getLazyResourceValue("rr-lazy-missing"),
+    ).rejects.toThrow('Resource "rr-lazy-missing" not found.');
   });
 
   it("returns stored value in lazy mode when no lazy loader is configured", async () => {
@@ -336,7 +336,7 @@ describe("RunResult", () => {
     runtime.setLazyOptions({ lazyMode: true });
 
     const resource = defineResource({
-      id: "rr.lazy.manual.resource",
+      id: "rr-lazy-manual-resource",
     });
     fixture.store.storeGenericItem(resource);
     const resourceEntry = fixture.store.resources.get(resource.id);
@@ -352,15 +352,15 @@ describe("RunResult", () => {
 
   it("exposes root helpers and blocks dispose during bootstrap", async () => {
     const probe = defineResource({
-      id: "rr.root.probe",
+      id: "rr-root-probe",
       dependencies: { runtime: globalResources.runtime },
       init: async (_config, { runtime }) => {
-        expect(runtime.getRootId()).toBe("rr.root.app");
+        expect(runtime.getRootId()).toBe("rr-root-app");
         expect(runtime.getRootConfig<{ mode: "alpha" }>()).toEqual({
           mode: "alpha",
         });
         expect(() => runtime.getRootValue()).toThrow(
-          'Root resource "rr.root.app" is not initialized yet.',
+          'Root resource "rr-root-app" is not initialized yet.',
         );
         expect(() => runtime.dispose()).toThrow(
           "RunResult.dispose() is not available during bootstrap. Wait for run() to finish initialization.",
@@ -370,7 +370,7 @@ describe("RunResult", () => {
     });
 
     const app = defineResource<{ mode: "alpha" }, Promise<string>>({
-      id: "rr.root.app",
+      id: "rr-root-app",
       register: [probe],
       init: async () => "app-ready",
     });
@@ -378,7 +378,7 @@ describe("RunResult", () => {
     const runtime = await run(app.with({ mode: "alpha" }), {
       shutdownHooks: false,
     });
-    expect(runtime.getRootId()).toBe("rr.root.app");
+    expect(runtime.getRootId()).toBe("rr-root-app");
     expect(runtime.getRootConfig<{ mode: "alpha" }>()).toEqual({
       mode: "alpha",
     });

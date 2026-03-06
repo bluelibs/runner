@@ -5,11 +5,11 @@ import { durableWorkflowTag } from "../../durable/tags/durableWorkflow.tag";
 describe("durable: workflow discovery", () => {
   it("discovers tasks tagged with durable.workflow at runtime", async () => {
     const durable = memoryDurableResource.fork(
-      "durable.tests.discovery.resource",
+      "durable-tests-discovery-resource",
     );
 
     const taggedWorkflow = r
-      .task("durable.tests.discovery.tagged")
+      .task("durable-tests-discovery-tagged")
       .dependencies({ durable })
       .tags([durableWorkflowTag.with({ category: "orders" })])
       .run(async (_input: undefined, { durable }) => {
@@ -20,7 +20,7 @@ describe("durable: workflow discovery", () => {
       .build();
 
     const untaggedWorkflow = r
-      .task("durable.tests.discovery.untagged")
+      .task("durable-tests-discovery-untagged")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -30,7 +30,7 @@ describe("durable: workflow discovery", () => {
       .build();
 
     const app = r
-      .resource("durable.tests.discovery.app")
+      .resource("durable-tests-discovery-app")
       .register([durable.with({}), taggedWorkflow, untaggedWorkflow])
       .build();
 

@@ -8,7 +8,7 @@ import { rpcExposure } from "../testkit/rpcExposure";
 describe("nodeExposure response hijack (duplex)", () => {
   it("skips JSON envelope when task writes to res (raw-body)", async () => {
     const duplexTask = defineTask<void, Promise<string>>({
-      id: "ctx.raw.duplex",
+      id: "ctx-raw-duplex",
       run: async () => {
         const { req, res } = useRpcLaneRequestContext();
 
@@ -46,7 +46,7 @@ describe("nodeExposure response hijack (duplex)", () => {
       },
     });
     const app = defineResource({
-      id: "ctx.raw.duplex.app",
+      id: "ctx-raw-duplex-app",
       register: [duplexTask, exposure],
     });
     const rr = await run(app);

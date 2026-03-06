@@ -3,7 +3,7 @@ import { r } from "../../..";
 // Type-only tests for r.override(base, run/init).
 {
   const baseTask = r
-    .task("types.override.shorthand.task")
+    .task("types-override-shorthand-task")
     .run(async (input: { value: number }) => input.value)
     .build();
 
@@ -18,7 +18,7 @@ import { r } from "../../..";
 
 {
   const baseResource = r
-    .resource("types.override.shorthand.resource")
+    .resource("types-override-shorthand-resource")
     .init(async () => 123)
     .build();
 
@@ -30,12 +30,12 @@ import { r } from "../../..";
 
 {
   const event = r
-    .event("types.override.shorthand.hook.event")
+    .event("types-override-shorthand-hook-event")
     .payloadSchema<{ id: string }>({ parse: (v) => v as { id: string } })
     .build();
 
   const baseHook = r
-    .hook("types.override.shorthand.hook")
+    .hook("types-override-shorthand-hook")
     .on(event)
     .run(async (emission) => emission.data.id.length)
     .build();
@@ -50,7 +50,7 @@ import { r } from "../../..";
 
 {
   const baseTaskMiddleware = r.middleware
-    .task("types.override.shorthand.middleware.task")
+    .task("types-override-shorthand-middleware-task")
     .run(async ({ next }) => next())
     .build();
 
@@ -62,7 +62,7 @@ import { r } from "../../..";
 
 {
   const baseResourceMiddleware = r.middleware
-    .resource("types.override.shorthand.middleware.resource")
+    .resource("types-override-shorthand-middleware-resource")
     .run(async ({ next }) => next())
     .build();
 

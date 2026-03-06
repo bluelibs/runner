@@ -4,27 +4,27 @@ import { r, run } from "../../index";
 describe("IResource.fork() (basic)", () => {
   it("creates a new resource with a different id", () => {
     const base = r
-      .resource<{ value: string }>("base.resource")
+      .resource<{ value: string }>("base-resource")
       .init(async (cfg) => ({ msg: cfg.value }))
       .build();
 
-    const forked = base.fork("forked.resource");
+    const forked = base.fork("forked-resource");
 
-    expect(forked.id).toBe("forked.resource");
-    expect(base.id).toBe("base.resource");
+    expect(forked.id).toBe("forked-resource");
+    expect(base.id).toBe("base-resource");
 
     expect(base[symbolForkedFrom]).toBeUndefined();
-    expect(forked[symbolForkedFrom]?.fromId).toBe("base.resource");
+    expect(forked[symbolForkedFrom]?.fromId).toBe("base-resource");
     expect(forked[symbolFilePath]).toEqual(expect.any(String));
   });
 
   it("preserves the type signature and config shape", async () => {
     const base = r
-      .resource<{ host: string; port: number }>("base.db")
+      .resource<{ host: string; port: number }>("base-db")
       .init(async (cfg) => ({ connectionString: `${cfg.host}:${cfg.port}` }))
       .build();
 
-    const forked = base.fork("replica.db");
+    const forked = base.fork("replica-db");
 
     const app = r
       .resource("app")
@@ -46,15 +46,15 @@ describe("IResource.fork() (basic)", () => {
 
   it("forked resources work as independent dependencies", async () => {
     const base = r
-      .resource<{ value: string }>("base.mailer")
+      .resource<{ value: string }>("base-mailer")
       .init(async (cfg) => ({ msg: cfg.value }))
       .build();
 
-    const fork1 = base.fork("mailer.transactional");
-    const fork2 = base.fork("mailer.marketing");
+    const fork1 = base.fork("mailer-transactional");
+    const fork2 = base.fork("mailer-marketing");
 
     const consumer = r
-      .task("test.consumer")
+      .task("test-consumer")
       .dependencies({ tx: fork1, mkt: fork2 })
       .run(async (_, { tx, mkt }) => ({ a: tx.msg, b: mkt.msg }))
       .build();
@@ -77,26 +77,26 @@ describe("IResource.fork() (basic)", () => {
   });
 
   it("inherits tags from the base resource", () => {
-    const myTag = r.tag("test.tag").build();
-    const base = r.resource("base.tagged").tags([myTag]).build();
+    const myTag = r.tag("test-tag").build();
+    const base = r.resource("base-tagged").tags([myTag]).build();
 
-    const forked = base.fork("forked.tagged");
+    const forked = base.fork("forked-tagged");
 
     expect(forked.tags).toHaveLength(1);
-    expect(forked.tags[0].id).toBe("test.tag");
+    expect(forked.tags[0].id).toBe("test-tag");
   });
 
   it("allows chaining fork().with()", async () => {
     const base = r
-      .resource<{ name: string }>("base.service")
+      .resource<{ name: string }>("base-service")
       .init(async (cfg) => ({ greeting: `Hello, ${cfg.name}` }))
       .build();
 
-    const configured = base.fork("custom.service").with({ name: "World" });
+    const configured = base.fork("custom-service").with({ name: "World" });
     const app = r.resource("app").register([configured]).build();
 
     const runtime = await run(app);
-    const value = runtime.getResourceValue(base.fork("custom.service"));
+    const value = runtime.getResourceValue(base.fork("custom-service"));
 
     expect(value.greeting).toBe("Hello, World");
 
@@ -107,15 +107,15 @@ describe("IResource.fork() (basic)", () => {
     let initCount = 0;
 
     const base = r
-      .resource<{ id: string }>("base.counter")
+      .resource<{ id: string }>("base-counter")
       .init(async (cfg) => {
         initCount++;
         return { id: cfg.id, instanceNumber: initCount };
       })
       .build();
 
-    const fork1 = base.fork("counter.one");
-    const fork2 = base.fork("counter.two");
+    const fork1 = base.fork("counter-one");
+    const fork2 = base.fork("counter-two");
 
     const app = r
       .resource("app")
@@ -137,12 +137,12 @@ describe("IResource.fork() (basic)", () => {
 
   it("preserves middleware from base resource", () => {
     const mw = r.middleware
-      .resource("test.mw")
+      .resource("test-mw")
       .run(async ({ next }) => next())
       .build();
 
-    const base = r.resource("base.with.mw").middleware([mw]).build();
-    const forked = base.fork("forked.with.mw");
+    const base = r.resource("base-with-mw").middleware([mw]).build();
+    const forked = base.fork("forked-with-mw");
 
     expect(forked.middleware).toHaveLength(1);
   });
@@ -150,13 +150,13 @@ describe("IResource.fork() (basic)", () => {
   it("preserves cooldown hook through fork cloning", async () => {
     const cooldownCalls: string[] = [];
     const base = r
-      .resource("base.with.cooldown")
+      .resource("base-with-cooldown")
       .init(async () => "ok")
       .cooldown(async () => {
         cooldownCalls.push("cooled");
       })
       .build();
-    const forked = base.fork("forked.with.cooldown");
+    const forked = base.fork("forked-with-cooldown");
     const app = r.resource("app").register([forked]).build();
 
     const runtime = await run(app);
@@ -167,15 +167,15 @@ describe("IResource.fork() (basic)", () => {
 
   it("can drop registered items on fork", async () => {
     const sharedTask = r
-      .task("test.shared")
+      .task("test-shared")
       .run(async () => "ok")
       .build();
 
     const base = r
-      .resource("base.with.register")
+      .resource("base-with-register")
       .register([sharedTask])
       .build();
-    const forked = base.fork("base.with.register.fork", { register: "drop" });
+    const forked = base.fork("base-with-register-fork", { register: "drop" });
 
     expect(Array.isArray(forked.register)).toBe(true);
     expect(forked.register).toHaveLength(0);
@@ -192,19 +192,19 @@ describe("IResource.fork() (basic)", () => {
 
   it("keep-mode preserves the base register list", () => {
     const task = r
-      .task("test.keep.task")
+      .task("test-keep-task")
       .run(async () => "ok")
       .build();
-    const base = r.resource("test.keep.base").register([task]).build();
+    const base = r.resource("test-keep-base").register([task]).build();
 
-    const forked = base.fork("test.keep.forked", { register: "keep" });
+    const forked = base.fork("test-keep-forked", { register: "keep" });
     expect(forked.register).toBe(base.register);
   });
 
   it("rejects forking gateway resources", () => {
-    const gateway = r.resource("test.gateway", { gateway: true }).build();
+    const gateway = r.resource("test-gateway", { gateway: true }).build();
 
-    expect(() => gateway.fork("test.gateway.fork")).toThrow(
+    expect(() => gateway.fork("test-gateway-fork")).toThrow(
       /cannot be forked because gateway resources suppress their own namespace segment/i,
     );
   });

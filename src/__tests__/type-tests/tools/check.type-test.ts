@@ -231,7 +231,7 @@ import {
 
 {
   const map = check(
-    { a: { id: "lane.a" } },
+    { a: { id: "lane-a" } },
     Match.MapOf(
       Match.ObjectIncluding({
         id: String,
@@ -244,7 +244,7 @@ import {
 
 {
   const strict = check(
-    { id: "lane.a", retries: 1 },
+    { id: "lane-a", retries: 1 },
     Match.ObjectStrict({
       id: String,
       retries: Match.Optional(Number),

@@ -6,7 +6,7 @@ import { createReqRes } from "./resource.test.utils";
 
 describe("nodeExposure Coverage - Auth", () => {
   it("auth header override works and missing header rejects", async () => {
-    const okEvent = defineEvent<{ v?: number }>({ id: "ok.event.custom" });
+    const okEvent = defineEvent<{ v?: number }>({ id: "ok-event-custom" });
     const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
@@ -14,7 +14,7 @@ describe("nodeExposure Coverage - Auth", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.auth.app8",
+      id: "unit-exposure-coverage-auth-app8",
       register: [okEvent, exposure],
     });
     const rr = await run(app);
@@ -41,7 +41,7 @@ describe("nodeExposure Coverage - Auth", () => {
   });
 
   it("accepts auth tokens provided as array headers", async () => {
-    const evt = defineEvent<void>({ id: "coverage.header.arr" });
+    const evt = defineEvent<void>({ id: "coverage-header-arr" });
     const exposure = rpcExposure.with({
       http: {
         basePath: "/__runner",
@@ -49,7 +49,7 @@ describe("nodeExposure Coverage - Auth", () => {
       },
     });
     const app = defineResource({
-      id: "coverage.header.app",
+      id: "coverage-header-app",
       register: [evt, exposure],
     });
     const rr = await run(app);
@@ -69,9 +69,9 @@ describe("nodeExposure Coverage - Auth", () => {
   });
 
   it("discovers auth validator tasks via tag dependencies", async () => {
-    const evt = defineEvent<void>({ id: "coverage.auth.validator.discovery" });
+    const evt = defineEvent<void>({ id: "coverage-auth-validator-discovery" });
     const validatorTask = defineTask({
-      id: "coverage.auth.validator.task",
+      id: "coverage-auth-validator-task",
       tags: [globalTags.authValidator],
       run: async () => ({ ok: true }),
     });
@@ -82,7 +82,7 @@ describe("nodeExposure Coverage - Auth", () => {
       },
     });
     const app = defineResource({
-      id: "coverage.auth.validator.app",
+      id: "coverage-auth-validator-app",
       register: [evt, validatorTask, exposure],
     });
     const rr = await run(app);

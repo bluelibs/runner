@@ -54,7 +54,7 @@ Match.Field(Number)(DecoratedSchema.prototype, "ttl");
   });
 
   defineTask({
-    id: "task.decorator",
+    id: "task-decorator",
     inputSchema: DecoratedSchema,
     run: async (input) => {
       input.ttl;
@@ -65,7 +65,7 @@ Match.Field(Number)(DecoratedSchema.prototype, "ttl");
   });
 
   defineTaskMiddleware({
-    id: "middleware.decorator",
+    id: "middleware-decorator",
     configSchema: DecoratedSchema,
     run: async ({ next }, _deps, config) => {
       config.ttl;

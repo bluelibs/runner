@@ -899,11 +899,11 @@ describe("Semaphore", () => {
           eventManager: { registry: { listeners: Map<string, unknown[]> } };
         }
       ).eventManager.registry.listeners;
-      expect(listeners.get("semaphore.events.released")).toHaveLength(1);
+      expect(listeners.get("semaphore-events-released")).toHaveLength(1);
 
       unsubscribe();
 
-      expect(listeners.get("semaphore.events.released")).toBeUndefined();
+      expect(listeners.get("semaphore-events-released")).toBeUndefined();
     });
 
     it("hard-removes once() listeners from EventManager storage after first fire", async () => {
@@ -915,13 +915,13 @@ describe("Semaphore", () => {
           eventManager: { registry: { listeners: Map<string, unknown[]> } };
         }
       ).eventManager.registry.listeners;
-      expect(listeners.get("semaphore.events.released")).toHaveLength(1);
+      expect(listeners.get("semaphore-events-released")).toHaveLength(1);
 
       await sem.acquire();
       sem.release();
       await Promise.resolve();
 
-      expect(listeners.get("semaphore.events.released")).toBeUndefined();
+      expect(listeners.get("semaphore-events-released")).toBeUndefined();
     });
 
     it("ignores stale semaphore listener callbacks when listener id is inactive", async () => {
@@ -935,7 +935,7 @@ describe("Semaphore", () => {
         eventManager: { registry: { listeners: Map<string, Array<any>> } };
       };
       const listeners = internals.eventManager.registry.listeners.get(
-        "semaphore.events.released",
+        "semaphore-events-released",
       );
       if (!listeners?.[0]) {
         throw new Error(
@@ -983,7 +983,7 @@ describe("Semaphore", () => {
         eventManager: { registry: { listeners: Map<string, Array<any>> } };
       };
       const listeners = internals.eventManager.registry.listeners.get(
-        "semaphore.events.released",
+        "semaphore-events-released",
       );
       if (!listeners?.[0]) {
         throw new Error(

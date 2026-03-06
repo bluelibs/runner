@@ -73,24 +73,24 @@ class ManualCoverageQueue implements IEventLaneQueue {
 
 describe("event-lanes: additional coverage", () => {
   it("treats malformed relay ids as non-lane-specific and runs matching hooks", async () => {
-    const laneA = r.eventLane("tests.event-lanes.malformed-relay.a").build();
+    const laneA = r.eventLane("tests-event-lanes-malformed-relay-a").build();
     const queue = new ManualCoverageQueue();
     const event = r
-      .event<{ id: string }>("tests.event-lanes.malformed-relay.event")
+      .event<{ id: string }>("tests-event-lanes-malformed-relay-event")
       .tags([tags.eventLane.with({ lane: laneA })])
       .build();
 
     let callsA = 0;
     let callsB = 0;
     const hookA = r
-      .hook("tests.event-lanes.malformed-relay.hook-a")
+      .hook("tests-event-lanes-malformed-relay-hook-a")
       .on(event)
       .run(async () => {
         callsA += 1;
       })
       .build();
     const hookB = r
-      .hook("tests.event-lanes.malformed-relay.hook-b")
+      .hook("tests-event-lanes-malformed-relay-hook-b")
       .on(event)
       .run(async () => {
         callsB += 1;
@@ -98,7 +98,7 @@ describe("event-lanes: additional coverage", () => {
       .build();
 
     const emitMalformedRelay = r
-      .task("tests.event-lanes.malformed-relay.emit")
+      .task("tests-event-lanes-malformed-relay-emit")
       .dependencies({ eventManager: resources.eventManager })
       .run(async (_input, deps) => {
         await deps.eventManager.emit(
@@ -110,7 +110,7 @@ describe("event-lanes: additional coverage", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.malformed-relay.app")
+      .resource("tests-event-lanes-malformed-relay-app")
       .register([
         event,
         hookA,
@@ -136,19 +136,19 @@ describe("event-lanes: additional coverage", () => {
   });
 
   it("uses binding prefetch and ignores repeated ready", async () => {
-    const lane = r.eventLane("tests.event-lanes.prefetch.invalid").build();
+    const lane = r.eventLane("tests-event-lanes-prefetch-invalid").build();
     const queue = new ManualCoverageQueue();
     const event = r
-      .event("tests.event-lanes.prefetch.invalid.event")
+      .event("tests-event-lanes-prefetch-invalid-event")
       .tags([tags.eventLane.with({ lane })])
       .build();
     const laneHook = r
-      .hook("tests.event-lanes.prefetch.invalid.hook")
+      .hook("tests-event-lanes-prefetch-invalid-hook")
       .on(event)
       .run(async () => {})
       .build();
     const triggerReadyAgain = r
-      .task("tests.event-lanes.prefetch.invalid.ready-again")
+      .task("tests-event-lanes-prefetch-invalid-ready-again")
       .dependencies({ eventManager: resources.eventManager })
       .run(async (_input, deps) => {
         await deps.eventManager.emit(
@@ -160,7 +160,7 @@ describe("event-lanes: additional coverage", () => {
       .build();
 
     const app = r
-      .resource("tests.event-lanes.prefetch.invalid.app")
+      .resource("tests-event-lanes-prefetch-invalid-app")
       .register([
         event,
         laneHook,
@@ -188,11 +188,11 @@ describe("event-lanes: additional coverage", () => {
 
   it("nacks inactive, unknown, and post-dispose messages as expected", async () => {
     const lane = r
-      .eventLane("tests.event-lanes.consumer-branches.lane")
+      .eventLane("tests-event-lanes-consumer-branches-lane")
       .build();
     const queue = new ManualCoverageQueue();
     const app = r
-      .resource("tests.event-lanes.consumer-branches.app")
+      .resource("tests-event-lanes-consumer-branches-app")
       .register([
         eventLanesResource.with({
           profile: "worker",

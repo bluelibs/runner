@@ -223,7 +223,7 @@ describe("createHttpSmartClient - multipart", () => {
       serializer: new Serializer(),
       contexts: [
         {
-          id: "ctx.mp2",
+          id: "ctx-mp2",
           use: () => 1,
           serialize: (v: any) => String(v),
           parse: (s: string) => s,
@@ -251,7 +251,7 @@ describe("createHttpSmartClient - multipart", () => {
       serializer: new Serializer(),
       contexts: [
         {
-          id: "ctx.bad",
+          id: "ctx-bad",
           use: () => {
             throw createMessageError("missing context");
           },
@@ -269,7 +269,7 @@ describe("createHttpSmartClient - multipart", () => {
     );
 
     await expect(client.task("upload.bad", { file } as any)).rejects.toThrow(
-      /Failed to serialize async context "ctx.bad"/,
+      /Failed to serialize async context "ctx-bad"/,
     );
     expect(reqSpy).not.toHaveBeenCalled();
   });

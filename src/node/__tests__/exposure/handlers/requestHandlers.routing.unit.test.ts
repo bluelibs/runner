@@ -23,17 +23,17 @@ describe("requestHandlers - routing and dispatching", () => {
   describe("Method and URL Routing", () => {
     it("handleTask responds 405 for non-POST", async () => {
       const deps = createRequestHandlersDeps(serializer, {
-        store: { tasks: new Map([["t.id", { task: async () => 1 }]]) },
+        store: { tasks: new Map([["t-id", { task: async () => 1 }]]) },
         taskRunner: { run: async () => 1 },
         eventManager: {},
         router: {
-          extract: () => ({ kind: "task", id: "t.id" }),
+          extract: () => ({ kind: "task", id: "t-id" }),
         },
       });
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: "GET",
-        url: "/api/task/t.id",
+        url: "/api/task/t-id",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       });
       await handleTask(req, res);
@@ -132,7 +132,7 @@ describe("requestHandlers - routing and dispatching", () => {
 
     it("discovery resolves allow-list from rpc lane served ids", async () => {
       const store = {
-        tasks: new Map([["task.a", { task: { id: "task.a" } }]]),
+        tasks: new Map([["task-a", { task: { id: "task-a" } }]]),
         events: new Map(),
         resources: new Map(),
         asyncContexts: new Map(),
@@ -148,7 +148,7 @@ describe("requestHandlers - routing and dispatching", () => {
         },
         policy: {
           enabled: true,
-          taskIds: ["task.a"],
+          taskIds: ["task-a"],
           eventIds: [],
           taskAllowAsyncContext: {},
           eventAllowAsyncContext: {},
@@ -168,7 +168,7 @@ describe("requestHandlers - routing and dispatching", () => {
       const body = res._buf
         ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
         : undefined;
-      expect(body?.result?.allowList?.tasks).toContain("task.a");
+      expect(body?.result?.allowList?.tasks).toContain("task-a");
     });
   });
 
@@ -190,13 +190,13 @@ describe("requestHandlers - routing and dispatching", () => {
           },
         }),
         router: {
-          extract: () => ({ kind: "task", id: "t.id" }),
+          extract: () => ({ kind: "task", id: "t-id" }),
         },
       });
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/task/t.id",
+        url: "/api/task/t-id",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       });
       await handleTask(req, res);
@@ -210,17 +210,17 @@ describe("requestHandlers - routing and dispatching", () => {
     it("returns 403 when task/event blocked by allow-list", async () => {
       const policy = {
         enabled: true,
-        taskIds: ["allowed.task"],
-        eventIds: ["allowed.event"],
+        taskIds: ["allowed-task"],
+        eventIds: ["allowed-event"],
         taskAllowAsyncContext: {},
         eventAllowAsyncContext: {},
         taskAsyncContextAllowList: {},
         eventAsyncContextAllowList: {},
       } as const;
       const store: any = {
-        tasks: new Map([["allowed.task", { task: { id: "allowed.task" } }]]),
+        tasks: new Map([["allowed-task", { task: { id: "allowed-task" } }]]),
         events: new Map([
-          ["allowed.event", { event: { id: "allowed.event" } }],
+          ["allowed-event", { event: { id: "allowed-event" } }],
         ]),
         resources: new Map(),
         asyncContexts: new Map(),
@@ -237,7 +237,7 @@ describe("requestHandlers - routing and dispatching", () => {
         },
         allowList: createAllowListGuard(policy),
         router: {
-          extract: () => ({ kind: "task", id: "blocked.task" }),
+          extract: () => ({ kind: "task", id: "blocked-task" }),
         },
         policy,
       });
@@ -247,17 +247,17 @@ describe("requestHandlers - routing and dispatching", () => {
       // Task request blocked
       const { req: tReq, res: tRes } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/task/blocked.task",
+        url: "/api/task/blocked-task",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       });
       await handleTask(tReq, tRes);
       expect(tRes._status).toBe(403);
 
       // Event request blocked
-      deps.router.extract = () => ({ kind: "event", id: "blocked.event" });
+      deps.router.extract = () => ({ kind: "event", id: "blocked-event" });
       const { req: eReq, res: eRes } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/event/blocked.event",
+        url: "/api/event/blocked-event",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       });
       await handleEvent(eReq, eRes);
@@ -268,7 +268,7 @@ describe("requestHandlers - routing and dispatching", () => {
       const policy = {
         enabled: true,
         taskIds: [],
-        eventIds: ["allowed.event"],
+        eventIds: ["allowed-event"],
         taskAllowAsyncContext: {},
         eventAllowAsyncContext: {},
         taskAsyncContextAllowList: {},
@@ -277,7 +277,7 @@ describe("requestHandlers - routing and dispatching", () => {
       const store: any = {
         tasks: new Map(),
         events: new Map([
-          ["allowed.event", { event: { id: "allowed.event" } }],
+          ["allowed-event", { event: { id: "allowed-event" } }],
         ]),
         resources: new Map(),
         asyncContexts: new Map(),
@@ -299,7 +299,7 @@ describe("requestHandlers - routing and dispatching", () => {
         logger: { info: () => {}, warn: () => {}, error: () => {} },
         allowList: createAllowListGuard(policy),
         router: {
-          extract: () => ({ kind: "event", id: "blocked.event" }),
+          extract: () => ({ kind: "event", id: "blocked-event" }),
         },
         serializer: customSerializer,
         policy,
@@ -308,7 +308,7 @@ describe("requestHandlers - routing and dispatching", () => {
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/event/blocked.event",
+        url: "/api/event/blocked-event",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       });
 
@@ -367,7 +367,7 @@ describe("requestHandlers - routing and dispatching", () => {
   describe("Edge Case Internal Routing", () => {
     it("handles early res.close and triggers listener wiring path", async () => {
       const ev = defineEvent<{ payload?: unknown }>({
-        id: "tests.routing.abort",
+        id: "tests-routing-abort",
       });
       const exposure = rpcExposure.with({
         http: {
@@ -376,7 +376,7 @@ describe("requestHandlers - routing and dispatching", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.routing.abort",
+        id: "tests-app-routing-abort",
         register: [ev, exposure],
       });
       const rr = await run(app);

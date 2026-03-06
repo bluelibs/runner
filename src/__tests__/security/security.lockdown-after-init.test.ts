@@ -15,7 +15,7 @@ describe("Security: Post-init lockdown", () => {
     let mutateStoreFailed = false;
 
     const probe = defineHook({
-      id: "sec.lock.probe",
+      id: "sec-lock-probe",
       on: events.ready,
       dependencies: {
         eventManager: resources.eventManager,
@@ -31,7 +31,7 @@ describe("Security: Post-init lockdown", () => {
         try {
           // Attempt to add a listener without a real event definition
           // @ts-ignore
-          eventManager.addListener({ id: "non.existent" }, async () => {});
+          eventManager.addListener({ id: "non-existent" }, async () => {});
         } catch (_) {
           addListenerFailed = true;
         }
@@ -45,14 +45,14 @@ describe("Security: Post-init lockdown", () => {
         try {
           // Attempt to tamper with store once locked
           // @ts-ignore
-          store.storeGenericItem({ id: "attack.resource" });
+          store.storeGenericItem({ id: "attack-resource" });
         } catch (_) {
           mutateStoreFailed = true;
         }
       },
     });
 
-    const app = defineResource({ id: "sec.lock.app", register: [probe] });
+    const app = defineResource({ id: "sec-lock-app", register: [probe] });
     const rr = await run(app);
     await rr.dispose();
 
@@ -64,7 +64,7 @@ describe("Security: Post-init lockdown", () => {
 
   it("prevents registering local task interceptors after lock", async () => {
     const task = defineTask({
-      id: "sec.lock.task",
+      id: "sec-lock-task",
       run: async (input: number) => input,
     });
 
@@ -73,7 +73,7 @@ describe("Security: Post-init lockdown", () => {
     let capturedTaskDep: { intercept: (mw: any) => void } | undefined;
 
     const app = defineResource({
-      id: "sec.lock.taskIntercept.app",
+      id: "sec-lock-taskIntercept-app",
       register: [task],
       dependencies: { task },
       init: async (_, { task: taskDep }) => {
@@ -87,7 +87,7 @@ describe("Security: Post-init lockdown", () => {
     expect(() =>
       capturedTaskDep!.intercept((next: any, input: any) => next(input)),
     ).toThrow(
-      'Cannot register a task interceptor on task "sec.lock.task" from "sec.lock.taskIntercept.app"',
+      'Cannot register a task interceptor on task "sec-lock-task" from "sec-lock-taskIntercept-app"',
     );
 
     await rr.dispose();

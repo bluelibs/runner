@@ -164,6 +164,7 @@ npx tsx index.ts
 **That's it!** You now have a working `Runtime` and you can execute tasks with `runtime.runTask(...)`.
 
 > **Tip:** If you prefer an end-to-end example with HTTP, OpenAPI, and persistence, jump to the examples below.
+> **Tip:** User-defined ids are local ids. Use `send-email` or `userStore`, not dotted ids like `app.tasks.sendEmail`.
 
 ---
 
@@ -229,4 +230,3 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
 ## License
 
 This project is licensed under the MIT License - see [LICENSE.md](./LICENSE.md).
-

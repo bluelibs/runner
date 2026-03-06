@@ -19,7 +19,7 @@ describe("StoreRegistryTagMatchCollector", () => {
   it("returns empty resource matches when definition ids are missing or empty", () => {
     const collector = new StoreRegistryTagMatchCollector(createCollections());
     const tag = defineTag({
-      id: "collector.tags.empty",
+      id: "collector-tags-empty",
     });
 
     expect(

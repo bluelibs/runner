@@ -49,7 +49,9 @@ export function defineMiddlewareCore<TConfig, TDeps extends DependencyMapType>(
   filePath: string,
   middlewareDef: MiddlewareDefCore<TConfig, TDeps>,
 ): Record<string | symbol, unknown> {
-  assertDefinitionId(variant.label, middlewareDef.id);
+  assertDefinitionId(variant.label, middlewareDef.id, {
+    callerFilePath: filePath,
+  });
 
   const configSchema = normalizeOptionalValidationSchema(
     middlewareDef.configSchema,

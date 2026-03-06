@@ -109,12 +109,12 @@ describe("http-client (universal)", () => {
   it("eventWithResult: rethrows typed app error via errorRegistry when RemoteLaneTransportError carries id+data", async () => {
     exposureState.eventWithResult.mockImplementationOnce(async () => {
       throw new RemoteLaneTransportError("INTERNAL_ERROR", "boom", undefined, {
-        id: "tests.errors.evret",
+        id: "tests-errors-evret",
         data: { code: 9, message: "evret" },
       });
     });
     const helper = {
-      id: "tests.errors.evret",
+      id: "tests-errors-evret",
       throw: (data: any) => {
         throw createMessageError("typed-evret:" + String(data?.code));
       },
@@ -124,7 +124,7 @@ describe("http-client (universal)", () => {
     const client = createHttpClient({
       baseUrl,
       serializer: new Serializer(),
-      errorRegistry: new Map([["tests.errors.evret", helper]]),
+      errorRegistry: new Map([["tests-errors-evret", helper]]),
     });
     await expect(client.eventWithResult!("e.ret", { a: 1 })).rejects.toThrow(
       /typed-evret:9/,
@@ -167,7 +167,7 @@ describe("http-client (universal)", () => {
       serializer: new Serializer(),
       contexts: [
         {
-          id: "ctx.web",
+          id: "ctx-web",
           use: () => ({ a: 1 }),
           serialize: (v: any) => JSON.stringify(v),
           parse: (s: string) => JSON.parse(s),
@@ -238,7 +238,7 @@ describe("http-client (universal)", () => {
       serializer: new Serializer(),
       contexts: [
         {
-          id: "ctx.bad",
+          id: "ctx-bad",
           use: () => {
             throw "missing context";
           },
@@ -251,7 +251,7 @@ describe("http-client (universal)", () => {
     });
 
     await expect(client.task("t.upload.bad", { file })).rejects.toThrow(
-      /Failed to serialize async context "ctx.bad"/,
+      /Failed to serialize async context "ctx-bad"/,
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -277,7 +277,7 @@ describe("http-client (universal)", () => {
       serializer: new Serializer(),
       contexts: [
         {
-          id: "ctx.bad.error",
+          id: "ctx-bad-error",
           use: () => {
             throw createMessageError("missing context error");
           },
@@ -290,7 +290,7 @@ describe("http-client (universal)", () => {
     });
 
     await expect(client.task("t.upload.bad.error", { file })).rejects.toThrow(
-      /Failed to serialize async context "ctx.bad.error"/,
+      /Failed to serialize async context "ctx-bad-error"/,
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -332,14 +332,14 @@ describe("http-client (universal)", () => {
         error: {
           code: "INTERNAL_ERROR",
           message: "boom",
-          id: "tests.errors.web",
+          id: "tests-errors-web",
           data: { code: 11, message: "boom" },
         },
       };
       return { text: async () => serializer.stringify(env) } as any;
     });
     const helper = {
-      id: "tests.errors.web",
+      id: "tests-errors-web",
       throw: (data: any) => {
         throw createMessageError("typed-web:" + String(data?.code));
       },
@@ -350,7 +350,7 @@ describe("http-client (universal)", () => {
       baseUrl,
       fetchImpl: fetchMock as any,
       serializer: new Serializer(),
-      errorRegistry: new Map([["tests.errors.web", helper]]),
+      errorRegistry: new Map([["tests-errors-web", helper]]),
     });
     await expect(client.task("t.upload.err", { file } as any)).rejects.toThrow(
       /typed-web:11/,
@@ -360,12 +360,12 @@ describe("http-client (universal)", () => {
   it("event: rethrows typed app error via errorRegistry when RemoteLaneTransportError carries id+data", async () => {
     exposureState.event.mockImplementationOnce(async () => {
       throw new RemoteLaneTransportError("INTERNAL_ERROR", "boom", undefined, {
-        id: "tests.errors.ev",
+        id: "tests-errors-ev",
         data: { code: 8, message: "ev" },
       });
     });
     const helper = {
-      id: "tests.errors.ev",
+      id: "tests-errors-ev",
       throw: (data: any) => {
         throw createMessageError("typed-ev:" + String(data?.code));
       },
@@ -375,7 +375,7 @@ describe("http-client (universal)", () => {
     const client = createHttpClient({
       baseUrl,
       serializer: new Serializer(),
-      errorRegistry: new Map([["tests.errors.ev", helper]]),
+      errorRegistry: new Map([["tests-errors-ev", helper]]),
     });
     await expect(client.event("e.1", { a: 1 })).rejects.toThrow(/typed-ev:8/);
   });
@@ -474,12 +474,12 @@ describe("http-client (universal)", () => {
     // Make the mocked exposure fetch throw a RemoteLaneTransportError
     exposureState.task.mockImplementationOnce(async () => {
       throw new RemoteLaneTransportError("INTERNAL_ERROR", "boom", undefined, {
-        id: "tests.errors.app",
+        id: "tests-errors-app",
         data: { code: 5, message: "boom" },
       });
     });
     const helper = {
-      id: "tests.errors.app",
+      id: "tests-errors-app",
       throw: (data: any) => {
         throw createMessageError("typed:" + String(data?.code));
       },
@@ -489,7 +489,7 @@ describe("http-client (universal)", () => {
     const client = createHttpClient({
       baseUrl,
       serializer: new Serializer(),
-      errorRegistry: new Map([["tests.errors.app", helper]]),
+      errorRegistry: new Map([["tests-errors-app", helper]]),
     });
     await expect(client.task("t.json", { a: 1 } as any)).rejects.toThrow(
       /typed:5/,
@@ -498,8 +498,8 @@ describe("http-client (universal)", () => {
 
   it("does not remap errors that are already typed by the same registry helper", async () => {
     const alreadyTyped = Object.assign(new Error("already-typed"), {
-      id: "tests.errors.app",
-      name: "tests.errors.app",
+      id: "tests-errors-app",
+      name: "tests-errors-app",
       data: { code: 99, message: "x" },
     });
     exposureState.task.mockImplementationOnce(async () => {
@@ -507,7 +507,7 @@ describe("http-client (universal)", () => {
     });
 
     const helper = {
-      id: "tests.errors.app",
+      id: "tests-errors-app",
       throw: jest.fn((data: any) => {
         throw createMessageError("should-not-remap:" + String(data?.code));
       }),
@@ -518,7 +518,7 @@ describe("http-client (universal)", () => {
     const client = createHttpClient({
       baseUrl,
       serializer: new Serializer(),
-      errorRegistry: new Map([["tests.errors.app", helper]]),
+      errorRegistry: new Map([["tests-errors-app", helper]]),
     });
 
     await expect(client.task("t.json", { a: 1 } as any)).rejects.toBe(

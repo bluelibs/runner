@@ -137,7 +137,7 @@ D("nodeExposure - unit server", () => {
       http: { auth: { token: TOKEN, allowAnonymous: true } },
     });
     const app = defineResource({
-      id: "unit.exposure.serverProvided",
+      id: "unit-exposure-serverProvided",
       register: [testTask, testEvent, exposure],
     });
     const rr = await run(app);

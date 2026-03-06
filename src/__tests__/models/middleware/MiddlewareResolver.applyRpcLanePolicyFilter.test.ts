@@ -14,7 +14,7 @@ const resolveDefinitionId = (reference: unknown): string | undefined => {
   return undefined;
 };
 
-describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
+describe("MiddlewareResolver-applyRpcLanePolicyFilter", () => {
   test("throws when task is not registered", () => {
     const store: any = {
       tasks: new Map(),
@@ -39,7 +39,7 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
       middleware: [],
       isRpcRouted: true,
       [symbolRpcLanePolicy]: {
-        middlewareAllowList: ["mw.a"],
+        middlewareAllowList: ["mw-a"],
       },
     };
     const store: any = {
@@ -51,21 +51,21 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
       getOwnerResourceId: () => undefined,
     };
     const resolver = new MiddlewareResolver(store);
-    const middlewares = [{ id: "mw.a" }, { id: "mw.b" }] as any[];
+    const middlewares = [{ id: "mw-a" }, { id: "mw-b" }] as any[];
 
     expect(resolver.applyRpcLanePolicyFilter(task, middlewares)).toEqual([
-      { id: "mw.a" },
+      { id: "mw-a" },
     ]);
   });
 
   test("returns empty list when routed task has no allow list policy", () => {
     const task: any = {
-      id: "registered.grouped",
+      id: "registered-grouped",
       middleware: [],
       isRpcRouted: true,
     };
     const store: any = {
-      tasks: new Map([["registered.grouped", { task }]]),
+      tasks: new Map([["registered-grouped", { task }]]),
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
       resources: new Map(),
@@ -73,22 +73,22 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
       getOwnerResourceId: () => undefined,
     };
     const resolver = new MiddlewareResolver(store);
-    const middlewares = [{ id: "mw.keep" }, { id: "mw.drop" }] as any[];
+    const middlewares = [{ id: "mw-keep" }, { id: "mw-drop" }] as any[];
 
     expect(resolver.applyRpcLanePolicyFilter(task, middlewares)).toEqual([]);
   });
 
   test("supports legacy object middleware ids in lane policy allow list", () => {
     const task: any = {
-      id: "registered.legacy-allow-list",
+      id: "registered-legacy-allow-list",
       middleware: [],
       isRpcRouted: true,
       [symbolRpcLanePolicy]: {
-        middlewareAllowList: [{ id: "mw.legacy.allowed" }],
+        middlewareAllowList: [{ id: "mw-legacy-allowed" }],
       },
     };
     const store: any = {
-      tasks: new Map([["registered.legacy-allow-list", { task }]]),
+      tasks: new Map([["registered-legacy-allow-list", { task }]]),
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
       resources: new Map(),
@@ -99,15 +99,15 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
 
     expect(
       resolver.applyRpcLanePolicyFilter(task, [
-        { id: "mw.legacy.allowed" },
-        { id: "mw.legacy.blocked" },
+        { id: "mw-legacy-allowed" },
+        { id: "mw-legacy-blocked" },
       ] as any[]),
-    ).toEqual([{ id: "mw.legacy.allowed" }]);
+    ).toEqual([{ id: "mw-legacy-allowed" }]);
   });
 
   test("does not auto-apply subtree middleware when owner cannot be resolved", () => {
     const middleware = {
-      id: "tests.middleware.subtree.owner-missing",
+      id: "tests-middleware-subtree-owner-missing",
       run: async ({ next }: any) => next(),
     };
 
@@ -123,19 +123,19 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
     };
 
     const resolver = new MiddlewareResolver(store);
-    const task = { id: "tests.task.target", middleware: [] } as any;
+    const task = { id: "tests-task-target", middleware: [] } as any;
 
     expect(resolver.getEverywhereTaskMiddlewares(task)).toEqual([]);
   });
 
   test("resolves owner from store helper", () => {
     const middleware = {
-      id: "tests.middleware.subtree.visibility-fallback",
+      id: "tests-middleware-subtree-visibility-fallback",
       run: async ({ next }: any) => next(),
     };
 
     const ownerResource = {
-      id: "tests.middleware.subtree.visibility-fallback.owner",
+      id: "tests-middleware-subtree-visibility-fallback-owner",
       middleware: [],
       subtree: {
         tasks: {
@@ -148,10 +148,10 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
     const store: any = {
       tasks: new Map([
         [
-          "tests.task.target.visibility-fallback",
+          "tests-task-target-visibility-fallback",
           {
             task: {
-              id: "tests.task.target.visibility-fallback",
+              id: "tests-task-target-visibility-fallback",
               middleware: [],
             },
           },
@@ -166,7 +166,7 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
 
     const resolver = new MiddlewareResolver(store);
     const task = {
-      id: "tests.task.target.visibility-fallback",
+      id: "tests-task-target-visibility-fallback",
       middleware: [],
     } as any;
 
@@ -174,9 +174,9 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
   });
 
   test("caches applicable task middlewares when store is locked", () => {
-    const local = { id: "mw.local" } as any;
-    const global = { id: "mw.global" } as any;
-    const task: any = { id: "task.locked.cache", middleware: [local] };
+    const local = { id: "mw-local" } as any;
+    const global = { id: "mw-global" } as any;
+    const task: any = { id: "task-locked-cache", middleware: [local] };
     const store: any = {
       isLocked: true,
       tasks: new Map(),
@@ -201,10 +201,10 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
   });
 
   test("caches applicable resource middlewares when store is locked", () => {
-    const local = { id: "mw.resource.local" } as any;
-    const global = { id: "mw.resource.global" } as any;
+    const local = { id: "mw-resource-local" } as any;
+    const global = { id: "mw-resource-global" } as any;
     const resource: any = {
-      id: "resource.locked.cache",
+      id: "resource-locked-cache",
       middleware: [local],
     };
     const store: any = {
@@ -232,16 +232,16 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
 
   test("caches rpc allowlist set when store is locked", () => {
     const task: any = {
-      id: "task.rpc.locked.allow-list",
+      id: "task-rpc-locked-allow-list",
       middleware: [],
       isRpcRouted: true,
       [symbolRpcLanePolicy]: {
-        middlewareAllowList: ["mw.a"],
+        middlewareAllowList: ["mw-a"],
       },
     };
     const store: any = {
       isLocked: true,
-      tasks: new Map([["task.rpc.locked.allow-list", { task }]]),
+      tasks: new Map([["task-rpc-locked-allow-list", { task }]]),
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
       resources: new Map(),
@@ -249,14 +249,14 @@ describe("MiddlewareResolver.applyRpcLanePolicyFilter", () => {
       getOwnerResourceId: () => undefined,
     };
     const resolver = new MiddlewareResolver(store);
-    const middlewares = [{ id: "mw.a" }, { id: "mw.b" }] as any[];
+    const middlewares = [{ id: "mw-a" }, { id: "mw-b" }] as any[];
 
     const first = resolver.applyRpcLanePolicyFilter(task, middlewares);
 
-    task[symbolRpcLanePolicy].middlewareAllowList = ["mw.b"];
+    task[symbolRpcLanePolicy].middlewareAllowList = ["mw-b"];
     const second = resolver.applyRpcLanePolicyFilter(task, middlewares);
 
-    expect(first).toEqual([{ id: "mw.a" }]);
-    expect(second).toEqual([{ id: "mw.a" }]);
+    expect(first).toEqual([{ id: "mw-a" }]);
+    expect(second).toEqual([{ id: "mw-a" }]);
   });
 });

@@ -7,13 +7,13 @@ describe("StoreRegistryDefinitionPreparer", () => {
 
     expect(() =>
       preparer.prepareFreshValue({
-        item: { id: "tests.override.missing.task" },
+        item: { id: "tests-override-missing-task" },
         collection,
         key: "task",
         mode: "override",
         overrideTargetType: "Task",
       }),
-    ).toThrow(/Override target Task "tests\.override\.missing\.task"/);
+    ).toThrow(/Override target Task "tests-override-missing-task"/);
   });
 
   it("defaults missing override target type to Resource when not provided", () => {
@@ -22,11 +22,11 @@ describe("StoreRegistryDefinitionPreparer", () => {
 
     expect(() =>
       preparer.prepareFreshValue({
-        item: { id: "tests.override.missing.resource" },
+        item: { id: "tests-override-missing-resource" },
         collection,
         key: "resource",
         mode: "override",
       }),
-    ).toThrow(/Override target Resource "tests\.override\.missing\.resource"/);
+    ).toThrow(/Override target Resource "tests-override-missing-resource"/);
   });
 });

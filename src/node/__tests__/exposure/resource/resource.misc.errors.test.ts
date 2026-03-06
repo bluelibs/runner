@@ -8,11 +8,11 @@ import { createMessageError } from "../../../../errors";
 describe("nodeExposure - misc error branches", () => {
   const TOKEN = "unit-secret";
   const noInputTask = defineTask<void, Promise<number>>({
-    id: "unit.exposure.misc.noInputTask",
+    id: "unit-exposure-misc-noInputTask",
     run: async () => 123,
   });
   const dummyEvent = defineEvent<{ x?: number }>({
-    id: "unit.exposure.misc.event",
+    id: "unit-exposure-misc-event",
   });
 
   it("readJson branch: accepts non-Buffer chunks (string)", async () => {
@@ -23,7 +23,7 @@ describe("nodeExposure - misc error branches", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.misc.app3",
+      id: "unit-exposure-misc-app3",
       register: [noInputTask, exposure],
     });
     const rr = await run(app);
@@ -50,7 +50,7 @@ describe("nodeExposure - misc error branches", () => {
 
   it("swallows logger errors inside catch blocks (task)", async () => {
     const badTask = defineTask<{ v: number }, Promise<number>>({
-      id: "unit.exposure.misc.badTask",
+      id: "unit-exposure-misc-badTask",
       inputSchema: z.object({ v: z.number() }).strict(),
       run: async ({ v }) => v,
     });
@@ -61,7 +61,7 @@ describe("nodeExposure - misc error branches", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.misc.app6",
+      id: "unit-exposure-misc-app6",
       register: [badTask, exposure],
     });
     const rr = await run(app);
@@ -89,7 +89,7 @@ describe("nodeExposure - misc error branches", () => {
       },
     });
     const app = defineResource({
-      id: "unit.exposure.misc.app9",
+      id: "unit-exposure-misc-app9",
       register: [dummyEvent, exposure],
     });
     const rr = await run(app);

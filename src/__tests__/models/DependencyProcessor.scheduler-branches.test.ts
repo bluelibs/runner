@@ -21,34 +21,34 @@ describe("DependencyProcessor scheduler branches", () => {
     store.setTaskRunner(taskRunner);
 
     const aggregateTag = defineTag({
-      id: "scheduler.direct.branches.tag",
+      id: "scheduler-direct-branches-tag",
     });
     const event = defineEvent({
-      id: "scheduler.direct.branches.event",
+      id: "scheduler-direct-branches-event",
     });
 
     const taggedResource = defineResource({
-      id: "scheduler.direct.branches.resource",
+      id: "scheduler-direct-branches-resource",
       tags: [aggregateTag],
     });
     const taskDepResource = defineResource({
-      id: "scheduler.direct.branches.task.dep",
+      id: "scheduler-direct-branches-task-dep",
     });
     const hookDepResource = defineResource({
-      id: "scheduler.direct.branches.hook.dep",
+      id: "scheduler-direct-branches-hook-dep",
     });
     const taskMiddlewareDepResource = defineResource({
-      id: "scheduler.direct.branches.task-middleware.dep",
+      id: "scheduler-direct-branches-task-middleware-dep",
     });
     const resourceMiddlewareDepResource = defineResource({
-      id: "scheduler.direct.branches.resource-middleware.dep",
+      id: "scheduler-direct-branches-resource-middleware-dep",
     });
     const directResource = defineResource({
-      id: "scheduler.direct.branches.direct.resource",
+      id: "scheduler-direct-branches-direct-resource",
     });
 
     const taggedTask = defineTask({
-      id: "scheduler.direct.branches.task",
+      id: "scheduler-direct-branches-task",
       tags: [aggregateTag],
       dependencies: {
         taskDepResource,
@@ -58,7 +58,7 @@ describe("DependencyProcessor scheduler branches", () => {
       },
     });
     const taggedHook = defineHook({
-      id: "scheduler.direct.branches.hook",
+      id: "scheduler-direct-branches-hook",
       on: event,
       tags: [aggregateTag],
       dependencies: {
@@ -67,7 +67,7 @@ describe("DependencyProcessor scheduler branches", () => {
       async run() {},
     });
     const taggedTaskMiddleware = defineTaskMiddleware({
-      id: "scheduler.direct.branches.task-middleware",
+      id: "scheduler-direct-branches-task-middleware",
       tags: [aggregateTag],
       dependencies: {
         taskMiddlewareDepResource,
@@ -77,7 +77,7 @@ describe("DependencyProcessor scheduler branches", () => {
       },
     });
     const taggedResourceMiddleware = defineResourceMiddleware({
-      id: "scheduler.direct.branches.resource-middleware",
+      id: "scheduler-direct-branches-resource-middleware",
       tags: [aggregateTag],
       dependencies: {
         resourceMiddlewareDepResource,
@@ -88,11 +88,11 @@ describe("DependencyProcessor scheduler branches", () => {
     });
 
     const missingOptionalResource = defineResource({
-      id: "scheduler.direct.branches.optional.missing",
+      id: "scheduler-direct-branches-optional-missing",
     });
 
     const consumer = defineResource({
-      id: "scheduler.direct.branches.consumer",
+      id: "scheduler-direct-branches-consumer",
       dependencies: {
         taggedTask,
         aggregateTag,
@@ -122,7 +122,7 @@ describe("DependencyProcessor scheduler branches", () => {
     store.storeGenericItem(consumer);
 
     store.root = {
-      resource: defineResource({ id: "scheduler.direct.branches.root" }),
+      resource: defineResource({ id: "scheduler-direct-branches-root" }),
       config: undefined,
       value: undefined,
       context: {},
@@ -170,17 +170,17 @@ describe("DependencyProcessor scheduler branches", () => {
     store.setTaskRunner(taskRunner);
 
     const aggregateTag = defineTag({
-      id: "scheduler.startup.tag.branch.tag",
+      id: "scheduler-startup-tag-branch-tag",
     });
     const taggedResource = defineResource({
-      id: "scheduler.startup.tag.branch.resource",
+      id: "scheduler-startup-tag-branch-resource",
       tags: [aggregateTag],
     });
 
     store.storeGenericItem(aggregateTag);
     store.storeGenericItem(taggedResource);
     store.root = {
-      resource: defineResource({ id: "scheduler.startup.tag.branch.root" }),
+      resource: defineResource({ id: "scheduler-startup-tag-branch-root" }),
       config: undefined,
       value: undefined,
       context: {},
@@ -207,7 +207,7 @@ describe("DependencyProcessor scheduler branches", () => {
         {
           startupTag: aggregateTag.startup(),
         },
-        "scheduler.startup.tag.branch.consumer",
+        "scheduler-startup-tag-branch-consumer",
       );
 
     expect(collected).toContain(taggedResource.id);
@@ -220,13 +220,13 @@ describe("DependencyProcessor scheduler branches", () => {
     store.setTaskRunner(taskRunner);
 
     const event = defineEvent({
-      id: "scheduler.hook.error.event",
+      id: "scheduler-hook-error-event",
     });
     const missingResource = defineResource({
-      id: "scheduler.hook.error.missing.resource",
+      id: "scheduler-hook-error-missing-resource",
     });
     const hook = defineHook({
-      id: "scheduler.hook.error.hook",
+      id: "scheduler-hook-error-hook",
       on: event,
       dependencies: {
         missingResource,
@@ -237,7 +237,7 @@ describe("DependencyProcessor scheduler branches", () => {
     store.storeGenericItem(event);
     store.storeGenericItem(hook);
     store.root = {
-      resource: defineResource({ id: "scheduler.hook.error.root" }),
+      resource: defineResource({ id: "scheduler-hook-error-root" }),
       config: undefined,
       value: undefined,
       context: {},
@@ -267,16 +267,16 @@ describe("DependencyProcessor scheduler branches", () => {
     store.setTaskRunner(taskRunner);
 
     store.root = {
-      resource: defineResource({ id: "scheduler.attach.no-on.root" }),
+      resource: defineResource({ id: "scheduler-attach-no-on-root" }),
       config: undefined,
       value: undefined,
       context: {},
       isInitialized: false,
     } as never;
 
-    store.hooks.set("scheduler.attach.no-on.hook", {
+    store.hooks.set("scheduler-attach-no-on-hook", {
       hook: {
-        id: "scheduler.attach.no-on.hook",
+        id: "scheduler-attach-no-on-hook",
         on: undefined,
         dependencies: {},
       },

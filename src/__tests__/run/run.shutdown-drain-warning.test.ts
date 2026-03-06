@@ -14,14 +14,14 @@ describe("run shutdown drain warning", () => {
     const warns: Array<{ message: unknown; data: unknown }> = [];
 
     const neverTask = defineTask({
-      id: "tests.shutdown-drain-warning.manual.never-task",
+      id: "tests-shutdown-drain-warning-manual-never-task",
       async run() {
         return new Promise<never>(() => undefined);
       },
     });
 
     const drainedHook = defineHook({
-      id: "tests.shutdown-drain-warning.manual.drained-hook",
+      id: "tests-shutdown-drain-warning-manual-drained-hook",
       on: globalEvents.drained,
       async run() {
         lifecycle.push("drained");
@@ -29,7 +29,7 @@ describe("run shutdown drain warning", () => {
     });
 
     const app = defineResource({
-      id: "tests.shutdown-drain-warning.manual.app",
+      id: "tests-shutdown-drain-warning-manual-app",
       register: [neverTask, drainedHook],
       async init() {
         return "ok";
@@ -77,14 +77,14 @@ describe("run shutdown drain warning", () => {
 
     try {
       const neverTask = defineTask({
-        id: "tests.shutdown-drain-warning.signal.never-task",
+        id: "tests-shutdown-drain-warning-signal-never-task",
         async run() {
           return new Promise<never>(() => undefined);
         },
       });
 
       const app = defineResource({
-        id: "tests.shutdown-drain-warning.signal.app",
+        id: "tests-shutdown-drain-warning-signal-app",
         register: [neverTask],
         async init() {
           return "ok";
@@ -123,7 +123,7 @@ describe("run shutdown drain warning", () => {
     const warns: unknown[] = [];
 
     const quickTask = defineTask({
-      id: "tests.shutdown-drain-warning.success.quick-task",
+      id: "tests-shutdown-drain-warning-success-quick-task",
       async run() {
         await tick(5);
         return "done";
@@ -131,7 +131,7 @@ describe("run shutdown drain warning", () => {
     });
 
     const app = defineResource({
-      id: "tests.shutdown-drain-warning.success.app",
+      id: "tests-shutdown-drain-warning-success-app",
       register: [quickTask],
       async init() {
         return "ok";
@@ -163,14 +163,14 @@ describe("run shutdown drain warning", () => {
     const warns: unknown[] = [];
 
     const neverTask = defineTask({
-      id: "tests.shutdown-drain-warning.disabled.never-task",
+      id: "tests-shutdown-drain-warning-disabled-never-task",
       async run() {
         return new Promise<never>(() => undefined);
       },
     });
 
     const app = defineResource({
-      id: "tests.shutdown-drain-warning.disabled.app",
+      id: "tests-shutdown-drain-warning-disabled-app",
       register: [neverTask],
       async init() {
         return "ok";
@@ -203,14 +203,14 @@ describe("run shutdown drain warning", () => {
 
     try {
       const neverTask = defineTask({
-        id: "tests.shutdown-drain-warning.warn-failure.never-task",
+        id: "tests-shutdown-drain-warning-warn-failure-never-task",
         async run() {
           return new Promise<never>(() => undefined);
         },
       });
 
       const app = defineResource({
-        id: "tests.shutdown-drain-warning.warn-failure.app",
+        id: "tests-shutdown-drain-warning-warn-failure-app",
         register: [neverTask],
         async init() {
           return "ok";

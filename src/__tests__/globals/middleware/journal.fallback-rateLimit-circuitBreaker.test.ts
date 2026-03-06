@@ -21,7 +21,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       };
 
       const failingTask = defineTask({
-        id: "test.journal.fallback.failing",
+        id: "test-journal-fallback-failing",
         middleware: [middleware.task.fallback.with({ fallback: fallbackFn })],
         run: async (_input: void, _deps, context) => {
           capturedActive = context?.journal.get(fallbackJournalKeys.active);
@@ -30,7 +30,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       });
 
       const app = defineResource({
-        id: "test.journal.fallback.app",
+        id: "test-journal-fallback-app",
         register: [failingTask],
       });
       const runtime = await run(app);
@@ -49,7 +49,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       let observedErrorMessage: string | undefined;
 
       const fallbackObserver = defineTaskMiddleware({
-        id: "test.journal.fallback.observer",
+        id: "test-journal-fallback-observer",
         async run({ task, next, journal }) {
           const result = await next(task.input);
           observedActive = journal.get(fallbackJournalKeys.active);
@@ -61,7 +61,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       });
 
       const myTask = defineTask({
-        id: "test.journal.fallback.observed",
+        id: "test-journal-fallback-observed",
         middleware: [
           fallbackObserver,
           middleware.task.fallback.with({ fallback: "default" }),
@@ -72,7 +72,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       });
 
       const app = defineResource({
-        id: "test.journal.fallback.app3",
+        id: "test-journal-fallback-app3",
         register: [fallbackObserver, myTask],
       });
       const runtime = await run(app);
@@ -90,7 +90,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       let capturedActive: boolean | undefined;
 
       const successTask = defineTask({
-        id: "test.journal.fallback.success",
+        id: "test-journal-fallback-success",
         middleware: [middleware.task.fallback.with({ fallback: "unused" })],
         run: async (_input: void, _deps, context) => {
           capturedActive = context?.journal.get(fallbackJournalKeys.active);
@@ -99,7 +99,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       });
 
       const app = defineResource({
-        id: "test.journal.fallback.app2",
+        id: "test-journal-fallback-app2",
         register: [successTask],
       });
       const runtime = await run(app);
@@ -120,7 +120,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       let capturedLimit: number | undefined;
 
       const rateLimitedTask = defineTask({
-        id: "test.journal.rateLimit.task",
+        id: "test-journal-rateLimit-task",
         middleware: [
           middleware.task.rateLimit.with({ windowMs: 60000, max: 5 }),
         ],
@@ -137,7 +137,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       });
 
       const app = defineResource({
-        id: "test.journal.rateLimit.app",
+        id: "test-journal-rateLimit-app",
         register: [rateLimitedTask],
       });
       const runtime = await run(app);
@@ -158,7 +158,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       let capturedFailures: number | undefined;
 
       const circuitTask = defineTask({
-        id: "test.journal.circuitBreaker.task",
+        id: "test-journal-circuitBreaker-task",
         middleware: [
           middleware.task.circuitBreaker.with({
             failureThreshold: 3,
@@ -175,7 +175,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       });
 
       const app = defineResource({
-        id: "test.journal.circuitBreaker.app",
+        id: "test-journal-circuitBreaker-app",
         register: [circuitTask],
       });
       const runtime = await run(app);
@@ -194,7 +194,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       let observedFailures: number | undefined;
 
       const observer = defineTaskMiddleware({
-        id: "test.journal.circuitBreaker.observer",
+        id: "test-journal-circuitBreaker-observer",
         async run({ task, next, journal }) {
           try {
             return await next(task.input);
@@ -206,7 +206,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       });
 
       const task = defineTask({
-        id: "test.journal.circuitBreaker.transitions",
+        id: "test-journal-circuitBreaker-transitions",
         middleware: [
           observer,
           middleware.task.circuitBreaker.with({
@@ -223,7 +223,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       });
 
       const app = defineResource({
-        id: "test.journal.circuitBreaker.transitions.app",
+        id: "test-journal-circuitBreaker-transitions-app",
         register: [observer, task],
       });
       const runtime = await run(app);

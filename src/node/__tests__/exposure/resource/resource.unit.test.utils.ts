@@ -10,18 +10,18 @@ import { createMessageError } from "../../../../errors";
 export const TOKEN = "unit-secret";
 
 export const testTask = defineTask<{ v: number }, Promise<number>>({
-  id: "unit.exposure.task",
+  id: "unit-exposure-task",
   inputSchema: z.object({ v: z.number() }).strict(),
   resultSchema: z.number(),
   run: async ({ v }) => v,
 });
 
 export const testEvent = defineEvent<{ msg?: string }>({
-  id: "unit.exposure.event",
+  id: "unit-exposure-event",
 });
 
 export const noInputTask = defineTask<void, Promise<number>>({
-  id: "unit.exposure.noInputTask",
+  id: "unit-exposure-noInputTask",
   run: async () => 1,
 });
 
@@ -34,7 +34,7 @@ export async function startExposureServer() {
     },
   });
   const app = defineResource({
-    id: "unit.exposure.app",
+    id: "unit-exposure-app",
     register: [testTask, noInputTask, testEvent, exposure],
   });
   const rr = await run(app);

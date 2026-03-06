@@ -5,18 +5,18 @@ import { createMessageError } from "../../errors";
 describe("RunResult disposal guards", () => {
   it("throws clear errors when accessed after dispose and allows idempotent double-dispose", async () => {
     const sampleTask = defineTask({
-      id: "runresult.dispose.guard.task",
+      id: "runresult-dispose-guard-task",
       async run() {
         return "ok";
       },
     });
 
     const sampleEvent = defineEvent({
-      id: "runresult.dispose.guard.event",
+      id: "runresult-dispose-guard-event",
     });
 
     const app = defineResource({
-      id: "runresult.dispose.guard.app",
+      id: "runresult-dispose-guard-app",
       register: [sampleTask, sampleEvent],
       async init() {
         return "ready";
@@ -45,7 +45,7 @@ describe("RunResult disposal guards", () => {
     let disposeCalls = 0;
 
     const app = defineResource({
-      id: "runresult.dispose.guard.concurrent.app",
+      id: "runresult-dispose-guard-concurrent-app",
       async init() {
         return "ready";
       },
@@ -74,7 +74,7 @@ describe("RunResult disposal guards", () => {
 
   it("allows disposal retry when cleanup initially fails", async () => {
     const app = defineResource({
-      id: "runresult.dispose.retry.app",
+      id: "runresult-dispose-retry-app",
       async init() {
         return "ready";
       },

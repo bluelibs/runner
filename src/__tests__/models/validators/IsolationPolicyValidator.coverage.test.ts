@@ -53,7 +53,7 @@ function expectThrownErrorId(action: () => void, errorId: string): void {
 describe("IsolationPolicyValidator coverage", () => {
   it("uses raw subtree ids when resolution misses and reports unknown targets once for direct filters", () => {
     const resource = {
-      id: "validator.coverage.subtree.direct",
+      id: "validator-coverage-subtree-direct",
     };
     const ctx = createValidatorContext({
       resolveDefinitionId: () => undefined,
@@ -77,7 +77,7 @@ describe("IsolationPolicyValidator coverage", () => {
 
   it("reports unknown targets once for subtree filters nested inside scope()", () => {
     const resource = {
-      id: "validator.coverage.subtree.scope",
+      id: "validator-coverage-subtree-scope",
     };
     const ctx = createValidatorContext({
       resolveDefinitionId: () => undefined,
@@ -125,7 +125,7 @@ describe("IsolationPolicyValidator coverage", () => {
         entries: [
           {
             _subtreeFilter: true,
-            resourceId: "validator.coverage.manual",
+            resourceId: "validator-coverage-manual",
             types: ["not-real"],
           } as any,
         ],
@@ -147,7 +147,7 @@ describe("IsolationPolicyValidator coverage", () => {
         entries: [
           {
             _subtreeFilter: true,
-            resourceId: "validator.coverage.manual",
+            resourceId: "validator-coverage-manual",
             types: "task",
           } as any,
         ],
@@ -163,7 +163,7 @@ describe("IsolationPolicyValidator coverage", () => {
 
   it("falls back to the raw subtree resource id when no resource reference is preserved", () => {
     const ctx = createValidatorContext({
-      registeredIds: ["validator.coverage.manual"],
+      registeredIds: ["validator-coverage-manual"],
       resolveDefinitionId: () => undefined,
     });
 
@@ -171,7 +171,7 @@ describe("IsolationPolicyValidator coverage", () => {
       entries: [
         {
           _subtreeFilter: true,
-          resourceId: "validator.coverage.manual",
+          resourceId: "validator-coverage-manual",
         } as any,
       ],
       onInvalidEntry: () => {
@@ -183,14 +183,14 @@ describe("IsolationPolicyValidator coverage", () => {
     });
 
     expect((normalized[0] as { resourceId: string }).resourceId).toBe(
-      "validator.coverage.manual",
+      "validator-coverage-manual",
     );
   });
 
   it("fails fast when a resolved isolation entry keeps a non-string id", () => {
     const ctx = createValidatorContext({
-      registeredIds: ["validator.coverage.resolved"],
-      resolveDefinitionId: () => "validator.coverage.resolved",
+      registeredIds: ["validator-coverage-resolved"],
+      resolveDefinitionId: () => "validator-coverage-resolved",
     });
 
     expect(() =>
@@ -208,14 +208,14 @@ describe("IsolationPolicyValidator coverage", () => {
 
   it("keeps direct tag references unchanged when their ids are already resolved", () => {
     const ctx = createValidatorContext({
-      registeredIds: ["validator.coverage.tag"],
+      registeredIds: ["validator-coverage-tag"],
       resolveDefinitionId: (reference) =>
         reference && typeof reference === "object"
           ? ((reference as { id?: string }).id ?? undefined)
           : undefined,
     });
     const tag = defineTag({
-      id: "validator.coverage.tag",
+      id: "validator-coverage-tag",
     });
 
     const normalized = normalizeIsolationEntries(ctx, {
@@ -232,13 +232,13 @@ describe("IsolationPolicyValidator coverage", () => {
   });
 
   it("throws the exports invalid-entry error for string entries during policy validation", () => {
-    const resourceId = "validator.coverage.exports.invalid";
+    const resourceId = "validator-coverage-exports-invalid";
     const ctx = createValidatorContext({
       resources: [
         {
           id: resourceId,
           isolate: {
-            exports: ["invalid.export.target"],
+            exports: ["invalid-export-target"],
           },
         },
       ],
@@ -251,8 +251,8 @@ describe("IsolationPolicyValidator coverage", () => {
   });
 
   it("throws the exports unknown-target error for unresolved export references during policy validation", () => {
-    const resourceId = "validator.coverage.exports.unknown";
-    const unknownTargetId = "validator.coverage.exports.missing-target";
+    const resourceId = "validator-coverage-exports-unknown";
+    const unknownTargetId = "validator-coverage-exports-missing-target";
     const ctx = createValidatorContext({
       resources: [
         {

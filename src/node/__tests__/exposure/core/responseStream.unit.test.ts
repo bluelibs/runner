@@ -65,7 +65,7 @@ function createReqRes(init: {
 describe("nodeExposure - task returned stream", () => {
   it("pipes plain Readable result (JSON path)", async () => {
     const streamTask = defineTask<void, Promise<NodeJS.ReadableStream>>({
-      id: "tests.stream.task",
+      id: "tests-stream-task",
       async run() {
         let i = 0;
         return new Readable({
@@ -84,7 +84,7 @@ describe("nodeExposure - task returned stream", () => {
       },
     });
     const app = defineResource({
-      id: "tests.app.stream.json",
+      id: "tests-app-stream-json",
       register: [streamTask, exposure],
     });
     const rr = await run(app);
@@ -112,7 +112,7 @@ describe("nodeExposure - task returned stream", () => {
       void,
       Promise<{ stream: NodeJS.ReadableStream; contentType: string }>
     >({
-      id: "tests.stream.wrapper",
+      id: "tests-stream-wrapper",
       async run() {
         let i = 0;
         const stream = new Readable({
@@ -132,7 +132,7 @@ describe("nodeExposure - task returned stream", () => {
       },
     });
     const app = defineResource({
-      id: "tests.app.stream.octet",
+      id: "tests-app-stream-octet",
       register: [streamTask, exposure],
     });
     const rr = await run(app);

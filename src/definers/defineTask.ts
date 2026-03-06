@@ -45,7 +45,7 @@ export function defineTask<
 ): ITask<Input, Output, Deps, TMeta, TTags, TMiddleware> {
   const filePath = getCallerFile();
   const id = taskConfig.id;
-  assertDefinitionId("Task", id);
+  assertDefinitionId("Task", id, { callerFilePath: filePath });
   const inputSchema = normalizeOptionalValidationSchema(
     taskConfig.inputSchema,
     {
