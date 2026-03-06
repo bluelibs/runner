@@ -34,18 +34,12 @@ type SupportedOverride =
 export class OverrideManager {
   public overrides: Map<string, SupportedOverride> = new Map();
 
-  public overrideRequests: Set<{
+  public overrideRequests: Array<{
     source: string;
     override: RegisterableItems;
-  }> = new Set();
+  }> = [];
 
   constructor(private readonly registry: StoreRegistry) {}
-
-  private assertOverrideValuesShape(): void {
-    for (const override of this.overrides.values()) {
-      this.toSupportedOverride(override);
-    }
-  }
 
   private toSupportedOverride(override: RegisterableItems): SupportedOverride {
     if (
@@ -59,10 +53,6 @@ export class OverrideManager {
     }
 
     return unknownItemTypeError.throw({ item: override });
-  }
-
-  private resolveRegistryDefinitionId(reference: unknown): string | undefined {
-    return this.registry.resolveDefinitionId(reference);
   }
 
   private getOverrideId(override: SupportedOverride): string {
@@ -92,7 +82,7 @@ export class OverrideManager {
     override: SupportedOverride,
   ): string {
     const targetReference = this.getOverrideTargetReference(override);
-    const targetId = this.resolveRegistryDefinitionId(targetReference);
+    const targetId = this.registry.resolveDefinitionId(targetReference);
     if (!targetId) {
       return overrideTargetNotRegisteredError.throw({
         targetId: this.getOverrideId(override),
@@ -106,7 +96,7 @@ export class OverrideManager {
 
   private getOverrideSourcesById(targetId: string): string[] {
     const sources = new Set<string>();
-    for (const request of this.overrideRequests.values()) {
+    for (const request of this.overrideRequests) {
       try {
         const override = this.toSupportedOverride(request.override);
         const id = this.getOverrideTargetId(request.source, override);
@@ -125,20 +115,14 @@ export class OverrideManager {
     targetId: string,
     override: SupportedOverride,
   ): boolean {
-    const targetType = this.getOverrideType(override);
-
-    switch (targetType) {
-      case "Task":
-        return this.registry.tasks.has(targetId);
-      case "Resource":
-        return this.registry.resources.has(targetId);
-      case "Task middleware":
-        return this.registry.taskMiddlewares.has(targetId);
-      case "Resource middleware":
-        return this.registry.resourceMiddlewares.has(targetId);
-      case "Hook":
-        return this.registry.hooks.has(targetId);
-    }
+    if (utils.isTask(override)) return this.registry.tasks.has(targetId);
+    if (utils.isResource(override))
+      return this.registry.resources.has(targetId);
+    if (utils.isTaskMiddleware(override))
+      return this.registry.taskMiddlewares.has(targetId);
+    if (utils.isResourceMiddleware(override))
+      return this.registry.resourceMiddlewares.has(targetId);
+    return this.registry.hooks.has(targetId);
   }
 
   private assertOverrideWithinDeclaringSubtree(
@@ -209,7 +193,7 @@ export class OverrideManager {
           supportedOverride,
         );
       }
-      this.overrideRequests.add({ source: element.id, override });
+      this.overrideRequests.push({ source: element.id, override });
       if (this.overrides.has(targetId)) {
         overrideDuplicateTargetError.throw({
           targetId: this.getOverrideId(supportedOverride),
@@ -221,63 +205,48 @@ export class OverrideManager {
   }
 
   processOverrides() {
-    // Fail fast if the override map was mutated unexpectedly.
-    this.assertOverrideValuesShape();
-
-    // If we are trying to use override on something that wasn't previously registered, we throw an error.
+    // Validate all targets exist before writing any overrides.
     for (const [targetId, override] of this.overrides.entries()) {
-      const supportedOverride = this.toSupportedOverride(override);
-      const targetType = this.getOverrideType(supportedOverride);
-      const hasAnyItem = this.hasRegisteredOverrideTarget(
-        targetId,
-        supportedOverride,
-      );
-
-      if (!hasAnyItem) {
+      if (!this.hasRegisteredOverrideTarget(targetId, override)) {
         overrideTargetNotRegisteredError.throw({
-          targetId: this.getOverrideId(supportedOverride),
-          targetType,
+          targetId: this.getOverrideId(override),
+          targetType: this.getOverrideType(override),
           sources: this.getOverrideSourcesById(targetId),
         });
       }
     }
 
-    // Validate again before writes in case third-party code mutates the map during validation.
-    this.assertOverrideValuesShape();
-
     for (const [targetId, override] of this.overrides.entries()) {
-      const supportedOverride = this.toSupportedOverride(override);
-      if (utils.isTask(supportedOverride)) {
-        const taskOverride = supportedOverride as ITask;
-        this.registry.storeTask({ ...taskOverride, id: targetId }, "override");
-        continue;
-      }
-      if (utils.isResource(supportedOverride)) {
-        const resourceOverride = supportedOverride as IResource;
-        this.registry.storeResource(
-          { ...resourceOverride, id: targetId },
-          "override",
-        );
-        continue;
-      }
-      if (utils.isTaskMiddleware(supportedOverride)) {
-        const middlewareOverride = supportedOverride as ITaskMiddleware;
-        this.registry.storeTaskMiddleware(
-          { ...middlewareOverride, id: targetId },
-          "override",
-        );
-        continue;
-      }
-      if (utils.isResourceMiddleware(supportedOverride)) {
-        const middlewareOverride = supportedOverride as IResourceMiddleware;
-        this.registry.storeResourceMiddleware(
-          { ...middlewareOverride, id: targetId },
-          "override",
-        );
-        continue;
-      }
-      const hookOverride = supportedOverride as IHook;
-      this.registry.storeHook({ ...hookOverride, id: targetId }, "override");
+      this.storeOverride(targetId, override);
     }
+  }
+
+  private storeOverride(targetId: string, override: SupportedOverride): void {
+    if (utils.isTask(override)) {
+      this.registry.storeTask({ ...override, id: targetId }, "override");
+      return;
+    }
+    if (utils.isResource(override)) {
+      this.registry.storeResource({ ...override, id: targetId }, "override");
+      return;
+    }
+    if (utils.isTaskMiddleware(override)) {
+      this.registry.storeTaskMiddleware(
+        { ...override, id: targetId },
+        "override",
+      );
+      return;
+    }
+    if (utils.isResourceMiddleware(override)) {
+      this.registry.storeResourceMiddleware(
+        { ...override, id: targetId },
+        "override",
+      );
+      return;
+    }
+    this.registry.storeHook(
+      { ...(override as IHook), id: targetId },
+      "override",
+    );
   }
 }

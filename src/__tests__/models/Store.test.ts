@@ -422,7 +422,7 @@ describe("Store", () => {
     // Test the overrideRequests getter (line 57)
     const overrideRequests = store.overrideRequests;
     expect(overrideRequests).toBeDefined();
-    expect(overrideRequests instanceof Set).toBe(true);
+    expect(overrideRequests instanceof Array).toBe(true);
   });
 
   it("should call processOverrides method", () => {

@@ -31,33 +31,13 @@ export class MiddlewareResolver {
 
   constructor(private readonly store: Store) {}
 
-  private resolveDefinitionId(reference: unknown): string | undefined {
-    return this.store.resolveDefinitionId(reference);
-  }
-
-  private isStoreLocked(): boolean {
-    return this.store.isLocked;
-  }
-
-  private getOwnerResourceId(itemId: string): string | undefined {
-    return this.store.getOwnerResourceId(itemId);
-  }
-
-  private getResource(
-    resourceId: string,
-  ): IResource<any, any, any, any> | undefined {
-    const resourcesMap = this.store.resources;
-
-    return resourcesMap.get(resourceId)?.resource;
-  }
-
   /**
    * Gets all applicable middlewares for a task (global + local, deduplicated)
    */
   getApplicableTaskMiddlewares(task: ITask<any, any, any>): ITaskMiddleware[] {
-    const taskId = this.resolveDefinitionId(task)!;
+    const taskId = this.store.resolveDefinitionId(task)!;
     const effectiveTask = this.store.tasks.get(taskId)?.task ?? task;
-    if (this.isStoreLocked()) {
+    if (this.store.isLocked) {
       const cached = this.taskMiddlewareCache.get(taskId);
       if (cached) {
         return cached;
@@ -75,7 +55,7 @@ export class MiddlewareResolver {
     // business-specific local middleware.
     const result = [...globalFiltered, ...local];
 
-    if (this.isStoreLocked()) {
+    if (this.store.isLocked) {
       this.taskMiddlewareCache.set(taskId, result);
     }
 
@@ -88,10 +68,10 @@ export class MiddlewareResolver {
   getApplicableResourceMiddlewares(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
-    const resourceId = this.resolveDefinitionId(resource)!;
+    const resourceId = this.store.resolveDefinitionId(resource)!;
     const effectiveResource =
       this.store.resources.get(resourceId)?.resource ?? resource;
-    if (this.isStoreLocked()) {
+    if (this.store.isLocked) {
       const cached = this.resourceMiddlewareCache.get(resourceId);
       if (cached) {
         return cached;
@@ -107,7 +87,7 @@ export class MiddlewareResolver {
 
     const result = [...globalFiltered, ...local];
 
-    if (this.isStoreLocked()) {
+    if (this.store.isLocked) {
       this.resourceMiddlewareCache.set(resourceId, result);
     }
 
@@ -122,7 +102,7 @@ export class MiddlewareResolver {
     task: ITask<any, any, any>,
     middlewares: ITaskMiddleware[],
   ): ITaskMiddleware[] {
-    const taskId = this.resolveDefinitionId(task)!;
+    const taskId = this.store.resolveDefinitionId(task)!;
     const entry = this.store.tasks.get(taskId);
     if (!entry) {
       return taskNotRegisteredError.throw({ taskId });
@@ -152,7 +132,7 @@ export class MiddlewareResolver {
     taskId: string,
     policy: IRpcLanePolicy | undefined,
   ): ReadonlySet<string> | null {
-    if (this.isStoreLocked()) {
+    if (this.store.isLocked) {
       const cached = this.rpcLaneAllowSetCache.get(taskId);
       if (cached !== undefined) {
         return cached;
@@ -160,12 +140,13 @@ export class MiddlewareResolver {
     }
 
     const allowList = getMiddlewareAllowList(policy);
-    const toId = (x: string | { id: string }) => this.resolveDefinitionId(x);
+    const toId = (x: string | { id: string }) =>
+      this.store.resolveDefinitionId(x);
     const allowSet = Array.isArray(allowList)
       ? new Set(allowList.map(toId).filter((id): id is string => !!id))
       : null;
 
-    if (this.isStoreLocked()) {
+    if (this.store.isLocked) {
       this.rpcLaneAllowSetCache.set(taskId, allowSet);
     }
 
@@ -174,18 +155,18 @@ export class MiddlewareResolver {
 
   /**
    * Gets all auto-applied middlewares that apply to the given task.
-   * Kept under the legacy method name for backward compatibility.
    */
   public getEverywhereTaskMiddlewares(
     task: ITask<any, any, any>,
   ): ITaskMiddleware[] {
-    const taskId = this.resolveDefinitionId(task)!;
+    const taskId = this.store.resolveDefinitionId(task)!;
     const effectiveTask = this.store.tasks.get(taskId)?.task ?? task;
 
     return resolveApplicableSubtreeTaskMiddlewares(
       {
-        getOwnerResourceId: (itemId) => this.getOwnerResourceId(itemId),
-        getResource: (resourceId) => this.getResource(resourceId),
+        getOwnerResourceId: (itemId) => this.store.getOwnerResourceId(itemId),
+        getResource: (resourceId) =>
+          this.store.resources.get(resourceId)?.resource,
       },
       effectiveTask,
     );
@@ -193,19 +174,19 @@ export class MiddlewareResolver {
 
   /**
    * Gets all auto-applied middlewares that apply to the given resource.
-   * Kept under the legacy method name for backward compatibility.
    */
   public getEverywhereResourceMiddlewares(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
-    const resourceId = this.resolveDefinitionId(resource)!;
+    const resourceId = this.store.resolveDefinitionId(resource)!;
     const effectiveResource =
       this.store.resources.get(resourceId)?.resource ?? resource;
 
     return resolveApplicableSubtreeResourceMiddlewares(
       {
-        getOwnerResourceId: (itemId) => this.getOwnerResourceId(itemId),
-        getResource: (resourceId) => this.getResource(resourceId),
+        getOwnerResourceId: (itemId) => this.store.getOwnerResourceId(itemId),
+        getResource: (resourceId) =>
+          this.store.resources.get(resourceId)?.resource,
       },
       effectiveResource,
     );

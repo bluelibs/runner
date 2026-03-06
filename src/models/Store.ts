@@ -90,7 +90,7 @@ export class Store {
     this.registry = new StoreRegistry(this);
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
-    this.middlewareManager = new MiddlewareManager(this, eventManager, logger);
+    this.middlewareManager = new MiddlewareManager(this);
     this.eventManager.bindStore(this);
 
     this.mode = detectRunnerMode(mode);

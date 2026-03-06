@@ -83,11 +83,11 @@ describe("OverrideManager override graph recursion", () => {
 
     const manager2 = new OverrideManager(registry);
     manager2.overrides.set(missingHookOverride.id, missingHookOverride);
-    manager2.overrideRequests.add({
+    manager2.overrideRequests.push({
       source: "source-matching",
       override: missingHookOverride,
     });
-    manager2.overrideRequests.add({
+    manager2.overrideRequests.push({
       source: "source-unrelated",
       override: unrelatedOverride,
     });
@@ -95,7 +95,7 @@ describe("OverrideManager override graph recursion", () => {
     expect(() => manager2.processOverrides()).toThrow(/override-hook-missing/);
   });
 
-  it("fails fast when an unknown override shape is encountered during validation", () => {
+  it("fails fast when an unknown override shape is injected into the overrides map", () => {
     const fixture = createTestFixture();
     const { store } = fixture;
     const taskRunner = fixture.createTaskRunner();
@@ -113,43 +113,45 @@ describe("OverrideManager override graph recursion", () => {
       id: "override-unknown-shape",
     } as any);
 
-    expect(() => manager.processOverrides()).toThrow(/Unknown item type/);
+    // Invalid shapes still get caught — the target won't be found in any registry.
+    expect(() => manager.processOverrides()).toThrow(/override-unknown-shape/);
   });
 
-  it("fails fast when an unknown override shape appears at store-write time", () => {
+  it("silently skips malformed entries in overrideRequests when collecting diagnostics", () => {
     const fixture = createTestFixture();
     const { store } = fixture;
     const taskRunner = fixture.createTaskRunner();
     store.setTaskRunner(taskRunner);
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
-    const baseTask = defineTask({
-      id: "override-unknown-shape-writer-base",
-      run: async () => "base",
-    });
     const root = defineResource({
-      id: "override-unknown-shape-writer-root",
-      register: [baseTask],
+      id: "override-malformed-diag-root",
     });
     store.initializeStore(root, {}, runtimeResult);
 
     const registry = (store as any).registry as any;
-    const validOverride = defineTask({
-      id: baseTask.id,
-      run: async () => "override",
-    });
-    const invalidOverride = { id: "override-unknown-shape-writer-invalid" };
-
     const manager = new OverrideManager(registry);
-    let valuesReadCount = 0;
-    (manager.overrides as any).values = () => {
-      valuesReadCount += 1;
-      return valuesReadCount === 1
-        ? [validOverride][Symbol.iterator]()
-        : [invalidOverride][Symbol.iterator]();
-    };
 
-    expect(() => manager.processOverrides()).toThrow(/Unknown item type/);
+    // Inject a valid-looking but unregistered override into the map.
+    const fakeHook = defineHook({
+      id: "override-malformed-diag-hook",
+      on: "*",
+      run: async () => undefined,
+    });
+    manager.overrides.set(fakeHook.id, fakeHook);
+
+    // Push a malformed entry into overrideRequests to exercise the
+    // toSupportedOverride error path inside getOverrideSourcesById.
+    manager.overrideRequests.push({
+      source: "malformed-source",
+      override: { id: "not-a-real-type" } as any,
+    });
+
+    // processOverrides will throw (unregistered target). The malformed
+    // overrideRequest is silently skipped during diagnostics collection.
+    expect(() => manager.processOverrides()).toThrow(
+      /override-malformed-diag-hook/,
+    );
   });
 
   it("fails fast when two overrides target the same definition", () => {

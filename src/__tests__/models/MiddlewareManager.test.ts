@@ -734,7 +734,7 @@ describe("MiddlewareManager", () => {
         },
         RunnerMode.TEST,
       );
-      const manager = new MiddlewareManager(store, eventManager, logger);
+      const manager = new MiddlewareManager(store);
 
       manager.intercept("task", async (_next: any, _input: any) => {
         throw createMessageError("interceptor error");
@@ -765,7 +765,7 @@ describe("MiddlewareManager", () => {
         },
         RunnerMode.TEST,
       );
-      const manager = new MiddlewareManager(store, eventManager, logger);
+      const manager = new MiddlewareManager(store);
 
       manager.intercept("resource", async (_next: any, _input: any) => {
         throw createMessageError("interceptor error");
@@ -796,7 +796,7 @@ describe("MiddlewareManager", () => {
         },
         RunnerMode.TEST,
       );
-      const manager = new MiddlewareManager(store, eventManager, logger);
+      const manager = new MiddlewareManager(store);
 
       const resource = defineResource<{ n: number }, Promise<number>>({
         id: "resource_with_init_error_reporting",
@@ -826,7 +826,7 @@ describe("MiddlewareManager", () => {
         },
         RunnerMode.TEST,
       );
-      const manager = new MiddlewareManager(store, eventManager, logger);
+      const manager = new MiddlewareManager(store);
 
       manager.intercept("resource", async () => {
         throw createMessageError("global resource interceptor failed");

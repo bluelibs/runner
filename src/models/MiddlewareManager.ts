@@ -34,11 +34,7 @@ export class MiddlewareManager {
   private readonly taskComposer: TaskMiddlewareComposer;
   private readonly resourceComposer: ResourceMiddlewareComposer;
 
-  constructor(
-    protected readonly store: Store,
-    _eventManager: unknown,
-    _logger: unknown,
-  ) {
+  constructor(protected readonly store: Store) {
     this.interceptorRegistry = new InterceptorRegistry();
     this.middlewareResolver = new MiddlewareResolver(store);
     this.taskComposer = new TaskMiddlewareComposer(
