@@ -193,6 +193,12 @@ describe("StoreRegistry facade delegates", () => {
     expect(() =>
       registry.registerDefinitionAlias("primitive", "ignored"),
     ).not.toThrow();
+    expect(() =>
+      registry.registerDefinitionAlias({}, "ignored-object"),
+    ).not.toThrow();
+    expect(() =>
+      registry.registerDefinitionAlias({ id: "" } as any, "ignored-empty-id"),
+    ).not.toThrow();
 
     expect(registry.resolveDefinitionId(configured)).toBe(resource.id);
   });
@@ -282,16 +288,19 @@ describe("StoreRegistry facade delegates", () => {
     ).toBeUndefined();
 
     expect(() =>
-      (registry as any).recordSourceIdAlias(123, "registry-coverage-primitive"),
+      registry.registerDefinitionAlias(
+        123 as any,
+        "registry-coverage-primitive",
+      ),
     ).not.toThrow();
     expect(() =>
-      (registry as any).recordCanonicalSourceId(
+      registry.registerDefinitionAlias(
         undefined,
         "registry-coverage-primitive",
       ),
     ).not.toThrow();
     expect(() =>
-      (registry as any).recordCanonicalSourceId(
+      registry.registerDefinitionAlias(
         () => undefined,
         "registry-coverage-function",
       ),
@@ -303,30 +312,22 @@ describe("StoreRegistry facade delegates", () => {
       ),
     ).not.toThrow();
 
-    (registry as any).definitionAliasesBySourceId.set("registry-coverage-raw", {
-      size: 1,
-      values: () => ({
-        next: () => ({
-          value: 123,
-        }),
-      }),
-    });
+    registry.registerDefinitionAlias(
+      { id: "registry-coverage-raw" },
+      "registry.coverage.one",
+    );
+    registry.registerDefinitionAlias(
+      { id: "registry-coverage-raw" },
+      "registry.coverage.two",
+    );
     expect(registry.resolveDefinitionId("registry-coverage-raw")).toBe(
       "registry-coverage-raw",
     );
 
-    (registry as any).sourceIdsByCanonicalId.set("registry-coverage-same", {
-      size: 2,
-      values: () => ({
-        next: () => ({
-          value: "registry-coverage-same",
-        }),
-      }),
-      [Symbol.iterator]: function* () {
-        yield "registry-coverage-same";
-        yield "registry-coverage-same";
-      },
-    });
+    registry.registerDefinitionAlias(
+      { id: "registry-coverage-same" },
+      "registry-coverage-same",
+    );
     expect(registry.getDisplayId("registry-coverage-same")).toBe(
       "registry-coverage-same",
     );

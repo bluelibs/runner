@@ -38,13 +38,13 @@ describe("VisibilityTracker", () => {
       });
 
       tracker.recordOwnership("resource-owner", task);
-      expect(tracker.getOwnership().get("tracker-task")).toBe("resource-owner");
+      expect(tracker.getOwnerResourceId("tracker-task")).toBe("resource-owner");
     });
 
     it("should ignore items without id", () => {
       // passing something that has no id — should be no-op
       tracker.recordOwnership("resource-owner", null as any);
-      expect(tracker.getOwnership().size).toBe(0);
+      expect(tracker.getOwnerResourceId("resource-owner")).toBeUndefined();
     });
 
     it("should build subtree chains up to ancestors", () => {
@@ -64,9 +64,16 @@ describe("VisibilityTracker", () => {
       tracker.recordOwnership("tracker-parent", childTask);
 
       // Child task should be in both parent subtree and root subtree
-      const ownership = tracker.getOwnership();
-      expect(ownership.get("tracker-child-task")).toBe("tracker-parent");
-      expect(ownership.get("tracker-parent")).toBe("root");
+      expect(tracker.getOwnerResourceId("tracker-child-task")).toBe(
+        "tracker-parent",
+      );
+      expect(tracker.getOwnerResourceId("tracker-parent")).toBe("root");
+      expect(
+        tracker.isWithinResourceSubtree("tracker-parent", "tracker-child-task"),
+      ).toBe(true);
+      expect(
+        tracker.isWithinResourceSubtree("root", "tracker-child-task"),
+      ).toBe(true);
     });
 
     it("should ignore duplicate ownership attempts to avoid cycles", () => {
@@ -83,9 +90,10 @@ describe("VisibilityTracker", () => {
       tracker.recordOwnership("tracker-cycle-a", resourceB);
       tracker.recordOwnership("tracker-cycle-b", resourceA);
 
-      const ownership = tracker.getOwnership();
-      expect(ownership.get("tracker-cycle-a")).toBe("root");
-      expect(ownership.get("tracker-cycle-b")).toBe("tracker-cycle-a");
+      expect(tracker.getOwnerResourceId("tracker-cycle-a")).toBe("root");
+      expect(tracker.getOwnerResourceId("tracker-cycle-b")).toBe(
+        "tracker-cycle-a",
+      );
     });
   });
 
@@ -103,19 +111,31 @@ describe("VisibilityTracker", () => {
 
       tracker.recordExports("resource-id", [task1, task2]);
 
-      const exportSets = tracker.getExportSets();
-      const exportSet = exportSets.get("resource-id");
-      expect(exportSet).toBeDefined();
-      expect(exportSet!.has("tracker-export-t1")).toBe(true);
-      expect(exportSet!.has("tracker-export-t2")).toBe(true);
+      const firstAccess = tracker.getRootAccessInfo(
+        "tracker-export-t1",
+        "resource-id",
+      );
+      const secondAccess = tracker.getRootAccessInfo(
+        "tracker-export-t2",
+        "resource-id",
+      );
+
+      expect(firstAccess.accessible).toBe(true);
+      expect(secondAccess.accessible).toBe(true);
+      expect(firstAccess.exportedIds).toHaveLength(2);
+      expect(firstAccess.exportedIds).toEqual(
+        expect.arrayContaining(["tracker-export-t1", "tracker-export-t2"]),
+      );
     });
 
     it("should handle empty exports array", () => {
       tracker.recordExports("resource-id", []);
-      const exportSets = tracker.getExportSets();
-      const exportSet = exportSets.get("resource-id");
-      expect(exportSet).toBeDefined();
-      expect(exportSet!.size).toBe(0);
+      expect(
+        tracker.getRootAccessInfo("tracker-export-missing", "resource-id"),
+      ).toEqual({
+        accessible: false,
+        exportedIds: [],
+      });
     });
 
     it("should skip items without extractable id", () => {
@@ -126,17 +146,28 @@ describe("VisibilityTracker", () => {
 
       // A bare function has no id — getItemId returns undefined
       tracker.recordExports("resource-id", [task, (() => {}) as any]);
-      const exportSet = tracker.getExportSets().get("resource-id");
-      expect(exportSet).toBeDefined();
-      expect(exportSet!.size).toBe(1);
-      expect(exportSet!.has("tracker-export-valid")).toBe(true);
+      expect(
+        tracker.getRootAccessInfo("tracker-export-valid", "resource-id"),
+      ).toEqual({
+        accessible: true,
+        exportedIds: ["tracker-export-valid"],
+      });
+      expect(
+        tracker.getRootAccessInfo("tracker-export-missing", "resource-id"),
+      ).toEqual({
+        accessible: false,
+        exportedIds: ["tracker-export-valid"],
+      });
     });
 
     it("stores string export ids directly", () => {
       tracker.recordExports("resource-id", ["tracker-export-direct"]);
-      const exportSet = tracker.getExportSets().get("resource-id");
-      expect(exportSet).toBeDefined();
-      expect(exportSet!.has("tracker-export-direct")).toBe(true);
+      expect(
+        tracker.getRootAccessInfo("tracker-export-direct", "resource-id"),
+      ).toEqual({
+        accessible: true,
+        exportedIds: ["tracker-export-direct"],
+      });
     });
   });
 
@@ -282,13 +313,15 @@ describe("VisibilityTracker", () => {
       const configured = res.with({ port: 3000 });
       tracker.recordExports("owner", [configured]);
 
-      const exportSets = tracker.getExportSets();
-      expect(exportSets.get("owner")!.has("tracker-rwc-res")).toBe(true);
+      expect(tracker.getRootAccessInfo("tracker-rwc-res", "owner")).toEqual({
+        accessible: true,
+        exportedIds: ["tracker-rwc-res"],
+      });
     });
   });
 
-  describe("internal guards", () => {
-    it("should skip already-seen traversal keys", () => {
+  describe("internal guard coverage", () => {
+    it("skips already-seen traversal keys and returns empty gating sets when needed", () => {
       const deepTask = defineTask({
         id: "tracker-guard-deep",
         run: async () => "deep",
@@ -307,20 +340,22 @@ describe("VisibilityTracker", () => {
         "root::tracker-guard-middle::tracker-guard-deep",
       ]);
 
-      const isAllowed = (tracker as any).isTargetAllowedByExports(
-        "tracker-guard-deep",
-        "root",
-        seenPaths,
-      );
-      expect(isAllowed).toBe(false);
-    });
+      expect(
+        (tracker as any).isTargetAllowedByExports(
+          "tracker-guard-deep",
+          "root",
+          seenPaths,
+        ),
+      ).toBe(false);
 
-    it("should return an empty export set when no gating set exists in chain", () => {
-      const gatingSet = (tracker as any).findGatingExportSet(
-        "tracker-guard-none",
-        "tracker-guard-owner-none",
-      ) as Set<string>;
-      expect(gatingSet.size).toBe(0);
+      expect(
+        (
+          (tracker as any).findGatingExportSet(
+            "tracker-guard-none",
+            "tracker-guard-owner-none",
+          ) as Set<string>
+        ).size,
+      ).toBe(0);
     });
   });
 
@@ -916,13 +951,15 @@ describe("VisibilityTracker", () => {
       tracker.recordOwnership("tracker-rollback-root", childResource);
       tracker.recordOwnership(childResource.id, nestedTask);
 
-      expect(tracker.getOwnership().has(childResource.id)).toBe(true);
-      expect(tracker.getOwnership().has(nestedTask.id)).toBe(true);
+      expect(tracker.getOwnerResourceId(childResource.id)).toBe(
+        "tracker-rollback-root",
+      );
+      expect(tracker.getOwnerResourceId(nestedTask.id)).toBe(childResource.id);
 
       tracker.rollbackOwnershipTree(childResource.id);
 
-      expect(tracker.getOwnership().has(childResource.id)).toBe(false);
-      expect(tracker.getOwnership().has(nestedTask.id)).toBe(false);
+      expect(tracker.getOwnerResourceId(childResource.id)).toBeUndefined();
+      expect(tracker.getOwnerResourceId(nestedTask.id)).toBeUndefined();
     });
 
     it("returns early when rollback is requested for an unknown id", () => {
@@ -934,7 +971,7 @@ describe("VisibilityTracker", () => {
 
       tracker.rollbackOwnershipTree("tracker-rollback-missing");
 
-      expect(tracker.getOwnership().get(task.id)).toBe(
+      expect(tracker.getOwnerResourceId(task.id)).toBe(
         "tracker-rollback-owner",
       );
     });

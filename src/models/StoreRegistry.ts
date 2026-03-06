@@ -39,6 +39,39 @@ import { StoringMode, TagIndexBucket } from "./store-registry/types";
 import { validationError } from "../errors";
 import { getDefinitionIdentity } from "../tools/isSameDefinition";
 
+type DefinitionReferenceWithOptionalId = {
+  id?: unknown;
+};
+
+type DefinitionReferenceWithConfiguredFrom = {
+  [symbolTagConfiguredFrom]?: unknown;
+};
+
+function isObjectReference(value: unknown): value is object {
+  return (
+    (typeof value === "object" && value !== null) || typeof value === "function"
+  );
+}
+
+function getReferenceSourceId(reference: object): string | undefined {
+  if (!("id" in reference)) {
+    return undefined;
+  }
+
+  const sourceId = (reference as DefinitionReferenceWithOptionalId).id;
+  return typeof sourceId === "string" && sourceId.length > 0
+    ? sourceId
+    : undefined;
+}
+
+function getConfiguredFromReference(reference: object): object | undefined {
+  const configuredFrom = (reference as DefinitionReferenceWithConfiguredFrom)[
+    symbolTagConfiguredFrom
+  ];
+
+  return isObjectReference(configuredFrom) ? configuredFrom : undefined;
+}
+
 export class StoreRegistry {
   public tasks = new LockableMap<string, TaskStoreElementType>("tasks");
   public resources = new LockableMap<string, ResourceStoreElementType>(
@@ -132,16 +165,11 @@ export class StoreRegistry {
   }
 
   registerDefinitionAlias(reference: unknown, canonicalId: string): void {
-    if (
-      reference === null ||
-      reference === undefined ||
-      (typeof reference !== "object" && typeof reference !== "function")
-    ) {
+    if (!isObjectReference(reference)) {
       return;
     }
 
-    const objectReference = reference as object;
-    const existing = this.definitionAliases.get(objectReference);
+    const existing = this.definitionAliases.get(reference);
     if (existing && existing !== canonicalId) {
       validationError.throw({
         subject: "Definition alias",
@@ -150,7 +178,7 @@ export class StoreRegistry {
       });
     }
 
-    this.definitionAliases.set(objectReference, canonicalId);
+    this.definitionAliases.set(reference, canonicalId);
     this.recordDefinitionIdentityAlias(reference, canonicalId);
     this.recordSourceIdAlias(reference, canonicalId);
     this.recordCanonicalSourceId(reference, canonicalId);
@@ -161,15 +189,11 @@ export class StoreRegistry {
       return this.resolveUniqueSourceIdAlias(reference) ?? reference;
     }
 
-    if (
-      reference === null ||
-      reference === undefined ||
-      (typeof reference !== "object" && typeof reference !== "function")
-    ) {
+    if (!isObjectReference(reference)) {
       return undefined;
     }
 
-    const mapped = this.definitionAliases.get(reference as object);
+    const mapped = this.definitionAliases.get(reference);
     if (mapped) {
       return mapped;
     }
@@ -182,14 +206,8 @@ export class StoreRegistry {
       }
     }
 
-    const configuredFrom = (reference as Record<symbol, unknown>)[
-      symbolTagConfiguredFrom
-    ];
-    if (
-      configuredFrom &&
-      (typeof configuredFrom === "object" ||
-        typeof configuredFrom === "function")
-    ) {
+    const configuredFrom = getConfiguredFromReference(reference);
+    if (configuredFrom) {
       const byConfiguredFrom = this.definitionAliases.get(configuredFrom);
       if (byConfiguredFrom) {
         return byConfiguredFrom;
@@ -197,27 +215,23 @@ export class StoreRegistry {
     }
 
     if (isResourceWithConfig(reference)) {
-      const byResource = this.definitionAliases.get(
-        reference.resource as unknown as object,
-      );
+      const byResource = this.definitionAliases.get(reference.resource);
       if (byResource) {
         return byResource;
       }
       return reference.resource.id;
     }
 
-    if ("id" in reference) {
-      const id = (reference as { id?: unknown }).id;
-      if (typeof id === "string" && id.length > 0) {
-        return this.resolveUniqueSourceIdAlias(id) ?? id;
-      }
+    const sourceId = getReferenceSourceId(reference);
+    if (sourceId) {
+      return this.resolveUniqueSourceIdAlias(sourceId) ?? sourceId;
     }
 
     return undefined;
   }
 
   private recordDefinitionIdentityAlias(
-    reference: unknown,
+    reference: object,
     canonicalId: string,
   ): void {
     const identity = getDefinitionIdentity(reference);
@@ -237,21 +251,9 @@ export class StoreRegistry {
     this.definitionIdentityAliases.set(identity, canonicalId);
   }
 
-  private recordSourceIdAlias(reference: unknown, canonicalId: string): void {
-    if (
-      reference === null ||
-      reference === undefined ||
-      (typeof reference !== "object" && typeof reference !== "function")
-    ) {
-      return;
-    }
-
-    if (!("id" in reference)) {
-      return;
-    }
-
-    const sourceId = (reference as { id?: unknown }).id;
-    if (typeof sourceId !== "string" || sourceId.length === 0) {
+  private recordSourceIdAlias(reference: object, canonicalId: string): void {
+    const sourceId = getReferenceSourceId(reference);
+    if (!sourceId) {
       return;
     }
 
@@ -265,23 +267,11 @@ export class StoreRegistry {
   }
 
   private recordCanonicalSourceId(
-    reference: unknown,
+    reference: object,
     canonicalId: string,
   ): void {
-    if (
-      reference === null ||
-      reference === undefined ||
-      (typeof reference !== "object" && typeof reference !== "function")
-    ) {
-      return;
-    }
-
-    if (!("id" in reference)) {
-      return;
-    }
-
-    const sourceId = (reference as { id?: unknown }).id;
-    if (typeof sourceId !== "string" || sourceId.length === 0) {
+    const sourceId = getReferenceSourceId(reference);
+    if (!sourceId) {
       return;
     }
 
@@ -300,8 +290,7 @@ export class StoreRegistry {
       return undefined;
     }
 
-    const first = candidates.values().next().value;
-    return typeof first === "string" ? first : undefined;
+    return candidates.values().next().value as string;
   }
 
   getDisplayId(id: string): string {
@@ -310,17 +299,13 @@ export class StoreRegistry {
       return id;
     }
 
-    if (sourceIds.size === 1) {
-      return sourceIds.values().next().value as string;
-    }
-
     for (const sourceId of sourceIds) {
       if (sourceId !== id) {
         return sourceId;
       }
     }
 
-    return id;
+    return sourceIds.values().next().value as string;
   }
 
   /** Lock every map in the registry, preventing further mutations. */

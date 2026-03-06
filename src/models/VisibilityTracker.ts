@@ -101,6 +101,38 @@ type AccessViolation =
       channel: IsolationChannel;
     };
 
+type DependencyValidationEntry = {
+  consumerId: string;
+  consumerType: string;
+  dependencies: unknown;
+};
+
+type TagValidationEntry = {
+  consumerId: string;
+  consumerType: string;
+  tags: unknown;
+};
+
+type MiddlewareVisibilityEntry = {
+  consumerId: string;
+  consumerType: string;
+  targetType: string;
+  targetIds: string[];
+};
+
+function mapEntries<TSource, TResult>(
+  items: Iterable<TSource>,
+  map: (item: TSource) => TResult,
+): TResult[] {
+  const results: TResult[] = [];
+
+  for (const item of items) {
+    results.push(map(item));
+  }
+
+  return results;
+}
+
 /**
  * Maps a registerable item to its Runner ItemType string.
  * Needed so subtreeOf({ types: ["task"] }) can filter by item kind at violation-check time.
@@ -443,7 +475,6 @@ export class VisibilityTracker {
         consumerId,
         targetOwner,
         undefined,
-        new Set<string>(),
       );
 
       if (!visibilityAllowed) {
@@ -463,7 +494,7 @@ export class VisibilityTracker {
     consumerId: string,
     ownerId: string,
     boundaryOwnerId: string | undefined,
-    seenPaths: Set<string>,
+    seenPaths: Set<string> = new Set<string>(),
   ): boolean {
     // A resource can always access items in its own registration scope.
     if (consumerId === ownerId) return true;
@@ -501,7 +532,7 @@ export class VisibilityTracker {
   private isTargetAllowedByExports(
     targetId: string,
     ownerId: string,
-    seenPaths: Set<string>,
+    seenPaths: Set<string> = new Set<string>(),
   ): boolean {
     const exportSet = this.exportSets.get(ownerId)!;
     if (exportSet.has(targetId)) return true;
@@ -565,82 +596,17 @@ export class VisibilityTracker {
    * Checks dependencies declared by all dependency-bearing definitions.
    */
   private validateItemDependencies(registry: StoreRegistry): void {
-    const entries: Array<{
-      consumerId: string;
-      consumerType: string;
-      dependencies: unknown;
-    }> = [];
-
-    for (const { task } of registry.tasks.values()) {
-      entries.push({
-        consumerId: task.id,
-        consumerType: "Task",
-        dependencies: task.dependencies,
+    for (const entry of this.collectDependencyEntries(registry)) {
+      this.validateReferenceIds(registry, {
+        consumerId: entry.consumerId,
+        consumerType: entry.consumerType,
+        channel: "dependencies",
+        targetIds: this.resolveDependencyReferenceIds(
+          registry,
+          entry.dependencies,
+        ),
+        targetType: (targetId) => getItemTypeLabel(registry, targetId),
       });
-    }
-    for (const { resource } of registry.resources.values()) {
-      entries.push({
-        consumerId: resource.id,
-        consumerType: "Resource",
-        dependencies: resource.dependencies,
-      });
-    }
-    for (const { hook } of registry.hooks.values()) {
-      entries.push({
-        consumerId: hook.id,
-        consumerType: "Hook",
-        dependencies: hook.dependencies,
-      });
-    }
-    for (const { middleware } of registry.taskMiddlewares.values()) {
-      entries.push({
-        consumerId: middleware.id,
-        consumerType: "Task middleware",
-        dependencies: middleware.dependencies,
-      });
-    }
-    for (const { middleware } of registry.resourceMiddlewares.values()) {
-      entries.push({
-        consumerId: middleware.id,
-        consumerType: "Resource middleware",
-        dependencies: middleware.dependencies,
-      });
-    }
-
-    for (const { consumerId, consumerType, dependencies } of entries) {
-      if (!dependencies || typeof dependencies !== "object") continue;
-
-      for (const [, depDef] of Object.entries(
-        dependencies as Record<string, unknown>,
-      )) {
-        const dep = utils.isOptional(depDef)
-          ? (depDef as { inner: unknown }).inner
-          : depDef;
-
-        const depId =
-          dep && typeof dep === "object"
-            ? resolveReferenceId(registry, dep)
-            : undefined;
-
-        if (!depId) continue;
-
-        const violation = this.getAccessViolation(
-          depId,
-          consumerId,
-          "dependencies",
-        );
-        if (!violation) {
-          continue;
-        }
-
-        this.throwAccessViolation(registry, {
-          violation,
-          targetId: depId,
-          targetType: getItemTypeLabel(registry, depId),
-          consumerId,
-          consumerType,
-        });
-      }
     }
   }
 
@@ -657,25 +623,13 @@ export class VisibilityTracker {
           : Array.isArray(hook.on)
             ? hook.on
             : [hook.on];
-      for (const event of events) {
-        const eventId = resolveReferenceId(registry, event)!;
-        const violation = this.getAccessViolation(
-          eventId,
-          hook.id,
-          "listening",
-        );
-        if (!violation) {
-          continue;
-        }
-
-        this.throwAccessViolation(registry, {
-          violation,
-          targetId: eventId,
-          targetType: "Event",
-          consumerId: hook.id,
-          consumerType: "Hook",
-        });
-      }
+      this.validateReferenceIds(registry, {
+        consumerId: hook.id,
+        consumerType: "Hook",
+        channel: "listening",
+        targetIds: this.resolveReferenceIds(registry, events),
+        targetType: "Event",
+      });
     }
   }
 
@@ -683,84 +637,14 @@ export class VisibilityTracker {
    * Validates that tag attachments are visible to the attaching definition.
    */
   private validateTaggingVisibility(registry: StoreRegistry): void {
-    const entries: Array<{
-      consumerId: string;
-      consumerType: string;
-      tags: unknown;
-    }> = [];
-
-    for (const { task } of registry.tasks.values()) {
-      entries.push({
-        consumerId: task.id,
-        consumerType: "Task",
-        tags: task.tags,
+    for (const entry of this.collectTagEntries(registry)) {
+      this.validateReferenceIds(registry, {
+        consumerId: entry.consumerId,
+        consumerType: entry.consumerType,
+        channel: "tagging",
+        targetIds: this.resolveTagReferenceIds(registry, entry.tags),
+        targetType: "Tag",
       });
-    }
-
-    for (const { resource } of registry.resources.values()) {
-      entries.push({
-        consumerId: resource.id,
-        consumerType: "Resource",
-        tags: resource.tags,
-      });
-    }
-
-    for (const { event } of registry.events.values()) {
-      entries.push({
-        consumerId: event.id,
-        consumerType: "Event",
-        tags: event.tags,
-      });
-    }
-
-    for (const { hook } of registry.hooks.values()) {
-      entries.push({
-        consumerId: hook.id,
-        consumerType: "Hook",
-        tags: hook.tags,
-      });
-    }
-
-    for (const { middleware } of registry.taskMiddlewares.values()) {
-      entries.push({
-        consumerId: middleware.id,
-        consumerType: "Task middleware",
-        tags: middleware.tags,
-      });
-    }
-
-    for (const { middleware } of registry.resourceMiddlewares.values()) {
-      entries.push({
-        consumerId: middleware.id,
-        consumerType: "Resource middleware",
-        tags: middleware.tags,
-      });
-    }
-
-    for (const { consumerId, consumerType, tags } of entries) {
-      if (!Array.isArray(tags) || tags.length === 0) {
-        continue;
-      }
-
-      for (const tagReference of tags) {
-        const tagId = resolveReferenceId(registry, tagReference);
-        if (!tagId) {
-          continue;
-        }
-
-        const violation = this.getAccessViolation(tagId, consumerId, "tagging");
-        if (!violation) {
-          continue;
-        }
-
-        this.throwAccessViolation(registry, {
-          violation,
-          targetId: tagId,
-          targetType: "Tag",
-          consumerId,
-          consumerType,
-        });
-      }
     }
   }
 
@@ -768,113 +652,224 @@ export class VisibilityTracker {
    * Validates that middleware attachments are visible.
    */
   private validateMiddlewareVisibility(registry: StoreRegistry): void {
-    for (const { task } of registry.tasks.values()) {
-      for (const middlewareAttachment of task.middleware) {
-        const middlewareId = resolveReferenceId(
-          registry,
-          middlewareAttachment,
-        )!;
-        const violation = this.getAccessViolation(
-          middlewareId,
-          task.id,
-          "middleware",
-        );
-        if (!violation) {
-          continue;
-        }
-
-        this.throwAccessViolation(registry, {
-          violation,
-          targetId: middlewareId,
-          targetType: "Task middleware",
-          consumerId: task.id,
-          consumerType: "Task",
-        });
-      }
+    for (const entry of this.collectMiddlewareVisibilityEntries(registry)) {
+      this.validateReferenceIds(registry, {
+        consumerId: entry.consumerId,
+        consumerType: entry.consumerType,
+        channel: "middleware",
+        targetIds: entry.targetIds,
+        targetType: entry.targetType,
+      });
     }
+  }
 
-    for (const { resource } of registry.resources.values()) {
-      for (const middlewareAttachment of resource.middleware) {
-        const middlewareId = resolveReferenceId(
+  private collectDependencyEntries(
+    registry: StoreRegistry,
+  ): DependencyValidationEntry[] {
+    return [
+      ...mapEntries(registry.tasks.values(), ({ task }) => ({
+        consumerId: task.id,
+        consumerType: "Task",
+        dependencies: task.dependencies,
+      })),
+      ...mapEntries(registry.resources.values(), ({ resource }) => ({
+        consumerId: resource.id,
+        consumerType: "Resource",
+        dependencies: resource.dependencies,
+      })),
+      ...mapEntries(registry.hooks.values(), ({ hook }) => ({
+        consumerId: hook.id,
+        consumerType: "Hook",
+        dependencies: hook.dependencies,
+      })),
+      ...mapEntries(registry.taskMiddlewares.values(), ({ middleware }) => ({
+        consumerId: middleware.id,
+        consumerType: "Task middleware",
+        dependencies: middleware.dependencies,
+      })),
+      ...mapEntries(
+        registry.resourceMiddlewares.values(),
+        ({ middleware }) => ({
+          consumerId: middleware.id,
+          consumerType: "Resource middleware",
+          dependencies: middleware.dependencies,
+        }),
+      ),
+    ];
+  }
+
+  private collectTagEntries(registry: StoreRegistry): TagValidationEntry[] {
+    return [
+      ...mapEntries(registry.tasks.values(), ({ task }) => ({
+        consumerId: task.id,
+        consumerType: "Task",
+        tags: task.tags,
+      })),
+      ...mapEntries(registry.resources.values(), ({ resource }) => ({
+        consumerId: resource.id,
+        consumerType: "Resource",
+        tags: resource.tags,
+      })),
+      ...mapEntries(registry.events.values(), ({ event }) => ({
+        consumerId: event.id,
+        consumerType: "Event",
+        tags: event.tags,
+      })),
+      ...mapEntries(registry.hooks.values(), ({ hook }) => ({
+        consumerId: hook.id,
+        consumerType: "Hook",
+        tags: hook.tags,
+      })),
+      ...mapEntries(registry.taskMiddlewares.values(), ({ middleware }) => ({
+        consumerId: middleware.id,
+        consumerType: "Task middleware",
+        tags: middleware.tags,
+      })),
+      ...mapEntries(
+        registry.resourceMiddlewares.values(),
+        ({ middleware }) => ({
+          consumerId: middleware.id,
+          consumerType: "Resource middleware",
+          tags: middleware.tags,
+        }),
+      ),
+    ];
+  }
+
+  private collectMiddlewareVisibilityEntries(
+    registry: StoreRegistry,
+  ): MiddlewareVisibilityEntry[] {
+    return [
+      ...mapEntries(registry.tasks.values(), ({ task }) => ({
+        consumerId: task.id,
+        consumerType: "Task",
+        targetType: "Task middleware",
+        targetIds: this.resolveReferenceIds(registry, task.middleware),
+      })),
+      ...mapEntries(registry.resources.values(), ({ resource }) => ({
+        consumerId: resource.id,
+        consumerType: "Resource",
+        targetType: "Resource middleware",
+        targetIds: this.resolveReferenceIds(registry, resource.middleware),
+      })),
+      ...mapEntries(registry.resources.values(), ({ resource }) => ({
+        consumerId: resource.id,
+        consumerType: "Resource",
+        targetType: "Task middleware",
+        targetIds: this.resolveSubtreeMiddlewareReferenceIds(
           registry,
-          middlewareAttachment,
-        )!;
-        const violation = this.getAccessViolation(
-          middlewareId,
-          resource.id,
-          "middleware",
-        );
-        if (!violation) {
-          continue;
-        }
+          resource.subtree?.tasks?.middleware ?? [],
+          getSubtreeTaskMiddlewareAttachment,
+        ),
+      })),
+      ...mapEntries(registry.resources.values(), ({ resource }) => ({
+        consumerId: resource.id,
+        consumerType: "Resource",
+        targetType: "Resource middleware",
+        targetIds: this.resolveSubtreeMiddlewareReferenceIds(
+          registry,
+          resource.subtree?.resources?.middleware ?? [],
+          getSubtreeResourceMiddlewareAttachment,
+        ),
+      })),
+    ];
+  }
 
-        this.throwAccessViolation(registry, {
-          violation,
-          targetId: middlewareId,
-          targetType: "Resource middleware",
-          consumerId: resource.id,
-          consumerType: "Resource",
-        });
-      }
-    }
+  private validateReferenceIds(
+    registry: StoreRegistry,
+    options: {
+      consumerId: string;
+      consumerType: string;
+      channel: IsolationChannel;
+      targetIds: Iterable<string>;
+      targetType: string | ((targetId: string) => string);
+    },
+  ): void {
+    const { consumerId, consumerType, channel, targetIds, targetType } =
+      options;
 
-    for (const { resource } of registry.resources.values()) {
-      const ownerId = resource.id;
-      const subtreePolicy = resource.subtree;
-      if (!subtreePolicy) {
+    for (const targetId of targetIds) {
+      const violation = this.getAccessViolation(targetId, consumerId, channel);
+      if (!violation) {
         continue;
       }
 
-      for (const middlewareEntry of subtreePolicy.tasks?.middleware ?? []) {
-        const middlewareAttachment =
-          getSubtreeTaskMiddlewareAttachment(middlewareEntry);
-        const middlewareId = resolveReferenceId(
-          registry,
-          middlewareAttachment,
-        )!;
-        const violation = this.getAccessViolation(
-          middlewareId,
-          ownerId,
-          "middleware",
-        );
-        if (!violation) {
-          continue;
-        }
+      this.throwAccessViolation(registry, {
+        violation,
+        targetId,
+        targetType:
+          typeof targetType === "function" ? targetType(targetId) : targetType,
+        consumerId,
+        consumerType,
+      });
+    }
+  }
 
-        this.throwAccessViolation(registry, {
-          violation,
-          targetId: middlewareId,
-          targetType: "Task middleware",
-          consumerId: ownerId,
-          consumerType: "Resource",
-        });
-      }
+  private resolveDependencyReferenceIds(
+    registry: StoreRegistry,
+    dependencies: unknown,
+  ): string[] {
+    if (!dependencies || typeof dependencies !== "object") {
+      return [];
+    }
 
-      for (const middlewareEntry of subtreePolicy.resources?.middleware ?? []) {
-        const middlewareAttachment =
-          getSubtreeResourceMiddlewareAttachment(middlewareEntry);
-        const middlewareId = resolveReferenceId(
-          registry,
-          middlewareAttachment,
-        )!;
-        const violation = this.getAccessViolation(
-          middlewareId,
-          ownerId,
-          "middleware",
-        );
-        if (!violation) {
-          continue;
-        }
+    const ids: string[] = [];
 
-        this.throwAccessViolation(registry, {
-          violation,
-          targetId: middlewareId,
-          targetType: "Resource middleware",
-          consumerId: ownerId,
-          consumerType: "Resource",
-        });
+    for (const [, depDef] of Object.entries(
+      dependencies as Record<string, unknown>,
+    )) {
+      const dep = utils.isOptional(depDef)
+        ? (depDef as { inner: unknown }).inner
+        : depDef;
+      const depId =
+        dep && typeof dep === "object"
+          ? resolveReferenceId(registry, dep)
+          : undefined;
+
+      if (depId) {
+        ids.push(depId);
       }
     }
+
+    return ids;
+  }
+
+  private resolveTagReferenceIds(
+    registry: StoreRegistry,
+    tags: unknown,
+  ): string[] {
+    if (!Array.isArray(tags) || tags.length === 0) {
+      return [];
+    }
+
+    return this.resolveReferenceIds(registry, tags);
+  }
+
+  private resolveReferenceIds(
+    registry: StoreRegistry,
+    references: Iterable<unknown>,
+  ): string[] {
+    const ids: string[] = [];
+
+    for (const reference of references) {
+      const resolvedId = resolveReferenceId(registry, reference);
+      if (resolvedId) {
+        ids.push(resolvedId);
+      }
+    }
+
+    return ids;
+  }
+
+  private resolveSubtreeMiddlewareReferenceIds<TEntry>(
+    registry: StoreRegistry,
+    entries: readonly TEntry[],
+    getAttachment: (entry: TEntry) => { id: string },
+  ): string[] {
+    return this.resolveReferenceIds(
+      registry,
+      entries.map((entry) => getAttachment(entry)),
+    );
   }
 
   private findIsolationViolation(
@@ -1065,25 +1060,12 @@ export class VisibilityTracker {
    */
   private findGatingExportSet(targetId: string, ownerId: string): Set<string> {
     const exportSet = this.exportSets.get(ownerId);
-    if (
-      exportSet &&
-      !this.isTargetAllowedByExports(targetId, ownerId, new Set())
-    ) {
+    if (exportSet && !this.isTargetAllowedByExports(targetId, ownerId)) {
       return exportSet;
     }
     const parentOwner = this.ownership.get(ownerId);
     if (parentOwner === undefined) return new Set<string>();
     return this.findGatingExportSet(targetId, parentOwner);
-  }
-
-  /** Exposes the ownership map for testing. */
-  getOwnership(): ReadonlyMap<string, string> {
-    return this.ownership;
-  }
-
-  /** Exposes the export sets for testing. */
-  getExportSets(): ReadonlyMap<string, ReadonlySet<string>> {
-    return this.exportSets;
   }
 
   /**

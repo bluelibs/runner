@@ -31,6 +31,18 @@ export interface ILog {
 }
 
 export type PrintStrategy = PrinterStrategy;
+
+export function detectColorSupport(): boolean {
+  const noColor = typeof process !== "undefined" && !!process.env.NO_COLOR;
+  if (noColor) return false;
+
+  const isTty =
+    typeof process !== "undefined" &&
+    !!process.stdout &&
+    !!process.stdout.isTTY;
+  return isTty;
+}
+
 export class Logger {
   private printThreshold: null | LogLevels = "info";
   private printStrategy: PrintStrategy = "pretty";
@@ -72,7 +84,7 @@ export class Logger {
     this.useColors =
       typeof options.useColors === "boolean"
         ? options.useColors
-        : this.detectColorSupport();
+        : detectColorSupport();
 
     this.source = source;
 
@@ -82,19 +94,6 @@ export class Logger {
           strategy: this.printStrategy,
           useColors: this.useColors,
         });
-  }
-
-  private detectColorSupport(): boolean {
-    // Respect NO_COLOR convention
-
-    const noColor = typeof process !== "undefined" && !!process.env.NO_COLOR;
-    if (noColor) return false;
-
-    const isTty =
-      typeof process !== "undefined" &&
-      !!process.stdout &&
-      !!process.stdout.isTTY;
-    return isTty;
   }
 
   /**

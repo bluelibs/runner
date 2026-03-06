@@ -54,6 +54,28 @@ type ConditionalSubtreeMiddlewareEntry<
   when?: (definition: TTargetDefinition) => boolean;
 };
 
+type MiddlewareAttachmentCandidate<TMiddleware extends MiddlewareWithId> =
+  | TMiddleware
+  | {
+      id?: unknown;
+    }
+  | object
+  | null
+  | undefined;
+
+type ConditionalSubtreeMiddlewareEntryCandidate<
+  TMiddleware extends MiddlewareWithId,
+  TTargetDefinition,
+> =
+  | TMiddleware
+  | ConditionalSubtreeMiddlewareEntry<TMiddleware, TTargetDefinition>
+  | {
+      use?: MiddlewareAttachmentCandidate<TMiddleware>;
+      when?: (definition: TTargetDefinition) => boolean;
+    }
+  | null
+  | undefined;
+
 function throwInvalidSubtreeMiddlewareEntry(kind: MiddlewareTargetKind): never {
   return validationError.throw({
     subject: "Subtree middleware",
@@ -62,29 +84,39 @@ function throwInvalidSubtreeMiddlewareEntry(kind: MiddlewareTargetKind): never {
   }) as never;
 }
 
-function isMiddlewareAttachment<TAttachment extends MiddlewareWithId>(
-  entry: unknown,
-): entry is TAttachment {
-  return (
-    entry !== null &&
-    typeof entry === "object" &&
-    "id" in entry &&
-    typeof (entry as { id?: unknown }).id === "string"
-  );
+function getMiddlewareAttachment<TAttachment extends MiddlewareWithId>(
+  entry: MiddlewareAttachmentCandidate<TAttachment>,
+): TAttachment | undefined {
+  if (!entry || typeof entry !== "object" || !("id" in entry)) {
+    return undefined;
+  }
+
+  return typeof entry.id === "string" ? (entry as TAttachment) : undefined;
 }
 
-function isConditionalSubtreeMiddlewareEntry<
+function getConditionalSubtreeMiddlewareEntry<
   TMiddleware extends MiddlewareWithId,
   TTargetDefinition,
 >(
-  entry: unknown,
-): entry is ConditionalSubtreeMiddlewareEntry<TMiddleware, TTargetDefinition> {
-  return (
-    entry !== null &&
-    typeof entry === "object" &&
-    "use" in entry &&
-    isMiddlewareAttachment<TMiddleware>((entry as { use?: unknown }).use)
-  );
+  entry: ConditionalSubtreeMiddlewareEntryCandidate<
+    TMiddleware,
+    TTargetDefinition
+  >,
+):
+  | ConditionalSubtreeMiddlewareEntry<TMiddleware, TTargetDefinition>
+  | undefined {
+  if (entry === null || typeof entry !== "object" || !("use" in entry)) {
+    return undefined;
+  }
+
+  if (!getMiddlewareAttachment<TMiddleware>(entry.use)) {
+    return undefined;
+  }
+
+  return entry as ConditionalSubtreeMiddlewareEntry<
+    TMiddleware,
+    TTargetDefinition
+  >;
 }
 
 function extractSubtreeMiddlewareAttachment<
@@ -96,14 +128,19 @@ function extractSubtreeMiddlewareAttachment<
     | ConditionalSubtreeMiddlewareEntry<TMiddleware, TTargetDefinition>,
   kind: MiddlewareTargetKind,
 ): TMiddleware {
-  if (isMiddlewareAttachment<TMiddleware>(entry)) {
-    return entry;
+  const directAttachment = getMiddlewareAttachment<TMiddleware>(entry);
+  if (directAttachment) {
+    return directAttachment;
   }
-  if (
-    isConditionalSubtreeMiddlewareEntry<TMiddleware, TTargetDefinition>(entry)
-  ) {
-    return entry.use;
+
+  const conditionalEntry = getConditionalSubtreeMiddlewareEntry<
+    TMiddleware,
+    TTargetDefinition
+  >(entry);
+  if (conditionalEntry) {
+    return conditionalEntry.use;
   }
+
   return throwInvalidSubtreeMiddlewareEntry(kind);
 }
 
@@ -117,20 +154,26 @@ function resolveSubtreeMiddlewareEntry<
   targetDefinition: TTargetDefinition,
   kind: MiddlewareTargetKind,
 ): TMiddleware | undefined {
-  if (isMiddlewareAttachment<TMiddleware>(entry)) {
-    return entry;
+  const directAttachment = getMiddlewareAttachment<TMiddleware>(entry);
+  if (directAttachment) {
+    return directAttachment;
   }
 
-  if (
-    !isConditionalSubtreeMiddlewareEntry<TMiddleware, TTargetDefinition>(entry)
-  ) {
+  const conditionalEntry = getConditionalSubtreeMiddlewareEntry<
+    TMiddleware,
+    TTargetDefinition
+  >(entry);
+  if (!conditionalEntry) {
     return throwInvalidSubtreeMiddlewareEntry(kind);
   }
 
-  if (!entry.when) {
-    return entry.use;
+  if (!conditionalEntry.when) {
+    return conditionalEntry.use;
   }
-  return entry.when(targetDefinition) ? entry.use : undefined;
+
+  return conditionalEntry.when(targetDefinition)
+    ? conditionalEntry.use
+    : undefined;
 }
 
 export function getTargetOwnerResourceChain(

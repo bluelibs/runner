@@ -710,40 +710,20 @@ export class StoreRegistryWriter {
   private normalizeTaskMiddlewareAttachments(
     task: ITask<any, any, {}>,
   ): ITask<any, any, {}>["middleware"] {
-    if (!Array.isArray(task.middleware) || task.middleware.length === 0) {
-      return task.middleware;
-    }
-
-    const ownerResourceId = this.resolveOwnerResourceIdFromTaskId(task.id);
-    if (!ownerResourceId) {
-      return task.middleware;
-    }
-
-    return task.middleware.map((attachment) =>
-      this.normalizeMiddlewareAttachment(
-        ownerResourceId,
-        RegisterableKind.TaskMiddleware,
-        attachment,
-      ),
+    return this.normalizeMiddlewareAttachments(
+      this.resolveOwnerResourceIdFromTaskId(task.id),
+      RegisterableKind.TaskMiddleware,
+      task.middleware,
     );
   }
 
   private normalizeResourceMiddlewareAttachments(
     resource: IResource<any, any, any>,
   ): IResource<any, any, any>["middleware"] {
-    if (
-      !Array.isArray(resource.middleware) ||
-      resource.middleware.length === 0
-    ) {
-      return resource.middleware;
-    }
-
-    return resource.middleware.map((attachment) =>
-      this.normalizeMiddlewareAttachment(
-        resource.id,
-        RegisterableKind.ResourceMiddleware,
-        attachment,
-      ),
+    return this.normalizeMiddlewareAttachments(
+      resource.id,
+      RegisterableKind.ResourceMiddleware,
+      resource.middleware,
     );
   }
 
@@ -802,39 +782,57 @@ export class StoreRegistryWriter {
     ownerResourceId: string,
     entry: SubtreeTaskMiddlewareEntry,
   ) {
-    const attachment = getSubtreeTaskMiddlewareAttachment(entry);
-    const normalizedAttachment = this.normalizeMiddlewareAttachment(
+    return this.normalizeSubtreeMiddlewareEntry(
       ownerResourceId,
       RegisterableKind.TaskMiddleware,
-      attachment,
+      entry,
+      getSubtreeTaskMiddlewareAttachment,
     );
-
-    if (normalizedAttachment === attachment) {
-      return entry;
-    }
-
-    if (
-      entry &&
-      typeof entry === "object" &&
-      "use" in (entry as Record<string, unknown>)
-    ) {
-      return {
-        ...(entry as object),
-        use: normalizedAttachment,
-      };
-    }
-
-    return normalizedAttachment;
   }
 
   private normalizeSubtreeResourceMiddlewareEntry(
     ownerResourceId: string,
     entry: SubtreeResourceMiddlewareEntry,
   ) {
-    const attachment = getSubtreeResourceMiddlewareAttachment(entry);
-    const normalizedAttachment = this.normalizeMiddlewareAttachment(
+    return this.normalizeSubtreeMiddlewareEntry(
       ownerResourceId,
       RegisterableKind.ResourceMiddleware,
+      entry,
+      getSubtreeResourceMiddlewareAttachment,
+    );
+  }
+
+  private normalizeMiddlewareAttachments<TAttachment extends { id: string }>(
+    ownerResourceId: string | null,
+    kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
+    attachments: TAttachment[],
+  ): TAttachment[] {
+    if (!Array.isArray(attachments) || attachments.length === 0) {
+      return attachments;
+    }
+
+    if (!ownerResourceId) {
+      return attachments;
+    }
+
+    return attachments.map((attachment) =>
+      this.normalizeMiddlewareAttachment(ownerResourceId, kind, attachment),
+    );
+  }
+
+  private normalizeSubtreeMiddlewareEntry<
+    TAttachment extends { id: string },
+    TEntry extends TAttachment | ({ use: TAttachment } & object),
+  >(
+    ownerResourceId: string,
+    kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
+    entry: TEntry,
+    getAttachment: (entry: TEntry) => TAttachment,
+  ): TEntry {
+    const attachment = getAttachment(entry);
+    const normalizedAttachment = this.normalizeMiddlewareAttachment(
+      ownerResourceId,
+      kind,
       attachment,
     );
 
@@ -842,18 +840,14 @@ export class StoreRegistryWriter {
       return entry;
     }
 
-    if (
-      entry &&
-      typeof entry === "object" &&
-      "use" in (entry as Record<string, unknown>)
-    ) {
+    if ("use" in entry) {
       return {
         ...(entry as object),
         use: normalizedAttachment,
-      };
+      } as TEntry;
     }
 
-    return normalizedAttachment;
+    return normalizedAttachment as TEntry;
   }
 
   private normalizeMiddlewareAttachment<TAttachment extends { id: string }>(

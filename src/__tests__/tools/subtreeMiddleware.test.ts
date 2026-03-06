@@ -165,6 +165,12 @@ describe("subtreeMiddleware tools", () => {
     ).toThrow(/Duplicate middleware id/);
   });
 
+  it("fails fast when a conditional subtree entry has an invalid use payload", () => {
+    expect(() =>
+      getSubtreeTaskMiddlewareAttachment({ use: { invalid: true } } as any),
+    ).toThrow(/Invalid subtree task middleware entry/);
+  });
+
   it("fails fast for duplicate resource subtree middleware local ids across owners", () => {
     const rootMiddleware = defineResourceMiddleware({
       id: "tests-tools-subtree-root-middleware-resource-duplicate",
@@ -407,6 +413,14 @@ describe("subtreeMiddleware tools", () => {
   it("throws for invalid subtree attachment entries", () => {
     expect(() =>
       getSubtreeTaskMiddlewareAttachment({ nope: true } as any),
+    ).toThrow(/Invalid subtree task middleware entry/);
+
+    expect(() => getSubtreeTaskMiddlewareAttachment("nope" as any)).toThrow(
+      /Invalid subtree task middleware entry/,
+    );
+
+    expect(() =>
+      getSubtreeTaskMiddlewareAttachment({ id: 123 } as any),
     ).toThrow(/Invalid subtree task middleware entry/);
 
     expect(() =>

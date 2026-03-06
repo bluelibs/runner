@@ -13,20 +13,34 @@ function toArray<T>(value: T | T[] | undefined): T[] {
   return Array.isArray(value) ? [...value] : [value];
 }
 
-function cloneSubtreeConditionalMiddlewareEntry<TEntry>(entry: TEntry): TEntry {
-  if (
-    entry &&
-    typeof entry === "object" &&
-    "use" in entry &&
-    (entry as { use?: unknown }).use !== undefined
-  ) {
+function hasConditionalSubtreeMiddlewareEntry<TEntry extends object>(
+  entry: TEntry,
+): entry is Extract<TEntry, { use: object }> {
+  return "use" in entry;
+}
+
+function cloneSubtreeConditionalMiddlewareEntry<TEntry extends object>(
+  entry: TEntry,
+): TEntry {
+  if (hasConditionalSubtreeMiddlewareEntry(entry)) {
     return {
-      use: (entry as { use: unknown }).use,
-      when: (entry as { when?: unknown }).when,
+      ...(entry as object),
     } as TEntry;
   }
 
   return entry;
+}
+
+function cloneSubtreeMiddlewareBranch<TEntry extends object>(
+  branch: { middleware: TEntry[] } | undefined,
+): { middleware: TEntry[] } | undefined {
+  if (!branch) {
+    return undefined;
+  }
+
+  return {
+    middleware: branch.middleware.map(cloneSubtreeConditionalMiddlewareEntry),
+  };
 }
 
 function cloneNormalizedSubtreePolicy(
@@ -37,20 +51,12 @@ function cloneNormalizedSubtreePolicy(
   }
 
   return {
-    tasks: policy.tasks
-      ? {
-          middleware: policy.tasks.middleware.map(
-            cloneSubtreeConditionalMiddlewareEntry<SubtreeTaskMiddlewareEntry>,
-          ),
-        }
-      : undefined,
-    resources: policy.resources
-      ? {
-          middleware: policy.resources.middleware.map(
-            cloneSubtreeConditionalMiddlewareEntry<SubtreeResourceMiddlewareEntry>,
-          ),
-        }
-      : undefined,
+    tasks: cloneSubtreeMiddlewareBranch<SubtreeTaskMiddlewareEntry>(
+      policy.tasks,
+    ),
+    resources: cloneSubtreeMiddlewareBranch<SubtreeResourceMiddlewareEntry>(
+      policy.resources,
+    ),
     ...("validate" in policy
       ? {
           validate: [...(policy.validate ?? [])],
@@ -92,7 +98,8 @@ export function normalizeResourceSubtreePolicy(
 }
 
 function mergeSubtreeMiddlewareBranch<
-  TBranch extends { middleware: unknown[] },
+  TEntry,
+  TBranch extends { middleware: TEntry[] },
 >(
   existing: TBranch | undefined,
   incoming: TBranch,
