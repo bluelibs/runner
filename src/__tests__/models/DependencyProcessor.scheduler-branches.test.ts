@@ -10,7 +10,7 @@ import {
 import type { DependencyMapType } from "../../defs";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { HookDependencyState } from "../../types/storeTypes";
-import { ResourceInitMode } from "../../types/runner";
+import { ResourceLifecycleMode } from "../../types/runner";
 import { createTestFixture } from "../test-utils";
 
 describe("DependencyProcessor scheduler branches", () => {
@@ -134,7 +134,7 @@ describe("DependencyProcessor scheduler branches", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
     ) as unknown as {
       resourceScheduler: {
         isResourceReadyForParallelInit: (
@@ -192,7 +192,7 @@ describe("DependencyProcessor scheduler branches", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
     ) as unknown as {
       resourceScheduler: {
         collectResourceDependenciesFromMap: (
@@ -249,7 +249,7 @@ describe("DependencyProcessor scheduler branches", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
     ) as unknown as {
       computeHookDependencies: () => Promise<void>;
     };
@@ -288,7 +288,7 @@ describe("DependencyProcessor scheduler branches", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
     );
 
     expect(() => processor.attachListeners()).not.toThrow();

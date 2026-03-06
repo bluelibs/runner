@@ -142,14 +142,6 @@ export type RunOptions = {
    */
   lifecycleMode?: ResourceLifecycleMode | "sequential" | "parallel";
   /**
-   * @deprecated Use `lifecycleMode` instead.
-   */
-  initMode?:
-    | ResourceInitMode
-    | ResourceLifecycleMode
-    | "sequential"
-    | "parallel";
-  /**
    * Specify in which mode to run "dev", "prod" or "test".
    * If inside Node this is automatically detected from the NODE_ENV environment variable if not provided.
    */
@@ -171,12 +163,4 @@ export enum RunnerMode {
 export enum ResourceLifecycleMode {
   Sequential = "sequential",
   Parallel = "parallel",
-}
-
-/**
- * @deprecated Use `ResourceLifecycleMode` instead.
- */
-export enum ResourceInitMode {
-  Sequential = ResourceLifecycleMode.Sequential,
-  Parallel = ResourceLifecycleMode.Parallel,
 }

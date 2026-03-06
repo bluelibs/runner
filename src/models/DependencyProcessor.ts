@@ -20,7 +20,7 @@ import { ResourceInitializer } from "./ResourceInitializer";
 import { TaskRunner } from "./TaskRunner";
 import { eventNotFoundError } from "../errors";
 import { Logger } from "./Logger";
-import { ResourceLifecycleMode, ResourceInitMode } from "../types/runner";
+import { ResourceLifecycleMode } from "../types/runner";
 import { DependencyExtractor } from "./dependency-processor/DependencyExtractor";
 import { HookEventBuffer } from "./dependency-processor/HookEventBuffer";
 import { ResourceScheduler } from "./dependency-processor/ResourceScheduler";
@@ -48,18 +48,12 @@ export class DependencyProcessor {
     protected readonly eventManager: EventManager,
     protected readonly taskRunner: TaskRunner,
     logger: Logger,
-    lifecycleMode:
-      | ResourceLifecycleMode
-      | ResourceInitMode = ResourceLifecycleMode.Sequential,
+    lifecycleMode: ResourceLifecycleMode = ResourceLifecycleMode.Sequential,
     lazy = false,
     runtimeEventCycleDetection = true,
   ) {
     this.logger = logger.with({ source: "dependencyProcessor" });
-    this.lifecycleMode =
-      lifecycleMode === ResourceLifecycleMode.Parallel ||
-      lifecycleMode === ResourceInitMode.Parallel
-        ? ResourceLifecycleMode.Parallel
-        : ResourceLifecycleMode.Sequential;
+    this.lifecycleMode = lifecycleMode;
     this.lazy = lazy;
     this.resourceInitializer = new ResourceInitializer(
       store,

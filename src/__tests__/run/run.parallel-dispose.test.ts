@@ -1,6 +1,6 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
-import { ResourceInitMode, ResourceLifecycleMode } from "../../types/runner";
+import { ResourceLifecycleMode } from "../../types/runner";
 import { createMessageError } from "../../errors";
 
 describe("run parallel disposal lifecycle", () => {
@@ -269,7 +269,7 @@ describe("run parallel disposal lifecycle", () => {
     });
 
     const runtimePromise = run(app, {
-      initMode: ResourceInitMode.Parallel,
+      lifecycleMode: ResourceLifecycleMode.Parallel,
       shutdownHooks: false,
     });
 

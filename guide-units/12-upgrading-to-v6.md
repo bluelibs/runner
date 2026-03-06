@@ -103,10 +103,7 @@ const redisCacheProvider = r
 
 const app = r
   .resource("app")
-  .register([
-    redis,
-    resources.cache.with({ provider: redisCacheProvider }),
-  ])
+  .register([redis, resources.cache.with({ provider: redisCacheProvider })])
   .build();
 ```
 
@@ -315,7 +312,7 @@ const inspect = r
 
 ### 10. Lifecycle Option Rename
 
-`initMode` is deprecated alias; use `lifecycleMode`.
+`initMode` has been removed; use `lifecycleMode`.
 
 Before:
 

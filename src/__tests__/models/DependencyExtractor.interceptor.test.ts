@@ -3,7 +3,7 @@ import { Store } from "../../models/Store";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { MiddlewareManager } from "../../models/MiddlewareManager";
 import { run } from "../../run";
-import { ResourceInitMode } from "../../types/runner";
+import { ResourceLifecycleMode } from "../../types/runner";
 import { resources } from "../../index";
 import { createTestFixture } from "../test-utils";
 
@@ -115,7 +115,7 @@ describe("DependencyExtractor interceptor branches", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Sequential,
+      ResourceLifecycleMode.Sequential,
     ) as unknown as {
       dependencyExtractor: {
         extractDependencies: (...args: any[]) => Promise<any>;
@@ -209,7 +209,7 @@ describe("DependencyExtractor interceptor branches", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Sequential,
+      ResourceLifecycleMode.Sequential,
     ) as unknown as {
       dependencyExtractor: {
         extractDependency: (
@@ -237,7 +237,7 @@ describe("DependencyExtractor interceptor branches", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Sequential,
+      ResourceLifecycleMode.Sequential,
     ) as unknown as {
       dependencyExtractor: {
         extractDependency: (

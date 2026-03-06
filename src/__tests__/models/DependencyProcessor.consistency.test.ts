@@ -3,7 +3,7 @@ import { run } from "../../run";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { createTestFixture } from "../test-utils";
 import { createMessageError } from "../../errors";
-import { ResourceInitMode } from "../../types/runner";
+import { ResourceLifecycleMode } from "../../types/runner";
 import { runtimeSource } from "../../types/runtimeSource";
 import type { RuntimeCallSource } from "../../types/runtimeSource";
 
@@ -503,7 +503,7 @@ describe("DependencyProcessor Consistency", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Sequential,
+      ResourceLifecycleMode.Sequential,
       false,
       false,
     );

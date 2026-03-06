@@ -8,7 +8,7 @@ import {
   defineTaskMiddleware,
 } from "../../define";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
-import { ResourceInitMode } from "../../types/runner";
+import { ResourceLifecycleMode } from "../../types/runner";
 import { createTestFixture } from "../test-utils";
 
 describe("DependencyProcessor parallel init internals", () => {
@@ -58,7 +58,7 @@ describe("DependencyProcessor parallel init internals", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
     ) as any;
 
     await processor.initializeUninitializedResourcesParallel();
@@ -101,7 +101,7 @@ describe("DependencyProcessor parallel init internals", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
     ) as any;
 
     await expect(
@@ -147,7 +147,7 @@ describe("DependencyProcessor parallel init internals", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
     ) as any;
 
     jest
@@ -189,7 +189,7 @@ describe("DependencyProcessor parallel init internals", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
       true,
     ) as any;
 
@@ -261,7 +261,7 @@ describe("DependencyProcessor parallel init internals", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
       true,
     ) as any;
 
@@ -346,7 +346,7 @@ describe("DependencyProcessor parallel init internals", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
       true,
     ) as any;
 
@@ -400,7 +400,7 @@ describe("DependencyProcessor parallel init internals", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
     ) as any;
 
     const scheduler = processor.resourceScheduler as {
@@ -469,7 +469,7 @@ describe("DependencyProcessor parallel init internals", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
     ) as any;
 
     const scheduler = processor.resourceScheduler as {
@@ -617,7 +617,7 @@ describe("DependencyProcessor parallel init internals", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
       true,
     ) as any;
 
@@ -692,7 +692,7 @@ describe("DependencyProcessor parallel init internals", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Parallel,
+      ResourceLifecycleMode.Parallel,
       true,
     ) as any;
 

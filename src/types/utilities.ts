@@ -320,3 +320,14 @@ export type RegisterableItems =
   | IAsyncContext<any>
   | IErrorHelper<any>
   | ITag<any, any, any, any>;
+
+export type AnyElement =
+  | IResource<any, any, any, any, any, any, any>
+  | ITask<any, any, any, any, any, any>
+  | IHook<any, any>
+  | ITaskMiddleware<any, any, any, any>
+  | IResourceMiddleware<any, any, any, any>
+  | IEvent<any>
+  | IAsyncContext<any>
+  | IErrorHelper<any>
+  | ITag<any, any, any, any>;

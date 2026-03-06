@@ -1,7 +1,7 @@
 import { defineResource } from "../../define";
 import { r } from "../../public";
 import { run } from "../../run";
-import { ResourceInitMode, ResourceLifecycleMode } from "../../types/runner";
+import { ResourceLifecycleMode } from "../../types/runner";
 import { createMessageError } from "../../errors";
 
 describe("run behavioral scenarios", () => {
@@ -269,7 +269,7 @@ describe("run behavioral scenarios", () => {
     let caught: unknown;
     try {
       await run(app, {
-        initMode: ResourceInitMode.Parallel,
+        lifecycleMode: ResourceLifecycleMode.Parallel,
         shutdownHooks: false,
       });
     } catch (error: unknown) {

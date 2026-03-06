@@ -5,6 +5,7 @@ import {
   IsolationSubtreeFilter,
   ItemType,
   IsolationChannel,
+  DependencyMapType,
 } from "../defs";
 import type { IsolationScope, IsolationScopeTarget } from "../tools/scope";
 import * as utils from "../define";
@@ -104,7 +105,7 @@ type AccessViolation =
 type DependencyValidationEntry = {
   consumerId: string;
   consumerType: string;
-  dependencies: unknown;
+  dependencies: DependencyMapType | undefined;
 };
 
 type TagValidationEntry = {
@@ -154,10 +155,14 @@ function deriveItemType(item: RegisterableItems): ItemType | undefined {
  * Extracts the string id from any registerable item.
  */
 function getItemId(item: RegisterableItems): string | undefined {
+  // Guard against non-object values smuggled in via `as any` at registration boundaries
+  if (!item || (typeof item !== "object" && typeof item !== "function")) {
+    return undefined;
+  }
   if (utils.isResourceWithConfig(item)) {
     return (item as IResourceWithConfig).resource.id;
   }
-  if (item && typeof item === "object" && "id" in item) {
+  if ("id" in item) {
     return (item as { id: string }).id;
   }
   return undefined;
@@ -807,20 +812,19 @@ export class VisibilityTracker {
 
   private resolveDependencyReferenceIds(
     registry: StoreRegistry,
-    dependencies: unknown,
+    dependencies: DependencyMapType | undefined,
   ): string[] {
-    if (!dependencies || typeof dependencies !== "object") {
+    if (!dependencies) {
       return [];
     }
 
     const ids: string[] = [];
 
-    for (const [, depDef] of Object.entries(
-      dependencies as Record<string, unknown>,
-    )) {
+    for (const [, depDef] of Object.entries(dependencies)) {
       const dep = utils.isOptional(depDef)
         ? (depDef as { inner: unknown }).inner
         : depDef;
+      // Runtime guard: optional unwrapping yields `unknown`, so primitives can slip through
       const depId =
         dep && typeof dep === "object"
           ? resolveReferenceId(registry, dep)

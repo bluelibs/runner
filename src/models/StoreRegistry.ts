@@ -39,6 +39,13 @@ import { StoringMode, TagIndexBucket } from "./store-registry/types";
 import { validationError } from "../errors";
 import { getDefinitionIdentity } from "../tools/isSameDefinition";
 
+/**
+ * Any object reference used as a definition identity key.
+ * Kept as `object` because WeakMap requires non-primitive keys
+ * and these functions work at the raw metadata layer before element type narrowing.
+ */
+type DefinitionReference = object;
+
 type DefinitionReferenceWithOptionalId = {
   id?: unknown;
 };
@@ -47,13 +54,15 @@ type DefinitionReferenceWithConfiguredFrom = {
   [symbolTagConfiguredFrom]?: unknown;
 };
 
-function isObjectReference(value: unknown): value is object {
+function isObjectReference(value: unknown): value is DefinitionReference {
   return (
     (typeof value === "object" && value !== null) || typeof value === "function"
   );
 }
 
-function getReferenceSourceId(reference: object): string | undefined {
+function getReferenceSourceId(
+  reference: DefinitionReference,
+): string | undefined {
   if (!("id" in reference)) {
     return undefined;
   }
@@ -64,7 +73,9 @@ function getReferenceSourceId(reference: object): string | undefined {
     : undefined;
 }
 
-function getConfiguredFromReference(reference: object): object | undefined {
+function getConfiguredFromReference(
+  reference: DefinitionReference,
+): DefinitionReference | undefined {
   const configuredFrom = (reference as DefinitionReferenceWithConfiguredFrom)[
     symbolTagConfiguredFrom
   ];
@@ -93,8 +104,14 @@ export class StoreRegistry {
   );
   public errors = new LockableMap<string, IErrorHelper<any>>("errors");
   public readonly visibilityTracker = new VisibilityTracker();
-  private readonly definitionAliases = new WeakMap<object, string>();
-  private readonly definitionIdentityAliases = new WeakMap<object, string>();
+  private readonly definitionAliases = new WeakMap<
+    DefinitionReference,
+    string
+  >();
+  private readonly definitionIdentityAliases = new WeakMap<
+    DefinitionReference,
+    string
+  >();
   private readonly definitionAliasesBySourceId = new Map<string, Set<string>>();
   private readonly sourceIdsByCanonicalId = new Map<string, Set<string>>();
 
@@ -231,7 +248,7 @@ export class StoreRegistry {
   }
 
   private recordDefinitionIdentityAlias(
-    reference: object,
+    reference: DefinitionReference,
     canonicalId: string,
   ): void {
     const identity = getDefinitionIdentity(reference);
@@ -251,7 +268,10 @@ export class StoreRegistry {
     this.definitionIdentityAliases.set(identity, canonicalId);
   }
 
-  private recordSourceIdAlias(reference: object, canonicalId: string): void {
+  private recordSourceIdAlias(
+    reference: DefinitionReference,
+    canonicalId: string,
+  ): void {
     const sourceId = getReferenceSourceId(reference);
     if (!sourceId) {
       return;
@@ -267,7 +287,7 @@ export class StoreRegistry {
   }
 
   private recordCanonicalSourceId(
-    reference: object,
+    reference: DefinitionReference,
     canonicalId: string,
   ): void {
     const sourceId = getReferenceSourceId(reference);
