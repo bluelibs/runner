@@ -9,7 +9,6 @@ import { temporalResource } from "./middleware/temporal.middleware";
 import { cronResource as cron } from "./cron/cron.resource";
 import { queueResource } from "./resources/queue.resource";
 import { runtimeResource } from "./resources/runtime.resource";
-import { httpClientFactory } from "./resources/httpClientFactory.resource";
 import { storeResource } from "./resources/store.resource";
 import { debugResource as debug } from "./resources/debug/debug.resource";
 import { serializerResource as serializer } from "./resources/serializer.resource";
@@ -36,7 +35,6 @@ export const runnerResources = {
   cache: cacheResource,
   cron,
   queue: queueResource,
-  httpClientFactory: httpClientFactory,
 
   // Middleware State Resources
   rateLimit: rateLimitResource,

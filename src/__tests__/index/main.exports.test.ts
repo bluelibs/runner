@@ -65,6 +65,7 @@ describe("main exports", () => {
     // Test namespaced sub-properties for complete coverage
     expect(typeof mainExports.resources.runtime).toBe("object");
     expect(typeof mainExports.resources.cron).toBe("object");
+    expect((mainExports.resources as any).httpClientFactory).toBeUndefined();
     expect(typeof mainExports.events.ready).toBe("object");
     expect(typeof mainExports.tags.system).toBe("object");
     expect(typeof mainExports.tags.cron).toBe("object");

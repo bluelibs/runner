@@ -385,6 +385,12 @@ new RabbitMQEventLaneQueue({
 
 Use RPC Lanes when one Runner needs to call another Runner and wait for the result. The caller awaits a response; the routing decision (local vs. remote) is made by the active profile's `serve` list.
 
+HTTP client transport options:
+
+- `client: "fetch"` uses the universal `createHttpClient` path and works in any `fetch` runtime.
+- `client: "mixed"` and `client: "smart"` are Node-only presets from `@bluelibs/runner/node`, intended for streaming and multipart flows.
+- Runner no longer exposes a global `resources.httpClientFactory`; create clients explicitly or use `r.rpcLane.httpClient(...)` for communicator resources.
+
 ### Quick Start
 
 ```typescript

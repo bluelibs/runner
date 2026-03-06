@@ -1,4 +1,4 @@
-import { r, run } from "@bluelibs/runner";
+import { createHttpClient, r, resources, run } from "@bluelibs/runner";
 import {
   rpcLanesResource,
   type RpcLanesResourceValue,
@@ -137,11 +137,12 @@ type BuildClientAppOptions = {
 function buildClientApp(options: BuildClientAppOptions) {
   const communicator = r
     .resource<void>(ResourceId.Client.Communicator)
-    .dependencies({ clientFactory: r.runner.httpClientFactory })
+    .dependencies({ serializer: resources.serializer })
     .init(async (_cfg, deps) => {
-      const client = deps.clientFactory({
+      const client = createHttpClient({
         baseUrl: options.baseUrl,
         auth: { token: options.exposureToken },
+        serializer: deps.serializer,
       });
       return {
         task: async (

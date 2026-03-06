@@ -84,7 +84,7 @@ export function normalizeResourceSubtreePolicy(
     };
   }
 
-  if (policy.validate !== undefined) {
+  if ("validate" in policy) {
     normalized.validate = toArray<SubtreeElementValidator>(policy.validate);
   }
 
@@ -144,7 +144,7 @@ export function mergeResourceSubtreePolicy(
   }
 
   if ("validate" in normalizedIncoming) {
-    const incomingValidators = normalizedIncoming.validate ?? [];
+    const incomingValidators = normalizedIncoming.validate!;
     merged.validate =
       !merged.validate || override
         ? [...incomingValidators]

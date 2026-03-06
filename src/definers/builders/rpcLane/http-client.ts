@@ -4,10 +4,6 @@ import type { IErrorHelper } from "../../../types/error";
 import type { Store } from "../../../models/Store";
 import type { IRpcLaneCommunicator } from "../../../defs";
 import type { SerializerLike } from "../../../serializer";
-import type {
-  HttpClientFactory,
-  HttpClientFactoryConfig,
-} from "../../../globals/resources/httpClientFactory.resource";
 import {
   rpcLaneCommunicatorContractError,
   rpcLaneHttpClientPresetNotFoundError,
@@ -64,37 +60,7 @@ function resolveSerializer(
   return new Serializer();
 }
 
-function toFactoryConfig(
-  config: RpcLaneHttpClientConfig,
-): HttpClientFactoryConfig {
-  return {
-    baseUrl: config.baseUrl,
-    auth: config.auth,
-    timeoutMs: config.timeoutMs,
-    fetchImpl: config.fetchImpl,
-    onRequest: config.onRequest,
-  };
-}
-
 registerRpcLaneHttpClientPreset("fetch", (config, dependencies) => {
-  const factory = dependencies.clientFactory as HttpClientFactory | undefined;
-
-  if (factory) {
-    const client = factory(toFactoryConfig(config));
-    return {
-      task: async (id, input, options) =>
-        options ? client.task(id, input, options) : client.task(id, input),
-      event: async (id, payload, options) =>
-        options
-          ? client.event(id, payload, options)
-          : client.event(id, payload),
-      eventWithResult: async (id, payload, options) =>
-        options
-          ? client.eventWithResult?.(id, payload, options)
-          : client.eventWithResult?.(id, payload),
-    };
-  }
-
   const store = dependencies.store as Store | undefined;
   const serializer = resolveSerializer(dependencies);
   const client = createHttpClient({

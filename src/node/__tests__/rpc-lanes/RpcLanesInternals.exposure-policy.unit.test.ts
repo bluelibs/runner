@@ -1,5 +1,6 @@
 import {
   toRpcLanesExposurePolicy,
+  toRpcLanesResourceValue,
   type RpcLaneResolvedState,
 } from "../../rpc-lanes/RpcLanesInternals";
 
@@ -61,5 +62,30 @@ describe("toRpcLanesExposurePolicy", () => {
     expect(policy.enabled).toBe(true);
     expect(policy.taskIds).toEqual(["task.served"]);
     expect(policy.eventIds).toEqual(["event.served"]);
+  });
+
+  it("keeps ids unchanged when resource values use the default mapper", () => {
+    const resolved = createResolvedState({
+      serveTaskIds: new Set(["task.served"]),
+      serveEventIds: new Set(["event.served"]),
+      taskAllowAsyncContext: new Map([["task.served", true]]),
+      eventAllowAsyncContext: new Map([["event.served", false]]),
+      taskAsyncContextAllowList: new Map([["task.served", ["ctx.task"]]]),
+      eventAsyncContextAllowList: new Map([["event.served", ["ctx.event"]]]),
+    });
+
+    expect(toRpcLanesResourceValue(resolved, null)).toEqual(
+      expect.objectContaining({
+        profile: "tests.profile",
+        mode: "network",
+        serveTaskIds: ["task.served"],
+        serveEventIds: ["event.served"],
+        taskAllowAsyncContext: { "task.served": true },
+        eventAllowAsyncContext: { "event.served": false },
+        taskAsyncContextAllowList: { "task.served": ["ctx.task"] },
+        eventAsyncContextAllowList: { "event.served": ["ctx.event"] },
+        exposure: null,
+      }),
+    );
   });
 });

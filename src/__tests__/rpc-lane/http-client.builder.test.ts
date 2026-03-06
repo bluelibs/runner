@@ -9,22 +9,18 @@ import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
 
 describe("r.rpcLane.httpClient helper", () => {
-  it("uses fetch preset with injected clientFactory when available", async () => {
+  it("uses fetch preset without requiring a clientFactory resource", async () => {
     const helper = rpcLaneHttpClient({
       client: "fetch",
       baseUrl: "http://example.test/__runner",
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ ok: true, result: "remote-value" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })) as any,
     });
 
-    const taskMock = jest.fn(async () => "remote-value");
-    const communicator = await helper(
-      {},
-      {
-        clientFactory: () => ({
-          task: taskMock,
-          event: async () => {},
-        }),
-      },
-    );
+    const communicator = await helper({}, { serializer: new Serializer() });
 
     await expect(
       communicator.task!("app.tasks.any", { ok: true }),
@@ -32,27 +28,31 @@ describe("r.rpcLane.httpClient helper", () => {
     await expect(
       communicator.task!("app.tasks.any", { ok: true }, { headers: {} }),
     ).resolves.toBe("remote-value");
-    expect(taskMock).toHaveBeenCalledWith("app.tasks.any", { ok: true });
   });
 
-  it("forwards event/eventWithResult when using injected clientFactory", async () => {
+  it("forwards event/eventWithResult through the fetch preset", async () => {
     const helper = rpcLaneHttpClient({
       client: "fetch",
       baseUrl: "http://example.test/__runner",
+      fetchImpl: (async (input: any) => {
+        const url = String(input?.url ?? input);
+        if (url.includes("/event/")) {
+          return new Response(
+            JSON.stringify({ ok: true, result: { ok: "yes" } }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        return new Response(JSON.stringify({ ok: true, result: null }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }) as any,
     });
 
-    const eventMock = jest.fn(async () => undefined);
-    const eventWithResultMock = jest.fn(async () => ({ ok: "yes" }));
-    const communicator = await helper(
-      {},
-      {
-        clientFactory: () => ({
-          task: async () => "remote-value",
-          event: eventMock,
-          eventWithResult: eventWithResultMock,
-        }),
-      },
-    );
+    const communicator = await helper({}, { serializer: new Serializer() });
 
     await expect(
       communicator.event?.("app.events.any", { p: true }),
@@ -74,11 +74,6 @@ describe("r.rpcLane.httpClient helper", () => {
         { headers: { "x-test": "1" } },
       ),
     ).resolves.toEqual({ ok: "yes" });
-
-    expect(eventMock).toHaveBeenCalledWith("app.events.any", { p: true });
-    expect(eventWithResultMock).toHaveBeenCalledWith("app.events.any", {
-      p: true,
-    });
   });
 
   it("falls back to createHttpClient path without clientFactory", async () => {
@@ -164,22 +159,18 @@ describe("r.rpcLane.httpClient helper", () => {
   it("uses default fetch preset when client is omitted", async () => {
     const helper = rpcLaneHttpClient({
       baseUrl: "http://example.test/__runner",
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ ok: true, result: "default-fetch" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })) as any,
     });
 
-    const taskMock = jest.fn(async () => "default-fetch");
-    const communicator = await helper(
-      {},
-      {
-        clientFactory: () => ({
-          task: taskMock,
-        }),
-      },
-    );
+    const communicator = await helper({}, { serializer: new Serializer() });
 
     await expect(communicator.task!("app.tasks.default", {})).resolves.toBe(
       "default-fetch",
     );
-    expect(taskMock).toHaveBeenCalledWith("app.tasks.default", {});
   });
 
   it("creates serializer and registries from store when serializer is not provided", async () => {

@@ -36,7 +36,3 @@ export type {
 } from "./middleware/temporal.middleware";
 export type { TimeoutMiddlewareConfig } from "./middleware/timeout.middleware";
 export type { TimeoutError } from "./middleware/timeout.middleware";
-export type {
-  HttpClientFactoryConfig,
-  HttpClientFactory,
-} from "./resources/httpClientFactory.resource";

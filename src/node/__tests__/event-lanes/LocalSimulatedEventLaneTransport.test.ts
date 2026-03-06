@@ -287,4 +287,50 @@ describe("LocalSimulatedEventLaneTransport", () => {
       expect.objectContaining({ kind: "runtime" }),
     );
   });
+
+  it("routes producer emissions by raw ids when registration cannot resolve stored events", async () => {
+    const logger = createLogger();
+    const intercept = jest.fn();
+    const context = createContext();
+    const diagnostics = {
+      logEnqueue: jest.fn(async () => undefined),
+    };
+    context.eventRouteByEventId.set("tests.local-simulated.raw-id", {
+      lane: { id: "tests.local-simulated.raw-id.lane" },
+    } as any);
+
+    const transport = new LocalSimulatedEventLaneTransport(
+      {
+        eventManager: { intercept } as any,
+        serializer: new Serializer(),
+        store: {
+          events: new Map(),
+          toPublicId: (id: string) => id,
+        } as any,
+        logger,
+      },
+      context,
+      diagnostics as any,
+    );
+    const scheduleRelay = jest
+      .spyOn(transport as any, "scheduleRelay")
+      .mockImplementation(() => undefined);
+
+    transport.register();
+    const interceptor = intercept.mock.calls[0][0];
+    const stopPropagation = jest.fn();
+
+    await interceptor(
+      jest.fn(async () => "next-result"),
+      {
+        id: "tests.local-simulated.raw-id",
+        data: { value: 1 },
+        source: runtimeSource.task("tests.local-simulated.raw-id.source"),
+        stopPropagation,
+      },
+    );
+
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(scheduleRelay).toHaveBeenCalledTimes(1);
+  });
 });

@@ -135,4 +135,119 @@ describe("rpcLanesResource exposure auth callbacks", () => {
       expect.objectContaining({ status: 401 }),
     );
   });
+
+  it("falls back to raw ids when auth callbacks cannot resolve served task or event aliases", async () => {
+    const servedLane = r
+      .rpcLane("tests.rpc-lanes.authz-fallback.served-lane")
+      .build();
+    const task = defineTask({
+      id: "tests.rpc-lanes.authz-fallback.task",
+      tags: [globalTags.rpcLane.with({ lane: servedLane })],
+      run: async () => "ok",
+    });
+    const event = defineEvent({
+      id: "tests.rpc-lanes.authz-fallback.event",
+      tags: [globalTags.rpcLane.with({ lane: servedLane })],
+    });
+    const communicator = defineResource({
+      id: "tests.rpc-lanes.authz-fallback.communicator",
+      init: async () => ({
+        task: async () => "remote",
+        event: async () => undefined,
+      }),
+    });
+    const topology = r.rpcLane.topology({
+      profiles: {
+        server: { serve: [servedLane] },
+      },
+      bindings: [
+        {
+          lane: servedLane,
+          communicator,
+          auth: { secret: "fallback-secret" },
+        },
+      ],
+    });
+
+    const callbackAssertions = jest.fn();
+    jest
+      .spyOn(exposureModule, "createNodeExposure")
+      .mockImplementation(async (_cfg, deps, options) => {
+        const originalResolveDefinitionId = deps.store.resolveDefinitionId.bind(
+          deps.store,
+        );
+        const resolveSpy = jest
+          .spyOn(deps.store, "resolveDefinitionId")
+          .mockImplementation((reference) => {
+            if (
+              reference === task.id ||
+              reference === event.id ||
+              reference === storedTaskId ||
+              reference === storedEventId
+            ) {
+              return undefined;
+            }
+            return originalResolveDefinitionId(reference);
+          });
+
+        const authorization = options?.authorization;
+        const storedTaskId = Array.from(deps.store.tasks.keys()).find((id) =>
+          id.endsWith(".task"),
+        )!;
+        const storedEventId = Array.from(deps.store.events.keys()).find((id) =>
+          id.endsWith(".event"),
+        )!;
+        const unauthorizedServedTask = await authorization?.authorizeTask?.(
+          { headers: {} } as any,
+          storedTaskId,
+        );
+        const unauthorizedServedEvent = await authorization?.authorizeEvent?.(
+          { headers: {} } as any,
+          storedEventId,
+        );
+        callbackAssertions(unauthorizedServedTask, unauthorizedServedEvent);
+        resolveSpy.mockRestore();
+
+        return {
+          handleRequest: async () => false,
+          handleTask: async () => undefined,
+          handleEvent: async () => undefined,
+          handleDiscovery: async () => undefined,
+          createRequestListener: () => (_req: any, _res: any) => undefined,
+          createServer: () => ({ close: (_cb: any) => undefined }) as any,
+          attachTo: () => () => undefined,
+          server: undefined,
+          basePath: "/__runner",
+          close: async () => undefined,
+        };
+      });
+
+    const app = defineResource({
+      id: "tests.rpc-lanes.authz-fallback.app",
+      register: [
+        task,
+        event,
+        communicator,
+        rpcLanesResource.with({
+          profile: "server",
+          topology,
+          mode: "network",
+          exposure: {
+            http: {
+              basePath: "/__runner",
+              auth: { allowAnonymous: true },
+            },
+          },
+        }),
+      ],
+    });
+
+    const runtime = await run(app);
+    await runtime.dispose();
+
+    expect(callbackAssertions).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 401 }),
+      expect.objectContaining({ status: 401 }),
+    );
+  });
 });

@@ -10,6 +10,7 @@ import {
 import { defineAsyncContext } from "../../definers/defineAsyncContext";
 import { defineError } from "../../definers/defineError";
 import { Store } from "../../models/Store";
+import { symbolTagConfiguredFrom } from "../../types/symbols";
 import { createTestFixture } from "../test-utils";
 
 describe("StoreRegistry facade delegates", () => {
@@ -201,5 +202,92 @@ describe("StoreRegistry facade delegates", () => {
     expect(() =>
       registry.registerDefinitionAlias(reference, "app.alias.second"),
     ).toThrow(/cannot be remapped/i);
+  });
+
+  it("covers alias fallback helpers and consumer-id normalization fallbacks", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+    const tag = defineTag({
+      id: "registry.coverage.tag",
+    });
+    const task = defineTask({
+      id: "registry.coverage.task",
+      tags: [tag],
+      run: async () => "ok",
+    });
+    const resource = defineResource({
+      id: "registry.coverage.resource",
+      tags: [tag],
+      init: async () => "ok",
+    });
+
+    registry.storeTag(tag);
+    registry.storeTask(task);
+    registry.storeResource(resource);
+
+    const configuredFromFunction = Object.assign(() => undefined, {
+      [symbolTagConfiguredFrom]: () => undefined,
+    });
+    expect(
+      registry.resolveDefinitionId(configuredFromFunction),
+    ).toBeUndefined();
+
+    expect(() =>
+      (registry as any).recordSourceIdAlias(123, "registry.coverage.primitive"),
+    ).not.toThrow();
+    expect(() =>
+      (registry as any).recordCanonicalSourceId(
+        undefined,
+        "registry.coverage.primitive",
+      ),
+    ).not.toThrow();
+    expect(() =>
+      (registry as any).recordCanonicalSourceId(
+        () => undefined,
+        "registry.coverage.function",
+      ),
+    ).not.toThrow();
+    expect(() =>
+      registry.registerDefinitionAlias(
+        { id: 123 } as any,
+        "registry.coverage.invalid-id",
+      ),
+    ).not.toThrow();
+
+    (registry as any).definitionAliasesBySourceId.set("registry.coverage.raw", {
+      size: 1,
+      values: () => ({
+        next: () => ({
+          value: 123,
+        }),
+      }),
+    });
+    expect(registry.resolveDefinitionId("registry.coverage.raw")).toBe(
+      "registry.coverage.raw",
+    );
+
+    (registry as any).sourceIdsByCanonicalId.set("registry.coverage.same", {
+      size: 2,
+      values: () => ({
+        next: () => ({
+          value: "registry.coverage.same",
+        }),
+      }),
+      [Symbol.iterator]: function* () {
+        yield "registry.coverage.same";
+        yield "registry.coverage.same";
+      },
+    });
+    expect(registry.getDisplayId("registry.coverage.same")).toBe(
+      "registry.coverage.same",
+    );
+
+    const accessor = registry.getTagAccessor(tag, {
+      consumerId: { not: "resolvable" } as any,
+    });
+    expect(
+      accessor.tasks.map(
+        (entry: { definition: { id: string } }) => entry.definition.id,
+      ),
+    ).toEqual([task.id]);
   });
 });

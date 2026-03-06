@@ -38,7 +38,6 @@ import {
 
 export function registerStoreBuiltins(registry: StoreRegistry): void {
   registry.storeGenericItem(globalResources.queue);
-  registry.storeGenericItem(globalResources.httpClientFactory);
 
   const seenGlobalTagIds = new Set<string>();
   Object.values(globalTags).forEach((tag) => {

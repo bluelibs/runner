@@ -25,6 +25,7 @@ describe("node entry run/shared-contract", () => {
     expect(nodeMiddleware).toBe(coreMiddleware);
 
     const resources = nodeResources as Record<string, unknown>;
+    expect(resources.httpClientFactory).toBeUndefined();
     expect(resources.httpSmartClientFactory).toBeUndefined();
     expect(resources.httpMixedClientFactory).toBeUndefined();
   });

@@ -11,6 +11,7 @@ import {
   buildDependencyGraph,
   buildEventEmissionGraph,
 } from "../../../models/utils/buildDependencyGraph";
+import { defineTag } from "../../../define";
 
 const resolveDefinitionId = (reference: unknown): string | undefined => {
   if (typeof reference === "string") {
@@ -248,6 +249,52 @@ describe("buildDependencyGraph branch coverage", () => {
     expect(graph.find((node) => node.id === eventA.id)?.dependencies).toEqual(
       {},
     );
+  });
+
+  it("falls back to raw tag ids when tagged definitions cannot be alias-resolved", () => {
+    const tag = defineTag({
+      id: "graph.branch.raw-tag.tag",
+    });
+    const carriedTag = tag.with(undefined);
+    const consumerTask = defineTask({
+      id: "graph.branch.raw-tag.consumer",
+      dependencies: { feature: tag },
+      run: async () => "consumer",
+    });
+    const taggedTask = defineTask({
+      id: "graph.branch.raw-tag.target",
+      tags: [carriedTag],
+      run: async () => "target",
+    });
+
+    const graph = buildDependencyGraph({
+      tasks: new Map([
+        [consumerTask.id, { task: consumerTask }],
+        [taggedTask.id, { task: taggedTask }],
+      ]),
+      resources: new Map(),
+      hooks: new Map(),
+      taskMiddlewares: new Map(),
+      resourceMiddlewares: new Map(),
+      events: new Map(),
+      visibilityTracker: {
+        isAccessible: () => true,
+        getOwnerResourceId: () => undefined,
+        isWithinResourceSubtree: () => false,
+      },
+      resolveDefinitionId: (reference: unknown) => {
+        if (reference === carriedTag) {
+          return undefined;
+        }
+        return resolveDefinitionId(reference);
+      },
+    } as any);
+
+    expect(
+      graph.find((node) => node.id === consumerTask.id)?.dependencies[
+        `tag:${tag.id}:${taggedTask.id}`
+      ]?.id,
+    ).toBe(taggedTask.id);
   });
 
   it("covers subtree middleware dedupe and missing-node guards", () => {

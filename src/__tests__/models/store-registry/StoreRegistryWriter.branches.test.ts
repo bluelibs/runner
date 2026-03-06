@@ -2,6 +2,7 @@ import {
   defineResource,
   defineResourceMiddleware,
   defineTag,
+  defineTask,
   defineTaskMiddleware,
 } from "../../../define";
 import { defineError } from "../../../definers/defineError";
@@ -16,12 +17,19 @@ describe("StoreRegistryWriter branches", () => {
     const { store } = createTestFixture();
     const registry = (store as unknown as { registry: any }).registry;
     return registry.writer as {
+      compileOwnedDefinition: (
+        ownerResourceId: string,
+        ownerIsGateway: boolean,
+        item: unknown,
+        kind: string,
+      ) => unknown;
       computeCanonicalId: (
         ownerResourceId: string,
         ownerIsGateway: boolean,
         kind: string,
         currentId: string,
       ) => string;
+      normalizeTaskMiddlewareAttachments: (task: any) => unknown;
       normalizeSubtreeTaskMiddlewareEntry: (
         ownerResourceId: string,
         entry: unknown,
@@ -36,6 +44,7 @@ describe("StoreRegistryWriter branches", () => {
         source: ReadonlyArray<T>,
         next: ReadonlyArray<T>,
       ) => boolean;
+      resolveOwnerResourceIdFromTaskId: (taskId: string) => string | null;
     };
   };
 
@@ -51,6 +60,53 @@ describe("StoreRegistryWriter branches", () => {
     expect(
       writer.computeCanonicalId("app", false, "unknown-kind", "item"),
     ).toBe("app.item");
+  });
+
+  it("keeps gateway resources unchanged and prefixes other gateway-owned definitions", () => {
+    const writer = getWriter();
+    const gatewayResource = defineResource({
+      id: "child",
+    });
+
+    expect(
+      writer.compileOwnedDefinition(
+        "gateway",
+        true,
+        gatewayResource,
+        "resource",
+      ),
+    ).toBe(gatewayResource);
+
+    expect(
+      writer.computeCanonicalId("gateway", true, "resource", "child"),
+    ).toBe("child");
+    expect(writer.computeCanonicalId("gateway", true, "task", "child")).toBe(
+      "tasks.child",
+    );
+    expect(writer.computeCanonicalId("gateway", true, "event", "child")).toBe(
+      "events.child",
+    );
+    expect(writer.computeCanonicalId("gateway", true, "hook", "child")).toBe(
+      "hooks.child",
+    );
+    expect(
+      writer.computeCanonicalId("gateway", true, "taskMiddleware", "child"),
+    ).toBe("middleware.task.child");
+    expect(
+      writer.computeCanonicalId("gateway", true, "resourceMiddleware", "child"),
+    ).toBe("middleware.resource.child");
+    expect(writer.computeCanonicalId("gateway", true, "tag", "child")).toBe(
+      "tags.child",
+    );
+    expect(writer.computeCanonicalId("gateway", true, "error", "child")).toBe(
+      "errors.child",
+    );
+    expect(
+      writer.computeCanonicalId("gateway", true, "asyncContext", "child"),
+    ).toBe("ctx.child");
+    expect(writer.computeCanonicalId("gateway", true, "unknown", "child")).toBe(
+      "child",
+    );
   });
 
   it("fails fast on empty and reserved local names", () => {
@@ -177,6 +233,24 @@ describe("StoreRegistryWriter branches", () => {
     expect(normalized.resources).toBeUndefined();
   });
 
+  it("keeps top-level task middleware unchanged when task ids are not resource-owned", () => {
+    const writer = getWriter();
+    const middleware = defineTaskMiddleware({
+      id: "shared.task.middleware",
+      run: async ({ next, task }) => next(task.input),
+    });
+    const task = defineTask({
+      id: "top.level.task",
+      middleware: [middleware],
+      run: async () => "ok",
+    });
+
+    expect(writer.resolveOwnerResourceIdFromTaskId(task.id)).toBeNull();
+    expect(writer.normalizeTaskMiddlewareAttachments(task)).toBe(
+      task.middleware,
+    );
+  });
+
   it("normalizes definition tags through aliases and detects array changes", () => {
     const { store } = createTestFixture();
     const registry = (store as unknown as { registry: any }).registry;
@@ -248,5 +322,59 @@ describe("StoreRegistryWriter branches", () => {
     expect(typeof stored?.throw).toBe("function");
     expect(typeof stored?.new).toBe("function");
     expect(stored?.new({}).id).toBe("app.owner.errors.boom");
+  });
+
+  it("returns the original subtree and entries when middleware ids are already canonical", () => {
+    const { store } = createTestFixture();
+    const registry = (store as unknown as { registry: any }).registry;
+    const writer = registry.writer as {
+      normalizeResourceSubtreeMiddlewareAttachments: (resource: any) => unknown;
+      normalizeSubtreeTaskMiddlewareEntry: (
+        ownerResourceId: string,
+        entry: unknown,
+      ) => unknown;
+      normalizeSubtreeResourceMiddlewareEntry: (
+        ownerResourceId: string,
+        entry: unknown,
+      ) => unknown;
+    };
+
+    const taskMiddleware = defineTaskMiddleware({
+      id: "shared.task.middleware",
+      run: async ({ next, task }) => next(task.input),
+    });
+    const resourceMiddleware = defineResourceMiddleware({
+      id: "shared.resource.middleware",
+      run: async ({ next }) => next(),
+    });
+    registry.storeTaskMiddleware(taskMiddleware);
+    registry.storeResourceMiddleware(resourceMiddleware);
+
+    const taskEntry = { use: taskMiddleware };
+    const resourceEntry = { use: resourceMiddleware };
+    const resource = defineResource({
+      id: "app.owner",
+      subtree: {
+        tasks: {
+          middleware: [taskEntry],
+        },
+        resources: {
+          middleware: [resourceEntry],
+        },
+      },
+    });
+
+    expect(
+      writer.normalizeSubtreeTaskMiddlewareEntry("app.owner", taskEntry),
+    ).toBe(taskEntry);
+    expect(
+      writer.normalizeSubtreeResourceMiddlewareEntry(
+        "app.owner",
+        resourceEntry,
+      ),
+    ).toBe(resourceEntry);
+    expect(writer.normalizeResourceSubtreeMiddlewareAttachments(resource)).toBe(
+      resource.subtree,
+    );
   });
 });

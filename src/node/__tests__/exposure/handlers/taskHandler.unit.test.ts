@@ -258,4 +258,47 @@ describe("taskHandler", () => {
     await handler(createReq(ContentType.Json), res, TaskId.T);
     expect(res.endCalls).toBe(0);
   });
+
+  it("falls back to raw task ids when request id resolution misses", async () => {
+    const serializer = new Serializer();
+    const ensureTask = jest.fn(() => null);
+    const authorizeTask = jest.fn(() => null);
+    const runTask = jest.fn(async () => ({ ok: true }));
+    jest
+      .spyOn(requestBodyModule, "readJsonBody")
+      .mockResolvedValue({ ok: true, value: { input: 1 } });
+
+    const handler = createTaskHandler({
+      store: {
+        tasks: new Map([[TaskId.T, { task: { id: TaskId.T } }]]),
+        errors: new Map(),
+        resolveDefinitionId: () => undefined,
+        toPublicId: (reference: unknown) =>
+          typeof reference === "string"
+            ? reference
+            : ((reference as { id?: string })?.id ?? String(reference)),
+      } as any,
+      taskRunner: { run: runTask } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
+      authenticator: async () => ({ ok: true as const }),
+      allowList: { ensureTask } as any,
+      authorizeTask,
+      router: { basePath: RouterBasePath.X },
+      cors: undefined,
+      serializer,
+      limits: undefined,
+    });
+    const res = createRes();
+
+    await handler(createReq(ContentType.Json), res, TaskId.T);
+
+    expect(res.statusCode).toBe(200);
+    expect(ensureTask).toHaveBeenCalledWith(TaskId.T);
+    expect(authorizeTask).toHaveBeenCalledWith(expect.anything(), TaskId.T);
+    expect(runTask).toHaveBeenCalled();
+  });
 });

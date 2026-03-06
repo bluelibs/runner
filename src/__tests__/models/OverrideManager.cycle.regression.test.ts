@@ -249,4 +249,24 @@ describe("OverrideManager override graph recursion", () => {
     expect(registry.taskMiddlewares.has(taskMiddleware.id)).toBe(true);
     expect(registry.resourceMiddlewares.has(resourceMiddleware.id)).toBe(true);
   });
+
+  it("returns early when override traversal revisits an already-visited resource", () => {
+    const fixture = createTestFixture();
+    const { store } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+    const runtimeResult = fixture.createRuntimeResult(taskRunner);
+
+    const root = defineResource({
+      id: "override.visited.root",
+    });
+    store.initializeStore(root, {}, runtimeResult);
+
+    const registry = (store as any).registry as any;
+    const manager = new OverrideManager(registry);
+    expect(() =>
+      manager.storeOverridesDeeply(root, new Set([root.id])),
+    ).not.toThrow();
+    expect(manager.overrides.size).toBe(0);
+  });
 });

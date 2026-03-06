@@ -139,6 +139,16 @@ describe("durable: DurableResource", () => {
     expect(runnerStore.getTagAccessor).toHaveBeenCalledWith(durableWorkflowTag);
   });
 
+  it("fails fast when workflow discovery APIs are missing from the runner store", () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const durable = new DurableResource(service, storage, undefined, {} as any);
+
+    expect(() => durable.getWorkflows()).toThrow(
+      "Durable workflow discovery requires Store.getTasksWithTag(tag) or Store.getTagAccessor(tag).",
+    );
+  });
+
   it("throws when describe() is called and dependencies are missing in runner store", async () => {
     const service = createMockService();
     const storage = new AsyncLocalStorage<IDurableContext>();

@@ -345,4 +345,50 @@ describe("errorHandlers", () => {
 
     expect(statusCode).toBe(422);
   });
+
+  it("matches typed helpers by raw error names when id resolution misses", () => {
+    const serializer = new Serializer();
+    const store = {
+      errors: new Map([
+        [
+          "tests.errors.raw-id",
+          {
+            id: "tests.errors.raw-id",
+            httpCode: 409,
+            is: () => false,
+          },
+        ],
+      ]),
+      resolveDefinitionId: () => undefined,
+    } as unknown as Store;
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "plain",
+      bufferLogs: true,
+    });
+    const req = { headers: {}, method: "POST", url: "/x" } as IncomingMessage;
+    let statusCode = 0;
+    const res = {
+      writableEnded: false,
+      statusCode: 0,
+      setHeader() {},
+      end() {
+        statusCode = this.statusCode;
+      },
+    } as unknown as ServerResponse;
+    const error = new Error("Boom");
+    (error as unknown as { name: string }).name = "tests.errors.raw-id";
+
+    handleRequestError({
+      error,
+      req,
+      res,
+      store,
+      logger,
+      serializer,
+      logKey: ExposureErrorLogKey.TaskError,
+    });
+
+    expect(statusCode).toBe(409);
+  });
 });

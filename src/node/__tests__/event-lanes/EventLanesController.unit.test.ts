@@ -230,4 +230,77 @@ describe("EventLanesController unit coverage", () => {
       }),
     );
   });
+
+  it("routes producer emissions by raw ids when stored event resolution misses", async () => {
+    const queue = {
+      enqueue: jest.fn(async () => undefined),
+    };
+    const intercept = jest.fn();
+    const controller = new EventLanesController(
+      createBaseConfig(),
+      {
+        eventManager: {
+          intercept,
+          addListener: jest.fn(),
+        } as any,
+        serializer: {
+          stringify: JSON.stringify,
+          parse: JSON.parse,
+        } as any,
+        store: {
+          events: new Map(),
+          toPublicId: (id: string) => id,
+        } as any,
+        logger: { error: jest.fn(async () => undefined) } as any,
+      },
+      {
+        profile: "unit",
+        started: false,
+        coolingDown: false,
+        disposed: false,
+        activeBindingsByQueue: new Map(),
+        bindingsByLaneId: new Map([
+          [
+            "lane.unit.raw",
+            {
+              lane: { id: "lane.unit.raw" },
+              queue,
+            },
+          ],
+        ]),
+        eventRouteByEventId: new Map([
+          [
+            "unit.raw.event",
+            {
+              lane: { id: "lane.unit.raw" },
+            },
+          ],
+        ]),
+        queues: new Set(),
+        managedQueues: new Set(),
+        relaySourcePrefix: "relay:",
+      } as any,
+      {
+        logEnqueue: async () => undefined,
+        logRelayEmit: async () => undefined,
+        logSkipInactiveLane: async () => undefined,
+      } as any,
+    );
+
+    (controller as any).registerProducerInterceptor();
+    const interceptor = intercept.mock.calls[0][0];
+    const next = jest.fn(async () => "next-result");
+    const stopPropagation = jest.fn();
+
+    await interceptor(next, {
+      id: "unit.raw.event",
+      data: { ok: true },
+      source: runtimeSource.runtime("tests.event-lanes.unit.raw"),
+      stopPropagation,
+    });
+
+    expect(queue.enqueue).toHaveBeenCalledTimes(1);
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(next).not.toHaveBeenCalled();
+  });
 });

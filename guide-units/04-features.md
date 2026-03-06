@@ -1140,6 +1140,8 @@ const app = r
 
 ### RPC Lane Quick Start
 
+Use `client: "fetch"` for universal `fetch` runtimes. Use `client: "mixed"` or `client: "smart"` only from `@bluelibs/runner/node` when you need Node streaming or multipart behavior.
+
 ```typescript
 import { r } from "@bluelibs/runner";
 import { rpcLanesResource } from "@bluelibs/runner/node";

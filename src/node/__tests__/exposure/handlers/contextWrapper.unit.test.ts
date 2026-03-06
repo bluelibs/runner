@@ -207,4 +207,39 @@ describe("contextWrapper", () => {
     expect(secondParse).toHaveBeenCalledTimes(1);
     expect(secondProvide).toHaveBeenCalledTimes(1);
   });
+
+  it("falls back to raw allowlisted ids when context id resolution misses", async () => {
+    const parseSpy = jest.fn((value: string) => JSON.parse(value));
+    const provideSpy = jest.fn(
+      async (_value: unknown, fn: () => Promise<string>) => fn(),
+    );
+    const ctx = {
+      id: "ctx.raw-allowlist",
+      parse: parseSpy,
+      provide: provideSpy,
+    };
+
+    const out = await withUserContexts(
+      {
+        headers: {
+          "x-runner-context": JSON.stringify({
+            [ctx.id]: JSON.stringify({ ok: true }),
+          }),
+        },
+      } as any,
+      {
+        store: {
+          asyncContexts: new Map([[ctx.id, ctx]]),
+          resolveDefinitionId: () => undefined,
+        } as any,
+        serializer: { parse: (text: string) => JSON.parse(text) } as any,
+      },
+      async () => "ok",
+      { allowedAsyncContextIds: [ctx.id] },
+    );
+
+    expect(out).toBe("ok");
+    expect(parseSpy).toHaveBeenCalledTimes(1);
+    expect(provideSpy).toHaveBeenCalledTimes(1);
+  });
 });

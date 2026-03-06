@@ -1,4 +1,4 @@
-import { r } from "@bluelibs/runner";
+import { createHttpClient, r, resources } from "@bluelibs/runner";
 import { rpcLanesResource } from "@bluelibs/runner/node";
 import type { RpcLaneRequestOptions } from "@bluelibs/runner";
 
@@ -20,11 +20,12 @@ export type BuildHttpClientAppOptions = {
 export function buildHttpClientApp(options: BuildHttpClientAppOptions) {
   const communicator = r
     .resource<void>(ResourceId.ClientCommunicator)
-    .dependencies({ clientFactory: r.runner.httpClientFactory })
+    .dependencies({ serializer: resources.serializer })
     .init(async (_cfg, deps) => {
-      const client = deps.clientFactory({
+      const client = createHttpClient({
         baseUrl: options.baseUrl,
         auth: { token: options.authToken },
+        serializer: deps.serializer,
       });
       return {
         task: async (

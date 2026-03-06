@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@bluelibs/runner — API Audit: Tags, Errors &amp; Utilities</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --font-body: "Crimson Pro", Georgia, serif;
+        --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+        --font-sans: system-ui, -apple-system, sans-serif;
+        --bg: #faf8f5;
+        --surface: #ffffff;
+        --surface2: #f3efe9;
+        --border: rgba(0, 0, 0, 0.08);
+        --border-bright: rgba(0, 0, 0, 0.15);
+        --text: #1c1917;
+        --text-dim: #78716c;
+        --accent: #92400e;
+        --accent-dim: rgba(146, 64, 14, 0.07);
+        --green: #16a34a;
+        --green-dim: rgba(22, 163, 74, 0.08);
+        --red: #dc2626;
+        --red-dim: rgba(220, 38, 38, 0.08);
+        --orange: #d97706;
+        --orange-dim: rgba(217, 119, 6, 0.08);
+        --blue: #2563eb;
+        --blue-dim: rgba(37, 99, 235, 0.07);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #18150f;
+          --surface: #231f17;
+          --surface2: #2e2a20;
+          --border: rgba(255, 255, 255, 0.06);
+          --border-bright: rgba(255, 255, 255, 0.12);
+          --text: #f5f0e8;
+          --text-dim: #b8a990;
+          --accent: #f59e0b;
+          --accent-dim: rgba(245, 158, 11, 0.12);
+          --green: #4ade80;
+          --green-dim: rgba(74, 222, 128, 0.1);
+          --red: #f87171;
+          --red-dim: rgba(248, 113, 113, 0.1);
+          --orange: #fbbf24;
+          --orange-dim: rgba(251, 191, 36, 0.1);
+          --blue: #60a5fa;
+          --blue-dim: rgba(96, 165, 250, 0.1);
+        }
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: var(--font-body);
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+        padding: 2rem 1rem;
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+      }
+      .subtitle {
+        color: var(--text-dim);
+        font-size: 1.1rem;
+        margin-bottom: 2rem;
+      }
+      h2 {
+        font-size: 1.4rem;
+        font-weight: 700;
+        margin: 2.5rem 0 0.75rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 2px solid var(--accent);
+        color: var(--accent);
+      }
+      h3 {
+        font-size: 1.15rem;
+        font-weight: 600;
+        margin: 1.5rem 0 0.5rem;
+      }
+
+      /* KPI cards */
+      .kpi-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+      }
+      .kpi {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem 1.2rem;
+        text-align: center;
+      }
+      .kpi .number {
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+      .kpi .label {
+        font-size: 0.85rem;
+        color: var(--text-dim);
+        font-family: var(--font-sans);
+      }
+      .kpi.accent .number {
+        color: var(--accent);
+      }
+      .kpi.red .number {
+        color: var(--red);
+      }
+      .kpi.green .number {
+        color: var(--green);
+      }
+      .kpi.orange .number {
+        color: var(--orange);
+      }
+      .kpi.blue .number {
+        color: var(--blue);
+      }
+
+      /* Table */
+      .table-wrap {
+        overflow-x: auto;
+        margin: 1rem 0 2rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+        font-family: var(--font-sans);
+      }
+      thead {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+      }
+      th {
+        background: var(--surface2);
+        color: var(--text);
+        font-weight: 600;
+        text-align: left;
+        padding: 0.65rem 0.8rem;
+        border-bottom: 2px solid var(--border-bright);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      td {
+        padding: 0.6rem 0.8rem;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      tr:nth-child(even) td {
+        background: var(--surface2);
+      }
+      tr:hover td {
+        background: var(--accent-dim);
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.82rem;
+        background: var(--surface2);
+        padding: 0.1em 0.35em;
+        border-radius: 3px;
+      }
+
+      /* Risk badges */
+      .badge {
+        display: inline-block;
+        font-size: 0.72rem;
+        font-weight: 600;
+        font-family: var(--font-sans);
+        padding: 0.15em 0.55em;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+      }
+      .badge.low {
+        background: var(--green-dim);
+        color: var(--green);
+      }
+      .badge.medium {
+        background: var(--orange-dim);
+        color: var(--orange);
+      }
+      .badge.high {
+        background: var(--red-dim);
+        color: var(--red);
+      }
+
+      /* Category badges */
+      .cat {
+        display: inline-block;
+        font-size: 0.7rem;
+        font-weight: 600;
+        font-family: var(--font-mono);
+        padding: 0.12em 0.45em;
+        border-radius: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+      }
+      .cat.tag {
+        background: var(--blue-dim);
+        color: var(--blue);
+      }
+      .cat.error {
+        background: var(--red-dim);
+        color: var(--red);
+      }
+      .cat.util {
+        background: var(--accent-dim);
+        color: var(--accent);
+      }
+      .cat.export {
+        background: var(--green-dim);
+        color: var(--green);
+      }
+      .cat.alias {
+        background: var(--orange-dim);
+        color: var(--orange);
+      }
+
+      .rationale {
+        color: var(--text-dim);
+        font-size: 0.88rem;
+        line-height: 1.5;
+      }
+      .file {
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        color: var(--text-dim);
+      }
+
+      details {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.8rem 1.2rem;
+        margin: 1rem 0;
+      }
+      summary {
+        cursor: pointer;
+        font-weight: 600;
+        font-family: var(--font-sans);
+        font-size: 0.92rem;
+      }
+      details p {
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+      }
+      .legend {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin: 0.5rem 0 1rem;
+        font-size: 0.82rem;
+        font-family: var(--font-sans);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>@bluelibs/runner — API Surface Audit</h1>
+    <p class="subtitle">
+      Tags, Errors, Utilities &amp; Exports — Candidates for Elimination or
+      Simplification
+    </p>
+
+    <div class="kpi-row">
+      <div class="kpi accent">
+        <div class="number">21</div>
+        <div class="label">Total Findings</div>
+      </div>
+      <div class="kpi green">
+        <div class="number">10</div>
+        <div class="label">Low Risk</div>
+      </div>
+      <div class="kpi orange">
+        <div class="number">8</div>
+        <div class="label">Medium Risk</div>
+      </div>
+      <div class="kpi red">
+        <div class="number">3</div>
+        <div class="label">High Risk</div>
+      </div>
+      <div class="kpi blue">
+        <div class="number">5</div>
+        <div class="label">Categories</div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><span class="cat tag">TAG</span> Tag system</span>
+      <span><span class="cat error">ERROR</span> Error helpers</span>
+      <span><span class="cat util">UTIL</span> Utilities</span>
+      <span><span class="cat export">EXPORT</span> Public API surface</span>
+      <span
+        ><span class="cat alias">ALIAS</span> Deprecated/duplicate alias</span
+      >
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <h2>1 · Tag System — Over-Engineering</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Finding</th>
+            <th>Location</th>
+            <th>Why Eliminate / Simplify</th>
+            <th>Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>
+              <span class="cat tag">TAG</span> <strong>Contract tags</strong> —
+              <code>TEnforceInputContract</code> /
+              <code>TEnforceOutputContract</code> generics on tags
+            </td>
+            <td>
+              <div class="file">src/types/tag.ts L48–L98</div>
+              <div class="file">src/definers/defineTag.ts L33–L47</div>
+              <div class="file">
+                src/types/contracts.ts (entire file, 219 lines)
+              </div>
+            </td>
+            <td class="rationale">
+              Tags carry <em>four</em> generic type params (<code
+                >TConfig, TEnforceIn, TEnforceOut, TAllowedTargets</code
+              >). The contract params are only used for compile-time type
+              narrowing of task inputs/outputs. This machinery adds ~220 lines
+              of advanced generic plumbing (<code>contracts.ts</code>) plus
+              <code>IContractable</code> extension on tags, middleware, etc.
+              Most users never use contract tags — they use schema validation.
+              Simplifying to a separate utility type or removing contract
+              enforcement from the tag layer would dramatically cut type
+              complexity.
+            </td>
+            <td><span class="badge high">High</span></td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>
+              <span class="cat tag">TAG</span> <strong>Scoped tags</strong> —
+              <code>.for()</code> restricting tag targets at the type level
+            </td>
+            <td>
+              <div class="file">src/types/tag.ts L163–L185</div>
+              <div class="file">
+                src/definers/builders/tag/fluent-builder.ts L59–L82
+              </div>
+            </td>
+            <td class="rationale">
+              <code>TAllowedTargets</code> adds a fourth generic to every tag,
+              plus 7 target-specific type aliases (<code>TaskTagType</code>,
+              <code>ResourceTagType</code>, etc. L178–L185). This is nice DX but
+              adds significant type-level noise everywhere — every builder that
+              accepts tags must carry matching generic filters. A runtime-only
+              check (already present in
+              <code>assertTagTargetsApplicableTo</code>) would suffice for most
+              use cases.
+            </td>
+            <td><span class="badge medium">Medium</span></td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>
+              <span class="cat tag">TAG</span>
+              <strong><code>.startup()</code> method</strong> on tags
+            </td>
+            <td><div class="file">src/definers/defineTag.ts L138–L159</div></td>
+            <td class="rationale">
+              <code>tag.startup()</code> wraps a tag as a "before-init"
+              dependency. This is a very niche DI signal — most resources don't
+              need startup tag ordering. It adds a wrapper type
+              (<code>ITagStartupDependency</code>), a unique symbol, and nested
+              <code>.optional()</code>. Could be a standalone utility rather
+              than a method on every tag instance.
+            </td>
+            <td><span class="badge low">Low</span></td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>
+              <span class="cat tag">TAG</span>
+              <strong><code>.schema()</code> alias</strong> on tag builder
+            </td>
+            <td>
+              <div class="file">
+                src/definers/builders/tag/fluent-builder.interface.ts L27–L30
+              </div>
+            </td>
+            <td class="rationale">
+              <code>.schema()</code> is an alias for
+              <code>.configSchema()</code> on the tag builder. Two names for the
+              same method adds confusion without adding clarity. Pick one.
+            </td>
+            <td><span class="badge low">Low</span></td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>
+              <span class="cat alias">ALIAS</span>
+              <strong><code>globalTags.internal</code></strong> duplicates
+              <code>globalTags.system</code>
+            </td>
+            <td><div class="file">src/globals/globalTags.ts L20–L21</div></td>
+            <td class="rationale">
+              Deprecated alias. <code>internal</code> is just
+              <code>system</code> under a different name. Remove at next major.
+            </td>
+            <td><span class="badge low">Low</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <h2>2 · Error System — Bloat &amp; Feature Creep</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Finding</th>
+            <th>Location</th>
+            <th>Why Eliminate / Simplify</th>
+            <th>Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>6</td>
+            <td>
+              <span class="cat error">ERROR</span>
+              <strong><code>.remediation()</code></strong> on every error
+              definition
+            </td>
+            <td>
+              <div class="file">src/definers/defineError.ts L130–L137</div>
+              <div class="file">
+                src/definers/builders/error/fluent-builder.interface.ts L37–L41
+              </div>
+            </td>
+            <td class="rationale">
+              ~95% of the 80+ error definitions use
+              <code>.remediation()</code> with verbose paragraphs that get
+              appended to every error message. This is useful for
+              framework-internal errors, but it bloats bundle size (remediation
+              strings alone are several KB), pollutes stack traces, and is
+              rarely consumed programmatically. Could be opt-in debug-mode-only,
+              or removed from the public builder API and kept internal.
+            </td>
+            <td><span class="badge medium">Medium</span></td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>
+              <span class="cat error">ERROR</span>
+              <strong><code>.is(error, partialData)</code></strong> — partial
+              matching overload
+            </td>
+            <td>
+              <div class="file">src/definers/defineError.ts L195–L207</div>
+            </td>
+            <td class="rationale">
+              The <code>.is()</code> type guard accepts an optional
+              <code>partialData</code> argument for shallow matching
+              (<code>matchesRunnerErrorData</code>). This is a niche inspection
+              pattern — users rarely check <em>which specific data</em> a typed
+              error carries via its guard. A simple
+              <code>.is(error)</code> guard is sufficient; data inspection can
+              be done after narrowing. The partial matcher function is 15 lines
+              of code that serves very few call sites.
+            </td>
+            <td><span class="badge low">Low</span></td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>
+              <span class="cat error">ERROR</span>
+              <strong><code>.httpCode()</code></strong> on every error builder
+            </td>
+            <td>
+              <div class="file">
+                src/definers/builders/error/fluent-builder.interface.ts L13
+              </div>
+              <div class="file">src/definers/defineError.ts L24–L37</div>
+            </td>
+            <td class="rationale">
+              <code>httpCode</code> mixes HTTP transport concerns into the error
+              definition layer. Only 6 out of 80+ errors use it
+              (<code>408</code>, <code>413</code>, <code>429</code>,
+              <code>499</code>, <code>500</code>, <code>503</code>). This is
+              really an HTTP exposure concern and could live in the HTTP layer
+              (e.g., a mapping from error id → status code) rather than on every
+              error helper. The assertion logic with
+              <code>isValidHttpCode</code> is duplicated in both
+              <code>defineError.ts</code> and the builder.
+            </td>
+            <td><span class="badge medium">Medium</span></td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>
+              <span class="cat error">ERROR</span>
+              <strong><code>.serialize()</code> / <code>.parse()</code></strong>
+              on error builder
+            </td>
+            <td>
+              <div class="file">
+                src/definers/builders/error/fluent-builder.interface.ts L14–L15
+              </div>
+              <div class="file">src/types/error.ts L14–L15</div>
+            </td>
+            <td class="rationale">
+              <code>serialize</code> and <code>parse</code> fields exist on the
+              error definition interface, and corresponding builder methods
+              exist, but they are <strong>never used at runtime</strong> — the
+              <code>ErrorHelper</code> class doesn't call them. They appear to
+              be forward-looking stubs for potential error serialization over
+              the wire, but they pollute every builder's API today with no
+              benefit.
+            </td>
+            <td><span class="badge low">Low</span></td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>
+              <span class="cat error">ERROR</span>
+              <strong><code>.create()</code></strong> deprecated alias for
+              <code>.new()</code>
+            </td>
+            <td>
+              <div class="file">src/definers/defineError.ts L190–L193</div>
+            </td>
+            <td class="rationale">
+              Marked <code>@deprecated</code>. Should be removed at next major
+              version.
+            </td>
+            <td><span class="badge low">Low</span></td>
+          </tr>
+          <tr>
+            <td>11</td>
+            <td>
+              <span class="cat error">ERROR</span>
+              <strong><code>.schema()</code> alias</strong> for
+              <code>.dataSchema()</code> on error builder
+            </td>
+            <td>
+              <div class="file">
+                src/definers/builders/error/fluent-builder.interface.ts L22–L25
+              </div>
+            </td>
+            <td class="rationale">
+              Same pattern as the tag builder — two names for the same thing.
+              Pick one, remove the other.
+            </td>
+            <td><span class="badge low">Low</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <h2>3 · Deprecated &amp; Duplicate Error Aliases</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Finding</th>
+            <th>Location</th>
+            <th>Why Eliminate / Simplify</th>
+            <th>Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>12</td>
+            <td>
+              <span class="cat alias">ALIAS</span>
+              <strong><code>circularDependenciesError</code></strong> &amp;
+              <strong><code>dependencyCycleError</code></strong>
+            </td>
+            <td>
+              <div class="file">
+                src/errors/foundation/event.errors.ts L33–L37
+              </div>
+            </td>
+            <td class="rationale">
+              Both are deprecated aliases pointing to
+              <code>circularDependencyError</code>. Only one test file imports
+              <code>circularDependenciesError</code>;
+              <code>dependencyCycleError</code> has zero usage outside its
+              declaration. Dead weight.
+            </td>
+            <td><span class="badge low">Low</span></td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td>
+              <span class="cat alias">ALIAS</span>
+              <strong><code>platformInvariantError</code></strong>
+            </td>
+            <td>
+              <div class="file">src/errors/domain-runtime.errors.ts L393</div>
+            </td>
+            <td class="rationale">
+              Alias for <code>platformUnreachableError</code>. Zero usage
+              outside declaration. Dead export.
+            </td>
+            <td><span class="badge low">Low</span></td>
+          </tr>
+          <tr>
+            <td>14</td>
+            <td>
+              <span class="cat alias">ALIAS</span>
+              <strong><code>serializerPayloadValidationError</code></strong>
+            </td>
+            <td>
+              <div class="file">src/errors/domain-runtime.errors.ts L412</div>
+            </td>
+            <td class="rationale">
+              Alias for <code>serializerValidationError</code>. Zero usage
+              outside declaration.
+            </td>
+            <td><span class="badge low">Low</span></td>
+          </tr>
+          <tr>
+            <td>15</td>
+            <td>
+              <span class="cat alias">ALIAS</span>
+              <strong><code>middlewareInterceptUnknownTypeError</code></strong>
+            </td>
+            <td>
+              <div class="file">src/errors/model-runtime.errors.ts L124</div>
+            </td>
+            <td class="rationale">
+              Alias for <code>unknownMiddlewareTypeError</code>. Zero usage
+              outside declaration.
+            </td>
+            <td><span class="badge low">Low</span></td>
+          </tr>
+          <tr>
+            <td>16</td>
+            <td>
+              <span class="cat alias">ALIAS</span>
+              <strong
+                ><code>inputSchemaValidationError</code> /
+                <code>resultSchemaValidationError</code></strong
+              >
+            </td>
+            <td>
+              <div class="file">
+                src/errors/foundation/validation.errors.ts L33–L35
+              </div>
+            </td>
+            <td class="rationale">
+              Both aliases resolve to the same
+              <code>validationError</code> instance. They are used in
+              <code>ValidationHelper.ts</code> but provide no unique identity —
+              they share the same error id
+              <code>runner.errors.validation</code>. They could be replaced by
+              direct <code>validationError</code> usage with the
+              <code>subject</code> field distinguishing input vs result at
+              runtime.
+            </td>
+            <td><span class="badge medium">Medium</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <h2>4 · <code>check()</code> / <code>Match</code> System — Redundancy</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Finding</th>
+            <th>Location</th>
+            <th>Why Eliminate / Simplify</th>
+            <th>Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>17</td>
+            <td>
+              <span class="cat util">UTIL</span>
+              <strong
+                ><code>check()</code> and <code>Match</code> — entire
+                subsystem</strong
+              >
+            </td>
+            <td>
+              <div class="file">src/tools/check/ (7 files, ~1500 lines)</div>
+              <div class="file">src/tools/check/matcher/ (6+ files)</div>
+              <div class="file">
+                src/tools/check/toJsonSchema.ts (520 lines)
+              </div>
+              <div class="file">src/tools/check/classSchema.ts (201 lines)</div>
+            </td>
+            <td class="rationale">
+              This is a full Meteor <code>check</code>-style runtime validation
+              library embedded in the framework. It includes pattern matching
+              (<code>Match.OneOf</code>, <code>Match.Where</code>,
+              <code>Match.ObjectStrict</code>, etc.), class schema decorators
+              (<code>@Match.Schema()</code>, <code>@Match.Field()</code>), JSON
+              Schema generation (520 lines), and error types. It overlaps
+              heavily with Zod/Valibot/ArkType which the framework already
+              supports via <code>ValidationSchemaInput</code>. Internal usage is
+              modest — serializer, concurrency middleware config, rpc-lanes
+              config, and durable workflow tags use it. This is a
+              <strong>large amount of code</strong> to maintain for a
+              convenience validation layer. It could be extracted to a separate
+              package or replaced with the users' choice of schema library.
+            </td>
+            <td><span class="badge high">High</span></td>
+          </tr>
+          <tr>
+            <td>18</td>
+            <td>
+              <span class="cat export">EXPORT</span>
+              <strong>10 <code>Match</code>-related type exports</strong> from
+              main entry
+            </td>
+            <td>
+              <div class="file">
+                src/index.ts L44 via src/public.ts L155–L165
+              </div>
+            </td>
+            <td class="rationale">
+              The main entry re-exports <code>CheckSchemaLike</code>,
+              <code>CheckedValue</code>, <code>InferCheckSchema</code>,
+              <code>InferMatchPattern</code>, <code>MatchCompiledSchema</code>,
+              <code>MatchJsonObject</code>, <code>MatchJsonPrimitive</code>,
+              <code>MatchJsonSchema</code>, <code>MatchJsonValue</code>,
+              <code>MatchPattern</code>. These are internal types of the
+              <code>check</code> system and pollute the public API. Most users
+              using Zod or similar never need these.
+            </td>
+            <td><span class="badge medium">Medium</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <h2>5 · Public API Surface — Excess Exports</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Finding</th>
+            <th>Location</th>
+            <th>Why Eliminate / Simplify</th>
+            <th>Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>19</td>
+            <td>
+              <span class="cat export">EXPORT</span>
+              <strong><code>globals</code> object</strong> — deprecated
+              namespace
+            </td>
+            <td><div class="file">src/public.ts L62–L76</div></td>
+            <td class="rationale">
+              Marked <code>@deprecated</code> in favor of <code>r.system</code>,
+              <code>r.runner</code>, <code>r.debug</code>. It aggregates events,
+              resources, system, runner, middleware (and a deprecated
+              <code>middlewares</code> alias), tags, and debug into a single
+              object. This entire export should be removed at next major — it's
+              redundant with the <code>r</code> namespace.
+            </td>
+            <td><span class="badge medium">Medium</span></td>
+          </tr>
+          <tr>
+            <td>20</td>
+            <td>
+              <span class="cat export">EXPORT</span>
+              <strong><code>LockableMap</code></strong> as public API
+            </td>
+            <td><div class="file">src/public.ts L154</div></td>
+            <td class="rationale">
+              <code>LockableMap</code> is a 50-line internal utility class (Map
+              with a lock flag). It's exported from the main entry point, but
+              it's an implementation detail used internally by the Store.
+              Library users have no reason to import it. Removing from the
+              public API would reduce surface without impact.
+            </td>
+            <td><span class="badge medium">Medium</span></td>
+          </tr>
+          <tr>
+            <td>21</td>
+            <td>
+              <span class="cat export">EXPORT</span>
+              <strong><code>createContext</code></strong> legacy alias +
+              <strong><code>createTestResource</code></strong> deprecated
+            </td>
+            <td>
+              <div class="file">src/public.ts L99–L100 (createContext)</div>
+              <div class="file">
+                src/testing.ts L31 (createTestResource deprecated)
+              </div>
+            </td>
+            <td class="rationale">
+              <code>createContext</code> is a legacy alias for
+              <code>defineAsyncContext</code>/<code>asyncContext</code>.
+              <code>createTestResource</code> is deprecated in favor of
+              <code>run()</code>. Both stay exported for backward compat but
+              should be removed in next major to reduce confusion. Users see
+              multiple ways to do the same thing.
+            </td>
+            <td><span class="badge medium">Medium</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <h2>Summary of Recommendations</h2>
+
+    <details open>
+      <summary>Quick wins (low risk, immediate cleanup)</summary>
+      <p>
+        <strong>8 items</strong> — Remove deprecated aliases
+        (<code>circularDependenciesError</code>,
+        <code>dependencyCycleError</code>, <code>platformInvariantError</code>,
+        <code>serializerPayloadValidationError</code>,
+        <code>middlewareInterceptUnknownTypeError</code>,
+        <code>globalTags.internal</code>, <code>.create()</code> on errors),
+        remove unused <code>.serialize()</code>/<code>.parse()</code> stubs from
+        error builder, and collapse <code>.schema()</code> aliases on both tag
+        and error builders.
+      </p>
+    </details>
+
+    <details>
+      <summary>Medium-term simplification (medium risk, v7 planning)</summary>
+      <p>
+        <strong>8 items</strong> — Move <code>.httpCode()</code> to the HTTP
+        exposure layer, make <code>.remediation()</code> debug-only or internal,
+        remove <code>globals</code> deprecated namespace, unpublish
+        <code>LockableMap</code>, remove <code>createContext</code>/<code
+          >createTestResource</code
+        >
+        compat exports, collapse <code>inputSchemaValidationError</code>/<code
+          >resultSchemaValidationError</code
+        >
+        aliases, reduce <code>Match</code> type exports from main entry.
+      </p>
+    </details>
+
+    <details>
+      <summary>Structural changes (high risk, careful migration)</summary>
+      <p>
+        <strong>3 items</strong> — (1) Simplify or decouple
+        <strong>contract tags</strong> from the tag generics to reduce type
+        complexity across the entire codebase. (2) Evaluate extracting the
+        <strong><code>check()</code>/<code>Match</code> system</strong> (~2000+
+        lines) into a separate package or replacing internal usage with a
+        lighter pattern. (3) Consider removing the
+        <strong>scoped tag target types</strong> (<code>TaskTagType</code>,
+        etc.) in favor of runtime-only target enforcement. These are deeply
+        woven into the type system and need careful migration planning.
+      </p>
+    </details>
+
+    <details>
+      <summary>
+        Error definition count — domain-runtime.errors.ts is 800 lines
+      </summary>
+      <p>
+        The single file <code>src/errors/domain-runtime.errors.ts</code> defines
+        <strong>50+ error helpers</strong> with verbose formatting and
+        remediation strings. Combined with foundation errors (~180 lines across
+        7 files) and model-runtime errors (~177 lines), the error system
+        accounts for <strong>~1,200 lines</strong> of code. Consider whether
+        some of these could be collapsed into parameterized generic errors
+        (e.g., one "lane binding not found" error parameterized by lane type,
+        instead of separate <code>rpcLaneBindingNotFoundError</code> and
+        <code>eventLaneBindingNotFoundError</code>).
+      </p>
+    </details>
+  </body>
+</html>
