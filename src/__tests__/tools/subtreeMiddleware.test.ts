@@ -304,7 +304,7 @@ describe("subtreeMiddleware tools", () => {
     ).toThrow(/Duplicate middleware id \"shared\"/);
   });
 
-  it("does not collapse middleware ids from foreign namespaces when resolving duplicates", () => {
+  it("fails fast when foreign namespaces resolve to the same middleware local id", () => {
     const rootMiddleware = defineTaskMiddleware({
       id: "tests.tools.subtree.foreign.root",
       run: async ({ next, task }) => next(task.input),
@@ -370,7 +370,7 @@ describe("subtreeMiddleware tools", () => {
         },
         targetTask,
       ),
-    ).not.toThrow();
+    ).toThrow(/Duplicate middleware id \"shared\"/);
   });
 
   it("unwraps direct and conditional subtree middleware entries", () => {

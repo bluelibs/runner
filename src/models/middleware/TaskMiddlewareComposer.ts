@@ -10,6 +10,7 @@ import type { ExecutionJournal } from "../../types/executionJournal";
 import type { TaskMiddlewareInterceptor } from "./types";
 import { RuntimeCallSource, runtimeSource } from "../../types/runtimeSource";
 import { LifecycleAdmissionController } from "../runtime/LifecycleAdmissionController";
+import { toPublicDefinition } from "../utils/toPublicDefinition";
 
 /**
  * Composes task execution chains with validation, interceptors, and middlewares.
@@ -198,7 +199,7 @@ export class TaskMiddlewareComposer {
     if (interceptors.length === 0) {
       return runner;
     }
-    const publicTaskDefinition = this.toPublicDefinition(task);
+    const publicTaskDefinition = toPublicDefinition(this.store, task);
 
     const createExecutionInput = (
       input: TInput,
@@ -288,7 +289,7 @@ export class TaskMiddlewareComposer {
     }
 
     let next = runner;
-    const publicTaskDefinition = this.toPublicDefinition(task);
+    const publicTaskDefinition = toPublicDefinition(this.store, task);
 
     // Layer middlewares (global first, then local), closest to the task runs last
     for (let i = middlewares.length - 1; i >= 0; i--) {
@@ -370,7 +371,7 @@ export class TaskMiddlewareComposer {
     }
 
     let wrapped = middlewareRunner;
-    const publicTaskDefinition = this.toPublicDefinition(task);
+    const publicTaskDefinition = toPublicDefinition(this.store, task);
 
     for (let i = interceptors.length - 1; i >= 0; i--) {
       const interceptor = interceptors[i];
@@ -415,19 +416,5 @@ export class TaskMiddlewareComposer {
     }
 
     return wrapped;
-  }
-
-  private toPublicDefinition<TTask extends ITask<any, any, any>>(
-    task: TTask,
-  ): TTask {
-    const publicId = this.store.toPublicId(task);
-    if (publicId === task.id) {
-      return task;
-    }
-
-    return {
-      ...task,
-      id: publicId,
-    };
   }
 }

@@ -18,7 +18,9 @@ async function waitUntil(
 }
 
 describe("durable: signal timeout integration", () => {
-  const Paid = defineEvent<{ paidAt: number }>({ id: "durable.tests.timeout.paid" });
+  const Paid = defineEvent<{ paidAt: number }>({
+    id: "durable.tests.timeout.paid",
+  });
 
   it("returns timeout when no signal arrives before deadline", async () => {
     const store = new MemoryStore();

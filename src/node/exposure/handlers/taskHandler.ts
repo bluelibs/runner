@@ -68,21 +68,19 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
   } = deps;
 
   const exposureSource = runtimeSource.resource(sourceResourceId);
-  const resolveTaskId = (taskId: string): string => {
-    const maybeStore = store as {
-      resolveDefinitionId?: (reference: unknown) => string | undefined;
-    };
-    return maybeStore.resolveDefinitionId?.(taskId) ?? taskId;
-  };
 
   return async (
     req: IncomingMessage,
     res: ServerResponse,
     taskIdInput: string,
   ): Promise<void> => {
-    const taskId = resolveTaskId(taskIdInput);
-    const allowAsyncContextForTask = allowAsyncContext(taskId);
-    const asyncContextAllowListForTask = resolveAsyncContextAllowList(taskId);
+    const taskId = store.resolveDefinitionId(taskIdInput) ?? taskIdInput;
+    const policyTaskId = store.tasks.has(taskId)
+      ? store.toPublicId(taskId)
+      : taskIdInput;
+    const allowAsyncContextForTask = allowAsyncContext(policyTaskId);
+    const asyncContextAllowListForTask =
+      resolveAsyncContextAllowList(policyTaskId);
 
     if (req.method !== "POST") {
       applyCorsActual(req, res, cors);
@@ -97,14 +95,14 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
       return;
     }
 
-    const allowError = allowList.ensureTask(taskId);
+    const allowError = allowList.ensureTask(policyTaskId);
     if (allowError) {
       applyCorsActual(req, res, cors);
       respondJson(res, allowError, serializer);
       return;
     }
 
-    const authzError = await authorizeTask(req, taskId);
+    const authzError = await authorizeTask(req, policyTaskId);
     if (authzError) {
       applyCorsActual(req, res, cors);
       respondJson(res, authzError, serializer);
@@ -116,7 +114,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
       applyCorsActual(req, res, cors);
       respondJson(
         res,
-          jsonErrorResponse(404, `Task ${taskId} not found`, "NOT_FOUND"),
+        jsonErrorResponse(404, `Task ${taskId} not found`, "NOT_FOUND"),
         serializer,
       );
       return;

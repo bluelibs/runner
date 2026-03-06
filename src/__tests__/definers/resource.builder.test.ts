@@ -1,4 +1,11 @@
-import { r, defineResource, definitions, run, defineTag, IResourceMeta } from "../..";
+import {
+  r,
+  defineResource,
+  definitions,
+  run,
+  defineTag,
+  IResourceMeta,
+} from "../..";
 
 describe("resource builder", () => {
   it("build() returns branded resource with id", () => {
@@ -60,7 +67,10 @@ describe("resource builder", () => {
       id: "tests.builder.fn.alpha",
       init: async () => 1,
     });
-    const beta = defineResource({ id: "tests.builder.fn.beta", init: async () => 2 });
+    const beta = defineResource({
+      id: "tests.builder.fn.beta",
+      init: async () => 2,
+    });
 
     const composed = r
       .resource("tests.builder.registerfn")
@@ -496,4 +506,3 @@ describe("resource builder", () => {
     await rr2.dispose();
   });
 });
-

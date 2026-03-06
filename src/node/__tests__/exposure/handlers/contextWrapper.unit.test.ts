@@ -4,6 +4,16 @@ import {
 } from "../../../exposure/handlers/contextWrapper";
 import { useExposureContext } from "../../../exposure/requestContext";
 
+function createStore(asyncContexts: Map<string, unknown>) {
+  return {
+    asyncContexts,
+    resolveDefinitionId: (reference: unknown) =>
+      typeof reference === "string"
+        ? reference
+        : (reference as { id?: string })?.id,
+  };
+}
+
 describe("contextWrapper", () => {
   it("withExposureContext handles array context header and bad per-context parse", async () => {
     const goodCtx = {
@@ -40,10 +50,12 @@ describe("contextWrapper", () => {
       controller,
       {
         store: {
-          asyncContexts: new Map([
-            [goodCtx.id, goodCtx],
-            [badCtx.id, badCtx],
-          ]),
+          ...createStore(
+            new Map([
+              [goodCtx.id, goodCtx],
+              [badCtx.id, badCtx],
+            ]),
+          ),
         } as any,
         router: { basePath: "/__runner" },
         serializer: { parse: (text: string) => JSON.parse(text) } as any,
@@ -79,7 +91,7 @@ describe("contextWrapper", () => {
     const out = await withUserContexts(
       req,
       {
-        store: { asyncContexts: new Map([[ctx.id, ctx]]) } as any,
+        store: createStore(new Map([[ctx.id, ctx]])) as any,
         serializer: { parse: (text: string) => JSON.parse(text) } as any,
       },
       async () => "ok",
@@ -119,7 +131,7 @@ describe("contextWrapper", () => {
       resA,
       controller,
       {
-        store: { asyncContexts: new Map([[ctx.id, ctx]]) } as any,
+        store: createStore(new Map([[ctx.id, ctx]])) as any,
         router: { basePath: "/__runner" },
         serializer,
       },
@@ -134,7 +146,7 @@ describe("contextWrapper", () => {
     const out = await withUserContexts(
       reqB,
       {
-        store: { asyncContexts: new Map([[ctx.id, ctx]]) } as any,
+        store: createStore(new Map([[ctx.id, ctx]])) as any,
         serializer,
       },
       async () => "ok-b",
@@ -177,12 +189,12 @@ describe("contextWrapper", () => {
     const out = await withUserContexts(
       req,
       {
-        store: {
-          asyncContexts: new Map([
+        store: createStore(
+          new Map([
             [firstCtx.id, firstCtx],
             [secondCtx.id, secondCtx],
           ]),
-        } as any,
+        ) as any,
         serializer: { parse: (text: string) => JSON.parse(text) } as any,
       },
       async () => "ok",

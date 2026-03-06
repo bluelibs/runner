@@ -91,7 +91,7 @@ export class Store {
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
     this.middlewareManager = new MiddlewareManager(this, eventManager, logger);
-    this.eventManager.setEventDefinitionResolver(<T>(eventDefinition: any) => {
+    this.eventManager.setEventDefinitionResolver((eventDefinition: any) => {
       const resolvedId = this.resolveDefinitionId(eventDefinition);
       if (!resolvedId) {
         return eventDefinition;
@@ -100,7 +100,9 @@ export class Store {
       const storeEvent = this.events.get(resolvedId);
       return (storeEvent?.event ?? eventDefinition) as any;
     });
-    this.eventManager.setEventIdFormatter((eventId) => this.toPublicId(eventId));
+    this.eventManager.setEventIdFormatter((eventId) =>
+      this.toPublicId(eventId),
+    );
 
     this.mode = detectRunnerMode(mode);
   }
@@ -175,16 +177,25 @@ export class Store {
 
   public toPublicId(reference: unknown): string {
     const resolvedId = this.resolveDefinitionId(reference);
-    if (!resolvedId) {
-      validationError.throw({
-        subject: "Definition reference",
-        id: String(reference),
-        originalError:
-          "Unable to resolve a definition id from the provided reference.",
-      });
-    }
+    this.assertResolvedDefinitionId(resolvedId, reference);
 
     return this.registry.getDisplayId(resolvedId);
+  }
+
+  private assertResolvedDefinitionId(
+    resolvedId: string | undefined,
+    reference: unknown,
+  ): asserts resolvedId is string {
+    if (typeof resolvedId === "string" && resolvedId.length > 0) {
+      return;
+    }
+
+    validationError.throw({
+      subject: "Definition reference",
+      id: String(reference),
+      originalError:
+        "Unable to resolve a definition id from the provided reference.",
+    });
   }
 
   /**
@@ -684,17 +695,12 @@ export class Store {
       .map((resource) => this.toPublicDefinition(resource));
   }
 
-  private toPublicDefinition<TDefinition extends { id: string }>(
+  public toPublicDefinition<TDefinition extends { id: string }>(
     definition: TDefinition,
   ): TDefinition {
-    const publicId = this.toPublicId(definition);
-    if (publicId === definition.id) {
-      return definition;
-    }
-
     return {
       ...definition,
-      id: publicId,
+      id: this.toPublicId(definition),
     };
   }
 }

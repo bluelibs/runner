@@ -154,7 +154,7 @@ describe("StoreValidator regressions", () => {
     expect(normalized[0].targets[0]._subtreeFilter).toBe(true);
   });
 
-  it("normalizes non-object definition references to resolved ids", () => {
+  it("rejects non-definition function references in isolation entries", () => {
     const { store } = createTestFixture();
     const registry = (store as unknown as { registry: any }).registry;
     const validator = registry.getValidator() as {
@@ -171,17 +171,17 @@ describe("StoreValidator regressions", () => {
     });
     validator.registeredIds.add(functionReference.id);
 
-    const normalized = validator.normalizeIsolationEntries({
-      entries: [functionReference],
-      onInvalidEntry: () => {
-        throw new Error("invalid");
-      },
-      onUnknownTarget: () => {
-        throw new Error("unknown");
-      },
-    });
-
-    expect(normalized).toEqual([functionReference.id]);
+    expect(() =>
+      validator.normalizeIsolationEntries({
+        entries: [functionReference],
+        onInvalidEntry: () => {
+          throw new Error("invalid");
+        },
+        onUnknownTarget: () => {
+          throw new Error("unknown");
+        },
+      }),
+    ).toThrow("invalid");
   });
 
   it("reports invalid non-resolvable targets inside scope()", () => {

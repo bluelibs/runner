@@ -21,6 +21,8 @@ const resolveDefinitionId = (reference: unknown): string | undefined => {
   return undefined;
 };
 
+const getDisplayId = (id: string): string => id;
+
 describe("VisibilityTracker", () => {
   let tracker: VisibilityTracker;
 
@@ -644,6 +646,7 @@ describe("VisibilityTracker", () => {
           ],
         ]),
         resolveDefinitionId,
+        getDisplayId,
       };
 
       expect(() => tracker.validateVisibility(registry as any)).toThrow(
@@ -698,6 +701,7 @@ describe("VisibilityTracker", () => {
           ],
         ]),
         resolveDefinitionId,
+        getDisplayId,
       };
 
       expect(() => tracker.validateVisibility(registry as any)).toThrow(
@@ -741,6 +745,7 @@ describe("VisibilityTracker", () => {
           [policyOwner.id, { resource: policyOwner }],
         ]),
         resolveDefinitionId,
+        getDisplayId,
       };
 
       expect(() => tracker.validateVisibility(registry as any)).toThrow(
@@ -784,6 +789,7 @@ describe("VisibilityTracker", () => {
           [policyOwner.id, { resource: policyOwner }],
         ]),
         resolveDefinitionId,
+        getDisplayId,
       };
 
       expect(() => tracker.validateVisibility(registry as any)).not.toThrow();
@@ -812,6 +818,7 @@ describe("VisibilityTracker", () => {
         resourceMiddlewares: new Map(),
         resources: new Map([[policyOwner.id, { resource: policyOwner }]]),
         resolveDefinitionId,
+        getDisplayId,
       };
 
       expect(() => tracker.validateVisibility(registry as any)).not.toThrow();
@@ -861,6 +868,7 @@ describe("VisibilityTracker", () => {
         resourceMiddlewares: new Map(),
         resources: new Map(),
         resolveDefinitionId,
+        getDisplayId,
       };
 
       expect(() => tracker.validateVisibility(registry as any)).not.toThrow();

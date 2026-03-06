@@ -17,6 +17,7 @@ import {
   ResourceMiddlewareInterceptor,
 } from "./middleware/types";
 import { unknownMiddlewareTypeError } from "../errors";
+import { toPublicDefinition } from "./utils/toPublicDefinition";
 
 // Re-export types for backwards compatibility
 export type { TaskMiddlewareInterceptor, ResourceMiddlewareInterceptor };
@@ -264,7 +265,7 @@ export class MiddlewareManager {
   ): ITaskMiddleware[] {
     return this.middlewareResolver
       .getEverywhereTaskMiddlewares(task)
-      .map((middleware) => this.toPublicMiddleware(middleware));
+      .map((middleware) => toPublicDefinition(this.store, middleware));
   }
 
   /**
@@ -277,20 +278,6 @@ export class MiddlewareManager {
   ): IResourceMiddleware[] {
     return this.middlewareResolver
       .getEverywhereResourceMiddlewares(resource)
-      .map((middleware) => this.toPublicMiddleware(middleware));
-  }
-
-  private toPublicMiddleware<TMiddleware extends { id: string }>(
-    middleware: TMiddleware,
-  ): TMiddleware {
-    const publicId = this.store.toPublicId(middleware);
-    if (publicId === middleware.id) {
-      return middleware;
-    }
-
-    return {
-      ...middleware,
-      id: publicId,
-    };
+      .map((middleware) => toPublicDefinition(this.store, middleware));
   }
 }

@@ -23,17 +23,17 @@ const taskMiddlewareScopeMarker = ".middleware.task.";
 const resourceMiddlewareScopeMarker = ".middleware.resource.";
 
 function getSubtreeMiddlewareDuplicateKey(
-  ownerResourceId: string,
+  _ownerResourceId: string,
   id: string,
 ): string {
-  const taskScopePrefix = `${ownerResourceId}${taskMiddlewareScopeMarker}`;
-  if (id.startsWith(taskScopePrefix)) {
-    return id.slice(taskScopePrefix.length);
+  const taskScopeIndex = id.lastIndexOf(taskMiddlewareScopeMarker);
+  if (taskScopeIndex >= 0) {
+    return id.slice(taskScopeIndex + taskMiddlewareScopeMarker.length);
   }
 
-  const resourceScopePrefix = `${ownerResourceId}${resourceMiddlewareScopeMarker}`;
-  if (id.startsWith(resourceScopePrefix)) {
-    return id.slice(resourceScopePrefix.length);
+  const resourceScopeIndex = id.lastIndexOf(resourceMiddlewareScopeMarker);
+  if (resourceScopeIndex >= 0) {
+    return id.slice(resourceScopeIndex + resourceMiddlewareScopeMarker.length);
   }
 
   return id;

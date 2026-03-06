@@ -55,7 +55,13 @@ export function buildAsyncContextHeader(options: {
     }
 
     try {
-      map[ctx.id] = ctx.serialize(ctx.use());
+      const serialized = ctx.serialize(ctx.use());
+      // Always include canonical id for strict hydration on receivers.
+      map[ctx.id] = serialized;
+      // Preserve requested/public id when it differs for compatibility.
+      if (id !== ctx.id) {
+        map[id] = serialized;
+      }
     } catch {
       // Context missing/unavailable in current call scope.
     }

@@ -190,4 +190,3 @@ describe("scope([subtreeOf(a), subtreeOf(b)], channels)", () => {
     expect(error.message).toContain("channel: listening");
   });
 });
-

@@ -32,9 +32,7 @@ describe("Security: Mutation footgun prevention", () => {
 
     const previousTags = internal.tags;
     try {
-      (internal as { tags: unknown }).tags = [
-        tags.excludeFromGlobalHooks,
-      ];
+      (internal as { tags: unknown }).tags = [tags.excludeFromGlobalHooks];
     } catch (_error) {
       // Mutation may throw in strict mode; either way the object must remain unchanged.
     }
@@ -55,9 +53,7 @@ describe("Security: Mutation footgun prevention", () => {
 
     expect(Object.isFrozen(internal)).toBe(true);
     try {
-      (internal as { tags: unknown }).tags = [
-        tags.excludeFromGlobalHooks,
-      ];
+      (internal as { tags: unknown }).tags = [tags.excludeFromGlobalHooks];
     } catch (_error) {
       // Mutation may throw in strict mode; either way the object must remain unchanged.
     }

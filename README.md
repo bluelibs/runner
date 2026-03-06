@@ -50,7 +50,7 @@ const mailer = r
 const createUser = r
   .task("users.create")
   .dependencies({ db, mailer })
-  .middleware([r.runner.middleware.task.retry.with({ retries: 3 })])
+  .middleware([middleware.task.retry.with({ retries: 3 })])
   .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
   .run(async (input, { db, mailer }) => {
     const user = await db.users.insert(input);
@@ -128,6 +128,7 @@ Use these minimums before starting:
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
+
 ## Your First 5 Minutes
 
 **New to Runner?** Here's the absolute minimum you need to know:
@@ -229,3 +230,4 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
 ## License
 
 This project is licensed under the MIT License - see [LICENSE.md](./LICENSE.md).
+

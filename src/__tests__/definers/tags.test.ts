@@ -323,9 +323,9 @@ describe("Configurable Tags", () => {
       ).size;
       expect(tags).toHaveLength(uniqueGlobalTagCount + 2);
       const tagIds = tags.map((registeredTag) => registeredTag.id);
-      expect(
-        tagIds.some((registeredId) => registeredId.endsWith(tag.id)),
-      ).toBe(true);
+      expect(tagIds.some((registeredId) => registeredId.endsWith(tag.id))).toBe(
+        true,
+      );
       expect(
         tagIds.some((registeredId) => registeredId.endsWith(tag2.id)),
       ).toBe(true);

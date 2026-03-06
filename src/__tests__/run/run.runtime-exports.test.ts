@@ -191,7 +191,9 @@ describe("run.runtime-exports", () => {
             id.endsWith("runtime.exports.runTask.err.a"),
           ),
         ).toBe(true);
-        expect(String(e.remediation)).toContain("runtime.exports.runTask.err.b");
+        expect(String(e.remediation)).toContain(
+          "runtime.exports.runTask.err.b",
+        );
       }
       await runtime.dispose();
     });
@@ -362,9 +364,7 @@ describe("run.runtime-exports", () => {
 
       const runtime = await run(root, { shutdownHooks: false });
       const privateResourceId = runtime.store.resolveDefinitionId(inner)!;
-      expect(() =>
-        runtime.getResourceValue(privateResourceId),
-      ).toThrow(
+      expect(() => runtime.getResourceValue(privateResourceId)).toThrow(
         expect.objectContaining({ id: "runner.errors.runtimeAccessViolation" }),
       );
       await runtime.dispose();

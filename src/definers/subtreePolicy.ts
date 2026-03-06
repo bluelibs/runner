@@ -91,7 +91,9 @@ export function normalizeResourceSubtreePolicy(
   return normalized;
 }
 
-function mergeSubtreeMiddlewareBranch<TBranch extends { middleware: unknown[] }>(
+function mergeSubtreeMiddlewareBranch<
+  TBranch extends { middleware: unknown[] },
+>(
   existing: TBranch | undefined,
   incoming: TBranch,
   override: boolean,

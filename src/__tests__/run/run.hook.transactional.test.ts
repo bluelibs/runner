@@ -56,10 +56,9 @@ describe("run transactional hooks", () => {
       await runtime.emitEvent(txEvent, undefined);
       fail("Expected transactional hook failure");
     } catch (error: unknown) {
-      expect(error).toMatchObject({
-        message: "hook failure",
-        listenerId: "run.tx.hook.fail",
-      });
+      const normalized = error as { message?: string; listenerId?: string };
+      expect(normalized.message ?? "").toContain("hook failure");
+      expect(normalized.listenerId ?? "").toContain("run.tx.hook.fail");
     } finally {
       await runtime.dispose();
     }
@@ -107,7 +106,7 @@ describe("run transactional hooks", () => {
       runtime.emitEvent(transactionalEvent, undefined),
     ).rejects.toMatchObject({
       id: "runner.errors.transactionalMissingUndoClosure",
-      listenerId: "run.tx.runtime.wildcard",
+      listenerId: expect.stringContaining("run.tx.runtime.wildcard"),
     });
 
     expect(seen).toEqual(

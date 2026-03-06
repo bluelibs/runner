@@ -10,7 +10,17 @@ import {
 
 describe("requestHandlers - content-type handling", () => {
   const getDeps = () => ({
-    store: { tasks: new Map([["t", { task: async () => 7 }]]) },
+    store: {
+      tasks: new Map([["t", { task: async () => 7 }]]),
+      resolveDefinitionId: (reference: unknown) =>
+        typeof reference === "string"
+          ? reference
+          : (reference as { id?: string })?.id,
+      toPublicId: (reference: unknown) =>
+        typeof reference === "string"
+          ? reference
+          : ((reference as { id?: string })?.id ?? String(reference)),
+    },
     taskRunner: { run: async () => 7 },
     eventManager: {} as any,
     logger: { info: () => {}, warn: () => {}, error: () => {} },

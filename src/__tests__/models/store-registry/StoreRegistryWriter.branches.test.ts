@@ -47,14 +47,10 @@ describe("StoreRegistryWriter branches", () => {
     );
     expect(
       writer.computeCanonicalId("app", false, "asyncContext", "request"),
-    ).toBe(
-      "app.ctx.request",
-    );
+    ).toBe("app.ctx.request");
     expect(
       writer.computeCanonicalId("app", false, "unknown-kind", "item"),
-    ).toBe(
-      "app.item",
-    );
+    ).toBe("app.item");
   });
 
   it("fails fast on empty and reserved local names", () => {
@@ -63,11 +59,9 @@ describe("StoreRegistryWriter branches", () => {
     expect(() => writer.computeCanonicalId("app", false, "task", " ")).toThrow(
       /non-empty strings/i,
     );
-    expect(
-      () => writer.computeCanonicalId("app", false, "task", "tasks"),
-    ).toThrow(
-      /reserved by Runner/i,
-    );
+    expect(() =>
+      writer.computeCanonicalId("app", false, "task", "tasks"),
+    ).toThrow(/reserved by Runner/i);
   });
 
   it("normalizes subtree middleware entries for both object and direct attachment forms", () => {

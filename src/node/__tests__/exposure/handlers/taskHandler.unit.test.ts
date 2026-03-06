@@ -37,6 +37,21 @@ enum CustomResponseBody {
   Custom = "custom",
 }
 
+function createStore(taskId: string) {
+  return {
+    tasks: new Map([[taskId, { task: { id: taskId } }]]),
+    errors: new Map(),
+    resolveDefinitionId: (reference: unknown) =>
+      typeof reference === "string"
+        ? reference
+        : (reference as { id?: string })?.id,
+    toPublicId: (reference: unknown) =>
+      typeof reference === "string"
+        ? reference
+        : ((reference as { id?: string })?.id ?? String(reference)),
+  };
+}
+
 function createReq(contentType: ContentType): IncomingMessage {
   const req: any = {
     method: "POST",
@@ -108,10 +123,7 @@ describe("taskHandler", () => {
     };
 
     const handler = createTaskHandler({
-      store: {
-        tasks: new Map([[TaskId.T, { task: { id: TaskId.T } }]]),
-        errors: new Map(),
-      } as any,
+      store: createStore(TaskId.T) as any,
       taskRunner: taskRunner as any,
       logger: {
         info: () => undefined,
@@ -149,10 +161,7 @@ describe("taskHandler", () => {
     };
 
     const handler = createTaskHandler({
-      store: {
-        tasks: new Map([[TaskId.T, { task: { id: TaskId.T } }]]),
-        errors: new Map(),
-      } as any,
+      store: createStore(TaskId.T) as any,
       taskRunner: taskRunner as any,
       logger: {
         info: () => undefined,
@@ -198,10 +207,7 @@ describe("taskHandler", () => {
     };
 
     const handler = createTaskHandler({
-      store: {
-        tasks: new Map([[TaskId.T, { task: { id: TaskId.T } }]]),
-        errors: new Map(),
-      } as any,
+      store: createStore(TaskId.T) as any,
       taskRunner: taskRunner as any,
       logger: {
         info: () => undefined,
@@ -234,10 +240,7 @@ describe("taskHandler", () => {
     res.headersSent = true;
 
     const handler = createTaskHandler({
-      store: {
-        tasks: new Map([[TaskId.T, { task: { id: TaskId.T } }]]),
-        errors: new Map(),
-      } as any,
+      store: createStore(TaskId.T) as any,
       taskRunner: { run: async () => undefined } as any,
       logger: {
         info: () => undefined,

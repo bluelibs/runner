@@ -83,6 +83,10 @@ describe("errorHandlers", () => {
           },
         ],
       ]),
+      resolveDefinitionId: (reference: unknown) =>
+        typeof reference === "string"
+          ? reference
+          : (reference as { id?: string })?.id,
     } as unknown as Store;
     const logger = new Logger({
       printThreshold: null,
@@ -142,6 +146,10 @@ describe("errorHandlers", () => {
           },
         ],
       ]),
+      resolveDefinitionId: (reference: unknown) =>
+        typeof reference === "string"
+          ? reference
+          : (reference as { id?: string })?.id,
     } as unknown as Store;
     const logger = new Logger({
       printThreshold: null,
@@ -241,6 +249,10 @@ describe("errorHandlers", () => {
           },
         ],
       ]),
+      resolveDefinitionId: (reference: unknown) =>
+        typeof reference === "string"
+          ? reference
+          : (reference as { id?: string })?.id,
     } as unknown as Store;
     const logger = new Logger({
       printThreshold: null,
@@ -297,6 +309,10 @@ describe("errorHandlers", () => {
           },
         ],
       ]),
+      resolveDefinitionId: (reference: unknown) =>
+        typeof reference === "string"
+          ? reference
+          : (reference as { id?: string })?.id,
     } as unknown as Store;
     const logger = new Logger({
       printThreshold: null,

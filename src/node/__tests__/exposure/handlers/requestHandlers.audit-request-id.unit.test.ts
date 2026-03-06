@@ -15,14 +15,27 @@ import {
 
 describe("requestHandlers - audit and request id", () => {
   const serializer = new Serializer();
+  const taskId = "task_audit";
+  const resolveDefinitionId = (reference: unknown): string | undefined => {
+    if (typeof reference === "string") {
+      return reference;
+    }
+    if (reference && typeof reference === "object" && "id" in reference) {
+      const id = (reference as { id?: unknown }).id;
+      return typeof id === "string" ? id : undefined;
+    }
+    return undefined;
+  };
 
   const getBaseDeps = (): RequestProcessingDeps =>
     ({
       store: {
-        tasks: new Map([["t.id", { task: { id: "t.id" } }]]),
+        tasks: new Map([[taskId, { task: { id: taskId } }]]),
         events: new Map(),
         asyncContexts: new Map(),
         errors: new Map(),
+        resolveDefinitionId,
+        toPublicId: resolveDefinitionId,
       } as unknown as RequestProcessingDeps["store"],
       taskRunner: {
         run: async () => "ok",
@@ -42,7 +55,7 @@ describe("requestHandlers - audit and request id", () => {
       },
       router: {
         basePath: "/api",
-        extract: () => ({ kind: "task", id: "t.id" }),
+        extract: () => ({ kind: "task", id: taskId }),
         isUnderBase: () => true,
       },
       cors: undefined,
@@ -54,7 +67,7 @@ describe("requestHandlers - audit and request id", () => {
     const { handleTask } = createRequestHandlers(deps);
     const transport = createReqRes({
       method: HttpMethod.Post,
-      url: "/api/task/t.id",
+      url: `/api/task/${taskId}`,
       headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       body: "{}",
     });
@@ -71,7 +84,7 @@ describe("requestHandlers - audit and request id", () => {
     const { handleTask } = createRequestHandlers(deps);
     const transport = createReqRes({
       method: HttpMethod.Post,
-      url: "/api/task/t.id",
+      url: `/api/task/${taskId}`,
       headers: {
         [HeaderName.ContentType]: MimeType.ApplicationJson,
         "x-runner-request-id": "req-12345",
@@ -89,7 +102,7 @@ describe("requestHandlers - audit and request id", () => {
     const { handleTask } = createRequestHandlers(deps);
     const transport = createReqRes({
       method: HttpMethod.Post,
-      url: "/api/task/t.id",
+      url: `/api/task/${taskId}`,
       headers: {
         [HeaderName.ContentType]: MimeType.ApplicationJson,
         "x-runner-request-id": "bad id!",
@@ -118,7 +131,7 @@ describe("requestHandlers - audit and request id", () => {
     const { handleTask } = createRequestHandlers(deps);
     const transport = createReqRes({
       method: HttpMethod.Post,
-      url: "/api/task/t.id",
+      url: `/api/task/${taskId}`,
       headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       body: "{}",
     });
@@ -150,7 +163,7 @@ describe("requestHandlers - audit and request id", () => {
     const { handleTask } = createRequestHandlers(deps);
     const transport = createReqRes({
       method: HttpMethod.Post,
-      url: "/api/task/t.id",
+      url: `/api/task/${taskId}`,
       headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       body: "{}",
     });
@@ -184,7 +197,7 @@ describe("requestHandlers - audit and request id", () => {
     const { handleTask } = createRequestHandlers(deps);
     const transport = createReqRes({
       method: HttpMethod.Post,
-      url: "/api/task/t.id",
+      url: `/api/task/${taskId}`,
       headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       body: "{}",
     });
@@ -218,7 +231,7 @@ describe("requestHandlers - audit and request id", () => {
     const { handleTask } = createRequestHandlers(deps);
     const transport = createReqRes({
       method: HttpMethod.Post,
-      url: "/api/task/t.id",
+      url: `/api/task/${taskId}`,
       headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       body: "{}",
     });
@@ -252,7 +265,7 @@ describe("requestHandlers - audit and request id", () => {
     const { handleTask } = createRequestHandlers(deps);
     const transport = createReqRes({
       method: HttpMethod.Post,
-      url: "/api/task/t.id",
+      url: `/api/task/${taskId}`,
       headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       body: "{}",
     });

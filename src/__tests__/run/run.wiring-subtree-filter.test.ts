@@ -530,4 +530,3 @@ describe("subtreeOf() API surface", () => {
     expect(filter.types).toBeUndefined();
   });
 });
-

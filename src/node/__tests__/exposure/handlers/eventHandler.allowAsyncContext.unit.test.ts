@@ -9,6 +9,22 @@ import {
 } from "./requestHandlers.test.utils";
 import { cancellationError } from "../../../../errors";
 
+function createStore(eventId: string, asyncContexts: Map<string, unknown>) {
+  return {
+    events: new Map([[eventId, { event: { id: eventId } }]]),
+    asyncContexts,
+    errors: new Map(),
+    resolveDefinitionId: (reference: unknown) =>
+      typeof reference === "string"
+        ? reference
+        : (reference as { id?: string })?.id,
+    toPublicId: (reference: unknown) =>
+      typeof reference === "string"
+        ? reference
+        : ((reference as { id?: string })?.id ?? String(reference)),
+  };
+}
+
 describe("eventHandler allowAsyncContext option", () => {
   it("disables user async-context hydration when allowAsyncContext resolver returns false", async () => {
     const serializer = new Serializer();
@@ -21,11 +37,7 @@ describe("eventHandler allowAsyncContext option", () => {
     };
 
     const handler = createEventHandler({
-      store: {
-        events: new Map([["event.id", { event: { id: "event.id" } }]]),
-        asyncContexts: new Map([[ctx.id, ctx]]),
-        errors: new Map(),
-      } as any,
+      store: createStore("event.id", new Map([[ctx.id, ctx]])) as any,
       eventManager: {
         emit: async () => undefined,
         emitWithResult: async () => undefined,
@@ -66,11 +78,7 @@ describe("eventHandler allowAsyncContext option", () => {
     };
 
     const handler = createEventHandler({
-      store: {
-        events: new Map([["event.id", { event: { id: "event.id" } }]]),
-        asyncContexts: new Map([[ctx.id, ctx]]),
-        errors: new Map(),
-      } as any,
+      store: createStore("event.id", new Map([[ctx.id, ctx]])) as any,
       eventManager: {
         emit: async () => undefined,
         emitWithResult: async () => undefined,
@@ -108,11 +116,7 @@ describe("eventHandler allowAsyncContext option", () => {
       );
 
     const handler = createEventHandler({
-      store: {
-        events: new Map([["event.id", { event: { id: "event.id" } }]]),
-        asyncContexts: new Map(),
-        errors: new Map(),
-      } as any,
+      store: createStore("event.id", new Map()) as any,
       eventManager: {
         emit: async () => undefined,
         emitWithResult: async () => undefined,

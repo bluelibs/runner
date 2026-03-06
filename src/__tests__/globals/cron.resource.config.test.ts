@@ -68,12 +68,14 @@ describe("global cron resource config", () => {
     );
     expect(
       scheduledTaskIds.some(
-        (taskId) => taskId === includedTask.id || taskId.endsWith(includedTask.id),
+        (taskId) =>
+          taskId === includedTask.id || taskId.endsWith(includedTask.id),
       ),
     ).toBe(true);
     expect(
       scheduledTaskIds.some(
-        (taskId) => taskId === excludedTask.id || taskId.endsWith(excludedTask.id),
+        (taskId) =>
+          taskId === excludedTask.id || taskId.endsWith(excludedTask.id),
       ),
     ).toBe(false);
 

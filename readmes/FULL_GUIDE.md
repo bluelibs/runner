@@ -50,7 +50,7 @@ const mailer = r
 const createUser = r
   .task("users.create")
   .dependencies({ db, mailer })
-  .middleware([r.runner.middleware.task.retry.with({ retries: 3 })])
+  .middleware([middleware.task.retry.with({ retries: 3 })])
   .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
   .run(async (input, { db, mailer }) => {
     const user = await db.users.insert(input);
@@ -128,6 +128,7 @@ Use these minimums before starting:
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
+
 ## Why Runner?
 
 Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
@@ -140,7 +141,7 @@ Runner keeps everything as plain functions and objects. You declare dependencies
 import { r, run } from "@bluelibs/runner";
 import { z } from "zod";
 
-const logger = r.runner.logger;
+const logger = resources.logger;
 
 // resources are singletons with lifecycle management and async construction
 const db = r
@@ -300,6 +301,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Production Readiness Checklist](#production-readiness-checklist) - Framework-wide deploy checks
 - [Node API Index](#node-api-index) - Node-only exports at a glance
 - [Community & Support](#community--support) - Getting help
+
 ## What Is This Thing?
 
 BlueLibs Runner is a TypeScript-first dependency injection framework built around **tasks** (functions) and **resources** (singletons). It's explicit and composition-first: you write normal async functions; Runner wires dependencies, middleware, events/hooks, and lifecycle.
@@ -339,7 +341,7 @@ BlueLibs Runner is a TypeScript-first dependency injection framework built aroun
 import { r } from "@bluelibs/runner";
 
 // Built-in middleware from Runner
-const { cache, retry } = r.runner.middleware.task;
+const { cache, retry } = middleware.task;
 
 // Assuming: db is a resource defined elsewhere, and mockDb is its test double
 // ONE LINE to add caching with TTL
@@ -604,7 +606,7 @@ const server = r
 // Tasks are your business logic - easily testable functions
 const createUser = r
   .task("app.tasks.createUser")
-  .dependencies({ server, logger: r.runner.logger })
+  .dependencies({ server, logger: resources.logger })
   .inputSchema(z.object({ name: z.string() }))
   .run(async (input, { logger }) => {
     await logger.info(`Creating ${input.name}`);
@@ -648,7 +650,7 @@ Creating Ada
 
 - A full Express API with proper lifecycle management
 - Dependency injection (tasks get what they need automatically)
-- Built-in logging (via `r.runner.logger`)
+- Built-in logging (via `resources.logger`)
 - Schema validation with Zod
 - Graceful shutdown (the `dispose()` method -- idempotent, safe to call twice)
 - Type-safe everything (TypeScript has your back)
@@ -830,8 +832,8 @@ import { r } from "@bluelibs/runner";
 
 const myTask = r
   .task("myTask")
-  .dependencies({ logger: r.runner.logger }) // Built-in logger
-  .middleware([r.runner.middleware.task.cache.with({ ttl: 60000 })]) // Built-in cache
+  .dependencies({ logger: resources.logger }) // Built-in logger
+  .middleware([middleware.task.cache.with({ ttl: 60000 })]) // Built-in cache
   .run(async (input, { logger }) => {
     await logger.info("Processing...");
   })
@@ -893,6 +895,7 @@ Now that you know the patterns, here's your learning path:
 > **runtime:** "Seven patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
 
 ---
+
 ## Quick Wins: Copy-Paste Solutions
 
 Production-ready patterns you can use today. Each example is complete and tested.
@@ -916,7 +919,7 @@ import { r } from "@bluelibs/runner";
 const getUser = r
   .task("users.get")
   .middleware([
-    r.runner.middleware.task.cache.with({
+    middleware.task.cache.with({
       ttl: 60 * 1000, // 1 minute
       keyBuilder: (taskId, input) => `user:${input.id}`,
     }),
@@ -937,7 +940,7 @@ const getUser = r
 const callExternalAPI = r
   .task("api.external")
   .middleware([
-    r.runner.middleware.task.retry.with({
+    middleware.task.retry.with({
       retries: 3,
       delayStrategy: (attempt) => 100 * Math.pow(2, attempt), // 100ms, 200ms, 400ms
       stopRetryIf: (error) => error.status === 404, // Don't retry not found
@@ -960,7 +963,7 @@ const callExternalAPI = r
 const slowOperation = r
   .task("operations.slow")
   .middleware([
-    r.runner.middleware.task.timeout.with({ ttl: 5000 }), // 5 second max
+    middleware.task.timeout.with({ ttl: 5000 }), // 5 second max
   ])
   .run(async () => {
     // This will throw TimeoutError if it takes > 5s
@@ -972,8 +975,8 @@ const slowOperation = r
 const robustTask = r
   .task("operations.robust")
   .middleware([
-    r.runner.middleware.task.retry.with({ retries: 3 }),
-    r.runner.middleware.task.timeout.with({ ttl: 10000 }), // Each retry gets 10s
+    middleware.task.retry.with({ retries: 3 }),
+    middleware.task.timeout.with({ ttl: 10000 }), // Each retry gets 10s
   ])
   .run(async () => await unreliableOperation())
   .build();
@@ -1023,7 +1026,7 @@ The built-in queue provides in-process named locks - no Redis needed, but only w
 ```typescript
 const writeConfig = r
   .task("config.write")
-  .dependencies({ queue: r.runner.queue })
+  .dependencies({ queue: resources.queue })
   .run(async (input: { key: string; value: string }, { queue }) => {
     // Only one write per key at a time within this process
     return await queue.run(`config:${input.key}`, async (signal) => {
@@ -1044,7 +1047,7 @@ const writeConfig = r
 ```typescript
 const processPayment = r
   .task("payments.process")
-  .dependencies({ logger: r.runner.logger })
+  .dependencies({ logger: resources.logger })
   .run(async (input: { orderId: string; amount: number }, { logger }) => {
     // Logs are automatically structured and include task context
     await logger.info("Processing payment", {
@@ -1106,6 +1109,7 @@ Each pattern here is runnable as-is. They rely only on Runner's built-ins, so yo
 > **runtime:** "Six production problems, six one-liners. You bolted middleware onto tasks like Lego bricks and called it architecture. I respect the pragmatism. Ship it."
 
 ---
+
 ## The Big Five
 
 The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using Runner effectively.
@@ -1137,7 +1141,7 @@ Tasks are where your business logic lives. They are async functions with explici
 Here's a complete example showing you everything:
 
 ```typescript
-import { r, run } from "@bluelibs/runner";
+import { isTask, r, run } from "@bluelibs/runner";
 
 // Assuming: emailService and logger resources are defined elsewhere
 // 1. Define your task - it's just a function with a name and dependencies
@@ -1521,7 +1525,7 @@ const payments = r
 - Tag definition entries and tag-id selector entries are intentionally different:
   - `deny: [internalOnlyTag]` / `only: [internalOnlyTag]` apply tag semantics (tag dependency itself + all definitions carrying that tag).
   - `deny: [scope(internalOnlyTag.id)]` / `only: [scope(internalOnlyTag.id)]` are exact-id matches only (no carrier expansion).
-- `scope(target, options)` applies the same channel options to every wrapped target, including combinations like `scope([paymentsApi, subtreeOf(agentResource), r.system.tag], { dependencies: false })`.
+- `scope(target, options)` applies the same channel options to every wrapped target, including combinations like `scope([paymentsApi, subtreeOf(agentResource), tags.system], { dependencies: false })`.
 - **`only` automatically exempts internal items**: anything registered by the resource or its children is always accessible without being listed. `only: []` blocks all external dependencies while keeping internal ones reachable.
 - **`only` is checked at every ancestor boundary** for the consumer. For external dependencies, effective access behaves like the intersection of ancestor `only` lists (with the internal-subtree exemption still applied at each boundary).
 - Rules are validated at bootstrap; unknown, malformed, or unmatched wildcard selectors fail fast.
@@ -1589,7 +1593,7 @@ const mixed = r
   .resource("mixed.boundary")
   .isolate({
     deny: [
-      scope([subtreeOf(agentResource), r.system.tag], { dependencies: false }),
+      scope([subtreeOf(agentResource), tags.system], { dependencies: false }),
     ],
   })
   .build();
@@ -1747,7 +1751,7 @@ Transactional behavior:
 - If a hook fails (throws), previously completed hooks are rolled back in reverse completion order.
 - Rollback continues even if one undo fails; Runner throws an aggregated transactional rollback error.
 - Transactional execution is always fail-fast.
-- Runtime sanity constraints: `transactional + parallel` and `transactional + r.runner.tags.eventLane` are invalid.
+- Runtime sanity constraints: `transactional + parallel` and `transactional + tags.eventLane` are invalid.
 - `run(app)` API does not change; only hook return behavior changes for transactional emissions.
 
 #### Parallel Event Execution
@@ -1856,7 +1860,7 @@ import { r } from "@bluelibs/runner";
 // Internal event that won't be seen by global hooks
 const internalEvent = r
   .event("app.events.internal")
-  .tags([r.runner.tags.excludeFromGlobalHooks])
+  .tags([tags.excludeFromGlobalHooks])
   .build();
 ```
 
@@ -1955,7 +1959,7 @@ import { r } from "@bluelibs/runner";
 
 const systemReadyHook = r
   .hook("app.hooks.systemReady")
-  .on(r.system.events.ready)
+  .on(events.ready)
   .run(async () => {
     console.log("System is ready and operational!");
   })
@@ -1964,9 +1968,9 @@ const systemReadyHook = r
 
 Available system events:
 
-- `r.system.events.ready` - System has completed initialization
-- `r.system.events.disposing` - Runtime entered `disposing`; fresh `runtime`/`resource` admissions are blocked while in-flight business work drains
-- `r.system.events.drained` - Drain completed (or grace timed out); hooks registered on this event fire (lifecycle-bypassed), but cannot start new tasks or emit additional events — all regular business admissions are blocked before resource disposal
+- `events.ready` - System has completed initialization
+- `events.disposing` - Runtime entered `disposing`; fresh `runtime`/`resource` admissions are blocked while in-flight business work drains
+- `events.drained` - Drain completed (or grace timed out); hooks registered on this event fire (lifecycle-bypassed), but cannot start new tasks or emit additional events — all regular business admissions are blocked before resource disposal
   // Note: use run({ onUnhandledError }) for unhandled error handling
 
 #### stopPropagation()
@@ -2089,7 +2093,7 @@ import { r } from "@bluelibs/runner";
 
 const logTaskMiddleware = r.middleware
   .task("app.middleware.log.task")
-  .dependencies({ logger: r.runner.logger })
+  .dependencies({ logger: resources.logger })
   .run(async ({ task, next }, { logger }) => {
     logger.info(`Executing: ${String(task!.definition.id)}`);
     const result = await next(task!.input);
@@ -2119,7 +2123,7 @@ const app = r
 
 > **Note:** if a validator throws or returns a non-array, Runner records an `invalid-definition` violation and still throws the aggregated subtree validation error.
 
-> **Note:** set `allowGlobalIds: false` (default is `true`) on any subtree branch (`tasks`, `resources`, `hooks`, `taskMiddleware`, `resourceMiddleware`, `events`, `tags`) to reject definitions declared with absolute ids (ids containing `.`).
+> **Note:** `.subtree(...)` supports `tasks.middleware`, `resources.middleware`, and a top-level `validate(element, ownerConfig)` callback for dynamic gating.
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
@@ -2152,11 +2156,20 @@ await run(app); // throws subtreeValidationFailedError if violations exist
 ```
 
 ```typescript
-const strictLocalIds = r
+const strictPolicies = r
   .resource("app")
   .subtree({
-    tasks: { allowGlobalIds: false },
-    resources: { allowGlobalIds: false },
+    validate: (element) => {
+      if (isTask(element) && !element.meta?.title) {
+        return [
+          {
+            code: "missing-task-title",
+            message: `Task "${element.id}" must define meta.title`,
+          },
+        ];
+      }
+      return [];
+    },
   })
   .build();
 ```
@@ -2483,7 +2496,7 @@ import { r } from "@bluelibs/runner";
 // Auto-register HTTP routes based on tags
 const routeRegistration = r
   .hook("app.hooks.registerRoutes")
-  .on(r.system.events.ready)
+  .on(events.ready)
   .dependencies({
     server: expressServer,
     httpTag, // use the runtime accessor because we execute matched tasks via entry.run(...)
@@ -2599,7 +2612,7 @@ const performanceMiddleware = r.middleware
 #### System Tags
 
 Built-in tags for framework behavior:
-- `r.system.tag` is shorthand for `r.system.tags.system`.
+- `tags.system` is shorthand for `tags.system`.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -2607,21 +2620,21 @@ import { r } from "@bluelibs/runner";
 const internalTask = r
   .task("app.internal.cleanup")
   .tags([
-    r.system.tags.internal, // system.tags.internal
-    r.runner.tags.debug.with({ logTaskInput: true }), // Per-component debug config
+    tags.internal, // system.tags.internal
+    tags.debug.with({ logTaskInput: true }), // Per-component debug config
   ])
   .run(async () => performCleanup())
   .build();
 
 const internalEvent = r
   .event("app.events.internal")
-  .tags([r.runner.tags.excludeFromGlobalHooks]) // Won't trigger wildcard hooks
+  .tags([tags.excludeFromGlobalHooks]) // Won't trigger wildcard hooks
   .build();
 
 // Deny privileged internal resources inside a boundary
 const secureModule = r
   .resource("app.secure")
-  .isolate({ deny: [r.system.tag] })
+  .isolate({ deny: [tags.system] })
   .build();
 // Keep tooling resources outside the isolated app boundary when they need internal access.
 ```
@@ -2809,6 +2822,10 @@ The core concepts above cover most use cases. For specialized features:
 - **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](../readmes/SERIALIZER_PROTOCOL.md).
 
 ---
+
+
+
+
 ## run() and RunOptions
 
 The `run()` function is your application's entry point. It initializes all resources, wires up dependencies, and returns handles for interacting with your system.
@@ -2851,27 +2868,27 @@ An object with the following properties and methods:
 | `getRootValue()`            | Read the initialized root resource value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `logger`                    | Logger instance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `store`                     | Runtime store with registered resources, tasks, middleware, events, and runtime internals                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `dispose()`                 | Transitions to `disposing` (stops admitting fresh external work), runs resource `cooldown()` in reverse dependency order, emits `r.system.events.disposing` (awaited), waits for in-flight tasks + event hooks to drain (up to `disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`), logs a structured `warn` if drain did not complete in time, transitions to `drained` (blocks all new business task/event admissions), emits `r.system.events.drained` (lifecycle-bypassed, awaited), then disposes resources and removes hooks |
+| `dispose()`                 | Transitions to `disposing` (stops admitting fresh external work), runs resource `cooldown()` in reverse dependency order, emits `events.disposing` (awaited), waits for in-flight tasks + event hooks to drain (up to `disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`), logs a structured `warn` if drain did not complete in time, transitions to `drained` (blocks all new business task/event admissions), emits `events.drained` (lifecycle-bypassed, awaited), then disposes resources and removes hooks |
 
 Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.
 
-This object is your main interface to interact with the running application. It can also be declared as a dependency via `r.system.runtime`.
+This object is your main interface to interact with the running application. It can also be declared as a dependency via `resources.runtime`.
 
 Important bootstrap note: when `runtime` is declared as a dependency inside a resource `init()`, startup may still be in progress. You are guaranteed your current resource dependencies are ready, but not that all registered resources in the app are already initialized.
 
 ### Ready-phase startup orchestration
 
-Use `r.system.events.ready` for components that should start only after bootstrap is fully complete.
+Use `events.ready` for components that should start only after bootstrap is fully complete.
 
-`resource.ready(...)` runs right before `r.system.events.ready`:
+`resource.ready(...)` runs right before `events.ready`:
 
 - Runner locks the store/event manager/logger first.
 - Then it runs `ready()` for initialized resources in dependency order.
-- Then it emits `r.system.events.ready`.
+- Then it emits `events.ready`.
 
 Example:
 
-- In `eventLanesResource` `mode: "network"` (default), Event Lanes consumers attach dequeue workers on `r.system.events.ready`.
+- In `eventLanesResource` `mode: "network"` (default), Event Lanes consumers attach dequeue workers on `events.ready`.
 - This guarantees serializer/resource setup done during `init()` is available before first consumed message is re-emitted.
 - Event Lanes also resolves queue `prefetch` from lane bindings at this phase, before `network`-mode consumers start.
 - RPC Lanes (`rpcLanesResource`) resolve task/event routing + serve allow-list during `init()`; they do not require a separate ready-phase consumer start.
@@ -2961,7 +2978,7 @@ Runner applies source-aware admission rules during shutdown:
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `running`   | Admit all task/event calls.                                                                                                                                                                                                                            |
 | `disposing` | Reject fresh external admissions (`runtime`, `resource`). Allow in-flight internal continuations (`task`, `hook`, `middleware`) while their originating execution is still active.                                                                     |
-| `drained`   | Reject all new business task/event admissions. Lifecycle events (`r.system.events.drained`) are lifecycle-bypassed — their hooks fire, but those hooks cannot start new tasks or emit additional events. Lifecycle flow continues to resource disposal. |
+| `drained`   | Reject all new business task/event admissions. Lifecycle events (`events.drained`) are lifecycle-bypassed — their hooks fire, but those hooks cannot start new tasks or emit additional events. Lifecycle flow continues to resource disposal. |
 
 Practical effect for HTTP resources:
 
@@ -2971,7 +2988,7 @@ Practical effect for HTTP resources:
 
 ### Resource `cooldown()` in Shutdown
 
-`resource.cooldown(...)` is a pre-drain ingress-stop hook. It runs right after Runner enters `disposing`, before `r.system.events.disposing`, and before drain waiting.
+`resource.cooldown(...)` is a pre-drain ingress-stop hook. It runs right after Runner enters `disposing`, before `events.disposing`, and before drain waiting.
 
 - Use it to stop intake quickly (for example: stop accepting HTTP requests, mark readiness as false, stop new queue consumption).
 - It can be async, but keep it fast and return promptly. Let Runner's drain phase wait for business work.
@@ -2982,7 +2999,7 @@ Practical effect for HTTP resources:
 
 ### Resource `ready()` in Startup
 
-`resource.ready(...)` is a post-init startup hook. It runs after Runner locks mutation surfaces and before `r.system.events.ready` is emitted.
+`resource.ready(...)` is a post-init startup hook. It runs after Runner locks mutation surfaces and before `events.ready` is emitted.
 
 - Use it to start ingress or consumers only when startup wiring is complete.
 - It follows dependency-safe startup order (dependencies before dependents), with same-wave parallelism in `lifecycleMode: "parallel"` mode.
@@ -3132,13 +3149,13 @@ Manual `runtime.dispose()` and signal-based shutdown both follow:
 
 1. transition to `disposing`
 2. resource `cooldown()` (reverse dependency order)
-3. `r.system.events.disposing` (awaited)
+3. `events.disposing` (awaited)
 4. drain wait (`disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`)
 5. transition to `drained`
-6. `r.system.events.drained` (lifecycle-bypassed, awaited)
+6. `events.drained` (lifecycle-bypassed, awaited)
 7. resource disposal (within remaining `disposeBudgetMs`)
 
-Important: hooks registered on `r.system.events.drained` **do fire** (the emission is lifecycle-bypassed), but those hooks cannot start new tasks or emit additional events — all regular business admissions are blocked once `drained` begins.
+Important: hooks registered on `events.drained` **do fire** (the emission is lifecycle-bypassed), but those hooks cannot start new tasks or emit additional events — all regular business admissions are blocked once `drained` begins.
 
 ### Error Boundary Integration
 
@@ -3208,10 +3225,12 @@ await run(app, {
 - Stop accepting new work before cleaning up
 
 > **runtime:** "An error boundary: a trampoline under your tightrope. I'm the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
+
+
 ## Caching
 
 Avoid recomputing expensive work by caching task results with TTL-based eviction.
-Cache is opt-in: you must register `r.runner.cache`.
+Cache is opt-in: you must register `resources.cache`.
 
 ### Provider Contract
 
@@ -3233,7 +3252,7 @@ type CacheProviderFactory = (
 
 Notes:
 
-- `options` are merged from `r.runner.cache.with({ defaultOptions })` and middleware-level cache options.
+- `options` are merged from `resources.cache.with({ defaultOptions })` and middleware-level cache options.
 - `keyBuilder` is middleware-only and is not passed to the provider.
 - `has()` is optional, but recommended when `undefined` can be a valid cached value.
 
@@ -3245,7 +3264,7 @@ import { r } from "@bluelibs/runner";
 const expensiveTask = r
   .task("app.tasks.expensive")
   .middleware([
-    r.runner.middleware.task.cache.with({
+    middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
       keyBuilder: (taskId, input: { userId: string }) =>
@@ -3263,7 +3282,7 @@ const app = r
   .resource("app.cache")
   .register([
     // You have to register it, cache resource is not enabled by default.
-    r.runner.cache.with({
+    resources.cache.with({
       defaultOptions: {
         max: 1000, // Maximum items in cache
         ttl: 30 * 1000, // Default TTL
@@ -3330,7 +3349,7 @@ const app = r
   .resource("app")
   .register([
     redis.with({ url: process.env.REDIS_URL! }),
-    r.runner.cache.with({ provider: redisCacheProvider }),
+    resources.cache.with({ provider: redisCacheProvider }),
   ])
   .build();
 ```
@@ -3342,7 +3361,7 @@ const app = r
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const cacheJournalKeys = r.runner.middleware.task.cache.journalKeys;
+const cacheJournalKeys = middleware.task.cache.journalKeys;
 
 const cacheLogger = r.middleware
   .task("app.middleware.cacheLogger")
@@ -3356,7 +3375,7 @@ const cacheLogger = r.middleware
 
 const myTask = r
   .task("app.tasks.cached")
-  .middleware([cacheLogger, r.runner.middleware.task.cache.with({ ttl: 60000 })])
+  .middleware([cacheLogger, middleware.task.cache.with({ ttl: 60000 })])
   .run(async () => "result")
   .build();
 ```
@@ -3373,11 +3392,11 @@ Limit concurrent executions to protect databases and external APIs. The concurre
 import { r, Semaphore } from "@bluelibs/runner";
 
 // Option 1: Simple limit (shared for all tasks using this middleware instance)
-const limitMiddleware = r.runner.middleware.task.concurrency.with({ limit: 5 });
+const limitMiddleware = middleware.task.concurrency.with({ limit: 5 });
 
 // Option 2: Explicit semaphore for fine-grained coordination
 const dbSemaphore = new Semaphore(10);
-const dbLimit = r.runner.middleware.task.concurrency.with({
+const dbLimit = middleware.task.concurrency.with({
   semaphore: dbSemaphore,
 });
 
@@ -3410,7 +3429,7 @@ import { r } from "@bluelibs/runner";
 const resilientTask = r
   .task("app.tasks.remoteCall")
   .middleware([
-    r.runner.middleware.task.circuitBreaker.with({
+    middleware.task.circuitBreaker.with({
       failureThreshold: 5, // Trip after 5 failures
       resetTimeout: 30000, // Stay open for 30 seconds
     }),
@@ -3435,13 +3454,12 @@ const resilientTask = r
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const circuitBreakerJournalKeys =
-  r.runner.middleware.task.circuitBreaker.journalKeys;
+const circuitBreakerJournalKeys = middleware.task.circuitBreaker.journalKeys;
 
 const myTask = r
   .task("app.tasks.monitored")
   .middleware([
-    r.runner.middleware.task.circuitBreaker.with({
+    middleware.task.circuitBreaker.with({
       failureThreshold: 5,
       resetTimeout: 30000,
     }),
@@ -3469,7 +3487,7 @@ import { r } from "@bluelibs/runner";
 // Debounce: Run only after 500ms of inactivity
 const saveTask = r
   .task("app.tasks.save")
-  .middleware([r.runner.middleware.task.debounce.with({ ms: 500 })])
+  .middleware([middleware.task.debounce.with({ ms: 500 })])
   .run(async (data) => {
     // Assuming db is available in the closure
     return await db.save(data);
@@ -3479,7 +3497,7 @@ const saveTask = r
 // Throttle: Run at most once every 1000ms
 const logTask = r
   .task("app.tasks.log")
-  .middleware([r.runner.middleware.task.throttle.with({ ms: 1000 })])
+  .middleware([middleware.task.throttle.with({ ms: 1000 })])
   .run(async (msg) => {
     console.log(msg);
   })
@@ -3505,7 +3523,7 @@ import { r } from "@bluelibs/runner";
 const getPrice = r
   .task("app.tasks.getPrice")
   .middleware([
-    r.runner.middleware.task.fallback.with({
+    middleware.task.fallback.with({
       // Can be a static value, a function, or another task
       fallback: async (input, error) => {
         console.warn(`Price fetch failed: ${error.message}. Using default.`);
@@ -3526,7 +3544,7 @@ const getPrice = r
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const fallbackJournalKeys = r.runner.middleware.task.fallback.journalKeys;
+const fallbackJournalKeys = middleware.task.fallback.journalKeys;
 
 const fallbackLogger = r.middleware
   .task("app.middleware.fallbackLogger")
@@ -3543,7 +3561,7 @@ const myTask = r
   .task("app.tasks.withFallback")
   .middleware([
     fallbackLogger,
-    r.runner.middleware.task.fallback.with({ fallback: "default" }),
+    middleware.task.fallback.with({ fallback: "default" }),
   ])
   .run(async () => {
     throw new Error("Primary failed");
@@ -3565,7 +3583,7 @@ import { r } from "@bluelibs/runner";
 const sensitiveTask = r
   .task("app.tasks.login")
   .middleware([
-    r.runner.middleware.task.rateLimit.with({
+    middleware.task.rateLimit.with({
       windowMs: 60 * 1000, // 1 minute window
       max: 5, // Max 5 attempts per window
     }),
@@ -3590,13 +3608,11 @@ const sensitiveTask = r
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const rateLimitJournalKeys = r.runner.middleware.task.rateLimit.journalKeys;
+const rateLimitJournalKeys = middleware.task.rateLimit.journalKeys;
 
 const myTask = r
   .task("app.tasks.rateLimited")
-  .middleware([
-    r.runner.middleware.task.rateLimit.with({ windowMs: 60000, max: 10 }),
-  ])
+  .middleware([middleware.task.rateLimit.with({ windowMs: 60000, max: 10 })])
   .run(async (_input, _deps, context) => {
     const remaining = context?.journal.get(rateLimitJournalKeys.remaining); // number
     const resetTime = context?.journal.get(rateLimitJournalKeys.resetTime); // timestamp (ms)
@@ -3626,7 +3642,7 @@ const RequestContext = r
 
 const getAuditTrail = r
   .task("app.tasks.getAuditTrail")
-  // Shortcut: creates r.runner.middleware.task.requireContext with this context
+  // Shortcut: creates middleware.task.requireContext with this context
   .middleware([RequestContext.require()])
   .run(async () => {
     const { requestId } = RequestContext.use();
@@ -3646,9 +3662,7 @@ const TenantContext = r
 
 const listProjects = r
   .task("app.tasks.listProjects")
-  .middleware([
-    r.runner.middleware.task.requireContext.with({ context: TenantContext }),
-  ])
+  .middleware([middleware.task.requireContext.with({ context: TenantContext })])
   .run(async () => {
     const { tenantId } = TenantContext.use();
     return await projectRepo.findByTenant(tenantId);
@@ -3680,7 +3694,7 @@ import { r } from "@bluelibs/runner";
 const flakyApiCall = r
   .task("app.tasks.flakyApiCall")
   .middleware([
-    r.runner.middleware.task.retry.with({
+    middleware.task.retry.with({
       retries: 5, // Try up to 5 times
       delayStrategy: (attempt) => 100 * Math.pow(2, attempt), // Exponential backoff
       stopRetryIf: (error) => error.message === "Invalid credentials", // Don't retry auth errors
@@ -3709,7 +3723,7 @@ import { r } from "@bluelibs/runner";
 const database = r
   .resource<{ connectionString: string }>("app.db")
   .middleware([
-    r.runner.middleware.resource.retry.with({
+    middleware.resource.retry.with({
       retries: 4,
       delayStrategy: (attempt) => 250 * Math.pow(2, attempt),
     }),
@@ -3730,11 +3744,11 @@ const database = r
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const retryJournalKeys = r.runner.middleware.task.retry.journalKeys;
+const retryJournalKeys = middleware.task.retry.journalKeys;
 
 const myTask = r
   .task("app.tasks.retryable")
-  .middleware([r.runner.middleware.task.retry.with({ retries: 5 })])
+  .middleware([middleware.task.retry.with({ retries: 5 })])
   .run(async (_input, _deps, context) => {
     const attempt = context?.journal.get(retryJournalKeys.attempt); // 0-indexed attempt number
     const lastError = context?.journal.get(retryJournalKeys.lastError); // Error from previous attempt, if any
@@ -3760,8 +3774,8 @@ import { r } from "@bluelibs/runner";
 const apiTask = r
   .task("app.tasks.externalApi")
   .middleware([
-    // Works for tasks and resources via r.runner.middleware.resource.timeout
-    r.runner.middleware.task.timeout.with({ ttl: 5000 }), // 5 second timeout
+    // Works for tasks and resources via middleware.resource.timeout
+    middleware.task.timeout.with({ ttl: 5000 }), // 5 second timeout
   ])
   .run(async () => {
     // This operation will be aborted if it takes longer than 5 seconds
@@ -3774,12 +3788,12 @@ const resilientTask = r
   .task("app.tasks.resilient")
   .middleware([
     // Order matters here. Imagine a big onion.
-    // Works for resources as well via r.runner.middleware.resource.retry
-    r.runner.middleware.task.retry.with({
+    // Works for resources as well via middleware.resource.retry
+    middleware.task.retry.with({
       retries: 3,
       delayStrategy: (attempt) => 1000 * attempt, // 1s, 2s, 3s delays
     }),
-    r.runner.middleware.task.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
+    middleware.task.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
   ])
   .run(async () => {
     // Each retry attempt gets its own 10-second timeout
@@ -3811,8 +3825,8 @@ import { r } from "@bluelibs/runner";
 const messageBroker = r
   .resource("app.broker")
   .middleware([
-    r.runner.middleware.resource.timeout.with({ ttl: 15000 }),
-    r.runner.middleware.resource.retry.with({ retries: 2 }),
+    middleware.resource.timeout.with({ ttl: 15000 }),
+    middleware.resource.retry.with({ retries: 2 }),
   ])
   .init(async () => {
     return await connectBroker();
@@ -3877,7 +3891,7 @@ const httpServer = r
 
 Why this pattern works:
 
-- `cooldown()` runs before `r.system.events.disposing` and before drain wait, so it prevents new HTTP requests from entering.
+- `cooldown()` runs before `events.disposing` and before drain wait, so it prevents new HTTP requests from entering.
 - In-flight requests/tasks/events still get the normal drain window (`disposeDrainBudgetMs`).
 - `dispose()` runs after drain, so cleanup can focus on leftovers only.
 - This is the intended `cooldown()` shape: ingress resources that route to tasks/events.
@@ -3891,7 +3905,7 @@ Why this pattern works:
 
 Need recurring task execution without bringing in a separate scheduler process? Runner ships with a built-in global cron scheduler.
 
-You mark tasks with `r.runner.tags.cron.with({...})` (alias: `r.runner.cron.tag.with({...})`), and `r.runner.cron` discovers and schedules them at startup. The cron resource is opt-in, so you must register it explicitly.
+You mark tasks with `tags.cron.with({...})` (alias: `resources.cron.tag.with({...})`), and `resources.cron` discovers and schedules them at startup. The cron resource is opt-in, so you must register it explicitly.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -3899,7 +3913,7 @@ import { r } from "@bluelibs/runner";
 const sendDigest = r
   .task("app.tasks.sendDigest")
   .tags([
-    r.runner.tags.cron.with({
+    tags.cron.with({
       expression: "0 9 * * *",
       timezone: "UTC",
       immediate: false,
@@ -3914,7 +3928,7 @@ const sendDigest = r
 const app = r
   .resource("app")
   .register([
-    r.runner.cron.with({
+    resources.cron.with({
       // Optional: restrict scheduling to selected task ids/definitions.
       only: [sendDigest],
     }),
@@ -3933,17 +3947,17 @@ Cron options:
 - `onError`: `"continue"` (default) or `"stop"` for that schedule.
 - `silent`: suppress all cron log output for this task when `true` (default `false`).
 
-`r.runner.cron.with({...})` options:
+`resources.cron.with({...})` options:
 
 - `only`: optional array of task ids or task definitions; when set, only those cron-tagged tasks are scheduled.
 
 Operational notes:
 
 - One cron tag per task is supported. If you need multiple schedules, fork the task and tag each fork.
-- If `r.runner.cron` is not registered, cron tags are treated as metadata and no schedules are started.
+- If `resources.cron` is not registered, cron tags are treated as metadata and no schedules are started.
 - Scheduler uses `setTimeout` chaining, which keeps it portable across supported runtimes.
-- Startup and execution lifecycle messages are emitted via `r.runner.logger`.
-- On `r.system.events.disposing`, cron stops all pending schedules immediately (no new timer-driven runs), while already in-flight cron executions drain under the normal shutdown budgets.
+- Startup and execution lifecycle messages are emitted via `resources.logger`.
+- On `events.disposing`, cron stops all pending schedules immediately (no new timer-driven runs), while already in-flight cron executions drain under the normal shutdown budgets.
 
 Best practices:
 
@@ -4002,7 +4016,7 @@ const users = await dbSemaphore.withPermit(async () => {
 }); // Permit released automatically, even if query throws
 ```
 
-**Pro Tip**: You don't always need to use `Semaphore` manually. The `concurrency` middleware (available via `r.runner.middleware.task.concurrency`) provides a declarative way to apply these limits to your tasks.
+**Pro Tip**: You don't always need to use `Semaphore` manually. The `concurrency` middleware (available via `middleware.task.concurrency`) provides a declarative way to apply these limits to your tasks.
 
 ### Manual acquire/release
 
@@ -4085,15 +4099,15 @@ dbSemaphore.dispose();
 // Error: "Semaphore has been disposed"
 ```
 
-### From Utilities to Middlewares
+### From Utilities to Middleware
 
-While `Semaphore` and `Queue` provide powerful manual control, Runner often wraps these into declarative middlewares for common patterns:
+While `Semaphore` and `Queue` provide powerful manual control, Runner often wraps these into declarative middleware for common patterns:
 
 - **concurrency**: Uses `Semaphore` internally to limit task parallelization.
 - **temporal**: Uses timers and promise-tracking to implement `debounce` and `throttle`.
 - **rateLimit**: Uses fixed-window counting to protect resources from bursts.
 
-**What you just learned**: Utilities are the building blocks; Middlewares are the blueprints for common resilience patterns.
+**What you just learned**: Utilities are the building blocks; Middleware is the blueprint for common resilience patterns.
 
 > **runtime:** "I provide the bricks and the mortar. You decide if you're building a fortress or just a very complicated way to trip over your own feet. Use the middleware for common paths; use the utilities when you want to play architect."
 
@@ -4321,7 +4335,7 @@ const emailLane = r.eventLane("app.lanes.email").build();
 // 2. Tag the event for lane routing
 const userRegistered = r
   .event<{ userId: string }>("app.events.userRegistered")
-  .tags([r.runner.tags.eventLane.with({ lane: emailLane })])
+  .tags([tags.eventLane.with({ lane: emailLane })])
   .build();
 
 // 3. Hook runs on the consumer side after relay
@@ -4365,7 +4379,7 @@ const billingLane = r.rpcLane("app.rpc.billing").build();
 // 2. Tag the task for lane routing
 const chargeCard = r
   .task("billing.tasks.chargeCard")
-  .tags([r.runner.tags.rpcLane.with({ lane: billingLane })])
+  .tags([tags.rpcLane.with({ lane: billingLane })])
   .run(async (input: { amount: number }) => ({
     ok: true,
     amount: input.amount,
@@ -4958,11 +4972,12 @@ Unsupported in strict mode (fail-fast):
 - Custom class constructor patterns
 - Literal `undefined`, `bigint`, `symbol`
 - `Match.Optional(...)` / `Match.Maybe(...)` outside object-property context
+
 ## Observability Strategy (Logs, Metrics, and Traces)
 
 Runner gives you primitives for all three observability signals:
 
-- **Logs**: structured application/runtime events via `r.runner.logger`
+- **Logs**: structured application/runtime events via `resources.logger`
 - **Metrics**: numeric health and performance indicators from your resources/tasks/middleware
 - **Traces**: distributed timing and call-path correlation using your tracing stack (for example OpenTelemetry)
 
@@ -5021,7 +5036,7 @@ import { r } from "@bluelibs/runner";
 
 const app = r
   .resource("app")
-  .dependencies({ logger: r.runner.logger })
+  .dependencies({ logger: resources.logger })
   .init(async (_config, { logger }) => {
     logger.info("Starting business process"); //  Visible by default
     logger.warn("This might take a while"); //  Visible by default
@@ -5082,7 +5097,7 @@ The logger accepts rich, structured data that makes debugging actually useful:
 ```typescript
 const userTask = r
   .task("app.tasks.user.create")
-  .dependencies({ logger: r.runner.logger })
+  .dependencies({ logger: resources.logger })
   .run(async (input, { logger }) => {
     // Basic message
     logger.info("Creating new user");
@@ -5133,7 +5148,7 @@ const RequestContext = r
 
 const requestHandler = r
   .task("app.tasks.handleRequest")
-  .dependencies({ logger: r.runner.logger })
+  .dependencies({ logger: resources.logger })
   .run(async (requestData, { logger }) => {
     const request = RequestContext.use();
 
@@ -5193,7 +5208,7 @@ const winstonLogger = winston.createLogger({
 // Bridge BlueLibs logs to Winston using hooks
 const winstonBridgeResource = r
   .resource("app.resources.winstonBridge")
-  .dependencies({ logger: r.runner.logger })
+  .dependencies({ logger: resources.logger })
   .init(async (_config, { logger }) => {
     // Map log levels (BlueLibs -> Winston)
     const levelMapping = {
@@ -5261,7 +5276,7 @@ const customLogger = r
   )
   .build();
 
-// Or you could simply add it as "r.runner.logger" and override the default logger
+// Or you could simply add it as "resources.logger" and override the default logger
 ```
 
 ### Log Structure
@@ -5321,7 +5336,7 @@ import { r } from "@bluelibs/runner";
 const app = r
   .resource("app")
   .register([
-    r.runner.debug.with({
+    resources.debug.with({
       logTaskInput: true,
       logTaskOutput: false,
       logResourceConfig: true,
@@ -5336,21 +5351,21 @@ const app = r
 
 ### Accessing Debug Levels Programmatically
 
-The debug configuration levels can be accessed via `r.runner.debug.levels`:
+The debug configuration levels can be accessed via `debug.levels`:
 
 ```typescript
 import { r } from "@bluelibs/runner";
 
 // Use in custom configurations
 const customConfig = {
-  ...r.runner.debug.levels.normal, // or .verbose
+  ...debug.levels.normal, // or .verbose
   logTaskInput: true, // Override specific settings
 };
 
 // Register with custom configuration
 const app = r
   .resource("app")
-  .register([r.runner.debug.with(customConfig)])
+  .register([resources.debug.with(customConfig)])
   .build();
 ```
 
@@ -5363,7 +5378,7 @@ import { r } from "@bluelibs/runner";
 
 const criticalTask = r
   .task("app.tasks.critical")
-  .tags([r.runner.tags.debug.with("verbose")])
+  .tags([tags.debug.with("verbose")])
   .run(async (input) => {
     // This task will have verbose debug logging
     return await processPayment(input);
@@ -5464,6 +5479,7 @@ await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
 > **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it's off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
+
 ## Advanced Patterns
 
 This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.
@@ -5614,8 +5630,8 @@ import { r } from "@bluelibs/runner";
 const telemetryInstaller = r
   .resource("app.telemetry")
   .dependencies({
-    taskRunner: r.system.taskRunner,
-    logger: r.runner.logger,
+    taskRunner: resources.taskRunner,
+    logger: resources.logger,
   })
   .init(async (_config, { taskRunner, logger }) => {
     taskRunner.intercept(
@@ -5748,7 +5764,7 @@ const topology = r.rpcLane.topology({
 
 app = app
   .register([
-    // ... your tasks and events tagged with r.runner.tags.rpcLane.with({ lane })
+    // ... your tasks and events tagged with tags.rpcLane.with({ lane })
     rpcLanesResource.with({
       profile: "client",
       topology,
@@ -5796,7 +5812,7 @@ Remote lane auth tip:
 
 ## Resilience Orchestration
 
-In production, one resilience strategy is rarely enough. Runner allows you to compose multiple middlewares into a "resilience onion" that protects your business logic from multiple failure modes.
+In production, one resilience strategy is rarely enough. Runner allows you to compose multiple middleware layers into a "resilience onion" that protects your business logic from multiple failure modes.
 
 ### The Problem
 
@@ -5813,21 +5829,21 @@ const resilientTask = r
   .task("app.tasks.ultimateResilience")
   .middleware([
     // Outer layer: Fallback (the absolute Plan B if everything below fails)
-    r.runner.middleware.task.fallback.with({
+    middleware.task.fallback.with({
       fallback: { status: "offline-mode", data: [] },
     }),
 
     // Next: Rate Limit (check this before wasting resources or retry budget)
-    r.runner.middleware.task.rateLimit.with({ windowMs: 60000, max: 100 }),
+    middleware.task.rateLimit.with({ windowMs: 60000, max: 100 }),
 
     // Next: Circuit Breaker (stop immediately if the service is known to be down)
-    r.runner.middleware.task.circuitBreaker.with({ failureThreshold: 5 }),
+    middleware.task.circuitBreaker.with({ failureThreshold: 5 }),
 
     // Next: Retry (wrap the attempt in a retry loop)
-    r.runner.middleware.task.retry.with({ retries: 3 }),
+    middleware.task.retry.with({ retries: 3 }),
 
     // Inner layer: Timeout (enforce limit on EACH individual attempt)
-    r.runner.middleware.task.timeout.with({ ttl: 5000 }),
+    middleware.task.timeout.with({ ttl: 5000 }),
   ])
   .run(async () => {
     return await fetchDataFromUnreliableSource();
@@ -5968,10 +5984,10 @@ Metadata transforms your components from anonymous functions into self-documenti
 
 Sometimes you need to replace a component entirely. Maybe you're doing integration testing or you want to override a library from an external package.
 
-Use `r.override(base, fn)` (or alias `override(base, fn)`) for behavior swaps while preserving the same `id`.
+Use `r.override(base, fn)` for behavior swaps while preserving the same `id`.
 
 ```typescript
-import { override, r } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const productionEmailer = r
   .resource("app.emailer")
@@ -5980,12 +5996,6 @@ const productionEmailer = r
 
 // Option 1: Namespace form
 const shorthandOverrideEmailer = r.override(
-  productionEmailer,
-  async () => new MockEmailer(),
-);
-
-// Option 2: Alias form (same behavior)
-const helperOverrideEmailer = override(
   productionEmailer,
   async () => new MockEmailer(),
 );
@@ -6058,7 +6068,7 @@ const app = r
   .build();
 ```
 
-Important: `.overrides([...])` only accepts definitions produced by `r.override(...)` / `override(...)` (plus `null` / `undefined` for conditional lists).
+Important: `.overrides([...])` only accepts definitions produced by `r.override(...)` (plus `null` / `undefined` for conditional lists).
 
 Direct registration of an override definition is also valid when you control the composition and only register one version for that id:
 
@@ -6119,7 +6129,7 @@ r.resource("test")
   .build();
 ```
 
-Overrides are applied after everything is registered. If multiple overrides target the same id, Runner rejects the graph with a dedicated duplicate-target override error (instead of applying precedence). Overriding something that wasn't registered also throws a dedicated error with remediation (register the base first, or for resources use `.fork("new.id")` when you meant a separate instance). Use override() to change behavior safely while preserving the original id.
+Overrides are applied after everything is registered. If multiple overrides target the same id, Runner rejects the graph with a dedicated duplicate-target override error (instead of applying precedence). Overriding something that wasn't registered also throws a dedicated error with remediation (register the base first, or for resources use `.fork("new.id")` when you meant a separate instance). Use `r.override()` to change behavior safely while preserving the original id.
 
 > **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
 
@@ -6165,9 +6175,8 @@ Important behavior:
 
 - Inside `run(...)`, middleware, hooks, lane policies, and validators, `definition.id` is always the canonical runtime ID.
 - Original definition objects are not mutated; per-run compiled definitions are stored internally (run isolation safe).
-- Reference-based wiring remains preferred (`dependencies({ createUser })`, `.register([createUser])`) over string-id wiring.
-- **Fully qualified IDs** (any id containing a `.`) are treated as absolute and bypass parent prefixing entirely. The detection rule is simple: if `id.includes(".")`, the id stays as-is regardless of which resource registers it. This means a child can "escape" its parent's namespace — useful for library resources that own their own id namespace (e.g., `runner-dev.resources.dev` stays exactly that even when registered inside `root`).
-- When you need subtree-local naming only, set branch-level `allowGlobalIds: false` (default is `true`) in `.subtree(...)` so definitions declared with absolute ids (containing `.`) fail fast at bootstrap.
+- Canonical ids are composed structurally from owner resources; prefer local definition ids and reference-based wiring.
+- Use `defineResource({ id, gateway: true })` for namespace gateways when a resource should not add its own segment to compiled canonical ids.
 - Local names fail fast if they use reserved segments: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `ctx`.
 - All definition ids fail fast when they start/end with `.`, contain empty segments (`..`), or equal a reserved standalone local name.
 
@@ -6341,9 +6350,9 @@ const invalidDb = r
 
 We expose the internal services for advanced use cases (but try not to use them unless you really need to):
 
-When you call `run(app)`, Runner creates an isolated runtime for that specific run. During bootstrap, it registers built-in system resources for that app, including `r.system.runtime`.
+When you call `run(app)`, Runner creates an isolated runtime for that specific run. During bootstrap, it registers built-in system resources for that app, including `resources.runtime`.
 
-`r.system.runtime` resolves to the same runtime object returned by `run(app)`, scoped to that app only. This lets code running _inside_ the app depend on `runtime` and perform runtime operations (`runTask`, `emitEvent`, `getResourceValue`, root helpers, etc.) without passing the outer runtime object around manually.
+`resources.runtime` resolves to the same runtime object returned by `run(app)`, scoped to that app only. This lets code running _inside_ the app depend on `runtime` and perform runtime operations (`runTask`, `emitEvent`, `getResourceValue`, root helpers, etc.) without passing the outer runtime object around manually.
 
 Bootstrap timing note: inside resource `init()`, `runtime` is available early, but that does **not** mean every registered resource is initialized yet. Runner guarantees dependency readiness for the currently initializing resource; unrelated resources may still be pending (especially with `lifecycleMode: "parallel"` or `lazy: true`).
 
@@ -6354,10 +6363,10 @@ const advancedTask = r
   .task("app.advanced")
   .dependencies({
     // Available because run(app) provides this resource to the current app.
-    runtime: r.system.runtime,
-    store: r.system.store,
-    taskRunner: r.system.taskRunner,
-    eventManager: r.system.eventManager,
+    runtime: resources.runtime,
+    store: resources.store,
+    taskRunner: resources.taskRunner,
+    eventManager: resources.eventManager,
   })
   .run(async (_param, { runtime, store, taskRunner, eventManager }) => {
     // Direct access to the framework internals
@@ -6553,7 +6562,7 @@ import { r } from "@bluelibs/runner";
 
 const auditLog = r
   .task("app.tasks.auditLog")
-  .dependencies({ requestContext, logger: r.runner.logger })
+  .dependencies({ requestContext, logger: resources.logger })
   .run(async (message: string, { requestContext, logger }) => {
     const ctx = requestContext.use();
     await logger.info(message, {
@@ -6681,14 +6690,14 @@ import { z } from "zod";
 // Assuming: userRepo was defined in the "Building resources" section above
 const createUser = r
   .task("users.create")
-  .dependencies({ userRepo, logger: r.runner.logger })
+  .dependencies({ userRepo, logger: resources.logger })
   .inputSchema(
     z.object({
       name: z.string().min(2),
       email: z.string().email(),
     }),
   )
-  .middleware([r.runner.middleware.task.retry.with({ retries: 3 })])
+  .middleware([middleware.task.retry.with({ retries: 3 })])
   .run(async (input, { userRepo, logger }) => {
     await logger.info("Creating user", { email: input.email });
     return userRepo.create(input);
@@ -6920,6 +6929,7 @@ const app = r
 When running, open `http://localhost:1337` for the visual DevTools.
 
 > **Note:** Runner Dev Tools is intended for development and controlled environments. Treat it as privileged operational access.
+
 ## Testing
 
 Runner's explicit dependency injection makes testing straightforward. Call `.run()` on a task with plain mocks for fast unit tests, or spin up the full runtime when you need middleware and lifecycle behavior.
@@ -6986,18 +6996,18 @@ Use `run()` to start the full app with middleware, events, and lifecycle. Swap i
 
 Important:
 
-- `r.override(base, fn)` (or alias `override(base, fn)`) creates a replacement definition.
+- `r.override(base, fn)` creates a replacement definition.
 - `.overrides([...])` only accepts override-produced definitions.
 - If you place both base and replacement in `.register([...])`, you'll get duplicate-id registration errors.
 
 ```typescript
-import { run, r, override } from "@bluelibs/runner";
+import { run, r } from "@bluelibs/runner";
 
 describe("User registration flow", () => {
   it("creates user, sends email, and tracks analytics", async () => {
     // Swap infrastructure with test doubles
     const mockDb = r.override(realDb, async () => new InMemoryDatabase());
-    const mockMailer = override(realMailer, async () => ({
+    const mockMailer = r.override(realMailer, async () => ({
       send: jest.fn().mockResolvedValue(true),
     }));
 
@@ -7060,6 +7070,7 @@ await run(app, { debug: "verbose" });
 ```
 
 > **runtime:** "Testing: an elaborate puppet show where every string behaves. Then production walks in, kicks the stage, and asks for pagination. Still — nice coverage badge."
+
 ## Upgrading from 5.x to 6.0
 
 This release removes and reshapes core APIs (`override` builders, middleware catch-all, Event Lanes helpers, event source contract), so treat it as a **major** upgrade.
@@ -7077,7 +7088,7 @@ Before code changes:
   - `r.override.task/resource/hook/taskMiddleware/resourceMiddleware`
   - `middleware.everywhere`
   - `defineEventLanesTopology`, `toEventLanesResourceConfig`
-  - `r.runner.tags.eventLaneHook`
+  - `tags.eventLaneHook`
   - string event sources in low-level custom event emission code
 
 ### 2. Replace Legacy Override Builders
@@ -7132,7 +7143,7 @@ If you intended a second component (not replacement), use a different id or `.fo
 ### 2.2. Migrate Cache Customization to `cacheProvider`
 
 Legacy 5.x cache factory task id is removed.
-Use `r.runner.cacheProvider` as the extension seam (via cache config).
+Use `resources.cacheProvider` as the extension seam (via cache config).
 
 Before (5.x legacy):
 
@@ -7145,7 +7156,7 @@ const redisCacheFactory = r
 
 const app = r
   .resource("app")
-  .register([redis, r.runner.cache])
+  .register([redis, resources.cache])
   .overrides([redisCacheFactory])
   .build();
 ```
@@ -7167,7 +7178,7 @@ const app = r
   .resource("app")
   .register([
     redis,
-    r.runner.cache.with({ provider: redisCacheProvider }),
+    resources.cache.with({ provider: redisCacheProvider }),
   ])
   .build();
 ```
@@ -7204,7 +7215,7 @@ After (global catch-all interception):
 ```typescript
 const app = r
   .resource("app")
-  .dependencies({ taskRunner: r.system.taskRunner })
+  .dependencies({ taskRunner: resources.taskRunner })
   .init(async (_config, { taskRunner }) => {
     taskRunner.intercept(async (next, input) => next(input));
   })
@@ -7233,7 +7244,7 @@ Removed:
 
 - `defineEventLanesTopology(...)`
 - `toEventLanesResourceConfig(...)`
-- `r.runner.tags.eventLaneHook`
+- `tags.eventLaneHook`
 
 Use canonical config:
 
@@ -7354,7 +7365,7 @@ If you opt in, enforce:
 
 - Every participating hook returns an async undo closure.
 - `transactional + parallel` is invalid.
-- `transactional + r.runner.tags.eventLane` is invalid.
+- `transactional + tags.eventLane` is invalid.
 
 ### 9. Switch Tag Discovery to Tag Dependencies
 
@@ -7419,7 +7430,7 @@ npm run qa
 Smoke test checklist:
 
 - Runtime startup completes without subtree/isolation violations.
-- Shutdown sequence emits `r.system.events.disposing` then `r.system.events.drained`.
+- Shutdown sequence emits `events.disposing` then `events.drained`.
 - Task and event admissions are blocked during disposal as expected.
 - Event Lanes consume only lanes for the active profile.
 - Public runtime API calls succeed only for exported ids.
@@ -7432,5 +7443,4 @@ Smoke test checklist:
 - Phase 4: Promote to production with one runtime profile at a time for Event Lanes.
 
 If your codebase has broad use of removed APIs, budget one focused migration iteration rather than mixing this with unrelated feature work.
-
 

@@ -89,7 +89,7 @@ describe("run.isolate exports", () => {
     });
   });
 
-  it("supports legacy exports selectors (deprecated) by mapping to isolate.exports", async () => {
+  it("rejects legacy exports selectors (deprecated string wildcard ids)", async () => {
     const publicTask = defineTask({
       id: "isolate.exports.legacy-selector.api.public",
       run: async () => "ok",
@@ -112,12 +112,12 @@ describe("run.isolate exports", () => {
       init: async (_cfg, deps) => deps.publicTask(),
     });
 
-    const runtime = await run(app);
-    expect(runtime.value).toBe("ok");
-    await runtime.dispose();
+    await expect(run(app)).rejects.toMatchObject({
+      id: "runner.errors.isolateExportsUnknownTarget",
+    });
   });
 
-  it("supports isolate.exports wildcard selectors", async () => {
+  it("rejects isolate.exports wildcard selectors", async () => {
     const publicTask = defineTask({
       id: "isolate.exports.selector.api.public",
       run: async () => "ok",
@@ -140,9 +140,9 @@ describe("run.isolate exports", () => {
       init: async (_config, deps) => deps.publicTask(),
     });
 
-    const runtime = await run(app);
-    expect(runtime.value).toBe("ok");
-    await runtime.dispose();
+    await expect(run(app)).rejects.toMatchObject({
+      id: "runner.errors.isolateExportsUnknownTarget",
+    });
   });
 
   it("supports legacy exports alongside isolate deny/only in a single definition", async () => {

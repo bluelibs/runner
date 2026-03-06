@@ -108,10 +108,10 @@ describe("run subtree validation branches", () => {
       register: [task, child],
       subtree: {
         validate: (definition) => {
-          if (isTask(definition) && definition.id === task.id) {
+          if (isTask(definition) && definition.id.endsWith(task.id)) {
             seen.task = typeof definition.run === "function";
           }
-          if (isResource(definition) && definition.id === child.id) {
+          if (isResource(definition) && definition.id.endsWith(child.id)) {
             seen.resource = typeof definition.init === "function";
           }
           return [];

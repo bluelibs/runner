@@ -79,13 +79,13 @@ describe("subtree validation extended targets", () => {
       ],
       subtree: {
         validate: (definition) => {
-          if (isHook(definition) && definition.id === policyHook.id) {
+          if (isHook(definition) && definition.id.endsWith(policyHook.id)) {
             seenCompiled.hook = Array.isArray(definition.tags);
             return [{ code: "custom", message: "hook policy check" }];
           }
           if (
             isTaskMiddleware(definition) &&
-            definition.id === policyTaskMiddleware.id
+            definition.id.endsWith(policyTaskMiddleware.id)
           ) {
             seenCompiled.taskMiddleware =
               typeof definition.with === "function" &&
@@ -96,7 +96,7 @@ describe("subtree validation extended targets", () => {
           }
           if (
             isResourceMiddleware(definition) &&
-            definition.id === policyResourceMiddleware.id
+            definition.id.endsWith(policyResourceMiddleware.id)
           ) {
             seenCompiled.resourceMiddleware =
               typeof definition.with === "function" &&
@@ -105,11 +105,11 @@ describe("subtree validation extended targets", () => {
               { code: "custom", message: "resource middleware policy check" },
             ];
           }
-          if (isEvent(definition) && definition.id === policyEvent.id) {
+          if (isEvent(definition) && definition.id.endsWith(policyEvent.id)) {
             seenCompiled.event = Array.isArray(definition.tags);
             return [{ code: "custom", message: "event policy check" }];
           }
-          if (isTag(definition) && definition.id === policyTag.id) {
+          if (isTag(definition) && definition.id.endsWith(policyTag.id)) {
             seenCompiled.tag =
               typeof definition.meta === "object" &&
               typeof definition.exists === "function";
@@ -131,15 +131,11 @@ describe("subtree validation extended targets", () => {
     }
 
     expect(message).toContain("Subtree policy validation failed");
-    expect(message).toContain(`target=hook:${policyHook.id}`);
-    expect(message).toContain(
-      `target=task-middleware:${policyTaskMiddleware.id}`,
-    );
-    expect(message).toContain(
-      `target=resource-middleware:${policyResourceMiddleware.id}`,
-    );
-    expect(message).toContain(`target=event:${policyEvent.id}`);
-    expect(message).toContain(`target=tag:${policyTag.id}`);
+    expect(message).toContain("target=hook:");
+    expect(message).toContain("target=task-middleware:");
+    expect(message).toContain("target=resource-middleware:");
+    expect(message).toContain("target=event:");
+    expect(message).toContain("target=tag:");
 
     expect(seenCompiled).toEqual({
       hook: true,

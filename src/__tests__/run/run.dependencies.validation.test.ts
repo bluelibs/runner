@@ -61,7 +61,10 @@ describe("run dependency map validation", () => {
             return [];
           }
 
-          const deps = definition.dependencies as Record<string, { id: string }>;
+          const deps = definition.dependencies as Record<
+            string,
+            { id: string }
+          >;
           sawNormalizedDependencies =
             typeof definition.dependencies === "object" &&
             (deps.event?.id === event.id || deps.event?.id === expectedEventId);

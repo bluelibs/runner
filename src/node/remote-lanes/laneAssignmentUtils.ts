@@ -1,4 +1,5 @@
 import type { Store } from "../../models/Store";
+import { toPublicDefinition } from "../../models/utils/toPublicDefinition";
 
 /**
  * Extracts the id string from a lane applyTo target.
@@ -121,17 +122,9 @@ export function collectCrossLaneApplyToEventIds(
   return eventIds;
 }
 
-function toPublicPredicateCandidate<T extends { id: string }>(
+export function toPublicPredicateCandidate<T extends { id: string }>(
   store: Store,
   definition: T,
 ): T {
-  const publicId = store.toPublicId(definition);
-  if (publicId === definition.id) {
-    return definition;
-  }
-
-  return {
-    ...definition,
-    id: publicId,
-  };
+  return toPublicDefinition(store, definition);
 }

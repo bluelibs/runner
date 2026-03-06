@@ -29,8 +29,11 @@ describe("global cron resource", () => {
     runtime: Awaited<ReturnType<typeof run>>,
     taskId: string,
   ) =>
-    Array.from(runtime.getResourceValue(resources.cron).schedules.values()).find(
-      (schedule) => schedule.taskId === taskId || schedule.taskId.endsWith(taskId),
+    Array.from(
+      runtime.getResourceValue(resources.cron).schedules.values(),
+    ).find(
+      (schedule) =>
+        schedule.taskId === taskId || schedule.taskId.endsWith(taskId),
     );
 
   it("does not auto-register cron scheduling when resource is not registered", async () => {
@@ -203,9 +206,7 @@ describe("global cron resource", () => {
     await flushMicrotasks();
 
     expect(attempts).toBe(1);
-    expect(
-      findSchedule(runtime, immediateStopTask.id)?.stopped,
-    ).toBe(true);
+    expect(findSchedule(runtime, immediateStopTask.id)?.stopped).toBe(true);
 
     await runtime.dispose();
   });

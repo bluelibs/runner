@@ -186,7 +186,9 @@ describe("Optional dependencies", () => {
   });
 
   test("event.optional() present should resolve to emit function", async () => {
-    const ev = defineEvent<{ v: number }>({ id: "tests.optional.event.present" });
+    const ev = defineEvent<{ v: number }>({
+      id: "tests.optional.event.present",
+    });
     const registrar = defineResource({
       id: "tests.optional.event.registrar",
       register: [ev],
@@ -451,4 +453,3 @@ describe("Optional dependencies", () => {
     expect(inHook).toBe(true);
   });
 });
-

@@ -176,7 +176,8 @@ export class StoreRegistry {
     ];
     if (
       configuredFrom &&
-      (typeof configuredFrom === "object" || typeof configuredFrom === "function")
+      (typeof configuredFrom === "object" ||
+        typeof configuredFrom === "function")
     ) {
       const byConfiguredFrom = this.definitionAliases.get(configuredFrom);
       if (byConfiguredFrom) {
@@ -231,7 +232,10 @@ export class StoreRegistry {
     this.definitionAliasesBySourceId.set(sourceId, new Set([canonicalId]));
   }
 
-  private recordCanonicalSourceId(reference: unknown, canonicalId: string): void {
+  private recordCanonicalSourceId(
+    reference: unknown,
+    canonicalId: string,
+  ): void {
     if (
       reference === null ||
       reference === undefined ||

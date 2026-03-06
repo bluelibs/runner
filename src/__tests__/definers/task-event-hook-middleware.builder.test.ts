@@ -10,7 +10,10 @@ describe("task/event/hook/middleware builders", () => {
       )
       .build();
 
-    const app = defineResource({ id: "tests.app.task.infer", register: [task] });
+    const app = defineResource({
+      id: "tests.app.task.infer",
+      register: [task],
+    });
     const rr = await run(app);
     const out = await rr.runTask(task, { a: 1, b: 2 });
     expect(out).toBe(3);
@@ -61,11 +64,16 @@ describe("task/event/hook/middleware builders", () => {
       })
       .build();
 
-    const app = defineResource({ id: "tests.app.ev", register: [ev, listener] });
+    const app = defineResource({
+      id: "tests.app.ev",
+      register: [ev, listener],
+    });
     const rr = await run(app);
     await rr.emitEvent(ev, undefined);
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toEqual(expect.stringMatching(/(?:^|\.)tests\.builder\.event$/));
+    expect(calls[0]).toEqual(
+      expect.stringMatching(/(?:^|\.)tests\.builder\.event$/),
+    );
     await rr.dispose();
   });
 
@@ -464,7 +472,10 @@ describe("task/event/hook/middleware builders", () => {
       .run(async (_: void, deps: { a: number; b: number }) => deps.a + deps.b)
       .build();
 
-    const app = defineResource({ id: "tests.app.task.deps.ff", register: [a, b, t] });
+    const app = defineResource({
+      id: "tests.app.task.deps.ff",
+      register: [a, b, t],
+    });
     const rr = await run(app);
     expect(await rr.runTask(t)).toBe(10);
     await rr.dispose();
@@ -622,8 +633,14 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("task middleware dependencies: function+function merge and override", () => {
-    const a = defineResource({ id: "tests.builder.tmw.deps.a", init: async () => 1 });
-    const b = defineResource({ id: "tests.builder.tmw.deps.b", init: async () => 2 });
+    const a = defineResource({
+      id: "tests.builder.tmw.deps.a",
+      init: async () => 1,
+    });
+    const b = defineResource({
+      id: "tests.builder.tmw.deps.b",
+      init: async () => 2,
+    });
     const tmw = r.middleware
       .task("tests.builder.tmw.deps.merge")
       .dependencies(() => ({ a }))
@@ -652,8 +669,14 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("resource middleware dependencies: function+function merge and override", () => {
-    const a = defineResource({ id: "tests.builder.rmw.deps.a", init: async () => 1 });
-    const b = defineResource({ id: "tests.builder.rmw.deps.b", init: async () => 2 });
+    const a = defineResource({
+      id: "tests.builder.rmw.deps.a",
+      init: async () => 1,
+    });
+    const b = defineResource({
+      id: "tests.builder.rmw.deps.b",
+      init: async () => 2,
+    });
     const rmw = r.middleware
       .resource("tests.builder.rmw.deps.merge")
       .dependencies(() => ({ a }))
@@ -715,7 +738,10 @@ describe("task/event/hook/middleware builders", () => {
       // Non-async arrow with single param, no parentheses in toString
       .run((input: number) => Promise.resolve(input + 9))
       .build();
-    const app = defineResource({ id: "tests.app.task.noparens", register: [task] });
+    const app = defineResource({
+      id: "tests.app.task.noparens",
+      register: [task],
+    });
     const rr = await run(app);
     const out = await rr.runTask(task, 1);
     expect(out).toBe(10);
@@ -728,7 +754,10 @@ describe("task/event/hook/middleware builders", () => {
       .inputSchema<number>({ parse: (x: any) => x })
       .run(async (input: number, _deps: any) => Promise.resolve(input + 2))
       .build();
-    const app = defineResource({ id: "tests.app.task.twoargs", register: [task] });
+    const app = defineResource({
+      id: "tests.app.task.twoargs",
+      register: [task],
+    });
     const rr = await run(app);
     const out = await rr.runTask(task, 5);
     expect(out).toBe(7);
@@ -741,7 +770,10 @@ describe("task/event/hook/middleware builders", () => {
       .inputSchema<number>({ parse: (x: any) => x })
       .run(async (input) => Promise.resolve((input as number) + 3))
       .build();
-    const app = defineResource({ id: "tests.app.task.runobj", register: [task] });
+    const app = defineResource({
+      id: "tests.app.task.runobj",
+      register: [task],
+    });
     const rr = await run(app);
     const out = await rr.runTask(task, 4);
     expect(out).toBe(7);
@@ -937,4 +969,3 @@ describe("task/event/hook/middleware builders", () => {
     });
   });
 });
-

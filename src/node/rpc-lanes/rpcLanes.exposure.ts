@@ -39,6 +39,8 @@ export async function startRpcLanesExposure(
     rpcLanesExposureModeError.throw({ mode: resolved.mode });
   }
 
+  assertRpcLanesOwner(resourceId);
+
   const policy = toRpcLanesExposurePolicy(resolved, (id) =>
     dependencies.store.toPublicId(id),
   );
@@ -50,8 +52,6 @@ export async function startRpcLanesExposure(
     });
     return null;
   }
-
-  assertRpcLanesOwner(resourceId);
 
   const exposure = await createNodeExposure(
     { http: config.exposure.http },

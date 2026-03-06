@@ -1,7 +1,4 @@
-import {
-  defineResource,
-  defineTask,
-} from "../../define";
+import { defineResource, defineTask } from "../../define";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
 import { RunResult } from "../../models/RunResult";

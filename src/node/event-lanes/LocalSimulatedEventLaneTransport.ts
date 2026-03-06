@@ -47,14 +47,16 @@ export class LocalSimulatedEventLaneTransport {
       const resolvedEmissionEventId =
         this.dependencies.store.events.get(emission.id)?.event.id ??
         emission.id;
-      const eventRoute =
-        this.context.eventRouteByEventId.get(resolvedEmissionEventId);
+      const eventRoute = this.context.eventRouteByEventId.get(
+        resolvedEmissionEventId,
+      );
       if (!eventRoute) {
         return next(emission);
       }
 
-      const publicEventId =
-        this.dependencies.store.toPublicId(resolvedEmissionEventId);
+      const publicEventId = this.dependencies.store.toPublicId(
+        resolvedEmissionEventId,
+      );
 
       emission.stopPropagation();
       const bindingAuth = this.resolveBindingAuth(eventRoute.lane.id);

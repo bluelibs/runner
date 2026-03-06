@@ -11,6 +11,7 @@ import { IResourceMiddlewareExecutionInput } from "../../types/resourceMiddlewar
 import type { ResourceMiddlewareInterceptor } from "./types";
 import { runtimeSource } from "../../types/runtimeSource";
 import { LifecycleAdmissionController } from "../runtime/LifecycleAdmissionController";
+import { toPublicDefinition } from "../utils/toPublicDefinition";
 
 /**
  * Composes resource initialization chains with validation, interceptors, and middlewares.
@@ -115,7 +116,7 @@ export class ResourceMiddlewareComposer {
     }
 
     let next = runner;
-    const publicResourceDefinition = this.toPublicDefinition(resource);
+    const publicResourceDefinition = toPublicDefinition(this.store, resource);
 
     for (let i = middlewares.length - 1; i >= 0; i--) {
       const middleware = middlewares[i];
@@ -173,7 +174,7 @@ export class ResourceMiddlewareComposer {
     if (interceptors.length === 0) {
       return runner;
     }
-    const publicResourceDefinition = this.toPublicDefinition(resource);
+    const publicResourceDefinition = toPublicDefinition(this.store, resource);
 
     const createExecutionInput = (
       config: TConfig,
@@ -225,7 +226,7 @@ export class ResourceMiddlewareComposer {
     if (interceptors.length === 0) {
       return middlewareRunner;
     }
-    const publicResourceDefinition = this.toPublicDefinition(resource);
+    const publicResourceDefinition = toPublicDefinition(this.store, resource);
 
     let wrapped = middlewareRunner;
 
@@ -280,19 +281,5 @@ export class ResourceMiddlewareComposer {
     } catch (_) {
       // Ignore errors from error handler
     }
-  }
-
-  private toPublicDefinition<
-    TResource extends IResource<any, any, any, any>,
-  >(resource: TResource): TResource {
-    const publicId = this.store.toPublicId(resource);
-    if (publicId === resource.id) {
-      return resource;
-    }
-
-    return {
-      ...resource,
-      id: publicId,
-    };
   }
 }

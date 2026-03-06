@@ -13,6 +13,7 @@ import {
   readTargetId,
   isRegisteredDefinitionId,
   collectCrossLaneApplyToEventIds,
+  toPublicPredicateCandidate,
 } from "../remote-lanes/laneAssignmentUtils";
 
 const RPC_LANES_RESOURCE_ID = "platform.node.resources.rpcLanes";
@@ -172,19 +173,4 @@ function collectRpcLaneApplyToEventIds(store: Store): Set<string> {
       topology: unknown,
     ) => readonly { applyTo?: unknown }[],
   );
-}
-
-function toPublicPredicateCandidate<T extends { id: string }>(
-  store: Store,
-  definition: T,
-): T {
-  const publicId = store.toPublicId(definition);
-  if (publicId === definition.id) {
-    return definition;
-  }
-
-  return {
-    ...definition,
-    id: publicId,
-  };
 }

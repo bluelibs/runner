@@ -18,7 +18,9 @@ async function waitUntil(
 }
 
 describe("durable: signals integration", () => {
-  const Paid = defineEvent<{ paidAt: number }>({ id: "durable.tests.signals.paid" });
+  const Paid = defineEvent<{ paidAt: number }>({
+    id: "durable.tests.signals.paid",
+  });
 
   it("waits for a signal and resumes the workflow", async () => {
     const store = new MemoryStore();

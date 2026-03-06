@@ -29,8 +29,7 @@ Tasks are where your business logic lives. They are async functions with explici
 Here's a complete example showing you everything:
 
 ```typescript
-import { r, run } from "@bluelibs/runner";
-import { isTask } from "@bluelibs/runner/define";
+import { isTask, r, run } from "@bluelibs/runner";
 
 // Assuming: emailService and logger resources are defined elsewhere
 // 1. Define your task - it's just a function with a name and dependencies

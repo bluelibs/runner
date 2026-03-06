@@ -357,8 +357,7 @@ export class EventManager {
     if (Array.isArray(event)) {
       event.forEach((id) => this.addListener(id, handler, options));
     } else {
-      const resolvedEvent =
-        this.eventDefinitionResolver?.(event) ?? event;
+      const resolvedEvent = this.eventDefinitionResolver?.(event) ?? event;
       const eventId = resolvedEvent.id;
       this.registry.addListener(eventId, newListener);
     }

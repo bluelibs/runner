@@ -58,22 +58,19 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     sourceResourceId = "platform.node.resources.rpcLanes",
   } = deps;
   const exposureSource = runtimeSource.resource(sourceResourceId);
-  const resolveEventId = (eventId: string): string => {
-    const maybeStore = store as {
-      resolveDefinitionId?: (reference: unknown) => string | undefined;
-    };
-    return maybeStore.resolveDefinitionId?.(eventId) ?? eventId;
-  };
 
   return async (
     req: IncomingMessage,
     res: ServerResponse,
     eventIdInput: string,
   ): Promise<void> => {
-    const eventId = resolveEventId(eventIdInput);
-    const allowAsyncContextForEvent = allowAsyncContext(eventId);
+    const eventId = store.resolveDefinitionId(eventIdInput) ?? eventIdInput;
+    const policyEventId = store.events.has(eventId)
+      ? store.toPublicId(eventId)
+      : eventIdInput;
+    const allowAsyncContextForEvent = allowAsyncContext(policyEventId);
     const asyncContextAllowListForEvent =
-      resolveAsyncContextAllowList(eventId);
+      resolveAsyncContextAllowList(policyEventId);
 
     if (req.method !== "POST") {
       applyCorsActual(req, res, cors);
@@ -88,14 +85,14 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
       return;
     }
 
-    const allowError = allowList.ensureEvent(eventId);
+    const allowError = allowList.ensureEvent(policyEventId);
     if (allowError) {
       applyCorsActual(req, res, cors);
       respondJson(res, allowError, serializer);
       return;
     }
 
-    const authzError = await authorizeEvent(req, eventId);
+    const authzError = await authorizeEvent(req, policyEventId);
     if (authzError) {
       applyCorsActual(req, res, cors);
       respondJson(res, authzError, serializer);

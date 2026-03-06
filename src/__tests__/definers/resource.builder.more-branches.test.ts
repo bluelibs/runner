@@ -2,8 +2,14 @@ import { r, defineResource, run } from "../..";
 
 describe("resource builder - register function+function merge branch", () => {
   it("merges two function-based registers preserving order", () => {
-    const a = defineResource({ id: "tests.builder.fnfn.a", init: async () => 1 });
-    const b = defineResource({ id: "tests.builder.fnfn.b", init: async () => 2 });
+    const a = defineResource({
+      id: "tests.builder.fnfn.a",
+      init: async () => 1,
+    });
+    const b = defineResource({
+      id: "tests.builder.fnfn.b",
+      init: async () => 2,
+    });
 
     const composed = r
       .resource("tests.builder.fnfn")
@@ -52,7 +58,10 @@ describe("resource builder - register function+function merge branch", () => {
   });
 
   it("init handles context state via the classic signature", async () => {
-    const a = defineResource({ id: "tests.builder.init.obj.a", init: async () => 5 });
+    const a = defineResource({
+      id: "tests.builder.init.obj.a",
+      init: async () => 5,
+    });
     const app = r
       .resource("tests.builder.init.obj")
       .register([a])
@@ -131,8 +140,14 @@ describe("resource builder - register function+function merge branch", () => {
   });
 
   it("resource dependencies append by default and override when requested", async () => {
-    const a = defineResource({ id: "tests.builder.deps.a", init: async () => 5 });
-    const b = defineResource({ id: "tests.builder.deps.b", init: async () => 7 });
+    const a = defineResource({
+      id: "tests.builder.deps.a",
+      init: async () => 5,
+    });
+    const b = defineResource({
+      id: "tests.builder.deps.b",
+      init: async () => 7,
+    });
 
     const appAppend = r
       .resource("tests.builder.deps.append")
@@ -193,6 +208,3 @@ describe("resource builder - register function+function merge branch", () => {
     expect(configured.config).toEqual({ name: "detached" });
   });
 });
-
-
-

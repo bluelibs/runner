@@ -18,7 +18,9 @@ async function waitUntil(
 }
 
 describe("durable: audit trail (integration)", () => {
-  const Paid = defineEvent<{ paidAt: number }>({ id: "durable.tests.audit.paid" });
+  const Paid = defineEvent<{ paidAt: number }>({
+    id: "durable.tests.audit.paid",
+  });
 
   it("records steps, emits, sleeps, and custom notes", async () => {
     const store = new MemoryStore();

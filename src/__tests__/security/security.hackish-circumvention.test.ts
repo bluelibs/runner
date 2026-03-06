@@ -47,9 +47,13 @@ describe("Security: Hackish circumvention attempts", () => {
 
     const emitWithSpoof = defineTask<{ msg: string }>({
       id: "sec.hack.emitWithSpoof",
-      dependencies: { eventManager: resources.eventManager },
-      run: async (input, { eventManager }) => {
-        await eventManager.emit(e, input, runtimeSource.runtime(h1.id)); // spoof source as h1
+      dependencies: {
+        eventManager: resources.eventManager,
+        store: resources.store,
+      },
+      run: async (input, { eventManager, store }) => {
+        const hookId = store.resolveDefinitionId(h1) ?? h1.id;
+        await eventManager.emit(e, input, runtimeSource.runtime(hookId)); // spoof source as h1
       },
     });
 
@@ -78,15 +82,15 @@ describe("Security: Hackish circumvention attempts", () => {
     const h = defineHook({
       id: "sec.hack.h",
       on: e,
-      dependencies: { eventManager: resources.eventManager },
-      run: async (ev, { eventManager }) => {
+      dependencies: {
+        eventManager: resources.eventManager,
+        store: resources.store,
+      },
+      run: async (ev, { eventManager, store }) => {
         countH++;
         if (ev.data.step === 0) {
-          await eventManager.emit(
-            e,
-            { step: 1 },
-            runtimeSource.runtime("sec.hack.h"),
-          );
+          const hookId = store.resolveDefinitionId(h) ?? h.id;
+          await eventManager.emit(e, { step: 1 }, runtimeSource.hook(hookId));
         }
       },
     });

@@ -158,7 +158,8 @@ export class EventLanesController {
       }
 
       const resolvedEmissionId =
-        this.dependencies.store.events.get(emission.id)?.event.id ?? emission.id;
+        this.dependencies.store.events.get(emission.id)?.event.id ??
+        emission.id;
       const eventRoute =
         this.context.eventRouteByEventId.get(resolvedEmissionId);
       if (!eventRoute) {

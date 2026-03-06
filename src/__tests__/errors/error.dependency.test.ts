@@ -97,7 +97,9 @@ describe("errors as registrable items and dependencies", () => {
     });
     const runtime = await run(app);
     const store = await runtime.getResourceValue(resources.store);
-    expect(store.errors.get(myErr.id)).toBe(myErr);
+    const registered = store.errors.get(myErr.id);
+    expect(registered).toBeDefined();
+    expect(registered?.id).toBe(store.resolveDefinitionId(myErr));
     await runtime.dispose();
   });
   it("prevents duplicate error ids on registration", async () => {

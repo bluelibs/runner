@@ -14,11 +14,24 @@ import {
 import { createMessageError } from "../../../../errors";
 
 describe("requestHandlers - multipart and sanitization", () => {
+  const resolveDefinitionId = (reference: unknown): string | undefined => {
+    if (typeof reference === "string") {
+      return reference;
+    }
+    if (reference && typeof reference === "object" && "id" in reference) {
+      const id = (reference as { id?: unknown }).id;
+      return typeof id === "string" ? id : undefined;
+    }
+    return undefined;
+  };
+
   const getDeps = () => ({
     store: {
       tasks: new Map([["t", { task: async () => 1 }]]),
       errors: new Map(),
       asyncContexts: new Map(),
+      resolveDefinitionId,
+      toPublicId: resolveDefinitionId,
     },
     taskRunner: { run: async () => 1 },
     eventManager: { emit: async () => undefined } as any,

@@ -50,7 +50,12 @@ export class ValidatorContext {
   }
 
   resolveReferenceId(entry: unknown): string | null {
-    const resolved = this.registry.resolveDefinitionId(entry);
+    const resolveDefinitionId = (
+      this.registry as unknown as {
+        resolveDefinitionId?: (reference: unknown) => string | undefined;
+      }
+    ).resolveDefinitionId;
+    const resolved = resolveDefinitionId?.call(this.registry, entry);
     if (resolved && resolved.length > 0) {
       return resolved;
     }
@@ -58,8 +63,17 @@ export class ValidatorContext {
   }
 
   toPublicId(reference: unknown): string {
-    const resolved = this.registry.resolveDefinitionId(reference);
-    return this.registry.getDisplayId(resolved ?? String(reference));
+    const resolveDefinitionId = (
+      this.registry as unknown as {
+        resolveDefinitionId?: (reference: unknown) => string | undefined;
+      }
+    ).resolveDefinitionId;
+    const getDisplayId = (
+      this.registry as unknown as { getDisplayId?: (id: string) => string }
+    ).getDisplayId;
+    const resolved = resolveDefinitionId?.call(this.registry, reference);
+    const id = resolved ?? String(reference);
+    return getDisplayId ? getDisplayId.call(this.registry, id) : id;
   }
 
   forEachTaggableEntry(callback: (entry: TaggableEntry) => void): void {

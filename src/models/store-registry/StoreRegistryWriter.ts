@@ -26,7 +26,6 @@ import {
   symbolTag,
   symbolTask,
   symbolTaskMiddleware,
-  symbolMiddlewareConfiguredFrom,
 } from "../../defs";
 import { unknownItemTypeError, validationError } from "../../errors";
 import { IAsyncContext } from "../../types/asyncContext";
@@ -852,22 +851,15 @@ export class StoreRegistryWriter {
     const ownerIsGateway =
       this.collections.resources.get(ownerResourceId)?.resource.gateway ===
       true;
-    const configuredFrom = (attachment as unknown as Record<symbol, unknown>)[
-      symbolMiddlewareConfiguredFrom
-    ];
-    const isConfiguredAttachment =
-      configuredFrom !== undefined && configuredFrom !== null;
     const isRegisteredMiddlewareId = (candidateId: string): boolean =>
       kind === RegisterableKind.TaskMiddleware
         ? this.collections.taskMiddlewares.has(candidateId)
         : this.collections.resourceMiddlewares.has(candidateId);
     const resolvedByAliasCandidate =
-      isConfiguredAttachment
-        ? undefined
-        : this.aliasResolver.resolveDefinitionId(attachment);
+      this.aliasResolver.resolveDefinitionId(attachment);
     const resolvedByAlias =
-      typeof resolvedByAliasCandidate === "string"
-      && isRegisteredMiddlewareId(resolvedByAliasCandidate)
+      typeof resolvedByAliasCandidate === "string" &&
+      isRegisteredMiddlewareId(resolvedByAliasCandidate)
         ? resolvedByAliasCandidate
         : undefined;
     const resolvedId =

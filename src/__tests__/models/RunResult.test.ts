@@ -191,7 +191,8 @@ describe("RunResult", () => {
     const runtime = await run(app);
     await runtime.runTask(parent);
 
-    expect(seenChildSources[0]).toEqual(runtimeSource.task(parent.id));
+    const parentTaskId = runtime.store.resolveDefinitionId(parent)!;
+    expect(seenChildSources[0]).toEqual(runtimeSource.task(parentTaskId));
     await runtime.dispose();
   });
 

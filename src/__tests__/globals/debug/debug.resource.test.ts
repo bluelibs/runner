@@ -121,9 +121,9 @@ describe("runner.debug", () => {
     await result.runTask(testTask);
 
     // Task/resource tracker messages (assert present during boot)
-    expect(
-      messages.some((m) => /Task .*tests\.task is running/.test(m)),
-    ).toBe(true);
+    expect(messages.some((m) => /Task .*tests\.task is running/.test(m))).toBe(
+      true,
+    );
     expect(messages.some((m) => /Task .*tests\.task completed/.test(m))).toBe(
       true,
     );

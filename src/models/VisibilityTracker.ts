@@ -989,13 +989,16 @@ export class VisibilityTracker {
     return chain;
   }
 
-  private throwAccessViolation(registry: StoreRegistry, data: {
-    violation: AccessViolation;
-    targetId: string;
-    targetType: string;
-    consumerId: string;
-    consumerType: string;
-  }): void {
+  private throwAccessViolation(
+    registry: StoreRegistry,
+    data: {
+      violation: AccessViolation;
+      targetId: string;
+      targetType: string;
+      consumerId: string;
+      consumerType: string;
+    },
+  ): void {
     const { violation, targetId, targetType, consumerId, consumerType } = data;
     const toDisplayId = (id: string): string => registry.getDisplayId(id);
     const displayTargetId = toDisplayId(targetId);

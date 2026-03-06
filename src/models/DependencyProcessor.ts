@@ -379,7 +379,7 @@ export class DependencyProcessor {
         };
 
         const order = hook.order ?? 0;
-        const hookListenerId = this.store.toPublicId(hook);
+        const hookListenerId = hook.id;
 
         if (eventDefinition === "*") {
           this.eventManager.addGlobalListener(handler, {

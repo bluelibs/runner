@@ -15,6 +15,7 @@ import {
   readTargetId,
   isRegisteredDefinitionId,
   collectCrossLaneApplyToEventIds,
+  toPublicPredicateCandidate,
 } from "../remote-lanes/laneAssignmentUtils";
 
 type ResolvedTarget =
@@ -128,21 +129,6 @@ export function resolveRpcLaneAssignments(
   return {
     taskLaneByTaskId,
     eventLaneByEventId,
-  };
-}
-
-function toPublicPredicateCandidate<T extends { id: string }>(
-  store: Store,
-  definition: T,
-): T {
-  const publicId = store.toPublicId(definition);
-  if (publicId === definition.id) {
-    return definition;
-  }
-
-  return {
-    ...definition,
-    id: publicId,
   };
 }
 

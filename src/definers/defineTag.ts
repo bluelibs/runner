@@ -108,9 +108,8 @@ export function defineTag<
         config = tagConfig;
       }
       const configuredFrom =
-        (this as unknown as Record<symbol, unknown>)[
-          symbolTagConfiguredFrom
-        ] ?? this;
+        (this as unknown as Record<symbol, unknown>)[symbolTagConfiguredFrom] ??
+        this;
       const configured = {
         ...this,
         [symbolTagConfigured]: true,

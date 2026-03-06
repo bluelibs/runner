@@ -302,8 +302,7 @@ export class RunResult<V> implements IRuntime<V> {
   ) => {
     this.ensureRuntimeIsActive();
 
-    const eventId =
-      this.resolveRuntimeElementId(event);
+    const eventId = this.resolveRuntimeElementId(event);
     if (!this.store.events.has(eventId)) {
       runtimeElementNotFoundError.throw({
         type: "Event",
@@ -527,9 +526,7 @@ export class RunResult<V> implements IRuntime<V> {
    * Resolves either a definition object or a string id to the store's
    * canonical id, with graceful fallback to the original string/object id.
    */
-  private resolveRuntimeElementId(
-    reference: string | { id: string },
-  ): string {
+  private resolveRuntimeElementId(reference: string | { id: string }): string {
     const resolved = this.store.resolveDefinitionId(reference);
     if (resolved) {
       return resolved;

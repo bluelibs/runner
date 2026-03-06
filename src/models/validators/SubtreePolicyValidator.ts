@@ -15,7 +15,10 @@ export function validateSubtreePolicies(ctx: ValidatorContext): void {
   const violations: SubtreePolicyViolationRecord[] = [];
   const subtreeEntries = collectSubtreeValidationEntries(ctx);
 
-  for (const { resource: ownerResource, config } of ctx.registry.resources.values()) {
+  for (const {
+    resource: ownerResource,
+    config,
+  } of ctx.registry.resources.values()) {
     const ownerResourceId = ownerResource.id;
     const validators = ownerResource.subtree?.validate ?? [];
     if (validators.length === 0) {
@@ -60,9 +63,7 @@ export function validateSubtreePolicies(ctx: ValidatorContext): void {
   });
 }
 
-function collectSubtreeValidationEntries(
-  ctx: ValidatorContext,
-): Array<{
+function collectSubtreeValidationEntries(ctx: ValidatorContext): Array<{
   definition: SubtreeValidatableElement;
   targetType: SubtreeValidationTargetType;
 }> {

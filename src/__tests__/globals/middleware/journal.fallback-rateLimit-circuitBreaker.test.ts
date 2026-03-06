@@ -9,8 +9,7 @@ import { createMessageError } from "../../../errors";
 
 const fallbackJournalKeys = middleware.task.fallback.journalKeys;
 const rateLimitJournalKeys = middleware.task.rateLimit.journalKeys;
-const circuitBreakerJournalKeys =
-  middleware.task.circuitBreaker.journalKeys;
+const circuitBreakerJournalKeys = middleware.task.circuitBreaker.journalKeys;
 
 describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () => {
   describe("Fallback Middleware", () => {
@@ -23,9 +22,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
 
       const failingTask = defineTask({
         id: "test.journal.fallback.failing",
-        middleware: [
-          middleware.task.fallback.with({ fallback: fallbackFn }),
-        ],
+        middleware: [middleware.task.fallback.with({ fallback: fallbackFn })],
         run: async (_input: void, _deps, context) => {
           capturedActive = context?.journal.get(fallbackJournalKeys.active);
           throw createMessageError("Primary failed");
@@ -94,9 +91,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
 
       const successTask = defineTask({
         id: "test.journal.fallback.success",
-        middleware: [
-          middleware.task.fallback.with({ fallback: "unused" }),
-        ],
+        middleware: [middleware.task.fallback.with({ fallback: "unused" })],
         run: async (_input: void, _deps, context) => {
           capturedActive = context?.journal.get(fallbackJournalKeys.active);
           return "success";

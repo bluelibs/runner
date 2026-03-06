@@ -13,6 +13,14 @@ export function createRequestHandlersDeps(
       events: new Map(),
       errors: new Map(),
       asyncContexts: new Map(),
+      resolveDefinitionId: (reference: unknown) =>
+        typeof reference === "string"
+          ? reference
+          : (reference as { id?: string })?.id,
+      toPublicId: (reference: unknown) =>
+        typeof reference === "string"
+          ? reference
+          : ((reference as { id?: string })?.id ?? String(reference)),
     },
     taskRunner: { run: async () => undefined },
     eventManager: {

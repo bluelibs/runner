@@ -75,10 +75,8 @@ describe("global cron resource (additional)", () => {
 
     expect(attempts).toBe(1);
     expect(
-      runtime
-        .getResourceValue(resources.cron)
-        .schedules.values()
-        .next().value?.stopped,
+      runtime.getResourceValue(resources.cron).schedules.values().next().value
+        ?.stopped,
     ).toBe(false);
 
     await runtime.dispose();

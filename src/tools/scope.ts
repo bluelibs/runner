@@ -1,7 +1,4 @@
-import type {
-  RegisterableItems,
-  IsolationSubtreeFilter,
-} from "../defs";
+import type { RegisterableItems, IsolationSubtreeFilter } from "../defs";
 
 /**
  * The four interaction channels that `scope()` controls.
@@ -30,9 +27,7 @@ export type IsolationChannel =
   | "middleware";
 
 /** The set of target types that scope() accepts (same as pre-scope IsolationTarget). */
-export type IsolationScopeTarget =
-  | RegisterableItems
-  | IsolationSubtreeFilter;
+export type IsolationScopeTarget = RegisterableItems | IsolationSubtreeFilter;
 
 /**
  * A scope entry created by `scope()`.

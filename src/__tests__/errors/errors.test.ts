@@ -215,7 +215,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Tag \"app.tags.tag1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Tag \"tag1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -240,7 +240,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Hook \"app.hooks.hook1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Hook \"hook1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -260,7 +260,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Middleware \"app.middleware.task.middlewarex\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Middleware \"middlewarex\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -278,7 +278,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Event \"app.events.ev1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Event \"ev1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 

@@ -37,8 +37,7 @@ const hasCacheEntryByTaskId = <TValue>(
   map: Map<string, TValue>,
   taskId: string,
 ): boolean =>
-  map.has(taskId) ||
-  Array.from(map.keys()).some((key) => key.endsWith(taskId));
+  map.has(taskId) || Array.from(map.keys()).some((key) => key.endsWith(taskId));
 
 describe("Caching System", () => {
   describe("Cache Resource", () => {
@@ -1104,4 +1103,3 @@ describe("Caching System", () => {
     });
   });
 });
-

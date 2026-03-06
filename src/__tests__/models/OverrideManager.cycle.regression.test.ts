@@ -35,7 +35,8 @@ describe("OverrideManager override graph recursion", () => {
     const registry = (store as any).registry as any;
     const manager = new OverrideManager(registry);
     expect(() => manager.storeOverridesDeeply(root)).not.toThrow();
-    expect(manager.overrides.has(baseTask.id)).toBe(true);
+    const targetId = registry.resolveDefinitionId(baseTask);
+    expect(manager.overrides.has(targetId)).toBe(true);
   });
 
   it("processes hook overrides and reports missing hook override targets with filtered sources", () => {
