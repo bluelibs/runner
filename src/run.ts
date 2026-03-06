@@ -270,6 +270,7 @@ export async function run<C, V extends Promise<any>>(
     store.lock();
     eventManager.lock();
     await logger.lock();
+    await store.ready();
 
     await eventManager.emit(
       globalEvents.ready,

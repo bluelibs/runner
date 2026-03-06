@@ -68,25 +68,25 @@ describe("isolation entry normalization coverage", () => {
       });
       const resource = defineResource({
         id: "coverage.isolate.empty-scope-target.resource",
-        isolate: { deny: [scope("")] },
+        isolate: { deny: [scope("" as unknown as never)] },
         register: [task],
       });
 
       await expectRunnerErrorId(run(resource), POLICY_INVALID_ENTRY_ID);
     });
 
-    it("throws isolateUnknownTargetError for scope wildcard resolving to zero IDs", async () => {
+    it("throws isolateInvalidEntryError for scope string targets", async () => {
       const task = defineTask({
         id: "coverage.isolate.zero-match-wildcard.task",
         run: async () => 42,
       });
       const resource = defineResource({
         id: "coverage.isolate.zero-match-wildcard.resource",
-        isolate: { deny: [scope("no.such.pattern.*")] },
+        isolate: { deny: [scope("no.such.pattern.*" as unknown as never)] },
         register: [task],
       });
 
-      await expectRunnerErrorId(run(resource), POLICY_UNKNOWN_TARGET_ID);
+      await expectRunnerErrorId(run(resource), POLICY_INVALID_ENTRY_ID);
     });
   });
 

@@ -4,7 +4,7 @@ import type {
   EventLaneMessage,
   IEventLaneQueue,
 } from "../../event-lanes/types";
-import { r, run } from "../../..";
+import { r, resources, run, tags } from "../../..";
 
 class TestEventLaneQueue implements IEventLaneQueue {
   private seq = 0;
@@ -100,7 +100,7 @@ describe("event-lanes: eventLanesResource", () => {
     const queue = new TestEventLaneQueue();
     const tagged = r
       .event<{ value: string }>("tests.event-lanes.producer.event")
-      .tags([r.runner.tags.eventLane.with({ lane })])
+      .tags([tags.eventLane.with({ lane })])
       .build();
 
     let localHookCalls = 0;
@@ -152,7 +152,7 @@ describe("event-lanes: eventLanesResource", () => {
     const queue = new TestEventLaneQueue();
     const tagged = r
       .event("tests.event-lanes.producer.max-attempts.event")
-      .tags([r.runner.tags.eventLane.with({ lane })])
+      .tags([tags.eventLane.with({ lane })])
       .build();
 
     const emitTask = r
@@ -193,11 +193,11 @@ describe("event-lanes: eventLanesResource", () => {
 
     const taggedA = r
       .event<{ id: string }>("tests.event-lanes.profile.taggedA")
-      .tags([r.runner.tags.eventLane.with({ lane: laneA })])
+      .tags([tags.eventLane.with({ lane: laneA })])
       .build();
     const taggedB = r
       .event<{ id: string }>("tests.event-lanes.profile.taggedB")
-      .tags([r.runner.tags.eventLane.with({ lane: laneB })])
+      .tags([tags.eventLane.with({ lane: laneB })])
       .build();
     const untagged = r
       .event<{ id: string }>("tests.event-lanes.profile.local")
@@ -275,11 +275,11 @@ describe("event-lanes: eventLanesResource", () => {
     const queue = new TestEventLaneQueue();
     const eventA = r
       .event<{ id: string }>("tests.event-lanes.shared-lane.eventA")
-      .tags([r.runner.tags.eventLane.with({ lane })])
+      .tags([tags.eventLane.with({ lane })])
       .build();
     const eventB = r
       .event<{ id: string }>("tests.event-lanes.shared-lane.eventB")
-      .tags([r.runner.tags.eventLane.with({ lane })])
+      .tags([tags.eventLane.with({ lane })])
       .build();
     const emitTask = r
       .task("tests.event-lanes.shared-lane.emit")
@@ -319,12 +319,12 @@ describe("event-lanes: eventLanesResource", () => {
       .event<{ date: Date; pattern: RegExp; custom: CustomPayload }>(
         "tests.event-lanes.serializer.event",
       )
-      .tags([r.runner.tags.eventLane.with({ lane })])
+      .tags([tags.eventLane.with({ lane })])
       .build();
 
     const serializerSetup = r
       .resource("tests.event-lanes.serializer.setup")
-      .dependencies({ serializer: r.runner.serializer })
+      .dependencies({ serializer: resources.serializer })
       .init(async (_config, { serializer }) => {
         serializer.addType?.({
           id: "tests.customPayload",
@@ -394,7 +394,7 @@ describe("event-lanes: eventLanesResource", () => {
     const lane = r.eventLane("tests.event-lanes.missing-binding").build();
     const tagged = r
       .event("tests.event-lanes.missing-binding.event")
-      .tags([r.runner.tags.eventLane.with({ lane })])
+      .tags([tags.eventLane.with({ lane })])
       .build();
     const emitTask = r
       .task("tests.event-lanes.missing-binding.emit")
@@ -469,11 +469,11 @@ describe("event-lanes: eventLanesResource", () => {
 
     const eventA = r
       .event<{ id: string }>("tests.event-lanes.topology.eventA")
-      .tags([r.runner.tags.eventLane.with({ lane: laneA })])
+      .tags([tags.eventLane.with({ lane: laneA })])
       .build();
     const eventB = r
       .event<{ id: string }>("tests.event-lanes.topology.eventB")
-      .tags([r.runner.tags.eventLane.with({ lane: laneB })])
+      .tags([tags.eventLane.with({ lane: laneB })])
       .build();
 
     const seen: string[] = [];

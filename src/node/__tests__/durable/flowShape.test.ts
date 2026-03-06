@@ -1,4 +1,4 @@
-import { event } from "../../..";
+import { defineEvent } from "../../..";
 import { createDurableStepId } from "../../durable/core/ids";
 import { recordFlowShape } from "../../durable/core/flowShape";
 
@@ -51,7 +51,7 @@ describe("durable: flowShape recorder", () => {
   });
 
   it("records waitForSignal nodes", async () => {
-    const Approved = event<{ by: string }>({ id: "app.approved" });
+    const Approved = defineEvent<{ by: string }>({ id: "app.approved" });
 
     const shape = await recordFlowShape(async (ctx) => {
       await ctx.waitForSignal(Approved, {
@@ -78,7 +78,7 @@ describe("durable: flowShape recorder", () => {
   });
 
   it("records emit nodes", async () => {
-    const OrderShipped = event<{ orderId: string }>({
+    const OrderShipped = defineEvent<{ orderId: string }>({
       id: "app.orderShipped",
     });
 

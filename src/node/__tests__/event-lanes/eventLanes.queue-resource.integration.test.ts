@@ -1,5 +1,5 @@
 import { createMessageError } from "../../../errors";
-import { r, run } from "../../..";
+import { r, run, tags } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
   EventLaneMessage,
@@ -155,7 +155,7 @@ describe("event-lanes: queue resource bindings", () => {
     const lane = r.eventLane("tests.event-lanes.queue-resource.lane").build();
     const event = r
       .event<{ id: string }>("tests.event-lanes.queue-resource.event")
-      .tags([r.runner.tags.eventLane.with({ lane })])
+      .tags([tags.eventLane.with({ lane })])
       .build();
 
     let hookCalls = 0;

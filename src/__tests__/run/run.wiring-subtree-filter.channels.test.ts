@@ -26,22 +26,22 @@ async function expectRunnerErrorId(
 describe("scope(subtreeOf(...), channels)", () => {
   it("allows listening when listening channel is disabled", async () => {
     const agentEvent = defineEvent({
-      id: "subtree.channels.listen.allowed.event",
+      id: "subtree-channels-listen-allowed-event",
     });
 
     const agentResource = defineResource({
-      id: "subtree.channels.listen.allowed.agent",
+      id: "subtree-channels-listen-allowed-agent",
       register: [agentEvent],
     });
 
     const hookConsumer = defineHook({
-      id: "subtree.channels.listen.allowed.hook",
+      id: "subtree-channels-listen-allowed-hook",
       on: agentEvent,
       run: async () => undefined,
     });
 
     const boundary = defineResource({
-      id: "subtree.channels.listen.allowed.boundary",
+      id: "subtree-channels-listen-allowed-boundary",
       register: [hookConsumer],
       isolate: {
         deny: [scope(subtreeOf(agentResource), { listening: false })],
@@ -49,7 +49,7 @@ describe("scope(subtreeOf(...), channels)", () => {
     });
 
     const app = defineResource({
-      id: "subtree.channels.listen.allowed.app",
+      id: "subtree-channels-listen-allowed-app",
       register: [agentResource, boundary],
     });
 
@@ -59,23 +59,23 @@ describe("scope(subtreeOf(...), channels)", () => {
 
   it("still blocks dependencies when only listening is disabled", async () => {
     const agentTask = defineTask({
-      id: "subtree.channels.deps.blocked.task",
+      id: "subtree-channels-deps-blocked-task",
       run: async () => "agent",
     });
 
     const agentResource = defineResource({
-      id: "subtree.channels.deps.blocked.agent",
+      id: "subtree-channels-deps-blocked-agent",
       register: [agentTask],
     });
 
     const consumer = defineTask({
-      id: "subtree.channels.deps.blocked.consumer",
+      id: "subtree-channels-deps-blocked-consumer",
       dependencies: { agentTask },
       run: async (_input, deps) => deps.agentTask(),
     });
 
     const boundary = defineResource({
-      id: "subtree.channels.deps.blocked.boundary",
+      id: "subtree-channels-deps-blocked-boundary",
       register: [consumer],
       isolate: {
         deny: [scope(subtreeOf(agentResource), { listening: false })],
@@ -83,7 +83,7 @@ describe("scope(subtreeOf(...), channels)", () => {
     });
 
     const app = defineResource({
-      id: "subtree.channels.deps.blocked.app",
+      id: "subtree-channels-deps-blocked-app",
       register: [agentResource, boundary],
     });
 
@@ -95,25 +95,25 @@ describe("scope(subtreeOf(...), channels)", () => {
 describe("scope([subtreeOf(a), subtreeOf(b)], channels)", () => {
   it("allows dependencies when dependencies channel is disabled", async () => {
     const firstTask = defineTask({
-      id: "subtree.channels.multi.deps.allowed.first",
+      id: "subtree-channels-multi-deps-allowed-first",
       run: async () => "first",
     });
     const secondTask = defineTask({
-      id: "subtree.channels.multi.deps.allowed.second",
+      id: "subtree-channels-multi-deps-allowed-second",
       run: async () => "second",
     });
 
     const firstResource = defineResource({
-      id: "subtree.channels.multi.deps.allowed.first.resource",
+      id: "subtree-channels-multi-deps-allowed-first-resource",
       register: [firstTask],
     });
     const secondResource = defineResource({
-      id: "subtree.channels.multi.deps.allowed.second.resource",
+      id: "subtree-channels-multi-deps-allowed-second-resource",
       register: [secondTask],
     });
 
     const consumer = defineTask({
-      id: "subtree.channels.multi.deps.allowed.consumer",
+      id: "subtree-channels-multi-deps-allowed-consumer",
       dependencies: { firstTask, secondTask },
       run: async (_input, deps) => [
         await deps.firstTask(),
@@ -122,7 +122,7 @@ describe("scope([subtreeOf(a), subtreeOf(b)], channels)", () => {
     });
 
     const boundary = defineResource({
-      id: "subtree.channels.multi.deps.allowed.boundary",
+      id: "subtree-channels-multi-deps-allowed-boundary",
       register: [consumer],
       isolate: {
         deny: [
@@ -134,7 +134,7 @@ describe("scope([subtreeOf(a), subtreeOf(b)], channels)", () => {
     });
 
     const app = defineResource({
-      id: "subtree.channels.multi.deps.allowed.app",
+      id: "subtree-channels-multi-deps-allowed-app",
       register: [firstResource, secondResource, boundary],
     });
 
@@ -148,29 +148,29 @@ describe("scope([subtreeOf(a), subtreeOf(b)], channels)", () => {
 
   it("blocks listening for wrapped subtrees when dependencies channel is disabled", async () => {
     const firstEvent = defineEvent({
-      id: "subtree.channels.multi.listen.blocked.first-event",
+      id: "subtree-channels-multi-listen-blocked-first-event",
     });
     const secondEvent = defineEvent({
-      id: "subtree.channels.multi.listen.blocked.second-event",
+      id: "subtree-channels-multi-listen-blocked-second-event",
     });
 
     const firstResource = defineResource({
-      id: "subtree.channels.multi.listen.blocked.first.resource",
+      id: "subtree-channels-multi-listen-blocked-first-resource",
       register: [firstEvent],
     });
     const secondResource = defineResource({
-      id: "subtree.channels.multi.listen.blocked.second.resource",
+      id: "subtree-channels-multi-listen-blocked-second-resource",
       register: [secondEvent],
     });
 
     const hookConsumer = defineHook({
-      id: "subtree.channels.multi.listen.blocked.hook",
+      id: "subtree-channels-multi-listen-blocked-hook",
       on: secondEvent,
       run: async () => undefined,
     });
 
     const boundary = defineResource({
-      id: "subtree.channels.multi.listen.blocked.boundary",
+      id: "subtree-channels-multi-listen-blocked-boundary",
       register: [hookConsumer],
       isolate: {
         deny: [
@@ -182,7 +182,7 @@ describe("scope([subtreeOf(a), subtreeOf(b)], channels)", () => {
     });
 
     const app = defineResource({
-      id: "subtree.channels.multi.listen.blocked.app",
+      id: "subtree-channels-multi-listen-blocked-app",
       register: [firstResource, secondResource, boundary],
     });
 
@@ -190,3 +190,4 @@ describe("scope([subtreeOf(a), subtreeOf(b)], channels)", () => {
     expect(error.message).toContain("channel: listening");
   });
 });
+

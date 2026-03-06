@@ -262,7 +262,9 @@ export class MiddlewareManager {
   getEverywhereMiddlewareForTasks(
     task: ITask<any, any, any>,
   ): ITaskMiddleware[] {
-    return this.middlewareResolver.getEverywhereTaskMiddlewares(task);
+    return this.middlewareResolver
+      .getEverywhereTaskMiddlewares(task)
+      .map((middleware) => this.toPublicMiddleware(middleware));
   }
 
   /**
@@ -273,6 +275,22 @@ export class MiddlewareManager {
   getEverywhereMiddlewareForResources(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
-    return this.middlewareResolver.getEverywhereResourceMiddlewares(resource);
+    return this.middlewareResolver
+      .getEverywhereResourceMiddlewares(resource)
+      .map((middleware) => this.toPublicMiddleware(middleware));
+  }
+
+  private toPublicMiddleware<TMiddleware extends { id: string }>(
+    middleware: TMiddleware,
+  ): TMiddleware {
+    const publicId = this.store.toPublicId(middleware);
+    if (publicId === middleware.id) {
+      return middleware;
+    }
+
+    return {
+      ...middleware,
+      id: publicId,
+    };
   }
 }

@@ -1,5 +1,5 @@
 import { createMessageError } from "../../../errors";
-import { r, run } from "../../..";
+import { r, run, tags } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import { MemoryEventLaneQueue } from "../../event-lanes/MemoryEventLaneQueue";
 
@@ -29,7 +29,7 @@ describe("eventLanesResource mode infrastructure bypass", () => {
     let hookRuns = 0;
     const event = r
       .event<{ value: number }>("tests.event-lanes.transparent.no-deps.event")
-      .tags([r.runner.tags.eventLane.with({ lane })])
+      .tags([tags.eventLane.with({ lane })])
       .build();
     const hook = r
       .hook("tests.event-lanes.transparent.no-deps.hook")
@@ -81,7 +81,7 @@ describe("eventLanesResource mode infrastructure bypass", () => {
     let hookRuns = 0;
     const event = r
       .event<{ value: number }>("tests.event-lanes.simulated.no-deps.event")
-      .tags([r.runner.tags.eventLane.with({ lane })])
+      .tags([tags.eventLane.with({ lane })])
       .build();
     const hook = r
       .hook("tests.event-lanes.simulated.no-deps.hook")

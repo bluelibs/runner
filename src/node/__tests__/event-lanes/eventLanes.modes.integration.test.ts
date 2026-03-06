@@ -1,5 +1,5 @@
 import { createMessageError } from "../../../errors";
-import { r, run } from "../../..";
+import { r, run, tags } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
   EventLaneMessage,
@@ -53,7 +53,7 @@ describe("event-lanes: mode-first routing", () => {
 
     const tagged = r
       .event<{ value: number }>("tests.event-lanes.mode.transparent.event")
-      .tags([r.runner.tags.eventLane.with({ lane })])
+      .tags([tags.eventLane.with({ lane })])
       .build();
 
     const hook = r
@@ -105,7 +105,7 @@ describe("event-lanes: mode-first routing", () => {
 
     const tagged = r
       .event<{ value: number }>("tests.event-lanes.mode.simulated.event")
-      .tags([r.runner.tags.eventLane.with({ lane })])
+      .tags([tags.eventLane.with({ lane })])
       .build();
 
     const hook = r

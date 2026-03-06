@@ -600,7 +600,7 @@ export class VisibilityTracker {
           continue;
         }
 
-        this.throwAccessViolation({
+        this.throwAccessViolation(registry, {
           violation,
           targetId: depId,
           targetType: getItemTypeLabel(registry, depId),
@@ -635,7 +635,7 @@ export class VisibilityTracker {
           continue;
         }
 
-        this.throwAccessViolation({
+        this.throwAccessViolation(registry, {
           violation,
           targetId: eventId,
           targetType: "Event",
@@ -720,7 +720,7 @@ export class VisibilityTracker {
           continue;
         }
 
-        this.throwAccessViolation({
+        this.throwAccessViolation(registry, {
           violation,
           targetId: tagId,
           targetType: "Tag",
@@ -750,7 +750,7 @@ export class VisibilityTracker {
           continue;
         }
 
-        this.throwAccessViolation({
+        this.throwAccessViolation(registry, {
           violation,
           targetId: middlewareId,
           targetType: "Task middleware",
@@ -775,7 +775,7 @@ export class VisibilityTracker {
           continue;
         }
 
-        this.throwAccessViolation({
+        this.throwAccessViolation(registry, {
           violation,
           targetId: middlewareId,
           targetType: "Resource middleware",
@@ -808,7 +808,7 @@ export class VisibilityTracker {
           continue;
         }
 
-        this.throwAccessViolation({
+        this.throwAccessViolation(registry, {
           violation,
           targetId: middlewareId,
           targetType: "Task middleware",
@@ -833,7 +833,7 @@ export class VisibilityTracker {
           continue;
         }
 
-        this.throwAccessViolation({
+        this.throwAccessViolation(registry, {
           violation,
           targetId: middlewareId,
           targetType: "Resource middleware",
@@ -989,7 +989,7 @@ export class VisibilityTracker {
     return chain;
   }
 
-  private throwAccessViolation(data: {
+  private throwAccessViolation(registry: StoreRegistry, data: {
     violation: AccessViolation;
     targetId: string;
     targetType: string;
@@ -997,25 +997,28 @@ export class VisibilityTracker {
     consumerType: string;
   }): void {
     const { violation, targetId, targetType, consumerId, consumerType } = data;
+    const toDisplayId = (id: string): string => registry.getDisplayId(id);
+    const displayTargetId = toDisplayId(targetId);
+    const displayConsumerId = toDisplayId(consumerId);
 
     if (violation.kind === "visibility") {
       visibilityViolationError.throw({
-        targetId,
+        targetId: displayTargetId,
         targetType,
-        ownerResourceId: violation.targetOwnerResourceId,
-        consumerId,
+        ownerResourceId: toDisplayId(violation.targetOwnerResourceId),
+        consumerId: displayConsumerId,
         consumerType,
-        exportedIds: violation.exportedIds,
+        exportedIds: violation.exportedIds.map(toDisplayId),
       });
     } else {
       isolateViolationError.throw({
-        targetId,
+        targetId: displayTargetId,
         targetType,
-        consumerId,
+        consumerId: displayConsumerId,
         consumerType,
-        policyResourceId: violation.policyResourceId,
+        policyResourceId: toDisplayId(violation.policyResourceId),
         matchedRuleType: violation.matchedRuleType,
-        matchedRuleId: violation.matchedRuleId,
+        matchedRuleId: toDisplayId(violation.matchedRuleId),
         channel: violation.channel,
       });
     }

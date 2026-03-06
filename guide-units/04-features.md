@@ -1,7 +1,7 @@
 ## Caching
 
 Avoid recomputing expensive work by caching task results with TTL-based eviction.
-Cache is opt-in: you must register `r.runner.cache`.
+Cache is opt-in: you must register `resources.cache`.
 
 ### Provider Contract
 
@@ -23,7 +23,7 @@ type CacheProviderFactory = (
 
 Notes:
 
-- `options` are merged from `r.runner.cache.with({ defaultOptions })` and middleware-level cache options.
+- `options` are merged from `resources.cache.with({ defaultOptions })` and middleware-level cache options.
 - `keyBuilder` is middleware-only and is not passed to the provider.
 - `has()` is optional, but recommended when `undefined` can be a valid cached value.
 
@@ -35,7 +35,7 @@ import { r } from "@bluelibs/runner";
 const expensiveTask = r
   .task("app.tasks.expensive")
   .middleware([
-    r.runner.middleware.task.cache.with({
+    middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
       keyBuilder: (taskId, input: { userId: string }) =>
@@ -53,7 +53,7 @@ const app = r
   .resource("app.cache")
   .register([
     // You have to register it, cache resource is not enabled by default.
-    r.runner.cache.with({
+    resources.cache.with({
       defaultOptions: {
         max: 1000, // Maximum items in cache
         ttl: 30 * 1000, // Default TTL
@@ -120,7 +120,7 @@ const app = r
   .resource("app")
   .register([
     redis.with({ url: process.env.REDIS_URL! }),
-    r.runner.cache.with({ provider: redisCacheProvider }),
+    resources.cache.with({ provider: redisCacheProvider }),
   ])
   .build();
 ```
@@ -132,7 +132,7 @@ const app = r
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const cacheJournalKeys = r.runner.middleware.task.cache.journalKeys;
+const cacheJournalKeys = middleware.task.cache.journalKeys;
 
 const cacheLogger = r.middleware
   .task("app.middleware.cacheLogger")
@@ -146,7 +146,7 @@ const cacheLogger = r.middleware
 
 const myTask = r
   .task("app.tasks.cached")
-  .middleware([cacheLogger, r.runner.middleware.task.cache.with({ ttl: 60000 })])
+  .middleware([cacheLogger, middleware.task.cache.with({ ttl: 60000 })])
   .run(async () => "result")
   .build();
 ```
@@ -163,11 +163,11 @@ Limit concurrent executions to protect databases and external APIs. The concurre
 import { r, Semaphore } from "@bluelibs/runner";
 
 // Option 1: Simple limit (shared for all tasks using this middleware instance)
-const limitMiddleware = r.runner.middleware.task.concurrency.with({ limit: 5 });
+const limitMiddleware = middleware.task.concurrency.with({ limit: 5 });
 
 // Option 2: Explicit semaphore for fine-grained coordination
 const dbSemaphore = new Semaphore(10);
-const dbLimit = r.runner.middleware.task.concurrency.with({
+const dbLimit = middleware.task.concurrency.with({
   semaphore: dbSemaphore,
 });
 
@@ -200,7 +200,7 @@ import { r } from "@bluelibs/runner";
 const resilientTask = r
   .task("app.tasks.remoteCall")
   .middleware([
-    r.runner.middleware.task.circuitBreaker.with({
+    middleware.task.circuitBreaker.with({
       failureThreshold: 5, // Trip after 5 failures
       resetTimeout: 30000, // Stay open for 30 seconds
     }),
@@ -225,13 +225,12 @@ const resilientTask = r
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const circuitBreakerJournalKeys =
-  r.runner.middleware.task.circuitBreaker.journalKeys;
+const circuitBreakerJournalKeys = middleware.task.circuitBreaker.journalKeys;
 
 const myTask = r
   .task("app.tasks.monitored")
   .middleware([
-    r.runner.middleware.task.circuitBreaker.with({
+    middleware.task.circuitBreaker.with({
       failureThreshold: 5,
       resetTimeout: 30000,
     }),
@@ -259,7 +258,7 @@ import { r } from "@bluelibs/runner";
 // Debounce: Run only after 500ms of inactivity
 const saveTask = r
   .task("app.tasks.save")
-  .middleware([r.runner.middleware.task.debounce.with({ ms: 500 })])
+  .middleware([middleware.task.debounce.with({ ms: 500 })])
   .run(async (data) => {
     // Assuming db is available in the closure
     return await db.save(data);
@@ -269,7 +268,7 @@ const saveTask = r
 // Throttle: Run at most once every 1000ms
 const logTask = r
   .task("app.tasks.log")
-  .middleware([r.runner.middleware.task.throttle.with({ ms: 1000 })])
+  .middleware([middleware.task.throttle.with({ ms: 1000 })])
   .run(async (msg) => {
     console.log(msg);
   })
@@ -295,7 +294,7 @@ import { r } from "@bluelibs/runner";
 const getPrice = r
   .task("app.tasks.getPrice")
   .middleware([
-    r.runner.middleware.task.fallback.with({
+    middleware.task.fallback.with({
       // Can be a static value, a function, or another task
       fallback: async (input, error) => {
         console.warn(`Price fetch failed: ${error.message}. Using default.`);
@@ -316,7 +315,7 @@ const getPrice = r
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const fallbackJournalKeys = r.runner.middleware.task.fallback.journalKeys;
+const fallbackJournalKeys = middleware.task.fallback.journalKeys;
 
 const fallbackLogger = r.middleware
   .task("app.middleware.fallbackLogger")
@@ -333,7 +332,7 @@ const myTask = r
   .task("app.tasks.withFallback")
   .middleware([
     fallbackLogger,
-    r.runner.middleware.task.fallback.with({ fallback: "default" }),
+    middleware.task.fallback.with({ fallback: "default" }),
   ])
   .run(async () => {
     throw new Error("Primary failed");
@@ -355,7 +354,7 @@ import { r } from "@bluelibs/runner";
 const sensitiveTask = r
   .task("app.tasks.login")
   .middleware([
-    r.runner.middleware.task.rateLimit.with({
+    middleware.task.rateLimit.with({
       windowMs: 60 * 1000, // 1 minute window
       max: 5, // Max 5 attempts per window
     }),
@@ -380,13 +379,11 @@ const sensitiveTask = r
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const rateLimitJournalKeys = r.runner.middleware.task.rateLimit.journalKeys;
+const rateLimitJournalKeys = middleware.task.rateLimit.journalKeys;
 
 const myTask = r
   .task("app.tasks.rateLimited")
-  .middleware([
-    r.runner.middleware.task.rateLimit.with({ windowMs: 60000, max: 10 }),
-  ])
+  .middleware([middleware.task.rateLimit.with({ windowMs: 60000, max: 10 })])
   .run(async (_input, _deps, context) => {
     const remaining = context?.journal.get(rateLimitJournalKeys.remaining); // number
     const resetTime = context?.journal.get(rateLimitJournalKeys.resetTime); // timestamp (ms)
@@ -416,7 +413,7 @@ const RequestContext = r
 
 const getAuditTrail = r
   .task("app.tasks.getAuditTrail")
-  // Shortcut: creates r.runner.middleware.task.requireContext with this context
+  // Shortcut: creates middleware.task.requireContext with this context
   .middleware([RequestContext.require()])
   .run(async () => {
     const { requestId } = RequestContext.use();
@@ -436,9 +433,7 @@ const TenantContext = r
 
 const listProjects = r
   .task("app.tasks.listProjects")
-  .middleware([
-    r.runner.middleware.task.requireContext.with({ context: TenantContext }),
-  ])
+  .middleware([middleware.task.requireContext.with({ context: TenantContext })])
   .run(async () => {
     const { tenantId } = TenantContext.use();
     return await projectRepo.findByTenant(tenantId);
@@ -470,7 +465,7 @@ import { r } from "@bluelibs/runner";
 const flakyApiCall = r
   .task("app.tasks.flakyApiCall")
   .middleware([
-    r.runner.middleware.task.retry.with({
+    middleware.task.retry.with({
       retries: 5, // Try up to 5 times
       delayStrategy: (attempt) => 100 * Math.pow(2, attempt), // Exponential backoff
       stopRetryIf: (error) => error.message === "Invalid credentials", // Don't retry auth errors
@@ -499,7 +494,7 @@ import { r } from "@bluelibs/runner";
 const database = r
   .resource<{ connectionString: string }>("app.db")
   .middleware([
-    r.runner.middleware.resource.retry.with({
+    middleware.resource.retry.with({
       retries: 4,
       delayStrategy: (attempt) => 250 * Math.pow(2, attempt),
     }),
@@ -520,11 +515,11 @@ const database = r
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const retryJournalKeys = r.runner.middleware.task.retry.journalKeys;
+const retryJournalKeys = middleware.task.retry.journalKeys;
 
 const myTask = r
   .task("app.tasks.retryable")
-  .middleware([r.runner.middleware.task.retry.with({ retries: 5 })])
+  .middleware([middleware.task.retry.with({ retries: 5 })])
   .run(async (_input, _deps, context) => {
     const attempt = context?.journal.get(retryJournalKeys.attempt); // 0-indexed attempt number
     const lastError = context?.journal.get(retryJournalKeys.lastError); // Error from previous attempt, if any
@@ -550,8 +545,8 @@ import { r } from "@bluelibs/runner";
 const apiTask = r
   .task("app.tasks.externalApi")
   .middleware([
-    // Works for tasks and resources via r.runner.middleware.resource.timeout
-    r.runner.middleware.task.timeout.with({ ttl: 5000 }), // 5 second timeout
+    // Works for tasks and resources via middleware.resource.timeout
+    middleware.task.timeout.with({ ttl: 5000 }), // 5 second timeout
   ])
   .run(async () => {
     // This operation will be aborted if it takes longer than 5 seconds
@@ -564,12 +559,12 @@ const resilientTask = r
   .task("app.tasks.resilient")
   .middleware([
     // Order matters here. Imagine a big onion.
-    // Works for resources as well via r.runner.middleware.resource.retry
-    r.runner.middleware.task.retry.with({
+    // Works for resources as well via middleware.resource.retry
+    middleware.task.retry.with({
       retries: 3,
       delayStrategy: (attempt) => 1000 * attempt, // 1s, 2s, 3s delays
     }),
-    r.runner.middleware.task.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
+    middleware.task.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
   ])
   .run(async () => {
     // Each retry attempt gets its own 10-second timeout
@@ -601,8 +596,8 @@ import { r } from "@bluelibs/runner";
 const messageBroker = r
   .resource("app.broker")
   .middleware([
-    r.runner.middleware.resource.timeout.with({ ttl: 15000 }),
-    r.runner.middleware.resource.retry.with({ retries: 2 }),
+    middleware.resource.timeout.with({ ttl: 15000 }),
+    middleware.resource.retry.with({ retries: 2 }),
   ])
   .init(async () => {
     return await connectBroker();
@@ -667,7 +662,7 @@ const httpServer = r
 
 Why this pattern works:
 
-- `cooldown()` runs before `r.system.events.disposing` and before drain wait, so it prevents new HTTP requests from entering.
+- `cooldown()` runs before `events.disposing` and before drain wait, so it prevents new HTTP requests from entering.
 - In-flight requests/tasks/events still get the normal drain window (`disposeDrainBudgetMs`).
 - `dispose()` runs after drain, so cleanup can focus on leftovers only.
 - This is the intended `cooldown()` shape: ingress resources that route to tasks/events.
@@ -681,7 +676,7 @@ Why this pattern works:
 
 Need recurring task execution without bringing in a separate scheduler process? Runner ships with a built-in global cron scheduler.
 
-You mark tasks with `r.runner.tags.cron.with({...})`, and `r.runner.cron` discovers and schedules them at startup. The cron resource is opt-in, so you must register it explicitly.
+You mark tasks with `tags.cron.with({...})` (alias: `resources.cron.tag.with({...})`), and `resources.cron` discovers and schedules them at startup. The cron resource is opt-in, so you must register it explicitly.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -689,7 +684,7 @@ import { r } from "@bluelibs/runner";
 const sendDigest = r
   .task("app.tasks.sendDigest")
   .tags([
-    r.runner.tags.cron.with({
+    tags.cron.with({
       expression: "0 9 * * *",
       timezone: "UTC",
       immediate: false,
@@ -704,7 +699,7 @@ const sendDigest = r
 const app = r
   .resource("app")
   .register([
-    r.runner.cron.with({
+    resources.cron.with({
       // Optional: restrict scheduling to selected task ids/definitions.
       only: [sendDigest],
     }),
@@ -723,17 +718,17 @@ Cron options:
 - `onError`: `"continue"` (default) or `"stop"` for that schedule.
 - `silent`: suppress all cron log output for this task when `true` (default `false`).
 
-`r.runner.cron.with({...})` options:
+`resources.cron.with({...})` options:
 
 - `only`: optional array of task ids or task definitions; when set, only those cron-tagged tasks are scheduled.
 
 Operational notes:
 
 - One cron tag per task is supported. If you need multiple schedules, fork the task and tag each fork.
-- If `r.runner.cron` is not registered, cron tags are treated as metadata and no schedules are started.
+- If `resources.cron` is not registered, cron tags are treated as metadata and no schedules are started.
 - Scheduler uses `setTimeout` chaining, which keeps it portable across supported runtimes.
-- Startup and execution lifecycle messages are emitted via `r.runner.logger`.
-- On `r.system.events.disposing`, cron stops all pending schedules immediately (no new timer-driven runs), while already in-flight cron executions drain under the normal shutdown budgets.
+- Startup and execution lifecycle messages are emitted via `resources.logger`.
+- On `events.disposing`, cron stops all pending schedules immediately (no new timer-driven runs), while already in-flight cron executions drain under the normal shutdown budgets.
 
 Best practices:
 
@@ -792,7 +787,7 @@ const users = await dbSemaphore.withPermit(async () => {
 }); // Permit released automatically, even if query throws
 ```
 
-**Pro Tip**: You don't always need to use `Semaphore` manually. The `concurrency` middleware (available via `r.runner.middleware.task.concurrency`) provides a declarative way to apply these limits to your tasks.
+**Pro Tip**: You don't always need to use `Semaphore` manually. The `concurrency` middleware (available via `middleware.task.concurrency`) provides a declarative way to apply these limits to your tasks.
 
 ### Manual acquire/release
 
@@ -875,15 +870,15 @@ dbSemaphore.dispose();
 // Error: "Semaphore has been disposed"
 ```
 
-### From Utilities to Middlewares
+### From Utilities to Middleware
 
-While `Semaphore` and `Queue` provide powerful manual control, Runner often wraps these into declarative middlewares for common patterns:
+While `Semaphore` and `Queue` provide powerful manual control, Runner often wraps these into declarative middleware for common patterns:
 
 - **concurrency**: Uses `Semaphore` internally to limit task parallelization.
 - **temporal**: Uses timers and promise-tracking to implement `debounce` and `throttle`.
 - **rateLimit**: Uses fixed-window counting to protect resources from bursts.
 
-**What you just learned**: Utilities are the building blocks; Middlewares are the blueprints for common resilience patterns.
+**What you just learned**: Utilities are the building blocks; Middleware is the blueprint for common resilience patterns.
 
 > **runtime:** "I provide the bricks and the mortar. You decide if you're building a fortress or just a very complicated way to trip over your own feet. Use the middleware for common paths; use the utilities when you want to play architect."
 
@@ -1111,7 +1106,7 @@ const emailLane = r.eventLane("app.lanes.email").build();
 // 2. Tag the event for lane routing
 const userRegistered = r
   .event<{ userId: string }>("app.events.userRegistered")
-  .tags([r.runner.tags.eventLane.with({ lane: emailLane })])
+  .tags([tags.eventLane.with({ lane: emailLane })])
   .build();
 
 // 3. Hook runs on the consumer side after relay
@@ -1155,7 +1150,7 @@ const billingLane = r.rpcLane("app.rpc.billing").build();
 // 2. Tag the task for lane routing
 const chargeCard = r
   .task("billing.tasks.chargeCard")
-  .tags([r.runner.tags.rpcLane.with({ lane: billingLane })])
+  .tags([tags.rpcLane.with({ lane: billingLane })])
   .run(async (input: { amount: number }) => ({
     ok: true,
     amount: input.amount,

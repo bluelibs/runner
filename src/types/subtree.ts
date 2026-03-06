@@ -15,41 +15,27 @@ export type SubtreeViolation = {
   message: string;
 };
 
-export type SubtreeTaskValidator = (
-  taskDefinition: ITask<any, any, any, any, any, any>,
+export type SubtreeValidatableElement =
+  | ITask<any, any, any, any, any, any>
+  | IResource<any, any, any, any, any, any, any>
+  | IHook<any, any, any>
+  | ITaskMiddleware<any, any, any, any>
+  | IResourceMiddleware<any, any, any, any>
+  | IEvent<any>
+  | ITag<any, any, any, any>;
+
+export type SubtreeElementValidator = (
+  element: SubtreeValidatableElement,
+  ownerResourceConfig: unknown,
 ) => SubtreeViolation[];
 
 export type SubtreeTaskMiddlewarePredicate = (
   taskDefinition: ITask<any, any, any, any, any, any>,
 ) => boolean;
 
-export type SubtreeResourceValidator = (
-  resourceDefinition: IResource<any, any, any, any, any, any, any>,
-) => SubtreeViolation[];
-
 export type SubtreeResourceMiddlewarePredicate = (
   resourceDefinition: IResource<any, any, any, any, any, any, any>,
 ) => boolean;
-
-export type SubtreeHookValidator = (
-  hookDefinition: IHook<any, any, any>,
-) => SubtreeViolation[];
-
-export type SubtreeTaskMiddlewareValidator = (
-  middlewareDefinition: ITaskMiddleware<any, any, any, any>,
-) => SubtreeViolation[];
-
-export type SubtreeResourceMiddlewareValidator = (
-  middlewareDefinition: IResourceMiddleware<any, any, any, any>,
-) => SubtreeViolation[];
-
-export type SubtreeEventValidator = (
-  eventDefinition: IEvent<any>,
-) => SubtreeViolation[];
-
-export type SubtreeTagValidator = (
-  tagDefinition: ITag<any, any, any, any>,
-) => SubtreeViolation[];
 
 export type SubtreeTaskMiddlewareEntry =
   | TaskMiddlewareAttachmentType
@@ -67,84 +53,30 @@ export type SubtreeResourceMiddlewareEntry =
 
 export type ResourceSubtreeTaskPolicy = {
   middleware?: SubtreeTaskMiddlewareEntry[];
-  validate?: SubtreeTaskValidator | SubtreeTaskValidator[];
 };
 
 export type ResourceSubtreeResourcePolicy = {
   middleware?: SubtreeResourceMiddlewareEntry[];
-  validate?: SubtreeResourceValidator | SubtreeResourceValidator[];
-};
-
-export type ResourceSubtreeHookPolicy = {
-  validate?: SubtreeHookValidator | SubtreeHookValidator[];
-};
-
-export type ResourceSubtreeTaskMiddlewarePolicy = {
-  validate?: SubtreeTaskMiddlewareValidator | SubtreeTaskMiddlewareValidator[];
-};
-
-export type ResourceSubtreeResourceMiddlewarePolicy = {
-  validate?:
-    | SubtreeResourceMiddlewareValidator
-    | SubtreeResourceMiddlewareValidator[];
-};
-
-export type ResourceSubtreeEventPolicy = {
-  validate?: SubtreeEventValidator | SubtreeEventValidator[];
-};
-
-export type ResourceSubtreeTagPolicy = {
-  validate?: SubtreeTagValidator | SubtreeTagValidator[];
 };
 
 export type ResourceSubtreePolicy = {
   tasks?: ResourceSubtreeTaskPolicy;
   resources?: ResourceSubtreeResourcePolicy;
-  hooks?: ResourceSubtreeHookPolicy;
-  taskMiddleware?: ResourceSubtreeTaskMiddlewarePolicy;
-  resourceMiddleware?: ResourceSubtreeResourceMiddlewarePolicy;
-  events?: ResourceSubtreeEventPolicy;
-  tags?: ResourceSubtreeTagPolicy;
+  validate?: SubtreeElementValidator | SubtreeElementValidator[];
 };
 
 export type NormalizedResourceSubtreeTaskPolicy = {
   middleware: SubtreeTaskMiddlewareEntry[];
-  validate: SubtreeTaskValidator[];
 };
 
 export type NormalizedResourceSubtreeResourcePolicy = {
   middleware: SubtreeResourceMiddlewareEntry[];
-  validate: SubtreeResourceValidator[];
-};
-
-export type NormalizedResourceSubtreeHookPolicy = {
-  validate: SubtreeHookValidator[];
-};
-
-export type NormalizedResourceSubtreeTaskMiddlewarePolicy = {
-  validate: SubtreeTaskMiddlewareValidator[];
-};
-
-export type NormalizedResourceSubtreeResourceMiddlewarePolicy = {
-  validate: SubtreeResourceMiddlewareValidator[];
-};
-
-export type NormalizedResourceSubtreeEventPolicy = {
-  validate: SubtreeEventValidator[];
-};
-
-export type NormalizedResourceSubtreeTagPolicy = {
-  validate: SubtreeTagValidator[];
 };
 
 export type NormalizedResourceSubtreePolicy = {
   tasks?: NormalizedResourceSubtreeTaskPolicy;
   resources?: NormalizedResourceSubtreeResourcePolicy;
-  hooks?: NormalizedResourceSubtreeHookPolicy;
-  taskMiddleware?: NormalizedResourceSubtreeTaskMiddlewarePolicy;
-  resourceMiddleware?: NormalizedResourceSubtreeResourceMiddlewarePolicy;
-  events?: NormalizedResourceSubtreeEventPolicy;
-  tags?: NormalizedResourceSubtreeTagPolicy;
+  validate?: SubtreeElementValidator[];
 };
 
 export type SubtreePolicyOptions = {

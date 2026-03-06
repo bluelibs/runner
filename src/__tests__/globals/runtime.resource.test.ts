@@ -1,6 +1,4 @@
 import {
-  defineEvent,
-  defineHook,
   defineResource,
   defineTask,
 } from "../../define";
@@ -15,25 +13,13 @@ describe("system.runtime", () => {
       run: async (input: number) => input * 2,
     });
 
-    const ping = defineEvent<{ n: number }>({ id: "runtime.ping" });
-
     const acc = defineResource<{ seed: number }, Promise<{ value: number }>>({
       id: "runtime.acc",
       init: async (config) => ({ value: config.seed }),
     });
 
-    const onPing = defineHook({
-      id: "runtime.onPing",
-      on: ping,
-      dependencies: { acc },
-      run: async (event, deps) => {
-        deps.acc.value += event.data.n;
-      },
-    });
-
     const snapshot: {
       byDefinition?: number;
-      byId?: number;
       accValue?: number;
       accConfig?: { seed: number };
       rootId?: string;
@@ -48,10 +34,6 @@ describe("system.runtime", () => {
       },
       init: async (_, { runtime }) => {
         snapshot.byDefinition = await runtime.runTask(double, 21);
-        snapshot.byId = await runtime.runTask("runtime.double", 2);
-
-        await runtime.emitEvent(ping, { n: 2 });
-        await runtime.emitEvent("runtime.ping", { n: 3 });
 
         snapshot.accValue = runtime.getResourceValue(acc).value;
         snapshot.accConfig = runtime.getResourceConfig(acc);
@@ -72,7 +54,7 @@ describe("system.runtime", () => {
       { probe: typeof probe; runtime: typeof globalResources.runtime }
     >({
       id: "runtime.app",
-      register: [double, ping, onPing, acc.with({ seed: 10 }), probe],
+      register: [double, acc.with({ seed: 10 }), probe],
       dependencies: {
         probe,
         runtime: globalResources.runtime,
@@ -90,8 +72,7 @@ describe("system.runtime", () => {
 
     expect(snapshot).toEqual({
       byDefinition: 42,
-      byId: 4,
-      accValue: 15,
+      accValue: 10,
       accConfig: { seed: 10 },
       rootId: "runtime.app",
       rootConfig: { mode: "alpha" },

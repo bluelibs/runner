@@ -1,5 +1,5 @@
 import { createMessageError } from "../../../errors";
-import { r, run } from "../../..";
+import { r, run, tags } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
   EventLaneMessage,
@@ -44,12 +44,12 @@ async function waitUntil(
 describe("eventLanes applyTo", () => {
   it("routes applyTo event targets through lane producer transport without explicit tags", async () => {
     const queue = new RecordingQueue();
-    const lane = r
-      .eventLane("tests.event-lanes.apply-to.producer.lane")
-      .applyTo(["tests.event-lanes.apply-to.producer.event"])
-      .build();
     const event = r
       .event<{ value: number }>("tests.event-lanes.apply-to.producer.event")
+      .build();
+    const lane = r
+      .eventLane("tests.event-lanes.apply-to.producer.lane")
+      .applyTo([event])
       .build();
 
     let localHookRuns = 0;
@@ -100,7 +100,7 @@ describe("eventLanes applyTo", () => {
     const lane = r.eventLane("tests.event-lanes.apply-to.same-lane").build();
     const event = r
       .event<{ value: number }>("tests.event-lanes.apply-to.same-lane.event")
-      .tags([r.runner.tags.eventLane.with({ lane })])
+      .tags([tags.eventLane.with({ lane })])
       .build();
     const configuredLane = r.eventLane(lane.id).applyTo([event]).build();
     const emitTask = r
@@ -213,14 +213,13 @@ describe("eventLanes applyTo", () => {
     const laneA = r
       .eventLane("tests.event-lanes.apply-to.override-ioc.a")
       .build();
-    const laneB = r
-      .eventLane("tests.event-lanes.apply-to.override-ioc.b")
-      .applyTo(["tests.event-lanes.apply-to.override-ioc.event"])
-      .build();
-
     const event = r
       .event("tests.event-lanes.apply-to.override-ioc.event")
-      .tags([r.runner.tags.eventLane.with({ lane: laneA })])
+      .tags([tags.eventLane.with({ lane: laneA })])
+      .build();
+    const laneB = r
+      .eventLane("tests.event-lanes.apply-to.override-ioc.b")
+      .applyTo([event])
       .build();
 
     const app = r

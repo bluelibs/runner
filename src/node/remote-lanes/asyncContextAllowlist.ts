@@ -55,7 +55,7 @@ export function buildAsyncContextHeader(options: {
     }
 
     try {
-      map[id] = ctx.serialize(ctx.use());
+      map[ctx.id] = ctx.serialize(ctx.use());
     } catch {
       // Context missing/unavailable in current call scope.
     }

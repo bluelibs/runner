@@ -68,12 +68,19 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
   } = deps;
 
   const exposureSource = runtimeSource.resource(sourceResourceId);
+  const resolveTaskId = (taskId: string): string => {
+    const maybeStore = store as {
+      resolveDefinitionId?: (reference: unknown) => string | undefined;
+    };
+    return maybeStore.resolveDefinitionId?.(taskId) ?? taskId;
+  };
 
   return async (
     req: IncomingMessage,
     res: ServerResponse,
-    taskId: string,
+    taskIdInput: string,
   ): Promise<void> => {
+    const taskId = resolveTaskId(taskIdInput);
     const allowAsyncContextForTask = allowAsyncContext(taskId);
     const asyncContextAllowListForTask = resolveAsyncContextAllowList(taskId);
 
@@ -109,7 +116,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
       applyCorsActual(req, res, cors);
       respondJson(
         res,
-        jsonErrorResponse(404, `Task ${taskId} not found`, "NOT_FOUND"),
+          jsonErrorResponse(404, `Task ${taskId} not found`, "NOT_FOUND"),
         serializer,
       );
       return;

@@ -5,7 +5,7 @@ import type { IDurableContext } from "../../durable/core/interfaces/context";
 import type { IDurableService } from "../../durable/core/interfaces/service";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { event, r } from "../../..";
+import { defineEvent, r } from "../../..";
 import { durableWorkflowTag } from "../../durable/tags/durableWorkflow.tag";
 
 /**
@@ -172,7 +172,7 @@ describe("durable: DurableResource", () => {
       .task("durable.tests.resource.task")
       .run(async (_input: { a: number }) => "ok")
       .build();
-    const signalDef = event<{ a: number }>({
+    const signalDef = defineEvent<{ a: number }>({
       id: "durable.tests.resource.signal",
     });
 

@@ -1,4 +1,4 @@
-import { tag as defineTag, r } from "../..";
+import { defineTag, r } from "../..";
 import {
   assertTagTargetsApplicable,
   assertTagTargetsApplicableTo,

@@ -7,7 +7,7 @@
 // and throws EventCycleError instead of hanging the event loop.
 import { defineEvent, defineHook, defineResource } from "../../define";
 import { run } from "../../run";
-import { r } from "../../index";
+import { resources } from "../../index";
 import { runtimeSource } from "../../types/runtimeSource";
 
 describe("Security: Event cycle detection", () => {
@@ -21,7 +21,7 @@ describe("Security: Event cycle detection", () => {
     // e1 emits e2; e2 emits e1 -> cycle
     const onE1 = defineHook({
       id: "sec.hooks.onE1",
-      dependencies: { eventManager: r.system.eventManager },
+      dependencies: { eventManager: resources.eventManager },
       on: e1,
       run: async (ev, { eventManager }) => {
         await eventManager.emit(
@@ -34,7 +34,7 @@ describe("Security: Event cycle detection", () => {
 
     const onE2 = defineHook({
       id: "sec.hooks.onE2",
-      dependencies: { eventManager: r.system.eventManager },
+      dependencies: { eventManager: resources.eventManager },
       on: e2,
       run: async (ev, { eventManager }) => {
         await eventManager.emit(

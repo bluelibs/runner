@@ -1,10 +1,10 @@
-import { r } from "../../../";
+import { r, resources } from "../../../";
 import type {
   CacheProvider,
   ICacheProvider,
 } from "../../../globals/middleware/cache.middleware";
 
-// Type-only tests for cache provider wiring through r.runner.cache.with(...)
+// Type-only tests for cache provider wiring through resources.cache.with(...)
 {
   const validProvider = r
     .resource("types.cache.provider.valid")
@@ -18,14 +18,14 @@ import type {
     })
     .build();
 
-  r.runner.cache.with({ provider: validProvider });
+  resources.cache.with({ provider: validProvider });
 
   const invalidProviderResource = r
     .resource("types.cache.provider.invalid.resource")
     .init(async () => 123)
     .build();
 
-  r.runner.cache.with({
+  resources.cache.with({
     // @ts-expect-error provider must return cache provider function
     provider: invalidProviderResource,
   });
@@ -39,7 +39,7 @@ import type {
     }))
     .build();
 
-  r.runner.cache.with({
+  resources.cache.with({
     // @ts-expect-error provider-produced cache object must implement clear()
     provider: invalidFactoryProvider,
   });
@@ -54,7 +54,7 @@ import type {
     }))
     .build();
 
-  r.runner.cache.with({
+  resources.cache.with({
     // @ts-expect-error has() must return boolean | Promise<boolean>
     provider: invalidHasProvider,
   });

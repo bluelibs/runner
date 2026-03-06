@@ -35,6 +35,7 @@ function createStore(options: {
     errors: new Map(),
     tags: new Map(),
     asyncContexts: new Map(),
+    toPublicId: (id: string) => id,
   } as unknown as Store;
 }
 

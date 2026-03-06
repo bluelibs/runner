@@ -1,5 +1,5 @@
 import { createMessageError } from "../../../errors";
-import { r, run } from "../../..";
+import { r, run, tags } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
   EventLaneMessage,
@@ -103,7 +103,7 @@ describe("event-lanes: hook relay behavior + prefetch", () => {
     const queue = new CoverageQueue();
     const event = r
       .event<{ id: string }>("tests.event-lanes.hook-lane.event")
-      .tags([r.runner.tags.eventLane.with({ lane: laneA })])
+      .tags([tags.eventLane.with({ lane: laneA })])
       .build();
 
     let callsA = 0;

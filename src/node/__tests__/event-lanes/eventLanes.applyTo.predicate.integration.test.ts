@@ -48,7 +48,7 @@ describe("eventLanes applyTo predicate", () => {
       .build();
     const lane = r
       .eventLane("tests.event-lanes.apply-to.predicate.lane")
-      .applyTo((candidate) => candidate.id === event.id)
+      .applyTo((candidate) => candidate.id.endsWith(event.id))
       .build();
 
     const emitTask = r

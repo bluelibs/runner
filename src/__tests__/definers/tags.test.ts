@@ -236,8 +236,14 @@ describe("Configurable Tags", () => {
 
       expect(middlewareExecutions).toHaveLength(2);
       expect(middlewareExecutions).toEqual([
-        { taskId: "fast.task", config: { alertAboveMs: 100 } },
-        { taskId: "slow.task", config: { alertAboveMs: 500 } },
+        {
+          taskId: expect.stringMatching(/(?:^|\.)fast\.task$/),
+          config: { alertAboveMs: 100 },
+        },
+        {
+          taskId: expect.stringMatching(/(?:^|\.)slow\.task$/),
+          config: { alertAboveMs: 500 },
+        },
       ]);
     });
   });
@@ -316,8 +322,13 @@ describe("Configurable Tags", () => {
         Object.values(globalTags).map((globalTag) => globalTag.id),
       ).size;
       expect(tags).toHaveLength(uniqueGlobalTagCount + 2);
-      expect(tags).toContain(tag);
-      expect(tags).toContain(tag2);
+      const tagIds = tags.map((registeredTag) => registeredTag.id);
+      expect(
+        tagIds.some((registeredId) => registeredId.endsWith(tag.id)),
+      ).toBe(true);
+      expect(
+        tagIds.some((registeredId) => registeredId.endsWith(tag2.id)),
+      ).toBe(true);
     });
   });
   it("should throw an exception if you are using an unregistered tag", async () => {

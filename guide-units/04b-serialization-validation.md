@@ -548,3 +548,4 @@ Unsupported in strict mode (fail-fast):
 - Custom class constructor patterns
 - Literal `undefined`, `bigint`, `symbol`
 - `Match.Optional(...)` / `Match.Maybe(...)` outside object-property context
+

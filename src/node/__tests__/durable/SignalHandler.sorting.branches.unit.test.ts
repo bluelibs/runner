@@ -1,9 +1,9 @@
-import { event } from "../../..";
+import { defineEvent } from "../../..";
 import { DurableService } from "../../durable/core/DurableService";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { SpyQueue, sleepingExecution } from "./DurableService.unit.helpers";
 
-const Paid = event<{ paidAt: number }>({ id: "paid" });
+const Paid = defineEvent<{ paidAt: number }>({ id: "paid" });
 
 describe("durable: SignalHandler sorting branch coverage", () => {
   it("treats non-numeric suffixes as custom slots when ranking waiters", async () => {

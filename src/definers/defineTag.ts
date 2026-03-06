@@ -10,6 +10,7 @@ import {
   symbolTag,
   symbolFilePath,
   symbolTagConfigured,
+  symbolTagConfiguredFrom,
   symbolOptionalDependency,
   symbolTagBeforeInitDependency,
 } from "../defs";
@@ -106,6 +107,10 @@ export function defineTag<
       } else {
         config = tagConfig;
       }
+      const configuredFrom =
+        (this as unknown as Record<symbol, unknown>)[
+          symbolTagConfiguredFrom
+        ] ?? this;
       const configured = {
         ...this,
         [symbolTagConfigured]: true,
@@ -116,6 +121,9 @@ export function defineTag<
         TEnforceOutputContract,
         TAllowedTargets
       >;
+      (configured as unknown as Record<symbol, unknown>)[
+        symbolTagConfiguredFrom
+      ] = configuredFrom;
       return freezeIfLineageLocked(this, configured);
     },
     optional() {

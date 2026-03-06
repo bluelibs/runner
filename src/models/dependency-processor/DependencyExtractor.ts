@@ -436,7 +436,10 @@ export class DependencyExtractor {
         // Fail-fast: interceptors are a registration-phase action. Post-lock,
         // cached runners would miss this interceptor, creating silent inconsistency.
         if (this.store.isLocked) {
-          interceptAfterLockError.throw({ taskId, source: ownerResourceId });
+          interceptAfterLockError.throw({
+            taskId: this.store.toPublicId(taskId),
+            source: this.store.toPublicId(ownerResourceId),
+          });
         }
         const storeTask = this.getStoreTaskOrThrow(taskId);
 
@@ -452,7 +455,7 @@ export class DependencyExtractor {
         const ownerIds = new Set<string>();
         for (const interceptor of interceptors) {
           if (interceptor.ownerResourceId) {
-            ownerIds.add(interceptor.ownerResourceId);
+            ownerIds.add(this.store.toPublicId(interceptor.ownerResourceId));
           }
         }
         return Object.freeze(Array.from(ownerIds));
@@ -469,6 +472,7 @@ export class DependencyExtractor {
     }
 
     const middlewareManager = value as MiddlewareManager;
+    const publicOwnerResourceId = this.store.toPublicId(ownerResourceId);
     if (
       typeof middlewareManager.interceptOwned !== "function" ||
       typeof middlewareManager.interceptMiddlewareOwned !== "function"
@@ -489,7 +493,7 @@ export class DependencyExtractor {
               target.interceptOwned(
                 "task",
                 interceptor as TaskMiddlewareInterceptor,
-                ownerResourceId,
+                publicOwnerResourceId,
               );
               return;
             }
@@ -497,7 +501,7 @@ export class DependencyExtractor {
             target.interceptOwned(
               "resource",
               interceptor as ResourceMiddlewareInterceptor,
-              ownerResourceId,
+              publicOwnerResourceId,
             );
           };
         }
@@ -515,7 +519,7 @@ export class DependencyExtractor {
               target.interceptMiddlewareOwned(
                 middleware,
                 interceptor as TaskMiddlewareInterceptor,
-                ownerResourceId,
+                publicOwnerResourceId,
               );
               return;
             }
@@ -524,7 +528,7 @@ export class DependencyExtractor {
               target.interceptMiddlewareOwned(
                 middleware,
                 interceptor as ResourceMiddlewareInterceptor,
-                ownerResourceId,
+                publicOwnerResourceId,
               );
             }
           };

@@ -37,7 +37,7 @@ BlueLibs Runner is a TypeScript-first dependency injection framework built aroun
 import { r } from "@bluelibs/runner";
 
 // Built-in middleware from Runner
-const { cache, retry } = r.runner.middleware.task;
+const { cache, retry } = middleware.task;
 
 // Assuming: db is a resource defined elsewhere, and mockDb is its test double
 // ONE LINE to add caching with TTL
@@ -302,7 +302,7 @@ const server = r
 // Tasks are your business logic - easily testable functions
 const createUser = r
   .task("app.tasks.createUser")
-  .dependencies({ server, logger: r.runner.logger })
+  .dependencies({ server, logger: resources.logger })
   .inputSchema(z.object({ name: z.string() }))
   .run(async (input, { logger }) => {
     await logger.info(`Creating ${input.name}`);
@@ -346,7 +346,7 @@ Creating Ada
 
 - A full Express API with proper lifecycle management
 - Dependency injection (tasks get what they need automatically)
-- Built-in logging (via `r.runner.logger`)
+- Built-in logging (via `resources.logger`)
 - Schema validation with Zod
 - Graceful shutdown (the `dispose()` method -- idempotent, safe to call twice)
 - Type-safe everything (TypeScript has your back)
@@ -528,8 +528,8 @@ import { r } from "@bluelibs/runner";
 
 const myTask = r
   .task("myTask")
-  .dependencies({ logger: r.runner.logger }) // Built-in logger
-  .middleware([r.runner.middleware.task.cache.with({ ttl: 60000 })]) // Built-in cache
+  .dependencies({ logger: resources.logger }) // Built-in logger
+  .middleware([middleware.task.cache.with({ ttl: 60000 })]) // Built-in cache
   .run(async (input, { logger }) => {
     await logger.info("Processing...");
   })
@@ -591,3 +591,4 @@ Now that you know the patterns, here's your learning path:
 > **runtime:** "Seven patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
 
 ---
+

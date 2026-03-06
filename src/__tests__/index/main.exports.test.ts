@@ -5,17 +5,23 @@ describe("main exports", () => {
   it("should export all public APIs correctly", () => {
     // Test main index exports for 100% coverage
 
-    expect(typeof mainExports.task).toBe("function");
-    expect(typeof mainExports.resource).toBe("function");
-    expect(typeof mainExports.resourceMiddleware).toBe("function");
-    expect(typeof mainExports.taskMiddleware).toBe("function");
-    expect(typeof mainExports.event).toBe("function");
-    expect(typeof mainExports.hook).toBe("function");
-    expect(typeof mainExports.rpcLane).toBe("function");
-    expect(typeof mainExports.tag).toBe("function");
+    expect(typeof mainExports.defineTask).toBe("function");
+    expect(typeof mainExports.defineResource).toBe("function");
+    expect(typeof mainExports.defineResourceMiddleware).toBe("function");
+    expect(typeof mainExports.defineTaskMiddleware).toBe("function");
+    expect(typeof mainExports.defineEvent).toBe("function");
+    expect(typeof mainExports.defineHook).toBe("function");
+    expect(typeof mainExports.defineRpcLane).toBe("function");
+    expect(typeof mainExports.defineEventLane).toBe("function");
+    expect(typeof mainExports.defineTag).toBe("function");
+    expect(typeof mainExports.defineOverride).toBe("function");
+    expect(typeof mainExports.resources).toBe("object");
+    expect(typeof mainExports.events).toBe("object");
+    expect(typeof mainExports.middleware).toBe("object");
+    expect(typeof mainExports.tags).toBe("object");
+    expect(typeof mainExports.debug).toBe("object");
     expect(typeof mainExports.run).toBe("function");
     expect(typeof mainExports.createContext).toBe("function");
-    expect(typeof mainExports.globals).toBe("object");
     expect(typeof mainExports.definitions).toBe("object");
     expect(typeof mainExports.Store).toBe("function");
     expect(typeof mainExports.EventManager).toBe("function");
@@ -28,19 +34,23 @@ describe("main exports", () => {
     expect(typeof mainExports.LogPrinter).toBe("function");
     expect(typeof mainExports.PlatformAdapter).toBe("function");
 
-    // Test that aliases work the same as direct imports
+    // Test that direct exports work the same as imports from define.ts
     const directTask = defineTask({ id: "test", run: async () => "direct" });
-    const aliasTask = mainExports.task({
+    const exportedTask = mainExports.defineTask({
       id: "test2",
       run: async () => "alias",
     });
 
     expect(directTask.id).toBe("test");
-    expect(aliasTask.id).toBe("test2");
+    expect(exportedTask.id).toBe("test2");
 
     // Test tag exports work
-    const testTag = mainExports.tag<{ value: number }>({ id: "test.tag" });
-    const testTag2 = mainExports.tag<{ name: string }>({ id: "test.tag2" });
+    const testTag = mainExports.defineTag<{ value: number }>({
+      id: "test.tag",
+    });
+    const testTag2 = mainExports.defineTag<{ name: string }>({
+      id: "test.tag2",
+    });
 
     expect(testTag.id).toBe("test.tag");
     expect(testTag2.id).toBe("test.tag2");
@@ -53,32 +63,27 @@ describe("main exports", () => {
     expect(typeof TestContext.use).toBe("function");
 
     // Test namespaced sub-properties for complete coverage
-    expect(typeof mainExports.system.runtime).toBe("object");
-    expect(typeof mainExports.system.events.ready).toBe("object");
-    expect(typeof mainExports.system.tags.internal).toBe("object");
-    expect(typeof mainExports.runner.middleware).toBe("object");
-    expect(typeof mainExports.runner.tags).toBe("object");
-    expect(typeof mainExports.debug.levels).toBe("object");
+    expect(typeof mainExports.resources.runtime).toBe("object");
+    expect(typeof mainExports.resources.cron).toBe("object");
+    expect(typeof mainExports.events.ready).toBe("object");
+    expect(typeof mainExports.tags.system).toBe("object");
+    expect(typeof mainExports.tags.cron).toBe("object");
+    expect(typeof mainExports.middleware.task.retry).toBe("object");
+    expect(typeof mainExports.debug.levels.normal).toBe("object");
     expect(typeof (mainExports.r as any).rpcLane).toBe("function");
-    expect(typeof (mainExports.r as any).system.eventManager).toBe("object");
-    expect(typeof (mainExports.r as any).system.events.ready).toBe("object");
-    expect(typeof (mainExports.r as any).system.tags.internal).toBe("object");
-    expect(typeof (mainExports.r as any).runner.cron).toBe("object");
-    expect(typeof (mainExports.r as any).runner.middleware.task).toBe("object");
-    expect(typeof (mainExports.r as any).runner.tags.cron).toBe("object");
-    expect(typeof (mainExports.r as any).debug.levels.normal).toBe("object");
-    expect((mainExports.r as any).system).toBe(mainExports.system);
-    expect((mainExports.r as any).runner).toBe(mainExports.runner);
-    expect((mainExports.r as any).system.events).toBe(
-      mainExports.system.events,
-    );
-    expect((mainExports.r as any).runner.middleware).toBe(
-      mainExports.runner.middleware,
-    );
-    expect((mainExports.r as any).runner.tags).toBe(mainExports.runner.tags);
-    expect((mainExports.r as any).system.tags.internal).toBe(
-      mainExports.system.tags.internal,
-    );
-    expect((mainExports.r as any).debug.levels).toBe(mainExports.debug.levels);
+    expect(typeof (mainExports.r as any).middleware.task).toBe("function");
+    expect((mainExports.r as any).system).toBeUndefined();
+    expect((mainExports.r as any).runner).toBeUndefined();
+    expect((mainExports.r as any).debug).toBeUndefined();
+    expect((mainExports as any).task).toBeUndefined();
+    expect((mainExports as any).resource).toBeUndefined();
+    expect((mainExports as any).event).toBeUndefined();
+    expect((mainExports as any).hook).toBeUndefined();
+    expect((mainExports as any).tag).toBeUndefined();
+    expect((mainExports as any).taskMiddleware).toBeUndefined();
+    expect((mainExports as any).resourceMiddleware).toBeUndefined();
+    expect((mainExports as any).runner).toBeUndefined();
+    expect((mainExports as any).system).toBeUndefined();
+    expect((mainExports as any).globals).toBeUndefined();
   });
 });

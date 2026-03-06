@@ -28,11 +28,6 @@ describe("scope()", () => {
       expect(result.targets).toEqual(targets);
     });
 
-    it("accepts a string selector (wildcard)", () => {
-      const result = scope("app.internal.*");
-      expect(result.targets).toEqual(["app.internal.*"]);
-    });
-
     it("accepts a subtreeOf filter", () => {
       const filter = subtreeOf(exampleResource);
       const result = scope(filter);
@@ -43,7 +38,6 @@ describe("scope()", () => {
       const filter = subtreeOf(exampleResource);
       const targets: IsolationScopeTarget[] = [
         exampleTask,
-        "app.*",
         filter,
         exampleEvent,
       ];

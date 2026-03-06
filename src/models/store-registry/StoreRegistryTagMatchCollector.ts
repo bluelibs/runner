@@ -11,10 +11,25 @@ import {
 import { normalizeTags, TagIndexedCollections } from "./types";
 
 export class StoreRegistryTagMatchCollector {
-  constructor(private readonly collections: TagIndexedCollections) {}
+  constructor(
+    private readonly collections: TagIndexedCollections,
+    private readonly resolveDefinitionId?: (
+      reference: unknown,
+    ) => string | undefined,
+  ) {}
 
   normalizeTags(tags: unknown): TagType[] {
     return normalizeTags(tags);
+  }
+
+  private normalizeResolvedTags(tags: unknown): TagType[] {
+    return this.normalizeTags(tags).map((tag) => {
+      const resolvedId = this.resolveDefinitionId?.(tag);
+      if (!resolvedId || resolvedId === tag.id) {
+        return tag;
+      }
+      return { ...tag, id: resolvedId } as TagType;
+    });
   }
 
   collectTaggedTaskMatches<TTag extends ITag<any, any, any>>(
@@ -36,7 +51,7 @@ export class StoreRegistryTagMatchCollector {
         continue;
       }
 
-      const tags = this.normalizeTags(storeEntry.task.tags);
+      const tags = this.normalizeResolvedTags(storeEntry.task.tags);
       if (!this.hasTagId(tags, tag.id)) {
         continue;
       }
@@ -69,7 +84,7 @@ export class StoreRegistryTagMatchCollector {
         continue;
       }
 
-      const tags = this.normalizeTags(storeEntry.resource.tags);
+      const tags = this.normalizeResolvedTags(storeEntry.resource.tags);
       if (!this.hasTagId(tags, tag.id)) {
         continue;
       }
@@ -120,13 +135,14 @@ export class StoreRegistryTagMatchCollector {
       if (!isIncluded(resolved.definition.id)) {
         continue;
       }
-      if (!this.hasTagId(resolved.tags, tag.id)) {
+      const tags = this.normalizeResolvedTags(resolved.tags);
+      if (!this.hasTagId(tags, tag.id)) {
         continue;
       }
 
       matches.push({
         definition: resolved.definition,
-        config: this.readTagConfig(tag, resolved.tags),
+        config: this.readTagConfig(tag, tags),
       });
     }
 

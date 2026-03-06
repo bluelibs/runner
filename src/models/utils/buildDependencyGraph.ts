@@ -51,7 +51,12 @@ function resolveTagDependencyNodes(
       return;
     }
 
-    if (!definition.tags?.some((tag) => tag.id === tagId)) {
+    if (
+      !definition.tags?.some((tag) => {
+        const resolvedTagId = resolveDefinitionId(registry, tag);
+        return (resolvedTagId ?? tag.id) === tagId;
+      })
+    ) {
       return;
     }
 

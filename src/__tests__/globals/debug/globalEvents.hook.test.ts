@@ -53,7 +53,7 @@ describe("runner.debug.globalEvent.hook", () => {
 
     const infoLogs = logs.filter((l) => l.level === "info");
     const eventLog = infoLogs.find((l) =>
-      String(l.message).includes("Event tests.global-event emitted"),
+      /Event .*tests\.global-event emitted/.test(String(l.message)),
     );
 
     expect(eventLog).toBeTruthy();
@@ -105,7 +105,7 @@ describe("runner.debug.globalEvent.hook", () => {
 
     const infoLogs = logs.filter((l) => l.level === "info");
     const eventLog = infoLogs.find((l) =>
-      String(l.message).includes("Event tests.global-event.flags emitted"),
+      /Event .*tests\.global-event\.flags emitted/.test(String(l.message)),
     );
 
     expect(eventLog).toBeTruthy();
@@ -154,7 +154,7 @@ describe("runner.debug.globalEvent.hook", () => {
     const messages = logs.map((l) => String(l.message));
     expect(
       messages.some((m) =>
-        m.includes("Event tests.global-event.system emitted"),
+        /Event .*tests\.global-event\.system emitted/.test(m),
       ),
     ).toBe(false);
   });

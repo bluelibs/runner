@@ -2,7 +2,7 @@
 // mutation from changing global hook behavior after bootstrap.
 import { defineEvent, defineHook, defineResource } from "../../define";
 import { run } from "../../run";
-import { r } from "../../index";
+import { r, tags } from "../../index";
 
 describe("Security: Mutation footgun prevention", () => {
   it("blocks mutating direct-defined event tags at runtime", async () => {
@@ -33,7 +33,7 @@ describe("Security: Mutation footgun prevention", () => {
     const previousTags = internal.tags;
     try {
       (internal as { tags: unknown }).tags = [
-        r.runner.tags.excludeFromGlobalHooks,
+        tags.excludeFromGlobalHooks,
       ];
     } catch (_error) {
       // Mutation may throw in strict mode; either way the object must remain unchanged.
@@ -56,7 +56,7 @@ describe("Security: Mutation footgun prevention", () => {
     expect(Object.isFrozen(internal)).toBe(true);
     try {
       (internal as { tags: unknown }).tags = [
-        r.runner.tags.excludeFromGlobalHooks,
+        tags.excludeFromGlobalHooks,
       ];
     } catch (_error) {
       // Mutation may throw in strict mode; either way the object must remain unchanged.

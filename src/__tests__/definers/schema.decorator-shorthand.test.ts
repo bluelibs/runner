@@ -1,15 +1,14 @@
 import {
   Match,
-  asyncContext as defineAsyncContext,
-  event as defineEvent,
-  resource as defineResource,
-  resourceMiddleware as defineResourceMiddleware,
+  defineAsyncContext,
+  defineEvent,
+  defineResource,
+  defineResourceMiddleware,
   r,
-  resource,
   run,
-  tag as defineTag,
-  task as defineTask,
-  taskMiddleware as defineTaskMiddleware,
+  defineTag,
+  defineTask,
+  defineTaskMiddleware,
 } from "../..";
 import { defineError } from "../../definers/defineError";
 
@@ -36,7 +35,7 @@ describe("decorator schema shorthand", () => {
       run: async (input) => input,
     });
 
-    const app = resource({
+    const app = defineResource({
       id: "tests.decorator.precedence.app",
       register: [task],
     });
@@ -129,7 +128,7 @@ describe("decorator schema shorthand", () => {
       .run(async () => undefined)
       .build();
 
-    const app = resource({
+    const app = defineResource({
       id: "tests.decorator.nonfluent.app",
       register: [task, event, hook],
     });

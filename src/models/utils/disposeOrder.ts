@@ -14,12 +14,67 @@ export function getResourcesInDisposeWaves(
   resources: Map<string, ResourceStoreElementType>,
   initWaves: readonly InitWave[],
 ): DisposeWave[] {
+  const initializedResources = getInitializedResources(resources);
+  const fastPathWaves = getTrackedInitWaves(initializedResources, initWaves);
+
+  if (fastPathWaves) {
+    return fastPathWaves.slice().reverse();
+  }
+
+  const fallbackOrder = getTopologicalInitOrder(
+    resources,
+    initializedResources,
+  );
+  return fallbackOrder
+    .slice()
+    .reverse()
+    .map((resource) => ({
+      resources: [resource],
+      parallel: false,
+    }));
+}
+
+/**
+ * Returns initialized resources grouped into startup-ready waves
+ * (dependencies first).
+ *
+ * Uses the recorded init waves when complete; otherwise falls back to a
+ * topological order converted to sequential single-resource waves.
+ */
+export function getResourcesInReadyWaves(
+  resources: Map<string, ResourceStoreElementType>,
+  initWaves: readonly InitWave[],
+): DisposeWave[] {
+  const initializedResources = getInitializedResources(resources);
+  const fastPathWaves = getTrackedInitWaves(initializedResources, initWaves);
+
+  if (fastPathWaves) {
+    return fastPathWaves;
+  }
+
+  return getTopologicalInitOrder(resources, initializedResources).map(
+    (resource) => ({
+      resources: [resource],
+      parallel: false,
+    }),
+  );
+}
+
+function getInitializedResources(
+  resources: Map<string, ResourceStoreElementType>,
+): ResourceStoreElementType[] {
   const initializedResources = Array.from(resources.values()).filter(
     (r) => r.isInitialized,
   );
+  return initializedResources;
+}
 
-  // Fast path: reverse fully-tracked initialization waves for disposal.
-  // This preserves the original dependency-ready parallel grouping.
+function getTrackedInitWaves(
+  initializedResources: ResourceStoreElementType[],
+  initWaves: readonly InitWave[],
+): DisposeWave[] | undefined {
+  // Fast path: use fully-tracked initialization waves to preserve the original
+  // dependency-ready parallel grouping.
   const initWaveIds = initWaves.flatMap((wave) => wave.resourceIds);
   const initializedIdSet = new Set(
     initializedResources.map((resource) => resource.resource.id),
@@ -34,7 +89,6 @@ export function getResourcesInDisposeWaves(
     );
     return initWaves
       .slice()
-      .reverse()
       .map((wave) => {
         const waveResources = wave.resourceIds
           .map((id) => byId.get(id))
@@ -50,8 +104,14 @@ export function getResourcesInDisposeWaves(
       .filter((wave) => wave.resources.length > 0);
   }
 
-  // Fallback: derive a deterministic dependents-first order from the graph and
-  // model it as sequential waves.
+  return undefined;
+}
+
+function getTopologicalInitOrder(
+  resources: Map<string, ResourceStoreElementType>,
+  initializedResources: ResourceStoreElementType[],
+): ResourceStoreElementType[] {
+  // Fallback: derive a deterministic dependency-first order from the graph.
   const visitState = new Map<string, "visiting" | "visited">();
   const initOrder: ResourceStoreElementType[] = [];
   let cycleDetected = false;
@@ -80,19 +140,10 @@ export function getResourcesInDisposeWaves(
   initializedResources.forEach((r) => visit(r.resource.id));
 
   // If a cycle sneaks in despite validation (or disposal is called on a
-  // partially-initialized store), fall back to insertion order LIFO.
+  // partially-initialized store), fall back to insertion order.
   if (cycleDetected) {
-    return initializedResources
-      .slice()
-      .reverse()
-      .map((resource) => ({
-        resources: [resource],
-        parallel: false,
-      }));
+    return initializedResources.slice();
   }
 
-  return initOrder.reverse().map((resource) => ({
-    resources: [resource],
-    parallel: false,
-  }));
+  return initOrder;
 }

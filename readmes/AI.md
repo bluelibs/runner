@@ -4,7 +4,7 @@
 
 ```ts
 import express from "express";
-import { r, run } from "@bluelibs/runner";
+import { resources, r, run } from "@bluelibs/runner";
 
 const server = r
   .resource<{ port: number }>("server")
@@ -25,7 +25,7 @@ const server = r
 
 const createUser = r
   .task("createUser")
-  .dependencies({ logger: r.runner.logger })
+  .dependencies({ logger: resources.logger })
   .schema<{ name: string }>({ parse: (value) => value }) // parses the input
   .resultSchema<{ id: string; name: string }>({ parse: (value) => value }) // parses the response
   .run(async (input, { logger }) => {
@@ -55,18 +55,18 @@ await runtime.runTask(createUser, { name: "Ada" });
 // runtime.dispose() when you are done.
 ```
 
-- Built-in resources are also available from `r` for one-import ergonomics (`r.system.*`, `r.runner.*`).
+- Use flat globals for framework internals: `resources.*`, `events.*`, `tags.*`, `middleware.*`, and `debug.levels`.
 
 - `.with(config)` exists on configurable built definitions (resources, middleware, tags); fluent builders chain methods plus `.build()`.
 - RPC HTTP exposure is owned by `rpcLanesResource.with({ exposure: { http: ... } })` in `mode: "network"`.
 - RPC HTTP exposure internals are RPC-lanes-owned; do not depend on `src/node/exposure/*` as public API.
 - Node request context for RPC HTTP handlers is exposed as `useRpcLaneRequestContext()` / `hasRpcLaneRequestContext()` from `@bluelibs/runner/node`.
 - `r.resource<Config>(id)` / `r.task<Input>(id)` seed typing before explicit schema; config-only resources can omit `.init()`.
-- Resource lifecycle split: use `cooldown()` to stop ingress quickly at shutdown start, then use `dispose()` for final teardown after runtime drain. `cooldown()` can be async, but should return promptly by contract. Treat it as an ingress hook (HTTP/tRPC/consumer boundaries), not a teardown phase for support resources like databases.
+- Resource lifecycle split: use `ready()` to start ingress only after startup lock, `cooldown()` to stop ingress quickly at shutdown start, then `dispose()` for final teardown after runtime drain. `ready()` and `cooldown()` can be async; keep both short and intent-focused ingress hooks (HTTP/tRPC/consumer boundaries), not teardown phases for support resources like databases.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` clones a resource under a new id with a separate runtime instance. `"drop"` clears nested items; `"deep"` deep-forks the resource tree and remaps dependencies.
 - Dependency maps are fail-fast validated: when `dependencies` is a function, Runner resolves it during bootstrap and it must return an object map (not `null`, array, or primitive).
 - `.isolate({ exports: [...] })` narrows visibility: omit = everything public; `exports: []` / `exports: "none"` = nothing public (private subtree). String entries support id selectors with segment wildcard `*` (for example: `app.resources.*`) and must match at least one id at bootstrap.
-- `.subtree(policy)` declares owner-scoped subtree policies. Supported branches: `tasks`, `resources`, `hooks`, `taskMiddleware`, `resourceMiddleware`, `events`, `tags`. Each branch supports `validate(definition) => SubtreeViolation[]`; `tasks/resources` also support `middleware: [...]` attachments (see Middleware section for attachment patterns).
+- `.subtree(policy)` supports `tasks.middleware`, `resources.middleware`, and a top-level `validate(element, ownerConfig)` function for dynamic policy checks.
 - Subtree validators are **return-based**: return `SubtreeViolation[]` from `validate(...)` (do not throw for normal policy failures). Runner aggregates all returned violations and throws one `subtreeValidationFailedError` during bootstrap. If a validator throws or returns a non-array, Runner records an `invalid-definition` violation and still throws the aggregated subtree error.
 
 ```ts
@@ -100,28 +100,26 @@ await run(app); // throws aggregated subtreeValidationFailedError if violations 
 - Isolation quick reference:
   - `isolate.exports` controls visibility across resource boundaries.
   - `isolate.deny` / `isolate.only` control wiring permissions by channel.
-  - Bare strings are invalid in `deny` / `only`; use `scope("pattern.*")`.
+  - Bare strings are invalid in `deny` / `only`; use definition refs, `subtreeOf(resource)`, or `scope([...])`.
   - Policies are additive through ancestors; effective external `only` behaves like intersection (internal subtree exemption still applies).
 
-| Target Form | What it matches | Use when |
-| --- | --- | --- |
-| `definition` (task/resource/event/hook/middleware/tag) | Exact definition id (tag definitions also match carriers) | You already have a stable definition reference |
-| `scope("selector.*")` | Id selectors expanded at bootstrap | You want pattern-based targeting |
-| `subtreeOf(resource, { types? })` | Resource ownership subtree (optionally by type) | Ids are overridable/nested and structural ownership is safer |
-| `scope([...], channels)` | Applies same channel options to mixed targets | You want one channel policy across selectors/definitions/subtrees |
+| Target Form                                            | What it matches                                           | Use when                                                     |
+| ------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------ |
+| `definition` (task/resource/event/hook/middleware/tag) | Exact definition id (tag definitions also match carriers) | You already have a stable definition reference               |
+| `scope([definition, subtreeOf(resource)], channels)`   | Channel-scoped matching for mixed non-string targets      | You need one channel policy across multiple target kinds     |
+| `subtreeOf(resource, { types? })`                      | Resource ownership subtree (optionally by type)           | Ids are overridable/nested and structural ownership is safer |
 
 - **`subtreeOf(resource, { types? })`** is structural and works in both `deny` and `only`. It matches items by ownership (not id string), including deeply nested descendants. `types` narrows to `"task" | "hook" | "event" | "tag" | "resource" | "taskMiddleware" | "resourceMiddleware"`. The referenced resource must be registered in the same runtime graph or bootstrap fails with `isolationUnknownTarget`.
 - **`scope(target, channels?)`** wraps one or more targets with channel precision (`dependencies`, `listening`, `tagging`, `middleware`). Same `channels` options apply to every target inside that `scope(...)` entry. Available as a named export and `r.scope()`.
 - Channel options table (default for each option is `true`):
 
-| Option | Controls |
-| --- | --- |
+| Option         | Controls                                                 |
+| -------------- | -------------------------------------------------------- |
 | `dependencies` | Dependency wiring and dependency-surface runtime access. |
-| `listening` | Hook `.on(...)` event subscriptions. |
-| `tagging` | `.tags([tag])` attachments on definitions. |
-| `middleware` | `.middleware([...])` and subtree middleware attachments. |
+| `listening`    | Hook `.on(...)` event subscriptions.                     |
+| `tagging`      | `.tags([tag])` attachments on definitions.               |
+| `middleware`   | `.middleware([...])` and subtree middleware attachments. |
 
-- Tag object entries and id selector entries are intentionally different: `deny: [myTag]` / `only: [myTag]` match the tag dependency and all tagged carriers; `deny: [scope(myTag.id)]` / `only: [scope(myTag.id)]` match only the exact id string.
 - Isolation/visibility enforcement covers dependency wiring plus hook event subscriptions, tag attachments (`.tags([...])`), and middleware attachments (task + resource middleware), so the same rules apply to events, tags, and middleware too.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
@@ -132,7 +130,7 @@ await run(app); // throws aggregated subtreeValidationFailedError if violations 
 Tasks are your business actions. They are plain async functions with DI, middleware, and validation.
 
 ```ts
-import { r } from "@bluelibs/runner";
+import { resources, r } from "@bluelibs/runner";
 
 // Assuming: userService, loggingMiddleware, and tracingMiddleware are defined elsewhere
 const sendEmail = r
@@ -205,7 +203,7 @@ const sendWelcomeEmail = r
 
 - Use `.on(onAnyOf(...))` to listen to several events while keeping inference. Import `onAnyOf` from `@bluelibs/runner/defs` (or `@bluelibs/runner` if you already re-export it in your local facade).
 - Hooks can set `.order(priority)`; lower numbers run first. Call `event.stopPropagation()` inside `run` to cancel downstream hooks.
-- Wildcard hooks use `.on("*")` and receive every emission except events tagged with `r.runner.tags.excludeFromGlobalHooks`.
+- Wildcard hooks use `.on("*")` and receive every emission except events tagged with `tags.excludeFromGlobalHooks`.
 - Use `.transactional(true)` on events when listeners must be reversible:
   - Transactional is event metadata (`event.transactional` on emission info), not hook metadata.
   - Every executed listener must return an async undo closure: `async () => { ... }`.
@@ -214,7 +212,7 @@ const sendWelcomeEmail = r
   - `run(root)` API is unchanged. This affects hook/listener `run(...)` return behavior for transactional emissions only.
 - Transactional constraints (fail-fast runtime sanity checks):
   - `transactional + parallel` is invalid.
-  - `transactional + r.runner.tags.eventLane` is invalid.
+  - `transactional + tags.eventLane` is invalid.
 - Use `.parallel(true)` on event definitions: same-`order` listeners run concurrently, batches execute sequentially by ascending priority; if any batch throws, subsequent batches are skipped.
 - Event emitters (dependency-injected or `runtime.emitEvent`) support options:
   - `failureMode: "fail-fast" | "aggregate"`
@@ -231,7 +229,7 @@ import { r } from "@bluelibs/runner";
 
 const auditTasks = r.middleware
   .task("audit")
-  .dependencies({ logger: r.runner.logger })
+  .dependencies({ logger: resources.logger })
   .run(async ({ task, next }, { logger }) => {
     logger.info(`→ ${task.definition.id}`);
     const result = await next(task.input);
@@ -278,10 +276,9 @@ const auth = r.middleware
 **ExecutionJournal** is a typed key-value store scoped to a single task execution, enabling middleware and tasks to share state. It has **fail-fast semantics**: calling `set()` on an existing key throws an error (prevents silent bugs from middleware clobbering each other). Use `{ override: true }` to intentionally update.
 
 ```ts
-import { r, journal } from "@bluelibs/runner";
+import { journal, middleware, r } from "@bluelibs/runner";
 
-const abortControllerKey =
-  r.runner.middleware.task.timeout.journalKeys.abortController;
+const abortControllerKey = middleware.task.timeout.journalKeys.abortController;
 
 // Middleware accesses journal via execution input
 const auditMiddleware = r.middleware
@@ -312,7 +309,7 @@ const myTask = r
 const myKey = journal.createKey<{ startedAt: Date }>("app.middleware.timing");
 ```
 
-**Built-in Middleware Journal Keys**: Global middlewares (`retry`, `cache`, `circuitBreaker`, `rateLimit`, `fallback`, `timeout`) expose runtime state via typed journal keys at `r.runner.middleware.task.<name>.journalKeys`. For example, `retry` exposes `attempt` and `lastError`; `cache` exposes `hit`; `circuitBreaker` exposes `state` and `failures`. Access these via `journal.get(key)` without deep imports.
+**Built-in Middleware Journal Keys**: Global middlewares (`retry`, `cache`, `circuitBreaker`, `rateLimit`, `fallback`, `timeout`) expose runtime state via typed journal keys at `middleware.task.<name>.journalKeys`. For example, `retry` exposes `attempt` and `lastError`; `cache` exposes `hit`; `circuitBreaker` exposes `state` and `failures`. Access these via `journal.get(key)` without deep imports.
 
 Task `run(..., deps, context)` context includes both `journal` and `source` (both auto-injected): `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
 
@@ -357,8 +354,8 @@ Use `tag.startup()` when startup ordering matters; treat that accessor as metada
 
 - Scope tags with `.for([...])` to specific definition kinds (`"tasks"`, `"resources"`, `"events"`, `"hooks"`, `"taskMiddlewares"`, `"resourceMiddlewares"`, `"errors"`). Wrong usage is rejected by TypeScript in `.tags([...])` and also fails fast at runtime (useful when `any`/casts bypass TS).
 - Contract tags (a "smart tag"): define type contracts for task input/output (or resource config/value) via `r.tag<TConfig, TInputContract, TOutputContract>(id)`. They don't change runtime behavior; they shape the inferred types and compose with contract middleware.
-- Smart tags: built-in tags like `r.system.tags.internal` (id: `system.tags.internal`), `r.runner.tags.debug`, and `r.runner.tags.excludeFromGlobalHooks` change framework behavior.
-- Internal container resources are namespaced under `system.*` and accessible through `r.system.*` (`store`, `taskRunner`, `middlewareManager`, `eventManager`, `runtime`); deny them by id selectors such as `.isolate({ deny: [scope("system.*")] })` when needed.
+- Smart tags: built-in tags like `tags.internal` / `tags.system` (id: `system.tags.internal`), `tags.debug`, and `tags.excludeFromGlobalHooks` change framework behavior.
+- Internal container resources are namespaced under `system.*` and exposed as flat globals (`resources.store`, `resources.taskRunner`, `resources.middlewareManager`, `resources.eventManager`, `resources.runtime`). Prefer tag-based gates such as `.isolate({ deny: [tags.system] })`.
 
 ```ts
 type Input = { id: string };
@@ -374,15 +371,15 @@ const getUser = r
 
 ## Cron Scheduling
 
-Use `r.runner.tags.cron` to schedule tasks with cron expressions. The scheduler lives in `r.runner.cron` (alias: `r.runner.cron`), and it is opt-in: cron schedules run only when you explicitly register this resource.
+Use `tags.cron` to schedule tasks with cron expressions. The scheduler lives in `resources.cron`, and it is opt-in: cron schedules run only when you explicitly register this resource.
 
 ```ts
-import { r } from "@bluelibs/runner";
+import { resources, r, tags } from "@bluelibs/runner";
 
 const cleanupTask = r
   .task("app.tasks.cleanup")
   .tags([
-    r.runner.tags.cron.with({
+    tags.cron.with({
       expression: "*/5 * * * *",
       immediate: true,
       onError: "continue",
@@ -396,7 +393,7 @@ const cleanupTask = r
 const app = r
   .resource("app")
   .register([
-    r.runner.cron.with({
+    resources.cron.with({
       // Optional: restrict scheduling to selected task ids/definitions.
       only: [cleanupTask],
     }),
@@ -405,7 +402,7 @@ const app = r
   .build();
 ```
 
-`r.runner.tags.cron.with({...})` options:
+`tags.cron.with({...})` options:
 
 - `expression` (required): 5-field cron expression
 - `input`: static input passed to the task on each run
@@ -415,20 +412,20 @@ const app = r
 - `onError`: `"continue"` (default) or `"stop"`
 - `silent`: suppress all cron log output for this task when `true` (default `false`)
 
-`r.runner.cron.with({...})` options:
+`resources.cron.with({...})` options:
 
 - `only`: optional array of task ids or task definitions; when set, only those cron-tagged tasks are scheduled.
 
 Notes:
 
 - One cron tag per task is supported. If you need multiple schedules, use task forking and tag each fork.
-- If `r.runner.cron` is not registered, cron tags are treated as metadata and no schedules are started.
-- Cron startup logs are emitted through `r.runner.logger`.
-- On `r.system.events.disposing`, cron stops all pending schedules immediately (no new timer-driven runs), while already in-flight cron task executions drain with normal shutdown budgets.
+- If `resources.cron` is not registered, cron tags are treated as metadata and no schedules are started.
+- Cron startup logs are emitted through `resources.logger`.
+- On `events.disposing`, cron stops all pending schedules immediately (no new timer-driven runs), while already in-flight cron task executions drain with normal shutdown budgets.
 
 ## Async Context
 
-Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node, and Deno when `AsyncLocalStorage` is available). Use the fluent builder under `r.asyncContext` or the classic `asyncContext({ ... })` export.
+Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node, and Deno when `AsyncLocalStorage` is available). Use `r.asyncContext(...)` or `defineAsyncContext({ ... })`.
 
 > **Platform Note**: Async Context requires `AsyncLocalStorage`. It is available in Node.js and Deno (when exposed), and unavailable in browser runtimes.
 
@@ -473,7 +470,7 @@ const app = r.resource("app").register([requestContext, whoAmI]).build();
 
 `Queue` is a cooperative FIFO task queue. Tasks run one-after-another, with dead-lock detection and graceful disposal.
 
-The global resource `r.runner.queue` (alias: `r.runner.queue`) provides a named queue factory — each `id` gets its own isolated `Queue` instance.
+The global resource `resources.queue` provides a named queue factory — each `id` gets its own isolated `Queue` instance.
 
 **Key methods:**
 
@@ -482,11 +479,11 @@ The global resource `r.runner.queue` (alias: `r.runner.queue`) provides a named 
 **Event lifecycle:** `enqueue` → `start` → `finish` | `error`. On disposal: `disposed`. On cancel: `cancel`.
 
 ```ts
-import { r, run } from "@bluelibs/runner";
+import { resources, r, run } from "@bluelibs/runner";
 
 const processOrder = r
   .task("processOrder")
-  .dependencies({ queue: r.runner.queue })
+  .dependencies({ queue: resources.queue })
   .run(async (input: { orderId: string }, { queue }) => {
     // Tasks with the same orderId run sequentially
     return queue.run(input.orderId, async (signal) => {
@@ -615,12 +612,11 @@ const app = r
   .build();
 ```
 
-- `r.override(base, fn)` is a typed shorthand for common behavior swaps:
+- `r.override(base, fn)` and `defineOverride(base, fn)` share the same typed behavior for swaps:
   - task/hook/task-middleware/resource-middleware: replaces `run`
   - resource: replaces `init`
-- `override(base, fn)` is an alias with the same behavior as `r.override(base, fn)`.
-- `r.override(...)` creates replacement definitions; `.overrides([...])` applies them in a specific container during bootstrap.
-- `.overrides([...])` accepts only definitions produced by `r.override(...)` / `override(...)` (plus `null` / `undefined`).
+- `r.override(...)` / `defineOverride(...)` create replacement definitions; `.overrides([...])` applies them in a specific container during bootstrap.
+- `.overrides([...])` accepts only definitions produced by `r.override(...)` or `defineOverride(...)` (plus `null` / `undefined`).
 - Registering only the replacement definition is valid; registering both base and replacement in `.register([...])` causes duplicate-id errors.
 - `.overrides([...])` requires the target id to already be present in the graph; if you wanted a second resource instance instead of replacement, use `.fork("new.id")`.
 - Hook overrides keep the same `.on` target; shorthand only replaces `run`.
@@ -632,9 +628,9 @@ const app = r
 - `emitEvent(event, payload, options?)` accepts the same emission options (`failureMode`, `throwOnError`, `report`) as dependency emitters.
 - `.isolate({ exports: [...] })` on the root restricts `runTask`, `emitEvent`, `getResourceValue`, and `getLazyResourceValue` to exported ids; omit for full open surface.
 - Run options: `debug` (normal/verbose), `logs`, `errorBoundary`, `shutdownHooks`, `disposeBudgetMs` (total), `disposeDrainBudgetMs` (drain wait), `dryRun`, `lazy`, `lifecycleMode` (`"sequential"` or `"parallel"`).
-- Startup: wire deps → init resources (dependency order) → emit `r.system.events.ready` → return runtime. Signals during bootstrap cancel and roll back.
-- Shutdown phases: (1) `cooldown()` on resources (reverse dep order) — fast ingress stop; (2) emit `r.system.events.disposing`; (3) drain in-flight tasks/events up to `disposeDrainBudgetMs`; (4) transition to `drained`, emit `r.system.events.drained`, block new admissions; (5) `dispose()` resources with remaining budget.
-- Lifecycle usage reminder: use `cooldown()` for ingress stop and `dispose()` for final teardown (see Resources section for the contract details).
+- Startup: wire deps -> init resources (dependency order) -> lock runtime mutation surfaces -> run resource `ready()` hooks (dependency order) -> emit `events.ready` -> return runtime. Signals during bootstrap cancel and roll back.
+- Shutdown phases: (1) `cooldown()` on resources (reverse dep order) — fast ingress stop; (2) emit `events.disposing`; (3) drain in-flight tasks/events up to `disposeDrainBudgetMs`; (4) transition to `drained`, emit `events.drained`, block new admissions; (5) `dispose()` resources with remaining budget.
+- Lifecycle usage reminder: use `ready()` for ingress start, `cooldown()` for ingress stop, and `dispose()` for final teardown (see Resources section for the contract details).
 - Event source model: `IEventEmission.source` is object-based end-to-end: `{ kind: "runtime" | "resource" | "task" | "hook" | "middleware"; id: string }`.
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime.
 
@@ -642,51 +638,51 @@ const app = r
 
 - **Concurrency**: Limit parallel execution using a shared or local `Semaphore`.
   ```ts
-  .middleware([r.runner.middleware.task.concurrency.with({ limit: 5 })])
+  .middleware([middleware.task.concurrency.with({ limit: 5 })])
   ```
 - **Circuit Breaker**: Trip after failures to prevent cascading downstream pressure.
   ```ts
-  .middleware([r.runner.middleware.task.circuitBreaker.with({ failureThreshold: 5, resetTimeout: 30000 })])
+  .middleware([middleware.task.circuitBreaker.with({ failureThreshold: 5, resetTimeout: 30000 })])
   ```
 - **Rate Limit**: Protect APIs with fixed-window request counting.
   ```ts
-  .middleware([r.runner.middleware.task.rateLimit.with({ windowMs: 60000, max: 100 })])
+  .middleware([middleware.task.rateLimit.with({ windowMs: 60000, max: 100 })])
   ```
 - **Temporal (Debounce/Throttle)**: Control execution frequency.
   ```ts
-  .middleware([r.runner.middleware.task.debounce.with({ ms: 300 })])
+  .middleware([middleware.task.debounce.with({ ms: 300 })])
   ```
 - **Fallback**: Provide a Plan B (value, function, or another task) when the primary fails.
   ```ts
   // Recommended: Fallback should be outer (on top) of Retry to catch final failures
   .middleware([
-    r.runner.middleware.task.fallback.with({ fallback: "Guest User" }),
-    r.runner.middleware.task.retry.with({ attempts: 3 })
+    middleware.task.fallback.with({ fallback: "Guest User" }),
+    middleware.task.retry.with({ attempts: 3 })
   ])
   ```
-- **Retry/Backoff**: `r.runner.middleware.task.retry` and `r.runner.middleware.resource.retry` for transient failures.
+- **Retry/Backoff**: `middleware.task.retry` and `middleware.resource.retry` for transient failures.
   ```ts
-  .middleware([r.runner.middleware.task.retry.with({ retries: 3 })])
+  .middleware([middleware.task.retry.with({ retries: 3 })])
   ```
-- **Caching**: `r.runner.middleware.task.cache` plus `r.runner.cache`.
+- **Caching**: `middleware.task.cache` plus `resources.cache`.
   ```ts
-  .middleware([r.runner.middleware.task.cache.with({ ttl: 60000 })])
+  .middleware([middleware.task.cache.with({ ttl: 60000 })])
   ```
-- **Timeouts**: `r.runner.middleware.task.timeout` / `r.runner.middleware.resource.timeout` using `AbortController`.
+- **Timeouts**: `middleware.task.timeout` / `middleware.resource.timeout` using `AbortController`.
   ```ts
-  .middleware([r.runner.middleware.task.timeout.with({ ttl: 5000 })])
+  .middleware([middleware.task.timeout.with({ ttl: 5000 })])
   ```
-- **Logging & Debug**: `r.logger` (alias `r.runner.logger`) and `r.runner.debug`.
+- **Logging & Debug**: `resources.logger` and `resources.debug`.
   ```ts
   // Verbose debug logging for a specific task
-  .tags([r.runner.tags.debug])
+  .tags([tags.debug])
   ```
 
 ## Serialization
 
 Runner ships with a serializer that round-trips Dates, RegExp, binary, and custom shapes across Node and web.
 
-Register custom types via `serializer.addType({ id, is, serialize, deserialize, strategy })` (inject `r.runner.serializer`). Use `new Serializer()` for a standalone instance.
+Register custom types via `serializer.addType({ id, is, serialize, deserialize, strategy })` (inject `resources.serializer`). Use `new Serializer()` for a standalone instance.
 
 Schema-aware deserialization is available via `deserialize(payload, { schema })` (or `parse(payload, { schema })`):
 
@@ -728,11 +724,11 @@ test("sends welcome email", async () => {
 ## Observability & Debugging
 
 - Pass `{ debug: "verbose" }` to `run` for structured logs about registration, middleware, and lifecycle events.
-- `r.logger` (shorthand for `r.runner.logger`) exposes the framework logger. Inject it as a dependency to access the `Logger` instance at runtime.
-- Hooks and tasks emit metadata through `r.system.store`. Query it for dashboards or editor plugins.
+- `resources.logger` exposes the framework logger. Inject it as a dependency to access the `Logger` instance at runtime.
+- Hooks and tasks emit metadata through `resources.store`. Query it for dashboards or editor plugins.
 - Use middleware for tracing (`r.middleware.task("...").run(...)`) to wrap every task call.
 - **Silence stdout**: `run(app, { logs: { printThreshold: null } })` — disables all console output. Also accepts `printStrategy: "pretty" | "json"`.
-- **Intercept the log stream**: inject `r.logger` and call `logger.onLog(async (log) => { ... })`. The `ILog` payload includes `level`, `message`, `data`, `context`, `error`, `source`, and `timestamp`. Listeners fire before printing, buffered startup logs are replayed in order, and listener errors are swallowed (won't crash the runtime). Use this for PII scrubbing, forwarding to external APIs, or filtering.
+- **Intercept the log stream**: inject `resources.logger` and call `logger.onLog(async (log) => { ... })`. The `ILog` payload includes `level`, `message`, `data`, `context`, `error`, `source`, and `timestamp`. Listeners fire before printing, buffered startup logs are replayed in order, and listener errors are swallowed (won't crash the runtime). Use this for PII scrubbing, forwarding to external APIs, or filtering.
 
 ## Namespacing & IDs
 
@@ -752,7 +748,8 @@ test("sends welcome email", async () => {
 - Runtime/store internals always expose canonical IDs (`definition.id`), while original definition objects remain unchanged.
 - Fail-fast reserved local names: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `ctx`.
 - Fail-fast id shape checks are centralized for all definition types: ids cannot start/end with `.`, cannot contain `..`, and cannot be a reserved standalone local name.
-- Fully qualified IDs (any id containing a `.`) are treated as absolute: they bypass parent prefixing entirely. The detection is simple — if `id.includes(".")`, it stays as-is. This means a child resource can escape its parent's namespace (e.g., `resource("runner-dev.resources.dev")` registered under `root` keeps its own namespace instead of becoming `root.runner-dev.resources.dev`). This is intentional for library/framework resources that own their own namespace.
+- Namespace composition is structural and deterministic: local ids are canonicalized by their owner subtree.
+- Use `r.resource(id, { gateway: true })` when a resource should not add its own namespace segment.
 - Runtime validation: `inputSchema`, `resultSchema`, `payloadSchema`, `configSchema` share the same `parse(input)` contract; config validation happens on `.with()`, task/event validation happens on call/emit. Use `.schema()` as a unified alias (input/payload/schema/data) for simplicity.
 
 ## File Structure
@@ -765,4 +762,4 @@ test("sends welcome email", async () => {
 - **Optional dependencies:** `analytics: analyticsService.optional()` injects `undefined` when the resource is absent.
 - **Conditional registration:** `.register((config) => (config.enableFeature ? [featureResource] : []))`.
 - **Event safety:** Runner detects event emission cycles and throws an `EventCycleError` with the offending chain.
-- **Internal runtime:** `r.system.runtime` (alias: `r.system.runtime`) resolves to the same `IRuntime` returned by `run(...)`. When injected inside `init()`, only that resource's dependencies are guaranteed initialized.
+- **Internal runtime:** `resources.runtime` resolves to the same `IRuntime` returned by `run(...)`. When injected inside `init()`, only that resource's dependencies are guaranteed initialized.

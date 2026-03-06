@@ -85,6 +85,45 @@ describe("run behavioral scenarios", () => {
     expect(order).toContain("good");
   });
 
+  it("fails startup when resource.ready throws and rolls back initialized resources", async () => {
+    let dependencyDisposed = false;
+
+    const dependency = defineResource({
+      id: "ready.failure.rollback.dependency",
+      async init() {
+        return "dependency";
+      },
+      async dispose() {
+        dependencyDisposed = true;
+      },
+    });
+
+    const failing = defineResource({
+      id: "ready.failure.rollback.failing",
+      dependencies: { dependency },
+      async init() {
+        return "failing";
+      },
+      async ready() {
+        throw createMessageError("ready failed");
+      },
+    });
+
+    const app = defineResource({
+      id: "ready.failure.rollback.app",
+      register: [dependency, failing],
+      dependencies: { failing },
+      async init() {
+        return "app";
+      },
+    });
+
+    await expect(run(app, { shutdownHooks: false })).rejects.toThrow(
+      "ready failed",
+    );
+    expect(dependencyDisposed).toBe(true);
+  });
+
   it("should handle empty dynamic register return values", async () => {
     const app = defineResource({
       id: "app",

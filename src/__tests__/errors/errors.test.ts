@@ -510,11 +510,11 @@ describe("Errors", () => {
       const txLane = capture(() =>
         transactionalEventLaneConflictError.throw({
           eventId: "events.tx.lane.invalid",
-          tagId: "r.runner.tags.eventLane",
+          tagId: "tags.eventLane",
         }),
       );
       expect(txLane.message).toContain(
-        'Event "events.tx.lane.invalid" cannot be transactional while using lane tag "r.runner.tags.eventLane".',
+        'Event "events.tx.lane.invalid" cannot be transactional while using lane tag "tags.eventLane".',
       );
       expect(transactionalEventLaneConflictError.is(txLane)).toBe(true);
 

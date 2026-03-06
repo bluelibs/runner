@@ -29,7 +29,7 @@ export const isolateInvalidEntryError = error<
   )
   .remediation(
     ({ policyResourceId }) =>
-      `Use .isolate({ deny: [...] }) or .isolate({ only: [...] }) with Runner definitions, subtreeOf() filters, or scope() entries. Bare strings are not allowed — use scope("pattern") instead. Review "${policyResourceId}" and fix malformed entries.`,
+      `Use .isolate({ deny: [...] }) or .isolate({ only: [...] }) with Runner definitions, subtreeOf() filters, or scope() entries. String targets are not supported. Review "${policyResourceId}" and fix malformed entries.`,
   )
   .build();
 
@@ -45,7 +45,7 @@ export const isolateUnknownTargetError = error<
   )
   .remediation(
     ({ targetId }) =>
-      `Register "${targetId}" in the same runtime graph, or if it is a wildcard selector ensure it matches at least one id at bootstrap.`,
+      `Register "${targetId}" in the same runtime graph and pass the definition reference (or subtreeOf filter) instead of raw ids.`,
   )
   .build();
 
@@ -92,7 +92,7 @@ export const isolateExportsUnknownTargetError = error<
   )
   .remediation(
     ({ targetId }) =>
-      `Register "${targetId}" in the same runtime graph, or if it is a wildcard selector ensure it matches at least one id at bootstrap.`,
+      `Register "${targetId}" in the same runtime graph and pass the definition reference (or subtreeOf filter) instead of raw ids.`,
   )
   .build();
 

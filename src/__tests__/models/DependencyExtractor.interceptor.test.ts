@@ -1,10 +1,10 @@
 import { defineEvent, defineTask, defineResource } from "../../define";
-import { r } from "../../index";
 import { Store } from "../../models/Store";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { MiddlewareManager } from "../../models/MiddlewareManager";
 import { run } from "../../run";
 import { ResourceInitMode } from "../../types/runner";
+import { resources } from "../../index";
 import { createTestFixture } from "../test-utils";
 
 describe("DependencyExtractor interceptor branches", () => {
@@ -16,7 +16,7 @@ describe("DependencyExtractor interceptor branches", () => {
 
     const consumer = defineResource({
       id: "extractor.interceptor.no-owner.consumer",
-      dependencies: { task, store: r.system.store },
+      dependencies: { task, store: resources.store },
       init: async (_config, { task, store }) => {
         const typedStore = store as Store;
 
@@ -59,7 +59,7 @@ describe("DependencyExtractor interceptor branches", () => {
     const consumer = defineResource({
       id: "extractor.proxy.unknown-mw.consumer",
       dependencies: {
-        middlewareManager: r.system.middlewareManager,
+        middlewareManager: resources.middlewareManager,
       },
       init: async (_config, { middlewareManager }) => {
         const mgr = middlewareManager as MiddlewareManager;

@@ -9,6 +9,7 @@ import {
   symbolFilePath,
   symbolTag,
   symbolTagConfigured,
+  symbolTagConfiguredFrom,
 } from "./utilities";
 
 export interface ITaggable {
@@ -141,6 +142,12 @@ export interface ITagConfigured<
   TAllowedTargets
 > {
   [symbolTagConfigured]: true;
+  [symbolTagConfiguredFrom]?: ITag<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TAllowedTargets
+  >;
   config: TConfig;
 }
 

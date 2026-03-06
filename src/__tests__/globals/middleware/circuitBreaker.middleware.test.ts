@@ -188,7 +188,7 @@ describe("Circuit Breaker Middleware", () => {
 
         const inFlightProbe = task();
         await expect(task()).rejects.toThrow(
-          'Circuit is HALF_OPEN for task "task.halfOpenProbeGate" (probe in progress)',
+          /Circuit is HALF_OPEN for task ".*task\.halfOpenProbeGate" \(probe in progress\)/,
         );
 
         mode = "closed";
@@ -316,7 +316,13 @@ describe("Circuit Breaker Middleware", () => {
         await task();
         // All 10k stale entries should be evicted, only "task.eviction.target" remains
         expect(statusMapRef.size).toBe(1);
-        expect(statusMapRef.has("task.eviction.target")).toBe(true);
+        expect(
+          Array.from(statusMapRef.keys()).some(
+            (id) =>
+              id === "task.eviction.target" ||
+              String(id).endsWith("task.eviction.target"),
+          ),
+        ).toBe(true);
       },
     });
 

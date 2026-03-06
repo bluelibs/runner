@@ -1,4 +1,4 @@
-import { override, r } from "../../..";
+import { defineOverride, r } from "../../..";
 import {
   defineResource,
   defineTag,
@@ -8,7 +8,7 @@ import {
 
 // Type-only tests for strict overrides and tags.
 
-// Scenario: override(base, patch) is no longer supported.
+// Scenario: defineOverride(base, patch) is no longer supported.
 {
   const task = defineTask({
     id: "task",
@@ -16,11 +16,11 @@ import {
   });
 
   // @ts-expect-error patch-form override is removed from the public API
-  override(task, {
+  defineOverride(task, {
     run: async () => "Task overridden",
   });
 
-  const validOverride = r.override(task, async () => "Task overridden");
+  const validOverride = defineOverride(task, async () => "Task overridden");
 
   defineResource({
     id: "resource.valid.override",

@@ -9,7 +9,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { run } from "../../run";
-import { r } from "../../index";
+import { middleware, resources } from "../../index";
 
 describe("Comprehensive Performance Benchmarks", () => {
   const results: Record<string, any> = {};
@@ -384,7 +384,7 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const expensiveTask = defineTask({
       id: "benchmark.cache.expensive",
-      middleware: [r.runner.middleware.task.cache.with({ ttl: 5000 })],
+      middleware: [middleware.task.cache.with({ ttl: 5000 })],
       run: async (n: number) => {
         // Simulate expensive computation
         let result = 0;
@@ -397,7 +397,7 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const app = defineResource({
       id: "benchmark.cache.app",
-      register: [expensiveTask, r.runner.middleware.task.cache, r.runner.cache],
+      register: [expensiveTask, middleware.task.cache, resources.cache],
       dependencies: { expensiveTask },
       async init(_, { expensiveTask }) {
         // Benchmark without cache (first calls)

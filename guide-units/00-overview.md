@@ -10,7 +10,7 @@ Runner keeps everything as plain functions and objects. You declare dependencies
 import { r, run } from "@bluelibs/runner";
 import { z } from "zod";
 
-const logger = r.runner.logger;
+const logger = resources.logger;
 
 // resources are singletons with lifecycle management and async construction
 const db = r
@@ -170,3 +170,4 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Production Readiness Checklist](#production-readiness-checklist) - Framework-wide deploy checks
 - [Node API Index](#node-api-index) - Node-only exports at a glance
 - [Community & Support](#community--support) - Getting help
+

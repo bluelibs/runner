@@ -94,7 +94,7 @@ export class ResourceMiddlewareComposer {
       return ValidationHelper.validateResult(
         rawValue,
         resource.resultSchema,
-        resource.id,
+        this.store.toPublicId(resource),
         "Resource",
       ) as Awaited<TValue>;
     }) as (config: TConfig) => TValue;
@@ -115,6 +115,7 @@ export class ResourceMiddlewareComposer {
     }
 
     let next = runner;
+    const publicResourceDefinition = this.toPublicDefinition(resource);
 
     for (let i = middlewares.length - 1; i >= 0; i--) {
       const middleware = middlewares[i];
@@ -131,7 +132,7 @@ export class ResourceMiddlewareComposer {
             storeMiddleware.middleware.run(
               {
                 resource: {
-                  definition: resource,
+                  definition: publicResourceDefinition,
                   config: cfg,
                 },
                 next: (...args: [TConfig?]) =>
@@ -172,13 +173,14 @@ export class ResourceMiddlewareComposer {
     if (interceptors.length === 0) {
       return runner;
     }
+    const publicResourceDefinition = this.toPublicDefinition(resource);
 
     const createExecutionInput = (
       config: TConfig,
       nextFunc: (...args: [config?: TConfig]) => Promise<Awaited<TValue>>,
     ): IResourceMiddlewareExecutionInput<TConfig, Awaited<TValue>> => ({
       resource: {
-        definition: resource,
+        definition: publicResourceDefinition,
         config: config,
       },
       next: nextFunc,
@@ -223,6 +225,7 @@ export class ResourceMiddlewareComposer {
     if (interceptors.length === 0) {
       return middlewareRunner;
     }
+    const publicResourceDefinition = this.toPublicDefinition(resource);
 
     let wrapped = middlewareRunner;
 
@@ -243,7 +246,7 @@ export class ResourceMiddlewareComposer {
           Awaited<TValue>
         > = {
           resource: {
-            definition: resource,
+            definition: publicResourceDefinition,
             config: config,
           },
           next: nextForExecutionInput,
@@ -277,5 +280,19 @@ export class ResourceMiddlewareComposer {
     } catch (_) {
       // Ignore errors from error handler
     }
+  }
+
+  private toPublicDefinition<
+    TResource extends IResource<any, any, any, any>,
+  >(resource: TResource): TResource {
+    const publicId = this.store.toPublicId(resource);
+    if (publicId === resource.id) {
+      return resource;
+    }
+
+    return {
+      ...resource,
+      id: publicId,
+    };
   }
 }

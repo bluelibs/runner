@@ -61,7 +61,7 @@ describe("runner.debug", () => {
     const infoLogs = logs.filter((l) => l.level === "info");
     expect(
       infoLogs.some((l) =>
-        String(l.message).includes("Event tests.event emitted"),
+        /Event .*tests\.event emitted/.test(String(l.message)),
       ),
     ).toBe(true);
   });
@@ -121,19 +121,19 @@ describe("runner.debug", () => {
     await result.runTask(testTask);
 
     // Task/resource tracker messages (assert present during boot)
-    expect(messages.some((m) => m.includes("Task tests.task is running"))).toBe(
-      true,
-    );
-    expect(messages.some((m) => m.includes("Task tests.task completed"))).toBe(
+    expect(
+      messages.some((m) => /Task .*tests\.task is running/.test(m)),
+    ).toBe(true);
+    expect(messages.some((m) => /Task .*tests\.task completed/.test(m))).toBe(
       true,
     );
     // Middleware observability messages
     // Allow for either ordering due to interleaving; just assert presence
     const joined = messages.join("\n");
-    expect(joined.includes("Middleware triggered for task tests.task")).toBe(
+    expect(/Middleware triggered for task .*tests\.task/.test(joined)).toBe(
       true,
     );
-    expect(joined.includes("Middleware completed for task tests.task")).toBe(
+    expect(/Middleware completed for task .*tests\.task/.test(joined)).toBe(
       true,
     );
     // Resource logs are implementation-defined depending on eager/lazy init.
@@ -188,7 +188,7 @@ describe("runner.debug", () => {
       .filter((l) => l.level === "info")
       .map((l) => String(l.message));
     expect(
-      infoLogs.some((m) => m.includes("Event tests.event.options emitted")),
+      infoLogs.some((m) => /Event .*tests\.event\.options emitted/.test(m)),
     ).toBe(true);
   });
 
@@ -227,7 +227,7 @@ describe("runner.debug", () => {
     await run(app);
 
     const resourceLogs = logs.filter((l) =>
-      String(l.message).includes("Resource tests.resource.with.config"),
+      /Resource .*tests\.resource\.with\.config/.test(String(l.message)),
     );
     expect(resourceLogs).toHaveLength(2);
     expect(resourceLogs[0].data).toEqual({ config: { name: "test" } });
@@ -377,12 +377,8 @@ describe("runner.debug", () => {
     await rr.runTask(testTask);
 
     const messages = logs.map((l) => String(l.message));
-    expect(messages.some((m) => m.includes(`Resource ${collector.id}`))).toBe(
-      true,
-    );
-    expect(messages.some((m) => m.includes(`Resource ${harness.id}`))).toBe(
-      true,
-    );
+    expect(messages.some((m) => m.includes(collector.id))).toBe(true);
+    expect(messages.some((m) => m.includes(harness.id))).toBe(true);
   });
 
   it("omits task input/result, resource config/value, and event payload when flags are false", async () => {
@@ -449,23 +445,23 @@ describe("runner.debug", () => {
 
     // Ensure the messages we're targeting exist
     expect(
-      messages.some((m) => m.includes("Task tests.flags.task is running")),
+      messages.some((m) => /Task .*tests\.flags\.task is running/.test(m)),
     ).toBe(true);
     expect(
-      messages.some((m) => m.includes("Task tests.flags.task completed")),
+      messages.some((m) => /Task .*tests\.flags\.task completed/.test(m)),
     ).toBe(true);
     expect(
-      messages.some((m) => m.includes("Event tests.flags.event emitted")),
+      messages.some((m) => /Event .*tests\.flags\.event emitted/.test(m)),
     ).toBe(true);
 
     // Now validate the attached data payloads are omitted according to flags
     const taskStart = logs.find((l) =>
-      String(l.message).includes("Task tests.flags.task is running"),
+      /Task .*tests\.flags\.task is running/.test(String(l.message)),
     );
     expect(taskStart?.data).toBeUndefined();
 
     const taskComplete = logs.find((l) =>
-      String(l.message).includes("Task tests.flags.task completed"),
+      /Task .*tests\.flags\.task completed/.test(String(l.message)),
     );
     expect(taskComplete?.data).toBeUndefined();
 
@@ -482,7 +478,7 @@ describe("runner.debug", () => {
     expect(resourceComplete?.data).toBeUndefined();
 
     const eventLog = logs.find((l) =>
-      String(l.message).includes("Event tests.flags.event emitted"),
+      /Event .*tests\.flags\.event emitted/.test(String(l.message)),
     );
     expect(eventLog?.data).toBeUndefined();
   });

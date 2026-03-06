@@ -42,8 +42,12 @@ export class StoreRegistryTagIndex {
   constructor(
     private readonly collections: TagIndexedCollections,
     private readonly visibilityTracker: VisibilityTracker,
+    resolveDefinitionId?: (reference: unknown) => string | undefined,
   ) {
-    this.matchCollector = new StoreRegistryTagMatchCollector(this.collections);
+    this.matchCollector = new StoreRegistryTagMatchCollector(
+      this.collections,
+      resolveDefinitionId,
+    );
   }
 
   get index(): Map<string, TagIndexBucket> {
@@ -290,12 +294,8 @@ export class StoreRegistryTagIndex {
   getTasksWithTag<TTag extends ITag<any, any, any>>(
     tag: TTag,
   ): TaggedTask<TTag>[];
-  getTasksWithTag(tag: string): AnyTask[];
-  getTasksWithTag(tag: string | ITag<any, any, any>): AnyTask[] {
-    const resolved =
-      typeof tag === "string" ? this.collections.tags.get(tag) : tag;
-    if (!resolved) return [];
-    return this.getTagAccessor(resolved).tasks.map((item) => item.definition);
+  getTasksWithTag(tag: ITag<any, any, any>): AnyTask[] {
+    return this.getTagAccessor(tag).tasks.map((item) => item.definition);
   }
 
   /**
@@ -304,14 +304,8 @@ export class StoreRegistryTagIndex {
   getResourcesWithTag<TTag extends ITag<any, any, any>>(
     tag: TTag,
   ): TaggedResource<TTag>[];
-  getResourcesWithTag(tag: string): AnyResource[];
-  getResourcesWithTag(tag: string | ITag<any, any, any>): AnyResource[] {
-    const resolved =
-      typeof tag === "string" ? this.collections.tags.get(tag) : tag;
-    if (!resolved) return [];
-    return this.getTagAccessor(resolved).resources.map(
-      (item) => item.definition,
-    );
+  getResourcesWithTag(tag: ITag<any, any, any>): AnyResource[] {
+    return this.getTagAccessor(tag).resources.map((item) => item.definition);
   }
 
   // ---------------------------------------------------------------------------

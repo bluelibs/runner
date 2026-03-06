@@ -54,6 +54,10 @@ export class EventManager {
   private readonly registry: ListenerRegistry;
   private readonly cycleContext: CycleContext;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
+  private eventDefinitionResolver?: <T>(
+    eventDefinition: IEvent<T>,
+  ) => IEvent<T> | undefined;
+  private eventIdFormatter?: (eventId: string) => string;
 
   // Locking mechanism to prevent modifications after initialization
   #isLocked = false;
@@ -92,6 +96,16 @@ export class EventManager {
    */
   lock() {
     this.#isLocked = true;
+  }
+
+  public setEventDefinitionResolver(
+    resolver: <T>(eventDefinition: IEvent<T>) => IEvent<T> | undefined,
+  ): void {
+    this.eventDefinitionResolver = resolver;
+  }
+
+  public setEventIdFormatter(formatter: (eventId: string) => string): void {
+    this.eventIdFormatter = formatter;
   }
 
   /**
@@ -191,7 +205,12 @@ export class EventManager {
       shutdownLockdownError.throw();
     }
 
-    const { eventDefinition, source } = params;
+    const eventDefinition =
+      this.eventDefinitionResolver?.(params.eventDefinition) ??
+      params.eventDefinition;
+    const outputEventId =
+      this.eventIdFormatter?.(eventDefinition.id) ?? eventDefinition.id;
+    const { source } = params;
     let { data } = params;
     // Snapshot interceptors so in-flight emissions stay deterministic even if
     // dispose() clears interceptor registries mid-emission.
@@ -219,7 +238,7 @@ export class EventManager {
       } catch (error) {
         validationError.throw({
           subject: "Event payload",
-          id: eventDefinition.id,
+          id: outputEventId,
           originalError:
             error instanceof Error ? error : new Error(String(error)),
         });
@@ -238,7 +257,7 @@ export class EventManager {
         emissionInterceptorsSnapshot.length === 0
       ) {
         const event = new EventEmissionImpl<TInput>(
-          eventDefinition.id,
+          outputEventId,
           data,
           new Date(),
           source,
@@ -265,7 +284,7 @@ export class EventManager {
         eventDefinition.tags.length > 0 ? [...eventDefinition.tags] : [];
 
       const event = new EventEmissionImpl<TInput>(
-        eventDefinition.id,
+        outputEventId,
         data,
         new Date(),
         source,
@@ -338,7 +357,9 @@ export class EventManager {
     if (Array.isArray(event)) {
       event.forEach((id) => this.addListener(id, handler, options));
     } else {
-      const eventId = event.id;
+      const resolvedEvent =
+        this.eventDefinitionResolver?.(event) ?? event;
+      const eventId = resolvedEvent.id;
       this.registry.addListener(eventId, newListener);
     }
   }
@@ -421,6 +442,7 @@ export class EventManager {
     event: IEventEmission<any>,
     computedDependencies: DependencyValuesType<any>,
   ): Promise<any> {
+    const hookId = hook.id;
     const baseExecute = async (
       hookToExecute: IHook<any, any>,
       eventForHook: IEventEmission<any>,
@@ -435,7 +457,7 @@ export class EventManager {
 
     const hookSource: RuntimeCallSource = {
       kind: RuntimeCallSourceKind.Hook,
-      id: hook.id,
+      id: hookId,
     };
 
     return this.lifecycleAdmissionController.trackHookExecution(
@@ -443,7 +465,7 @@ export class EventManager {
       async () => {
         // Execute the hook with interceptors within current hook context
         return this.cycleContext.isEnabled
-          ? await this.cycleContext.runHook(hook.id, () =>
+          ? await this.cycleContext.runHook(hookId, () =>
               executeWithInterceptors(hook, event),
             )
           : await executeWithInterceptors(hook, event);

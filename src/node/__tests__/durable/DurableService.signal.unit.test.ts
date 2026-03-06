@@ -1,4 +1,4 @@
-import { event, r } from "../../..";
+import { defineEvent, r } from "../../..";
 import { DurableService } from "../../durable/core/DurableService";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import {
@@ -9,9 +9,9 @@ import {
 } from "./DurableService.unit.helpers";
 
 // Shared events used across signal tests
-const Paid = event<{ paidAt: number }>({ id: "paid" });
-const Timed = event<{ paidAt: number }>({ id: "timed" });
-const X = event<any>({ id: "x" });
+const Paid = defineEvent<{ paidAt: number }>({ id: "paid" });
+const Timed = defineEvent<{ paidAt: number }>({ id: "timed" });
+const X = defineEvent<any>({ id: "x" });
 
 // ---------------------------------------------------------------------------
 // Helper: create a signal-test service with a sleeping execution

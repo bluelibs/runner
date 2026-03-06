@@ -64,18 +64,18 @@ Use `run()` to start the full app with middleware, events, and lifecycle. Swap i
 
 Important:
 
-- `r.override(base, fn)` (or alias `override(base, fn)`) creates a replacement definition.
+- `r.override(base, fn)` creates a replacement definition.
 - `.overrides([...])` only accepts override-produced definitions.
 - If you place both base and replacement in `.register([...])`, you'll get duplicate-id registration errors.
 
 ```typescript
-import { run, r, override } from "@bluelibs/runner";
+import { run, r } from "@bluelibs/runner";
 
 describe("User registration flow", () => {
   it("creates user, sends email, and tracks analytics", async () => {
     // Swap infrastructure with test doubles
     const mockDb = r.override(realDb, async () => new InMemoryDatabase());
-    const mockMailer = override(realMailer, async () => ({
+    const mockMailer = r.override(realMailer, async () => ({
       send: jest.fn().mockResolvedValue(true),
     }));
 
@@ -138,3 +138,4 @@ await run(app, { debug: "verbose" });
 ```
 
 > **runtime:** "Testing: an elaborate puppet show where every string behaves. Then production walks in, kicks the stage, and asks for pagination. Still — nice coverage badge."
+

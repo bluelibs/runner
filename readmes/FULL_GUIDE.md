@@ -1521,7 +1521,7 @@ const payments = r
 - Tag definition entries and tag-id selector entries are intentionally different:
   - `deny: [internalOnlyTag]` / `only: [internalOnlyTag]` apply tag semantics (tag dependency itself + all definitions carrying that tag).
   - `deny: [scope(internalOnlyTag.id)]` / `only: [scope(internalOnlyTag.id)]` are exact-id matches only (no carrier expansion).
-- `scope(target, options)` applies the same channel options to every wrapped target, including combinations like `scope([paymentsApi, subtreeOf(agentResource), "system.*"], { dependencies: false })`.
+- `scope(target, options)` applies the same channel options to every wrapped target, including combinations like `scope([paymentsApi, subtreeOf(agentResource), r.system.tag], { dependencies: false })`.
 - **`only` automatically exempts internal items**: anything registered by the resource or its children is always accessible without being listed. `only: []` blocks all external dependencies while keeping internal ones reachable.
 - **`only` is checked at every ancestor boundary** for the consumer. For external dependencies, effective access behaves like the intersection of ancestor `only` lists (with the internal-subtree exemption still applied at each boundary).
 - Rules are validated at bootstrap; unknown, malformed, or unmatched wildcard selectors fail fast.
@@ -1589,7 +1589,7 @@ const mixed = r
   .resource("mixed.boundary")
   .isolate({
     deny: [
-      scope([subtreeOf(agentResource), "system.*"], { dependencies: false }),
+      scope([subtreeOf(agentResource), r.system.tag], { dependencies: false }),
     ],
   })
   .build();
@@ -2119,6 +2119,8 @@ const app = r
 
 > **Note:** if a validator throws or returns a non-array, Runner records an `invalid-definition` violation and still throws the aggregated subtree validation error.
 
+> **Note:** set `allowGlobalIds: false` (default is `true`) on any subtree branch (`tasks`, `resources`, `hooks`, `taskMiddleware`, `resourceMiddleware`, `events`, `tags`) to reject definitions declared with absolute ids (ids containing `.`).
+
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
@@ -2147,6 +2149,16 @@ const app = r
   .build();
 
 await run(app); // throws subtreeValidationFailedError if violations exist
+```
+
+```typescript
+const strictLocalIds = r
+  .resource("app")
+  .subtree({
+    tasks: { allowGlobalIds: false },
+    resources: { allowGlobalIds: false },
+  })
+  .build();
 ```
 
 For true catch-all task behavior, use `taskRunner.intercept(...)` during resource init.
@@ -2587,6 +2599,7 @@ const performanceMiddleware = r.middleware
 #### System Tags
 
 Built-in tags for framework behavior:
+- `r.system.tag` is shorthand for `r.system.tags.system`.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -2608,7 +2621,7 @@ const internalEvent = r
 // Deny privileged internal resources inside a boundary
 const secureModule = r
   .resource("app.secure")
-  .isolate({ deny: [r.scope("system.*")] })
+  .isolate({ deny: [r.system.tag] })
   .build();
 // Keep tooling resources outside the isolated app boundary when they need internal access.
 ```
@@ -2850,6 +2863,12 @@ Important bootstrap note: when `runtime` is declared as a dependency inside a re
 
 Use `r.system.events.ready` for components that should start only after bootstrap is fully complete.
 
+`resource.ready(...)` runs right before `r.system.events.ready`:
+
+- Runner locks the store/event manager/logger first.
+- Then it runs `ready()` for initialized resources in dependency order.
+- Then it emits `r.system.events.ready`.
+
 Example:
 
 - In `eventLanesResource` `mode: "network"` (default), Event Lanes consumers attach dequeue workers on `r.system.events.ready`.
@@ -2961,14 +2980,23 @@ Practical effect for HTTP resources:
 - Supporting resources that in-flight tasks depend on (for example: database pools, cache clients, message producers) should usually not perform teardown in `cooldown()`. Keep them available until `dispose()`.
 - Execution order mirrors resource disposal: reverse dependency waves, with same-wave parallelism when `lifecycleMode: "parallel"` is enabled.
 
+### Resource `ready()` in Startup
+
+`resource.ready(...)` is a post-init startup hook. It runs after Runner locks mutation surfaces and before `r.system.events.ready` is emitted.
+
+- Use it to start ingress or consumers only when startup wiring is complete.
+- It follows dependency-safe startup order (dependencies before dependents), with same-wave parallelism in `lifecycleMode: "parallel"` mode.
+- In lazy mode, if a startup-unused resource is initialized later on-demand, its `ready()` runs immediately once after that lazy initialization.
+
 ### How It Works
 
 Resources initialize in dependency order and dispose in **reverse** order. If Resource B depends on Resource A, then:
 
-1. **Startup**: A initializes first, then B
-2. **Shutdown**: B disposes first, then A
+1. **Startup init**: A initializes first, then B
+2. **Startup ready**: A `ready()` runs before B `ready()`
+3. **Shutdown**: B disposes first, then A
 
-This ensures a resource can safely use its dependencies during `init()`, `cooldown()`, and `dispose()`.
+This ensures a resource can safely use its dependencies during `init()`, `ready()`, `cooldown()`, and `dispose()`.
 
 ```mermaid
 sequenceDiagram
@@ -3863,7 +3891,7 @@ Why this pattern works:
 
 Need recurring task execution without bringing in a separate scheduler process? Runner ships with a built-in global cron scheduler.
 
-You mark tasks with `r.runner.tags.cron.with({...})`, and `r.runner.cron` discovers and schedules them at startup. The cron resource is opt-in, so you must register it explicitly.
+You mark tasks with `r.runner.tags.cron.with({...})` (alias: `r.runner.cron.tag.with({...})`), and `r.runner.cron` discovers and schedules them at startup. The cron resource is opt-in, so you must register it explicitly.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -6139,6 +6167,7 @@ Important behavior:
 - Original definition objects are not mutated; per-run compiled definitions are stored internally (run isolation safe).
 - Reference-based wiring remains preferred (`dependencies({ createUser })`, `.register([createUser])`) over string-id wiring.
 - **Fully qualified IDs** (any id containing a `.`) are treated as absolute and bypass parent prefixing entirely. The detection rule is simple: if `id.includes(".")`, the id stays as-is regardless of which resource registers it. This means a child can "escape" its parent's namespace — useful for library resources that own their own id namespace (e.g., `runner-dev.resources.dev` stays exactly that even when registered inside `root`).
+- When you need subtree-local naming only, set branch-level `allowGlobalIds: false` (default is `true`) in `.subtree(...)` so definitions declared with absolute ids (containing `.`) fail fast at bootstrap.
 - Local names fail fast if they use reserved segments: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `ctx`.
 - All definition ids fail fast when they start/end with `.`, contain empty segments (`..`), or equal a reserved standalone local name.
 
@@ -7403,3 +7432,5 @@ Smoke test checklist:
 - Phase 4: Promote to production with one runtime profile at a time for Event Lanes.
 
 If your codebase has broad use of removed APIs, budget one focused migration iteration rather than mixing this with unrelated feature work.
+
+

@@ -88,11 +88,11 @@ export const overrideDefinitionRequiredError = error<
     ({ sourceId, receivedId }) =>
       `Resource "${sourceId}" declares an invalid override${
         receivedId ? ` ("${receivedId}")` : ""
-      }. .overrides([...]) accepts only definitions produced by r.override(...) / override(...).`,
+      }. .overrides([...]) accepts only definitions produced by r.override(...) / defineOverride(...).`,
   )
   .remediation(
     ({ receivedId }) =>
-      `Wrap the base definition with r.override(base, fn)${
+      `Wrap the base definition with r.override(base, fn) or defineOverride(base, fn)${
         receivedId ? ` for "${receivedId}"` : ""
       } before passing it to .overrides([...]).`,
   )

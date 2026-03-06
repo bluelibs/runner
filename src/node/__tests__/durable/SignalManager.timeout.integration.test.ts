@@ -1,4 +1,4 @@
-import { event, r, run } from "../../..";
+import { defineEvent, r, run } from "../../..";
 import { durableResource } from "../../durable/core/resource";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
@@ -18,7 +18,7 @@ async function waitUntil(
 }
 
 describe("durable: signal timeout integration", () => {
-  const Paid = event<{ paidAt: number }>({ id: "durable.tests.timeout.paid" });
+  const Paid = defineEvent<{ paidAt: number }>({ id: "durable.tests.timeout.paid" });
 
   it("returns timeout when no signal arrives before deadline", async () => {
     const store = new MemoryStore();

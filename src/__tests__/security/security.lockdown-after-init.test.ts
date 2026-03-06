@@ -5,7 +5,7 @@
 // These behaviors reduce the attack surface from late-binding instrumentation.
 import { defineHook, defineResource, defineTask } from "../../define";
 import { run } from "../../run";
-import { r } from "../../index";
+import { events, resources } from "../../index";
 
 describe("Security: Post-init lockdown", () => {
   it("prevents adding listeners/interceptors and store mutations after lock", async () => {
@@ -16,10 +16,10 @@ describe("Security: Post-init lockdown", () => {
 
     const probe = defineHook({
       id: "sec.lock.probe",
-      on: r.system.events.ready,
+      on: events.ready,
       dependencies: {
-        eventManager: r.system.eventManager,
-        store: r.system.store,
+        eventManager: resources.eventManager,
+        store: resources.store,
       },
       run: async (_, { eventManager, store }) => {
         try {

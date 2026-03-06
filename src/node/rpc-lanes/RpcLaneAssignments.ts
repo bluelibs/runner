@@ -40,19 +40,22 @@ export function resolveRpcLaneAssignments(
 
     if (typeof applyTo === "function") {
       for (const taskEntry of store.tasks.values()) {
-        if (applyTo(taskEntry.task)) {
-          assignTask(taskLaneByTaskId, taskEntry.task.id, lane);
+        if (applyTo(toPublicPredicateCandidate(store, taskEntry.task))) {
+          assignTask(taskLaneByTaskId, taskEntry.task.id, lane, store);
         }
       }
 
       for (const eventEntry of store.events.values()) {
-        if (!applyTo(eventEntry.event)) continue;
+        if (!applyTo(toPublicPredicateCandidate(store, eventEntry.event))) {
+          continue;
+        }
         assertEventIsNotExplicitlyAssignedToEventLane(
           eventLaneApplyToEventIds,
           eventEntry.event.id,
           lane.id,
+          store,
         );
-        assignEvent(eventLaneByEventId, eventEntry.event.id, lane);
+        assignEvent(eventLaneByEventId, eventEntry.event.id, lane, store);
       }
       continue;
     }
@@ -64,7 +67,7 @@ export function resolveRpcLaneAssignments(
     for (const target of applyTo) {
       const resolvedTarget = resolveRpcLaneTarget(target, lane.id, store);
       if (resolvedTarget.kind === "task") {
-        assignTask(taskLaneByTaskId, resolvedTarget.id, lane);
+        assignTask(taskLaneByTaskId, resolvedTarget.id, lane, store);
         continue;
       }
 
@@ -72,8 +75,9 @@ export function resolveRpcLaneAssignments(
         eventLaneApplyToEventIds,
         resolvedTarget.id,
         lane.id,
+        store,
       );
-      assignEvent(eventLaneByEventId, resolvedTarget.id, lane);
+      assignEvent(eventLaneByEventId, resolvedTarget.id, lane, store);
     }
   }
 
@@ -113,7 +117,7 @@ export function resolveRpcLaneAssignments(
     // Without explicit applyTo, IoC tags must not assign the same event to both systems.
     if (globalTags.eventLane.exists(eventEntry.event.tags)) {
       rpcLaneAssignmentEventLaneConflictError.throw({
-        eventId,
+        eventId: store.toPublicId(eventId),
         rpcLaneId: laneConfig.lane.id,
       });
     }
@@ -127,14 +131,30 @@ export function resolveRpcLaneAssignments(
   };
 }
 
+function toPublicPredicateCandidate<T extends { id: string }>(
+  store: Store,
+  definition: T,
+): T {
+  const publicId = store.toPublicId(definition);
+  if (publicId === definition.id) {
+    return definition;
+  }
+
+  return {
+    ...definition,
+    id: publicId,
+  };
+}
+
 function assertEventIsNotExplicitlyAssignedToEventLane(
   eventLaneApplyToEventIds: Set<string>,
   eventId: string,
   rpcLaneId: string,
+  store: Store,
 ): void {
   if (eventLaneApplyToEventIds.has(eventId)) {
     rpcLaneAssignmentEventLaneConflictError.throw({
-      eventId,
+      eventId: store.toPublicId(eventId),
       rpcLaneId,
     });
   }
@@ -144,11 +164,12 @@ function assignTask(
   assignments: Map<string, IRpcLaneDefinition>,
   taskId: string,
   lane: IRpcLaneDefinition,
+  store: Store,
 ): void {
   const current = assignments.get(taskId);
   if (current && current.id !== lane.id) {
     rpcLaneTaskAssignmentConflictError.throw({
-      taskId,
+      taskId: store.toPublicId(taskId),
       currentLaneId: current.id,
       attemptedLaneId: lane.id,
     });
@@ -163,11 +184,12 @@ function assignEvent(
   assignments: Map<string, IRpcLaneDefinition>,
   eventId: string,
   lane: IRpcLaneDefinition,
+  store: Store,
 ): void {
   const current = assignments.get(eventId);
   if (current && current.id !== lane.id) {
     rpcLaneEventAssignmentConflictError.throw({
-      eventId,
+      eventId: store.toPublicId(eventId),
       currentLaneId: current.id,
       attemptedLaneId: lane.id,
     });
@@ -188,18 +210,20 @@ function resolveRpcLaneTarget(
     laneId,
     rpcLaneApplyToInvalidTargetError,
   );
-  if (store.tasks.has(targetId)) {
-    return { kind: "task", id: targetId };
+  const taskEntry = store.tasks.get(targetId);
+  if (taskEntry) {
+    return { kind: "task", id: taskEntry.task.id };
   }
 
-  if (store.events.has(targetId)) {
-    return { kind: "event", id: targetId };
+  const eventEntry = store.events.get(targetId);
+  if (eventEntry) {
+    return { kind: "event", id: eventEntry.event.id };
   }
 
   if (isRegisteredDefinitionId(store, targetId)) {
     return rpcLaneApplyToTargetTypeError.throw({
       laneId,
-      targetId,
+      targetId: store.toPublicId(targetId),
     });
   }
 

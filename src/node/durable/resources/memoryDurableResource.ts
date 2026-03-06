@@ -1,4 +1,4 @@
-import { r } from "../../../index";
+import { r, resources } from "../../../index";
 import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { MemoryQueue } from "../queue/MemoryQueue";
 import { MemoryStore } from "../store/MemoryStore";
@@ -30,10 +30,10 @@ export const memoryDurableResource = r
   .resource<MemoryDurableResourceConfig>("base.durable.memory")
   .register([durableWorkflowTag, ...durableEventsArray])
   .dependencies({
-    taskRunner: r.system.taskRunner,
-    eventManager: r.system.eventManager,
-    runnerStore: r.system.store,
-    logger: r.runner.logger,
+    taskRunner: resources.taskRunner,
+    eventManager: resources.eventManager,
+    runnerStore: resources.store,
+    logger: resources.logger,
   })
   .context<MemoryDurableResourceContext>(() => ({ runtimeConfig: null }))
   .init(async function (

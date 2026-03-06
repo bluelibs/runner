@@ -137,6 +137,13 @@ import { r } from "../../../";
     .overrides([])
     .isolate({})
     .exports([])
+    .ready(async (value, config, deps, context) => {
+      const valueReady: boolean = value.ready;
+      const configEnabled: boolean = config.enabled;
+      const depValue: number = deps.dep;
+      const contextStarted: boolean = context.started;
+      [valueReady, configEnabled, depValue, contextStarted];
+    })
     .cooldown(async (value, config, deps, context) => {
       const valueReady: boolean = value.ready;
       const configEnabled: boolean = config.enabled;

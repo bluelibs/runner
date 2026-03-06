@@ -8,12 +8,17 @@ import { defineError } from "../../../definers/defineError";
 import { createTestFixture } from "../../test-utils";
 
 describe("StoreRegistryWriter branches", () => {
+  type ResourceSubtreeWithMiddlewareIds = {
+    resources?: { middleware?: Array<{ use: { id: string } }> };
+  };
+
   const getWriter = () => {
     const { store } = createTestFixture();
     const registry = (store as unknown as { registry: any }).registry;
     return registry.writer as {
       computeCanonicalId: (
         ownerResourceId: string,
+        ownerIsGateway: boolean,
         kind: string,
         currentId: string,
       ) => string;
@@ -37,13 +42,17 @@ describe("StoreRegistryWriter branches", () => {
   it("computes canonical ids for error/async-context and fallback kinds", () => {
     const writer = getWriter();
 
-    expect(writer.computeCanonicalId("app", "error", "boom")).toBe(
+    expect(writer.computeCanonicalId("app", false, "error", "boom")).toBe(
       "app.errors.boom",
     );
-    expect(writer.computeCanonicalId("app", "asyncContext", "request")).toBe(
+    expect(
+      writer.computeCanonicalId("app", false, "asyncContext", "request"),
+    ).toBe(
       "app.ctx.request",
     );
-    expect(writer.computeCanonicalId("app", "unknown-kind", "item")).toBe(
+    expect(
+      writer.computeCanonicalId("app", false, "unknown-kind", "item"),
+    ).toBe(
       "app.item",
     );
   });
@@ -51,10 +60,12 @@ describe("StoreRegistryWriter branches", () => {
   it("fails fast on empty and reserved local names", () => {
     const writer = getWriter();
 
-    expect(() => writer.computeCanonicalId("app", "task", " ")).toThrow(
+    expect(() => writer.computeCanonicalId("app", false, "task", " ")).toThrow(
       /non-empty strings/i,
     );
-    expect(() => writer.computeCanonicalId("app", "task", "tasks")).toThrow(
+    expect(
+      () => writer.computeCanonicalId("app", false, "task", "tasks"),
+    ).toThrow(
       /reserved by Runner/i,
     );
   });
@@ -96,7 +107,7 @@ describe("StoreRegistryWriter branches", () => {
     );
   });
 
-  it("normalizes resource subtree policies and keeps unchanged policies by identity", () => {
+  it("normalizes resource subtree policies for both local and dotted middleware ids", () => {
     const writer = getWriter();
     const middleware = defineResourceMiddleware({
       id: "localSubtreeMw",
@@ -137,7 +148,10 @@ describe("StoreRegistryWriter branches", () => {
     });
     const unchanged =
       writer.normalizeResourceSubtreeMiddlewareAttachments(unchangedResource);
-    expect(unchanged).toBe(unchangedResource.subtree);
+    const normalizedUnchanged = unchanged as ResourceSubtreeWithMiddlewareIds;
+    expect(normalizedUnchanged.resources?.middleware?.[0]?.use.id).toBe(
+      "app.owner.middleware.resource.app.owner.middleware.resource.absolute",
+    );
   });
 
   it("normalizes task subtree direct middleware entries and returns task-only subtree updates", () => {

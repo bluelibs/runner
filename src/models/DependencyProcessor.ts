@@ -254,6 +254,9 @@ export class DependencyProcessor {
         if (options?.trackInitCompletion !== false) {
           this.store.recordResourceInitialized(resourceId);
         }
+        if (this.store.isLocked) {
+          await this.store.readyResource(resourceId);
+        }
       } catch (error: unknown) {
         this.resetResourceInitializationState(resource);
         this.rethrowResourceInitError(resourceId, error);
@@ -279,20 +282,21 @@ export class DependencyProcessor {
   }
 
   private rethrowResourceInitError(resourceId: string, error: unknown): never {
-    const prefix = `Resource "${resourceId}" initialization failed`;
+    const publicResourceId = this.store.toPublicId(resourceId);
+    const prefix = `Resource "${publicResourceId}" initialization failed`;
     if (error instanceof Error) {
-      if (!error.message.includes(resourceId)) {
+      if (!error.message.includes(publicResourceId)) {
         error.message = `${prefix}: ${error.message}`;
       }
       if (!Object.prototype.hasOwnProperty.call(error, "resourceId")) {
         Object.defineProperty(error, "resourceId", {
-          value: resourceId,
+          value: publicResourceId,
           configurable: true,
         });
       }
       if (!Object.prototype.hasOwnProperty.call(error, "cause")) {
         Object.defineProperty(error, "cause", {
-          value: { resourceId },
+          value: { resourceId: publicResourceId },
           configurable: true,
         });
       }
@@ -301,7 +305,7 @@ export class DependencyProcessor {
 
     const wrapper = new Error(`${prefix}: ${String(error)}`);
     Object.defineProperty(wrapper, "resourceId", {
-      value: resourceId,
+      value: publicResourceId,
       configurable: true,
     });
     Object.defineProperty(wrapper, "cause", {
@@ -375,9 +379,13 @@ export class DependencyProcessor {
         };
 
         const order = hook.order ?? 0;
+        const hookListenerId = this.store.toPublicId(hook);
 
         if (eventDefinition === "*") {
-          this.eventManager.addGlobalListener(handler, { order, id: hook.id });
+          this.eventManager.addGlobalListener(handler, {
+            order,
+            id: hookListenerId,
+          });
         } else if (Array.isArray(eventDefinition)) {
           const resolvedEvents = (eventDefinition as IEvent[]).map((event) => {
             const eventId = this.store.resolveDefinitionId(event)!;
@@ -389,7 +397,7 @@ export class DependencyProcessor {
           });
           this.eventManager.addListener(resolvedEvents, handler, {
             order,
-            id: hook.id,
+            id: hookListenerId,
           });
         } else {
           const eventId = this.store.resolveDefinitionId(eventDefinition)!;
@@ -399,7 +407,7 @@ export class DependencyProcessor {
           }
           this.eventManager.addListener(storeEvent!.event as IEvent, handler, {
             order,
-            id: hook.id,
+            id: hookListenerId,
           });
         }
       }

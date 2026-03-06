@@ -10,7 +10,7 @@ describe("requestHandlers - Security", () => {
   describe("Authentication", () => {
     it("rejects requests when no auth is configured (fail-closed)", async () => {
       const t = defineTask<any, Promise<string>>({
-        id: "tests.security.auth.failclosed",
+        id: "tests-security-auth-failclosed",
         async run() {
           return "should not reach here";
         },
@@ -19,7 +19,7 @@ describe("requestHandlers - Security", () => {
         http: { basePath: "/__runner" },
       });
       const app = defineResource({
-        id: "tests.app.security.auth.failclosed",
+        id: "tests-app-security-auth-failclosed",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -41,7 +41,7 @@ describe("requestHandlers - Security", () => {
 
     it("allows requests when allowAnonymous is explicitly true", async () => {
       const t = defineTask<any, Promise<string>>({
-        id: "tests.security.auth.allowanon",
+        id: "tests-security-auth-allowanon",
         async run() {
           return "allowed";
         },
@@ -53,7 +53,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.auth.allowanon",
+        id: "tests-app-security-auth-allowanon",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -75,7 +75,7 @@ describe("requestHandlers - Security", () => {
 
     it("allows requests when token is configured and provided", async () => {
       const t = defineTask<any, Promise<string>>({
-        id: "tests.security.auth.token",
+        id: "tests-security-auth-token",
         async run() {
           return "authenticated";
         },
@@ -87,7 +87,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.auth.token",
+        id: "tests-app-security-auth-token",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -112,7 +112,7 @@ describe("requestHandlers - Security", () => {
 
     it("rejects requests with wrong token", async () => {
       const t = defineTask<any, Promise<string>>({
-        id: "tests.security.auth.wrongtoken",
+        id: "tests-security-auth-wrongtoken",
         async run() {
           return "should not reach";
         },
@@ -124,7 +124,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.auth.wrongtoken",
+        id: "tests-app-security-auth-wrongtoken",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -149,7 +149,7 @@ describe("requestHandlers - Security", () => {
 
     it("handles safeCompare failure (catch block)", async () => {
       const t = defineTask<any, Promise<string>>({
-        id: "tests.security.auth.safeCompare",
+        id: "tests-security-auth-safeCompare",
         async run() {
           return "ok";
         },
@@ -158,7 +158,7 @@ describe("requestHandlers - Security", () => {
         http: { auth: { token: "secret", allowAnonymous: true } },
       });
       const app = defineResource({
-        id: "tests.app.security.compare",
+        id: "tests-app-security-compare",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -183,7 +183,7 @@ describe("requestHandlers - Security", () => {
   describe("CORS", () => {
     it("denies credentials without explicit origin configuration", async () => {
       const t = defineTask<any, Promise<string>>({
-        id: "tests.security.cors.denied",
+        id: "tests-security-cors-denied",
         async run() {
           return "ok";
         },
@@ -196,7 +196,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.cors.denied",
+        id: "tests-app-security-cors-denied",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -222,7 +222,7 @@ describe("requestHandlers - Security", () => {
 
     it("allows credentials with explicit origin configuration", async () => {
       const t = defineTask<any, Promise<string>>({
-        id: "tests.security.cors.allowed",
+        id: "tests-security-cors-allowed",
         async run() {
           return "ok";
         },
@@ -235,7 +235,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.cors.allowed",
+        id: "tests-app-security-cors-allowed",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -266,7 +266,7 @@ describe("requestHandlers - Security", () => {
   describe("Limits", () => {
     it("rejects JSON body > 2MB with 413", async () => {
       const t = defineTask<any, Promise<string>>({
-        id: "tests.security.limits.json",
+        id: "tests-security-limits-json",
         async run() {
           return "ok";
         },
@@ -278,7 +278,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.limits.json",
+        id: "tests-app-security-limits-json",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -303,7 +303,7 @@ describe("requestHandlers - Security", () => {
 
     it("handles requestBody multi-chunk abortion and custom maxSize", async () => {
       const t = defineTask<{ x: string }, Promise<string>>({
-        id: "tests.security.limits.json.multi",
+        id: "tests-security-limits-json-multi",
         async run({ x }) {
           return x;
         },
@@ -315,7 +315,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.limits.json.multi",
+        id: "tests-app-security-limits-json-multi",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -339,7 +339,7 @@ describe("requestHandlers - Security", () => {
 
     it("handles multipart fileSize limit", async () => {
       const t = defineTask<any, Promise<string>>({
-        id: "tests.security.limits.multipart",
+        id: "tests-security-limits-multipart",
         async run() {
           return "ok";
         },
@@ -351,7 +351,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.limits.multipart",
+        id: "tests-app-security-limits-multipart",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -380,7 +380,7 @@ describe("requestHandlers - Security", () => {
   describe("Error Masking", () => {
     it("masks internal error (500) messages", async () => {
       const t = defineTask<void, Promise<void>>({
-        id: "tests.security.error.masking",
+        id: "tests-security-error-masking",
         async run() {
           throw createMessageError("SECRET_DATA");
         },
@@ -392,7 +392,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.error.masking",
+        id: "tests-app-security-error-masking",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -414,9 +414,9 @@ describe("requestHandlers - Security", () => {
     });
 
     it("exposes typed error data if present", async () => {
-      const MyError = error<{ reason: string }>("tests.errors.MyError").build();
+      const MyError = error<{ reason: string }>("tests-errors-MyError").build();
       const t = defineTask<void, Promise<void>>({
-        id: "tests.security.error.typed",
+        id: "tests-security-error-typed",
         async run() {
           MyError.throw({ reason: "valid" });
         },
@@ -428,7 +428,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.error.typed",
+        id: "tests-app-security-error-typed",
         register: [t, exposure, MyError],
       });
       const rr = await run(app);
@@ -449,11 +449,11 @@ describe("requestHandlers - Security", () => {
     });
 
     it("allows message through for typed errors if format is used", async () => {
-      const MyError = error<{ message: string }>("tests.errors.MyError")
+      const MyError = error<{ message: string }>("tests-errors-MyError")
         .format((d) => d.message)
         .build();
       const t = defineTask<void, Promise<void>>({
-        id: "tests.security.error.typed2",
+        id: "tests-security-error-typed2",
         async run() {
           MyError.throw({ message: "Safe User Message" });
         },
@@ -465,7 +465,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.typed2",
+        id: "tests-app-security-typed2",
         register: [t, exposure, MyError],
       });
       const rr = await run(app);
@@ -487,7 +487,7 @@ describe("requestHandlers - Security", () => {
 
     it("does not leak stack traces in 500 errors", async () => {
       const t = defineTask<void, Promise<void>>({
-        id: "tests.security.error.stack",
+        id: "tests-security-error-stack",
         async run() {
           const err = new Error("Secret");
           (err as any).stack = "at secret (internal/secrets.ts:42)";
@@ -501,7 +501,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.error.stack",
+        id: "tests-app-security-error-stack",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -523,7 +523,7 @@ describe("requestHandlers - Security", () => {
 
     it("uses INTERNAL_ERROR code when error has no code property", async () => {
       const t = defineTask<void, Promise<void>>({
-        id: "tests.security.error.nocode",
+        id: "tests-security-error-nocode",
         async run() {
           throw createMessageError("plain");
         },
@@ -534,7 +534,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.error.nocode",
+        id: "tests-app-security-error-nocode",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -556,7 +556,7 @@ describe("requestHandlers - Security", () => {
 
     it("masks multipart missing file error message", async () => {
       const t = defineTask<any, Promise<string>>({
-        id: "tests.security.multipart.missingFile",
+        id: "tests-security-multipart-missingFile",
         async run() {
           return "ok";
         },
@@ -567,7 +567,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.multipart.missingFile",
+        id: "tests-app-security-multipart-missingFile",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -600,7 +600,7 @@ describe("requestHandlers - Security", () => {
     it("JSON body: abort maps to 499 and task is not executed", async () => {
       let ran = false;
       const t = defineTask<{ x: number }, Promise<number>>({
-        id: "tests.security.cancel.json",
+        id: "tests-security-cancel-json",
         async run({ x }) {
           ran = true;
           return x + 1;
@@ -613,7 +613,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.cancel.json",
+        id: "tests-app-security-cancel-json",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -637,7 +637,7 @@ describe("requestHandlers - Security", () => {
 
     it("octet-stream: task throws CancellationError on signal → 499", async () => {
       const t = defineTask<void, Promise<void>>({
-        id: "tests.security.cancel.octet",
+        id: "tests-security-cancel-octet",
         async run() {
           const { signal } = useExposureContext();
           if (signal.aborted)
@@ -669,7 +669,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.cancel.octet",
+        id: "tests-app-security-cancel-octet",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -692,7 +692,7 @@ describe("requestHandlers - Security", () => {
 
     it("multipart: request error maps to 499 REQUEST_ABORTED", async () => {
       const t = defineTask<void, Promise<string>>({
-        id: "tests.security.cancel.multipart",
+        id: "tests-security-cancel-multipart",
         async run() {
           return "OK";
         },
@@ -704,7 +704,7 @@ describe("requestHandlers - Security", () => {
         },
       });
       const app = defineResource({
-        id: "tests.app.security.cancel.multipart",
+        id: "tests-app-security-cancel-multipart",
         register: [t, exposure],
       });
       const rr = await run(app);
@@ -731,7 +731,7 @@ describe("requestHandlers - Security", () => {
   describe("Security Limits - Multipart Extras", () => {
     const getHandlersForLimits = async (limits: any) => {
       const t = defineTask<any, Promise<string>>({
-        id: "t.lim",
+        id: "t-lim",
         async run() {
           return "ok";
         },
@@ -742,7 +742,7 @@ describe("requestHandlers - Security", () => {
           auth: { allowAnonymous: true },
         },
       });
-      const app = defineResource({ id: "app.lim", register: [t, exposure] });
+      const app = defineResource({ id: "app-lim", register: [t, exposure] });
       const rr = await run(app);
       const handlers = await rr.getResourceValue(exposure as any);
       return { handlers, rr, tId: t.id };
@@ -853,3 +853,4 @@ describe("requestHandlers - Security", () => {
     });
   });
 });
+

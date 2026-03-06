@@ -26,6 +26,7 @@ describe("nodeExposure - more multipart coverage", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
+    const echoCanonicalId = rr.store.resolveDefinitionId(echo)!;
 
     const boundary = "----moreBoundary1";
     const manifest = JSON.stringify({ input: { n: 7 } });
@@ -40,7 +41,7 @@ describe("nodeExposure - more multipart coverage", () => {
       "content-type": `multipart/form-data; boundary=${boundary}`,
       "content-length": String(Buffer.byteLength(body)),
     });
-    req.url = `/__runner/task/${encodeURIComponent(echo.id)}`;
+    req.url = `/__runner/task/${encodeURIComponent(echoCanonicalId)}`;
 
     await handlers.handleTask(req, res);
     expect(res.statusCode).toBe(200);
@@ -64,6 +65,7 @@ describe("nodeExposure - more multipart coverage", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
+    const echoCanonicalId = rr.store.resolveDefinitionId(echo)!;
 
     const boundary = "----moreBoundary1b";
     const manifest = JSON.stringify({ input: { n: 9 } });
@@ -78,7 +80,7 @@ describe("nodeExposure - more multipart coverage", () => {
       "content-type": `multipart/form-data; boundary=${boundary}`,
       "content-length": String(Buffer.byteLength(body)),
     });
-    ref.req.url = `/__runner/task/${encodeURIComponent(echo.id)}`;
+    ref.req.url = `/__runner/task/${encodeURIComponent(echoCanonicalId)}`;
 
     await handlers.handleTask(ref.req, ref.res);
     expect(ref.res.statusCode).toBe(200);
@@ -102,16 +104,18 @@ describe("nodeExposure - more multipart coverage", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
+    const fileTaskCanonicalId = rr.store.resolveDefinitionId(fileTask)!;
 
     const boundary = "----moreBoundary5";
     const req = createBaseReq();
     req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(fileTask.id)}`;
+    req.url = `/__runner/task/${encodeURIComponent(fileTaskCanonicalId)}`;
     req.headers = {
       "x-runner-token": "T",
       "content-type": `multipart/form-data; boundary=${boundary}`,
       "content-length": "0",
     };
+    req.on("error", () => undefined);
 
     let status = 0;
     let payload: Buffer | null = null;

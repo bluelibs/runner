@@ -1,4 +1,4 @@
-import { r } from "../../../index";
+import { r, resources } from "../../../index";
 import { disposeDurableService } from "./DurableService";
 import { durableEventsArray } from "../events";
 import type { RunnerDurableRuntimeConfig } from "./createRunnerDurableRuntime";
@@ -18,10 +18,10 @@ export const durableResource = r
   .resource<DurableResourceRuntimeConfig>("base.durable")
   .register([durableWorkflowTag, ...durableEventsArray])
   .dependencies({
-    taskRunner: r.system.taskRunner,
-    eventManager: r.system.eventManager,
-    runnerStore: r.system.store,
-    logger: r.runner.logger,
+    taskRunner: resources.taskRunner,
+    eventManager: resources.eventManager,
+    runnerStore: resources.store,
+    logger: resources.logger,
   })
   .init(async (config, { taskRunner, eventManager, runnerStore, logger }) => {
     return await createRunnerDurableRuntime(config, {

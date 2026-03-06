@@ -3,14 +3,14 @@ import {
   defineTask,
   defineTaskMiddleware,
 } from "../../../define";
-import { r, run } from "../../../index";
+import { middleware, run } from "../../../index";
 import { CircuitBreakerState } from "../../../globals/middleware/circuitBreaker.middleware";
 import { createMessageError } from "../../../errors";
 
-const fallbackJournalKeys = r.runner.middleware.task.fallback.journalKeys;
-const rateLimitJournalKeys = r.runner.middleware.task.rateLimit.journalKeys;
+const fallbackJournalKeys = middleware.task.fallback.journalKeys;
+const rateLimitJournalKeys = middleware.task.rateLimit.journalKeys;
 const circuitBreakerJournalKeys =
-  r.runner.middleware.task.circuitBreaker.journalKeys;
+  middleware.task.circuitBreaker.journalKeys;
 
 describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () => {
   describe("Fallback Middleware", () => {
@@ -24,7 +24,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       const failingTask = defineTask({
         id: "test.journal.fallback.failing",
         middleware: [
-          r.runner.middleware.task.fallback.with({ fallback: fallbackFn }),
+          middleware.task.fallback.with({ fallback: fallbackFn }),
         ],
         run: async (_input: void, _deps, context) => {
           capturedActive = context?.journal.get(fallbackJournalKeys.active);
@@ -67,7 +67,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
         id: "test.journal.fallback.observed",
         middleware: [
           fallbackObserver,
-          r.runner.middleware.task.fallback.with({ fallback: "default" }),
+          middleware.task.fallback.with({ fallback: "default" }),
         ],
         run: async () => {
           throw createMessageError("Primary failed");
@@ -95,7 +95,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       const successTask = defineTask({
         id: "test.journal.fallback.success",
         middleware: [
-          r.runner.middleware.task.fallback.with({ fallback: "unused" }),
+          middleware.task.fallback.with({ fallback: "unused" }),
         ],
         run: async (_input: void, _deps, context) => {
           capturedActive = context?.journal.get(fallbackJournalKeys.active);
@@ -127,7 +127,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       const rateLimitedTask = defineTask({
         id: "test.journal.rateLimit.task",
         middleware: [
-          r.runner.middleware.task.rateLimit.with({ windowMs: 60000, max: 5 }),
+          middleware.task.rateLimit.with({ windowMs: 60000, max: 5 }),
         ],
         run: async (_input: void, _deps, context) => {
           capturedRemaining = context?.journal.get(
@@ -165,7 +165,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
       const circuitTask = defineTask({
         id: "test.journal.circuitBreaker.task",
         middleware: [
-          r.runner.middleware.task.circuitBreaker.with({
+          middleware.task.circuitBreaker.with({
             failureThreshold: 3,
             resetTimeout: 1000,
           }),
@@ -214,7 +214,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
         id: "test.journal.circuitBreaker.transitions",
         middleware: [
           observer,
-          r.runner.middleware.task.circuitBreaker.with({
+          middleware.task.circuitBreaker.with({
             failureThreshold: 1,
             resetTimeout: 1,
           }),

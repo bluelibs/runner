@@ -85,7 +85,7 @@ describe("r.override shorthand", () => {
       .build();
 
     const runtime = await run(app);
-    await expect(runtime.runTask(baseTask.id)).resolves.toBe(2);
+    await expect(runtime.runTask(baseTask)).resolves.toBe(2);
     await runtime.dispose();
   });
 

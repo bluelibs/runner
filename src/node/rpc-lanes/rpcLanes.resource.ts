@@ -52,7 +52,9 @@ export const rpcLanesResource = defineResource<
       resourceId,
     });
 
-    return toRpcLanesResourceValue(resolved, exposure);
+    return toRpcLanesResourceValue(resolved, exposure, (id) =>
+      store.toPublicId(id),
+    );
   },
   async dispose(value) {
     if (value?.exposure) {

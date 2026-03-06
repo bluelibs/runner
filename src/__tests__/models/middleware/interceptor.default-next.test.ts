@@ -27,6 +27,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       tasks: new Map(),
       onUnhandledError: jest.fn(),
       resolveDefinitionId,
+      toPublicId: (id: string) => id,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
@@ -61,6 +62,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       tasks: new Map(),
       onUnhandledError: jest.fn(),
       resolveDefinitionId,
+      toPublicId: (id: string) => id,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
@@ -110,6 +112,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       resourceMiddlewares: new Map(),
       resources: new Map(),
       resolveDefinitionId,
+      toPublicId: (id: string) => id,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
@@ -151,6 +154,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       tasks: new Map(),
       onUnhandledError: jest.fn(),
       resolveDefinitionId,
+      toPublicId: (id: string) => id,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
@@ -199,6 +203,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       tasks: new Map(),
       onUnhandledError: jest.fn(),
       resolveDefinitionId,
+      toPublicId: (id: string) => id,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };

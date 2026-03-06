@@ -252,8 +252,7 @@ export class RunResult<V> implements IRuntime<V> {
   ): TTask extends ITask<any, infer O, any> ? O : Promise<any> => {
     this.ensureRuntimeIsActive();
     const [input, options] = args as [unknown, TaskCallOptions | undefined];
-    const taskId =
-      typeof task === "string" ? task : this.store.resolveDefinitionId(task)!;
+    const taskId = this.resolveRuntimeElementId(task);
     if (!this.store.tasks.has(taskId)) {
       runtimeElementNotFoundError.throw({ type: "Task", elementId: taskId });
     }
@@ -304,9 +303,7 @@ export class RunResult<V> implements IRuntime<V> {
     this.ensureRuntimeIsActive();
 
     const eventId =
-      typeof event === "string"
-        ? event
-        : this.store.resolveDefinitionId(event)!;
+      this.resolveRuntimeElementId(event);
     if (!this.store.events.has(eventId)) {
       runtimeElementNotFoundError.throw({
         type: "Event",
@@ -523,11 +520,21 @@ export class RunResult<V> implements IRuntime<V> {
   private getResourceId(
     resource: string | IResource<any, any, any, any, any>,
   ): string {
-    if (typeof resource === "string") {
-      return resource;
-    }
+    return this.resolveRuntimeElementId(resource);
+  }
 
-    return this.store.resolveDefinitionId(resource)!;
+  /**
+   * Resolves either a definition object or a string id to the store's
+   * canonical id, with graceful fallback to the original string/object id.
+   */
+  private resolveRuntimeElementId(
+    reference: string | { id: string },
+  ): string {
+    const resolved = this.store.resolveDefinitionId(reference);
+    if (resolved) {
+      return resolved;
+    }
+    return typeof reference === "string" ? reference : reference.id;
   }
 
   /**

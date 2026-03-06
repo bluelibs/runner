@@ -36,7 +36,10 @@ import { MiddlewareManager } from "./MiddlewareManager";
 import { RunnerMode } from "../types/runner";
 import { detectRunnerMode } from "../tools/detectRunnerMode";
 import { Serializer } from "../serializer";
-import { getResourcesInDisposeWaves as computeDisposeWaves } from "./utils/disposeOrder";
+import {
+  getResourcesInDisposeWaves as computeDisposeWaves,
+  getResourcesInReadyWaves as computeReadyWaves,
+} from "./utils/disposeOrder";
 import { RunResult } from "./RunResult";
 import { registerStoreBuiltins } from "./BuiltinsRegistry";
 import type { RuntimeCallSource } from "../types/runtimeSource";
@@ -66,6 +69,7 @@ export class Store {
   private middlewareManager!: MiddlewareManager;
   private readonly initWaves: InitWave[] = [];
   private readonly initializedResourceIds = new Set<string>();
+  private readonly readyResourceIds = new Set<string>();
   private readonly pendingCooldownErrors: Error[] = [];
   private hasRunCooldown = false;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
@@ -87,6 +91,16 @@ export class Store {
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
     this.middlewareManager = new MiddlewareManager(this, eventManager, logger);
+    this.eventManager.setEventDefinitionResolver(<T>(eventDefinition: any) => {
+      const resolvedId = this.resolveDefinitionId(eventDefinition);
+      if (!resolvedId) {
+        return eventDefinition;
+      }
+
+      const storeEvent = this.events.get(resolvedId);
+      return (storeEvent?.event ?? eventDefinition) as any;
+    });
+    this.eventManager.setEventIdFormatter((eventId) => this.toPublicId(eventId));
 
     this.mode = detectRunnerMode(mode);
   }
@@ -151,11 +165,26 @@ export class Store {
    * Returns the owner resource id that directly registered the given item.
    */
   public getOwnerResourceId(itemId: string): string | undefined {
-    return this.registry.visibilityTracker.getOwnerResourceId(itemId);
+    const resolvedItemId = this.resolveDefinitionId(itemId) ?? itemId;
+    return this.registry.visibilityTracker.getOwnerResourceId(resolvedItemId);
   }
 
   public resolveDefinitionId(reference: unknown): string | undefined {
     return this.registry.resolveDefinitionId(reference);
+  }
+
+  public toPublicId(reference: unknown): string {
+    const resolvedId = this.resolveDefinitionId(reference);
+    if (!resolvedId) {
+      validationError.throw({
+        subject: "Definition reference",
+        id: String(reference),
+        originalError:
+          "Unable to resolve a definition id from the provided reference.",
+      });
+    }
+
+    return this.registry.getDisplayId(resolvedId);
   }
 
   /**
@@ -426,6 +455,27 @@ export class Store {
     return computeDisposeWaves(this.resources, this.initWaves);
   }
 
+  private getResourcesInReadyWaves(): DisposeWave[] {
+    return computeReadyWaves(this.resources, this.initWaves);
+  }
+
+  /** @internal Executes startup-ready hooks for initialized resources. */
+  public async ready() {
+    for (const wave of this.getResourcesInReadyWaves()) {
+      await this.readyWave(wave);
+    }
+  }
+
+  /** @internal Executes ready for a single initialized resource (used by lazy init). */
+  public async readyResource(resourceId: string): Promise<void> {
+    const resource = this.resources.get(resourceId);
+    if (!resource) {
+      return;
+    }
+
+    await this.runReadyResource(resource);
+  }
+
   public async cooldown() {
     if (this.hasRunCooldown) {
       return;
@@ -450,6 +500,7 @@ export class Store {
 
     this.initWaves.length = 0;
     this.initializedResourceIds.clear();
+    this.readyResourceIds.clear();
     this.pendingCooldownErrors.length = 0;
     this.hasRunCooldown = false;
     this.markDisposed();
@@ -497,8 +548,54 @@ export class Store {
     return this.executeWave(wave, (r) => this.cooldownResource(r));
   }
 
+  private async readyWave(wave: DisposeWave): Promise<void> {
+    if (wave.parallel) {
+      try {
+        await Promise.all(
+          wave.resources.map((resource) => this.runReadyResource(resource)),
+        );
+      } catch (error) {
+        throw this.normalizeError(error);
+      }
+      return;
+    }
+
+    for (const resource of wave.resources) {
+      try {
+        await this.runReadyResource(resource);
+      } catch (error) {
+        throw this.normalizeError(error);
+      }
+    }
+  }
+
   private async disposeWave(wave: DisposeWave): Promise<Error[]> {
     return this.executeWave(wave, (r) => this.disposeResource(r));
+  }
+
+  private normalizeError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+
+  private async runReadyResource(
+    resource: ResourceStoreElementType,
+  ): Promise<void> {
+    if (!resource.isInitialized || !resource.resource.ready) {
+      return;
+    }
+
+    const resourceId = resource.resource.id;
+    if (this.readyResourceIds.has(resourceId)) {
+      return;
+    }
+
+    await resource.resource.ready(
+      resource.value,
+      resource.config,
+      resource.computedDependencies ?? {},
+      resource.context,
+    );
+    this.readyResourceIds.add(resourceId);
   }
 
   private async disposeResource(
@@ -565,12 +662,10 @@ export class Store {
     tag: TTag,
   ): TaggedTask<TTag>[];
   /** @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor. */
-  public getTasksWithTag(tag: string): AnyTask[];
-  /** @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor. */
-  public getTasksWithTag(tag: string | ITag<any, any, any>): AnyTask[] {
-    return typeof tag === "string"
-      ? this.registry.getTasksWithTag(tag)
-      : this.registry.getTasksWithTag(tag);
+  public getTasksWithTag(tag: ITag<any, any, any>): AnyTask[] {
+    return this.registry
+      .getTasksWithTag(tag)
+      .map((task) => this.toPublicDefinition(task));
   }
 
   /**
@@ -583,11 +678,23 @@ export class Store {
     tag: TTag,
   ): TaggedResource<TTag>[];
   /** @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor. */
-  public getResourcesWithTag(tag: string): AnyResource[];
-  /** @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor. */
-  public getResourcesWithTag(tag: string | ITag<any, any, any>): AnyResource[] {
-    return typeof tag === "string"
-      ? this.registry.getResourcesWithTag(tag)
-      : this.registry.getResourcesWithTag(tag);
+  public getResourcesWithTag(tag: ITag<any, any, any>): AnyResource[] {
+    return this.registry
+      .getResourcesWithTag(tag)
+      .map((resource) => this.toPublicDefinition(resource));
+  }
+
+  private toPublicDefinition<TDefinition extends { id: string }>(
+    definition: TDefinition,
+  ): TDefinition {
+    const publicId = this.toPublicId(definition);
+    if (publicId === definition.id) {
+      return definition;
+    }
+
+    return {
+      ...definition,
+      id: publicId,
+    };
   }
 }

@@ -1,4 +1,4 @@
-import { event, r, run } from "../../..";
+import { defineEvent, r, run } from "../../..";
 import { durableResource } from "../../durable/core/resource";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
@@ -18,7 +18,7 @@ async function waitUntil(
 }
 
 describe("durable: audit trail (integration)", () => {
-  const Paid = event<{ paidAt: number }>({ id: "durable.tests.audit.paid" });
+  const Paid = defineEvent<{ paidAt: number }>({ id: "durable.tests.audit.paid" });
 
   it("records steps, emits, sleeps, and custom notes", async () => {
     const store = new MemoryStore();
@@ -40,7 +40,7 @@ describe("durable: audit trail (integration)", () => {
         await ctx.note("starting", { orderId: "o1" });
 
         const before = await ctx.step("before", async () => "before");
-        const AuditEvt = event<{ a: number }>({
+        const AuditEvt = defineEvent<{ a: number }>({
           id: "durable.tests.audit.event",
         });
         await ctx.emit(AuditEvt, { a: 1 });

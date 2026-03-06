@@ -97,7 +97,7 @@ export function collectCrossLaneApplyToEventIds(
 
     if (typeof applyTo === "function") {
       for (const eventEntry of store.events.values()) {
-        if (applyTo(eventEntry.event)) {
+        if (applyTo(toPublicPredicateCandidate(store, eventEntry.event))) {
           eventIds.add(eventEntry.event.id);
         }
       }
@@ -107,11 +107,31 @@ export function collectCrossLaneApplyToEventIds(
     if (!Array.isArray(applyTo)) continue;
     for (const target of applyTo) {
       const targetId = extractTargetId(target);
-      if (typeof targetId === "string" && store.events.has(targetId)) {
-        eventIds.add(targetId);
+      if (typeof targetId !== "string") {
+        continue;
+      }
+
+      const eventEntry = store.events.get(targetId);
+      if (eventEntry) {
+        eventIds.add(eventEntry.event.id);
       }
     }
   }
 
   return eventIds;
+}
+
+function toPublicPredicateCandidate<T extends { id: string }>(
+  store: Store,
+  definition: T,
+): T {
+  const publicId = store.toPublicId(definition);
+  if (publicId === definition.id) {
+    return definition;
+  }
+
+  return {
+    ...definition,
+    id: publicId,
+  };
 }

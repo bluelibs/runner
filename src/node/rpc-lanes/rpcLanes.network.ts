@@ -41,10 +41,11 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
           input?: unknown,
           options?: { headers?: Record<string, string> },
         ) => Promise<unknown>;
+        const remoteTaskId = store.toPublicId(taskEntry.task);
         const headers = buildRpcLaneRequestHeaders(lane.id);
         return headers
-          ? executeRemoteTask(taskEntry.task.id, input, { headers })
-          : executeRemoteTask(taskEntry.task.id, input);
+          ? executeRemoteTask(remoteTaskId, input, { headers })
+          : executeRemoteTask(remoteTaskId, input);
       }) as typeof taskEntry.task.run,
       isRpcRouted: true,
       [symbolRpcLaneRoutedBy]: resourceId,
@@ -53,13 +54,16 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
   }
 
   dependencies.eventManager.intercept(async (next, emission) => {
-    const lane = resolved.eventLaneByEventId.get(emission.id);
+    const resolvedEmissionEventId =
+      store.events.get(emission.id)?.event.id ?? emission.id;
+    const lane = resolved.eventLaneByEventId.get(resolvedEmissionEventId);
     if (!lane) {
       return next(emission);
     }
 
     const binding = resolved.bindingsByLaneId.get(lane.id)!;
     const isServed = resolved.serveLaneIds.has(lane.id);
+    const remoteEventId = store.toPublicId(resolvedEmissionEventId);
     if (isServed) {
       return next(emission);
     }
@@ -67,7 +71,7 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
     if (typeof binding.communicator.eventWithResult === "function") {
       const headers = buildRpcLaneRequestHeaders(lane.id);
       const result = await binding.communicator.eventWithResult(
-        emission.id,
+        remoteEventId,
         emission.data,
         headers ? { headers } : undefined,
       );
@@ -80,11 +84,11 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
     if (typeof binding.communicator.event === "function") {
       const headers = buildRpcLaneRequestHeaders(lane.id);
       if (headers) {
-        await binding.communicator.event(emission.id, emission.data, {
+        await binding.communicator.event(remoteEventId, emission.data, {
           headers,
         });
       } else {
-        await binding.communicator.event(emission.id, emission.data);
+        await binding.communicator.event(remoteEventId, emission.data);
       }
       return;
     }

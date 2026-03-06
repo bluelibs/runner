@@ -63,6 +63,10 @@ export const symbolTag: unique symbol = Symbol.for("runner.tag");
 export const symbolTagConfigured: unique symbol = Symbol.for(
   "runner.tagConfigured",
 );
+/** @internal Points a configured tag instance to its source definition. */
+export const symbolTagConfiguredFrom: unique symbol = Symbol.for(
+  "runner.tagConfiguredFrom",
+);
 /** @internal Marks a tag before-init dependency wrapper */
 export const symbolTagBeforeInitDependency: unique symbol = Symbol.for(
   "runner.tagBeforeInitDependency",

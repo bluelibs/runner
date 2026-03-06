@@ -25,6 +25,7 @@ export type BuilderState<
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 > = Readonly<{
   id: string;
+  gateway: boolean;
   filePath: string;
   dependencies?: TDeps | ((config: TConfig) => TDeps);
   register?:
@@ -54,6 +55,19 @@ export type BuilderState<
       TTags,
       TMiddleware
     >["dispose"]
+  >;
+  ready?: NonNullable<
+    IResourceDefinition<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >["ready"]
   >;
   cooldown?: NonNullable<
     IResourceDefinition<

@@ -1,4 +1,4 @@
-import { r } from "../../../index";
+import { r, resources } from "../../../index";
 import { RedisEventBus } from "../bus/RedisEventBus";
 import { RabbitMQQueue } from "../queue/RabbitMQQueue";
 import { RedisStore } from "../store/RedisStore";
@@ -41,10 +41,10 @@ export const redisDurableResource = r
   .resource<RedisDurableResourceConfig>("base.durable.redis")
   .register([durableWorkflowTag, ...durableEventsArray])
   .dependencies({
-    taskRunner: r.system.taskRunner,
-    eventManager: r.system.eventManager,
-    runnerStore: r.system.store,
-    logger: r.runner.logger,
+    taskRunner: resources.taskRunner,
+    eventManager: resources.eventManager,
+    runnerStore: resources.store,
+    logger: resources.logger,
   })
   .context<RedisDurableResourceContext>(() => ({ runtimeConfig: null }))
   .init(async function (

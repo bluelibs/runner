@@ -1,4 +1,4 @@
-import { r, resource, definitions, run, tag, IResourceMeta } from "../..";
+import { r, defineResource, definitions, run, defineTag, IResourceMeta } from "../..";
 
 describe("resource builder", () => {
   it("build() returns branded resource with id", () => {
@@ -21,11 +21,11 @@ describe("resource builder", () => {
   });
 
   it("register appends by default and overrides when requested", () => {
-    const shared = resource({
+    const shared = defineResource({
       id: "tests.builder.append.shared",
       init: async () => 1,
     });
-    const extra = resource({
+    const extra = defineResource({
       id: "tests.builder.append.extra",
       init: async () => 2,
     });
@@ -56,11 +56,11 @@ describe("resource builder", () => {
   });
 
   it("register merges dynamic callbacks into a single function", () => {
-    const alpha = resource({
+    const alpha = defineResource({
       id: "tests.builder.fn.alpha",
       init: async () => 1,
     });
-    const beta = resource({ id: "tests.builder.fn.beta", init: async () => 2 });
+    const beta = defineResource({ id: "tests.builder.fn.beta", init: async () => 2 });
 
     const composed = r
       .resource("tests.builder.registerfn")
@@ -76,7 +76,7 @@ describe("resource builder", () => {
   });
 
   it("supports config-driven register without init", () => {
-    const enabled = resource({
+    const enabled = defineResource({
       id: "tests.builder.config-only.enabled",
       init: async () => true,
     });
@@ -96,11 +96,11 @@ describe("resource builder", () => {
   });
 
   it("register merges array base with lazy callbacks", () => {
-    const alpha = resource({
+    const alpha = defineResource({
       id: "tests.builder.fnfn.alpha",
       init: async () => 1,
     });
-    const beta = resource({
+    const beta = defineResource({
       id: "tests.builder.fnfn.beta",
       init: async () => 2,
     });
@@ -119,8 +119,8 @@ describe("resource builder", () => {
   });
 
   it("chains dependencies, tags, middleware, meta, overrides, register, context", () => {
-    const a = resource({ id: "tests.a", init: async () => 1 });
-    const b = resource({ id: "tests.b", init: async () => 2 });
+    const a = defineResource({ id: "tests.a", init: async () => 1 });
+    const b = defineResource({ id: "tests.b", init: async () => 2 });
     const app = r
       .resource("tests.builder.app")
       .dependencies({ a, b })
@@ -134,6 +134,7 @@ describe("resource builder", () => {
         return Promise.resolve(deps.a + deps.b + ctx.c);
       })
       .meta({ title: "X" } as unknown as IResourceMeta)
+      .ready(async () => {})
       .cooldown(async () => {})
       .dispose(async () => {})
       .build();
@@ -143,6 +144,7 @@ describe("resource builder", () => {
     ).toBeTruthy();
     expect(app.register).toBeInstanceOf(Array);
     expect(app.context).toBeDefined();
+    expect(app.ready).toBeDefined();
     expect(app.cooldown).toBeDefined();
     expect(app.meta).toEqual({ title: "X" });
   });
@@ -179,11 +181,11 @@ describe("resource builder", () => {
   });
 
   it("resource overrides append by default and overrides when requested", () => {
-    const baseA = resource({
+    const baseA = defineResource({
       id: "tests.builder.override.a",
       init: async () => 1,
     });
-    const baseB = resource({
+    const baseB = defineResource({
       id: "tests.builder.override.b",
       init: async () => 2,
     });
@@ -210,7 +212,7 @@ describe("resource builder", () => {
   });
 
   it("init propagates dependencies and context through the classic signature", async () => {
-    const a = resource({ id: "tests.a2", init: async () => 5 });
+    const a = defineResource({ id: "tests.a2", init: async () => 5 });
     const app = r
       .resource("tests.builder.app2")
       .register([a])
@@ -382,7 +384,7 @@ describe("resource builder", () => {
       .run(async () => Promise.resolve("ok"))
       .build();
 
-    const app = resource({
+    const app = defineResource({
       id: "tests.builder.app.taskmw",
       register: [tmw, task],
       dependencies: { task },
@@ -397,7 +399,7 @@ describe("resource builder", () => {
   });
 
   it("resource tags are accessible in middleware during init", async () => {
-    const tg = tag({ id: "tests.builder.tag" });
+    const tg = defineTag({ id: "tests.builder.tag" });
     const seen: string[] = [];
     const rmw = r.middleware
       .resource("tests.builder.rm.tags")
@@ -425,11 +427,11 @@ describe("resource builder", () => {
   });
 
   it("register merges function + function and supports override", () => {
-    const gamma = resource({
+    const gamma = defineResource({
       id: "tests.builder.fnfn.gamma",
       init: async () => 3,
     });
-    const delta = resource({
+    const delta = defineResource({
       id: "tests.builder.fnfn.delta",
       init: async () => 4,
     });
@@ -460,11 +462,11 @@ describe("resource builder", () => {
   });
 
   it("resource dependencies covers function+function and object+function branches", async () => {
-    const a = resource({
+    const a = defineResource({
       id: "tests.builder.resdeps.ff.a",
       init: async () => 10,
     });
-    const b = resource({
+    const b = defineResource({
       id: "tests.builder.resdeps.ff.b",
       init: async () => 20,
     });
@@ -494,3 +496,4 @@ describe("resource builder", () => {
     await rr2.dispose();
   });
 });
+

@@ -1,4 +1,4 @@
-import { r } from "../../index";
+import { events } from "../../index";
 import { runtimeSource } from "../../types/runtimeSource";
 import { eventLaneEventNotRegisteredError } from "../../errors";
 import type { EventManager } from "../../models/EventManager";
@@ -157,7 +157,10 @@ export class EventLanesController {
         return next(emission);
       }
 
-      const eventRoute = this.context.eventRouteByEventId.get(emission.id);
+      const resolvedEmissionId =
+        this.dependencies.store.events.get(emission.id)?.event.id ?? emission.id;
+      const eventRoute =
+        this.context.eventRouteByEventId.get(resolvedEmissionId);
       if (!eventRoute) {
         return next(emission);
       }
@@ -171,6 +174,8 @@ export class EventLanesController {
         context: this.context,
         config: this.config,
       });
+      const publicEventId =
+        this.dependencies.store.toPublicId(resolvedEmissionId);
       const authToken = issueRemoteLaneToken({
         laneId: eventRoute.lane.id,
         bindingAuth,
@@ -179,7 +184,7 @@ export class EventLanesController {
 
       await binding.queue.enqueue({
         laneId: eventRoute.lane.id,
-        eventId: emission.id,
+        eventId: publicEventId,
         payload: this.dependencies.serializer.stringify(emission.data),
         source: emission.source,
         authToken,
@@ -187,7 +192,7 @@ export class EventLanesController {
       });
       emission.stopPropagation();
       await this.diagnostics.logEnqueue({
-        eventId: emission.id,
+        eventId: publicEventId,
         laneId: eventRoute.lane.id,
         profile: this.context.profile,
         mode: resolveRemoteLanesMode(this.config.mode),
@@ -199,7 +204,7 @@ export class EventLanesController {
 
   private registerConsumersOnReady() {
     this.dependencies.eventManager.addListener(
-      r.system.events.ready,
+      events.ready,
       async () => {
         if (this.context.started || this.context.disposed) {
           return;
@@ -255,8 +260,11 @@ export class EventLanesController {
           config: this.config,
         }),
       });
+      const resolvedMessageEventId =
+        this.dependencies.store.events.get(message.eventId)?.event.id ??
+        message.eventId;
       const eventStoreEntry = this.dependencies.store.events.get(
-        message.eventId,
+        resolvedMessageEventId,
       );
       if (!eventStoreEntry) {
         eventLaneEventNotRegisteredError.throw({ eventId: message.eventId });

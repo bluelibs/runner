@@ -6,8 +6,6 @@ export type {
   PlatformClearTimeout,
 } from "./platform";
 
-export type { TestFacade } from "./testing";
-
 export type {
   TaskFluentBuilder,
   ResolveInput,

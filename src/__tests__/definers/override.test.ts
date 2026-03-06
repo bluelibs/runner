@@ -1,16 +1,16 @@
-import { override, r, resource, run, task } from "../..";
+import { r, defineResource, run, defineTask } from "../..";
+import { override } from "../../definers/builders/override";
 import {
   defineEvent,
   defineHook,
   defineOverride,
-  defineResource,
   defineResourceMiddleware,
   defineTaskMiddleware,
 } from "../../define";
 
 describe("override() helper", () => {
   it("should preserve id and override run for tasks", async () => {
-    const base = task({
+    const base = defineTask({
       id: "test.task",
       run: async () => "base",
     });
@@ -24,7 +24,7 @@ describe("override() helper", () => {
   });
 
   it("should preserve id and override init for resources", async () => {
-    const base = resource({
+    const base = defineResource({
       id: "test.resource",
       init: async () => 1,
     });
@@ -165,7 +165,7 @@ describe("override() helper", () => {
   });
 
   it("should ignore null and undefined overrides", async () => {
-    const base = task({
+    const base = defineTask({
       id: "test.task.nullable",
       run: async () => "base",
     });
@@ -185,7 +185,7 @@ describe("override() helper", () => {
   });
 
   it("should reject patch-form usage at runtime", () => {
-    const base = task({
+    const base = defineTask({
       id: "test.task.runtime.patch.rejected",
       run: async () => "base",
     });
@@ -202,31 +202,48 @@ describe("override() helper", () => {
     ).toThrow(/second argument must be a function/);
   });
 
+  it("should reject patch-form defineOverride usage at runtime", () => {
+    const base = defineTask({
+      id: "test.task.runtime.patch.rejected.define",
+      run: async () => "base",
+    });
+
+    const runtimeDefineOverride = defineOverride as unknown as (
+      base: unknown,
+      fn?: unknown,
+    ) => unknown;
+
+    expect(() =>
+      runtimeDefineOverride(base, {
+        run: async () => "changed",
+      }),
+    ).toThrow(/second argument must be a function/);
+  });
+
   it("should throw when fn shorthand is provided with an unrecognized base type", () => {
     const unknownBase = { id: "unknown", __type: "alien" } as any;
     expect(() => override(unknownBase, async () => "noop")).toThrow(/override/);
   });
 
-  it("keeps defineOverride as low-level helper and rejects it in .overrides()", async () => {
-    const baseTask = task({
-      id: "test.override.low-level.base",
+  it("supports defineOverride as the same override contract as r.override", async () => {
+    const baseTask = defineTask({
+      id: "test.override.define-equals-r.base",
       run: async () => "base",
     });
-    const lowLevelOverride = defineOverride(baseTask, {
-      run: async () => "changed",
-    });
+    const highLevelOverride = defineOverride(baseTask, async () => "changed");
 
-    expect(await lowLevelOverride.run(undefined, {})).toBe("changed");
+    expect(await highLevelOverride.run(undefined, {})).toBe("changed");
 
     const app = defineResource({
-      id: "test.override.low-level.app",
+      id: "test.override.define-equals-r.app",
       register: [baseTask],
-      overrides: [lowLevelOverride as any],
-      init: async () => undefined,
+      overrides: [highLevelOverride],
+      dependencies: { baseTask },
+      init: async (_config, deps) => deps.baseTask(),
     });
 
-    await expect(run(app)).rejects.toThrow(
-      ".overrides([...]) accepts only definitions produced by r.override(...) / override(...).",
-    );
+    const result = await run(app);
+    expect(result.value).toBe("changed");
   });
 });
+

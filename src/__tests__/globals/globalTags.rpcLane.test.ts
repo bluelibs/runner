@@ -1,7 +1,7 @@
 import { globalTags } from "../../globals/globalTags";
 import { r } from "../..";
 
-describe("r.runner.tags.rpcLane", () => {
+describe("tags.rpcLane", () => {
   it("is scoped to tasks/events and extracts lane config", () => {
     expect(globalTags.rpcLane.targets).toEqual(["tasks", "events"]);
     expect(Object.isFrozen(globalTags.rpcLane.targets)).toBe(true);

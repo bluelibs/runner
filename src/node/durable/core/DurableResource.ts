@@ -98,9 +98,7 @@ export class DurableResource implements IDurableResource {
   getWorkflows(): AnyTask[] {
     const runnerStore = this.requireRunnerStoreForWorkflowDiscovery();
 
-    return runnerStore
-      .getTagAccessor(durableWorkflowTag)
-      .tasks.map((entry) => entry.definition);
+    return runnerStore.getTasksWithTag(durableWorkflowTag);
   }
 
   private requireRunnerStoreForDescribe(): Store {

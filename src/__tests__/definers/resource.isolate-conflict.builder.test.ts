@@ -2,11 +2,20 @@ import { r, scope } from "../..";
 import { isolateConflictError } from "../../errors";
 
 describe("resource builder: isolate deny+only conflict", () => {
+  const denyTask = r
+    .task("tests.isolate.conflict.deny.task")
+    .run(async () => "deny")
+    .build();
+  const onlyTask = r
+    .task("tests.isolate.conflict.only.task")
+    .run(async () => "only")
+    .build();
+
   it("throws at build time when deny and only are in the same isolate() call", () => {
     expect(() => {
       r.resource("tests.isolate.conflict.same-call.resource").isolate({
-        deny: [scope("a.task")],
-        only: [scope("b.task")],
+        deny: [scope(denyTask)],
+        only: [scope(onlyTask)],
       });
     }).toThrow(expect.objectContaining({ id: isolateConflictError.id }));
   });
@@ -14,16 +23,16 @@ describe("resource builder: isolate deny+only conflict", () => {
   it("throws at build time when deny is set first and only is added via chaining", () => {
     expect(() => {
       r.resource("tests.isolate.conflict.chained-deny-first.resource")
-        .isolate({ deny: [scope("a.task")] })
-        .isolate({ only: [scope("b.task")] });
+        .isolate({ deny: [scope(denyTask)] })
+        .isolate({ only: [scope(onlyTask)] });
     }).toThrow(expect.objectContaining({ id: isolateConflictError.id }));
   });
 
   it("throws at build time when only is set first and deny is added via chaining", () => {
     expect(() => {
       r.resource("tests.isolate.conflict.chained-only-first.resource")
-        .isolate({ only: [scope("a.task")] })
-        .isolate({ deny: [scope("b.task")] });
+        .isolate({ only: [scope(onlyTask)] })
+        .isolate({ deny: [scope(denyTask)] });
     }).toThrow(expect.objectContaining({ id: isolateConflictError.id }));
   });
 
@@ -32,8 +41,8 @@ describe("resource builder: isolate deny+only conflict", () => {
     let caught: unknown;
     try {
       r.resource(resourceId).isolate({
-        deny: [scope("a.task")],
-        only: [scope("b.task")],
+        deny: [scope(denyTask)],
+        only: [scope(onlyTask)],
       });
     } catch (err) {
       caught = err;
@@ -48,7 +57,7 @@ describe("resource builder: isolate deny+only conflict", () => {
   it("allows deny-only (no only) without throwing", () => {
     expect(() => {
       r.resource("tests.isolate.conflict.deny-only.resource")
-        .isolate({ deny: [scope("a.task")] })
+        .isolate({ deny: [scope(denyTask)] })
         .build();
     }).not.toThrow();
   });
@@ -56,7 +65,7 @@ describe("resource builder: isolate deny+only conflict", () => {
   it("allows only-only (no deny) without throwing", () => {
     expect(() => {
       r.resource("tests.isolate.conflict.only-only.resource")
-        .isolate({ only: [scope("a.task")] })
+        .isolate({ only: [scope(onlyTask)] })
         .build();
     }).not.toThrow();
   });

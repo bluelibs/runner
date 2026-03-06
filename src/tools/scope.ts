@@ -1,7 +1,6 @@
 import type {
   RegisterableItems,
   IsolationSubtreeFilter,
-  IsolationSelector,
 } from "../defs";
 
 /**
@@ -33,7 +32,6 @@ export type IsolationChannel =
 /** The set of target types that scope() accepts (same as pre-scope IsolationTarget). */
 export type IsolationScopeTarget =
   | RegisterableItems
-  | IsolationSelector
   | IsolationSubtreeFilter;
 
 /**
@@ -75,7 +73,7 @@ const ALL_CHANNELS_ON: Readonly<Required<IsolationChannels>> = Object.freeze({
  *       scope(dangerousTask),                                     // block all channels
  *       scope(userCreated, { listening: false }),                  // block emit, allow listen
  *       scope([subtreeOf(lib), subtreeOf(agent)], { tagging: false }), // block deps/listen/mw
- *       scope("app.internal.*", { dependencies: false }),          // block listen/tag/mw only
+ *       scope(subtreeOf(internalModule), { dependencies: false }), // block listen/tag/mw only
  *     ],
  *   })
  *   .build();

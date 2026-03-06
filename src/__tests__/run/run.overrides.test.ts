@@ -211,7 +211,7 @@ describe("run.overrides", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      ".overrides([...]) accepts only definitions produced by r.override(...) / override(...).",
+      ".overrides([...]) accepts only definitions produced by r.override(...) / defineOverride(...).",
     );
   });
 
@@ -441,7 +441,7 @@ describe("run.overrides", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      ".overrides([...]) accepts only definitions produced by r.override(...) / override(...).",
+      ".overrides([...]) accepts only definitions produced by r.override(...) / defineOverride(...).",
     );
   });
 
@@ -463,7 +463,7 @@ describe("run.overrides", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      ".overrides([...]) accepts only definitions produced by r.override(...) / override(...).",
+      ".overrides([...]) accepts only definitions produced by r.override(...) / defineOverride(...).",
     );
   });
 
@@ -481,7 +481,7 @@ describe("run.overrides", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      ".overrides([...]) accepts only definitions produced by r.override(...) / override(...).",
+      ".overrides([...]) accepts only definitions produced by r.override(...) / defineOverride(...).",
     );
   });
 

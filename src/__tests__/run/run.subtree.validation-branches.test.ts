@@ -1,5 +1,6 @@
 import { defineResource, defineTask } from "../../define";
 import { run } from "../../run";
+import { isResource, isTask } from "../../definers/tools";
 
 describe("run subtree validation branches", () => {
   it("fails fast when subtree task middleware is not registered", async () => {
@@ -106,21 +107,14 @@ describe("run subtree validation branches", () => {
       id: "tests.subtree.branches.validator.app",
       register: [task, child],
       subtree: {
-        tasks: {
-          validate: (definition) => {
-            if (definition.id === task.id) {
-              seen.task = typeof definition.run === "function";
-            }
-            return [];
-          },
-        },
-        resources: {
-          validate: (definition) => {
-            if (definition.id === child.id) {
-              seen.resource = typeof definition.init === "function";
-            }
-            return [];
-          },
+        validate: (definition) => {
+          if (isTask(definition) && definition.id === task.id) {
+            seen.task = typeof definition.run === "function";
+          }
+          if (isResource(definition) && definition.id === child.id) {
+            seen.resource = typeof definition.init === "function";
+          }
+          return [];
         },
       },
       async init() {
@@ -148,17 +142,15 @@ describe("run subtree validation branches", () => {
       id: "tests.subtree.branches.invalid-validator.app",
       register: [task],
       subtree: {
-        tasks: {
-          validate: [
-            () => "invalid" as any,
-            () => {
-              throw "validator exploded";
-            },
-            () => {
-              throw new Error("validator error object");
-            },
-          ],
-        },
+        validate: [
+          () => "invalid" as any,
+          () => {
+            throw "validator exploded";
+          },
+          () => {
+            throw new Error("validator error object");
+          },
+        ],
       },
       async init() {
         return "never";

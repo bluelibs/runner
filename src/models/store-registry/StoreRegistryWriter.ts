@@ -366,7 +366,7 @@ export class StoreRegistryWriter {
     element.register = items;
 
     const scopedItems = items.map((item) =>
-      this.compileOwnedItem(element.id, item),
+      this.compileOwnedItem(element.id, element.gateway === true, item),
     );
 
     for (const item of scopedItems) {
@@ -405,6 +405,7 @@ export class StoreRegistryWriter {
 
   private compileOwnedItem(
     ownerResourceId: string,
+    ownerIsGateway: boolean,
     item: RegisterableItems,
   ): RegisterableItems {
     const kind = resolveRegisterableKind(item);
@@ -416,6 +417,7 @@ export class StoreRegistryWriter {
       const withConfig = item as IResourceWithConfig<any, any, any>;
       const compiledResource = this.compileOwnedDefinition(
         ownerResourceId,
+        ownerIsGateway,
         withConfig.resource as RegisterableItems,
         RegisterableKind.Resource,
       ) as IResource<any, any, any>;
@@ -441,7 +443,12 @@ export class StoreRegistryWriter {
       return compiledWithConfig;
     }
 
-    const compiled = this.compileOwnedDefinition(ownerResourceId, item, kind);
+    const compiled = this.compileOwnedDefinition(
+      ownerResourceId,
+      ownerIsGateway,
+      item,
+      kind,
+    );
     const resolvedId = this.resolveRegisterableId(compiled)!;
     this.aliasResolver.registerDefinitionAlias(item, resolvedId);
     this.aliasResolver.registerDefinitionAlias(compiled, resolvedId);
@@ -450,11 +457,17 @@ export class StoreRegistryWriter {
 
   private compileOwnedDefinition(
     ownerResourceId: string,
+    ownerIsGateway: boolean,
     item: RegisterableItems,
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
   ): RegisterableItems {
     const currentId = item.id;
-    const nextId = this.computeCanonicalId(ownerResourceId, kind, currentId);
+    const nextId = this.computeCanonicalId(
+      ownerResourceId,
+      ownerIsGateway,
+      kind,
+      currentId,
+    );
     if (nextId === currentId) {
       return item;
     }
@@ -508,15 +521,36 @@ export class StoreRegistryWriter {
 
   private computeCanonicalId(
     ownerResourceId: string,
+    ownerIsGateway: boolean,
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
     currentId: string,
   ): string {
-    if (currentId.includes(".")) {
-      // Compatibility path: fully-qualified ids stay as absolute ids.
-      return currentId;
-    }
-
     this.assertLocalName(ownerResourceId, kind, currentId);
+
+    if (ownerIsGateway) {
+      switch (kind) {
+        case RegisterableKind.Resource:
+          return currentId;
+        case RegisterableKind.Task:
+          return `tasks.${currentId}`;
+        case RegisterableKind.Event:
+          return `events.${currentId}`;
+        case RegisterableKind.Hook:
+          return `hooks.${currentId}`;
+        case RegisterableKind.TaskMiddleware:
+          return `middleware.task.${currentId}`;
+        case RegisterableKind.ResourceMiddleware:
+          return `middleware.resource.${currentId}`;
+        case RegisterableKind.Tag:
+          return `tags.${currentId}`;
+        case RegisterableKind.Error:
+          return `errors.${currentId}`;
+        case RegisterableKind.AsyncContext:
+          return `ctx.${currentId}`;
+        default:
+          return currentId;
+      }
+    }
 
     switch (kind) {
       case RegisterableKind.Resource:
@@ -815,33 +849,35 @@ export class StoreRegistryWriter {
     kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
     attachment: TAttachment,
   ): TAttachment {
+    const ownerIsGateway =
+      this.collections.resources.get(ownerResourceId)?.resource.gateway ===
+      true;
     const configuredFrom = (attachment as unknown as Record<symbol, unknown>)[
       symbolMiddlewareConfiguredFrom
     ];
-    const configuredFromId =
-      configuredFrom &&
-      typeof configuredFrom === "object" &&
-      "id" in configuredFrom
-        ? (configuredFrom as { id?: unknown }).id
-        : undefined;
-    const resolvedConfiguredFromCandidate = configuredFrom
-      ? this.aliasResolver.resolveDefinitionId(configuredFrom)
-      : undefined;
-    const resolvedConfiguredFromId =
-      resolvedConfiguredFromCandidate &&
-      resolvedConfiguredFromCandidate !== configuredFromId
-        ? resolvedConfiguredFromCandidate
-        : undefined;
+    const isConfiguredAttachment =
+      configuredFrom !== undefined && configuredFrom !== null;
+    const isRegisteredMiddlewareId = (candidateId: string): boolean =>
+      kind === RegisterableKind.TaskMiddleware
+        ? this.collections.taskMiddlewares.has(candidateId)
+        : this.collections.resourceMiddlewares.has(candidateId);
     const resolvedByAliasCandidate =
-      this.aliasResolver.resolveDefinitionId(attachment);
+      isConfiguredAttachment
+        ? undefined
+        : this.aliasResolver.resolveDefinitionId(attachment);
     const resolvedByAlias =
-      resolvedByAliasCandidate && resolvedByAliasCandidate !== attachment.id
+      typeof resolvedByAliasCandidate === "string"
+      && isRegisteredMiddlewareId(resolvedByAliasCandidate)
         ? resolvedByAliasCandidate
         : undefined;
     const resolvedId =
-      resolvedConfiguredFromId ??
       resolvedByAlias ??
-      this.computeCanonicalId(ownerResourceId, kind, attachment.id);
+      this.computeCanonicalId(
+        ownerResourceId,
+        ownerIsGateway,
+        kind,
+        attachment.id,
+      );
 
     if (resolvedId === attachment.id) {
       return attachment;

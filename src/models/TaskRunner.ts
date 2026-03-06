@@ -84,6 +84,7 @@ export class TaskRunner {
     input?: TInput,
     options?: TaskCallOptions,
   ): Promise<TOutput | undefined> {
+    const taskId = this.store.resolveDefinitionId(task)!;
     const source = options?.source ?? defaultTaskSource;
     if (!this.store.canAdmitTaskCall(source)) {
       shutdownLockdownError.throw();
@@ -96,7 +97,7 @@ export class TaskRunner {
     // memoize. This is lazy — we only compose on first post-lock call per task.
     const canCacheRunner = this.store.isLocked;
     let runner = canCacheRunner
-      ? (this.runnerStore.get(task.id) as
+      ? (this.runnerStore.get(taskId) as
           | ((
               input: TInput,
               journal?: ExecutionJournal,
@@ -107,12 +108,12 @@ export class TaskRunner {
     if (!runner) {
       runner = this.createRunnerWithMiddleware<TInput, TOutput, TDeps>(task);
       if (canCacheRunner) {
-        this.runnerStore.set(task.id, runner as CachedTaskRunner);
+        this.runnerStore.set(taskId, runner as CachedTaskRunner);
       }
     }
 
     const executeTask = () => runner(input as TInput, options?.journal, source);
-    const executionSource = runtimeSource.task(task.id);
+    const executionSource = runtimeSource.task(taskId);
     // Pass journal if provided; composer will use it or create new
     return this.lifecycleAdmissionController.trackTaskExecution(
       executionSource,
@@ -140,8 +141,15 @@ export class TaskRunner {
       next,
       input,
     ) => {
-      if (options?.when && !options.when(input.task.definition)) {
-        return next(input);
+      if (options?.when) {
+        const taskDefinition = input.task.definition;
+        const publicTaskDefinition = {
+          ...taskDefinition,
+          id: this.store.toPublicId(taskDefinition),
+        };
+        if (!options.when(publicTaskDefinition as typeof taskDefinition)) {
+          return next(input);
+        }
       }
 
       return interceptor(next, input);

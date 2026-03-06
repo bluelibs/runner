@@ -462,7 +462,7 @@ describe("VisibilityTracker", () => {
       tracker.recordIsolation(owner.id, {
         deny: [
           scope(subtreeOf(child), { dependencies: false }),
-          scope(directIdTask.id, { listening: false }),
+          scope(directIdTask, { listening: false }),
           scope(denyTag, { middleware: false }),
           scope(directTask, { tagging: false }),
         ],

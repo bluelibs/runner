@@ -6,24 +6,17 @@ import {
   defineRpcLane,
   defineTaskMiddleware,
   defineResourceMiddleware,
+  defineOverride,
   defineTag,
   defineHook,
 } from "./define";
-import {
-  defineAsyncContext,
-  createContext as oldCreateContext,
-} from "./definers/defineAsyncContext";
+import { defineAsyncContext, createContext } from "./definers/defineAsyncContext";
 import { globalEvents } from "./globals/globalEvents";
-import {
-  globalResources,
-  runnerResources,
-  systemResources,
-} from "./globals/globalResources";
+import { globalResources } from "./globals/globalResources";
 import { globalMiddlewares } from "./globals/globalMiddleware";
 import { globalTags } from "./globals/globalTags";
-import { debug } from "./globals/debug";
+import { debug as globalDebug } from "./globals/debug";
 import { run } from "./run";
-import { createTestResource } from "./testing";
 import { resource as resourceFn } from "./definers/builders/resource";
 import { task as taskFn } from "./definers/builders/task";
 import { event as eventFn } from "./definers/builders/event";
@@ -42,66 +35,31 @@ import { onAnyOf, isOneOf } from "./types/event";
 import { subtreeOf as subtreeOfFn } from "./tools/subtreeOf";
 import { scope as scopeFn } from "./tools/scope";
 
-const rSystem = Object.freeze({
-  ...systemResources,
-  events: globalEvents,
-  tags: Object.freeze({
-    system: globalTags.system,
-    internal: globalTags.internal,
-  }),
-});
+export const resources = Object.freeze({ ...globalResources });
+export const events = Object.freeze({ ...globalEvents });
+export const middleware = Object.freeze({ ...globalMiddlewares });
+export const tags = Object.freeze({ ...globalTags });
+export const debug = Object.freeze({ levels: globalDebug.levels });
 
-const rRunner = Object.freeze({
-  ...runnerResources,
-  middleware: globalMiddlewares,
-  tags: globalTags,
-});
-
-const rDebug = Object.freeze({
-  levels: debug.levels,
-});
-
-/**
- * @deprecated Use `r.system`, `r.runner`, and `r.debug` instead.
- * Kept as a compatibility alias and scheduled for removal in the next major version.
- */
-export const globals = {
-  events: globalEvents,
-  resources: globalResources,
-  system: rSystem,
-  runner: rRunner,
-  middleware: globalMiddlewares,
-  /** @deprecated Use `middleware` namespace. Kept for backward compatibility. */
-  middlewares: globalMiddlewares,
-  tags: globalTags,
-  debug: rDebug,
-};
-
-export const system = rSystem;
-export const runner = rRunner;
 export {
-  defineTask as task,
-  defineResource as resource,
-  defineEvent as event,
-  defineEventLane as eventLane,
-  defineRpcLane as rpcLane,
-  defineTaskMiddleware as taskMiddleware,
-  defineResourceMiddleware as resourceMiddleware,
-  defineAsyncContext as asyncContext,
-  defineTag as tag,
-  overrideBuilder as override,
-  defineHook as hook,
+  defineTask,
+  defineResource,
+  defineEvent,
+  defineEventLane,
+  defineRpcLane,
+  defineTaskMiddleware,
+  defineResourceMiddleware,
+  defineAsyncContext,
+  defineTag,
+  defineOverride,
+  defineHook,
+  createContext,
   run,
-  createTestResource,
   onAnyOf,
   isOneOf,
   subtreeOfFn as subtreeOf,
   scopeFn as scope,
 };
-
-// Legacy alias kept for compatibility.
-const createContext = oldCreateContext;
-export { createContext };
 
 /**
  * The unified fluent builder namespace for creating Runner components.
@@ -138,11 +96,6 @@ export const r = Object.freeze({
     task: taskMiddlewareFn,
     resource: resourceMiddlewareFn,
   }),
-  system: rSystem,
-  runner: rRunner,
-  debug: rDebug,
-  /** Shorthand for `r.runner.logger`. See {@link loggerResource} for full documentation. */
-  logger: runnerResources.logger,
 });
 
 export * as definitions from "./defs";

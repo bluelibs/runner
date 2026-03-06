@@ -17,8 +17,8 @@ describe("mergeResourceSubtreePolicy", () => {
     const existing = {
       resources: {
         middleware: [{ use: middlewareA }],
-        validate: [validateA],
       },
+      validate: [validateA],
     } as any;
 
     const merged = mergeResourceSubtreePolicy(
@@ -26,8 +26,8 @@ describe("mergeResourceSubtreePolicy", () => {
       {
         resources: {
           middleware: [{ use: middlewareB }],
-          validate: [validateB],
         },
+        validate: [validateB],
       },
       { override: false },
     );
@@ -36,8 +36,8 @@ describe("mergeResourceSubtreePolicy", () => {
       { use: middlewareA, when: undefined },
       { use: middlewareB, when: undefined },
     ]);
-    expect(merged.resources?.validate).toEqual([validateA, validateB]);
+    expect(merged.validate).toEqual([validateA, validateB]);
     expect(existing.resources.middleware).toEqual([{ use: middlewareA }]);
-    expect(existing.resources.validate).toEqual([validateA]);
+    expect(existing.validate).toEqual([validateA]);
   });
 });

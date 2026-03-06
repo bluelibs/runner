@@ -58,7 +58,9 @@ export function applyLocalSimulatedModeRouting(
   }
 
   dependencies.eventManager.intercept(async (next, emission) => {
-    const lane = resolved.eventLaneByEventId.get(emission.id);
+    const resolvedEmissionEventId =
+      store.events.get(emission.id)?.event.id ?? emission.id;
+    const lane = resolved.eventLaneByEventId.get(resolvedEmissionEventId);
     if (!lane) {
       return next(emission);
     }

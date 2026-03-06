@@ -58,14 +58,22 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     sourceResourceId = "platform.node.resources.rpcLanes",
   } = deps;
   const exposureSource = runtimeSource.resource(sourceResourceId);
+  const resolveEventId = (eventId: string): string => {
+    const maybeStore = store as {
+      resolveDefinitionId?: (reference: unknown) => string | undefined;
+    };
+    return maybeStore.resolveDefinitionId?.(eventId) ?? eventId;
+  };
 
   return async (
     req: IncomingMessage,
     res: ServerResponse,
-    eventId: string,
+    eventIdInput: string,
   ): Promise<void> => {
+    const eventId = resolveEventId(eventIdInput);
     const allowAsyncContextForEvent = allowAsyncContext(eventId);
-    const asyncContextAllowListForEvent = resolveAsyncContextAllowList(eventId);
+    const asyncContextAllowListForEvent =
+      resolveAsyncContextAllowList(eventId);
 
     if (req.method !== "POST") {
       applyCorsActual(req, res, cors);

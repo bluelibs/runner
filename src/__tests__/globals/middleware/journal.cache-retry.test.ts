@@ -3,11 +3,11 @@ import {
   defineTask,
   defineTaskMiddleware,
 } from "../../../define";
-import { r, run } from "../../../index";
+import { middleware, resources, run } from "../../../index";
 import { createMessageError } from "../../../errors";
 
-const retryJournalKeys = r.runner.middleware.task.retry.journalKeys;
-const cacheJournalKeys = r.runner.middleware.task.cache.journalKeys;
+const retryJournalKeys = middleware.task.retry.journalKeys;
+const cacheJournalKeys = middleware.task.cache.journalKeys;
 
 describe("Middleware Journal Keys (Cache + Retry)", () => {
   describe("Retry Middleware", () => {
@@ -19,7 +19,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       const failOnceTask = defineTask({
         id: "test.journal.retry.failOnce",
         middleware: [
-          r.runner.middleware.task.retry.with({
+          middleware.task.retry.with({
             retries: 3,
             delayStrategy: () => 0, // No delay for fast tests
           }),
@@ -58,7 +58,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       const successTask = defineTask({
         id: "test.journal.retry.success",
         middleware: [
-          r.runner.middleware.task.retry.with({
+          middleware.task.retry.with({
             retries: 3,
             delayStrategy: () => 0,
           }),
@@ -100,7 +100,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
         id: "test.journal.cache.task",
         middleware: [
           cacheHitObserver,
-          r.runner.middleware.task.cache.with({ ttl: 60000 }),
+          middleware.task.cache.with({ ttl: 60000 }),
         ],
         run: async (_input: void) => ({ value: "computed" }),
       });
@@ -108,8 +108,8 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       const app = defineResource({
         id: "test.journal.cache.app",
         register: [
-          r.runner.cache,
-          r.runner.middleware.task.cache,
+          resources.cache,
+          middleware.task.cache,
           cacheHitObserver,
           cachedTask,
         ],
@@ -132,11 +132,11 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       const task = defineTask({
         id: "test.journal.cache.retry.noThrow",
         middleware: [
-          r.runner.middleware.task.retry.with({
+          middleware.task.retry.with({
             retries: 2,
             delayStrategy: () => 0,
           }),
-          r.runner.middleware.task.cache.with({ ttl: 60000 }),
+          middleware.task.cache.with({ ttl: 60000 }),
         ],
         run: async (_input: void, _deps, context) => {
           expect(context?.journal.get(cacheJournalKeys.hit)).toBe(false);
@@ -151,7 +151,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
 
       const app = defineResource({
         id: "test.journal.cache.retry.app",
-        register: [r.runner.cache, r.runner.middleware.task.cache, task],
+        register: [resources.cache, middleware.task.cache, task],
       });
       const runtime = await run(app);
 

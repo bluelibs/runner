@@ -47,7 +47,7 @@ import { r } from "@bluelibs/runner";
 
 const auditLog = r
   .task("app.tasks.auditLog")
-  .dependencies({ requestContext, logger: r.runner.logger })
+  .dependencies({ requestContext, logger: resources.logger })
   .run(async (message: string, { requestContext, logger }) => {
     const ctx = requestContext.use();
     await logger.info(message, {
@@ -175,14 +175,14 @@ import { z } from "zod";
 // Assuming: userRepo was defined in the "Building resources" section above
 const createUser = r
   .task("users.create")
-  .dependencies({ userRepo, logger: r.runner.logger })
+  .dependencies({ userRepo, logger: resources.logger })
   .inputSchema(
     z.object({
       name: z.string().min(2),
       email: z.string().email(),
     }),
   )
-  .middleware([r.runner.middleware.task.retry.with({ retries: 3 })])
+  .middleware([middleware.task.retry.with({ retries: 3 })])
   .run(async (input, { userRepo, logger }) => {
     await logger.info("Creating user", { email: input.email });
     return userRepo.create(input);
@@ -414,3 +414,4 @@ const app = r
 When running, open `http://localhost:1337` for the visual DevTools.
 
 > **Note:** Runner Dev Tools is intended for development and controlled environments. Treat it as privileged operational access.
+

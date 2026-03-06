@@ -347,6 +347,33 @@ export function makeResourceBuilder<
         THasInit
       >(next);
     },
+    ready(
+      fn: NonNullable<
+        IResourceDefinition<
+          TConfig,
+          TValue,
+          TDeps,
+          TContext,
+          any,
+          any,
+          TMeta,
+          TTags,
+          TMiddleware
+        >["ready"]
+      >,
+    ) {
+      const next = clone(state, { ready: fn });
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        THasInit
+      >(next);
+    },
     cooldown(
       fn: NonNullable<
         IResourceDefinition<
@@ -523,6 +550,7 @@ export function makeResourceBuilder<
         TMiddleware
       > = {
         id: state.id,
+        gateway: state.gateway,
         dependencies: state.dependencies,
         register: state.register,
         middleware: state.middleware,
@@ -530,6 +558,7 @@ export function makeResourceBuilder<
         context: state.context,
         init: state.init,
         dispose: state.dispose,
+        ready: state.ready,
         cooldown: state.cooldown,
         configSchema: state.configSchema,
         resultSchema: state.resultSchema,

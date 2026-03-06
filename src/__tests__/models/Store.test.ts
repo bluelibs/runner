@@ -455,10 +455,9 @@ describe("Store", () => {
     const result = store.getTasksWithTag(tag);
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
-    const result2 = store.getTasksWithTag("tags.test");
-    expect(result2).toHaveLength(1);
-    const result3 = store.getTasksWithTag("tags.unknown");
-    expect(result3).toHaveLength(0);
+    const unknownTag = defineTag({ id: "tags.unknown" });
+    const result2 = store.getTasksWithTag(unknownTag);
+    expect(result2).toHaveLength(0);
   });
 
   it("should call getResourcesWithTag method", () => {
@@ -484,10 +483,9 @@ describe("Store", () => {
     const result = store.getResourcesWithTag(tag);
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
-    const result2 = store.getResourcesWithTag("tags.test");
-    expect(result2).toHaveLength(1);
-    const result3 = store.getResourcesWithTag("tags.unknown");
-    expect(result3).toHaveLength(0);
+    const unknownTag = defineTag({ id: "tags.unknown" });
+    const result2 = store.getResourcesWithTag(unknownTag);
+    expect(result2).toHaveLength(0);
   });
 
   it("should support tag accessors with includeSelf=false", () => {
@@ -541,8 +539,9 @@ describe("Store", () => {
 
     store.initializeStore(rootResource, {}, runtimeResult);
 
-    const storeTask = store.tasks.get(taggedTask.id)!;
-    store.tasks.set(taggedTask.id, {
+    const taggedTaskId = store.resolveDefinitionId(taggedTask)!;
+    const storeTask = store.tasks.get(taggedTaskId)!;
+    store.tasks.set(taggedTaskId, {
       ...storeTask,
       task: {
         ...storeTask.task,
@@ -619,7 +618,8 @@ describe("Store", () => {
     store.initializeStore(rootResource, {}, runtimeResult);
 
     const registry = (store as unknown as { registry: any }).registry;
-    const staleBucket = registry.tagIndex.get(tag.id);
+    const canonicalTagId = store.resolveDefinitionId(tag)!;
+    const staleBucket = registry.tagIndex.get(canonicalTagId);
     staleBucket.tasks.add("missing.task");
     staleBucket.resources.add("missing.resource");
     staleBucket.events.add("missing.event");
@@ -702,7 +702,8 @@ describe("Store", () => {
 
     const resourceMatch = accessor.resources[0]!;
     expect(resourceMatch.value).toBeUndefined();
-    const storeResource = store.resources.get(resource.id)!;
+    const resourceId = store.resolveDefinitionId(resource)!;
+    const storeResource = store.resources.get(resourceId)!;
     storeResource.isInitialized = true;
     storeResource.value = "resource-value";
     expect(resourceMatch.value).toBe("resource-value");

@@ -1,9 +1,9 @@
-import { r } from "../../index";
+import { r, tags } from "../../index";
 import type { IEvent } from "../../defs";
 import { DurableAuditEntryKind, type DurableAuditEntry } from "./core/audit";
 
-const systemTag = r.system.tags.internal;
-const excludeFromGlobalHooksTag = r.runner.tags.excludeFromGlobalHooks;
+const systemTag = tags.system;
+const excludeFromGlobalHooksTag = tags.excludeFromGlobalHooks;
 
 export const durableEvents = {
   audit: {

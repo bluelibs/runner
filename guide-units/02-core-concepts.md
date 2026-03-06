@@ -30,6 +30,7 @@ Here's a complete example showing you everything:
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
+import { isTask } from "@bluelibs/runner/define";
 
 // Assuming: emailService and logger resources are defined elsewhere
 // 1. Define your task - it's just a function with a name and dependencies
@@ -413,7 +414,7 @@ const payments = r
 - Tag definition entries and tag-id selector entries are intentionally different:
   - `deny: [internalOnlyTag]` / `only: [internalOnlyTag]` apply tag semantics (tag dependency itself + all definitions carrying that tag).
   - `deny: [scope(internalOnlyTag.id)]` / `only: [scope(internalOnlyTag.id)]` are exact-id matches only (no carrier expansion).
-- `scope(target, options)` applies the same channel options to every wrapped target, including combinations like `scope([paymentsApi, subtreeOf(agentResource), "system.*"], { dependencies: false })`.
+- `scope(target, options)` applies the same channel options to every wrapped target, including combinations like `scope([paymentsApi, subtreeOf(agentResource), tags.system], { dependencies: false })`.
 - **`only` automatically exempts internal items**: anything registered by the resource or its children is always accessible without being listed. `only: []` blocks all external dependencies while keeping internal ones reachable.
 - **`only` is checked at every ancestor boundary** for the consumer. For external dependencies, effective access behaves like the intersection of ancestor `only` lists (with the internal-subtree exemption still applied at each boundary).
 - Rules are validated at bootstrap; unknown, malformed, or unmatched wildcard selectors fail fast.
@@ -481,7 +482,7 @@ const mixed = r
   .resource("mixed.boundary")
   .isolate({
     deny: [
-      scope([subtreeOf(agentResource), "system.*"], { dependencies: false }),
+      scope([subtreeOf(agentResource), tags.system], { dependencies: false }),
     ],
   })
   .build();
@@ -639,7 +640,7 @@ Transactional behavior:
 - If a hook fails (throws), previously completed hooks are rolled back in reverse completion order.
 - Rollback continues even if one undo fails; Runner throws an aggregated transactional rollback error.
 - Transactional execution is always fail-fast.
-- Runtime sanity constraints: `transactional + parallel` and `transactional + r.runner.tags.eventLane` are invalid.
+- Runtime sanity constraints: `transactional + parallel` and `transactional + tags.eventLane` are invalid.
 - `run(app)` API does not change; only hook return behavior changes for transactional emissions.
 
 #### Parallel Event Execution
@@ -748,7 +749,7 @@ import { r } from "@bluelibs/runner";
 // Internal event that won't be seen by global hooks
 const internalEvent = r
   .event("app.events.internal")
-  .tags([r.runner.tags.excludeFromGlobalHooks])
+  .tags([tags.excludeFromGlobalHooks])
   .build();
 ```
 
@@ -847,7 +848,7 @@ import { r } from "@bluelibs/runner";
 
 const systemReadyHook = r
   .hook("app.hooks.systemReady")
-  .on(r.system.events.ready)
+  .on(events.ready)
   .run(async () => {
     console.log("System is ready and operational!");
   })
@@ -856,9 +857,9 @@ const systemReadyHook = r
 
 Available system events:
 
-- `r.system.events.ready` - System has completed initialization
-- `r.system.events.disposing` - Runtime entered `disposing`; fresh `runtime`/`resource` admissions are blocked while in-flight business work drains
-- `r.system.events.drained` - Drain completed (or grace timed out); hooks registered on this event fire (lifecycle-bypassed), but cannot start new tasks or emit additional events — all regular business admissions are blocked before resource disposal
+- `events.ready` - System has completed initialization
+- `events.disposing` - Runtime entered `disposing`; fresh `runtime`/`resource` admissions are blocked while in-flight business work drains
+- `events.drained` - Drain completed (or grace timed out); hooks registered on this event fire (lifecycle-bypassed), but cannot start new tasks or emit additional events — all regular business admissions are blocked before resource disposal
   // Note: use run({ onUnhandledError }) for unhandled error handling
 
 #### stopPropagation()
@@ -981,7 +982,7 @@ import { r } from "@bluelibs/runner";
 
 const logTaskMiddleware = r.middleware
   .task("app.middleware.log.task")
-  .dependencies({ logger: r.runner.logger })
+  .dependencies({ logger: resources.logger })
   .run(async ({ task, next }, { logger }) => {
     logger.info(`Executing: ${String(task!.definition.id)}`);
     const result = await next(task!.input);
@@ -1011,6 +1012,8 @@ const app = r
 
 > **Note:** if a validator throws or returns a non-array, Runner records an `invalid-definition` violation and still throws the aggregated subtree validation error.
 
+> **Note:** `.subtree(...)` supports `tasks.middleware`, `resources.middleware`, and a top-level `validate(element, ownerConfig)` callback for dynamic gating.
+
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
@@ -1039,6 +1042,25 @@ const app = r
   .build();
 
 await run(app); // throws subtreeValidationFailedError if violations exist
+```
+
+```typescript
+const strictPolicies = r
+  .resource("app")
+  .subtree({
+    validate: (element) => {
+      if (isTask(element) && !element.meta?.title) {
+        return [
+          {
+            code: "missing-task-title",
+            message: `Task "${element.id}" must define meta.title`,
+          },
+        ];
+      }
+      return [];
+    },
+  })
+  .build();
 ```
 
 For true catch-all task behavior, use `taskRunner.intercept(...)` during resource init.
@@ -1363,7 +1385,7 @@ import { r } from "@bluelibs/runner";
 // Auto-register HTTP routes based on tags
 const routeRegistration = r
   .hook("app.hooks.registerRoutes")
-  .on(r.system.events.ready)
+  .on(events.ready)
   .dependencies({
     server: expressServer,
     httpTag, // use the runtime accessor because we execute matched tasks via entry.run(...)
@@ -1479,6 +1501,7 @@ const performanceMiddleware = r.middleware
 #### System Tags
 
 Built-in tags for framework behavior:
+- `tags.system` is shorthand for `tags.system`.
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -1486,21 +1509,21 @@ import { r } from "@bluelibs/runner";
 const internalTask = r
   .task("app.internal.cleanup")
   .tags([
-    r.system.tags.internal, // system.tags.internal
-    r.runner.tags.debug.with({ logTaskInput: true }), // Per-component debug config
+    tags.internal, // system.tags.internal
+    tags.debug.with({ logTaskInput: true }), // Per-component debug config
   ])
   .run(async () => performCleanup())
   .build();
 
 const internalEvent = r
   .event("app.events.internal")
-  .tags([r.runner.tags.excludeFromGlobalHooks]) // Won't trigger wildcard hooks
+  .tags([tags.excludeFromGlobalHooks]) // Won't trigger wildcard hooks
   .build();
 
 // Deny privileged internal resources inside a boundary
 const secureModule = r
   .resource("app.secure")
-  .isolate({ deny: [r.scope("system.*")] })
+  .isolate({ deny: [tags.system] })
   .build();
 // Keep tooling resources outside the isolated app boundary when they need internal access.
 ```
@@ -1688,3 +1711,7 @@ The core concepts above cover most use cases. For specialized features:
 - **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](../readmes/SERIALIZER_PROTOCOL.md).
 
 ---
+
+
+
+

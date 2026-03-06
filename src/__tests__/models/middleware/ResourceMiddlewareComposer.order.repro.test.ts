@@ -19,6 +19,7 @@ describe("ResourceMiddlewareComposer Order Bug Repro", () => {
       taskMiddlewares: new Map(),
       tasks: new Map(),
       resolveDefinitionId: (reference: any) => reference?.id,
+      toPublicId: (id: string) => id,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };

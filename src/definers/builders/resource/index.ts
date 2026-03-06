@@ -15,8 +15,13 @@ export * from "./types";
 /**
  * Creates a new resource builder with the given id.
  */
+export type ResourceBuilderOptions = {
+  gateway?: boolean;
+};
+
 export function resourceBuilder<TConfig = void>(
   id: string,
+  options?: ResourceBuilderOptions,
 ): ResourceFluentBuilder<
   TConfig,
   Promise<any>,
@@ -37,6 +42,7 @@ export function resourceBuilder<TConfig = void>(
     ResourceMiddlewareAttachmentType[]
   > = Object.freeze({
     id,
+    gateway: options?.gateway === true,
     filePath,
     dependencies: undefined,
     register: undefined,
@@ -45,6 +51,7 @@ export function resourceBuilder<TConfig = void>(
     context: undefined,
     init: undefined,
     dispose: undefined,
+    ready: undefined,
     cooldown: undefined,
     configSchema: undefined,
     resultSchema: undefined,

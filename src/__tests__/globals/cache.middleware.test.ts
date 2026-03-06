@@ -11,9 +11,34 @@ import { createMessageError } from "../../errors";
 import { r } from "../..";
 
 enum CacheNoHasId {
-  App = "cache.nohas.app",
-  Task = "cache.nohas.task",
+  App = "cache-nohas-app",
+  Task = "cache-nohas-task",
 }
+
+const getCacheEntryByTaskId = <TValue>(
+  map: Map<string, TValue>,
+  taskId: string,
+): TValue | undefined => {
+  const direct = map.get(taskId);
+  if (direct !== undefined) {
+    return direct;
+  }
+
+  for (const [key, value] of map.entries()) {
+    if (key.endsWith(taskId)) {
+      return value;
+    }
+  }
+
+  return undefined;
+};
+
+const hasCacheEntryByTaskId = <TValue>(
+  map: Map<string, TValue>,
+  taskId: string,
+): boolean =>
+  map.has(taskId) ||
+  Array.from(map.keys()).some((key) => key.endsWith(taskId));
 
 describe("Caching System", () => {
   describe("Cache Resource", () => {
@@ -53,7 +78,7 @@ describe("Caching System", () => {
       );
 
       const app = defineResource({
-        id: "cache.invalid-provider.app",
+        id: "cache-invalid-provider-app",
         register: [cacheResource],
         overrides: [invalidProviderOverride],
         dependencies: { cache: cacheResource },
@@ -65,7 +90,7 @@ describe("Caching System", () => {
 
     it("should create separate cache instances per task", async () => {
       const testTask = defineTask({
-        id: "test.task",
+        id: "test-task",
         middleware: [cacheMiddleware],
         run: async () => Date.now(),
       });
@@ -80,7 +105,7 @@ describe("Caching System", () => {
 
           expect(firstRun).toBe(secondRun);
           expect(cache.map.size).toBe(1);
-          expect(cache.map.has("test.task")).toBe(true);
+          expect(hasCacheEntryByTaskId(cache.map, "test-task")).toBe(true);
         },
       });
 
@@ -113,7 +138,7 @@ describe("Caching System", () => {
       );
 
       const testTask = defineTask({
-        id: "custom.factory.task",
+        id: "custom-factory-task",
         middleware: [cacheMiddleware],
         run: async (input: string) => input.toUpperCase(),
       });
@@ -130,7 +155,10 @@ describe("Caching System", () => {
           expect(result1).toBe("TEST");
           expect(result2).toBe("TEST");
 
-          const cacheInstance = cache.map.get("custom.factory.task") as any;
+          const cacheInstance = getCacheEntryByTaskId(
+            cache.map,
+            "custom-factory-task",
+          ) as any;
           expect(cacheInstance.customFlag).toBe(true);
         },
       });
@@ -176,7 +204,7 @@ describe("Caching System", () => {
 
       let callCount = 0;
       const testTask = defineTask({
-        id: "redis.cache.task",
+        id: "redis-cache-task",
         middleware: [cacheMiddleware],
         run: async () => {
           callCount++;
@@ -217,7 +245,7 @@ describe("Caching System", () => {
   describe("Cache Middleware", () => {
     it("should return cached results for same inputs", async () => {
       const testTask = defineTask({
-        id: "cached.task",
+        id: "cached-task",
         middleware: [cacheMiddleware],
         run: async (input: number) => input * 2,
       });
@@ -318,7 +346,7 @@ describe("Caching System", () => {
 
       let callCount = 0;
       const testTask = defineTask({
-        id: "cache.async-has.task",
+        id: "cache-async-has-task",
         middleware: [cacheMiddleware],
         run: async () => {
           callCount += 1;
@@ -327,7 +355,7 @@ describe("Caching System", () => {
       });
 
       const app = defineResource({
-        id: "cache.async-has.app",
+        id: "cache-async-has-app",
         register: [cacheResource, cacheMiddleware, testTask],
         overrides: [cacheProviderOverride],
         dependencies: { testTask },
@@ -348,7 +376,7 @@ describe("Caching System", () => {
       let callCount = 0;
       const ttlMs = 25;
       const testTask = defineTask({
-        id: "ttl.task",
+        id: "ttl-task",
         middleware: [cacheMiddleware.with({ ttl: ttlMs, ttlAutopurge: true })],
         run: async () => {
           callCount++;
@@ -386,7 +414,7 @@ describe("Caching System", () => {
       });
 
       const testTask = defineTask({
-        id: "custom.key.task",
+        id: "custom-key-task",
         middleware: [customMiddleware],
         run: async (input: { id: string }) => input,
       });
@@ -437,7 +465,7 @@ describe("Caching System", () => {
 
       let callCount = 0;
       const task = defineTask({
-        id: "cache.set-fail-open-error.task",
+        id: "cache-set-fail-open-error-task",
         middleware: [cacheMiddleware],
         run: async () => {
           callCount += 1;
@@ -446,7 +474,7 @@ describe("Caching System", () => {
       });
 
       const app = defineResource({
-        id: "cache.set-fail-open-error.app",
+        id: "cache-set-fail-open-error-app",
         register: [cacheResource, cacheMiddleware, task],
         overrides: [cacheProviderOverride],
         dependencies: { task },
@@ -468,7 +496,7 @@ describe("Caching System", () => {
       const capturedHits: Array<boolean | undefined> = [];
 
       const hitCaptureMiddleware = defineTaskMiddleware({
-        id: "cache.hit.capture",
+        id: "cache-hit-capture",
         async run({ task, journal, next }) {
           const result = await next(task.input);
           capturedHits.push(journal.get(cacheJournalKeys.hit));
@@ -477,7 +505,7 @@ describe("Caching System", () => {
       });
 
       const testTask = defineTask({
-        id: "falsy.cache.task",
+        id: "falsy-cache-task",
         middleware: [hitCaptureMiddleware, cacheMiddleware],
         run: async (input: any) => {
           callCount++;
@@ -515,7 +543,7 @@ describe("Caching System", () => {
     it("should not cache errors by default", async () => {
       let callCount = 0;
       const errorTask = defineTask({
-        id: "error.task",
+        id: "error-task",
         middleware: [cacheMiddleware],
         run: async () => {
           callCount++;
@@ -540,7 +568,7 @@ describe("Caching System", () => {
     it("should not cache errors by default (errors throw through)", async () => {
       let callCount = 0;
       const errorTask = defineTask({
-        id: "cached.error.task",
+        id: "cached-error-task",
         middleware: [
           cacheMiddleware.with({
             ttl: 1000,
@@ -595,7 +623,7 @@ describe("Caching System", () => {
 
       let callCount = 0;
       const task = defineTask({
-        id: "cache.set-fail-open.task",
+        id: "cache-set-fail-open-task",
         middleware: [cacheMiddleware],
         run: async () => {
           callCount += 1;
@@ -604,7 +632,7 @@ describe("Caching System", () => {
       });
 
       const app = defineResource({
-        id: "cache.set-fail-open.app",
+        id: "cache-set-fail-open-app",
         register: [cacheResource, cacheMiddleware, task],
         overrides: [cacheProviderOverride],
         dependencies: { task },
@@ -626,7 +654,7 @@ describe("Caching System", () => {
     it("should clear cache instances when resource is disposed", async () => {
       let executionCount = 0;
       const testTask = defineTask({
-        id: "disposal.task",
+        id: "disposal-task",
         middleware: [cacheMiddleware],
         run: async () => {
           executionCount++;
@@ -706,7 +734,7 @@ describe("Caching System", () => {
   describe("Complex Input Serialization", () => {
     it("should handle complex object inputs", async () => {
       const testTask = defineTask({
-        id: "complex.object.task",
+        id: "complex-object-task",
         middleware: [cacheMiddleware],
         run: async (input: { nested: { data: string }; array: number[] }) =>
           JSON.stringify(input),
@@ -734,7 +762,7 @@ describe("Caching System", () => {
       const runSpy = jest.fn(async (_input: CircularBigIntInput) => "ok");
 
       const testTask = defineTask({
-        id: "circular.bigint.task",
+        id: "circular-bigint-task",
         middleware: [cacheMiddleware],
         run: async (input: CircularBigIntInput) => runSpy(input),
       });
@@ -761,7 +789,7 @@ describe("Caching System", () => {
 
     it("should handle null and undefined inputs", async () => {
       const testTask = defineTask({
-        id: "null.undefined.task",
+        id: "null-undefined-task",
         middleware: [cacheMiddleware],
         run: async (input: any) => `result-${input}`,
       });
@@ -787,7 +815,7 @@ describe("Caching System", () => {
 
     it("should handle array inputs with different orders", async () => {
       const testTask = defineTask({
-        id: "array.order.task",
+        id: "array-order-task",
         middleware: [cacheMiddleware],
         run: async (input: number[]) => input.reduce((a, b) => a + b, 0),
       });
@@ -816,7 +844,7 @@ describe("Caching System", () => {
   describe("Cache Invalidation and Limits", () => {
     it("should respect max cache size", async () => {
       const testTask = defineTask({
-        id: "max.size.task",
+        id: "max-size-task",
         middleware: [cacheMiddleware.with({ max: 2 })],
         run: async (input: number) => input * 2,
       });
@@ -830,7 +858,10 @@ describe("Caching System", () => {
           await testTask(2);
           await testTask(3); // Should evict first entry
 
-          const cacheInstance = cache.map.get("max.size.task");
+          const cacheInstance = getCacheEntryByTaskId(
+            cache.map,
+            "max-size-task",
+          );
           expect(cacheInstance).toBeDefined();
           // LRU should maintain size limit
         },
@@ -842,7 +873,7 @@ describe("Caching System", () => {
     it("should handle cache clear during execution", async () => {
       let executionCount = 0;
       const testTask = defineTask({
-        id: "clear.during.exec.task",
+        id: "clear-during-exec-task",
         middleware: [cacheMiddleware],
         run: async (input: number) => {
           executionCount++;
@@ -858,7 +889,7 @@ describe("Caching System", () => {
           const firstResult = await testTask(5);
 
           // Clear cache manually
-          cache.map.get("clear.during.exec.task")?.clear();
+          getCacheEntryByTaskId(cache.map, "clear-during-exec-task")?.clear();
 
           const secondResult = await testTask(5);
 
@@ -876,7 +907,7 @@ describe("Caching System", () => {
     it("should handle concurrent calls to same task", async () => {
       let executionCount = 0;
       const slowTask = defineTask({
-        id: "concurrent.task",
+        id: "concurrent-task",
         middleware: [cacheMiddleware],
         run: async (input: number) => {
           executionCount++;
@@ -930,7 +961,7 @@ describe("Caching System", () => {
       );
 
       const task = defineTask({
-        id: "concurrent.cache.instance.task",
+        id: "concurrent-cache-instance-task",
         middleware: [cacheMiddleware],
         run: async (input: number) => input * 10,
       });
@@ -981,7 +1012,7 @@ describe("Caching System", () => {
       );
 
       const testTask = defineTask({
-        id: "disposal.test.task",
+        id: "disposal-test-task",
         middleware: [cacheMiddleware],
         run: async () => "test",
       });
@@ -1003,7 +1034,10 @@ describe("Caching System", () => {
       await result.dispose();
 
       // Verify cache was disposed
-      const cacheInstance = result.value.map.get("disposal.test.task") as any;
+      const cacheInstance = getCacheEntryByTaskId(
+        result.value.map,
+        "disposal-test-task",
+      ) as any;
       expect(cacheInstance?.disposed).toBe(true);
     });
   });
@@ -1017,7 +1051,7 @@ describe("Caching System", () => {
       });
 
       const testTask = defineTask({
-        id: "custom.keybuilder.task",
+        id: "custom-keybuilder-task",
         middleware: [customMiddleware],
         run: async (input: string) => `result-${input}`,
       });
@@ -1050,7 +1084,7 @@ describe("Caching System", () => {
       );
 
       const testTask = defineTask({
-        id: "invalid.handler.task",
+        id: "invalid-handler-task",
         middleware: [cacheMiddleware],
         run: async () => "test",
       });
@@ -1070,3 +1104,4 @@ describe("Caching System", () => {
     });
   });
 });
+

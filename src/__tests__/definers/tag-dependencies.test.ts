@@ -116,17 +116,48 @@ describe("Tag dependencies", () => {
 
     const runtime = await run(app);
     expect(runtime.value).toEqual({
-      tasks: [{ id: "tests.tasks.feature", config: "alpha" }],
-      resources: [{ id: "tests.resources.feature", config: "alpha" }],
-      events: [{ id: "tests.events.feature", config: "alpha" }],
-      hooks: [{ id: "tests.hooks.feature", config: "alpha" }],
+      tasks: [
+        {
+          id: "tests.resources.feature.app.tasks.tests.tasks.feature",
+          config: "alpha",
+        },
+      ],
+      resources: [
+        {
+          id: "tests.resources.feature.app.tests.resources.feature",
+          config: "alpha",
+        },
+      ],
+      events: [
+        {
+          id: "tests.resources.feature.app.events.tests.events.feature",
+          config: "alpha",
+        },
+      ],
+      hooks: [
+        {
+          id: "tests.resources.feature.app.hooks.tests.hooks.feature",
+          config: "alpha",
+        },
+      ],
       taskMiddlewares: [
-        { id: "tests.middleware.task.feature", config: "alpha" },
+        {
+          id: "tests.resources.feature.app.middleware.task.tests.middleware.task.feature",
+          config: "alpha",
+        },
       ],
       resourceMiddlewares: [
-        { id: "tests.middleware.resource.feature", config: "alpha" },
+        {
+          id: "tests.resources.feature.app.middleware.resource.tests.middleware.resource.feature",
+          config: "alpha",
+        },
       ],
-      errors: [{ id: "tests.errors.feature", config: "alpha" }],
+      errors: [
+        {
+          id: "tests.resources.feature.app.errors.tests.errors.feature",
+          config: "alpha",
+        },
+      ],
     });
     await runtime.dispose();
   });
@@ -268,7 +299,10 @@ describe("Tag dependencies", () => {
 
     const runtime = await run(app);
     expect(runtime.value).toEqual([
-      { id: "tests.tasks.beforeInit.accessor.tagged", kind: "route" },
+      {
+        id: "tests.resources.beforeInit.accessor.app.tasks.tests.tasks.beforeInit.accessor.tagged",
+        kind: "route",
+      },
     ]);
     await runtime.dispose();
   });

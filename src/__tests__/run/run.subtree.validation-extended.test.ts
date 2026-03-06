@@ -7,6 +7,13 @@ import {
   defineTask,
   defineTaskMiddleware,
 } from "../../define";
+import {
+  isEvent,
+  isHook,
+  isResourceMiddleware,
+  isTag,
+  isTaskMiddleware,
+} from "../../definers/tools";
 import { run } from "../../run";
 
 describe("subtree validation extended targets", () => {
@@ -71,65 +78,44 @@ describe("subtree validation extended targets", () => {
         policyResource,
       ],
       subtree: {
-        hooks: {
-          validate: (definition) => {
-            if (definition.id !== policyHook.id) {
-              return [];
-            }
-
+        validate: (definition) => {
+          if (isHook(definition) && definition.id === policyHook.id) {
             seenCompiled.hook = Array.isArray(definition.tags);
             return [{ code: "custom", message: "hook policy check" }];
-          },
-        },
-        taskMiddleware: {
-          validate: (definition) => {
-            if (definition.id !== policyTaskMiddleware.id) {
-              return [];
-            }
-
+          }
+          if (
+            isTaskMiddleware(definition) &&
+            definition.id === policyTaskMiddleware.id
+          ) {
             seenCompiled.taskMiddleware =
               typeof definition.with === "function" &&
               typeof definition.config === "object";
             return [
               { code: "custom", message: "task middleware policy check" },
             ];
-          },
-        },
-        resourceMiddleware: {
-          validate: (definition) => {
-            if (definition.id !== policyResourceMiddleware.id) {
-              return [];
-            }
-
+          }
+          if (
+            isResourceMiddleware(definition) &&
+            definition.id === policyResourceMiddleware.id
+          ) {
             seenCompiled.resourceMiddleware =
               typeof definition.with === "function" &&
               typeof definition.config === "object";
             return [
               { code: "custom", message: "resource middleware policy check" },
             ];
-          },
-        },
-        events: {
-          validate: (definition) => {
-            if (definition.id !== policyEvent.id) {
-              return [];
-            }
-
+          }
+          if (isEvent(definition) && definition.id === policyEvent.id) {
             seenCompiled.event = Array.isArray(definition.tags);
             return [{ code: "custom", message: "event policy check" }];
-          },
-        },
-        tags: {
-          validate: (definition) => {
-            if (definition.id !== policyTag.id) {
-              return [];
-            }
-
+          }
+          if (isTag(definition) && definition.id === policyTag.id) {
             seenCompiled.tag =
               typeof definition.meta === "object" &&
               typeof definition.exists === "function";
             return [{ code: "custom", message: "tag policy check" }];
-          },
+          }
+          return [];
         },
       },
       async init() {

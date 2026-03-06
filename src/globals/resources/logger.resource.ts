@@ -48,7 +48,8 @@ import { globalTags } from "../globalTags";
  * - Listener errors are caught and printed internally; they will not crash or
  *   halt the runtime.
  *
- * Shorthand: `r.logger` (alias for `r.runner.logger`).
+ * Preferred access: `resources.logger`.
+ * Legacy shorthand: `r.logger`.
  */
 export const loggerResource = defineResource<void, Promise<Logger>>({
   id: "runner.logger",

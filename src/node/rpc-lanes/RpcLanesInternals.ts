@@ -158,17 +158,18 @@ export function resolveRpcLaneState(
 export function toRpcLanesResourceValue(
   resolved: RpcLaneResolvedState,
   exposure?: { close: () => Promise<void> } | null,
+  mapId: (id: string) => string = (id) => id,
 ): RpcLanesResourceValue {
   return {
     profile: resolved.profile,
     mode: resolved.mode,
-    serveTaskIds: Array.from(resolved.serveTaskIds),
-    serveEventIds: Array.from(resolved.serveEventIds),
+    serveTaskIds: Array.from(resolved.serveTaskIds, mapId),
+    serveEventIds: Array.from(resolved.serveEventIds, mapId),
     taskAllowAsyncContext: Object.freeze(
       Array.from(resolved.taskAllowAsyncContext.entries()).reduce<
         Record<string, boolean>
       >((acc, [taskId, allow]) => {
-        acc[taskId] = allow;
+        acc[mapId(taskId)] = allow;
         return acc;
       }, {}),
     ),
@@ -176,7 +177,7 @@ export function toRpcLanesResourceValue(
       Array.from(resolved.eventAllowAsyncContext.entries()).reduce<
         Record<string, boolean>
       >((acc, [eventId, allow]) => {
-        acc[eventId] = allow;
+        acc[mapId(eventId)] = allow;
         return acc;
       }, {}),
     ),
@@ -185,7 +186,7 @@ export function toRpcLanesResourceValue(
         Record<string, readonly string[]>
       >((acc, [taskId, allowList]) => {
         if (allowList !== undefined) {
-          acc[taskId] = allowList;
+          acc[mapId(taskId)] = allowList;
         }
         return acc;
       }, {}),
@@ -195,7 +196,7 @@ export function toRpcLanesResourceValue(
         Record<string, readonly string[]>
       >((acc, [eventId, allowList]) => {
         if (allowList !== undefined) {
-          acc[eventId] = allowList;
+          acc[mapId(eventId)] = allowList;
         }
         return acc;
       }, {}),
@@ -207,12 +208,13 @@ export function toRpcLanesResourceValue(
 
 export function toRpcLanesExposurePolicy(
   resolved: RpcLaneResolvedState,
+  mapId: (id: string) => string = (id) => id,
 ): NodeExposurePolicySnapshot {
   const taskAllowAsyncContext = Object.freeze(
     Array.from(resolved.taskAllowAsyncContext.entries()).reduce<
       Record<string, boolean>
     >((acc, [taskId, allow]) => {
-      acc[taskId] = allow;
+      acc[mapId(taskId)] = allow;
       return acc;
     }, {}),
   );
@@ -220,7 +222,7 @@ export function toRpcLanesExposurePolicy(
     Array.from(resolved.eventAllowAsyncContext.entries()).reduce<
       Record<string, boolean>
     >((acc, [eventId, allow]) => {
-      acc[eventId] = allow;
+      acc[mapId(eventId)] = allow;
       return acc;
     }, {}),
   );
@@ -229,7 +231,7 @@ export function toRpcLanesExposurePolicy(
       Record<string, readonly string[]>
     >((acc, [taskId, allowList]) => {
       if (allowList !== undefined) {
-        acc[taskId] = allowList;
+        acc[mapId(taskId)] = allowList;
       }
       return acc;
     }, {}),
@@ -239,13 +241,13 @@ export function toRpcLanesExposurePolicy(
       Record<string, readonly string[]>
     >((acc, [eventId, allowList]) => {
       if (allowList !== undefined) {
-        acc[eventId] = allowList;
+        acc[mapId(eventId)] = allowList;
       }
       return acc;
     }, {}),
   );
-  const taskIds = Object.freeze(Array.from(resolved.serveTaskIds));
-  const eventIds = Object.freeze(Array.from(resolved.serveEventIds));
+  const taskIds = Object.freeze(Array.from(resolved.serveTaskIds, mapId));
+  const eventIds = Object.freeze(Array.from(resolved.serveEventIds, mapId));
 
   return {
     enabled: taskIds.length > 0 || eventIds.length > 0,

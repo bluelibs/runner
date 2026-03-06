@@ -32,7 +32,11 @@ function wrapWithUserContexts<T>(
   const allowedIds =
     options?.allowedAsyncContextIds === undefined
       ? undefined
-      : new Set(options.allowedAsyncContextIds);
+      : new Set(
+          options.allowedAsyncContextIds
+            .map((id) => store.resolveDefinitionId(id))
+            .filter((id): id is string => Boolean(id)),
+        );
 
   const headerText = readContextHeader(req);
   let userWrapped = fn;

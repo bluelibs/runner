@@ -103,7 +103,7 @@ export class TaskMiddlewareComposer {
       const validatedInput = ValidationHelper.validateInput(
         input,
         task.inputSchema,
-        task.id,
+        this.store.toPublicId(task),
         "Task",
       );
 
@@ -116,7 +116,7 @@ export class TaskMiddlewareComposer {
       return ValidationHelper.validateResult(
         rawResult,
         task.resultSchema,
-        task.id,
+        this.store.toPublicId(task),
         "Task",
       );
     }) as (
@@ -198,6 +198,7 @@ export class TaskMiddlewareComposer {
     if (interceptors.length === 0) {
       return runner;
     }
+    const publicTaskDefinition = this.toPublicDefinition(task);
 
     const createExecutionInput = (
       input: TInput,
@@ -205,7 +206,7 @@ export class TaskMiddlewareComposer {
       journal: ExecutionJournal,
     ): ITaskMiddlewareExecutionInput<TInput, Awaited<TOutput>> => ({
       task: {
-        definition: task,
+        definition: publicTaskDefinition,
         input: input,
       },
       next: nextFunc,
@@ -287,6 +288,7 @@ export class TaskMiddlewareComposer {
     }
 
     let next = runner;
+    const publicTaskDefinition = this.toPublicDefinition(task);
 
     // Layer middlewares (global first, then local), closest to the task runs last
     for (let i = middlewares.length - 1; i >= 0; i--) {
@@ -308,7 +310,7 @@ export class TaskMiddlewareComposer {
             storeMiddleware.middleware.run(
               {
                 task: {
-                  definition: task,
+                  definition: publicTaskDefinition,
                   input,
                 },
                 next: (...args: [TInput?]) =>
@@ -368,6 +370,7 @@ export class TaskMiddlewareComposer {
     }
 
     let wrapped = middlewareRunner;
+    const publicTaskDefinition = this.toPublicDefinition(task);
 
     for (let i = interceptors.length - 1; i >= 0; i--) {
       const interceptor = interceptors[i];
@@ -383,7 +386,7 @@ export class TaskMiddlewareComposer {
           Awaited<TOutput>
         > = {
           task: {
-            definition: task,
+            definition: publicTaskDefinition,
             input: input,
           },
           next: (...args: [TInput?]) =>
@@ -412,5 +415,19 @@ export class TaskMiddlewareComposer {
     }
 
     return wrapped;
+  }
+
+  private toPublicDefinition<TTask extends ITask<any, any, any>>(
+    task: TTask,
+  ): TTask {
+    const publicId = this.store.toPublicId(task);
+    if (publicId === task.id) {
+      return task;
+    }
+
+    return {
+      ...task,
+      id: publicId,
+    };
   }
 }

@@ -1,4 +1,4 @@
-import { r } from "../../public";
+import { r, resources, tags } from "../../public";
 import { run } from "../../run";
 import { cronResource } from "../../globals/cron/cron.resource";
 import { RunnerError } from "../../definers/defineError";
@@ -35,7 +35,7 @@ describe("global cron resource config", () => {
 
     const includedTask = r
       .task("app.tasks.only.included")
-      .tags([r.runner.tags.cron.with({ expression: "* * * * *" })])
+      .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         includedRuns += 1;
       })
@@ -43,7 +43,7 @@ describe("global cron resource config", () => {
 
     const excludedTask = r
       .task("app.tasks.only.excluded")
-      .tags([r.runner.tags.cron.with({ expression: "* * * * *" })])
+      .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         excludedRuns += 1;
       })
@@ -52,7 +52,7 @@ describe("global cron resource config", () => {
     const app = r
       .resource("app")
       .register([
-        r.runner.cron.with({
+        resources.cron.with({
           only: [includedTask, "app.tasks.only.unknown"],
         }),
         includedTask,
@@ -61,10 +61,21 @@ describe("global cron resource config", () => {
       .build();
     const runtime = await run(app);
 
-    const cron = runtime.getResourceValue(r.runner.cron);
+    const cron = runtime.getResourceValue(resources.cron);
     expect(cron.schedules.size).toBe(1);
-    expect(cron.schedules.has(includedTask.id)).toBe(true);
-    expect(cron.schedules.has(excludedTask.id)).toBe(false);
+    const scheduledTaskIds = Array.from(cron.schedules.values()).map(
+      (schedule) => schedule.taskId,
+    );
+    expect(
+      scheduledTaskIds.some(
+        (taskId) => taskId === includedTask.id || taskId.endsWith(includedTask.id),
+      ),
+    ).toBe(true);
+    expect(
+      scheduledTaskIds.some(
+        (taskId) => taskId === excludedTask.id || taskId.endsWith(excludedTask.id),
+      ),
+    ).toBe(false);
 
     jest.advanceTimersByTime(60_000);
     await flushMicrotasks();
@@ -80,7 +91,7 @@ describe("global cron resource config", () => {
 
     const task = r
       .task("app.tasks.only.empty")
-      .tags([r.runner.tags.cron.with({ expression: "* * * * *" })])
+      .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         runs += 1;
       })
@@ -88,11 +99,11 @@ describe("global cron resource config", () => {
 
     const app = r
       .resource("app")
-      .register([r.runner.cron.with({ only: [] }), task])
+      .register([resources.cron.with({ only: [] }), task])
       .build();
     const runtime = await run(app);
 
-    const cron = runtime.getResourceValue(r.runner.cron);
+    const cron = runtime.getResourceValue(resources.cron);
     expect(cron.schedules.size).toBe(0);
 
     jest.advanceTimersByTime(180_000);
@@ -108,13 +119,13 @@ describe("global cron resource config", () => {
 
     const task = r
       .task("app.tasks.only.warn")
-      .tags([r.runner.tags.cron.with({ expression: "* * * * *" })])
+      .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => undefined)
       .build();
 
     const app = r
       .resource("app")
-      .register([r.runner.cron.with({ only: ["app.tasks.only.miss"] }), task])
+      .register([resources.cron.with({ only: ["app.tasks.only.miss"] }), task])
       .build();
     const runtime = await run(app, {
       logs: {
@@ -142,7 +153,7 @@ describe("global cron resource config", () => {
     expectConfigValidationError(() =>
       r
         .resource("app")
-        .register([r.runner.cron.with("invalid" as never)])
+        .register([resources.cron.with("invalid" as never)])
         .build(),
     );
   });
@@ -151,7 +162,7 @@ describe("global cron resource config", () => {
     expectConfigValidationError(() =>
       r
         .resource("app")
-        .register([r.runner.cron.with({ only: "task.id" } as never)])
+        .register([resources.cron.with({ only: "task.id" } as never)])
         .build(),
     );
   });
@@ -160,7 +171,7 @@ describe("global cron resource config", () => {
     expectConfigValidationError(() =>
       r
         .resource("app")
-        .register([r.runner.cron.with({ only: [42] } as never)])
+        .register([resources.cron.with({ only: [42] } as never)])
         .build(),
     );
   });
@@ -169,7 +180,7 @@ describe("global cron resource config", () => {
     expectConfigValidationError(() =>
       r
         .resource("app")
-        .register([r.runner.cron.with([] as never)])
+        .register([resources.cron.with([] as never)])
         .build(),
     );
   });
@@ -178,7 +189,7 @@ describe("global cron resource config", () => {
     expectConfigValidationError(() =>
       r
         .resource("app")
-        .register([r.runner.cron.with({ only: [{ id: 123 }] } as never)])
+        .register([resources.cron.with({ only: [{ id: 123 }] } as never)])
         .build(),
     );
   });
@@ -191,7 +202,7 @@ describe("global cron resource config", () => {
     expect(() =>
       r
         .resource("app")
-        .register([r.runner.cron.with({})])
+        .register([resources.cron.with({})])
         .build(),
     ).not.toThrow();
   });

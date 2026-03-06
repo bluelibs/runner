@@ -19,6 +19,7 @@ import {
   ResourceStoreElementType,
   EventStoreElementType,
   HookStoreElementType,
+  symbolTagConfiguredFrom,
 } from "../defs";
 import { isResourceWithConfig } from "../define";
 import { StoreValidator } from "./StoreValidator";
@@ -59,6 +60,8 @@ export class StoreRegistry {
   public errors = new LockableMap<string, IErrorHelper<any>>("errors");
   public readonly visibilityTracker = new VisibilityTracker();
   private readonly definitionAliases = new WeakMap<object, string>();
+  private readonly definitionAliasesBySourceId = new Map<string, Set<string>>();
+  private readonly sourceIdsByCanonicalId = new Map<string, Set<string>>();
 
   // Kept on the registry for backward compatibility in tests/tools.
   public readonly tagIndex: Map<string, TagIndexBucket>;
@@ -68,6 +71,18 @@ export class StoreRegistry {
   private readonly writer: StoreRegistryWriter;
 
   constructor(protected readonly store: Store) {
+    const lookupResolver = (key: string): string | undefined =>
+      this.resolveDefinitionId(key);
+    this.tasks.setLookupResolver(lookupResolver);
+    this.resources.setLookupResolver(lookupResolver);
+    this.events.setLookupResolver(lookupResolver);
+    this.taskMiddlewares.setLookupResolver(lookupResolver);
+    this.resourceMiddlewares.setLookupResolver(lookupResolver);
+    this.hooks.setLookupResolver(lookupResolver);
+    this.tags.setLookupResolver(lookupResolver);
+    this.asyncContexts.setLookupResolver(lookupResolver);
+    this.errors.setLookupResolver(lookupResolver);
+
     this.validator = new StoreValidator(this);
 
     this.tagIndexer = new StoreRegistryTagIndex(
@@ -82,6 +97,7 @@ export class StoreRegistry {
         tags: this.tags,
       },
       this.visibilityTracker,
+      (reference) => this.resolveDefinitionId(reference),
     );
     this.tagIndex = this.tagIndexer.index;
 
@@ -133,11 +149,13 @@ export class StoreRegistry {
     }
 
     this.definitionAliases.set(objectReference, canonicalId);
+    this.recordSourceIdAlias(reference, canonicalId);
+    this.recordCanonicalSourceId(reference, canonicalId);
   }
 
   resolveDefinitionId(reference: unknown): string | undefined {
     if (typeof reference === "string") {
-      return reference;
+      return this.resolveUniqueSourceIdAlias(reference) ?? reference;
     }
 
     if (
@@ -153,6 +171,19 @@ export class StoreRegistry {
       return mapped;
     }
 
+    const configuredFrom = (reference as Record<symbol, unknown>)[
+      symbolTagConfiguredFrom
+    ];
+    if (
+      configuredFrom &&
+      (typeof configuredFrom === "object" || typeof configuredFrom === "function")
+    ) {
+      const byConfiguredFrom = this.definitionAliases.get(configuredFrom);
+      if (byConfiguredFrom) {
+        return byConfiguredFrom;
+      }
+    }
+
     if (isResourceWithConfig(reference)) {
       const byResource = this.definitionAliases.get(
         reference.resource as unknown as object,
@@ -166,11 +197,94 @@ export class StoreRegistry {
     if ("id" in reference) {
       const id = (reference as { id?: unknown }).id;
       if (typeof id === "string" && id.length > 0) {
-        return id;
+        return this.resolveUniqueSourceIdAlias(id) ?? id;
       }
     }
 
     return undefined;
+  }
+
+  private recordSourceIdAlias(reference: unknown, canonicalId: string): void {
+    if (
+      reference === null ||
+      reference === undefined ||
+      (typeof reference !== "object" && typeof reference !== "function")
+    ) {
+      return;
+    }
+
+    if (!("id" in reference)) {
+      return;
+    }
+
+    const sourceId = (reference as { id?: unknown }).id;
+    if (typeof sourceId !== "string" || sourceId.length === 0) {
+      return;
+    }
+
+    const existing = this.definitionAliasesBySourceId.get(sourceId);
+    if (existing) {
+      existing.add(canonicalId);
+      return;
+    }
+
+    this.definitionAliasesBySourceId.set(sourceId, new Set([canonicalId]));
+  }
+
+  private recordCanonicalSourceId(reference: unknown, canonicalId: string): void {
+    if (
+      reference === null ||
+      reference === undefined ||
+      (typeof reference !== "object" && typeof reference !== "function")
+    ) {
+      return;
+    }
+
+    if (!("id" in reference)) {
+      return;
+    }
+
+    const sourceId = (reference as { id?: unknown }).id;
+    if (typeof sourceId !== "string" || sourceId.length === 0) {
+      return;
+    }
+
+    const existing = this.sourceIdsByCanonicalId.get(canonicalId);
+    if (existing) {
+      existing.add(sourceId);
+      return;
+    }
+
+    this.sourceIdsByCanonicalId.set(canonicalId, new Set([sourceId]));
+  }
+
+  private resolveUniqueSourceIdAlias(sourceId: string): string | undefined {
+    const candidates = this.definitionAliasesBySourceId.get(sourceId);
+    if (!candidates || candidates.size !== 1) {
+      return undefined;
+    }
+
+    const first = candidates.values().next().value;
+    return typeof first === "string" ? first : undefined;
+  }
+
+  getDisplayId(id: string): string {
+    const sourceIds = this.sourceIdsByCanonicalId.get(id);
+    if (!sourceIds || sourceIds.size === 0) {
+      return id;
+    }
+
+    if (sourceIds.size === 1) {
+      return sourceIds.values().next().value as string;
+    }
+
+    for (const sourceId of sourceIds) {
+      if (sourceId !== id) {
+        return sourceId;
+      }
+    }
+
+    return id;
   }
 
   /** Lock every map in the registry, preventing further mutations. */
@@ -265,7 +379,23 @@ export class StoreRegistry {
     tag: TTag,
     options?: { consumerId?: string; includeSelf?: boolean },
   ): TagDependencyAccessor<TTag> {
-    return this.tagIndexer.getTagAccessor(tag, options);
+    const normalizedOptions = options?.consumerId
+      ? {
+          ...options,
+          consumerId:
+            this.resolveDefinitionId(options.consumerId) ?? options.consumerId,
+        }
+      : options;
+    const resolvedTagId = this.resolveDefinitionId(tag);
+    if (!resolvedTagId || resolvedTagId === tag.id) {
+      return this.tagIndexer.getTagAccessor(tag, normalizedOptions);
+    }
+
+    const canonicalTag = {
+      ...tag,
+      id: resolvedTagId,
+    } as TTag;
+    return this.tagIndexer.getTagAccessor(canonicalTag, normalizedOptions);
   }
 
   /**
@@ -277,14 +407,8 @@ export class StoreRegistry {
   /**
    * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
    */
-  getTasksWithTag(tag: string): AnyTask[];
-  /**
-   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
-   */
-  getTasksWithTag(tag: string | ITag<any, any, any>): AnyTask[] {
-    return typeof tag === "string"
-      ? this.tagIndexer.getTasksWithTag(tag)
-      : this.tagIndexer.getTasksWithTag(tag);
+  getTasksWithTag(tag: ITag<any, any, any>): AnyTask[] {
+    return this.getTagAccessor(tag).tasks.map((entry) => entry.definition);
   }
 
   /**
@@ -296,13 +420,7 @@ export class StoreRegistry {
   /**
    * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
    */
-  getResourcesWithTag(tag: string): AnyResource[];
-  /**
-   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
-   */
-  getResourcesWithTag(tag: string | ITag<any, any, any>): AnyResource[] {
-    return typeof tag === "string"
-      ? this.tagIndexer.getResourcesWithTag(tag)
-      : this.tagIndexer.getResourcesWithTag(tag);
+  getResourcesWithTag(tag: ITag<any, any, any>): AnyResource[] {
+    return this.getTagAccessor(tag).resources.map((entry) => entry.definition);
   }
 }

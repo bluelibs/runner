@@ -60,7 +60,7 @@ describe("debug config isolation across runs", () => {
     });
 
     const start1 = logs1.find((l) =>
-      String(l.message).includes("Task tests.isolation.task is running"),
+      /Task .*tests\.isolation\.task is running/.test(String(l.message)),
     );
     expect(start1).toBeTruthy();
     expect(start1?.data?.input).toEqual({ msg: "first" });
@@ -86,7 +86,7 @@ describe("debug config isolation across runs", () => {
     });
 
     const start2 = logs2.find((l) =>
-      String(l.message).includes("Task tests.isolation.task is running"),
+      /Task .*tests\.isolation\.task is running/.test(String(l.message)),
     );
     expect(start2).toBeTruthy();
     expect(start2?.data).toBeUndefined();

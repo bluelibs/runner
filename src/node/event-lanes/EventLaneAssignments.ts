@@ -34,18 +34,21 @@ export function resolveEventLaneAssignments(
 
     if (typeof applyTo === "function") {
       for (const eventEntry of store.events.values()) {
-        if (!applyTo(eventEntry.event)) continue;
+        if (!applyTo(toPublicPredicateCandidate(store, eventEntry.event))) {
+          continue;
+        }
         const eventId = eventEntry.event.id;
         assertEventIsNotExplicitlyAssignedToRpcLane(
           rpcLaneApplyToEventIds,
           eventId,
           lane.id,
+          store,
         );
 
         const current = routesByEventId.get(eventId);
         if (current && current.lane.id !== lane.id) {
           eventLaneAssignmentConflictError.throw({
-            eventId,
+            eventId: store.toPublicId(eventId),
             currentLaneId: current.lane.id,
             attemptedLaneId: lane.id,
           });
@@ -68,12 +71,13 @@ export function resolveEventLaneAssignments(
         rpcLaneApplyToEventIds,
         eventId,
         lane.id,
+        store,
       );
 
       const current = routesByEventId.get(eventId);
       if (current && current.lane.id !== lane.id) {
         eventLaneAssignmentConflictError.throw({
-          eventId,
+          eventId: store.toPublicId(eventId),
           currentLaneId: current.lane.id,
           attemptedLaneId: lane.id,
         });
@@ -92,12 +96,8 @@ export function resolveEventLaneAssignments(
     }
 
     const eventId = eventEntry.event.id;
-    const existing = routesByEventId.get(eventId);
-    if (existing) {
+    if (routesByEventId.has(eventId)) {
       // applyTo is authoritative; tags only apply when no applyTo matched.
-      if (existing.lane.id === laneConfig.lane.id) {
-        // Same lane, no-op.
-      }
       continue;
     }
 
@@ -109,7 +109,7 @@ export function resolveEventLaneAssignments(
     // Without explicit applyTo, IoC tags must not assign the same event to both systems.
     if (globalTags.rpcLane.exists(eventEntry.event.tags)) {
       eventLaneAssignmentRpcLaneConflictError.throw({
-        eventId,
+        eventId: store.toPublicId(eventId),
         eventLaneId: laneConfig.lane.id,
       });
     }
@@ -126,10 +126,11 @@ function assertEventIsNotExplicitlyAssignedToRpcLane(
   rpcLaneApplyToEventIds: Set<string>,
   eventId: string,
   eventLaneId: string,
+  store: Store,
 ): void {
   if (rpcLaneApplyToEventIds.has(eventId)) {
     eventLaneAssignmentRpcLaneConflictError.throw({
-      eventId,
+      eventId: store.toPublicId(eventId),
       eventLaneId,
     });
   }
@@ -145,14 +146,15 @@ function resolveEventLaneTarget(
     laneId,
     eventLaneApplyToInvalidTargetError,
   );
-  if (store.events.has(targetId)) {
-    return targetId;
+  const eventEntry = store.events.get(targetId);
+  if (eventEntry) {
+    return eventEntry.event.id;
   }
 
   if (isRegisteredDefinitionId(store, targetId)) {
     return eventLaneApplyToTargetTypeError.throw({
       laneId,
-      targetId,
+      targetId: store.toPublicId(targetId),
     });
   }
 
@@ -170,4 +172,19 @@ function collectRpcLaneApplyToEventIds(store: Store): Set<string> {
       topology: unknown,
     ) => readonly { applyTo?: unknown }[],
   );
+}
+
+function toPublicPredicateCandidate<T extends { id: string }>(
+  store: Store,
+  definition: T,
+): T {
+  const publicId = store.toPublicId(definition);
+  if (publicId === definition.id) {
+    return definition;
+  }
+
+  return {
+    ...definition,
+    id: publicId,
+  };
 }

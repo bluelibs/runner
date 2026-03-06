@@ -52,18 +52,13 @@ export type { ResourceTagType, TagType } from "./tag";
 export type { IResourceMeta } from "./meta";
 export type {
   ResourceSubtreePolicy,
+  SubtreeElementValidator,
+  SubtreeValidatableElement,
   SubtreeResourceMiddlewareEntry,
   SubtreeResourceMiddlewarePredicate,
-  SubtreeEventValidator,
-  SubtreeHookValidator,
   SubtreePolicyOptions,
-  SubtreeResourceMiddlewareValidator,
-  SubtreeResourceValidator,
-  SubtreeTagValidator,
   SubtreeTaskMiddlewareEntry,
   SubtreeTaskMiddlewarePredicate,
-  SubtreeTaskMiddlewareValidator,
-  SubtreeTaskValidator,
   SubtreeViolation,
 } from "./subtree";
 
@@ -108,8 +103,7 @@ export type ItemType =
 /**
  * A structural subtree filter created by `subtreeOf(resource, { types })`.
  *
- * Unlike string selectors (which match against literal ids) this reference
- * binds to the resource object itself.  At bootstrap, Runner resolves
+ * This reference binds to the resource object itself. At bootstrap, Runner resolves
  * "all items owned by that resource's registration subtree" — so overridable
  * ids and deeply-nested children are all caught automatically.
  */
@@ -129,14 +123,16 @@ export interface IsolationSubtreeFilter {
  * - **IsolationScope** — created by `scope(target, { channels })` for
  *   fine‑grained per-channel control.
  *
- * Raw strings are **not** valid here.  Use `scope("pattern")` instead,
- * which makes the channel options explicit.
+ * Raw strings are **not** valid here.
  */
 export type IsolationTarget =
   | RegisterableItems
   | IsolationSubtreeFilter
   | IsolationScope;
-export type IsolationExportsTarget = RegisterableItems | IsolationSelector;
+export type IsolationExportsTarget =
+  | RegisterableItems
+  | IResource<any, any, any, any, any, any, any>
+  | IsolationSelector;
 
 export type IsolationExportsConfig =
   | ReadonlyArray<IsolationExportsTarget>
@@ -146,13 +142,11 @@ export interface IsolationPolicy {
   /**
    * Denied targets for this resource boundary.
    * Denials are additive across nested resources.
-   * Use `scope("pattern", { ... })` for string selectors with channel control.
    */
   deny?: ReadonlyArray<IsolationTarget>;
   /**
    * Allowed targets for this resource boundary.
    * When provided, only these targets (and internal items) can be referenced.
-   * Use `scope("pattern", { ... })` for string selectors with channel control.
    */
   only?: ReadonlyArray<IsolationTarget>;
   /**
@@ -222,6 +216,20 @@ export interface IResourceDefinition<
     TValue extends Promise<infer U> ? U : TValue
   >;
   /**
+   * Ready hook for the resource. This runs after initialization completes and
+   * right before Runner emits the global system ready event.
+   *
+   * Use this for startup ingress actions that should begin only after runtime
+   * internals are locked and all startup-initialized dependencies are ready.
+   */
+  ready?: (
+    this: unknown,
+    value: TValue extends Promise<infer U> ? U : TValue,
+    config: TConfig,
+    dependencies: ResourceDependencyValuesType<TDependencies>,
+    context: TContext,
+  ) => Promise<void>;
+  /**
    * Clean-up function for the resource. This is called when the resource is no longer needed.
    *
    * @param value The value of the resource (undefined if no init method)
@@ -275,8 +283,8 @@ export interface IResourceDefinition<
   /** Middleware applied around init/cooldown/dispose. */
   middleware?: TMiddleware;
   /**
-   * Create a private, mutable context shared between `init`, `cooldown`, and
-   * `dispose`.
+   * Create a private, mutable context shared between `init`, `ready`,
+   * `cooldown`, and `dispose`.
    */
   context?: () => TContext;
   /**
@@ -305,6 +313,11 @@ export interface IResourceDefinition<
    * Declares subtree policies for tasks/resources registered under this resource.
    */
   subtree?: ResourceSubtreePolicy;
+  /**
+   * When true, this resource acts as a namespace gateway and does not add its
+   * own id prefix when compiling ids for items in its register tree.
+   */
+  gateway?: boolean;
   tags?: TTags;
 }
 
@@ -400,6 +413,10 @@ export interface IResource<
    * Normalized subtree policy declarations owned by this resource.
    */
   subtree?: NormalizedResourceSubtreePolicy;
+  /**
+   * Namespace gateway flag copied from the definition.
+   */
+  gateway?: boolean;
   /** Return an optional dependency wrapper for this resource. */
   optional: () => IOptionalDependency<
     IResource<

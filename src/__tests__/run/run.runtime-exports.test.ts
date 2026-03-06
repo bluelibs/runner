@@ -99,7 +99,7 @@ describe("run.runtime-exports", () => {
       await runtime.dispose();
     });
 
-    it("allows running tasks exported through wildcard selectors", async () => {
+    it("allows running explicitly exported tasks and blocks hidden ones", async () => {
       const exported = defineTask({
         id: "runtime.exports.runTask.selector.api.task",
         run: async () => "selector-result",
@@ -112,7 +112,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.runTask.selector.root",
         register: [exported, hidden],
-        isolate: { exports: ["runtime.exports.runTask.selector.api.*"] },
+        isolate: { exports: [exported] },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -153,8 +153,9 @@ describe("run.runtime-exports", () => {
       });
 
       const runtime = await run(root, { shutdownHooks: false });
+      const internalId = runtime.store.resolveDefinitionId(internal)!;
       await expect(
-        runtime.runTask("runtime.exports.runTask.str.internal"),
+        Promise.resolve().then(() => runtime.runTask(internalId)),
       ).rejects.toMatchObject({ id: "runner.errors.runtimeAccessViolation" });
       await runtime.dispose();
     });
@@ -181,10 +182,16 @@ describe("run.runtime-exports", () => {
         await runtime.runTask(taskB);
       } catch (e: any) {
         expect(e.id).toBe("runner.errors.runtimeAccessViolation");
-        expect(e.data.targetId).toBe("runtime.exports.runTask.err.b");
+        expect(String(e.data.targetId)).toMatch(
+          /runtime\.exports\.runTask\.err\.b$/,
+        );
         expect(e.data.rootId).toBe("runtime.exports.runTask.err.root");
-        expect(e.data.exportedIds).toContain("runtime.exports.runTask.err.a");
-        expect(e.remediation).toContain("runtime.exports.runTask.err.b");
+        expect(
+          (e.data.exportedIds as string[]).some((id) =>
+            id.endsWith("runtime.exports.runTask.err.a"),
+          ),
+        ).toBe(true);
+        expect(String(e.remediation)).toContain("runtime.exports.runTask.err.b");
       }
       await runtime.dispose();
     });
@@ -210,7 +217,7 @@ describe("run.runtime-exports", () => {
       await runtime.dispose();
     });
 
-    it("allows emitting events exported through wildcard selectors", async () => {
+    it("allows emitting explicitly exported events and blocks private ones", async () => {
       const publicEvt = defineEvent<undefined>({
         id: "runtime.exports.emit.selector.public.event",
       });
@@ -221,7 +228,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.emit.selector.root",
         register: [publicEvt, privateEvt],
-        isolate: { exports: ["runtime.exports.emit.selector.public.*"] },
+        isolate: { exports: [publicEvt] },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -262,8 +269,11 @@ describe("run.runtime-exports", () => {
       });
 
       const runtime = await run(root, { shutdownHooks: false });
+      const privateEventId = runtime.store.resolveDefinitionId(privateEvt)!;
       await expect(
-        runtime.emitEvent("runtime.exports.emit.str.private", undefined),
+        Promise.resolve().then(() =>
+          runtime.emitEvent(privateEventId, undefined),
+        ),
       ).rejects.toMatchObject({ id: "runner.errors.runtimeAccessViolation" });
       await runtime.dispose();
     });
@@ -290,7 +300,7 @@ describe("run.runtime-exports", () => {
       await runtime.dispose();
     });
 
-    it("allows resources exported through wildcard selectors", async () => {
+    it("allows explicitly exported resources and blocks hidden ones", async () => {
       const exported = defineResource({
         id: "runtime.exports.getRes.selector.group.public",
         async init() {
@@ -306,7 +316,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.getRes.selector.root",
         register: [exported, hidden],
-        isolate: { exports: ["runtime.exports.getRes.selector.group.*"] },
+        isolate: { exports: [exported] },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -351,8 +361,9 @@ describe("run.runtime-exports", () => {
       });
 
       const runtime = await run(root, { shutdownHooks: false });
+      const privateResourceId = runtime.store.resolveDefinitionId(inner)!;
       expect(() =>
-        runtime.getResourceValue("runtime.exports.getRes.str.private"),
+        runtime.getResourceValue(privateResourceId),
       ).toThrow(
         expect.objectContaining({ id: "runner.errors.runtimeAccessViolation" }),
       );
@@ -370,7 +381,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.getCfg.root",
         register: [inner.with({ flag: true })],
-        isolate: { exports: [inner.id] },
+        isolate: { exports: [inner] },
       });
 
       const runtime = await run(root, { shutdownHooks: false });
@@ -419,7 +430,7 @@ describe("run.runtime-exports", () => {
       await runtime.dispose();
     });
 
-    it("allows lazy access through wildcard exported resources only", async () => {
+    it("allows lazy access through explicitly exported resources only", async () => {
       const exported = defineResource({
         id: "runtime.exports.lazy.selector.group.public",
         async init() {
@@ -435,7 +446,7 @@ describe("run.runtime-exports", () => {
       const root = defineResource({
         id: "runtime.exports.lazy.selector.root",
         register: [exported, hidden],
-        isolate: { exports: ["runtime.exports.lazy.selector.group.*"] },
+        isolate: { exports: [exported] },
       });
 
       const runtime = await run(root, { lazy: true, shutdownHooks: false });

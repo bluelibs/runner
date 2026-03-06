@@ -1,4 +1,4 @@
-import { event } from "../../..";
+import { defineEvent } from "../../..";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { DurableContext } from "../../durable/core/DurableContext";
 import type { DurableAuditEmitter } from "../../durable/core/audit";
@@ -10,7 +10,7 @@ import { MemoryStore } from "../../durable/store/MemoryStore";
 import { createMessageError } from "../../../errors";
 
 describe("durable: DurableContext", () => {
-  const Paid = event<{ paidAt: number }>({ id: "durable.tests.paid" });
+  const Paid = defineEvent<{ paidAt: number }>({ id: "durable.tests.paid" });
   const createContext = (
     executionId = "e1",
     attempt = 1,
@@ -280,9 +280,9 @@ describe("durable: DurableContext", () => {
       received.push({ type: evt.type, payload: evt.payload });
     });
 
-    const E1 = event<{ a: number }>({ id: "event.1" });
-    const E2 = event<{ b: number }>({ id: "event.2" });
-    const E3 = event<{ c: number }>({ id: "event.3" });
+    const E1 = defineEvent<{ a: number }>({ id: "event.1" });
+    const E2 = defineEvent<{ b: number }>({ id: "event.2" });
+    const E3 = defineEvent<{ c: number }>({ id: "event.3" });
 
     await ctx.emit(E1, { a: 1 });
     await ctx.emit(E1, { a: 2 });
@@ -362,7 +362,7 @@ describe("durable: DurableContext", () => {
       completedAt: new Date(),
     });
 
-    const Raw = event<string>({ id: "raw" });
+    const Raw = defineEvent<string>({ id: "raw" });
     await expect(ctx.waitForSignal(Raw)).rejects.toThrow(
       "Invalid signal step state",
     );
@@ -371,7 +371,7 @@ describe("durable: DurableContext", () => {
   it("supports waitForSignal() using typed signal ids", async () => {
     const { store, ctx } = createContext();
 
-    const PaidSignal = event<{ paidAt: number }>({ id: Paid.id });
+    const PaidSignal = defineEvent<{ paidAt: number }>({ id: Paid.id });
 
     await store.saveStepResult({
       executionId: "e1",
@@ -595,7 +595,7 @@ describe("durable: DurableContext", () => {
       }),
     );
 
-    const Stable = event<{ ok: boolean }>({ id: "event.stable" });
+    const Stable = defineEvent<{ ok: boolean }>({ id: "event.stable" });
     await ctx.emit(Stable, { ok: true }, { stepId: "stable-emit" });
     expect(await store.getStepResult("e1", "__emit:stable-emit")).toEqual(
       expect.objectContaining({

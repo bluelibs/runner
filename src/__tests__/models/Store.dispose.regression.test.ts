@@ -140,4 +140,98 @@ describe("Store disposal regressions", () => {
 
     await store.cooldown();
   });
+
+  it("normalizes non-error ready failures from parallel waves", async () => {
+    const fixture = createTestFixture();
+    const { store } = fixture;
+    store.setTaskRunner(fixture.createTaskRunner());
+
+    const failing = defineResource({
+      id: "store.ready.parallel.failure.failing",
+      async ready() {
+        throw "ready-string-failure";
+      },
+    });
+
+    const sibling = defineResource({
+      id: "store.ready.parallel.failure.sibling",
+      async ready() {
+        return;
+      },
+    });
+
+    store.storeGenericItem(failing);
+    store.storeGenericItem(sibling);
+
+    store.resources.get(failing.id)!.isInitialized = true;
+    store.resources.get(sibling.id)!.isInitialized = true;
+    store.recordInitWave([failing.id, sibling.id]);
+
+    await expect(store.ready()).rejects.toMatchObject({
+      message: "ready-string-failure",
+    });
+  });
+
+  it("rethrows Error ready failures from parallel waves without re-wrapping", async () => {
+    const fixture = createTestFixture();
+    const { store } = fixture;
+    store.setTaskRunner(fixture.createTaskRunner());
+
+    const readyFailure = new Error("ready-error-failure");
+    const failing = defineResource({
+      id: "store.ready.parallel.failure.error",
+      async ready() {
+        throw readyFailure;
+      },
+    });
+
+    const sibling = defineResource({
+      id: "store.ready.parallel.failure.error.sibling",
+      async ready() {
+        return;
+      },
+    });
+
+    store.storeGenericItem(failing);
+    store.storeGenericItem(sibling);
+
+    store.resources.get(failing.id)!.isInitialized = true;
+    store.resources.get(sibling.id)!.isInitialized = true;
+    store.recordInitWave([failing.id, sibling.id]);
+
+    await expect(store.ready()).rejects.toMatchObject({
+      message: readyFailure.message,
+    });
+  });
+
+  it("normalizes non-error ready failures from sequential waves", async () => {
+    const fixture = createTestFixture();
+    const { store } = fixture;
+    store.setTaskRunner(fixture.createTaskRunner());
+
+    const failing = defineResource({
+      id: "store.ready.sequential.failure.failing",
+      async ready() {
+        throw "ready-sequential-string-failure";
+      },
+    });
+
+    store.storeGenericItem(failing);
+    store.resources.get(failing.id)!.isInitialized = true;
+    store.recordResourceInitialized(failing.id);
+
+    await expect(store.ready()).rejects.toMatchObject({
+      message: "ready-sequential-string-failure",
+    });
+  });
+
+  it("ignores ready execution requests for unknown resources", async () => {
+    const fixture = createTestFixture();
+    const { store } = fixture;
+    store.setTaskRunner(fixture.createTaskRunner());
+
+    await expect(store.readyResource("store.ready.unknown")).resolves.toBe(
+      undefined,
+    );
+  });
 });

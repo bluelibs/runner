@@ -2,7 +2,7 @@ import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { DurableContext } from "../../durable/core/DurableContext";
 import type { IDurableStore } from "../../durable/core/interfaces/store";
 import { SuspensionSignal } from "../../durable/core/interfaces/context";
-import { event } from "../../..";
+import { defineEvent } from "../../..";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { createMessageError } from "../../../errors";
 
@@ -72,7 +72,7 @@ describe("durable: DurableContext audit branches", () => {
       received.push(evt.type);
     });
 
-    const Evt1 = event<{ a: number }>({ id: "evt.1" });
+    const Evt1 = defineEvent<{ a: number }>({ id: "evt.1" });
     await expect(ctx.emit(Evt1, { a: 1 })).resolves.toBeUndefined();
     expect(received).toEqual(["evt.1"]);
   });

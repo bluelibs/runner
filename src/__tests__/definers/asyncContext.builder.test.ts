@@ -1,4 +1,4 @@
-import { definitions, r, asyncContext, createContext } from "../..";
+import { definitions, r, defineAsyncContext, createContext } from "../..";
 import { createMessageError } from "../../errors";
 
 describe("async context builder and defineAsyncContext", () => {
@@ -27,7 +27,7 @@ describe("async context builder and defineAsyncContext", () => {
   });
 
   it("asyncContext (define) honors provided serialize/parse over default", () => {
-    const ctx = asyncContext<{ v: string }>({
+    const ctx = defineAsyncContext<{ v: string }>({
       id: "tests.ctx.custom",
       configSchema: {
         parse(input: unknown) {

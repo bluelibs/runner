@@ -1,4 +1,4 @@
-import { r } from "../../index";
+import { r, resources } from "../../index";
 import { debugConfig } from "../../globals/resources/debug";
 import type { DebugConfig } from "../../globals/resources/debug";
 import { EventLanesDiagnostics } from "./EventLanesDiagnostics";
@@ -28,10 +28,10 @@ const eventLanesResourceBase = r
   .resource<EventLanesResourceConfig>(EVENT_LANES_RESOURCE_ID)
   .configSchema(eventLanesResourceConfigSchema)
   .dependencies({
-    eventManager: r.system.eventManager,
-    serializer: r.runner.serializer,
-    store: r.system.store,
-    logger: r.runner.logger,
+    eventManager: resources.eventManager,
+    serializer: resources.serializer,
+    store: resources.store,
+    logger: resources.logger,
     debugConfig: debugConfig.optional(),
   })
   .dependencies((config) => collectEventLaneQueueResourceDependencies(config))

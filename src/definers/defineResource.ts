@@ -119,8 +119,10 @@ export function defineResource<
     [symbolResource]: true,
     [symbolFilePath]: filePath,
     id,
+    gateway: constConfig.gateway === true,
     dependencies: constConfig.dependencies,
     dispose: constConfig.dispose,
+    ready: constConfig.ready,
     cooldown: constConfig.cooldown,
     register: constConfig.register || [],
     overrides: constConfig.overrides || [],
@@ -191,10 +193,12 @@ export function defineResource<
     throws: current.throws,
     middleware: current.middleware,
     dispose: current.dispose,
+    ready: current.ready,
     cooldown: current.cooldown,
     meta: current.meta,
     isolate: current.isolate,
     subtree: current.subtree,
+    gateway: current.gateway,
   });
 
   base.with = function (config: TConfig) {
