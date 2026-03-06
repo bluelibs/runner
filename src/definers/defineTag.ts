@@ -1,4 +1,5 @@
 import {
+  symbolDefinitionIdentity,
   ITag,
   ITagDefinition,
   ITaggable,
@@ -17,6 +18,7 @@ import {
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
+import { isSameDefinition } from "../tools/isSameDefinition";
 import { assertDefinitionId } from "./assertDefinitionId";
 import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
@@ -63,13 +65,15 @@ export function defineTag<
   );
   const isPlainObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null && !Array.isArray(value);
+  const definitionIdentity = {};
   const foundation = {
     id,
     meta: definition.meta ?? {},
     config: definition.config,
     configSchema,
     targets: definition.targets,
-  } as ITag<
+    [symbolDefinitionIdentity]: definitionIdentity,
+  } as unknown as ITag<
     TConfig,
     TEnforceInputContract,
     TEnforceOutputContract,
@@ -170,13 +174,12 @@ export function defineTag<
      * @returns
      */
     exists(target: ITaggable | TagType[]): boolean {
-      const currentId = this.id;
       const currentTags: TagType[] = Array.isArray(target)
         ? target
         : target.tags;
 
       for (const candidate of currentTags) {
-        if (candidate.id === currentId) {
+        if (isSameDefinition(candidate, this)) {
           return true;
         }
       }
@@ -189,13 +192,12 @@ export function defineTag<
      * @returns
      */
     extract(target: ITaggable | TagType[]): TConfig | undefined {
-      const currentId = this.id;
       const currentTags: TagType[] = Array.isArray(target)
         ? target
         : target.tags || [];
 
       for (const candidate of currentTags) {
-        if (candidate.id === currentId) {
+        if (isSameDefinition(candidate, this)) {
           return candidate.config as TConfig;
         }
       }

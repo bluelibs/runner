@@ -64,6 +64,10 @@ export const symbolHook: unique symbol = Symbol.for("runner.hook");
 // );
 /** @internal Marks a tag definition */
 export const symbolTag: unique symbol = Symbol.for("runner.tag");
+/** @internal Stable lineage identity preserved across clones/public projections. */
+export const symbolDefinitionIdentity: unique symbol = Symbol.for(
+  "runner.definitionIdentity",
+);
 export const symbolTagConfigured: unique symbol = Symbol.for(
   "runner.tagConfigured",
 );

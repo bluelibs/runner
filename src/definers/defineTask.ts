@@ -8,6 +8,7 @@ import type {
   TaskMiddlewareAttachmentType,
 } from "../types/task";
 import {
+  symbolDefinitionIdentity,
   symbolTask,
   symbolFilePath,
   symbolOptionalDependency,
@@ -64,7 +65,9 @@ export function defineTask<
     },
   );
   assertTagTargetsApplicableTo("tasks", "Task", id, taskConfig.tags);
+  const definitionIdentity = {};
   return deepFreeze({
+    [symbolDefinitionIdentity]: definitionIdentity,
     [symbolTask]: true,
     [symbolFilePath]: filePath,
     id,

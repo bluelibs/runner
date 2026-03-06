@@ -54,6 +54,7 @@ import { override as overrideBuilder } from "./definers/builders/override";
 import { onAnyOf, isOneOf } from "./types/event";
 import { subtreeOf as subtreeOfFn } from "./tools/subtreeOf";
 import { scope as scopeFn } from "./tools/scope";
+import { isSameDefinition } from "./tools/isSameDefinition";
 
 export const resources = Object.freeze({ ...globalResources });
 export const events = Object.freeze({ ...globalEvents });
@@ -94,6 +95,7 @@ export {
   run,
   onAnyOf,
   isOneOf,
+  isSameDefinition,
   subtreeOfFn as subtreeOf,
   scopeFn as scope,
 };
@@ -129,6 +131,7 @@ export const r = Object.freeze({
   error: errorFn,
   subtreeOf: subtreeOfFn,
   scope: scopeFn,
+  isSameDefinition,
   middleware: Object.freeze({
     task: taskMiddlewareFn,
     resource: resourceMiddlewareFn,
