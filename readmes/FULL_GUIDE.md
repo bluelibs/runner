@@ -1354,49 +1354,35 @@ const app = r
   .build();
 ```
 
-##### Shallow vs Deep Fork
-
-| Type                                                                    | Use when                                                                |
-| ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `fork("new.id")`                                                        | Simple resources with no registered children                            |
-| `fork("new.id", { register: "drop" })`                                  | Resource that registers things you don't want cloned                    |
-| `fork("new.id", { register: "deep", reId: (id) => \`prefix.\${id}\` })` | You need a complete cloned resource tree (e.g., multi-tenant databases) |
-
-**Deep fork example:**
+##### Fork Rules
 
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const child = r
-  .resource("app.base.child")
-  .init(async () => ({ ok: true }))
+const smtpTransport = r
+  .resource<{ host: string }>("smtp-transport")
+  .init(async (cfg) => ({ host: cfg.host }))
   .build();
 
-const base = r
-  .resource("app.base")
-  .dependencies({ child })
-  .register([child])
-  .init(async (_cfg, deps) => deps.child)
+const txTransport = smtpTransport.fork("smtp-transport-tx");
+
+const txMailer = r
+  .resource("tx-mailer")
+  .register([txTransport.with({ host: "tx.smtp.com" })])
   .build();
-
-const forked = base.fork("app.base.forked", {
-  register: "deep",
-  reId: (id) => `forked.${id}`,
-});
-
-const app = r.resource("app").register([base, forked]).build();
 ```
 
-> **Note:** `register: "deep"` clones only **resources**; tasks, events, hooks, middleware, tags, errors, and async contexts are not cloned. Dependencies pointing to deep-forked resources are remapped inside the cloned tree.
+> **Note:** `.fork()` is leaf-only. If a resource declares `.register(...)`, it is a non-leaf resource and cannot be forked.
 
 > **Note:** Gateway resources cannot be forked. They suppress their own namespace segment, so forked gateway instances would make their registered children collide.
 
 ##### Key Points
 
 - **`.fork()` returns a built `IResource`** — no need to call `.build()` again
+- **Forks clone identity, not structure**
 - **Tags, middleware, and type parameters are inherited**
 - **Each fork gets independent runtime** — no shared state
-- **`register` defaults to `"keep"`**
+- **Non-leaf resources must be composed explicitly**
 - **Gateway resources cannot be forked**
 - **Export forked resources** to use them as typed dependencies
 
@@ -6049,7 +6035,7 @@ const overriddenMiddleware = r.override(
 - resource: callback replaces `init`
 - hook overrides keep the same `.on` target
 
-Override APIs do not change structural boundaries (dependencies, register tree, subtree policies). If you need a separate structural variant, use `.fork("new.id")`.
+Override APIs do not change structural boundaries (dependencies, register tree, subtree policies). If you need a separate structural variant, compose a distinct parent resource explicitly. Use `.fork("new-id")` only for leaf resources.
 
 ### `r.override(...)` vs `.overrides([...])` (Critical Distinction)
 
@@ -6110,7 +6096,7 @@ Fix: either register only one definition for that id, or keep base in `register`
 .overrides([r.override(remoteMailer, async () => new MockMailer())])
 ```
 
-Fix: ensure the base target is in the resource graph first. If you wanted a separate resource, use `.fork("new.id")` and register that fork.
+Fix: ensure the base target is in the resource graph first. If you wanted a separate resource, use a different id. For leaf resources you can `.fork("new-id")`; for non-leaf resources compose a distinct parent resource.
 
 4. Passing raw definitions to `.overrides([...])`:
 
@@ -6133,7 +6119,7 @@ r.resource("test")
   .build();
 ```
 
-Overrides are applied after everything is registered. If multiple overrides target the same id, Runner rejects the graph with a dedicated duplicate-target override error (instead of applying precedence). Overriding something that wasn't registered also throws a dedicated error with remediation (register the base first, or for resources use `.fork("new.id")` when you meant a separate instance). Use `r.override()` to change behavior safely while preserving the original id.
+Overrides are applied after everything is registered. If multiple overrides target the same id, Runner rejects the graph with a dedicated duplicate-target override error (instead of applying precedence). Overriding something that wasn't registered also throws a dedicated error with remediation (register the base first, or use a different resource id when you meant a separate instance). Use `r.override()` to change behavior safely while preserving the original id.
 
 > **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
 
@@ -7142,7 +7128,7 @@ const mockMailer = r.override(realMailer, async () => new MockMailer());
 r.resource("test").register([realMailer]).overrides([mockMailer]).build();
 ```
 
-If you intended a second component (not replacement), use a different id or `.fork("new.id")` and register it directly.
+If you intended a second component (not replacement), use a different id. Leaf resources can still use `.fork("new-id")`; non-leaf resources should be composed explicitly.
 
 ### 2.2. Migrate Cache Customization to `cacheProvider`
 
@@ -7447,4 +7433,3 @@ Smoke test checklist:
 - Phase 4: Promote to production with one runtime profile at a time for Event Lanes.
 
 If your codebase has broad use of removed APIs, budget one focused migration iteration rather than mixing this with unrelated feature work.
-

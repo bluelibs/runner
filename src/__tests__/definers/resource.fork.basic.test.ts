@@ -165,40 +165,34 @@ describe("IResource.fork() (basic)", () => {
     expect(cooldownCalls).toEqual(["cooled"]);
   });
 
-  it("can drop registered items on fork", async () => {
+  it("rejects forking non-leaf resources with static register lists", () => {
     const sharedTask = r
       .task("test-shared")
       .run(async () => "ok")
       .build();
-
     const base = r
       .resource("base-with-register")
       .register([sharedTask])
       .build();
-    const forked = base.fork("base-with-register-fork", { register: "drop" });
 
-    expect(Array.isArray(forked.register)).toBe(true);
-    expect(forked.register).toHaveLength(0);
-
-    const app = r.resource("app").register([base, forked]).build();
-
-    const runtime = await run(app);
-    const result = await runtime.runTask(sharedTask);
-
-    expect(result).toBe("ok");
-
-    await runtime.dispose();
+    expect(() => base.fork("base-with-register-fork")).toThrow(
+      /cannot be forked because it registers children/i,
+    );
   });
 
-  it("keep-mode preserves the base register list", () => {
+  it("rejects forking non-leaf resources with register functions", () => {
     const task = r
-      .task("test-keep-task")
+      .task("test-register-fn")
       .run(async () => "ok")
       .build();
-    const base = r.resource("test-keep-base").register([task]).build();
+    const base = r
+      .resource<{ enabled: boolean }>("base-with-register-fn")
+      .register((config) => (config.enabled ? [task] : []))
+      .build();
 
-    const forked = base.fork("test-keep-forked", { register: "keep" });
-    expect(forked.register).toBe(base.register);
+    expect(() => base.fork("base-with-register-fn-fork")).toThrow(
+      /cannot be forked because it registers children/i,
+    );
   });
 
   it("rejects forking gateway resources", () => {

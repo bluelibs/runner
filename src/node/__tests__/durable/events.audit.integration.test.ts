@@ -23,7 +23,7 @@ describe("durable: audit runner events (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable-tests-events-durable");
+    const durable = durableResource.define("durable-tests-events-durable");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -103,7 +103,7 @@ describe("durable: audit runner events (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork(
+    const durable = durableResource.define(
       "durable-tests-events-emitterFailure-durable",
     );
     const durableRegistration = durable.with({

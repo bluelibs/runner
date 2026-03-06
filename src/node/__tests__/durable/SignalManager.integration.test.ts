@@ -26,7 +26,7 @@ describe("durable: signals integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable-tests-signals-durable");
+    const durable = durableResource.define("durable-tests-signals-durable");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -71,7 +71,9 @@ describe("durable: signals integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable-tests-signals-durable-twice");
+    const durable = durableResource.define(
+      "durable-tests-signals-durable-twice",
+    );
     const durableRegistration = durable.with({
       store,
       eventBus: bus,

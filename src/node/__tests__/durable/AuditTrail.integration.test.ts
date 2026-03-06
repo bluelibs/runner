@@ -26,7 +26,7 @@ describe("durable: audit trail (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable-tests-audit-basic-durable");
+    const durable = durableResource.define("durable-tests-audit-basic-durable");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -96,7 +96,7 @@ describe("durable: audit trail (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork(
+    const durable = durableResource.define(
       "durable-tests-audit-signal-delivered-durable",
     );
     const durableRegistration = durable.with({
@@ -152,7 +152,7 @@ describe("durable: audit trail (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork(
+    const durable = durableResource.define(
       "durable-tests-audit-signal-timeout-durable",
     );
     const durableRegistration = durable.with({

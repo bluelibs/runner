@@ -55,7 +55,7 @@ export const overrideTargetNotRegisteredError = error<
     const directRegistrationPath = `If you already control composition, you can register the overridden definition directly (without .overrides([...])) as long as only one definition for that id is registered.`;
     const separateInstanceHint =
       targetType === "Resource"
-        ? ` If you intended a separate resource instance (not a replacement), use .fork("new.id") on the base resource and register the fork.`
+        ? ` If you intended a separate resource instance (not a replacement), use a different id. Leaf resources can use .fork("new-id"), while non-leaf resources should be composed explicitly.`
         : ` If you intended a separate component (not a replacement), keep a different id and register it directly.`;
 
     return `${replacementPath} ${directRegistrationPath}${separateInstanceHint}`;

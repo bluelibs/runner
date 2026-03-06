@@ -15,7 +15,9 @@ describe("durable: audit trail failure tolerance (integration)", () => {
     const store = new ThrowingAuditStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable-tests-audit-failure-durable");
+    const durable = durableResource.define(
+      "durable-tests-audit-failure-durable",
+    );
     const durableRegistration = durable.with({
       store,
       eventBus: bus,

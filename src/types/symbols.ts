@@ -8,6 +8,10 @@ export const symbolTask: unique symbol = Symbol.for("runner.task");
 export const symbolResource: unique symbol = Symbol.for("runner.resource");
 /** @internal Generic fork provenance metadata for definitions that support `.fork()` */
 export const symbolForkedFrom: unique symbol = Symbol.for("runner.forkedFrom");
+/** @internal Tracks whether a resource definition explicitly declared `.register(...)`. */
+export const symbolResourceRegistersChildren: unique symbol = Symbol.for(
+  "runner.resourceRegistersChildren",
+);
 export const symbolResourceWithConfig: unique symbol = Symbol.for(
   "runner.resourceWithConfig",
 );

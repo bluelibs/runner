@@ -5,7 +5,7 @@ import { createMessageError } from "../../../errors";
 
 describe("durable: describe() defaults", () => {
   it("uses durableWorkflowTag.defaults when describe() input is omitted", async () => {
-    const durable = memoryDurableResource.fork(
+    const durable = memoryDurableResource.define(
       "durable-tests-recorder-defaults",
     );
 
@@ -47,7 +47,7 @@ describe("durable: describe() defaults", () => {
   });
 
   it("prefers explicit describe() input over durableWorkflowTag.defaults", async () => {
-    const durable = memoryDurableResource.fork(
+    const durable = memoryDurableResource.define(
       "durable-tests-recorder-defaults-override",
     );
 
@@ -86,7 +86,7 @@ describe("durable: describe() defaults", () => {
   });
 
   it("clones durableWorkflowTag.defaults for each describe() call", async () => {
-    const durable = memoryDurableResource.fork(
+    const durable = memoryDurableResource.define(
       "durable-tests-recorder-defaults-clone",
     );
 
@@ -142,7 +142,7 @@ describe("durable: describe() defaults", () => {
   });
 
   it("fails fast when durableWorkflowTag.defaults cannot be cloned", async () => {
-    const durable = memoryDurableResource.fork(
+    const durable = memoryDurableResource.define(
       "durable-tests-recorder-defaults-uncloneable",
     );
 
@@ -177,7 +177,7 @@ describe("durable: describe() defaults", () => {
   });
 
   it("surfaces non-Error clone failures from structuredClone", async () => {
-    const durable = memoryDurableResource.fork(
+    const durable = memoryDurableResource.define(
       "durable-tests-recorder-defaults-nonerror-clone-failure",
     );
 
@@ -221,7 +221,7 @@ describe("durable: describe() defaults", () => {
   });
 
   it("surfaces Error clone failures from structuredClone", async () => {
-    const durable = memoryDurableResource.fork(
+    const durable = memoryDurableResource.define(
       "durable-tests-recorder-defaults-error-clone-failure",
     );
 

@@ -26,7 +26,7 @@ describe("durable: signal timeout integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable-tests-timeout-durable");
+    const durable = durableResource.define("durable-tests-timeout-durable");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -69,7 +69,7 @@ describe("durable: signal timeout integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork(
+    const durable = durableResource.define(
       "durable-tests-timeout-durable-signal",
     );
     const durableRegistration = durable.with({

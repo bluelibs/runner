@@ -10,7 +10,7 @@ describe("durable: queue mode integration", () => {
     const queue = new MemoryQueue();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable-tests-queue-durable");
+    const durable = durableResource.define("durable-tests-queue-durable");
     const durableRegistration = durable.with({
       store,
       queue,

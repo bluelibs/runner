@@ -23,7 +23,7 @@ async function waitUntil(
 describe("durable: durableResource + fork + with (integration)", () => {
   it("awaits nested taskRunner promises (normal path)", async () => {
     const store = new MemoryStore();
-    const durable = durableResource.fork("durable-tests-unified-ok");
+    const durable = durableResource.define("durable-tests-unified-ok");
     const durableRegistration = durable.with({ store });
     const task = r
       .task("durable-tests-unified-task-ok")
@@ -50,7 +50,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
 
   it("handles undefined taskRunner results (edge branch)", async () => {
     const store = new MemoryStore();
-    const durable = durableResource.fork("durable-tests-unified-undefined");
+    const durable = durableResource.define("durable-tests-unified-undefined");
     const durableRegistration = durable.with({ store });
     const task = r
       .task("durable-tests-unified-task-undefined")
@@ -77,7 +77,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     const queue = new MemoryQueue();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable-tests-unified-queue");
+    const durable = durableResource.define("durable-tests-unified-queue");
     const durableRegistration = durable.with({
       store,
       queue,
@@ -154,7 +154,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
       })
       .build();
 
-    const durable = durableResource.fork("durable-tests-unified-audit");
+    const durable = durableResource.define("durable-tests-unified-audit");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -224,7 +224,9 @@ describe("durable: durableResource + fork + with (integration)", () => {
       })
       .build();
 
-    const durable = durableResource.fork("durable-tests-unified-audit-persist");
+    const durable = durableResource.define(
+      "durable-tests-unified-audit-persist",
+    );
     const durableRegistration = durable.with({
       store,
       eventBus: bus,

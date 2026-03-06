@@ -131,7 +131,7 @@ export class ExecutionManager {
     if (!this.config.queue && !this.config.taskExecutor) {
       durableExecutionInvariantError.throw({
         message:
-          "DurableService requires `taskExecutor` to execute Runner tasks (when no queue is configured). Use `durableResource.fork(...).with(...)` in a Runner runtime, or provide a custom executor in config.",
+          "DurableService requires `taskExecutor` to execute Runner tasks (when no queue is configured). Use `durableResource.define(...).with(...)` in a Runner runtime, or provide a custom executor in config.",
       });
     }
   }

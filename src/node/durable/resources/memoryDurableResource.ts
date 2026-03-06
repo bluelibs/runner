@@ -9,6 +9,7 @@ import { durableEventsArray } from "../events";
 import type { DurableResource } from "../core/DurableResource";
 import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 import { Logger } from "../../../models/Logger";
+import { createDurableResourceTemplate } from "./createDurableResourceTemplate";
 
 export type MemoryDurableResourceConfig = Omit<
   RunnerDurableRuntimeConfig,
@@ -16,7 +17,7 @@ export type MemoryDurableResourceConfig = Omit<
 > & {
   /**
    * Isolation namespace (used for defaults and docs).
-   * Defaults to the resource id (ie. the value passed to `.fork(id)`).
+   * Defaults to the resource id (ie. the value passed to `.define(id)`).
    */
   namespace?: string;
   queue?: { enabled?: boolean };
@@ -26,58 +27,60 @@ interface MemoryDurableResourceContext {
   runtimeConfig: RunnerDurableRuntimeConfig | null;
 }
 
-export const memoryDurableResource = r
-  .resource<MemoryDurableResourceConfig>("base-durable-memory")
-  .register([durableWorkflowTag, ...durableEventsArray])
-  .dependencies({
-    taskRunner: resources.taskRunner,
-    eventManager: resources.eventManager,
-    runnerStore: resources.store,
-    logger: resources.logger,
-  })
-  .context<MemoryDurableResourceContext>(() => ({ runtimeConfig: null }))
-  .init(async function (
-    this: { id: string },
-    config,
-    { taskRunner, eventManager, runnerStore, logger },
-    ctx,
-  ): Promise<DurableResource> {
-    const baseLogger =
-      config.logger ??
-      logger ??
-      new Logger({
-        printThreshold: "error",
-        printStrategy: "pretty",
-        bufferLogs: false,
+export const memoryDurableResource = createDurableResourceTemplate(
+  r
+    .resource<MemoryDurableResourceConfig>("base-durable-memory")
+    .register([durableWorkflowTag, ...durableEventsArray])
+    .dependencies({
+      taskRunner: resources.taskRunner,
+      eventManager: resources.eventManager,
+      runnerStore: resources.store,
+      logger: resources.logger,
+    })
+    .context<MemoryDurableResourceContext>(() => ({ runtimeConfig: null }))
+    .init(async function (
+      this: { id: string },
+      config,
+      { taskRunner, eventManager, runnerStore, logger },
+      ctx,
+    ): Promise<DurableResource> {
+      const baseLogger =
+        config.logger ??
+        logger ??
+        new Logger({
+          printThreshold: "error",
+          printStrategy: "pretty",
+          bufferLogs: false,
+        });
+      const durableLogger = baseLogger.with({ source: "durable.memory" });
+
+      const shouldCreateQueue = config.queue?.enabled ?? config.worker === true;
+      const queue = shouldCreateQueue ? new MemoryQueue() : undefined;
+      const worker = config.worker ?? Boolean(queue);
+
+      const runtimeConfig: RunnerDurableRuntimeConfig = {
+        ...config,
+        logger: durableLogger,
+        worker,
+        store: new MemoryStore(),
+        eventBus: new MemoryEventBus({
+          logger: durableLogger.with({ source: "durable.bus.memory" }),
+        }),
+        queue,
+      };
+
+      ctx.runtimeConfig = runtimeConfig;
+
+      return await createRunnerDurableRuntime(runtimeConfig, {
+        taskRunner,
+        eventManager,
+        runnerStore,
+        logger: durableLogger,
       });
-    const durableLogger = baseLogger.with({ source: "durable.memory" });
-
-    const shouldCreateQueue = config.queue?.enabled ?? config.worker === true;
-    const queue = shouldCreateQueue ? new MemoryQueue() : undefined;
-    const worker = config.worker ?? Boolean(queue);
-
-    const runtimeConfig: RunnerDurableRuntimeConfig = {
-      ...config,
-      logger: durableLogger,
-      worker,
-      store: new MemoryStore(),
-      eventBus: new MemoryEventBus({
-        logger: durableLogger.with({ source: "durable.bus.memory" }),
-      }),
-      queue,
-    };
-
-    ctx.runtimeConfig = runtimeConfig;
-
-    return await createRunnerDurableRuntime(runtimeConfig, {
-      taskRunner,
-      eventManager,
-      runnerStore,
-      logger: durableLogger,
-    });
-  })
-  .dispose(async (durable, _config, _deps, ctx) => {
-    if (!ctx.runtimeConfig) return;
-    await disposeDurableService(durable.service, ctx.runtimeConfig);
-  })
-  .build();
+    })
+    .dispose(async (durable, _config, _deps, ctx) => {
+      if (!ctx.runtimeConfig) return;
+      await disposeDurableService(durable.service, ctx.runtimeConfig);
+    })
+    .build(),
+);

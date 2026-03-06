@@ -24,6 +24,7 @@ import {
   symbolFilePath,
   symbolForkedFrom,
   symbolResource,
+  symbolResourceRegistersChildren,
   symbolResourceWithConfig,
 } from "./symbols";
 import {
@@ -61,23 +62,6 @@ export type {
   SubtreeTaskMiddlewarePredicate,
   SubtreeViolation,
 } from "./subtree";
-
-export type ResourceForkRegisterMode = "keep" | "drop" | "deep";
-
-export interface ResourceForkOptions {
-  /**
-   * Control whether the fork keeps the base `register` list.
-   * - "keep" (default) keeps registration items
-   * - "drop" clears registration items
-   * - "deep" deep-forks registered resources with new ids (resource tree)
-   */
-  register?: ResourceForkRegisterMode;
-  /**
-   * Used with `register: "deep"` to derive ids for deep-forked resources.
-   * Defaults to `(id) => \`\${newId}.\${id}\``.
-   */
-  reId?: (id: string) => string;
-}
 
 export interface ResourceForkInfo {
   /** The id of the resource that was forked. */
@@ -391,6 +375,8 @@ export interface IResource<
   middleware: TMiddleware;
   [symbolFilePath]: string;
   [symbolResource]: true;
+  /** @internal Tracks whether the resource explicitly declared `.register(...)`. */
+  [symbolResourceRegistersChildren]?: true;
   /** Present only on forked resources. */
   [symbolForkedFrom]?: ResourceForkInfo;
   /** Normalized list of error ids declared via `throws`. */
@@ -431,12 +417,11 @@ export interface IResource<
    * Create a new resource with a different id but the same definition.
    * Useful for creating multiple instances of a "template" resource.
    * The forked resource should be exported and used as a dependency.
-   * Gateway resources cannot be forked because they suppress their own
-   * namespace segment, which makes forked registrations collide.
+   * Only leaf resources can be forked. Resources that register children
+   * must be composed explicitly instead of cloned structurally.
    */
   fork(
     newId: string,
-    options?: ResourceForkOptions,
   ): IResource<
     TConfig,
     TValue,

@@ -26,6 +26,7 @@ import {
   remoteLaneAuthSignerMissingError,
   remoteLaneAuthVerifierMissingError,
   resourceForkGatewayUnsupportedError,
+  resourceForkNonLeafUnsupportedError,
 } from "../../errors";
 
 describe("error helpers extra branches", () => {
@@ -262,7 +263,9 @@ describe("error helpers extra branches", () => {
         );
         expect(e.message).toContain("tests.app");
         expect(e.remediation).toContain(".register([...])");
-        expect(e.remediation).toContain('.fork("new.id")');
+        expect(e.remediation).toContain(
+          'Leaf resources can use .fork("new-id")',
+        );
       }
     });
 
@@ -275,6 +278,20 @@ describe("error helpers extra branches", () => {
         expect(e.message).toContain('Resource "http-gateway" cannot be forked');
         expect(e.message).toContain("namespace segment");
         expect(e.remediation).toContain("Do not call .fork()");
+      }
+    });
+
+    it("includes composition remediation for non-leaf fork failures", () => {
+      expect.assertions(3);
+      try {
+        resourceForkNonLeafUnsupportedError.throw({ id: "mailers" });
+        fail("Expected throw");
+      } catch (e: any) {
+        expect(e.message).toContain(
+          'Resource "mailers" cannot be forked because it registers children',
+        );
+        expect(e.remediation).toContain("non-leaf resource");
+        expect(e.remediation).toContain("dedicated factory API");
       }
     });
 

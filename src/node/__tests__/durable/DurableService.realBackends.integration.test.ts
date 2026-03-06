@@ -25,7 +25,7 @@ const shouldRun = process.env.DURABLE_INTEGRATION === "1";
       },
     });
 
-    const durable = durableResource.fork("durable-integration-durable");
+    const durable = durableResource.define("durable-integration-durable");
     const durableRegistration = durable.with({
       store,
       queue,

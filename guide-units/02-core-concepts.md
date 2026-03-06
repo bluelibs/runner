@@ -243,49 +243,35 @@ const app = r
   .build();
 ```
 
-##### Shallow vs Deep Fork
-
-| Type                                                                    | Use when                                                                |
-| ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `fork("new.id")`                                                        | Simple resources with no registered children                            |
-| `fork("new.id", { register: "drop" })`                                  | Resource that registers things you don't want cloned                    |
-| `fork("new.id", { register: "deep", reId: (id) => \`prefix.\${id}\` })` | You need a complete cloned resource tree (e.g., multi-tenant databases) |
-
-**Deep fork example:**
+##### Fork Rules
 
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const child = r
-  .resource("app.base.child")
-  .init(async () => ({ ok: true }))
+const smtpTransport = r
+  .resource<{ host: string }>("smtp-transport")
+  .init(async (cfg) => ({ host: cfg.host }))
   .build();
 
-const base = r
-  .resource("app.base")
-  .dependencies({ child })
-  .register([child])
-  .init(async (_cfg, deps) => deps.child)
+const txTransport = smtpTransport.fork("smtp-transport-tx");
+
+const txMailer = r
+  .resource("tx-mailer")
+  .register([txTransport.with({ host: "tx.smtp.com" })])
   .build();
-
-const forked = base.fork("app.base.forked", {
-  register: "deep",
-  reId: (id) => `forked.${id}`,
-});
-
-const app = r.resource("app").register([base, forked]).build();
 ```
 
-> **Note:** `register: "deep"` clones only **resources**; tasks, events, hooks, middleware, tags, errors, and async contexts are not cloned. Dependencies pointing to deep-forked resources are remapped inside the cloned tree.
+> **Note:** `.fork()` is leaf-only. If a resource declares `.register(...)`, it is a non-leaf resource and cannot be forked.
 
 > **Note:** Gateway resources cannot be forked. They suppress their own namespace segment, so forked gateway instances would make their registered children collide.
 
 ##### Key Points
 
 - **`.fork()` returns a built `IResource`** — no need to call `.build()` again
+- **Forks clone identity, not structure**
 - **Tags, middleware, and type parameters are inherited**
 - **Each fork gets independent runtime** — no shared state
-- **`register` defaults to `"keep"`**
+- **Non-leaf resources must be composed explicitly**
 - **Gateway resources cannot be forked**
 - **Export forked resources** to use them as typed dependencies
 

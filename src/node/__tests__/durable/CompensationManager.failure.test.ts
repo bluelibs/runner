@@ -7,7 +7,9 @@ describe("durable: compensation failure", () => {
   it("marks execution as compensation_failed when rollback compensation throws", async () => {
     const store = new MemoryStore();
 
-    const durable = durableResource.fork("durable-tests-compensation-durable");
+    const durable = durableResource.define(
+      "durable-tests-compensation-durable",
+    );
     const durableRegistration = durable.with({
       store,
       execution: { maxAttempts: 1 },

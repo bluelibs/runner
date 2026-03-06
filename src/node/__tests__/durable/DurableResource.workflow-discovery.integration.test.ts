@@ -4,7 +4,7 @@ import { durableWorkflowTag } from "../../durable/tags/durableWorkflow.tag";
 
 describe("durable: workflow discovery", () => {
   it("discovers tasks tagged with durable.workflow at runtime", async () => {
-    const durable = memoryDurableResource.fork(
+    const durable = memoryDurableResource.define(
       "durable-tests-discovery-resource",
     );
 

@@ -371,7 +371,7 @@ describe("run-exports-visibility", () => {
       );
     });
 
-    it("fork inherits exports", async () => {
+    it("composed variants preserve exports boundaries", async () => {
       const publicTask = defineTask({
         id: "exports-fork-public",
         run: async () => "fork-public",
@@ -386,7 +386,11 @@ describe("run-exports-visibility", () => {
         register: [publicTask, privateTask],
         isolate: { exports: [publicTask] },
       });
-      const forked = base.fork("exports-fork-forked");
+      const forked = defineResource({
+        id: "exports-fork-forked",
+        register: base.register,
+        isolate: base.isolate,
+      });
 
       const root = defineResource({
         id: "exports-fork-root",

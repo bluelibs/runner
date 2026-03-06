@@ -565,7 +565,7 @@ const overriddenMiddleware = r.override(
 - resource: callback replaces `init`
 - hook overrides keep the same `.on` target
 
-Override APIs do not change structural boundaries (dependencies, register tree, subtree policies). If you need a separate structural variant, use `.fork("new.id")`.
+Override APIs do not change structural boundaries (dependencies, register tree, subtree policies). If you need a separate structural variant, compose a distinct parent resource explicitly. Use `.fork("new-id")` only for leaf resources.
 
 ### `r.override(...)` vs `.overrides([...])` (Critical Distinction)
 
@@ -626,7 +626,7 @@ Fix: either register only one definition for that id, or keep base in `register`
 .overrides([r.override(remoteMailer, async () => new MockMailer())])
 ```
 
-Fix: ensure the base target is in the resource graph first. If you wanted a separate resource, use `.fork("new.id")` and register that fork.
+Fix: ensure the base target is in the resource graph first. If you wanted a separate resource, use a different id. For leaf resources you can `.fork("new-id")`; for non-leaf resources compose a distinct parent resource.
 
 4. Passing raw definitions to `.overrides([...])`:
 
@@ -649,7 +649,7 @@ r.resource("test")
   .build();
 ```
 
-Overrides are applied after everything is registered. If multiple overrides target the same id, Runner rejects the graph with a dedicated duplicate-target override error (instead of applying precedence). Overriding something that wasn't registered also throws a dedicated error with remediation (register the base first, or for resources use `.fork("new.id")` when you meant a separate instance). Use `r.override()` to change behavior safely while preserving the original id.
+Overrides are applied after everything is registered. If multiple overrides target the same id, Runner rejects the graph with a dedicated duplicate-target override error (instead of applying precedence). Overriding something that wasn't registered also throws a dedicated error with remediation (register the base first, or use a different resource id when you meant a separate instance). Use `r.override()` to change behavior safely while preserving the original id.
 
 > **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
 

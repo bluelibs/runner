@@ -55,7 +55,7 @@ Durable workflows are regular Runner tasks, but **must be tagged with `durableWo
 import { r } from "@bluelibs/runner";
 import { memoryDurableResource, durableWorkflowTag } from "@bluelibs/runner/node";
 
-const durable = memoryDurableResource.fork("app.durable");
+const durable = memoryDurableResource.define("app-durable");
 
 const onboarding = r
   .task("app.workflows.onboarding")
@@ -93,7 +93,7 @@ import express from "express";
 import { r, run } from "@bluelibs/runner";
 import { memoryDurableResource, durableWorkflowTag } from "@bluelibs/runner/node";
 
-const durable = memoryDurableResource.fork("app.durable");
+const durable = memoryDurableResource.define("app-durable");
 
 const approveOrder = r
   .task("app.workflows.approveOrder")
@@ -138,11 +138,11 @@ import {
 
 // dev/tests
 const durable = memoryDurableResource
-  .fork("app.durable")
+  .define("app-durable")
   .with({ worker: true });
 
 // production (Redis + optional RabbitMQ queue)
-const durableProd = redisDurableResource.fork("app.durable").with({
+const durableProd = redisDurableResource.define("app-durable").with({
   redis: { url: process.env.REDIS_URL! },
   queue: { url: process.env.RABBITMQ_URL! },
   worker: true,

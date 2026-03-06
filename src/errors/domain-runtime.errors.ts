@@ -359,15 +359,16 @@ export const remoteLaneAuthUnauthorizedError = error<
   )
   .build();
 
-export const resourceForkInvalidIdError = error<
+export const resourceForkNonLeafUnsupportedError = error<
   { id: string } & DefaultErrorType
->(RunnerErrorId.ResourceForkInvalidId)
+>(RunnerErrorId.ResourceForkNonLeafUnsupported)
   .format(
     ({ id }) =>
-      `resourceFork reId() must return a non-empty string for "${id}"`,
+      `Resource "${id}" cannot be forked because it registers children.`,
   )
   .remediation(
-    "Provide a reId function that always returns a non-empty string for each registered item id.",
+    ({ id }) =>
+      `Do not call .fork() on non-leaf resource "${id}". Compose a distinct parent resource and register distinct children explicitly. Use a dedicated factory API when the template owns a registered subtree.`,
   )
   .build();
 

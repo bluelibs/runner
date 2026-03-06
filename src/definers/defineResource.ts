@@ -7,24 +7,24 @@ import type {
   IOptionalDependency,
   ResourceMiddlewareAttachmentType,
   IResourceWithConfig,
-  ResourceForkOptions,
 } from "../types/resource";
 import {
   symbolForkedFrom,
   symbolResource,
   symbolFilePath,
   symbolOptionalDependency,
+  symbolResourceRegistersChildren,
   symbolResourceWithConfig,
 } from "../types/symbols";
 import {
   isolateExportsConflictError,
+  resourceForkNonLeafUnsupportedError,
   resourceForkGatewayUnsupportedError,
   validationError,
 } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
-import { resolveForkedRegisterAndDependencies } from "./resourceFork";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
 import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
@@ -124,6 +124,8 @@ export function defineResource<
 
   const base = {
     [symbolResource]: true,
+    [symbolResourceRegistersChildren]:
+      constConfig.register !== undefined ? true : undefined,
     [symbolFilePath]: filePath,
     id,
     gateway: constConfig.gateway === true,
@@ -254,23 +256,20 @@ export function defineResource<
     return freezeIfLineageLocked(current, wrapper);
   };
 
-  base.fork = function (newId: string, options?: ResourceForkOptions) {
+  base.fork = function (newId: string) {
     const current = resolveCurrent(this);
+    if (current[symbolResourceRegistersChildren] === true) {
+      resourceForkNonLeafUnsupportedError.throw({ id: current.id });
+    }
     if (current.gateway === true) {
       resourceForkGatewayUnsupportedError.throw({ id: current.id });
     }
     const forkCallerFilePath = getCallerFile();
-    const forkedParts = resolveForkedRegisterAndDependencies({
-      register: current.register,
-      dependencies: current.dependencies,
-      forkId: newId,
-      options,
-    });
     const forked = defineResource({
       ...buildDefinition(current),
       id: newId,
-      register: forkedParts.register,
-      dependencies: forkedParts.dependencies,
+      register: current.register,
+      dependencies: current.dependencies,
       [symbolFilePath]: forkCallerFilePath,
     });
     const forkedWithMeta = {

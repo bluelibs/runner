@@ -30,7 +30,7 @@ describe("durable: idempotency & cancellation (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable-test-idempotency");
+    const durable = durableResource.define("durable-test-idempotency");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -79,7 +79,7 @@ describe("durable: idempotency & cancellation (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable-test-cancel");
+    const durable = durableResource.define("durable-test-cancel");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,

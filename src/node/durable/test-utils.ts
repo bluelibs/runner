@@ -5,7 +5,7 @@ import { MemoryQueue } from "./queue/MemoryQueue";
 import { MemoryStore } from "./store/MemoryStore";
 import { durableExecutionInvariantError } from "../../errors";
 
-type DurableResource = ReturnType<typeof durableResource.fork>;
+type DurableResource = ReturnType<typeof durableResource.define>;
 type DurableResourceRegistration = ReturnType<DurableResource["with"]>;
 
 export interface DurableTestSetup {
@@ -48,7 +48,7 @@ export function createDurableTestSetup(
     },
   };
 
-  const durable = durableResource.fork(
+  const durable = durableResource.define(
     options.durableId ?? "durable-tests-resource",
   );
   const durableRegistration = durable.with(durableConfig);

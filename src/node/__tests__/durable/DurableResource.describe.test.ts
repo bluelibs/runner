@@ -4,7 +4,7 @@ import { createMessageError } from "../../../errors";
 
 describe("durable: describe()", () => {
   it("describes a task using real non-durable deps and shimmed durable.use()", async () => {
-    const durable = memoryDurableResource.fork(
+    const durable = memoryDurableResource.define(
       "durable-tests-recorder-durable",
     );
 
@@ -51,7 +51,7 @@ describe("durable: describe()", () => {
   });
 
   it("throws when describing an unregistered task id", async () => {
-    const durable = memoryDurableResource.fork(
+    const durable = memoryDurableResource.define(
       "durable-tests-recorder-durable-unregistered",
     );
 

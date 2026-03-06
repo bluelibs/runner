@@ -4,7 +4,9 @@ import { durableWorkflowTag } from "../../durable/tags/durableWorkflow.tag";
 
 describe("durable: durableWorkflowTag execution boundaries (integration)", () => {
   it("does not auto-route runtime.runTask(task) for tagged workflows", async () => {
-    const durable = memoryDurableResource.fork("durable-tests-routing-direct");
+    const durable = memoryDurableResource.define(
+      "durable-tests-routing-direct",
+    );
     const durableRegistration = durable.with({ worker: false });
 
     const task = r
@@ -32,7 +34,9 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
   });
 
   it("executes tagged workflows explicitly via durable.startAndWait()", async () => {
-    const durable = memoryDurableResource.fork("durable-tests-routing-execute");
+    const durable = memoryDurableResource.define(
+      "durable-tests-routing-execute",
+    );
     const durableRegistration = durable.with({ worker: false });
 
     const task = r
@@ -77,7 +81,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
   });
 
   it("can start tagged workflows by id and wait by execution id", async () => {
-    const durable = memoryDurableResource.fork("durable-tests-routing-start");
+    const durable = memoryDurableResource.define("durable-tests-routing-start");
     const durableRegistration = durable.with({ worker: false });
 
     const task = r

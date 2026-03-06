@@ -65,7 +65,7 @@ const mockMailer = r.override(realMailer, async () => new MockMailer());
 r.resource("test").register([realMailer]).overrides([mockMailer]).build();
 ```
 
-If you intended a second component (not replacement), use a different id or `.fork("new.id")` and register it directly.
+If you intended a second component (not replacement), use a different id. Leaf resources can still use `.fork("new-id")`; non-leaf resources should be composed explicitly.
 
 ### 2.2. Migrate Cache Customization to `cacheProvider`
 
@@ -370,4 +370,3 @@ Smoke test checklist:
 - Phase 4: Promote to production with one runtime profile at a time for Event Lanes.
 
 If your codebase has broad use of removed APIs, budget one focused migration iteration rather than mixing this with unrelated feature work.
-

@@ -8,7 +8,7 @@ describe("durable: DurableService integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable-test-durable");
+    const durable = durableResource.define("durable-test-durable");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,

@@ -151,6 +151,8 @@ Resources model shared services and state.
 - `dispose(value, config, deps, context)` performs final teardown after drain.
 - Config-only resources can omit `.init()`.
 - `r.resource(id, { gateway: true })` prevents the resource from adding its own namespace segment.
+- If you register something, you are a non-leaf resource.
+- Non-leaf resources cannot be forked.
 - Gateway resources cannot be forked with `.fork()` because multiple gateway instances would compile the same child canonical ids.
 - `.context(() => initialContext)` can hold mutable resource-local state used across lifecycle phases.
 
@@ -447,21 +449,14 @@ Subtrees:
 
 Forks and overrides:
 
-- `resource.fork(newId, { register, reId })` clones a resource definition under a new id.
-- `register` controls what happens to the resource's registered children:
-  - `"keep"`: keep the same registered items in the forked resource
-  - `"drop"`: clear registered items from the fork
-  - `"deep"`: deep-fork registered resources too
-- `register` defaults to `"keep"`.
-- `reId` is used only with `register: "deep"`.
-- `reId` receives each deep-forked resource id and must return the new id for that cloned resource.
-- If `reId` is omitted, Runner defaults to prefixing with the fork id using `-`.
-- `register: "deep"` clones only resources.
-- Tasks, events, hooks, middleware, tags, errors, and async contexts are not deep-cloned.
-- When deep-forking, dependencies pointing to forked resources are remapped inside the cloned resource tree.
-- Use `.fork(...)` when you need another instance.
+- `resource.fork(newId)` clones a leaf resource definition under a new id.
+- Forks clone identity, not structure.
+- If a resource declares `.register(...)`, it is non-leaf and `.fork()` is invalid.
+- Use `.fork(...)` when you need another instance of a leaf resource.
 - `.fork()` is not supported for gateway resources.
 - `.fork()` returns a built resource. You do not call `.build()` again.
+- Compose a distinct parent resource when you need a structural variant of a non-leaf resource.
+- Durable templates use `.define(id)` instead of `.fork(id)`.
 - Use `r.override(base, fn)` when you need to replace behavior while preserving the original id.
 - `.overrides([...])` applies override definitions during bootstrap.
 - Override direction is downstream-only: declare overrides from the resource that owns the target subtree or from one of its ancestors. Child resources cannot replace parent-owned or sibling-owned definitions.
@@ -469,9 +464,9 @@ Forks and overrides:
 
 Fork quick guide:
 
-- `fork("new-id")`: same resource behavior, new id, keep registered children
-- `fork("new-id", { register: "drop" })`: new resource instance without the original registered subtree
-- `fork("new-id", { register: "deep", reId })`: clone the resource tree for isolated variants such as tenant-specific resources
+- `fork("new-id")`: same leaf resource behavior, new id
+- non-leaf resource variant: compose a new parent resource and register the desired children explicitly
+- durable template variant: `memoryDurableResource.define("app-durable")`
 
 ## Tags and Scheduling
 
