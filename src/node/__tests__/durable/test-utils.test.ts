@@ -1,4 +1,4 @@
-import { r, run } from "../../..";
+import { r, resources, run } from "../../node";
 import { createDurableTestSetup, waitUntil } from "../../durable/test-utils";
 
 describe("durable test utils", () => {
@@ -17,7 +17,7 @@ describe("durable test utils", () => {
 
     const app = r
       .resource("durable-tests-app")
-      .register([durableRegistration, task])
+      .register([resources.durable, durableRegistration, task])
       .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
     const durableRuntime = runtime.getResourceValue(durable);
@@ -49,7 +49,7 @@ describe("durable test utils", () => {
 
     const app = r
       .resource("durable-tests-app-overrides")
-      .register([durableRegistration, task])
+      .register([resources.durable, durableRegistration, task])
       .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
     const durableRuntime = runtime.getResourceValue(durable);

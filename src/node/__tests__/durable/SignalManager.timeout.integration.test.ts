@@ -1,4 +1,4 @@
-import { defineEvent, r, run } from "../../..";
+import { defineEvent, r, resources, run } from "../../node";
 import { durableResource } from "../../durable/core/resource";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
@@ -26,7 +26,7 @@ describe("durable: signal timeout integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.define("durable-tests-timeout-durable");
+    const durable = durableResource.fork("durable-tests-timeout-durable");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -42,7 +42,10 @@ describe("durable: signal timeout integration", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
@@ -69,7 +72,7 @@ describe("durable: signal timeout integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.define(
+    const durable = durableResource.fork(
       "durable-tests-timeout-durable-signal",
     );
     const durableRegistration = durable.with({
@@ -87,7 +90,10 @@ describe("durable: signal timeout integration", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);

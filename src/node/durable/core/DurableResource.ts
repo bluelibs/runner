@@ -48,7 +48,7 @@ export class DurableResource implements IDurableResource {
     if (!this.store) {
       durableExecutionInvariantError.throw({
         message:
-          "Durable operator API is not available: store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) or construct a DurableOperator(store) directly.",
+          "Durable operator API is not available: store was not provided to DurableResource. Use a Runner durable workflow resource (for example `resources.memoryWorkflow.fork(...)` or `resources.redisWorkflow.fork(...)`) or construct a DurableOperator(store) directly.",
       });
     }
     if (!this.operatorInstance) {
@@ -129,7 +129,7 @@ export class DurableResource implements IDurableResource {
     const runnerStore = this.runnerStore;
     this.assertRunnerStore(
       runnerStore,
-      "Durable describe API is not available: runner store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) instead of manually constructing DurableResource.",
+      "Durable describe API is not available: runner store was not provided to DurableResource. Use a Runner durable workflow resource (for example `resources.memoryWorkflow.fork(...)` or `resources.redisWorkflow.fork(...)`) instead of manually constructing DurableResource.",
     );
     return runnerStore;
   }
@@ -138,7 +138,7 @@ export class DurableResource implements IDurableResource {
     const runnerStore = this.runnerStore;
     this.assertRunnerStore(
       runnerStore,
-      "Durable workflow discovery is not available: runner store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) instead of manually constructing DurableResource.",
+      "Durable workflow discovery is not available: runner store was not provided to DurableResource. Use a Runner durable workflow resource (for example `resources.memoryWorkflow.fork(...)` or `resources.redisWorkflow.fork(...)`) instead of manually constructing DurableResource.",
     );
     return runnerStore;
   }

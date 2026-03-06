@@ -456,7 +456,7 @@ Forks and overrides:
 - `.fork()` is not supported for gateway resources.
 - `.fork()` returns a built resource. You do not call `.build()` again.
 - Compose a distinct parent resource when you need a structural variant of a non-leaf resource.
-- Durable templates use `.define(id)` instead of `.fork(id)`.
+- Durable support is registered via `resources.durable`, while concrete durable backends use normal forks such as `resources.memoryWorkflow.fork("app-durable")`.
 - Use `r.override(base, fn)` when you need to replace behavior while preserving the original id.
 - `.overrides([...])` applies override definitions during bootstrap.
 - Override direction is downstream-only: declare overrides from the resource that owns the target subtree or from one of its ancestors. Child resources cannot replace parent-owned or sibling-owned definitions.
@@ -466,7 +466,7 @@ Fork quick guide:
 
 - `fork("new-id")`: same leaf resource behavior, new id
 - non-leaf resource variant: compose a new parent resource and register the desired children explicitly
-- durable template variant: `memoryDurableResource.define("app-durable")`
+- durable workflow variant: register `resources.durable` and fork a backend such as `resources.memoryWorkflow.fork("app-durable")`
 
 ## Tags and Scheduling
 

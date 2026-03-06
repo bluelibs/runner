@@ -18,13 +18,23 @@ describe("node entry run/shared-contract", () => {
     expect(nodeRun).toBe(coreRun);
   });
 
-  it("re-exports the same core resource/tag/event/middleware registries", () => {
-    expect(nodeResources).toBe(coreResources);
+  it("extends core resources and tags with node durable helpers", () => {
+    expect(nodeResources).not.toBe(coreResources);
     expect(nodeEvents).toBe(coreEvents);
-    expect(nodeTags).toBe(coreTags);
+    expect(nodeTags).not.toBe(coreTags);
     expect(nodeMiddleware).toBe(coreMiddleware);
 
     const resources = nodeResources as Record<string, unknown>;
+    const tags = nodeTags as Record<string, unknown>;
+
+    expect(resources.runtime).toBe(coreResources.runtime);
+    expect(resources.cron).toBe(coreResources.cron);
+    expect(resources.durable).toBeDefined();
+    expect(resources.memoryWorkflow).toBeDefined();
+    expect(resources.redisWorkflow).toBeDefined();
+    expect(tags.system).toBe(coreTags.system);
+    expect(tags.cron).toBe(coreTags.cron);
+    expect(tags.durableWorkflow).toBeDefined();
     expect(resources.httpClientFactory).toBeUndefined();
     expect(resources.httpSmartClientFactory).toBeUndefined();
     expect(resources.httpMixedClientFactory).toBeUndefined();

@@ -53,6 +53,7 @@ export {
   durableWorkflowTag,
   type DurableWorkflowTagConfig,
 } from "./tags/durableWorkflow.tag";
+export { durableSupportResource } from "./resources/durable.resource";
 
 export { memoryDurableResource } from "./resources/memoryDurableResource";
 export type { MemoryDurableResourceConfig } from "./resources/memoryDurableResource";

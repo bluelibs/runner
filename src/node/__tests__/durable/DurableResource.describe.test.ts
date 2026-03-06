@@ -1,10 +1,9 @@
-import { r, run } from "../../..";
-import { memoryDurableResource } from "../../durable/resources/memoryDurableResource";
+import { r, resources, run } from "../../node";
 import { createMessageError } from "../../../errors";
 
 describe("durable: describe()", () => {
   it("describes a task using real non-durable deps and shimmed durable.use()", async () => {
-    const durable = memoryDurableResource.define(
+    const durable = resources.memoryWorkflow.fork(
       "durable-tests-recorder-durable",
     );
 
@@ -35,7 +34,7 @@ describe("durable: describe()", () => {
 
     const app = r
       .resource("durable-tests-recorder-app")
-      .register([durable.with({}), other, task])
+      .register([resources.durable, durable.with({}), other, task])
       .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
@@ -51,7 +50,7 @@ describe("durable: describe()", () => {
   });
 
   it("throws when describing an unregistered task id", async () => {
-    const durable = memoryDurableResource.define(
+    const durable = resources.memoryWorkflow.fork(
       "durable-tests-recorder-durable-unregistered",
     );
 
@@ -67,7 +66,7 @@ describe("durable: describe()", () => {
 
     const app = r
       .resource("durable-tests-recorder-app-unregistered")
-      .register([durable.with({}), registeredTask])
+      .register([resources.durable, durable.with({}), registeredTask])
       .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });

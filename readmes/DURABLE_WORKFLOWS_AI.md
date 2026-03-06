@@ -49,19 +49,19 @@ Signals buffer if no waiter exists yet; the next `waitForSignal(...)` consumes t
 
 ## Tagging workflows (required for discovery)
 
-Durable workflows are regular Runner tasks, but **must be tagged with `durableWorkflowTag`** to make them discoverable at runtime. Always add this tag to your workflow tasks:
+Durable workflows are regular Runner tasks, but **must be tagged with `tags.durableWorkflow`** to make them discoverable at runtime. Always add this tag to your workflow tasks:
 
 ```ts
 import { r } from "@bluelibs/runner";
-import { memoryDurableResource, durableWorkflowTag } from "@bluelibs/runner/node";
+import { resources, tags } from "@bluelibs/runner/node";
 
-const durable = memoryDurableResource.define("app-durable");
+const durable = resources.memoryWorkflow.fork("app-durable");
 
 const onboarding = r
   .task("app.workflows.onboarding")
   .dependencies({ durable })
   .tags([
-    durableWorkflowTag.with({
+    tags.durableWorkflow.with({
       category: "users",
       defaults: { invitedBy: "system" },
     }),
@@ -78,9 +78,9 @@ const onboarding = r
 // const workflows = durableRuntime.getWorkflows();
 ```
 
-The `durableWorkflowTag` is **required** — workflows without this tag will not be discoverable via `getWorkflows()`. The durable resources (`memoryDurableResource` / `redisDurableResource` / `durableResource`) auto-register this tag definition, so you can use it immediately without manual tag registration.
+`tags.durableWorkflow` is **required** — workflows without this tag will not be discoverable via `getWorkflows()`. Register `resources.durable` once in the app so the durable tag definition and durable events are available at runtime.
 
-`durableWorkflowTag` is discovery metadata, and can also carry optional `defaults` for `describe(...)`.
+`tags.durableWorkflow` is discovery metadata, and can also carry optional `defaults` for `describe(...)`.
 The unified response envelope is produced by `startAndWait(...)`: `{ durable: { executionId }, data }`.
 `defaults` are applied only by `describe(task)` when no explicit describe input is passed.
 
@@ -91,14 +91,14 @@ Tagged tasks are discovery metadata only. Start workflows explicitly via `durabl
 ```ts
 import express from "express";
 import { r, run } from "@bluelibs/runner";
-import { memoryDurableResource, durableWorkflowTag } from "@bluelibs/runner/node";
+import { resources, tags } from "@bluelibs/runner/node";
 
-const durable = memoryDurableResource.define("app-durable");
+const durable = resources.memoryWorkflow.fork("app-durable");
 
 const approveOrder = r
   .task("app.workflows.approveOrder")
   .dependencies({ durable })
-  .tags([durableWorkflowTag.with({ category: "orders" })])
+  .tags([tags.durableWorkflow.with({ category: "orders" })])
   .run(async (input: { orderId: string }, { durable }) => {
     const ctx = durable.use();
     await ctx.step("approve", async () => ({ approved: true }));
@@ -108,7 +108,7 @@ const approveOrder = r
 
 const api = r
   .resource("app.api")
-  .register([durable.with({ worker: false }), approveOrder])
+  .register([resources.durable, durable.with({ worker: false }), approveOrder])
   .dependencies({ durable, approveOrder })
   .init(async (_cfg, { durable, approveOrder }) => {
     const app = express();
@@ -131,18 +131,15 @@ await run(api);
 Recommended wiring (config-only resources):
 
 ```ts
-import {
-  memoryDurableResource,
-  redisDurableResource,
-} from "@bluelibs/runner/node";
+import { resources } from "@bluelibs/runner/node";
 
 // dev/tests
-const durable = memoryDurableResource
-  .define("app-durable")
-  .with({ worker: true });
+const durable = resources.memoryWorkflow.fork("app-durable").with({
+  worker: true,
+});
 
 // production (Redis + optional RabbitMQ queue)
-const durableProd = redisDurableResource.define("app-durable").with({
+const durableProd = resources.redisWorkflow.fork("app-durable").with({
   redis: { url: process.env.REDIS_URL! },
   queue: { url: process.env.RABBITMQ_URL! },
   worker: true,
@@ -178,7 +175,7 @@ const durableProd = redisDurableResource.define("app-durable").with({
 
 Audit can be enabled via `audit: { enabled: true }`; inside workflows you can add replay-safe notes via `ctx.note("msg", meta)`. In Runner integration, audit entries are also emitted via `durableEvents.*`.
 
-Runner integration detail: durable events emission does not depend on `audit.enabled` (it controls store persistence); events are emitted as long as an audit emitter is configured (the `durableResource` wires one by default).
+Runner integration detail: durable events emission does not depend on `audit.enabled` (it controls store persistence); events are emitted as long as an audit emitter is configured (the built-in durable workflow resources wire one by default).
 
 Import and subscribe using event definitions (not strings): `import { durableEvents } from "@bluelibs/runner/node"` and `.on(durableEvents.audit.appended)` (or a specific durable event).
 
@@ -239,7 +236,7 @@ const shape2 = await durableRuntime.describe<{ orderId: string }>(myTask, {
 
 The recorder shims `durable.use()` inside the task's `run` and records every `ctx.*` operation.
 
-If the task uses `durableWorkflowTag.with({ defaults: {...} })`, `describe(task)` uses those defaults.
+If the task uses `tags.durableWorkflow.with({ defaults: {...} })`, `describe(task)` uses those defaults.
 `describe(task, input)` always overrides tag defaults.
 
 Notes:

@@ -1,4 +1,4 @@
-import { r, run } from "../../..";
+import { r, resources, run } from "../../node";
 import { durableResource } from "../../durable/core/resource";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryQueue } from "../../durable/queue/MemoryQueue";
@@ -10,7 +10,7 @@ describe("durable: queue mode integration", () => {
     const queue = new MemoryQueue();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.define("durable-tests-queue-durable");
+    const durable = durableResource.fork("durable-tests-queue-durable");
     const durableRegistration = durable.with({
       store,
       queue,
@@ -28,7 +28,10 @@ describe("durable: queue mode integration", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);

@@ -1,10 +1,35 @@
-import { r, run } from "../../..";
-import { memoryDurableResource } from "../../durable/resources/memoryDurableResource";
-import { durableWorkflowTag } from "../../durable/tags/durableWorkflow.tag";
+import { r, resources, run, tags } from "../../node";
 
 describe("durable: durableWorkflowTag execution boundaries (integration)", () => {
+  it("fails fast when durable support is not registered", async () => {
+    const durable = resources.memoryWorkflow.fork(
+      "durable-tests-routing-missing",
+    );
+    const durableRegistration = durable.with({ worker: false });
+
+    const task = r
+      .task("durable-tests-routing-missing-task")
+      .dependencies({ durable })
+      .tags([tags.durableWorkflow.with({ category: "orders" })])
+      .run(async (_input: { v: number }, { durable }) => {
+        const ctx = durable.use();
+        await ctx.step("double", async () => 2);
+        return { value: 2 };
+      })
+      .build();
+
+    const app = r
+      .resource("durable-tests-routing-missing-app")
+      .register([durableRegistration, task])
+      .build();
+
+    await expect(run(app, { logs: { printThreshold: null } })).rejects.toThrow(
+      /tag.*durableWorkflow/i,
+    );
+  });
+
   it("does not auto-route runtime.runTask(task) for tagged workflows", async () => {
-    const durable = memoryDurableResource.define(
+    const durable = resources.memoryWorkflow.fork(
       "durable-tests-routing-direct",
     );
     const durableRegistration = durable.with({ worker: false });
@@ -12,7 +37,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     const task = r
       .task("durable-tests-routing-direct-task")
       .dependencies({ durable })
-      .tags([durableWorkflowTag.with({ category: "orders" })])
+      .tags([tags.durableWorkflow.with({ category: "orders" })])
       .run(async (input: { v: number }, { durable }) => {
         const ctx = durable.use();
         const value = await ctx.step("double", async () => input.v * 2);
@@ -22,7 +47,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
 
     const app = r
       .resource("durable-tests-routing-direct-app")
-      .register([durableRegistration, task])
+      .register([resources.durable, durableRegistration, task])
       .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
 
@@ -34,7 +59,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
   });
 
   it("executes tagged workflows explicitly via durable.startAndWait()", async () => {
-    const durable = memoryDurableResource.define(
+    const durable = resources.memoryWorkflow.fork(
       "durable-tests-routing-execute",
     );
     const durableRegistration = durable.with({ worker: false });
@@ -42,7 +67,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     const task = r
       .task("durable-tests-routing-execute-task")
       .dependencies({ durable })
-      .tags([durableWorkflowTag.with({ category: "orders" })])
+      .tags([tags.durableWorkflow.with({ category: "orders" })])
       .run(async (input: { v: number }, { durable }) => {
         const ctx = durable.use();
         const value = await ctx.step("double", async () => input.v * 2);
@@ -52,7 +77,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
 
     const app = r
       .resource("durable-tests-routing-execute-app")
-      .register([durableRegistration, task])
+      .register([resources.durable, durableRegistration, task])
       .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
     const durableRuntime = runtime.getResourceValue(durable);
@@ -81,13 +106,15 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
   });
 
   it("can start tagged workflows by id and wait by execution id", async () => {
-    const durable = memoryDurableResource.define("durable-tests-routing-start");
+    const durable = resources.memoryWorkflow.fork(
+      "durable-tests-routing-start",
+    );
     const durableRegistration = durable.with({ worker: false });
 
     const task = r
       .task("durable-tests-routing-start-task")
       .dependencies({ durable })
-      .tags([durableWorkflowTag.with({ category: "orders" })])
+      .tags([tags.durableWorkflow.with({ category: "orders" })])
       .run(async (input: { v: number }, { durable }) => {
         const ctx = durable.use();
         const value = await ctx.step("double", async () => input.v * 2);
@@ -97,7 +124,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
 
     const app = r
       .resource("durable-tests-routing-start-app")
-      .register([durableRegistration, task])
+      .register([resources.durable, durableRegistration, task])
       .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
     const durableRuntime = runtime.getResourceValue(durable);

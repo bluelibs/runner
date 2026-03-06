@@ -32,9 +32,14 @@
 
 ## Quickstart
 
-### 0) Create a durable resource (Runner-style)
+### 0) Create durable support + a durable backend
 
-The recommended integration is a **single durable resource** that:
+The recommended integration is:
+
+- register `resources.durable` once for durable tags/events support
+- fork a concrete durable backend (`resources.memoryWorkflow` / `resources.redisWorkflow`)
+
+The concrete durable backend:
 
 - Executes Runner tasks via DI (`taskRunner.run(...)`).
 - Provides a **per-resource** durable context, accessed via `durable.use()`.
@@ -44,11 +49,11 @@ The recommended integration is a **single durable resource** that:
 
 ```ts
 import { event, r, run } from "@bluelibs/runner";
-import { memoryDurableResource } from "@bluelibs/runner/node";
+import { resources } from "@bluelibs/runner/node";
 
 const Approved = event<{ approvedBy: string }>({ id: "app.signals.approved" });
 
-const durable = memoryDurableResource.define("app-durable");
+const durable = resources.memoryWorkflow.fork("app-durable");
 
 const durableRegistration = durable.with({
   worker: true, // single-process dev/tests
@@ -86,7 +91,7 @@ const approveOrder = r
 
 const app = r
   .resource("app")
-  .register([durableRegistration, approveOrder])
+  .register([resources.durable, durableRegistration, approveOrder])
   .build();
 
 await run(app, { logs: { printThreshold: null } });
@@ -94,23 +99,20 @@ await run(app, { logs: { printThreshold: null } });
 
 ## Tagging Workflows for Discovery (Required)
 
-Durable workflows are regular Runner tasks, but **must be tagged with `durableWorkflowTag`**
+Durable workflows are regular Runner tasks, but **must be tagged with `tags.durableWorkflow`**
 to make them discoverable at runtime. Always add this tag to your workflow tasks:
 
 ```ts
 import { r } from "@bluelibs/runner";
-import {
-  memoryDurableResource,
-  durableWorkflowTag,
-} from "@bluelibs/runner/node";
+import { resources, tags } from "@bluelibs/runner/node";
 
-const durable = memoryDurableResource.define("app-durable");
+const durable = resources.memoryWorkflow.fork("app-durable");
 
 const onboarding = r
   .task("app.workflows.onboarding")
   .dependencies({ durable })
   .tags([
-    durableWorkflowTag.with({
+    tags.durableWorkflow.with({
       category: "users",
       defaults: { invitedBy: "system" },
     }),
@@ -127,16 +129,15 @@ const onboarding = r
 // const workflows = durableRuntime.getWorkflows();
 ```
 
-The `durableWorkflowTag` is **required** — workflows without this tag will not be discoverable
-via `getWorkflows()`. The durable resources (`durableResource`, `memoryDurableResource`,
-and `redisDurableResource`) auto-register this tag definition, so you can use it immediately
-without manual tag registration.
+`tags.durableWorkflow` is **required** — workflows without this tag will not be discoverable
+via `getWorkflows()`. Register `resources.durable` once in the app so the durable tag
+definition and durable events are available at runtime.
 
-`durableWorkflowTag` is discovery metadata only. The unified response envelope
+`tags.durableWorkflow` is discovery metadata only. The unified response envelope
 is produced by `durable.startAndWait(...)`:
 `{ durable: { executionId }, data }`.
 
-`durableWorkflowTag` also supports optional `defaults` used by
+`tags.durableWorkflow` also supports optional `defaults` used by
 `durable.describe(task)` **only when no explicit describe input is provided**.
 This does not affect `start()`, `startAndWait()`, `schedule()`, or `ensureSchedule()`.
 
@@ -149,17 +150,14 @@ start with `durable.start(...)` (fire-and-track) or
 ```ts
 import express from "express";
 import { r, run } from "@bluelibs/runner";
-import {
-  memoryDurableResource,
-  durableWorkflowTag,
-} from "@bluelibs/runner/node";
+import { resources, tags } from "@bluelibs/runner/node";
 
-const durable = memoryDurableResource.define("app-durable");
+const durable = resources.memoryWorkflow.fork("app-durable");
 
 const approveOrder = r
   .task("app.workflows.approveOrder")
   .dependencies({ durable })
-  .tags([durableWorkflowTag.with({ category: "orders" })])
+  .tags([tags.durableWorkflow.with({ category: "orders" })])
   .run(async (input: { orderId: string }, { durable }) => {
     const ctx = durable.use();
     await ctx.step("approve", async () => ({ approved: true }));
@@ -169,7 +167,7 @@ const approveOrder = r
 
 const api = r
   .resource("app.api")
-  .register([durable.with({ worker: false }), approveOrder])
+  .register([resources.durable, durable.with({ worker: false }), approveOrder])
   .dependencies({ durable, approveOrder })
   .init(async (_cfg, { durable, approveOrder }) => {
     const app = express();
@@ -195,9 +193,9 @@ await run(api);
 For production, swap the in-memory backends:
 
 ```ts
-import { redisDurableResource } from "@bluelibs/runner/node";
+import { resources } from "@bluelibs/runner/node";
 
-const durable = redisDurableResource.define("app-durable");
+const durable = resources.redisWorkflow.fork("app-durable");
 
 const durableRegistration = durable.with({
   redis: { url: process.env.REDIS_URL! },
@@ -206,12 +204,12 @@ const durableRegistration = durable.with({
 });
 ```
 
-Isolation note: `redisDurableResource` derives Redis key prefixes, pub/sub prefixes, and default queue names from the durable resource id (the value you pass to `.define("...")`). Use different ids (or set `{ namespace }`) to run multiple durable "apps" safely on the same Redis/RabbitMQ.
+Isolation note: `resources.redisWorkflow` derives Redis key prefixes, pub/sub prefixes, and default queue names from the durable resource id (the value you pass to `.fork("...")`). Use different ids (or set `{ namespace }`) to run multiple durable "apps" safely on the same Redis/RabbitMQ.
 
 API nodes typically **disable polling and the embedded worker**:
 
 ```ts
-const durable = redisDurableResource.define("app-durable");
+const durable = resources.redisWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
   redis: { url: process.env.REDIS_URL! },
   queue: { url: process.env.RABBITMQ_URL! },
@@ -238,7 +236,7 @@ The core idea is: **the store is the source of truth**, and the queue distribute
 **API node config (no background work):**
 
 ```ts
-const durable = redisDurableResource.define("app-durable");
+const durable = resources.redisWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
   redis: { url: process.env.REDIS_URL! },
   queue: { url: process.env.RABBITMQ_URL! },
@@ -250,7 +248,7 @@ const durableRegistration = durable.with({
 **Worker node config (does background work):**
 
 ```ts
-const durable = redisDurableResource.define("app-durable");
+const durable = resources.redisWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
   redis: { url: process.env.REDIS_URL! },
   queue: { url: process.env.RABBITMQ_URL! },
@@ -680,17 +678,17 @@ graph TB
 
 ### Basic Usage
 
-Durable workflows are **normal Runner tasks** that inject a **durable resource** (created via `durableResource.define(id)` and registered via `.with(config)`) and call `ctx.step(...)` / `ctx.sleep(...)` from inside their `run` function.
+Durable workflows are **normal Runner tasks** that inject a **durable backend resource** (created via `resources.memoryWorkflow.fork(id)` or `resources.redisWorkflow.fork(id)` and registered via `.with(config)`) and call `ctx.step(...)` / `ctx.sleep(...)` from inside their `run` function.
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
-import { durableResource, MemoryStore } from "@bluelibs/runner/node";
+import { MemoryStore, resources } from "@bluelibs/runner/node";
 
 // 1. Create store
 const store = new MemoryStore();
 
 // 2. Create durable resource definition
-const durable = durableResource.define("app-durable");
+const durable = resources.memoryWorkflow.fork("app-durable");
 
 // 3. Register durable resource with config
 const durableRegistration = durable.with({
@@ -737,7 +735,7 @@ const processOrder = r
 // 4. Wire up and run
 const app = r
   .resource("app")
-  .register([durableRegistration, processOrder])
+  .register([resources.durable, durableRegistration, processOrder])
   .build();
 
 const runtime = await run(app);
@@ -954,10 +952,10 @@ Return shapes:
 
 ```typescript
 import { event, r } from "@bluelibs/runner";
-import { durableResource, MemoryStore } from "@bluelibs/runner/node";
+import { MemoryStore, resources } from "@bluelibs/runner/node";
 
 const Paid = event<{ paidAt: number }>({ id: "app.signals.paid" });
-const durable = durableResource.define("app-durable");
+const durable = resources.memoryWorkflow.fork("app-durable");
 const durableRegistration = durable.with({ store: new MemoryStore() });
 
 export const processOrder = r
@@ -1163,12 +1161,12 @@ Call `describe()` on your durable dependency, then pass your task directly — i
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
-import { memoryDurableResource } from "@bluelibs/runner/node";
+import { resources } from "@bluelibs/runner/node";
 
-const durable = memoryDurableResource.define("app-durable");
+const durable = resources.memoryWorkflow.fork("app-durable");
 const app = r
   .resource("app")
-  .register([durable.with({})])
+  .register([resources.durable, durable.with({})])
   .build();
 const runtime = await run(app);
 
@@ -1189,7 +1187,7 @@ console.log(shape.nodes);
 // ]
 ```
 
-If your task is tagged with `durableWorkflowTag.with({ defaults: {...} })`,
+If your task is tagged with `tags.durableWorkflow.with({ defaults: {...} })`,
 `describe(task)` (without input) uses a cloned copy of those defaults.
 Passing `describe(task, input)` always wins and replaces tag defaults.
 
@@ -1710,10 +1708,10 @@ npm install ioredis amqplib
 
 ```typescript
 import {
-  durableResource,
   RedisStore,
   RedisEventBus,
   RabbitMQQueue,
+  resources,
 } from "@bluelibs/runner/node";
 
 // State storage with Redis
@@ -1740,7 +1738,7 @@ const queue = new RabbitMQQueue({
 });
 
 // Create durable resource definition + registration
-const durable = durableResource.define("app-durable");
+const durable = resources.redisWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
   store,
   eventBus,
@@ -1753,7 +1751,7 @@ const durableRegistration = durable.with({
 If you want API-only nodes to call `start()` / `signal()` / `wait()` **without running the timer poller**, disable polling:
 
 ```ts
-const durable = durableResource.define("app-durable");
+const durable = resources.redisWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
   store,
   eventBus,
@@ -1913,9 +1911,9 @@ The durable module integrates seamlessly with Runner's resource pattern:
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
-import { durableResource, MemoryStore } from "@bluelibs/runner/node";
+import { MemoryStore, resources } from "@bluelibs/runner/node";
 
-const durable = durableResource.define("app-durable");
+const durable = resources.memoryWorkflow.fork("app-durable");
 const durableRegistration = durable.with({
   store: new MemoryStore(),
   worker: true, // single-process: also consumes the queue if configured
@@ -1940,7 +1938,7 @@ const recoverDurable = r
 
 const app = r
   .resource("app")
-  .register([durableRegistration, processOrder, recoverDurable])
+  .register([resources.durable, durableRegistration, processOrder, recoverDurable])
   .build();
 await run(app);
 ```
@@ -1954,7 +1952,7 @@ const store = process.env.REDIS_URL
   ? new RedisStore({ redis: process.env.REDIS_URL })
   : new MemoryStore();
 
-const durable = durableResource.define("app-durable");
+const durable = resources.memoryWorkflow.fork("app-durable");
 const durableRegistration = durable.with({ store });
 ```
 
@@ -2047,7 +2045,7 @@ const task = r
 
 const app = r
   .resource("spec.app")
-  .register([durableRegistration, Paid, task])
+  .register([resources.durable, durableRegistration, Paid, task])
   .build();
 const runtime = await run(app);
 const durableRuntime = runtime.getResourceValue(durable);
@@ -2140,7 +2138,7 @@ In addition to `StepResult` records, durable can persist a structured audit trai
 
 This is implemented via optional `IDurableStore` capabilities:
 
-- Enable it via `durableResource.define("app-durable").with({ audit: { enabled: true }, ... })` (default: off).
+- Enable it via `resources.memoryWorkflow.fork("app-durable").with({ audit: { enabled: true }, ... })` or `resources.redisWorkflow.fork("app-durable").with({ audit: { enabled: true }, ... })` (default: off).
 - `appendAuditEntry(entry)`
 - `listAuditEntries(executionId)`
 
