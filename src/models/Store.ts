@@ -2,11 +2,7 @@ import {
   IResource,
   RegisterableItems,
   ITag,
-  AnyTask,
-  TaggedTask,
-  TaggedResource,
   TagDependencyAccessor,
-  AnyResource,
 } from "../defs";
 import { findCircularDependencies } from "./utils/findCircularDependencies";
 import {
@@ -672,43 +668,14 @@ export class Store {
     return this.registry.storeGenericItem<C>(item);
   }
 
+  /**
+   * Provides a way to access tagged elements from the store.
+   */
   public getTagAccessor<TTag extends ITag<any, any, any>>(
     tag: TTag,
     options?: { consumerId?: string; includeSelf?: boolean },
   ): TagDependencyAccessor<TTag> {
     return this.registry.getTagAccessor(tag, options);
-  }
-
-  /**
-   * Returns all tasks with the given tag.
-   * @param tag - The tag to filter by.
-   * @returns The tasks with the given tag.
-   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
-   */
-  public getTasksWithTag<TTag extends ITag<any, any, any>>(
-    tag: TTag,
-  ): TaggedTask<TTag>[];
-  /** @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor. */
-  public getTasksWithTag(tag: ITag<any, any, any>): AnyTask[] {
-    return this.registry
-      .getTasksWithTag(tag)
-      .map((task) => this.toPublicDefinition(task));
-  }
-
-  /**
-   * Returns all resources with the given tag.
-   * @param tag - The tag to filter by.
-   * @returns The resources with the given tag.
-   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
-   */
-  public getResourcesWithTag<TTag extends ITag<any, any, any>>(
-    tag: TTag,
-  ): TaggedResource<TTag>[];
-  /** @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor. */
-  public getResourcesWithTag(tag: ITag<any, any, any>): AnyResource[] {
-    return this.registry
-      .getResourcesWithTag(tag)
-      .map((resource) => this.toPublicDefinition(resource));
   }
 
   public toPublicDefinition<TDefinition extends { id: string }>(

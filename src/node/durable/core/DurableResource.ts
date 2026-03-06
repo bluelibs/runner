@@ -97,32 +97,18 @@ export class DurableResource implements IDurableResource {
 
   getWorkflows(): AnyTask[] {
     const runnerStore = this.requireRunnerStoreForWorkflowDiscovery();
-    const getTasksWithTag = (
-      runnerStore as unknown as {
-        getTasksWithTag?: (tag: typeof durableWorkflowTag) => AnyTask[];
-      }
-    ).getTasksWithTag;
-    if (typeof getTasksWithTag === "function") {
-      return getTasksWithTag.call(runnerStore, durableWorkflowTag);
+    if (typeof runnerStore.getTagAccessor !== "function") {
+      return durableExecutionInvariantError.throw({
+        message:
+          "Durable workflow discovery requires Store.getTagAccessor(tag).",
+      });
     }
 
-    const getTagAccessor = (
-      runnerStore as unknown as {
-        getTagAccessor?: (tag: typeof durableWorkflowTag) => {
-          tasks: Array<{ definition: AnyTask }>;
-        };
-      }
-    ).getTagAccessor;
-    if (typeof getTagAccessor === "function") {
-      return getTagAccessor
-        .call(runnerStore, durableWorkflowTag)
-        .tasks.map((entry) => entry.definition);
-    }
+    const tasks = runnerStore
+      .getTagAccessor(durableWorkflowTag)
+      .tasks.map((entry) => entry.definition);
 
-    return durableExecutionInvariantError.throw({
-      message:
-        "Durable workflow discovery requires Store.getTasksWithTag(tag) or Store.getTagAccessor(tag).",
-    });
+    return tasks.map((task) => runnerStore.toPublicDefinition(task));
   }
 
   private requireRunnerStoreForDescribe(): Store {

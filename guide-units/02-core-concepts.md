@@ -1443,7 +1443,7 @@ const installRoutes = r
 
 Use `tag.startup()` when startup ordering matters (for example route registration). It injects the same typed accessor while making the dependency intent explicit.
 
-Deprecated API note: `store.getTasksWithTag(...)` and `store.getResourcesWithTag(...)` are deprecated in favor of tag dependencies.
+Store-level tag discovery uses `store.getTagAccessor(tag)`. Inside tasks/resources, prefer injected tag dependencies because they preserve runtime helpers and discovery intent.
 
 Fail-fast rule: if a tagged item depends on the same tag, Runner throws during store sanity checks.
 

@@ -1,11 +1,7 @@
 import {
-  AnyResource,
-  AnyTask,
   ITag,
   TagDependencyAccessor,
   TagDependencyMatch,
-  TaggedResource,
-  TaggedTask,
   TagType,
 } from "../../defs";
 import { VisibilityTracker } from "../VisibilityTracker";
@@ -286,26 +282,6 @@ export class StoreRegistryTagIndex {
     };
 
     return Object.freeze(accessor);
-  }
-
-  /**
-   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
-   */
-  getTasksWithTag<TTag extends ITag<any, any, any>>(
-    tag: TTag,
-  ): TaggedTask<TTag>[];
-  getTasksWithTag(tag: ITag<any, any, any>): AnyTask[] {
-    return this.getTagAccessor(tag).tasks.map((item) => item.definition);
-  }
-
-  /**
-   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
-   */
-  getResourcesWithTag<TTag extends ITag<any, any, any>>(
-    tag: TTag,
-  ): TaggedResource<TTag>[];
-  getResourcesWithTag(tag: ITag<any, any, any>): AnyResource[] {
-    return this.getTagAccessor(tag).resources.map((item) => item.definition);
   }
 
   // ---------------------------------------------------------------------------

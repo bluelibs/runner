@@ -1,6 +1,4 @@
 import {
-  AnyResource,
-  AnyTask,
   IEvent,
   IHook,
   IResource,
@@ -11,8 +9,6 @@ import {
   ITaskMiddleware,
   RegisterableItems,
   TagDependencyAccessor,
-  TaggedResource,
-  TaggedTask,
   TaskMiddlewareStoreElementType,
   TaskStoreElementType,
   ResourceMiddlewareStoreElementType,
@@ -437,31 +433,5 @@ export class StoreRegistry {
       id: resolvedTagId,
     } as TTag;
     return this.tagIndexer.getTagAccessor(canonicalTag, normalizedOptions);
-  }
-
-  /**
-   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
-   */
-  getTasksWithTag<TTag extends ITag<any, any, any>>(
-    tag: TTag,
-  ): TaggedTask<TTag>[];
-  /**
-   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
-   */
-  getTasksWithTag(tag: ITag<any, any, any>): AnyTask[] {
-    return this.getTagAccessor(tag).tasks.map((entry) => entry.definition);
-  }
-
-  /**
-   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
-   */
-  getResourcesWithTag<TTag extends ITag<any, any, any>>(
-    tag: TTag,
-  ): TaggedResource<TTag>[];
-  /**
-   * @deprecated Use tag dependencies (`dependencies({ myTag })`) and the injected accessor.
-   */
-  getResourcesWithTag(tag: ITag<any, any, any>): AnyResource[] {
-    return this.getTagAccessor(tag).resources.map((entry) => entry.definition);
   }
 }

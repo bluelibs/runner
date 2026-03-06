@@ -4,7 +4,7 @@ import { StoreRegistryTagIndex } from "../../../models/store-registry/StoreRegis
 import { IndexedTagCategory } from "../../../models/store-registry/types";
 
 describe("StoreRegistryTagIndex", () => {
-  it("supports deprecated task and resource wrapper accessors", () => {
+  it("returns tagged task and resource matches through the accessor", () => {
     const tag = defineTag({
       id: "tag-index-coverage-tag",
     });
@@ -38,7 +38,11 @@ describe("StoreRegistryTagIndex", () => {
       tag,
     ]);
 
-    expect(tagIndex.getTasksWithTag(tag)).toEqual([task]);
-    expect(tagIndex.getResourcesWithTag(tag)).toEqual([resource]);
+    const accessor = tagIndex.getTagAccessor(tag);
+
+    expect(accessor.tasks.map((entry) => entry.definition)).toEqual([task]);
+    expect(accessor.resources.map((entry) => entry.definition)).toEqual([
+      resource,
+    ]);
   });
 });

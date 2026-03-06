@@ -430,7 +430,7 @@ describe("Store", () => {
     expect(() => store.processOverrides()).not.toThrow();
   });
 
-  it("should call getTasksWithTag method", () => {
+  it("should expose tagged tasks through the accessor", () => {
     const tag = defineTag({
       id: "tags-test",
     });
@@ -452,15 +452,18 @@ describe("Store", () => {
     });
 
     store.initializeStore(rootResource, {}, runtimeResult);
-    const result = store.getTasksWithTag(tag);
+    const result = store.getTagAccessor(tag).tasks;
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
+    expect(result[0]?.definition).toBe(
+      store.tasks.get(result[0]!.definition.id)?.task,
+    );
     const unknownTag = defineTag({ id: "tags-unknown" });
-    const result2 = store.getTasksWithTag(unknownTag);
+    const result2 = store.getTagAccessor(unknownTag).tasks;
     expect(result2).toHaveLength(0);
   });
 
-  it("should call getResourcesWithTag method", () => {
+  it("should expose tagged resources through the accessor", () => {
     const tag = defineTag({
       id: "tags-test",
     });
@@ -480,11 +483,14 @@ describe("Store", () => {
     });
 
     store.initializeStore(rootResource, {}, runtimeResult);
-    const result = store.getResourcesWithTag(tag);
+    const result = store.getTagAccessor(tag).resources;
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
+    expect(result[0]?.definition).toBe(
+      store.resources.get(result[0]!.definition.id)?.resource,
+    );
     const unknownTag = defineTag({ id: "tags-unknown" });
-    const result2 = store.getResourcesWithTag(unknownTag);
+    const result2 = store.getTagAccessor(unknownTag).resources;
     expect(result2).toHaveLength(0);
   });
 
@@ -785,8 +791,9 @@ describe("Store", () => {
 
     store.initializeStore(rootResource, {}, runtimeResult);
 
-    const tasks = store.getTasksWithTag(contractTag);
-    const resources = store.getResourcesWithTag(contractTag);
+    const accessor = store.getTagAccessor(contractTag);
+    const tasks = accessor.tasks.map((entry) => entry.definition);
+    const resources = accessor.resources.map((entry) => entry.definition);
 
     expect(tasks).toHaveLength(1);
     expect(resources).toHaveLength(1);

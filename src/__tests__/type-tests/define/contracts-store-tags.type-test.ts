@@ -141,7 +141,7 @@ import type { Store } from "../../../models/Store";
   });
 }
 
-// Scenario: store tag lookup methods should preserve contract-based task/resource signatures.
+// Scenario: store tag accessors should preserve contract-based task/resource signatures.
 {
   const store = null as unknown as Store;
 
@@ -149,10 +149,9 @@ import type { Store } from "../../../models/Store";
     id: "types-tag-contract",
   });
 
-  const taggedTasks = store.getTasksWithTag(contractTag);
-  const taggedResources = store.getResourcesWithTag(contractTag);
-  const firstTask = taggedTasks[0]!;
-  const firstResource = taggedResources[0]!;
+  const accessor = store.getTagAccessor(contractTag);
+  const firstTask = accessor.tasks[0]!.definition;
+  const firstResource = accessor.resources[0]!.definition;
 
   type TaskInput = Parameters<typeof firstTask.run>[0];
   const validTaskInput: TaskInput = { tenantId: "acme" };

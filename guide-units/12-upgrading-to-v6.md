@@ -293,7 +293,7 @@ If you opt in, enforce:
 
 ### 9. Switch Tag Discovery to Tag Dependencies
 
-Deprecated:
+Removed:
 
 - `store.getTasksWithTag()`
 - `store.getResourcesWithTag()`
@@ -309,6 +309,8 @@ const inspect = r
   )
   .build();
 ```
+
+If you still need store-level discovery outside injected dependencies, use `store.getTagAccessor(routeTag)`.
 
 ### 10. Lifecycle Option Rename
 
