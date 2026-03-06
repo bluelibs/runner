@@ -13,9 +13,9 @@ import type { TaskCallOptions } from "../types/utilities";
 import {
   RuntimeCallSource,
   RuntimeCallSourceKind,
-  runtimeSource,
 } from "../types/runtimeSource";
 import type { LifecycleAdmissionController } from "./runtime/LifecycleAdmissionController";
+import { toPublicDefinition } from "./utils/toPublicDefinition";
 
 type CachedTaskRunner = (
   input: unknown,
@@ -26,6 +26,7 @@ type CachedTaskRunner = (
 const defaultTaskSource: RuntimeCallSource = {
   kind: RuntimeCallSourceKind.Runtime,
   id: "runtime-internal-taskRunner",
+  path: "runtime-internal-taskRunner",
 };
 
 /**
@@ -113,7 +114,7 @@ export class TaskRunner {
     }
 
     const executeTask = () => runner(input as TInput, options?.journal, source);
-    const executionSource = runtimeSource.task(taskId);
+    const executionSource = this.store.createRuntimeSource("task", task);
     // Pass journal if provided; composer will use it or create new
     return this.lifecycleAdmissionController.trackTaskExecution(
       executionSource,
@@ -143,10 +144,10 @@ export class TaskRunner {
     ) => {
       if (options?.when) {
         const taskDefinition = input.task.definition;
-        const publicTaskDefinition = {
-          ...taskDefinition,
-          id: this.store.toPublicId(taskDefinition),
-        };
+        const publicTaskDefinition = toPublicDefinition(
+          this.store,
+          taskDefinition,
+        );
         if (!options.when(publicTaskDefinition as typeof taskDefinition)) {
           return next(input);
         }

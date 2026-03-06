@@ -12,6 +12,7 @@ import { IHook } from "../types/hook";
 import {
   RuntimeCallSource,
   RuntimeCallSourceKind,
+  runtimeSource,
 } from "../types/runtimeSource";
 import {
   EventEmissionInterceptor,
@@ -24,6 +25,9 @@ import { composeInterceptors } from "./event/InterceptorPipeline";
 import { CycleContext } from "./event/CycleContext";
 import { EmissionContext, EventEmissionImpl } from "./event/EmissionContext";
 import { LifecycleAdmissionController } from "./runtime/LifecycleAdmissionController";
+import { getDefinitionIdentity } from "../tools/isSameDefinition";
+import type { Store } from "./Store";
+import { getRuntimeId } from "../tools/runtimeMetadata";
 
 type AggregateErrorCtor = new (
   errors: unknown[],
@@ -41,6 +45,15 @@ type EventEmissionInternalOptions = IEventEmitOptions & {
   allowLifecycleBypass?: boolean;
 };
 
+type EventManagerStoreBindings = Pick<
+  Store,
+  | "createRuntimeSource"
+  | "events"
+  | "getRuntimeMetadata"
+  | "resolveDefinitionId"
+  | "toRuntimeSource"
+>;
+
 /**
  * EventManager handles event emission, listener registration, and event processing.
  * It supports both specific event listeners and global listeners that handle all events.
@@ -54,10 +67,7 @@ export class EventManager {
   private readonly registry: ListenerRegistry;
   private readonly cycleContext: CycleContext;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
-  private eventDefinitionResolver?: <T>(
-    eventDefinition: IEvent<T>,
-  ) => IEvent<T> | undefined;
-  private eventIdFormatter?: (eventId: string) => string;
+  private store?: EventManagerStoreBindings;
 
   // Locking mechanism to prevent modifications after initialization
   #isLocked = false;
@@ -98,14 +108,8 @@ export class EventManager {
     this.#isLocked = true;
   }
 
-  public setEventDefinitionResolver(
-    resolver: <T>(eventDefinition: IEvent<T>) => IEvent<T> | undefined,
-  ): void {
-    this.eventDefinitionResolver = resolver;
-  }
-
-  public setEventIdFormatter(formatter: (eventId: string) => string): void {
-    this.eventIdFormatter = formatter;
+  public bindStore(store: EventManagerStoreBindings): void {
+    this.store = store;
   }
 
   /**
@@ -205,12 +209,11 @@ export class EventManager {
       shutdownLockdownError.throw();
     }
 
-    const eventDefinition =
-      this.eventDefinitionResolver?.(params.eventDefinition) ??
-      params.eventDefinition;
-    const outputEventId =
-      this.eventIdFormatter?.(eventDefinition.id) ?? eventDefinition.id;
-    const { source } = params;
+    const eventDefinition = this.resolveEventDefinition(params.eventDefinition);
+    const eventMetadata = this.resolveEventMetadata(eventDefinition);
+    const source =
+      this.store?.toRuntimeSource(params.source) ??
+      this.ensureSourcePath(params.source);
     let { data } = params;
     // Snapshot interceptors so in-flight emissions stay deterministic even if
     // dispose() clears interceptor registries mid-emission.
@@ -238,14 +241,18 @@ export class EventManager {
       } catch (error) {
         validationError.throw({
           subject: "Event payload",
-          id: outputEventId,
+          id: eventMetadata.id,
           originalError:
             error instanceof Error ? error : new Error(String(error)),
         });
       }
     }
 
-    const frame = { id: eventDefinition.id, source };
+    const frame = {
+      id: eventMetadata.runtimeId,
+      source,
+    };
+    const eventDefinitionIdentity = getDefinitionIdentity(eventDefinition);
     const processEmission = async (): Promise<{
       emission: IEventEmission<TInput>;
       report: IEventEmitReport;
@@ -257,13 +264,16 @@ export class EventManager {
         emissionInterceptorsSnapshot.length === 0
       ) {
         const event = new EventEmissionImpl<TInput>(
-          outputEventId,
+          eventMetadata.id,
+          eventMetadata.path,
           data,
           new Date(),
           source,
           eventDefinition.meta ?? {},
           Boolean(eventDefinition.transactional),
           eventDefinition.tags,
+          eventMetadata.runtimeId,
+          eventDefinitionIdentity,
         );
         return {
           emission: event as IEventEmission<TInput>,
@@ -284,13 +294,16 @@ export class EventManager {
         eventDefinition.tags.length > 0 ? [...eventDefinition.tags] : [];
 
       const event = new EventEmissionImpl<TInput>(
-        outputEventId,
+        eventMetadata.id,
+        eventMetadata.path,
         data,
         new Date(),
         source,
         eventMeta,
         Boolean(eventDefinition.transactional),
         eventTags,
+        eventMetadata.runtimeId,
+        eventDefinitionIdentity,
       );
 
       const context = new EmissionContext<TInput>(
@@ -357,8 +370,7 @@ export class EventManager {
     if (Array.isArray(event)) {
       event.forEach((id) => this.addListener(id, handler, options));
     } else {
-      const resolvedEvent = this.eventDefinitionResolver?.(event) ?? event;
-      const eventId = resolvedEvent.id;
+      const eventId = this.resolveEventMetadata(event).runtimeId;
       this.registry.addListener(eventId, newListener);
     }
   }
@@ -400,7 +412,9 @@ export class EventManager {
    * @returns true if listeners exist, false otherwise
    */
   hasListeners<T>(eventDefinition: IEvent<T>): boolean {
-    return this.registry.hasListeners(eventDefinition);
+    return this.registry.hasListeners(
+      this.resolveEventDefinition(eventDefinition),
+    );
   }
 
   /**
@@ -454,10 +468,9 @@ export class EventManager {
       baseExecute,
     );
 
-    const hookSource: RuntimeCallSource = {
-      kind: RuntimeCallSourceKind.Hook,
-      id: hookId,
-    };
+    const hookSource: RuntimeCallSource =
+      this.store?.createRuntimeSource(RuntimeCallSourceKind.Hook, hook) ??
+      runtimeSource.hook(hookId);
 
     return this.lifecycleAdmissionController.trackHookExecution(
       hookSource,
@@ -490,6 +503,39 @@ export class EventManager {
     this.registry.clear();
     this.emissionInterceptors.length = 0;
     this.hookInterceptors.length = 0;
+  }
+
+  private resolveEventDefinition<T>(eventDefinition: IEvent<T>): IEvent<T> {
+    if (!this.store) {
+      return eventDefinition;
+    }
+
+    const resolvedId = this.store.resolveDefinitionId(eventDefinition);
+    if (!resolvedId) {
+      return eventDefinition;
+    }
+
+    const storeEvent = this.store.events.get(resolvedId);
+    return (storeEvent?.event ?? eventDefinition) as IEvent<T>;
+  }
+
+  private resolveEventMetadata<T>(eventDefinition: IEvent<T>) {
+    if (!this.store) {
+      return {
+        id: eventDefinition.id,
+        path: eventDefinition.path ?? eventDefinition.id,
+        runtimeId: getRuntimeId(eventDefinition) ?? eventDefinition.id,
+      };
+    }
+
+    return this.store.getRuntimeMetadata(eventDefinition);
+  }
+
+  private ensureSourcePath(source: RuntimeCallSource): RuntimeCallSource {
+    return {
+      ...source,
+      path: source.path ?? source.id,
+    };
   }
 }
 

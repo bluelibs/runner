@@ -19,6 +19,7 @@ import {
   type RpcLanesRuntimeContext,
 } from "./rpcLanes.runtime.utils";
 import type { RpcLanesResourceConfig } from "./types";
+import { getRuntimeId } from "../../tools/runtimeMetadata";
 
 export function applyLocalSimulatedModeRouting(
   context: RpcLanesRuntimeContext,
@@ -59,7 +60,7 @@ export function applyLocalSimulatedModeRouting(
 
   dependencies.eventManager.intercept(async (next, emission) => {
     const resolvedEmissionEventId =
-      store.events.get(emission.id)?.event.id ?? emission.id;
+      getRuntimeId(emission) ?? emission.path ?? emission.id;
     const lane = resolved.eventLaneByEventId.get(resolvedEmissionEventId);
     if (!lane) {
       return next(emission);

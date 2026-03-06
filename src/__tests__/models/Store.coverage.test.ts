@@ -1,25 +1,36 @@
-import { defineEvent, defineResource } from "../../define";
+import { defineResource } from "../../define";
 import { validationError } from "../../errors";
+import { symbolRuntimeId } from "../../types/symbols";
+import { runtimeSource } from "../../types/runtimeSource";
 import { createTestFixture } from "../test-utils";
 
 describe("Store coverage", () => {
-  it("keeps original events when definition resolution misses or no stored event exists", () => {
-    const { store, eventManager } = createTestFixture();
-    const resolver = (
-      eventManager as unknown as {
-        eventDefinitionResolver: (eventDefinition: unknown) => unknown;
-      }
-    ).eventDefinitionResolver;
-    const event = defineEvent({
-      id: "store-coverage-event",
+  it("derives runtime metadata from stamped ids and literal strings", () => {
+    const { store } = createTestFixture();
+    const registry = (store as unknown as { registry: any }).registry;
+    const stamped = {
+      id: "ignored",
+      [symbolRuntimeId]: "tasks.store-coverage-runtime",
+    };
+
+    jest
+      .spyOn(registry, "getDisplayId")
+      .mockImplementation((id: unknown) =>
+        id === "tasks.store-coverage-runtime" ? "store-coverage-runtime" : id,
+      );
+
+    expect(store.getRuntimeDefinitionId(stamped)).toBe(
+      "tasks.store-coverage-runtime",
+    );
+    expect(store.getRuntimeMetadata(stamped)).toEqual({
+      id: "store-coverage-runtime",
+      path: "tasks.store-coverage-runtime",
+      runtimeId: "tasks.store-coverage-runtime",
     });
-    const resolveSpy = jest.spyOn(store, "resolveDefinitionId");
-
-    resolveSpy.mockReturnValueOnce(undefined);
-    expect(resolver(event)).toBe(event);
-
-    resolveSpy.mockReturnValueOnce("store-coverage-event-missing");
-    expect(resolver(event)).toBe(event);
+    expect(store.toPublicPath(stamped)).toBe("tasks.store-coverage-runtime");
+    expect(store.createRuntimeSource("runtime", "runtime.literal")).toEqual(
+      runtimeSource.runtime("runtime.literal"),
+    );
   });
 
   it("falls back to raw ids for owner lookup and fails fast on unresolved public ids", () => {

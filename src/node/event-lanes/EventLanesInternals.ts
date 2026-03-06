@@ -149,7 +149,7 @@ export function isRelayEmission(
 ): boolean {
   return (
     emission.source.kind === "runtime" &&
-    emission.source.id.startsWith(relaySourcePrefix)
+    (emission.source.path ?? emission.source.id).startsWith(relaySourcePrefix)
   );
 }
 

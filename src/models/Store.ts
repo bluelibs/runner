@@ -42,12 +42,15 @@ import {
 } from "./utils/disposeOrder";
 import { RunResult } from "./RunResult";
 import type { RuntimeCallSource } from "../types/runtimeSource";
+import { runtimeSource } from "../types/runtimeSource";
 import {
   LifecycleAdmissionController,
   RuntimeLifecyclePhase,
 } from "./runtime/LifecycleAdmissionController";
 import { createFrameworkRootGateway } from "./createFrameworkRootGateway";
 import type { DebugFriendlyConfig } from "../globals/resources/debug";
+import { symbolRuntimeId } from "../types/symbols";
+import { getRuntimeId } from "../tools/runtimeMetadata";
 
 // Re-export types for backward compatibility
 export type {
@@ -92,18 +95,7 @@ export class Store {
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
     this.middlewareManager = new MiddlewareManager(this, eventManager, logger);
-    this.eventManager.setEventDefinitionResolver((eventDefinition: any) => {
-      const resolvedId = this.resolveDefinitionId(eventDefinition);
-      if (!resolvedId) {
-        return eventDefinition;
-      }
-
-      const storeEvent = this.events.get(resolvedId);
-      return (storeEvent?.event ?? eventDefinition) as any;
-    });
-    this.eventManager.setEventIdFormatter((eventId) =>
-      this.toPublicId(eventId),
-    );
+    this.eventManager.bindStore(this);
 
     this.mode = detectRunnerMode(mode);
   }
@@ -177,26 +169,73 @@ export class Store {
   }
 
   public toPublicId(reference: unknown): string {
-    const resolvedId = this.resolveDefinitionId(reference);
-    this.assertResolvedDefinitionId(resolvedId, reference);
+    return this.getRuntimeMetadata(reference).id;
+  }
 
-    return this.registry.getDisplayId(resolvedId);
+  public toPublicPath(reference: unknown): string {
+    return this.getRuntimeMetadata(reference).path;
+  }
+
+  public getRuntimeDefinitionId(reference: unknown): string {
+    const runtimeId =
+      getRuntimeId(reference) ?? this.resolveDefinitionId(reference);
+    this.assertResolvedDefinitionId(runtimeId, reference);
+    return runtimeId;
+  }
+
+  public getRuntimeMetadata(reference: unknown): {
+    id: string;
+    path: string;
+    runtimeId: string;
+  } {
+    const runtimeId = this.getRuntimeDefinitionId(reference);
+    return {
+      id: this.registry.getDisplayId(runtimeId),
+      path: runtimeId,
+      runtimeId,
+    };
+  }
+
+  public toRuntimeSource(source: RuntimeCallSource): RuntimeCallSource {
+    const runtimeId = this.getRuntimeDefinitionId(source);
+    return {
+      ...source,
+      id: this.registry.getDisplayId(runtimeId),
+      path: runtimeId,
+    };
+  }
+
+  public createRuntimeSource(
+    kind: RuntimeCallSource["kind"],
+    reference: unknown,
+  ): RuntimeCallSource {
+    const metadata = this.getRuntimeMetadata(reference);
+    switch (kind) {
+      case "task":
+        return runtimeSource.task(metadata.id, metadata.path);
+      case "hook":
+        return runtimeSource.hook(metadata.id, metadata.path);
+      case "resource":
+        return runtimeSource.resource(metadata.id, metadata.path);
+      case "middleware":
+        return runtimeSource.middleware(metadata.id, metadata.path);
+      default:
+        return runtimeSource.runtime(metadata.id, metadata.path);
+    }
   }
 
   private assertResolvedDefinitionId(
     resolvedId: string | undefined,
     reference: unknown,
   ): asserts resolvedId is string {
-    if (typeof resolvedId === "string" && resolvedId.length > 0) {
-      return;
+    if (typeof resolvedId !== "string" || resolvedId.length === 0) {
+      validationError.throw({
+        subject: "Definition reference",
+        id: String(reference),
+        originalError:
+          "Unable to resolve a definition id from the provided reference.",
+      });
     }
-
-    validationError.throw({
-      subject: "Definition reference",
-      id: String(reference),
-      originalError:
-        "Unable to resolve a definition id from the provided reference.",
-    });
   }
 
   /**
@@ -675,9 +714,12 @@ export class Store {
   public toPublicDefinition<TDefinition extends { id: string }>(
     definition: TDefinition,
   ): TDefinition {
+    const metadata = this.getRuntimeMetadata(definition);
     return {
       ...definition,
-      id: this.toPublicId(definition),
+      id: metadata.id,
+      path: metadata.path,
+      [symbolRuntimeId]: metadata.runtimeId,
     };
   }
 }

@@ -297,7 +297,10 @@ export class TaskMiddlewareComposer {
       const middlewareId = this.store.resolveDefinitionId(middleware)!;
       const storeMiddleware = this.store.taskMiddlewares.get(middlewareId)!;
       const nextFunction = next;
-      const middlewareSource = runtimeSource.middleware(middlewareId);
+      const middlewareSource = this.store.createRuntimeSource(
+        "middleware",
+        middlewareId,
+      );
 
       // Create base middleware runner (captures journal from closure)
       const baseMiddlewareRunner = async (

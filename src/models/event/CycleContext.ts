@@ -49,7 +49,7 @@ export class CycleContext {
         const isSafeReEmit =
           top.id === frame.id &&
           currentHookId &&
-          currentHookId === frame.source.id &&
+          currentHookId === frame.source.path &&
           !this.sameSource(top.source, frame.source) &&
           !hasSameSourceInCycle;
 
@@ -81,6 +81,6 @@ export class CycleContext {
   }
 
   private sameSource(a: RuntimeCallSource, b: RuntimeCallSource): boolean {
-    return a.kind === b.kind && a.id === b.id;
+    return a.kind === b.kind && a.path === b.path;
   }
 }

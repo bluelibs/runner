@@ -10,7 +10,10 @@ import {
 import { defineAsyncContext } from "../../definers/defineAsyncContext";
 import { defineError } from "../../definers/defineError";
 import { Store } from "../../models/Store";
-import { symbolTagConfiguredFrom } from "../../types/symbols";
+import {
+  symbolDefinitionIdentity,
+  symbolTagConfiguredFrom,
+} from "../../types/symbols";
 import { createTestFixture } from "../test-utils";
 
 describe("StoreRegistry facade delegates", () => {
@@ -192,6 +195,53 @@ describe("StoreRegistry facade delegates", () => {
     ).not.toThrow();
 
     expect(registry.resolveDefinitionId(configured)).toBe(resource.id);
+  });
+
+  it("fails fast when a definition alias is remapped to a different id", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+    const reference = {};
+
+    registry.registerDefinitionAlias(reference, "app-alias-first");
+    expect(() =>
+      registry.registerDefinitionAlias(reference, "app-alias-second"),
+    ).toThrow(/cannot be remapped/i);
+  });
+
+  it("resolves configured-from aliases when the configured source is already registered", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+    const configuredFrom = { id: "registry-configured-from-source" };
+    const reference = {
+      [symbolTagConfiguredFrom]: configuredFrom,
+    };
+
+    registry.definitionAliases.set(
+      configuredFrom,
+      "registry-configured-from-canonical",
+    );
+
+    expect(registry.resolveDefinitionId(reference)).toBe(
+      "registry-configured-from-canonical",
+    );
+  });
+
+  it("fails fast when a shared definition identity is remapped to a different id", () => {
+    const registry = (store as unknown as { registry: any }).registry;
+    const event = defineEvent({ id: "registry-identity-remap-event" });
+    const clonedReference = Object.defineProperty(
+      { id: "registry-identity-remap-clone" },
+      symbolDefinitionIdentity,
+      {
+        value: (event as unknown as Record<symbol, unknown>)[
+          symbolDefinitionIdentity
+        ],
+      },
+    );
+
+    registry.registerDefinitionAlias(event, "events.identity.one");
+
+    expect(() =>
+      registry.registerDefinitionAlias(clonedReference, "events.identity.two"),
+    ).toThrow(/cannot be remapped/i);
   });
 
   it("fails fast when a definition alias is remapped to a different id", () => {

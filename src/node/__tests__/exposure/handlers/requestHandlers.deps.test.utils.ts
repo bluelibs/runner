@@ -1,3 +1,8 @@
+import {
+  createMockRuntimeSource,
+  resolveMockDefinitionId,
+} from "../../../../__tests__/test-utils/createMockRuntimeSource";
+
 type AnyRecord = Record<string, unknown>;
 
 export function createRequestHandlersDeps(
@@ -13,14 +18,12 @@ export function createRequestHandlersDeps(
       events: new Map(),
       errors: new Map(),
       asyncContexts: new Map(),
-      resolveDefinitionId: (reference: unknown) =>
-        typeof reference === "string"
-          ? reference
-          : (reference as { id?: string })?.id,
+      resolveDefinitionId: resolveMockDefinitionId,
       toPublicId: (reference: unknown) =>
         typeof reference === "string"
           ? reference
           : ((reference as { id?: string })?.id ?? String(reference)),
+      createRuntimeSource: createMockRuntimeSource,
     },
     taskRunner: { run: async () => undefined },
     eventManager: {

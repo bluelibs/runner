@@ -303,4 +303,84 @@ describe("EventLanesController unit coverage", () => {
     expect(stopPropagation).toHaveBeenCalledTimes(1);
     expect(next).not.toHaveBeenCalled();
   });
+
+  it("logs enqueue diagnostics with source ids when source paths are absent", async () => {
+    const queue = {
+      enqueue: jest.fn(async () => undefined),
+    };
+    const intercept = jest.fn();
+    const diagnostics = {
+      logEnqueue: jest.fn(async () => undefined),
+      logRelayEmit: async () => undefined,
+      logSkipInactiveLane: async () => undefined,
+    };
+    const controller = new EventLanesController(
+      createBaseConfig(),
+      {
+        eventManager: {
+          intercept,
+          addListener: jest.fn(),
+        } as any,
+        serializer: {
+          stringify: JSON.stringify,
+          parse: JSON.parse,
+        } as any,
+        store: {
+          events: new Map(),
+          toPublicId: (id: string) => id,
+        } as any,
+        logger: { error: jest.fn(async () => undefined) } as any,
+      },
+      {
+        profile: "unit",
+        started: false,
+        coolingDown: false,
+        disposed: false,
+        activeBindingsByQueue: new Map(),
+        bindingsByLaneId: new Map([
+          [
+            "lane-unit-raw-source",
+            {
+              lane: { id: "lane-unit-raw-source" },
+              queue,
+            },
+          ],
+        ]),
+        eventRouteByEventId: new Map([
+          [
+            "unit-raw-source-event",
+            {
+              lane: { id: "lane-unit-raw-source" },
+            },
+          ],
+        ]),
+        queues: new Set(),
+        managedQueues: new Set(),
+        relaySourcePrefix: "relay:",
+      } as any,
+      diagnostics as any,
+    );
+
+    (controller as any).registerProducerInterceptor();
+    const interceptor = intercept.mock.calls[0][0];
+
+    await interceptor(
+      jest.fn(async () => "next-result"),
+      {
+        id: "unit-raw-source-event",
+        data: { ok: true },
+        source: {
+          kind: "runtime",
+          id: "relay.raw-source",
+        },
+        stopPropagation() {},
+      },
+    );
+
+    expect(diagnostics.logEnqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: "relay.raw-source",
+      }),
+    );
+  });
 });

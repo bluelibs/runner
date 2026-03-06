@@ -1,5 +1,5 @@
 import { createMessageError } from "../../../errors";
-import { r, run } from "../../..";
+import { isSameDefinition, r, run } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
   EventLaneMessage,
@@ -48,7 +48,7 @@ describe("eventLanes applyTo predicate", () => {
       .build();
     const lane = r
       .eventLane("tests-event-lanes-apply-to-predicate-lane")
-      .applyTo((candidate) => candidate.id.endsWith(event.id))
+      .applyTo((candidate) => isSameDefinition(candidate, event))
       .build();
 
     const emitTask = r
@@ -79,6 +79,53 @@ describe("eventLanes applyTo predicate", () => {
 
     await waitUntil(() => queue.enqueued.length === 1);
     expect(queue.enqueued[0].eventId).toBe(event.id);
+
+    await runtime.dispose();
+  });
+
+  it("routes only the intended sibling event when local ids collide", async () => {
+    const queue = new RecordingQueue();
+    const leftEvent = r.event<{ value: number }>("shared-event").build();
+    const rightEvent = r.event<{ value: number }>("shared-event").build();
+    const lane = r
+      .eventLane("tests-event-lanes-apply-to-predicate-shared-event-lane")
+      .applyTo((candidate) => isSameDefinition(candidate, rightEvent))
+      .build();
+
+    const leftResource = r.resource("left").register([leftEvent]).build();
+    const rightResource = r.resource("right").register([rightEvent]).build();
+
+    const emitTask = r
+      .task("tests-event-lanes-apply-to-predicate-shared-event-emit")
+      .dependencies({ leftEvent, rightEvent })
+      .run(async (_input, deps) => {
+        await deps.leftEvent({ value: 1 });
+        await deps.rightEvent({ value: 2 });
+      })
+      .build();
+
+    const app = r
+      .resource("tests-event-lanes-apply-to-predicate-shared-event-app")
+      .register([
+        leftResource,
+        rightResource,
+        emitTask,
+        eventLanesResource.with({
+          profile: "producer",
+          topology: {
+            profiles: { producer: { consume: [] } },
+            bindings: [{ lane, queue }],
+          },
+        }),
+      ])
+      .build();
+
+    const runtime = await run(app);
+    await runtime.runTask(emitTask);
+
+    await waitUntil(() => queue.enqueued.length === 1);
+    expect(queue.enqueued[0].eventId).toBe(rightEvent.id);
+    expect(JSON.parse(queue.enqueued[0].payload)).toEqual({ value: 2 });
 
     await runtime.dispose();
   });

@@ -1,6 +1,6 @@
 import { defineRpcLane, isRpcLane } from "../../define";
 import { rpcLaneInvalidIdError } from "../../errors";
-import { definitions, r } from "../..";
+import { definitions, isSameDefinition, r } from "../..";
 
 describe("rpc lane builder", () => {
   it("builds rpc lanes via defineRpcLane", () => {
@@ -93,7 +93,9 @@ describe("rpc lane builder", () => {
     const lane = r
       .rpcLane("tests-rpc-lanes-builder-apply-to-predicate-lane")
       .applyTo(
-        (candidate) => candidate.id === task.id || candidate.id === event.id,
+        (candidate) =>
+          isSameDefinition(candidate, task) ||
+          isSameDefinition(candidate, event),
       )
       .build();
 

@@ -9,7 +9,6 @@ import { MiddlewareResolver } from "./MiddlewareResolver";
 import { ValidationHelper } from "./ValidationHelper";
 import { IResourceMiddlewareExecutionInput } from "../../types/resourceMiddleware";
 import type { ResourceMiddlewareInterceptor } from "./types";
-import { runtimeSource } from "../../types/runtimeSource";
 import { LifecycleAdmissionController } from "../runtime/LifecycleAdmissionController";
 import { toPublicDefinition } from "../utils/toPublicDefinition";
 
@@ -123,7 +122,10 @@ export class ResourceMiddlewareComposer {
       const middlewareId = this.store.resolveDefinitionId(middleware)!;
       const storeMiddleware = this.store.resourceMiddlewares.get(middlewareId)!;
       const nextFunction = next;
-      const middlewareSource = runtimeSource.middleware(middlewareId);
+      const middlewareSource = this.store.createRuntimeSource(
+        "middleware",
+        middlewareId,
+      );
 
       // Create base middleware runner
       const baseMiddlewareRunner = async (cfg: TConfig) => {

@@ -1,6 +1,6 @@
 import { defineEventLane, isEventLane } from "../../define";
 import { eventLaneInvalidIdError } from "../../errors";
-import { definitions, r } from "../..";
+import { definitions, isSameDefinition, r } from "../..";
 
 describe("event lane builder", () => {
   it("builds event lanes via defineEventLane", () => {
@@ -63,7 +63,7 @@ describe("event lane builder", () => {
       .build();
     const lane = r
       .eventLane("tests-event-lanes-builder-apply-to-predicate-lane")
-      .applyTo((candidate) => candidate.id === event.id)
+      .applyTo((candidate) => isSameDefinition(candidate, event))
       .build();
 
     const applyTo = lane.applyTo;

@@ -8,20 +8,22 @@ import {
   MimeType,
 } from "./requestHandlers.test.utils";
 import { cancellationError } from "../../../../errors";
+import {
+  createMockRuntimeSource,
+  resolveMockDefinitionId,
+} from "../../../../__tests__/test-utils/createMockRuntimeSource";
 
 function createStore(eventId: string, asyncContexts: Map<string, unknown>) {
   return {
     events: new Map([[eventId, { event: { id: eventId } }]]),
     asyncContexts,
     errors: new Map(),
-    resolveDefinitionId: (reference: unknown) =>
-      typeof reference === "string"
-        ? reference
-        : (reference as { id?: string })?.id,
+    resolveDefinitionId: resolveMockDefinitionId,
     toPublicId: (reference: unknown) =>
       typeof reference === "string"
         ? reference
         : ((reference as { id?: string })?.id ?? String(reference)),
+    createRuntimeSource: createMockRuntimeSource,
   };
 }
 
@@ -160,6 +162,7 @@ describe("eventHandler allowAsyncContext option", () => {
           typeof reference === "string"
             ? reference
             : ((reference as { id?: string })?.id ?? String(reference)),
+        createRuntimeSource: createMockRuntimeSource,
       } as any,
       eventManager: {
         emit: async () => undefined,

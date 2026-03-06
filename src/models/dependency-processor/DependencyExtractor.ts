@@ -40,11 +40,7 @@ import type {
   ResourceMiddlewareInterceptor,
   TaskMiddlewareInterceptor,
 } from "../middleware/types";
-import {
-  RuntimeCallSource,
-  RuntimeCallSourceKind,
-  runtimeSource,
-} from "../../types/runtimeSource";
+import { RuntimeCallSource, runtimeSource } from "../../types/runtimeSource";
 
 const MIDDLEWARE_MANAGER_RESOURCE_ID = "system.middlewareManager";
 
@@ -555,23 +551,20 @@ export class DependencyExtractor {
 
   private resolveRuntimeCallSource(sourceId: string): RuntimeCallSource {
     if (this.store.tasks.has(sourceId)) {
-      return runtimeSource.task(sourceId);
+      return this.store.createRuntimeSource("task", sourceId);
     }
     if (this.store.hooks.has(sourceId)) {
-      return runtimeSource.hook(sourceId);
+      return this.store.createRuntimeSource("hook", sourceId);
     }
     if (
       this.store.taskMiddlewares.has(sourceId) ||
       this.store.resourceMiddlewares.has(sourceId)
     ) {
-      return runtimeSource.middleware(sourceId);
+      return this.store.createRuntimeSource("middleware", sourceId);
     }
     if (this.store.resources.has(sourceId)) {
-      return runtimeSource.resource(sourceId);
+      return this.store.createRuntimeSource("resource", sourceId);
     }
-    return {
-      kind: RuntimeCallSourceKind.Runtime,
-      id: sourceId,
-    };
+    return runtimeSource.runtime(sourceId);
   }
 }

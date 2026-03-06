@@ -1879,7 +1879,7 @@ const myHook = r
 
 #### Multiple Events (type-safe intersection)
 
-Hooks can listen to multiple events by providing an array to `on`. The `run(event)` payload is inferred as the common (intersection-like) shape across all provided event payloads. Use the `onAnyOf()` helper to preserve tuple inference ergonomics, and `isOneOf()` as a convenient runtime/type guard when needed.
+Hooks can listen to multiple events by providing an array to `on`. The `run(event)` payload is inferred as the common (intersection-like) shape across all provided event payloads. Use the `onAnyOf()` helper to preserve tuple inference ergonomics, and `isOneOf()` as a convenient runtime/type guard when needed. When an emission comes from Runner runtime it follows definition identity, so sibling events may safely share the same local id.
 
 ```typescript
 import { r, onAnyOf, isOneOf } from "@bluelibs/runner";
@@ -5646,6 +5646,7 @@ Notes:
 - Register interceptors during resource `init` before the runtime locks.
 - `taskRunner.intercept(...)` runs outermost around the task middleware pipeline.
 - `deps.someTask.intercept(...)` runs inside task middleware and only for that task.
+- When `when(...)` must target one concrete definition, prefer `isSameDefinition(taskDefinition, someTask)` over comparing public ids directly.
 
 ---
 

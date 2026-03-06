@@ -216,7 +216,7 @@ export class LifecycleAdmissionController {
   }
 
   private sourceKey(source: RuntimeCallSource): string {
-    return `${source.kind}:${source.id}`;
+    return `${source.kind}:${source.path}`;
   }
 
   private isBusinessWorkDrained(): boolean {

@@ -1,6 +1,10 @@
 import { createRequestHandlers } from "../../../exposure/requestHandlers";
 import { Serializer } from "../../../../serializer";
 import {
+  createMockRuntimeSource,
+  resolveMockDefinitionId,
+} from "../../../../__tests__/test-utils/createMockRuntimeSource";
+import {
   createReqRes,
   HeaderName,
   HttpMethod,
@@ -12,14 +16,12 @@ describe("requestHandlers - content-type handling", () => {
   const getDeps = () => ({
     store: {
       tasks: new Map([["t", { task: async () => 7 }]]),
-      resolveDefinitionId: (reference: unknown) =>
-        typeof reference === "string"
-          ? reference
-          : (reference as { id?: string })?.id,
+      resolveDefinitionId: resolveMockDefinitionId,
       toPublicId: (reference: unknown) =>
         typeof reference === "string"
           ? reference
           : ((reference as { id?: string })?.id ?? String(reference)),
+      createRuntimeSource: createMockRuntimeSource,
     },
     taskRunner: { run: async () => 7 },
     eventManager: {} as any,

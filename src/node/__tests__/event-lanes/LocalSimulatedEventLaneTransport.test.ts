@@ -2,6 +2,7 @@ import { defineEvent } from "../../../define";
 import { Logger } from "../../../models/Logger";
 import { Serializer } from "../../../serializer/Serializer";
 import { runtimeSource } from "../../../types/runtimeSource";
+import { symbolRuntimeId } from "../../../types/symbols";
 import { EventManager } from "../../../models/EventManager";
 import type { Store } from "../../../models/Store";
 import { EventLanesDiagnostics } from "../../event-lanes/EventLanesDiagnostics";
@@ -249,6 +250,67 @@ describe("LocalSimulatedEventLaneTransport", () => {
     );
   });
 
+  it("logs enqueue diagnostics with source ids when source paths are absent", async () => {
+    const intercept = jest.fn();
+    const diagnostics = {
+      logEnqueue: jest.fn(async () => undefined),
+    } as unknown as EventLanesDiagnostics;
+    const transport = new LocalSimulatedEventLaneTransport(
+      {
+        eventManager: {
+          intercept,
+        } as unknown as EventManager,
+        serializer: {
+          stringify: JSON.stringify,
+        } as unknown as Serializer,
+        store: {
+          toPublicId: (id: string) => id,
+        } as unknown as Store,
+        logger: createLogger(),
+      },
+      {
+        ...createContext(),
+        eventRouteByEventId: new Map([
+          [
+            "tests.local-simulated.raw-source-event",
+            {
+              lane: { id: "tests.local-simulated.raw-source-lane" },
+            },
+          ],
+        ]),
+      },
+      diagnostics,
+    );
+    jest
+      .spyOn(
+        transport as unknown as { scheduleRelay: (message: unknown) => void },
+        "scheduleRelay",
+      )
+      .mockImplementation(() => undefined);
+
+    transport.register();
+    const interceptor = intercept.mock.calls[0][0];
+
+    await interceptor(
+      jest.fn(async () => undefined),
+      {
+        id: "tests.local-simulated.raw-source-event",
+        data: { value: 1 },
+        source: {
+          kind: "runtime",
+          id: "relay.raw-source",
+        },
+        stopPropagation() {},
+      },
+    );
+
+    expect((diagnostics as any).logEnqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: "relay.raw-source",
+      }),
+    );
+  });
+
   it("falls back to no lane policy when lane id is not found in routing table", async () => {
     const logger = createLogger();
     jest.spyOn(logger, "error").mockResolvedValue();
@@ -327,6 +389,56 @@ describe("LocalSimulatedEventLaneTransport", () => {
         data: { value: 1 },
         source: runtimeSource.task("tests-local-simulated-raw-id.source"),
         stopPropagation,
+      },
+    );
+
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(scheduleRelay).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes producer emissions by definition identity before falling back to emission ids", async () => {
+    const logger = createLogger();
+    const intercept = jest.fn();
+    const context = createContext();
+    const diagnostics = {
+      logEnqueue: jest.fn(async () => undefined),
+    };
+    context.eventRouteByEventId.set("right.shared-event", {
+      lane: { id: "tests-local-simulated-identity-lane" },
+    } as any);
+
+    const transport = new LocalSimulatedEventLaneTransport(
+      {
+        eventManager: { intercept } as any,
+        serializer: new Serializer(),
+        store: {
+          events: new Map(),
+          toPublicId: (id: string) => id,
+        } as any,
+        logger,
+      },
+      context,
+      diagnostics as any,
+    );
+    const scheduleRelay = jest
+      .spyOn(transport as any, "scheduleRelay")
+      .mockImplementation(() => undefined);
+
+    transport.register();
+    const interceptor = intercept.mock.calls[0][0];
+    const stopPropagation = jest.fn();
+
+    await interceptor(
+      jest.fn(async () => "next-result"),
+      {
+        id: "shared-event",
+        path: "right.shared-event",
+        data: { value: 2 },
+        source: runtimeSource.task(
+          "tests-local-simulated-definition-identity.source",
+        ),
+        stopPropagation,
+        [symbolRuntimeId]: "right.shared-event",
       },
     );
 

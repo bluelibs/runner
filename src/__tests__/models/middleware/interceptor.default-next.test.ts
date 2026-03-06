@@ -4,18 +4,13 @@ import { ResourceMiddlewareComposer } from "../../../models/middleware/ResourceM
 import { TaskMiddlewareComposer } from "../../../models/middleware/TaskMiddlewareComposer";
 import { LifecycleAdmissionController } from "../../../models/runtime/LifecycleAdmissionController";
 import { defineResourceMiddleware } from "../../../define";
+import {
+  createMockRuntimeSource,
+  resolveMockDefinitionId,
+} from "../../test-utils/createMockRuntimeSource";
 
 const resolveDefinitionId = (reference: unknown): string | undefined => {
-  if (typeof reference === "string") {
-    return reference;
-  }
-  if (reference && typeof reference === "object" && "id" in reference) {
-    const id = (reference as { id?: unknown }).id;
-    if (typeof id === "string" && id.length > 0) {
-      return id;
-    }
-  }
-  return undefined;
+  return resolveMockDefinitionId(reference);
 };
 
 describe("Middleware interceptor default next() argument branches", () => {
@@ -28,6 +23,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       onUnhandledError: jest.fn(),
       resolveDefinitionId,
       toPublicId: (id: string) => id,
+      createRuntimeSource: createMockRuntimeSource,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
@@ -63,6 +59,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       onUnhandledError: jest.fn(),
       resolveDefinitionId,
       toPublicId: (id: string) => id,
+      createRuntimeSource: createMockRuntimeSource,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
@@ -113,6 +110,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       resources: new Map(),
       resolveDefinitionId,
       toPublicId: (id: string) => id,
+      createRuntimeSource: createMockRuntimeSource,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
@@ -155,6 +153,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       onUnhandledError: jest.fn(),
       resolveDefinitionId,
       toPublicId: (id: string) => id,
+      createRuntimeSource: createMockRuntimeSource,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
@@ -204,6 +203,7 @@ describe("Middleware interceptor default next() argument branches", () => {
       onUnhandledError: jest.fn(),
       resolveDefinitionId,
       toPublicId: (id: string) => id,
+      createRuntimeSource: createMockRuntimeSource,
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };

@@ -15,7 +15,7 @@ function isObjectLike(value: unknown): value is Record<PropertyKey, unknown> {
   );
 }
 
-function getDefinitionIdentity(value: unknown): object | undefined {
+export function getDefinitionIdentity(value: unknown): object | undefined {
   if (!isObjectLike(value)) {
     return undefined;
   }
@@ -45,6 +45,10 @@ function getDefinitionIdentity(value: unknown): object | undefined {
   }
 
   return undefined;
+}
+
+export function hasDefinitionIdentity(value: unknown): boolean {
+  return getDefinitionIdentity(value) !== undefined;
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   issueRemoteLaneToken,
   verifyRemoteLaneToken,
 } from "../remote-lanes/laneAuth";
+import { getRuntimeId } from "../../tools/runtimeMetadata";
 
 type Dependencies = {
   eventManager: EventManager;
@@ -45,8 +46,7 @@ export class LocalSimulatedEventLaneTransport {
       }
 
       const resolvedEmissionEventId =
-        this.dependencies.store.events.get(emission.id)?.event.id ??
-        emission.id;
+        getRuntimeId(emission) ?? emission.path ?? emission.id;
       const eventRoute = this.context.eventRouteByEventId.get(
         resolvedEmissionEventId,
       );
@@ -83,7 +83,7 @@ export class LocalSimulatedEventLaneTransport {
         profile: this.context.profile,
         mode: "local-simulated",
         sourceKind: emission.source.kind,
-        sourceId: emission.source.id,
+        sourceId: emission.source.path ?? emission.source.id,
       });
 
       this.scheduleRelay(message);

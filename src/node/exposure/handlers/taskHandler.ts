@@ -23,7 +23,6 @@ import {
 import { withExposureContext } from "./contextWrapper";
 import { getRequestId } from "../requestIdentity";
 import type { MultipartLimits } from "../multipart";
-import { runtimeSource } from "../../../types/runtimeSource";
 import { respondTaskResult } from "./taskResult";
 
 interface TaskHandlerDeps {
@@ -67,7 +66,10 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     sourceResourceId = "platform-node-resources-rpcLanes",
   } = deps;
 
-  const exposureSource = runtimeSource.resource(sourceResourceId);
+  const exposureSource = store.createRuntimeSource(
+    "resource",
+    sourceResourceId,
+  );
 
   return async (
     req: IncomingMessage,

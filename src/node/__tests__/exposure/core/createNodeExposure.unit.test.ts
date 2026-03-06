@@ -1,5 +1,6 @@
 import { Serializer } from "../../../../serializer";
 import { createNodeExposure } from "../../../exposure/createNodeExposure";
+import { createMockRuntimeSource } from "../../../../__tests__/test-utils/createMockRuntimeSource";
 import {
   createReqRes,
   HttpMethod,
@@ -21,6 +22,7 @@ describe("createNodeExposure", () => {
           events: new Map(),
           errors: new Map(),
           asyncContexts: new Map(),
+          createRuntimeSource: createMockRuntimeSource,
         } as any,
         authValidators: { tasks: [] } as any,
         taskRunner: { run: async () => undefined } as any,

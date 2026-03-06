@@ -192,7 +192,9 @@ describe("RunResult", () => {
     await runtime.runTask(parent);
 
     const parentTaskId = runtime.store.resolveDefinitionId(parent)!;
-    expect(seenChildSources[0]).toEqual(runtimeSource.task(parentTaskId));
+    expect(seenChildSources[0]).toEqual(
+      runtimeSource.task(parent.id, parentTaskId),
+    );
     await runtime.dispose();
   });
 

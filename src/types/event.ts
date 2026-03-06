@@ -5,8 +5,18 @@ import {
 } from "./utilities";
 import { EventTagType } from "./tag";
 import { IEventMeta } from "./meta";
-import { CommonPayload, symbolEvent, symbolFilePath } from "./utilities";
+import {
+  CommonPayload,
+  symbolDefinitionIdentity,
+  symbolEvent,
+  symbolFilePath,
+  symbolRuntimeId,
+} from "./utilities";
 import { RuntimeCallSource } from "./runtimeSource";
+import {
+  hasDefinitionIdentity,
+  isSameDefinition,
+} from "../tools/isSameDefinition";
 
 export type EventHandlerType<T = any> = (
   event: IEventEmission<T>,
@@ -68,7 +78,15 @@ export function isOneOf<TDefs extends readonly IEventDefinition<any>[]>(
   emission: IEventEmission<any>,
   defs: TDefs,
 ): emission is IEventEmission<CommonPayload<TDefs>> {
-  return defs.some((d) => d.id === emission.id);
+  if (defs.some((definition) => isSameDefinition(definition, emission))) {
+    return true;
+  }
+
+  if (hasDefinitionIdentity(emission)) {
+    return false;
+  }
+
+  return defs.some((definition) => definition.id === emission.id);
 }
 
 export interface IEventDefinition<TPayload = void> {
@@ -97,6 +115,8 @@ export interface IEventDefinition<TPayload = void> {
  */
 export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
   id: string;
+  path?: string;
+  [symbolRuntimeId]?: string;
   /**
    * We use this event to discriminate between resources with just 'id' and 'events' as they collide. This is a workaround, should be redone using classes and instanceof.
    */
@@ -117,6 +137,7 @@ export interface IEventEmission<TPayload = any> {
    * This is useful for global event listeners.
    */
   id: string;
+  path?: string;
   /**
    * The data that the event carries. It can be anything.
    */
@@ -149,4 +170,6 @@ export interface IEventEmission<TPayload = any> {
    * The tags that the event carries.
    */
   tags: EventTagType[];
+  [symbolDefinitionIdentity]?: object;
+  [symbolRuntimeId]?: string;
 }

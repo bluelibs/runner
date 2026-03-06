@@ -182,6 +182,7 @@ describe("TaskRunner", () => {
     expect(result).toEqual({
       kind: "runtime",
       id: "runtime-internal-taskRunner",
+      path: "runtime-internal-taskRunner",
     });
   });
 

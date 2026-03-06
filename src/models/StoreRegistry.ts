@@ -37,6 +37,7 @@ import { StoreRegistryTagIndex } from "./store-registry/StoreRegistryTagIndex";
 import { StoreRegistryWriter } from "./store-registry/StoreRegistryWriter";
 import { StoringMode, TagIndexBucket } from "./store-registry/types";
 import { validationError } from "../errors";
+import { getDefinitionIdentity } from "../tools/isSameDefinition";
 
 export class StoreRegistry {
   public tasks = new LockableMap<string, TaskStoreElementType>("tasks");
@@ -60,6 +61,7 @@ export class StoreRegistry {
   public errors = new LockableMap<string, IErrorHelper<any>>("errors");
   public readonly visibilityTracker = new VisibilityTracker();
   private readonly definitionAliases = new WeakMap<object, string>();
+  private readonly definitionIdentityAliases = new WeakMap<object, string>();
   private readonly definitionAliasesBySourceId = new Map<string, Set<string>>();
   private readonly sourceIdsByCanonicalId = new Map<string, Set<string>>();
 
@@ -149,6 +151,7 @@ export class StoreRegistry {
     }
 
     this.definitionAliases.set(objectReference, canonicalId);
+    this.recordDefinitionIdentityAlias(reference, canonicalId);
     this.recordSourceIdAlias(reference, canonicalId);
     this.recordCanonicalSourceId(reference, canonicalId);
   }
@@ -169,6 +172,14 @@ export class StoreRegistry {
     const mapped = this.definitionAliases.get(reference as object);
     if (mapped) {
       return mapped;
+    }
+
+    const identity = getDefinitionIdentity(reference);
+    if (identity) {
+      const byIdentity = this.definitionIdentityAliases.get(identity);
+      if (byIdentity) {
+        return byIdentity;
+      }
     }
 
     const configuredFrom = (reference as Record<symbol, unknown>)[
@@ -203,6 +214,27 @@ export class StoreRegistry {
     }
 
     return undefined;
+  }
+
+  private recordDefinitionIdentityAlias(
+    reference: unknown,
+    canonicalId: string,
+  ): void {
+    const identity = getDefinitionIdentity(reference);
+    if (!identity) {
+      return;
+    }
+
+    const existing = this.definitionIdentityAliases.get(identity);
+    if (existing && existing !== canonicalId) {
+      validationError.throw({
+        subject: "Definition identity alias",
+        id: canonicalId,
+        originalError: `Definition identity is already mapped to "${existing}" and cannot be remapped to "${canonicalId}". Use .fork() for distinct registrations.`,
+      });
+    }
+
+    this.definitionIdentityAliases.set(identity, canonicalId);
   }
 
   private recordSourceIdAlias(reference: unknown, canonicalId: string): void {

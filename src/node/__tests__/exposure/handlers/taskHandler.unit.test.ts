@@ -7,6 +7,10 @@ import * as requestBodyModule from "../../../exposure/requestBody";
 import * as errorHandlers from "../../../exposure/handlers/errorHandlers";
 import { createMessageError } from "../../../../errors";
 import { cancellationError } from "../../../../errors";
+import {
+  createMockRuntimeSource,
+  resolveMockDefinitionId,
+} from "../../../../__tests__/test-utils/createMockRuntimeSource";
 
 enum TaskId {
   T = "t",
@@ -41,14 +45,12 @@ function createStore(taskId: string) {
   return {
     tasks: new Map([[taskId, { task: { id: taskId } }]]),
     errors: new Map(),
-    resolveDefinitionId: (reference: unknown) =>
-      typeof reference === "string"
-        ? reference
-        : (reference as { id?: string })?.id,
+    resolveDefinitionId: resolveMockDefinitionId,
     toPublicId: (reference: unknown) =>
       typeof reference === "string"
         ? reference
         : ((reference as { id?: string })?.id ?? String(reference)),
+    createRuntimeSource: createMockRuntimeSource,
   };
 }
 
@@ -277,6 +279,7 @@ describe("taskHandler", () => {
           typeof reference === "string"
             ? reference
             : ((reference as { id?: string })?.id ?? String(reference)),
+        createRuntimeSource: createMockRuntimeSource,
       } as any,
       taskRunner: { run: runTask } as any,
       logger: {

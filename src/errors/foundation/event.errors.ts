@@ -41,13 +41,13 @@ export const eventCycleError = error<
   {
     path: Array<{
       id: string;
-      source: { kind: string; id: string };
+      source: { kind: string; id: string; path?: string };
     }>;
   } & DefaultErrorType
 >("runner.errors.eventCycle")
   .format(({ path }) => {
     const chain = path
-      .map((p) => `${p.id}<-${p.source.kind}:${p.source.id}`)
+      .map((p) => `${p.id}<-${p.source.kind}:${p.source.path ?? p.source.id}`)
       .join("  ->  ");
     return `Event emission cycle detected:\n  ${chain}\n\nBreak the cycle by changing hook logic (avoid mutual emits) or gate with conditions/tags.`;
   })

@@ -12,21 +12,14 @@ import {
   HttpMethod,
   MimeType,
 } from "./requestHandlers.test.utils";
+import {
+  createMockRuntimeSource,
+  resolveMockDefinitionId,
+} from "../../../../__tests__/test-utils/createMockRuntimeSource";
 
 describe("requestHandlers - audit and request id", () => {
   const serializer = new Serializer();
   const taskId = "task_audit";
-  const resolveDefinitionId = (reference: unknown): string | undefined => {
-    if (typeof reference === "string") {
-      return reference;
-    }
-    if (reference && typeof reference === "object" && "id" in reference) {
-      const id = (reference as { id?: unknown }).id;
-      return typeof id === "string" ? id : undefined;
-    }
-    return undefined;
-  };
-
   const getBaseDeps = (): RequestProcessingDeps =>
     ({
       store: {
@@ -34,8 +27,9 @@ describe("requestHandlers - audit and request id", () => {
         events: new Map(),
         asyncContexts: new Map(),
         errors: new Map(),
-        resolveDefinitionId,
-        toPublicId: resolveDefinitionId,
+        resolveDefinitionId: resolveMockDefinitionId,
+        toPublicId: resolveMockDefinitionId,
+        createRuntimeSource: createMockRuntimeSource,
       } as unknown as RequestProcessingDeps["store"],
       taskRunner: {
         run: async () => "ok",

@@ -1,11 +1,13 @@
 import { createRequestHandlers } from "../../../exposure/requestHandlers";
 import { createReqRes, HttpMethod } from "./requestHandlers.test.utils";
+import { createMockRuntimeSource } from "../../../../__tests__/test-utils/createMockRuntimeSource";
 
 describe("requestHandlers - preflight handling", () => {
   const getDeps = () => ({
     store: {
       tasks: new Map([["t", { task: async () => 1 }]]),
       events: new Map([["e", { event: { id: "e" } }]]),
+      createRuntimeSource: createMockRuntimeSource,
     },
     taskRunner: { run: async () => 1 },
     eventManager: { emit: async () => {} },

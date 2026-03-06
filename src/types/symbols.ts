@@ -68,6 +68,8 @@ export const symbolTag: unique symbol = Symbol.for("runner.tag");
 export const symbolDefinitionIdentity: unique symbol = Symbol.for(
   "runner.definitionIdentity",
 );
+/** @internal Run-scoped canonical id stamped onto runtime-facing objects. */
+export const symbolRuntimeId: unique symbol = Symbol.for("runner.runtimeId");
 export const symbolTagConfigured: unique symbol = Symbol.for(
   "runner.tagConfigured",
 );

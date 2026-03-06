@@ -12,22 +12,43 @@ export type RuntimeCallSourceKind =
 export type RuntimeCallSource = {
   kind: RuntimeCallSourceKind;
   id: string;
+  path?: string;
 };
 
 export const runtimeSource = {
-  runtime(id: string): RuntimeCallSource {
-    return { kind: RuntimeCallSourceKind.Runtime, id };
+  runtime(id: string, path: string = id): RuntimeCallSource {
+    return {
+      kind: RuntimeCallSourceKind.Runtime,
+      id,
+      path,
+    };
   },
-  resource(id: string): RuntimeCallSource {
-    return { kind: RuntimeCallSourceKind.Resource, id };
+  resource(id: string, path: string = id): RuntimeCallSource {
+    return {
+      kind: RuntimeCallSourceKind.Resource,
+      id,
+      path,
+    };
   },
-  task(id: string): RuntimeCallSource {
-    return { kind: RuntimeCallSourceKind.Task, id };
+  task(id: string, path: string = id): RuntimeCallSource {
+    return {
+      kind: RuntimeCallSourceKind.Task,
+      id,
+      path,
+    };
   },
-  hook(id: string): RuntimeCallSource {
-    return { kind: RuntimeCallSourceKind.Hook, id };
+  hook(id: string, path: string = id): RuntimeCallSource {
+    return {
+      kind: RuntimeCallSourceKind.Hook,
+      id,
+      path,
+    };
   },
-  middleware(id: string): RuntimeCallSource {
-    return { kind: RuntimeCallSourceKind.Middleware, id };
+  middleware(id: string, path: string = id): RuntimeCallSource {
+    return {
+      kind: RuntimeCallSourceKind.Middleware,
+      id,
+      path,
+    };
   },
 } as const;

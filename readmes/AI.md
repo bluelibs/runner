@@ -283,6 +283,7 @@ Key rules:
 - Contract middleware can constrain task input and output types.
 - Built-in middleware covers common reliability concerns such as retry, cache, timeout, fallback, circuit breaker, rate limit, debounce, and concurrency.
 - `taskRunner.intercept(...)` can wrap task executions globally at runtime.
+- When a runtime predicate must match one specific task/event/resource definition, prefer `isSameDefinition(candidate, definitionRef)` over comparing public ids directly.
 
 Task vs resource middleware:
 

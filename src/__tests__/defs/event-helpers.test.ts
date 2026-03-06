@@ -2,6 +2,7 @@ import { defineEvent } from "../../define";
 import { onAnyOf, isOneOf } from "../../public";
 import type { IEventEmission } from "../../defs";
 import { runtimeSource } from "../../types/runtimeSource";
+import { symbolDefinitionIdentity } from "../../types/symbols";
 
 describe("event helpers", () => {
   it("isOneOf checks membership by id", () => {
@@ -38,5 +39,30 @@ describe("event helpers", () => {
 
     expect(isOneOf(emissionA, onAnyOf(e1, e2))).toBe(true);
     expect(isOneOf(emissionC, onAnyOf(e1, e2))).toBe(false);
+  });
+
+  it("distinguishes sibling events that share a local id when emissions carry identity", () => {
+    const left = defineEvent<{ side: "left" }>({ id: "shared-event" });
+    const right = defineEvent<{ side: "right" }>({ id: "shared-event" });
+
+    const rightEmission: IEventEmission<{ side: "right" }> = {
+      id: "shared-event",
+      data: { side: "right" },
+      timestamp: new Date(),
+      source: runtimeSource.runtime("test"),
+      meta: {},
+      transactional: false,
+      stopPropagation() {},
+      isPropagationStopped() {
+        return false;
+      },
+      tags: [],
+      [symbolDefinitionIdentity]: ((
+        right as unknown as Record<symbol, unknown>
+      )[symbolDefinitionIdentity] ?? undefined) as object | undefined,
+    };
+
+    expect(isOneOf(rightEmission, onAnyOf(right))).toBe(true);
+    expect(isOneOf(rightEmission, onAnyOf(left))).toBe(false);
   });
 });

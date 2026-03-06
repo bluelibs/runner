@@ -9,6 +9,7 @@ import {
   assertTaskOwnership,
   type RpcLanesRuntimeContext,
 } from "./rpcLanes.runtime.utils";
+import { getRuntimeId } from "../../tools/runtimeMetadata";
 
 export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
   const { resolved, dependencies, resourceId } = context;
@@ -55,7 +56,7 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
 
   dependencies.eventManager.intercept(async (next, emission) => {
     const resolvedEmissionEventId =
-      store.events.get(emission.id)?.event.id ?? emission.id;
+      getRuntimeId(emission) ?? emission.path ?? emission.id;
     const lane = resolved.eventLaneByEventId.get(resolvedEmissionEventId);
     if (!lane) {
       return next(emission);

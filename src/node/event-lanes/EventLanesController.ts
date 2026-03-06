@@ -31,6 +31,7 @@ import {
   applyPrefetchPolicies,
   validateAssignedEventRoutesHaveBindings,
 } from "./eventLanes.routing";
+import { getRuntimeId } from "../../tools/runtimeMetadata";
 export type EventLanesCoreDependencies = Record<string, unknown> & {
   eventManager: EventManager;
   serializer: Serializer;
@@ -158,8 +159,7 @@ export class EventLanesController {
       }
 
       const resolvedEmissionId =
-        this.dependencies.store.events.get(emission.id)?.event.id ??
-        emission.id;
+        getRuntimeId(emission) ?? emission.path ?? emission.id;
       const eventRoute =
         this.context.eventRouteByEventId.get(resolvedEmissionId);
       if (!eventRoute) {
@@ -198,7 +198,7 @@ export class EventLanesController {
         profile: this.context.profile,
         mode: resolveRemoteLanesMode(this.config.mode),
         sourceKind: emission.source.kind,
-        sourceId: emission.source.id,
+        sourceId: emission.source.path ?? emission.source.id,
       });
     });
   }

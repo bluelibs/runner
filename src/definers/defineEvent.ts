@@ -1,6 +1,7 @@
 import {
   IEvent,
   IEventDefinition,
+  symbolDefinitionIdentity,
   symbolEvent,
   symbolFilePath,
   symbolOptionalDependency,
@@ -47,9 +48,11 @@ export function defineEvent<TPayload = void>(
     eventConfig.id,
     eventConfig.tags,
   );
+  const definitionIdentity = {};
   return deepFreeze({
     ...eventConfig,
     id: eventConfig.id,
+    [symbolDefinitionIdentity]: definitionIdentity,
     [symbolFilePath]: callerFilePath,
     [symbolEvent]: true, // This is a workaround
     tags: eventConfig.tags || [],

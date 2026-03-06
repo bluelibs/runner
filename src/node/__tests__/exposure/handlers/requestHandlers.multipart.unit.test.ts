@@ -5,6 +5,10 @@ import {
 import { Serializer } from "../../../../serializer";
 import * as multipartModule from "../../../exposure/multipart";
 import {
+  createMockRuntimeSource,
+  resolveMockDefinitionId,
+} from "../../../../__tests__/test-utils/createMockRuntimeSource";
+import {
   createReqRes,
   HeaderName,
   HttpMethod,
@@ -14,24 +18,14 @@ import {
 import { createMessageError } from "../../../../errors";
 
 describe("requestHandlers - multipart and sanitization", () => {
-  const resolveDefinitionId = (reference: unknown): string | undefined => {
-    if (typeof reference === "string") {
-      return reference;
-    }
-    if (reference && typeof reference === "object" && "id" in reference) {
-      const id = (reference as { id?: unknown }).id;
-      return typeof id === "string" ? id : undefined;
-    }
-    return undefined;
-  };
-
   const getDeps = () => ({
     store: {
       tasks: new Map([["t", { task: async () => 1 }]]),
       errors: new Map(),
       asyncContexts: new Map(),
-      resolveDefinitionId,
-      toPublicId: resolveDefinitionId,
+      resolveDefinitionId: resolveMockDefinitionId,
+      toPublicId: resolveMockDefinitionId,
+      createRuntimeSource: createMockRuntimeSource,
     },
     taskRunner: { run: async () => 1 },
     eventManager: { emit: async () => undefined } as any,
