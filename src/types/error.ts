@@ -1,4 +1,8 @@
-import { symbolError, symbolFilePath } from "./symbols";
+import {
+  symbolDefinitionIdentity,
+  symbolError,
+  symbolFilePath,
+} from "./symbols";
 import type { IOptionalDependency } from "./utilities";
 import type { IValidationSchema, ValidationSchemaInput } from "./utilities";
 import type { IErrorMeta } from "./meta";
@@ -56,6 +60,7 @@ export interface IRunnerError<
   httpCode?: number;
   data: TData;
   remediation?: string;
+  [symbolDefinitionIdentity]?: object;
 }
 
 /**
@@ -95,4 +100,6 @@ export interface IErrorHelper<
   optional(): IOptionalDependency<IErrorHelper<TData>>;
   /** File path where this error was defined */
   [symbolFilePath]: string;
+  /** Stable lineage identity shared with thrown errors created by this helper */
+  [symbolDefinitionIdentity]?: object;
 }

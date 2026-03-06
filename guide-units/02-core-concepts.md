@@ -1614,7 +1614,7 @@ throw userNotFoundError.create({
 });
 ```
 
-`errorHelper.is(err, partialData?)` accepts an optional partial data filter and performs shallow strict matching (`===`) on each provided key.
+`errorHelper.is(err, partialData?)` is lineage-aware: it matches Runner errors created from the same helper definition, even when a local id was later compiled to a canonical runtime id. After lineage matching, it accepts an optional partial data filter and performs shallow strict matching (`===`) on each provided key.
 `errorHelper.new(data)` constructs and returns the typed `RunnerError` without throwing, and `errorHelper.create(data)` is an alias.
 
 **Remediation** can also be a function when the advice depends on the error data:
@@ -1653,7 +1653,7 @@ try {
 }
 ```
 
-The `r.error.is()` type guard narrows the error to `RunnerError`, giving you access to `id`, `data`, `httpCode`, and `remediation`. You can also use `instanceof RunnerError` directly if you prefer, but `r.error.is()` is more consistent with the fluent API.
+The `r.error.is()` type guard narrows the error to `RunnerError`, giving you access to `id`, `data`, `httpCode`, and `remediation`. It is the broad "is any Runner error" check; helper-specific `.is(...)` remains the precise definition-aware match. You can also use `instanceof RunnerError` directly if you prefer, but `r.error.is()` is more consistent with the fluent API.
 
 ### Declaring Error Contracts with `.throws()`
 

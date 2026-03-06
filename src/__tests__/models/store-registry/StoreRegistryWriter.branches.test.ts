@@ -334,6 +334,45 @@ describe("StoreRegistryWriter branches", () => {
     expect(stored?.new({}).id).toBe("app-owner.errors.boom");
   });
 
+  it("preserves error helper identity across scoped id compilation", () => {
+    const { store } = createTestFixture();
+    const registry = (store as unknown as { registry: any }).registry;
+
+    const localError = defineError<{ code: number }>({
+      id: "boom",
+      format: ({ code }) => `boom ${code}`,
+    });
+    const ownerDefinition = defineResource({
+      id: "app-owner",
+      register: [localError],
+    });
+    expect(Array.isArray(ownerDefinition.register)).toBe(true);
+    if (!Array.isArray(ownerDefinition.register)) {
+      return;
+    }
+    const owner = {
+      ...ownerDefinition,
+      register: [...ownerDefinition.register],
+    };
+
+    registry.computeRegistrationDeeply(owner, {});
+
+    const stored = store.errors.get("app-owner.errors.boom");
+    expect(stored).toBeDefined();
+    if (!stored) {
+      return;
+    }
+
+    expect(localError.id).toBe("boom");
+    expect(stored.id).toBe("app-owner.errors.boom");
+
+    const scopedError = stored.new({ code: 1 });
+    const localScopedError = localError.new({ code: 2 });
+
+    expect(localError.is(scopedError)).toBe(true);
+    expect(stored.is(localScopedError)).toBe(true);
+  });
+
   it("returns the original subtree and entries when middleware ids are already canonical", () => {
     const { store } = createTestFixture();
     const registry = (store as unknown as { registry: any }).registry;

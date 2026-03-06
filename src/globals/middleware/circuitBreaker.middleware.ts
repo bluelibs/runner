@@ -7,6 +7,7 @@ import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
 import { middlewareCircuitBreakerOpenError, RunnerErrorId } from "../../errors";
 import { Match } from "../../tools/check";
+import { symbolDefinitionIdentity } from "../../types/symbols";
 
 /**
  * States of the Circuit Breaker
@@ -48,6 +49,8 @@ export class CircuitBreakerOpenError extends RunnerError<{ message: string }> {
       message,
       { message },
       middlewareCircuitBreakerOpenError.httpCode,
+      undefined,
+      middlewareCircuitBreakerOpenError[symbolDefinitionIdentity],
     );
   }
 }

@@ -562,6 +562,7 @@ Errors:
 
 - Use `r.error(...)` to define typed Runner errors.
 - Helpers expose `new`, `create`, `throw`, and `is`.
+- Helper-specific `.is(err)` is lineage-aware, so scoped/canonical helper clones still match the same Runner error reliably.
 - `.httpCode(...)` and `.remediation(...)` enrich errors for transport and operator feedback.
 - `r.error.is(err)` checks whether something is any Runner error.
 

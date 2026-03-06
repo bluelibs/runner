@@ -6,6 +6,7 @@ import { journal } from "../../models/ExecutionJournal";
 import { RunnerError } from "../../definers/defineError";
 import { middlewareTimeoutError, RunnerErrorId } from "../../errors";
 import { Match } from "../../tools/check";
+import { symbolDefinitionIdentity } from "../../types/symbols";
 
 enum AbortSignalEventType {
   Abort = "abort",
@@ -34,6 +35,8 @@ export class TimeoutError extends RunnerError<{ message: string }> {
       message,
       { message },
       middlewareTimeoutError.httpCode,
+      undefined,
+      middlewareTimeoutError[symbolDefinitionIdentity],
     );
   }
 }

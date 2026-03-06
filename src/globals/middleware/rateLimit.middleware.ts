@@ -7,6 +7,7 @@ import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
 import { middlewareRateLimitExceededError, RunnerErrorId } from "../../errors";
 import { Match } from "../../tools/check";
+import { symbolDefinitionIdentity } from "../../types/symbols";
 
 export interface RateLimitMiddlewareConfig {
   /**
@@ -34,6 +35,8 @@ export class RateLimitError extends RunnerError<{ message: string }> {
       message,
       { message },
       middlewareRateLimitExceededError.httpCode,
+      undefined,
+      middlewareRateLimitExceededError[symbolDefinitionIdentity],
     );
   }
 }

@@ -9,6 +9,7 @@ import type { IErrorMeta } from "../types/meta";
 import type { TagType } from "../types/tag";
 import {
   symbolError,
+  symbolDefinitionIdentity,
   symbolFilePath,
   symbolOptionalDependency,
 } from "../types/symbols";
@@ -26,6 +27,7 @@ import type {
   IValidationSchema,
   ValidationSchemaInput,
 } from "../types/utilities";
+import { isSameDefinition } from "../tools/isSameDefinition";
 
 const isValidHttpCode = (value: number): boolean =>
   Number.isInteger(value) && value >= 100 && value <= 599;
@@ -105,12 +107,14 @@ export class RunnerError<
   public readonly data!: TData;
   public readonly httpCode?: number;
   public readonly remediation?: string;
+  public readonly [symbolDefinitionIdentity]?: object;
   constructor(
     public readonly id: string,
     message: string,
     data: TData,
     httpCode?: number,
     remediation?: string,
+    definitionIdentity?: object,
   ) {
     super(
       remediation !== undefined
@@ -121,6 +125,7 @@ export class RunnerError<
     this.name = id;
     this.httpCode = httpCode;
     this.remediation = remediation;
+    this[symbolDefinitionIdentity] = definitionIdentity;
   }
 }
 
@@ -129,11 +134,14 @@ export class ErrorHelper<
 > implements IErrorHelper<TData> {
   [symbolError] = true as const;
   [symbolFilePath]: string;
+  [symbolDefinitionIdentity]?: object;
   constructor(
     private readonly definition: IErrorDefinitionFinal<TData>,
     filePath: string,
+    definitionIdentity?: object,
   ) {
     this[symbolFilePath] = filePath;
+    this[symbolDefinitionIdentity] = definitionIdentity;
   }
   get id(): string {
     return this.definition.id;
@@ -164,6 +172,7 @@ export class ErrorHelper<
       parsed,
       this.definition.httpCode,
       remediation,
+      this[symbolDefinitionIdentity],
     );
   }
   ["new"](...args: ErrorThrowArgs<TData>): RunnerError<TData> {
@@ -185,7 +194,7 @@ export class ErrorHelper<
 
     return (
       error instanceof RunnerError &&
-      error.name === this.definition.id &&
+      isSameDefinition(this, error) &&
       matchesRunnerErrorData(error.data, safePartialData)
     );
   }
@@ -232,6 +241,13 @@ export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
     format: definition.format,
     dataSchema: normalizeErrorDataSchema(definition.dataSchema, definition.id),
   } as IErrorDefinitionFinal<TData>;
+  const definitionIdentity = {};
 
-  return deepFreeze(new ErrorHelper<TData>(finalDefinition, resolvedFilePath));
+  return deepFreeze(
+    new ErrorHelper<TData>(
+      finalDefinition,
+      resolvedFilePath,
+      definitionIdentity,
+    ),
+  );
 }

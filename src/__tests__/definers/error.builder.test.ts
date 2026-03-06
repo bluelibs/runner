@@ -170,6 +170,21 @@ describe("error builder", () => {
     expect(E.is(caught, {})).toBe(true);
   });
 
+  it("does not cross-match sibling helpers that share the same local id", () => {
+    const leftError = r
+      .error<{ side: string }>("tests-errors-shared-local-id")
+      .build();
+    const rightError = r
+      .error<{ side: string }>("tests-errors-shared-local-id")
+      .build();
+
+    const error = leftError.new({ side: "left" });
+
+    expect(leftError.is(error)).toBe(true);
+    expect(rightError.is(error)).toBe(false);
+    expect(r.error.is(error)).toBe(true);
+  });
+
   it("validates data via dataSchema.parse before throwing", () => {
     const TypedError = r
       .error<{ code: number; message: string }>("tests-errors-typed")
