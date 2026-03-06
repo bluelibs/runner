@@ -72,18 +72,13 @@ function readOptions(options?: CheckOptions): { throwAllErrors: boolean } {
 
 function isCheckSchemaLike(value: unknown): value is CheckSchemaLike<unknown> {
   if (value === null || typeof value !== "object") return false;
+
+  // All internal Match patterns/tokens carry a `kind` string starting
+  // with "Match." — skip them so they go through the normal pattern path.
   if (
-    value instanceof OptionalPattern ||
-    value instanceof MaybePattern ||
-    value instanceof OneOfPattern ||
-    value instanceof WherePattern ||
-    value instanceof ObjectIncludingPattern ||
-    value instanceof ObjectStrictPattern ||
-    value instanceof MapOfPattern ||
-    value instanceof NonEmptyArrayPattern ||
-    value instanceof RegExpPattern ||
-    value instanceof LazyPattern ||
-    value instanceof ClassPattern
+    "kind" in value &&
+    typeof (value as { kind: unknown }).kind === "string" &&
+    (value as { kind: string }).kind.startsWith("Match.")
   ) {
     return false;
   }
@@ -119,13 +114,7 @@ class CompiledMatchPatternSchema<
   }
 
   test(input: unknown): input is InferMatchPattern<TPattern> {
-    try {
-      this.parse(input);
-      return true;
-    } catch (error) {
-      if (error instanceof MatchError) return false;
-      throw error;
-    }
+    return collectMatchFailures(input, this.pattern, false).length === 0;
   }
 
   toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
@@ -170,13 +159,7 @@ function matchTest<TPattern extends MatchPattern>(
   value: unknown,
   pattern: TPattern,
 ): value is InferMatchPattern<TPattern> {
-  try {
-    check(value, pattern);
-    return true;
-  } catch (error) {
-    if (error instanceof MatchError) return false;
-    throw error;
-  }
+  return collectMatchFailures(value, pattern, false).length === 0;
 }
 
 type MatchWhere = {

@@ -13,10 +13,15 @@ import {
   RegExpPattern,
   WherePattern,
 } from "./patterns";
-import type { MatchContext, PathSegment } from "./shared";
 import {
   EMAIL_PATTERN,
   ISO_DATE_STRING_PATTERN,
+  UUID_PATTERN,
+  resolveClassAllowUnknownKeys,
+  type MatchContext,
+  type PathSegment,
+} from "./shared";
+import {
   matchAnyToken,
   matchEmailToken,
   matchIntegerToken,
@@ -25,7 +30,6 @@ import {
   matchPositiveIntegerToken,
   matchUrlToken,
   matchUuidToken,
-  UUID_PATTERN,
 } from "./tokens";
 import {
   appendPath,
@@ -36,6 +40,29 @@ import {
   trackActiveComparison,
 } from "./utils";
 import { matchesObjectPattern } from "./matchingObject";
+
+function matchArrayElements(
+  value: unknown[],
+  elementPattern: unknown,
+  context: MatchContext,
+  path: readonly PathSegment[],
+): boolean {
+  const startFailures = context.failures.length;
+  for (let index = 0; index < value.length; index += 1) {
+    if (
+      !matchesPattern(
+        value[index],
+        elementPattern,
+        context,
+        appendPath(path, index),
+      ) &&
+      !context.collectAll
+    ) {
+      return false;
+    }
+  }
+  return context.failures.length === startFailures;
+}
 
 export function matchesPattern(
   value: unknown,
@@ -170,12 +197,10 @@ export function matchesPattern(
     }
     if (pattern instanceof ClassPattern) {
       const classSchema = getClassSchemaDefinition(pattern.ctor);
-      const allowUnknownKeys =
-        pattern.options?.exact === true
-          ? false
-          : pattern.options?.exact === false
-            ? true
-            : !classSchema.exact;
+      const allowUnknownKeys = resolveClassAllowUnknownKeys(
+        pattern.options?.exact,
+        classSchema.exact,
+      );
       return matchesObjectPattern(
         value,
         classSchema.pattern,
@@ -222,17 +247,7 @@ export function matchesPattern(
         return fail(context, path, "non-empty array", value);
       }
       if (pattern.pattern === undefined) return true;
-      const startFailures = context.failures.length;
-      for (let index = 0; index < value.length; index += 1) {
-        const matched = matchesPattern(
-          value[index],
-          pattern.pattern,
-          context,
-          appendPath(path, index),
-        );
-        if (!matched && !context.collectAll) return false;
-      }
-      return context.failures.length === startFailures;
+      return matchArrayElements(value, pattern.pattern, context, path);
     }
     if (pattern === String) {
       return typeof value === "string"
@@ -284,17 +299,7 @@ export function matchesPattern(
         );
       }
       if (!Array.isArray(value)) return fail(context, path, "array", value);
-      const startFailures = context.failures.length;
-      for (let index = 0; index < value.length; index += 1) {
-        const matched = matchesPattern(
-          value[index],
-          pattern[0],
-          context,
-          appendPath(path, index),
-        );
-        if (!matched && !context.collectAll) return false;
-      }
-      return context.failures.length === startFailures;
+      return matchArrayElements(value, pattern[0], context, path);
     }
     if (isPlainObject(pattern)) {
       // Plain object patterns use ObjectStrict semantics by default.

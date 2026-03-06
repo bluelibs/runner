@@ -9,13 +9,15 @@ import {
 } from "./toJsonSchema.helpers";
 import { getClassSchemaDefinition } from "./classSchema";
 import type { MatchJsonSchema, MatchToJsonSchemaOptions } from "./types";
+import {
+  ISO_DATE_STRING_PATTERN,
+  resolveClassAllowUnknownKeys,
+} from "./matcher/shared";
 
 const JSON_SCHEMA_DRAFT_2020_12 =
   "https://json-schema.org/draft/2020-12/schema";
 const INT32_MIN = -2147483648;
 const INT32_MAX = 2147483647;
-const ISO_DATE_STRING_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 const MATCH_KIND = {
   Any: "Match.Any",
@@ -321,12 +323,10 @@ function compilePattern(
 
       context.compilingDefinitionIds.add(definitionId);
       try {
-        const allowUnknownKeys =
-          classField.options?.exact === true
-            ? false
-            : classField.options?.exact === false
-              ? true
-              : !classDefinition.exact;
+        const allowUnknownKeys = resolveClassAllowUnknownKeys(
+          classField.options?.exact,
+          classDefinition.exact,
+        );
 
         context.definitions[definitionId] = compileObjectPattern(
           classDefinition.pattern,

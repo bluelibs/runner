@@ -1,85 +1,71 @@
 import { MatchPatternError } from "../errors";
 import { matchToJsonSchema } from "../toJsonSchema";
-import type {
-  InferMatchPattern,
-  MatchJsonSchema,
-  MatchToJsonSchemaOptions,
-} from "../types";
+import type { MatchJsonSchema, MatchToJsonSchemaOptions } from "../types";
 import type { NonEmptyArrayElement, WhereCondition } from "./shared";
 import { parsePatternValue } from "./parse";
 
-export class MaybePattern<TPattern = unknown> {
+// ── Base class: provides parse() + toJSONSchema() for all pattern classes ────
+
+export class MatchPatternBase<TParseResult = unknown> {
+  parse(value: unknown): TParseResult {
+    return parsePatternValue(value, this) as TParseResult;
+  }
+
+  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
+    return matchToJsonSchema(this, options);
+  }
+}
+
+// ── Pattern classes ──────────────────────────────────────────────────────────
+
+export class MaybePattern<TPattern = unknown> extends MatchPatternBase<
+  TParseResult.Maybe<TPattern>
+> {
   public readonly kind = "Match.MaybePattern";
-
-  constructor(public readonly pattern: TPattern) {}
-
-  parse(value: unknown): InferMatchPattern<TPattern> | null | undefined {
-    return parsePatternValue(value, this as MaybePattern<TPattern>) as
-      | InferMatchPattern<TPattern>
-      | null
-      | undefined;
-  }
-
-  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
-    return matchToJsonSchema(this as MaybePattern<TPattern>, options);
+  constructor(public readonly pattern: TPattern) {
+    super();
   }
 }
 
-export class OptionalPattern<TPattern = unknown> {
+export class OptionalPattern<TPattern = unknown> extends MatchPatternBase<
+  TParseResult.Optional<TPattern>
+> {
   public readonly kind = "Match.OptionalPattern";
-
-  constructor(public readonly pattern: TPattern) {}
-
-  parse(value: unknown): InferMatchPattern<TPattern> | undefined {
-    return parsePatternValue(value, this as OptionalPattern<TPattern>) as
-      | InferMatchPattern<TPattern>
-      | undefined;
-  }
-
-  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
-    return matchToJsonSchema(this as OptionalPattern<TPattern>, options);
+  constructor(public readonly pattern: TPattern) {
+    super();
   }
 }
 
-export class OneOfPattern<TPatterns extends readonly unknown[] = readonly []> {
+export class OneOfPattern<
+  TPatterns extends readonly unknown[] = readonly [],
+> extends MatchPatternBase<TParseResult.OneOf<TPatterns>> {
   public readonly kind = "Match.OneOfPattern";
-
-  constructor(public readonly patterns: TPatterns) {}
-
-  parse(value: unknown): InferMatchPattern<TPatterns[number]> {
-    return parsePatternValue(
-      value,
-      this as OneOfPattern<TPatterns>,
-    ) as InferMatchPattern<TPatterns[number]>;
-  }
-
-  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
-    return matchToJsonSchema(this as OneOfPattern<TPatterns>, options);
+  constructor(public readonly patterns: TPatterns) {
+    super();
   }
 }
 
-export class WherePattern<TGuarded = unknown> {
+export class WherePattern<
+  TGuarded = unknown,
+> extends MatchPatternBase<TGuarded> {
   public readonly kind = "Match.WherePattern";
-
-  constructor(public readonly condition: WhereCondition<TGuarded>) {}
-
-  parse(value: unknown): TGuarded {
-    return parsePatternValue(value, this as WherePattern<TGuarded>) as TGuarded;
-  }
-
-  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
-    return matchToJsonSchema(this as WherePattern<TGuarded>, options);
+  constructor(public readonly condition: WhereCondition<TGuarded>) {
+    super();
   }
 }
 
-export class LazyPattern<TPattern = unknown> {
+export class LazyPattern<TPattern = unknown> extends MatchPatternBase<
+  TParseResult.Lazy<TPattern>
+> {
   public readonly kind = "Match.LazyPattern";
 
   private hasResolved = false;
   private resolvedPattern?: TPattern;
   private isResolving = false;
 
-  constructor(private readonly resolver: () => TPattern) {}
+  constructor(private readonly resolver: () => TPattern) {
+    super();
+  }
 
   resolve(): TPattern {
     if (this.hasResolved) return this.resolvedPattern as TPattern;
@@ -111,142 +97,92 @@ export class LazyPattern<TPattern = unknown> {
       this.isResolving = false;
     }
   }
-
-  parse(value: unknown): InferMatchPattern<TPattern> {
-    return parsePatternValue(
-      value,
-      this as LazyPattern<TPattern>,
-    ) as InferMatchPattern<TPattern>;
-  }
-
-  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
-    return matchToJsonSchema(this as LazyPattern<TPattern>, options);
-  }
 }
 
 export class ClassPattern<
   TCtor extends abstract new (...args: never[]) => unknown,
-> {
+> extends MatchPatternBase<InstanceType<TCtor>> {
   public readonly kind = "Match.ClassPattern";
 
   constructor(
     public readonly ctor: TCtor,
     public readonly options?: { exact?: boolean; schemaId?: string },
-  ) {}
-
-  parse(value: unknown): InstanceType<TCtor> {
-    return parsePatternValue(
-      value,
-      this as ClassPattern<TCtor>,
-    ) as InstanceType<TCtor>;
-  }
-
-  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
-    return matchToJsonSchema(this as ClassPattern<TCtor>, options);
+  ) {
+    super();
   }
 }
 
-export class RegExpPattern<TExpression extends RegExp = RegExp> {
+export class RegExpPattern<
+  TExpression extends RegExp = RegExp,
+> extends MatchPatternBase<string> {
   public readonly kind = "Match.RegExpPattern";
   public readonly expression: TExpression;
 
   constructor(expression: TExpression) {
+    super();
     this.expression = new RegExp(
       expression.source,
       expression.flags,
     ) as TExpression;
   }
-
-  parse(value: unknown): string {
-    return parsePatternValue(
-      value,
-      this as RegExpPattern<TExpression>,
-    ) as string;
-  }
-
-  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
-    return matchToJsonSchema(this as RegExpPattern<TExpression>, options);
-  }
 }
 
 export class ObjectIncludingPattern<
   TObjectPattern extends Record<string, unknown> = Record<string, unknown>,
-> {
+> extends MatchPatternBase<TParseResult.ObjectIncluding<TObjectPattern>> {
   public readonly kind = "Match.ObjectIncludingPattern";
-
-  constructor(public readonly pattern: TObjectPattern) {}
-
-  parse(
-    value: unknown,
-  ): InferMatchPattern<TObjectPattern> & Record<string, unknown> {
-    return parsePatternValue(
-      value,
-      this as ObjectIncludingPattern<TObjectPattern>,
-    ) as InferMatchPattern<TObjectPattern> & Record<string, unknown>;
-  }
-
-  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
-    return matchToJsonSchema(
-      this as ObjectIncludingPattern<TObjectPattern>,
-      options,
-    );
+  constructor(public readonly pattern: TObjectPattern) {
+    super();
   }
 }
 
 export class ObjectStrictPattern<
   TObjectPattern extends Record<string, unknown> = Record<string, unknown>,
-> {
+> extends MatchPatternBase<TParseResult.ObjectStrict<TObjectPattern>> {
   public readonly kind = "Match.ObjectStrictPattern";
-
-  constructor(public readonly pattern: TObjectPattern) {}
-
-  parse(value: unknown): InferMatchPattern<TObjectPattern> {
-    return parsePatternValue(
-      value,
-      this as ObjectStrictPattern<TObjectPattern>,
-    ) as InferMatchPattern<TObjectPattern>;
-  }
-
-  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
-    return matchToJsonSchema(
-      this as ObjectStrictPattern<TObjectPattern>,
-      options,
-    );
+  constructor(public readonly pattern: TObjectPattern) {
+    super();
   }
 }
 
-export class MapOfPattern<TPattern = unknown> {
+export class MapOfPattern<TPattern = unknown> extends MatchPatternBase<
+  TParseResult.MapOf<TPattern>
+> {
   public readonly kind = "Match.MapOfPattern";
-
-  constructor(public readonly pattern: TPattern) {}
-
-  parse(value: unknown): Record<string, InferMatchPattern<TPattern>> {
-    return parsePatternValue(value, this as MapOfPattern<TPattern>) as Record<
-      string,
-      InferMatchPattern<TPattern>
-    >;
-  }
-
-  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
-    return matchToJsonSchema(this as MapOfPattern<TPattern>, options);
+  constructor(public readonly pattern: TPattern) {
+    super();
   }
 }
 
-export class NonEmptyArrayPattern<TPattern = undefined> {
+export class NonEmptyArrayPattern<
+  TPattern = undefined,
+> extends MatchPatternBase<TParseResult.NonEmptyArray<TPattern>> {
   public readonly kind = "Match.NonEmptyArrayPattern";
-
-  constructor(public readonly pattern?: TPattern) {}
-
-  parse(
-    value: unknown,
-  ): [NonEmptyArrayElement<TPattern>, ...NonEmptyArrayElement<TPattern>[]] {
-    return parsePatternValue(value, this as NonEmptyArrayPattern<TPattern>) as [
-      NonEmptyArrayElement<TPattern>,
-      ...NonEmptyArrayElement<TPattern>[],
-    ];
+  constructor(public readonly pattern?: TPattern) {
+    super();
   }
+}
 
-  toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
-    return matchToJsonSchema(this as NonEmptyArrayPattern<TPattern>, options);
-  }
+// ── Namespace for parse result types ─────────────────────────────────────────
+// Keeps the generic extends clauses on each class readable.
+
+import type { InferMatchPattern } from "../types";
+
+// eslint-disable-next-line @typescript-eslint/no-namespace
+namespace TParseResult {
+  export type Maybe<T> = InferMatchPattern<T> | null | undefined;
+  export type Optional<T> = InferMatchPattern<T> | undefined;
+  export type OneOf<T extends readonly unknown[]> = InferMatchPattern<
+    T[number]
+  >;
+  export type Lazy<T> = InferMatchPattern<T>;
+  export type ObjectIncluding<T extends Record<string, unknown>> =
+    InferMatchPattern<T> & Record<string, unknown>;
+  export type ObjectStrict<T extends Record<string, unknown>> =
+    InferMatchPattern<T>;
+  export type MapOf<T> = Record<string, InferMatchPattern<T>>;
+  export type NonEmptyArray<T> = [
+    NonEmptyArrayElement<T>,
+    ...NonEmptyArrayElement<T>[],
+  ];
 }
