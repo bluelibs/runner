@@ -12,6 +12,7 @@ import {
 import { EventEmissionInterceptor } from "./types";
 import { symbolDefinitionIdentity, symbolRuntimeId } from "../../types/symbols";
 import {
+  createEmptyReport,
   executeInParallel,
   executeSequentially,
   executeTransactionally,
@@ -82,15 +83,7 @@ export class EmissionContext<TInput> {
     initialEvent: IEventEmission<TInput>,
   ) {
     this.deepestEvent = initialEvent;
-    this.executionReport = {
-      totalListeners: allListeners.length,
-      attemptedListeners: 0,
-      skippedListeners: 0,
-      succeededListeners: 0,
-      failedListeners: 0,
-      propagationStopped: false,
-      errors: [],
-    };
+    this.executionReport = createEmptyReport(allListeners.length);
   }
 
   async baseEmit(eventToEmit: IEventEmission<any>): Promise<IEventEmitReport> {

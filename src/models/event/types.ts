@@ -20,7 +20,7 @@ export interface IListenerStorage {
   handler: EventHandlerType;
   /** Optional listener id (from IEventHandlerOptions.id) */
   id?: string;
-  /** True when this listener originates from addGlobalListener(). */
+  /** Enables introspection tools to distinguish global from event-specific listeners in merged lists. */
   isGlobal: boolean;
 }
 

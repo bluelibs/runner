@@ -10,7 +10,6 @@ import {
   transactionalRollbackFailureError,
 } from "../../errors";
 import { normalizeError } from "../../tools/normalizeError";
-import { isObjectRecord } from "../../tools/typeChecks";
 import { IListenerStorage } from "./types";
 
 interface ExecuteOptions {
@@ -20,21 +19,16 @@ interface ExecuteOptions {
   failureMode: EventEmissionFailureMode;
 }
 
+/**
+ * Enriches an error with listener metadata so callers can trace
+ * which listener failed and at what priority.
+ */
 function toListenerError(
   error: unknown,
   listener: IListenerStorage,
 ): IEventListenerError {
   const normalized = normalizeError(error);
-  const payload = isObjectRecord(error) ? error : undefined;
-  const errObj = Object.assign(
-    new Error(normalized.message),
-    normalized,
-    payload,
-  ) as IEventListenerError;
-
-  if (typeof errObj.message !== "string") {
-    errObj.message = String(error);
-  }
+  const errObj = normalized as IEventListenerError;
 
   if (errObj.listenerId === undefined) {
     errObj.listenerId = listener.id;
@@ -56,7 +50,7 @@ function recordListenerFailure(
   return listenerError;
 }
 
-function createReport(totalListeners: number): IEventEmitReport {
+export function createEmptyReport(totalListeners: number): IEventEmitReport {
   return {
     totalListeners,
     attemptedListeners: 0,
@@ -68,7 +62,7 @@ function createReport(totalListeners: number): IEventEmitReport {
   };
 }
 
-function createAggregateError(
+export function createAggregateError(
   errors: IEventListenerError[],
   message: string,
 ): Error {
@@ -85,7 +79,7 @@ export async function executeSequentially({
   isPropagationStopped,
   failureMode,
 }: ExecuteOptions): Promise<IEventEmitReport> {
-  const report = createReport(listeners.length);
+  const report = createEmptyReport(listeners.length);
 
   for (const listener of listeners) {
     if (isPropagationStopped?.()) {
@@ -137,7 +131,7 @@ export async function executeTransactionally({
   event,
   isPropagationStopped,
 }: Omit<ExecuteOptions, "failureMode">): Promise<IEventEmitReport> {
-  const report = createReport(listeners.length);
+  const report = createEmptyReport(listeners.length);
   const listenersToRollback: Array<{
     listener: IListenerStorage;
     revert: HookRevertFn;
@@ -210,7 +204,7 @@ export async function executeInParallel({
   event,
   failureMode,
 }: Omit<ExecuteOptions, "isPropagationStopped">): Promise<IEventEmitReport> {
-  const report = createReport(listeners.length);
+  const report = createEmptyReport(listeners.length);
 
   if (listeners.length === 0 || event.isPropagationStopped()) {
     report.propagationStopped = event.isPropagationStopped();

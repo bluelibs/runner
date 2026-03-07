@@ -38,6 +38,7 @@ export class ListenerRegistry {
   }
 
   addGlobalListener(newListener: IListenerStorage): void {
+    newListener.isGlobal = true;
     this.insertListener(this.globalListeners, newListener);
     this.invalidateCache();
   }
@@ -203,14 +204,16 @@ export class ListenerRegistry {
   }
 }
 
-export function createListener(
-  newListener: Partial<IListenerStorage>,
-): IListenerStorage {
+/** Input for creating a listener — handler is required, isGlobal is set by the registry. */
+type CreateListenerInput = Pick<IListenerStorage, "handler"> &
+  Partial<Omit<IListenerStorage, "handler" | "isGlobal">>;
+
+export function createListener(input: CreateListenerInput): IListenerStorage {
   return {
-    handler: newListener.handler!,
-    order: newListener.order ?? HandlerOptionsDefaults.order,
-    filter: newListener.filter,
-    id: newListener.id,
-    isGlobal: newListener.isGlobal ?? false,
+    handler: input.handler,
+    order: input.order ?? HandlerOptionsDefaults.order,
+    filter: input.filter,
+    id: input.id,
+    isGlobal: false,
   };
 }
