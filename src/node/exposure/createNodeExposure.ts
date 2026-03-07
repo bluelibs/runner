@@ -8,33 +8,75 @@ import type {
   NodeExposureDeps,
   NodeExposureHandlers,
 } from "./resourceTypes";
+import {
+  EMPTY_NODE_EXPOSURE_POLICY,
+  type NodeExposurePolicySnapshot,
+} from "./policy";
 import type { AuthValidatorInput, AuthValidatorResult } from "./types";
-import { globalTags } from "../../globals/globalTags";
 import type { ITask } from "../../defs";
+import type { IncomingMessage } from "http";
+import type { JsonResponse } from "./types";
+
+export interface NodeExposureAuthorizationOptions {
+  authorizeTask?: (
+    req: IncomingMessage,
+    taskId: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
+  authorizeEvent?: (
+    req: IncomingMessage,
+    eventId: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
+}
+
+export interface CreateNodeExposureOptions {
+  authorization?: NodeExposureAuthorizationOptions;
+  policy?: NodeExposurePolicySnapshot;
+  sourceResourceId?: string;
+}
 
 export async function createNodeExposure(
   cfg: NodeExposureConfig | undefined,
   deps: NodeExposureDeps,
+  options?: CreateNodeExposureOptions,
 ): Promise<NodeExposureHandlers> {
-  const { store, taskRunner, eventManager, logger, serializer } = deps;
+  const {
+    store,
+    authValidators,
+    taskRunner,
+    eventManager,
+    logger,
+    serializer,
+  } = deps;
   const httpConfig = cfg?.http;
   const basePath = resolveBasePath(httpConfig?.basePath);
   const router = createRouter(basePath);
+  // Keep a single explicit opt-in for unmanaged/open exposure when no allow-list source is active.
   const allowList = createAllowListGuard(
-    store,
-    !!httpConfig?.dangerouslyAllowOpenExposure,
-    logger,
+    options?.policy ?? EMPTY_NODE_EXPOSURE_POLICY,
+    httpConfig?.auth?.allowAnonymous === true,
   );
 
   // Discover auth validator tasks
-  const validatorTasks = store.getTasksWithTag(
-    globalTags.authValidator,
-  ) as ITask<AuthValidatorInput, Promise<AuthValidatorResult>, any>[];
+  const validatorTasks: ITask<
+    AuthValidatorInput,
+    Promise<AuthValidatorResult>,
+    any
+  >[] = [];
+  for (const entry of authValidators.tasks) {
+    validatorTasks.push(
+      entry.definition as ITask<
+        AuthValidatorInput,
+        Promise<AuthValidatorResult>,
+        any
+      >,
+    );
+  }
 
   const authenticator = createAuthenticator(
     httpConfig?.auth,
     taskRunner,
     validatorTasks,
+    options?.sourceResourceId,
   );
 
   const { handleTask, handleEvent, handleDiscovery, handleRequest } =
@@ -50,6 +92,10 @@ export async function createNodeExposure(
       serializer,
       limits: httpConfig?.limits,
       disableDiscovery: httpConfig?.disableDiscovery,
+      authorizeTask: options?.authorization?.authorizeTask,
+      authorizeEvent: options?.authorization?.authorizeEvent,
+      policy: options?.policy ?? EMPTY_NODE_EXPOSURE_POLICY,
+      sourceResourceId: options?.sourceResourceId,
     });
 
   const serverControls = await createExposureServer({

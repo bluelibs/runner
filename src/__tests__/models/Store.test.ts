@@ -3,9 +3,12 @@ import {
   defineResource,
   defineTask,
   defineEvent,
+  defineHook,
+  defineResourceMiddleware,
   defineTag,
   defineTaskMiddleware,
 } from "../../define";
+import { defineError } from "../../definers/defineError";
 import { run } from "../../run";
 import { MiddlewareManager, RunResult, TaskRunner } from "../../models";
 import { RunnerMode } from "../../types/runner";
@@ -29,11 +32,65 @@ describe("Store", () => {
     expect(store.getMiddlewareManager()).toBeInstanceOf(MiddlewareManager);
   });
 
+  it("should expose visibility helper methods", () => {
+    const rootResource = defineResource({
+      id: "store-visibility-helpers-root",
+      register: [
+        defineTask({
+          id: "store-visibility-helpers-task",
+          run: async () => "ok",
+        }),
+      ],
+      async init() {
+        return "ready";
+      },
+    });
+
+    store.initializeStore(rootResource, {}, runtimeResult);
+
+    expect(
+      store.isItemVisibleToConsumer(
+        "store-visibility-helpers-task",
+        "store-visibility-helpers-root",
+      ),
+    ).toBe(true);
+    expect(
+      store.isItemWithinResourceSubtree(
+        "store-visibility-helpers-root",
+        "store-visibility-helpers-root",
+      ),
+    ).toBe(true);
+  });
+
+  it("should enter shutdown lockdown once and keep it idempotent", () => {
+    const eventManager = (
+      store as unknown as {
+        eventManager: { enterShutdownLockdown: () => void };
+      }
+    ).eventManager;
+    const eventManagerSpy = jest.spyOn(eventManager, "enterShutdownLockdown");
+
+    expect(store.isInShutdownLockdown()).toBe(false);
+    store.enterShutdownLockdown();
+    store.enterShutdownLockdown();
+
+    expect(store.isInShutdownLockdown()).toBe(true);
+    expect(eventManagerSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("should ignore duplicate calls to recordResourceInitialized", () => {
     store.recordResourceInitialized("dup");
     store.recordResourceInitialized("dup");
     store.recordResourceInitialized("other");
     store.recordResourceInitialized("dup");
+  });
+
+  it("should ignore init waves when all resource ids were already tracked", () => {
+    store.recordResourceInitialized("wave-dup");
+    store.recordInitWave(["wave-dup", "wave-dup"]);
+
+    const initWaves = (store as unknown as { initWaves: unknown[] }).initWaves;
+    expect(initWaves).toHaveLength(1);
   });
 
   it("should initialize the store with a root resource", () => {
@@ -58,6 +115,10 @@ describe("Store", () => {
     );
   });
 
+  it("should allow checkLock when store is unlocked", () => {
+    expect(() => store.checkLock()).not.toThrow();
+  });
+
   it("should lock all registry maps when the store is locked", () => {
     store.lock();
 
@@ -71,50 +132,50 @@ describe("Store", () => {
 
   it("should store a task and retrieve it", () => {
     const testTask = defineTask({
-      id: "test.task",
+      id: "test-task",
       run: async () => "Task executed",
     });
 
     store.storeGenericItem(testTask);
 
-    expect(store.tasks.has("test.task")).toBe(true);
+    expect(store.tasks.has("test-task")).toBe(true);
   });
 
   it("should store a resource and retrieve it", () => {
     const testResource = defineResource({
-      id: "test.resource",
+      id: "test-resource",
       init: async () => "Resource Value",
     });
 
     store.storeGenericItem(testResource);
 
-    expect(store.resources.has("test.resource")).toBe(true);
+    expect(store.resources.has("test-resource")).toBe(true);
   });
 
   it("should store a middleware and retrieve it", () => {
     const testMiddleware = defineTaskMiddleware({
-      id: "test.middleware",
+      id: "test-middleware",
       run: async ({ next }) => {
         return `Middleware: ${await next()}`;
       },
     });
 
     store.storeGenericItem(testMiddleware);
-    expect(store.taskMiddlewares.has("test.middleware")).toBe(true);
+    expect(store.taskMiddlewares.has("test-middleware")).toBe(true);
   });
 
   it("should store an event and retrieve it", () => {
-    const testEvent = defineEvent({ id: "test.event" });
+    const testEvent = defineEvent({ id: "test-event" });
 
     store.storeGenericItem(testEvent);
 
-    expect(store.events.has("test.event")).toBe(true);
+    expect(store.events.has("test-event")).toBe(true);
   });
 
   it("should dispose of resources correctly", async () => {
     const disposeFn = jest.fn(async (..._args: any[]) => {});
     const testResource = defineResource({
-      id: "test.resource",
+      id: "test-resource",
       dispose: disposeFn,
       init: async () => "Resource Value",
     });
@@ -122,8 +183,8 @@ describe("Store", () => {
     store.storeGenericItem(testResource);
 
     // Simulate resource initialization
-    store.resources.get("test.resource")!.value = "Resource Value";
-    store.resources.get("test.resource")!.isInitialized = true;
+    store.resources.get("test-resource")!.value = "Resource Value";
+    store.resources.get("test-resource")!.isInitialized = true;
 
     await store.dispose();
 
@@ -134,14 +195,14 @@ describe("Store", () => {
     const callOrder: string[] = [];
 
     const dependency = defineResource({
-      id: "dispose.order.dep",
+      id: "dispose-order-dep",
       dispose: async () => {
         callOrder.push("dep");
       },
     });
 
     const dependent = defineResource({
-      id: "dispose.order.dependent",
+      id: "dispose-order-dependent",
       dependencies: { dependency },
       dispose: async () => {
         callOrder.push("dependent");
@@ -163,14 +224,14 @@ describe("Store", () => {
     const callOrder: string[] = [];
 
     const dependency = defineResource({
-      id: "dispose.order.optional.dep",
+      id: "dispose-order-optional-dep",
       dispose: async () => {
         callOrder.push("dep");
       },
     });
 
     const dependent = defineResource({
-      id: "dispose.order.optional.dependent",
+      id: "dispose-order-optional-dependent",
       dependencies: { maybeDep: dependency.optional() },
       dispose: async () => {
         callOrder.push("dependent");
@@ -191,7 +252,7 @@ describe("Store", () => {
     const callOrder: string[] = [];
 
     const dependency = defineResource({
-      id: "dispose.initOrder.dep",
+      id: "dispose-initOrder-dep",
       async init() {
         return "dep";
       },
@@ -201,7 +262,7 @@ describe("Store", () => {
     });
 
     const app = defineResource({
-      id: "dispose.initOrder.app",
+      id: "dispose-initOrder-app",
       register: [dependency],
       dependencies: { dependency },
       async init() {
@@ -217,18 +278,18 @@ describe("Store", () => {
     expect(callOrder).toEqual(["app", "dep"]);
   });
 
-  it("should ignore tracked init order when deterministic disposal is forced", async () => {
+  it("should fall back to dependency-safe disposal when tracked waves are incomplete", async () => {
     const callOrder: string[] = [];
 
     const dependency = defineResource({
-      id: "dispose.parallel.dep",
+      id: "dispose-parallel-dep",
       dispose: async () => {
         callOrder.push("dep");
       },
     });
 
     const dependent = defineResource({
-      id: "dispose.parallel.dependent",
+      id: "dispose-parallel-dependent",
       dependencies: { dependency },
       dispose: async () => {
         callOrder.push("dependent");
@@ -241,39 +302,33 @@ describe("Store", () => {
     store.resources.get(dependency.id)!.isInitialized = true;
     store.resources.get(dependent.id)!.isInitialized = true;
 
-    // Simulate non-deterministic init completion order under parallel startup.
+    // Intentionally track only one initialized resource to force fallback logic.
     store.recordResourceInitialized(dependent.id);
-    store.recordResourceInitialized(dependency.id);
-    store.setPreferInitOrderDisposal(false);
 
     await store.dispose();
     expect(callOrder).toEqual(["dependent", "dep"]);
   });
 
-  it("should ignore non-object dependencies when ordering disposal", async () => {
-    const disposeFn = jest.fn();
+  it("should fail fast when dependencies are not an object map", () => {
     const weirdDepsResource = defineResource({
-      id: "dispose.order.weird.deps",
+      id: "dispose-order-weird-deps",
       dependencies: (() => "not-an-object") as any,
-      dispose: async () => {
-        disposeFn();
-      },
     });
 
-    store.storeGenericItem(weirdDepsResource);
-    store.resources.get(weirdDepsResource.id)!.isInitialized = true;
-
-    await store.dispose();
-    expect(disposeFn).toHaveBeenCalledTimes(1);
+    expect(() => store.storeGenericItem(weirdDepsResource)).toThrow(
+      expect.objectContaining({
+        id: "runner.errors.validation",
+      }),
+    );
   });
 
   it("should not throw if a dependency resource is not registered during disposal ordering", async () => {
     const disposeFn = jest.fn();
     const missing = defineResource({
-      id: "dispose.order.missing.dep",
+      id: "dispose-order-missing-dep",
     });
     const dependent = defineResource({
-      id: "dispose.order.missing.dependent",
+      id: "dispose-order-missing-dependent",
       dependencies: { missing },
       dispose: async () => {
         disposeFn();
@@ -293,15 +348,15 @@ describe("Store", () => {
     const aDeps: any = {};
     const bDeps: any = {};
     const a = defineResource({
-      id: "dispose.order.cycle.a",
-      dependencies: aDeps,
+      id: "dispose-order-cycle-a",
+      dependencies: () => aDeps,
       dispose: async () => {
         callOrder.push("a");
       },
     });
     const b = defineResource({
-      id: "dispose.order.cycle.b",
-      dependencies: bDeps,
+      id: "dispose-order-cycle-b",
+      dependencies: () => bDeps,
       dispose: async () => {
         callOrder.push("b");
       },
@@ -321,13 +376,26 @@ describe("Store", () => {
 
   it("should throw an error for duplicate registration", () => {
     const testTask = defineTask({
-      id: "duplicate.task",
+      id: "duplicate-task",
       run: async () => "Task executed",
     });
 
     store.storeGenericItem(testTask);
 
     expect(() => store.storeGenericItem(testTask)).toThrow(
+      /already registered/i,
+    );
+  });
+
+  it("should throw an error for duplicate resource middleware registration", () => {
+    const middleware = defineResourceMiddleware({
+      id: "duplicate-resource-middleware",
+      run: async ({ next }) => next(),
+    });
+
+    store.storeGenericItem(middleware);
+
+    expect(() => store.storeGenericItem(middleware)).toThrow(
       /already registered/i,
     );
   });
@@ -354,7 +422,7 @@ describe("Store", () => {
     // Test the overrideRequests getter (line 57)
     const overrideRequests = store.overrideRequests;
     expect(overrideRequests).toBeDefined();
-    expect(overrideRequests instanceof Set).toBe(true);
+    expect(overrideRequests instanceof Array).toBe(true);
   });
 
   it("should call processOverrides method", () => {
@@ -362,19 +430,19 @@ describe("Store", () => {
     expect(() => store.processOverrides()).not.toThrow();
   });
 
-  it("should call getTasksWithTag method", () => {
+  it("should expose tagged tasks through the accessor", () => {
     const tag = defineTag({
-      id: "tags.test",
+      id: "tags-test",
     });
     const taskTest = defineTask({
-      id: "task.test",
+      id: "task-test",
       tags: [tag],
       async run() {
         return "OK";
       },
     });
     const unfindableTask = defineTask({
-      id: "task.unfindable",
+      id: "task-unfindable",
       run: async () => 1,
     });
     const rootResource = defineResource({
@@ -384,24 +452,28 @@ describe("Store", () => {
     });
 
     store.initializeStore(rootResource, {}, runtimeResult);
-    const result = store.getTasksWithTag(tag);
+    const result = store.getTagAccessor(tag).tasks;
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
-    const result2 = store.getTasksWithTag("tags.test");
-    expect(result2).toHaveLength(1);
+    expect(result[0]?.definition).toBe(
+      store.tasks.get(result[0]!.definition.id)?.task,
+    );
+    const unknownTag = defineTag({ id: "tags-unknown" });
+    const result2 = store.getTagAccessor(unknownTag).tasks;
+    expect(result2).toHaveLength(0);
   });
 
-  it("should call getResourcesWithTag method", () => {
+  it("should expose tagged resources through the accessor", () => {
     const tag = defineTag({
-      id: "tags.test",
+      id: "tags-test",
     });
     const resourceTest = defineResource({
-      id: "resource.test",
+      id: "resource-test",
       tags: [tag],
     });
 
     const unfindableResource = defineResource({
-      id: "resource.unfindable",
+      id: "resource-unfindable",
       init: async () => 1,
     });
     const rootResource = defineResource({
@@ -411,26 +483,302 @@ describe("Store", () => {
     });
 
     store.initializeStore(rootResource, {}, runtimeResult);
-    const result = store.getResourcesWithTag(tag);
+    const result = store.getTagAccessor(tag).resources;
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
-    const result2 = store.getResourcesWithTag("tags.test");
-    expect(result2).toHaveLength(1);
+    expect(result[0]?.definition).toBe(
+      store.resources.get(result[0]!.definition.id)?.resource,
+    );
+    const unknownTag = defineTag({ id: "tags-unknown" });
+    const result2 = store.getTagAccessor(unknownTag).resources;
+    expect(result2).toHaveLength(0);
+  });
+
+  it("should support tag accessors with includeSelf=false", () => {
+    const tag = defineTag({
+      id: "tags-accessor-self",
+    });
+
+    const taggedTask = defineTask({
+      id: "task-accessor-self",
+      tags: [tag],
+      run: async () => "ok",
+    });
+
+    const rootResource = defineResource({
+      id: "root-accessor-self",
+      register: [tag, taggedTask],
+      init: async () => "Root Value",
+    });
+
+    store.initializeStore(rootResource, {}, runtimeResult);
+
+    const withoutSelf = store.getTagAccessor(tag, {
+      consumerId: taggedTask.id,
+      includeSelf: false,
+    });
+    const withSelf = store.getTagAccessor(tag, {
+      consumerId: taggedTask.id,
+      includeSelf: true,
+    });
+
+    expect(withoutSelf.tasks).toHaveLength(0);
+    expect(withSelf.tasks).toHaveLength(1);
+  });
+
+  it("should harden tag accessor lookups against malformed tag arrays", () => {
+    const tag = defineTag({
+      id: "tags-accessor-hardened",
+    });
+
+    const taggedTask = defineTask({
+      id: "task-accessor-hardened",
+      tags: [tag],
+      run: async () => "ok",
+    });
+
+    const rootResource = defineResource({
+      id: "root-accessor-hardened",
+      register: [tag, taggedTask],
+      init: async () => "Root Value",
+    });
+
+    store.initializeStore(rootResource, {}, runtimeResult);
+
+    const taggedTaskId = store.resolveDefinitionId(taggedTask)!;
+    const storeTask = store.tasks.get(taggedTaskId)!;
+    store.tasks.set(taggedTaskId, {
+      ...storeTask,
+      task: {
+        ...storeTask.task,
+        tags: undefined,
+      } as unknown as typeof storeTask.task,
+    });
+
+    expect(() => store.getTagAccessor(tag)).not.toThrow();
+    expect(store.getTagAccessor(tag).tasks).toHaveLength(0);
+  });
+
+  it("should tolerate stale tag index entries across all accessor categories", () => {
+    const tag = defineTag({
+      id: "tags-accessor-stale-index",
+    });
+
+    const event = defineEvent({
+      id: "events-accessor-stale-index",
+      tags: [tag],
+    });
+
+    const hook = defineHook({
+      id: "hooks-accessor-stale-index",
+      on: event,
+      tags: [tag],
+      run: async () => undefined,
+    });
+
+    const taskMiddleware = defineTaskMiddleware({
+      id: "middleware-task-accessor-stale-index",
+      tags: [tag],
+      run: async ({ next, task }) => next(task.input),
+    });
+
+    const resourceMiddleware = defineResourceMiddleware({
+      id: "middleware-resource-accessor-stale-index",
+      tags: [tag],
+      run: async ({ next }) => next(),
+    });
+
+    const task = defineTask({
+      id: "tasks-accessor-stale-index",
+      tags: [tag],
+      run: async () => "ok",
+    });
+
+    const resource = defineResource({
+      id: "resources-accessor-stale-index",
+      tags: [tag],
+      init: async () => "resource-value",
+    });
+
+    const taggedError = defineError({
+      id: "errors-accessor-stale-index",
+      tags: [tag],
+      format: () => "boom",
+    });
+
+    const rootResource = defineResource({
+      id: "root-accessor-stale-index",
+      register: [
+        tag,
+        event,
+        hook,
+        taskMiddleware,
+        resourceMiddleware,
+        task,
+        resource,
+        taggedError,
+      ],
+      init: async () => "Root Value",
+    });
+
+    store.initializeStore(rootResource, {}, runtimeResult);
+
+    const registry = (store as unknown as { registry: any }).registry;
+    const canonicalTagId = store.resolveDefinitionId(tag)!;
+    const staleBucket = registry.tagIndex.get(canonicalTagId);
+    staleBucket.tasks.add("missing-task");
+    staleBucket.resources.add("missing-resource");
+    staleBucket.events.add("missing-event");
+    staleBucket.hooks.add("missing-hook");
+    staleBucket.taskMiddlewares.add("missing-task-middleware");
+    staleBucket.resourceMiddlewares.add("missing-resource-middleware");
+    staleBucket.errors.add("missing-error");
+
+    const untaggedTask = defineTask({
+      id: "tasks-accessor-stale-index-untagged",
+      run: async () => "untagged",
+    });
+    const untaggedResource = defineResource({
+      id: "resources-accessor-stale-index-untagged",
+      init: async () => "untagged",
+    });
+    const untaggedEvent = defineEvent({
+      id: "events-accessor-stale-index-untagged",
+    });
+    const untaggedHook = defineHook({
+      id: "hooks-accessor-stale-index-untagged",
+      on: untaggedEvent,
+      run: async () => undefined,
+    });
+    const untaggedTaskMiddleware = defineTaskMiddleware({
+      id: "middleware-task-accessor-stale-index-untagged",
+      run: async ({ next, task }) => next(task.input),
+    });
+    const untaggedResourceMiddleware = defineResourceMiddleware({
+      id: "middleware-resource-accessor-stale-index-untagged",
+      run: async ({ next }) => next(),
+    });
+    const untaggedError = defineError({
+      id: "errors-accessor-stale-index-untagged",
+      format: () => "untagged",
+    });
+
+    store.storeGenericItem(untaggedTask);
+    store.storeGenericItem(untaggedResource);
+    store.storeGenericItem(untaggedEvent);
+    store.storeGenericItem(untaggedHook);
+    store.storeGenericItem(untaggedTaskMiddleware);
+    store.storeGenericItem(untaggedResourceMiddleware);
+    store.storeGenericItem(untaggedError);
+
+    staleBucket.tasks.add(untaggedTask.id);
+    staleBucket.resources.add(untaggedResource.id);
+    staleBucket.events.add(untaggedEvent.id);
+    staleBucket.hooks.add(untaggedHook.id);
+    staleBucket.taskMiddlewares.add(untaggedTaskMiddleware.id);
+    staleBucket.resourceMiddlewares.add(untaggedResourceMiddleware.id);
+    staleBucket.errors.add(untaggedError.id);
+
+    const selfExcluded = store.getTagAccessor(tag, {
+      consumerId: resource.id,
+      includeSelf: false,
+    });
+    expect(
+      selfExcluded.resources.some(
+        (entry) => entry.definition.id === resource.id,
+      ),
+    ).toBe(false);
+
+    const eventExcluded = store.getTagAccessor(tag, {
+      consumerId: event.id,
+      includeSelf: false,
+    });
+    expect(
+      eventExcluded.events.some((entry) => entry.definition.id === event.id),
+    ).toBe(false);
+
+    const accessor = store.getTagAccessor(tag);
+    expect(accessor.tasks).toHaveLength(1);
+    expect(accessor.resources).toHaveLength(1);
+    expect(accessor.events).toHaveLength(1);
+    expect(accessor.hooks).toHaveLength(1);
+    expect(accessor.taskMiddlewares).toHaveLength(1);
+    expect(accessor.resourceMiddlewares).toHaveLength(1);
+    expect(accessor.errors).toHaveLength(1);
+
+    const resourceMatch = accessor.resources[0]!;
+    expect(resourceMatch.value).toBeUndefined();
+    const resourceId = store.resolveDefinitionId(resource)!;
+    const storeResource = store.resources.get(resourceId)!;
+    storeResource.isInitialized = true;
+    storeResource.value = "resource-value";
+    expect(resourceMatch.value).toBe("resource-value");
+  });
+
+  it("should reindex tag memberships when overriding tagged definitions", () => {
+    const tagA = defineTag({ id: "tags-reindex-a" });
+    const tagB = defineTag({ id: "tags-reindex-b" });
+    store.storeGenericItem(tagA);
+    store.storeGenericItem(tagB);
+
+    const firstTask = defineTask({
+      id: "tasks-reindex-first",
+      tags: [tagA],
+      run: async () => "first",
+    });
+    const secondTask = defineTask({
+      id: "tasks-reindex-second",
+      tags: [tagA],
+      run: async () => "second",
+    });
+    const orphanTask = defineTask({
+      id: "tasks-reindex-orphan",
+      tags: [tagB],
+      run: async () => "orphan",
+    });
+
+    store.storeGenericItem(firstTask);
+    store.storeGenericItem(secondTask);
+    store.storeGenericItem(orphanTask);
+
+    const registry = (store as unknown as { registry: any }).registry;
+
+    const firstTaskNoTags = defineTask({
+      id: firstTask.id,
+      run: async () => "first-no-tags",
+    });
+    registry.storeTask(firstTaskNoTags, "override");
+    expect(store.getTagAccessor(tagA).tasks).toHaveLength(1);
+
+    registry.tagIndex.delete(tagB.id);
+    const orphanTaskNoTags = defineTask({
+      id: orphanTask.id,
+      run: async () => "orphan-no-tags",
+    });
+    registry.storeTask(orphanTaskNoTags, "override");
+    expect(store.getTagAccessor(tagB).tasks).toHaveLength(0);
+
+    const secondTaskNoTags = defineTask({
+      id: secondTask.id,
+      run: async () => "second-no-tags",
+    });
+    registry.storeTask(secondTaskNoTags, "override");
+    expect(store.getTagAccessor(tagA).tasks).toHaveLength(0);
   });
 
   it("should discover tasks and resources by a contract tag at runtime", async () => {
     const contractTag = defineTag<void, { tenantId: string }, { ok: boolean }>({
-      id: "tags.contract",
+      id: "tags-contract",
     });
 
     const taskWithContractTag = defineTask({
-      id: "task.contract",
+      id: "task-contract",
       tags: [contractTag],
       run: async (input) => ({ ok: input.tenantId.length > 0 }),
     });
 
     const resourceWithContractTag = defineResource({
-      id: "resource.contract",
+      id: "resource-contract",
       tags: [contractTag],
       init: async (config) => ({ ok: config.tenantId.length > 0 }),
     });
@@ -443,8 +791,9 @@ describe("Store", () => {
 
     store.initializeStore(rootResource, {}, runtimeResult);
 
-    const tasks = store.getTasksWithTag(contractTag);
-    const resources = store.getResourcesWithTag(contractTag);
+    const accessor = store.getTagAccessor(contractTag);
+    const tasks = accessor.tasks.map((entry) => entry.definition);
+    const resources = accessor.resources.map((entry) => entry.definition);
 
     expect(tasks).toHaveLength(1);
     expect(resources).toHaveLength(1);

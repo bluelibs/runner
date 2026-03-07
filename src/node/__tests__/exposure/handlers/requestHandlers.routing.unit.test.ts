@@ -1,12 +1,11 @@
-import * as http from "http";
 import { Readable } from "stream";
 import { createRequestHandlers } from "../../../exposure/requestHandlers";
 import { createAllowListGuard } from "../../../exposure/allowList";
-import { globalTags } from "../../../../globals/globalTags";
 import { Serializer } from "../../../../serializer";
 import { defineResource, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
+import { createRequestHandlersDeps } from "./requestHandlers.deps.test.utils";
 import {
   createReqRes,
   HeaderName,
@@ -23,24 +22,18 @@ describe("requestHandlers - routing and dispatching", () => {
 
   describe("Method and URL Routing", () => {
     it("handleTask responds 405 for non-POST", async () => {
-      const deps: any = {
-        store: { tasks: new Map([["t.id", { task: async () => 1 }]]) },
+      const deps = createRequestHandlersDeps(serializer, {
+        store: { tasks: new Map([["t-id", { task: async () => 1 }]]) },
         taskRunner: { run: async () => 1 },
-        eventManager: {} as any,
-        logger: { info: () => {}, warn: () => {}, error: () => {} },
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        eventManager: {},
         router: {
-          basePath: "/api",
-          extract: () => ({ kind: "task", id: "t.id" }),
-          isUnderBase: () => true,
+          extract: () => ({ kind: "task", id: "t-id" }),
         },
-        cors: undefined,
-      };
+      });
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: "GET",
-        url: "/api/task/t.id",
+        url: "/api/task/t-id",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       });
       await handleTask(req, res);
@@ -52,20 +45,12 @@ describe("requestHandlers - routing and dispatching", () => {
     });
 
     it("handleRequest returns false for paths outside basePath", async () => {
-      const deps: any = {
-        store: { tasks: new Map(), events: new Map() },
-        taskRunner: {} as any,
-        eventManager: {} as any,
-        logger: { info: () => {}, warn: () => {}, error: () => {} },
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
+      const deps = createRequestHandlersDeps(serializer, {
         router: {
-          basePath: "/api",
           extract: () => null,
           isUnderBase: () => false,
         },
-        cors: undefined,
-      };
+      });
       const { handleRequest } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Get,
@@ -76,20 +61,12 @@ describe("requestHandlers - routing and dispatching", () => {
     });
 
     it("handleRequest returns true and 404 JSON when under base but no target", async () => {
-      const deps: any = {
-        store: { tasks: new Map(), events: new Map() },
-        taskRunner: {} as any,
-        eventManager: {} as any,
-        logger: { info: () => {}, warn: () => {}, error: () => {} },
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
+      const deps = createRequestHandlersDeps(serializer, {
         router: {
-          basePath: "/api",
           extract: () => null,
           isUnderBase: () => true,
         },
-        cors: undefined,
-      };
+      });
       const { handleRequest } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Get,
@@ -104,8 +81,24 @@ describe("requestHandlers - routing and dispatching", () => {
       expect(json?.error?.code).toBe("NOT_FOUND");
     });
 
+    it("handleRequest returns true for unknown extracted target kinds without dispatch", async () => {
+      const deps = createRequestHandlersDeps(serializer, {
+        router: {
+          extract: () => ({ kind: "other", id: "x" }),
+          isUnderBase: () => true,
+        },
+      });
+      const { handleRequest } = createRequestHandlers(deps);
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/other/x",
+      });
+      await expect(handleRequest(req, res)).resolves.toBe(true);
+      expect(res._status).toBeUndefined();
+    });
+
     it("returns 404 when task id missing from store", async () => {
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map(),
           events: new Map(),
@@ -119,16 +112,10 @@ describe("requestHandlers - routing and dispatching", () => {
           warn: async () => {},
           error: async () => {},
         },
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
-          basePath: "/api",
           extract: () => ({ kind: "task", id: "missing" }),
-          isUnderBase: () => true,
         },
-        cors: undefined,
-        serializer,
-      };
+      });
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
@@ -143,48 +130,32 @@ describe("requestHandlers - routing and dispatching", () => {
       expect(json?.error?.code).toBe("NOT_FOUND");
     });
 
-    it("logs allow-list selector failures during discovery", async () => {
-      const logger = {
-        info: jest.fn(),
-        warn: jest.fn(),
-        error: jest.fn(),
-      };
+    it("discovery resolves allow-list from rpc lane served ids", async () => {
       const store = {
-        tasks: new Map([["task.a", { task: { id: "task.a" } }]]),
+        tasks: new Map([["task-a", { task: { id: "task-a" } }]]),
         events: new Map(),
-        resources: new Map([
-          [
-            "srv",
-            {
-              resource: { id: "srv", tags: [globalTags.tunnel] },
-              value: {
-                mode: "server",
-                transport: "http",
-                tasks: () => {
-                  throw "selector failed";
-                },
-              },
-            },
-          ],
-        ]),
+        resources: new Map(),
         asyncContexts: new Map(),
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store,
         taskRunner: { run: async () => 1 },
         eventManager: { emit: async () => {} },
-        logger,
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
         router: {
-          basePath: "/api",
           extract: () => ({ kind: "discovery" }),
-          isUnderBase: () => true,
         },
-        cors: undefined,
-        serializer,
-      };
+        policy: {
+          enabled: true,
+          taskIds: ["task-a"],
+          eventIds: [],
+          taskAllowAsyncContext: {},
+          eventAllowAsyncContext: {},
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
+      });
       const { handleDiscovery } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Get,
@@ -193,85 +164,17 @@ describe("requestHandlers - routing and dispatching", () => {
 
       await handleDiscovery(req, res);
 
-      expect(logger.warn).toHaveBeenCalledWith(
-        "[runner] Tunnel allow-list selector failed; item skipped.",
-        expect.objectContaining({
-          selectorKind: "task",
-          candidateId: "task.a",
-          tunnelResourceId: "srv",
-          error: expect.any(Error),
-        }),
-      );
-    });
-
-    it("forwards selector Error instances to logger without rewrapping", async () => {
-      const logger = {
-        info: jest.fn(),
-        warn: jest.fn(),
-        error: jest.fn(),
-      };
-      const selectorError = new Error("selector failed");
-      const store = {
-        tasks: new Map([["task.a", { task: { id: "task.a" } }]]),
-        events: new Map(),
-        resources: new Map([
-          [
-            "srv",
-            {
-              resource: { id: "srv", tags: [globalTags.tunnel] },
-              value: {
-                mode: "server",
-                transport: "http",
-                tasks: () => {
-                  throw selectorError;
-                },
-              },
-            },
-          ],
-        ]),
-        asyncContexts: new Map(),
-      } as any;
-
-      const deps: any = {
-        store,
-        taskRunner: { run: async () => 1 },
-        eventManager: { emit: async () => {} },
-        logger,
-        authenticator: async () => ({ ok: true }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
-        router: {
-          basePath: "/api",
-          extract: () => ({ kind: "discovery" }),
-          isUnderBase: () => true,
-        },
-        cors: undefined,
-        serializer,
-      };
-      const { handleDiscovery } = createRequestHandlers(deps);
-      const { req, res } = createReqRes({
-        method: HttpMethod.Get,
-        url: "/api/discovery",
-      });
-
-      await handleDiscovery(req, res);
-
-      expect(logger.warn).toHaveBeenCalledWith(
-        "[runner] Tunnel allow-list selector failed; item skipped.",
-        expect.objectContaining({
-          error: selectorError,
-        }),
-      );
+      expect(res._status).toBe(200);
+      const body = res._buf
+        ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+        : undefined;
+      expect(body?.result?.allowList?.tasks).toContain("task-a");
     });
   });
 
   describe("Authentication and Authorization", () => {
     it("returns auth error when authenticator fails", async () => {
-      const deps: any = {
-        store: {
-          tasks: new Map(),
-          events: new Map(),
-          asyncContexts: new Map(),
-        },
+      const deps = createRequestHandlersDeps(serializer, {
         taskRunner: { run: async () => 1 },
         eventManager: { emit: async () => {} },
         logger: {
@@ -286,19 +189,14 @@ describe("requestHandlers - routing and dispatching", () => {
             body: { ok: false, error: { code: "UNAUTHORIZED" } },
           },
         }),
-        allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
-          basePath: "/api",
-          extract: () => ({ kind: "task", id: "t.id" }),
-          isUnderBase: () => true,
+          extract: () => ({ kind: "task", id: "t-id" }),
         },
-        cors: undefined,
-        serializer,
-      };
+      });
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/task/t.id",
+        url: "/api/task/t-id",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       });
       await handleTask(req, res);
@@ -310,29 +208,25 @@ describe("requestHandlers - routing and dispatching", () => {
     });
 
     it("returns 403 when task/event blocked by allow-list", async () => {
+      const policy = {
+        enabled: true,
+        taskIds: ["allowed-task"],
+        eventIds: ["allowed-event"],
+        taskAllowAsyncContext: {},
+        eventAllowAsyncContext: {},
+        taskAsyncContextAllowList: {},
+        eventAsyncContextAllowList: {},
+      } as const;
       const store: any = {
-        tasks: new Map([["allowed.task", { task: { id: "allowed.task" } }]]),
+        tasks: new Map([["allowed-task", { task: { id: "allowed-task" } }]]),
         events: new Map([
-          ["allowed.event", { event: { id: "allowed.event" } }],
+          ["allowed-event", { event: { id: "allowed-event" } }],
         ]),
-        resources: new Map([
-          [
-            "srv",
-            {
-              resource: { id: "srv", tags: [globalTags.tunnel] },
-              value: {
-                mode: "server",
-                transport: "http",
-                tasks: ["allowed.task"],
-                events: ["allowed.event"],
-              },
-            },
-          ],
-        ]),
+        resources: new Map(),
         asyncContexts: new Map(),
       };
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store,
         taskRunner: { run: async () => 1 },
         eventManager: { emit: async () => {} },
@@ -341,33 +235,29 @@ describe("requestHandlers - routing and dispatching", () => {
           warn: async () => {},
           error: async () => {},
         },
-        authenticator: async () => ({ ok: true }),
-        allowList: createAllowListGuard(store),
+        allowList: createAllowListGuard(policy),
         router: {
-          basePath: "/api",
-          extract: () => ({ kind: "task", id: "blocked.task" }),
-          isUnderBase: () => true,
+          extract: () => ({ kind: "task", id: "blocked-task" }),
         },
-        cors: undefined,
-        serializer,
-      };
+        policy,
+      });
 
       const { handleTask, handleEvent } = createRequestHandlers(deps);
 
       // Task request blocked
       const { req: tReq, res: tRes } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/task/blocked.task",
+        url: "/api/task/blocked-task",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       });
       await handleTask(tReq, tRes);
       expect(tRes._status).toBe(403);
 
       // Event request blocked
-      deps.router.extract = () => ({ kind: "event", id: "blocked.event" });
+      deps.router.extract = () => ({ kind: "event", id: "blocked-event" });
       const { req: eReq, res: eRes } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/event/blocked.event",
+        url: "/api/event/blocked-event",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       });
       await handleEvent(eReq, eRes);
@@ -375,24 +265,21 @@ describe("requestHandlers - routing and dispatching", () => {
     });
 
     it("serializes blocked event responses with the configured serializer", async () => {
+      const policy = {
+        enabled: true,
+        taskIds: [],
+        eventIds: ["allowed-event"],
+        taskAllowAsyncContext: {},
+        eventAllowAsyncContext: {},
+        taskAsyncContextAllowList: {},
+        eventAsyncContextAllowList: {},
+      } as const;
       const store: any = {
         tasks: new Map(),
         events: new Map([
-          ["allowed.event", { event: { id: "allowed.event" } }],
+          ["allowed-event", { event: { id: "allowed-event" } }],
         ]),
-        resources: new Map([
-          [
-            "srv",
-            {
-              resource: { id: "srv", tags: [globalTags.tunnel] },
-              value: {
-                mode: "server",
-                transport: "http",
-                events: ["allowed.event"],
-              },
-            },
-          ],
-        ]),
+        resources: new Map(),
         asyncContexts: new Map(),
       };
       const customSerializer = {
@@ -405,26 +292,23 @@ describe("requestHandlers - routing and dispatching", () => {
           ),
         ),
       };
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store,
         taskRunner: { run: async () => 1 },
         eventManager: { emit: async () => {} },
         logger: { info: () => {}, warn: () => {}, error: () => {} },
-        authenticator: async () => ({ ok: true }),
-        allowList: createAllowListGuard(store),
+        allowList: createAllowListGuard(policy),
         router: {
-          basePath: "/api",
-          extract: () => ({ kind: "event", id: "blocked.event" }),
-          isUnderBase: () => true,
+          extract: () => ({ kind: "event", id: "blocked-event" }),
         },
-        cors: undefined,
         serializer: customSerializer,
-      };
+        policy,
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/event/blocked.event",
+        url: "/api/event/blocked-event",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       });
 
@@ -435,13 +319,22 @@ describe("requestHandlers - routing and dispatching", () => {
     });
 
     it("returns 403 when exposure is disabled", async () => {
+      const policy = {
+        enabled: false,
+        taskIds: [],
+        eventIds: [],
+        taskAllowAsyncContext: {},
+        eventAllowAsyncContext: {},
+        taskAsyncContextAllowList: {},
+        eventAsyncContextAllowList: {},
+      } as const;
       const store: any = {
         tasks: new Map([["t", { task: { id: "t" } }]]),
         events: new Map(),
         asyncContexts: new Map(),
         resources: new Map(),
       };
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store,
         taskRunner: { run: async () => 1 },
         eventManager: { emit: async () => {} },
@@ -450,16 +343,12 @@ describe("requestHandlers - routing and dispatching", () => {
           warn: async () => {},
           error: async () => {},
         },
-        authenticator: async () => ({ ok: true }),
-        allowList: createAllowListGuard(store),
+        allowList: createAllowListGuard(policy),
         router: {
-          basePath: "/api",
           extract: () => ({ kind: "task", id: "t" }),
-          isUnderBase: () => true,
         },
-        cors: undefined,
-        serializer,
-      };
+        policy,
+      });
       const { handleTask } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
@@ -478,23 +367,21 @@ describe("requestHandlers - routing and dispatching", () => {
   describe("Edge Case Internal Routing", () => {
     it("handles early res.close and triggers listener wiring path", async () => {
       const ev = defineEvent<{ payload?: unknown }>({
-        id: "tests.routing.abort",
+        id: "tests-routing-abort",
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
       });
       const app = defineResource({
-        id: "tests.app.routing.abort",
+        id: "tests-app-routing-abort",
         register: [ev, exposure],
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const req: any = new Readable({ read() {} });
         req.method = "POST";
         req.url = `/__runner/event/${encodeURIComponent(ev.id)}`;

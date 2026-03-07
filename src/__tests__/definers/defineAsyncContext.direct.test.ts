@@ -5,7 +5,7 @@ import {
 
 describe("defineAsyncContext direct createContext", () => {
   it("covers createContext function", () => {
-    const C = createContext<string>("direct.ctx");
+    const C = createContext<string>("direct-ctx");
     expect(C.id).toBeDefined();
   });
 

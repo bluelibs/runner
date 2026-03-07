@@ -11,6 +11,10 @@ import {
   symbolOptionalDependency,
 } from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
+import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
+import { assertDefinitionId } from "./assertDefinitionId";
+import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
+import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 export { contextError as ContextError };
 
@@ -37,8 +41,15 @@ export function defineAsyncContext<T>(
     });
   }
 
-  const ctxId = def.id;
   const resolvedFilePath = filePath ?? getCallerFile();
+  const ctxId = def.id;
+  assertDefinitionId("Async context", ctxId, {
+    allowReservedDottedNamespace: isFrameworkDefinitionMarked(def),
+  });
+  const configSchema = normalizeOptionalValidationSchema(def.configSchema, {
+    definitionId: ctxId,
+    subject: "Async context config",
+  });
 
   /* istanbul ignore next */
   const use = (): T => {
@@ -70,13 +81,12 @@ export function defineAsyncContext<T>(
     id: ctxId,
     [symbolAsyncContext]: true as const,
     [symbolFilePath]: resolvedFilePath,
+    configSchema,
     use,
     /* istanbul ignore next */
     provide(value: T, fn: () => Promise<any> | any) {
       // Validate provided context if schema exists
-      const validated = def.configSchema
-        ? def.configSchema.parse(value)
-        : value;
+      const validated = configSchema ? configSchema.parse(value) : value;
       return provide(validated, fn);
     },
     require(): ITaskMiddlewareConfigured {
@@ -89,14 +99,15 @@ export function defineAsyncContext<T>(
     /* istanbul ignore next */
     parse: def.parse || ((data: string) => serializer.parse(data)),
     optional() {
-      return {
+      const wrapper = {
         inner: api as IAsyncContext<T>,
         [symbolOptionalDependency]: true,
       } as const;
+      return freezeIfLineageLocked(api, wrapper);
     },
   };
 
-  return api;
+  return deepFreeze(api);
 }
 
 export type { IAsyncContext } from "../types/asyncContext";
@@ -106,6 +117,6 @@ export type { IAsyncContext } from "../types/asyncContext";
 /* istanbul ignore next */
 export function createContext<T>(name?: string): IAsyncContext<T> {
   const id =
-    name ?? `context.${Math.random().toString(36).slice(2)}.${Date.now()}`;
+    name ?? `context-${Math.random().toString(36).slice(2)}-${Date.now()}`;
   return defineAsyncContext<T>({ id });
 }

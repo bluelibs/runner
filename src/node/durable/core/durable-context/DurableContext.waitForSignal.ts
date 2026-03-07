@@ -173,58 +173,57 @@ export async function waitForSignalDurably<TPayload>(params: {
         if (parsedState.state === "timed_out") {
           return resolveTimedOut();
         }
-        if (parsedState.state === "waiting") {
-          if (
-            parsedState.signalId !== undefined &&
-            parsedState.signalId !== signalId
-          ) {
-            return durableExecutionInvariantError.throw({
-              message: `Invalid signal step state for '${signalId}' at '${stepId}'`,
+        // Remaining valid parsed state is "waiting" (completed/timed_out returned above).
+        if (
+          parsedState.signalId !== undefined &&
+          parsedState.signalId !== signalId
+        ) {
+          return durableExecutionInvariantError.throw({
+            message: `Invalid signal step state for '${signalId}' at '${stepId}'`,
+          });
+        }
+        if (params.options?.timeoutMs !== undefined) {
+          if ("timeoutAtMs" in parsedState && "timerId" in parsedState) {
+            await params.store.createTimer({
+              id: parsedState.timerId,
+              executionId: params.executionId,
+              stepId,
+              type: TimerType.SignalTimeout,
+              fireAt: new Date(parsedState.timeoutAtMs),
+              status: TimerStatus.Pending,
+            });
+          } else {
+            const timerId = `signal_timeout:${params.executionId}:${stepId}`;
+            const timeoutAtMs = Date.now() + params.options.timeoutMs;
+
+            await params.store.createTimer({
+              id: timerId,
+              executionId: params.executionId,
+              stepId,
+              type: TimerType.SignalTimeout,
+              fireAt: new Date(timeoutAtMs),
+              status: TimerStatus.Pending,
+            });
+
+            await params.store.saveStepResult({
+              executionId: params.executionId,
+              stepId,
+              result: { state: "waiting", signalId, timeoutAtMs, timerId },
+              completedAt: new Date(),
+            });
+
+            await params.appendAuditEntry({
+              kind: DurableAuditEntryKind.SignalWaiting,
+              stepId,
+              signalId,
+              timeoutMs: params.options.timeoutMs,
+              timeoutAtMs,
+              timerId,
+              reason: "timeout_armed",
             });
           }
-          if (params.options?.timeoutMs !== undefined) {
-            if ("timeoutAtMs" in parsedState && "timerId" in parsedState) {
-              await params.store.createTimer({
-                id: parsedState.timerId,
-                executionId: params.executionId,
-                stepId,
-                type: TimerType.SignalTimeout,
-                fireAt: new Date(parsedState.timeoutAtMs),
-                status: TimerStatus.Pending,
-              });
-            } else {
-              const timerId = `signal_timeout:${params.executionId}:${stepId}`;
-              const timeoutAtMs = Date.now() + params.options.timeoutMs;
-
-              await params.store.createTimer({
-                id: timerId,
-                executionId: params.executionId,
-                stepId,
-                type: TimerType.SignalTimeout,
-                fireAt: new Date(timeoutAtMs),
-                status: TimerStatus.Pending,
-              });
-
-              await params.store.saveStepResult({
-                executionId: params.executionId,
-                stepId,
-                result: { state: "waiting", signalId, timeoutAtMs, timerId },
-                completedAt: new Date(),
-              });
-
-              await params.appendAuditEntry({
-                kind: DurableAuditEntryKind.SignalWaiting,
-                stepId,
-                signalId,
-                timeoutMs: params.options.timeoutMs,
-                timeoutAtMs,
-                timerId,
-                reason: "timeout_armed",
-              });
-            }
-          }
-          throw new SuspensionSignal("yield");
         }
+        throw new SuspensionSignal("yield");
       }
 
       if (params.options?.timeoutMs !== undefined) {

@@ -141,4 +141,166 @@ describe("httpResponse additional branch coverage", () => {
     await new Promise((r) => setImmediate(r));
     expect(res.writableEnded).toBe(true);
   });
+
+  it("respondStream skips blocked response headers from streaming wrapper", () => {
+    const setHeader = jest.fn();
+    const res: any = {
+      writableEnded: false,
+      statusCode: 0,
+      setHeader,
+      write() {},
+      end() {
+        this.writableEnded = true;
+      },
+    };
+    const inner: any = {
+      _readableState: { ended: true },
+      read() {
+        return null;
+      },
+    };
+
+    respondStream(res, {
+      stream: inner,
+      headers: {
+        "x-custom": "1",
+        "x-frame-options": "ALLOWALL",
+      },
+    } as any);
+
+    expect(setHeader).toHaveBeenCalledWith("x-custom", "1");
+    expect(setHeader).not.toHaveBeenCalledWith("x-frame-options", "ALLOWALL");
+  });
+
+  it("respondStream ignores handleError end when response is already ended", async () => {
+    const endSpy = jest.fn();
+    const res: any = {
+      writableEnded: true,
+      statusCode: 0,
+      setHeader() {},
+      end: endSpy,
+    };
+    const listeners: Record<string, Function[]> = {};
+    const stream: any = {
+      on(ev: string, cb: Function) {
+        (listeners[ev] ||= []).push(cb);
+        return stream;
+      },
+      once(ev: string, cb: Function) {
+        (listeners[ev] ||= []).push(cb);
+        return stream;
+      },
+    };
+
+    respondStream(res, { stream } as any);
+    for (const fn of listeners["error"] ?? []) fn(new Error("boom"));
+    await new Promise((r) => setImmediate(r));
+    expect(endSpy).not.toHaveBeenCalled();
+  });
+
+  it("respondStream falls through sync-read path when stream is not yet ended", async () => {
+    const writes: Buffer[] = [];
+    const res: any = {
+      writableEnded: false,
+      statusCode: 0,
+      setHeader() {},
+      write(payload?: unknown) {
+        if (payload != null) {
+          writes.push(
+            Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)),
+          );
+        }
+      },
+      end() {
+        this.writableEnded = true;
+      },
+    };
+    const listeners: Record<string, Function[]> = {};
+    const stream: any = {
+      read() {
+        return null;
+      },
+      on(ev: string, cb: Function) {
+        (listeners[ev] ||= []).push(cb);
+        return stream;
+      },
+      once(ev: string, cb: Function) {
+        (listeners[ev] ||= []).push(cb);
+        return stream;
+      },
+    };
+
+    respondStream(res, { stream } as any);
+    expect(res.writableEnded).toBe(false);
+    for (const fn of listeners["data"] ?? []) fn("L");
+    for (const fn of listeners["end"] ?? []) fn();
+    await new Promise((r) => setImmediate(r));
+    expect(Buffer.concat(writes).toString("utf8")).toBe("L");
+  });
+
+  it("respondStream sync-read ended path skips end when response is already ended", () => {
+    const endSpy = jest.fn();
+    const res: any = {
+      writableEnded: true,
+      statusCode: 0,
+      setHeader() {},
+      end: endSpy,
+    };
+    const inner: any = {
+      readableEnded: true,
+      read() {
+        return null;
+      },
+    };
+
+    respondStream(res, { stream: inner } as any);
+    expect(endSpy).not.toHaveBeenCalled();
+  });
+
+  it("respondStream handleError ends response when not already ended", async () => {
+    const endSpy = jest.fn(function (this: any) {
+      this.writableEnded = true;
+    });
+    const res: any = {
+      writableEnded: false,
+      statusCode: 0,
+      setHeader() {},
+      end: endSpy,
+    };
+    const listeners: Record<string, Function[]> = {};
+    const stream: any = {
+      on(ev: string, cb: Function) {
+        (listeners[ev] ||= []).push(cb);
+        return stream;
+      },
+      once(ev: string, cb: Function) {
+        (listeners[ev] ||= []).push(cb);
+        return stream;
+      },
+    };
+
+    respondStream(res, { stream } as any);
+    for (const fn of listeners["error"] ?? []) fn(new Error("boom"));
+    await new Promise((r) => setImmediate(r));
+    expect(endSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("respondStream safeEnd returns early when response is already ended", () => {
+    const endSpy = jest.fn();
+    const res: any = {
+      writableEnded: true,
+      statusCode: 0,
+      setHeader() {},
+      end: endSpy,
+    };
+    const inner: any = {
+      _readableState: { ended: true },
+      read() {
+        return null;
+      },
+    };
+
+    respondStream(res, { stream: inner } as any);
+    expect(endSpy).not.toHaveBeenCalled();
+  });
 });

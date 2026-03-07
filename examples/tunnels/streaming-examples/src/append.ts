@@ -1,20 +1,37 @@
 /**
- * Streaming append over HTTP using Runner exposure + Runner serializer.
+ * Streaming append over RPC Lanes + smart HTTP transport.
  *
- * - Server: nodeExposure HTTP
- * - Client: Node smart client that auto-detects File sentinels and streams via multipart
+ * - Server: rpcLanes HTTP exposure
+ * - Client: rpcLane smart communicator uploads Node File sentinels via multipart
  */
 
-import { globals, resource, run, task, InputFile } from "@bluelibs/runner";
+import { InputFile, r, run } from "@bluelibs/runner";
+import { createNodeFile, rpcLanesResource } from "@bluelibs/runner/node";
 import { Readable, Transform } from "stream";
-import {
-  nodeExposure,
-  createNodeFile,
-  createHttpSmartClient,
-} from "@bluelibs/runner/node";
 
-// @ts-ignore
 import { createSlowReadable, getExposureBaseUrl } from "./utils";
+
+const RPC_PROFILE = {
+  client: "client",
+  server: "server",
+} as const;
+
+const IDS = {
+  // Shared app id keeps fully-qualified task ids aligned across client/server.
+  app: "appendApp",
+  task: "appendTask",
+  communicator: {
+    server: "appendServerCommunicator",
+    client: "appendClientCommunicator",
+  },
+  rpcLanes: {
+    server: "appendServerRpcLanes",
+    client: "appendClientRpcLanes",
+  },
+} as const;
+const RPC_BASE_PATH = "/__runner";
+
+const appendLane = r.rpcLane("appendLane").build();
 
 function appendMagic(value: string): string {
   return value
@@ -44,7 +61,6 @@ function tap(label: string): Transform {
       const text = Buffer.isBuffer(chunk)
         ? chunk.toString("utf8")
         : String(chunk);
-      // Required demo log: "send" / "receive"
 
       console.log(label, text);
       cb(null, chunk);
@@ -52,77 +68,146 @@ function tap(label: string): Transform {
   });
 }
 
-// Task; receives a file and streams it via InputFile.resolve()
-const appendTask = task({
-  id: "examples.streaming.appendTask",
-  meta: {
+const appendTask = r
+  .task<{ file: InputFile<Readable> }>(IDS.task)
+  .tags([r.runner.tags.rpcLane.with({ lane: appendLane })])
+  .meta({
     title: "Append magic",
     description: "Appends 'a' to every character (file stream)",
-  },
-  run: async (input: { file: InputFile<Readable> }) => {
+  })
+  .run(async (input): Promise<string> => {
     const { stream } = await input.file.resolve();
     const xform = createAppendTransform();
     const rxTap = tap("receive");
+
     return await new Promise<string>((resolve, reject) => {
       const chunks: Buffer[] = [];
       stream
         .pipe(rxTap)
         .pipe(xform)
-        .on("data", (c: any) =>
-          chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(String(c))),
-        )
-        .on("end", () =>
-          resolve(
-            Buffer.concat(chunks as readonly Uint8Array[]).toString("utf8"),
-          ),
-        )
+        .on("data", (chunk: Buffer | string) => {
+          chunks.push(
+            Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, "utf8"),
+          );
+        })
+        .on("end", () => {
+          resolve(Buffer.concat(chunks).toString("utf8"));
+        })
         .on("error", reject);
     });
-  },
-});
+  })
+  .build();
 
-const exposure = nodeExposure.with({
-  http: {
-    dangerouslyAllowOpenExposure: true,
-    auth: { allowAnonymous: true },
-    basePath: "/__runner",
-    listen: { port: 0 },
-  },
-});
-const app = resource({
-  id: "examples.streaming.append.app",
-  register: [appendTask, exposure],
-});
+const appendRemoteTask = r
+  .task<{ file: InputFile<Readable> }>(IDS.task)
+  .tags([r.runner.tags.rpcLane.with({ lane: appendLane })])
+  .run(async (): Promise<string> => {
+    throw new Error("This task must be routed through rpcLanes.");
+  })
+  .build();
+
+function createTopology(communicator: ReturnType<typeof r.resource<void>>) {
+  return r.rpcLane.topology({
+    profiles: {
+      [RPC_PROFILE.client]: { serve: [] },
+      [RPC_PROFILE.server]: { serve: [appendLane] },
+    },
+    bindings: [{ lane: appendLane, communicator }],
+  });
+}
+
+function buildServerApp() {
+  const communicator = r
+    .resource<void>(IDS.communicator.server)
+    .init(async () => ({
+      task: async (): Promise<never> => {
+        throw new Error("Unexpected remote task call on server communicator.");
+      },
+      event: async (): Promise<never> => {
+        throw new Error("Unexpected remote event call on server communicator.");
+      },
+      eventWithResult: async (): Promise<never> => {
+        throw new Error("Unexpected remote event call on server communicator.");
+      },
+    }))
+    .build();
+
+  const rpcLanes = rpcLanesResource.fork(IDS.rpcLanes.server).with({
+    profile: RPC_PROFILE.server,
+    mode: "network",
+    topology: createTopology(communicator),
+    exposure: {
+      http: {
+        auth: { allowAnonymous: true },
+        basePath: RPC_BASE_PATH,
+        listen: { host: "127.0.0.1", port: 0 },
+      },
+    },
+  });
+
+  return {
+    app: r.resource(IDS.app).register([appendTask, communicator, rpcLanes]).build(),
+    rpcLanes,
+  };
+}
+
+function buildClientApp(baseUrl: string) {
+  const communicator = r
+    .resource<void>(IDS.communicator.client)
+    .init(
+      r.rpcLane.httpClient({
+        client: "smart",
+        baseUrl,
+      }),
+    )
+    .build();
+
+  const rpcLanes = rpcLanesResource.fork(IDS.rpcLanes.client).with({
+    profile: RPC_PROFILE.client,
+    mode: "network",
+    topology: createTopology(communicator),
+  });
+
+  return r
+    .resource(IDS.app)
+    .register([appendRemoteTask, communicator, rpcLanes])
+    .build();
+}
 
 export async function runStreamingAppendExample(): Promise<void> {
-  const rr = await run(app);
+  const { app: serverApp, rpcLanes: serverRpcLanes } = buildServerApp();
+  const serverRuntime = await run(serverApp);
+
+  let clientRuntime: Awaited<ReturnType<typeof run>> | null = null;
+
   try {
     const payload = "Runner streaming demo";
     const expected = appendMagic(payload);
 
-    // Discover exposure base URL and create a smart client
-    const handlers = await rr.getResourceValue(exposure.resource as any);
-    const baseUrl = await getExposureBaseUrl(handlers);
-    const serializer = rr.getResourceValue(globals.resources.serializer);
-    const client = createHttpSmartClient({ baseUrl, serializer });
+    const serverRpcLanesValue = await serverRuntime.getResourceValue(serverRpcLanes);
+    const baseUrl = getExposureBaseUrl(serverRpcLanesValue);
 
-    // Client builds a File sentinel with a local Node stream; the client uploads via multipart
-    const sendTap = tap("send");
-    const result = (await client.task<{ file: any }, string>(appendTask.id, {
+    const clientApp = buildClientApp(baseUrl);
+    clientRuntime = await run(clientApp);
+
+    const result = await clientRuntime.runTask(appendRemoteTask, {
       file: createNodeFile(
         { name: "payload.txt", type: "text/plain" },
-        { stream: createSlowReadable(payload, 25).pipe(sendTap) },
+        { stream: createSlowReadable(payload, 25).pipe(tap("send")) },
         "F1",
       ),
-    } as any)) as string;
+    });
+
     console.log(`[result] ${result}`);
+
     if (result !== expected) {
-      throw new Error(
-        "HTTP client result did not match expected transform output",
-      );
+      throw new Error("RPC lane result did not match expected transform output");
     }
   } finally {
-    await rr.dispose();
+    if (clientRuntime) {
+      await clientRuntime.dispose();
+    }
+    await serverRuntime.dispose();
   }
 }
 
@@ -133,4 +218,4 @@ if (require.main === module) {
   });
 }
 
-export { app as appendStreamingServer, appendTask };
+export { appendTask };

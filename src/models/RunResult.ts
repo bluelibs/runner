@@ -17,10 +17,12 @@ import {
   lazyResourceSyncAccessError,
   runResultDisposeDuringBootstrapError,
   runResultDisposedError,
+  runtimeAccessViolationError,
   runtimeElementNotFoundError,
   runtimeRootNotAvailableError,
   runtimeRootNotInitializedError,
 } from "../errors";
+import { runtimeSource } from "../types/runtimeSource";
 
 /**
  * Options for configuring lazy resource loading behavior.
@@ -156,6 +158,43 @@ export class RunResult<V> implements IRuntime<V> {
   }
 
   /**
+   * Enforces the root resource's exported API surface for runtime callers.
+   *
+   * When the root resource declares `.isolate({ exports: [...] })`, only those items may be
+   * reached through the IRuntime API. This prevents external callers from
+   * bypassing encapsulation boundaries that were intentionally declared at
+   * the resource composition layer.
+   *
+   * When no isolate exports are declared on the root, everything remains open
+   * (backward compatible).
+   * @internal
+   */
+  private assertRuntimeAccess(
+    targetId: string,
+    targetType: "Task" | "Event" | "Resource",
+  ): void {
+    const rootId = this.store.root?.resource.id;
+    // Root not yet wired in unit-test mocks or rare early-bootstrap injection
+    // via system.runtime — skip the check; other guards apply.
+    /* istanbul ignore next */
+    if (!rootId) return;
+
+    const { accessible, exportedIds } = this.store.getRootAccessInfo(
+      targetId,
+      rootId,
+    );
+
+    if (!accessible) {
+      runtimeAccessViolationError.throw({
+        targetId,
+        targetType,
+        rootId,
+        exportedIds,
+      });
+    }
+  }
+
+  /**
    * Retrieves the root resource from the store.
    * Throws if the root hasn't been set (e.g., during early access).
    * @internal
@@ -201,6 +240,7 @@ export class RunResult<V> implements IRuntime<V> {
    *
    * // Run with options for journal forwarding
    * const result = await runtime.runTask(greet, undefined, { journal });
+   * // Inside task.run(...), context.source is injected automatically
    */
   public runTask = <TTask extends ITask<any, Promise<any>, any> | string>(
     task: TTask,
@@ -212,23 +252,26 @@ export class RunResult<V> implements IRuntime<V> {
   ): TTask extends ITask<any, infer O, any> ? O : Promise<any> => {
     this.ensureRuntimeIsActive();
     const [input, options] = args as [unknown, TaskCallOptions | undefined];
-    let resolvedTask: ITask<any, Promise<any>, any>;
+    const taskId = this.resolveRuntimeElementId(task);
+    if (!this.store.tasks.has(taskId)) {
+      runtimeElementNotFoundError.throw({ type: "Task", elementId: taskId });
+    }
+    const resolvedTask = this.store.tasks.get(taskId)!.task;
 
-    if (typeof task === "string") {
-      const taskId = task;
-      if (!this.store.tasks.has(taskId)) {
-        runtimeElementNotFoundError.throw({ type: "Task", elementId: taskId });
-      }
-      resolvedTask = this.store.tasks.get(taskId)!.task;
-    } else {
-      resolvedTask = task;
+    // Violations return a rejected Promise rather than throwing synchronously
+    // so callers can always use .catch() / await idioms on the returned Promise.
+    try {
+      this.assertRuntimeAccess(resolvedTask.id, "Task");
+    } catch (e) {
+      return Promise.reject(e) as TTask extends ITask<any, infer O, any>
+        ? O
+        : Promise<any>;
     }
 
-    return this.taskRunner.run(
-      resolvedTask,
-      input,
-      options,
-    ) as TTask extends ITask<any, infer O, any> ? O : Promise<any>;
+    return this.taskRunner.run(resolvedTask, input, {
+      ...(options || {}),
+      source: runtimeSource.runtime("runtime.api"),
+    }) as TTask extends ITask<any, infer O, any> ? O : Promise<any>;
   };
 
   /**
@@ -259,17 +302,29 @@ export class RunResult<V> implements IRuntime<V> {
   ) => {
     this.ensureRuntimeIsActive();
 
-    if (typeof event === "string") {
-      const eventId = event;
-      if (!this.store.events.has(eventId)) {
-        runtimeElementNotFoundError.throw({
-          type: "Event",
-          elementId: eventId,
-        });
-      }
-      event = this.store.events.get(eventId)!.event;
+    const eventId = this.resolveRuntimeElementId(event);
+    if (!this.store.events.has(eventId)) {
+      runtimeElementNotFoundError.throw({
+        type: "Event",
+        elementId: eventId,
+      });
     }
-    return this.eventManager.emit(event, payload, "outside", options);
+    event = this.store.events.get(eventId)!.event as IEvent<P>;
+
+    // Violations return a rejected Promise rather than throwing synchronously
+    // so callers can always use .catch() / await idioms on the returned Promise.
+    try {
+      this.assertRuntimeAccess((event as IEvent<P>).id, "Event");
+    } catch (e) {
+      return Promise.reject(e);
+    }
+
+    return this.eventManager.emit(
+      event,
+      payload,
+      runtimeSource.runtime("runtime.api"),
+      options,
+    );
   }) as {
     <P>(
       event: IEvent<P> | string,
@@ -319,6 +374,9 @@ export class RunResult<V> implements IRuntime<V> {
         elementId: resourceId,
       });
     }
+
+    this.assertRuntimeAccess(resourceId, "Resource");
+
     if (
       this.lazyOptions.lazyMode &&
       this.lazyOptions.startupUnusedResourceIds?.has(resourceId)
@@ -366,6 +424,8 @@ export class RunResult<V> implements IRuntime<V> {
       });
     }
 
+    this.assertRuntimeAccess(resourceId, "Resource");
+
     if (!this.lazyOptions.lazyResourceLoader) {
       return this.store.resources.get(resourceId)!.value;
     }
@@ -399,13 +459,15 @@ export class RunResult<V> implements IRuntime<V> {
   ): Config => {
     this.ensureRuntimeIsActive();
 
-    const resourceId = typeof resource === "string" ? resource : resource.id;
+    const resourceId = this.getResourceId(resource);
     if (!this.store.resources.has(resourceId)) {
       runtimeElementNotFoundError.throw({
         type: "Resource",
         elementId: resourceId,
       });
     }
+
+    this.assertRuntimeAccess(resourceId, "Resource");
 
     return this.store.resources.get(resourceId)!.config;
   };
@@ -457,7 +519,19 @@ export class RunResult<V> implements IRuntime<V> {
   private getResourceId(
     resource: string | IResource<any, any, any, any, any>,
   ): string {
-    return typeof resource === "string" ? resource : resource.id;
+    return this.resolveRuntimeElementId(resource);
+  }
+
+  /**
+   * Resolves either a definition object or a string id to the store's
+   * canonical id, with graceful fallback to the original string/object id.
+   */
+  private resolveRuntimeElementId(reference: string | { id: string }): string {
+    const resolved = this.store.resolveDefinitionId(reference);
+    if (resolved) {
+      return resolved;
+    }
+    return typeof reference === "string" ? reference : reference.id;
   }
 
   /**
@@ -495,8 +569,10 @@ export class RunResult<V> implements IRuntime<V> {
 
     this.#disposePromise = Promise.resolve()
       .then(() => this.disposeFn())
-      .finally(() => {
+      .then(() => {
         this.#disposed = true;
+      })
+      .finally(() => {
         this.#disposing = false;
         this.#disposePromise = undefined;
       });

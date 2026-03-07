@@ -2,7 +2,7 @@ import { r, definitions } from "../..";
 
 describe("tag builder", () => {
   it("build() returns branded tag with id", () => {
-    const tg = r.tag("tests.builder.tag").build();
+    const tg = r.tag("tests-builder-tag").build();
     // brand
     expect((tg as unknown as Record<symbol, any>)[definitions.symbolTag]).toBe(
       true,
@@ -10,12 +10,12 @@ describe("tag builder", () => {
     expect(
       typeof (tg as unknown as Record<symbol, any>)[definitions.symbolFilePath],
     ).toBe("string");
-    expect(tg.id).toBe("tests.builder.tag");
+    expect(tg.id).toBe("tests-builder-tag");
   });
 
   it("supports meta, configSchema, and config; with/exists/extract work", () => {
     const tg = r
-      .tag<{ value?: number }>("tests.builder.tag.meta")
+      .tag<{ value?: number }>("tests-builder-tag-meta")
       .meta({})
       .configSchema<{ value?: number }>({ parse: (x: any) => x })
       .config({ value: 1 })

@@ -1,8 +1,13 @@
-import { defineResource, defineTaskMiddleware } from "../../define";
+import {
+  defineFrameworkResource,
+  defineFrameworkTaskMiddleware,
+} from "../../definers/frameworkDefinition";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
 import { middlewareRateLimitExceededError, RunnerErrorId } from "../../errors";
+import { Match } from "../../tools/check";
+import { symbolDefinitionIdentity } from "../../types/symbols";
 
 export interface RateLimitMiddlewareConfig {
   /**
@@ -15,41 +20,10 @@ export interface RateLimitMiddlewareConfig {
   max: number;
 }
 
-function assertRateLimitMiddlewareConfig(
-  config: unknown,
-): asserts config is RateLimitMiddlewareConfig {
-  if (!config || typeof config !== "object") {
-    throw new TypeError(
-      "rateLimitTaskMiddleware requires .with({ windowMs, max }) configuration.",
-    );
-  }
-
-  const maybe = config as Partial<RateLimitMiddlewareConfig>;
-  if (maybe.windowMs === undefined || maybe.max === undefined) {
-    throw new TypeError(
-      "rateLimitTaskMiddleware requires .with({ windowMs, max }) configuration.",
-    );
-  }
-
-  if (!Number.isFinite(maybe.windowMs) || (maybe.windowMs as number) <= 0) {
-    throw new TypeError(
-      "rateLimitTaskMiddleware requires a positive number for config.windowMs.",
-    );
-  }
-
-  if (!Number.isFinite(maybe.max) || (maybe.max as number) <= 0) {
-    throw new TypeError(
-      "rateLimitTaskMiddleware requires a positive number for config.max.",
-    );
-  }
-}
-
-const rateLimitConfigSchema = {
-  parse: (config: unknown) => {
-    assertRateLimitMiddlewareConfig(config);
-    return config;
-  },
-};
+const rateLimitConfigPattern = Match.ObjectIncluding({
+  windowMs: Match.PositiveInteger,
+  max: Match.PositiveInteger,
+});
 
 /**
  * Custom error class for rate limit errors.
@@ -61,6 +35,8 @@ export class RateLimitError extends RunnerError<{ message: string }> {
       message,
       { message },
       middlewareRateLimitExceededError.httpCode,
+      undefined,
+      middlewareRateLimitExceededError[symbolDefinitionIdentity],
     );
   }
 }
@@ -77,20 +53,20 @@ export interface RateLimitState {
 export const journalKeys = {
   /** Number of remaining requests in the current window */
   remaining: journalHelper.createKey<number>(
-    "globals.middleware.task.rateLimit.remaining",
+    "runner.middleware.task.rateLimit.remaining",
   ),
   /** Timestamp when the current window resets */
   resetTime: journalHelper.createKey<number>(
-    "globals.middleware.task.rateLimit.resetTime",
+    "runner.middleware.task.rateLimit.resetTime",
   ),
   /** Maximum requests allowed per window */
   limit: journalHelper.createKey<number>(
-    "globals.middleware.task.rateLimit.limit",
+    "runner.middleware.task.rateLimit.limit",
   ),
 } as const;
 
-export const rateLimitResource = defineResource({
-  id: "globals.resources.rateLimit",
+export const rateLimitResource = defineFrameworkResource({
+  id: "runner.rateLimit",
   tags: [globalTags.system],
   init: async () => {
     return {
@@ -102,18 +78,16 @@ export const rateLimitResource = defineResource({
 /**
  * Rate limit middleware: limits the number of executions within a fixed time window.
  */
-export const rateLimitTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.task.rateLimit",
+export const rateLimitTaskMiddleware = defineFrameworkTaskMiddleware({
+  id: "runner.middleware.task.rateLimit",
   throws: [middlewareRateLimitExceededError],
-  configSchema: rateLimitConfigSchema,
+  configSchema: rateLimitConfigPattern,
   dependencies: { state: rateLimitResource },
   async run(
     { task, next, journal },
     { state },
     config: RateLimitMiddlewareConfig,
   ) {
-    assertRateLimitMiddlewareConfig(config);
-
     const { states } = state;
     let limitState = states.get(config);
     const now = Date.now();

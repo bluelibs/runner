@@ -28,6 +28,7 @@ export interface TreeSerializerOptions {
   maxDepth: number;
   unsafeKeys: ReadonlySet<string>;
   typeRegistry: TypeRegistry;
+  mapObjectForSerialization?: (value: object) => Record<string, unknown>;
 }
 
 /**
@@ -115,7 +116,9 @@ export const serializeTreeValue = (
           const payload =
             serializedPayload === objectValue
               ? serializeRecordEntries(
-                  objectValue as Record<string, unknown>,
+                  options.mapObjectForSerialization
+                    ? options.mapObjectForSerialization(objectValue)
+                    : (objectValue as Record<string, unknown>),
                   options.unsafeKeys,
                   (nested) =>
                     serializeTreeValue(nested, context, depth + 1, options),
@@ -146,8 +149,12 @@ export const serializeTreeValue = (
       );
     }
 
+    const recordSource = options.mapObjectForSerialization
+      ? options.mapObjectForSerialization(objectValue)
+      : (objectValue as Record<string, unknown>);
+
     return serializeRecordEntries(
-      objectValue as Record<string, unknown>,
+      recordSource,
       options.unsafeKeys,
       (nested) => serializeTreeValue(nested, context, depth + 1, options),
       escapeReservedMarkerKey,

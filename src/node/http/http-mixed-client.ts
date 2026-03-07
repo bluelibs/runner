@@ -1,5 +1,5 @@
 import type { Readable } from "stream";
-import { createExposureFetch } from "../../http-fetch-tunnel.resource";
+import { createExposureFetch } from "../../http-fetch-remote-lane.resource";
 import type { SerializerLike } from "../../serializer";
 import { createHttpSmartClient } from "./http-smart-client.model";
 import type { IAsyncContext } from "../../types/asyncContext";
@@ -48,44 +48,21 @@ export interface MixedHttpClient {
   task<I = unknown, O = unknown>(
     id: string,
     input?: I,
+    options?: { headers?: Record<string, string> },
   ): Promise<O | Readable | ReadableStream<Uint8Array>>;
-  event<P = unknown>(id: string, payload?: P): Promise<void>;
-  eventWithResult?<P = unknown>(id: string, payload?: P): Promise<P>;
+  event<P = unknown>(
+    id: string,
+    payload?: P,
+    options?: { headers?: Record<string, string> },
+  ): Promise<void>;
+  eventWithResult?<P = unknown>(
+    id: string,
+    payload?: P,
+    options?: { headers?: Record<string, string> },
+  ): Promise<P>;
 }
 
-function isReadable(value: unknown): value is Readable {
-  return !!value && typeof (value as { pipe?: unknown }).pipe === "function";
-}
-
-function hasNodeFile(value: unknown): boolean {
-  const isNodeFileSentinel = (
-    v: unknown,
-  ): v is {
-    $runnerFile: "File";
-    id: string;
-    _node?: { stream?: unknown; buffer?: unknown };
-  } => {
-    if (!v || typeof v !== "object") return false;
-    const rec = v as Record<string, unknown>;
-    if (rec.$runnerFile !== "File") return false;
-    if (typeof rec.id !== "string") return false;
-    const node = rec._node;
-    if (!node || typeof node !== "object") return false;
-    const n = node as Record<string, unknown>;
-    return Boolean(n.stream || n.buffer);
-  };
-
-  const visit = (v: unknown): boolean => {
-    if (isNodeFileSentinel(v)) return true;
-    if (!v || typeof v !== "object") return false;
-    if (Array.isArray(v)) return v.some(visit);
-    for (const k of Object.keys(v as Record<string, unknown>)) {
-      if (visit((v as Record<string, unknown>)[k])) return true;
-    }
-    return false;
-  };
-  return visit(value);
-}
+import { isReadable, hasNodeFile } from "./nodeFileDetection";
 
 async function shouldForceSmart(
   cfg: MixedHttpClientConfig,
@@ -134,6 +111,7 @@ export function createHttpMixedClient(
     async task<I, O>(
       id: string,
       input?: I,
+      options?: { headers?: Record<string, string> },
     ): Promise<O | Readable | ReadableStream<Uint8Array>> {
       // Prefer Smart path only when needed (streams or Node file sentinels)
       if (
@@ -141,22 +119,30 @@ export function createHttpMixedClient(
         hasNodeFile(input) ||
         (await shouldForceSmart(cfg, id, input))
       ) {
-        return await smartClient.task<I, O>(id, input as I);
+        return await smartClient.task<I, O>(id, input as I, options);
       }
       // Otherwise, lean JSON path
-      return await fetchClient.task<I, O>(id, input as I);
+      return await fetchClient.task<I, O>(id, input as I, options);
     },
-    async event<P>(id: string, payload?: P): Promise<void> {
+    async event<P>(
+      id: string,
+      payload?: P,
+      options?: { headers?: Record<string, string> },
+    ): Promise<void> {
       // Events are always plain JSON
-      return await fetchClient.event<P>(id, payload);
+      return await fetchClient.event<P>(id, payload, options);
     },
-    async eventWithResult<P>(id: string, payload?: P): Promise<P> {
+    async eventWithResult<P>(
+      id: string,
+      payload?: P,
+      options?: { headers?: Record<string, string> },
+    ): Promise<P> {
       if (!fetchClient.eventWithResult) {
         httpEventWithResultUnavailableError.throw({
           clientFactory: "createHttpMixedClient",
         });
       }
-      return await fetchClient.eventWithResult!<P>(id, payload);
+      return await fetchClient.eventWithResult!<P>(id, payload, options);
     },
   };
 }

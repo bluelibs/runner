@@ -1,11 +1,11 @@
 import { r } from "@bluelibs/runner";
 import { z } from "zod";
-import { httpRoute } from "#/http/tags";
+import { httpRoute } from "#/web/tags";
 import { db } from "#/db/resources";
-import { HTTPError } from "#/http/http-error";
+import { HTTPError } from "#/web/http-error";
 
 export const getUserById = r
-  .task("app.users.tasks.get-user-by-id")
+  .task("getUserById")
   .meta({
     title: "Get User By ID",
     description: "Retrieve a single user by its unique identifier",

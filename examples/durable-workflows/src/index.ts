@@ -9,7 +9,6 @@
  *   npm run build && node dist/index.js
  */
 import { r, run } from "@bluelibs/runner";
-import { waitUntil } from "@bluelibs/runner/node";
 
 import {
   durable,
@@ -22,11 +21,12 @@ import { processOrder } from "./orderProcessing.js";
 import { userOnboarding } from "./userOnboarding.js";
 import type { OrderResult } from "./orderProcessing.js";
 import type { OnboardingResult } from "./userOnboarding.js";
+import { waitForSignalCheckpoint } from "./signalCheckpoint.js";
 
 // ─── Root resource (wires everything) ────────────────────────────────────────
 
 const app = r
-  .resource("example.app")
+  .resource("app")
   .register([
     durableRegistration,
     processOrder,
@@ -57,18 +57,13 @@ export async function runDurableWorkflowsDemo(): Promise<{
     console.log(`  Started execution: ${orderExecutionId}`);
 
     // Wait until the workflow reaches the signal wait point (not just the sleep)
-    await waitUntil(
-      async () => {
-        const steps = await store.listStepResults(orderExecutionId);
-        return steps.some((s) => {
-          const r = s.result as Record<string, unknown> | null;
-          return (
-            r && r.state === "waiting" && r.signalId === PaymentConfirmed.id
-          );
-        });
-      },
-      { timeoutMs: 5_000, intervalMs: 20 },
-    );
+    await waitForSignalCheckpoint({
+      store,
+      executionId: orderExecutionId,
+      signalId: PaymentConfirmed.id,
+      timeoutMs: 5_000,
+      intervalMs: 20,
+    });
     console.log(
       "  Workflow is sleeping — waiting for PaymentConfirmed signal...",
     );
@@ -80,10 +75,10 @@ export async function runDurableWorkflowsDemo(): Promise<{
     console.log("  Signal sent: PaymentConfirmed");
 
     // Wait for the execution to complete
-    const orderResult = (await service.wait(orderExecutionId, {
+    const orderResult = await service.wait<OrderResult>(orderExecutionId, {
       timeout: 10_000,
       waitPollIntervalMs: 20,
-    })) as OrderResult;
+    });
     console.log("  Order result:", orderResult);
 
     // ── Workflow 2: User Onboarding (verified path) ──────────────────────
@@ -96,16 +91,13 @@ export async function runDurableWorkflowsDemo(): Promise<{
     console.log(`  Started execution: ${onboardingExecutionId}`);
 
     // Wait for the workflow to reach the signal wait point
-    await waitUntil(
-      async () => {
-        const steps = await store.listStepResults(onboardingExecutionId);
-        return steps.some((s) => {
-          const r = s.result as Record<string, unknown> | null;
-          return r && r.state === "waiting" && r.signalId === EmailVerified.id;
-        });
-      },
-      { timeoutMs: 5_000, intervalMs: 20 },
-    );
+    await waitForSignalCheckpoint({
+      store,
+      executionId: onboardingExecutionId,
+      signalId: EmailVerified.id,
+      timeoutMs: 5_000,
+      intervalMs: 20,
+    });
     console.log("  Workflow is sleeping — waiting for EmailVerified signal...");
 
     // Simulate user clicking the verification link
@@ -115,10 +107,13 @@ export async function runDurableWorkflowsDemo(): Promise<{
     console.log("  Signal sent: EmailVerified");
 
     // Wait for completion
-    const onboardingResult = (await service.wait(onboardingExecutionId, {
+    const onboardingResult = await service.wait<OnboardingResult>(
+      onboardingExecutionId,
+      {
       timeout: 10_000,
       waitPollIntervalMs: 20,
-    })) as OnboardingResult;
+      },
+    );
     console.log("  Onboarding result:", onboardingResult);
 
     console.log("\n=== All workflows completed successfully! ===\n");

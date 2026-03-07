@@ -1,27 +1,24 @@
-import * as http from "http";
 import { defineEvent, defineHook, defineResource } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
 import { createMessageError } from "../../../../errors";
 
 describe("nodeExposure Coverage - Events", () => {
   it("covers event not-found branches", async () => {
-    const okEvent = defineEvent<{ v?: number }>({ id: "ok.event" });
-    const exposure = nodeExposure.with({
+    const okEvent = defineEvent<{ v?: number }>({ id: "ok-event" });
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.events.app1",
+      id: "unit-exposure-coverage-events-app1",
       register: [okEvent, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     // method not allowed
     {
@@ -40,35 +37,33 @@ describe("nodeExposure Coverage - Events", () => {
         headers: { "x-runner-token": "T" },
       });
       await handlers.handleEvent(rrMock.req, rrMock.res);
-      expect(rrMock.status).toBe(404);
+      expect(rrMock.status).toBe(403);
     }
 
     await rr.dispose();
   });
 
   it("processEventRequest handles non-Error and Error from emit failures", async () => {
-    const evt = defineEvent<void>({ id: "coverage.event.error" });
+    const evt = defineEvent<void>({ id: "coverage-event-error" });
     const hook = defineHook({
-      id: "coverage.event.error.hook",
+      id: "coverage-event-error-hook",
       on: evt,
       run: async () => {
         throw createMessageError("emit failure");
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "EVERR" },
+        auth: { token: "EVERR", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "coverage.event.error.app",
+      id: "coverage-event-error-app",
       register: [evt, hook, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const container = createReqRes({
       url: `/__runner/event/${encodeURIComponent(evt.id)}`,

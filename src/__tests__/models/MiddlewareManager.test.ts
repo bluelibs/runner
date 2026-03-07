@@ -13,8 +13,7 @@ import {
 import { OnUnhandledError } from "../../index";
 import { RunnerMode } from "../../types/runner";
 import { TaskStoreElementType } from "../../types/storeTypes";
-import { ITaskMiddleware, IResource } from "../../defs";
-import { globalTags } from "../../globals/globalTags";
+import { ITaskMiddleware, IResource, symbolRpcLanePolicy } from "../../defs";
 import { createMessageError } from "../../errors";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
@@ -213,40 +212,67 @@ describe("MiddlewareManager", () => {
 
   it("should call getEverywhereMiddlewareForTasks method", () => {
     // Create a minimal, typed task
-    const t = defineTask({ id: "t.method", run: async () => 0 });
+    const t = defineTask({ id: "t-method", run: async () => 0 });
     const result = manager.getEverywhereMiddlewareForTasks(t);
     expect(Array.isArray(result)).toBe(true);
   });
 
   it("should call getEverywhereMiddlewareForResources method", () => {
     // Create a minimal, typed resource
-    const r = defineResource({ id: "r.method" });
+    const r = defineResource({ id: "r-method" });
     const result = manager.getEverywhereMiddlewareForResources(r);
     expect(Array.isArray(result)).toBe(true);
   });
 
-  it("getEverywhereMiddlewareForResources includes middleware with everywhere: true", () => {
-    const r = defineResource({ id: "r.test" });
+  it("getEverywhereMiddlewareForResources includes subtree middleware", () => {
+    const r = defineResource({ id: "r-test" });
     const mw = defineResourceMiddleware({
-      id: "mw.everywhere.true",
-      everywhere: true,
+      id: "mw-everywhere-true",
       run: async ({ next }) => next(),
     });
-    store.storeGenericItem(mw);
+    const owner = defineResource({
+      id: "owner-resource-middleware",
+      subtree: {
+        resources: {
+          middleware: [mw],
+        },
+      },
+      register: [mw, r],
+    });
+    store.storeGenericItem(owner);
     const result = manager.getEverywhereMiddlewareForResources(r);
-    expect(result.some((m) => m.id === "mw.everywhere.true")).toBe(true);
+    expect(result.some((m) => m.id === "mw-everywhere-true")).toBe(true);
   });
 
-  it("getEverywhereMiddlewareForResources filters with everywhere function", () => {
-    const r = defineResource({ id: "r.test.func" });
-    const mw = defineResourceMiddleware({
-      id: "mw.everywhere.func",
-      everywhere: (resource) => resource.id.startsWith("r.test"),
+  it("getEverywhereMiddlewareForResources fails fast on duplicate subtree middleware ids", () => {
+    const r = defineResource({ id: "r-test-func" });
+    const baseMw = defineResourceMiddleware({
+      id: "mw-everywhere-func",
       run: async ({ next }) => next(),
     });
-    store.storeGenericItem(mw);
-    const result = manager.getEverywhereMiddlewareForResources(r);
-    expect(result.some((m) => m.id === "mw.everywhere.func")).toBe(true);
+    const childMw = baseMw.with({ source: "child" });
+    const child = defineResource({
+      id: "owner-resource-child",
+      subtree: {
+        resources: {
+          middleware: [childMw],
+        },
+      },
+      register: [r],
+    });
+    const owner = defineResource({
+      id: "owner-resource-parent",
+      subtree: {
+        resources: {
+          middleware: [baseMw],
+        },
+      },
+      register: [baseMw, child],
+    });
+    store.storeGenericItem(owner);
+    expect(() => manager.getEverywhereMiddlewareForResources(r)).toThrow(
+      'Duplicate middleware id "mw-everywhere-func"',
+    );
   });
 
   it("should access resourceMiddlewareInterceptors getter", () => {
@@ -278,32 +304,56 @@ describe("MiddlewareManager", () => {
     expect(taskInterceptorsAfterMutationAttempt).toHaveLength(1);
   });
 
-  it("getEverywhereMiddlewareForTasks includes middleware with everywhere: true", () => {
-    const task = defineTask({ id: "task.true", run: async () => 0 });
+  it("getEverywhereMiddlewareForTasks includes subtree middleware", () => {
+    const task = defineTask({ id: "task-true", run: async () => 0 });
     const mw = defineTaskMiddleware({
-      id: "mw.task.everywhere.true",
-      everywhere: true,
+      id: "mw-task-everywhere-true",
       run: async ({ next, task }) => next(task?.input),
     });
-    store.storeGenericItem(mw);
+    const owner = defineResource({
+      id: "owner-task-middleware",
+      subtree: {
+        tasks: {
+          middleware: [mw],
+        },
+      },
+      register: [mw, task],
+    });
+    store.storeGenericItem(owner);
     const res = manager.getEverywhereMiddlewareForTasks(task);
-    expect(res.some((m) => m.id === "mw.task.everywhere.true")).toBe(true);
+    expect(res.some((m) => m.id === "mw-task-everywhere-true")).toBe(true);
   });
 
-  it("getEverywhereMiddlewareForTasks excludes middleware that depends on the task", () => {
-    const task = defineTask({ id: "task.dep", run: async () => 0 });
-    const mw = defineTaskMiddleware({
-      id: "mw",
+  it("getEverywhereMiddlewareForTasks fails fast on duplicate subtree middleware ids", () => {
+    const task = defineTask({ id: "task-dep", run: async () => 0 });
+    const baseMw = defineTaskMiddleware({
+      id: "mw-shared",
       dependencies: { t: task },
       run: async ({ next, task }) => next(task?.input),
-      everywhere(task) {
-        return task.id !== task.id;
-      },
     });
-    // register via public API to ensure types are respected
-    store.storeGenericItem(mw);
-    const res = manager.getEverywhereMiddlewareForTasks(task);
-    expect(res).toHaveLength(0);
+    const childMw = baseMw.with({ source: "child" });
+    const child = defineResource({
+      id: "owner-task-child",
+      subtree: {
+        tasks: {
+          middleware: [childMw],
+        },
+      },
+      register: [task],
+    });
+    const owner = defineResource({
+      id: "owner-task-parent",
+      subtree: {
+        tasks: {
+          middleware: [baseMw],
+        },
+      },
+      register: [baseMw, child],
+    });
+    store.storeGenericItem(owner);
+    expect(() => manager.getEverywhereMiddlewareForTasks(task)).toThrow(
+      'Duplicate middleware id "mw-shared"',
+    );
   });
 
   it("should export middleware classes from barrel file", () => {
@@ -318,7 +368,7 @@ describe("MiddlewareManager", () => {
   it("should handle non-Error validation failures", async () => {
     // Test ValidationHelper branch where error is not instanceof Error
     const task = defineTask({
-      id: "task.nonError",
+      id: "task-nonError",
       resultSchema: {
         parse: (_value: any) => {
           throw "string error"; // throw non-Error
@@ -336,27 +386,27 @@ describe("MiddlewareManager", () => {
     await expect(runner(undefined)).rejects.toThrow();
   });
 
-  it("should apply tunnel policy filter when task is tunneled", () => {
-    // Test MiddlewareResolver branch for tunnel policy
+  it("should apply rpc lane policy filter when task is routed", () => {
+    // Test MiddlewareResolver branch for rpc lane policy
 
     const mw = defineTaskMiddleware({
-      id: "test.mw.tunnel",
+      id: "test-mw-rpc-lane",
       run: async ({ next, task }) => next(task?.input),
     });
 
     const task = defineTask({
-      id: "task.tunneled",
-      tags: [
-        globalTags.tunnelTaskPolicy.with({
-          client: { middlewareAllowList: [mw.id] },
-        }),
-      ],
+      id: "task-rpc-routed",
       middleware: [mw],
       run: async () => 0,
     });
 
-    // Mark task as tunneled
-    task.isTunneled = true;
+    const routedTask = {
+      ...task,
+      isRpcRouted: true,
+      [symbolRpcLanePolicy]: {
+        middlewareAllowList: [mw.id],
+      },
+    };
 
     store.taskMiddlewares.set(mw.id, {
       middleware: mw,
@@ -364,9 +414,8 @@ describe("MiddlewareManager", () => {
       isInitialized: true,
     });
 
-    // Create a copy of the task for the store and mark it as tunneled too
-    const storeTask = { ...task };
-    storeTask.isTunneled = true;
+    // Create a copy of the task for the store and mark it as routed too
+    const storeTask = { ...routedTask };
 
     store.tasks.set(task.id, {
       task: storeTask,
@@ -374,7 +423,7 @@ describe("MiddlewareManager", () => {
       isInitialized: true,
     });
 
-    const runner = manager.composeTaskRunner(task);
+    const runner = manager.composeTaskRunner(routedTask as typeof task);
     expect(runner).toBeDefined();
   });
 
@@ -403,38 +452,38 @@ describe("MiddlewareManager", () => {
       manager.interceptOwned(
         "task",
         async (next: any, input: any) => next(input),
-        "tests.resources.owner.task",
+        "tests-resources-owner-task",
       );
       manager.intercept("task", async (next: any, input: any) => next(input));
       manager.interceptOwned(
         "resource",
         async (next: any, input: any) => next(input),
-        "tests.resources.owner.resource",
+        "tests-resources-owner-resource",
       );
 
       const snapshot = manager.getInterceptorOwnerSnapshot();
       expect(snapshot.globalTaskInterceptorOwnerIds).toEqual([
-        "tests.resources.owner.task",
+        "tests-resources-owner-task",
       ]);
       expect(snapshot.globalResourceInterceptorOwnerIds).toEqual([
-        "tests.resources.owner.resource",
+        "tests-resources-owner-resource",
       ]);
     });
 
     it("captures owner ids for per-middleware interceptors when registered via resource context", () => {
       const taskMiddleware = defineTaskMiddleware({
-        id: "tests.middleware.task.owner",
+        id: "tests-middleware-task-owner",
         run: async ({ next, task }) => next(task.input),
       });
       const resourceMiddleware = defineResourceMiddleware({
-        id: "tests.middleware.resource.owner",
+        id: "tests-middleware-resource-owner",
         run: async ({ next }) => next(),
       });
 
       manager.interceptMiddlewareOwned(
         taskMiddleware,
         async (next: any, input: any) => next(input),
-        "tests.resources.owner.perTask",
+        "tests-resources-owner-perTask",
       );
       manager.interceptMiddleware(
         taskMiddleware,
@@ -443,23 +492,23 @@ describe("MiddlewareManager", () => {
       manager.interceptMiddlewareOwned(
         resourceMiddleware,
         async (next: any, input: any) => next(input),
-        "tests.resources.owner.perResource",
+        "tests-resources-owner-perResource",
       );
 
       const snapshot = manager.getInterceptorOwnerSnapshot();
       expect(snapshot.perTaskMiddlewareInterceptorOwnerIds).toEqual({
-        "tests.middleware.task.owner": ["tests.resources.owner.perTask"],
+        "tests-middleware-task-owner": ["tests-resources-owner-perTask"],
       });
       expect(snapshot.perResourceMiddlewareInterceptorOwnerIds).toEqual({
-        "tests.middleware.resource.owner": [
-          "tests.resources.owner.perResource",
+        "tests-middleware-resource-owner": [
+          "tests-resources-owner-perResource",
         ],
       });
     });
 
     it("omits middleware entries that have no owner ids", () => {
       const taskMiddleware = defineTaskMiddleware({
-        id: "tests.middleware.task.no-owner",
+        id: "tests-middleware-task-no-owner",
         run: async ({ next, task }) => next(task.input),
       });
 
@@ -474,21 +523,21 @@ describe("MiddlewareManager", () => {
 
     it("tracks owners when middlewareManager is injected into a resource", async () => {
       const taskMiddleware = defineTaskMiddleware({
-        id: "tests.middleware.task.via.resource",
+        id: "tests-middleware-task-via-resource",
         run: async ({ next, task }) => next(task.input),
       });
       const resourceMiddleware = defineResourceMiddleware({
-        id: "tests.middleware.resource.via.resource",
+        id: "tests-middleware-resource-via-resource",
         run: async ({ next }) => next(),
       });
       const task = defineTask({
-        id: "tests.task.via.resource",
+        id: "tests-task-via-resource",
         middleware: [taskMiddleware],
         run: async () => "ok",
       });
 
       const ownerResource = defineResource({
-        id: "tests.resources.owner.via.resource",
+        id: "tests-resources-owner-via-resource",
         register: [taskMiddleware, resourceMiddleware, task],
         dependencies: {
           middlewareManager: globalResources.middlewareManager,
@@ -513,7 +562,7 @@ describe("MiddlewareManager", () => {
       });
 
       const app = defineResource({
-        id: "tests.app.middleware.owners",
+        id: "tests-app-middleware-owners",
         register: [ownerResource],
       });
 
@@ -685,7 +734,7 @@ describe("MiddlewareManager", () => {
         },
         RunnerMode.TEST,
       );
-      const manager = new MiddlewareManager(store, eventManager, logger);
+      const manager = new MiddlewareManager(store);
 
       manager.intercept("task", async (_next: any, _input: any) => {
         throw createMessageError("interceptor error");
@@ -716,7 +765,7 @@ describe("MiddlewareManager", () => {
         },
         RunnerMode.TEST,
       );
-      const manager = new MiddlewareManager(store, eventManager, logger);
+      const manager = new MiddlewareManager(store);
 
       manager.intercept("resource", async (_next: any, _input: any) => {
         throw createMessageError("interceptor error");
@@ -747,7 +796,7 @@ describe("MiddlewareManager", () => {
         },
         RunnerMode.TEST,
       );
-      const manager = new MiddlewareManager(store, eventManager, logger);
+      const manager = new MiddlewareManager(store);
 
       const resource = defineResource<{ n: number }, Promise<number>>({
         id: "resource_with_init_error_reporting",
@@ -777,7 +826,7 @@ describe("MiddlewareManager", () => {
         },
         RunnerMode.TEST,
       );
-      const manager = new MiddlewareManager(store, eventManager, logger);
+      const manager = new MiddlewareManager(store);
 
       manager.intercept("resource", async () => {
         throw createMessageError("global resource interceptor failed");
@@ -1137,7 +1186,7 @@ describe("MiddlewareManager", () => {
         manager.interceptMiddlewareOwned(
           bogusMiddleware,
           async (next: any, input: any) => next(input),
-          "tests.resources.owner.invalid",
+          "tests-resources-owner-invalid",
         ),
       ).toThrow("Unknown middleware type");
     });

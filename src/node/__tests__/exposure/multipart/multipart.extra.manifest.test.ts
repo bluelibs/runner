@@ -101,4 +101,42 @@ describe("parseMultipartInput - manifest extra branches", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expectErrorCode(result.response, "INVALID_MULTIPART");
   });
+
+  it("ignores duplicate manifest fields after ready promise is already resolved", async () => {
+    const manifest = JSON.stringify({ input: { ok: 1 } });
+    const req = createMockRequest(baseHeaders, (busboy) => {
+      busboy.emit("field", "__manifest", manifest, {});
+      busboy.emit("field", "__manifest", "", {});
+      busboy.emit("finish");
+    });
+
+    const result = await parseMultipartInput(req, undefined, serializer);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      await expect(result.finalize).resolves.toEqual({ ok: true });
+      expect(result.value).toEqual({ ok: 1 });
+    }
+  });
+
+  it("resumes request when busboy emits a parser error", async () => {
+    const resumeSpy = jest.fn();
+    const req = createMockRequest(baseHeaders, (busboy, mockReq) => {
+      (mockReq as unknown as { resume: () => void }).resume = resumeSpy;
+      busboy.emit("error", new Error("parse-error"));
+    });
+
+    const result = await parseMultipartInput(req, undefined, serializer);
+    expect(result.ok).toBe(false);
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("handles parser errors when request.resume is not callable", async () => {
+    const req = createMockRequest(baseHeaders, (busboy, mockReq) => {
+      (mockReq as unknown as { resume: unknown }).resume = 1;
+      busboy.emit("error", new Error("parse-error"));
+    });
+
+    const result = await parseMultipartInput(req, undefined, serializer);
+    expect(result.ok).toBe(false);
+  });
 });

@@ -191,6 +191,13 @@ export class RedisEventBus implements IEventBus {
       await state.subscriptionPromise;
     }
 
+    if (this.channels.get(fullChannel) !== state) {
+      // Another branch unsubscribed/replaced this channel while we awaited
+      // the subscription handshake. Retry against the current state.
+      await this.subscribe(channel, handler);
+      return;
+    }
+
     // Only add handler after subscription succeeds
     state.handlers.add(handler);
   }
@@ -207,8 +214,15 @@ export class RedisEventBus implements IEventBus {
       }
     }
 
-    await this.sub.unsubscribe(fullChannel);
     this.channels.delete(fullChannel);
+    if (state.subscriptionPromise) {
+      try {
+        await state.subscriptionPromise;
+      } catch {
+        // If subscribe failed, there may be nothing to unsubscribe.
+      }
+    }
+    await this.sub.unsubscribe(fullChannel);
   }
 
   async dispose(): Promise<void> {

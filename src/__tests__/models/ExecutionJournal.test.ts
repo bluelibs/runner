@@ -7,7 +7,7 @@ describe("ExecutionJournal", () => {
   describe("ExecutionJournalImpl", () => {
     it("stores and retrieves values by key", () => {
       const journal = new ExecutionJournalImpl();
-      const key = journalFactory.createKey<string>("test.key");
+      const key = journalFactory.createKey<string>("test-key");
 
       journal.set(key, "hello");
       expect(journal.get(key)).toBe("hello");
@@ -15,14 +15,14 @@ describe("ExecutionJournal", () => {
 
     it("returns undefined for unset keys", () => {
       const journal = new ExecutionJournalImpl();
-      const key = journalFactory.createKey<number>("missing.key");
+      const key = journalFactory.createKey<number>("missing-key");
 
       expect(journal.get(key)).toBeUndefined();
     });
 
     it("has() returns true for set keys", () => {
       const journal = new ExecutionJournalImpl();
-      const key = journalFactory.createKey<boolean>("exists.key");
+      const key = journalFactory.createKey<boolean>("exists-key");
 
       expect(journal.has(key)).toBe(false);
       journal.set(key, true);
@@ -47,12 +47,12 @@ describe("ExecutionJournal", () => {
 
     it("throws when setting existing key without override", () => {
       const journal = new ExecutionJournalImpl();
-      const key = journalFactory.createKey<string>("collision.key");
+      const key = journalFactory.createKey<string>("collision-key");
 
       journal.set(key, "first");
 
       expect(() => journal.set(key, "second")).toThrow(
-        'Journal key "collision.key" already exists. Use { override: true } to overwrite.',
+        'Journal key "collision-key" already exists. Use { override: true } to overwrite.',
       );
       // Original value preserved
       expect(journal.get(key)).toBe("first");
@@ -60,7 +60,7 @@ describe("ExecutionJournal", () => {
 
     it("allows overwrite with { override: true }", () => {
       const journal = new ExecutionJournalImpl();
-      const key = journalFactory.createKey<string>("overwrite.key");
+      const key = journalFactory.createKey<string>("overwrite-key");
 
       journal.set(key, "first");
       journal.set(key, "second", { override: true });
@@ -71,14 +71,14 @@ describe("ExecutionJournal", () => {
 
   describe("createJournalKey", () => {
     it("creates a key with the given id", () => {
-      const key = journalFactory.createKey<string>("my.key.id");
-      expect(key.id).toBe("my.key.id");
+      const key = journalFactory.createKey<string>("my-key-id");
+      expect(key.id).toBe("my-key-id");
     });
 
     it("keys with same id share the same storage slot", () => {
       const journal = new ExecutionJournalImpl();
-      const key1 = journalFactory.createKey<string>("shared.id");
-      const key2 = journalFactory.createKey<string>("shared.id");
+      const key1 = journalFactory.createKey<string>("shared-id");
+      const key2 = journalFactory.createKey<string>("shared-id");
 
       journal.set(key1, "value");
       expect(journal.get(key2)).toBe("value");
@@ -87,7 +87,7 @@ describe("ExecutionJournal", () => {
 
   describe("Journal Forwarding", () => {
     it("forwards journal to nested task when options passed", async () => {
-      const traceKey = journalFactory.createKey<string[]>("trace.steps");
+      const traceKey = journalFactory.createKey<string[]>("trace-steps");
 
       const innerTask = defineTask({
         id: "innerTask",
@@ -129,7 +129,7 @@ describe("ExecutionJournal", () => {
     });
 
     it("creates new journal when options not passed", async () => {
-      const traceKey = journalFactory.createKey<string[]>("trace.steps");
+      const traceKey = journalFactory.createKey<string[]>("trace-steps");
 
       const innerTask = defineTask({
         id: "innerTaskNew",
@@ -167,11 +167,11 @@ describe("ExecutionJournal", () => {
     });
   });
 
-  describe("journal.create", () => {
+  describe("journal-create", () => {
     it("creates an empty journal", () => {
       const journal = journalFactory.create();
       expect(journal).toBeInstanceOf(ExecutionJournalImpl);
-      const key = journalFactory.createKey<string>("test.key");
+      const key = journalFactory.createKey<string>("test-key");
       expect(journal.get(key)).toBeUndefined();
     });
   });

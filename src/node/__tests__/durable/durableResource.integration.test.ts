@@ -1,4 +1,4 @@
-import { globals, r, run } from "../../..";
+import { r, resources, run } from "../../node";
 import { DurableExecutionError } from "../../durable/core/DurableService";
 import { durableResource } from "../../durable/core/resource";
 import { durableEvents } from "../../durable/events";
@@ -23,17 +23,20 @@ async function waitUntil(
 describe("durable: durableResource + fork + with (integration)", () => {
   it("awaits nested taskRunner promises (normal path)", async () => {
     const store = new MemoryStore();
-    const durable = durableResource.fork("durable.tests.unified.ok");
+    const durable = durableResource.fork("durable-tests-unified-ok");
     const durableRegistration = durable.with({ store });
     const task = r
-      .task("durable.tests.unified.task.ok")
+      .task("durable-tests-unified-task-ok")
       .run(async () => "ok")
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
 
-    const taskRunner = runtime.getResourceValue(globals.resources.taskRunner);
+    const taskRunner = runtime.getResourceValue(resources.taskRunner);
     const spy = jest
       .spyOn(taskRunner, "run")
       .mockResolvedValue(Promise.resolve("ok"));
@@ -50,17 +53,20 @@ describe("durable: durableResource + fork + with (integration)", () => {
 
   it("handles undefined taskRunner results (edge branch)", async () => {
     const store = new MemoryStore();
-    const durable = durableResource.fork("durable.tests.unified.undefined");
+    const durable = durableResource.fork("durable-tests-unified-undefined");
     const durableRegistration = durable.with({ store });
     const task = r
-      .task("durable.tests.unified.task.undefined")
+      .task("durable-tests-unified-task-undefined")
       .run(async () => "ok")
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
 
-    const taskRunner = runtime.getResourceValue(globals.resources.taskRunner);
+    const taskRunner = runtime.getResourceValue(resources.taskRunner);
     const spy = jest.spyOn(taskRunner, "run").mockResolvedValue(undefined);
 
     const d = runtime.getResourceValue(durable);
@@ -77,7 +83,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     const queue = new MemoryQueue();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.tests.unified.queue");
+    const durable = durableResource.fork("durable-tests-unified-queue");
     const durableRegistration = durable.with({
       store,
       queue,
@@ -87,7 +93,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     });
 
     const task = r
-      .task("durable.tests.unified.queue.task")
+      .task("durable-tests-unified-queue-task")
       .dependencies({ durable })
       .run(async (input: { v: number }, { durable }) => {
         const ctx = durable.use();
@@ -96,7 +102,10 @@ describe("durable: durableResource + fork + with (integration)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
     const d = runtime.getResourceValue(durable);
 
@@ -136,7 +145,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     const notes: string[] = [];
 
     const onAudit = r
-      .hook("durable.tests.unified.hooks.audit.appended")
+      .hook("durable-tests-unified-hooks-audit-appended")
       .on(durableEvents.audit.appended)
       .run(async (event) => {
         received.push({
@@ -147,14 +156,14 @@ describe("durable: durableResource + fork + with (integration)", () => {
       .build();
 
     const onNote = r
-      .hook("durable.tests.unified.hooks.note.created")
+      .hook("durable-tests-unified-hooks-note-created")
       .on(durableEvents.note.created)
       .run(async (event) => {
         notes.push(event.data.message);
       })
       .build();
 
-    const durable = durableResource.fork("durable.tests.unified.audit");
+    const durable = durableResource.fork("durable-tests-unified-audit");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -162,7 +171,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     });
 
     const task = r
-      .task("durable.tests.unified.audit.task")
+      .task("durable-tests-unified-audit-task")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -175,7 +184,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
 
     const app = r
       .resource("app")
-      .register([durableRegistration, task, onAudit, onNote])
+      .register([resources.durable, durableRegistration, task, onAudit, onNote])
       .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
     const d = runtime.getResourceValue(durable);
@@ -214,7 +223,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     const received: Array<{ executionId: string; kind: string }> = [];
 
     const onAudit = r
-      .hook("durable.tests.unified.hooks.audit.appended.persist")
+      .hook("durable-tests-unified-hooks-audit-appended-persist")
       .on(durableEvents.audit.appended)
       .run(async (event) => {
         received.push({
@@ -224,7 +233,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
       })
       .build();
 
-    const durable = durableResource.fork("durable.tests.unified.audit.persist");
+    const durable = durableResource.fork("durable-tests-unified-audit-persist");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -233,7 +242,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     });
 
     const task = r
-      .task("durable.tests.unified.audit.persist.task")
+      .task("durable-tests-unified-audit-persist-task")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -246,7 +255,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
 
     const app = r
       .resource("app")
-      .register([durableRegistration, task, onAudit])
+      .register([resources.durable, durableRegistration, task, onAudit])
       .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
     const d = runtime.getResourceValue(durable);

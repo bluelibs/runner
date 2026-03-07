@@ -1,14 +1,14 @@
-import { defineResource } from "../../define";
+import { defineFrameworkResource } from "../../definers/frameworkDefinition";
 import { globalTags } from "../globalTags";
 import type { RunResult } from "../../models/RunResult";
 
 const systemTag = globalTags.system;
 
-export const runtimeResource = defineResource<
+export const runtimeResource = defineFrameworkResource<
   void,
   Promise<RunResult<unknown>>
 >({
-  id: "globals.resources.runtime",
+  id: "system.runtime",
   meta: {
     title: "Runtime Services",
     description:

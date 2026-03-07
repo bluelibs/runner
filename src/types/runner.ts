@@ -93,9 +93,24 @@ export type RunOptions = {
    */
   errorBoundary?: boolean;
   /**
-   * When true (default), installs SIGINT/SIGTERM handlers that call dispose() on the root allowing for graceful shutdown.
+   * When true (default), installs SIGINT/SIGTERM handlers that trigger graceful shutdown.
+   * Signals received during bootstrap will cancel startup, rollback initialized resources,
+   * and exit cleanly once teardown completes.
    */
   shutdownHooks?: boolean;
+  /**
+   * Total disposal budget (milliseconds) for the shutdown lifecycle.
+   * This budget covers `disposing` hooks, drain wait, `drained` hooks, and
+   * resource disposal. Once exhausted, Runner stops waiting and returns.
+   */
+  disposeBudgetMs?: number;
+  /**
+   * Drain budget (milliseconds) used while waiting for in-flight business work
+   * (tasks + event listeners) after entering `disposing`.
+   * Effective wait is capped by remaining `disposeBudgetMs`.
+   * Set to `0` to skip drain waiting.
+   */
+  disposeDrainBudgetMs?: number;
   /**
    * Custom handler for any unhandled error caught by Runner. Defaults to logging via the created logger.
    */
@@ -123,9 +138,9 @@ export type RunOptions = {
   lazy?: boolean;
   /**
    * Defaults to `sequential`.
-   * Controls how resources are initialized during startup.
+   * Controls startup and disposal scheduling behavior.
    */
-  initMode?: ResourceInitMode | "sequential" | "parallel";
+  lifecycleMode?: ResourceLifecycleMode | "sequential" | "parallel";
   /**
    * Specify in which mode to run "dev", "prod" or "test".
    * If inside Node this is automatically detected from the NODE_ENV environment variable if not provided.
@@ -143,9 +158,9 @@ export enum RunnerMode {
 }
 
 /**
- * Resource initialization strategy during run() bootstrap.
+ * Resource lifecycle strategy during run() bootstrap and dispose().
  */
-export enum ResourceInitMode {
+export enum ResourceLifecycleMode {
   Sequential = "sequential",
   Parallel = "parallel",
 }

@@ -1,4 +1,4 @@
-import { event, r, run } from "../../..";
+import { defineEvent, r, resources, run } from "../../node";
 import { durableResource } from "../../durable/core/resource";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
@@ -18,13 +18,15 @@ async function waitUntil(
 }
 
 describe("durable: signals integration", () => {
-  const Paid = event<{ paidAt: number }>({ id: "durable.tests.signals.paid" });
+  const Paid = defineEvent<{ paidAt: number }>({
+    id: "durable-tests-signals-paid",
+  });
 
   it("waits for a signal and resumes the workflow", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.tests.signals.durable");
+    const durable = durableResource.fork("durable-tests-signals-durable");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -32,7 +34,7 @@ describe("durable: signals integration", () => {
     });
 
     const task = r
-      .task("durable.test.waitForSignal")
+      .task("durable-test-waitForSignal")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -41,7 +43,10 @@ describe("durable: signals integration", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
@@ -69,7 +74,7 @@ describe("durable: signals integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.tests.signals.durable.twice");
+    const durable = durableResource.fork("durable-tests-signals-durable-twice");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -77,7 +82,7 @@ describe("durable: signals integration", () => {
     });
 
     const task = r
-      .task("durable.test.waitForSignal.twice")
+      .task("durable-test-waitForSignal-twice")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -87,7 +92,10 @@ describe("durable: signals integration", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
@@ -110,7 +118,7 @@ describe("durable: signals integration", () => {
         const exec = await store.getExecution(executionId);
         const secondWait = await store.getStepResult(
           executionId,
-          "__signal:durable.tests.signals.paid:1",
+          "__signal:durable-tests-signals-paid:1",
         );
 
         return (

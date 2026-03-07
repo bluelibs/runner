@@ -50,6 +50,16 @@ describe("requestIdentity", () => {
     expect(res.headersSent).toBe(false);
   });
 
+  it("does not set response header after headers are already sent", () => {
+    const req = makeReq({ "x-runner-request-id": "existing-id" });
+    const { res, headers } = makeRes();
+    res.headersSent = true;
+
+    const requestId = ensureRequestId(req, res);
+    expect(requestId).toBe("existing-id");
+    expect(headers["x-runner-request-id"]).toBeUndefined();
+  });
+
   it("falls back to randomBytes when randomUUID is unavailable", () => {
     jest.doMock("node:crypto", () => ({
       randomUUID: undefined,

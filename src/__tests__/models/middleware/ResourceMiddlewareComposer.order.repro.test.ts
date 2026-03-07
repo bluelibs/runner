@@ -1,6 +1,7 @@
 import { ResourceMiddlewareComposer } from "../../../models/middleware/ResourceMiddlewareComposer";
 import { InterceptorRegistry } from "../../../models/middleware/InterceptorRegistry";
 import { MiddlewareResolver } from "../../../models/middleware/MiddlewareResolver";
+import { LifecycleAdmissionController } from "../../../models/runtime/LifecycleAdmissionController";
 
 describe("ResourceMiddlewareComposer Order Bug Repro", () => {
   let composer: ResourceMiddlewareComposer;
@@ -13,9 +14,14 @@ describe("ResourceMiddlewareComposer Order Bug Repro", () => {
     callOrder = [];
     store = {
       resourceMiddlewares: new Map(),
+      resources: new Map(),
       onUnhandledError: jest.fn(),
       taskMiddlewares: new Map(),
       tasks: new Map(),
+      resolveDefinitionId: (reference: any) => reference?.id,
+      toPublicId: (id: string) => id,
+      getOwnerResourceId: () => undefined,
+      getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
     interceptorRegistry = new InterceptorRegistry();
     middlewareResolver = new MiddlewareResolver(store);

@@ -10,10 +10,17 @@ import {
   IEventEmitReport,
 } from "./event";
 import { ITag } from "./tag";
-import { symbolOptionalDependency } from "./symbols";
+import type { TagDependencyAccessor } from "./tagged";
+import {
+  symbolOptionalDependency,
+  symbolOverrideDefinition,
+  symbolTagBeforeInitDependency,
+} from "./symbols";
 import { IErrorHelper } from "./error";
 import type { IAsyncContext } from "./asyncContext";
 import type { ExecutionJournal } from "./executionJournal";
+import type { RuntimeCallSource } from "./runtimeSource";
+import type { MatchPattern } from "../tools/check";
 
 export * from "./symbols";
 
@@ -28,7 +35,20 @@ export interface IValidationSchema<T = unknown> {
    * Can transform the data if the schema supports transformations.
    */
   parse(input: unknown): T;
+  /**
+   * Optional JSON Schema export for tooling/documentation use-cases.
+   */
+  toJSONSchema?(): Record<string, unknown>;
 }
+
+export type ValidationSchemaClassConstructor<T = unknown> = abstract new (
+  ...args: never[]
+) => T;
+
+export type ValidationSchemaInput<T = unknown> =
+  | IValidationSchema<T>
+  | MatchPattern
+  | ValidationSchemaClassConstructor<T>;
 
 /**
  * Core public TypeScript types for BlueLibs Runner.
@@ -50,21 +70,24 @@ export type RequiredKeys<T> = {
   [K in keyof T]-?: {} extends Pick<T, K> ? never : K;
 }[keyof T];
 
+export type OverrideDefinitionBrand = {
+  [symbolOverrideDefinition]: true;
+};
+
+export type OverridableDefinition =
+  | (IResource<any, any, any, any, any, any, any> & OverrideDefinitionBrand)
+  | (ITask<any, any, any, any, any, any> & OverrideDefinitionBrand)
+  | (ITaskMiddleware<any, any, any, any> & OverrideDefinitionBrand)
+  | (IResourceMiddleware<any, any, any, any> & OverrideDefinitionBrand)
+  | (IHook<any, any, any> & OverrideDefinitionBrand);
+
 /**
  * The reason we accept null and undefined is because we want to be able to offer beautiful DX:
  * overrides: [
  *    process.env.NODE_ENV === 'production' ? prodEmailer : null,
  * ]
  */
-export type OverridableElements =
-  | IResource<any, any, any, any, any>
-  | ITask<any, any, any, any>
-  | ITaskMiddleware<any>
-  | IResourceMiddleware<any, any>
-  | IResourceWithConfig<any, any, any>
-  | IHook<any, any>
-  | undefined
-  | null;
+export type OverridableElements = OverridableDefinition | undefined | null;
 
 /**
  * A mapping of dependency keys to Runner definitions. Used in `dependencies`
@@ -76,11 +99,15 @@ export type DependencyMapType = Record<
   | ITask<any, any, any, any, any, any>
   | IResource<any, any, any, any, any, any, any>
   | IEvent<any>
+  | ITag<any, any, any, any>
   | IErrorHelper<any>
   | IAsyncContext<any>
   | IOptionalDependency<ITask<any, any, any, any, any, any>>
   | IOptionalDependency<IResource<any, any, any, any, any, any, any>>
   | IOptionalDependency<IEvent<any>>
+  | IOptionalDependency<ITag<any, any, any, any>>
+  | ITagStartupDependency<ITag<any, any, any, any>>
+  | IOptionalDependency<ITagStartupDependency<ITag<any, any, any, any>>>
   | IOptionalDependency<IErrorHelper<any>>
   | IOptionalDependency<IAsyncContext<any>>
 >;
@@ -91,6 +118,16 @@ export interface IOptionalDependency<T> {
   inner: T;
   /** Brand symbol for optional dependency */
   [symbolOptionalDependency]: true;
+}
+
+/** Wrapper type marking a tag dependency as a before-init dependency */
+export interface ITagStartupDependency<TTag extends ITag<any, any, any, any>> {
+  /** Wrapped tag definition */
+  tag: TTag;
+  /** Optional wrapper helper */
+  optional: () => IOptionalDependency<ITagStartupDependency<TTag>>;
+  /** Brand symbol for before-init tag dependency */
+  [symbolTagBeforeInitDependency]: true;
 }
 
 // Helper Types for Extracting Generics
@@ -135,22 +172,22 @@ export type CommonPayload<
 
 /**
  * Options that can be passed when calling a task dependency.
- * Allows forwarding the execution journal to nested task calls.
+ * Allows forwarding execution context to nested task calls.
  */
 export interface TaskCallOptions {
   /** Optional journal to forward to the nested task */
   journal?: ExecutionJournal;
+  /** Source metadata used for lifecycle admission and tracing. */
+  source?: RuntimeCallSource;
 }
 
 /**
  * Task dependencies transform into callable functions: call with the task input
- * and you receive the task output. Optionally accepts TaskCallOptions for journal forwarding.
+ * and you receive the task output. Call options are always passed as the second
+ * argument to avoid ambiguous object-input vs options inference.
  */
 export type TaskDependency<I, O> = I extends null | void
-  ? {
-      (options?: TaskCallOptions): O;
-      (input?: I, options?: TaskCallOptions): O;
-    }
+  ? (input?: I, options?: TaskCallOptions) => O
   : (input: I, options?: TaskCallOptions) => O;
 /**
  * Resource dependencies resolve to the resource's value directly.
@@ -209,11 +246,15 @@ export type DependencyValueType<T> =
         ? T
         : T extends IAsyncContext<any>
           ? T
-          : T extends IEventDefinition<any>
-            ? EventDependency<ExtractEventPayload<T>>
-            : T extends IOptionalDependency<infer U>
-              ? DependencyValueType<U> | undefined
-              : never;
+          : T extends ITag<any, any, any, any>
+            ? TagDependencyAccessor<T>
+            : T extends ITagStartupDependency<infer TTag>
+              ? TagDependencyAccessor<TTag>
+              : T extends IEventDefinition<any>
+                ? EventDependency<ExtractEventPayload<T>>
+                : T extends IOptionalDependency<infer U>
+                  ? DependencyValueType<U> | undefined
+                  : never;
 
 export type DependencyValuesType<T extends DependencyMapType> = {
   [K in keyof T]: DependencyValueType<T[K]>;
@@ -244,11 +285,15 @@ export type ResourceDependencyValueType<T> =
         ? T
         : T extends IAsyncContext<any>
           ? T
-          : T extends IEventDefinition<any>
-            ? EventDependency<ExtractEventPayload<T>>
-            : T extends IOptionalDependency<infer U>
-              ? ResourceDependencyValueType<U> | undefined
-              : never;
+          : T extends ITag<any, any, any, any>
+            ? TagDependencyAccessor<T>
+            : T extends ITagStartupDependency<infer TTag>
+              ? TagDependencyAccessor<TTag>
+              : T extends IEventDefinition<any>
+                ? EventDependency<ExtractEventPayload<T>>
+                : T extends IOptionalDependency<infer U>
+                  ? ResourceDependencyValueType<U> | undefined
+                  : never;
 
 export type ResourceDependencyValuesType<T extends DependencyMapType> = {
   [K in keyof T]: ResourceDependencyValueType<T[K]>;
@@ -274,4 +319,15 @@ export type RegisterableItems =
   | IEvent<any>
   | IAsyncContext<any>
   | IErrorHelper<any>
-  | ITag<any, any, any>;
+  | ITag<any, any, any, any>;
+
+export type AnyElement =
+  | IResource<any, any, any, any, any, any, any>
+  | ITask<any, any, any, any, any, any>
+  | IHook<any, any>
+  | ITaskMiddleware<any, any, any, any>
+  | IResourceMiddleware<any, any, any, any>
+  | IEvent<any>
+  | IAsyncContext<any>
+  | IErrorHelper<any>
+  | ITag<any, any, any, any>;

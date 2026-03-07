@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@bluelibs/ejson": "^1.5.0",
-    "@bluelibs/runner": "^5.2.0",
+    "@bluelibs/runner": "file:../..",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dedupe": "^4.0.3",

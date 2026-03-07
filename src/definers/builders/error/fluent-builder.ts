@@ -1,5 +1,12 @@
-import type { DefaultErrorType, IErrorMeta, TagType } from "../../../defs";
+import type {
+  DefaultErrorType,
+  EnsureTagsForTarget,
+  ErrorTagType,
+  IErrorMeta,
+} from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineError } from "../../defineError";
+import { markFrameworkDefinition } from "../../markFrameworkDefinition";
 import type { ErrorFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
 import { clone, mergeArray } from "./utils";
@@ -48,8 +55,8 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
       return builder.dataSchema(schema);
     },
 
-    tags<TNewTags extends TagType[]>(
-      t: TNewTags,
+    tags<TNewTags extends ErrorTagType[]>(
+      t: EnsureTagsForTarget<"errors", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
@@ -75,19 +82,33 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
     },
 
     build() {
-      return defineError<TData>(
-        {
-          id: state.id,
-          httpCode: state.httpCode,
-          serialize: state.serialize,
-          parse: state.parse,
-          dataSchema: state.dataSchema,
-          format: state.format,
-          remediation: state.remediation,
-          meta: state.meta,
-          tags: state.tags,
-        },
-        state.filePath,
+      return deepFreeze(
+        defineError<TData>(
+          state.frameworkOwned
+            ? markFrameworkDefinition({
+                id: state.id,
+                httpCode: state.httpCode,
+                serialize: state.serialize,
+                parse: state.parse,
+                dataSchema: state.dataSchema,
+                format: state.format,
+                remediation: state.remediation,
+                meta: state.meta,
+                tags: state.tags,
+              })
+            : {
+                id: state.id,
+                httpCode: state.httpCode,
+                serialize: state.serialize,
+                parse: state.parse,
+                dataSchema: state.dataSchema,
+                format: state.format,
+                remediation: state.remediation,
+                meta: state.meta,
+                tags: state.tags,
+              },
+          state.filePath,
+        ),
       );
     },
   };

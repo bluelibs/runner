@@ -18,7 +18,7 @@ export class User extends BaseEntity {
 }
 
 export const userEntity = r
-  .resource("app.db.entities.resources.user")
+  .resource("user")
   .meta({
     title: "User Entity Schema",
     description:

@@ -120,6 +120,13 @@ describe("node exposure - authenticator", () => {
       expect(mockTaskRunner.run).toHaveBeenCalledWith(
         task,
         expect.objectContaining({ url: "/", method: "GET" }),
+        expect.objectContaining({
+          source: {
+            kind: "resource",
+            id: "platform-node-resources-rpcLanes",
+            path: "platform-node-resources-rpcLanes",
+          },
+        }),
       );
       expect(result).toEqual({ ok: true });
     });

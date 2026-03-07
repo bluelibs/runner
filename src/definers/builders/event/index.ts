@@ -1,4 +1,4 @@
-import type { TagType } from "../../../defs";
+import type { EventTagType } from "../../../defs";
 import { getCallerFile } from "../../../tools/getCallerFile";
 import { makeEventBuilder } from "./fluent-builder";
 import type { EventFluentBuilder } from "./fluent-builder.interface";
@@ -14,18 +14,19 @@ export * from "./utils";
  */
 export function eventBuilder<TPayload = void>(
   id: string,
-): EventFluentBuilder<TPayload> {
+): EventFluentBuilder<TPayload, undefined> {
   const filePath = getCallerFile();
-  const initial: BuilderState<TPayload> = Object.freeze({
+  const initial: BuilderState<TPayload, undefined> = Object.freeze({
     id,
     filePath,
-    meta: {} as BuilderState<TPayload>["meta"],
+    meta: {} as BuilderState<TPayload, undefined>["meta"],
     payloadSchema: undefined,
-    tags: [] as TagType[],
+    tags: [] as EventTagType[],
     parallel: undefined,
+    transactional: undefined,
   });
 
-  return makeEventBuilder(initial);
+  return makeEventBuilder<TPayload, undefined>(initial);
 }
 
 export const event = eventBuilder;

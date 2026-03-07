@@ -2,10 +2,7 @@ import {
   IResource,
   RegisterableItems,
   ITag,
-  AnyTask,
-  TaggedTask,
-  TaggedResource,
-  AnyResource,
+  TagDependencyAccessor,
 } from "../defs";
 import { findCircularDependencies } from "./utils/findCircularDependencies";
 import {
@@ -14,6 +11,7 @@ import {
   eventEmissionCycleError,
   lockedError,
   taskRunnerNotSetError,
+  validationError,
 } from "../errors";
 import { EventManager } from "./EventManager";
 import { Logger } from "./Logger";
@@ -24,6 +22,8 @@ import {
   ResourceStoreElementType,
   TaskStoreElementType,
   EventStoreElementType,
+  DisposeWave,
+  InitWave,
 } from "../types/storeTypes";
 import { TaskRunner } from "./TaskRunner";
 import { globalResources } from "../globals/globalResources";
@@ -32,19 +32,29 @@ import { MiddlewareManager } from "./MiddlewareManager";
 import { RunnerMode } from "../types/runner";
 import { detectRunnerMode } from "../tools/detectRunnerMode";
 import { Serializer } from "../serializer";
-import { getResourcesInDisposeOrder as computeDisposeOrder } from "./utils/disposeOrder";
+import {
+  getResourcesInDisposeWaves as computeDisposeWaves,
+  getResourcesInReadyWaves as computeReadyWaves,
+} from "./utils/disposeOrder";
 import { RunResult } from "./RunResult";
-import { getAllThrows } from "../tools/getAllThrows";
-import type { ITask } from "../types/task";
-import { registerStoreBuiltins } from "./BuiltinsRegistry";
-
-const INTERNAL_ROOT_CRON_DEPENDENCY_KEY = "__runnerCron";
+import type { RuntimeCallSource } from "../types/runtimeSource";
+import { runtimeSource } from "../types/runtimeSource";
+import {
+  LifecycleAdmissionController,
+  RuntimeLifecyclePhase,
+} from "./runtime/LifecycleAdmissionController";
+import { createFrameworkRootGateway } from "./createFrameworkRootGateway";
+import type { DebugFriendlyConfig } from "../globals/resources/debug";
+import { symbolRuntimeId } from "../types/symbols";
+import { getRuntimeId } from "../tools/runtimeMetadata";
 
 // Re-export types for backward compatibility
 export type {
   ResourceStoreElementType,
   TaskStoreElementType,
   EventStoreElementType,
+  InitWave,
+  DisposeWave,
 };
 
 /**
@@ -57,8 +67,12 @@ export class Store {
   private validator: StoreValidator;
   private taskRunner?: TaskRunner;
   private middlewareManager!: MiddlewareManager;
-  private readonly initializedResourceIds: string[] = [];
-  private preferInitOrderDisposal = true;
+  private readonly initWaves: InitWave[] = [];
+  private readonly initializedResourceIds = new Set<string>();
+  private readonly readyResourceIds = new Set<string>();
+  private readonly pendingCooldownErrors: Error[] = [];
+  private hasRunCooldown = false;
+  private readonly lifecycleAdmissionController: LifecycleAdmissionController;
 
   #isLocked = false;
   #isInitialized = false;
@@ -69,11 +83,15 @@ export class Store {
     protected readonly logger: Logger,
     public readonly onUnhandledError: OnUnhandledError,
     mode?: RunnerMode,
+    lifecycleAdmissionController?: LifecycleAdmissionController,
   ) {
+    this.lifecycleAdmissionController =
+      lifecycleAdmissionController ?? new LifecycleAdmissionController();
     this.registry = new StoreRegistry(this);
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
-    this.middlewareManager = new MiddlewareManager(this, eventManager, logger);
+    this.middlewareManager = new MiddlewareManager(this);
+    this.eventManager.bindStore(this);
 
     this.mode = detectRunnerMode(mode);
   }
@@ -119,6 +137,10 @@ export class Store {
     return this.middlewareManager;
   }
 
+  public getLifecycleAdmissionController(): LifecycleAdmissionController {
+    return this.lifecycleAdmissionController;
+  }
+
   /**
    * Checks whether a registered item is visible to a consumer id under the
    * current exports visibility model.
@@ -130,8 +152,151 @@ export class Store {
     return this.registry.visibilityTracker.isAccessible(targetId, consumerId);
   }
 
+  /**
+   * Returns the owner resource id that directly registered the given item.
+   */
+  public getOwnerResourceId(itemId: string): string | undefined {
+    const resolvedItemId = this.resolveDefinitionId(itemId) ?? itemId;
+    return this.registry.visibilityTracker.getOwnerResourceId(resolvedItemId);
+  }
+
+  public resolveDefinitionId(reference: unknown): string | undefined {
+    return this.registry.resolveDefinitionId(reference);
+  }
+
+  public toPublicId(reference: unknown): string {
+    return this.getRuntimeMetadata(reference).id;
+  }
+
+  public toPublicPath(reference: unknown): string {
+    return this.getRuntimeMetadata(reference).path;
+  }
+
+  public getRuntimeDefinitionId(reference: unknown): string {
+    const runtimeId =
+      getRuntimeId(reference) ?? this.resolveDefinitionId(reference);
+    this.assertResolvedDefinitionId(runtimeId, reference);
+    return runtimeId;
+  }
+
+  public getRuntimeMetadata(reference: unknown): {
+    id: string;
+    path: string;
+    runtimeId: string;
+  } {
+    const runtimeId = this.getRuntimeDefinitionId(reference);
+    return {
+      id: this.registry.getDisplayId(runtimeId),
+      path: runtimeId,
+      runtimeId,
+    };
+  }
+
+  public toRuntimeSource(source: RuntimeCallSource): RuntimeCallSource {
+    const runtimeId = this.getRuntimeDefinitionId(source);
+    return {
+      ...source,
+      id: this.registry.getDisplayId(runtimeId),
+      path: runtimeId,
+    };
+  }
+
+  public createRuntimeSource(
+    kind: RuntimeCallSource["kind"],
+    reference: unknown,
+  ): RuntimeCallSource {
+    const metadata = this.getRuntimeMetadata(reference);
+    switch (kind) {
+      case "task":
+        return runtimeSource.task(metadata.id, metadata.path);
+      case "hook":
+        return runtimeSource.hook(metadata.id, metadata.path);
+      case "resource":
+        return runtimeSource.resource(metadata.id, metadata.path);
+      case "middleware":
+        return runtimeSource.middleware(metadata.id, metadata.path);
+      default:
+        return runtimeSource.runtime(metadata.id, metadata.path);
+    }
+  }
+
+  private assertResolvedDefinitionId(
+    resolvedId: string | undefined,
+    reference: unknown,
+  ): asserts resolvedId is string {
+    if (typeof resolvedId !== "string" || resolvedId.length === 0) {
+      validationError.throw({
+        subject: "Definition reference",
+        id: String(reference),
+        originalError:
+          "Unable to resolve a definition id from the provided reference.",
+      });
+    }
+  }
+
+  /**
+   * Checks whether an item belongs to a resource registration subtree (or is
+   * the resource itself).
+   */
+  public isItemWithinResourceSubtree(
+    resourceId: string,
+    itemId: string,
+  ): boolean {
+    return this.registry.visibilityTracker.isWithinResourceSubtree(
+      resourceId,
+      itemId,
+    );
+  }
+
+  /**
+   * Returns accessibility info for a target id against the root's export surface.
+   * Used by the runtime API (runTask, emitEvent, getResourceValue, etc.) to enforce
+   * that callers can only reach items the root resource has explicitly exported.
+   */
+  public getRootAccessInfo(
+    targetId: string,
+    rootId: string,
+  ): { accessible: boolean; exportedIds: string[] } {
+    return this.registry.visibilityTracker.getRootAccessInfo(targetId, rootId);
+  }
+
   get isLocked() {
     return this.#isLocked;
+  }
+
+  public isInShutdownLockdown() {
+    return this.lifecycleAdmissionController.isShutdownLockdown();
+  }
+
+  public canAdmitTaskCall(source: RuntimeCallSource): boolean {
+    return this.lifecycleAdmissionController.canAdmitTask(source);
+  }
+
+  public beginDisposing() {
+    if (
+      this.lifecycleAdmissionController.getPhase() !==
+      RuntimeLifecyclePhase.Running
+    ) {
+      return;
+    }
+    this.eventManager.enterShutdownLockdown();
+    this.lifecycleAdmissionController.beginDisposing();
+  }
+
+  public beginDrained() {
+    this.lifecycleAdmissionController.beginDrained();
+  }
+
+  public async waitForDrain(disposeDrainBudgetMs: number): Promise<boolean> {
+    return this.lifecycleAdmissionController.waitForDrain(disposeDrainBudgetMs);
+  }
+
+  public markDisposed() {
+    this.lifecycleAdmissionController.markDisposed();
+  }
+
+  public enterShutdownLockdown() {
+    this.beginDisposing();
   }
 
   lock() {
@@ -145,7 +310,7 @@ export class Store {
     }
   }
 
-  private registerGlobalComponents(runtimeResult: RunResult<unknown>) {
+  private bindFrameworkResourceValues(runtimeResult: RunResult<unknown>) {
     if (!this.taskRunner) {
       taskRunnerNotSetError.throw();
     }
@@ -166,61 +331,40 @@ export class Store {
     builtInResourcesMap.set(globalResources.runtime, runtimeResult);
 
     for (const [resource, value] of builtInResourcesMap.entries()) {
-      this.registry.storeGenericItem(resource);
       const entry = this.resources.get(resource.id);
-      if (entry) {
-        entry.value = value;
-        entry.isInitialized = true;
-        this.recordResourceInitialized(resource.id);
+      if (!entry) {
+        continue;
       }
+
+      entry.value = value;
+      entry.isInitialized = true;
+      this.recordResourceInitialized(resource.id);
     }
-    registerStoreBuiltins(this.registry);
   }
 
   public setTaskRunner(taskRunner: TaskRunner) {
     this.taskRunner = taskRunner;
   }
 
-  public setPreferInitOrderDisposal(prefer: boolean) {
-    this.preferInitOrderDisposal = prefer;
-  }
+  private resolveRootEntry(
+    rootDefinition: IResource<any>,
+  ): ResourceStoreElementType {
+    const rootId =
+      this.registry.resolveDefinitionId(rootDefinition) ?? rootDefinition.id;
+    const rootEntry = this.resources.get(rootId);
 
-  private setupRootResource(rootDefinition: IResource<any>, config: unknown) {
-    const resolvedDependencies =
-      typeof rootDefinition.dependencies === "function"
-        ? rootDefinition.dependencies(config)
-        : rootDefinition.dependencies;
+    if (rootEntry) {
+      return rootEntry;
+    }
 
-    const dependenciesObject = (resolvedDependencies || {}) as Record<
-      string,
-      unknown
-    >;
+    validationError.throw({
+      subject: "Root resource",
+      id: rootDefinition.id,
+      originalError:
+        "Root resource was not registered during framework bootstrap. This indicates an inconsistent runtime setup.",
+    });
 
-    const rootDependencies = {
-      ...dependenciesObject,
-      [INTERNAL_ROOT_CRON_DEPENDENCY_KEY]:
-        dependenciesObject[INTERNAL_ROOT_CRON_DEPENDENCY_KEY] ||
-        globalResources.cron,
-    };
-
-    // Clone the root definition so per-run dependency/register resolution
-    // never mutates the reusable user definition object.
-    const root: IResource<any> = {
-      ...rootDefinition,
-      dependencies: rootDependencies,
-    };
-
-    this.root = {
-      resource: root,
-      computedDependencies: undefined,
-      config,
-      value: undefined,
-      isInitialized: false,
-      context: {},
-    };
-
-    this.registry.computeRegistrationDeeply(root, config);
-    this.registry.resources.set(root.id, this.root);
+    return undefined as never;
   }
 
   public validateDependencyGraph() {
@@ -244,40 +388,42 @@ export class Store {
     root: IResource<any, any, any, any, any>,
     config: unknown,
     runtimeResult: RunResult<unknown>,
+    options?: {
+      debug?: DebugFriendlyConfig;
+    },
   ) {
     if (this.#isInitialized) {
       storeAlreadyInitializedError.throw();
     }
 
-    this.registerGlobalComponents(runtimeResult);
-    this.setupRootResource(root, config);
+    const frameworkRoot = createFrameworkRootGateway({
+      rootItem: root.with(config as any),
+      debug: options?.debug,
+    });
+
+    this.registry.computeRegistrationDeeply(frameworkRoot);
+    this.bindFrameworkResourceValues(runtimeResult);
+    const rootEntry = this.resolveRootEntry(root);
+    this.root = rootEntry;
     this.validator.runSanityChecks();
 
+    const overrideTraversalVisited = new Set<string>();
     for (const resource of this.resources.values()) {
-      this.overrideManager.storeOverridesDeeply(resource.resource);
+      this.overrideManager.storeOverridesDeeply(
+        resource.resource,
+        overrideTraversalVisited,
+      );
     }
 
     this.#isInitialized = true;
   }
 
   public async dispose() {
-    const disposalErrors: Error[] = [];
+    const disposalErrors: Error[] = [...this.pendingCooldownErrors];
 
-    for (const resource of this.getResourcesInDisposeOrder()) {
-      try {
-        if (resource.isInitialized && resource.resource.dispose) {
-          await resource.resource.dispose(
-            resource.value,
-            resource.config,
-            resource.computedDependencies ?? {},
-            resource.context,
-          );
-        }
-      } catch (error) {
-        disposalErrors.push(
-          error instanceof Error ? error : new Error(String(error)),
-        );
-      }
+    for (const wave of this.getResourcesInDisposeWaves()) {
+      const waveErrors = await this.disposeWave(wave);
+      disposalErrors.push(...waveErrors);
     }
 
     this.clearRuntimeStateAfterDispose();
@@ -300,22 +446,71 @@ export class Store {
   }
 
   public recordResourceInitialized(resourceId: string) {
-    if (
-      this.initializedResourceIds[this.initializedResourceIds.length - 1] ===
-      resourceId
-    ) {
+    if (this.initializedResourceIds.has(resourceId)) {
       return;
     }
-    if (this.initializedResourceIds.includes(resourceId)) {
-      return;
-    }
-    this.initializedResourceIds.push(resourceId);
+    this.initializedResourceIds.add(resourceId);
+    this.initWaves.push({
+      resourceIds: [resourceId],
+      parallel: false,
+    });
   }
 
-  private getResourcesInDisposeOrder(): ResourceStoreElementType[] {
-    return computeDisposeOrder(this.resources, this.initializedResourceIds, {
-      preferInitOrderFastPath: this.preferInitOrderDisposal,
+  public recordInitWave(resourceIds: readonly string[]) {
+    const uniqueResourceIds = Array.from(
+      new Set(resourceIds.filter((id) => !this.initializedResourceIds.has(id))),
+    );
+    if (uniqueResourceIds.length === 0) {
+      return;
+    }
+
+    for (const resourceId of uniqueResourceIds) {
+      this.initializedResourceIds.add(resourceId);
+    }
+
+    this.initWaves.push({
+      resourceIds: uniqueResourceIds,
+      parallel: uniqueResourceIds.length > 1,
     });
+  }
+
+  private getResourcesInDisposeWaves(): DisposeWave[] {
+    return computeDisposeWaves(this.resources, this.initWaves);
+  }
+
+  private getResourcesInReadyWaves(): DisposeWave[] {
+    return computeReadyWaves(this.resources, this.initWaves);
+  }
+
+  /** @internal Executes startup-ready hooks for initialized resources. */
+  public async ready() {
+    for (const wave of this.getResourcesInReadyWaves()) {
+      await this.readyWave(wave);
+    }
+  }
+
+  /** @internal Executes ready for a single initialized resource (used by lazy init). */
+  public async readyResource(resourceId: string): Promise<void> {
+    const resource = this.resources.get(resourceId);
+    if (!resource) {
+      return;
+    }
+
+    await this.runReadyResource(resource);
+  }
+
+  public async cooldown() {
+    if (this.hasRunCooldown) {
+      return;
+    }
+
+    this.hasRunCooldown = true;
+    this.pendingCooldownErrors.length = 0;
+
+    for (const wave of this.getResourcesInDisposeWaves()) {
+      const waveErrors = await this.cooldownWave(wave);
+      this.pendingCooldownErrors.push(...waveErrors);
+    }
   }
 
   private clearRuntimeStateAfterDispose() {
@@ -326,7 +521,134 @@ export class Store {
       resource.isInitialized = false;
     }
 
-    this.initializedResourceIds.length = 0;
+    this.initWaves.length = 0;
+    this.initializedResourceIds.clear();
+    this.readyResourceIds.clear();
+    this.pendingCooldownErrors.length = 0;
+    this.hasRunCooldown = false;
+    this.markDisposed();
+  }
+
+  /**
+   * Executes a lifecycle wave (cooldown or dispose) on all resources in the wave,
+   * honoring the parallel flag. Returns any errors encountered without throwing.
+   */
+  private async executeWave(
+    wave: DisposeWave,
+    action: (resource: ResourceStoreElementType) => Promise<void>,
+  ): Promise<Error[]> {
+    const normalizeError = (error: unknown): Error =>
+      error instanceof Error ? error : new Error(String(error));
+    const collectWaveErrors = (
+      results: readonly PromiseSettledResult<void>[],
+    ): Error[] =>
+      results
+        .filter(
+          (result): result is PromiseRejectedResult =>
+            result.status === "rejected",
+        )
+        .map((result) => normalizeError(result.reason));
+
+    if (wave.parallel) {
+      const results = await Promise.allSettled(
+        wave.resources.map((resource) => action(resource)),
+      );
+      return collectWaveErrors(results);
+    }
+
+    const errors: Error[] = [];
+    for (const resource of wave.resources) {
+      try {
+        await action(resource);
+      } catch (error) {
+        errors.push(normalizeError(error));
+      }
+    }
+    return errors;
+  }
+
+  private async cooldownWave(wave: DisposeWave): Promise<Error[]> {
+    return this.executeWave(wave, (r) => this.cooldownResource(r));
+  }
+
+  private async readyWave(wave: DisposeWave): Promise<void> {
+    if (wave.parallel) {
+      try {
+        await Promise.all(
+          wave.resources.map((resource) => this.runReadyResource(resource)),
+        );
+      } catch (error) {
+        throw this.normalizeError(error);
+      }
+      return;
+    }
+
+    for (const resource of wave.resources) {
+      try {
+        await this.runReadyResource(resource);
+      } catch (error) {
+        throw this.normalizeError(error);
+      }
+    }
+  }
+
+  private async disposeWave(wave: DisposeWave): Promise<Error[]> {
+    return this.executeWave(wave, (r) => this.disposeResource(r));
+  }
+
+  private normalizeError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+
+  private async runReadyResource(
+    resource: ResourceStoreElementType,
+  ): Promise<void> {
+    if (!resource.isInitialized || !resource.resource.ready) {
+      return;
+    }
+
+    const resourceId = resource.resource.id;
+    if (this.readyResourceIds.has(resourceId)) {
+      return;
+    }
+
+    await resource.resource.ready(
+      resource.value,
+      resource.config,
+      resource.computedDependencies ?? {},
+      resource.context,
+    );
+    this.readyResourceIds.add(resourceId);
+  }
+
+  private async disposeResource(
+    resource: ResourceStoreElementType,
+  ): Promise<void> {
+    if (!resource.isInitialized || !resource.resource.dispose) {
+      return;
+    }
+
+    await resource.resource.dispose(
+      resource.value,
+      resource.config,
+      resource.computedDependencies ?? {},
+      resource.context,
+    );
+  }
+
+  private async cooldownResource(
+    resource: ResourceStoreElementType,
+  ): Promise<void> {
+    if (!resource.isInitialized || !resource.resource.cooldown) {
+      return;
+    }
+
+    await resource.resource.cooldown(
+      resource.value,
+      resource.config,
+      resource.computedDependencies ?? {},
+      resource.context,
+    );
   }
 
   /**
@@ -334,6 +656,7 @@ export class Store {
    */
   public processOverrides() {
     this.overrideManager.processOverrides();
+    this.validator.runSanityChecks();
   }
 
   /**
@@ -346,44 +669,24 @@ export class Store {
   }
 
   /**
-   * Returns all tasks with the given tag.
-   * @param tag - The tag to filter by.
-   * @returns The tasks with the given tag.
+   * Provides a way to access tagged elements from the store.
    */
-  public getTasksWithTag<TTag extends ITag<any, any, any>>(
+  public getTagAccessor<TTag extends ITag<any, any, any>>(
     tag: TTag,
-  ): TaggedTask<TTag>[];
-  public getTasksWithTag(tag: string): AnyTask[];
-  public getTasksWithTag(tag: string | ITag<any, any, any>): AnyTask[] {
-    return typeof tag === "string"
-      ? this.registry.getTasksWithTag(tag)
-      : this.registry.getTasksWithTag(tag);
+    options?: { consumerId?: string; includeSelf?: boolean },
+  ): TagDependencyAccessor<TTag> {
+    return this.registry.getTagAccessor(tag, options);
   }
 
-  /**
-   * Returns all resources with the given tag.
-   * @param tag - The tag to filter by.
-   * @returns The resources with the given tag.
-   */
-  public getResourcesWithTag<TTag extends ITag<any, any, any>>(
-    tag: TTag,
-  ): TaggedResource<TTag>[];
-  public getResourcesWithTag(tag: string): AnyResource[];
-  public getResourcesWithTag(tag: string | ITag<any, any, any>): AnyResource[] {
-    return typeof tag === "string"
-      ? this.registry.getResourcesWithTag(tag)
-      : this.registry.getResourcesWithTag(tag);
-  }
-
-  /**
-   * Returns all error ids declared across a task or resource and its full
-   * dependency chain: own throws, middleware throws (local + everywhere),
-   * resource dependency throws, and — for tasks — hook throws on events
-   * the task can emit. Deduplicated.
-   */
-  public getAllThrows(
-    target: ITask<any, any, any, any, any, any> | IResource<any, any, any, any>,
-  ): readonly string[] {
-    return getAllThrows(this.registry, target);
+  public toPublicDefinition<TDefinition extends { id: string }>(
+    definition: TDefinition,
+  ): TDefinition {
+    const metadata = this.getRuntimeMetadata(definition);
+    return {
+      ...definition,
+      id: metadata.id,
+      path: metadata.path,
+      [symbolRuntimeId]: metadata.runtimeId,
+    };
   }
 }

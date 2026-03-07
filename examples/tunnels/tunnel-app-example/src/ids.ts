@@ -2,33 +2,39 @@
 
 export enum ResourceId {
   // Server
-  ServerApp = "example.tunnels.server.app",
-  NotesStore = "example.tunnels.server.notesStore",
-  AuditStore = "example.tunnels.server.auditStore",
-  HttpExposurePolicy = "example.tunnels.server.httpExposurePolicy",
-  ServerExposure = "example.tunnels.server.exposure",
+  ServerApp = "app",
+  NotesStore = "notesStore",
+  AuditStore = "auditStore",
+  ServerCommunicator = "serverCommunicator",
+  ServerRpcLanes = "serverRpcLanes",
 
   // Client
-  ClientApp = "example.tunnels.client.app",
-  TunnelClient = "example.tunnels.client.tunnel",
+  ClientApp = "app",
+  ClientCommunicator = "clientCommunicator",
+  MemoryCommunicator = "memoryCommunicator",
+  ClientRpcLanes = "clientRpcLanes",
 }
 
 export enum TaskId {
   // Server tasks
-  CreateNote = "example.tunnels.tasks.notes.create",
-  ListNotes = "example.tunnels.tasks.notes.list",
-  LogAudit = "example.tunnels.tasks.audit.log",
-  ListAudits = "example.tunnels.tasks.audit.list",
+  CreateNote = "createNote",
+  ListNotes = "listNotes",
+  LogAudit = "logAudit",
+  ListAudits = "listAudits",
 
   // Client tasks
-  Demo = "example.tunnels.tasks.demo",
+  Demo = "demo",
 }
 
-export enum TunnelTransport {
-  Http = "http",
-}
+// rpcLanes transmits resolved runtime task ids, not raw local task ids.
+export const RuntimeTaskId = {
+  CreateNote: `${ResourceId.ClientApp}.tasks.${TaskId.CreateNote}`,
+  ListNotes: `${ResourceId.ClientApp}.tasks.${TaskId.ListNotes}`,
+  LogAudit: `${ResourceId.ClientApp}.tasks.${TaskId.LogAudit}`,
+  ListAudits: `${ResourceId.ClientApp}.tasks.${TaskId.ListAudits}`,
+} as const;
 
-export enum TunnelMode {
+export enum RpcProfile {
   Server = "server",
   Client = "client",
 }
@@ -50,4 +56,3 @@ export enum EnvVar {
   Token = "RUNNER_EXAMPLE_TOKEN",
   RunNetTests = "RUNNER_TEST_NET",
 }
-

@@ -1,13 +1,11 @@
-import { globals, r } from "../../../index";
+import { r, resources } from "../../../index";
 import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { MemoryQueue } from "../queue/MemoryQueue";
 import { MemoryStore } from "../store/MemoryStore";
 import type { RunnerDurableRuntimeConfig } from "../core/createRunnerDurableRuntime";
 import { createRunnerDurableRuntime } from "../core/createRunnerDurableRuntime";
 import { disposeDurableService } from "../core/DurableService";
-import { durableEventsArray } from "../events";
 import type { DurableResource } from "../core/DurableResource";
-import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 import { Logger } from "../../../models/Logger";
 
 export type MemoryDurableResourceConfig = Omit<
@@ -22,18 +20,17 @@ export type MemoryDurableResourceConfig = Omit<
   queue?: { enabled?: boolean };
 };
 
-interface MemoryDurableResourceContext {
+export interface MemoryDurableResourceContext {
   runtimeConfig: RunnerDurableRuntimeConfig | null;
 }
 
 export const memoryDurableResource = r
-  .resource<MemoryDurableResourceConfig>("base.durable.memory")
-  .register([durableWorkflowTag, ...durableEventsArray])
+  .resource<MemoryDurableResourceConfig>("base-durable-memory")
   .dependencies({
-    taskRunner: globals.resources.taskRunner,
-    eventManager: globals.resources.eventManager,
-    runnerStore: globals.resources.store,
-    logger: globals.resources.logger,
+    taskRunner: resources.taskRunner,
+    eventManager: resources.eventManager,
+    runnerStore: resources.store,
+    logger: resources.logger,
   })
   .context<MemoryDurableResourceContext>(() => ({ runtimeConfig: null }))
   .init(async function (

@@ -8,17 +8,26 @@ import { ITaskMiddlewareExecutionInput } from "../../types/taskMiddleware";
 import { ExecutionJournalImpl } from "../ExecutionJournal";
 import type { ExecutionJournal } from "../../types/executionJournal";
 import type { TaskMiddlewareInterceptor } from "./types";
+import { RuntimeCallSource, runtimeSource } from "../../types/runtimeSource";
+import { LifecycleAdmissionController } from "../runtime/LifecycleAdmissionController";
+import { toPublicDefinition } from "../utils/toPublicDefinition";
+import { composeReverseLayers } from "./composeLayers";
 
 /**
  * Composes task execution chains with validation, interceptors, and middlewares.
  * Builds the onion-style wrapping of task runners.
  */
 export class TaskMiddlewareComposer {
+  private readonly lifecycleAdmissionController: LifecycleAdmissionController;
+
   constructor(
     private readonly store: Store,
     private readonly interceptorRegistry: InterceptorRegistry,
     private readonly middlewareResolver: MiddlewareResolver,
-  ) {}
+  ) {
+    this.lifecycleAdmissionController =
+      this.store.getLifecycleAdmissionController();
+  }
 
   /**
    * Composes a complete task runner with all middleware and interceptors applied
@@ -32,12 +41,15 @@ export class TaskMiddlewareComposer {
   ): (
     input: TInput,
     parentJournal?: ExecutionJournal,
+    source?: RuntimeCallSource,
   ) => Promise<Awaited<TOutput>> {
-    const storeTask = this.store.tasks.get(task.id)!;
+    const taskId = this.store.resolveDefinitionId(task)!;
+    const storeTask = this.store.tasks.get(taskId)!;
+    const storeTaskDefinition = storeTask.task as ITask<TInput, TOutput, TDeps>;
 
     // Determine the effective task definition for this execution.
-    // When tunneled, the Store task definition carries tunnel overrides and metadata.
-    const runnerTask = this.resolveTaskDefinition(task, storeTask.task);
+    // When RPC-routed, the Store task definition carries runtime routing overrides.
+    const runnerTask = this.resolveTaskDefinition(task, storeTaskDefinition);
 
     // 1. Base runner with validation (receives input + journal)
     let runner = this.createBaseRunner(runnerTask, storeTask);
@@ -54,12 +66,19 @@ export class TaskMiddlewareComposer {
 
     // 5. Outer wrapper: use provided journal or create new one
     const journaledRunner = runner;
-    return ((input: TInput, parentJournal?: ExecutionJournal) => {
+    return ((
+      input: TInput,
+      parentJournal?: ExecutionJournal,
+      source?: RuntimeCallSource,
+    ) => {
       const journal = parentJournal ?? new ExecutionJournalImpl();
-      return journaledRunner(input, journal);
+      const executionSource =
+        source ?? runtimeSource.runtime("runtime-internal-taskRunner");
+      return journaledRunner(input, journal, executionSource);
     }) as (
       input: TInput,
       parentJournal?: ExecutionJournal,
+      source?: RuntimeCallSource,
     ) => Promise<Awaited<TOutput>>;
   }
 
@@ -73,65 +92,91 @@ export class TaskMiddlewareComposer {
   >(
     task: ITask<TInput, TOutput, TDeps>,
     storeTask: TaskStoreElementType,
-  ): (input: TInput, journal: ExecutionJournal) => TOutput {
-    return (async (input: TInput, journal: ExecutionJournal) => {
+  ): (
+    input: TInput,
+    journal: ExecutionJournal,
+    source: RuntimeCallSource,
+  ) => TOutput {
+    return (async (
+      input: TInput,
+      journal: ExecutionJournal,
+      source: RuntimeCallSource,
+    ) => {
       const validatedInput = ValidationHelper.validateInput(
         input,
         task.inputSchema,
-        task.id,
+        this.store.toPublicId(task),
         "Task",
       );
 
       const rawResult = await task.run(
         validatedInput,
         storeTask.computedDependencies,
-        { journal },
+        { journal, source },
       );
 
       return ValidationHelper.validateResult(
         rawResult,
         task.resultSchema,
-        task.id,
+        this.store.toPublicId(task),
         "Task",
       );
-    }) as (input: TInput, journal: ExecutionJournal) => TOutput;
+    }) as (
+      input: TInput,
+      journal: ExecutionJournal,
+      source: RuntimeCallSource,
+    ) => TOutput;
   }
 
   /**
    * Determines which task definition to use for execution
-   * Prefers store definition when task is tunneled (tunnel overrides apply)
+   * Prefers store definition when task is RPC-routed (runtime overrides apply)
    */
   private resolveTaskDefinition<T extends ITask<any, any, any>>(
     task: T,
     storeTask: T,
   ): T {
-    const isLocallyTunneled = task.isTunneled || storeTask.isTunneled;
-    return isLocallyTunneled ? storeTask : task;
+    const isRpcRouted = task.isRpcRouted || storeTask.isRpcRouted;
+    return isRpcRouted ? storeTask : task;
   }
 
   /**
    * Applies local per-task interceptors (closest to the task)
    */
   private applyLocalInterceptors<TInput, TOutput extends Promise<any>>(
-    runner: (input: TInput, journal: ExecutionJournal) => TOutput,
+    runner: (
+      input: TInput,
+      journal: ExecutionJournal,
+      source: RuntimeCallSource,
+    ) => TOutput,
     storeTask: TaskStoreElementType,
-  ): (input: TInput, journal: ExecutionJournal) => TOutput {
+  ): (
+    input: TInput,
+    journal: ExecutionJournal,
+    source: RuntimeCallSource,
+  ) => TOutput {
     if (!storeTask.interceptors || storeTask.interceptors.length === 0) {
       return runner;
     }
 
-    let wrapped = runner;
-    for (let i = storeTask.interceptors.length - 1; i >= 0; i--) {
-      const interceptor = storeTask.interceptors[i].interceptor;
-      const nextFunction = wrapped;
-      wrapped = (async (input: TInput, journal: ExecutionJournal) =>
-        interceptor((inp) => nextFunction(inp, journal), input)) as (
-        input: TInput,
-        journal: ExecutionJournal,
-      ) => TOutput;
-    }
-
-    return wrapped;
+    return composeReverseLayers(
+      runner,
+      storeTask.interceptors,
+      (nextFunction, storedInterceptor) =>
+        (async (
+          input: TInput,
+          journal: ExecutionJournal,
+          source: RuntimeCallSource,
+        ) =>
+          storedInterceptor.interceptor(
+            (inp) => nextFunction(inp, journal, source),
+            input,
+          )) as (
+          input: TInput,
+          journal: ExecutionJournal,
+          source: RuntimeCallSource,
+        ) => TOutput,
+    );
   }
 
   /**
@@ -142,57 +187,74 @@ export class TaskMiddlewareComposer {
     TOutput extends Promise<any>,
     TDeps extends DependencyMapType,
   >(
-    runner: (input: TInput, journal: ExecutionJournal) => TOutput,
+    runner: (
+      input: TInput,
+      journal: ExecutionJournal,
+      source: RuntimeCallSource,
+    ) => TOutput,
     task: ITask<TInput, TOutput, TDeps>,
-  ): (input: TInput, journal: ExecutionJournal) => TOutput {
+  ): (
+    input: TInput,
+    journal: ExecutionJournal,
+    source: RuntimeCallSource,
+  ) => TOutput {
     const interceptors = this.interceptorRegistry.getGlobalTaskInterceptors();
     if (interceptors.length === 0) {
       return runner;
     }
+    const publicTaskDefinition = toPublicDefinition(this.store, task);
 
     const createExecutionInput = (
       input: TInput,
-      nextFunc: (inp?: TInput) => Promise<Awaited<TOutput>>,
+      nextFunc: (...args: [inp?: TInput]) => Promise<Awaited<TOutput>>,
       journal: ExecutionJournal,
     ): ITaskMiddlewareExecutionInput<TInput, Awaited<TOutput>> => ({
       task: {
-        definition: task,
+        definition: publicTaskDefinition,
         input: input,
       },
       next: nextFunc,
       journal,
     });
 
-    let currentNext = runner;
-
-    for (let i = interceptors.length - 1; i >= 0; i--) {
-      const interceptor = interceptors[i];
-      const nextFunction = currentNext;
-
-      currentNext = (async (input: TInput, journal: ExecutionJournal) => {
-        const wrappedNextForInterceptor = (
-          inp?: TInput,
-        ): Promise<Awaited<TOutput>> =>
-          nextFunction(inp === undefined ? input : inp, journal) as Promise<
-            Awaited<TOutput>
-          >;
-        const executionInput = createExecutionInput(
-          input,
-          wrappedNextForInterceptor,
-          journal,
-        );
-        const wrappedNext = (
-          i: ITaskMiddlewareExecutionInput<TInput, Awaited<TOutput>>,
-        ): Promise<Awaited<TOutput>> => {
-          return nextFunction(i.task.input, journal) as Promise<
-            Awaited<TOutput>
-          >;
-        };
-        return interceptor(wrappedNext, executionInput) as TOutput;
-      }) as (input: TInput, journal: ExecutionJournal) => TOutput;
-    }
-
-    return currentNext;
+    return composeReverseLayers(
+      runner,
+      interceptors,
+      (nextFunction, interceptor) =>
+        (async (
+          input: TInput,
+          journal: ExecutionJournal,
+          source: RuntimeCallSource,
+        ) => {
+          const wrappedNextForInterceptor = (
+            ...args: [inp?: TInput]
+          ): Promise<Awaited<TOutput>> =>
+            nextFunction(
+              args.length > 0 ? (args[0] as TInput) : input,
+              journal,
+              source,
+            ) as Promise<Awaited<TOutput>>;
+          const executionInput = createExecutionInput(
+            input,
+            wrappedNextForInterceptor,
+            journal,
+          );
+          const wrappedNext = (
+            execution: ITaskMiddlewareExecutionInput<TInput, Awaited<TOutput>>,
+          ): Promise<Awaited<TOutput>> => {
+            return nextFunction(
+              execution.task.input,
+              journal,
+              source,
+            ) as Promise<Awaited<TOutput>>;
+          };
+          return interceptor(wrappedNext, executionInput) as TOutput;
+        }) as (
+          input: TInput,
+          journal: ExecutionJournal,
+          source: RuntimeCallSource,
+        ) => TOutput,
+    );
   }
 
   /**
@@ -203,14 +265,22 @@ export class TaskMiddlewareComposer {
     TOutput extends Promise<any>,
     TDeps extends DependencyMapType,
   >(
-    runner: (input: TInput, journal: ExecutionJournal) => TOutput,
+    runner: (
+      input: TInput,
+      journal: ExecutionJournal,
+      source: RuntimeCallSource,
+    ) => TOutput,
     task: ITask<TInput, TOutput, TDeps>,
-  ): (input: TInput, journal: ExecutionJournal) => TOutput {
+  ): (
+    input: TInput,
+    journal: ExecutionJournal,
+    source: RuntimeCallSource,
+  ) => TOutput {
     let middlewares =
       this.middlewareResolver.getApplicableTaskMiddlewares(task);
 
-    // Apply tunnel policy filter if needed
-    middlewares = this.middlewareResolver.applyTunnelPolicyFilter(
+    // Apply rpc lane policy filter if needed
+    middlewares = this.middlewareResolver.applyRpcLanePolicyFilter(
       task,
       middlewares,
     );
@@ -219,52 +289,61 @@ export class TaskMiddlewareComposer {
       return runner;
     }
 
-    let next = runner;
+    const publicTaskDefinition = toPublicDefinition(this.store, task);
 
-    // Layer middlewares (global first, then local), closest to the task runs last
-    for (let i = middlewares.length - 1; i >= 0; i--) {
-      const middleware = middlewares[i];
-      const storeMiddleware = this.store.taskMiddlewares.get(middleware.id)!;
-      const nextFunction = next;
-
-      // Create base middleware runner (captures journal from closure)
-      const baseMiddlewareRunner = async (
-        input: TInput,
-        journal: ExecutionJournal,
-      ) => {
-        return storeMiddleware.middleware.run(
-          {
-            task: {
-              definition: task,
-              input,
-            },
-            next: (...args: [TInput?]) =>
-              nextFunction(
-                args.length > 0 ? (args[0] as TInput) : input,
-                journal,
-              ),
-            journal,
-          },
-          storeMiddleware.computedDependencies,
-          middleware.config,
+    return composeReverseLayers(
+      runner,
+      middlewares,
+      (nextFunction, middleware) => {
+        const middlewareId = this.store.resolveDefinitionId(middleware)!;
+        const storeMiddleware = this.store.taskMiddlewares.get(middlewareId)!;
+        const middlewareSource = this.store.createRuntimeSource(
+          "middleware",
+          middlewareId,
         );
-      };
 
-      // Get and apply per-middleware interceptors
-      const middlewareInterceptors =
-        this.interceptorRegistry.getTaskMiddlewareInterceptors(middleware.id);
-
-      next = this.wrapWithInterceptors<TInput, TOutput, TDeps>(
-        baseMiddlewareRunner as (
+        const baseMiddlewareRunner = async (
           input: TInput,
           journal: ExecutionJournal,
-        ) => TOutput,
-        middlewareInterceptors,
-        task,
-      );
-    }
+          source: RuntimeCallSource,
+        ) => {
+          return this.lifecycleAdmissionController.trackMiddlewareExecution(
+            middlewareSource,
+            () =>
+              storeMiddleware.middleware.run(
+                {
+                  task: {
+                    definition: publicTaskDefinition,
+                    input,
+                  },
+                  next: (...args: [TInput?]) =>
+                    nextFunction(
+                      args.length > 0 ? (args[0] as TInput) : input,
+                      journal,
+                      source,
+                    ),
+                  journal,
+                },
+                storeMiddleware.computedDependencies,
+                middleware.config,
+              ),
+          );
+        };
 
-    return next;
+        const middlewareInterceptors =
+          this.interceptorRegistry.getTaskMiddlewareInterceptors(middlewareId);
+
+        return this.wrapWithInterceptors<TInput, TOutput, TDeps>(
+          baseMiddlewareRunner as (
+            input: TInput,
+            journal: ExecutionJournal,
+            source: RuntimeCallSource,
+          ) => TOutput,
+          middlewareInterceptors,
+          task,
+        );
+      },
+    );
   }
 
   /**
@@ -275,49 +354,66 @@ export class TaskMiddlewareComposer {
     TOutput extends Promise<any>,
     TDeps extends DependencyMapType,
   >(
-    middlewareRunner: (input: TInput, journal: ExecutionJournal) => TOutput,
+    middlewareRunner: (
+      input: TInput,
+      journal: ExecutionJournal,
+      source: RuntimeCallSource,
+    ) => TOutput,
     interceptors: readonly TaskMiddlewareInterceptor[],
     task: ITask<TInput, TOutput, TDeps>,
-  ): (input: TInput, journal: ExecutionJournal) => TOutput {
+  ): (
+    input: TInput,
+    journal: ExecutionJournal,
+    source: RuntimeCallSource,
+  ) => TOutput {
     if (interceptors.length === 0) {
       return middlewareRunner;
     }
 
-    let wrapped = middlewareRunner;
+    const publicTaskDefinition = toPublicDefinition(this.store, task);
 
-    for (let i = interceptors.length - 1; i >= 0; i--) {
-      const interceptor = interceptors[i];
-      const nextFunction = wrapped;
-
-      wrapped = (async (input: TInput, journal: ExecutionJournal) => {
-        const executionInput: ITaskMiddlewareExecutionInput<
-          TInput,
-          Awaited<TOutput>
-        > = {
-          task: {
-            definition: task,
-            input: input,
-          },
-          next: (...args: [TInput?]) =>
-            nextFunction(
-              args.length > 0 ? (args[0] as TInput) : input,
-              journal,
-            ),
-          journal,
-        };
-
-        const wrappedNext = (
-          i: ITaskMiddlewareExecutionInput<TInput, Awaited<TOutput>>,
-        ): Promise<Awaited<TOutput>> => {
-          return nextFunction(i.task.input, journal) as Promise<
+    return composeReverseLayers(
+      middlewareRunner,
+      interceptors,
+      (nextFunction, interceptor) =>
+        (async (
+          input: TInput,
+          journal: ExecutionJournal,
+          source: RuntimeCallSource,
+        ) => {
+          const executionInput: ITaskMiddlewareExecutionInput<
+            TInput,
             Awaited<TOutput>
-          >;
-        };
+          > = {
+            task: {
+              definition: publicTaskDefinition,
+              input: input,
+            },
+            next: (...args: [TInput?]) =>
+              nextFunction(
+                args.length > 0 ? (args[0] as TInput) : input,
+                journal,
+                source,
+              ),
+            journal,
+          };
 
-        return interceptor(wrappedNext, executionInput) as TOutput;
-      }) as (input: TInput, journal: ExecutionJournal) => TOutput;
-    }
+          const wrappedNext = (
+            execution: ITaskMiddlewareExecutionInput<TInput, Awaited<TOutput>>,
+          ): Promise<Awaited<TOutput>> => {
+            return nextFunction(
+              execution.task.input,
+              journal,
+              source,
+            ) as Promise<Awaited<TOutput>>;
+          };
 
-    return wrapped;
+          return interceptor(wrappedNext, executionInput) as TOutput;
+        }) as (
+          input: TInput,
+          journal: ExecutionJournal,
+          source: RuntimeCallSource,
+        ) => TOutput,
+    );
   }
 }

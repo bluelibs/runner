@@ -46,6 +46,7 @@ export function createAbortControllerForRequest(
   res: ServerResponse,
 ): AbortController {
   const controller = new AbortController();
+  let responseFinished = false;
   const createClientClosedRequestError = (): Error => {
     try {
       return cancellationError.throw({ reason: "Client Closed Request" });
@@ -55,6 +56,9 @@ export function createAbortControllerForRequest(
   };
 
   const onAbort = () => {
+    if (controller.signal.aborted) {
+      return;
+    }
     try {
       controller.abort(createClientClosedRequestError());
     } catch (abortError) {
@@ -67,7 +71,16 @@ export function createAbortControllerForRequest(
       });
     }
   };
+  const onResponseClose = () => {
+    if (responseFinished || res.writableEnded || res.writableFinished) {
+      return;
+    }
+    onAbort();
+  };
+  attachRequestListener(res, "finish", () => {
+    responseFinished = true;
+  });
   attachRequestListener(req, "aborted", onAbort);
-  attachRequestListener(res, "close", onAbort);
+  attachRequestListener(res, "close", onResponseClose);
   return controller;
 }

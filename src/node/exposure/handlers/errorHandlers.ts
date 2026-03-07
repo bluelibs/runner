@@ -170,10 +170,24 @@ const resolveAppErrorExtra = (
   store: Store,
   error: unknown,
 ): AppErrorExtra | undefined => {
+  const errorRecord = isRecord(error) ? error : undefined;
+  const rawErrorName =
+    typeof errorRecord?.[ExposureErrorField.Name] === "string"
+      ? (errorRecord[ExposureErrorField.Name] as string)
+      : undefined;
+  const resolvedErrorId = rawErrorName
+    ? (store.resolveDefinitionId(rawErrorName) ?? rawErrorName)
+    : undefined;
+
   try {
     for (const helper of store.errors.values()) {
-      if (helper.is(error)) {
-        if (!isRecord(error)) {
+      const helperId = store.resolveDefinitionId(helper) ?? helper.id;
+      const isMatchedTypedError =
+        helper.is(error) ||
+        (resolvedErrorId !== undefined && resolvedErrorId === helperId);
+
+      if (isMatchedTypedError) {
+        if (!errorRecord) {
           return {
             id: undefined,
             data: undefined,
@@ -183,10 +197,10 @@ const resolveAppErrorExtra = (
           };
         }
 
-        const name = error[ExposureErrorField.Name];
+        const name = errorRecord[ExposureErrorField.Name];
         const id = typeof name === "string" ? name : undefined;
-        const data = error[ExposureErrorField.Data];
-        const runtimeHttpCode = error[ExposureErrorField.HttpCode];
+        const data = errorRecord[ExposureErrorField.Data];
+        const runtimeHttpCode = errorRecord[ExposureErrorField.HttpCode];
         const httpCode = isValidHttpCode(runtimeHttpCode)
           ? runtimeHttpCode
           : isValidHttpCode(helper.httpCode)

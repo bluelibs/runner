@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from "@jest/globals";
 import { Serializer } from "../../serializer/index";
+import { serializeTreeValue } from "../../serializer/tree-serializer";
+import { TypeRegistry } from "../../serializer/type-registry";
+import { DEFAULT_UNSAFE_KEYS } from "../../serializer/validation";
 
 describe("Serializer tree validation coverage", () => {
   let serializer: Serializer;
@@ -108,6 +111,72 @@ describe("Serializer tree validation coverage", () => {
       expect(() => jsonStringify(() => true)).toThrow(
         'Cannot stringify value of type "function"',
       );
+    });
+
+    it("serializeTreeValue works without mapObjectForSerialization option", () => {
+      const registry = new TypeRegistry({
+        allowedTypes: null,
+        regExpValidator: { maxPatternLength: 1024, allowUnsafe: false },
+        symbolPolicy: "allow-all",
+      });
+
+      const result = serializeTreeValue(
+        { id: "u1" },
+        {
+          stack: new WeakSet(),
+          serializingValueTypes: new WeakSet(),
+          excludedTypeIds: [],
+        },
+        0,
+        {
+          maxDepth: 10,
+          unsafeKeys: DEFAULT_UNSAFE_KEYS,
+          typeRegistry: registry,
+        },
+      );
+
+      expect(result).toEqual({ id: "u1" });
+    });
+
+    it("serializeTreeValue handles value-strategy types that serialize to themselves without mapper hook", () => {
+      const registry = new TypeRegistry({
+        allowedTypes: null,
+        regExpValidator: { maxPatternLength: 1024, allowUnsafe: false },
+        symbolPolicy: "allow-all",
+      });
+
+      class SamePayloadType {
+        public id = "u1";
+      }
+
+      registry.addType({
+        id: "SamePayloadType",
+        is: (value: unknown): value is SamePayloadType =>
+          value instanceof SamePayloadType,
+        serialize: (value: SamePayloadType) => value,
+        deserialize: (value: SamePayloadType) => value,
+        strategy: "value",
+      });
+
+      const result = serializeTreeValue(
+        new SamePayloadType(),
+        {
+          stack: new WeakSet(),
+          serializingValueTypes: new WeakSet(),
+          excludedTypeIds: [],
+        },
+        0,
+        {
+          maxDepth: 10,
+          unsafeKeys: DEFAULT_UNSAFE_KEYS,
+          typeRegistry: registry,
+        },
+      );
+
+      expect(result).toEqual({
+        __type: "SamePayloadType",
+        value: { id: "u1" },
+      });
     });
   });
 });

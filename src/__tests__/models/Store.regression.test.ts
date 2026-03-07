@@ -3,7 +3,7 @@ import { RunResult } from "../../models";
 import { createTestFixture } from "../test-utils";
 
 enum ResourceId {
-  Root = "store.regression.root",
+  Root = "store-regression-root",
 }
 
 describe("Store regressions", () => {

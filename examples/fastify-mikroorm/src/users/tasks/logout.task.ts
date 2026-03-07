@@ -1,11 +1,11 @@
 import { r } from "@bluelibs/runner";
 import { z } from "zod";
-import { httpRoute } from "#/http/tags";
+import { httpRoute } from "#/web/tags";
 import { auth as authResource } from "#/users/resources/auth.resource";
-import { fastifyContext } from "#/http/fastify-context";
+import { fastifyContext } from "#/web/fastify-context";
 
 export const logoutUser = r
-  .task("app.users.tasks.logout")
+  .task("logout")
   .meta({
     title: "User Logout",
     description: "Clear user authentication cookie and end session",

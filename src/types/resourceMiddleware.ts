@@ -2,13 +2,15 @@ import {
   DependencyMapType,
   DependencyValuesType,
   IValidationSchema,
+  ValidationSchemaInput,
 } from "./utilities";
 import type { IResource } from "./resource";
-import { TagType } from "./tag";
+import { ResourceMiddlewareTagType } from "./tag";
 import { IMiddlewareMeta } from "./meta";
 import {
   symbolFilePath,
   symbolMiddlewareConfigured,
+  symbolRuntimeId,
   symbolResourceMiddleware,
 } from "./symbols";
 import { IContractable } from "./contracts";
@@ -27,7 +29,7 @@ export interface IResourceMiddlewareDefinition<
    * Optional validation schema for runtime config validation.
    * When provided, middleware config will be validated when .with() is called.
    */
-  configSchema?: IValidationSchema<TConfig>;
+  configSchema?: ValidationSchemaInput<TConfig>;
   /**
    * The middleware body, called with resource execution input.
    */
@@ -40,15 +42,12 @@ export interface IResourceMiddlewareDefinition<
     config: TConfig,
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
-  tags?: TagType[];
+  tags?: ResourceMiddlewareTagType[];
   /**
    * Declares which typed errors are part of this middleware's contract.
    * Declarative only — does not imply DI or enforcement.
    */
   throws?: ThrowsList;
-  everywhere?:
-    | boolean
-    | ((resource: IResource<any, any, any, any, any>) => boolean);
 }
 
 export interface IResourceMiddleware<
@@ -68,11 +67,14 @@ export interface IResourceMiddleware<
   [symbolResourceMiddleware]: true;
 
   id: string;
+  path?: string;
+  [symbolRuntimeId]?: string;
   dependencies: TDependencies | ((config: TConfig) => TDependencies);
   /** Normalized list of error ids declared via `throws`. */
   throws?: readonly string[];
   /** Current configuration object (empty by default). */
   config: TConfig;
+  configSchema?: IValidationSchema<TConfig>;
   /** Configure the middleware and return a marked, configured instance. */
   with: (
     config: TConfig,
@@ -83,7 +85,7 @@ export interface IResourceMiddleware<
     TDependencies
   >;
   [symbolFilePath]: string;
-  tags: TagType[];
+  tags: ResourceMiddlewareTagType[];
 }
 
 export interface IResourceMiddlewareConfigured<

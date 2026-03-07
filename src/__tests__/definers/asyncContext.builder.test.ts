@@ -1,11 +1,11 @@
-import { definitions, r, asyncContext, createContext } from "../..";
+import { definitions, r, defineAsyncContext, createContext } from "../..";
 import { createMessageError } from "../../errors";
 
 describe("async context builder and defineAsyncContext", () => {
   it("builder.build produces context with id and custom serializer/parse", () => {
     type Ctx = { id: number };
     const ctx = r
-      .asyncContext<Ctx>("tests.ctx.builder")
+      .asyncContext<Ctx>("tests-ctx-builder")
       .configSchema({
         parse(input: unknown) {
           const d = input as Ctx;
@@ -27,8 +27,8 @@ describe("async context builder and defineAsyncContext", () => {
   });
 
   it("asyncContext (define) honors provided serialize/parse over default", () => {
-    const ctx = asyncContext<{ v: string }>({
-      id: "tests.ctx.custom",
+    const ctx = defineAsyncContext<{ v: string }>({
+      id: "tests-ctx-custom",
       configSchema: {
         parse(input: unknown) {
           const d = input as { v: string };
@@ -47,7 +47,7 @@ describe("async context builder and defineAsyncContext", () => {
   });
 
   it("default serializer/parse path works when no custom provided", () => {
-    const ctx = createContext<{ when: Date }>("tests.ctx.default");
+    const ctx = createContext<{ when: Date }>("tests-ctx-default");
     const encoded = ctx.serialize({
       when: new Date("2024-01-01T00:00:00.000Z"),
     });
@@ -58,7 +58,7 @@ describe("async context builder and defineAsyncContext", () => {
 
   it("validates value via configSchema.parse on provide", async () => {
     const ctx = r
-      .asyncContext<{ id: number }>("tests.ctx.schema")
+      .asyncContext<{ id: number }>("tests-ctx-schema")
       .configSchema({
         parse(input: unknown) {
           const d = input as { id: number };
@@ -75,7 +75,7 @@ describe("async context builder and defineAsyncContext", () => {
 
   it("accepts meta in builder chain (smoke)", async () => {
     const ctx = r
-      .asyncContext<{ id: number }>("tests.ctx.meta")
+      .asyncContext<{ id: number }>("tests-ctx-meta")
       .meta({ title: "Test Context", description: "A test context" })
       .build();
 
@@ -85,7 +85,7 @@ describe("async context builder and defineAsyncContext", () => {
   });
 
   it("captures symbolFilePath from the caller location", () => {
-    const ctx = r.asyncContext<{ id: string }>("tests.ctx.filePath").build();
+    const ctx = r.asyncContext<{ id: string }>("tests-ctx-filePath").build();
 
     expect(
       (ctx as unknown as Record<symbol, any>)[definitions.symbolFilePath],

@@ -2,6 +2,7 @@ import {
   DependencyMapType,
   IOptionalDependency,
   IValidationSchema,
+  ValidationSchemaInput,
   OverridableElements,
   RegisterableItems,
   ResourceDependencyValuesType,
@@ -10,13 +11,21 @@ import {
   IResourceMiddleware,
   ResourceMiddlewareAttachmentType,
 } from "./resourceMiddleware";
-import { TagType } from "./tag";
+import { ResourceTagType } from "./tag";
 import { IResourceMeta } from "./meta";
 import type { ThrowsList } from "./error";
+import type { IsolationScope } from "../tools/scope";
+export type {
+  IsolationScope,
+  IsolationChannels,
+  IsolationChannel,
+} from "../tools/scope";
 import {
   symbolFilePath,
   symbolForkedFrom,
   symbolResource,
+  symbolResourceRegistersChildren,
+  symbolRuntimeId,
   symbolResourceWithConfig,
 } from "./symbols";
 import {
@@ -26,39 +35,111 @@ import {
   HasOutputContracts,
   InferInputOrViolationFromContracts,
 } from "./contracts";
+import type {
+  NormalizedResourceSubtreePolicy,
+  ResourceSubtreePolicy,
+} from "./subtree";
 
 export type {
   DependencyMapType,
   IOptionalDependency,
   IValidationSchema,
+  ValidationSchemaInput,
   OverridableElements,
   RegisterableItems,
   ResourceDependencyValuesType,
 } from "./utilities";
 export type { ResourceMiddlewareAttachmentType } from "./resourceMiddleware";
-export type { TagType } from "./tag";
+export type { ResourceTagType, TagType } from "./tag";
 export type { IResourceMeta } from "./meta";
-
-export type ResourceForkRegisterMode = "keep" | "drop" | "deep";
-
-export interface ResourceForkOptions {
-  /**
-   * Control whether the fork keeps the base `register` list.
-   * - "keep" (default) keeps registration items
-   * - "drop" clears registration items
-   * - "deep" deep-forks registered resources with new ids (resource tree)
-   */
-  register?: ResourceForkRegisterMode;
-  /**
-   * Used with `register: "deep"` to derive ids for deep-forked resources.
-   * Defaults to `(id) => \`\${newId}.\${id}\``.
-   */
-  reId?: (id: string) => string;
-}
+export type {
+  ResourceSubtreePolicy,
+  SubtreeElementValidator,
+  SubtreeValidatableElement,
+  SubtreeResourceMiddlewareEntry,
+  SubtreeResourceMiddlewarePredicate,
+  SubtreePolicyOptions,
+  SubtreeTaskMiddlewareEntry,
+  SubtreeTaskMiddlewarePredicate,
+  SubtreeViolation,
+} from "./subtree";
 
 export interface ResourceForkInfo {
   /** The id of the resource that was forked. */
   readonly fromId: string;
+}
+
+/**
+ * The definition types recognised by Runner's isolation engine.
+ * Used by `subtreeOf()` to narrow which items inside a resource subtree
+ * are matched by a deny/only filter.
+ */
+export type ItemType =
+  | "task"
+  | "hook"
+  | "event"
+  | "tag"
+  | "resource"
+  | "taskMiddleware"
+  | "resourceMiddleware";
+
+/**
+ * A structural subtree filter created by `subtreeOf(resource, { types })`.
+ *
+ * This reference binds to the resource object itself. At bootstrap, Runner resolves
+ * "all items owned by that resource's registration subtree" — so overridable
+ * ids and deeply-nested children are all caught automatically.
+ */
+export interface IsolationSubtreeFilter {
+  readonly _subtreeFilter: true;
+  readonly resourceId: string;
+  readonly types?: ReadonlyArray<ItemType>;
+}
+
+/**
+ * Valid targets for `.isolate({ deny: [...], only: [...] })`.
+ *
+ * - **RegisterableItems** — bare definitions (task, resource, event, tag, etc.).
+ *   Treated as `scope(item)` with all channels = `true`.
+ * - **IsolationSubtreeFilter** — created by `subtreeOf(resource, { types? })`.
+ *   Treated as `scope(subtreeOf(x))` with all channels = `true`.
+ * - **IsolationScope** — created by `scope(target, { channels })` for
+ *   fine‑grained per-channel control.
+ *
+ * Raw strings are **not** valid here.
+ */
+export type IsolationTarget =
+  | RegisterableItems
+  | IsolationSubtreeFilter
+  | IsolationScope;
+export type IsolationExportsTarget =
+  | RegisterableItems
+  | IResource<any, any, any, any, any, any, any>;
+
+export type IsolationExportsConfig =
+  | ReadonlyArray<IsolationExportsTarget>
+  | "none";
+
+export interface IsolationPolicy {
+  /**
+   * Denied targets for this resource boundary.
+   * Denials are additive across nested resources.
+   */
+  deny?: ReadonlyArray<IsolationTarget>;
+  /**
+   * Allowed targets for this resource boundary.
+   * When provided, only these targets (and internal items) can be referenced.
+   */
+  only?: ReadonlyArray<IsolationTarget>;
+  /**
+   * Declares which registered items are visible outside this resource's
+   * registration subtree.
+   *
+   * - Omit `exports` => everything is public (default)
+   * - `exports: []` or `exports: "none"` => nothing is public
+   * - Array entries must be explicit Runner definition/resource references
+   */
+  exports?: IsolationExportsConfig;
 }
 
 // Helper to detect `any` so we can treat it as "unspecified"
@@ -79,7 +160,7 @@ export interface IResourceDefinition<
   _THooks = any,
   _TRegisterableItems = any,
   TMeta extends IResourceMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends ResourceTagType[] = ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[] =
     ResourceMiddlewareAttachmentType[],
 > {
@@ -113,9 +194,23 @@ export interface IResourceDefinition<
    * When provided, the value will be validated immediately after `init` resolves,
    * without considering middleware.
    */
-  resultSchema?: IValidationSchema<
+  resultSchema?: ValidationSchemaInput<
     TValue extends Promise<infer U> ? U : TValue
   >;
+  /**
+   * Ready hook for the resource. This runs after initialization completes and
+   * right before Runner emits the global system ready event.
+   *
+   * Use this for startup ingress actions that should begin only after runtime
+   * internals are locked and all startup-initialized dependencies are ready.
+   */
+  ready?: (
+    this: unknown,
+    value: TValue extends Promise<infer U> ? U : TValue,
+    config: TConfig,
+    dependencies: ResourceDependencyValuesType<TDependencies>,
+    context: TContext,
+  ) => Promise<void>;
   /**
    * Clean-up function for the resource. This is called when the resource is no longer needed.
    *
@@ -125,6 +220,20 @@ export interface IResourceDefinition<
    * @returns Promise<void>
    */
   dispose?: (
+    this: unknown,
+    value: TValue extends Promise<infer U> ? U : TValue,
+    config: TConfig,
+    dependencies: ResourceDependencyValuesType<TDependencies>,
+    context: TContext,
+  ) => Promise<void>;
+  /**
+   * Cooldown hook for the resource. This runs during shutdown to stop intake
+   * quickly before runtime drains in-flight business work.
+   *
+   * Keep this fast and non-blocking in intent: trigger ingress stop, capture
+   * handles/promises in context, and return promptly.
+   */
+  cooldown?: (
     this: unknown,
     value: TValue extends Promise<infer U> ? U : TValue,
     config: TConfig,
@@ -146,17 +255,18 @@ export interface IResourceDefinition<
    * Optional validation schema for runtime config validation.
    * When provided, resource config will be validated when .with() is called.
    */
-  configSchema?: IValidationSchema<TConfig>;
+  configSchema?: ValidationSchemaInput<TConfig>;
   /**
    * Safe overrides to swap behavior while preserving identities. See
    * README: Overrides.
    */
   overrides?: Array<OverridableElements>;
 
-  /** Middleware applied around init/dispose. */
+  /** Middleware applied around init/cooldown/dispose. */
   middleware?: TMiddleware;
   /**
-   * Create a private, mutable context shared between `init` and `dispose`.
+   * Create a private, mutable context shared between `init`, `ready`,
+   * `cooldown`, and `dispose`.
    */
   context?: () => TContext;
   /**
@@ -164,13 +274,32 @@ export interface IResourceDefinition<
    * registration subtree. When present, only listed items (and items registered
    * by child resources that also export them) are accessible from outside.
    * Omitting `exports` means everything is public (default).
+   *
+   * @deprecated Use `isolate: { exports: [...] }` instead.
    */
-  exports?: Array<RegisterableItems>;
+  exports?: Array<IsolationExportsTarget>;
+  /**
+   * Isolates this resource boundary, restricting which external definitions can
+   * be referenced by this resource and its subtree.
+   *
+   * Why: this provides a fail-fast dependency boundary that prevents accidental
+   * cross-module wiring, even when visibility rules would otherwise allow it.
+   */
+  isolate?: IsolationPolicy;
   /**
    * This is optional and used from an index resource to get the correct caller.
    * This is the reason we allow it here as well.
    */
   [symbolFilePath]?: string;
+  /**
+   * Declares subtree policies for tasks/resources registered under this resource.
+   */
+  subtree?: ResourceSubtreePolicy;
+  /**
+   * When true, this resource acts as a namespace gateway and does not add its
+   * own id prefix when compiling ids for items in its register tree.
+   */
+  gateway?: boolean;
   tags?: TTags;
 }
 
@@ -184,7 +313,7 @@ export type ResourceInitFn<
   TDependencies extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 > = NonNullable<
   IResourceDefinition<
@@ -206,7 +335,7 @@ export interface IResource<
   TDependencies extends DependencyMapType = any,
   TContext = any,
   TMeta extends IResourceMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends ResourceTagType[] = ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[] =
     ResourceMiddlewareAttachmentType[],
 > extends IResourceDefinition<
@@ -220,7 +349,13 @@ export interface IResource<
   TTags,
   TMiddleware
 > {
+  configSchema?: IValidationSchema<TConfig>;
+  resultSchema?: IValidationSchema<
+    TValue extends Promise<infer U> ? U : TValue
+  >;
   id: string;
+  path?: string;
+  [symbolRuntimeId]?: string;
   with(
     config: HasInputContracts<[...TTags, ...TMiddleware]> extends true
       ? IsUnspecified<TConfig> extends true
@@ -243,6 +378,8 @@ export interface IResource<
   middleware: TMiddleware;
   [symbolFilePath]: string;
   [symbolResource]: true;
+  /** @internal Tracks whether the resource explicitly declared `.register(...)`. */
+  [symbolResourceRegistersChildren]?: true;
   /** Present only on forked resources. */
   [symbolForkedFrom]?: ResourceForkInfo;
   /** Normalized list of error ids declared via `throws`. */
@@ -250,8 +387,22 @@ export interface IResource<
   /**
    * Items visible outside this resource's subtree. When set, only listed items
    * can be referenced from outside.
+   *
+   * @deprecated Use `isolate: { exports: ... }` instead.
    */
-  exports?: Array<RegisterableItems>;
+  exports?: Array<IsolationExportsTarget>;
+  /**
+   * Wiring isolation policy for this resource and its subtree.
+   */
+  isolate?: IsolationPolicy;
+  /**
+   * Normalized subtree policy declarations owned by this resource.
+   */
+  subtree?: NormalizedResourceSubtreePolicy;
+  /**
+   * Namespace gateway flag copied from the definition.
+   */
+  gateway?: boolean;
   /** Return an optional dependency wrapper for this resource. */
   optional: () => IOptionalDependency<
     IResource<
@@ -269,10 +420,11 @@ export interface IResource<
    * Create a new resource with a different id but the same definition.
    * Useful for creating multiple instances of a "template" resource.
    * The forked resource should be exported and used as a dependency.
+   * Only leaf resources can be forked. Resources that register children
+   * must be composed explicitly instead of cloned structurally.
    */
   fork(
     newId: string,
-    options?: ResourceForkOptions,
   ): IResource<
     TConfig,
     TValue,
@@ -290,13 +442,15 @@ export interface IResourceWithConfig<
   TDependencies extends DependencyMapType = any,
   TContext = any,
   TMeta extends IResourceMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends ResourceTagType[] = ResourceTagType[],
   TMiddleware extends IResourceMiddleware<any, any, any, any>[] =
     IResourceMiddleware[],
 > {
   [symbolResourceWithConfig]: true;
   /** The id of the underlying resource. */
   id: string;
+  path?: string;
+  [symbolRuntimeId]?: string;
   /** The underlying resource definition. */
   resource: IResource<
     TConfig,

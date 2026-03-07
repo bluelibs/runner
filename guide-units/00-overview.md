@@ -7,10 +7,10 @@ Modern applications are complex. They integrate with multiple services, have man
 Runner keeps everything as plain functions and objects. You declare dependencies up front, wire them once, and get predictable runtime behavior with no hidden reflection.
 
 ```typescript
-import { r, run, globals } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 import { z } from "zod";
 
-const logger = globals.resources.logger;
+const logger = resources.logger;
 
 // resources are singletons with lifecycle management and async construction
 const db = r
@@ -37,7 +37,7 @@ const userCreated = r
   .payloadSchema(z.object({ userId: z.string() })) // runtime and compile-time validation
   .build();
 
-// notifications module
+// notifications
 const onUserCreatedHook = r
   .hook("app.hooks.onUserCreated")
   .on(userCreated)
@@ -76,7 +76,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 **Benefits:**
 
 - **Explicit wiring** — Dependencies are declared in code, not discovered at runtime
-- **Architectural isolation** — Use resource `.exports([...])` to keep domain internals private and expose only stable contracts
+- **Architectural isolation** — Use resource `.isolate({ exports: [...] })` to keep domain internals private and expose only stable contracts
 - **Type-driven** — TypeScript inference flows through tasks, resources, and middleware
 - **Testable by default** — Call `.run()` with mocks or run the full app, no special harnesses
 - **Traceable** — Stack traces and debug output stay aligned with your source
@@ -135,7 +135,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 **Deployment & Integrations** (see dedicated guides in this folder)
 
 - [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows (Node-only)
-- [HTTP Tunnels](./readmes/TUNNELS.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)
+- [Remote Lanes](./readmes/REMOTE_LANES.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)
 - [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md) - How Runner supports Node, browsers, and edge runtimes
 
 **Architecture Patterns**
@@ -143,7 +143,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Optional Dependencies](#optional-dependencies) - Graceful degradation
 - [Resource Forking](#resource-forking) - Multi-instance patterns
 - [Serialization](#serialization) - Advanced data handling
-- [Tunnels](#tunnels-bridging-runners) - Distributed systems
+- [Remote Lanes](#remote-lanes-bridging-runners) - Distributed systems
 - [Async Context](#async-context) - Request-scoped state
 - [Overrides](#overrides) - Component replacement
 - [Namespacing](#namespacing) - Code organization
@@ -169,7 +169,5 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Release, Support, and Deprecation Policy](#release-support-and-deprecation-policy) - Upgrade governance
 - [Production Readiness Checklist](#production-readiness-checklist) - Framework-wide deploy checks
 - [Node API Index](#node-api-index) - Node-only exports at a glance
-- [Troubleshooting](#troubleshooting) - Common issues and solutions
-- [Under the Hood](#under-the-hood) - Architecture deep dive
-- [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
+

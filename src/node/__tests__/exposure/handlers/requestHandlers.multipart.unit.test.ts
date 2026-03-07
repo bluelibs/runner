@@ -5,6 +5,10 @@ import {
 import { Serializer } from "../../../../serializer";
 import * as multipartModule from "../../../exposure/multipart";
 import {
+  createMockRuntimeSource,
+  resolveMockDefinitionId,
+} from "../../../../__tests__/test-utils/createMockRuntimeSource";
+import {
   createReqRes,
   HeaderName,
   HttpMethod,
@@ -19,6 +23,9 @@ describe("requestHandlers - multipart and sanitization", () => {
       tasks: new Map([["t", { task: async () => 1 }]]),
       errors: new Map(),
       asyncContexts: new Map(),
+      resolveDefinitionId: resolveMockDefinitionId,
+      toPublicId: resolveMockDefinitionId,
+      createRuntimeSource: createMockRuntimeSource,
     },
     taskRunner: { run: async () => 1 },
     eventManager: { emit: async () => undefined } as any,

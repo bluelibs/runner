@@ -1,8 +1,33 @@
-import { defineTag } from "../../../define";
+import { defineFrameworkTag } from "../../../definers/frameworkDefinition";
 import { DebugFriendlyConfig } from "./types";
+import { Match } from "../../../tools/check";
 
-export const debugTag = defineTag<DebugFriendlyConfig>({
-  id: "globals.tags.debug",
+const debugConfigPattern = Match.ObjectIncluding({
+  logResourceConfig: Match.Optional(Boolean),
+  logResourceValue: Match.Optional(Boolean),
+  logResourceBeforeRun: Match.Optional(Boolean),
+  logResourceAfterRun: Match.Optional(Boolean),
+  logTaskBeforeRun: Match.Optional(Boolean),
+  logTaskInput: Match.Optional(Boolean),
+  logTaskOutput: Match.Optional(Boolean),
+  logTaskAfterRun: Match.Optional(Boolean),
+  logMiddlewareBeforeRun: Match.Optional(Boolean),
+  logMiddlewareAfterRun: Match.Optional(Boolean),
+  logEventEmissionOnRun: Match.Optional(Boolean),
+  logEventEmissionInput: Match.Optional(Boolean),
+  logHookTriggered: Match.Optional(Boolean),
+  logHookCompleted: Match.Optional(Boolean),
+});
+
+const debugFriendlyConfigPattern = Match.OneOf(
+  "normal",
+  "verbose",
+  debugConfigPattern,
+);
+
+export const debugTag = defineFrameworkTag<DebugFriendlyConfig>({
+  id: "runner.tags.debug",
+  configSchema: debugFriendlyConfigPattern,
   meta: {
     title: "Debug",
     description:

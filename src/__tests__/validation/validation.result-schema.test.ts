@@ -27,7 +27,7 @@ describe("Result Schema Validation", () => {
       });
 
       const t = defineTask({
-        id: "tests.result.task.ok",
+        id: "tests-result-task-ok",
         resultSchema,
         async run() {
           return { ok: true };
@@ -63,7 +63,7 @@ describe("Result Schema Validation", () => {
       });
 
       const t = defineTask({
-        id: "tests.result.task.invalid",
+        id: "tests-result-task-invalid",
         resultSchema: resultSchema as any,
         async run() {
           return { nope: true };
@@ -96,7 +96,7 @@ describe("Result Schema Validation", () => {
       });
 
       const mw = defineTaskMiddleware({
-        id: "tests.result.mw.task",
+        id: "tests-result-mw-task",
         async run({ next }) {
           const base = await next();
           // Return an invalid shape w.r.t. resultSchema; should not be re-validated
@@ -106,7 +106,7 @@ describe("Result Schema Validation", () => {
       });
 
       const t = defineTask({
-        id: "tests.result.task.middleware",
+        id: "tests-result-task-middleware",
         resultSchema,
         middleware: [mw],
         async run() {
@@ -145,7 +145,7 @@ describe("Result Schema Validation", () => {
       });
 
       const r = defineResource({
-        id: "tests.result.resource.ok",
+        id: "tests-result-resource-ok",
         resultSchema,
         async init() {
           return { connected: true };
@@ -175,7 +175,7 @@ describe("Result Schema Validation", () => {
       });
 
       const r = defineResource({
-        id: "tests.result.resource.invalid",
+        id: "tests-result-resource-invalid",
         resultSchema: resultSchema as any,
         async init() {
           return { nope: true };
@@ -195,7 +195,7 @@ describe("Result Schema Validation", () => {
       });
 
       const mw = defineResourceMiddleware({
-        id: "tests.result.mw.resource",
+        id: "tests-result-mw-resource",
         async run({ next }) {
           const base = await next();
           expect(base).toEqual({ connected: true });
@@ -204,7 +204,7 @@ describe("Result Schema Validation", () => {
       });
 
       const r = defineResource({
-        id: "tests.result.resource.middleware",
+        id: "tests-result-resource-middleware",
         resultSchema,
         middleware: [mw],
         async init() {

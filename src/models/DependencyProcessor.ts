@@ -20,7 +20,7 @@ import { ResourceInitializer } from "./ResourceInitializer";
 import { TaskRunner } from "./TaskRunner";
 import { eventNotFoundError } from "../errors";
 import { Logger } from "./Logger";
-import { ResourceInitMode } from "../types/runner";
+import { ResourceLifecycleMode } from "../types/runner";
 import { DependencyExtractor } from "./dependency-processor/DependencyExtractor";
 import { HookEventBuffer } from "./dependency-processor/HookEventBuffer";
 import { ResourceScheduler } from "./dependency-processor/ResourceScheduler";
@@ -34,7 +34,7 @@ export class DependencyProcessor {
   protected readonly hookEventBuffer: HookEventBuffer;
   protected readonly resourceScheduler: ResourceScheduler;
   protected readonly logger!: Logger;
-  protected readonly initMode: ResourceInitMode;
+  protected readonly lifecycleMode: ResourceLifecycleMode;
   protected readonly lazy: boolean;
   public readonly pendingHookEvents: Map<string, IEventEmission<any>[]>;
   public readonly drainingHookIds: Set<string>;
@@ -48,12 +48,12 @@ export class DependencyProcessor {
     protected readonly eventManager: EventManager,
     protected readonly taskRunner: TaskRunner,
     logger: Logger,
-    initMode: ResourceInitMode = ResourceInitMode.Sequential,
+    lifecycleMode: ResourceLifecycleMode = ResourceLifecycleMode.Sequential,
     lazy = false,
     runtimeEventCycleDetection = true,
   ) {
     this.logger = logger.with({ source: "dependencyProcessor" });
-    this.initMode = initMode;
+    this.lifecycleMode = lifecycleMode;
     this.lazy = lazy;
     this.resourceInitializer = new ResourceInitializer(
       store,
@@ -62,7 +62,6 @@ export class DependencyProcessor {
     );
     this.hookEventBuffer = new HookEventBuffer(
       eventManager,
-      this.logger,
       runtimeEventCycleDetection,
     );
     this.pendingHookEvents = this.hookEventBuffer.pendingHookEvents;
@@ -74,8 +73,10 @@ export class DependencyProcessor {
       this.logger,
       async (resource) => this.ensureResourceInitialized(resource),
     );
-    this.resourceScheduler = new ResourceScheduler(store, async (resource) =>
-      this.ensureResourceInitialized(resource),
+    this.resourceScheduler = new ResourceScheduler(
+      store,
+      async (resource, options) =>
+        this.ensureResourceInitialized(resource, options),
     );
   }
 
@@ -91,9 +92,12 @@ export class DependencyProcessor {
     // events; hooks must be dependency-ready before that happens.
     await this.computeHookDependencies();
 
-    if (this.initMode === ResourceInitMode.Parallel && this.lazy) {
+    if (this.lifecycleMode === ResourceLifecycleMode.Parallel && this.lazy) {
       await this.initializeStartupRequiredResourcesParallel();
-    } else if (!this.lazy && this.initMode === ResourceInitMode.Parallel) {
+    } else if (
+      !this.lazy &&
+      this.lifecycleMode === ResourceLifecycleMode.Parallel
+    ) {
       await this.initializeUninitializedResourcesParallel();
     } else if (!this.lazy) {
       for (const resource of this.store.resources.values()) {
@@ -191,13 +195,16 @@ export class DependencyProcessor {
       Array.from(this.store.hooks.values()).map(async (hookStoreElement) => {
         const hook = hookStoreElement.hook;
         const deps = hook.dependencies as DependencyMapType;
-        hookStoreElement.dependencyState = HookDependencyState.Computing;
-        hookStoreElement.computedDependencies = await this.extractDependencies(
-          deps,
-          hook.id,
-        );
-        hookStoreElement.dependencyState = HookDependencyState.Ready;
-        await this.flushBufferedHookEvents(hookStoreElement);
+        try {
+          hookStoreElement.dependencyState = HookDependencyState.Computing;
+          hookStoreElement.computedDependencies =
+            await this.extractDependencies(deps, hook.id);
+          hookStoreElement.dependencyState = HookDependencyState.Ready;
+          await this.flushBufferedHookEvents(hookStoreElement);
+        } catch (e) {
+          hookStoreElement.dependencyState = HookDependencyState.Error;
+          throw e;
+        }
       }),
     );
   }
@@ -212,6 +219,7 @@ export class DependencyProcessor {
 
   private async ensureResourceInitialized(
     resource: ResourceStoreElementType<any, any, any>,
+    options?: { trackInitCompletion?: boolean },
   ) {
     if (resource.isInitialized) {
       return;
@@ -237,7 +245,12 @@ export class DependencyProcessor {
         resource.context = context;
         resource.value = value;
         resource.isInitialized = true;
-        this.store.recordResourceInitialized(resourceId);
+        if (options?.trackInitCompletion !== false) {
+          this.store.recordResourceInitialized(resourceId);
+        }
+        if (this.store.isLocked) {
+          await this.store.readyResource(resourceId);
+        }
       } catch (error: unknown) {
         this.resetResourceInitializationState(resource);
         this.rethrowResourceInitError(resourceId, error);
@@ -263,20 +276,21 @@ export class DependencyProcessor {
   }
 
   private rethrowResourceInitError(resourceId: string, error: unknown): never {
-    const prefix = `Resource "${resourceId}" initialization failed`;
+    const publicResourceId = this.store.toPublicId(resourceId);
+    const prefix = `Resource "${publicResourceId}" initialization failed`;
     if (error instanceof Error) {
-      if (!error.message.includes(resourceId)) {
+      if (!error.message.includes(publicResourceId)) {
         error.message = `${prefix}: ${error.message}`;
       }
       if (!Object.prototype.hasOwnProperty.call(error, "resourceId")) {
         Object.defineProperty(error, "resourceId", {
-          value: resourceId,
+          value: publicResourceId,
           configurable: true,
         });
       }
       if (!Object.prototype.hasOwnProperty.call(error, "cause")) {
         Object.defineProperty(error, "cause", {
-          value: { resourceId },
+          value: { resourceId: publicResourceId },
           configurable: true,
         });
       }
@@ -285,7 +299,7 @@ export class DependencyProcessor {
 
     const wrapper = new Error(`${prefix}: ${String(error)}`);
     Object.defineProperty(wrapper, "resourceId", {
-      value: resourceId,
+      value: publicResourceId,
       configurable: true,
     });
     Object.defineProperty(wrapper, "cause", {
@@ -346,9 +360,6 @@ export class DependencyProcessor {
         const eventDefinition = hook.on;
 
         const handler = async (receivedEvent: IEventEmission<any>) => {
-          if (receivedEvent.source === hook.id) {
-            return;
-          }
           if (hookStoreElement.dependencyState !== HookDependencyState.Ready) {
             this.enqueueBufferedHookEvent(hook.id, receivedEvent);
             return;
@@ -362,24 +373,35 @@ export class DependencyProcessor {
         };
 
         const order = hook.order ?? 0;
+        const hookListenerId = hook.id;
 
         if (eventDefinition === "*") {
-          this.eventManager.addGlobalListener(handler, { order });
-        } else if (Array.isArray(eventDefinition)) {
-          for (const e of eventDefinition) {
-            if (this.store.events.get(e.id) === undefined) {
-              eventNotFoundError.throw({ id: e.id });
-            }
-          }
-          this.eventManager.addListener(eventDefinition as IEvent[], handler, {
+          this.eventManager.addGlobalListener(handler, {
             order,
+            id: hookListenerId,
+          });
+        } else if (Array.isArray(eventDefinition)) {
+          const resolvedEvents = (eventDefinition as IEvent[]).map((event) => {
+            const eventId = this.store.resolveDefinitionId(event)!;
+            const storeEvent = this.store.events.get(eventId);
+            if (storeEvent === undefined) {
+              eventNotFoundError.throw({ id: eventId });
+            }
+            return storeEvent!.event;
+          });
+          this.eventManager.addListener(resolvedEvents, handler, {
+            order,
+            id: hookListenerId,
           });
         } else {
-          if (this.store.events.get(eventDefinition.id) === undefined) {
-            eventNotFoundError.throw({ id: eventDefinition.id });
+          const eventId = this.store.resolveDefinitionId(eventDefinition)!;
+          const storeEvent = this.store.events.get(eventId);
+          if (storeEvent === undefined) {
+            eventNotFoundError.throw({ id: eventId });
           }
-          this.eventManager.addListener(eventDefinition as IEvent, handler, {
+          this.eventManager.addListener(storeEvent!.event as IEvent, handler, {
             order,
+            id: hookListenerId,
           });
         }
       }

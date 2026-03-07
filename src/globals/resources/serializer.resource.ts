@@ -1,9 +1,12 @@
-import { defineResource } from "../../define";
+import { defineFrameworkResource } from "../../definers/frameworkDefinition";
 import type { SerializerLike as Serializer } from "../../serializer";
 import { globalTags } from "../globalTags";
 
-export const serializerResource = defineResource<void, Promise<Serializer>>({
-  id: "globals.resources.serializer",
+export const serializerResource = defineFrameworkResource<
+  void,
+  Promise<Serializer>
+>({
+  id: "runner.serializer",
   meta: {
     title: "Serializer",
     description:

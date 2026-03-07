@@ -1,6 +1,6 @@
 import type { IEventEmission } from "../../defs";
+import { hookEventBufferFlushAbortedError } from "../../errors";
 import { EventManager } from "../EventManager";
-import { Logger } from "../Logger";
 import {
   HookDependencyState,
   HookStoreElementType,
@@ -13,7 +13,6 @@ export class HookEventBuffer {
 
   constructor(
     private readonly eventManager: EventManager,
-    private readonly logger: Logger,
     private readonly runtimeEventCycleDetection: boolean,
   ) {}
 
@@ -49,10 +48,10 @@ export class HookEventBuffer {
           !this.runtimeEventCycleDetection &&
           flushPasses > HookEventBuffer.MAX_FLUSH_PASSES_WITHOUT_CYCLE_DETECTION
         ) {
-          await this.logger.error(
-            `Aborting buffered hook event flush for "${hook.id}" after ${flushPasses - 1} passes because runtime event cycle detection is disabled.`,
-          );
-          break;
+          hookEventBufferFlushAbortedError.throw({
+            hookId: hook.id,
+            flushPasses: flushPasses - 1,
+          });
         }
 
         const queue = this.pendingHookEvents.get(hook.id);
@@ -63,7 +62,7 @@ export class HookEventBuffer {
         this.pendingHookEvents.delete(hook.id);
 
         for (const queuedEvent of queue) {
-          if (queuedEvent.source === hook.id) {
+          if (queuedEvent.source.path === hook.id) {
             continue;
           }
           await this.eventManager.executeHookWithInterceptors(

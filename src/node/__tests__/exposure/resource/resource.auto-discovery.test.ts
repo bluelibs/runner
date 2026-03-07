@@ -1,12 +1,10 @@
-import * as http from "http";
 import { defineResource, defineTask, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
-import { globalTags } from "../../../../globals/globalTags";
-import type { TunnelRunner } from "../../../../globals/resources/tunnel/types";
+import { r } from "../../../../public";
+import { rpcLanesResource } from "../../../rpc-lanes";
 import { createMockReqRes } from "./resource.http.testkit";
 
-describe("nodeExposure auto-discovery (server-mode http)", () => {
+describe("nodeExposure auto-discovery (rpc lanes)", () => {
   function makeJsonReqRes(body: string, url: string) {
     const rrMock = createMockReqRes({
       method: "POST",
@@ -26,45 +24,70 @@ describe("nodeExposure auto-discovery (server-mode http)", () => {
     return rrMock;
   }
 
-  it("allows only server-tunnel-allowlisted ids and uses store.resources.get() values", async () => {
+  it("allows only rpc-lane-allowlisted ids from served lanes", async () => {
     const allowed = defineTask<{ v: number }, Promise<number>>({
-      id: "auto.disc.allowed",
+      id: "auto-disc-allowed",
       run: async ({ v }) => v,
     });
     const notAllowed = defineTask<{ v: number }, Promise<number>>({
-      id: "auto.disc.notAllowed",
+      id: "auto-disc-notAllowed",
       run: async ({ v }) => v,
     });
     const allowedEvent = defineEvent<{ n: number }>({
-      id: "auto.disc.allowed.ev",
+      id: "auto-disc-allowed-ev",
     });
-
-    const srvTunnel = defineResource({
-      id: "auto.disc.tunnel",
-      tags: [globalTags.tunnel],
-      init: async (): Promise<TunnelRunner> => ({
-        mode: "server",
-        transport: "http",
-        tasks: [allowed.id],
-        events: [allowedEvent.id],
+    const servedLane = r
+      .rpcLane("tests-auto-discovery-served")
+      .applyTo([allowed, allowedEvent])
+      .build();
+    const unservedLane = r
+      .rpcLane("tests-auto-discovery-unserved")
+      .applyTo([notAllowed])
+      .build();
+    const communicator = defineResource({
+      id: "tests-auto-discovery-communicator",
+      init: async () => ({
+        task: async () => 1,
+        event: async () => undefined,
       }),
     });
-
-    const exposure = nodeExposure.with({
-      http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
-        basePath: "/__runner",
-        auth: { token: "T" },
+    const lanes = rpcLanesResource.with({
+      profile: "server",
+      mode: "network",
+      topology: r.rpcLane.topology({
+        profiles: {
+          server: { serve: [servedLane] },
+        },
+        bindings: [
+          {
+            lane: servedLane,
+            communicator,
+          },
+          {
+            lane: unservedLane,
+            communicator,
+          },
+        ],
+      }),
+      exposure: {
+        http: {
+          basePath: "/__runner",
+          auth: { token: "T", allowAnonymous: true },
+        },
       },
     });
 
     const app = defineResource({
-      id: "auto.disc.app",
-      register: [srvTunnel, allowed, notAllowed, allowedEvent, exposure],
+      id: "auto-disc-app",
+      register: [allowed, notAllowed, allowedEvent, communicator, lanes],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource);
+    const lanesValue = await rr.getResourceValue(lanes.resource as any);
+    const handlers = lanesValue.exposure?.getHandlers?.();
+    expect(handlers).toBeTruthy();
+    if (!handlers) {
+      return;
+    }
 
     // Allowed task -> 200
     {

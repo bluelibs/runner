@@ -17,6 +17,7 @@ import {
   ResourceMiddlewareInterceptor,
 } from "./middleware/types";
 import { unknownMiddlewareTypeError } from "../errors";
+import { toPublicDefinition } from "./utils/toPublicDefinition";
 
 // Re-export types for backwards compatibility
 export type { TaskMiddlewareInterceptor, ResourceMiddlewareInterceptor };
@@ -33,11 +34,7 @@ export class MiddlewareManager {
   private readonly taskComposer: TaskMiddlewareComposer;
   private readonly resourceComposer: ResourceMiddlewareComposer;
 
-  constructor(
-    protected readonly store: Store,
-    _eventManager: unknown,
-    _logger: unknown,
-  ) {
+  constructor(protected readonly store: Store) {
     this.interceptorRegistry = new InterceptorRegistry();
     this.middlewareResolver = new MiddlewareResolver(store);
     this.taskComposer = new TaskMiddlewareComposer(
@@ -255,22 +252,28 @@ export class MiddlewareManager {
   }
 
   /**
-   * Gets all "everywhere" middlewares that apply to the given task
+   * Gets all auto-applied middlewares that apply to the given task.
+   * Legacy method name kept for backward compatibility.
    * @deprecated Internal method exposed for testing - may be removed in future versions
    */
   getEverywhereMiddlewareForTasks(
     task: ITask<any, any, any>,
   ): ITaskMiddleware[] {
-    return this.middlewareResolver.getEverywhereTaskMiddlewares(task);
+    return this.middlewareResolver
+      .getEverywhereTaskMiddlewares(task)
+      .map((middleware) => toPublicDefinition(this.store, middleware));
   }
 
   /**
-   * Gets all "everywhere" middlewares that apply to the given resource
+   * Gets all auto-applied middlewares that apply to the given resource.
+   * Legacy method name kept for backward compatibility.
    * @deprecated Internal method exposed for testing - may be removed in future versions
    */
   getEverywhereMiddlewareForResources(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
-    return this.middlewareResolver.getEverywhereResourceMiddlewares(resource);
+    return this.middlewareResolver
+      .getEverywhereResourceMiddlewares(resource)
+      .map((middleware) => toPublicDefinition(this.store, middleware));
   }
 }

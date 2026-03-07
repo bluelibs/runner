@@ -22,6 +22,7 @@ import { DurableContext } from "../DurableContext";
 import { SuspensionSignal } from "../interfaces/context";
 import { createExecutionId, sleepMs, withTimeout } from "../utils";
 import { durableExecutionInvariantError } from "../../../../errors";
+import { NoopEventBus } from "../../bus/NoopEventBus";
 
 export interface ExecutionManagerConfig {
   store: IDurableStore;
@@ -50,12 +51,16 @@ export interface ExecutionManagerConfig {
  * - update execution status/result/error and notify waiters (`WaitManager`)
  */
 export class ExecutionManager {
+  private readonly eventBus: IEventBus;
+
   constructor(
     private readonly config: ExecutionManagerConfig,
     private readonly taskRegistry: TaskRegistry,
     private readonly auditLogger: AuditLogger,
     private readonly waitManager: WaitManager,
-  ) {}
+  ) {
+    this.eventBus = this.config.eventBus ?? new NoopEventBus();
+  }
 
   async start(
     taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
@@ -126,7 +131,7 @@ export class ExecutionManager {
     if (!this.config.queue && !this.config.taskExecutor) {
       durableExecutionInvariantError.throw({
         message:
-          "DurableService requires `taskExecutor` to execute Runner tasks (when no queue is configured). Use `durableResource.fork(...).with(...)` in a Runner runtime, or provide a custom executor in config.",
+          "DurableService requires `taskExecutor` to execute Runner tasks (when no queue is configured). Use a Runner durable workflow resource such as `resources.memoryWorkflow.fork(...).with(...)` or provide a custom executor in config.",
       });
     }
   }
@@ -310,7 +315,7 @@ export class ExecutionManager {
       reason: "cancelled",
     });
 
-    await this.config.eventBus!.publish(`execution:${executionId}`, {
+    await this.eventBus.publish(`execution:${executionId}`, {
       type: "finished",
       payload: { ...execution, status: ExecutionStatus.Cancelled },
       timestamp: new Date(),
@@ -434,7 +439,7 @@ export class ExecutionManager {
   }
 
   async notifyExecutionFinished(execution: Execution): Promise<void> {
-    await this.config.eventBus!.publish(`execution:${execution.id}`, {
+    await this.eventBus.publish(`execution:${execution.id}`, {
       type: "finished",
       payload: execution,
       timestamp: new Date(),
@@ -474,7 +479,7 @@ export class ExecutionManager {
 
     const context = new DurableContext(
       this.config.store,
-      this.config.eventBus!,
+      this.eventBus,
       execution.id,
       execution.attempt,
       {

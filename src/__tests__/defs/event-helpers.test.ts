@@ -1,17 +1,21 @@
 import { defineEvent } from "../../define";
-import { isOneOf, IEventEmission, onAnyOf } from "../../defs";
+import { onAnyOf, isOneOf } from "../../public";
+import type { IEventEmission } from "../../defs";
+import { runtimeSource } from "../../types/runtimeSource";
+import { symbolDefinitionIdentity } from "../../types/symbols";
 
 describe("event helpers", () => {
   it("isOneOf checks membership by id", () => {
-    const e1 = defineEvent<{ a: string }>({ id: "ev.a" });
-    const e2 = defineEvent<{ b: number }>({ id: "ev.b" });
+    const e1 = defineEvent<{ a: string }>({ id: "ev-a" });
+    const e2 = defineEvent<{ b: number }>({ id: "ev-b" });
 
     const emissionA: IEventEmission<{ a: string }> = {
-      id: "ev.a",
+      id: "ev-a",
       data: { a: "x" },
       timestamp: new Date(),
-      source: "test",
+      source: runtimeSource.runtime("test"),
       meta: {},
+      transactional: false,
       stopPropagation() {},
       isPropagationStopped() {
         return false;
@@ -20,11 +24,12 @@ describe("event helpers", () => {
     };
 
     const emissionC: IEventEmission<{ c: boolean }> = {
-      id: "ev.c",
+      id: "ev-c",
       data: { c: true },
       timestamp: new Date(),
-      source: "test",
+      source: runtimeSource.runtime("test"),
       meta: {},
+      transactional: false,
       stopPropagation() {},
       isPropagationStopped() {
         return false;
@@ -34,5 +39,30 @@ describe("event helpers", () => {
 
     expect(isOneOf(emissionA, onAnyOf(e1, e2))).toBe(true);
     expect(isOneOf(emissionC, onAnyOf(e1, e2))).toBe(false);
+  });
+
+  it("distinguishes sibling events that share a local id when emissions carry identity", () => {
+    const left = defineEvent<{ side: "left" }>({ id: "shared-event" });
+    const right = defineEvent<{ side: "right" }>({ id: "shared-event" });
+
+    const rightEmission: IEventEmission<{ side: "right" }> = {
+      id: "shared-event",
+      data: { side: "right" },
+      timestamp: new Date(),
+      source: runtimeSource.runtime("test"),
+      meta: {},
+      transactional: false,
+      stopPropagation() {},
+      isPropagationStopped() {
+        return false;
+      },
+      tags: [],
+      [symbolDefinitionIdentity]: ((
+        right as unknown as Record<symbol, unknown>
+      )[symbolDefinitionIdentity] ?? undefined) as object | undefined,
+    };
+
+    expect(isOneOf(rightEmission, onAnyOf(right))).toBe(true);
+    expect(isOneOf(rightEmission, onAnyOf(left))).toBe(false);
   });
 });

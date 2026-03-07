@@ -1,29 +1,26 @@
-import * as http from "http";
 import { Readable } from "stream";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 
 describe("nodeExposure - multipart early abort via signal", () => {
   it("returns 499 when AbortSignal is already aborted before parsing", async () => {
     const t = defineTask<{ n: number }, Promise<number>>({
-      id: "exposer.abort.multipart",
+      id: "exposer-abort-multipart",
       run: async ({ n }) => n,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "exposer.abort.app",
+      id: "exposer-abort-app",
       register: [t, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     // Prepare a request that claims multipart but will be aborted immediately
     const boundary = "----abortedBoundary";

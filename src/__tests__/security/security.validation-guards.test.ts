@@ -11,7 +11,7 @@ describe("Security: Validation guards", () => {
     // supply an invalid email string to assert the ValidationError is thrown
     // by the framework before task.run is invoked.
     const task = defineTask<{ email: string }>({
-      id: "sec.tasks.createUser",
+      id: "sec-tasks-createUser",
       inputSchema: {
         parse: (input: any) => {
           if (
@@ -30,7 +30,7 @@ describe("Security: Validation guards", () => {
       },
     });
 
-    const app = defineResource({ id: "sec.app", register: [task] });
+    const app = defineResource({ id: "sec-app", register: [task] });
     const rr = await run(app);
 
     await expect(

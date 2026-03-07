@@ -1,6 +1,10 @@
-import { defineTaskMiddleware, defineResourceMiddleware } from "../../define";
+import {
+  defineFrameworkResourceMiddleware,
+  defineFrameworkTaskMiddleware,
+} from "../../definers/frameworkDefinition";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { journalKeys as timeoutJournalKeys } from "./timeout.middleware";
+import { Match } from "../../tools/check";
 
 /**
  * Configuration options for the retry middleware
@@ -22,21 +26,28 @@ export interface RetryMiddlewareConfig {
   delayStrategy?: (attempt: number, error: Error) => number;
 }
 
+const retryConfigPattern = Match.ObjectIncluding({
+  retries: Match.Optional(Match.PositiveInteger),
+  stopRetryIf: Match.Optional(Function),
+  delayStrategy: Match.Optional(Function),
+});
+
 /**
  * Journal keys exposed by the retry middleware.
  * Use these to access shared state from downstream middleware or tasks.
  */
 export const journalKeys = {
   /** Current retry attempt number (0 = first attempt, 1 = first retry, etc.) */
-  attempt: journalHelper.createKey<number>("globals.middleware.retry.attempt"),
+  attempt: journalHelper.createKey<number>("runner.middleware.retry.attempt"),
   /** The last error that caused a retry */
   lastError: journalHelper.createKey<Error>(
-    "globals.middleware.retry.lastError",
+    "runner.middleware.retry.lastError",
   ),
 } as const;
 
-export const retryTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.retry.task",
+export const retryTaskMiddleware = defineFrameworkTaskMiddleware({
+  id: "runner.middleware.retry.task",
+  configSchema: retryConfigPattern,
   async run({ task, next, journal }, _deps, config: RetryMiddlewareConfig) {
     const input = task?.input;
     let attempts = 0;
@@ -87,8 +98,9 @@ export const retryTaskMiddleware = defineTaskMiddleware({
   },
 });
 
-export const retryResourceMiddleware = defineResourceMiddleware({
-  id: "globals.middleware.retry.resource",
+export const retryResourceMiddleware = defineFrameworkResourceMiddleware({
+  id: "runner.middleware.retry.resource",
+  configSchema: retryConfigPattern,
   async run({ resource, next }, _deps, config: RetryMiddlewareConfig) {
     const input = resource?.config;
     let attempts = 0;

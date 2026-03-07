@@ -1,10 +1,18 @@
-import { defineTaskMiddleware, defineResource } from "../../define";
+import {
+  defineFrameworkResource,
+  defineFrameworkTaskMiddleware,
+} from "../../definers/frameworkDefinition";
 import { globalTags } from "../globalTags";
 import { middlewareTemporalDisposedError } from "../../errors";
+import { Match } from "../../tools/check";
 
 export interface TemporalMiddlewareConfig {
   ms: number;
 }
+
+const temporalConfigPattern = Match.ObjectIncluding({
+  ms: Match.PositiveInteger,
+});
 
 type TimeoutHandle = ReturnType<typeof setTimeout>;
 
@@ -72,8 +80,8 @@ function rejectThrottleState(state: ThrottleState, error: Error) {
   });
 }
 
-export const temporalResource = defineResource({
-  id: "globals.resources.temporal",
+export const temporalResource = defineFrameworkResource({
+  id: "runner.temporal",
   tags: [globalTags.system],
   init: async (): Promise<TemporalResourceState> => {
     return {
@@ -87,10 +95,8 @@ export const temporalResource = defineResource({
   dispose: async (state: TemporalResourceState) => {
     state.isDisposed = true;
     const disposeError = createTemporalDisposedError();
-    const trackedDebounceStates =
-      state.trackedDebounceStates ?? new Set<DebounceState>();
-    const trackedThrottleStates =
-      state.trackedThrottleStates ?? new Set<ThrottleState>();
+    const trackedDebounceStates = state.trackedDebounceStates;
+    const trackedThrottleStates = state.trackedThrottleStates;
 
     trackedDebounceStates.forEach((debounceState) => {
       rejectDebounceState(debounceState, disposeError);
@@ -110,9 +116,10 @@ export const temporalResource = defineResource({
  * If multiple calls occur within the window, only the last one is executed,
  * and all callers receive the same result.
  */
-export const debounceTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.task.debounce",
+export const debounceTaskMiddleware = defineFrameworkTaskMiddleware({
+  id: "runner.middleware.task.debounce",
   throws: [middlewareTemporalDisposedError],
+  configSchema: temporalConfigPattern,
   dependencies: { state: temporalResource },
   async run({ task, next }, { state }, config: TemporalMiddlewareConfig) {
     if (state.isDisposed === true) {
@@ -120,9 +127,7 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
     }
 
     const debounceStates = state.debounceStates;
-    const trackedDebounceStates =
-      state.trackedDebounceStates ??
-      (state.trackedDebounceStates = new Set<DebounceState>());
+    const trackedDebounceStates = state.trackedDebounceStates;
     let debounceState = debounceStates.get(config);
     if (!debounceState) {
       debounceState = {
@@ -179,9 +184,10 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
  * Throttle middleware: ensures execution at most once every `ms`.
  * If calls occur within the window, the last one is scheduled for the end of the window.
  */
-export const throttleTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.task.throttle",
+export const throttleTaskMiddleware = defineFrameworkTaskMiddleware({
+  id: "runner.middleware.task.throttle",
   throws: [middlewareTemporalDisposedError],
+  configSchema: temporalConfigPattern,
   dependencies: { state: temporalResource },
   async run({ task, next }, { state }, config: TemporalMiddlewareConfig) {
     if (state.isDisposed === true) {
@@ -189,9 +195,7 @@ export const throttleTaskMiddleware = defineTaskMiddleware({
     }
 
     const throttleStates = state.throttleStates;
-    const trackedThrottleStates =
-      state.trackedThrottleStates ??
-      (state.trackedThrottleStates = new Set<ThrottleState>());
+    const trackedThrottleStates = state.trackedThrottleStates;
     let throttleState = throttleStates.get(config);
     if (!throttleState) {
       throttleState = {

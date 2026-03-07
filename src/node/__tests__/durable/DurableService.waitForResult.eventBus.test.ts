@@ -323,7 +323,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
     }
   });
 
-  it("rejects when a finish notification arrives but the execution is completed without result", async () => {
+  it("resolves undefined when a finish notification arrives and execution is completed without result", async () => {
     const bus = new MemoryEventBus();
     const store = new MemoryStore();
     const service = new DurableService({ store, eventBus: bus });
@@ -356,7 +356,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
       timestamp: new Date(),
     });
 
-    await expect(waitPromise).rejects.toBeInstanceOf(DurableExecutionError);
+    await expect(waitPromise).resolves.toBeUndefined();
   });
 
   it("uses 'unknown' metadata if execution disappears before eventBus timeout handler runs", async () => {

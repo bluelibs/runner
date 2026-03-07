@@ -146,7 +146,7 @@ describe("durable: redisDurableResource (config-only)", () => {
     });
 
     await redisDurableResource.init!.call(
-      { id: "tenantA.durable" },
+      { id: "tenantA-durable" },
       { redis: { url: "redis://x" } },
       deps as any,
       { runtimeConfig: null } as any,
@@ -188,7 +188,7 @@ describe("durable: redisDurableResource (config-only)", () => {
     });
 
     await redisDurableResource.init!.call(
-      { id: "ignored.by.namespace" },
+      { id: "ignored-by-namespace" },
       {
         namespace: "ns",
         redis: { url: "redis://x" },

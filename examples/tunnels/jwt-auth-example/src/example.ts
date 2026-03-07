@@ -1,190 +1,253 @@
-/**
- * Local copy of the JWT tunnel example so package-local devDependencies resolve.
- */
-import { r, run } from "@bluelibs/runner";
-import { nodeExposure, useExposureContext } from "@bluelibs/runner/node";
-import type { IncomingHttpHeaders, ServerResponse } from "http";
-import jwt from "jsonwebtoken";
-import type { JwtPayload } from "jsonwebtoken";
+import { createHttpClient, r, resources, run } from "@bluelibs/runner";
+import {
+  rpcLanesResource,
+  type RpcLanesResourceValue,
+} from "@bluelibs/runner/node";
+import type { RpcLaneRequestOptions } from "@bluelibs/runner";
 
-const BASE_PATH = "/__runner";
-const ORIGIN = "http://127.0.0.1:7070";
-const BASE_URL = `${ORIGIN}${BASE_PATH}`;
-const JWT_SECRET = "demo-secret-key-change-me";
+const RpcPath = "/__runner";
+const Host = "127.0.0.1";
+const ExposureToken = "demo-exposure-token";
+const LaneSecret = "demo-lane-secret";
 
-// Ensure platform is initialized for Node before any tunnel client usage
-// setPlatform(new PlatformAdapter("node"));
+const ResourceId = {
+  App: "app",
+  Server: {
+    Communicator: "serverCommunicator",
+    RpcLanes: "serverRpcLanes",
+  },
+  Client: {
+    Communicator: "clientCommunicator",
+    RpcLanes: "clientRpcLanes",
+  },
+} as const;
 
-interface JwtClaims {
-  sub: string;
-  scope: string[];
-  exp?: number;
-  [key: string]: unknown;
-}
+const TaskId = {
+  Hello: "hello",
+  CallHello: "callHello",
+} as const;
 
-interface JwtAugmentedRequest {
-  jwtClaims?: JwtClaims;
-}
+const Profile = {
+  Client: "client",
+  Server: "server",
+} as const;
 
-interface JwtMiddlewareConfig {
-  requiredScopes?: string[];
-}
-
-const jwtGuard = r.middleware
-  .task("examples.tunnels.jwt.guard")
-  .configSchema<JwtMiddlewareConfig>({
-    parse: (value) => value as JwtMiddlewareConfig,
-  })
-  .everywhere((t) => t.id.startsWith("examples.tunnels.jwt."))
-  .run(async (context, _deps, config: JwtMiddlewareConfig) => {
-    const nextInput = context.task?.input;
-    let requestContext: ReturnType<typeof useExposureContext>;
-    try {
-      requestContext = useExposureContext();
-    } catch {
-      return context.next(nextInput);
-    }
-    const { req, res } = requestContext;
-    const deny = (reason: string) => {
-      writeUnauthorized(res, reason);
-      return undefined as any;
-    };
-    const token = extractBearerToken(req.headers);
-    if (!token) return deny("Missing bearer token");
-    const verification = verifyJwt(token, JWT_SECRET);
-    if (!verification.ok)
-      return deny((verification as any).reason || "Invalid token");
-    const claims = verification.claims;
-    const requiredScopes = config?.requiredScopes ?? [];
-    const missingScopes = requiredScopes.filter(
-      (s) => !claims.scope.includes(s),
-    );
-    if (missingScopes.length > 0)
-      return deny(`Missing scopes: ${missingScopes.join(", ")}`);
-    (req as JwtAugmentedRequest).jwtClaims = claims;
-    return context.next(nextInput);
-  })
-  .build();
+const jwtProtectedLane = r.rpcLane("protectedLane").build();
 
 type HelloTaskInput = { message: string };
-type HelloTaskOutput = { message: string; user: string; scopes: string[] };
 
-const helloTask = r
-  .task("examples.tunnels.jwt.hello")
-  .middleware([jwtGuard.with({ requiredScopes: ["tasks:read"] })])
-  // Runner passes the task input directly to .run(), not wrapped in { input }
-  .run(async (input: HelloTaskInput) => {
-    const claims = getClaimsFromContext();
-    return {
-      message: input.message,
-      user: claims.sub,
-      scopes: [...claims.scope],
-    };
+const helloServerTask = r
+  .task<HelloTaskInput>(TaskId.Hello)
+  .tags([r.runner.tags.rpcLane.with({ lane: jwtProtectedLane })])
+  .run(async (input): Promise<void> => {
+    console.log(
+      `[server] Received protected message: "${input.message}" via rpcLanes`,
+    );
   })
   .build();
 
-const exposure = nodeExposure.with({
-  http: {
-    dangerouslyAllowOpenExposure: true,
-    basePath: BASE_PATH,
-    listen: { port: 7070, host: "127.0.0.1" },
-  },
-});
+const ErrorMessage = {
+  MustRouteThroughRpcLanes: "Task must be executed through rpcLanes routing.",
+  UnexpectedRemoteCall:
+    "Server should never call remote lane for served tasks.",
+  MissingExposure: "RPC lane HTTP exposure is unavailable.",
+  MissingExposureServer: "RPC lane HTTP server is unavailable.",
+  MissingExposureAddress: "RPC lane HTTP server address is unavailable.",
+  UnsupportedPipe: "Named pipe addresses are unsupported in this example.",
+} as const;
 
-const callHelloDirect = r
-  .task("examples.tunnels.jwt.client.call-direct")
-  .dependencies(() => ({ hello: helloTask }))
-  .run(async (_: void, deps) => {
-    // Direct in-process task invocation (no HTTP tunnel)
-    return deps.hello({ message: "Hello from direct call" });
+const helloRemoteTask = r
+  .task<HelloTaskInput>(TaskId.Hello)
+  .tags([r.runner.tags.rpcLane.with({ lane: jwtProtectedLane })])
+  .run(async (): Promise<void> => {
+    throw new Error(ErrorMessage.MustRouteThroughRpcLanes);
   })
   .build();
 
-const app = r
-  .resource("examples.tunnels.jwt.app")
-  .register([jwtGuard, helloTask, exposure, callHelloDirect])
+const callHelloTask = r
+  .task<void>(TaskId.CallHello)
+  .dependencies({ hello: helloRemoteTask })
+  .run(async (_input, deps): Promise<void> => {
+    await deps.hello({ message: "Hello from RPC lane client" });
+  })
   .build();
+
+type BuildServerAppOptions = {
+  exposureToken: string;
+  laneSecret: string;
+};
+
+function buildServerApp(options: BuildServerAppOptions) {
+  const communicator = r
+    .resource<void>(ResourceId.Server.Communicator)
+    .init(async () => ({
+      task: async (): Promise<never> => {
+        throw new Error(ErrorMessage.UnexpectedRemoteCall);
+      },
+      event: async (): Promise<never> => {
+        throw new Error(ErrorMessage.UnexpectedRemoteCall);
+      },
+      eventWithResult: async (): Promise<never> => {
+        throw new Error(ErrorMessage.UnexpectedRemoteCall);
+      },
+    }))
+    .build();
+
+  const topology = r.rpcLane.topology({
+    profiles: {
+      [Profile.Client]: { serve: [] },
+      [Profile.Server]: { serve: [jwtProtectedLane] },
+    },
+    bindings: [
+      {
+        lane: jwtProtectedLane,
+        communicator,
+        auth: { mode: "jwt_hmac", secret: options.laneSecret },
+      },
+    ],
+  });
+
+  const rpcLanes = rpcLanesResource.fork(ResourceId.Server.RpcLanes).with({
+    profile: Profile.Server,
+    mode: "network",
+    topology,
+    exposure: {
+      http: {
+        basePath: RpcPath,
+        listen: { port: 0, host: Host },
+        auth: { token: options.exposureToken },
+      },
+    },
+  });
+
+  const app = r
+    .resource(ResourceId.App)
+    .register([helloServerTask, communicator, rpcLanes])
+    .build();
+
+  return { app, rpcLanes };
+}
+
+type BuildClientAppOptions = {
+  baseUrl: string;
+  exposureToken: string;
+  laneSecret: string;
+};
+
+function buildClientApp(options: BuildClientAppOptions) {
+  const communicator = r
+    .resource<void>(ResourceId.Client.Communicator)
+    .dependencies({ serializer: resources.serializer })
+    .init(async (_cfg, deps) => {
+      const client = createHttpClient({
+        baseUrl: options.baseUrl,
+        auth: { token: options.exposureToken },
+        serializer: deps.serializer,
+      });
+      return {
+        task: async (
+          taskId: string,
+          input?: unknown,
+          requestOptions?: RpcLaneRequestOptions,
+        ) => client.task(taskId, input, requestOptions),
+      };
+    })
+    .build();
+
+  const topology = r.rpcLane.topology({
+    profiles: {
+      [Profile.Client]: { serve: [] },
+      [Profile.Server]: { serve: [jwtProtectedLane] },
+    },
+    bindings: [
+      {
+        lane: jwtProtectedLane,
+        communicator,
+        auth: { mode: "jwt_hmac", secret: options.laneSecret },
+      },
+    ],
+  });
+
+  const rpcLanes = rpcLanesResource.fork(ResourceId.Client.RpcLanes).with({
+    profile: Profile.Client,
+    mode: "network",
+    topology,
+  });
+
+  const app = r
+    .resource(ResourceId.App)
+    .register([communicator, helloRemoteTask, callHelloTask, rpcLanes])
+    .build();
+
+  return { app, callHelloTask };
+}
+
+function getBaseUrl(value: RpcLanesResourceValue): string {
+  const handlers = value.exposure?.getHandlers?.();
+  if (!handlers) {
+    throw new Error(ErrorMessage.MissingExposure);
+  }
+
+  const server = handlers.server;
+  if (!server) {
+    throw new Error(ErrorMessage.MissingExposureServer);
+  }
+
+  const address = server.address();
+  if (!address) {
+    throw new Error(ErrorMessage.MissingExposureAddress);
+  }
+  if (typeof address === "string") {
+    throw new Error(ErrorMessage.UnsupportedPipe);
+  }
+
+  const basePath = handlers.basePath.endsWith("/")
+    ? handlers.basePath.slice(0, -1)
+    : handlers.basePath;
+  return `http://${Host}:${address.port}${basePath}`;
+}
 
 export async function runJwtAuthExample(): Promise<void> {
-  const runner = await run(app);
-  try {
-    const direct = await runner.runTask(callHelloDirect);
-    console.log("Direct call result:", direct);
-  } finally {
-    await runner.dispose();
-  }
-}
-
-function extractBearerToken(headers: IncomingHttpHeaders): string | null {
-  const raw = headers.authorization;
-  const header = Array.isArray(raw) ? raw[0] : raw;
-  if (!header) return null;
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-  return match ? match[1] : null;
-}
-
-function getClaimsFromContext(): JwtClaims {
-  // When running in-process (no HTTP exposure), there is no request context.
-  // Fall back to a local identity so direct calls work without JWT.
-  try {
-    const { req } = useExposureContext();
-    const claims = (req as JwtAugmentedRequest).jwtClaims;
-    if (!claims) throw new Error("JWT claims missing in request context");
-    return claims;
-  } catch {
-    return { sub: "local", scope: [] };
-  }
-}
-
-function writeUnauthorized(res: ServerResponse, reason: string): void {
-  if (res.writableEnded) return;
-  const payload = JSON.stringify({
-    ok: false,
-    error: { code: "UNAUTHORIZED", message: reason },
+  const { app: serverApp, rpcLanes } = buildServerApp({
+    exposureToken: ExposureToken,
+    laneSecret: LaneSecret,
   });
-  res.statusCode = 401;
-  res.setHeader("content-type", "application/json; charset=utf-8");
-  res.setHeader("content-length", Buffer.byteLength(payload));
-  res.end(payload);
-}
 
-type JwtVerifyResult =
-  | { ok: true; claims: JwtClaims }
-  | { ok: false; reason: string };
-
-function verifyJwt(token: string, secret: string): JwtVerifyResult {
+  const serverRuntime = await run(serverApp);
   try {
-    const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] });
-    if (!decoded || typeof decoded !== "object")
-      return { ok: false, reason: "Unexpected JWT payload" };
-    const payload = decoded as JwtPayload &
-      Record<string, unknown> & { scope?: unknown };
-    const {
-      sub,
-      exp,
-      scope: rawScope,
-      ...rest
-    } = payload as Record<string, unknown> & {
-      sub?: unknown;
-      exp?: unknown;
-      scope?: unknown;
-    };
-    if (typeof sub !== "string" || sub.length === 0)
-      return { ok: false, reason: "Missing sub claim" };
-    const scope = Array.isArray(rawScope)
-      ? rawScope.filter((value): value is string => typeof value === "string")
-      : [];
-    const claims: JwtClaims = {
-      ...rest,
-      sub,
-      scope,
-      ...(typeof exp === "number" ? { exp } : {}),
-    };
-    return { ok: true, claims };
-  } catch (error) {
-    const message =
-      error instanceof Error && error.message ? error.message : "Invalid token";
-    return { ok: false, reason: message };
+    const rpcLanesValue = serverRuntime.getResourceValue(rpcLanes.resource);
+    const baseUrl = getBaseUrl(rpcLanesValue);
+
+    const { app: goodClientApp, callHelloTask: goodCallTask } = buildClientApp({
+      baseUrl,
+      exposureToken: ExposureToken,
+      laneSecret: LaneSecret,
+    });
+    const goodClientRuntime = await run(goodClientApp);
+    try {
+      await goodClientRuntime.runTask(goodCallTask);
+      console.log("Authorized remote call succeeded.");
+    } finally {
+      await goodClientRuntime.dispose();
+    }
+
+    const { app: badClientApp, callHelloTask: badCallTask } = buildClientApp({
+      baseUrl,
+      exposureToken: ExposureToken,
+      laneSecret: "invalid-lane-secret",
+    });
+    const badClientRuntime = await run(badClientApp);
+    try {
+      await badClientRuntime.runTask(badCallTask);
+      console.error("Unexpected success for invalid lane JWT secret.");
+      process.exitCode = 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log("Expected authorization failure:", message);
+    } finally {
+      await badClientRuntime.dispose();
+    }
+  } finally {
+    await serverRuntime.dispose();
   }
 }
-

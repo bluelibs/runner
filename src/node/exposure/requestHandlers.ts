@@ -20,15 +20,13 @@ import type {
   NodeExposureHttpCorsConfig,
 } from "./resourceTypes";
 import { applyCorsActual, handleCorsPreflight } from "./cors";
-import {
-  computeAllowList,
-  type AllowListSelectorErrorInfo,
-} from "../tunnel/allowlist";
 import { createTaskHandler } from "./handlers/taskHandler";
 import { createEventHandler } from "./handlers/eventHandler";
 import { safeLogWarn } from "./logging";
 import { ensureRequestId, getRequestId } from "./requestIdentity";
 import type { MultipartLimits } from "./multipart";
+import type { NodeExposurePolicySnapshot } from "./policy";
+import { EMPTY_NODE_EXPOSURE_POLICY } from "./policy";
 
 enum ExposureAuditLogKey {
   AuthFailure = "exposure.auth.failure",
@@ -49,6 +47,16 @@ export interface RequestProcessingDeps {
     multipart?: MultipartLimits;
   };
   disableDiscovery?: boolean;
+  policy?: NodeExposurePolicySnapshot;
+  sourceResourceId?: string;
+  authorizeTask?: (
+    req: IncomingMessage,
+    taskId: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
+  authorizeEvent?: (
+    req: IncomingMessage,
+    eventId: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
 }
 
 export interface NodeExposureRequestHandlers {
@@ -71,6 +79,7 @@ export function createRequestHandlers(
     router,
     limits,
   } = deps;
+  const policy = deps.policy ?? EMPTY_NODE_EXPOSURE_POLICY;
   const serializer = deps.serializer;
   const cors = deps.cors;
 
@@ -80,24 +89,6 @@ export function createRequestHandlers(
     if (!error || typeof error !== "object") return;
     const code = (error as { code?: unknown }).code;
     return typeof code === "string" ? code : undefined;
-  };
-
-  const reportAllowListSelectorError = ({
-    selectorKind,
-    candidateId,
-    tunnelResourceId,
-    error,
-  }: AllowListSelectorErrorInfo) => {
-    safeLogWarn(
-      logger,
-      "[runner] Tunnel allow-list selector failed; item skipped.",
-      {
-        selectorKind,
-        candidateId,
-        tunnelResourceId,
-        error: error instanceof Error ? error : new Error(String(error)),
-      },
-    );
   };
 
   const auditedAuthenticator: Authenticator = async (req) => {
@@ -119,17 +110,10 @@ export function createRequestHandlers(
     ensureRequestId(req, res);
   };
 
-  const resolveTaskAllowAsyncContext = (taskId: string): boolean => {
-    const list = computeAllowList(store, reportAllowListSelectorError);
-    const tunnelDecision = list.taskAcceptsAsyncContext.get(taskId);
-    return tunnelDecision ?? true;
-  };
-
-  const resolveEventAllowAsyncContext = (eventId: string): boolean => {
-    const list = computeAllowList(store, reportAllowListSelectorError);
-    const tunnelDecision = list.eventAcceptsAsyncContext.get(eventId);
-    return tunnelDecision ?? true;
-  };
+  const resolveAllowAsyncContext = (
+    id: string,
+    decisions: Readonly<Record<string, boolean>>,
+  ): boolean => decisions[id] ?? true;
 
   const processTaskRequest = createTaskHandler({
     store,
@@ -141,7 +125,12 @@ export function createRequestHandlers(
     cors,
     serializer,
     limits,
-    allowAsyncContext: resolveTaskAllowAsyncContext,
+    allowAsyncContext: (taskId) =>
+      resolveAllowAsyncContext(taskId, policy.taskAllowAsyncContext),
+    resolveAsyncContextAllowList: (taskId) =>
+      policy.taskAsyncContextAllowList[taskId],
+    authorizeTask: deps.authorizeTask,
+    sourceResourceId: deps.sourceResourceId,
   });
 
   const processEventRequest = createEventHandler({
@@ -153,7 +142,12 @@ export function createRequestHandlers(
     cors,
     serializer,
     limits,
-    allowAsyncContext: resolveEventAllowAsyncContext,
+    allowAsyncContext: (eventId) =>
+      resolveAllowAsyncContext(eventId, policy.eventAllowAsyncContext),
+    resolveAsyncContextAllowList: (eventId) =>
+      policy.eventAsyncContextAllowList[eventId],
+    authorizeEvent: deps.authorizeEvent,
+    sourceResourceId: deps.sourceResourceId,
   });
 
   const handleTask = async (req: IncomingMessage, res: ServerResponse) => {
@@ -201,16 +195,15 @@ export function createRequestHandlers(
       respondJson(res, auth.response, serializer);
       return;
     }
-    const list = computeAllowList(store, reportAllowListSelectorError);
     applyCorsActual(req, res, cors);
     respondJson(
       res,
       jsonOkResponse({
         result: {
           allowList: {
-            enabled: list.enabled,
-            tasks: Array.from(list.taskIds),
-            events: Array.from(list.eventIds),
+            enabled: policy.enabled,
+            tasks: [...policy.taskIds],
+            events: [...policy.eventIds],
           },
         },
       }),

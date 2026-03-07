@@ -2,6 +2,7 @@ import { clearTimeout, setTimeout } from "node:timers";
 import * as crypto from "node:crypto";
 import { RunnerError } from "../../../definers/defineError";
 import { durableExecutionError, RunnerErrorId } from "../../../errors";
+import { symbolDefinitionIdentity } from "../../../types/symbols";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -93,6 +94,8 @@ export class DurableExecutionError extends RunnerError<{
         causeInfo,
       },
       durableExecutionError.httpCode,
+      undefined,
+      durableExecutionError[symbolDefinitionIdentity],
     );
   }
 }

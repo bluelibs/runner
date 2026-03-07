@@ -18,7 +18,15 @@ import {
   unknownMiddlewareTypeError,
   parallelInitSchedulingError,
   platformUnreachableError,
-  dashboardApiRequestError,
+  eventLaneEventNotRegisteredError,
+  eventLaneRpcLaneConflictError,
+  eventLaneAssignmentConflictError,
+  rpcLaneTaskAssignmentConflictError,
+  overrideOutOfScopeError,
+  remoteLaneAuthSignerMissingError,
+  remoteLaneAuthVerifierMissingError,
+  resourceForkGatewayUnsupportedError,
+  resourceForkNonLeafUnsupportedError,
 } from "../../errors";
 
 describe("error helpers extra branches", () => {
@@ -69,6 +77,23 @@ describe("error helpers extra branches", () => {
       fail("Expected throw");
     } catch (e: any) {
       expect(String(e?.message)).toContain("Platform function not supported");
+    }
+  });
+
+  it("overrideOutOfScopeError omits owner details when ownerResourceId is absent", () => {
+    expect.assertions(2);
+    try {
+      overrideOutOfScopeError.throw({
+        sourceId: "tests.override.source",
+        targetId: "tests.override.target",
+        targetType: "Task",
+      });
+      fail("Expected throw");
+    } catch (e: any) {
+      expect(String(e?.message)).toContain(
+        'Resource "tests.override.source" cannot override Task "tests.override.target" because it is outside that resource\'s registration subtree.',
+      );
+      expect(String(e?.message)).not.toContain("It belongs to resource");
     }
   });
 
@@ -126,9 +151,68 @@ describe("error helpers extra branches", () => {
       ).toContain("unreachable branch");
       expect(
         captureMessage(() =>
-          dashboardApiRequestError.throw({ message: "dashboard failed" }),
+          eventLaneEventNotRegisteredError.throw({ eventId: "evt.missing" }),
         ),
-      ).toContain("dashboard failed");
+      ).toContain('unknown event "evt.missing"');
+      expect(
+        captureMessage(() =>
+          eventLaneRpcLaneConflictError.throw({
+            eventId: "evt.lanes.invalid",
+            eventLaneTagId: "tags.eventLane",
+            rpcLaneTagId: "tags.rpcLane",
+          }),
+        ),
+      ).toContain('Event "evt.lanes.invalid" cannot define both lane tags');
+      expect(
+        captureMessage(() =>
+          rpcLaneTaskAssignmentConflictError.throw({
+            taskId: "task.double-lane",
+            currentLaneId: "rpc.a",
+            attemptedLaneId: "rpc.b",
+          }),
+        ),
+      ).toContain('Task "task.double-lane" is already assigned');
+      expect(
+        captureMessage(() =>
+          eventLaneAssignmentConflictError.throw({
+            eventId: "evt.double-lane",
+            currentLaneId: "event.a",
+            attemptedLaneId: "event.b",
+          }),
+        ),
+      ).toContain('Event "evt.double-lane" is already assigned');
+      expect(
+        captureMessage(() =>
+          remoteLaneAuthSignerMissingError.throw({
+            laneId: "lane.h",
+            mode: "jwt_hmac",
+          }),
+        ),
+      ).toContain("auth.secret (or auth.produceSecret)");
+      expect(
+        captureMessage(() =>
+          remoteLaneAuthSignerMissingError.throw({
+            laneId: "lane.a",
+            mode: "jwt_asymmetric",
+          }),
+        ),
+      ).toContain("auth.privateKey");
+      expect(
+        captureMessage(() =>
+          remoteLaneAuthVerifierMissingError.throw({
+            laneId: "lane.h",
+            mode: "jwt_hmac",
+          }),
+        ),
+      ).toContain("auth.secret (or auth.consumeSecret)");
+      expect(
+        captureMessage(() =>
+          remoteLaneAuthVerifierMissingError.throw({
+            laneId: "lane.a",
+            mode: "jwt_asymmetric",
+          }),
+        ),
+      ).toContain("auth.publicKey or auth.publicKeysByKid");
     });
 
     it("includes remediation advice in the message", () => {
@@ -156,7 +240,7 @@ describe("error helpers extra branches", () => {
     it("includes data-dependent remediation for duplicateRegistration", () => {
       expect.assertions(2);
       try {
-        duplicateRegistrationError.throw({ type: "Task", id: "test.task" });
+        duplicateRegistrationError.throw({ type: "Task", id: "test-task" });
         fail("Expected throw");
       } catch (e: any) {
         expect(e.remediation).toContain("Task");
@@ -179,7 +263,35 @@ describe("error helpers extra branches", () => {
         );
         expect(e.message).toContain("tests.app");
         expect(e.remediation).toContain(".register([...])");
-        expect(e.remediation).toContain('.fork("new.id")');
+        expect(e.remediation).toContain(
+          'Leaf resources can use .fork("new-id")',
+        );
+      }
+    });
+
+    it("includes fork remediation for gateway-resource fork failures", () => {
+      expect.assertions(3);
+      try {
+        resourceForkGatewayUnsupportedError.throw({ id: "http-gateway" });
+        fail("Expected throw");
+      } catch (e: any) {
+        expect(e.message).toContain('Resource "http-gateway" cannot be forked');
+        expect(e.message).toContain("namespace segment");
+        expect(e.remediation).toContain("Do not call .fork()");
+      }
+    });
+
+    it("includes composition remediation for non-leaf fork failures", () => {
+      expect.assertions(3);
+      try {
+        resourceForkNonLeafUnsupportedError.throw({ id: "mailers" });
+        fail("Expected throw");
+      } catch (e: any) {
+        expect(e.message).toContain(
+          'Resource "mailers" cannot be forked because it registers children',
+        );
+        expect(e.remediation).toContain("non-leaf resource");
+        expect(e.remediation).toContain("dedicated factory API");
       }
     });
 

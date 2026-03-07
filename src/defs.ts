@@ -20,11 +20,17 @@ export * from "./types/tag";
 export * from "./types/hook";
 export * from "./types/resource";
 export * from "./types/event";
+export * from "./types/eventLane";
+export * from "./types/rpcLane";
+export * from "./types/remoteLaneAuth";
 export * from "./types/task";
 export * from "./types/taskMiddleware";
 export * from "./types/resourceMiddleware";
+export * from "./types/subtree";
+export * from "./types/taskRunner";
 export * from "./types/meta";
 export * from "./types/runner";
+export * from "./types/runtimeSource";
 export * from "./types/asyncContext";
 export * from "./types/error";
 export * from "./types/contracts";
@@ -32,5 +38,5 @@ export * from "./types/tagged";
 export * from "./types/inputFile";
 
 // Useful other types that are kind-of spread out.
-export type { ICacheInstance } from "./globals/middleware/cache.middleware";
+export type { ICacheProvider } from "./globals/middleware/cache.middleware";
 export * from "./types/storeTypes";

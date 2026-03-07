@@ -1,28 +1,23 @@
 import {
-  IResource,
-  ITask,
-  AnyTask,
-  IResourceWithConfig,
-  RegisterableItems,
-  ITaskMiddleware,
-  IResourceMiddleware,
   IEvent,
-  ITag,
   IHook,
-  TaggedTask,
-  TaggedResource,
-  AnyResource,
-} from "../defs";
-import * as utils from "../define";
-import { unknownItemTypeError } from "../errors";
-import {
-  TaskStoreElementType,
+  IResource,
+  IResourceMiddleware,
+  IResourceWithConfig,
+  ITag,
+  ITask,
+  ITaskMiddleware,
+  RegisterableItems,
+  TagDependencyAccessor,
   TaskMiddlewareStoreElementType,
+  TaskStoreElementType,
   ResourceMiddlewareStoreElementType,
   ResourceStoreElementType,
   EventStoreElementType,
   HookStoreElementType,
+  symbolTagConfiguredFrom,
 } from "../defs";
+import { isResourceWithConfig } from "../define";
 import { StoreValidator } from "./StoreValidator";
 import { Store } from "./Store";
 import {
@@ -31,11 +26,59 @@ import {
 } from "./utils/buildDependencyGraph";
 import { IErrorHelper } from "../types/error";
 import type { IAsyncContext } from "../types/asyncContext";
-import { HookDependencyState } from "../types/storeTypes";
 import { LockableMap } from "../tools/LockableMap";
 import { VisibilityTracker } from "./VisibilityTracker";
+import { StoreRegistryDefinitionPreparer } from "./store-registry/StoreRegistryDefinitionPreparer";
+import { StoreRegistryTagIndex } from "./store-registry/StoreRegistryTagIndex";
+import { StoreRegistryWriter } from "./store-registry/StoreRegistryWriter";
+import { StoringMode, TagIndexBucket } from "./store-registry/types";
+import { validationError } from "../errors";
+import { getDefinitionIdentity } from "../tools/isSameDefinition";
 
-type StoringMode = "normal" | "override";
+/**
+ * Any object reference used as a definition identity key.
+ * Kept as `object` because WeakMap requires non-primitive keys
+ * and these functions work at the raw metadata layer before element type narrowing.
+ */
+type DefinitionReference = object;
+
+type DefinitionReferenceWithOptionalId = {
+  id?: unknown;
+};
+
+type DefinitionReferenceWithConfiguredFrom = {
+  [symbolTagConfiguredFrom]?: unknown;
+};
+
+function isObjectReference(value: unknown): value is DefinitionReference {
+  return (
+    (typeof value === "object" && value !== null) || typeof value === "function"
+  );
+}
+
+function getReferenceSourceId(
+  reference: DefinitionReference,
+): string | undefined {
+  if (!("id" in reference)) {
+    return undefined;
+  }
+
+  const sourceId = (reference as DefinitionReferenceWithOptionalId).id;
+  return typeof sourceId === "string" && sourceId.length > 0
+    ? sourceId
+    : undefined;
+}
+
+function getConfiguredFromReference(
+  reference: DefinitionReference,
+): DefinitionReference | undefined {
+  const configuredFrom = (reference as DefinitionReferenceWithConfiguredFrom)[
+    symbolTagConfiguredFrom
+  ];
+
+  return isObjectReference(configuredFrom) ? configuredFrom : undefined;
+}
+
 export class StoreRegistry {
   public tasks = new LockableMap<string, TaskStoreElementType>("tasks");
   public resources = new LockableMap<string, ResourceStoreElementType>(
@@ -57,15 +100,228 @@ export class StoreRegistry {
   );
   public errors = new LockableMap<string, IErrorHelper<any>>("errors");
   public readonly visibilityTracker = new VisibilityTracker();
+  private readonly definitionAliases = new WeakMap<
+    DefinitionReference,
+    string
+  >();
+  private readonly definitionIdentityAliases = new WeakMap<
+    DefinitionReference,
+    string
+  >();
+  private readonly definitionAliasesBySourceId = new Map<string, Set<string>>();
+  private readonly sourceIdsByCanonicalId = new Map<string, Set<string>>();
 
-  private validator: StoreValidator;
+  // Kept on the registry for backward compatibility in tests/tools.
+  public readonly tagIndex: Map<string, TagIndexBucket>;
+
+  private readonly validator: StoreValidator;
+  private readonly tagIndexer: StoreRegistryTagIndex;
+  private readonly writer: StoreRegistryWriter;
 
   constructor(protected readonly store: Store) {
+    const lookupResolver = (key: string): string | undefined =>
+      this.resolveDefinitionId(key);
+    this.tasks.setLookupResolver(lookupResolver);
+    this.resources.setLookupResolver(lookupResolver);
+    this.events.setLookupResolver(lookupResolver);
+    this.taskMiddlewares.setLookupResolver(lookupResolver);
+    this.resourceMiddlewares.setLookupResolver(lookupResolver);
+    this.hooks.setLookupResolver(lookupResolver);
+    this.tags.setLookupResolver(lookupResolver);
+    this.asyncContexts.setLookupResolver(lookupResolver);
+    this.errors.setLookupResolver(lookupResolver);
+
     this.validator = new StoreValidator(this);
+
+    this.tagIndexer = new StoreRegistryTagIndex(
+      {
+        tasks: this.tasks,
+        resources: this.resources,
+        events: this.events,
+        hooks: this.hooks,
+        taskMiddlewares: this.taskMiddlewares,
+        resourceMiddlewares: this.resourceMiddlewares,
+        errors: this.errors,
+        tags: this.tags,
+      },
+      this.visibilityTracker,
+      (reference) => this.resolveDefinitionId(reference),
+    );
+    this.tagIndex = this.tagIndexer.index;
+
+    this.writer = new StoreRegistryWriter(
+      {
+        tasks: this.tasks,
+        resources: this.resources,
+        events: this.events,
+        taskMiddlewares: this.taskMiddlewares,
+        resourceMiddlewares: this.resourceMiddlewares,
+        hooks: this.hooks,
+        tags: this.tags,
+        asyncContexts: this.asyncContexts,
+        errors: this.errors,
+      },
+      this.validator,
+      this.visibilityTracker,
+      this.tagIndexer,
+      new StoreRegistryDefinitionPreparer(),
+      {
+        registerDefinitionAlias: (reference, canonicalId) =>
+          this.registerDefinitionAlias(reference, canonicalId),
+        resolveDefinitionId: (reference) => this.resolveDefinitionId(reference),
+      },
+    );
   }
 
   getValidator(): StoreValidator {
     return this.validator;
+  }
+
+  registerDefinitionAlias(reference: unknown, canonicalId: string): void {
+    if (!isObjectReference(reference)) {
+      return;
+    }
+
+    const existing = this.definitionAliases.get(reference);
+    if (existing && existing !== canonicalId) {
+      validationError.throw({
+        subject: "Definition alias",
+        id: canonicalId,
+        originalError: `Definition reference is already mapped to "${existing}" and cannot be remapped to "${canonicalId}". Use .fork() for distinct registrations.`,
+      });
+    }
+
+    this.definitionAliases.set(reference, canonicalId);
+    this.recordDefinitionIdentityAlias(reference, canonicalId);
+    this.recordSourceIdAlias(reference, canonicalId);
+    this.recordCanonicalSourceId(reference, canonicalId);
+  }
+
+  resolveDefinitionId(reference: unknown): string | undefined {
+    if (typeof reference === "string") {
+      return this.resolveUniqueSourceIdAlias(reference) ?? reference;
+    }
+
+    if (!isObjectReference(reference)) {
+      return undefined;
+    }
+
+    const mapped = this.definitionAliases.get(reference);
+    if (mapped) {
+      return mapped;
+    }
+
+    const identity = getDefinitionIdentity(reference);
+    if (identity) {
+      const byIdentity = this.definitionIdentityAliases.get(identity);
+      if (byIdentity) {
+        return byIdentity;
+      }
+    }
+
+    const configuredFrom = getConfiguredFromReference(reference);
+    if (configuredFrom) {
+      const byConfiguredFrom = this.definitionAliases.get(configuredFrom);
+      if (byConfiguredFrom) {
+        return byConfiguredFrom;
+      }
+    }
+
+    if (isResourceWithConfig(reference)) {
+      const byResource = this.definitionAliases.get(reference.resource);
+      if (byResource) {
+        return byResource;
+      }
+      return reference.resource.id;
+    }
+
+    const sourceId = getReferenceSourceId(reference);
+    if (sourceId) {
+      return this.resolveUniqueSourceIdAlias(sourceId) ?? sourceId;
+    }
+
+    return undefined;
+  }
+
+  private recordDefinitionIdentityAlias(
+    reference: DefinitionReference,
+    canonicalId: string,
+  ): void {
+    const identity = getDefinitionIdentity(reference);
+    if (!identity) {
+      return;
+    }
+
+    const existing = this.definitionIdentityAliases.get(identity);
+    if (existing && existing !== canonicalId) {
+      validationError.throw({
+        subject: "Definition identity alias",
+        id: canonicalId,
+        originalError: `Definition identity is already mapped to "${existing}" and cannot be remapped to "${canonicalId}". Use .fork() for distinct registrations.`,
+      });
+    }
+
+    this.definitionIdentityAliases.set(identity, canonicalId);
+  }
+
+  private recordSourceIdAlias(
+    reference: DefinitionReference,
+    canonicalId: string,
+  ): void {
+    const sourceId = getReferenceSourceId(reference);
+    if (!sourceId) {
+      return;
+    }
+
+    const existing = this.definitionAliasesBySourceId.get(sourceId);
+    if (existing) {
+      existing.add(canonicalId);
+      return;
+    }
+
+    this.definitionAliasesBySourceId.set(sourceId, new Set([canonicalId]));
+  }
+
+  private recordCanonicalSourceId(
+    reference: DefinitionReference,
+    canonicalId: string,
+  ): void {
+    const sourceId = getReferenceSourceId(reference);
+    if (!sourceId) {
+      return;
+    }
+
+    const existing = this.sourceIdsByCanonicalId.get(canonicalId);
+    if (existing) {
+      existing.add(sourceId);
+      return;
+    }
+
+    this.sourceIdsByCanonicalId.set(canonicalId, new Set([sourceId]));
+  }
+
+  private resolveUniqueSourceIdAlias(sourceId: string): string | undefined {
+    const candidates = this.definitionAliasesBySourceId.get(sourceId);
+    if (!candidates || candidates.size !== 1) {
+      return undefined;
+    }
+
+    return candidates.values().next().value as string;
+  }
+
+  getDisplayId(id: string): string {
+    const sourceIds = this.sourceIdsByCanonicalId.get(id);
+    if (!sourceIds || sourceIds.size === 0) {
+      return id;
+    }
+
+    for (const sourceId of sourceIds) {
+      if (sourceId !== id) {
+        return sourceId;
+      }
+    }
+
+    return sourceIds.values().next().value as string;
   }
 
   /** Lock every map in the registry, preventing further mutations. */
@@ -82,196 +338,68 @@ export class StoreRegistry {
   }
 
   storeGenericItem<_C>(item: RegisterableItems) {
-    if (utils.isTask(item)) {
-      this.storeTask<_C>(item);
-    } else if (utils.isError(item)) {
-      this.storeError<_C>(item as IErrorHelper<any>);
-    } else if (utils.isHook && utils.isHook(item)) {
-      this.storeHook<_C>(item as IHook);
-    } else if (utils.isResource(item)) {
-      this.storeResource<_C>(item);
-    } else if (utils.isEvent(item)) {
-      this.storeEvent<_C>(item);
-    } else if (utils.isAsyncContext(item)) {
-      this.storeAsyncContext<_C>(item as IAsyncContext<any>);
-    } else if (utils.isTaskMiddleware(item)) {
-      this.storeTaskMiddleware<_C>(item as ITaskMiddleware<any>);
-    } else if (utils.isResourceMiddleware(item)) {
-      this.storeResourceMiddleware<_C>(item as IResourceMiddleware<any>);
-    } else if (utils.isResourceWithConfig(item)) {
-      this.storeResourceWithConfig<_C>(item);
-    } else if (utils.isTag(item)) {
-      this.storeTag(item);
-    } else {
-      unknownItemTypeError.throw({ item });
-    }
+    return this.writer.storeGenericItem<_C>(item);
   }
 
   storeError<_C>(item: IErrorHelper<any>) {
-    this.validator.checkIfIDExists(item.id);
-    this.errors.set(item.id, item);
+    return this.writer.storeError<_C>(item);
   }
 
   storeAsyncContext<_C>(item: IAsyncContext<any>) {
-    this.validator.checkIfIDExists(item.id);
-    this.asyncContexts.set(item.id, item);
+    return this.writer.storeAsyncContext<_C>(item);
   }
 
   storeTag(item: ITag<any, any, any>) {
-    this.validator.checkIfIDExists(item.id);
-    this.tags.set(item.id, item);
+    return this.writer.storeTag(item);
   }
 
   storeHook<_C>(item: IHook<any, any>, overrideMode: StoringMode = "normal") {
-    overrideMode === "normal" && this.validator.checkIfIDExists(item.id);
-
-    const hook = this.getFreshValue(item, this.hooks, "hook", overrideMode);
-
-    // store separately
-    this.hooks.set(hook.id, {
-      hook,
-      computedDependencies: {},
-      dependencyState: HookDependencyState.Pending,
-    });
+    return this.writer.storeHook<_C>(item, overrideMode);
   }
 
   storeTaskMiddleware<_C>(
     item: ITaskMiddleware<any>,
     storingMode: StoringMode = "normal",
   ) {
-    storingMode === "normal" && this.validator.checkIfIDExists(item.id);
-
-    const middleware = this.getFreshValue(
-      item,
-      this.taskMiddlewares,
-      "middleware",
-      storingMode,
-    );
-
-    this.taskMiddlewares.set(item.id, {
-      middleware,
-      computedDependencies: {},
-      isInitialized: false,
-    });
+    return this.writer.storeTaskMiddleware<_C>(item, storingMode);
   }
 
   storeResourceMiddleware<_C>(
     item: IResourceMiddleware<any>,
     overrideMode: StoringMode = "normal",
   ) {
-    overrideMode === "normal" && this.validator.checkIfIDExists(item.id);
-    const middleware = this.getFreshValue(
-      item,
-      this.resourceMiddlewares,
-      "middleware",
-      overrideMode,
-    );
-
-    this.resourceMiddlewares.set(item.id, {
-      middleware,
-      computedDependencies: {},
-      isInitialized: false,
-    });
+    return this.writer.storeResourceMiddleware<_C>(item, overrideMode);
   }
 
   storeEvent<_C>(item: IEvent<void>) {
-    this.validator.checkIfIDExists(item.id);
-    this.events.set(item.id, { event: item });
+    return this.writer.storeEvent<_C>(item);
   }
 
   storeResourceWithConfig<_C>(
     item: IResourceWithConfig<any, any, any>,
     storingMode: StoringMode = "normal",
   ) {
-    storingMode === "normal" &&
-      this.validator.checkIfIDExists(item.resource.id);
-
-    const prepared = this.getFreshValue(
-      item.resource,
-      this.resources,
-      "resource",
-      storingMode,
-      item.config,
-    );
-
-    this.resources.set(prepared.id, {
-      resource: prepared,
-      config: item.config,
-      value: undefined,
-      isInitialized: false,
-      context: undefined,
-    });
-
-    this.computeRegistrationDeeply(prepared, item.config);
-    return prepared;
+    return this.writer.storeResourceWithConfig<_C>(item, storingMode);
   }
 
   computeRegistrationDeeply<_C>(element: IResource<_C>, config?: _C) {
-    let items =
-      typeof element.register === "function"
-        ? element.register(config as _C)
-        : element.register;
-
-    if (!items) {
-      items = [];
-    }
-
-    element.register = items;
-
-    for (const item of items) {
-      // Track which resource owns each registered item
-      this.visibilityTracker.recordOwnership(element.id, item);
-      // will call registration if it detects another resource.
-      this.storeGenericItem<_C>(item);
-    }
-
-    // Record exports after all items are registered so ids are available
-    if (element.exports) {
-      this.visibilityTracker.recordExports(element.id, element.exports);
-    }
+    return this.writer.computeRegistrationDeeply(element, config);
   }
 
   storeResource<_C>(
     item: IResource<any, any, any>,
     overrideMode: StoringMode = "normal",
   ) {
-    overrideMode === "normal" && this.validator.checkIfIDExists(item.id);
-
-    const prepared = this.getFreshValue(
-      item,
-      this.resources,
-      "resource",
-      overrideMode,
-    );
-
-    this.resources.set(prepared.id, {
-      resource: prepared,
-      config: {},
-      value: undefined,
-      isInitialized: false,
-      context: undefined,
-    });
-
-    this.computeRegistrationDeeply(prepared, {});
-    return prepared;
+    return this.writer.storeResource<_C>(item, overrideMode);
   }
 
   storeTask<_C>(
     item: ITask<any, any, {}>,
     storingMode: StoringMode = "normal",
   ) {
-    storingMode === "normal" && this.validator.checkIfIDExists(item.id);
-
-    const task = this.getFreshValue(item, this.tasks, "task", storingMode);
-
-    this.tasks.set(task.id, {
-      task,
-      computedDependencies: {},
-      isInitialized: false,
-    });
+    return this.writer.storeTask<_C>(item, storingMode);
   }
 
-  // Feels like a dependencyProcessor task?
   getDependentNodes() {
     return buildDependencyGraph(this);
   }
@@ -284,65 +412,26 @@ export class StoreRegistry {
     return buildEmissionGraph(this);
   }
 
-  getTasksWithTag<TTag extends ITag<any, any, any>>(
+  getTagAccessor<TTag extends ITag<any, any, any>>(
     tag: TTag,
-  ): TaggedTask<TTag>[];
-  getTasksWithTag(tag: string): AnyTask[];
-  getTasksWithTag(tag: string | ITag<any, any, any>): AnyTask[] {
-    const tagId = typeof tag === "string" ? tag : tag.id;
-
-    return Array.from(this.tasks.values())
-      .filter((x) => {
-        return x.task.tags.some((t) => t.id === tagId);
-      })
-      .map((x) => x.task);
-  }
-
-  getResourcesWithTag<TTag extends ITag<any, any, any>>(
-    tag: TTag,
-  ): TaggedResource<TTag>[];
-  getResourcesWithTag(tag: string): AnyResource[];
-  getResourcesWithTag(tag: string | ITag<any, any, any>): AnyResource[] {
-    const tagId = typeof tag === "string" ? tag : tag.id;
-
-    return Array.from(this.resources.values())
-      .filter((x) => {
-        return x.resource.tags.some((t) => t.id === tagId);
-      })
-      .map((x) => x.resource);
-  }
-
-  /**
-   * Used to fetch the value cloned, and if we're dealing with an override, we need to extend the previous value.
-   */
-  private getFreshValue<
-    T extends { id: string; dependencies?: unknown; config?: unknown },
-    MapType,
-  >(
-    item: T,
-    collection: Map<string, MapType>,
-    key: keyof MapType,
-    overrideMode: StoringMode,
-    config?: unknown, // If provided config, takes precedence over config in item.
-  ): T {
-    let currentItem: T;
-    if (overrideMode === "override") {
-      const existing = collection.get(item.id)![key];
-      currentItem = { ...existing, ...item };
-    } else {
-      currentItem = { ...item };
+    options?: { consumerId?: string; includeSelf?: boolean },
+  ): TagDependencyAccessor<TTag> {
+    const normalizedOptions = options?.consumerId
+      ? {
+          ...options,
+          consumerId:
+            this.resolveDefinitionId(options.consumerId) ?? options.consumerId,
+        }
+      : options;
+    const resolvedTagId = this.resolveDefinitionId(tag);
+    if (!resolvedTagId || resolvedTagId === tag.id) {
+      return this.tagIndexer.getTagAccessor(tag, normalizedOptions);
     }
 
-    if (typeof currentItem.dependencies === "function") {
-      const dependencyFactory = currentItem.dependencies as (
-        cfg: unknown,
-      ) => unknown;
-      const effectiveConfig = config ?? currentItem.config;
-      currentItem.dependencies = dependencyFactory(
-        effectiveConfig,
-      ) as T["dependencies"];
-    }
-
-    return currentItem;
+    const canonicalTag = {
+      ...tag,
+      id: resolvedTagId,
+    } as TTag;
+    return this.tagIndexer.getTagAccessor(canonicalTag, normalizedOptions);
   }
 }

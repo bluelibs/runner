@@ -7,7 +7,7 @@ describe("durable: audit helpers", () => {
   it("detects internal step ids", () => {
     expect(isDurableInternalStepId("__sleep:0")).toBe(true);
     expect(isDurableInternalStepId("rollback:s1")).toBe(true);
-    expect(isDurableInternalStepId("user.step")).toBe(false);
+    expect(isDurableInternalStepId("user-step")).toBe(false);
   });
 
   it("generates sortable audit entry ids", () => {

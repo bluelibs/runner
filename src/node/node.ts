@@ -1,13 +1,27 @@
 // Node entry point
 // Re-export the full public API so Node consumers get the same base surface.
-export * from "../public";
+import { resources as baseResources, tags as baseTags } from "../public";
+import { registerRpcLaneHttpPresetsForNode } from "./rpc-lanes/registerRpcLaneHttpPresets";
+import { durableSupportResource } from "./durable/resources/durable.resource";
+import { durableWorkflowTag } from "./durable/tags/durableWorkflow.tag";
+import { memoryDurableResource } from "./durable/resources/memoryDurableResource";
+import { redisDurableResource } from "./durable/resources/redisDurableResource";
 
-export { nodeExposure } from "./exposure";
-export {
-  hasExposureContext,
-  useExposureContext,
-} from "./exposure/requestContext";
-export type * from "./exposure/resourceTypes";
+registerRpcLaneHttpPresetsForNode();
+
+export const resources = Object.freeze({
+  ...baseResources,
+  durable: durableSupportResource,
+  memoryWorkflow: memoryDurableResource,
+  redisWorkflow: redisDurableResource,
+});
+
+export const tags = Object.freeze({
+  ...baseTags,
+  durableWorkflow: durableWorkflowTag,
+});
+
+export * from "../public";
 export { createNodeFile, NodeInputFile } from "./files";
 export type { NodeReadable } from "./files";
 export { readInputFileToBuffer, writeInputFileToPath } from "./files";
@@ -25,3 +39,5 @@ export type {
   Readable,
 } from "./http";
 export * from "./durable";
+export * from "./event-lanes";
+export * from "./rpc-lanes";

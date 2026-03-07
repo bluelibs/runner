@@ -1,20 +1,19 @@
 {
   "name": "test-with-module",
   "version": "1.0.0",
-  "description": "",
-  "license": "ISC",
-  "author": "",
-  "type": "module",
-  "main": "index.js",
+  "private": true,
+  "description": "Runner example with local IDs in a Node module package.",
+  "type": "commonjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "check": "npm run build && node dist/index.js",
-    "build": "tsc"
+    "build": "tsc -p .",
+    "start": "npm run build && node dist/index.js",
+    "check": "npm run start"
   },
   "devDependencies": {
+    "@types/node": "^20.11.30",
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@bluelibs/runner": "^5.2.0"
+    "@bluelibs/runner": "file:../.."
   }
 }

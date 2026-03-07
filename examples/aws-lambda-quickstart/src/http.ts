@@ -1,3 +1,5 @@
+import { AnyApiGatewayEvent } from "./types/aws";
+
 export type APIGatewayProxyResult = {
   statusCode: number;
   headers: Record<string, string>;
@@ -33,11 +35,20 @@ export function preflight(method: string): APIGatewayProxyResult | null {
   return null;
 }
 
-export function parseEvent<TBody = unknown>(event: any) {
+export function parseEvent<TBody = unknown>(
+  event: AnyApiGatewayEvent,
+): {
+  method: string;
+  path: string;
+  headers: Record<string, string | undefined>;
+  rawBody: string | undefined;
+  body: TBody | undefined;
+  contentType: string;
+} {
   const method =
     event?.requestContext?.http?.method ?? event?.httpMethod ?? "GET";
   const path = event?.rawPath || event?.path || "/";
-  const headers = event?.headers || {};
+  const headers = event?.headers ?? {};
   const contentType = String(
     headers["content-type"] || headers["Content-Type"] || "",
   );
@@ -55,22 +66,28 @@ export function parseEvent<TBody = unknown>(event: any) {
   return { method, path, headers, rawBody, body, contentType } as const;
 }
 
-function safelyParseJSON(s: string): unknown | undefined {
+function safelyParseJSON(value: string): unknown | undefined {
   try {
-    return JSON.parse(s);
+    return JSON.parse(value);
   } catch {
     return undefined;
   }
 }
 
-export function errorToResponse(err: any): APIGatewayProxyResult {
+export function errorToResponse(err: unknown): APIGatewayProxyResult {
+  const message =
+    err && typeof err === "object" && "message" in err
+      ? String(err.message)
+      : String(err);
+
   // Map Runner validation errors to 400; everything else 500
   if (
     err &&
-    (err.name === "ValidationError" ||
-      /validation failed/i.test(String(err?.message)))
+    typeof err === "object" &&
+    "name" in err &&
+    (err.name === "ValidationError" || /validation failed/i.test(message))
   ) {
-    return json(400, { message: "Invalid input", error: String(err) });
+    return json(400, { message: "Invalid input", error: message });
   }
-  return json(500, { message: "Internal error", error: String(err) });
+  return json(500, { message: "Internal error", error: message });
 }

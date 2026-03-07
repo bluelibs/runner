@@ -1,4 +1,4 @@
-import { createContext, task, run, resource } from "../../index";
+import { createContext, defineResource, defineTask, run } from "../../index";
 import { Logger } from "../../models/Logger";
 import { CONTRACT } from "../../types/contracts";
 
@@ -6,8 +6,8 @@ describe("Context System", () => {
   const TestContext = createContext<{ id: string }>();
 
   test("useContext throws when missing", async () => {
-    const r = resource({
-      id: "test.context.use",
+    const r = defineResource({
+      id: "test-context-use",
       register: [TestContext],
       init: async () => TestContext.use(),
     });
@@ -27,13 +27,13 @@ describe("Context System", () => {
   });
 
   test("require middleware blocks missing context", async () => {
-    const t = task({
+    const t = defineTask({
       id: "task",
       middleware: [TestContext.require()],
       run: async () => "ok",
     });
 
-    const r = resource({
+    const r = defineResource({
       id: "resource",
       register: [t, TestContext],
       dependencies: { t },

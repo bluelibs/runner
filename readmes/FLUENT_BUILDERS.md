@@ -36,6 +36,29 @@ Quick rules of thumb:
 - For resources, repeated `.overrides()` calls append by default; pass `{ override: true }` to replace.
 - For resources, tasks, hooks and middleware, repeated `.dependencies()` calls append (shallow merge) by default; pass `{ override: true }` to replace. Mixed function/object deps are supported and merged consistently.
 
+## Strict Chain Constraints (v1)
+
+Runner enforces compile-time chain phases for `r.task`, `r.hook`, `r.resource`, and middleware builders.
+
+- `task`: after `.run()`, these are locked: `.dependencies()`, `.inputSchema()`/`.schema()`, `.resultSchema()`, `.middleware()`, `.tags()`. `.meta()`, `.throws()`, `.build()` remain valid.
+- `hook`: `.run()` requires `.on(...)` first. After `.run()`, these are locked: `.on()`, `.dependencies()`, `.tags()`. `.build()` requires both `.on()` and `.run()`.
+- `middleware` (`task` and `resource`): after `.run()`, these are locked: `.dependencies()`, `.configSchema()`/`.schema()`, `.tags()`. `.build()` requires `.run()`.
+- `resource`: after `.init()`, these are locked: `.dependencies()`, `.configSchema()`/`.schema()`, `.resultSchema()`, `.middleware()`, `.tags()`, `.context()`. `.init()` stays optional.
+
+Examples:
+
+```ts
+r.task("ok")
+  .run(async () => "ok")
+  .meta({ title: "x" })
+  .throws([])
+  .build(); // valid
+
+r.task("nope")
+  .run(async () => "ok")
+  .tags([]); // TypeScript error
+```
+
 ---
 
 ## Resources
@@ -143,35 +166,6 @@ const calc = r
   .build();
 ```
 
-### Phantom Tasks
-
-Create a task that is intended to be routed through a tunnel (HTTP or custom). When run locally without a matching tunnel, it throws `runner.errors.phantomTaskNotRouted`. Use it to strongly type calls to remote services.
-
-```ts
-// Define a phantom task with typed input and resolved result
-const remoteHello = r.task
-  .phantom<{ name: string }, string>("app.tasks.remoteHello")
-  .build();
-
-// Register a tunnel that can execute it remotely
-const tunnel = r
-  .resource("app.tunnels.client")
-  .tags([globals.tags.tunnel])
-  .init(async () => ({
-    mode: "client" as const,
-    tasks: [remoteHello.id],
-    run: async (task, input) => `Hello ${input.name}!`,
-  }))
-  .build();
-
-const app = r.resource("app").register([remoteHello, tunnel]).build();
-```
-
-Notes:
-
-- Builder exposes the same knobs as normal tasks: `.dependencies()`, `.middleware()`, `.tags()`, `.meta()`, `.inputSchema()`, `.resultSchema()`.
-- The builder does not accept `.run()`; the runner injects a fail-fast function and brands the definition so tunnel middleware can intercept it.
-
 ---
 
 ## Events and Hooks
@@ -225,7 +219,6 @@ const tmw = r.middleware
   .configSchema<{ level: "info" | "warn" | "error" }>({ parse: (x: any) => x })
   .tags([])
   .meta({ title: "TaskLogger" } as any)
-  .everywhere(() => true)
   .run(async ({ next, task }, _deps, config) => {
     return next(task.input);
   })
@@ -241,12 +234,58 @@ const rmw = r.middleware
   .configSchema<{ ttl?: number }>({ parse: (x: any) => x })
   .tags([])
   .meta({ title: "ResourceWrapper" } as any)
-  .everywhere(() => true)
   .run(async ({ next }) => next())
   .build();
 ```
 
-Attach to resources or tasks via `.middleware([mw])` and ensure they're registered in a parent resource.
+Attach to resources or tasks via `.middleware([mw])`.
+
+For owner-scoped auto-application and governance, use resource subtree policies:
+
+```ts
+const app = r
+  .resource("app")
+  .subtree({
+    tasks: { middleware: [tmw] },
+    resources: { middleware: [rmw] },
+    hooks: {
+      validate: (hook) =>
+        hook.meta?.title
+          ? []
+          : [
+              {
+                code: "missing-meta-title",
+                message: "Hook meta.title required",
+              },
+            ],
+    },
+    taskMiddleware: { validate: (mw) => [] },
+    resourceMiddleware: { validate: (mw) => [] },
+    events: { validate: (event) => [] },
+    tags: { validate: (tag) => [] },
+  })
+  .build();
+```
+
+Conditional subtree middleware entries are also supported:
+
+```ts
+const appWithConditional = r
+  .resource("app.conditional")
+  .subtree({
+    tasks: {
+      middleware: [
+        {
+          use: tmw.with({ mode: "strict" }),
+          when: (task) => task.tags.some((tag) => tag.id === "app.tags.strict"),
+        },
+      ],
+    },
+  })
+  .build();
+```
+
+Use `taskRunner.intercept(interceptor, { when })` for cross-cutting catch-all task interception.
 
 Note on `.init()`:
 

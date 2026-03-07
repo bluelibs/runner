@@ -3,20 +3,23 @@ import type {
   ITaskDefinition,
   DependencyMapType,
   ITaskMeta,
-  TagType,
+  TaskTagType,
   IOptionalDependency,
   TaskMiddlewareAttachmentType,
-  IPhantomTask,
 } from "../types/task";
 import {
+  symbolDefinitionIdentity,
   symbolTask,
   symbolFilePath,
   symbolOptionalDependency,
-  symbolPhantomTask,
 } from "../types/symbols";
-import { phantomTaskNotRoutedError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
+import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import { assertDefinitionId } from "./assertDefinitionId";
+import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
+import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 /**
  * Define a task.
@@ -36,7 +39,7 @@ export function defineTask<
   Output extends Promise<any> = any,
   Deps extends DependencyMapType = any,
   TMeta extends ITaskMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends TaskTagType[] = TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[] =
     TaskMiddlewareAttachmentType[],
 >(
@@ -44,7 +47,27 @@ export function defineTask<
 ): ITask<Input, Output, Deps, TMeta, TTags, TMiddleware> {
   const filePath = getCallerFile();
   const id = taskConfig.id;
-  return {
+  assertDefinitionId("Task", id, {
+    allowReservedDottedNamespace: isFrameworkDefinitionMarked(taskConfig),
+  });
+  const inputSchema = normalizeOptionalValidationSchema(
+    taskConfig.inputSchema,
+    {
+      definitionId: id,
+      subject: "Task input",
+    },
+  );
+  const resultSchema = normalizeOptionalValidationSchema(
+    taskConfig.resultSchema,
+    {
+      definitionId: id,
+      subject: "Task result",
+    },
+  );
+  assertTagTargetsApplicableTo("tasks", "Task", id, taskConfig.tags);
+  const definitionIdentity = {};
+  return deepFreeze({
+    [symbolDefinitionIdentity]: definitionIdentity,
     [symbolTask]: true,
     [symbolFilePath]: filePath,
     id,
@@ -53,36 +76,20 @@ export function defineTask<
       taskConfig.middleware ||
       ([] as TaskMiddlewareAttachmentType[] as TMiddleware),
     run: taskConfig.run,
-    inputSchema: taskConfig.inputSchema,
-    resultSchema: taskConfig.resultSchema,
+    inputSchema,
+    resultSchema,
     meta: taskConfig.meta || ({} as TMeta),
-    tags: taskConfig.tags || ([] as TagType[] as TTags),
+    tags: taskConfig.tags || ([] as TaskTagType[] as TTags),
     throws: normalizeThrows({ kind: "task", id }, taskConfig.throws),
     // autorun,
     optional() {
-      return {
+      const wrapper = {
         inner: this,
         [symbolOptionalDependency]: true,
       } as IOptionalDependency<
         ITask<Input, Output, Deps, TMeta, TTags, TMiddleware>
       >;
+      return freezeIfLineageLocked(this, wrapper);
     },
-  };
-}
-
-defineTask.phantom = <Input = undefined, Output extends Promise<any> = any>(
-  taskConfig: Omit<ITaskDefinition<Input, Output, any, any, any, any>, "run">,
-) => {
-  const phantomRun = (async (_input: Input) => {
-    phantomTaskNotRoutedError.throw({ taskId: taskConfig.id });
-  }) as unknown as ITaskDefinition<Input, Output, any, any, any, any>["run"];
-
-  const taskDef = defineTask({
-    ...taskConfig,
-    run: phantomRun,
   });
-
-  taskDef[symbolPhantomTask] = true;
-
-  return taskDef as IPhantomTask<Input, Output, any, any, any, any>;
-};
+}

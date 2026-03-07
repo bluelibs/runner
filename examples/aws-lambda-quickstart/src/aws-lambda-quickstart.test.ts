@@ -1,19 +1,20 @@
 import { handler as lambdalith } from "./handler.lambdalith";
 import { handler as getUser } from "./handlers/getUser";
 import { handler as createUser } from "./handlers/createUser";
+import { APIGatewayProxyResult } from "./http";
 
 function makeCtx() {
   return { awsRequestId: `req-${Math.random().toString(36).slice(2)}` };
 }
 
-function parse(res: any) {
+function parse<T>(res: APIGatewayProxyResult) {
   return { ...res, json: JSON.parse(res.body || "null") };
 }
 
 describe("examples/aws-lambda-quickstart", () => {
   it("lambdalith flow: POST /users then GET /users/{id}", async () => {
     // GET first should 404
-    const res404 = parse(
+    const res404 = parse<{ message: string }>(
       await lambdalith(
         {
           requestContext: { http: { method: "GET" } },
@@ -26,7 +27,7 @@ describe("examples/aws-lambda-quickstart", () => {
     expect(res404.statusCode).toBe(404);
 
     // Create user
-    const created = parse(
+    const created = parse<{ id: string; name: string }>(
       await lambdalith(
         {
           requestContext: { http: { method: "POST" } },
@@ -44,7 +45,7 @@ describe("examples/aws-lambda-quickstart", () => {
     const id = created.json.id;
 
     // GET should return the created user
-    const res200 = parse(
+    const res200 = parse<{ id: string; name: string }>(
       await lambdalith(
         {
           requestContext: { http: { method: "GET" } },
@@ -60,7 +61,7 @@ describe("examples/aws-lambda-quickstart", () => {
 
   it("per-route flow: POST then GET", async () => {
     // POST
-    const created = parse(
+    const created = parse<{ id: string; name: string }>(
       await createUser(
         {
           requestContext: { http: { method: "POST" } },
@@ -76,7 +77,7 @@ describe("examples/aws-lambda-quickstart", () => {
     const id = created.json.id;
 
     // GET
-    const res = parse(
+    const res = parse<{ id: string; name: string }>(
       await getUser(
         {
           requestContext: { http: { method: "GET" } },
@@ -105,7 +106,7 @@ describe("examples/aws-lambda-quickstart", () => {
   });
 
   it("validation: createUser returns 400 when name missing", async () => {
-    const res = parse(
+    const res = parse<{ message: string }>(
       await createUser(
         {
           requestContext: { http: { method: "POST" } },
@@ -125,7 +126,7 @@ describe("examples/aws-lambda-quickstart", () => {
       JSON.stringify({ name: "B64" }),
       "utf8",
     ).toString("base64");
-    const created = parse(
+    const created = parse<{ id: string; name: string }>(
       await createUser(
         {
           requestContext: { http: { method: "POST" } },
@@ -142,7 +143,7 @@ describe("examples/aws-lambda-quickstart", () => {
   });
 
   it("API Gateway v1 compatibility (httpMethod/path)", async () => {
-    const created = parse(
+    const created = parse<{ id: string; name: string }>(
       await lambdalith(
         {
           httpMethod: "POST",
@@ -157,7 +158,7 @@ describe("examples/aws-lambda-quickstart", () => {
     expect(created.statusCode).toBe(201);
 
     const id = created.json.id;
-    const res = parse(
+    const res = parse<{ id: string; name: string }>(
       await lambdalith(
         {
           httpMethod: "GET",

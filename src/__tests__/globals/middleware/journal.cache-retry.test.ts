@@ -3,11 +3,11 @@ import {
   defineTask,
   defineTaskMiddleware,
 } from "../../../define";
-import { globals, run } from "../../../index";
+import { middleware, resources, run } from "../../../index";
 import { createMessageError } from "../../../errors";
 
-const retryJournalKeys = globals.middleware.task.retry.journalKeys;
-const cacheJournalKeys = globals.middleware.task.cache.journalKeys;
+const retryJournalKeys = middleware.task.retry.journalKeys;
+const cacheJournalKeys = middleware.task.cache.journalKeys;
 
 describe("Middleware Journal Keys (Cache + Retry)", () => {
   describe("Retry Middleware", () => {
@@ -17,9 +17,9 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       let callCount = 0;
 
       const failOnceTask = defineTask({
-        id: "test.journal.retry.failOnce",
+        id: "test-journal-retry-failOnce",
         middleware: [
-          globals.middleware.task.retry.with({
+          middleware.task.retry.with({
             retries: 3,
             delayStrategy: () => 0, // No delay for fast tests
           }),
@@ -37,7 +37,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       });
 
       const app = defineResource({
-        id: "test.journal.retry.app",
+        id: "test-journal-retry-app",
         register: [failOnceTask],
       });
       const runtime = await run(app);
@@ -56,9 +56,9 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       let capturedAttempt: number | undefined;
 
       const successTask = defineTask({
-        id: "test.journal.retry.success",
+        id: "test-journal-retry-success",
         middleware: [
-          globals.middleware.task.retry.with({
+          middleware.task.retry.with({
             retries: 3,
             delayStrategy: () => 0,
           }),
@@ -70,7 +70,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       });
 
       const app = defineResource({
-        id: "test.journal.retry.app2",
+        id: "test-journal-retry-app2",
         register: [successTask],
       });
       const runtime = await run(app);
@@ -88,7 +88,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       const hitStatuses: boolean[] = [];
 
       const cacheHitObserver = defineTaskMiddleware({
-        id: "test.journal.cache.hitObserver",
+        id: "test-journal-cache-hitObserver",
         async run({ task, next, journal }) {
           const result = await next(task.input);
           hitStatuses.push(journal.get(cacheJournalKeys.hit) ?? false);
@@ -97,19 +97,19 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       });
 
       const cachedTask = defineTask({
-        id: "test.journal.cache.task",
+        id: "test-journal-cache-task",
         middleware: [
           cacheHitObserver,
-          globals.middleware.task.cache.with({ ttl: 60000 }),
+          middleware.task.cache.with({ ttl: 60000 }),
         ],
         run: async (_input: void) => ({ value: "computed" }),
       });
 
       const app = defineResource({
-        id: "test.journal.cache.app",
+        id: "test-journal-cache-app",
         register: [
-          globals.resources.cache,
-          globals.middleware.task.cache,
+          resources.cache,
+          middleware.task.cache,
           cacheHitObserver,
           cachedTask,
         ],
@@ -130,13 +130,13 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       let callCount = 0;
 
       const task = defineTask({
-        id: "test.journal.cache.retry.noThrow",
+        id: "test-journal-cache-retry-noThrow",
         middleware: [
-          globals.middleware.task.retry.with({
+          middleware.task.retry.with({
             retries: 2,
             delayStrategy: () => 0,
           }),
-          globals.middleware.task.cache.with({ ttl: 60000 }),
+          middleware.task.cache.with({ ttl: 60000 }),
         ],
         run: async (_input: void, _deps, context) => {
           expect(context?.journal.get(cacheJournalKeys.hit)).toBe(false);
@@ -150,12 +150,8 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
       });
 
       const app = defineResource({
-        id: "test.journal.cache.retry.app",
-        register: [
-          globals.resources.cache,
-          globals.middleware.task.cache,
-          task,
-        ],
+        id: "test-journal-cache-retry-app",
+        register: [resources.cache, middleware.task.cache, task],
       });
       const runtime = await run(app);
 

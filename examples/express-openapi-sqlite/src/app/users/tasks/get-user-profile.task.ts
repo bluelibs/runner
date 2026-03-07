@@ -11,7 +11,7 @@ import z from "zod";
  * Get current user profile (protected route)
  */
 export const getUserProfileTask = r
-  .task("app.tasks.auth.profile")
+  .task("profile")
   .middleware([authMiddleware.with({ requiresAuth: true })])
   .tags([
     httpRoute.get("/api/auth/profile", {
@@ -34,7 +34,7 @@ export const getUserProfileTask = r
       return {
         success: true,
         data: {
-          id: userSession.userId,
+          id: userSession.id,
           email: userSession.email,
           name: userSession.name,
           createdAt: new Date(), // In real app, would come from database

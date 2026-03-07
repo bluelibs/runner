@@ -3,35 +3,63 @@ import {
   IResource,
   ITaskMiddleware,
   IResourceMiddleware,
+  symbolRpcLanePolicy,
+  type IRpcLanePolicy,
+  type RpcLaneMiddlewareId,
 } from "../../defs";
 import { Store } from "../Store";
-import { globalTags } from "../../globals/globalTags";
 import { taskNotRegisteredError } from "../../errors";
-import type {
-  TunnelMiddlewareId,
-  TunnelTaskMiddlewarePolicyConfig,
-} from "../../globals/resources/tunnel/tunnel.policy.tag";
+import {
+  resolveApplicableSubtreeResourceMiddlewares,
+  resolveApplicableSubtreeTaskMiddlewares,
+} from "../../tools/subtreeMiddleware";
 
 /**
  * Resolves which middlewares should be applied to tasks and resources.
- * Handles global "everywhere" middlewares, local middlewares, and tunnel policies.
+ * Handles auto-applied middlewares, local middlewares, and rpc-lane policies.
  */
 export class MiddlewareResolver {
+  private readonly taskMiddlewareCache = new Map<string, ITaskMiddleware[]>();
+  private readonly resourceMiddlewareCache = new Map<
+    string,
+    IResourceMiddleware[]
+  >();
+  private readonly rpcLaneAllowSetCache = new Map<
+    string,
+    ReadonlySet<string> | null
+  >();
+
   constructor(private readonly store: Store) {}
 
   /**
    * Gets all applicable middlewares for a task (global + local, deduplicated)
    */
   getApplicableTaskMiddlewares(task: ITask<any, any, any>): ITaskMiddleware[] {
-    const local = task.middleware;
-    const globalMiddlewares = this.getEverywhereTaskMiddlewares(task);
-    const localIds = new Set(local.map((m) => m.id));
+    const taskId = this.store.resolveDefinitionId(task)!;
+    const effectiveTask = this.store.tasks.get(taskId)?.task ?? task;
+    if (this.store.isLocked) {
+      const cached = this.taskMiddlewareCache.get(taskId);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    const local = effectiveTask.middleware;
+    const globalMiddlewares = this.getEverywhereTaskMiddlewares(effectiveTask);
+    const localIds = new Set(local.map((middleware) => middleware.id));
 
     const globalFiltered = globalMiddlewares.filter((m) => !localIds.has(m.id));
 
     // Global middlewares run FIRST, then local ones.
-    // This allows global "everywhere" policies (like logging, tracing) to wrap business-specific local middleware.
-    return [...globalFiltered, ...local];
+    // This allows cross-cutting policies (like logging, tracing) to wrap
+    // business-specific local middleware.
+    const result = [...globalFiltered, ...local];
+
+    if (this.store.isLocked) {
+      this.taskMiddlewareCache.set(taskId, result);
+    }
+
+    return result;
   }
 
   /**
@@ -40,121 +68,138 @@ export class MiddlewareResolver {
   getApplicableResourceMiddlewares(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
-    const local = resource.middleware;
-    const globalMiddlewares = this.getEverywhereResourceMiddlewares(resource);
-    const localIds = new Set(local.map((m) => m.id));
+    const resourceId = this.store.resolveDefinitionId(resource)!;
+    const effectiveResource =
+      this.store.resources.get(resourceId)?.resource ?? resource;
+    if (this.store.isLocked) {
+      const cached = this.resourceMiddlewareCache.get(resourceId);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    const local = effectiveResource.middleware;
+    const globalMiddlewares =
+      this.getEverywhereResourceMiddlewares(effectiveResource);
+    const localIds = new Set(local.map((middleware) => middleware.id));
 
     const globalFiltered = globalMiddlewares.filter((m) => !localIds.has(m.id));
 
-    return [...globalFiltered, ...local];
+    const result = [...globalFiltered, ...local];
+
+    if (this.store.isLocked) {
+      this.resourceMiddlewareCache.set(resourceId, result);
+    }
+
+    return result;
   }
 
   /**
-   * For tunneled tasks, controls caller-side task middleware execution.
+   * For rpc-routed tasks, controls caller-side task middleware execution.
    * Caller-side middleware is skipped by default and can be re-enabled via allowlist.
    */
-  applyTunnelPolicyFilter(
+  applyRpcLanePolicyFilter(
     task: ITask<any, any, any>,
     middlewares: ITaskMiddleware[],
   ): ITaskMiddleware[] {
-    const entry = this.store.tasks.get(task.id);
+    const taskId = this.store.resolveDefinitionId(task)!;
+    const entry = this.store.tasks.get(taskId);
     if (!entry) {
-      return taskNotRegisteredError.throw({ taskId: task.id });
+      return taskNotRegisteredError.throw({ taskId });
     }
     const tDef = entry.task;
-    const isLocallyTunneled = tDef.isTunneled;
+    const isRpcRouted = tDef.isRpcRouted;
 
-    if (!isLocallyTunneled) {
+    if (!isRpcRouted) {
       return middlewares;
     }
 
-    // Tunneled tasks skip caller-side middleware by default.
+    // RPC-routed tasks skip caller-side middleware by default.
     // Only explicitly allowlisted middleware runs locally.
-    if (!globalTags.tunnelTaskPolicy.exists(tDef)) {
-      return [];
-    }
-
     // Use the Store definition to avoid relying on object-identity.
     // Consumers can pass a different task object with the same id.
-    const cfg = globalTags.tunnelTaskPolicy.extract(tDef) as
-      | TunnelTaskMiddlewarePolicyConfig
-      | undefined;
-    const clientAllowList = getClientMiddlewareAllowList(cfg);
+    const policy = tDef[symbolRpcLanePolicy];
+    const allowSet = this.getRpcLaneAllowSet(taskId, policy);
 
-    if (!Array.isArray(clientAllowList)) {
+    if (!allowSet) {
       return [];
     }
 
-    const toId = (x: string | { id: string }) =>
-      typeof x === "string" ? x : x?.id;
-    const allowed = new Set(
-      clientAllowList.map(toId).filter((id): id is string => !!id),
-    );
+    return middlewares.filter((middleware) => allowSet.has(middleware.id));
+  }
 
-    return middlewares.filter((m) => allowed.has(m.id));
+  private getRpcLaneAllowSet(
+    taskId: string,
+    policy: IRpcLanePolicy | undefined,
+  ): ReadonlySet<string> | null {
+    if (this.store.isLocked) {
+      const cached = this.rpcLaneAllowSetCache.get(taskId);
+      if (cached !== undefined) {
+        return cached;
+      }
+    }
+
+    const allowList = getMiddlewareAllowList(policy);
+    const toId = (x: string | { id: string }) =>
+      this.store.resolveDefinitionId(x);
+    const allowSet = Array.isArray(allowList)
+      ? new Set(allowList.map(toId).filter((id): id is string => !!id))
+      : null;
+
+    if (this.store.isLocked) {
+      this.rpcLaneAllowSetCache.set(taskId, allowSet);
+    }
+
+    return allowSet;
   }
 
   /**
-   * Gets all "everywhere" middlewares that apply to the given task
+   * Gets all auto-applied middlewares that apply to the given task.
    */
   public getEverywhereTaskMiddlewares(
     task: ITask<any, any, any>,
   ): ITaskMiddleware[] {
-    return Array.from(this.store.taskMiddlewares.values())
-      .filter((x) => Boolean(x.middleware.everywhere))
-      .filter((x) =>
-        this.store.isItemVisibleToConsumer(x.middleware.id, task.id),
-      )
-      .filter((x) => {
-        if (typeof x.middleware.everywhere === "function") {
-          return x.middleware.everywhere(task);
-        }
-        return true;
-      })
-      .map((x) => x.middleware);
+    const taskId = this.store.resolveDefinitionId(task)!;
+    const effectiveTask = this.store.tasks.get(taskId)?.task ?? task;
+
+    return resolveApplicableSubtreeTaskMiddlewares(
+      {
+        getOwnerResourceId: (itemId) => this.store.getOwnerResourceId(itemId),
+        getResource: (resourceId) =>
+          this.store.resources.get(resourceId)?.resource,
+      },
+      effectiveTask,
+    );
   }
 
   /**
-   * Gets all "everywhere" middlewares that apply to the given resource
+   * Gets all auto-applied middlewares that apply to the given resource.
    */
   public getEverywhereResourceMiddlewares(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
-    return Array.from(this.store.resourceMiddlewares.values())
-      .filter((x) => Boolean(x.middleware.everywhere))
-      .filter((x) =>
-        this.store.isItemVisibleToConsumer(x.middleware.id, resource.id),
-      )
-      .filter((x) => {
-        if (typeof x.middleware.everywhere === "function") {
-          return x.middleware.everywhere(resource);
-        }
-        return true;
-      })
-      .map((x) => x.middleware);
+    const resourceId = this.store.resolveDefinitionId(resource)!;
+    const effectiveResource =
+      this.store.resources.get(resourceId)?.resource ?? resource;
+
+    return resolveApplicableSubtreeResourceMiddlewares(
+      {
+        getOwnerResourceId: (itemId) => this.store.getOwnerResourceId(itemId),
+        getResource: (resourceId) =>
+          this.store.resources.get(resourceId)?.resource,
+      },
+      effectiveResource,
+    );
   }
 }
 
-function getClientMiddlewareAllowList(
-  cfg: TunnelTaskMiddlewarePolicyConfig | undefined,
-): TunnelMiddlewareId[] | undefined {
-  if (!cfg) {
+function getMiddlewareAllowList(
+  policy: IRpcLanePolicy | undefined,
+): RpcLaneMiddlewareId[] | undefined {
+  const allowList = policy?.middlewareAllowList;
+  if (!Array.isArray(allowList)) {
     return;
   }
 
-  const preferred = cfg.client;
-  if (Array.isArray(preferred)) {
-    return preferred;
-  }
-  if (preferred && typeof preferred === "object") {
-    const allowList = preferred.middlewareAllowList;
-    if (Array.isArray(allowList)) return allowList;
-  }
-
-  const grouped = cfg.middlewareAllowList?.client;
-  if (Array.isArray(grouped)) {
-    return grouped;
-  }
-
-  return;
+  return allowList;
 }

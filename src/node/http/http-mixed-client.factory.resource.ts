@@ -1,4 +1,4 @@
-import { defineResource } from "../../define";
+import { defineFrameworkResource } from "../../definers/frameworkDefinition";
 import type { MixedHttpClient } from "./http-mixed-client";
 
 export interface HttpMixedClientFactoryConfig {
@@ -16,11 +16,11 @@ export type HttpMixedClientFactory = (
   config: HttpMixedClientFactoryConfig,
 ) => MixedHttpClient;
 
-export const httpMixedClientFactory = defineResource<
+export const httpMixedClientFactory = defineFrameworkResource<
   void,
   Promise<HttpMixedClientFactory>
 >({
-  id: "globals.resources.httpMixedClientFactory",
+  id: "runner.node.httpMixedClientFactory",
   meta: {
     title: "HTTP Mixed Client Factory (Node)",
     description:

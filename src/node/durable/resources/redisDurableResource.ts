@@ -1,14 +1,12 @@
-import { globals, r } from "../../../index";
+import { r, resources } from "../../../index";
 import { RedisEventBus } from "../bus/RedisEventBus";
 import { RabbitMQQueue } from "../queue/RabbitMQQueue";
 import { RedisStore } from "../store/RedisStore";
 import type { RunnerDurableRuntimeConfig } from "../core/createRunnerDurableRuntime";
 import { createRunnerDurableRuntime } from "../core/createRunnerDurableRuntime";
 import { disposeDurableService } from "../core/DurableService";
-import { durableEventsArray } from "../events";
 import type { DurableResource } from "../core/DurableResource";
 import { deriveDurableIsolation } from "./isolation";
-import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 import { Logger } from "../../../models/Logger";
 
 export type RedisDurableResourceConfig = Omit<
@@ -33,18 +31,17 @@ export type RedisDurableResourceConfig = Omit<
   };
 };
 
-interface RedisDurableResourceContext {
+export interface RedisDurableResourceContext {
   runtimeConfig: RunnerDurableRuntimeConfig | null;
 }
 
 export const redisDurableResource = r
-  .resource<RedisDurableResourceConfig>("base.durable.redis")
-  .register([durableWorkflowTag, ...durableEventsArray])
+  .resource<RedisDurableResourceConfig>("base-durable-redis")
   .dependencies({
-    taskRunner: globals.resources.taskRunner,
-    eventManager: globals.resources.eventManager,
-    runnerStore: globals.resources.store,
-    logger: globals.resources.logger,
+    taskRunner: resources.taskRunner,
+    eventManager: resources.eventManager,
+    runnerStore: resources.store,
+    logger: resources.logger,
   })
   .context<RedisDurableResourceContext>(() => ({ runtimeConfig: null }))
   .init(async function (

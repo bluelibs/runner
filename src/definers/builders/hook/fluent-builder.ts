@@ -1,16 +1,24 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   IEventDefinition,
   IHook,
   IHookDefinition,
   ITaskMeta,
-  TagType,
+  HookTagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { builderIncompleteError } from "../../../errors";
 import { defineHook } from "../../defineHook";
-import type { HookFluentBuilder } from "./fluent-builder.interface";
+import type {
+  HookFluentBuilder,
+  HookFluentBuilderAfterRun,
+  HookFluentBuilderWithOn,
+  HookFluentBuilderWithoutOn,
+  ValidOnTarget,
+} from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
 import { clone, mergeArray, mergeDependencies } from "./utils";
 
@@ -26,10 +34,11 @@ export function makeHookBuilder<
     | readonly IEventDefinition<any>[]
     | undefined,
   TMeta extends ITaskMeta,
+  THasRun extends boolean = false,
 >(
   state: BuilderState<TDeps, TOn, TMeta>,
-): HookFluentBuilder<TDeps, TOn, TMeta> {
-  const builder: HookFluentBuilder<TDeps, TOn, TMeta> = {
+): HookFluentBuilder<TDeps, TOn, TMeta, THasRun> {
+  const builder = {
     id: state.id,
 
     on<
@@ -41,12 +50,12 @@ export function makeHookBuilder<
       const next = clone<TDeps, TOn, TMeta, TDeps, TNewOn, TMeta>(state, {
         on: on as TNewOn,
       });
-      return makeHookBuilder<TDeps, TNewOn, TMeta>(next);
+      return makeHookBuilder<TDeps, TNewOn, TMeta, false>(next);
     },
 
     order(order: number) {
       const next = clone(state, { order });
-      return makeHookBuilder<TDeps, TOn, TMeta>(next);
+      return makeHookBuilder<TDeps, TOn, TMeta, THasRun>(next);
     },
 
     dependencies<TNewDeps extends DependencyMapType>(
@@ -68,22 +77,22 @@ export function makeHookBuilder<
       );
 
       if (override) {
-        return makeHookBuilder<TNewDeps, TOn, TMeta>(
+        return makeHookBuilder<TNewDeps, TOn, TMeta, false>(
           next as BuilderState<TNewDeps, TOn, TMeta>,
         );
       }
-      return makeHookBuilder<TDeps & TNewDeps, TOn, TMeta>(next);
+      return makeHookBuilder<TDeps & TNewDeps, TOn, TMeta, false>(next);
     },
 
-    tags<TNewTags extends TagType[]>(
-      t: TNewTags,
+    tags<TNewTags extends HookTagType[]>(
+      t: EnsureTagsForTarget<"hooks", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
       const next = clone(state, {
-        tags: mergeArray(state.tags, t, override) as TagType[],
+        tags: mergeArray(state.tags, t, override) as HookTagType[],
       });
-      return makeHookBuilder<TDeps, TOn, TMeta>(next);
+      return makeHookBuilder<TDeps, TOn, TMeta, false>(next);
     },
 
     meta<TNewMeta extends ITaskMeta>(m: TNewMeta) {
@@ -93,17 +102,17 @@ export function makeHookBuilder<
           meta: m as TNewMeta,
         },
       );
-      return makeHookBuilder<TDeps, TOn, TNewMeta>(next);
+      return makeHookBuilder<TDeps, TOn, TNewMeta, THasRun>(next);
     },
 
-    run(fn) {
+    run(fn: IHookDefinition<TDeps, any, TMeta>["run"]) {
       const next = clone(state, { run: fn as NonNullable<typeof state.run> });
-      return makeHookBuilder<TDeps, TOn, TMeta>(next);
+      return makeHookBuilder<TDeps, TOn, TMeta, true>(next);
     },
 
     throws(list: ThrowsList) {
       const next = clone(state, { throws: list });
-      return makeHookBuilder<TDeps, TOn, TMeta>(next);
+      return makeHookBuilder<TDeps, TOn, TMeta, THasRun>(next);
     },
 
     build() {
@@ -127,11 +136,16 @@ export function makeHookBuilder<
       const hook = defineHook({
         ...(state as IHookDefinition<TDeps, any, TMeta>),
       });
-      (hook as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
       // Runtime validation guarantees TOn is valid
-      return hook as IHook<TDeps, any, TMeta>;
+      return deepFreeze({
+        ...(hook as IHook<TDeps, any, TMeta>),
+        [symbolFilePath]: state.filePath,
+      });
     },
   };
 
-  return builder;
+  return builder as unknown as HookFluentBuilderWithoutOn<TDeps, TMeta> &
+    HookFluentBuilderWithOn<TDeps, ValidOnTarget, TMeta> &
+    HookFluentBuilderAfterRun<TDeps, ValidOnTarget, TMeta> &
+    HookFluentBuilder<TDeps, TOn, TMeta, THasRun>;
 }

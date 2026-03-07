@@ -56,11 +56,12 @@ describe("createExposureServer - idempotent close", () => {
     };
 
     const controls = await createExposureServer({
-      httpConfig: { server: external },
+      httpConfig: undefined,
       handler,
       logger,
       basePath: "/x",
     });
+    controls.attachTo(external);
 
     const p1 = controls.close();
     const p2 = controls.close();
@@ -72,7 +73,7 @@ describe("createExposureServer - idempotent close", () => {
 
   it("exposes createRequestListener() and createServer() factories", async () => {
     const controls = await createExposureServer({
-      httpConfig: { server: http.createServer() },
+      httpConfig: undefined,
       handler,
       logger,
       basePath: "/x",
@@ -85,5 +86,39 @@ describe("createExposureServer - idempotent close", () => {
     expect(typeof (server as any).on).toBe("function");
 
     await controls.close();
+  });
+
+  it("tolerates undefined detach entries during close cleanup", async () => {
+    const external: any = {
+      on() {},
+      off() {},
+    };
+
+    const controls = await createExposureServer({
+      httpConfig: undefined,
+      handler,
+      logger,
+      basePath: "/x",
+    });
+    controls.attachTo(external);
+
+    const originalPop = Array.prototype.pop;
+    let injected = false;
+    const popSpy = jest
+      .spyOn(Array.prototype, "pop")
+      .mockImplementation(function <T>(this: T[]) {
+        const value = originalPop.call(this);
+        if (!injected && typeof value === "function" && this.length === 0) {
+          injected = true;
+          return undefined as T;
+        }
+        return value;
+      });
+
+    try {
+      await expect(controls.close()).resolves.toBeUndefined();
+    } finally {
+      popSpy.mockRestore();
+    }
   });
 });

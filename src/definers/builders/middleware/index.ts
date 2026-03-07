@@ -1,7 +1,8 @@
 import type {
   DependencyMapType,
   IMiddlewareMeta,
-  TagType,
+  ResourceMiddlewareTagType,
+  TaskMiddlewareTagType,
 } from "../../../defs";
 import { getCallerFile } from "../../../tools/getCallerFile";
 import { makeTaskMiddlewareBuilder } from "./task";
@@ -20,9 +21,9 @@ export * from "./utils";
 /**
  * Entry point for creating a task middleware builder.
  */
-export function taskMiddlewareBuilder<In = void>(
+export function taskMiddlewareBuilder<C = void>(
   id: string,
-): TaskMiddlewareFluentBuilder<void, In, void, {}>;
+): TaskMiddlewareFluentBuilder<C, void, void, {}>;
 
 export function taskMiddlewareBuilder<
   C,
@@ -45,8 +46,7 @@ export function taskMiddlewareBuilder<
     configSchema: undefined,
     run: undefined,
     meta: {} as IMiddlewareMeta,
-    tags: [] as TagType[],
-    everywhere: undefined,
+    tags: [] as TaskMiddlewareTagType[],
     throws: undefined,
   });
 
@@ -81,8 +81,7 @@ export function resourceMiddlewareBuilder<
     configSchema: undefined,
     run: undefined,
     meta: {} as IMiddlewareMeta,
-    tags: [] as TagType[],
-    everywhere: undefined,
+    tags: [] as ResourceMiddlewareTagType[],
     throws: undefined,
   });
 

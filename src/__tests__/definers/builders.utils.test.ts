@@ -2,11 +2,11 @@ import { r } from "../..";
 import {
   mergeArray,
   mergeDepsNoConfig,
+  mergeDepsWithConfig,
   cloneState,
 } from "../../definers/builders/utils";
 import { mergeArray as mergeErrorBuilderArray } from "../../definers/builders/error/utils";
 import { mergeArray as mergeTagBuilderArray } from "../../definers/builders/tag/utils";
-import "../../definers/builders/task.phantom";
 import { makeErrorBuilder } from "../../definers/builders/error/fluent-builder";
 import { defineError } from "../../definers/defineError";
 
@@ -34,11 +34,11 @@ describe("definers builders utils", () => {
 
   it("mergeDepsNoConfig merges objects and/or functions", () => {
     const a = r
-      .task("tests.dep.a")
+      .task("tests-dep-a")
       .run(async () => "a")
       .build();
     const b = r
-      .task("tests.dep.b")
+      .task("tests-dep-b")
       .run(async () => "b")
       .build();
 
@@ -61,12 +61,52 @@ describe("definers builders utils", () => {
     const overridden = mergeDepsNoConfig(eObj, aObj, true);
     expect(overridden).toEqual({ b });
   });
+
+  it("mergeDepsWithConfig merges objects and/or config-aware functions", () => {
+    const a = r
+      .task("tests-depwc-a")
+      .run(async () => "a")
+      .build();
+    const b = r
+      .task("tests-depwc-b")
+      .run(async () => "b")
+      .build();
+
+    type Cfg = { prefix: string };
+    const eObj = { a };
+    const aObj = { b };
+    expect(
+      mergeDepsWithConfig<Cfg, typeof eObj, typeof aObj>(eObj, aObj, false),
+    ).toEqual({ a, b });
+
+    const eFn = (_c: Cfg) => ({ a });
+    const aFn = (_c: Cfg) => ({ b });
+    const mergedFnFn = mergeDepsWithConfig(eFn, aFn, false) as (c: Cfg) => {
+      a: typeof a;
+      b: typeof b;
+    };
+    expect(mergedFnFn({ prefix: "ab" })).toEqual({ a, b });
+
+    const mergedFnObj = mergeDepsWithConfig(eFn, aObj, false) as (c: Cfg) => {
+      a: typeof a;
+      b: typeof b;
+    };
+    expect(mergedFnObj({ prefix: "ab" })).toEqual({ a, b });
+
+    const mergedObjFn = mergeDepsWithConfig(eObj, aFn, false) as (c: Cfg) => {
+      a: typeof a;
+      b: typeof b;
+    };
+    expect(mergedObjFn({ prefix: "ab" })).toEqual({ a, b });
+
+    expect(mergeDepsWithConfig(eObj, aObj, true)).toEqual({ b });
+  });
 });
 
 describe("error fluent builder + defineError", () => {
   it("makeErrorBuilder builds via defineError", () => {
     const helper = makeErrorBuilder({
-      id: "tests.errors.fluent",
+      id: "tests-errors-fluent",
       filePath: "tests/builders.utils.test.ts",
       serialize: (d: { message: string }) => JSON.stringify(d),
       parse: (s: string) => JSON.parse(s),
@@ -77,14 +117,14 @@ describe("error fluent builder + defineError", () => {
       .meta({ title: "t2" })
       .build();
 
-    expect(helper.id).toBe("tests.errors.fluent");
+    expect(helper.id).toBe("tests-errors-fluent");
     expect(() => helper.throw({ message: "Boom" })).toThrow();
   });
 
   it("defineError defaults format when missing", () => {
     expect.assertions(1);
     const E = defineError<{ message: string }>({
-      id: "tests.errors.defaultFormat",
+      id: "tests-errors-defaultFormat",
       dataSchema: { parse: (v: unknown) => v as { message: string } },
     });
 
@@ -97,7 +137,7 @@ describe("error fluent builder + defineError", () => {
 
   it("defineError meta getter falls back for nullish meta", () => {
     const E = defineError({
-      id: "tests.errors.nullMeta",
+      id: "tests-errors-nullMeta",
       format: () => "x",
       meta: null as unknown as Record<string, never>,
     });

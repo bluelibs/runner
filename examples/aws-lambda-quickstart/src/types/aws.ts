@@ -8,7 +8,7 @@ export type ApiGatewayV2HttpEvent = {
   headers?: Record<string, string | undefined>;
   body?: string;
   isBase64Encoded?: boolean;
-  pathParameters?: Record<string, string>;
+  pathParameters?: Record<string, string | undefined>;
 };
 
 export type ApiGatewayV1RestEvent = {
@@ -17,10 +17,13 @@ export type ApiGatewayV1RestEvent = {
   headers?: Record<string, string | undefined>;
   body?: string;
   isBase64Encoded?: boolean;
-  pathParameters?: Record<string, string>;
+  pathParameters?: Record<string, string | undefined>;
 };
 
-export type AnyApiGatewayEvent = ApiGatewayV2HttpEvent | ApiGatewayV1RestEvent;
+// Unified shape used by handlers that support both API Gateway v1 and v2 payloads.
+export type AnyApiGatewayEvent = Partial<
+  ApiGatewayV2HttpEvent & ApiGatewayV1RestEvent
+>;
 
 export type LambdaContextLike = {
   awsRequestId?: string;

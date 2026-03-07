@@ -45,10 +45,10 @@ test(TestName.OrderCompletesAfterSignal, async () => {
       transactionId: "txn_test_001",
     });
 
-    const result = (await service.wait(executionId, {
+    const result = await service.wait<OrderWorkflowResult>(executionId, {
       timeout: TimeoutMs.ExecutionWait,
       waitPollIntervalMs: IntervalMs.WaitPolling,
-    })) as OrderWorkflowResult;
+    });
 
     assert.equal(result.orderId, "ORD-TEST-1");
     assert.equal(result.transactionId, "txn_test_001");
@@ -84,16 +84,19 @@ test(TestName.OnboardingVerifiedCompletesWithWorkspace, async () => {
       verifiedAt: Date.now(),
     });
 
-    const result = (await service.wait(executionId, {
+    const result = await service.wait<OnboardingWorkflowResult>(executionId, {
       timeout: TimeoutMs.ExecutionWait,
       waitPollIntervalMs: IntervalMs.WaitPolling,
-    })) as OnboardingWorkflowResult;
+    });
 
     assert.equal(result.email, "test@example.com");
     assert.equal(result.plan, "pro");
     assert.equal(result.verified, true);
-    assert.ok(result.workspace !== null, "workspace should be provisioned");
-    assert.ok(result.workspace!.startsWith("workspace_"), "workspace prefix");
+    assert.equal(typeof result.workspace, "string", "workspace should exist");
+    if (typeof result.workspace !== "string") {
+      assert.fail("workspace should be a string");
+    }
+    assert.ok(result.workspace.startsWith("workspace_"), "workspace prefix");
     assert.ok(
       result.completedAt > 0,
       "completedAt should be a positive timestamp",
@@ -117,10 +120,10 @@ test(TestName.OnboardingTimeoutSkipsProvisioning, async () => {
       plan: "free" as const,
     });
 
-    const result = (await service.wait(executionId, {
+    const result = await service.wait<OnboardingWorkflowResult>(executionId, {
       timeout: TimeoutMs.ExecutionWait,
       waitPollIntervalMs: IntervalMs.WaitPolling,
-    })) as OnboardingWorkflowResult;
+    });
 
     assert.equal(result.email, "timeout@example.com");
     assert.equal(result.plan, "free");

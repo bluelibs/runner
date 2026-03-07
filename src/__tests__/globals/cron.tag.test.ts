@@ -1,7 +1,17 @@
 import { cronTag } from "../../globals/cron/cron.tag";
 import { CronOnError } from "../../globals/types";
+import { RunnerError } from "../../definers/defineError";
 
 describe("cronTag", () => {
+  const expectValidationError = (fn: () => unknown): void => {
+    try {
+      fn();
+      throw new Error("Expected validation error");
+    } catch (error) {
+      expect(error).toBeInstanceOf(RunnerError);
+    }
+  };
+
   it("accepts valid configs", () => {
     const configured = cronTag.with({
       expression: "* * * * *",
@@ -21,25 +31,23 @@ describe("cronTag", () => {
   });
 
   it("rejects invalid configs", () => {
-    expect(() => cronTag.with(null as never)).toThrow(/must be an object/i);
-    expect(() => cronTag.with({} as never)).toThrow(/non-empty "expression"/i);
-    expect(() => cronTag.with({ expression: "" } as never)).toThrow(
-      /non-empty "expression"/i,
-    );
-    expect(() =>
+    expectValidationError(() => cronTag.with(null as never));
+    expectValidationError(() => cronTag.with({} as never));
+    expectValidationError(() => cronTag.with({ expression: "" } as never));
+    expectValidationError(() =>
       cronTag.with({ expression: "* * * * *", timezone: "" }),
-    ).toThrow(/timezone/i);
-    expect(() =>
+    );
+    expectValidationError(() =>
       cronTag.with({ expression: "* * * * *", immediate: "yes" } as never),
-    ).toThrow(/immediate/i);
-    expect(() =>
+    );
+    expectValidationError(() =>
       cronTag.with({ expression: "* * * * *", enabled: "yes" } as never),
-    ).toThrow(/enabled/i);
-    expect(() =>
+    );
+    expectValidationError(() =>
       cronTag.with({ expression: "* * * * *", onError: "nope" } as never),
-    ).toThrow(/onError/i);
-    expect(() =>
+    );
+    expectValidationError(() =>
       cronTag.with({ expression: "* * * * *", silent: "yes" } as never),
-    ).toThrow(/silent/i);
+    );
   });
 });

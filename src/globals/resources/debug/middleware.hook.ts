@@ -1,4 +1,4 @@
-import { defineResource } from "../../../define";
+import { defineFrameworkResource } from "../../../definers/frameworkDefinition";
 import { loggerResource as logger } from "../logger.resource";
 import { middlewareManagerResource as middlewareManager } from "../middlewareManager.resource";
 import { globalTags } from "../../globalTags";
@@ -8,8 +8,8 @@ import { hasSystemTag } from "./utils";
 import { ITaskMiddlewareExecutionInput } from "../../../types/taskMiddleware";
 import { IResourceMiddlewareExecutionInput } from "../../../types/resourceMiddleware";
 
-const id = "globals.debug.resources.middlewareInterceptor";
-export const middlewareInterceptorResource = defineResource({
+const id = "runner.debug.resources.middlewareInterceptor";
+export const middlewareInterceptorResource = defineFrameworkResource({
   id,
   meta: {
     title: "Middleware Interceptor",

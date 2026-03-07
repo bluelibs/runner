@@ -9,7 +9,7 @@ import { verifyPasswordTask } from "./tasks/verify-password.task";
 import { createUserTask } from "./tasks/create-user.task";
 
 export const users = r
-  .resource("app.modules.users")
+  .resource("users")
   .register([
     usersRepository,
     registerUserTask,

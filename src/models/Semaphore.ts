@@ -8,6 +8,7 @@ import {
   semaphoreAcquireTimeoutError,
   cancellationError,
 } from "../errors";
+import { runtimeSource } from "../types/runtimeSource";
 
 export type SemaphoreEventType =
   | "queued"
@@ -19,12 +20,12 @@ export type SemaphoreEventType =
 
 // Event definitions for Semaphore
 const SemaphoreEvents = {
-  queued: defineEvent<SemaphoreEvent>({ id: "semaphore.events.queued" }),
-  acquired: defineEvent<SemaphoreEvent>({ id: "semaphore.events.acquired" }),
-  released: defineEvent<SemaphoreEvent>({ id: "semaphore.events.released" }),
-  timeout: defineEvent<SemaphoreEvent>({ id: "semaphore.events.timeout" }),
-  aborted: defineEvent<SemaphoreEvent>({ id: "semaphore.events.aborted" }),
-  disposed: defineEvent<SemaphoreEvent>({ id: "semaphore.events.disposed" }),
+  queued: defineEvent<SemaphoreEvent>({ id: "semaphore-events-queued" }),
+  acquired: defineEvent<SemaphoreEvent>({ id: "semaphore-events-acquired" }),
+  released: defineEvent<SemaphoreEvent>({ id: "semaphore-events-released" }),
+  timeout: defineEvent<SemaphoreEvent>({ id: "semaphore-events-timeout" }),
+  aborted: defineEvent<SemaphoreEvent>({ id: "semaphore-events-aborted" }),
+  disposed: defineEvent<SemaphoreEvent>({ id: "semaphore-events-disposed" }),
 } as const satisfies Record<
   SemaphoreEventType,
   IEventDefinition<SemaphoreEvent>
@@ -401,7 +402,11 @@ export class Semaphore {
     // Fire-and-forget to maintain synchronous behavior, but always catch to avoid
     // process-level unhandledRejection if a lifecycle listener throws.
     void this.eventManager
-      .emit(eventDef, this.buildEvent(type), "semaphore")
+      .emit(
+        eventDef,
+        this.buildEvent(type),
+        runtimeSource.runtime("runtime.internal.semaphore"),
+      )
       .catch(() => {});
   }
 

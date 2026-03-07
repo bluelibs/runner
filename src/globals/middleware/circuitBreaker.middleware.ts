@@ -1,8 +1,13 @@
-import { defineTaskMiddleware, defineResource } from "../../define";
+import {
+  defineFrameworkResource,
+  defineFrameworkTaskMiddleware,
+} from "../../definers/frameworkDefinition";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
 import { middlewareCircuitBreakerOpenError, RunnerErrorId } from "../../errors";
+import { Match } from "../../tools/check";
+import { symbolDefinitionIdentity } from "../../types/symbols";
 
 /**
  * States of the Circuit Breaker
@@ -29,6 +34,11 @@ export interface CircuitBreakerMiddlewareConfig {
   resetTimeout?: number;
 }
 
+const circuitBreakerConfigPattern = Match.ObjectIncluding({
+  failureThreshold: Match.Optional(Match.PositiveInteger),
+  resetTimeout: Match.Optional(Match.PositiveInteger),
+});
+
 /**
  * Error thrown when the circuit is OPEN
  */
@@ -39,6 +49,8 @@ export class CircuitBreakerOpenError extends RunnerError<{ message: string }> {
       message,
       { message },
       middlewareCircuitBreakerOpenError.httpCode,
+      undefined,
+      middlewareCircuitBreakerOpenError[symbolDefinitionIdentity],
     );
   }
 }
@@ -57,16 +69,16 @@ export interface CircuitBreakerStatus {
 export const journalKeys = {
   /** Current state of the circuit breaker (CLOSED, OPEN, or HALF_OPEN) */
   state: journalHelper.createKey<CircuitBreakerState>(
-    "globals.middleware.task.circuitBreaker.state",
+    "runner.middleware.task.circuitBreaker.state",
   ),
   /** Current failure count */
   failures: journalHelper.createKey<number>(
-    "globals.middleware.task.circuitBreaker.failures",
+    "runner.middleware.task.circuitBreaker.failures",
   ),
 } as const;
 
-export const circuitBreakerResource = defineResource({
-  id: "globals.resources.circuitBreaker",
+export const circuitBreakerResource = defineFrameworkResource({
+  id: "runner.circuitBreaker",
   tags: [globalTags.system],
   init: async () => {
     return {
@@ -78,9 +90,10 @@ export const circuitBreakerResource = defineResource({
   },
 });
 
-export const circuitBreakerMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.task.circuitBreaker",
+export const circuitBreakerMiddleware = defineFrameworkTaskMiddleware({
+  id: "runner.middleware.task.circuitBreaker",
   throws: [middlewareCircuitBreakerOpenError],
+  configSchema: circuitBreakerConfigPattern,
   dependencies: { state: circuitBreakerResource },
   async run(
     { task, next, journal },
@@ -177,11 +190,10 @@ export const circuitBreakerMiddleware = defineTaskMiddleware({
       } else {
         status.failures++;
         status.lastFailureTime = Date.now();
-
-        if (status.state === CircuitBreakerState.CLOSED) {
-          if (status.failures >= failureThreshold) {
-            status.state = CircuitBreakerState.OPEN;
-          }
+        // At this point the request path can only be CLOSED (HALF_OPEN handled above,
+        // OPEN throws before entering the try/catch execution path).
+        if (status.failures >= failureThreshold) {
+          status.state = CircuitBreakerState.OPEN;
         }
       }
 

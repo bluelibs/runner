@@ -1,29 +1,26 @@
-import * as http from "http";
 import { defineTask, defineResource } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
 
 describe("nodeExposure Coverage - JSON and Buffers", () => {
   it("readJson buffer branch and success: task JSON body succeeds", async () => {
     const okTask = defineTask<{ n?: number }, Promise<number>>({
-      id: "ok.task.buffer",
+      id: "ok-task-buffer",
       run: async ({ n = 1 }) => n,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.json.app5",
+      id: "unit-exposure-coverage-json-app5",
       register: [okTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const rrMock = createReqRes({
       url: `/__runner/task/${encodeURIComponent(okTask.id)}`,
@@ -42,23 +39,21 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
 
   it("returns 400 when task JSON parsing fails", async () => {
     const echo = defineTask<{ v: number }, Promise<number>>({
-      id: "coverage.json.fail",
+      id: "coverage-json-fail",
       run: async ({ v }) => v,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "ARR" },
+        auth: { token: "ARR", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "coverage.json.app",
+      id: "coverage-json-app",
       register: [echo, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const rrMock = createReqRes({
       url: `/__runner/task/${encodeURIComponent(echo.id)}`,
@@ -78,23 +73,21 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
 
   it("rejects JSON body when request is aborted", async () => {
     const echo = defineTask<void, Promise<number>>({
-      id: "coverage.abort.task",
+      id: "coverage-abort-task",
       run: async () => 1,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "AB" },
+        auth: { token: "AB", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "coverage.abort.app",
+      id: "coverage-abort-app",
       register: [echo, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const rrMock = createReqRes({
       url: `/__runner/task/${encodeURIComponent(echo.id)}`,

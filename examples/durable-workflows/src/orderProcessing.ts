@@ -27,7 +27,7 @@ export interface OrderResult {
 }
 
 export const processOrder = r
-  .task("example.tasks.processOrder")
+  .task("processOrder")
   .dependencies({ durable })
   .run(async (input: OrderInput, { durable }): Promise<OrderResult> => {
     const ctx = durable.use();

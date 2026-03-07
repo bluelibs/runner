@@ -1,20 +1,33 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   IResourceDefinition,
   IResourceMeta,
-  IValidationSchema,
+  IsolationExportsTarget,
+  IsolationPolicy,
   OverridableElements,
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
+  ResourceSubtreePolicy,
+  ResourceTagType,
   TagType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { defineResource } from "../../defineResource";
-import type { ResourceFluentBuilder } from "./fluent-builder.interface";
+import { markFrameworkDefinition } from "../../markFrameworkDefinition";
+import type {
+  ResourceFluentBuilder,
+  ResourceFluentBuilderAfterInit,
+  ResourceFluentBuilderBeforeInit,
+} from "./fluent-builder.interface";
 import type { BuilderState, ResolveConfig } from "./types";
 import { clone, mergeArray, mergeDependencies, mergeRegister } from "./utils";
+import { isolateConflictError } from "../../../errors";
+import { mergeResourceSubtreePolicy } from "../../subtreePolicy";
 
 /**
  * Creates a ResourceFluentBuilder from the given state.
@@ -26,8 +39,9 @@ export function makeResourceBuilder<
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
+  THasInit extends boolean = false,
 >(
   state: BuilderState<
     TConfig,
@@ -45,17 +59,10 @@ export function makeResourceBuilder<
   TContext,
   TMeta,
   TTags,
-  TMiddleware
+  TMiddleware,
+  THasInit
 > {
-  const builder: ResourceFluentBuilder<
-    TConfig,
-    TValue,
-    TDeps,
-    TContext,
-    TMeta,
-    TTags,
-    TMiddleware
-  > = {
+  const builder = {
     id: state.id,
     dependencies<
       TNewDeps extends DependencyMapType,
@@ -88,14 +95,38 @@ export function makeResourceBuilder<
         ) as TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
       });
 
-      return makeResourceBuilder(next);
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        false
+      >(next);
     },
-    register(items, options) {
+    register(
+      items:
+        | RegisterableItems
+        | Array<RegisterableItems>
+        | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>),
+      options?: { override?: boolean },
+    ) {
       const override = options?.override ?? false;
       const next = clone(state, {
         register: mergeRegister(state.register, items, override),
       });
-      return makeResourceBuilder(next);
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        THasInit
+      >(next);
     },
     middleware<TNewMw extends ResourceMiddlewareAttachmentType[]>(
       mw: TNewMw,
@@ -120,10 +151,19 @@ export function makeResourceBuilder<
       >(state, {
         middleware: mergeArray(state.middleware, mw, override) as TNewMw,
       });
-      return makeResourceBuilder(next);
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TNewMw,
+        false
+      >(next);
     },
-    tags<TNewTags extends TagType[]>(
-      tags: TNewTags,
+    tags<const TNewTags extends TagType[]>(
+      tags: EnsureTagsForTarget<"resources", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
@@ -145,7 +185,16 @@ export function makeResourceBuilder<
       >(state, {
         tags: mergeArray(state.tags, tags, override) as [...TTags, ...TNewTags],
       });
-      return makeResourceBuilder(next);
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        [...TTags, ...TNewTags],
+        TMiddleware,
+        false
+      >(next);
     },
     context<TNewCtx>(factory: () => TNewCtx) {
       const next = clone<
@@ -171,10 +220,11 @@ export function makeResourceBuilder<
         TNewCtx,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        false
       >(next);
     },
-    configSchema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
+    configSchema<TNewConfig>(schema: ValidationSchemaInput<TNewConfig>) {
       const next = clone<
         TConfig,
         TValue,
@@ -198,13 +248,14 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        false
       >(next);
     },
-    schema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
+    schema<TNewConfig>(schema: ValidationSchemaInput<TNewConfig>) {
       return builder.configSchema(schema);
     },
-    resultSchema<TResolved>(schema: IValidationSchema<TResolved>) {
+    resultSchema<TResolved>(schema: ValidationSchemaInput<TResolved>) {
       const next = clone<
         TConfig,
         TValue,
@@ -228,7 +279,8 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        false
       >(next);
     },
     init<TNewConfig = TConfig, TNewValue extends Promise<any> = TValue>(
@@ -265,7 +317,8 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        true
       >(next);
     },
     dispose(
@@ -291,7 +344,62 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        THasInit
+      >(next);
+    },
+    ready(
+      fn: NonNullable<
+        IResourceDefinition<
+          TConfig,
+          TValue,
+          TDeps,
+          TContext,
+          any,
+          any,
+          TMeta,
+          TTags,
+          TMiddleware
+        >["ready"]
+      >,
+    ) {
+      const next = clone(state, { ready: fn });
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        THasInit
+      >(next);
+    },
+    cooldown(
+      fn: NonNullable<
+        IResourceDefinition<
+          TConfig,
+          TValue,
+          TDeps,
+          TContext,
+          any,
+          any,
+          TMeta,
+          TTags,
+          TMiddleware
+        >["cooldown"]
+      >,
+    ) {
+      const next = clone(state, { cooldown: fn });
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        THasInit
       >(next);
     },
     meta<TNewMeta extends IResourceMeta>(m: TNewMeta) {
@@ -318,7 +426,8 @@ export function makeResourceBuilder<
         TContext,
         TNewMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        THasInit
       >(next);
     },
     overrides(o: Array<OverridableElements>, options?: { override?: boolean }) {
@@ -333,7 +442,8 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        THasInit
       >(next);
     },
     throws(list: ThrowsList) {
@@ -345,13 +455,77 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        THasInit
       >(next);
     },
-    exports(items: Array<RegisterableItems>, options?: { override?: boolean }) {
-      const override = options?.override ?? false;
+    /** @deprecated Use `.isolate({ exports: ... })` instead. */
+    exports(
+      items: Array<IsolationExportsTarget>,
+      options?: { override?: boolean },
+    ) {
+      return this.isolate({ exports: items }, options);
+    },
+    isolate(policy: IsolationPolicy, options?: { override?: boolean }) {
+      // Merging rules: deny merges with deny, only merges with only.
+      // Fail fast here rather than deferring to bootstrap — mixing deny+only
+      // is always a programming error and catching it at the call-site gives a
+      // clearer stack trace and earlier feedback.
+      const existingDeny = state.isolate?.deny ?? [];
+      const existingOnly = state.isolate?.only ?? [];
+      const existingExports = state.isolate?.exports;
+      const merged: IsolationPolicy = {};
+      if (existingDeny.length > 0 || policy.deny) {
+        merged.deny = [...existingDeny, ...(policy.deny ?? [])];
+      }
+      if (existingOnly.length > 0 || policy.only) {
+        merged.only = [...existingOnly, ...(policy.only ?? [])];
+      }
+
+      // Both fields being set — even via separate chained .isolate() calls — is
+      // an invalid combination; throw immediately instead of waiting for bootstrap.
+      if (merged.deny !== undefined && merged.only !== undefined) {
+        isolateConflictError.throw({ policyResourceId: state.id });
+      }
+
+      if (policy.exports !== undefined) {
+        if (policy.exports === "none") {
+          merged.exports = "none";
+        } else if (Array.isArray(policy.exports)) {
+          const override = options?.override === true;
+          if (
+            override ||
+            existingExports === undefined ||
+            existingExports === "none"
+          ) {
+            merged.exports = [...policy.exports];
+          } else if (Array.isArray(existingExports)) {
+            merged.exports = [...existingExports, ...policy.exports];
+          } else {
+            merged.exports = [...policy.exports];
+          }
+        } else {
+          merged.exports = policy.exports;
+        }
+      } else if (existingExports !== undefined) {
+        merged.exports = existingExports;
+      }
+
+      const next = clone(state, { isolate: merged });
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        THasInit
+      >(next);
+    },
+    subtree(policy: ResourceSubtreePolicy, options?: { override?: boolean }) {
       const next = clone(state, {
-        exports: mergeArray(state.exports, items, override),
+        subtree: mergeResourceSubtreePolicy(state.subtree, policy, options),
       });
       return makeResourceBuilder<
         TConfig,
@@ -360,7 +534,8 @@ export function makeResourceBuilder<
         TContext,
         TMeta,
         TTags,
-        TMiddleware
+        TMiddleware,
+        THasInit
       >(next);
     },
     build() {
@@ -376,6 +551,7 @@ export function makeResourceBuilder<
         TMiddleware
       > = {
         id: state.id,
+        gateway: state.gateway,
         dependencies: state.dependencies,
         register: state.register,
         middleware: state.middleware,
@@ -383,18 +559,51 @@ export function makeResourceBuilder<
         context: state.context,
         init: state.init,
         dispose: state.dispose,
+        ready: state.ready,
+        cooldown: state.cooldown,
         configSchema: state.configSchema,
         resultSchema: state.resultSchema,
         meta: state.meta,
         overrides: state.overrides,
         throws: state.throws,
-        exports: state.exports,
+        isolate: state.isolate,
+        subtree: state.subtree,
       };
-      const resource = defineResource(definition);
-      (resource as { [symbolFilePath]?: string })[symbolFilePath] =
-        state.filePath;
-      return resource;
+      const resource = defineResource(
+        state.frameworkOwned ? markFrameworkDefinition(definition) : definition,
+      );
+      return deepFreeze({
+        ...resource,
+        [symbolFilePath]: state.filePath,
+      });
     },
   };
-  return builder;
+  return builder as ResourceFluentBuilderBeforeInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  > &
+    ResourceFluentBuilderAfterInit<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      TMeta,
+      TTags,
+      TMiddleware
+    > &
+    ResourceFluentBuilder<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      TMeta,
+      TTags,
+      TMiddleware,
+      THasInit
+    >;
 }

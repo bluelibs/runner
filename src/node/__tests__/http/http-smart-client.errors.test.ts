@@ -33,7 +33,7 @@ describe("http smart/mixed client typed errors", () => {
   const baseUrl = "http://127.0.0.1:3333/__runner";
   const serializer = new Serializer();
   const helper = {
-    id: "tests.errors.node",
+    id: "tests-errors-node",
     throw: (data: any) => {
       throw createMessageError("typed:" + String(data?.code));
     },
@@ -141,5 +141,70 @@ describe("http smart/mixed client typed errors", () => {
       /typed:21/,
     );
     expect(reqSpy).toHaveBeenCalled();
+  });
+
+  it("rethrows original RemoteLaneTransportError when typed id exists but data is missing", async () => {
+    jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
+      const env = {
+        ok: false,
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "boom",
+          id: helper.id,
+        },
+      };
+      const body = serializer.stringify(env);
+      cb(
+        asIncoming(Readable.from([body]), {
+          "content-type": "application/json",
+        }),
+      );
+      return makeSink();
+    }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer,
+      errorRegistry: new Map([[helper.id, helper]]),
+    });
+
+    await expect(client.task("t.json", { a: 1 } as any)).rejects.toMatchObject({
+      name: "RemoteLaneTransportError",
+      id: helper.id,
+      data: undefined,
+    });
+  });
+
+  it("rethrows original RemoteLaneTransportError when errorRegistry has no matching helper", async () => {
+    jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
+      const env = {
+        ok: false,
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "boom",
+          id: "unknown-helper",
+          data: { code: 32 },
+        },
+      };
+      const body = serializer.stringify(env);
+      cb(
+        asIncoming(Readable.from([body]), {
+          "content-type": "application/json",
+        }),
+      );
+      return makeSink();
+    }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer,
+      errorRegistry: new Map([[helper.id, helper]]),
+    });
+
+    await expect(client.task("t.json", { a: 1 } as any)).rejects.toMatchObject({
+      name: "RemoteLaneTransportError",
+      id: "unknown-helper",
+      data: { code: 32 },
+    });
   });
 });

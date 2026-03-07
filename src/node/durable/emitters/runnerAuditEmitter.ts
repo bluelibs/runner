@@ -1,12 +1,13 @@
 import type { EventManager } from "../../../models/EventManager";
 import type { DurableAuditEmitter, DurableAuditEntry } from "../core/audit";
 import { durableEvents } from "../events";
+import { RuntimeCallSource, runtimeSource } from "../../../types/runtimeSource";
 
 export function createDurableRunnerAuditEmitter(params: {
   eventManager: EventManager;
-  source?: string;
+  source?: RuntimeCallSource;
 }): DurableAuditEmitter {
-  const source = params.source ?? "durable.audit";
+  const source = params.source ?? runtimeSource.resource("durable.runtime");
   const { eventManager } = params;
 
   return {

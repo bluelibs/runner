@@ -1,12 +1,18 @@
-import { r, resource, run } from "../..";
+import { r, defineResource, run } from "../..";
 
 describe("resource builder - register function+function merge branch", () => {
   it("merges two function-based registers preserving order", () => {
-    const a = resource({ id: "tests.builder.fnfn.a", init: async () => 1 });
-    const b = resource({ id: "tests.builder.fnfn.b", init: async () => 2 });
+    const a = defineResource({
+      id: "tests-builder-fnfn-a",
+      init: async () => 1,
+    });
+    const b = defineResource({
+      id: "tests-builder-fnfn-b",
+      init: async () => 2,
+    });
 
     const composed = r
-      .resource("tests.builder.fnfn")
+      .resource("tests-builder-fnfn")
       .register(() => [a])
       .register(() => [b])
       .build();
@@ -20,17 +26,17 @@ describe("resource builder - register function+function merge branch", () => {
   });
 
   it("init accepts traditional (config, deps, ctx) signature", async () => {
-    const a = resource({
-      id: "tests.builder.init.trad.a",
+    const a = defineResource({
+      id: "tests-builder-init-trad-a",
       init: async () => 1,
     });
-    const b = resource({
-      id: "tests.builder.init.trad.b",
+    const b = defineResource({
+      id: "tests-builder-init-trad-b",
       init: async () => 2,
     });
 
     const app = r
-      .resource("tests.builder.init.trad")
+      .resource("tests-builder-init-trad")
       .register([a, b])
       .dependencies({ a, b })
       .context(() => ({ c: 0 }))
@@ -52,9 +58,12 @@ describe("resource builder - register function+function merge branch", () => {
   });
 
   it("init handles context state via the classic signature", async () => {
-    const a = resource({ id: "tests.builder.init.obj.a", init: async () => 5 });
+    const a = defineResource({
+      id: "tests-builder-init-obj-a",
+      init: async () => 5,
+    });
     const app = r
-      .resource("tests.builder.init.obj")
+      .resource("tests-builder-init-obj")
       .register([a])
       .dependencies({ a })
       .context(() => ({ hits: 0 }))
@@ -71,7 +80,7 @@ describe("resource builder - register function+function merge branch", () => {
 
   it("init single-arg config signature works", async () => {
     const app = r
-      .resource("tests.builder.init.singlearg")
+      .resource("tests-builder-init-singlearg")
       .init(async (_cfg: void) => {
         return Promise.resolve("ok");
       })
@@ -87,7 +96,7 @@ describe("resource builder - register function+function merge branch", () => {
       return Promise.resolve("zero");
     }
 
-    const app = r.resource("tests.builder.init.zero").init(zeroInit).build();
+    const app = r.resource("tests-builder-init-zero").init(zeroInit).build();
 
     const rr = await run(app);
     expect(rr.value).toBe("zero");
@@ -100,7 +109,7 @@ describe("resource builder - register function+function merge branch", () => {
     const fn: any = eval("cfg => 11");
 
     const app = r
-      .resource("tests.builder.init.arrow.noparens")
+      .resource("tests-builder-init-arrow-noparens")
       .init(fn)
       .build();
 
@@ -121,7 +130,7 @@ describe("resource builder - register function+function merge branch", () => {
     });
 
     const app = r
-      .resource("tests.builder.init.exotic")
+      .resource("tests-builder-init-exotic")
       .init(proxied as unknown as () => Promise<string>)
       .build();
 
@@ -131,11 +140,17 @@ describe("resource builder - register function+function merge branch", () => {
   });
 
   it("resource dependencies append by default and override when requested", async () => {
-    const a = resource({ id: "tests.builder.deps.a", init: async () => 5 });
-    const b = resource({ id: "tests.builder.deps.b", init: async () => 7 });
+    const a = defineResource({
+      id: "tests-builder-deps-a",
+      init: async () => 5,
+    });
+    const b = defineResource({
+      id: "tests-builder-deps-b",
+      init: async () => 7,
+    });
 
     const appAppend = r
-      .resource("tests.builder.deps.append")
+      .resource("tests-builder-deps-append")
       .register([a, b])
       .dependencies(() => ({ a }))
       .dependencies({ b })
@@ -147,7 +162,7 @@ describe("resource builder - register function+function merge branch", () => {
     await rr1.dispose();
 
     const appOverride = r
-      .resource("tests.builder.deps.override")
+      .resource("tests-builder-deps-override")
       .register([a, b])
       .dependencies({ a })
       .dependencies({ b }, { override: true })
@@ -160,16 +175,16 @@ describe("resource builder - register function+function merge branch", () => {
   });
 
   it("resource dependencies object+object append branch", async () => {
-    const a = resource({
-      id: "tests.builder.resdeps.oo.a",
+    const a = defineResource({
+      id: "tests-builder-resdeps-oo-a",
       init: async () => 1,
     });
-    const b = resource({
-      id: "tests.builder.resdeps.oo.b",
+    const b = defineResource({
+      id: "tests-builder-resdeps-oo-b",
       init: async () => 2,
     });
     const app = r
-      .resource("tests.builder.resdeps.oo")
+      .resource("tests-builder-resdeps-oo")
       .register([a, b])
       .dependencies({ a })
       .dependencies({ b })
@@ -181,8 +196,8 @@ describe("resource builder - register function+function merge branch", () => {
   });
 
   it("falls back to the base resource when with() is called with detached this", () => {
-    const base = resource<{ name: string }>({
-      id: "tests.builder.resource.detached.with",
+    const base = defineResource<{ name: string }>({
+      id: "tests-builder-resource-detached-with",
       init: async (cfg) => ({ name: cfg.name }),
     });
 

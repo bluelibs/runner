@@ -1,29 +1,34 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   IResource,
   IResourceDefinition,
   IResourceMeta,
-  IValidationSchema,
+  IsolationExportsTarget,
+  IsolationPolicy,
   OverridableElements,
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
+  ResourceSubtreePolicy,
+  ResourceTagType,
+  SubtreePolicyOptions,
   TagType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 import type { ResolveConfig } from "./types";
 
 /**
- * Fluent builder interface for constructing resources.
- * Each method returns a new builder with updated type parameters.
+ * Fluent resource builder before `.init(...)`.
  */
-export interface ResourceFluentBuilder<
+export interface ResourceFluentBuilderBeforeInit<
   TConfig = void,
   TValue extends Promise<any> = Promise<any>,
   TDeps extends DependencyMapType = {},
   TContext = any,
   TMeta extends IResourceMeta = IResourceMeta,
-  TTags extends TagType[] = TagType[],
+  TTags extends ResourceTagType[] = ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[] =
     ResourceMiddlewareAttachmentType[],
 > {
@@ -33,7 +38,7 @@ export interface ResourceFluentBuilder<
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | ((config: TConfig) => TNewDeps),
     options?: { override?: false },
-  ): ResourceFluentBuilder<
+  ): ResourceFluentBuilderBeforeInit<
     TConfig,
     TValue,
     TDeps & TNewDeps,
@@ -47,7 +52,7 @@ export interface ResourceFluentBuilder<
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | ((config: TConfig) => TNewDeps),
     options: { override: true },
-  ): ResourceFluentBuilder<
+  ): ResourceFluentBuilderBeforeInit<
     TConfig,
     TValue,
     TNewDeps,
@@ -57,26 +62,10 @@ export interface ResourceFluentBuilder<
     TMiddleware
   >;
 
-  register(
-    items:
-      | RegisterableItems
-      | Array<RegisterableItems>
-      | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>),
-    options?: { override?: boolean },
-  ): ResourceFluentBuilder<
-    TConfig,
-    TValue,
-    TDeps,
-    TContext,
-    TMeta,
-    TTags,
-    TMiddleware
-  >;
-
   middleware<TNewMw extends ResourceMiddlewareAttachmentType[]>(
     mw: TNewMw,
     options?: { override?: boolean },
-  ): ResourceFluentBuilder<
+  ): ResourceFluentBuilderBeforeInit<
     TConfig,
     TValue,
     TDeps,
@@ -87,10 +76,10 @@ export interface ResourceFluentBuilder<
   >;
 
   // Append signature (default)
-  tags<TNewTags extends TagType[]>(
-    tags: TNewTags,
+  tags<const TNewTags extends TagType[]>(
+    tags: EnsureTagsForTarget<"resources", TNewTags>,
     options?: { override?: false },
-  ): ResourceFluentBuilder<
+  ): ResourceFluentBuilderBeforeInit<
     TConfig,
     TValue,
     TDeps,
@@ -101,10 +90,10 @@ export interface ResourceFluentBuilder<
   >;
 
   // Override signature (replace)
-  tags<TNewTags extends TagType[]>(
-    tags: TNewTags,
+  tags<const TNewTags extends TagType[]>(
+    tags: EnsureTagsForTarget<"resources", TNewTags>,
     options: { override: true },
-  ): ResourceFluentBuilder<
+  ): ResourceFluentBuilderBeforeInit<
     TConfig,
     TValue,
     TDeps,
@@ -116,7 +105,7 @@ export interface ResourceFluentBuilder<
 
   context<TNewCtx>(
     factory: () => TNewCtx,
-  ): ResourceFluentBuilder<
+  ): ResourceFluentBuilderBeforeInit<
     TConfig,
     TValue,
     TDeps,
@@ -127,8 +116,8 @@ export interface ResourceFluentBuilder<
   >;
 
   configSchema<TNewConfig>(
-    schema: IValidationSchema<TNewConfig>,
-  ): ResourceFluentBuilder<
+    schema: ValidationSchemaInput<TNewConfig>,
+  ): ResourceFluentBuilderBeforeInit<
     TNewConfig,
     TValue,
     TDeps,
@@ -142,8 +131,8 @@ export interface ResourceFluentBuilder<
    * Alias for configSchema. Use this to define the resource configuration validation contract.
    */
   schema<TNewConfig>(
-    schema: IValidationSchema<TNewConfig>,
-  ): ResourceFluentBuilder<
+    schema: ValidationSchemaInput<TNewConfig>,
+  ): ResourceFluentBuilderBeforeInit<
     TNewConfig,
     TValue,
     TDeps,
@@ -154,13 +143,25 @@ export interface ResourceFluentBuilder<
   >;
 
   resultSchema<TResolved>(
-    schema: IValidationSchema<TResolved>,
-  ): ResourceFluentBuilder<
+    schema: ValidationSchemaInput<TResolved>,
+  ): ResourceFluentBuilderBeforeInit<
     TConfig,
     Promise<TResolved>,
     TDeps,
     TContext,
     TMeta,
+    TTags,
+    TMiddleware
+  >;
+
+  meta<TNewMeta extends IResourceMeta>(
+    m: TNewMeta,
+  ): ResourceFluentBuilderBeforeInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TNewMeta,
     TTags,
     TMiddleware
   >;
@@ -175,9 +176,26 @@ export interface ResourceFluentBuilder<
       TTags,
       TMiddleware
     >,
-  ): ResourceFluentBuilder<
+  ): ResourceFluentBuilderAfterInit<
     ResolveConfig<TConfig, TNewConfig>,
     TNewValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+
+  // Kept available pre-init for compatibility and ergonomic ordering.
+  register(
+    items:
+      | RegisterableItems
+      | Array<RegisterableItems>
+      | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>),
+    options?: { override?: boolean },
+  ): ResourceFluentBuilderBeforeInit<
+    TConfig,
+    TValue,
     TDeps,
     TContext,
     TMeta,
@@ -199,7 +217,7 @@ export interface ResourceFluentBuilder<
         TMiddleware
       >["dispose"]
     >,
-  ): ResourceFluentBuilder<
+  ): ResourceFluentBuilderBeforeInit<
     TConfig,
     TValue,
     TDeps,
@@ -209,21 +227,57 @@ export interface ResourceFluentBuilder<
     TMiddleware
   >;
 
-  meta<TNewMeta extends IResourceMeta>(
-    m: TNewMeta,
-  ): ResourceFluentBuilder<
+  ready(
+    fn: NonNullable<
+      IResourceDefinition<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        any,
+        any,
+        TMeta,
+        TTags,
+        TMiddleware
+      >["ready"]
+    >,
+  ): ResourceFluentBuilderBeforeInit<
     TConfig,
     TValue,
     TDeps,
     TContext,
-    TNewMeta,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+
+  cooldown(
+    fn: NonNullable<
+      IResourceDefinition<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        any,
+        any,
+        TMeta,
+        TTags,
+        TMiddleware
+      >["cooldown"]
+    >,
+  ): ResourceFluentBuilderBeforeInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
     TTags,
     TMiddleware
   >;
 
   throws(
     list: ThrowsList,
-  ): ResourceFluentBuilder<
+  ): ResourceFluentBuilderBeforeInit<
     TConfig,
     TValue,
     TDeps,
@@ -235,16 +289,44 @@ export interface ResourceFluentBuilder<
 
   /**
    * Declares which registered items are visible outside this resource's
-   * registration subtree. When present, only listed items can be referenced
-   * from outside. Omitting `.exports()` = everything is public.
+   * registration subtree.
    *
-   * Follows standard composition rules: appends by default, replaces
-   * when `{ override: true }` is passed.
+   * @deprecated Use `.isolate({ exports: [...] })` instead (or `exports: "none"`).
    */
   exports(
-    items: Array<RegisterableItems>,
+    items: Array<IsolationExportsTarget>,
     options?: { override?: boolean },
-  ): ResourceFluentBuilder<
+  ): ResourceFluentBuilderBeforeInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+
+  /**
+   * Restricts wiring access for this resource boundary.
+   * Multiple calls are additive.
+   */
+  isolate(
+    policy: IsolationPolicy,
+    options?: { override?: boolean },
+  ): ResourceFluentBuilderBeforeInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+
+  subtree(
+    policy: ResourceSubtreePolicy,
+    options?: SubtreePolicyOptions,
+  ): ResourceFluentBuilderBeforeInit<
     TConfig,
     TValue,
     TDeps,
@@ -257,7 +339,7 @@ export interface ResourceFluentBuilder<
   overrides(
     o: Array<OverridableElements>,
     options?: { override?: boolean },
-  ): ResourceFluentBuilder<
+  ): ResourceFluentBuilderBeforeInit<
     TConfig,
     TValue,
     TDeps,
@@ -277,3 +359,216 @@ export interface ResourceFluentBuilder<
     TMiddleware
   >;
 }
+
+/**
+ * Fluent resource builder after `.init(...)`.
+ * Shape/wiring-affecting methods are intentionally unavailable.
+ */
+export interface ResourceFluentBuilderAfterInit<
+  TConfig = void,
+  TValue extends Promise<any> = Promise<any>,
+  TDeps extends DependencyMapType = {},
+  TContext = any,
+  TMeta extends IResourceMeta = IResourceMeta,
+  TTags extends ResourceTagType[] = ResourceTagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
+> {
+  id: string;
+  register(
+    items:
+      | RegisterableItems
+      | Array<RegisterableItems>
+      | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>),
+    options?: { override?: boolean },
+  ): ResourceFluentBuilderAfterInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  dispose(
+    fn: NonNullable<
+      IResourceDefinition<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        any,
+        any,
+        TMeta,
+        TTags,
+        TMiddleware
+      >["dispose"]
+    >,
+  ): ResourceFluentBuilderAfterInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  ready(
+    fn: NonNullable<
+      IResourceDefinition<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        any,
+        any,
+        TMeta,
+        TTags,
+        TMiddleware
+      >["ready"]
+    >,
+  ): ResourceFluentBuilderAfterInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  cooldown(
+    fn: NonNullable<
+      IResourceDefinition<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        any,
+        any,
+        TMeta,
+        TTags,
+        TMiddleware
+      >["cooldown"]
+    >,
+  ): ResourceFluentBuilderAfterInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  meta<TNewMeta extends IResourceMeta>(
+    m: TNewMeta,
+  ): ResourceFluentBuilderAfterInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TNewMeta,
+    TTags,
+    TMiddleware
+  >;
+  throws(
+    list: ThrowsList,
+  ): ResourceFluentBuilderAfterInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  /**
+   * @deprecated Use `.isolate({ exports: [...] })` instead (or `exports: "none"`).
+   */
+  exports(
+    items: Array<IsolationExportsTarget>,
+    options?: { override?: boolean },
+  ): ResourceFluentBuilderAfterInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  isolate(
+    policy: IsolationPolicy,
+    options?: { override?: boolean },
+  ): ResourceFluentBuilderAfterInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  subtree(
+    policy: ResourceSubtreePolicy,
+    options?: SubtreePolicyOptions,
+  ): ResourceFluentBuilderAfterInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  overrides(
+    o: Array<OverridableElements>,
+    options?: { override?: boolean },
+  ): ResourceFluentBuilderAfterInit<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  build(): IResource<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+}
+
+export type ResourceFluentBuilder<
+  TConfig = void,
+  TValue extends Promise<any> = Promise<any>,
+  TDeps extends DependencyMapType = {},
+  TContext = any,
+  TMeta extends IResourceMeta = IResourceMeta,
+  TTags extends ResourceTagType[] = ResourceTagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
+  THasInit extends boolean = false,
+> = THasInit extends true
+  ? ResourceFluentBuilderAfterInit<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      TMeta,
+      TTags,
+      TMiddleware
+    >
+  : ResourceFluentBuilderBeforeInit<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      TMeta,
+      TTags,
+      TMiddleware
+    >;

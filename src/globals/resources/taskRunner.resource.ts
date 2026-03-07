@@ -1,9 +1,12 @@
-import { defineResource } from "../../define";
+import { defineFrameworkResource } from "../../definers/frameworkDefinition";
 import type { TaskRunner } from "../../models/TaskRunner";
 import { globalTags } from "../globalTags";
 
-export const taskRunnerResource = defineResource<void, Promise<TaskRunner>>({
-  id: "globals.resources.taskRunner",
+export const taskRunnerResource = defineFrameworkResource<
+  void,
+  Promise<TaskRunner>
+>({
+  id: "system.taskRunner",
   meta: {
     title: "Task Runner",
     description:

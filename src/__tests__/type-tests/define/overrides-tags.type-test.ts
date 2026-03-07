@@ -1,43 +1,74 @@
+import { defineOverride, r } from "../../..";
 import {
-  defineOverride,
   defineResource,
   defineTag,
   defineTask,
   defineTaskMiddleware,
 } from "../../../define";
 
-// Type-only tests for define overrides and tags.
+// Type-only tests for strict overrides and tags.
 
-// Scenario: overrides should enforce compatible implementations.
+// Scenario: defineOverride(base, patch) is no longer supported.
 {
   const task = defineTask({
     id: "task",
     run: async () => "Task executed",
   });
 
+  // @ts-expect-error patch-form override is removed from the public API
   defineOverride(task, {
-    // @ts-expect-error
-    run: async () => 234,
+    run: async () => "Task overridden",
   });
 
-  const resource = defineResource({
-    id: "resource",
+  const validOverride = defineOverride(task, async () => "Task overridden");
+
+  defineResource({
+    id: "resource-valid-override",
     register: [task],
-    init: async () => "Resource executed",
+    overrides: [validOverride],
+    init: async () => "ok",
   });
 
-  defineOverride(resource, {
-    init: async () => "Resource overridden",
+  const rawSameIdTask = defineTask({
+    id: "task",
+    run: async () => "raw",
   });
 
-  defineOverride(resource, {
-    // @ts-expect-error
-    init: async () => 123,
+  defineResource({
+    id: "resource-invalid-override-raw-task",
+    register: [task],
+    overrides: [
+      // @ts-expect-error .overrides([...]) accepts only override-produced definitions
+      rawSameIdTask,
+    ],
+    init: async () => "ok",
   });
 
-  defineTaskMiddleware({
-    id: "middleware",
-    run: async () => "Middleware executed",
+  const baseConfigResource = defineResource<{ name: string }, Promise<string>>({
+    id: "resource-with-config-base",
+    init: async (config) => config.name,
+  });
+
+  const validConfigOverride = r.override(
+    baseConfigResource,
+    async (config) => `override:${config.name}`,
+  );
+
+  defineResource({
+    id: "resource-valid-override-with-config",
+    register: [baseConfigResource.with({ name: "base" })],
+    overrides: [validConfigOverride],
+    init: async () => "ok",
+  });
+
+  defineResource({
+    id: "resource-invalid-override-with-config",
+    register: [baseConfigResource.with({ name: "base" })],
+    overrides: [
+      // @ts-expect-error configured resources are not valid override entries
+      validConfigOverride.with({ name: "ok" }),
+    ],
+    init: async () => "ok",
   });
 }
 
@@ -51,8 +82,13 @@ import {
   // @ts-expect-error
   tag.with({ value: 123 });
 
+  defineTaskMiddleware({
+    id: "middleware",
+    run: async () => "Middleware executed",
+  });
+
   defineTask({
-    id: "task",
+    id: "task-tagged",
     tags: [
       tag,
       // @ts-expect-error

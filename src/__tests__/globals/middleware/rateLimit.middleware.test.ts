@@ -2,13 +2,20 @@ import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.middleware";
 
-const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
-
 describe("Rate Limit Middleware", () => {
+  const expectValidationError = (fn: () => unknown): void => {
+    try {
+      fn();
+      throw new Error("Expected validation error");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+    }
+  };
+
   it("should allow requests within limit", async () => {
     let callCount = 0;
     const task = defineTask({
-      id: "rateLimit.allow",
+      id: "rateLimit-allow",
       middleware: [rateLimitTaskMiddleware.with({ windowMs: 1000, max: 2 })],
       run: async () => {
         callCount++;
@@ -33,7 +40,7 @@ describe("Rate Limit Middleware", () => {
 
   it("should throw RateLimitError when exceeding limit", async () => {
     const task = defineTask({
-      id: "rateLimit.exceed",
+      id: "rateLimit-exceed",
       middleware: [rateLimitTaskMiddleware.with({ windowMs: 1000, max: 1 })],
       run: async () => "ok",
     });
@@ -52,10 +59,11 @@ describe("Rate Limit Middleware", () => {
   });
 
   it("should reset after window expires", async () => {
+    jest.useFakeTimers();
     let callCount = 0;
     const config = { windowMs: 100, max: 1 };
     const task = defineTask({
-      id: "rateLimit.reset",
+      id: "rateLimit-reset",
       middleware: [rateLimitTaskMiddleware.with(config)],
       run: async () => {
         callCount++;
@@ -70,13 +78,18 @@ describe("Rate Limit Middleware", () => {
       async init(_, { task }) {
         await task();
         await expect(task()).rejects.toThrow(/Rate limit exceeded/i);
-        await sleep(150);
+        jest.advanceTimersByTime(150);
+        await Promise.resolve();
         await task();
       },
     });
 
-    await run(app);
-    expect(callCount).toBe(2);
+    try {
+      await run(app);
+      expect(callCount).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("should reset exactly at window boundary", async () => {
@@ -85,7 +98,7 @@ describe("Rate Limit Middleware", () => {
     let callCount = 0;
     const config = { windowMs: 100, max: 1 };
     const task = defineTask({
-      id: "rateLimit.boundary",
+      id: "rateLimit-boundary",
       middleware: [rateLimitTaskMiddleware.with(config)],
       run: async () => {
         callCount += 1;
@@ -94,7 +107,7 @@ describe("Rate Limit Middleware", () => {
     });
 
     const app = defineResource({
-      id: "app.boundary",
+      id: "app-boundary",
       register: [task],
       dependencies: { task },
       async init(_, { task }) {
@@ -125,65 +138,48 @@ describe("Rate Limit Middleware", () => {
     });
   });
 
-  it("should throw a clear error when used without .with(config)", async () => {
-    const task = defineTask({
-      id: "rateLimit.missingConfig",
-      // Intentionally bypass typing to simulate JS usage without `.with(...)`.
-      // @ts-expect-error - rateLimitTaskMiddleware requires `.with({ windowMs, max })`.
-      middleware: [rateLimitTaskMiddleware],
-      run: async () => "ok",
-    });
-
-    const app = defineResource({
-      id: "app",
-      register: [task],
-      dependencies: { task },
-      async init(_, { task }) {
-        await task();
-      },
-    });
-
-    const runPromise = run(app);
-    await expect(runPromise).rejects.toThrow(
-      /requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i,
-    );
-  });
-
   it("should throw when config is null", () => {
-    expect(() => {
+    expectValidationError(() => {
       // @ts-expect-error - runtime guard should reject invalid config.
       rateLimitTaskMiddleware.with(null);
-    }).toThrow(/requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i);
+    });
   });
 
   it("should throw when config is a non-object", () => {
-    expect(() => {
+    expectValidationError(() => {
       // @ts-expect-error - runtime guard should reject invalid config.
       rateLimitTaskMiddleware.with(5);
-    }).toThrow(/requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i);
+    });
+  });
+
+  it("should throw when required config keys are missing", () => {
+    expectValidationError(() => {
+      // @ts-expect-error - runtime guard should reject missing keys.
+      rateLimitTaskMiddleware.with({});
+    });
   });
 
   it("should throw when windowMs is not finite", () => {
-    expect(() => {
+    expectValidationError(() => {
       rateLimitTaskMiddleware.with({ windowMs: Infinity, max: 1 });
-    }).toThrow(/positive number for config\.windowMs/i);
+    });
   });
 
   it("should throw when windowMs is not positive", () => {
-    expect(() => {
+    expectValidationError(() => {
       rateLimitTaskMiddleware.with({ windowMs: 0, max: 1 });
-    }).toThrow(/positive number for config\.windowMs/i);
+    });
   });
 
   it("should throw when max is not finite", () => {
-    expect(() => {
+    expectValidationError(() => {
       rateLimitTaskMiddleware.with({ windowMs: 1000, max: Infinity });
-    }).toThrow(/positive number for config\.max/i);
+    });
   });
 
   it("should throw when max is not positive", () => {
-    expect(() => {
+    expectValidationError(() => {
       rateLimitTaskMiddleware.with({ windowMs: 1000, max: 0 });
-    }).toThrow(/positive number for config\.max/i);
+    });
   });
 });

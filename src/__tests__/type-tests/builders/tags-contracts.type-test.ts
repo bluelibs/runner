@@ -21,10 +21,10 @@ import type { TagType } from "../../../";
       tag2.with({ value: "123" }),
       tag3,
     ])
-    .meta({} as Record<string, any>)
-    .run(async (input) => {
+    .run(async (input: unknown) => {
       return input;
     })
+    .meta({} as Record<string, any>)
     .build();
 }
 

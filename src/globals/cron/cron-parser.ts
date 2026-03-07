@@ -1,5 +1,5 @@
 import { CronExpressionParser } from "cron-parser";
-import { cronConfigurationError } from "./cron.errors";
+import { validationError } from "../../errors";
 
 type CronParseOptions = {
   currentDate?: Date;
@@ -20,8 +20,10 @@ export class CronParser {
 
       return interval.next().toDate();
     } catch {
-      return cronConfigurationError.throw({
-        message: `Invalid cron expression \"${expression}\".`,
+      return validationError.throw({
+        subject: "Cron expression",
+        id: "runner.cron",
+        originalError: `Invalid cron expression "${expression}".`,
       });
     }
   }

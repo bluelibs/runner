@@ -1,24 +1,16 @@
 import { getRunner, RequestCtx, getUser } from "../bootstrap";
 import { json, parseEvent, errorToResponse, APIGatewayProxyResult } from "../http";
+import { AnyApiGatewayEvent, LambdaContextLike } from "../types/aws";
 import { z } from "zod";
 
 const GetUserSchema = z.object({ id: z.string().min(1) });
 
-interface LambdaEvent {
-  pathParameters?: { id?: string; userId?: string };
-  requestContext?: { http?: { method?: string } };
-  httpMethod?: string;
-  rawPath?: string;
-  path?: string;
-  headers?: Record<string, string>;
-}
-
 export const handler = async (
-  event: LambdaEvent,
-  context: { awsRequestId?: string },
+  event: AnyApiGatewayEvent,
+  context: LambdaContextLike,
 ): Promise<APIGatewayProxyResult> => {
   const rr = await getRunner();
-  const id = event?.pathParameters?.id || event?.pathParameters?.userId || "";
+  const id = event.pathParameters?.id || event.pathParameters?.userId || "";
   const { method, path, headers } = parseEvent(event);
 
   return RequestCtx.provide(

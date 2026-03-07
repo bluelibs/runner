@@ -49,7 +49,7 @@ describe("durable: crash recovery + resume (integration)", () => {
   it("resumes from last checkpoint after a restart (sleep)", async () => {
     const store = new MemoryStore();
     const task = r
-      .task("durable.tests.crash-recovery.sleep")
+      .task("durable-tests-crash-recovery-sleep")
       .run(async () => "unused")
       .build();
 
@@ -109,7 +109,7 @@ describe("durable: crash recovery + resume (integration)", () => {
   it("retries failed executions and replays completed steps on resume", async () => {
     const store = new MemoryStore();
     const task = r
-      .task("durable.tests.crash-recovery.retry")
+      .task("durable-tests-crash-recovery-retry")
       .run(async () => "unused")
       .build();
 
@@ -176,10 +176,10 @@ describe("durable: crash recovery + resume (integration)", () => {
 
   it("recover() resumes running executions without timers", async () => {
     const store = new MemoryStore();
-    const executionId = "durable.tests.crash-recovery.recover.exec";
+    const executionId = "durable-tests-crash-recovery-recover-exec";
 
     const task = r
-      .task("durable.tests.crash-recovery.recover.task")
+      .task("durable-tests-crash-recovery-recover-task")
       .run(async () => "unused")
       .build();
 

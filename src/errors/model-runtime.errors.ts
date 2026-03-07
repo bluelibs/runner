@@ -1,4 +1,4 @@
-import { error } from "../definers/builders/error";
+import { frameworkError as error } from "../definers/builders/error";
 import type { DefaultErrorType } from "../types/error";
 
 // Store: TaskRunner not set
@@ -33,6 +33,19 @@ export const queueDeadlockError = error<DefaultErrorType>(
   )
   .remediation(
     "Avoid calling queue.run() from within another queued task. If you need to chain tasks, consider using task dependencies or hooks instead.",
+  )
+  .build();
+
+// Queue: Task ID overflow
+export const queueTaskIdOverflowError = error<DefaultErrorType>(
+  "runner.errors.queue.taskIdOverflow",
+)
+  .format(
+    () =>
+      "Queue cannot schedule additional tasks because the task id counter reached its limit.",
+  )
+  .remediation(
+    "Dispose the queue and create a new Queue instance to continue scheduling tasks safely.",
   )
   .build();
 
@@ -111,14 +124,53 @@ export const unknownMiddlewareTypeError = error<DefaultErrorType>(
 export const middlewareInterceptUnknownTypeError = unknownMiddlewareTypeError;
 
 // DependencyProcessor: Parallel initialization scheduling failure
-export const parallelInitSchedulingError = error<DefaultErrorType>(
-  "runner.errors.dependencyProcessor.parallelInitScheduling",
-)
+export const parallelInitSchedulingError = error<
+  {
+    pendingResourceIds?: string[];
+    blockedDependencies?: Array<{
+      resourceId: string;
+      dependencyIds: string[];
+    }>;
+  } & DefaultErrorType
+>("runner.errors.dependencyProcessor.parallelInitScheduling")
   .format(
-    () =>
-      "Could not schedule pending resources for initialization in parallel mode.",
+    (input?: {
+      pendingResourceIds?: string[];
+      blockedDependencies?: Array<{
+        resourceId: string;
+        dependencyIds: string[];
+      }>;
+    }) => {
+      const details = input?.blockedDependencies ?? [];
+      if (details.length === 0) {
+        return "Could not schedule pending resources for initialization in parallel mode.";
+      }
+
+      const blockedSummary = details
+        .map(
+          ({ resourceId, dependencyIds }) =>
+            `${resourceId} waiting for [${dependencyIds.join(", ")}]`,
+        )
+        .join("; ");
+      return `Could not schedule pending resources for initialization in parallel mode. Blocked resources: ${blockedSummary}.`;
+    },
   )
   .remediation(
-    "This indicates a dependency ordering issue in parallel initialization mode. Ensure all resources have their dependencies properly declared, or switch to sequential initialization mode via run(app, { initMode: 'sequential' }).",
+    "This indicates a dependency ordering issue in parallel initialization mode. Ensure all resources have their dependencies properly declared, or switch to sequential lifecycle mode via run(app, { lifecycleMode: 'sequential' }).",
+  )
+  .build();
+
+export const hookEventBufferFlushAbortedError = error<
+  {
+    hookId: string;
+    flushPasses: number;
+  } & DefaultErrorType
+>("runner.errors.dependencyProcessor.hookEventBufferFlushAborted")
+  .format(
+    ({ hookId, flushPasses }) =>
+      `Buffered hook event flush for "${hookId}" exceeded ${flushPasses} passes while runtime event cycle detection is disabled.`,
+  )
+  .remediation(
+    "Enable runtime event cycle detection, or update hooks to stop re-buffering the same event chain during flush.",
   )
   .build();

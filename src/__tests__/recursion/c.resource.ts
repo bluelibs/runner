@@ -6,7 +6,7 @@ import { b1Resource, b2Resource } from "./b.resource";
 const value = Math.random() > 0.5 ? b1Resource : b2Resource;
 
 export const cResource = defineResource({
-  id: "c.resource",
+  id: "c-resource",
   dependencies: {
     aTask,
     customResource: value,

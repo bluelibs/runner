@@ -9,7 +9,7 @@ import {
 
 function parseArgs(argv) {
   const idx = argv.indexOf("--");
-  if (idx === -1) return { extraJestArgs: [] };
+  if (idx === -1) return { extraJestArgs: argv.slice(2) };
   return { extraJestArgs: argv.slice(idx + 1) };
 }
 
@@ -115,6 +115,7 @@ async function main() {
     {
       AI_REPORTER_DISABLE_COVERAGE: "1",
       AI_REPORTER_SUMMARY_PATH: reporterSummaryPath,
+      NODE_NO_WARNINGS: "1",
     },
   );
 

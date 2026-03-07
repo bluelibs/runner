@@ -1,8 +1,8 @@
-import { globals, r } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 export const appConfig = r
-  .resource("app.modules.config")
-  .dependencies({ logger: globals.resources.logger })
+  .resource("config")
+  .dependencies({ logger: r.runner.logger })
   .init(async (_, { logger }) => {
     const isTest = process.env.NODE_ENV === "test";
     const listen =

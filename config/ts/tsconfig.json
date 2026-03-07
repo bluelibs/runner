@@ -25,7 +25,6 @@
   "include": ["../../src/**/*.ts"],
   "exclude": [
     "../../examples/**",
-    "../../web/**",
-    "../../src/node/durable/dashboard/**"
+    "../../web/**"
   ]
 }

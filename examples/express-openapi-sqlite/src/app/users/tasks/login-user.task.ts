@@ -17,7 +17,7 @@ const loginSchema = z.object({
  * User login task
  */
 export const loginUserTask = r
-  .task("app.tasks.auth.login")
+  .task("login")
   .dependencies({
     userService: usersRepository,
     config: appConfig,
@@ -59,7 +59,7 @@ export const loginUserTask = r
         }
 
         // Generate JWT token
-        const token = jwt.sign({ userId: user.id }, config.jwtSecret, {
+        const token = jwt.sign({ id: user.id }, config.jwtSecret, {
           expiresIn: "24h",
         });
 

@@ -9,19 +9,19 @@ void (async () => {
   type Input = { x: number };
 
   const add = r
-    .task("types.add")
+    .task("types-add")
     .inputSchema<Input>({ parse: (x: any) => x })
     .run(async (input: Input) => input.x + 1)
     .build();
 
   const depTask = r
-    .task("types.dep")
+    .task("types-dep")
     .inputSchema<{ v: string }>({ parse: (x: any) => x })
     .run(async (input) => input.v.toUpperCase())
     .build();
 
   const main = r
-    .task("types.main")
+    .task("types-main")
     .dependencies({ depTask })
     .inputSchema<Input>({ parse: (x: any) => x })
     .run(async (input, deps) => {
@@ -30,8 +30,8 @@ void (async () => {
     })
     .build();
 
-  const app = r.resource("types.app").register([add, depTask, main]).build();
-  const harness = r.resource("types.harness").register([app]).build();
+  const app = r.resource("types-app").register([add, depTask, main]).build();
+  const harness = r.resource("types-harness").register([app]).build();
 
   const rr = await run(harness);
   const valid1: number | undefined = await rr.runTask(add, { x: 1 });
@@ -52,11 +52,11 @@ void (async () => {
 // Scenario: emitEvent return type depends on literal report option.
 void (async () => {
   const evt = r
-    .event("types.emitEvent.builder")
+    .event("types-emitEvent-builder")
     .payloadSchema<{ id: string }>({ parse: (x: any) => x })
     .build();
 
-  const app = r.resource("types.emitEvent.builder.app").register([evt]).build();
+  const app = r.resource("types-emitEvent-builder-app").register([evt]).build();
   const rr = await run(app);
 
   const noReport = await rr.emitEvent(evt, { id: "1" });

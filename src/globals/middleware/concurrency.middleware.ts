@@ -1,7 +1,14 @@
-import { defineTaskMiddleware, defineResource } from "../../define";
+import {
+  defineFrameworkResource,
+  defineFrameworkTaskMiddleware,
+} from "../../definers/frameworkDefinition";
 import { Semaphore } from "../../models/Semaphore";
 import { globalTags } from "../globalTags";
-import { middlewareConcurrencyConflictError } from "../../errors";
+import {
+  middlewareConcurrencyConflictError,
+  validationError,
+} from "../../errors";
+import { Match } from "../../tools/check";
 
 export interface ConcurrencyMiddlewareConfig {
   /**
@@ -28,8 +35,46 @@ export interface ConcurrencyState {
   semaphores: Set<Semaphore>;
 }
 
-export const concurrencyResource = defineResource({
-  id: "globals.resources.concurrency",
+const concurrencyConfigPattern = Match.ObjectIncluding({
+  limit: Match.Optional(Match.PositiveInteger),
+  key: Match.Optional(Match.NonEmptyString),
+  semaphore: Match.Optional(Semaphore),
+});
+
+function assertConcurrencyConfig(config: ConcurrencyMiddlewareConfig): void {
+  const hasSemaphore = config.semaphore !== undefined;
+  const hasLimit = config.limit !== undefined;
+  const hasKey = config.key !== undefined;
+
+  if (hasSemaphore && (hasLimit || hasKey)) {
+    validationError.throw({
+      subject: "Middleware config",
+      id: "runner.middleware.task.concurrency",
+      originalError:
+        "Concurrency middleware config is ambiguous. Use either { semaphore } or { limit, key? }, not both.",
+    });
+  }
+
+  if (hasKey && !hasLimit) {
+    validationError.throw({
+      subject: "Middleware config",
+      id: "runner.middleware.task.concurrency",
+      originalError: 'Concurrency middleware config "key" requires "limit".',
+    });
+  }
+
+  if (!hasSemaphore && !hasLimit) {
+    validationError.throw({
+      subject: "Middleware config",
+      id: "runner.middleware.task.concurrency",
+      originalError:
+        'Concurrency middleware requires either "limit" or "semaphore".',
+    });
+  }
+}
+
+export const concurrencyResource = defineFrameworkResource({
+  id: "runner.concurrency",
   tags: [globalTags.system],
   init: async () => ({
     semaphoresByConfig: new WeakMap<ConcurrencyMiddlewareConfig, Semaphore>(),
@@ -48,11 +93,14 @@ export const concurrencyResource = defineResource({
 /**
  * Middleware that limits concurrency of task executions using a Semaphore.
  */
-export const concurrencyTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.task.concurrency",
+export const concurrencyTaskMiddleware = defineFrameworkTaskMiddleware({
+  id: "runner.middleware.task.concurrency",
   throws: [middlewareConcurrencyConflictError],
+  configSchema: concurrencyConfigPattern,
   dependencies: { state: concurrencyResource },
   async run({ task, next }, { state }, config: ConcurrencyMiddlewareConfig) {
+    assertConcurrencyConfig(config);
+
     let semaphore = config.semaphore;
 
     if (!semaphore && config.limit !== undefined) {
@@ -85,11 +133,6 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
       }
     }
 
-    if (!semaphore) {
-      // If no limit or semaphore is provided, just proceed
-      return next(task?.input);
-    }
-
-    return semaphore.withPermit(() => next(task?.input));
+    return semaphore!.withPermit(() => next(task?.input));
   },
 });

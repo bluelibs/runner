@@ -1,7 +1,6 @@
-import * as http from "http";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 
 function createReqRes(init: {
   method?: string;
@@ -72,15 +71,13 @@ function createReqRes(init: {
 describe("exposure CORS - more branches", () => {
   it("supports regex origin, uppercase Origin header, and varyOrigin=false", async () => {
     const t = defineTask<void, Promise<number>>({
-      id: "tests.cors.regex",
+      id: "tests-cors-regex",
       async run() {
         return 42;
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         cors: {
           origin: /.*/,
@@ -90,12 +87,12 @@ describe("exposure CORS - more branches", () => {
       },
     });
     const app = defineResource({
-      id: "tests.app.cors.regex",
+      id: "tests-app-cors-regex",
       register: [t, exposure],
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
 
       // Preflight (lowercase origin header path)
       const pre = createReqRes({
@@ -138,15 +135,13 @@ describe("exposure CORS - more branches", () => {
 
   it("supports function origin and Vary header de-duplication", async () => {
     const t = defineTask<void, Promise<string>>({
-      id: "tests.cors.fn",
+      id: "tests-cors-fn",
       async run() {
         return "ok";
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         cors: {
           origin: (o?: string) => (o?.endsWith(".ok.test") ? o : null),
@@ -155,12 +150,12 @@ describe("exposure CORS - more branches", () => {
       },
     });
     const app = defineResource({
-      id: "tests.app.cors.fn",
+      id: "tests-app-cors-fn",
       register: [t, exposure],
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
 
       // Preflight with pre-existing Vary header; should append without dupes
       const pre = createReqRes({

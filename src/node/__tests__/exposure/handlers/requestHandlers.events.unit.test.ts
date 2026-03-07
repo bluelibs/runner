@@ -1,13 +1,12 @@
-import * as http from "http";
 import { createRequestHandlers } from "../../../exposure/requestHandlers";
 import { defineError } from "../../../../definers/defineError";
 import { Serializer } from "../../../../serializer";
 import { defineResource, defineEvent, defineHook } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import * as requestBody from "../../../exposure/requestBody";
 import { cancellationError, createMessageError } from "../../../../errors";
-import { globalTags } from "../../../../globals/globalTags";
+import { createRequestHandlersDeps } from "./requestHandlers.deps.test.utils";
 import {
   createReqRes,
   HeaderName,
@@ -24,15 +23,96 @@ describe("requestHandlers - event handling", () => {
     jest.resetModules();
   });
 
+  it("returns authorization error when authorizeEvent blocks request", async () => {
+    const emitSpy = jest.fn(async () => undefined);
+    const deps = createRequestHandlersDeps(serializer, {
+      store: {
+        events: new Map([["e-authz", { event: { id: "e-authz" } }]]),
+        errors: new Map(),
+      },
+      taskRunner: {} as any,
+      eventManager: { emit: emitSpy },
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      authenticator: async () => ({ ok: true }),
+      allowList: { ensureTask: () => null, ensureEvent: () => null },
+      router: {
+        basePath: "/api",
+        extract: (_p: string) => ({ kind: "event", id: "e-authz" }),
+        isUnderBase: () => true,
+      },
+      cors: undefined,
+      authorizeEvent: async () => ({
+        status: 401,
+        body: {
+          ok: false,
+          error: { code: "UNAUTHORIZED", message: "Unauthorized" },
+        },
+      }),
+    });
+
+    const { handleEvent } = createRequestHandlers(deps);
+    const { req, res } = createReqRes({
+      method: HttpMethod.Post,
+      url: "/api/event/e-authz",
+      headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
+      body: JSON.stringify({ payload: { x: 1 } }),
+    });
+    await handleEvent(req, res);
+    const json = res._buf
+      ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+      : undefined;
+
+    expect(res._status).toBe(401);
+    expect(json?.error?.code).toBe("UNAUTHORIZED");
+    expect(emitSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns not found when event id is allowed but missing from store", async () => {
+    const emitSpy = jest.fn(async () => undefined);
+    const deps = createRequestHandlersDeps(serializer, {
+      store: {
+        events: new Map(),
+        errors: new Map(),
+      },
+      taskRunner: {} as any,
+      eventManager: { emit: emitSpy },
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      authenticator: async () => ({ ok: true }),
+      allowList: { ensureTask: () => null, ensureEvent: () => null },
+      router: {
+        basePath: "/api",
+        extract: (_p: string) => ({ kind: "event", id: "e-missing" }),
+        isUnderBase: () => true,
+      },
+      cors: undefined,
+    });
+
+    const { handleEvent } = createRequestHandlers(deps);
+    const { req, res } = createReqRes({
+      method: HttpMethod.Post,
+      url: "/api/event/e-missing",
+      headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
+      body: JSON.stringify({ payload: { x: 1 } }),
+    });
+    await handleEvent(req, res);
+
+    expect(res._status).toBe(404);
+    const json = res._buf
+      ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+      : undefined;
+    expect(json?.error?.code).toBe("NOT_FOUND");
+    expect(emitSpy).not.toHaveBeenCalled();
+  });
+
   describe("Application Errors and Sanitization", () => {
     it("includes id and data for known application errors", async () => {
       const AppError = defineError<{ code: number; message: string }>({
-        id: "tests.errors.app.ev",
+        id: "tests-errors-app-ev",
         httpCode: 410,
       });
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
-          events: new Map([["e.app", { event: { id: "e.app" } }]]),
+          events: new Map([["e-app", { event: { id: "e-app" } }]]),
           errors: new Map([[AppError.id, AppError]]),
         },
         taskRunner: {} as any,
@@ -46,17 +126,27 @@ describe("requestHandlers - event handling", () => {
         allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
           basePath: "/api",
-          extract: (_p: string) => ({ kind: "event", id: "e.app" }),
+          extract: (_p: string) => ({ kind: "event", id: "e-app" }),
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+        policy: {
+          enabled: true,
+          taskIds: [],
+          eventIds: ["e-ctx-disabled"],
+          taskAllowAsyncContext: {},
+          eventAllowAsyncContext: {
+            "e-ctx-disabled": false,
+          },
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: `/api/event/${encodeURIComponent("e.app")}`,
+        url: `/api/event/${encodeURIComponent("e-app")}`,
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
         body: JSON.stringify({ payload: { x: 1 } }),
       });
@@ -65,19 +155,19 @@ describe("requestHandlers - event handling", () => {
         ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
         : undefined;
       expect(res._status).toBe(410);
-      expect(json?.error?.id).toBe("tests.errors.app.ev");
+      expect(json?.error?.id).toBe("tests-errors-app-ev");
       expect(json?.error?.data).toEqual({ code: 9, message: "Ev" });
       expect(json?.error?.httpCode).toBe(410);
     });
 
     it("omits id when the matched error has a non-string name", async () => {
       const helper = {
-        id: "tests.errors.non-string-name.ev",
+        id: "tests-errors-non-string-name-ev",
         is: (_e: unknown): _e is { name: number; data: unknown } => true,
       };
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
-          events: new Map([["e.app", { event: { id: "e.app" } }]]),
+          events: new Map([["e-app", { event: { id: "e-app" } }]]),
           errors: new Map([[helper.id, helper]]),
         },
         taskRunner: {} as any,
@@ -91,17 +181,27 @@ describe("requestHandlers - event handling", () => {
         allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
           basePath: "/api",
-          extract: (_p: string) => ({ kind: "event", id: "e.app" }),
+          extract: (_p: string) => ({ kind: "event", id: "e-app" }),
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+        policy: {
+          enabled: true,
+          taskIds: [],
+          eventIds: ["e-ctx-policy"],
+          taskAllowAsyncContext: {},
+          eventAllowAsyncContext: {
+            "e-ctx-policy": false,
+          },
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: `/api/event/${encodeURIComponent("e.app")}`,
+        url: `/api/event/${encodeURIComponent("e-app")}`,
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
         body: JSON.stringify({ payload: { x: 1 } }),
       });
@@ -115,9 +215,9 @@ describe("requestHandlers - event handling", () => {
     });
 
     it("returns 500 with generic message when hook throws a string (displayMessage fallback)", async () => {
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
-          events: new Map([["e.str", { event: { id: "e.str" } }]]),
+          events: new Map([["e-str", { event: { id: "e-str" } }]]),
           errors: new Map(),
         },
         taskRunner: {} as any,
@@ -131,17 +231,16 @@ describe("requestHandlers - event handling", () => {
         allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
           basePath: "/api",
-          extract: () => ({ kind: "event", id: "e.str" }),
+          extract: () => ({ kind: "event", id: "e-str" }),
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/event/e.str",
+        url: "/api/event/e-str",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
         body: "{}",
       });
@@ -158,7 +257,7 @@ describe("requestHandlers - event handling", () => {
     it("hydrates async context around event emit", async () => {
       let current: any;
       const ctx = {
-        id: "ctx.ev",
+        id: "ctx-ev",
         use: () => current,
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
@@ -169,9 +268,9 @@ describe("requestHandlers - event handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
-          events: new Map([["e.ctx", { event: { id: "e.ctx" } }]]),
+          events: new Map([["e-ctx", { event: { id: "e-ctx" } }]]),
           errors: new Map(),
           asyncContexts: new Map([[ctx.id, ctx]]),
         },
@@ -186,12 +285,11 @@ describe("requestHandlers - event handling", () => {
         allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
           basePath: "/api",
-          extract: (_p: string) => ({ kind: "event", id: "e.ctx" }),
+          extract: (_p: string) => ({ kind: "event", id: "e-ctx" }),
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const headers = {
@@ -203,7 +301,7 @@ describe("requestHandlers - event handling", () => {
 
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: `/api/event/${encodeURIComponent("e.ctx")}`,
+        url: `/api/event/${encodeURIComponent("e-ctx")}`,
         headers,
         body: JSON.stringify({ payload: { a: 1 } }),
       });
@@ -214,7 +312,7 @@ describe("requestHandlers - event handling", () => {
     it("hydrates context when header is provided as array (event)", async () => {
       let current: any;
       const ctx = {
-        id: "ctx.ev2",
+        id: "ctx-ev2",
         use: () => current,
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
@@ -225,9 +323,9 @@ describe("requestHandlers - event handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
-          events: new Map([["e.ctx.arr", { event: { id: "e.ctx.arr" } }]]),
+          events: new Map([["e-ctx-arr", { event: { id: "e-ctx-arr" } }]]),
           errors: new Map(),
           asyncContexts: new Map([[ctx.id, ctx]]),
         },
@@ -242,12 +340,11 @@ describe("requestHandlers - event handling", () => {
         allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
           basePath: "/api",
-          extract: () => ({ kind: "event", id: "e.ctx.arr" }),
+          extract: () => ({ kind: "event", id: "e-ctx-arr" }),
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const headerText = serializer.stringify({
@@ -260,7 +357,7 @@ describe("requestHandlers - event handling", () => {
 
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/event/e.ctx.arr",
+        url: "/api/event/e-ctx-arr",
         headers,
         body: JSON.stringify({ payload: { a: 1 } }),
       });
@@ -268,7 +365,7 @@ describe("requestHandlers - event handling", () => {
       expect(res._status).toBe(200);
     });
 
-    it("skips async context hydration when tunnel policy disables it", async () => {
+    it("skips async context hydration when rpc-lane policy disables it", async () => {
       let current: any;
       const parse = jest.fn((s: string) => JSON.parse(s));
       const provide = jest.fn((v: any, fn: any) => {
@@ -276,7 +373,7 @@ describe("requestHandlers - event handling", () => {
         return fn();
       });
       const ctx = {
-        id: "ctx.ev.disabled",
+        id: "ctx-ev-disabled",
         use: () => current,
         serialize: (v: any) => JSON.stringify(v),
         parse,
@@ -284,24 +381,10 @@ describe("requestHandlers - event handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           events: new Map([
-            ["e.ctx.disabled", { event: { id: "e.ctx.disabled" } }],
-          ]),
-          resources: new Map([
-            [
-              "srv",
-              {
-                resource: { id: "srv", tags: [globalTags.tunnel] },
-                value: {
-                  mode: "server",
-                  transport: "http",
-                  allowAsyncContext: false,
-                  events: ["e.ctx.disabled"],
-                },
-              },
-            ],
+            ["e-ctx-disabled", { event: { id: "e-ctx-disabled" } }],
           ]),
           errors: new Map(),
           asyncContexts: new Map([[ctx.id, ctx]]),
@@ -317,12 +400,22 @@ describe("requestHandlers - event handling", () => {
         allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
           basePath: "/api",
-          extract: () => ({ kind: "event", id: "e.ctx.disabled" }),
+          extract: () => ({ kind: "event", id: "e-ctx-disabled" }),
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+        policy: {
+          enabled: true,
+          taskIds: [],
+          eventIds: ["e-ctx-disabled"],
+          taskAllowAsyncContext: {},
+          eventAllowAsyncContext: {
+            "e-ctx-disabled": false,
+          },
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const headers = {
@@ -334,7 +427,7 @@ describe("requestHandlers - event handling", () => {
 
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/event/e.ctx.disabled",
+        url: "/api/event/e-ctx-disabled",
         headers,
         body: JSON.stringify({ payload: { a: 1 } }),
       });
@@ -344,7 +437,7 @@ describe("requestHandlers - event handling", () => {
       expect(provide).not.toHaveBeenCalled();
     });
 
-    it("uses tunnel-level allowAsyncContext=false policy for event ids", async () => {
+    it("uses rpc-lane allowAsyncContext=false policy for event ids", async () => {
       let current: any;
       const parse = jest.fn((s: string) => JSON.parse(s));
       const provide = jest.fn((v: any, fn: any) => {
@@ -352,7 +445,7 @@ describe("requestHandlers - event handling", () => {
         return fn();
       });
       const ctx = {
-        id: "ctx.tunnel.policy.event",
+        id: "ctx-rpc-policy-event",
         use: () => current,
         serialize: (v: any) => JSON.stringify(v),
         parse,
@@ -360,25 +453,11 @@ describe("requestHandlers - event handling", () => {
         require: () => ({}) as any,
       } as any;
 
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map(),
           events: new Map([
-            ["e.ctx.policy", { event: { id: "e.ctx.policy" } }],
-          ]),
-          resources: new Map([
-            [
-              "srv",
-              {
-                resource: { id: "srv", tags: [globalTags.tunnel] },
-                value: {
-                  mode: "server",
-                  transport: "http",
-                  allowAsyncContext: false,
-                  events: ["e.ctx.policy"],
-                },
-              },
-            ],
+            ["e-ctx-policy", { event: { id: "e-ctx-policy" } }],
           ]),
           errors: new Map(),
           asyncContexts: new Map([[ctx.id, ctx]]),
@@ -394,12 +473,22 @@ describe("requestHandlers - event handling", () => {
         allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
           basePath: "/api",
-          extract: () => ({ kind: "event", id: "e.ctx.policy" }),
+          extract: () => ({ kind: "event", id: "e-ctx-policy" }),
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+        policy: {
+          enabled: true,
+          taskIds: [],
+          eventIds: ["e-ctx-policy"],
+          taskAllowAsyncContext: {},
+          eventAllowAsyncContext: {
+            "e-ctx-policy": false,
+          },
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {},
+        },
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const headers = {
@@ -410,7 +499,7 @@ describe("requestHandlers - event handling", () => {
       } satisfies NodeLikeHeaders;
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/event/e.ctx.policy",
+        url: "/api/event/e-ctx-policy",
         headers,
         body: JSON.stringify({ payload: { a: 1 } }),
       });
@@ -419,6 +508,98 @@ describe("requestHandlers - event handling", () => {
       expect(res._status).toBe(200);
       expect(parse).not.toHaveBeenCalled();
       expect(provide).not.toHaveBeenCalled();
+    });
+
+    it("hydrates only rpc-lane allowlisted async contexts for event ids", async () => {
+      let allowedCurrent: any;
+      let blockedCurrent: any;
+      const allowedParse = jest.fn((s: string) => JSON.parse(s));
+      const allowedProvide = jest.fn((v: any, fn: any) => {
+        allowedCurrent = v;
+        return fn();
+      });
+      const blockedParse = jest.fn((s: string) => JSON.parse(s));
+      const blockedProvide = jest.fn((v: any, fn: any) => {
+        blockedCurrent = v;
+        return fn();
+      });
+      const allowedCtx = {
+        id: "ctx-rpc-allowed-event",
+        use: () => allowedCurrent,
+        serialize: (v: any) => JSON.stringify(v),
+        parse: allowedParse,
+        provide: allowedProvide,
+        require: () => ({}) as any,
+      } as any;
+      const blockedCtx = {
+        id: "ctx-rpc-blocked-event",
+        use: () => blockedCurrent,
+        serialize: (v: any) => JSON.stringify(v),
+        parse: blockedParse,
+        provide: blockedProvide,
+        require: () => ({}) as any,
+      } as any;
+
+      const deps = createRequestHandlersDeps(serializer, {
+        store: {
+          tasks: new Map(),
+          events: new Map([["e-ctx-rpc", { event: { id: "e-ctx-rpc" } }]]),
+          errors: new Map(),
+          asyncContexts: new Map([
+            [allowedCtx.id, allowedCtx],
+            [blockedCtx.id, blockedCtx],
+          ]),
+        },
+        taskRunner: {} as any,
+        eventManager: {
+          emit: async () => {
+            expect(allowedCtx.use()).toEqual({ ok: "yes" });
+            expect(blockedCtx.use()).toBeUndefined();
+          },
+        },
+        logger: { info: () => {}, warn: () => {}, error: () => {} },
+        authenticator: async () => ({ ok: true }),
+        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "event", id: "e-ctx-rpc" }),
+          isUnderBase: () => true,
+        },
+        cors: undefined,
+        policy: {
+          enabled: true,
+          taskIds: [],
+          eventIds: ["e-ctx-rpc"],
+          taskAllowAsyncContext: {},
+          eventAllowAsyncContext: { "e-ctx-rpc": true },
+          taskAsyncContextAllowList: {},
+          eventAsyncContextAllowList: {
+            "e-ctx-rpc": [allowedCtx.id],
+          },
+        },
+      });
+
+      const { handleEvent } = createRequestHandlers(deps);
+      const headers = {
+        [HeaderName.ContentType]: MimeType.ApplicationJson,
+        [HeaderName.XRunnerContext]: serializer.stringify({
+          [allowedCtx.id]: allowedCtx.serialize({ ok: "yes" }),
+          [blockedCtx.id]: blockedCtx.serialize({ no: "no" }),
+        }),
+      } satisfies NodeLikeHeaders;
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/event/e-ctx-rpc",
+        headers,
+        body: JSON.stringify({ payload: { a: 1 } }),
+      });
+
+      await handleEvent(req, res);
+      expect(res._status).toBe(200);
+      expect(allowedParse).toHaveBeenCalledTimes(1);
+      expect(allowedProvide).toHaveBeenCalledTimes(1);
+      expect(blockedParse).not.toHaveBeenCalled();
+      expect(blockedProvide).not.toHaveBeenCalled();
     });
   });
 
@@ -433,8 +614,8 @@ describe("requestHandlers - event handling", () => {
       })();
       jest.spyOn(requestBody, "readJsonBody").mockRejectedValue(cancellation);
 
-      const deps: any = {
-        store: { events: new Map([["e.id", { event: { id: "e.id" } }]]) },
+      const deps = createRequestHandlersDeps(serializer, {
+        store: { events: new Map([["e-id", { event: { id: "e-id" } }]]) },
         taskRunner: {} as any,
         eventManager: { emit: async () => {} },
         logger: { info: () => {}, warn: () => {}, error: () => {} },
@@ -442,16 +623,16 @@ describe("requestHandlers - event handling", () => {
         allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
           basePath: "/api",
-          extract: (_p: string) => ({ kind: "event", id: "e.id" }),
+          extract: (_p: string) => ({ kind: "event", id: "e-id" }),
           isUnderBase: () => true,
         },
         cors: undefined,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/event/e.id",
+        url: "/api/event/e-id",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
         body: null,
         autoEnd: true,
@@ -466,8 +647,8 @@ describe("requestHandlers - event handling", () => {
     });
 
     it("handles abort via req 'aborted' signal", async () => {
-      const deps: any = {
-        store: { events: new Map([["e.id", { event: { id: "e.id" } }]]) },
+      const deps = createRequestHandlersDeps(serializer, {
+        store: { events: new Map([["e-id", { event: { id: "e-id" } }]]) },
         taskRunner: {} as any,
         eventManager: { emit: async () => {} },
         logger: { info: () => {}, warn: () => {}, error: () => {} },
@@ -475,16 +656,16 @@ describe("requestHandlers - event handling", () => {
         allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
           basePath: "/api",
-          extract: (_p: string) => ({ kind: "event", id: "e.id" }),
+          extract: (_p: string) => ({ kind: "event", id: "e-id" }),
           isUnderBase: () => true,
         },
         cors: undefined,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/event/e.id",
+        url: "/api/event/e-id",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
       });
 
@@ -502,9 +683,9 @@ describe("requestHandlers - event handling", () => {
   describe("Return Payload", () => {
     it("responds with result when returnPayload is true", async () => {
       const emitWithResult = jest.fn(async () => ({ x: 2 }));
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
-          events: new Map([["e.ret", { event: { id: "e.ret" } }]]),
+          events: new Map([["e-ret", { event: { id: "e-ret" } }]]),
           errors: new Map(),
           asyncContexts: new Map(),
         },
@@ -515,17 +696,16 @@ describe("requestHandlers - event handling", () => {
         allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
           basePath: "/api",
-          extract: (_p: string) => ({ kind: "event", id: "e.ret" }),
+          extract: (_p: string) => ({ kind: "event", id: "e-ret" }),
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/event/e.ret",
+        url: "/api/event/e-ret",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
         body: serializer.stringify({ payload: { x: 1 }, returnPayload: true }),
       });
@@ -538,10 +718,10 @@ describe("requestHandlers - event handling", () => {
     });
 
     it("returns 400 when event is parallel and returnPayload is requested", async () => {
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           events: new Map([
-            ["e.par", { event: { id: "e.par", parallel: true } }],
+            ["e-par", { event: { id: "e-par", parallel: true } }],
           ]),
           errors: new Map(),
           asyncContexts: new Map(),
@@ -556,17 +736,16 @@ describe("requestHandlers - event handling", () => {
         allowList: { ensureTask: () => null, ensureEvent: () => null },
         router: {
           basePath: "/api",
-          extract: () => ({ kind: "event", id: "e.par" }),
+          extract: () => ({ kind: "event", id: "e-par" }),
           isUnderBase: () => true,
         },
         cors: undefined,
-        serializer,
-      };
+      });
 
       const { handleEvent } = createRequestHandlers(deps);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
-        url: "/api/event/e.par",
+        url: "/api/event/e-par",
         headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
         body: serializer.stringify({ payload: { x: 1 }, returnPayload: true }),
       });
@@ -581,29 +760,27 @@ describe("requestHandlers - event handling", () => {
 
   describe("Integration Tests", () => {
     it("returns 500 when an event hook throws a normal error", async () => {
-      const ev = defineEvent<{ payload?: unknown }>({ id: "tests.ev.err" });
+      const ev = defineEvent<{ payload?: unknown }>({ id: "tests-ev-err" });
       const hook = defineHook({
-        id: "tests.ev.err.hook",
+        id: "tests-ev-err-hook",
         on: ev,
         async run() {
           throw createMessageError("boom");
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
       });
       const app = defineResource({
-        id: "tests.app.ev.err",
+        id: "tests-app-ev-err",
         register: [ev, hook, exposure],
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const { req, res } = createReqRes({
           method: HttpMethod.Post,
           url: `/__runner/event/${encodeURIComponent(ev.id)}`,
@@ -629,7 +806,7 @@ describe("requestHandlers - event handling", () => {
       const {
         createRequestHandlers: createHandlersMocked,
       } = require("../../../exposure/requestHandlers");
-      const deps: any = {
+      const deps = createRequestHandlersDeps(serializer, {
         store: {
           tasks: new Map(),
           events: new Map([["e", { event: { id: "e" } }]]),
@@ -650,9 +827,8 @@ describe("requestHandlers - event handling", () => {
           extract: () => ({ kind: "event", id: "e" }),
           isUnderBase: () => true,
         },
-        serializer,
         cors: undefined,
-      };
+      });
 
       const { handleRequest } = createHandlersMocked(deps);
       const { req, res } = createReqRes({

@@ -1,14 +1,24 @@
 import type { BuilderState } from "./types";
+import type { TagTarget } from "../../../defs";
 
 /**
  * Clones and patches the builder state immutably.
  */
-export function clone<TConfig, TEnforceIn, TEnforceOut, TNextConfig = TConfig>(
-  s: BuilderState<TConfig, TEnforceIn, TEnforceOut>,
-  patch: Partial<BuilderState<TNextConfig, TEnforceIn, TEnforceOut>>,
-): BuilderState<TNextConfig, TEnforceIn, TEnforceOut> {
+export function clone<
+  TConfig,
+  TEnforceIn,
+  TEnforceOut,
+  TTargets extends TagTarget | void,
+  TNextConfig = TConfig,
+  TNextTargets extends TagTarget | void = TTargets,
+>(
+  s: BuilderState<TConfig, TEnforceIn, TEnforceOut, TTargets>,
+  patch: Partial<
+    BuilderState<TNextConfig, TEnforceIn, TEnforceOut, TNextTargets>
+  >,
+): BuilderState<TNextConfig, TEnforceIn, TEnforceOut, TNextTargets> {
   return Object.freeze({
-    ...(s as BuilderState<TNextConfig, TEnforceIn, TEnforceOut>),
+    ...(s as BuilderState<TNextConfig, TEnforceIn, TEnforceOut, TNextTargets>),
     ...patch,
   });
 }

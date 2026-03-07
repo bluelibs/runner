@@ -1,4 +1,4 @@
-import * as exposureFetchModule from "../../../http-fetch-tunnel.resource";
+import * as exposureFetchModule from "../../../http-fetch-remote-lane.resource";
 import { createHttpMixedClient } from "../../http/http-mixed-client";
 import { Serializer } from "../../../serializer";
 

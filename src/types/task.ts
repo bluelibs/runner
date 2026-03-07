@@ -3,18 +3,22 @@ import {
   DependencyValuesType,
   IOptionalDependency,
   IValidationSchema,
+  ValidationSchemaInput,
 } from "./utilities";
 import { TaskMiddlewareAttachmentType } from "./taskMiddleware";
-import { TagType } from "./tag";
+import { TaskTagType } from "./tag";
 import { ITaskMeta } from "./meta";
 import type { ThrowsList } from "./error";
 import type { ExecutionJournal } from "./executionJournal";
+import type { RuntimeCallSource } from "./runtimeSource";
 import {
   symbolFilePath,
+  symbolRuntimeId,
   symbolTask,
-  symbolPhantomTask,
-  symbolTunneledBy,
+  symbolRpcLanePolicy,
+  symbolRpcLaneRoutedBy,
 } from "./symbols";
+import type { IRpcLanePolicy } from "./rpcLane";
 import {
   EnsureInputSatisfiesContracts,
   EnsureOutputSatisfiesContracts,
@@ -29,15 +33,20 @@ export type {
   IOptionalDependency,
 } from "./utilities";
 export type { TaskMiddlewareAttachmentType } from "./taskMiddleware";
-export type { TagType } from "./tag";
+export type { TagType, TaskTagType } from "./tag";
 export type { ITaskMeta } from "./meta";
+
+export type TaskRunContext = {
+  journal: ExecutionJournal;
+  source: RuntimeCallSource;
+};
 
 export interface ITaskDefinition<
   TInput = undefined,
   TOutput extends Promise<unknown> = Promise<unknown>,
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends TaskTagType[] = TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[] =
     TaskMiddlewareAttachmentType[],
 > {
@@ -55,13 +64,13 @@ export interface ITaskDefinition<
    * Optional validation schema for runtime input validation.
    * When provided, task input will be validated before execution.
    */
-  inputSchema?: IValidationSchema<TInput>;
+  inputSchema?: ValidationSchemaInput<TInput>;
   /**
    * Optional validation schema for the task result.
    * When provided, the result will be validated immediately after the task's
    * `run` resolves, without considering middleware.
    */
-  resultSchema?: IValidationSchema<
+  resultSchema?: ValidationSchemaInput<
     TOutput extends Promise<infer U> ? U : never
   >;
   /**
@@ -81,7 +90,7 @@ export interface ITaskDefinition<
         : EnsureInputSatisfiesContracts<[...TTags, ...TMiddleware], TInput>
       : TInput,
     dependencies: DependencyValuesType<TDependencies>,
-    context?: { journal: ExecutionJournal },
+    context?: TaskRunContext,
   ) => HasOutputContracts<[...TTags, ...TMiddleware]> extends true
     ? EnsureOutputSatisfiesContracts<[...TTags, ...TMiddleware], TOutput>
     : TOutput;
@@ -96,7 +105,7 @@ export interface ITask<
   TOutput extends Promise<unknown> = Promise<unknown>,
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends TaskTagType[] = TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[] =
     TaskMiddlewareAttachmentType[],
 > extends ITaskDefinition<
@@ -109,16 +118,22 @@ export interface ITask<
 > {
   [symbolFilePath]: string;
   [symbolTask]: true;
-  /** Present only for phantom tasks. */
-  [symbolPhantomTask]?: true;
-  /** Indicates if the task is tunneled through a tunnel client. */
-  isTunneled?: boolean;
-  /** Records which tunnel resource owns the task (exclusivity). */
-  [symbolTunneledBy]?: string;
+  path?: string;
+  [symbolRuntimeId]?: string;
+  /** Indicates if the task was patched for remote execution through rpc lanes. */
+  isRpcRouted?: boolean;
+  /** Records which rpc-lanes resource owns the task routing patch (exclusivity). */
+  [symbolRpcLaneRoutedBy]?: string;
+  /** Stores lane policy used for caller-side middleware filtering. */
+  [symbolRpcLanePolicy]?: IRpcLanePolicy;
   id: string;
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
   middleware: TMiddleware;
+  inputSchema?: IValidationSchema<TInput>;
+  resultSchema?: IValidationSchema<
+    TOutput extends Promise<infer U> ? U : never
+  >;
   /** Normalized list of error ids declared via `throws`. */
   throws?: readonly string[];
   /** Return an optional dependency wrapper for this task. */
@@ -129,21 +144,3 @@ export interface ITask<
 }
 
 export type AnyTask = ITask<any, any, any, any, any, any>;
-
-/** Narrowed type for phantom tasks (throws unless routed through a tunnel). */
-export type IPhantomTask<
-  TInput = any,
-  TResolved = any,
-  TDependencies extends DependencyMapType = {},
-  TMeta extends ITaskMeta = any,
-  TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[] =
-    TaskMiddlewareAttachmentType[],
-> = ITask<
-  TInput,
-  Promise<TResolved>,
-  TDependencies,
-  TMeta,
-  TTags,
-  TMiddleware
-> & { [symbolPhantomTask]: true };

@@ -3,13 +3,13 @@ import { run } from "../../index";
 
 describe("hooks with multiple events (array on)", () => {
   it("should attach the hook to all events and run for each", async () => {
-    const e1 = defineEvent<{ x: number }>({ id: "tests.events.e1" });
-    const e2 = defineEvent<{ y: string }>({ id: "tests.events.e2" });
+    const e1 = defineEvent<{ x: number }>({ id: "tests-events-e1" });
+    const e2 = defineEvent<{ y: string }>({ id: "tests-events-e2" });
 
     const calls: Array<{ id: string; data: any }> = [];
 
     const h = defineHook({
-      id: "tests.hooks.multi",
+      id: "tests-hooks-multi",
       on: [e1, e2] as const,
       run: async (ev) => {
         calls.push({ id: ev.id, data: ev.data });
@@ -17,13 +17,13 @@ describe("hooks with multiple events (array on)", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.multi",
+      id: "tests-app-multi",
       register: [e1, e2, h],
       init: async () => {},
     });
 
     const harness = defineResource({
-      id: "tests.harness.multi",
+      id: "tests-harness-multi",
       register: [app],
     });
 

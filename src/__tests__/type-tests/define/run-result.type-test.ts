@@ -11,17 +11,17 @@ void (async () => {
   type Output = Promise<number>;
 
   const add = defineTask<Input, Output>({
-    id: "types.add",
+    id: "types-add",
     run: async (input) => input.x + 1,
   });
 
   const depTask = defineTask<{ v: string }, Promise<string>>({
-    id: "types.dep",
+    id: "types-dep",
     run: async (input) => input.v.toUpperCase(),
   });
 
   const main = defineTask<Input, Output, { depTask: typeof depTask }>({
-    id: "types.main",
+    id: "types-main",
     dependencies: { depTask },
     run: async (input, deps) => {
       const value = await deps.depTask({ v: String(input.x) });
@@ -30,10 +30,10 @@ void (async () => {
   });
 
   const app = defineResource({
-    id: "types.app",
+    id: "types-app",
     register: [add, depTask, main],
   });
-  const harness = defineResource({ id: "types.harness", register: [app] });
+  const harness = defineResource({ id: "types-harness", register: [app] });
 
   const rr = await run(harness);
   const valid1: number | undefined = await rr.runTask(add, { x: 1 });
@@ -56,12 +56,12 @@ void (async () => {
   type Config = { region: "us" | "eu"; retries: number };
 
   const client = defineResource<Config, Promise<{ ok: true }>>({
-    id: "types.resource.config.client",
+    id: "types-resource-config-client",
     init: async () => ({ ok: true }),
   });
 
   const app = defineResource({
-    id: "types.resource.config.app",
+    id: "types-resource-config-app",
     register: [client.with({ region: "us", retries: 3 })],
   });
 
@@ -70,7 +70,7 @@ void (async () => {
   const region: "us" | "eu" = config.region;
   const retries: number = config.retries;
 
-  const configById = rr.getResourceConfig("types.resource.config.client");
+  const configById = rr.getResourceConfig("types-resource-config-client");
   const idRetries: number = (configById as Config).retries;
 
   void region;
@@ -81,11 +81,11 @@ void (async () => {
 // Scenario: RunResult.emitEvent infers report type from literal options.
 void (async () => {
   const appEvent = defineEvent<{ v: number }>({
-    id: "types.emitEvent.define",
+    id: "types-emitEvent-define",
   });
 
   const app = defineResource({
-    id: "types.emitEvent.define.root",
+    id: "types-emitEvent-define-root",
     register: [appEvent],
   });
 
@@ -123,7 +123,7 @@ void (async () => {
   type RootValue = { ready: true };
 
   const app = defineResource<RootConfig, Promise<RootValue>>({
-    id: "types.root.app",
+    id: "types-root-app",
     init: async () => ({ ready: true }),
   });
 

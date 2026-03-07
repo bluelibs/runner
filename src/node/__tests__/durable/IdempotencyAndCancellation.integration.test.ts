@@ -1,12 +1,12 @@
-import { r, run } from "../../..";
+import { r, resources, run } from "../../node";
 import { durableResource } from "../../durable/core/resource";
 import { ExecutionStatus } from "../../durable/core/types";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 
 enum TaskId {
-  IdempotentStart = "durable.test.idempotent-start",
-  CancellableSleep = "durable.test.cancellable-sleep",
+  IdempotentStart = "durable-test-idempotent-start",
+  CancellableSleep = "durable-test-cancellable-sleep",
 }
 
 enum IdempotencyKey {
@@ -30,7 +30,7 @@ describe("durable: idempotency & cancellation (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.test.idempotency");
+    const durable = durableResource.fork("durable-test-idempotency");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -43,7 +43,10 @@ describe("durable: idempotency & cancellation (integration)", () => {
       .run(async (input: { v: number }) => input)
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
@@ -79,7 +82,7 @@ describe("durable: idempotency & cancellation (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.test.cancel");
+    const durable = durableResource.fork("durable-test-cancel");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -96,7 +99,10 @@ describe("durable: idempotency & cancellation (integration)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);

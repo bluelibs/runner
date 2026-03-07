@@ -3,7 +3,7 @@
  * - Namespace: users
  * - File: src/users/resources/auth.resource.ts
  */
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { env } from "../../general/resources/env.resource";
 import {
   randomBytes,
@@ -57,14 +57,14 @@ function b64urlDecode(input: string): Buffer {
 }
 
 export const auth = r
-  .resource<AuthConfig>("users.resources.auth")
+  .resource<AuthConfig>("auth")
   .meta({
     title: "Authentication Service",
     description:
       "JWT token-based authentication with password hashing using scrypt and HMAC signing",
   })
   .dependencies({
-    logger: globals.resources.logger,
+    logger: r.runner.logger,
     env,
   })
   .init(async (cfg, { logger, env }): Promise<AuthValue> => {

@@ -1,16 +1,47 @@
 import { r, run } from "../..";
+import { override } from "../../definers/builders/override";
 
 describe("r.override shorthand", () => {
+  it("throws when implementation function is missing", () => {
+    const baseTask = r
+      .task("tests-override-shorthand-missing-implementation")
+      .run(async () => 1)
+      .build();
+
+    const runtimeOverride = override as unknown as (
+      base: unknown,
+      fn?: unknown,
+    ) => unknown;
+    expect(() => runtimeOverride(baseTask)).toThrow(
+      /requires an implementation function/,
+    );
+  });
+
+  it("throws when implementation is not a function", () => {
+    const baseTask = r
+      .task("tests-override-shorthand-invalid-implementation")
+      .run(async () => 1)
+      .build();
+
+    const runtimeOverride = override as unknown as (
+      base: unknown,
+      fn?: unknown,
+    ) => unknown;
+    expect(() => runtimeOverride(baseTask, "not-a-function")).toThrow(
+      /second argument must be a function/,
+    );
+  });
+
   it("can register a shorthand-overridden resource directly without using .overrides()", async () => {
     const suffixTask = r
-      .task("tests.override.shorthand.resource.direct-register.suffix")
+      .task("tests-override-shorthand-resource-direct-register-suffix")
       .run(async () => "-suffix")
       .build();
 
     const baseMailerResource = r
       .resource<{
         prefix: string;
-      }>("tests.override.shorthand.resource.direct-register.mailer")
+      }>("tests-override-shorthand-resource-direct-register-mailer")
       .dependencies({ suffixTask })
       .context(() => ({ calls: 0 }))
       .init(async (config, { suffixTask }, ctx) => {
@@ -28,7 +59,7 @@ describe("r.override shorthand", () => {
     );
 
     const app = r
-      .resource("tests.override.shorthand.resource.direct-register.app")
+      .resource("tests-override-shorthand-resource-direct-register-app")
       .register([suffixTask, customMailer.with({ prefix: "mail" })])
       .dependencies({ baseMailerResource })
       .init(async (_config, { baseMailerResource }) => baseMailerResource)
@@ -41,33 +72,33 @@ describe("r.override shorthand", () => {
 
   it("overrides task run with r.override(task, runFn)", async () => {
     const baseTask = r
-      .task("tests.override.shorthand.task")
+      .task("tests-override-shorthand-task")
       .run(async () => 1)
       .build();
 
     const taskOverride = r.override(baseTask, async () => 2);
 
     const app = r
-      .resource("tests.override.shorthand.task.app")
+      .resource("tests-override-shorthand-task-app")
       .register([baseTask])
       .overrides([taskOverride])
       .build();
 
     const runtime = await run(app);
-    await expect(runtime.runTask(baseTask.id)).resolves.toBe(2);
+    await expect(runtime.runTask(baseTask)).resolves.toBe(2);
     await runtime.dispose();
   });
 
   it("overrides resource init with r.override(resource, initFn)", async () => {
     const baseResource = r
-      .resource("tests.override.shorthand.resource")
+      .resource("tests-override-shorthand-resource")
       .init(async () => "base")
       .build();
 
     const resourceOverride = r.override(baseResource, async () => "override");
 
     const app = r
-      .resource("tests.override.shorthand.resource.app")
+      .resource("tests-override-shorthand-resource-app")
       .register([baseResource])
       .overrides([resourceOverride])
       .build();
@@ -78,11 +109,11 @@ describe("r.override shorthand", () => {
   });
 
   it("overrides hook run with r.override(hook, runFn)", async () => {
-    const userCreated = r.event("tests.override.shorthand.hook.event").build();
+    const userCreated = r.event("tests-override-shorthand-hook-event").build();
     let marker = "base";
 
     const baseHook = r
-      .hook("tests.override.shorthand.hook")
+      .hook("tests-override-shorthand-hook")
       .on(userCreated)
       .run(async () => {
         marker = "base";
@@ -94,7 +125,7 @@ describe("r.override shorthand", () => {
     });
 
     const app = r
-      .resource("tests.override.shorthand.hook.app")
+      .resource("tests-override-shorthand-hook-app")
       .register([userCreated, baseHook])
       .overrides([hookOverride])
       .dependencies({ userCreated })
@@ -111,7 +142,7 @@ describe("r.override shorthand", () => {
 
   it("overrides task middleware run with r.override(mw, runFn)", async () => {
     const baseMiddleware = r.middleware
-      .task("tests.override.shorthand.middleware.task")
+      .task("tests-override-shorthand-middleware-task")
       .run(async ({ next }) => `base:${await next()}`)
       .build();
 
@@ -120,13 +151,13 @@ describe("r.override shorthand", () => {
     });
 
     const baseTask = r
-      .task("tests.override.shorthand.middleware.task.target")
+      .task("tests-override-shorthand-middleware-task-target")
       .middleware([baseMiddleware])
       .run(async () => "ok")
       .build();
 
     const app = r
-      .resource("tests.override.shorthand.middleware.task.app")
+      .resource("tests-override-shorthand-middleware-task-app")
       .register([baseMiddleware, baseTask])
       .overrides([middlewareOverride])
       .dependencies({ baseTask })
@@ -140,7 +171,7 @@ describe("r.override shorthand", () => {
 
   it("overrides resource middleware run with r.override(mw, runFn)", async () => {
     const baseMiddleware = r.middleware
-      .resource("tests.override.shorthand.middleware.resource")
+      .resource("tests-override-shorthand-middleware-resource")
       .run(async ({ next }) => `base:${await next()}`)
       .build();
 
@@ -149,13 +180,13 @@ describe("r.override shorthand", () => {
     });
 
     const baseResource = r
-      .resource("tests.override.shorthand.middleware.resource.target")
+      .resource("tests-override-shorthand-middleware-resource-target")
       .middleware([baseMiddleware])
       .init(async () => "ok")
       .build();
 
     const app = r
-      .resource("tests.override.shorthand.middleware.resource.app")
+      .resource("tests-override-shorthand-middleware-resource-app")
       .register([baseMiddleware, baseResource])
       .overrides([middlewareOverride])
       .dependencies({ baseResource })
@@ -165,5 +196,12 @@ describe("r.override shorthand", () => {
     const runtime = await run(app);
     expect(runtime.value).toBe("override:ok");
     await runtime.dispose();
+  });
+
+  it("throws when fn shorthand is provided with an unrecognized base type", () => {
+    // Bypass the type system to pass an object that doesn't match any known type.
+    // This exercises the isResourceMiddleware(base) false branch within the fn block.
+    const unknownBase = { id: "unknown", __type: "alien" } as any;
+    expect(() => override(unknownBase, async () => "noop")).toThrow(/override/);
   });
 });

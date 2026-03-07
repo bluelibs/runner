@@ -2,11 +2,13 @@ import type {
   DependencyMapType,
   IResourceDefinition,
   IResourceMeta,
-  IValidationSchema,
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
-  TagType,
+  ResourceTagType,
+  IsolationPolicy,
+  NormalizedResourceSubtreePolicy,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -19,10 +21,12 @@ export type BuilderState<
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 > = Readonly<{
   id: string;
+  gateway: boolean;
+  frameworkOwned: boolean;
   filePath: string;
   dependencies?: TDeps | ((config: TConfig) => TDeps);
   register?:
@@ -53,12 +57,39 @@ export type BuilderState<
       TMiddleware
     >["dispose"]
   >;
-  configSchema?: IValidationSchema<any>;
-  resultSchema?: IValidationSchema<any>;
+  ready?: NonNullable<
+    IResourceDefinition<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >["ready"]
+  >;
+  cooldown?: NonNullable<
+    IResourceDefinition<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >["cooldown"]
+  >;
+  configSchema?: ValidationSchemaInput<any>;
+  resultSchema?: ValidationSchemaInput<any>;
   meta?: TMeta;
   overrides?: Array<any>;
   throws?: ThrowsList;
-  exports?: Array<RegisterableItems>;
+  isolate?: IsolationPolicy;
+  subtree?: NormalizedResourceSubtreePolicy;
 }>;
 
 /**

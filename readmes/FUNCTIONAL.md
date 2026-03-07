@@ -138,9 +138,9 @@ await result2.dispose();
 
 ## Extension and Composition
 
-### Extension via `r.override()`
+### Extension via `r.override(base, fn)`
 
-`r.override()` is ideal for replacing behavior while keeping the same id. For decorator-style extension, prefer a wrapper resource composed through DI so lifecycle and dependencies stay explicit and predictable.
+`r.override(base, fn)` is ideal for replacing behavior while keeping the same id. For decorator-style extension, prefer a wrapper resource composed through DI so lifecycle and dependencies stay explicit and predictable.
 
 ```ts
 // Assume loggerService is a resource defined elsewhere
@@ -167,18 +167,15 @@ const loggingEmailer = r
   .build();
 
 // For testing, you can completely replace the implementation:
-const mockEmailer = r
-  .override(baseEmailer)
-  .init(async () => {
-    const sentEmails: any[] = [];
-    return {
-      async send(to: string, subject: string, body: string) {
-        sentEmails.push({ to, subject, body });
-      },
-      getSentEmails: () => sentEmails,
-    };
-  })
-  .build();
+const mockEmailer = r.override(baseEmailer, async () => {
+  const sentEmails: any[] = [];
+  return {
+    async send(to: string, subject: string, body: string) {
+      sentEmails.push({ to, subject, body });
+    },
+    getSentEmails: () => sentEmails,
+  };
+});
 ```
 
 ### Composition via Dependency Injection
@@ -253,7 +250,7 @@ This approach is more flexible than traditional interfaces because contracts can
 | **Destructor**      | `dispose()` function          | `.dispose(async (api) => { /* cleanup */ })`                                 |
 | **Private members** | Closured `const`/`let`        | `const secret = ...; return { /* public */ }`                                |
 | **Public methods**  | Returned object methods       | `return { publicMethod: () => {} }`                                          |
-| **Inheritance**     | `r.override()` with decorator | `r.override(base).init(...).build()`                                         |
+| **Inheritance**     | `r.override(base, fn)`        | `r.override(base, async () => replacement)`                                  |
 | **Composition**     | Resource dependencies         | `.dependencies({ db, logger })`                                              |
 | **Interfaces**      | Contract tags                 | `.tag<..., { shape }>()`                                                     |
 | **Encapsulation**   | Closure-based privacy         | Private state is inaccessible from outside `init`.                           |
@@ -267,7 +264,7 @@ The functional approach supports many classic design patterns.
 Use contract tags to discover and select implementations at runtime.
 
 ```ts
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // 1. Define the strategy contract
 const paymentStrategyContract = r
@@ -289,16 +286,22 @@ const creditCardStrategy = r
   }))
   .build();
 
-// 3. Use the strategies via the store
+// 3. Discover strategy resources via tag dependency
 const paymentProcessor = r
   .resource("app.payment.processor")
-  .dependencies({ store: globals.resources.store })
-  .init(async (_config, { store }) => ({
+  .dependencies({
+    paymentStrategyContract,
+    runtime: r.system.runtime,
+  })
+  .init(async (_config, { paymentStrategyContract, runtime }) => ({
     async process(amount: number, method: string) {
-      const strategies = store.getResourcesWithTag(paymentStrategyContract);
-      const strategy = strategies.find((s) => s.id.includes(method));
-      if (!strategy) throw new Error("Strategy not found");
-      return strategy.value.process(amount);
+      const match = paymentStrategyContract.resources.find((entry) =>
+        entry.definition.id.includes(method),
+      );
+      if (!match) throw new Error("Strategy not found");
+
+      const strategy = await runtime.getResourceValue(match.definition);
+      return strategy.process(amount);
     },
   }))
   .build();
@@ -339,7 +342,7 @@ const welcomeEmailer = r
 1.  **Resources are factories** that return API objects.
 2.  **Closures create privacy** for state and helpers.
 3.  **`dispose` handles cleanup** — the functional destructor.
-4.  **`r.override()` enables extension** via the decorator pattern.
+4.  **`r.override(base, fn)` replaces behavior while preserving id**.
 5.  **Prefer DI for composition** to keep components decoupled.
 6.  **Contract tags are configurable interfaces** that provide compile-time safety.
 7.  **Each `run()` call is fully isolated** — closure state is never shared between containers.

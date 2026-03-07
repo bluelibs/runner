@@ -1,4 +1,4 @@
-import { defineResource } from "../../define";
+import { defineFrameworkResource } from "../../definers/frameworkDefinition";
 import type { HttpSmartClient } from "./http-smart-client.model";
 
 export interface HttpSmartClientFactoryConfig {
@@ -15,11 +15,11 @@ export type HttpSmartClientFactory = (
   config: HttpSmartClientFactoryConfig,
 ) => HttpSmartClient;
 
-export const httpSmartClientFactory = defineResource<
+export const httpSmartClientFactory = defineFrameworkResource<
   void,
   Promise<HttpSmartClientFactory>
 >({
-  id: "globals.resources.httpSmartClientFactory",
+  id: "runner.node.httpSmartClientFactory",
   meta: {
     title: "HTTP Smart Client Factory (Node)",
     description:

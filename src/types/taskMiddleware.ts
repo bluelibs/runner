@@ -2,21 +2,23 @@ import {
   DependencyMapType,
   DependencyValuesType,
   IValidationSchema,
+  ValidationSchemaInput,
 } from "./utilities";
 import type { ITask } from "./task";
 import type { ExecutionJournal } from "./executionJournal";
-import { TagType } from "./tag";
+import { TaskMiddlewareTagType } from "./tag";
 import { IMiddlewareMeta } from "./meta";
 import {
   symbolFilePath,
   symbolMiddlewareConfigured,
+  symbolRuntimeId,
   symbolTaskMiddleware,
 } from "./symbols";
 import { IContractable } from "./contracts";
 import type { ThrowsList } from "./error";
 
 export type { DependencyMapType, DependencyValuesType } from "./utilities";
-export type { TagType } from "./tag";
+export type { TagType, TaskMiddlewareTagType } from "./tag";
 export type { IMiddlewareMeta } from "./meta";
 
 export interface ITaskMiddlewareDefinition<
@@ -32,7 +34,7 @@ export interface ITaskMiddlewareDefinition<
    * Optional validation schema for runtime config validation.
    * When provided, middleware config will be validated when .with() is called.
    */
-  configSchema?: IValidationSchema<TConfig>;
+  configSchema?: ValidationSchemaInput<TConfig>;
   /**
    * The middleware body, called with task execution input.
    */
@@ -45,13 +47,12 @@ export interface ITaskMiddlewareDefinition<
     config: TConfig,
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
-  tags?: TagType[];
+  tags?: TaskMiddlewareTagType[];
   /**
    * Declares which typed errors are part of this middleware's contract.
    * Declarative only — does not imply DI or enforcement.
    */
   throws?: ThrowsList;
-  everywhere?: boolean | ((task: ITask<any, any, any, any>) => boolean);
 }
 
 export interface ITaskMiddleware<
@@ -71,11 +72,14 @@ export interface ITaskMiddleware<
   [symbolTaskMiddleware]: true;
   [symbolFilePath]: string;
   id: string;
+  path?: string;
+  [symbolRuntimeId]?: string;
   dependencies: TDependencies | ((config: TConfig) => TDependencies);
   /** Normalized list of error ids declared via `throws`. */
   throws?: readonly string[];
   /** Current configuration object (empty by default). */
   config: TConfig;
+  configSchema?: IValidationSchema<TConfig>;
   /** Configure the middleware and return a marked, configured instance. */
   with: (
     config: TConfig,
@@ -85,7 +89,7 @@ export interface ITaskMiddleware<
     TEnforceOutputContract,
     TDependencies
   >;
-  tags: TagType[];
+  tags: TaskMiddlewareTagType[];
 }
 
 export interface ITaskMiddlewareConfigured<

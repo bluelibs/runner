@@ -1,8 +1,7 @@
-import * as http from "http";
 import { Readable } from "node:stream";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 
 function createReqRes(init: {
   method?: string;
@@ -66,7 +65,7 @@ function createReqRes(init: {
 describe("nodeExposure - task returned stream", () => {
   it("pipes plain Readable result (JSON path)", async () => {
     const streamTask = defineTask<void, Promise<NodeJS.ReadableStream>>({
-      id: "tests.stream.task",
+      id: "tests-stream-task",
       async run() {
         let i = 0;
         return new Readable({
@@ -78,21 +77,19 @@ describe("nodeExposure - task returned stream", () => {
       },
     });
 
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "tests.app.stream.json",
+      id: "tests-app-stream-json",
       register: [streamTask, exposure],
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
       const transport = createReqRes({
         method: "POST",
         url: `/__runner/task/${encodeURIComponent(streamTask.id)}`,
@@ -115,7 +112,7 @@ describe("nodeExposure - task returned stream", () => {
       void,
       Promise<{ stream: NodeJS.ReadableStream; contentType: string }>
     >({
-      id: "tests.stream.wrapper",
+      id: "tests-stream-wrapper",
       async run() {
         let i = 0;
         const stream = new Readable({
@@ -128,21 +125,19 @@ describe("nodeExposure - task returned stream", () => {
       },
     });
 
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "tests.app.stream.octet",
+      id: "tests-app-stream-octet",
       register: [streamTask, exposure],
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
       const transport = createReqRes({
         method: "POST",
         url: `/__runner/task/${encodeURIComponent(streamTask.id)}`,

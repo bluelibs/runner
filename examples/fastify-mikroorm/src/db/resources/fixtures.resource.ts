@@ -1,4 +1,4 @@
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { db } from "./db.resource";
 import { User } from "./entities/user.entity";
 import { Post } from "./entities/post.entity";
@@ -6,13 +6,13 @@ import { randomUUID } from "crypto";
 import { auth as authResource } from "#/users/resources/auth.resource";
 
 export const fixtures = r
-  .resource("app.db.resources.fixtures")
+  .resource("fixtures")
   .meta({
     title: "Database Fixtures",
     description:
       "Seed initial user and post data for development and testing environments",
   })
-  .dependencies({ db, logger: globals.resources.logger, auth: authResource })
+  .dependencies({ db, logger: r.runner.logger, auth: authResource })
   .init(async (_, { db, logger, auth }) => {
     const em = db.em();
 

@@ -1,7 +1,7 @@
 import { buildTestRunner, testOrmConfig } from "#/general/test/utils";
-import { httpRoute } from "#/http/tags";
-import { fastify } from "#/http/resources/fastify.resource";
-import { fastifyRouter } from "#/http/resources/fastify-router.resource";
+import { httpRoute } from "#/web/tags";
+import { fastify } from "#/web/resources/fastify.resource";
+import { fastifyRouter } from "#/web/resources/fastify-router.resource";
 import { db } from "#/db/resources/db.resource";
 import { users } from "./index";
 

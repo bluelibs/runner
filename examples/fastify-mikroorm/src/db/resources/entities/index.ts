@@ -9,7 +9,7 @@ export const entitiesResourceMap = {
 };
 
 export const entities = r
-  .resource("app.db.resources.entities")
+  .resource("entities")
   .meta({
     title: "Database Entities Collection",
     description:

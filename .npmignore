@@ -2,5 +2,7 @@
 !src/**/*
 !dist/**/*
 dist/**/__tests__/**/*
+!readmes/AI.md
+!readmes/FULL_GUIDE.md
 !package.json
 !README.md

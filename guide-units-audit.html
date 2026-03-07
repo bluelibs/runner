@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Guide-Units Audit — Runner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f5f3ef;
+        --surface: #ffffff;
+        --surface2: #f0ede8;
+        --border: rgba(0, 0, 0, 0.08);
+        --border-bright: rgba(0, 0, 0, 0.15);
+        --text: #1c1917;
+        --text-dim: #78716c;
+        --accent: #b45309;
+        --accent-dim: rgba(180, 83, 9, 0.08);
+        --green: #15803d;
+        --green-dim: rgba(21, 128, 61, 0.08);
+        --blue: #1d4ed8;
+        --blue-dim: rgba(29, 78, 216, 0.07);
+        --purple: #7c3aed;
+        --purple-dim: rgba(124, 58, 237, 0.07);
+        --font-body: "Instrument Serif", Georgia, serif;
+        --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+        --font-sans: system-ui, -apple-system, sans-serif;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #12100e;
+          --surface: #1c1917;
+          --surface2: #28231e;
+          --border: rgba(255, 255, 255, 0.06);
+          --border-bright: rgba(255, 255, 255, 0.12);
+          --text: #e7e5e4;
+          --text-dim: #a8a29e;
+          --accent: #fb923c;
+          --accent-dim: rgba(251, 146, 60, 0.12);
+          --green: #4ade80;
+          --green-dim: rgba(74, 222, 128, 0.1);
+          --blue: #60a5fa;
+          --blue-dim: rgba(96, 165, 250, 0.1);
+          --purple: #c084fc;
+          --purple-dim: rgba(192, 132, 252, 0.1);
+        }
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-sans);
+        padding: 48px 40px;
+        min-height: 100vh;
+      }
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .animate {
+        animation: fadeUp 0.3s ease-out both;
+        animation-delay: calc(var(--i, 0) * 0.03s);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+        }
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      /* ── Header ── */
+      .page-header {
+        margin-bottom: 36px;
+      }
+      h1 {
+        font-family: var(--font-body);
+        font-size: 34px;
+        font-weight: 400;
+        letter-spacing: -0.3px;
+        margin-bottom: 4px;
+      }
+      .subtitle {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--text-dim);
+        letter-spacing: 0.02em;
+      }
+
+      /* ── KPI row ── */
+      .kpi-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+        margin-bottom: 32px;
+      }
+      .kpi {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px 18px;
+      }
+      .kpi-label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        margin-bottom: 6px;
+      }
+      .kpi-value {
+        font-family: var(--font-body);
+        font-size: 26px;
+        color: var(--accent);
+      }
+      .kpi-sub {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--text-dim);
+        margin-top: 3px;
+      }
+
+      /* ── Table wrapper ── */
+      .table-wrap {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .scroll-x {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      thead th {
+        background: var(--surface2);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        padding: 10px 14px;
+        text-align: left;
+        border-bottom: 1px solid var(--border-bright);
+        white-space: nowrap;
+        position: sticky;
+        top: 0;
+      }
+      thead th:first-child {
+        border-radius: 0;
+      }
+
+      tbody tr {
+        border-bottom: 1px solid var(--border);
+        transition: background 0.1s;
+      }
+      tbody tr:last-child {
+        border-bottom: none;
+      }
+      tbody tr:hover {
+        background: var(--accent-dim);
+      }
+
+      td {
+        padding: 10px 14px;
+        vertical-align: top;
+        line-height: 1.45;
+      }
+
+      /* filename col */
+      .col-file {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        font-weight: 500;
+        white-space: nowrap;
+        color: var(--accent);
+      }
+
+      /* lines col */
+      .col-lines {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        text-align: right;
+        white-space: nowrap;
+        color: var(--text-dim);
+      }
+      .col-lines span {
+        display: inline-block;
+        padding: 2px 7px;
+        border-radius: 4px;
+        font-size: 11px;
+      }
+      .lines-xl span {
+        background: var(--purple-dim);
+        color: var(--purple);
+      }
+      .lines-lg span {
+        background: var(--blue-dim);
+        color: var(--blue);
+      }
+      .lines-md span {
+        background: var(--green-dim);
+        color: var(--green);
+      }
+      .lines-sm span {
+        background: var(--border);
+        color: var(--text-dim);
+      }
+
+      /* chapter count */
+      .col-count {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        text-align: center;
+        color: var(--text-dim);
+      }
+      .badge {
+        display: inline-block;
+        min-width: 22px;
+        text-align: center;
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .badge-high {
+        background: var(--purple-dim);
+        color: var(--purple);
+      }
+      .badge-med {
+        background: var(--blue-dim);
+        color: var(--blue);
+      }
+      .badge-low {
+        background: var(--green-dim);
+        color: var(--green);
+      }
+      .badge-zero {
+        background: var(--border);
+        color: var(--text-dim);
+      }
+
+      /* chapters list */
+      .col-chapters {
+        color: var(--text-dim);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .chapter-item {
+        display: inline-block;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 1px 6px;
+        margin: 2px 2px 2px 0;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--text);
+        white-space: nowrap;
+      }
+      .chapter-meta {
+        font-style: italic;
+        color: var(--text-dim);
+        font-size: 11px;
+      }
+
+      /* section label */
+      .section-row td {
+        background: var(--surface2);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        padding: 6px 14px;
+        border-bottom: 1px solid var(--border-bright);
+      }
+
+      /* footer */
+      .table-footer {
+        padding: 11px 16px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-dim);
+        border-top: 1px solid var(--border-bright);
+        background: var(--surface2);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="page-header animate" style="--i: 0">
+        <h1>Guide-Units Audit</h1>
+        <div class="subtitle">
+          bluelibs/runner · guide-units/ · 3 March 2026
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-row">
+        <div class="kpi animate" style="--i: 1">
+          <div class="kpi-label">Total Files</div>
+          <div class="kpi-value">20</div>
+          <div class="kpi-sub">18 content + 2 index</div>
+        </div>
+        <div class="kpi animate" style="--i: 2">
+          <div class="kpi-label">Total Lines</div>
+          <div class="kpi-value">11,312</div>
+          <div class="kpi-sub">across all .md files</div>
+        </div>
+        <div class="kpi animate" style="--i: 3">
+          <div class="kpi-label">Total Chapters (##)</div>
+          <div class="kpi-value">101</div>
+          <div class="kpi-sub">level-2 headings</div>
+        </div>
+        <div class="kpi animate" style="--i: 4">
+          <div class="kpi-label">Largest File</div>
+          <div class="kpi-value">1,597</div>
+          <div class="kpi-sub">02-core-concepts.md</div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-wrap animate" style="--i: 5">
+        <div class="scroll-x">
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th style="text-align: right">Lines</th>
+                <th style="text-align: center">## Count</th>
+                <th>Chapters (##)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- INTRO / SCAFFOLDING -->
+              <tr class="section-row">
+                <td colspan="4">Intro &amp; Scaffolding</td>
+              </tr>
+
+              <tr class="animate" style="--i: 6">
+                <td class="col-file lines-sm">00-header.md</td>
+                <td class="col-lines lines-sm"><span>130</span></td>
+                <td class="col-count">
+                  <span class="badge badge-low">4</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item"
+                    >Explicit TypeScript DI Toolkit</span
+                  >
+                  <span class="chapter-item">Choose Your Path</span>
+                  <span class="chapter-item">Platform Support</span>
+                  <span class="chapter-item">Prerequisites</span>
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 7">
+                <td class="col-file lines-sm">00-overview.md</td>
+                <td class="col-lines lines-sm"><span>175</span></td>
+                <td class="col-count">
+                  <span class="badge badge-low">2</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">Why Runner?</span>
+                  <span class="chapter-item">Table of Contents</span>
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 8">
+                <td class="col-file lines-sm">01-readme.md</td>
+                <td class="col-lines lines-sm"><span>101</span></td>
+                <td class="col-count">
+                  <span class="badge badge-low">6</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">Your First 5 Minutes</span>
+                  <span class="chapter-item">Quick Start</span>
+                  <span class="chapter-item">Runner Dev Tools Quick Start</span>
+                  <span class="chapter-item">Real-World Examples</span>
+                  <span class="chapter-item">Where To Go Next</span>
+                  <span class="chapter-item">License</span>
+                </td>
+              </tr>
+
+              <!-- GETTING STARTED -->
+              <tr class="section-row">
+                <td colspan="4">Getting Started</td>
+              </tr>
+
+              <tr class="animate" style="--i: 9">
+                <td class="col-file lines-lg">01-getting-started.md</td>
+                <td class="col-lines lines-lg"><span>593</span></td>
+                <td class="col-count">
+                  <span class="badge badge-med">7</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">What Is This Thing?</span>
+                  <span class="chapter-item">Show Me the Wiring</span>
+                  <span class="chapter-item">How Does It Compare?</span>
+                  <span class="chapter-item">What's in the Box?</span>
+                  <span class="chapter-item">Your First 5 Minutes</span>
+                  <span class="chapter-item">Quick Start</span>
+                  <span class="chapter-item">Learning Guide</span>
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 10">
+                <td class="col-file lines-sm">01b-quick-wins.md</td>
+                <td class="col-lines lines-sm"><span>213</span></td>
+                <td class="col-count">
+                  <span class="badge badge-low">1</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item"
+                    >Quick Wins: Copy-Paste Solutions</span
+                  >
+                </td>
+              </tr>
+
+              <!-- CORE CONTENT -->
+              <tr class="section-row">
+                <td colspan="4">Core Content</td>
+              </tr>
+
+              <tr class="animate" style="--i: 11">
+                <td class="col-file lines-xl">02-core-concepts.md</td>
+                <td class="col-lines lines-xl"><span>1,597</span></td>
+                <td class="col-count">
+                  <span class="badge badge-low">1</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">The Big Five</span>
+                  <span class="chapter-meta"
+                    >(all content nested under one ##)</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 12">
+                <td class="col-file lines-md">03-runtime-lifecycle.md</td>
+                <td class="col-lines lines-md"><span>384</span></td>
+                <td class="col-count">
+                  <span class="badge badge-low">3</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">run() and RunOptions</span>
+                  <span class="chapter-item">Lifecycle Management</span>
+                  <span class="chapter-item">Unhandled Errors</span>
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 13">
+                <td class="col-file lines-xl">04-features.md</td>
+                <td class="col-lines lines-xl"><span>1,452</span></td>
+                <td class="col-count">
+                  <span class="badge badge-high">16</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item"
+                    >Structural Validation (check())</span
+                  >
+                  <span class="chapter-item">Caching</span>
+                  <span class="chapter-item">Concurrency Control</span>
+                  <span class="chapter-item">Circuit Breaker</span>
+                  <span class="chapter-item"
+                    >Temporal Control: Debounce &amp; Throttle</span
+                  >
+                  <span class="chapter-item">Fallback: The Plan B</span>
+                  <span class="chapter-item">Rate Limiting</span>
+                  <span class="chapter-item">Require Context</span>
+                  <span class="chapter-item">Retrying Failed Operations</span>
+                  <span class="chapter-item">Timeouts</span>
+                  <span class="chapter-item">HTTP Server Shutdown Pattern</span>
+                  <span class="chapter-item">Cron Scheduling</span>
+                  <span class="chapter-item">Concurrency Utilities</span>
+                  <span class="chapter-item">Semaphore</span>
+                  <span class="chapter-item">Queue</span>
+                  <span class="chapter-item">Remote Lanes (Node)</span>
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 14">
+                <td class="col-file lines-lg">05-observability.md</td>
+                <td class="col-lines lines-lg"><span>506</span></td>
+                <td class="col-count">
+                  <span class="badge badge-low">3</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">Observability Strategy</span>
+                  <span class="chapter-item">Logging</span>
+                  <span class="chapter-item">Debug Resource</span>
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 15">
+                <td class="col-file lines-xl">06-advanced.md</td>
+                <td class="col-lines lines-xl"><span>1,553</span></td>
+                <td class="col-count">
+                  <span class="badge badge-high">16</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">Advanced Patterns</span>
+                  <span class="chapter-item">Optional Dependencies</span>
+                  <span class="chapter-item">Execution Journal</span>
+                  <span class="chapter-item">Execution Interception APIs</span>
+                  <span class="chapter-item">Task Interceptors</span>
+                  <span class="chapter-item"
+                    >Durable Workflows (Node-only)</span
+                  >
+                  <span class="chapter-item">Serialization</span>
+                  <span class="chapter-item">Resilience Orchestration</span>
+                  <span class="chapter-item">Meta</span>
+                  <span class="chapter-item">Overrides</span>
+                  <span class="chapter-item">Namespacing</span>
+                  <span class="chapter-item">Factory Pattern</span>
+                  <span class="chapter-item">Runtime Validation</span>
+                  <span class="chapter-item">Type Contracts</span>
+                  <span class="chapter-item">Internal Services</span>
+                  <span class="chapter-item"
+                    >Handling Circular Dependencies</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 16">
+                <td class="col-file lines-md">07-developer-experience.md</td>
+                <td class="col-lines lines-md"><span>416</span></td>
+                <td class="col-count">
+                  <span class="badge badge-low">4</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">Async Context</span>
+                  <span class="chapter-item">Fluent Builders (r.*)</span>
+                  <span class="chapter-item">Type Helpers</span>
+                  <span class="chapter-item">Runner Dev Tools Quick Start</span>
+                </td>
+              </tr>
+
+              <!-- EXAMPLES / PRACTICAL -->
+              <tr class="section-row">
+                <td colspan="4">Examples &amp; Practical</td>
+              </tr>
+
+              <tr class="animate" style="--i: 17">
+                <td class="col-file lines-sm">08-real-world-example.md</td>
+                <td class="col-lines lines-sm"><span>198</span></td>
+                <td class="col-count">
+                  <span class="badge badge-low">1</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item"
+                    >Real-World Example: The Complete Package</span
+                  >
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 18">
+                <td class="col-file lines-sm">08-testing.md</td>
+                <td class="col-lines lines-sm"><span>140</span></td>
+                <td class="col-count">
+                  <span class="badge badge-low">1</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">Testing</span>
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 19">
+                <td class="col-file lines-md">09-troubleshooting.md</td>
+                <td class="col-lines lines-md"><span>466</span></td>
+                <td class="col-count">
+                  <span class="badge badge-low">1</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">Troubleshooting</span>
+                  <span class="chapter-meta"
+                    >(all content nested under one ##)</span
+                  >
+                </td>
+              </tr>
+
+              <!-- DEEP DIVES / REFERENCE -->
+              <tr class="section-row">
+                <td colspan="4">Deep Dives &amp; Reference</td>
+              </tr>
+
+              <tr class="animate" style="--i: 20">
+                <td class="col-file lines-xl">10-deep-dives.md</td>
+                <td class="col-lines lines-xl"><span>918</span></td>
+                <td class="col-count">
+                  <span class="badge badge-low">2</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">Under the Hood</span>
+                  <span class="chapter-item">Integration Recipes</span>
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 21">
+                <td class="col-file lines-lg">11-reference.md</td>
+                <td class="col-lines lines-lg"><span>564</span></td>
+                <td class="col-count">
+                  <span class="badge badge-med">8</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">Quick Reference: Cheat Sheet</span>
+                  <span class="chapter-item">Why Choose BlueLibs Runner?</span>
+                  <span class="chapter-item">The Migration Path</span>
+                  <span class="chapter-item"
+                    >Release, Support &amp; Deprecation Policy</span
+                  >
+                  <span class="chapter-item"
+                    >Production Readiness Checklist</span
+                  >
+                  <span class="chapter-item">Node API Index</span>
+                  <span class="chapter-item">Community &amp; Support</span>
+                  <span class="chapter-item">License</span>
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 22">
+                <td class="col-file lines-md">12-upgrading-to-v6.md</td>
+                <td class="col-lines lines-md"><span>372</span></td>
+                <td class="col-count">
+                  <span class="badge badge-low">1</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">Upgrading from 5.x to 6.0</span>
+                  <span class="chapter-meta"
+                    >(all content nested under one ##)</span
+                  >
+                </td>
+              </tr>
+
+              <!-- META / TOOLING -->
+              <tr class="section-row">
+                <td colspan="4">Meta &amp; Tooling</td>
+              </tr>
+
+              <tr class="animate" style="--i: 23">
+                <td class="col-file lines-xl">DOCS_STYLE_GUIDE.md</td>
+                <td class="col-lines lines-xl"><span>1,032</span></td>
+                <td class="col-count">
+                  <span class="badge badge-high">22</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-item">Glossary of Core Terms</span>
+                  <span class="chapter-item">Writing Style</span>
+                  <span class="chapter-item">Major Section # Level 2</span>
+                  <span class="chapter-item"
+                    >Quick Wins: Copy-Paste Solutions</span
+                  >
+                  <span class="chapter-item">Quick Reference Cheat Sheet</span>
+                  <span class="chapter-item">Troubleshooting</span>
+                  <span class="chapter-item"
+                    >Introduction &amp; Value Proposition</span
+                  >
+                  <span class="chapter-item">Getting Started</span>
+                  <span class="chapter-item">Core Concepts</span>
+                  <span class="chapter-item">Runtime &amp; Execution</span>
+                  <span class="chapter-item">Advanced Features</span>
+                  <span class="chapter-item">Architecture Patterns</span>
+                  <span class="chapter-item">Developer Experience</span>
+                  <span class="chapter-item">Reference</span>
+                  <span class="chapter-item">Code Example Standards</span>
+                  <span class="chapter-item">Cross-Reference Standards</span>
+                  <span class="chapter-item">Formatting Standards</span>
+                  <span class="chapter-item"
+                    >Visual Patterns &amp; Layouts</span
+                  >
+                  <span class="chapter-item">File Organization</span>
+                  <span class="chapter-item">Pre-Commit Checklist</span>
+                  <span class="chapter-item">Quick Wins Section Pattern</span>
+                  <span class="chapter-item">Writing Comparisons</span>
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 24">
+                <td class="col-file lines-sm">INDEX_GUIDE.md</td>
+                <td class="col-lines lines-sm"><span>16</span></td>
+                <td class="col-count">
+                  <span class="badge badge-zero">0</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-meta">index / no ## headings</span>
+                </td>
+              </tr>
+
+              <tr class="animate" style="--i: 25">
+                <td class="col-file lines-sm">INDEX_README.md</td>
+                <td class="col-lines lines-sm"><span>2</span></td>
+                <td class="col-count">
+                  <span class="badge badge-zero">0</span>
+                </td>
+                <td class="col-chapters">
+                  <span class="chapter-meta">index / no ## headings</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span>20 files · 11,312 lines · 101 ## chapters</span>
+          <span
+            >Lines color: <span style="color: var(--purple)">■</span> &gt;900
+            &nbsp; <span style="color: var(--blue)">■</span> 500–900 &nbsp;
+            <span style="color: var(--green)">■</span> 300–500 &nbsp;
+            <span style="color: var(--text-dim)">■</span> &lt;300</span
+          >
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -3,9 +3,9 @@ import { run } from "../../run";
 import { IResource } from "../../defs";
 
 enum ResourceId {
-  Root = "run.rootIsolation.root",
-  ChoiceA = "run.rootIsolation.choiceA",
-  ChoiceB = "run.rootIsolation.choiceB",
+  Root = "run-rootIsolation-root",
+  ChoiceA = "run-rootIsolation-choiceA",
+  ChoiceB = "run-rootIsolation-choiceB",
 }
 
 type RootConfig = { useA: boolean };

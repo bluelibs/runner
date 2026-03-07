@@ -14,7 +14,10 @@ const createTestEvent = (
   id: string,
   exclude: boolean,
 ): TestEvent & ReturnType<typeof defineEvent> => {
-  return Object.assign(defineEvent({ id }), { exclude });
+  return {
+    ...defineEvent({ id }),
+    exclude,
+  };
 };
 
 describe("ListenerRegistry", () => {
@@ -27,7 +30,6 @@ describe("ListenerRegistry", () => {
     const globalListener = createListener({
       handler: jest.fn(),
       order: 1,
-      isGlobal: true,
     });
     const specificListener = createListener({ handler: jest.fn(), order: 0 });
 
@@ -65,7 +67,6 @@ describe("ListenerRegistry", () => {
     const globalListener = createListener({
       handler: jest.fn(),
       order: 0,
-      isGlobal: true,
     });
     registry.addGlobalListener(globalListener);
 
@@ -75,9 +76,19 @@ describe("ListenerRegistry", () => {
     expect(registry.globalListenersCacheValid).toBe(true);
   });
 
-  it("createListener defaults isGlobal to false", () => {
-    const listener = createListener({ handler: jest.fn(), order: 0 });
+  it("createListener defaults order to 0 and isGlobal to false", () => {
+    const listener = createListener({ handler: jest.fn() });
+    expect(listener.order).toBe(0);
     expect(listener.isGlobal).toBe(false);
+  });
+
+  it("addGlobalListener sets isGlobal to true for introspection", () => {
+    const registry = new ListenerRegistry();
+    const listener = createListener({ handler: jest.fn() });
+    expect(listener.isGlobal).toBe(false);
+
+    registry.addGlobalListener(listener);
+    expect(listener.isGlobal).toBe(true);
   });
 
   it("mergeSortedListeners keeps remaining listeners from either side", () => {
@@ -133,7 +144,6 @@ describe("ListenerRegistry", () => {
       handler: jest.fn(),
       order: 0,
       id: "global-listener",
-      isGlobal: true,
     });
 
     registry.addGlobalListener(globalListener);
@@ -166,5 +176,24 @@ describe("ListenerRegistry", () => {
 
     expect(registry.listeners.get("ev1")).toBeUndefined();
     expect(registry.listeners.get("ev2")).toBeUndefined();
+  });
+
+  it("keeps FIFO order when listeners share the same priority", () => {
+    const registry = new ListenerRegistry();
+    const first = createListener({
+      handler: jest.fn(),
+      order: 1,
+      id: "first",
+    });
+    const second = createListener({
+      handler: jest.fn(),
+      order: 1,
+      id: "second",
+    });
+
+    registry.addListener("ev", first);
+    registry.addListener("ev", second);
+
+    expect(registry.listeners.get("ev")).toEqual([first, second]);
   });
 });

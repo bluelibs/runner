@@ -24,7 +24,7 @@ import { r } from "../../../";
   };
 
   const middlewareWithConfig = r.middleware
-    .task("middleware.config")
+    .task("middleware-config")
     .configSchema<MiddlewareConfig>({ parse: (x: any) => x })
     .run(async ({ next }, _deps, _config: MiddlewareConfig) => {
       return next();
@@ -32,7 +32,7 @@ import { r } from "../../../";
     .build();
 
   const middlewareWithOptionalConfig = r.middleware
-    .task("middleware.optional.config")
+    .task("middleware-optional-config")
     .configSchema<MiddlewareOptionalConfig>({ parse: (x: any) => x })
     .run(async ({ next }, _deps, _config: MiddlewareOptionalConfig) => {
       return next();
@@ -41,7 +41,7 @@ import { r } from "../../../";
 
   const middlewareWithExplicitContracts = r.middleware
     .task<MiddlewareConfig, { message: string }, { ok: true }>(
-      "middleware.explicit.contracts",
+      "middleware-explicit-contracts",
     )
     .run(async ({ next, task }, _deps, config) => {
       config.message;
@@ -57,10 +57,10 @@ import { r } from "../../../";
     .payloadSchema<{ message: string }>({ parse: (x: any) => x })
     .build();
 
-  const eventWithoutArguments = r.event("event.noargs").build();
+  const eventWithoutArguments = r.event("event-noargs").build();
 
   const baseTask = r
-    .task("task.base")
+    .task("task-base")
     .inputSchema<InputTask>({ parse: (x: any) => x })
     .run(async (_input: InputTask) => "Task executed")
     .build();
@@ -94,30 +94,30 @@ import { r } from "../../../";
   };
 
   const dummyResource = r
-    .resource<ResourceType>("dummy.resource")
+    .resource<ResourceType>("dummy-resource")
     .configSchema<ResourceType>({ parse: (x: any) => x })
     .init(async (_config: ResourceType) => "Resource Value")
     .build();
 
   const dummyResourceNoConfig = r
-    .resource("dummy.resource.noconfig")
+    .resource("dummy-resource-noconfig")
     .init(async () => "Resource Value")
     .build();
 
   const dummyResourceOptionalConfig = r
-    .resource<string | undefined>("dummy.resource.optional.config")
+    .resource<string | undefined>("dummy-resource-optional-config")
     .configSchema<string | undefined>({ parse: (x: any) => x })
     .init(async (_config?: string) => "Resource Value")
     .build();
 
   const testResource3 = r
-    .resource("test.resource3")
+    .resource("test-resource3")
     .init(async (_: { name: string }) => {
       return "OK";
     })
     .build();
 
-  r.resource("test.resource")
+  r.resource("test-resource")
     .middleware([])
     .dependencies({ task, dummyResource, event, eventWithoutArguments })
     .register([

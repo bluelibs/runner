@@ -4,7 +4,7 @@ describe("defineError httpCode", () => {
   it("exposes httpCode on helper and thrown error", () => {
     expect.assertions(3);
     const E = defineError<{ code: number; message: string }>({
-      id: "tests.errors.define.httpCode",
+      id: "tests-errors-define-httpCode",
       httpCode: 422,
       format: (d) => d.message,
     });
@@ -26,7 +26,7 @@ describe("defineError httpCode", () => {
   it("throws for invalid httpCode", () => {
     expect(() =>
       defineError({
-        id: "tests.errors.define.invalidHttpCode",
+        id: "tests-errors-define-invalidHttpCode",
         httpCode: 700,
       }),
     ).toThrow(/httpCode must be an integer between 100 and 599/i);

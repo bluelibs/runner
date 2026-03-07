@@ -6,7 +6,7 @@ import { defineConfig } from "@mikro-orm/core";
 // We are creating a new resource to bootstrap MikroORM and get the config
 // Nothing else is initialized here.
 const cli = resource({
-  id: "app.db.resources.cli",
+  id: "cli",
   register: [entities, ormConfig],
 });
 

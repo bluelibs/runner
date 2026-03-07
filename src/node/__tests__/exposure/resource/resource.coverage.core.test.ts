@@ -1,29 +1,27 @@
 import * as http from "http";
 import { defineTask, defineResource } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
 
 describe("nodeExposure Coverage - Core Routing", () => {
   it("covers extractTarget fallback, method 405/401, and not-found branches for task", async () => {
     const okTask = defineTask<void, Promise<number>>({
-      id: "ok.task",
+      id: "ok-task",
       run: async () => 42,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.core.app1",
+      id: "unit-exposure-coverage-core-app1",
       register: [okTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     // handleTask: non-base path -> 404
     {
@@ -62,23 +60,21 @@ describe("nodeExposure Coverage - Core Routing", () => {
 
   it("handleRequest dispatches correctly and returns false outside base", async () => {
     const okTask = defineTask<void, Promise<number>>({
-      id: "hr.task",
+      id: "hr-task",
       run: async () => 1,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.core.app2",
+      id: "unit-exposure-coverage-core-app2",
       register: [okTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     {
       const rrMock = createReqRes({
@@ -103,20 +99,18 @@ describe("nodeExposure Coverage - Core Routing", () => {
   });
 
   it("attachTo and detachTo coverage", async () => {
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "DET" },
+        auth: { token: "DET", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "coverage.detach.app",
+      id: "coverage-detach-app",
       register: [exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const listeners = new Map<string, Function[]>();
     const fakeServer: any = {
@@ -146,23 +140,21 @@ describe("nodeExposure Coverage - Core Routing", () => {
 
   it("handleTask handles malformed paths via router guard branches", async () => {
     const okTask = defineTask<void, Promise<number>>({
-      id: "coverage.router.task",
+      id: "coverage-router-task",
       run: async () => 1,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "R" },
+        auth: { token: "R", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "coverage.router.app",
+      id: "coverage-router-app",
       register: [okTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
     const headers = { "x-runner-token": "R" };
 
     {

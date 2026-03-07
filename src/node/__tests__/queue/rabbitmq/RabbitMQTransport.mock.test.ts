@@ -1,0 +1,439 @@
+import * as amqplibModule from "../../../durable/optionalDeps/amqplib";
+import { RabbitMQTransport } from "../../../queue/rabbitmq/RabbitMQTransport";
+
+type ChannelMock = {
+  assertQueue: jest.Mock;
+  checkQueue?: jest.Mock;
+  prefetch: jest.Mock;
+  sendToQueue: jest.Mock;
+  waitForConfirms?: jest.Mock;
+  consume: jest.Mock;
+  cancel: jest.Mock;
+  ack: jest.Mock;
+  nack: jest.Mock;
+  close: jest.Mock;
+  on?: jest.Mock;
+};
+
+type ConnectionMock = {
+  createChannel: jest.Mock;
+  createConfirmChannel?: jest.Mock;
+  close: jest.Mock;
+  on?: jest.Mock;
+};
+
+describe("node: RabbitMQTransport", () => {
+  let channelMock: ChannelMock;
+  let connMock: ConnectionMock;
+
+  beforeEach(() => {
+    channelMock = {
+      assertQueue: jest.fn().mockResolvedValue({}),
+      checkQueue: jest.fn().mockResolvedValue({}),
+      prefetch: jest.fn().mockResolvedValue({}),
+      sendToQueue: jest.fn().mockResolvedValue(true),
+      consume: jest.fn().mockResolvedValue({ consumerTag: "tag" }),
+      cancel: jest.fn().mockResolvedValue({}),
+      ack: jest.fn(),
+      nack: jest.fn(),
+      close: jest.fn().mockResolvedValue({}),
+      on: jest.fn(),
+    };
+    connMock = {
+      createChannel: jest.fn().mockResolvedValue(channelMock),
+      close: jest.fn().mockResolvedValue({}),
+      on: jest.fn(),
+    };
+    jest
+      .spyOn(amqplibModule, "connectAmqplib")
+      .mockResolvedValue(connMock as any);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("initializes defaults and supports publish/prefetch/dispose", async () => {
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: { name: "transport.default" },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+    expect(channelMock.assertQueue).toHaveBeenCalledWith(
+      "transport.default",
+      expect.objectContaining({
+        durable: true,
+        arguments: expect.objectContaining({ "x-queue-type": "quorum" }),
+      }),
+    );
+    expect(channelMock.prefetch).toHaveBeenCalledWith(10);
+
+    await transport.publish(Buffer.from('{"id":"a"}'));
+    expect(channelMock.sendToQueue).toHaveBeenCalledWith(
+      "transport.default",
+      expect.any(Buffer),
+      expect.objectContaining({ persistent: true }),
+    );
+
+    await transport.setPrefetch(5);
+    expect(channelMock.prefetch).toHaveBeenLastCalledWith(5);
+
+    await transport.consume(async () => {});
+    await transport.dispose();
+    expect(channelMock.cancel).toHaveBeenCalledWith("tag");
+    expect(channelMock.close).toHaveBeenCalled();
+    expect(connMock.close).toHaveBeenCalled();
+  });
+
+  it("supports cancelConsumer with and without an active consumer", async () => {
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: { name: "transport.cancel" },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+    await transport.cancelConsumer();
+    expect(channelMock.cancel).not.toHaveBeenCalled();
+
+    await transport.consume(async () => {});
+    await transport.cancelConsumer();
+    expect(channelMock.cancel).toHaveBeenCalledWith("tag");
+  });
+
+  it("throws from throwNotInitialized before init", async () => {
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: { name: "transport.not-initialized", quorum: false },
+      logger: { error: jest.fn() },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await expect(transport.publish(Buffer.from("{}"))).rejects.toThrow(
+      "transport not initialized",
+    );
+    await expect(transport.consume(async () => {})).rejects.toThrow(
+      "transport not initialized",
+    );
+  });
+
+  it("nacks null/invalid/unresolvable messages and defaults nack requeue", async () => {
+    const loggerError = jest.fn();
+    const transport = new RabbitMQTransport<{ id?: string; mode?: string }>({
+      queue: { name: "transport.consume" },
+      logger: { error: loggerError },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => {
+        const text = content.toString();
+        if (text === "null-payload") {
+          return null;
+        }
+        return JSON.parse(text) as { id?: string; mode?: string };
+      },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+    let consumer:
+      | ((msg: { content: Buffer } | null) => Promise<void>)
+      | undefined;
+    channelMock.consume.mockImplementation(
+      async (_queue: string, handler: any) => {
+        consumer = handler;
+      },
+    );
+
+    await transport.consume(async (message) => {
+      if (message.mode === "handler-fail") {
+        throw "primitive-handler-error";
+      }
+    });
+
+    await consumer?.(null);
+    await consumer?.({ content: Buffer.from("{bad-json}") });
+    await consumer?.({ content: Buffer.from("null-payload") });
+    await consumer?.({
+      content: Buffer.from(JSON.stringify({ mode: "no-id" })),
+    });
+
+    const routed = { content: Buffer.from(JSON.stringify({ id: "route-1" })) };
+    await consumer?.(routed);
+    await transport.nack("route-1");
+    expect(channelMock.nack).toHaveBeenCalledWith(routed, false, true);
+
+    await transport.ack("missing-id");
+    await transport.nack("missing-id");
+
+    await consumer?.({
+      content: Buffer.from(
+        JSON.stringify({ id: "route-2", mode: "handler-fail" }),
+      ),
+    });
+    expect(loggerError).toHaveBeenCalledWith(
+      "parse-failed",
+      expect.objectContaining({ error: expect.any(Error) }),
+    );
+    expect(loggerError).toHaveBeenCalledWith(
+      "handler-failed",
+      expect.objectContaining({
+        error: expect.any(Error),
+        messageId: "route-2",
+      }),
+    );
+  });
+
+  it("supports passive queue checks without asserting queues", async () => {
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: {
+        name: "transport.passive",
+        assert: "passive",
+        deadLetter: {
+          queue: "transport.passive.dlq",
+          exchange: "",
+          routingKey: "transport.passive.dlq",
+        },
+      },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+    expect(channelMock.checkQueue).toHaveBeenCalledWith(
+      "transport.passive.dlq",
+    );
+    expect(channelMock.checkQueue).toHaveBeenCalledWith("transport.passive");
+    expect(channelMock.assertQueue).not.toHaveBeenCalled();
+  });
+
+  it("waits for publisher confirms when confirm channel support exists", async () => {
+    channelMock.waitForConfirms = jest.fn().mockResolvedValue(undefined);
+    connMock.createConfirmChannel = jest.fn().mockResolvedValue(channelMock);
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: { name: "transport.confirm" },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+    await transport.publish(Buffer.from('{"id":"confirm"}'));
+    expect(connMock.createConfirmChannel).toHaveBeenCalled();
+    expect(channelMock.waitForConfirms).toHaveBeenCalled();
+  });
+
+  it("recovers publish after channel drop and reconnects", async () => {
+    const listenersA: Record<string, (error?: unknown) => void> = {};
+    const listenersB: Record<string, (error?: unknown) => void> = {};
+
+    const channelA: ChannelMock = {
+      assertQueue: jest.fn().mockResolvedValue({}),
+      checkQueue: jest.fn().mockResolvedValue({}),
+      prefetch: jest.fn().mockResolvedValue({}),
+      sendToQueue: jest.fn(() => {
+        throw new Error("channel closed");
+      }),
+      consume: jest.fn().mockResolvedValue({ consumerTag: "tag-a" }),
+      cancel: jest.fn().mockResolvedValue({}),
+      ack: jest.fn(),
+      nack: jest.fn(),
+      close: jest.fn().mockResolvedValue({}),
+      on: jest.fn((event: string, handler: (error?: unknown) => void) => {
+        listenersA[event] = handler;
+      }),
+    };
+
+    const channelB: ChannelMock = {
+      assertQueue: jest.fn().mockResolvedValue({}),
+      checkQueue: jest.fn().mockResolvedValue({}),
+      prefetch: jest.fn().mockResolvedValue({}),
+      sendToQueue: jest.fn().mockResolvedValue(true),
+      consume: jest.fn().mockResolvedValue({ consumerTag: "tag-b" }),
+      cancel: jest.fn().mockResolvedValue({}),
+      ack: jest.fn(),
+      nack: jest.fn(),
+      close: jest.fn().mockResolvedValue({}),
+      on: jest.fn((event: string, handler: (error?: unknown) => void) => {
+        listenersB[event] = handler;
+      }),
+    };
+
+    const connectionA: ConnectionMock = {
+      createChannel: jest.fn().mockResolvedValue(channelA),
+      close: jest.fn().mockResolvedValue({}),
+      on: jest.fn(),
+    };
+    const connectionB: ConnectionMock = {
+      createChannel: jest.fn().mockResolvedValue(channelB),
+      close: jest.fn().mockResolvedValue({}),
+      on: jest.fn(),
+    };
+
+    const connectSpy = jest
+      .spyOn(amqplibModule, "connectAmqplib")
+      .mockResolvedValueOnce(connectionA as any)
+      .mockResolvedValueOnce(connectionB as any);
+
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: { name: "transport.recover" },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+    await transport.consume(async () => undefined);
+    listenersA.close?.();
+
+    await transport.publish(Buffer.from('{"id":"recover"}'));
+
+    expect(connectSpy).toHaveBeenCalledTimes(2);
+    expect(channelB.consume).toHaveBeenCalled();
+    expect(channelB.sendToQueue).toHaveBeenCalled();
+  });
+
+  it("applies custom durable, arguments, and publish options", async () => {
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: {
+        name: "transport.custom",
+        durable: false,
+        quorum: false,
+        deadLetter: {
+          queue: "transport.custom.dlq",
+          exchange: "events.dlx",
+          routingKey: "events.failed",
+        },
+        arguments: {
+          "x-single-active-consumer": true,
+        },
+      },
+      publishOptions: {
+        persistent: false,
+        expiration: "5000",
+      },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+
+    expect(channelMock.assertQueue).toHaveBeenCalledWith(
+      "transport.custom.dlq",
+      expect.objectContaining({ durable: false }),
+    );
+    expect(channelMock.assertQueue).toHaveBeenCalledWith(
+      "transport.custom",
+      expect.objectContaining({
+        durable: false,
+        arguments: expect.objectContaining({
+          "x-single-active-consumer": true,
+          "x-dead-letter-exchange": "events.dlx",
+          "x-dead-letter-routing-key": "events.failed",
+        }),
+      }),
+    );
+
+    await transport.publish(Buffer.from('{"id":"custom"}'));
+    expect(channelMock.sendToQueue).toHaveBeenCalledWith(
+      "transport.custom",
+      expect.any(Buffer),
+      expect.objectContaining({
+        persistent: false,
+        expiration: "5000",
+      }),
+    );
+  });
+
+  it("supports deadLetter routing key without an explicit queue target", async () => {
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: {
+        name: "transport.routing-only",
+        deadLetter: {
+          routingKey: "failed.routing.only",
+        },
+      },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+
+    expect(channelMock.assertQueue).toHaveBeenCalledTimes(1);
+    expect(channelMock.assertQueue).toHaveBeenCalledWith(
+      "transport.routing-only",
+      expect.objectContaining({
+        arguments: expect.objectContaining({
+          "x-dead-letter-routing-key": "failed.routing.only",
+        }),
+      }),
+    );
+  });
+
+  it("falls back gracefully when passive checkQueue is unavailable", async () => {
+    channelMock.checkQueue = undefined;
+
+    const transport = new RabbitMQTransport<{ id?: string }>({
+      queue: {
+        name: "transport.passive-no-check",
+        assert: "passive",
+        deadLetter: {
+          queue: "transport.passive-no-check.dlq",
+        },
+      },
+      parseFailureLogMessage: "parse-failed",
+      handlerFailureLogMessage: "handler-failed",
+      decode: (content) => JSON.parse(content.toString()) as { id?: string },
+      resolveMessageId: (message) => message.id,
+      throwNotInitialized: () => {
+        throw new Error("transport not initialized");
+      },
+    });
+
+    await transport.init();
+
+    expect(channelMock.assertQueue).not.toHaveBeenCalled();
+  });
+});

@@ -26,7 +26,7 @@ describe("Validation Edge Cases", () => {
     });
 
     const task = defineTask({
-      id: "task.nonErrorValidation",
+      id: "task-nonErrorValidation",
       inputSchema: taskSchema,
       run: async (_input: string) => "success",
     });
@@ -42,7 +42,7 @@ describe("Validation Edge Cases", () => {
 
     await expect(run(app)).rejects.toThrow();
     await expect(run(app)).rejects.toThrow(
-      "Task input validation failed for task.nonErrorValidation: Non-error string thrown",
+      "Task input validation failed for task-nonErrorValidation: Non-error string thrown",
     );
   });
 
@@ -52,7 +52,7 @@ describe("Validation Edge Cases", () => {
     });
 
     const resource = defineResource({
-      id: "resource.nonErrorValidation",
+      id: "resource-nonErrorValidation",
       configSchema: configSchema,
       init: async (_config: any) => "success",
     });
@@ -63,7 +63,7 @@ describe("Validation Edge Cases", () => {
     expect(() => {
       resource.with({ invalid: "config" });
     }).toThrow(
-      "Resource config validation failed for resource.nonErrorValidation: Resource config error string",
+      "Resource config validation failed for resource-nonErrorValidation: Resource config error string",
     );
   });
 
@@ -73,7 +73,7 @@ describe("Validation Edge Cases", () => {
     });
 
     const middleware = defineTaskMiddleware({
-      id: "middleware.nonErrorValidation",
+      id: "middleware-nonErrorValidation",
       configSchema: configSchema,
       run: async ({ next }) => next(),
     });
@@ -84,7 +84,7 @@ describe("Validation Edge Cases", () => {
     expect(() => {
       middleware.with({ invalid: "config" });
     }).toThrow(
-      "Middleware config validation failed for middleware.nonErrorValidation: Middleware config error string",
+      "Middleware config validation failed for middleware-nonErrorValidation: Middleware config error string",
     );
   });
 
@@ -94,7 +94,7 @@ describe("Validation Edge Cases", () => {
     });
 
     const middleware = defineResourceMiddleware({
-      id: "resource.middleware.nonErrorValidation",
+      id: "resource-middleware-nonErrorValidation",
       configSchema: configSchema,
       run: async ({ next }) => next(),
     });
@@ -102,7 +102,7 @@ describe("Validation Edge Cases", () => {
     expect(() => {
       middleware.with({ invalid: "config" });
     }).toThrow(
-      "Middleware config validation failed for resource.middleware.nonErrorValidation: Resource middleware config error string",
+      "Middleware config validation failed for resource-middleware-nonErrorValidation: Resource middleware config error string",
     );
   });
 
@@ -112,12 +112,12 @@ describe("Validation Edge Cases", () => {
     });
 
     const event = defineEvent({
-      id: "event.nonErrorValidation",
+      id: "event-nonErrorValidation",
       payloadSchema: payloadSchema,
     });
 
     const listenerTask = defineHook({
-      id: "task.listener",
+      id: "task-listener",
       on: event,
       run: async (_event) => {
         // This won't be called because validation will fail
@@ -135,7 +135,7 @@ describe("Validation Edge Cases", () => {
 
     await expect(run(app)).rejects.toThrow();
     await expect(run(app)).rejects.toThrow(
-      "Event payload validation failed for event.nonErrorValidation: Event payload error string",
+      "Event payload validation failed for event-nonErrorValidation: Event payload error string",
     );
   });
 });

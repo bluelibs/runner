@@ -1,7 +1,6 @@
-import * as http from "http";
 import { defineTask, defineResource } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
 
 describe("nodeExposure Coverage - Multipart", () => {
@@ -10,23 +9,21 @@ describe("nodeExposure Coverage - Multipart", () => {
       { file: any },
       Promise<{ name: string; type: string }>
     >({
-      id: "ok.file.task",
+      id: "ok-file-task",
       run: async ({ file }) => ({ name: file.name, type: file.type }),
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.multipart.app3",
+      id: "unit-exposure-coverage-multipart-app3",
       register: [fileTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----covboundaryOK";
     const manifest = JSON.stringify({
@@ -64,23 +61,21 @@ describe("nodeExposure Coverage - Multipart", () => {
 
   it("multipart meta.extra overrides and is exposed to task", async () => {
     const fileTask = defineTask<{ file: any }, Promise<{ extra: any }>>({
-      id: "ok.file.extra.task",
+      id: "ok-file-extra-task",
       run: async ({ file }) => ({ extra: file.extra }),
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.multipart.app12",
+      id: "unit-exposure-coverage-multipart-app12",
       register: [fileTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----covboundaryExtra";
     const manifest = JSON.stringify({
@@ -114,23 +109,21 @@ describe("nodeExposure Coverage - Multipart", () => {
 
   it("multipart error: missing file part referenced in manifest triggers 500", async () => {
     const fileTask = defineTask<{ file: any }, Promise<void>>({
-      id: "missing.file.task",
+      id: "missing-file-task",
       run: async () => {},
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.multipart.app4",
+      id: "unit-exposure-coverage-multipart-app4",
       register: [fileTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----covboundaryMissing";
     const manifest = JSON.stringify({
@@ -157,23 +150,21 @@ describe("nodeExposure Coverage - Multipart", () => {
 
   it("hydrate array of files coverage", async () => {
     const fileTask = defineTask<{ files: any[] }, Promise<string[]>>({
-      id: "ok.array.files.task",
+      id: "ok-array-files-task",
       run: async ({ files }) => files.map((f) => f.name),
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "unit.exposure.coverage.multipart.app7",
+      id: "unit-exposure-coverage-multipart-app7",
       register: [fileTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----covboundaryArray";
     const manifest = JSON.stringify({

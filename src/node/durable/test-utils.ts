@@ -49,7 +49,7 @@ export function createDurableTestSetup(
   };
 
   const durable = durableResource.fork(
-    options.durableId ?? "durable.tests.resource",
+    options.durableId ?? "durable-tests-resource",
   );
   const durableRegistration = durable.with(durableConfig);
 
