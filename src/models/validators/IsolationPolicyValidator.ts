@@ -12,13 +12,17 @@ import type {
   IsolationTarget,
   ItemType,
 } from "../../defs";
-import { isTag, isSubtreeFilter, isIsolationScope } from "../../define";
-import type { IsolationScope, IsolationScopeTarget } from "../../tools/scope";
+import { isTag } from "../../define";
+import type { IsolationScopeTarget } from "../../tools/scope";
 import { scope } from "../../tools/scope";
 import {
   getSubtreeFilterResourceReference,
   isSubtreeFilterItemType,
 } from "../../tools/subtreeOf";
+import {
+  classifyIsolationEntry,
+  classifyScopeTarget,
+} from "../../tools/classifyIsolationEntry";
 import type { ValidatorContext } from "./ValidatorContext";
 
 /** Input for normalization functions */
@@ -145,6 +149,36 @@ export function validateIsolationPolicies(ctx: ValidatorContext): void {
   }
 }
 
+type EntryErrorCallbacks = {
+  onInvalidEntry: (entry: unknown) => never;
+  onUnknownTarget: (targetId: string) => never;
+};
+
+/**
+ * Resolves a tag or bare definition entry to its normalized form with a canonical id.
+ */
+function normalizeResolvedTarget<TEntry extends object>(
+  ctx: ValidatorContext,
+  entry: unknown,
+  callbacks: EntryErrorCallbacks,
+): TEntry {
+  const resolvedId = resolveKnownIsolationTargetId(ctx, {
+    entry,
+    ...callbacks,
+  });
+
+  if (isTag(entry)) {
+    return (
+      entry.id === resolvedId ? entry : { ...entry, id: resolvedId }
+    ) as TEntry;
+  }
+
+  return normalizeResolvedDefinitionEntry<TEntry>(
+    entry as object & { id: string },
+    resolvedId,
+  );
+}
+
 /**
  * Normalizes isolation entries - exported for testing purposes.
  */
@@ -158,60 +192,48 @@ export function normalizeIsolationEntries<TEntry extends object>(
   },
 ): Array<TEntry> {
   const normalizedEntries: Array<TEntry> = [];
+  const callbacks: EntryErrorCallbacks = {
+    onInvalidEntry: input.onInvalidEntry,
+    onUnknownTarget: input.onUnknownTarget,
+  };
 
   for (const entry of input.entries) {
-    // scope() entries � validate inner targets
-    if (isIsolationScope(entry)) {
-      const scopeEntry = entry as IsolationScope;
-      const expandedTargets = expandScopeTargets(ctx, {
-        targets: scopeEntry.targets,
-        policyResourceId: input.policyResourceId,
-        onInvalidEntry: input.onInvalidEntry,
-        onUnknownTarget: input.onUnknownTarget,
-      });
-      const expandedScope = scope(expandedTargets, scopeEntry.channels);
-      normalizedEntries.push(expandedScope as unknown as TEntry);
-      continue;
+    const classified = classifyIsolationEntry(entry);
+    switch (classified.kind) {
+      case "scope": {
+        const expandedTargets = expandScopeTargets(ctx, {
+          targets: classified.scope.targets,
+          policyResourceId: input.policyResourceId,
+          ...callbacks,
+        });
+        normalizedEntries.push(
+          scope(
+            expandedTargets,
+            classified.scope.channels,
+          ) as unknown as TEntry,
+        );
+        break;
+      }
+      case "subtreeFilter":
+        normalizedEntries.push(
+          normalizeSubtreeFilterResourceId(ctx, {
+            filter: classified.filter,
+            ...callbacks,
+          }) as unknown as TEntry,
+        );
+        break;
+      case "string":
+        input.onInvalidEntry(entry);
+      // falls through (onInvalidEntry returns never)
+      case "tag":
+      case "definition":
+        normalizedEntries.push(
+          normalizeResolvedTarget<TEntry>(ctx, entry, callbacks),
+        );
+        break;
+      case "unknown":
+        input.onInvalidEntry(entry);
     }
-
-    // Structural subtree filters bypass the id-resolution path
-    if (isSubtreeFilter(entry)) {
-      const normalizedFilter = normalizeSubtreeFilterResourceId(ctx, {
-        filter: entry,
-        onInvalidEntry: input.onInvalidEntry,
-        onUnknownTarget: input.onUnknownTarget,
-      });
-      normalizedEntries.push(normalizedFilter as unknown as TEntry);
-      continue;
-    }
-
-    // Bare strings are not valid in deny/only.
-    if (typeof entry === "string") {
-      input.onInvalidEntry(entry);
-    }
-
-    const resolvedId = resolveKnownIsolationTargetId(ctx, {
-      entry,
-      onInvalidEntry: input.onInvalidEntry,
-      onUnknownTarget: input.onUnknownTarget,
-    });
-
-    if (isTag(entry)) {
-      normalizedEntries.push(
-        (entry.id === resolvedId
-          ? entry
-          : { ...entry, id: resolvedId }) as TEntry,
-      );
-      continue;
-    }
-
-    normalizedEntries.push(
-      normalizeResolvedDefinitionEntry<TEntry>(
-        entry,
-        resolvedId,
-        input.onInvalidEntry,
-      ),
-    );
   }
 
   return normalizedEntries;
@@ -227,62 +249,44 @@ function expandScopeTargets(
   },
 ): IsolationScopeTarget[] {
   const expanded: IsolationScopeTarget[] = [];
+  const callbacks: EntryErrorCallbacks = {
+    onInvalidEntry: input.onInvalidEntry,
+    onUnknownTarget: input.onUnknownTarget,
+  };
 
   for (const target of input.targets) {
-    if (isSubtreeFilter(target)) {
-      const normalizedFilter = normalizeSubtreeFilterResourceId(ctx, {
-        filter: target,
-        onInvalidEntry: input.onInvalidEntry,
-        onUnknownTarget: input.onUnknownTarget,
-      });
-      expanded.push(normalizedFilter);
-      continue;
+    const classified = classifyScopeTarget(target);
+    switch (classified.kind) {
+      case "subtreeFilter":
+        expanded.push(
+          normalizeSubtreeFilterResourceId(ctx, {
+            filter: classified.filter,
+            ...callbacks,
+          }),
+        );
+        break;
+      case "string":
+        input.onInvalidEntry(target);
+      // falls through (onInvalidEntry returns never)
+      case "tag":
+      case "definition":
+        expanded.push(
+          normalizeResolvedTarget<IsolationScopeTarget>(ctx, target, callbacks),
+        );
+        break;
+      case "unknown":
+        input.onInvalidEntry(target);
     }
-
-    if (typeof target === "string") {
-      input.onInvalidEntry(target);
-    }
-
-    const resolvedId = resolveKnownIsolationTargetId(ctx, {
-      entry: target,
-      onInvalidEntry: input.onInvalidEntry,
-      onUnknownTarget: input.onUnknownTarget,
-    });
-
-    if (isTag(target)) {
-      expanded.push(
-        target.id === resolvedId ? target : { ...target, id: resolvedId },
-      );
-      continue;
-    }
-
-    expanded.push(
-      normalizeResolvedDefinitionEntry<IsolationScopeTarget>(
-        target,
-        resolvedId,
-        input.onInvalidEntry,
-      ),
-    );
   }
 
   return expanded;
 }
 
 function normalizeResolvedDefinitionEntry<TEntry extends object>(
-  entry: unknown,
+  entry: object & { id: string },
   resolvedId: string,
-  onInvalidEntry: (entry: unknown) => never,
 ): TEntry {
-  if (typeof entry !== "object" || entry === null || !("id" in entry)) {
-    onInvalidEntry(entry);
-  }
-
-  const currentId = (entry as { id?: unknown }).id;
-  if (typeof currentId !== "string") {
-    onInvalidEntry(entry);
-  }
-
-  if (currentId === resolvedId) {
+  if (entry.id === resolvedId) {
     return entry as TEntry;
   }
 
@@ -384,34 +388,30 @@ export function normalizeExportEntries(
   },
 ): Array<IsolationExportsTarget> {
   const normalizedEntries: Array<IsolationExportsTarget> = [];
+  const callbacks: EntryErrorCallbacks = {
+    onInvalidEntry: input.onInvalidEntry,
+    onUnknownTarget: input.onUnknownTarget,
+  };
 
   for (const entry of input.entries) {
-    if (typeof entry === "string") {
-      input.onInvalidEntry(entry);
+    const classified = classifyScopeTarget(entry);
+    switch (classified.kind) {
+      case "string":
+      case "unknown":
+      case "subtreeFilter":
+        input.onInvalidEntry(entry);
+      // falls through (onInvalidEntry returns never)
+      case "tag":
+      case "definition":
+        normalizedEntries.push(
+          normalizeResolvedTarget<IsolationExportsTarget>(
+            ctx,
+            entry,
+            callbacks,
+          ),
+        );
+        break;
     }
-
-    const resolvedId = resolveKnownIsolationTargetId(ctx, {
-      entry,
-      onInvalidEntry: input.onInvalidEntry,
-      onUnknownTarget: input.onUnknownTarget,
-    });
-
-    if (isTag(entry)) {
-      normalizedEntries.push(
-        (entry.id === resolvedId
-          ? entry
-          : { ...entry, id: resolvedId }) as IsolationExportsTarget,
-      );
-      continue;
-    }
-
-    normalizedEntries.push(
-      normalizeResolvedDefinitionEntry<IsolationExportsTarget>(
-        entry,
-        resolvedId,
-        input.onInvalidEntry,
-      ),
-    );
   }
 
   return normalizedEntries;

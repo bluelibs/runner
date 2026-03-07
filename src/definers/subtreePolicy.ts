@@ -116,9 +116,6 @@ function mergeSubtreeMiddlewareBranch<
   } as TBranch;
 }
 
-const mergeSubtreeTasksBranch = mergeSubtreeMiddlewareBranch;
-const mergeSubtreeResourcesBranch = mergeSubtreeMiddlewareBranch;
-
 export function mergeResourceSubtreePolicy(
   existing: NormalizedResourceSubtreePolicy | undefined,
   incoming: ResourceSubtreePolicy,
@@ -135,7 +132,7 @@ export function mergeResourceSubtreePolicy(
   const merged = cloneNormalizedSubtreePolicy(existing);
 
   if (normalizedIncoming.tasks) {
-    merged.tasks = mergeSubtreeTasksBranch(
+    merged.tasks = mergeSubtreeMiddlewareBranch(
       merged.tasks,
       normalizedIncoming.tasks,
       override,
@@ -143,7 +140,7 @@ export function mergeResourceSubtreePolicy(
   }
 
   if (normalizedIncoming.resources) {
-    merged.resources = mergeSubtreeResourcesBranch(
+    merged.resources = mergeSubtreeMiddlewareBranch(
       merged.resources,
       normalizedIncoming.resources,
       override,

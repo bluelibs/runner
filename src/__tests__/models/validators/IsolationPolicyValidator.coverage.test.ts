@@ -273,4 +273,86 @@ describe("IsolationPolicyValidator coverage", () => {
       isolateExportsUnknownTargetError.id,
     );
   });
+
+  it("rejects raw strings passed as isolation entries", () => {
+    const ctx = createValidatorContext();
+
+    expect(() =>
+      normalizeIsolationEntries(ctx, {
+        entries: ["raw-string-entry"],
+        onInvalidEntry: () => {
+          throw new Error("invalid");
+        },
+        onUnknownTarget: () => {
+          throw new Error("unknown");
+        },
+      }),
+    ).toThrow("invalid");
+  });
+
+  it("rejects unknown entry types (e.g. numbers) in isolation entries", () => {
+    const ctx = createValidatorContext();
+
+    expect(() =>
+      normalizeIsolationEntries(ctx, {
+        entries: [42 as any],
+        onInvalidEntry: () => {
+          throw new Error("invalid");
+        },
+        onUnknownTarget: () => {
+          throw new Error("unknown");
+        },
+      }),
+    ).toThrow("invalid");
+  });
+
+  it("rejects raw strings inside scope targets", () => {
+    const ctx = createValidatorContext();
+
+    expect(() =>
+      normalizeIsolationEntries(ctx, {
+        entries: [scope("raw-string-target" as any)],
+        onInvalidEntry: () => {
+          throw new Error("invalid");
+        },
+        onUnknownTarget: () => {
+          throw new Error("unknown");
+        },
+      }),
+    ).toThrow("invalid");
+  });
+
+  it("rejects unknown entry types inside scope targets", () => {
+    const ctx = createValidatorContext();
+
+    expect(() =>
+      normalizeIsolationEntries(ctx, {
+        entries: [scope(99 as any)],
+        onInvalidEntry: () => {
+          throw new Error("invalid");
+        },
+        onUnknownTarget: () => {
+          throw new Error("unknown");
+        },
+      }),
+    ).toThrow("invalid");
+  });
+
+  it("reports unresolvable definition entries as invalid", () => {
+    const ctx = createValidatorContext({
+      resolveDefinitionId: () => undefined,
+    });
+
+    expect(() =>
+      normalizeIsolationEntries(ctx, {
+        entries: [{ id: "unresolvable-def" }],
+        onInvalidEntry: () => {
+          throw new Error("invalid");
+        },
+        onUnknownTarget: () => {
+          throw new Error("unknown");
+        },
+      }),
+    ).toThrow("invalid");
+  });
 });

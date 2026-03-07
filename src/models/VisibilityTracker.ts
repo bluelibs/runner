@@ -7,8 +7,12 @@ import {
   IsolationChannel,
   DependencyMapType,
 } from "../defs";
-import type { IsolationScope, IsolationScopeTarget } from "../tools/scope";
 import * as utils from "../define";
+import {
+  classifyIsolationEntry,
+  classifyScopeTarget,
+} from "../tools/classifyIsolationEntry";
+import type { ClassifiedScopeTarget } from "../tools/classifyIsolationEntry";
 import { isolateViolationError, visibilityViolationError } from "../errors";
 import { StoreRegistry } from "./StoreRegistry";
 import {
@@ -120,19 +124,6 @@ type MiddlewareVisibilityEntry = {
   targetType: string;
   targetIds: string[];
 };
-
-function mapEntries<TSource, TResult>(
-  items: Iterable<TSource>,
-  map: (item: TSource) => TResult,
-): TResult[] {
-  const results: TResult[] = [];
-
-  for (const item of items) {
-    results.push(map(item));
-  }
-
-  return results;
-}
 
 /**
  * Maps a registerable item to its Runner ItemType string.
@@ -283,39 +274,34 @@ export class VisibilityTracker {
     const deny = emptyChannelRecord();
     const only = emptyChannelRecord();
 
-    /**
-     * Resolves a single target into the appropriate channel sets.
-     * Targets are either ids (strings), tag ids, or subtree filters.
-     */
-    const addTarget = (
-      target: IsolationScopeTarget,
+    const addClassifiedTarget = (
+      classified: ClassifiedScopeTarget,
       channels: Readonly<Record<IsolationChannel, boolean>>,
       channelRecord: Record<IsolationChannel, CompiledChannelSets>,
     ) => {
-      // Structural subtree filters are resolved lazily at violation-check time
-      // so overridable ids and late-registered children are included.
-      if (utils.isSubtreeFilter(target)) {
-        forEachEnabledChannel(channels, (channel) => {
-          channelRecord[channel].subtreeFilters.push(target);
-        });
-        return;
-      }
-      if (typeof target === "string") {
-        forEachEnabledChannel(channels, (channel) => {
-          channelRecord[channel].ids.add(target);
-        });
-        return;
-      }
-      const maybeId = getItemId(target as RegisterableItems);
-      if (!maybeId) return;
-      if (utils.isTag(target)) {
-        forEachEnabledChannel(channels, (channel) => {
-          channelRecord[channel].tagIds.add(maybeId);
-        });
-      } else {
-        forEachEnabledChannel(channels, (channel) => {
-          channelRecord[channel].ids.add(maybeId);
-        });
+      switch (classified.kind) {
+        case "subtreeFilter":
+          // Resolved lazily at violation-check time so overrides and late children are included.
+          forEachEnabledChannel(channels, (channel) => {
+            channelRecord[channel].subtreeFilters.push(classified.filter);
+          });
+          break;
+        case "tag":
+          forEachEnabledChannel(channels, (channel) => {
+            channelRecord[channel].tagIds.add(classified.id);
+          });
+          break;
+        case "string":
+          forEachEnabledChannel(channels, (channel) => {
+            channelRecord[channel].ids.add(classified.value);
+          });
+          break;
+        case "definition":
+          forEachEnabledChannel(channels, (channel) => {
+            channelRecord[channel].ids.add(classified.id);
+          });
+          break;
+        // "unknown" entries are silently skipped — validation already caught them.
       }
     };
 
@@ -326,46 +312,33 @@ export class VisibilityTracker {
       middleware: true,
     } as const;
 
-    const resolveEntry = (
+    const compileEntry = (
       entry: unknown,
       channelRecord: Record<IsolationChannel, CompiledChannelSets>,
     ) => {
-      // Scope entries — channel-scoped targets created by scope()
-      if (utils.isIsolationScope(entry)) {
-        const scopeEntry = entry as IsolationScope;
-        for (const target of scopeEntry.targets) {
-          addTarget(target, scopeEntry.channels, channelRecord);
+      const classified = classifyIsolationEntry(entry);
+      if (classified.kind === "scope") {
+        for (const target of classified.scope.targets) {
+          addClassifiedTarget(
+            classifyScopeTarget(target),
+            classified.scope.channels,
+            channelRecord,
+          );
         }
         return;
       }
-      // Subtree filters — implicit all-channels
-      if (utils.isSubtreeFilter(entry)) {
-        addTarget(entry, allOn, channelRecord);
-        return;
-      }
-      // Bare definitions — implicit all-channels
-      const maybeId = getItemId(entry as RegisterableItems);
-      if (!maybeId) return;
-      if (utils.isTag(entry)) {
-        forEachEnabledChannel(allOn, (channel) => {
-          channelRecord[channel].tagIds.add(maybeId);
-        });
-      } else {
-        forEachEnabledChannel(allOn, (channel) => {
-          channelRecord[channel].ids.add(maybeId);
-        });
-      }
+      addClassifiedTarget(classified, allOn, channelRecord);
     };
 
     if (hasDeny) {
       for (const entry of policy!.deny!) {
-        resolveEntry(entry, deny);
+        compileEntry(entry, deny);
       }
     }
 
     if (onlyPresent) {
       for (const entry of policy!.only!) {
-        resolveEntry(entry, only);
+        compileEntry(entry, only);
       }
     }
 
@@ -672,27 +645,27 @@ export class VisibilityTracker {
     registry: StoreRegistry,
   ): DependencyValidationEntry[] {
     return [
-      ...mapEntries(registry.tasks.values(), ({ task }) => ({
+      ...Array.from(registry.tasks.values(), ({ task }) => ({
         consumerId: task.id,
         consumerType: "Task",
         dependencies: task.dependencies,
       })),
-      ...mapEntries(registry.resources.values(), ({ resource }) => ({
+      ...Array.from(registry.resources.values(), ({ resource }) => ({
         consumerId: resource.id,
         consumerType: "Resource",
         dependencies: resource.dependencies,
       })),
-      ...mapEntries(registry.hooks.values(), ({ hook }) => ({
+      ...Array.from(registry.hooks.values(), ({ hook }) => ({
         consumerId: hook.id,
         consumerType: "Hook",
         dependencies: hook.dependencies,
       })),
-      ...mapEntries(registry.taskMiddlewares.values(), ({ middleware }) => ({
+      ...Array.from(registry.taskMiddlewares.values(), ({ middleware }) => ({
         consumerId: middleware.id,
         consumerType: "Task middleware",
         dependencies: middleware.dependencies,
       })),
-      ...mapEntries(
+      ...Array.from(
         registry.resourceMiddlewares.values(),
         ({ middleware }) => ({
           consumerId: middleware.id,
@@ -705,32 +678,32 @@ export class VisibilityTracker {
 
   private collectTagEntries(registry: StoreRegistry): TagValidationEntry[] {
     return [
-      ...mapEntries(registry.tasks.values(), ({ task }) => ({
+      ...Array.from(registry.tasks.values(), ({ task }) => ({
         consumerId: task.id,
         consumerType: "Task",
         tags: task.tags,
       })),
-      ...mapEntries(registry.resources.values(), ({ resource }) => ({
+      ...Array.from(registry.resources.values(), ({ resource }) => ({
         consumerId: resource.id,
         consumerType: "Resource",
         tags: resource.tags,
       })),
-      ...mapEntries(registry.events.values(), ({ event }) => ({
+      ...Array.from(registry.events.values(), ({ event }) => ({
         consumerId: event.id,
         consumerType: "Event",
         tags: event.tags,
       })),
-      ...mapEntries(registry.hooks.values(), ({ hook }) => ({
+      ...Array.from(registry.hooks.values(), ({ hook }) => ({
         consumerId: hook.id,
         consumerType: "Hook",
         tags: hook.tags,
       })),
-      ...mapEntries(registry.taskMiddlewares.values(), ({ middleware }) => ({
+      ...Array.from(registry.taskMiddlewares.values(), ({ middleware }) => ({
         consumerId: middleware.id,
         consumerType: "Task middleware",
         tags: middleware.tags,
       })),
-      ...mapEntries(
+      ...Array.from(
         registry.resourceMiddlewares.values(),
         ({ middleware }) => ({
           consumerId: middleware.id,
@@ -745,19 +718,19 @@ export class VisibilityTracker {
     registry: StoreRegistry,
   ): MiddlewareVisibilityEntry[] {
     return [
-      ...mapEntries(registry.tasks.values(), ({ task }) => ({
+      ...Array.from(registry.tasks.values(), ({ task }) => ({
         consumerId: task.id,
         consumerType: "Task",
         targetType: "Task middleware",
         targetIds: this.resolveReferenceIds(registry, task.middleware),
       })),
-      ...mapEntries(registry.resources.values(), ({ resource }) => ({
+      ...Array.from(registry.resources.values(), ({ resource }) => ({
         consumerId: resource.id,
         consumerType: "Resource",
         targetType: "Resource middleware",
         targetIds: this.resolveReferenceIds(registry, resource.middleware),
       })),
-      ...mapEntries(registry.resources.values(), ({ resource }) => ({
+      ...Array.from(registry.resources.values(), ({ resource }) => ({
         consumerId: resource.id,
         consumerType: "Resource",
         targetType: "Task middleware",
@@ -767,7 +740,7 @@ export class VisibilityTracker {
           getSubtreeTaskMiddlewareAttachment,
         ),
       })),
-      ...mapEntries(registry.resources.values(), ({ resource }) => ({
+      ...Array.from(registry.resources.values(), ({ resource }) => ({
         consumerId: resource.id,
         consumerType: "Resource",
         targetType: "Resource middleware",
