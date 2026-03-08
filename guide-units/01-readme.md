@@ -1,5 +1,7 @@
 ## Your First 5 Minutes
 
+This page is the shortest path from "what is Runner?" to "I ran it once and I trust the shape of it."
+
 **New to Runner?** Here's the absolute minimum you need to know:
 
 1. **Tasks** are your business logic functions (with dependencies and middleware)
@@ -7,7 +9,13 @@
 3. **You compose everything** under an `app` resource with `.register([...])`
 4. **You run it** with `run(app)` which gives you `runTask()` and `dispose()` first, plus more runtime helpers as you grow (`emitEvent()`, resource getters)
 
-That's it. Now let's get you to a first successful run.
+If you are here to evaluate fit instead of running code immediately:
+
+- Read [What Is This Thing?](#what-is-this-thing) for the mental model
+- Read [How Does It Compare?](#how-does-it-compare) for framework tradeoffs
+- Read [Quick Wins](#quick-wins-pressure-tested-recipes) for production recipes
+
+Now let's get you to a first successful run.
 
 ---
 
@@ -31,10 +39,11 @@ npm i -D typescript tsx
 npx tsx index.ts
 ```
 
-**That's it!** You now have a working `Runtime` and you can execute tasks with `runtime.runTask(...)`.
+**What you now have**: a working `Runtime` and the smallest useful Runner execution path.
 
 > **Tip:** If you prefer an end-to-end example with HTTP, OpenAPI, and persistence, jump to the examples below.
 > **Tip:** User-defined ids are local ids. Use `send-email` or `userStore`, not dotted ids like `app.tasks.sendEmail`.
+> **Boundary:** Advanced features such as Durable Workflows and server-side Remote Lanes are Node-only.
 
 ---
 

@@ -130,396 +130,124 @@ If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows
 ---
 ## Why Runner?
 
-Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
+When a TypeScript service grows past a few dependencies, the pain usually shows up in the same places: startup order becomes tribal knowledge, cross-cutting concerns leak into business logic, and testing means reconstructing half the app. Runner makes those seams explicit. You wire dependencies in code, keep lifecycle in one place, and choose when to execute a unit directly versus through the full runtime.
 
-### Functional Composition with Clarity
+### The Core Promise
 
-Runner keeps everything as plain functions and objects. You declare dependencies up front, wire them once, and get predictable runtime behavior with no hidden reflection.
+Runner is for teams that want explicit composition without class decorators, reflection, or framework-owned magic.
+
+- **Before Runner**: manual wiring, ad hoc startup and shutdown, inconsistent test setup, policies scattered across handlers
+- **With Runner**: explicit dependency maps, resource lifecycle, middleware for cross-cutting concerns, direct unit testing or full runtime execution
+
+### A Small, Runnable Example
+
+Start with one resource, one task, and one app. This example is intentionally small enough to run as-is.
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
-import { z } from "zod";
 
-const logger = resources.logger;
-
-// resources are singletons with lifecycle management and async construction
-const db = r
-  .resource("app.db")
-  .init(async () => {
-    const conn = await postgres.connect(process.env.DB_URL);
-    return conn;
-  })
+const userStore = r
+  .resource("userStore")
+  .init(async () => new Map<string, { id: string; email: string }>())
   .build();
 
-const mailer = r
-  .resource("app.mailer")
-  .dependencies({ logger })
-  .init(async (_config, { logger }) => ({
-    sendWelcome: async (userId: string) => {
-      logger.info("Sending welcome email", { userId });
-    },
-  }))
-  .build();
-
-// events are signals that something happened, often used for decoupling
-const userCreated = r
-  .event("app.events.userCreated")
-  .payloadSchema(z.object({ userId: z.string() })) // runtime and compile-time validation
-  .build();
-
-// notifications
-const onUserCreatedHook = r
-  .hook("app.hooks.onUserCreated")
-  .on(userCreated)
-  .dependencies({ mailer, logger })
-  .run(async (event, { mailer, logger }) => {
-    await mailer.sendWelcome(event.data.userId);
-    logger.info("Welcome email sent", { userId: event.data.userId });
-  })
-  .build();
-
-// tasks are functions with explicit dependencies and input/output schemas
 const createUser = r
-  .task("app.tasks.createUser")
-  .dependencies({ db, logger, emitUserCreated: userCreated })
-  .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
-  .run(async (user, { db, logger, emitUserCreated }) => {
-    const createdUser = await db.users.insert(user);
-    await emitUserCreated({ userId: createdUser.id });
-    logger.info("User created", { userId: createdUser.id });
-
-    return createdUser;
+  .task<{ email: string }>("createUser")
+  .dependencies({ userStore })
+  .run(async (input, { userStore }) => {
+    const user = { id: "user-1", email: input.email };
+    userStore.set(user.id, user);
+    return user;
   })
   .build();
 
-// wire everything into the app resource
 const app = r
   .resource("app")
-  .register([db, mailer, userCreated, createUser, onUserCreatedHook]) // lets the runtime know about it
-  .build(); // close the builder
+  .register([userStore, createUser])
+  .build();
 
-const { runTask, emitEvent, dispose } = await run(app);
+const { runTask, dispose } = await run(app);
+
+console.log(await runTask(createUser, { email: "ada@example.com" }));
+await dispose();
 ```
 
-Any resource can be 'run' independently, giving you incredible freedom of testing and composition. Stay tuned because we have lots of goodies.
+**What this proves**: the smallest Runner app still has explicit wiring, a runtime boundary, and reusable units.
 
-**Benefits:**
+### Starter Map
 
-- **Explicit wiring** — Dependencies are declared in code, not discovered at runtime
-- **Architectural isolation** — Use resource `.isolate({ exports: [...] })` to keep domain internals private and expose only stable contracts
-- **Type-driven** — TypeScript inference flows through tasks, resources, and middleware
-- **Testable by default** — Call `.run()` with mocks or run the full app, no special harnesses
-- **Traceable** — Stack traces and debug output stay aligned with your source
-- **Incremental adoption** — Wrap an existing service or task without rewriting the rest
+Use this instead of scanning the whole guide first:
 
----
+- [Your First 5 Minutes](#your-first-5-minutes) - shortest path to a working runtime
+- [What Is This Thing?](#what-is-this-thing) - the mental model
+- [Quick Wins](#quick-wins-pressure-tested-recipes) - production recipes you can paste
+- [How Does It Compare?](#how-does-it-compare) - where Runner fits
+- [Tasks](#tasks) - core execution unit
+- [Resources](#resources) - shared state and lifecycle
+- [Testing](#testing) - unit vs runtime execution
+- [Multi-Platform Architecture](./MULTI_PLATFORM.md) - Node, browser, and edge boundaries
 
-## Table of Contents
+### Why It Appeals to Senior TypeScript Teams
 
-**Getting Started**
+- **Explicit wiring**: dependencies are declared in code, not discovered at runtime
+- **Honest execution boundaries**: call `.run()` for isolated unit tests or `runTask()` for the full runtime path
+- **Lifecycle as a first-class concern**: startup and shutdown live with the resource, not in scattered bootstrap code
+- **Incremental adoption**: wrap one service or one task before deciding whether to expand
+- **Traceability**: ids, logs, and runtime behavior stay aligned with source code
 
-- [Prerequisites](#prerequisites) - Runtime/tooling requirements
-- [Why Runner?](#why-runner) - The problem we solve
-- [What Is This Thing?](#what-is-this-thing)
-- [When to Use Runner](#when-to-use-runner) - Is it right for you?
-- [Show Me the Wiring](#show-me-the-wiring) - See it in action
-- [How Does It Compare?](#how-does-it-compare) - vs. other frameworks
-- [What's in the Box?](#whats-in-the-box) - Feature matrix
-- [Your First 5 Minutes](#your-first-5-minutes) - **Start here!**
-- [Quick Start](#quick-start) - Full Express example
-- [Learning Guide](#learning-guide) - Common patterns
-- [Quick Wins](#quick-wins-copy-paste-solutions) - Copy-paste solutions
-- [The Big Five](#the-big-five) - Core concepts
+### Tradeoffs and Boundaries
 
-**Core Concepts**
+Runner is not trying to be the lowest-ceremony option for tiny scripts.
 
-- [Tasks](#tasks) - Functions with dependency injection and middleware
-- [Resources](#resources) - Singletons and lifecycle management
-- [Events](#events) - Decoupled communication
-- [Hooks](#hooks) - Lightweight event subscribers
-- [Middleware](#middleware) - Cross-cutting concerns
-- [Tags](#tags) - Component discovery and configuration
-- [Errors](#errors) - Typed error handling
+- You write some setup code up front so the graph stays explicit later.
+- The best payoff appears once your app has multiple long-lived services or cross-cutting policies.
+- Some features are intentionally platform-specific.
+  Async Context, Durable Workflows, and server-side Remote Lanes are Node-only.
 
-**Runtime & Lifecycle**
-
-- [run() and RunOptions](#run-and-runoptions) - Starting your application
-- [Task Interceptors](#task-interceptors) - Advanced task control
-- [Error Boundaries](#error-boundary-integration) - Fault isolation
-- [Lifecycle Management](#lifecycle-management) - Graceful shutdown and cleanup
-
-**Advanced Features**
-
-- [Caching](#caching) - Built-in performance optimization
-- [Retry](#retrying-failed-operations) - Resilience patterns
-- [Timeouts](#timeouts) - Operation time limits
-- [Logging](#logging) - Structured observability
-- [Observability Strategy](#observability-strategy-logs-metrics-and-traces) - Signals and alerting baseline
-- [Debug](#debug-resource) - Development tooling
-
-**Concurrency & Scheduling**
-
-- [Semaphore](#semaphore) - Concurrency control
-- [Queue](#queue) - Task scheduling
-
-**Deployment & Integrations** (see dedicated guides in this folder)
-
-- [Durable Workflows](./DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows (Node-only)
-- [Remote Lanes](./REMOTE_LANES.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)
-- [Multi-Platform Architecture](./MULTI_PLATFORM.md) - How Runner supports Node, browsers, and edge runtimes
-
-**Architecture Patterns**
-
-- [Optional Dependencies](#optional-dependencies) - Graceful degradation
-- [Resource Forking](#resource-forking) - Multi-instance patterns
-- [Serialization](#serialization) - Advanced data handling
-- [Remote Lanes](#remote-lanes-bridging-runners) - Distributed systems
-- [Async Context](#async-context) - Request-scoped state
-- [Overrides](#overrides) - Component replacement
-- [Namespacing](#namespacing) - Code organization
-- [Factory Pattern](#factory-pattern) - Dynamic creation
-- [Circular Dependencies](#handling-circular-dependencies) - Resolution strategies
-
-**Developer Experience**
-
-- [Quick Reference Cheat Sheet](#quick-reference-cheat-sheet) - **Bookmark this!**
-- [Fluent Builders](#fluent-builders-r) - Ergonomic API
-- [Runner Dev Tools Quick Start](#runner-dev-tools-quick-start) - CLI and runtime introspection
-- [Type Helpers](#type-helpers) - TypeScript utilities
-- [Runtime Validation](#runtime-validation) - Schema validation
-- [Meta](#meta) - Component documentation
-- [Testing](#testing) - Unit and integration patterns
-
-**Reference**
-
-- [Real-World Example](#real-world-example-the-complete-package) - Complete application
-- [Internal Services](#internal-services) - Framework internals
-- [Why Choose BlueLibs Runner?](#why-choose-bluelibs-runner) - Framework comparison
-- [Migration Path](#the-migration-path) - Adopting Runner
-- [Release, Support, and Deprecation Policy](#release-support-and-deprecation-policy) - Upgrade governance
-- [Production Readiness Checklist](#production-readiness-checklist) - Framework-wide deploy checks
-- [Node API Index](#node-api-index) - Node-only exports at a glance
-- [Community & Support](#community--support) - Getting help
-
+**Next step**: go to [Your First 5 Minutes](#your-first-5-minutes) if you want the fastest proof, or [How Does It Compare?](#how-does-it-compare) if you are still evaluating alternatives.
 ## What Is This Thing?
 
-BlueLibs Runner is a TypeScript-first dependency injection framework built around **tasks** (functions) and **resources** (singletons). It's explicit and composition-first: you write normal async functions; Runner wires dependencies, middleware, events/hooks, and lifecycle.
+Runner is dependency injection for async systems. The two nouns that matter first are **task** and **resource**: tasks hold business actions, resources hold shared state plus lifecycle.
 
-### The Core
+### The Mental Model
 
-- **Tasks are functions** - Your business logic, nicely packaged with dependency injection
-- **Resources are singletons** - Database connections, configs, services -- things that live for your app's lifetime
-- **Events are just events** - Decouple parts of your app so they can talk without tight coupling
-- **Hooks are lightweight subscribers** - React to events without the overhead of full tasks
-- **Middleware** - Add cross-cutting concerns (logging, auth, caching) without cluttering your business logic
-- **Everything is async** - Built for modern JavaScript/TypeScript
-- **Explicit beats implicit** - You'll always know what's happening and why
-- **Type-safe by default** - Catch mistakes at compile time, not at 3am in production
+- **Task**: business logic with typed input, dependencies, middleware, and output
+- **Resource**: a shared singleton with `init`, `ready`, `cooldown`, and `dispose`
+- **Event**: a typed signal
+- **Hook**: a reaction to an event
+- **App**: the root resource that registers the graph
+- **Runtime**: what `run(app)` returns so you can execute tasks and dispose cleanly
 
-### When to Use Runner
+In one line:
 
-**Great fit for:**
-
-- TypeScript applications that need structured dependency injection
-- Long-running services (APIs, workers, daemons) with lifecycle management
-- Projects where testability matters -- unit test with mocks, integration test with overrides
-- Teams that want middleware patterns without decorator magic
-- Applications growing beyond "one file" that need organization
-
-**The honest take**: If your app has 3+ services that depend on each other and you're tired of manually passing things around, Runner pays off. If you're building a 50-line script, stick with plain functions.
-
-> **runtime:** "I've seen what manually-wired dependency graphs look like at 2am. You don't want that life. Trust me, I run them."
-
----
-
-## Show Me the Wiring
-
-**Here's what explicit wiring looks like in practice:**
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-// Built-in middleware from Runner
-const { cache, retry } = middleware.task;
-
-// Assuming: db is a resource defined elsewhere, and mockDb is its test double
-// ONE LINE to add caching with TTL
-const getUser = r
-  .task("users.get")
-  .dependencies({ db })
-  .middleware([cache.with({ ttl: 60000 })]) // <- That's it. 1 minute cache.
-  .run(async (id, { db }) => db.query("SELECT * FROM users WHERE id = ?", id))
-  .build();
-
-// ONE LINE to add retry with exponential backoff
-const callAPI = r
-  .task("api.call")
-  .middleware([retry.with({ retries: 3 })]) // <- Auto-retry failures (default exponential backoff)
-  .run(async (url) => fetch(url))
-  .build();
-
-// Testing stays direct
-test("getUser works", async () => {
-  const result = await getUser.run("user-123", { db: mockDb }); // <- Just call it
-  expect(result.name).toBe("John");
-});
+```text
+task/resource/event/hook definitions -> app.register(...) -> run(app) -> runtime helpers
 ```
 
-**Nothing hidden here.** Each step is spelled out so you can trace dependencies, middleware, and tests without guessing.
+### When Runner Fits
 
----
+- Services, workers, APIs, or apps with several long-lived dependencies
+- Teams that care about explicit wiring and predictable startup/shutdown
+- Codebases that need both fast unit tests and full runtime integration tests
+- Projects where middleware and observability should stay out of business logic
 
-## How Does It Compare?
+### When Runner Is Probably Too Much
 
-### Quick Comparison Matrix
-
-| Feature                  | Runner                                      | NestJS                   | Effect (TS)                       | InversifyJS            | TypeDI                 | tsyringe               |
-| ------------------------ | ------------------------------------------- | ------------------------ | --------------------------------- | ---------------------- | ---------------------- | ---------------------- |
-| **Programming Paradigm** | Functional-first                            | OOP/Class-based          | Functional, algebraic             | OOP/Class-based        | OOP/Class-based        | OOP/Class-based        |
-| **DI Mechanism**         | Explicit, no reflection                     | Decorators, reflection   | Layers & Services (no reflection) | Decorators, reflection | Decorators, reflection | Decorators, reflection |
-| **Type Safety**          | Full inference                              | Manual typing            | Full inference                    | Manual typing          | Manual typing          | Manual typing          |
-| **Learning Curve**       | Gentle                                      | Steep                    | Steep (FP concepts)               | Moderate               | Moderate               | Moderate               |
-| **Size**                 | Medium (tree-shakable)                      | Large                    | Large (modular)                   | Small                  | Small                  | Small                  |
-| **Built-in Features**    | Broad toolkit                               | Full framework           | Broad toolkit                     | DI only                | DI only                | DI only                |
-| **Test Isolation**       | Easy                                        | Moderate                 | Easy (Layers)                     | Moderate               | Moderate               | Moderate               |
-| **Framework Lock-in**    | Minimal                                     | High                     | High (pervasive `Effect` wrapper) | Low                    | Low                    | Low                    |
-| **Async Context**        | Yes (Node-only)                             | Partial (ecosystem)      | Built-in (FiberRef)               | No                     | No                     | No                     |
-| **Middleware**           | Composable, type-safe                       | Guard/Interceptor system | Aspect-oriented via Layers        | N/A                    | N/A                    | N/A                    |
-| **Events**               | First-class support                         | EventEmitter2            | PubSub module                     | N/A                    | N/A                    | N/A                    |
-| **Durable Workflows**    | Yes (Node-only)                             | No (external libs)       | No                                | No                     | No                     | No                     |
-| **Remote Lanes (HTTP)**  | Yes (server Node-only, client browser/edge) | No                       | No                                | No                     | No                     | No                     |
-| **Ecosystem**            | Growing                                     | Mature, extensive        | Growing, active                   | Moderate               | Moderate               | Small                  |
-
-> **Note:** This table is intentionally qualitative. Durable workflows are Node-only (via `@bluelibs/runner/node`), while Remote Lanes HTTP transport requires Node on the server/exposure side and works in any `fetch` runtime on the client side.
-
-**Choose Runner when:**
-
-- You need **built-in reliability primitives** -- circuit breakers, rate limiting, retry with backoff, caching, timeouts, fallbacks, and concurrency control are first-class, not bolted on
-- You want **full type inference** -- dependencies, middleware configs, and task I/O are inferred, not manually typed
-- **Testing speed matters** -- call `task.run(input, { mockDep })` directly; no framework test modules, no DI container setup
-- You're building **any TypeScript application** (CLI tools, workers, services, serverless) -- Runner isn't web-specific
-- You need **durable workflows** or **Remote Lanes** for distributed task execution (Node.js)
-- You want **middleware introspection** -- the ExecutionJournal exposes cache hits, retry attempts, circuit state, and more at runtime
-- You're integrating into an existing project gradually -- no "rewrite in our style" requirement
-
-**Choose NestJS when** you want a full opinionated web framework with a large ecosystem and established conventions.
-
-**Choose Effect when** you want algebraic effects, structured concurrency, and are comfortable with a pervasive functional wrapper type around all your code.
-
-**Choose a DI container (InversifyJS / TypeDI / tsyringe) when** you only need class-based dependency injection and want minimal surface area.
-
-> For a detailed side-by-side code comparison with NestJS (service definition, testing, and capabilities), see [Framework Comparison](./COMPARISON.md).
-
-> **runtime:** "Comparison tables are where frameworks go to feel validated. I just execute your tasks and keep the lights on."
-
----
-
-## What's in the Box?
-
-Runner comes with **everything you need** to build production apps:
-
-<table>
-<tr>
-<td width="33%" valign="top">
-
-**Core Architecture**
-
-- Dependency Injection
-- Lifecycle Management
-- Type-safe Everything
-- Zero Configuration
-- Multi-platform (Node/Browser)
-
-</td>
-<td width="33%" valign="top">
-
-**Built-in Features**
-
-- Caching (LRU + Custom)
-- Retry with Backoff
-- Timeouts
-- Event System
-- Middleware Pipeline
-- Async Context
-- Serialization (Dates, RegExp, Binary)
-- HTTP Client Factory
-- File Upload Support
-
-</td>
-<td width="33%" valign="top">
-
-**Developer Experience**
-
-- Fluent API
-- Debug Tools
-- Error Boundaries
-- Testing Utilities
-- TypeDoc Integration
-- Full TypeScript Support
-- Tree-shakable
-
-</td>
-</tr>
-<tr>
-<td width="33%" valign="top">
-
-**Observability**
-
-- Structured Logging
-- Task Interceptors
-- Event Tracking
-- Performance Metrics
-- Debug Mode
-
-</td>
-<td width="33%" valign="top">
-
-**Production Ready**
-
-- Graceful Shutdown
-- Typed Errors with `r.error()`
-- Error Contracts (`throws`)
-- Optional Dependencies
-- Semaphore/Queue
-- Concurrency Control
-
-</td>
-<td width="33%" valign="top">
-
-**Advanced Patterns**
-
-- Durable Workflows (Node)
-- Remote Lanes (Distributed)
-- Tags System
-- Factory Pattern
-- Namespacing
-- Overrides
-- Meta/Documentation
-
-</td>
-</tr>
-</table>
-
-**No extra packages needed.** It's all included and works together seamlessly. For more details, see [Features](#features) and [Advanced Patterns](#advanced-patterns).
-
----
+- Tiny scripts where plain functions are already clear enough
+- Teams that specifically want decorator-heavy conventions or a full web framework
 
 ## Your First 5 Minutes
 
-**New to Runner?** Here's the absolute minimum you need to know:
+Here is the shortest path to a first successful run:
 
 1. **Tasks** are your business logic functions
 2. **Resources** are shared services (database, config, etc.)
 3. **You compose them** using `r.resource()` and `r.task()`
 4. **You run them** with `run(app)` which gives you `runTask()` and `dispose()`
 
-That's it! Now let's see it in action:
-
----
+Now let's prove it with the smallest runnable example:
 
 ## Quick Start
-
-Let's start with the simplest possible example. Just copy this, run it, and you'll see Runner in action:
 
 ```bash
 npm install @bluelibs/runner
@@ -528,51 +256,79 @@ npm install @bluelibs/runner
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
-// Step 1: Create a simple task (just a function with a name)
 const greet = r
   .task("greet")
   .run(async (name: string) => `Hello, ${name}!`)
   .build();
 
-// Step 2: Put it in an app resource (where you register components)
 const app = r
   .resource("app")
-  .register([greet]) // Tell the app about your task
+  .register([greet])
   .build();
 
-// Step 3: Run it!
 const { runTask, dispose } = await run(app);
-
-// Step 4: Use your task
 const message = await runTask(greet, "World");
-console.log(message); // "Hello, World!"
-
-// Step 5: Clean up when done (idempotent -- safe to call twice)
+console.log(message);
 await dispose();
 ```
 
-That's it! You just:
-
-1.  Created a task
-2.  Registered it
-3.  Ran it
-4.  Cleaned up
-
-**What you should see:**
+**Expected output:**
 
 ```
 Hello, World!
 ```
 
-**What you just learned**: The basic Runner pattern: Define -> Register -> Run -> Execute. Everything else builds on this foundation.
+**What you just learned**: Define -> Register -> Run -> Execute.
 
-**Pro tip**: Pass `{ dryRun: true }` to `run()` to validate your wiring without starting anything -- great for CI pipelines.
+**Fail-fast tip**: `run(app, { dryRun: true })` validates the graph without starting resources, which is useful in CI and wiring checks.
 
-**Next step**: See how this scales to real apps below.
+### What Happens When Wiring Is Wrong?
+
+Runner fails early when the graph is inconsistent.
+
+```typescript
+const brokenTask = r
+  .task("brokenTask")
+  .dependencies({ missingResource })
+  .run(async () => "never gets here")
+  .build();
+```
+
+If `missingResource` is not registered in the app, startup fails before the task can run. That is intentional: wiring errors should not surface as production traffic bugs.
+
+## Show Me the Wiring
+
+This example is intentionally partial. It focuses on execution boundaries and policy wiring, not the implementations of `db` or `mockDb`.
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const getUser = r
+  .task<string>("getUser")
+  .dependencies({ db })
+  .middleware([middleware.task.cache.with({ ttl: 60000 })])
+  .run(async (id, { db }) => db.query("SELECT * FROM users WHERE id = ?", id))
+  .build();
+
+const callApi = r
+  .task("callApi")
+  .middleware([middleware.task.retry.with({ retries: 3 })])
+  .run(async (url: string) => fetch(url))
+  .build();
+
+test("getUser unit test", async () => {
+  const result = await getUser.run("user-123", { db: mockDb });
+  expect(result.name).toBe("John");
+});
+```
+
+**Boundary that matters**: direct `.run()` is great for isolated unit tests, but it bypasses runtime concerns such as registration checks and the full execution path. Use `runTask()` when you want the whole runtime contract.
 
 ### Building a Real Express Server
 
-Now that you've seen the basics, let's build something real. Here's a complete Express API server with dependency injection, logging, and lifecycle management. The example keeps all wiring in one place so you can trace setup and teardown.
+Now that you've seen the basics, here's a real Node-oriented example with lifecycle and logging.
+
+**Boundary**: this example targets Node.js because it starts an HTTP server.
 
 ```bash
 npm install @bluelibs/runner express zod
@@ -580,12 +336,11 @@ npm install @bluelibs/runner express zod
 
 ```typescript
 import express from "express";
-import { r, run } from "@bluelibs/runner";
+import { r, resources, run } from "@bluelibs/runner";
 import { z } from "zod";
 
-// A resource is anything you want to share across your app, a singleton
 const server = r
-  .resource<{ port: number }>("app.server")
+  .resource<{ port: number }>("server")
   .init(
     async ({ port }) =>
       new Promise((resolve) => {
@@ -602,9 +357,8 @@ const server = r
   )
   .build();
 
-// Tasks are your business logic - easily testable functions
 const createUser = r
-  .task("app.tasks.createUser")
+  .task("createUser")
   .dependencies({ server, logger: resources.logger })
   .inputSchema(z.object({ name: z.string() }))
   .run(async (input, { logger }) => {
@@ -613,7 +367,6 @@ const createUser = r
   })
   .build();
 
-// Wire everything together
 const app = r
   .resource("app")
   .register([server.with({ port: 3000 }), createUser])
@@ -626,18 +379,13 @@ const app = r
   })
   .build();
 
-// That's it! Each run is fully isolated
 const { runTask, dispose } = await run(app);
-
-// Use the runtime helpers
-await runTask(createUser, { name: "Ada" });
+const user = await runTask(createUser, { name: "Ada" });
+console.log(user);
 await dispose();
-
-// Want to see what's happening? Add debug logging:
-// await run(app, { debug: "verbose" });
 ```
 
-**What you should see:**
+**Expected output:**
 
 ```
 Server running on port 3000
@@ -645,16 +393,12 @@ Creating Ada
 { id: 'user-123', name: 'Ada' }
 ```
 
-**What you just built:**
+**What this proves**:
 
-- A full Express API with proper lifecycle management
-- Dependency injection (tasks get what they need automatically)
-- Built-in logging (via `resources.logger`)
-- Schema validation with Zod
-- Graceful shutdown (the `dispose()` method -- idempotent, safe to call twice)
-- Type-safe everything (TypeScript has your back)
-
-**Note**: See how we used `r.task()` and `r.resource()`? That's the **fluent builder API** -- the recommended way to build with Runner. It's chainable, type-safe, and reads like a story.
+- lifecycle lives with the resource
+- task dependencies stay explicit
+- the runtime stays small: `runTask()` and `dispose()` cover the main path
+- ids stay local and readable: `server`, `createUser`, `app`
 
 > **runtime:** "An Express server with DI, validation, logging, and graceful shutdown. And you didn't write a single decorator. I'm almost proud."
 
@@ -665,9 +409,9 @@ Prefer fluent builders for new code, but the classic `define`-style API remains 
 ```ts
 import { resource, task, run } from "@bluelibs/runner";
 
-const db = resource({ id: "app.db", init: async () => "conn" });
+const db = resource({ id: "db", init: async () => "conn" });
 const add = task({
-  id: "app.tasks.add",
+  id: "add",
   run: async (i: { a: number; b: number }) => i.a + i.b,
 });
 
@@ -686,6 +430,45 @@ Runner auto-detects the platform (Node.js, browser, edge) and adapts behavior at
 - [Async Context](#async-context) - Request-scoped state via `AsyncLocalStorage`
 - [Durable Workflows](./DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows
 - [Remote Lanes](./REMOTE_LANES.md) - Remote task/event execution
+
+## How Does It Compare?
+
+Use this section if you are still deciding whether Runner is the right tool.
+
+- **Choose Runner** when you want explicit composition, lifecycle-aware resources, and middleware without decorator or reflection lock-in.
+- **Choose NestJS** when you want a full opinionated web framework with a large ecosystem and built-in conventions.
+- **Choose Effect** when you want a pervasive FP runtime model and algebraic effects across the codebase.
+- **Choose a smaller DI container** when you only need class-based injection and do not need Runner's lifecycle and policy surface.
+
+### Quick Comparison Matrix
+
+| Feature                  | Runner                                      | NestJS                   | Effect (TS)                       | InversifyJS            | TypeDI                 | tsyringe               |
+| ------------------------ | ------------------------------------------- | ------------------------ | --------------------------------- | ---------------------- | ---------------------- | ---------------------- |
+| **Programming Paradigm** | Functional-first                            | OOP/Class-based          | Functional, algebraic             | OOP/Class-based        | OOP/Class-based        | OOP/Class-based        |
+| **DI Mechanism**         | Explicit, no reflection                     | Decorators, reflection   | Layers & Services (no reflection) | Decorators, reflection | Decorators, reflection | Decorators, reflection |
+| **Test Isolation**       | Easy                                        | Moderate                 | Easy (Layers)                     | Moderate               | Moderate               | Moderate               |
+| **Lifecycle**            | First-class resources                       | Module/app lifecycle     | Runtime-managed                   | Minimal                | Minimal                | Minimal                |
+| **Middleware**           | Composable, type-safe                       | Guard/Interceptor system | Aspect-oriented via Layers        | N/A                    | N/A                    | N/A                    |
+| **Platform Scope**       | Multi-platform, some features Node-only     | Primarily server-side    | Multi-platform                    | General-purpose        | General-purpose        | General-purpose        |
+
+**Runner tradeoffs**:
+
+- more upfront graph design than plain functions
+- less convention than full-stack frameworks
+- best value once the app has real lifecycle and cross-cutting concerns
+
+> For a deeper side-by-side code comparison with NestJS, see [Framework Comparison](./COMPARISON.md).
+
+## What's in the Box?
+
+After the first example, the value is breadth without extra packages:
+
+- **Core architecture**: dependency injection, resource lifecycle, task execution, events and hooks
+- **Policies**: caching, retry, timeouts, logging, concurrency controls
+- **Developer experience**: fluent builders, testing utilities, debug tools, TypeDoc integration
+- **Advanced features**: Async Context, Durable Workflows, Remote Lanes, serialization, overrides
+
+**Boundary reminder**: some advanced features are Node-only. Use the dedicated guides when platform support matters.
 
 ## Learning Guide
 
@@ -839,7 +622,7 @@ const myTask = r
   .build();
 ```
 
-See [Quick Wins](#quick-wins-copy-paste-solutions) for ready-to-use examples with built-in Runner APIs.
+See [Quick Wins](#quick-wins-pressure-tested-recipes) for ready-to-use examples with built-in Runner APIs.
 
 ### Pattern 7: Typed Errors
 
@@ -850,7 +633,7 @@ import { r } from "@bluelibs/runner";
 
 // Define a typed error
 const InvalidCredentials = r
-  .error<{ email: string }>("app.errors.InvalidCredentials")
+  .error<{ email: string }>("invalidCredentials")
   .httpCode(401)
   .remediation("Check that the email and password are correct.")
   .format((data) => `Invalid credentials for ${data.email}`)
@@ -869,7 +652,7 @@ try {
   }
   // Or check if it's any Runner error at all
   if (r.error.is(err)) {
-    console.log(err.id); // "app.errors.InvalidCredentials"
+    console.log(err.id); // "invalidCredentials"
   }
 }
 ```
@@ -884,7 +667,7 @@ See [Errors](#errors) for `throws` contracts and advanced patterns.
 
 Now that you know the patterns, here's your learning path:
 
-1. **[Quick Wins](#quick-wins-copy-paste-solutions)** - Copy-paste solutions for caching, retry, timeouts
+1. **[Quick Wins](#quick-wins-pressure-tested-recipes)** - Production recipes for caching, retry, timeouts
 2. **[The Big Five](#the-big-five)** - Deep dive into Tasks, Resources, Events, Middleware, Tags
 3. **[Events & Hooks](#events)** - Decouple your app with event-driven patterns
 4. **[Middleware](#middleware)** - Add cross-cutting concerns cleanly
@@ -894,161 +677,30 @@ Now that you know the patterns, here's your learning path:
 > **runtime:** "Seven patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
 
 ---
+## Quick Wins: Pressure-Tested Recipes
 
-## Quick Wins: Copy-Paste Solutions
+Use this page when you already understand the basic Runner shape and want a production-oriented pattern quickly. These recipes focus on Runner wiring. External collaborators such as `db`, `fetch`, `emailService`, `fs`, or `chargeCard` are called out explicitly when assumed.
 
-Production-ready patterns you can use today. Each example is complete and tested.
+| Problem                  | Use This For                     | Boundary                                         | Jump to                                                         |
+| ------------------------ | -------------------------------- | ------------------------------------------------ | --------------------------------------------------------------- |
+| Production debugging     | Add structured logs first        | Works anywhere Runner logging is available        | [Logging](#add-structured-logging-with-context)                 |
+| Hanging operations       | Put a hard cap on task duration  | Middleware example; task body is app-specific     | [Timeouts](#add-request-timeouts-to-stop-hanging-operations)    |
+| Flaky external APIs      | Retry transient failures         | Use typed/domain errors for permanent failures    | [Retry](#retry-failed-api-calls-with-exponential-backoff)       |
+| Expensive repeated calls | Cache deterministic task results | Assumes a `db` dependency already exists          | [Caching](#add-caching-to-a-task-with-explicit-dependencies)    |
+| Tight coupling           | Emit events instead of callbacks | Assumes your user persistence lives elsewhere     | [Events](#set-up-event-driven-architecture-in-30-seconds)       |
+| Race conditions          | Serialize work per key           | Node-only if you use `fs`; queue is single-process | [Queue](#prevent-race-conditions-with-a-per-process-queue)      |
 
-| Problem                  | Solution                  | Jump to                                                         |
-| ------------------------ | ------------------------- | --------------------------------------------------------------- |
-| Expensive repeated calls | Add caching               | [Caching](#add-caching-to-any-task-with-automatic-invalidation) |
-| Flaky external APIs      | Auto-retry with backoff   | [Retry](#retry-failed-api-calls-with-exponential-backoff)       |
-| Hanging operations       | Add timeouts              | [Timeouts](#add-request-timeouts-prevent-hanging-operations)    |
-| Tight coupling           | Event-driven architecture | [Events](#set-up-event-driven-architecture-in-30-seconds)       |
-| Race conditions          | Sequential queue          | [Queue](#prevent-race-conditions-per-process-queue)             |
-| Production debugging     | Structured logging        | [Logging](#add-structured-logging-with-context)                 |
+### Add Structured Logging with Context
 
----
-
-### Add Caching to Any Task (with automatic invalidation)
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const getUser = r
-  .task("users.get")
-  .middleware([
-    middleware.task.cache.with({
-      ttl: 60 * 1000, // 1 minute
-      keyBuilder: (taskId, input) => `user:${input.id}`,
-    }),
-  ])
-  .run(async (input: { id: string }) => {
-    return await db.users.findOne({ id: input.id });
-  })
-  .build();
-
-// First call: hits database
-// Next 60 seconds: instant from cache
-// After 60s: refreshes automatically
-```
-
-### Retry Failed API Calls (with exponential backoff)
+**Use when**: you need better production visibility before adding more policies.
 
 ```typescript
-const callExternalAPI = r
-  .task("api.external")
-  .middleware([
-    middleware.task.retry.with({
-      retries: 3,
-      delayStrategy: (attempt) => 100 * Math.pow(2, attempt), // 100ms, 200ms, 400ms
-      stopRetryIf: (error) => error.status === 404, // Don't retry not found
-    }),
-  ])
-  .run(async (url: string) => {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return response.json();
-  })
-  .build();
+import { r, resources } from "@bluelibs/runner";
 
-// Automatically retries transient failures
-// Gives up on permanent errors
-```
-
-### Add Request Timeouts (prevent hanging operations)
-
-```typescript
-const slowOperation = r
-  .task("operations.slow")
-  .middleware([
-    middleware.task.timeout.with({ ttl: 5000 }), // 5 second max
-  ])
-  .run(async () => {
-    // This will throw TimeoutError if it takes > 5s
-    return await someSlowDatabaseQuery();
-  })
-  .build();
-
-// Combine with retry for robust error handling
-const robustTask = r
-  .task("operations.robust")
-  .middleware([
-    middleware.task.retry.with({ retries: 3 }),
-    middleware.task.timeout.with({ ttl: 10000 }), // Each retry gets 10s
-  ])
-  .run(async () => await unreliableOperation())
-  .build();
-```
-
-### Set Up Event-Driven Architecture (in 30 seconds)
-
-```typescript
-// Define your events
-const userRegistered = r
-  .event("users.registered")
-  .payloadSchema<{ userId: string; email: string }>({ parse: (v) => v })
-  .build();
-
-// Emit events from tasks
-const registerUser = r
-  .task("users.register")
-  .dependencies({ userRegistered })
-  .run(async (input, { userRegistered }) => {
-    const user = await createUserInDB(input);
-    await userRegistered({ userId: user.id, email: user.email }); //  Emit!
-    return user;
-  })
-  .build();
-
-// React to events with hooks
-const sendWelcomeEmail = r
-  .hook("users.welcome")
-  .on(userRegistered)
-  .run(async (event) => {
-    await emailService.send({
-      to: event.data.email,
-      subject: "Welcome!",
-      body: "Thanks for joining!",
-    });
-  })
-  .build();
-
-// Automatically decoupled - no direct dependencies!
-// Note: createUserInDB and emailService are your own implementations
-```
-
-### Prevent Race Conditions (per-process queue)
-
-The built-in queue provides in-process named locks - no Redis needed, but only works within a single Node.js process.
-
-```typescript
-const writeConfig = r
-  .task("config.write")
-  .dependencies({ queue: resources.queue })
-  .run(async (input: { key: string; value: string }, { queue }) => {
-    // Only one write per key at a time within this process
-    return await queue.run(`config:${input.key}`, async (signal) => {
-      await fs.writeFile(
-        `/config/${input.key}.json`,
-        JSON.stringify(input.value),
-      );
-      return { written: true };
-    });
-  })
-  .build();
-
-// Same key? Queued. Different keys? Parallel.
-```
-
-### Add Structured Logging (with context)
-
-```typescript
 const processPayment = r
-  .task("payments.process")
+  .task("processPayment")
   .dependencies({ logger: resources.logger })
   .run(async (input: { orderId: string; amount: number }, { logger }) => {
-    // Logs are automatically structured and include task context
     await logger.info("Processing payment", {
       data: { orderId: input.orderId, amount: input.amount },
     });
@@ -1068,47 +720,215 @@ const processPayment = r
     }
   })
   .build();
-
-// Logs include: timestamp, level, source (task ID), data, errors
-// Perfect for production debugging!
 ```
 
-### Wire It All Together
+**Why it helps**: every log already knows which task produced it, so you get structured context without threading logger metadata through every helper.
+
+**Limit**: `chargeCard` is your own collaborator; this recipe shows the Runner wiring around it.
+
+### Add Request Timeouts to Stop Hanging Operations
+
+**Use when**: the dangerous failure mode is a task that never returns.
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const slowOperation = r
+  .task("slowOperation")
+  .middleware([middleware.task.timeout.with({ ttl: 5000 })])
+  .run(async () => {
+    return await someSlowDatabaseQuery();
+  })
+  .build();
+
+const robustTask = r
+  .task("robustTask")
+  .middleware([
+    middleware.task.retry.with({ retries: 3 }),
+    middleware.task.timeout.with({ ttl: 10000 }),
+  ])
+  .run(async () => await unreliableOperation())
+  .build();
+```
+
+**Why it helps**: the timeout middleware makes latency limits explicit instead of relying on ad hoc `Promise.race` wrappers in application code.
+
+**Limit**: `someSlowDatabaseQuery` and `unreliableOperation` are application-specific. This recipe is about the timeout policy, not the dependency implementation.
+
+### Retry Failed API Calls with Exponential Backoff
+
+**Use when**: an external system fails transiently and a short retry window is acceptable.
+
+```typescript
+import { Match, middleware, r } from "@bluelibs/runner";
+
+const externalApiFailed = r
+  .error("externalApiFailed")
+  .dataSchema({
+    status: Match.Optional(Match.Integer),
+    url: Match.NonEmptyString,
+  })
+  .build();
+
+const callExternalApi = r
+  .task("callExternalApi")
+  .middleware([
+    middleware.task.retry.with({
+      retries: 3,
+      delayStrategy: (attempt) => 100 * 2 ** attempt,
+      stopRetryIf: (error) => error?.status === 404,
+    }),
+  ])
+  .run(async (url: string) => {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw externalApiFailed({
+        status: response.status,
+        url,
+      });
+    }
+
+    return response.json();
+  })
+  .build();
+```
+
+**Why it helps**: retry behavior stays declarative and visible in the task definition instead of being mixed into the fetch logic.
+
+**Limit**: retrying everything is usually wrong. Use typed errors or a predicate that encodes which failures are truly transient.
+
+### Add Caching to a Task with Explicit Dependencies
+
+**Use when**: the same deterministic request is repeated often enough to justify memoization.
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+// Assuming: `db` is a resource defined elsewhere.
+const getUser = r
+  .task<{ id: string }>("getUser")
+  .dependencies({ db })
+  .middleware([
+    middleware.task.cache.with({
+      ttl: 60 * 1000,
+      keyBuilder: (_taskId, input) => `user:${input.id}`,
+    }),
+  ])
+  .run(async (input, { db }) => {
+    return await db.users.findOne({ id: input.id });
+  })
+  .build();
+```
+
+**Why it helps**: caching becomes part of the task contract, which keeps the policy visible in one place and easy to remove or tune later.
+
+**Limit**: this example assumes a `db` resource already exists. It is intentionally partial so the caching concern stays isolated.
+
+### Set Up Event-Driven Architecture in 30 Seconds
+
+**Use when**: one task should announce something happened without owning every downstream side effect.
+
+```typescript
+import { Match, r } from "@bluelibs/runner";
+
+const userRegistered = r
+  .event("userRegistered")
+  .payloadSchema(
+    Match.compile({
+      userId: Match.NonEmptyString,
+      email: Match.Email,
+    }),
+  )
+  .build();
+
+// Assuming: createUserInDb and emailService are defined elsewhere.
+const registerUser = r
+  .task("registerUser")
+  .dependencies({ userRegistered })
+  .run(async (input, { userRegistered }) => {
+    const user = await createUserInDb(input);
+    await userRegistered({ userId: user.id, email: user.email });
+    return user;
+  })
+  .build();
+
+const sendWelcomeEmail = r
+  .hook("sendWelcomeEmail")
+  .on(userRegistered)
+  .run(async (event) => {
+    await emailService.send({
+      to: event.data.email,
+      subject: "Welcome!",
+      body: "Thanks for joining!",
+    });
+  })
+  .build();
+```
+
+**Why it helps**: the task owns the business action while hooks own reactions, so follow-up behavior can grow without bloating the task.
+
+**Limit**: this snippet assumes your persistence and email integrations already exist.
+
+### Prevent Race Conditions with a Per-Process Queue
+
+**Use when**: one logical key must run sequentially inside a single process.
+
+**Boundary**: this example is Node-oriented because it uses `fs`, and the queue only coordinates work inside one Runner process.
+
+```typescript
+import { resources, r } from "@bluelibs/runner";
+import { promises as fs } from "node:fs";
+
+const writeConfig = r
+  .task<{ key: string; value: string }>("writeConfig")
+  .dependencies({ queue: resources.queue })
+  .run(async (input, { queue }) => {
+    return await queue.run(`config:${input.key}`, async () => {
+      await fs.writeFile(
+        `/config/${input.key}.json`,
+        JSON.stringify(input.value),
+      );
+
+      return { written: true };
+    });
+  })
+  .build();
+```
+
+**Why it helps**: you get deterministic per-key sequencing without inventing your own in-memory lock management.
+
+**Limit**: this is not a distributed lock. If multiple processes can write the same key, you need a cross-process coordination strategy.
+
+### Wire the Recipes into an App
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
-// After defining your tasks, events, and hooks...
 const app = r
   .resource("app")
   .register([
-    getUser, // cached task
-    callExternalAPI, // retrying task
-    registerUser, // event emitter
-    userRegistered, // event definition
-    sendWelcomeEmail, // hook
-    writeConfig, // queue-protected task
-    processPayment, // logged task
+    processPayment,
+    slowOperation,
+    robustTask,
+    callExternalApi,
+    getUser,
+    userRegistered,
+    registerUser,
+    sendWelcomeEmail,
+    writeConfig,
   ])
   .build();
 
-// Start the runtime
 const { runTask, dispose } = await run(app);
 
-// Execute tasks
-const user = await runTask(getUser, { id: "123" });
-const result = await runTask(registerUser, { email: "new@user.com" });
-
-// Shutdown gracefully when done
+await runTask(getUser, { id: "123" });
 await dispose();
 ```
 
-Each pattern here is runnable as-is. They rely only on Runner's built-ins, so you can paste them into a project to prototype quickly and then tune configs (TTL, retries, timeouts) for your workload.
+**What you just learned**: Quick Wins works best as a catalog of policies you can add after the basic `task -> app -> run()` flow is already clear.
 
-> **runtime:** "Six production problems, six one-liners. You bolted middleware onto tasks like Lego bricks and called it architecture. I respect the pragmatism. Ship it."
-
----
-
+> **runtime:** "You wanted reliability primitives without building a private framework out of helper functions and regret. Sensible."
 ## The Big Five
 
 The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using Runner effectively.

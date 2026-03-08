@@ -14,9 +14,9 @@ Use these terms consistently throughout all documentation:
 
 | Term                         | Definition                                                                                                        | Usage Example                                                      |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| **Task**                     | A function with dependency injection, middleware support, and observability. The primary unit for business logic. | `const createUser = r.task("users.create")...`                     |
-| **Resource**                 | A singleton with lifecycle management (init/dispose). Represents shared services, connections, or state.          | `const database = r.resource("app.db")...`                         |
-| **Event**                    | A typed signal for decoupling components. Enables pub/sub patterns.                                               | `const userCreated = r.event("users.created")...`                  |
+| **Task**                     | A function with dependency injection, middleware support, and observability. The primary unit for business logic. | `const createUser = r.task("createUser")...`                       |
+| **Resource**                 | A singleton with lifecycle management (init/dispose). Represents shared services, connections, or state.          | `const database = r.resource("database")...`                       |
+| **Event**                    | A typed signal for decoupling components. Enables pub/sub patterns.                                               | `const userCreated = r.event("userCreated")...`                    |
 | **Hook**                     | A lightweight function subscribed to an event.                                                                    | `const onUserCreated = r.hook("onUserCreated").on(userCreated)...` |
 | **Middleware**               | A wrapper that adds cross-cutting concerns to tasks or resources (caching, retry, timeouts, logging).             | `.middleware([cache.with({ ttl: 60000 })])`                        |
 | **ExecutionJournal**         | A per-execution registry enabling middleware and tasks to share typed state.                                      | `journal.set(key, value)`                                          |
@@ -50,7 +50,7 @@ Use these terms consistently throughout all documentation:
 - **Conversational**: Write like you're explaining to a colleague
 - **First-person plural**: Use "we" and "let's" (e.g., "Let's build a server")
 - **Direct address**: Address the reader as "you"
-- **Encouraging**: Use positive language ("Great!", "You've got this!", "That's it!")
+- **Encouraging**: Celebrate outcomes, not hype
 - **Practical**: Focus on "how" and "why", not just "what"
 - **Confident but humble**: Assert value without arrogance
 
@@ -60,7 +60,7 @@ Use encouraging phrases to celebrate progress:
 
 ```markdown
 **Good - After examples:**
-"That's it! You just built a production-ready API server."
+"You now have a runtime that can execute typed tasks and shut down cleanly."
 
 **Good - In learning sections:**
 "**What you just learned**: The basic Runner pattern..."
@@ -69,11 +69,23 @@ Use encouraging phrases to celebrate progress:
 "**What you just built:**"
 
 **Good - After complex concepts:**
-"See? Not so scary after all."
+"The important part is the execution boundary: unit tests can call `.run()`, runtime execution goes through `runTask()`."
 
 **Bad - Overuse:**
 Avoid in every paragraph - save for milestone moments.
 ```
+
+### Intro Docs Rules
+
+Intro-facing docs (`00-overview.md`, `01-getting-started.md`, `01-readme.md`, `01b-quick-wins.md`) have a stricter job than the full guide:
+
+- Lead with one sharp problem statement, not a generic framework pitch
+- Put the first runnable success before comparison tables or feature inventories
+- Keep the above-the-fold navigation short: prefer a starter map over a full documentation sitemap
+- Use complete examples when practical; if an example is partial, say what is assumed
+- State important boundaries early: Node-only features, single-process constraints, runtime-vs-unit-test differences
+- Prefer outcome-based encouragement over cheerleading
+- Use the `runtime` narrator sparingly in intro docs: milestone moments only
 
 **Confidence without arrogance:**
 
@@ -192,7 +204,7 @@ Include sardonic "runtime" quotes at the end of major sections for personality. 
 ```markdown
 **Good:**
 
-## Quick Wins: Copy-Paste Solutions
+## Quick Wins: Pressure-Tested Recipes
 
 ## Tasks
 
@@ -236,14 +248,13 @@ The main README follows this high-level structure:
 ## Getting Started (Ordered for learning)
 
 - What Is This Thing? (conceptual overview)
-- Show Me the Magic (quick wins)
-- How Does It Compare? (framework comparison)
-- Performance at a Glance
-- What's in the Box? (feature matrix)
 - Your First 5 Minutes (absolute minimum)
 - Quick Start (full example)
+- Show Me the Wiring (execution boundaries)
+- How Does It Compare? (framework comparison)
+- What's in the Box? (feature matrix)
 - Learning Guide (common patterns)
-- Quick Wins (copy-paste solutions)
+- Quick Wins (pressure-tested recipes)
 - The Big Five (core concepts)
 
 ## Core Concepts (Alphabetical)
@@ -296,27 +307,27 @@ The main README follows this high-level structure:
 Component ids are part of Runner's public surface: they show up in logs, tooling, overrides, remote lane clients, and docs.
 In documentation, always use stable, readable ids and keep them consistent across examples.
 
-**Recommended id namespaces:**
+**Recommended id patterns for docs:**
 
-| Type                | Recommended Prefix / Pattern                                 | Example                                          |
-| ------------------- | ------------------------------------------------------------ | ------------------------------------------------ |
-| Root app resource   | `app`                                                        | `r.resource("app")`                              |
-| Resources           | `{domain}.{noun}` (use subdomains to group)                  | `app.db`, `app.http.server`, `app.services.user` |
-| Tasks               | `{domain}.tasks.{verb}`                                      | `app.tasks.createUser`                           |
-| Events              | `{domain}.events.{pastTenseVerbOrNoun}`                      | `app.events.userRegistered`                      |
-| Hooks               | `{domain}.hooks.{name}` (use `onX` for event-reactive hooks) | `app.hooks.onUserRegistered`                     |
-| Task middleware     | `{domain}.middleware.task.{name}`                            | `app.middleware.task.audit`                      |
-| Resource middleware | `{domain}.middleware.resource.{name}`                        | `app.middleware.resource.retry`                  |
-| Errors              | `{domain}.errors.{PascalCaseName}`                           | `app.errors.InvalidCredentials`                  |
-| Async Context       | `{domain}.ctx.{noun}`                                        | `app.ctx.request`                                |
-| Tags                | `{domain}.tags.{noun}`                                       | `app.tags.httpRoute`                             |
+| Type              | Recommended Pattern                      | Example                        |
+| ----------------- | ---------------------------------------- | ------------------------------ |
+| Root app resource | `app`                                    | `r.resource("app")`            |
+| Resources         | readable local noun                      | `db`, `server`, `userStore`    |
+| Tasks             | readable local verb                      | `createUser`, `sendEmail`      |
+| Events            | readable local past-tense action or noun | `userRegistered`               |
+| Hooks             | readable local reaction name             | `sendWelcomeEmail`, `onSignup` |
+| Middleware        | readable local policy name               | `auditTask`, `retryPolicy`     |
+| Errors            | readable local error id                  | `invalidCredentials`           |
+| Async Context     | readable local noun                      | `requestContext`               |
+| Tags              | readable local noun                      | `httpRoute`                    |
 
 **Rules of thumb:**
 
-- Keep ids dot-separated and human-readable (no random suffixes).
-- Prefer **`camelCase`** for the final segment of tasks/events/hooks/middleware/ctx/tags; prefer **`PascalCase`** for errors.
-- Prefer **verbs** for task ids, **past-tense** for event ids, and **nouns** for resources/ctx/tags.
-- Keep the entire example in the same domain (default: `app.*`) unless the point is cross-domain composition.
+- Use local ids in docs. User-defined ids must not contain `.`.
+- Keep ids human-readable and stable.
+- Prefer **verbs** for task ids, **past-tense** for event ids, and **nouns** for resources/context/tags.
+- Prefer **camelCase** for most ids. Reserve different casing only when the public API requires it.
+- Keep the entire example in one small domain unless the point is specifically cross-domain composition.
 
 ### Variable Naming
 
@@ -846,12 +857,12 @@ git commit -m "docs: your change description"
 
 ## Quick Wins Section Pattern
 
-The "Quick Wins" section is a special format designed for copy-paste solutions. It should follow this structure:
+The "Quick Wins" section is a special format designed for production-oriented recipes. It should follow this structure:
 
 ```markdown
-## Quick Wins: Copy-Paste Solutions
+## Quick Wins: Pressure-Tested Recipes
 
-**5 real-world problems, solved in minutes.** Just copy, customize, and ship.
+**5 real-world problems, solved with explicit boundaries.** Adapt the recipe to your app.
 
 ### 1. Problem Name (with result description)
 
@@ -876,10 +887,10 @@ const solution = r
 
 **Guidelines:**
 
-- Use numbered headings (1. 2. 3.)
+- Use problem-oriented headings
 - Include import statements
-- Add inline comments explaining behavior
-- Show results/effects below code blocks
+- State boundaries or assumptions when the snippet is partial
+- Show results or runtime effects below code blocks
 - Keep examples focused (one concept per win)
 - Include realistic use cases
 
@@ -941,14 +952,14 @@ Distill concepts to absolute minimum:
 3. **You compose them** using `r.resource()` and `r.task()`
 4. **You run them** with `run(app)` which gives you `runTask()` and `dispose()`
 
-That's it! Now let's see it in action:
+Now let's prove it with the smallest runnable example:
 ```
 
 **Guidelines:**
 
 - Start with "New to X?" question
 - Use numbered list (max 4-5 items)
-- End with forward-looking statement
+- End with a proof-oriented transition
 - Link to next section
 
 ### Common Patterns Section
@@ -965,7 +976,7 @@ When you're starting out, it's tempting to make everything a task. Here's the go
 const add = (a: number, b: number) => a + b;
 
 // Tasks are great for business operations
-const processOrder = r.task("app.processOrder")...
+const processOrder = r.task("processOrder")...
 \`\`\`
 
 **Want detailed guidance?** See the [Tasks section](#tasks) below.
@@ -1030,4 +1041,3 @@ Content...
 ---
 
 _Last updated: January 2026 · Version 2.0_
-
