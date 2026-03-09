@@ -187,10 +187,7 @@ export class ResourceScheduler {
     consumerId: string,
     options: ResourceDependencyCollectionOptions = {},
   ): string[] {
-    const {
-      includeTransitiveResourceDependencies = true,
-      targetSet,
-    } = options;
+    const { includeTransitiveResourceDependencies = true, targetSet } = options;
     const state: DependencyTraversalState = {
       resourceIds: targetSet ?? new Set<string>(),
       visitedDefinitions: new Set<string>(),

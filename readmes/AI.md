@@ -188,6 +188,8 @@ Do not use `cooldown()` as a general teardown phase for support resources like d
 
 Tasks are your main business actions.
 
+- For lifecycle-owned timers, depend on `resources.timers` inside a task or resource.
+  `timers.setTimeout()` and `timers.setInterval()` are available during `init()`, stop accepting new timers once `cooldown()` starts, and clear pending timers during `dispose()`.
 - Tasks are async functions with DI, middleware, validation, and typed output.
 - Dependency maps are fail-fast validated. If `dependencies` is a function, it must resolve to an object map.
 - Optional dependencies are explicit: `someResource.optional()`.
@@ -195,8 +197,6 @@ Tasks are your main business actions.
 - Task `run(..., deps, context)` receives auto-injected execution context:
   - `journal`: per-task typed state
   - `source`: `{ kind, id }`
-- `resources.timers.setTimeout()` and `resources.timers.setInterval()` create lifecycle-owned timers.
-  They can be used during `init()`, stop accepting new timers once `cooldown()` starts, and clear pending timers during `dispose()`.
 
 Example:
 
@@ -661,7 +661,7 @@ Runtime:
 - Use `run(app, { logs: { printThreshold: null } })` to silence console output.
 - `dryRun: true` validates the graph without starting resources.
 - `lazy: true` defers startup-unused resources until on-demand access.
-- `lifecycleMode: "parallel"` enables dependency-safe parallel startup and disposal waves.
+- `lifecycleMode: "parallel"` enables dependency-safe parallel startup/init and disposal waves (applies to ready(), cooldown() as well).
 - `executionContext: true | { createCorrelationId?, cycleDetection? }` enables runtime execution context (opt-in). Import `{ system }` and read `system.ctx.executionContext.use()` or `.tryUse()` inside tasks, hooks, and interceptors. Runner assigns a correlation id to each top-level execution and enables cycle detection by default. Use `cycleDetection: false` to keep context/correlation ids without repetition-depth guards. Requires AsyncLocalStorage (Node-only in practice).
 - `system.ctx.executionContext.use()` returns the current branch snapshot: `{ correlationId, startedAt, depth, currentFrame, frames }`.
 - The execution chain includes nested task calls, event emissions, and hook executions. Parallel child tasks inherit the same `correlationId` and parent frames, then append their own branch-local frame.
