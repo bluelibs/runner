@@ -1,4 +1,5 @@
-import { defineFrameworkTag } from "../../definers/frameworkDefinition";
+import { defineTag } from "../../definers/defineTag";
+import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import { Match } from "../../tools/check";
 import { CronOnError, CronTagConfig } from "./types";
 
@@ -12,12 +13,15 @@ const cronTagConfigPattern = Match.ObjectIncluding({
   silent: Match.Optional(Boolean),
 });
 
-export const cronTag = defineFrameworkTag<CronTagConfig>({
-  id: "runner.tags.cron",
-  configSchema: cronTagConfigPattern,
-  meta: {
-    title: "Cron",
-    description:
-      "Marks tasks that should be scheduled by runner.cron using a cron expression.",
-  },
-});
+export const cronTag = defineTag<CronTagConfig>(
+  markFrameworkDefinition({
+    id: "runner.tags.cron",
+    targets: ["tasks"] as const,
+    configSchema: cronTagConfigPattern,
+    meta: {
+      title: "Cron",
+      description:
+        "Marks tasks that should be scheduled by runner.cron using a cron expression.",
+    },
+  }),
+);

@@ -26,6 +26,7 @@ const assertHttpCode = (value: number): void => {
  */
 export function makeErrorBuilder<TData extends DefaultErrorType>(
   state: BuilderState<TData>,
+  framework = false,
 ): ErrorFluentBuilder<TData> {
   const builder: ErrorFluentBuilder<TData> = {
     id: state.id,
@@ -33,22 +34,22 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
     httpCode(code: number) {
       assertHttpCode(code);
       const next = clone(state, { httpCode: code });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     serialize(fn) {
       const next = clone(state, { serialize: fn });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     parse(fn) {
       const next = clone(state, { parse: fn });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     dataSchema(schema) {
       const next = clone(state, { dataSchema: schema });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     schema(schema) {
@@ -63,28 +64,28 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
       const next = clone(state, {
         tags: mergeArray(state.tags ?? [], t, override),
       });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     format(fn: (data: TData) => string) {
       const next = clone(state, { format: fn });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     remediation(advice: string | ((data: TData) => string)) {
       const next = clone(state, { remediation: advice });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     meta<TNewMeta extends IErrorMeta>(m: TNewMeta) {
       const next = clone(state, { meta: m });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     build() {
       return deepFreeze(
         defineError<TData>(
-          state.frameworkOwned
+          framework
             ? markFrameworkDefinition({
                 id: state.id,
                 httpCode: state.httpCode,

@@ -2,7 +2,6 @@ import type { ITagMeta, TagTarget, ValidationSchemaInput } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineTag } from "../../defineTag";
-import { markFrameworkDefinition } from "../../markFrameworkDefinition";
 import type { TagFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
 import { clone } from "./utils";
@@ -83,21 +82,13 @@ export function makeTagBuilder<
     },
 
     build() {
-      const tagDefinition = state.frameworkOwned
-        ? markFrameworkDefinition({
-            id: state.id,
-            meta: state.meta,
-            configSchema: state.configSchema,
-            config: state.config as TConfig,
-            targets: state.targets,
-          })
-        : {
-            id: state.id,
-            meta: state.meta,
-            configSchema: state.configSchema,
-            config: state.config as TConfig,
-            targets: state.targets,
-          };
+      const tagDefinition = {
+        id: state.id,
+        meta: state.meta,
+        configSchema: state.configSchema,
+        config: state.config as TConfig,
+        targets: state.targets,
+      };
       const tag = defineTag<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets>(
         tagDefinition,
       );

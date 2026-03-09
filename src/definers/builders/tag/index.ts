@@ -10,7 +10,6 @@ export * from "./types";
 export * from "./utils";
 
 type InternalTagBuilderOptions = {
-  frameworkOwned?: boolean;
   filePath: string;
 };
 
@@ -31,7 +30,6 @@ function createTagBuilder<
   > = Object.freeze({
     id,
     filePath: options.filePath,
-    frameworkOwned: options?.frameworkOwned === true,
     meta: {} as BuilderState<
       TConfig,
       TEnforceIn,
@@ -78,20 +76,3 @@ export function tagBuilder<
 }
 
 export const tag = tagBuilder;
-
-export function frameworkTag<
-  TConfig = void,
-  TEnforceIn = void,
-  TEnforceOut = void,
-  TAllowedTargets extends TagTarget | void = void,
->(
-  id: string,
-): TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets> {
-  return createTagBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets>(
-    id,
-    {
-      filePath: getCallerFile(),
-      frameworkOwned: true,
-    },
-  );
-}

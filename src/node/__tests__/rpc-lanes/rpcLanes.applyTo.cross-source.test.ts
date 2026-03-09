@@ -1,5 +1,5 @@
 import { defineEvent, defineResource } from "../../../define";
-import { frameworkResource } from "../../../definers/builders/resource";
+import { markFrameworkDefinition } from "../../../definers/markFrameworkDefinition";
 import { run } from "../../../run";
 import { r } from "../../../public";
 import { rpcLanesResource } from "../../rpc-lanes";
@@ -20,9 +20,15 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
         event: async () => undefined,
       }),
     });
-    const fakeEventLanesState = frameworkResource<any>(EVENT_LANES_RESOURCE_ID)
-      .init(async () => null)
-      .build();
+    const fakeEventLanesState = defineResource<
+      { topology: unknown },
+      Promise<null>
+    >(
+      markFrameworkDefinition({
+        id: EVENT_LANES_RESOURCE_ID,
+        init: async () => null,
+      }),
+    );
 
     const app = defineResource({
       id: "tests-rpc-lanes-apply-to-event-lane-string-app",
@@ -78,9 +84,15 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
         task: async () => "remote",
       }),
     });
-    const fakeEventLanesState = frameworkResource<any>(EVENT_LANES_RESOURCE_ID)
-      .init(async () => null)
-      .build();
+    const fakeEventLanesState = defineResource<
+      { topology: unknown },
+      Promise<null>
+    >(
+      markFrameworkDefinition({
+        id: EVENT_LANES_RESOURCE_ID,
+        init: async () => null,
+      }),
+    );
 
     const app = defineResource({
       id: "tests-rpc-lanes-apply-to-event-lane-invalid-app",

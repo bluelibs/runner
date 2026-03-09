@@ -1,4 +1,5 @@
-import { defineFrameworkTag } from "../../../definers/frameworkDefinition";
+import { defineTag } from "../../../definers/defineTag";
+import { markFrameworkDefinition } from "../../../definers/markFrameworkDefinition";
 import { Match } from "../../../tools/check";
 
 export interface DurableWorkflowTagConfig {
@@ -26,12 +27,14 @@ const durableWorkflowConfigPattern = Match.ObjectIncluding({
 /**
  * Marks a task as a durable workflow for runtime discovery.
  */
-export const durableWorkflowTag = defineFrameworkTag<DurableWorkflowTagConfig>({
-  id: "runner.tags.durableWorkflow",
-  configSchema: durableWorkflowConfigPattern,
-  meta: {
-    title: "Durable Workflow",
-    description:
-      "Marks tasks intended to run as durable workflows so they can be discovered at runtime.",
-  },
-});
+export const durableWorkflowTag = defineTag<DurableWorkflowTagConfig>(
+  markFrameworkDefinition({
+    id: "runner.tags.durableWorkflow",
+    configSchema: durableWorkflowConfigPattern,
+    meta: {
+      title: "Durable Workflow",
+      description:
+        "Marks tasks intended to run as durable workflows so they can be discovered at runtime.",
+    },
+  }),
+);

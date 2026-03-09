@@ -6,7 +6,9 @@ import {
   createSharedCacheBudgetState,
   createTaskScopedCacheInstance,
   isBuiltInCacheProvider,
+  shouldClearCacheOnDispose,
   supportsTaskScopedCacheProvider,
+  withCacheDisposeBehavior,
 } from "../../globals/middleware/cache.shared";
 
 describe("cache.shared", () => {
@@ -30,7 +32,10 @@ describe("cache.shared", () => {
       })),
     ).toBe(false);
 
-    await expect(provider({ max: 1 })).resolves.toBeInstanceOf(LRUCache);
+    const defaultCache = await provider({ max: 1 });
+
+    expect(defaultCache).toBeInstanceOf(LRUCache);
+    expect(shouldClearCacheOnDispose(defaultCache)).toBe(true);
     await expect(
       createTaskScopedCacheInstance(provider, {
         taskId: "task",
@@ -44,6 +49,25 @@ describe("cache.shared", () => {
         options: { max: 1 },
       }),
     ).toThrow(/does not support task-scoped cache instances/i);
+  });
+
+  it("defaults cache disposal to clear and supports persistent overrides", () => {
+    const ephemeralCache = {
+      get: () => undefined,
+      set: () => undefined,
+      clear: () => undefined,
+    };
+    const persistentCache = withCacheDisposeBehavior(
+      {
+        get: () => undefined,
+        set: () => undefined,
+        clear: () => undefined,
+      },
+      "keep",
+    );
+
+    expect(shouldClearCacheOnDispose(ephemeralCache)).toBe(true);
+    expect(shouldClearCacheOnDispose(persistentCache)).toBe(false);
   });
 
   it("does not track entries rejected by local cache size rules", () => {

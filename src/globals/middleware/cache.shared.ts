@@ -17,6 +17,8 @@ export type CacheProvider = (
   options: CacheFactoryOptions,
 ) => Promise<ICacheProvider>;
 
+export type CacheDisposeBehavior = "clear" | "keep";
+
 export type TaskScopedCacheProviderInput = {
   taskId: string;
   options: CacheFactoryOptions;
@@ -32,6 +34,10 @@ type TaskScopedCacheProvider = CacheProvider & {
   [taskScopedCacheProviderSymbol]: (
     input: TaskScopedCacheProviderInput,
   ) => Promise<ICacheProvider>;
+};
+
+type CacheProviderWithDisposeBehavior = ICacheProvider & {
+  [cacheDisposeBehaviorSymbol]?: CacheDisposeBehavior;
 };
 
 type BudgetEntry = {
@@ -51,13 +57,17 @@ export type SharedCacheBudgetState = {
 
 const builtInCacheProviderSymbol = Symbol("runner.builtInCacheProvider");
 const taskScopedCacheProviderSymbol = Symbol("runner.taskScopedCacheProvider");
+const cacheDisposeBehaviorSymbol = Symbol("runner.cacheDisposeBehavior");
 
 export function createDefaultCacheProvider(): CacheProvider {
   const provider: CacheProvider = async (
     options: CacheFactoryOptions,
   ): Promise<ICacheProvider> =>
-    new LRUCache<string, CacheStoredValue, unknown>(
-      options as LRUCache.Options<string, CacheStoredValue, unknown>,
+    withCacheDisposeBehavior(
+      new LRUCache<string, CacheStoredValue, unknown>(
+        options as LRUCache.Options<string, CacheStoredValue, unknown>,
+      ),
+      "clear",
     );
 
   return Object.assign(
@@ -126,6 +136,23 @@ export function createTaskScopedCacheInstance(
   return provider[taskScopedCacheProviderSymbol](input);
 }
 
+export function withCacheDisposeBehavior<T extends ICacheProvider>(
+  provider: T,
+  behavior: CacheDisposeBehavior,
+): T {
+  return Object.assign(provider, {
+    [cacheDisposeBehaviorSymbol]: behavior,
+  }) as T;
+}
+
+export function shouldClearCacheOnDispose(provider: ICacheProvider) {
+  const behavior = (provider as CacheProviderWithDisposeBehavior)[
+    cacheDisposeBehaviorSymbol
+  ];
+
+  return behavior !== "keep";
+}
+
 export function createSharedCacheBudgetState(
   totalBudgetBytes: number,
 ): SharedCacheBudgetState {
@@ -150,45 +177,48 @@ export function createBudgetedCacheInstance({
   const localCache = createLocalCache(taskId, options, sharedBudget);
   sharedBudget.localCaches.set(taskId, localCache);
 
-  return {
-    get(key: string) {
-      const value = localCache.get(key);
+  return withCacheDisposeBehavior(
+    {
+      get(key: string) {
+        const value = localCache.get(key);
 
-      if (value !== undefined || localCache.has(key)) {
-        touchBudgetEntry(sharedBudget, taskId, key);
-      }
+        if (value !== undefined || localCache.has(key)) {
+          touchBudgetEntry(sharedBudget, taskId, key);
+        }
 
-      return value;
+        return value;
+      },
+      set(key: string, value: unknown) {
+        localCache.set(key, value as CacheStoredValue);
+
+        if (!localCache.has(key)) {
+          return;
+        }
+
+        upsertBudgetEntry(
+          sharedBudget,
+          taskId,
+          key,
+          computeEntrySize(options, key, value),
+        );
+        enforceTotalBudget(sharedBudget);
+      },
+      clear() {
+        localCache.clear();
+        removeBudgetEntriesForTask(sharedBudget, taskId);
+      },
+      has(key: string) {
+        const present = localCache.has(key);
+
+        if (present) {
+          touchBudgetEntry(sharedBudget, taskId, key);
+        }
+
+        return present;
+      },
     },
-    set(key: string, value: unknown) {
-      localCache.set(key, value as CacheStoredValue);
-
-      if (!localCache.has(key)) {
-        return;
-      }
-
-      upsertBudgetEntry(
-        sharedBudget,
-        taskId,
-        key,
-        computeEntrySize(options, key, value),
-      );
-      enforceTotalBudget(sharedBudget);
-    },
-    clear() {
-      localCache.clear();
-      removeBudgetEntriesForTask(sharedBudget, taskId);
-    },
-    has(key: string) {
-      const present = localCache.has(key);
-
-      if (present) {
-        touchBudgetEntry(sharedBudget, taskId, key);
-      }
-
-      return present;
-    },
-  };
+    "clear",
+  );
 }
 
 function createLocalCache(

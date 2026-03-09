@@ -4,6 +4,7 @@ import {
   createTaskScopedCacheProvider,
   type CacheProvider,
   type CacheFactoryOptions,
+  withCacheDisposeBehavior,
 } from "../../globals/middleware/cache.shared";
 import { Match } from "../../tools/check";
 import { r, resources } from "../../index";
@@ -63,17 +64,19 @@ export const redisCacheProviderResource = r
       config.redis === undefined || typeof config.redis === "string";
 
     const provider: CacheProvider = async (options: CacheFactoryOptions) =>
-      new RedisCache({
-        options,
-        prefix,
-        redis,
-        serializer,
-        taskId: `cache:${randomUUID()}`,
-      });
+      withCacheDisposeBehavior(
+        new RedisCache({
+          options,
+          prefix,
+          redis,
+          serializer,
+          taskId: `cache:${randomUUID()}`,
+        }),
+        "keep",
+      );
 
-    return createTaskScopedCacheProvider(
-      provider,
-      async (input) =>
+    return createTaskScopedCacheProvider(provider, async (input) =>
+      withCacheDisposeBehavior(
         new RedisCache({
           options: input.options,
           prefix,
@@ -82,6 +85,8 @@ export const redisCacheProviderResource = r
           taskId: input.taskId,
           totalBudgetBytes: input.totalBudgetBytes,
         }),
+        "keep",
+      ),
     );
   })
   .dispose(async (_provider, _config, _deps, ctx) => {

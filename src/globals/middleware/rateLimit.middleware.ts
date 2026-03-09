@@ -1,7 +1,6 @@
-import {
-  defineFrameworkResource,
-  defineFrameworkTaskMiddleware,
-} from "../../definers/frameworkDefinition";
+import { defineResource } from "../../definers/defineResource";
+import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
+import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
@@ -65,62 +64,66 @@ export const journalKeys = {
   ),
 } as const;
 
-export const rateLimitResource = defineFrameworkResource({
-  id: "runner.rateLimit",
-  tags: [globalTags.system],
-  init: async () => {
-    return {
-      states: new WeakMap<RateLimitMiddlewareConfig, RateLimitState>(),
-    };
-  },
-});
+export const rateLimitResource = defineResource(
+  markFrameworkDefinition({
+    id: "runner.rateLimit",
+    tags: [globalTags.system],
+    init: async () => {
+      return {
+        states: new WeakMap<RateLimitMiddlewareConfig, RateLimitState>(),
+      };
+    },
+  }),
+);
 
 /**
  * Rate limit middleware: limits the number of executions within a fixed time window.
  */
-export const rateLimitTaskMiddleware = defineFrameworkTaskMiddleware({
-  id: "runner.middleware.task.rateLimit",
-  throws: [middlewareRateLimitExceededError],
-  configSchema: rateLimitConfigPattern,
-  dependencies: { state: rateLimitResource },
-  async run(
-    { task, next, journal },
-    { state },
-    config: RateLimitMiddlewareConfig,
-  ) {
-    const { states } = state;
-    let limitState = states.get(config);
-    const now = Date.now();
+export const rateLimitTaskMiddleware = defineTaskMiddleware(
+  markFrameworkDefinition({
+    id: "runner.middleware.task.rateLimit",
+    throws: [middlewareRateLimitExceededError],
+    configSchema: rateLimitConfigPattern,
+    dependencies: { state: rateLimitResource },
+    async run(
+      { task, next, journal },
+      { state },
+      config: RateLimitMiddlewareConfig,
+    ) {
+      const { states } = state;
+      let limitState = states.get(config);
+      const now = Date.now();
 
-    if (!limitState || now >= limitState.resetTime) {
-      limitState = {
-        count: 0,
-        resetTime: now + config.windowMs,
-      };
-      states.set(config, limitState);
-    }
+      if (!limitState || now >= limitState.resetTime) {
+        limitState = {
+          count: 0,
+          resetTime: now + config.windowMs,
+        };
+        states.set(config, limitState);
+      }
 
-    // Set journal values before checking limits
-    const remaining = Math.max(0, config.max - limitState.count);
-    journal.set(journalKeys.remaining, remaining, { override: true });
-    journal.set(journalKeys.resetTime, limitState.resetTime, {
-      override: true,
-    });
-    journal.set(journalKeys.limit, config.max, { override: true });
+      // Set journal values before checking limits
+      const remaining = Math.max(0, config.max - limitState.count);
+      journal.set(journalKeys.remaining, remaining, { override: true });
+      journal.set(journalKeys.resetTime, limitState.resetTime, {
+        override: true,
+      });
+      journal.set(journalKeys.limit, config.max, { override: true });
 
-    if (limitState.count >= config.max) {
-      throw new RateLimitError(
-        `Rate limit exceeded. Try again after ${new Date(
-          limitState.resetTime,
-        ).toISOString()}`,
-      );
-    }
+      if (limitState.count >= config.max) {
+        throw new RateLimitError(
+          `Rate limit exceeded. Try again after ${new Date(
+            limitState.resetTime,
+          ).toISOString()}`,
+        );
+      }
 
-    limitState.count++;
-    // Update remaining after incrementing count
-    journal.set(journalKeys.remaining, config.max - limitState.count, {
-      override: true,
-    });
-    return await next(task.input);
-  },
-});
+      limitState.count++;
+      // Update remaining after incrementing count
+      journal.set(journalKeys.remaining, config.max - limitState.count, {
+        override: true,
+      });
+      return await next(task.input);
+    },
+  }),
+);

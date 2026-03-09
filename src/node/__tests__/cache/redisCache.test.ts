@@ -336,6 +336,21 @@ describe("RedisCache", () => {
       stableTaskBytesBefore,
     );
 
+    const populatedClearCache = new RedisCache({
+      options: {},
+      prefix: "tests:redis:clear-populated",
+      redis,
+      serializer,
+      taskId: "tests-redis-clear-populated",
+    });
+
+    await populatedClearCache.set("clear-me", "value");
+    await populatedClearCache.clear();
+    await expect(populatedClearCache.has("clear-me")).resolves.toBe(false);
+    expect(await redis.get((populatedClearCache as any).taskBytesKey)).toBe(
+      null,
+    );
+
     await cache.set("key", "value");
     const entryId = (cache as any).createEntryId("key");
     const dataKey = (cache as any).getEntryDataKey(entryId);

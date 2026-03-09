@@ -11,7 +11,7 @@ export * from "./types";
 export * from "./utils";
 
 type InternalErrorBuilderOptions = {
-  frameworkOwned?: boolean;
+  framework?: boolean;
   filePath: string;
 };
 
@@ -22,7 +22,6 @@ function createErrorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
   const initial: BuilderState<TData> = Object.freeze({
     id,
     filePath: options.filePath,
-    frameworkOwned: options?.frameworkOwned === true,
     httpCode: undefined,
     serialize: undefined,
     parse: undefined,
@@ -30,7 +29,7 @@ function createErrorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
     meta: {} as IErrorMeta,
   });
 
-  return makeErrorBuilder(initial);
+  return makeErrorBuilder(initial, options.framework === true);
 }
 
 /**
@@ -76,8 +75,8 @@ export const error = Object.assign(errorBuilder, {
 export function frameworkError<
   TData extends DefaultErrorType = DefaultErrorType,
 >(id: string): ErrorFluentBuilder<TData> {
-  return createErrorBuilder<TData>(id, {
+  return createErrorBuilder(id, {
     filePath: getCallerFile(),
-    frameworkOwned: true,
+    framework: true,
   });
 }

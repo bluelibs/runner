@@ -12,7 +12,6 @@ export type BuilderState<
 > = Readonly<{
   id: string;
   filePath: string;
-  frameworkOwned?: boolean;
   meta?: ITagMeta;
   configSchema?: ValidationSchemaInput<any>;
   config?: TConfig;

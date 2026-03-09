@@ -1,7 +1,5 @@
-import {
-  defineFrameworkAsyncContext,
-  defineFrameworkError,
-} from "../../definers/frameworkDefinition";
+import { defineAsyncContext } from "../../definers/defineAsyncContext";
+import { defineError } from "../../definers/defineError";
 import {
   isFrameworkDefinitionMarked,
   markFrameworkDefinition,
@@ -31,13 +29,15 @@ describe("framework definition helpers", () => {
   });
 
   it("allows reserved framework ids for async contexts and forwards file paths to errors", () => {
-    const asyncContext = defineFrameworkAsyncContext({
-      id: "runner.contexts.internal",
-    });
-    const error = defineFrameworkError(
-      {
+    const asyncContext = defineAsyncContext(
+      markFrameworkDefinition({
+        id: "runner.contexts.internal",
+      }),
+    );
+    const error = defineError(
+      markFrameworkDefinition({
         id: "runner.errors.internal",
-      },
+      }),
       "/virtual/framework-definition.test.ts",
     );
 

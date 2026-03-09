@@ -187,6 +187,8 @@ function createFakeRedisClient() {
 }
 
 describe("redis cache provider resource", () => {
+  let persistentAppId = 0;
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -280,6 +282,52 @@ describe("redis cache provider resource", () => {
       expect(hits).toEqual({ first: 2, second: 1 });
     } finally {
       await runtime.dispose();
+    }
+  });
+
+  it("keeps redis-backed cache entries across runtime disposal", async () => {
+    const redis = createFakeRedisClient();
+    let executionCount = 0;
+
+    const cachedTask = r
+      .task("tests-redis-cache-persistent")
+      .middleware([middleware.task.cache])
+      .run(async (input: string) => {
+        executionCount += 1;
+        return input.toUpperCase();
+      })
+      .build();
+
+    const createApp = () =>
+      r
+        .resource(`tests-redis-cache-persistent-app-${++persistentAppId}`)
+        .register([
+          resources.cache.with({
+            provider: resources.redisCacheProvider.with({
+              prefix: "tests:redis-cache-persistent",
+              redis,
+            }),
+          }),
+          middleware.task.cache,
+          cachedTask,
+        ])
+        .dependencies({ cachedTask })
+        .init(async (_config, { cachedTask }) => {
+          return cachedTask("value");
+        })
+        .build();
+
+    const firstRuntime = await run(createApp());
+    expect(firstRuntime.value).toBe("VALUE");
+    await firstRuntime.dispose();
+
+    const secondRuntime = await run(createApp());
+
+    try {
+      expect(secondRuntime.value).toBe("VALUE");
+      expect(executionCount).toBe(1);
+    } finally {
+      await secondRuntime.dispose();
     }
   });
 

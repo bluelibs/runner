@@ -20,7 +20,6 @@ export type ResourceBuilderOptions = {
 };
 
 type InternalResourceBuilderOptions = ResourceBuilderOptions & {
-  frameworkOwned?: boolean;
   filePath: string;
 };
 
@@ -47,7 +46,6 @@ function createResourceBuilder<TConfig = void>(
   > = Object.freeze({
     id,
     gateway: options?.gateway === true,
-    frameworkOwned: options?.frameworkOwned === true,
     filePath: options.filePath,
     dependencies: undefined,
     register: undefined,
@@ -83,23 +81,6 @@ export function resourceBuilder<TConfig = void>(
   return createResourceBuilder(id, {
     ...options,
     filePath: getCallerFile(),
-  });
-}
-
-export function frameworkResource<TConfig = void>(
-  id: string,
-): ResourceFluentBuilder<
-  TConfig,
-  Promise<any>,
-  {},
-  any,
-  IResourceMeta,
-  ResourceTagType[],
-  ResourceMiddlewareAttachmentType[]
-> {
-  return createResourceBuilder<TConfig>(id, {
-    filePath: getCallerFile(),
-    frameworkOwned: true,
   });
 }
 

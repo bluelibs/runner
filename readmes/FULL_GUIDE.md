@@ -3244,6 +3244,7 @@ Notes:
 - `prefix` scopes the Redis keys used for entries, LRU ordering, and byte accounting.
 - When `prefix` is omitted, Runner generates an isolated per-container namespace.
 - Set an explicit `prefix` when you want multiple Node processes to share the same cache namespace and budget.
+- Redis-backed cache entries are not cleared by `runtime.dispose()`. Persistence is controlled by Redis TTLs, the chosen `prefix`, and your cache limits.
 
 ### Custom Redis Provider Example
 

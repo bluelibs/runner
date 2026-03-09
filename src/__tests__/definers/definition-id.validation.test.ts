@@ -10,16 +10,9 @@ import {
   defineTaskMiddleware,
 } from "../../define";
 import { defineAsyncContext } from "../../definers/defineAsyncContext";
-import { frameworkResource } from "../../definers/builders/resource";
 import { assertDefinitionId } from "../../definers/assertDefinitionId";
 import { defineError } from "../../definers/defineError";
-import { frameworkError } from "../../definers/builders/error";
-import { frameworkTag } from "../../definers/builders/tag";
-import {
-  defineFrameworkEvent,
-  defineFrameworkResource,
-  defineFrameworkTag,
-} from "../../definers/frameworkDefinition";
+import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 
 type DefinitionFactory = {
   label: string;
@@ -183,27 +176,35 @@ describe("definition id validation", () => {
 
   it("allows framework helpers to define reserved runner/system ids", () => {
     expect(() =>
-      defineFrameworkTag({
-        id: "runner.tags.internal",
-      }),
+      defineTag(
+        markFrameworkDefinition({
+          id: "runner.tags.internal",
+        }),
+      ),
     ).not.toThrow();
 
     expect(() =>
-      defineFrameworkEvent({
-        id: "system.events.ready",
-      }),
+      defineEvent(
+        markFrameworkDefinition({
+          id: "system.events.ready",
+        }),
+      ),
     ).not.toThrow();
 
     expect(() =>
-      defineFrameworkResource({
-        id: "runner.cache",
-      }),
+      defineResource(
+        markFrameworkDefinition({
+          id: "runner.cache",
+        }),
+      ),
     ).not.toThrow();
 
-    expect(() => frameworkResource("runner.health").build()).not.toThrow();
-    expect(() => frameworkTag("runner.tags.cron").build()).not.toThrow();
     expect(() =>
-      frameworkError("runner.errors.validation").build(),
+      defineError(
+        markFrameworkDefinition({
+          id: "runner.errors.validation",
+        }),
+      ),
     ).not.toThrow();
   });
 });

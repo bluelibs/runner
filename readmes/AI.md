@@ -334,6 +334,7 @@ Task middleware:
     - `totalBudgetBytes`: one shared budget across task cache instances for providers that support task-scoped budgeting
   - built-in memory cache supports `totalBudgetBytes` out of the box
   - Node also exposes `resources.redisCacheProvider.with({ redis, prefix? })` as a Redis-backed provider with the same shared-budget model
+  - Redis-backed entries are not cleared by `runtime.dispose()`; they persist according to Redis TTLs and the chosen `prefix`
 - `middleware.task.concurrency.with({ limit, key?, semaphore? })`
   - limits concurrent executions
   - use `key` to share a semaphore across middleware instances

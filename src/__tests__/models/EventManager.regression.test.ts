@@ -106,7 +106,7 @@ describe("EventManager regressions", () => {
 
     eventManager.addListener(event, (emission) => {
       emission.meta.title = "mutated";
-      emission.tags.push(globalTags.debug);
+      emission.tags.push(globalTags.debug.with("verbose"));
     });
 
     await eventManager.emit(event, "data", runtimeSource.runtime("src"));
