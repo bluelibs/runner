@@ -1,5 +1,4 @@
-import { r } from "@bluelibs/runner";
-import { z } from "zod";
+import { Match, r } from "@bluelibs/runner";
 import { httpRoute } from "#/web/tags";
 import { db } from "#/db/resources";
 import { auth as authResource } from "#/users/resources/auth.resource";
@@ -13,9 +12,12 @@ export const currentUser = r
     description:
       "Retrieve current authenticated user's profile information from JWT token",
   })
-  .inputSchema(z.undefined())
   .resultSchema(
-    z.object({ id: z.string(), name: z.string(), email: z.string() }).strict(),
+    Match.compile({
+      id: Match.NonEmptyString,
+      name: Match.NonEmptyString,
+      email: Match.Email,
+    }),
   )
   .tags([httpRoute.with({ method: "get", path: "/me", auth: "required" })])
   .dependencies({ db, auth: authResource })

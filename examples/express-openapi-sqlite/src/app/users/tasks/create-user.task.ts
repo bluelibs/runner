@@ -2,7 +2,7 @@ import { r } from "@bluelibs/runner";
 import { User } from "../types";
 import { db } from "../../db/resources/database";
 import bcrypt from "bcryptjs";
-import z from "zod";
+import { Match } from "@bluelibs/runner";
 
 export interface CreateUserInput {
   email: string;
@@ -10,10 +10,10 @@ export interface CreateUserInput {
   name: string;
 }
 
-const schema = z.object({
-  email: z.email(),
-  password: z.string().min(8),
-  name: z.string().min(1),
+const schema = Match.ObjectIncluding({
+  email: Match.Email,
+  password: Match.RegExp(/^.{8,}$/),
+  name: Match.NonEmptyString,
 });
 
 export const createUserTask = r

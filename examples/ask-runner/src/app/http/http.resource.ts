@@ -1,3 +1,5 @@
+import path from "path";
+
 import express, { type Request, type Response } from "express";
 import { r, resources } from "@bluelibs/runner";
 
@@ -9,8 +11,8 @@ import { buildStreamHtmlPage } from "./stream-html-page";
 
 const streamHtmlContentSecurityPolicy = [
   "default-src 'none'",
-  "script-src 'unsafe-inline' https://cdn.jsdelivr.net",
-  "style-src 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
   "connect-src 'self'",
   "img-src 'self' data:",
   "font-src 'self'",
@@ -18,6 +20,28 @@ const streamHtmlContentSecurityPolicy = [
   "form-action 'self'",
   "frame-ancestors 'none'",
 ].join("; ");
+
+const streamHtmlAssetRoutes = [
+  {
+    route: "/__ask-runner-assets/marked",
+    directory: path.join(
+      path.dirname(require.resolve("marked/package.json")),
+      "lib",
+    ),
+  },
+  {
+    route: "/__ask-runner-assets/dompurify",
+    directory: path.dirname(require.resolve("dompurify/dist/purify.min.js")),
+  },
+  {
+    route: "/__ask-runner-assets/highlight",
+    directory: path.dirname(require.resolve("highlight.js/package.json")),
+  },
+  {
+    route: "/__ask-runner-assets/mermaid",
+    directory: path.dirname(require.resolve("mermaid/dist/mermaid.min.js")),
+  },
+] as const;
 
 export interface HttpServer {
   app: express.Express;
@@ -113,6 +137,17 @@ export function registerExplicitHttpRoutes(
     }>;
   },
 ): void {
+  for (const assetRoute of streamHtmlAssetRoutes) {
+    app.use(
+      assetRoute.route,
+      express.static(assetRoute.directory, {
+        fallthrough: false,
+        immutable: true,
+        maxAge: "1d",
+      }),
+    );
+  }
+
   app.get("/", async (req, res) => {
     const request = prepareQueryRequest(req);
     const result = await deps.runAskRunnerTask(request);

@@ -1,5 +1,8 @@
 import type { Request } from "express";
 
+import {
+  askRunnerMaxOpenAiOutputTokens,
+} from "../ai/ask-runner-request";
 import { buildSystemPrompt, estimateTokenCount } from "../ai/prompt";
 
 export interface QueryRouteDeps {
@@ -51,7 +54,10 @@ export function estimateProjectedCostUsd(
     estimateTokenCount(promptText, tokenCharsEstimate) +
     estimateTokenCount(query, tokenCharsEstimate);
   // Preflight stays conservative and treats all input tokens as uncached.
-  const outputTokens = maxOutputTokens;
+  const outputTokens = Math.min(
+    maxOutputTokens,
+    askRunnerMaxOpenAiOutputTokens,
+  );
   const inputCost = (inputTokens / 1_000_000) * pricing.inputPer1M;
   const outputCost = (outputTokens / 1_000_000) * pricing.outputPer1M;
   return Number((inputCost + outputCost).toFixed(8));

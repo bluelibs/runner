@@ -12,6 +12,24 @@ describe("prompt helpers", () => {
       "Do not invent strengths, features, benchmarks, or guarantees. If the docs do not support a claim, say so explicitly.",
     );
     expect(prompt).toContain(
+      "Keep the final answer within about 10,000 characters.",
+    );
+    expect(prompt).toContain(
+      "When a chart, flow, relationship map, timeline, or other illustration would help, use Mermaid fenced code blocks with the language tag written exactly as ```mermaid.",
+    );
+    expect(prompt).toContain(
+      "When writing Mermaid, prefer Mermaid-safe labels and simple syntax: keep one statement per line, prefer plain words over punctuation-heavy labels, and avoid characters such as parentheses (), square brackets inside labels, quotes, or colons when a simpler label works.",
+    );
+    expect(prompt).toContain(
+      "For Mermaid flowcharts, prefer simple node labels like Start, Ready, Dispose, or Runtime running instead of labels like run(app) or emit events.ready when those could be rewritten more simply.",
+    );
+    expect(prompt).toContain(
+      "When providing code examples, use standard fenced code blocks with the correct language tag written exactly, for example ```typescript for TypeScript.",
+    );
+    expect(prompt).toContain(
+      "Do not draw ASCII art or ASCII diagrams unless the user explicitly asks for them.",
+    );
+    expect(prompt).toContain(
       "For comparison questions such as why Runner is better, stronger, or more compelling than alternatives, do not answer with a dry refusal. Briefly state that the docs do not prove a universal ranking, then pivot immediately into a lively, confident, and jovial explanation of Runner's documented strengths and why someone would choose it.",
     );
     expect(prompt).toContain(

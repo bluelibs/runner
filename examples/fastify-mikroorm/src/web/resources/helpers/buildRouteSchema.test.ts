@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { Match } from "@bluelibs/runner";
 import { buildRouteSchema } from "./buildRouteSchema";
 
 describe("buildRouteSchema", () => {
@@ -8,8 +8,8 @@ describe("buildRouteSchema", () => {
         title: "Get User By ID",
         description: "Retrieve a single user by its unique identifier",
       },
-      inputSchema: z.object({ id: z.string() }).strict(),
-      resultSchema: z.object({ ok: z.boolean() }).strict(),
+      inputSchema: Match.compile({ id: Match.NonEmptyString }),
+      resultSchema: Match.compile({ ok: Boolean }),
     };
     const config: any = { method: "get", path: "/user/:id" };
 
@@ -27,8 +27,8 @@ describe("buildRouteSchema", () => {
   it("builds body for non-GET and defaults param types to string when not in inputSchema", () => {
     const task: any = {
       meta: { title: "Create", description: "desc" },
-      inputSchema: z.object({ name: z.string() }),
-      resultSchema: z.object({ id: z.string() }),
+      inputSchema: Match.compile({ name: Match.NonEmptyString }),
+      resultSchema: Match.compile({ id: Match.NonEmptyString }),
     };
     const config: any = { method: "post", path: "/things/:id" };
 

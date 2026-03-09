@@ -1,5 +1,4 @@
-import { r } from "@bluelibs/runner";
-import { z } from "zod";
+import { Match, r } from "@bluelibs/runner";
 import { httpRoute } from "#/web/tags";
 
 export const healthz = r
@@ -8,8 +7,7 @@ export const healthz = r
     title: "Health Check",
     description: "Liveness probe endpoint",
   })
-  .inputSchema(z.undefined())
-  .resultSchema(z.object({ status: z.literal("ok") }))
+  .resultSchema(Match.compile({ status: Match.OneOf("ok") }))
   .tags([httpRoute.with({ method: "get", path: "/healthz" })])
   .run(async () => ({ status: "ok" as const }))
   .build();

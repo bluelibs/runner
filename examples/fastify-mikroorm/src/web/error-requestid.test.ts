@@ -3,7 +3,6 @@ import { httpRoute } from "./tags";
 import { fastify } from "./resources/fastify.resource";
 import { fastifyRouter } from "./resources/fastify-router.resource";
 import { r } from "@bluelibs/runner";
-import { z } from "zod";
 import { auth as authResource } from "#/users/resources/auth.resource";
 import { db } from "#/db/resources/db.resource";
 import { HTTPError } from "./http-error";
@@ -13,7 +12,6 @@ describe("error handler and request id", () => {
     const failing = r
       .task("failing")
       .meta({ title: "Failing", description: "Throws HTTPError" })
-      .inputSchema(z.object({ ok: z.boolean().optional() }).optional())
       .tags([httpRoute.with({ method: "post", path: "/fail" })])
       .run(async () => {
         throw new HTTPError(422, "Invalid payload");

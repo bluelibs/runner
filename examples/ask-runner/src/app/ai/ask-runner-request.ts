@@ -2,6 +2,8 @@ import type OpenAI from "openai";
 
 import { buildSystemPrompt } from "./prompt";
 
+export const askRunnerMaxOpenAiOutputTokens = 20_000;
+
 export interface AskRunnerInput {
   query: string;
   ip: string;
@@ -55,7 +57,10 @@ export function buildAskRunnerRequest(
     reasoning: { effort: input.reasoningEffort },
     prompt_cache_key: `ask-runner:${input.model}:${input.aiDocsVersion}`,
     prompt_cache_retention: "24h",
-    max_output_tokens: input.maxOutputTokens,
+    max_output_tokens: Math.min(
+      input.maxOutputTokens,
+      askRunnerMaxOpenAiOutputTokens,
+    ),
     input: [
       {
         role: "system",

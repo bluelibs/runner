@@ -1,73 +1,71 @@
-// Example of how to use Zod with the generic validation interface
-// This file is not part of the core framework but shows integration
+// Example of how to use Runner's built-in check/Match validation.
+// This file is not part of the core framework but shows the native approach.
 
-// First install zod: npm install zod
-// Then use it like this:
+import { Match, check, r } from "@bluelibs/runner";
+import type { IValidationSchema } from "@bluelibs/runner/defs";
 
-import { z } from "zod";
-import { r } from "@bluelibs/runner";
-import type { IValidationSchema } from "@bluelibs/runner";
-
-// Zod schemas already implement IValidationSchema<T>!
-// The .parse() method is compatible with our interface
-
-const UserSchema = z.object({
-  name: z.string().min(2),
-  email: z.string().email(),
-  age: z.number().int().min(0).max(150),
+const UserSchema = Match.compile({
+  name: Match.RegExp(/^.{2,}$/),
+  email: Match.Email,
+  age: Match.Integer,
 });
 
 const createUserTask = r
-  .task("createUserWithZod")
+  .task("createUserWithMatch")
   .inputSchema(UserSchema)
   .run(async (userData) => {
-    return { id: "user-123", ...userData };
+    const safeUser = check(userData, UserSchema);
+
+    return { id: "user-123", ...safeUser };
   })
   .build();
 
-const DatabaseConfigSchema = z.object({
-  host: z.string(),
-  port: z.number().min(1).max(65535),
-  ssl: z.boolean().default(false),
+const DatabaseConfigSchema = Match.compile({
+  host: Match.NonEmptyString,
+  port: Match.Integer,
+  ssl: Match.Optional(Boolean),
 });
 
 const databaseResource = r
-  .resource("databaseWithZod")
+  .resource("databaseWithMatch")
   .configSchema(DatabaseConfigSchema)
   .init(async (config) => {
     return {
       connect: () =>
-        `Connected to ${config.host}:${config.port} (SSL: ${config.ssl})`,
+        `Connected to ${config.host}:${config.port} (SSL: ${config.ssl ?? false})`,
     };
   })
   .build();
 
-const EventPayloadSchema = z.object({
-  userId: z.string(),
-  action: z.enum(["created", "updated", "deleted"]),
+const EventPayloadSchema = Match.compile({
+  userId: Match.NonEmptyString,
+  action: Match.OneOf("created", "updated", "deleted"),
 });
 
 const userActionEvent = r
-  .event("userActionWithZod")
+  .event("userActionWithMatch")
   .payloadSchema(EventPayloadSchema)
   .build();
 
-const TimingConfigSchema = z.object({
-  timeout: z.number().positive(),
-  logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
+const TimingConfigSchema = Match.compile({
+  timeout: Match.PositiveInteger,
+  logLevel: Match.Optional(Match.OneOf("debug", "info", "warn", "error")),
 });
 
 const timingMiddleware = r.middleware
-  .task("timingWithZod")
+  .task("timingWithMatch")
   .configSchema(TimingConfigSchema)
   .run(async ({ next }, _, config) => {
     const start = Date.now();
+
     try {
       const result = await next();
       const duration = Date.now() - start;
-      if (config.logLevel === "debug") {
+
+      if ((config.logLevel ?? "info") === "debug") {
         console.log(`Operation completed in ${duration}ms`);
       }
+
       return result;
     } catch (error) {
       const duration = Date.now() - start;
@@ -77,22 +75,36 @@ const timingMiddleware = r.middleware
   })
   .build();
 
-// Usage examples:
+class StringToNumberSchema implements IValidationSchema<number> {
+  parse(input: unknown): number {
+    const value = check(input, Match.NonEmptyString);
+    const parsed = Number.parseInt(value, 10);
 
-// Zod also works with transformations
-const StringToNumberSchema = z.string().transform((val) => parseInt(val, 10));
+    if (Number.isNaN(parsed)) {
+      throw new Error("Expected a numeric string");
+    }
+
+    return parsed;
+  }
+
+  toJSONSchema() {
+    return {
+      type: "string",
+      pattern: "^-?\\d+$",
+    };
+  }
+}
 
 const mathTask = r
-  .task("mathWithZodTransform")
-  .inputSchema(StringToNumberSchema)
+  .task("mathWithCustomParse")
+  .inputSchema(new StringToNumberSchema())
   .run(async (input: number) => {
     return input * 2;
   })
   .build();
 
-// And with custom validation libraries that implement IValidationSchema
 class CustomValidator<T> implements IValidationSchema<T> {
-  constructor(private validator: (input: unknown) => T) {}
+  constructor(private readonly validator: (input: unknown) => T) {}
 
   parse(input: unknown): T {
     return this.validator(input);
@@ -101,10 +113,8 @@ class CustomValidator<T> implements IValidationSchema<T> {
 
 const customSchema = new CustomValidator<{ value: string }>(
   (input: unknown) => {
-    if (typeof input === "object" && input !== null && "value" in input) {
-      return input as { value: string };
-    }
-    throw new Error("Invalid input");
+    const parsed = check(input, Match.compile({ value: Match.NonEmptyString }));
+    return parsed;
   },
 );
 

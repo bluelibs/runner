@@ -4,15 +4,14 @@ import { fastify } from "./fastify.resource";
 import { fastifyRouter } from "./fastify-router.resource";
 import { db } from "#/db/resources/db.resource";
 import { auth as authResource } from "#/users/resources/auth.resource";
-import { r } from "@bluelibs/runner";
-import { z } from "zod";
+import { Match, r } from "@bluelibs/runner";
 
 describe("fastify error handler branches", () => {
   it("handles validation error (400), statusCode errors, and fallback 500", async () => {
     const badInput = r
       .task("badInput")
       .meta({ title: "BadInput", description: "validation" })
-      .inputSchema(z.object({ must: z.string() }))
+      .inputSchema(Match.compile({ must: Match.NonEmptyString }))
       .tags([httpRoute.with({ method: "post", path: "/bad-input" })])
       .run(async () => "ok")
       .build();
@@ -20,7 +19,6 @@ describe("fastify error handler branches", () => {
     const statusErr = r
       .task("status")
       .meta({ title: "StatusErr", description: "status code" })
-      .inputSchema(z.undefined())
       .tags([httpRoute.with({ method: "get", path: "/status-err" })])
       .run(async () => {
         const e = new Error("nope");
@@ -32,7 +30,6 @@ describe("fastify error handler branches", () => {
     const boom = r
       .task("boom")
       .meta({ title: "Boom", description: "generic" })
-      .inputSchema(z.undefined())
       .tags([httpRoute.with({ method: "get", path: "/boom" })])
       .run(async () => {
         throw new Error("boom");
@@ -45,7 +42,6 @@ describe("fastify error handler branches", () => {
         title: "NameValidation",
         description: "name === ValidationError",
       })
-      .inputSchema(z.undefined())
       .tags([httpRoute.with({ method: "get", path: "/name-validation" })])
       .run(async () => {
         const e = new Error("bad");

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import type { IValidationSchema, MatchPattern } from "@bluelibs/runner/defs";
 
 // Basic route config shape extracted from httpRoute tag.
 export interface HttpRouteConfig {
@@ -11,10 +11,10 @@ export interface HttpRouteConfig {
 export type HttpAuthMode = "public" | "required" | "optional";
 export type HttpInputFrom = "body" | "merged";
 
-// Task with optional attached zod schemas (convention used in examples)
+// Task with optional attached validation schemas (convention used in examples)
 export interface TaskWithSchemas<I = any, R = any> {
-  inputSchema?: z.ZodTypeAny;
-  resultSchema?: z.ZodTypeAny;
+  inputSchema?: IValidationSchema<I> | MatchPattern;
+  resultSchema?: IValidationSchema<R> | MatchPattern;
   meta?: {
     title?: string;
     description?: string;

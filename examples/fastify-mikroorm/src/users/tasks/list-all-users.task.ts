@@ -3,8 +3,7 @@
  * - Namespace: users
  * - File: src/users/tasks/list-all-users.task.ts
  */
-import { r } from "@bluelibs/runner";
-import { z } from "zod";
+import { Match, r } from "@bluelibs/runner";
 import { httpRoute } from "#/web/tags";
 import { db } from "#/db/resources";
 import { authorize } from "#/web/middleware/authorize.middleware";
@@ -23,9 +22,12 @@ export const listAllUsers = r
     title: "List All Users",
     description: "Retrieve all users from the database for admin purposes",
   })
-  .inputSchema(z.undefined())
   .resultSchema(
-    z.array(z.object({ id: z.string(), name: z.string(), email: z.string() })),
+    Match.ArrayOf({
+      id: Match.NonEmptyString,
+      name: Match.NonEmptyString,
+      email: Match.Email,
+    }),
   )
   .tags([
     httpRoute.with({

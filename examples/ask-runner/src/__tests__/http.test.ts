@@ -317,21 +317,23 @@ describe("ask-runner http", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
     expect(response.headers.get("content-security-policy")).toContain(
-      "script-src 'unsafe-inline' https://cdn.jsdelivr.net",
+      "script-src 'self' 'unsafe-inline'",
     );
     expect(response.headers.get("x-frame-options")).toBe("DENY");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.text).toContain("Ask Runner Stream Viewer");
-    expect(response.text).toContain("https://cdn.jsdelivr.net/npm/marked@");
-    expect(response.text).toContain("https://cdn.jsdelivr.net/npm/dompurify@");
-    expect(response.text).toContain('integrity="sha384-');
-    expect(response.text).toContain('crossorigin="anonymous"');
+    expect(response.text).toContain("/__ask-runner-assets/marked/marked.esm.js");
+    expect(response.text).toContain("/__ask-runner-assets/dompurify/purify.es.mjs");
+    expect(response.text).toContain("/__ask-runner-assets/mermaid/mermaid.esm.min.mjs");
     expect(response.text).toContain(
       'fetch("/stream?query=" + encodeURIComponent(query)',
     );
     expect(response.text).toContain(
       "new URLSearchParams(window.location.search)",
     );
+    expect(response.text).toContain('id="copy-markdown-button"');
+    expect(response.text).toContain("navigator.clipboard.writeText(markdown)");
+    expect(response.text).toContain("language-mermaid");
   });
 
   test("query request uses req.ip instead of manually trusting x-forwarded-for", () => {

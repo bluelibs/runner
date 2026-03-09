@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { Match } from "@bluelibs/runner";
 import { HttpRouteConfig, TaskWithSchemas } from "./types";
 
 interface RouteSchema {
@@ -7,6 +7,19 @@ interface RouteSchema {
   summary?: string;
   description?: string;
   params?: any;
+}
+
+function toJsonSchema(schema: unknown): any {
+  if (
+    schema &&
+    typeof schema === "object" &&
+    "toJSONSchema" in schema &&
+    typeof schema.toJSONSchema === "function"
+  ) {
+    return schema.toJSONSchema();
+  }
+
+  return Match.toJSONSchema(schema as never);
 }
 
 // Remove $schema marker to keep Fastify/OpenAPI integrations cleaner.
@@ -32,7 +45,7 @@ export function buildRouteSchema(
   try {
     const { inputSchema, resultSchema } = task as TaskWithSchemas;
     if (inputSchema && config.method.toLowerCase() !== "get") {
-      routeSchema.body = stripSchemaMarkers(z.toJSONSchema(inputSchema));
+      routeSchema.body = stripSchemaMarkers(toJsonSchema(inputSchema));
     }
     // Build path params schema if route contains params like /user/:id
     const paramNames = (config.path.match(/:([A-Za-z0-9_]+)/g) || []).map((m) =>
@@ -43,7 +56,7 @@ export function buildRouteSchema(
       const required: string[] = [];
       let json: any = undefined;
       try {
-        if (inputSchema) json = z.toJSONSchema(inputSchema);
+        if (inputSchema) json = toJsonSchema(inputSchema);
       } catch {
         // ignore
       }
@@ -56,7 +69,7 @@ export function buildRouteSchema(
     }
     if (resultSchema) {
       routeSchema.response = {
-        200: stripSchemaMarkers(z.toJSONSchema(resultSchema)),
+        200: stripSchemaMarkers(toJsonSchema(resultSchema)),
       };
     }
   } catch {

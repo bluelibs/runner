@@ -1,5 +1,4 @@
-import { r } from "@bluelibs/runner";
-import { z } from "zod";
+import { Match, r } from "@bluelibs/runner";
 import { httpRoute } from "#/web/tags";
 import { db } from "#/db/resources";
 
@@ -9,8 +8,7 @@ export const readyz = r
     title: "Readiness Check",
     description: "Readiness probe endpoint (checks DB)",
   })
-  .inputSchema(z.undefined())
-  .resultSchema(z.object({ status: z.literal("ok") }))
+  .resultSchema(Match.compile({ status: Match.OneOf("ok") }))
   .tags([httpRoute.with({ method: "get", path: "/readyz" })])
   .dependencies({ db })
   .run(async (_input, { db }) => {

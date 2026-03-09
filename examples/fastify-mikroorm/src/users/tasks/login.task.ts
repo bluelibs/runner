@@ -1,5 +1,4 @@
-import { r } from "@bluelibs/runner";
-import { z } from "zod";
+import { Match, r } from "@bluelibs/runner";
 import { httpRoute } from "#/web/tags";
 import { db } from "#/db/resources";
 import { auth as authResource } from "#/users/resources/auth.resource";
@@ -14,20 +13,20 @@ export const loginUser = r
       "Authenticate user with email and password, returning JWT token and user details",
   })
   .inputSchema(
-    z.object({
-      email: z.string().email(),
-      password: z.string().min(1),
+    Match.compile({
+      email: Match.Email,
+      password: Match.NonEmptyString,
     }),
   )
   .resultSchema(
-    z
-      .object({
-        token: z.string(),
-        user: z
-          .object({ id: z.string(), name: z.string(), email: z.string() })
-          .strict(),
-      })
-      .strict(),
+    Match.compile({
+      token: Match.NonEmptyString,
+      user: {
+        id: Match.NonEmptyString,
+        name: Match.NonEmptyString,
+        email: Match.Email,
+      },
+    }),
   )
   .tags([
     httpRoute.with({ method: "post", path: "/auth/login", auth: "public" }),

@@ -1,12 +1,72 @@
-// examples/express-openapi-sqlite/src/tasks/routeRegistration.ts
-import { events, r, resources } from "@bluelibs/runner";
-import { ITask } from "@bluelibs/runner/defs";
+import { events, Match, r, resources } from "@bluelibs/runner";
+import { ITask, ValidationSchemaInput } from "@bluelibs/runner/defs";
 import { Request, Response } from "express";
 import { httpTag } from "../tags/http.tag";
 import { RequestContext, RequestData } from "../contexts/request.context";
 import { expressServerResource } from "../resources/express.resource";
 import swaggerUi from "swagger-ui-express";
-import { createDocument } from "zod-openapi";
+
+function stripSchemaMarkers(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(stripSchemaMarkers);
+
+  const copy: Record<string, unknown> = {};
+
+  for (const [key, child] of Object.entries(value)) {
+    if (key === "$schema") continue;
+    copy[key] = stripSchemaMarkers(child);
+  }
+
+  return copy;
+}
+
+function toOpenApiPath(path: string) {
+  return path.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
+}
+
+function toJsonSchema(
+  schema?: ValidationSchemaInput,
+): Record<string, unknown> | undefined {
+  if (!schema) return undefined;
+
+  if (
+    typeof schema === "object" &&
+    schema !== null &&
+    "toJSONSchema" in schema &&
+    typeof schema.toJSONSchema === "function"
+  ) {
+    return stripSchemaMarkers(schema.toJSONSchema()) as Record<string, unknown>;
+  }
+
+  return stripSchemaMarkers(Match.toJSONSchema(schema as never)) as Record<
+    string,
+    unknown
+  >;
+}
+
+function schemaToParameters(
+  schema: Record<string, unknown> | undefined,
+  location: "path" | "query",
+) {
+  if (!schema) return [];
+
+  const properties = schema.properties;
+  const requiredList = Array.isArray(schema.required) ? schema.required : [];
+  const requiredSet = new Set(
+    requiredList.filter((value): value is string => typeof value === "string"),
+  );
+
+  if (!properties || typeof properties !== "object") {
+    return [];
+  }
+
+  return Object.entries(properties).map(([name, parameterSchema]) => ({
+    in: location,
+    name,
+    required: location === "path" ? true : requiredSet.has(name),
+    schema: parameterSchema,
+  }));
+}
 
 export const routeRegistrationHook = r
   .hook("routeRegistration")
@@ -19,7 +79,7 @@ export const routeRegistrationHook = r
   })
   .run(async (_, { httpTag, taskRunner, expressServer, logger }) => {
     const { app, port } = expressServer;
-    const paths: Record<string, any> = {};
+    const paths: Record<string, Record<string, unknown>> = {};
 
     let routesRegistered = 0;
 
@@ -80,40 +140,50 @@ export const routeRegistrationHook = r
       logger.info(`📍 ${method} ${path} -> ${String(task.id)}`);
       routesRegistered++;
 
-      // Build zod-openapi path item
-      if (!paths[path]) paths[path] = {};
-      const operation: any = {
+      const paramsJsonSchema = toJsonSchema(paramsSchema);
+      const queryJsonSchema = toJsonSchema(querySchema);
+      const requestBodyJsonSchema = toJsonSchema(requestBodySchema);
+      const responseJsonSchema = toJsonSchema(responseSchema);
+      const openApiPath = toOpenApiPath(path);
+      const parameters = [
+        ...schemaToParameters(paramsJsonSchema, "path"),
+        ...schemaToParameters(queryJsonSchema, "query"),
+      ];
+
+      if (!paths[openApiPath]) paths[openApiPath] = {};
+
+      const operation: Record<string, unknown> = {
         summary,
         description,
         tags,
         responses: {
           "200": {
             description: "OK",
-            content: responseSchema
-              ? { "application/json": { schema: responseSchema } }
+            content: responseJsonSchema
+              ? { "application/json": { schema: responseJsonSchema } }
               : undefined,
           },
         },
       };
+
       if (requiresAuth) {
         operation.security = [{ BearerAuth: [] }];
       }
-      const requestParams: any = {};
-      if (paramsSchema) requestParams.path = paramsSchema;
-      if (querySchema) requestParams.query = querySchema;
-      if (Object.keys(requestParams).length > 0) {
-        operation.requestParams = requestParams;
+
+      if (parameters.length > 0) {
+        operation.parameters = parameters;
       }
-      if (requestBodySchema && method.toLowerCase() !== "get") {
+
+      if (requestBodyJsonSchema && method.toLowerCase() !== "get") {
         operation.requestBody = {
-          content: { "application/json": { schema: requestBodySchema } },
+          content: { "application/json": { schema: requestBodyJsonSchema } },
         };
       }
-      paths[path][method.toLowerCase()] = operation;
+
+      paths[openApiPath][method.toLowerCase()] = operation;
     });
 
-    // Build and serve spec (OpenAPI 3.1 via zod-openapi)
-    const openApiSpec = createDocument({
+    const openApiSpec = {
       openapi: "3.1.0",
       info: {
         title: "BlueLibs Runner Express API",
@@ -135,7 +205,7 @@ export const routeRegistrationHook = r
         },
       },
       paths,
-    });
+    };
 
     logger.info(`🔗 Registered a total of ${routesRegistered} routes`);
 
