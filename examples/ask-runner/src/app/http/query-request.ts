@@ -1,7 +1,5 @@
-import type { Request, Response } from "express";
+import type { Request } from "express";
 
-import type { BudgetLedger } from "../budget/budget-ledger.resource";
-import { dayKey, hourBucket, minuteBucket } from "../budget/budget-ledger.resource";
 import { buildSystemPrompt, estimateTokenCount } from "../ai/prompt";
 
 export interface QueryRouteDeps {
@@ -21,53 +19,19 @@ export interface QueryRouteDeps {
     content: string;
     version: string;
   };
-  budgetLedger: BudgetLedger;
 }
 
 export interface QueryRequestContext {
-  day: string;
   ip: string;
   query: string;
-  estimatedCostUsd: number;
 }
 
-export function prepareQueryRequest(
-  req: Request,
-  res: Response,
-  deps: QueryRouteDeps,
-): QueryRequestContext | null {
-  const query = String(req.query.query ?? "").trim();
-  if (query.length === 0) {
-    res.status(400).json({ error: "Query must not be empty." });
-    return null;
-  }
-
-  if (query.length > deps.appConfig.maxInputChars) {
-    res.status(400).json({ error: `Query exceeds ${deps.appConfig.maxInputChars} characters.` });
-    return null;
-  }
-
-  const now = new Date();
-  const day = dayKey(now);
-  const hour = hourBucket(now);
-  const minute = minuteBucket(now);
+export function prepareQueryRequest(req: Request): QueryRequestContext {
+  const query = String(req.query.query ?? "");
   const ip = requestIp(req);
-
-  deps.budgetLedger.enforceIpLimit({ day, minuteBucket: minute, hourBucket: hour, ip });
-  const estimatedCostUsd = estimateProjectedCostUsd(
-    deps.aiDocsPrompt.content,
-    query,
-    deps.appConfig.maxOutputTokens,
-    deps.appConfig.tokenCharsEstimate,
-    deps.appConfig.pricing,
-  );
-  deps.budgetLedger.ensureDayCanSpend({ day, projectedCostUsd: estimatedCostUsd });
-
   return {
-    day,
     ip,
     query,
-    estimatedCostUsd,
   };
 }
 
@@ -94,10 +58,5 @@ export function estimateProjectedCostUsd(
 }
 
 function requestIp(req: Request): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.length > 0) {
-    return forwarded.split(",")[0].trim();
-  }
-
   return req.ip || req.socket.remoteAddress || "unknown";
 }

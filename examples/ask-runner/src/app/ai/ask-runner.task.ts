@@ -2,6 +2,10 @@ import { Match, Semaphore, middleware, r } from "@bluelibs/runner";
 
 import { aiDocsPrompt } from "./ai-docs.resource";
 import {
+  askRunnerBudgetMiddleware,
+  streamWriterSchema,
+} from "./ask-runner.middleware";
+import {
   type AskRunnerInput,
   type AskRunnerOutput,
   type AskRunnerStreamResult,
@@ -25,7 +29,8 @@ export const openAiSemaphore = r
   .build();
 
 const askRunnerInputSchema = Match.compile({
-  query: Match.NonEmptyString,
+  query: String,
+  ip: Match.NonEmptyString,
 });
 
 export const askRunnerTask = r
@@ -38,6 +43,7 @@ export const askRunnerTask = r
     openAiSemaphore,
   })
   .middleware([
+    askRunnerBudgetMiddleware,
     middleware.task.timeout.with({ ttl: 45000 }),
     middleware.task.retry.with({
       retries: 2,
@@ -55,11 +61,6 @@ export const askRunnerTask = r
       { query },
       { appConfig, aiDocsPrompt, openAiClient, openAiSemaphore },
     ): Promise<AskRunnerOutput> => {
-      const normalizedQuery = query.trim();
-      if (normalizedQuery.length === 0) {
-        invalidQueryError.throw({ message: "Query must not be empty." });
-      }
-
       const response = await openAiSemaphore.withPermit(() =>
         openAiClient.responses.create(
           buildAskRunnerRequest({
@@ -69,7 +70,7 @@ export const askRunnerTask = r
             maxOutputTokens: appConfig.maxOutputTokens,
             aiDocsContent: aiDocsPrompt.content,
             aiDocsVersion: aiDocsPrompt.version,
-            query: normalizedQuery,
+            query,
           }),
         ),
       );
@@ -99,8 +100,9 @@ export const streamAskRunnerTask = r
   .task<StreamAskRunnerInput>("streamAskRunner")
   .inputSchema(
     Match.compile({
-      query: Match.NonEmptyString,
-      writer: Match.Any,
+      query: String,
+      ip: Match.NonEmptyString,
+      writer: streamWriterSchema,
     }),
   )
   .dependencies({
@@ -110,6 +112,7 @@ export const streamAskRunnerTask = r
     openAiSemaphore,
   })
   .middleware([
+    askRunnerBudgetMiddleware,
     middleware.task.timeout.with({ ttl: 45000 }),
     middleware.task.circuitBreaker.with({
       failureThreshold: 5,
@@ -122,11 +125,6 @@ export const streamAskRunnerTask = r
       { query, writer },
       { appConfig, aiDocsPrompt, openAiClient, openAiSemaphore },
     ): Promise<AskRunnerStreamResult> => {
-      const normalizedQuery = query.trim();
-      if (normalizedQuery.length === 0) {
-        invalidQueryError.throw({ message: "Query must not be empty." });
-      }
-
       const stream = await openAiSemaphore.withPermit(() =>
         openAiClient.responses.create({
           ...buildAskRunnerRequest({
@@ -136,7 +134,7 @@ export const streamAskRunnerTask = r
             maxOutputTokens: appConfig.maxOutputTokens,
             aiDocsContent: aiDocsPrompt.content,
             aiDocsVersion: aiDocsPrompt.version,
-            query: normalizedQuery,
+            query,
           }),
           stream: true,
         }),

@@ -4,6 +4,7 @@ import { buildSystemPrompt } from "./prompt";
 
 export interface AskRunnerInput {
   query: string;
+  ip: string;
 }
 
 export interface AskRunnerOutput {

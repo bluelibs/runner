@@ -1,11 +1,14 @@
-import type { Request, Response } from "express";
+import http from "http";
 
-import { assertAdminSecret, type BudgetLedger } from "../app/budget/budget-ledger.resource";
+import {
+  assertAdminSecret,
+  type BudgetLedger,
+} from "../app/budget/budget-ledger.resource";
+import { createHttpApp } from "../app/http/http.resource";
 import {
   estimateProjectedCostUsd,
-  handleQueryRequest,
-  handleStreamQueryRequest,
-} from "../app/http/http.resource";
+  prepareQueryRequest,
+} from "../app/http/query-request";
 
 describe("ask-runner http", () => {
   function createLedger(): BudgetLedger {
@@ -47,74 +50,12 @@ describe("ask-runner http", () => {
     };
   }
 
-  function createResponse() {
-    const response = {
-      statusCode: 200,
-      body: undefined as unknown,
-      contentType: undefined as string | undefined,
-      headers: {} as Record<string, string>,
-      chunks: [] as string[],
-      status(code: number) {
-        this.statusCode = code;
-        return this;
-      },
-      json(payload: unknown) {
-        this.body = payload;
-        return this;
-      },
-      type(value: string) {
-        this.contentType = value;
-        return this;
-      },
-      setHeader(name: string, value: string) {
-        this.headers[name] = value;
-        return this;
-      },
-      write(payload: string, callback?: (error?: Error | null) => void) {
-        this.chunks.push(payload);
-        if (callback) {
-          callback(null);
-        }
-        return true;
-      },
-      send(payload: unknown) {
-        this.body = payload;
-        return this;
-      },
-      end(payload?: string) {
-        if (payload) {
-          this.chunks.push(payload);
-        }
-        this.body = this.chunks.join("");
-        return this;
-      },
-    };
-
-    return response as unknown as Response & {
-      statusCode: number;
-      body: unknown;
-      contentType?: string;
-      headers: Record<string, string>;
-      chunks: string[];
-    };
-  }
-
-  function createRequest(query: string, ip: string = "127.0.0.1") {
-    return {
-      query: { query },
-      headers: {},
-      ip,
-      socket: { remoteAddress: ip },
-      header: jest.fn(() => undefined),
-    } as unknown as Request;
-  }
-
-  test("handler returns markdown", async () => {
+  function createApp(overrides?: Partial<Parameters<typeof createHttpApp>[0]>) {
     const ledger = createLedger();
-    const response = createResponse();
 
-    await handleQueryRequest(createRequest("lifecycle"), response, {
+    const app = createHttpApp({
       appConfig: {
+        adminSecret: "top-secret",
         trustProxy: true,
         maxInputChars: 20,
         maxOutputTokens: 300,
@@ -126,39 +67,114 @@ describe("ask-runner http", () => {
         content: "Runner docs",
         version: "v1",
       },
-      budgetLedger: ledger,
-      runTask: async ({ query }) => ({
+      runAskRunnerTask: overrides?.runAskRunnerTask ?? (async ({ query }) => ({
         markdown: `# ${query}`,
         model: "gpt-5-mini",
         usage: { input_tokens: 100, output_tokens: 50 },
-      }),
+      })),
+      runStreamAskRunnerTask:
+        overrides?.runStreamAskRunnerTask ??
+        (async ({ query, writer }) => {
+          await writer.write(`# ${query}`);
+          await writer.write("\n\nstream");
+          return {
+            model: "gpt-5-mini",
+            usage: { input_tokens: 100, output_tokens: 50 },
+          };
+        }),
+      runHealthTask:
+        overrides?.runHealthTask ??
+        (async () => ({
+          status: "ok" as const,
+          budget: ledger.getSnapshot("2026-03-09"),
+          state: {
+            storage: "memory" as const,
+            durable: false as const,
+            note: "Budget, rate-limit, and admin stop state reset when the process restarts.",
+          },
+        })),
+      runBudgetSnapshotTask:
+        overrides?.runBudgetSnapshotTask ?? (async () => ledger.getSnapshot("2026-03-09")),
+      runStopBudgetForDayTask:
+        overrides?.runStopBudgetForDayTask ??
+        (async () => ledger.stopForDay("2026-03-09", "Stopped manually.")),
+      runResumeBudgetTask:
+        overrides?.runResumeBudgetTask ?? (async () => ledger.resume("2026-03-09")),
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.contentType).toBe("text/markdown; charset=utf-8");
-    expect(response.body).toBe("# lifecycle");
-    expect(ledger.recordUsage).toHaveBeenCalled();
+    return { app };
+  }
+
+  async function request(app: ReturnType<typeof createHttpApp>, input: {
+    method: "GET" | "POST";
+    path: string;
+    headers?: Record<string, string>;
+    body?: unknown;
+  }) {
+    const server = http.createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+    const address = server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Expected an ephemeral HTTP port.");
+    }
+
+    const response = await fetch(`http://127.0.0.1:${address.port}${input.path}`, {
+      method: input.method,
+      headers: input.headers,
+      body: input.body ? JSON.stringify(input.body) : undefined,
+    });
+    const text = await response.text();
+
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+
+    return {
+      status: response.status,
+      headers: response.headers,
+      text,
+    };
+  }
+
+  test("query route passes parsed input to the task", async () => {
+    const runAskRunnerTask = jest.fn(async ({ query }: { query: string; ip: string }) => ({
+      markdown: `# ${query}`,
+      model: "gpt-5-mini",
+      usage: { input_tokens: 100, output_tokens: 50 },
+    }));
+
+    const { app } = createApp({ runAskRunnerTask });
+    const response = await request(app, {
+      method: "GET",
+      path: "/?query=lifecycle",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/markdown");
+    expect(response.text).toBe("# lifecycle");
+    expect(runAskRunnerTask).toHaveBeenCalledWith({
+      query: "lifecycle",
+      ip: "127.0.0.1",
+    });
   });
 
-  test("stream handler writes markdown chunks and records final usage", async () => {
-    const ledger = createLedger();
-    const response = createResponse();
-
-    await handleStreamQueryRequest(createRequest("lifecycle"), response, {
-      appConfig: {
-        trustProxy: true,
-        maxInputChars: 20,
-        maxOutputTokens: 300,
-        tokenCharsEstimate: 4,
-        pricing: { inputPer1M: 0.25, cachedInputPer1M: 0.025, outputPer1M: 2 },
-        model: "gpt-5-mini",
-      },
-      aiDocsPrompt: {
-        content: "Runner docs",
-        version: "v1",
-      },
-      budgetLedger: ledger,
-      runStreamTask: async ({ query, writer }) => {
+  test("stream route passes parsed input and writer to the task", async () => {
+    const runStreamAskRunnerTask = jest.fn(
+      async ({
+        query,
+        writer,
+      }: {
+        query: string;
+        ip: string;
+        writer: { write(chunk: string): Promise<void> };
+      }) => {
         await writer.write(`# ${query}`);
         await writer.write("\n\nstream");
         return {
@@ -166,95 +182,136 @@ describe("ask-runner http", () => {
           usage: { input_tokens: 100, output_tokens: 50 },
         };
       },
+    );
+
+    const { app } = createApp({ runStreamAskRunnerTask });
+    const response = await request(app, {
+      method: "GET",
+      path: "/stream?query=lifecycle",
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.headers["Content-Type"]).toBe("text/markdown; charset=utf-8");
-    expect(response.body).toBe("# lifecycle\n\nstream");
-    expect(ledger.recordUsage).toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/markdown");
+    expect(response.text).toBe("# lifecycle\n\nstream");
+    expect(runStreamAskRunnerTask).toHaveBeenCalled();
   });
 
-  test("stream handler rejects empty queries before opening the stream", async () => {
-    const response = createResponse();
+  test("query request uses req.ip instead of manually trusting x-forwarded-for", () => {
+    const request = prepareQueryRequest({
+      query: { query: "lifecycle" },
+      ip: "10.0.0.5",
+      headers: { "x-forwarded-for": "203.0.113.10" },
+      socket: { remoteAddress: "127.0.0.1" },
+    } as any);
 
-    await handleStreamQueryRequest(createRequest(""), response, {
-      appConfig: {
-        trustProxy: true,
-        maxInputChars: 20,
-        maxOutputTokens: 300,
-        tokenCharsEstimate: 4,
-        pricing: { inputPer1M: 0.25, cachedInputPer1M: 0.025, outputPer1M: 2 },
-        model: "gpt-5-mini",
-      },
-      aiDocsPrompt: {
-        content: "Runner docs",
-        version: "v1",
-      },
-      budgetLedger: createLedger(),
-      runStreamTask: async () => ({
-        model: "gpt-5-mini",
-        usage: null,
-      }),
+    expect(request).toEqual({
+      query: "lifecycle",
+      ip: "10.0.0.5",
     });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body).toEqual({ error: "Query must not be empty." });
   });
 
-  test("handler rejects empty queries", async () => {
-    const response = createResponse();
+  test("health route returns health task payload", async () => {
+    const runHealthTask = jest.fn(async () => ({
+      status: "ok" as const,
+      budget: {
+        day: "2026-03-09",
+        spentUsd: 0,
+        requestCount: 0,
+        stopped: false,
+        stopReason: null,
+        remainingUsd: 1,
+      },
+      state: {
+        storage: "memory" as const,
+        durable: false as const,
+        note: "Budget, rate-limit, and admin stop state reset when the process restarts.",
+      },
+    }));
 
-    await handleQueryRequest(createRequest(""), response, {
-      appConfig: {
-        trustProxy: true,
-        maxInputChars: 20,
-        maxOutputTokens: 300,
-        tokenCharsEstimate: 4,
-        pricing: { inputPer1M: 0.25, cachedInputPer1M: 0.025, outputPer1M: 2 },
-        model: "gpt-5-mini",
-      },
-      aiDocsPrompt: {
-        content: "Runner docs",
-        version: "v1",
-      },
-      budgetLedger: createLedger(),
-      runTask: async () => ({
-        markdown: "# ignored",
-        model: "gpt-5-mini",
-        usage: null,
-      }),
+    const { app } = createApp({ runHealthTask });
+    const response = await request(app, {
+      method: "GET",
+      path: "/health",
     });
 
-    expect(response.statusCode).toBe(400);
-    expect(response.body).toEqual({ error: "Query must not be empty." });
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.text)).toEqual(await runHealthTask.mock.results[0]?.value);
   });
 
-  test("handler rejects oversized queries", async () => {
-    const response = createResponse();
+  test("admin budget route runs budget snapshot task after auth", async () => {
+    const runBudgetSnapshotTask = jest.fn(async ({ day }: { day: string }) => ({
+      day,
+      spentUsd: 0,
+      requestCount: 0,
+      stopped: false,
+      stopReason: null,
+      remainingUsd: 1,
+    }));
 
-    await handleQueryRequest(createRequest("this query is too long"), response, {
-      appConfig: {
-        trustProxy: true,
-        maxInputChars: 5,
-        maxOutputTokens: 300,
-        tokenCharsEstimate: 4,
-        pricing: { inputPer1M: 0.25, cachedInputPer1M: 0.025, outputPer1M: 2 },
-        model: "gpt-5-mini",
-      },
-      aiDocsPrompt: {
-        content: "Runner docs",
-        version: "v1",
-      },
-      budgetLedger: createLedger(),
-      runTask: async () => ({
-        markdown: "# ignored",
-        model: "gpt-5-mini",
-        usage: null,
-      }),
+    const { app } = createApp({ runBudgetSnapshotTask });
+    const response = await request(app, {
+      method: "GET",
+      path: "/admin/budget",
+      headers: { "x-admin-secret": "top-secret" },
     });
 
-    expect(response.statusCode).toBe(400);
-    expect(response.body).toEqual({ error: "Query exceeds 5 characters." });
+    expect(response.status).toBe(200);
+    expect(runBudgetSnapshotTask).toHaveBeenCalled();
+    expect(JSON.parse(response.text).day).toBe("2026-03-09");
+  });
+
+  test("admin stop route runs stop task with default reason", async () => {
+    const runStopBudgetForDayTask = jest.fn(async ({ day, reason }: { day: string; reason: string }) => ({
+      day,
+      spentUsd: 0,
+      requestCount: 0,
+      stopped: true,
+      stopReason: reason,
+      remainingUsd: 1,
+    }));
+
+    const { app } = createApp({ runStopBudgetForDayTask });
+    const response = await request(app, {
+      method: "POST",
+      path: "/admin/stop-for-day",
+      headers: {
+        "content-type": "application/json",
+        "x-admin-secret": "top-secret",
+      },
+      body: {},
+    });
+
+    expect(response.status).toBe(200);
+    expect(runStopBudgetForDayTask).toHaveBeenCalledWith({
+      day: "2026-03-09",
+      reason: "Stopped manually.",
+    });
+    expect(JSON.parse(response.text).stopReason).toBe("Stopped manually.");
+  });
+
+  test("admin resume route runs resume task after auth", async () => {
+    const runResumeBudgetTask = jest.fn(async ({ day }: { day: string }) => ({
+      day,
+      spentUsd: 0,
+      requestCount: 0,
+      stopped: false,
+      stopReason: null,
+      remainingUsd: 1,
+    }));
+
+    const { app } = createApp({ runResumeBudgetTask });
+    const response = await request(app, {
+      method: "POST",
+      path: "/admin/resume",
+      headers: {
+        "content-type": "application/json",
+        "x-admin-secret": "top-secret",
+      },
+      body: {},
+    });
+
+    expect(response.status).toBe(200);
+    expect(runResumeBudgetTask).toHaveBeenCalled();
   });
 
   test("admin secret validation fails fast", () => {
