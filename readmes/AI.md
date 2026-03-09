@@ -174,6 +174,11 @@ Health reporting:
 - `report` entries look like `{ id, initialized, status, message?, details? }`, where `id` is the canonical global runtime id.
 - Use `report.find(resourceOrId).status` when you want one specific resource entry.
   It returns the entry or throws if that resource is not present in the report.
+- `runtime.pause()` is a synchronous, idempotent admission switch.
+  It stops new runtime/resource-origin task and event admissions immediately, while already-running tasks, hooks, and middleware can finish and continue their own internal work.
+- `runtime.state` is `"running" | "paused"`.
+- `runtime.resume()` reopens admissions immediately.
+- `runtime.recoverWhen({ everyMs, check })` registers paused-state recovery conditions; Runner auto-resumes only after all active conditions for the current pause episode pass (return true).
 - Tasks can opt into runtime health gating with `tags.failWhenUnhealthy.with([db, cache])`.
   It blocks only when one of those resources reports `unhealthy`; `degraded` still runs, bootstrap-time task calls are not gated, and sleeping lazy resources stay skipped.
 

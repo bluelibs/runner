@@ -95,6 +95,18 @@ export const shutdownLockdownError = error<DefaultErrorType>(
   )
   .build();
 
+export const runtimeAdmissionsPausedError = error<DefaultErrorType>(
+  "runner.errors.runtimeAdmissionsPaused",
+)
+  .format(
+    () =>
+      "Runtime is paused and no new task runs or event emissions are accepted.",
+  )
+  .remediation(
+    "Wait for runtime.resume() or recovery conditions to reopen admissions before submitting new work.",
+  )
+  .build();
+
 export const runtimeRootNotAvailableError = error<DefaultErrorType>(
   "runner.errors.runtimeRootNotAvailable",
 )
@@ -141,6 +153,19 @@ export const runtimeHealthDuringBootstrapError = error<DefaultErrorType>(
   )
   .build();
 
+export const runtimeAdmissionControlDuringBootstrapError =
+  error<DefaultErrorType>(
+    "runner.errors.runtimeAdmissionControlDuringBootstrap",
+  )
+    .format(
+      () =>
+        "Runtime pause/resume controls are not available during bootstrap. Wait for run() to finish initialization.",
+    )
+    .remediation(
+      "Call pause(), resume(), or recoverWhen() only after run(...) resolves and before dispose() starts.",
+    )
+    .build();
+
 export const runtimeTimersNotAcceptingError = error<DefaultErrorType>(
   "runner.errors.runtimeTimersNotAccepting",
 )
@@ -178,6 +203,14 @@ export const healthReportEntryNotFoundError = error<
       `Ensure resource "${resourceId}" was included in getHealth(...), defines health(), and was not skipped as a sleeping lazy resource.`,
   )
   .build();
+
+export const runtimeRecoverWhenRequiresPausedStateError =
+  error<DefaultErrorType>("runner.errors.runtimeRecoverWhenRequiresPausedState")
+    .format(() => "runtime.recoverWhen() requires the runtime to be paused.")
+    .remediation(
+      "Call runtime.pause() first, then register recovery conditions with runtime.recoverWhen(...).",
+    )
+    .build();
 
 // Runtime API access blocked — target is not in the root resource's exported set
 export const runtimeAccessViolationError = error<

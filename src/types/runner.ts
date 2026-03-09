@@ -16,11 +16,27 @@ export interface IHealthReporter {
   ): Promise<IResourceHealthReport>;
 }
 
+export type RuntimeState = "running" | "paused";
+
+export interface IRuntimeRecoveryHandle {
+  cancel(): void;
+  id: string;
+}
+
+export interface IRuntimeRecoveryOptions {
+  id?: string;
+  everyMs: number;
+  check: () => boolean | Promise<boolean>;
+}
+
 /**
  * Common interface for the Runner runtime instance.
  * Provides access to tasks, events, resources, and lifecycle management.
  */
 export interface IRuntime<V = unknown> extends IHealthReporter {
+  /** Current admission state for new work. */
+  readonly state: RuntimeState;
+
   /**
    * Executes a registered task.
    */
@@ -69,6 +85,15 @@ export interface IRuntime<V = unknown> extends IHealthReporter {
   getRootConfig<Config = unknown>(): Config;
   /** Returns the initialized value of the root resource. */
   getRootValue<Value = V>(): Value;
+
+  /** Stops admitting new external work while allowing active work to continue. */
+  pause(reason?: string): void;
+
+  /** Re-opens admissions immediately and clears the active recovery episode. */
+  resume(): void;
+
+  /** Registers a recovery condition for the current pause episode. */
+  recoverWhen(options: IRuntimeRecoveryOptions): IRuntimeRecoveryHandle;
 
   /** Disposes the runtime and all resources. */
   dispose(): Promise<void>;

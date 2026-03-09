@@ -5,6 +5,7 @@ import {
 
 export const RuntimeLifecyclePhase = {
   Running: "running",
+  Paused: "paused",
   Disposing: "disposing",
   Drained: "drained",
   Disposed: "disposed",
@@ -36,11 +37,36 @@ export class LifecycleAdmissionController {
   }
 
   public isShutdownLockdown(): boolean {
-    return this.phase !== RuntimeLifecyclePhase.Running;
+    return (
+      this.phase === RuntimeLifecyclePhase.Disposing ||
+      this.phase === RuntimeLifecyclePhase.Drained ||
+      this.phase === RuntimeLifecyclePhase.Disposed
+    );
+  }
+
+  public beginPausing(): void {
+    if (this.phase !== RuntimeLifecyclePhase.Running) {
+      return;
+    }
+
+    this.phase = RuntimeLifecyclePhase.Paused;
+    this.resolveDrainWaitersIfDrained();
+  }
+
+  public resume(): void {
+    if (this.phase !== RuntimeLifecyclePhase.Paused) {
+      return;
+    }
+
+    this.phase = RuntimeLifecyclePhase.Running;
   }
 
   public beginDisposing(): void {
-    if (this.phase !== RuntimeLifecyclePhase.Running) {
+    if (
+      this.phase === RuntimeLifecyclePhase.Disposing ||
+      this.phase === RuntimeLifecyclePhase.Drained ||
+      this.phase === RuntimeLifecyclePhase.Disposed
+    ) {
       return;
     }
     this.phase = RuntimeLifecyclePhase.Disposing;
@@ -126,6 +152,16 @@ export class LifecycleAdmissionController {
   private canAdmit(source: RuntimeCallSource): boolean {
     if (this.phase === RuntimeLifecyclePhase.Running) {
       return true;
+    }
+
+    if (this.phase === RuntimeLifecyclePhase.Paused) {
+      if (
+        source.kind === RuntimeCallSourceKind.Runtime ||
+        source.kind === RuntimeCallSourceKind.Resource
+      ) {
+        return false;
+      }
+      return this.getActiveInternalSourceCount(source) > 0;
     }
 
     if (this.phase === RuntimeLifecyclePhase.Disposing) {

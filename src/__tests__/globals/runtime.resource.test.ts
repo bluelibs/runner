@@ -1,9 +1,13 @@
-import { defineResource, defineTask } from "../../define";
+import { defineEvent, defineResource, defineTask } from "../../define";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
 import { RunResult } from "../../models/RunResult";
 
 describe("system.runtime", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it("works inside resource init and after boot with task/event/resource/root helpers", async () => {
     const double = defineTask({
       id: "runtime-double",
@@ -258,6 +262,210 @@ describe("system.runtime", () => {
     });
 
     const runtime = await run(app, { shutdownHooks: false });
+    await runtime.dispose();
+  });
+
+  it("exposes pause/resume state and blocks new runtime admissions while paused", async () => {
+    const blocker = new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    const slowTask = defineTask({
+      id: "runtime-pause-slow",
+      run: async () => {
+        await blocker;
+        return "done";
+      },
+    });
+
+    const quickTask = defineTask({
+      id: "runtime-pause-quick",
+      run: async () => "ok",
+    });
+    const quickEvent = defineEvent<void>({
+      id: "runtime-pause-quick-event",
+    });
+
+    const app = defineResource({
+      id: "runtime-pause-app",
+      register: [slowTask, quickTask, quickEvent],
+      async init() {
+        return "ready";
+      },
+    });
+
+    const runtime = await run(app, { shutdownHooks: false });
+
+    expect(runtime.state).toBe("running");
+
+    const inFlight = runtime.runTask(slowTask);
+    runtime.pause("test");
+    expect(runtime.state).toBe("paused");
+    runtime.pause("test-again");
+    expect(runtime.state).toBe("paused");
+
+    await expect(runtime.runTask(quickTask)).rejects.toThrow(/paused/i);
+    await expect(runtime.emitEvent(quickEvent)).rejects.toThrow(/paused/i);
+
+    await inFlight;
+    expect(runtime.state).toBe("paused");
+
+    runtime.resume();
+    expect(runtime.state).toBe("running");
+    await expect(runtime.runTask(quickTask)).resolves.toBe("ok");
+
+    await runtime.dispose();
+  });
+
+  it("allows pause from a task and auto-resumes when all recoverWhen checks pass", async () => {
+    jest.useFakeTimers();
+
+    let allowA = false;
+    let allowB = false;
+
+    const pauseTask = defineTask({
+      id: "runtime-recover-pause-task",
+      dependencies: { runtime: globalResources.runtime },
+      run: async (_input, { runtime }) => {
+        runtime.pause("health");
+        runtime.recoverWhen({
+          id: "a",
+          everyMs: 10,
+          check: async () => allowA,
+        });
+        runtime.recoverWhen({
+          id: "b",
+          everyMs: 10,
+          check: async () => allowB,
+        });
+        return runtime.state;
+      },
+    });
+
+    const quickTask = defineTask({
+      id: "runtime-recover-quick-task",
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "runtime-recover-app",
+      register: [pauseTask, quickTask],
+      async init() {
+        return "ready";
+      },
+    });
+
+    const runtime = await run(app, { shutdownHooks: false });
+
+    await expect(runtime.runTask(pauseTask)).resolves.toBe("paused");
+    expect(runtime.state).toBe("paused");
+    await expect(runtime.runTask(quickTask)).rejects.toThrow(/paused/i);
+
+    allowA = true;
+    await jest.advanceTimersByTimeAsync(10);
+    expect(runtime.state).toBe("paused");
+
+    allowB = true;
+    await jest.advanceTimersByTimeAsync(10);
+    expect(runtime.state).toBe("running");
+    await expect(runtime.runTask(quickTask)).resolves.toBe("ok");
+
+    await runtime.dispose();
+  });
+
+  it("treats resume() as a manual override for the current recovery episode", async () => {
+    jest.useFakeTimers();
+
+    let checks = 0;
+
+    const pauseTask = defineTask({
+      id: "runtime-recover-manual-resume-task",
+      dependencies: { runtime: globalResources.runtime },
+      run: async (_input, { runtime }) => {
+        runtime.pause("manual-override");
+        runtime.recoverWhen({
+          id: "a",
+          everyMs: 10,
+          check: async () => {
+            checks += 1;
+            return false;
+          },
+        });
+        runtime.recoverWhen({
+          id: "b",
+          everyMs: 10,
+          check: async () => false,
+        });
+      },
+    });
+
+    const quickTask = defineTask({
+      id: "runtime-recover-manual-resume-quick-task",
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "runtime-recover-manual-resume-app",
+      register: [pauseTask, quickTask],
+      async init() {
+        return "ready";
+      },
+    });
+
+    const runtime = await run(app, { shutdownHooks: false });
+
+    await runtime.runTask(pauseTask);
+    expect(runtime.state).toBe("paused");
+
+    runtime.resume();
+    expect(runtime.state).toBe("running");
+
+    await jest.advanceTimersByTimeAsync(50);
+    expect(checks).toBe(1);
+    await expect(runtime.runTask(quickTask)).resolves.toBe("ok");
+
+    await runtime.dispose();
+  });
+
+  it("rejects recoverWhen while running and pause controls during bootstrap", async () => {
+    const probe = defineResource({
+      id: "runtime-bootstrap-admission-probe",
+      dependencies: { runtime: globalResources.runtime },
+      async init(_config, { runtime }) {
+        expect(() => runtime.pause()).toThrow(
+          "Runtime pause/resume controls are not available during bootstrap. Wait for run() to finish initialization.",
+        );
+        expect(() => runtime.resume()).toThrow(
+          "Runtime pause/resume controls are not available during bootstrap. Wait for run() to finish initialization.",
+        );
+        expect(() =>
+          runtime.recoverWhen({
+            everyMs: 10,
+            check: () => true,
+          }),
+        ).toThrow(
+          "Runtime pause/resume controls are not available during bootstrap. Wait for run() to finish initialization.",
+        );
+        return "ok";
+      },
+    });
+
+    const app = defineResource({
+      id: "runtime-bootstrap-admission-app",
+      register: [probe],
+      dependencies: { probe },
+      async init() {
+        return "ready";
+      },
+    });
+
+    const runtime = await run(app, { shutdownHooks: false });
+    expect(() =>
+      runtime.recoverWhen({
+        everyMs: 10,
+        check: () => true,
+      }),
+    ).toThrow("runtime.recoverWhen() requires the runtime to be paused.");
     await runtime.dispose();
   });
 });

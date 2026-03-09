@@ -17,6 +17,7 @@ import {
   lazyResourceSyncAccessError,
   runResultDisposeDuringBootstrapError,
   runResultDisposedError,
+  runtimeAdmissionControlDuringBootstrapError,
   runtimeHealthDuringBootstrapError,
   runtimeAccessViolationError,
   runtimeElementNotFoundError,
@@ -25,6 +26,15 @@ import {
 } from "../errors";
 import { runtimeSource } from "../types/runtimeSource";
 import { HealthReporter } from "./HealthReporter";
+import { RuntimeLifecyclePhase } from "./runtime/LifecycleAdmissionController";
+import {
+  IRuntimeRecoveryHandle,
+  IRuntimeRecoveryOptions,
+  RuntimeState,
+} from "../types/runner";
+import { globalResources } from "../globals/globalResources";
+import type { ITimers } from "../types/timers";
+import { RuntimeRecoveryController } from "./runtime/RuntimeRecoveryController";
 
 /**
  * Options for configuring lazy resource loading behavior.
@@ -103,6 +113,7 @@ export class RunResult<V> implements IRuntime<V> {
    */
   private lazyOptions: RunResultLazyOptions = {};
   private readonly healthReporter: HealthReporter;
+  private readonly recoveryController: RuntimeRecoveryController;
 
   /**
    * Creates a new RunResult instance.
@@ -154,6 +165,13 @@ export class RunResult<V> implements IRuntime<V> {
       isSleepingResource: (resourceId) =>
         this.store.resources.get(resourceId)!.isInitialized !== true,
     });
+    this.recoveryController = new RuntimeRecoveryController({
+      getRuntimeState: () => this.getRuntimeState(),
+      getTimers: () => this.getTimersResourceValue(),
+      isShuttingDown: () => this.#disposed || this.#disposing,
+      onResume: () => this.store.getLifecycleAdmissionController().resume(),
+      onUnhandledError: this.store.onUnhandledError,
+    });
   }
 
   /**
@@ -162,6 +180,11 @@ export class RunResult<V> implements IRuntime<V> {
    */
   public get value(): V {
     return this.#value as V;
+  }
+
+  public get state(): RuntimeState {
+    this.ensureRuntimeIsActive();
+    return this.getRuntimeState();
   }
 
   /**
@@ -511,6 +534,34 @@ export class RunResult<V> implements IRuntime<V> {
     resourceDefs?: Array<string | IResource<any, any, any, any, any>>,
   ) => this.healthReporter.getHealth(resourceDefs);
 
+  public pause = (_reason?: string): void => {
+    this.ensureRuntimeIsActive();
+    this.ensureAdmissionControlIsAvailable();
+
+    const controller = this.store.getLifecycleAdmissionController();
+    if (controller.getPhase() !== RuntimeLifecyclePhase.Running) {
+      return;
+    }
+
+    this.recoveryController.beginPauseEpisode();
+    controller.beginPausing();
+  };
+
+  public resume = (): void => {
+    this.ensureRuntimeIsActive();
+    this.ensureAdmissionControlIsAvailable();
+
+    this.recoveryController.resumeCurrentEpisode();
+  };
+
+  public recoverWhen = (
+    options: IRuntimeRecoveryOptions,
+  ): IRuntimeRecoveryHandle => {
+    this.ensureRuntimeIsActive();
+    this.ensureAdmissionControlIsAvailable();
+    return this.recoveryController.recoverWhen(options);
+  };
+
   /**
    * Returns the ID of the root resource.
    * @returns The root resource identifier
@@ -573,6 +624,27 @@ export class RunResult<V> implements IRuntime<V> {
     return typeof reference === "string" ? reference : reference.id;
   }
 
+  private ensureAdmissionControlIsAvailable(): void {
+    if (this.#isBootstrapping) {
+      runtimeAdmissionControlDuringBootstrapError.throw();
+    }
+  }
+
+  private getRuntimeState(): RuntimeState {
+    const phase = this.store.getLifecycleAdmissionController().getPhase();
+    switch (phase) {
+      case RuntimeLifecyclePhase.Paused:
+        return "paused";
+      default:
+        return "running";
+    }
+  }
+
+  private getTimersResourceValue(): ITimers {
+    return this.store.resources.get(globalResources.timers.id)!
+      .value as ITimers;
+  }
+
   /**
    * Disposes the runtime and all registered resources.
    *
@@ -605,6 +677,7 @@ export class RunResult<V> implements IRuntime<V> {
     }
 
     this.#disposing = true;
+    this.recoveryController.dispose();
     this.store.beginDisposing();
 
     this.#disposePromise = Promise.resolve()

@@ -3,7 +3,11 @@ import { EventManager } from "./EventManager";
 import { Store } from "./Store";
 import { Logger } from "./Logger";
 import { MiddlewareManager } from "./MiddlewareManager";
-import { interceptAfterLockError, shutdownLockdownError } from "../errors";
+import {
+  interceptAfterLockError,
+  runtimeAdmissionsPausedError,
+  shutdownLockdownError,
+} from "../errors";
 import {
   taskBlockedByResourceHealthError,
   taskHealthResourceNotReportableError,
@@ -20,6 +24,7 @@ import {
   RuntimeCallSourceKind,
 } from "../types/runtimeSource";
 import type { LifecycleAdmissionController } from "./runtime/LifecycleAdmissionController";
+import { RuntimeLifecyclePhase } from "./runtime/LifecycleAdmissionController";
 import { toPublicDefinition } from "./utils/toPublicDefinition";
 import { ExecutionContextStore } from "./ExecutionContextStore";
 import type { ExecutionFrame } from "../types/executionContext";
@@ -105,6 +110,12 @@ export class TaskRunner {
     const taskId = this.store.resolveDefinitionId(task)!;
     const source = options?.source ?? defaultTaskSource;
     if (!this.store.canAdmitTaskCall(source)) {
+      if (
+        this.lifecycleAdmissionController.getPhase() ===
+        RuntimeLifecyclePhase.Paused
+      ) {
+        runtimeAdmissionsPausedError.throw();
+      }
       shutdownLockdownError.throw();
     }
 

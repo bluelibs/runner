@@ -273,9 +273,11 @@ export class Store {
   }
 
   public beginDisposing() {
+    const phase = this.lifecycleAdmissionController.getPhase();
     if (
-      this.lifecycleAdmissionController.getPhase() !==
-      RuntimeLifecyclePhase.Running
+      phase === RuntimeLifecyclePhase.Disposing ||
+      phase === RuntimeLifecyclePhase.Drained ||
+      phase === RuntimeLifecyclePhase.Disposed
     ) {
       return;
     }

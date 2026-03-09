@@ -7,7 +7,12 @@ import {
   IEventEmitOptions,
   IEventEmitReport,
 } from "../defs";
-import { lockedError, shutdownLockdownError, validationError } from "../errors";
+import {
+  lockedError,
+  runtimeAdmissionsPausedError,
+  shutdownLockdownError,
+  validationError,
+} from "../errors";
 import { IHook } from "../types/hook";
 import {
   RuntimeCallSource,
@@ -30,7 +35,10 @@ import {
   createAggregateError,
   createEmptyReport,
 } from "./event/EmissionExecutor";
-import { LifecycleAdmissionController } from "./runtime/LifecycleAdmissionController";
+import {
+  LifecycleAdmissionController,
+  RuntimeLifecyclePhase,
+} from "./runtime/LifecycleAdmissionController";
 import { getDefinitionIdentity } from "../tools/isSameDefinition";
 import type { Store } from "./Store";
 import { getRuntimeId } from "../tools/runtimeMetadata";
@@ -294,6 +302,12 @@ export class EventManager {
         allowLifecycleBypass: options?.allowLifecycleBypass === true,
       })
     ) {
+      if (
+        this.lifecycleAdmissionController.getPhase() ===
+        RuntimeLifecyclePhase.Paused
+      ) {
+        runtimeAdmissionsPausedError.throw();
+      }
       shutdownLockdownError.throw();
     }
 
