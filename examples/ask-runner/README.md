@@ -8,6 +8,7 @@ It demonstrates:
 - a dedicated OpenAI task
 - durable SQLite-backed budget and rate-limit state
 - public `GET /?query=...` markdown responses
+- public `GET /stream?query=...` streaming markdown responses
 - admin controls for stopping or resuming answering for the current day
 - prompt-cache aware usage accounting with separate cached-input pricing
 - a concurrency cap around OpenAI calls using Runner's `Semaphore`
@@ -15,6 +16,7 @@ It demonstrates:
 ## Endpoints
 
 - `GET /?query=...` -> returns `text/markdown`
+- `GET /stream?query=...` -> streams `text/markdown`
 - `GET /health` -> returns JSON health and budget snapshot
 - `POST /admin/stop-for-day` -> requires `x-admin-secret`
 - `POST /admin/resume` -> requires `x-admin-secret`

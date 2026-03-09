@@ -1,7 +1,6 @@
 import crypto from "crypto";
 
 import { r } from "@bluelibs/runner";
-import type Database from "better-sqlite3";
 
 import { appConfig, type AskRunnerPricing } from "../config/app-config.resource";
 import {
@@ -9,7 +8,6 @@ import {
   rateLimitExceededError,
   unauthorizedAdminError,
 } from "../errors";
-import { sqlite } from "./sqlite.resource";
 
 export interface UsageLike {
   input_tokens?: number;
@@ -27,6 +25,30 @@ export interface BudgetSnapshot {
   stopped: boolean;
   stopReason: string | null;
   remainingUsd: number;
+}
+
+interface DayState {
+  spentUsd: number;
+  requestCount: number;
+  stopped: boolean;
+  stopReason: string | null;
+}
+
+interface AuditEntry {
+  timestamp: string;
+  day: string;
+  ip: string;
+  queryHash: string;
+  model: string;
+  estimatedCostUsd: number;
+  actualCostUsd: number;
+  status: "ok" | "rejected";
+}
+
+interface BudgetLedgerState {
+  dayStateByDay: Map<string, DayState>;
+  minuteCountsByKey: Map<string, number>;
+  audit: AuditEntry[];
 }
 
 export interface BudgetLedger {
@@ -53,9 +75,14 @@ export interface BudgetLedger {
 
 export const budgetLedger = r
   .resource("budgetLedger")
-  .dependencies({ appConfig, sqlite })
-  .init(async (_, { appConfig, sqlite }): Promise<BudgetLedger> => {
-    return createBudgetLedger(sqlite, appConfig.dailyBudgetUsd, appConfig.pricing, {
+  .dependencies({ appConfig })
+  .context<BudgetLedgerState>(() => ({
+    dayStateByDay: new Map(),
+    minuteCountsByKey: new Map(),
+    audit: [],
+  }))
+  .init(async (_config, { appConfig }, context): Promise<BudgetLedger> => {
+    return createBudgetLedger(context, appConfig.dailyBudgetUsd, appConfig.pricing, {
       perMinute: appConfig.rateLimitPerMinute,
       perHour: appConfig.rateLimitPerHour,
       perDay: appConfig.rateLimitPerDay,
@@ -64,82 +91,75 @@ export const budgetLedger = r
   .build();
 
 export function createBudgetLedger(
-  db: Database.Database,
+  state: BudgetLedgerState,
   dailyBudgetUsd: number,
   pricing: AskRunnerPricing,
   rateLimits: { perMinute: number; perHour: number; perDay: number },
 ): BudgetLedger {
-  const upsertDay = db.prepare(`
-    INSERT INTO daily_budget_state(day, spent_usd, request_count, stopped, stop_reason)
-    VALUES (@day, 0, 0, 0, NULL)
-    ON CONFLICT(day) DO NOTHING
-  `);
-  const readDay = db.prepare(`
-    SELECT spent_usd, request_count, stopped, stop_reason
-    FROM daily_budget_state
-    WHERE day = ?
-  `);
-  const incrementMinute = db.prepare(`
-    INSERT INTO ip_rate_limits(day, minute_bucket, ip, request_count)
-    VALUES (@day, @minuteBucket, @ip, 1)
-    ON CONFLICT(day, minute_bucket, ip)
-    DO UPDATE SET request_count = request_count + 1
-  `);
-  const readMinute = db.prepare(
-    "SELECT request_count FROM ip_rate_limits WHERE day = ? AND minute_bucket = ? AND ip = ?",
-  );
-  const readDayCount = db.prepare(
-    "SELECT COALESCE(SUM(request_count), 0) AS count FROM ip_rate_limits WHERE day = ? AND ip = ?",
-  );
-  const readHourCount = db.prepare(
-    "SELECT COALESCE(SUM(request_count), 0) AS count FROM ip_rate_limits WHERE day = ? AND minute_bucket LIKE ? AND ip = ?",
-  );
-  const updateUsage = db.prepare(`
-    UPDATE daily_budget_state
-    SET spent_usd = spent_usd + @actualCostUsd,
-        request_count = request_count + 1,
-        stopped = CASE WHEN spent_usd + @actualCostUsd >= @dailyBudgetUsd THEN 1 ELSE stopped END,
-        stop_reason = CASE
-          WHEN spent_usd + @actualCostUsd >= @dailyBudgetUsd THEN 'Daily budget reached.'
-          ELSE stop_reason
-        END
-    WHERE day = @day
-  `);
-  const writeAudit = db.prepare(`
-    INSERT INTO query_audit(timestamp, day, ip, query_hash, model, estimated_cost_usd, actual_cost_usd, status)
-    VALUES (@timestamp, @day, @ip, @queryHash, @model, @estimatedCostUsd, @actualCostUsd, @status)
-  `);
-  const setStop = db.prepare(
-    "UPDATE daily_budget_state SET stopped = @stopped, stop_reason = @stopReason WHERE day = @day",
-  );
+  const ensureDay = (day: string): DayState => {
+    const existing = state.dayStateByDay.get(day);
+    if (existing) return existing;
 
-  const ensureDay = (day: string): void => {
-    upsertDay.run({ day });
+    const created: DayState = {
+      spentUsd: 0,
+      requestCount: 0,
+      stopped: false,
+      stopReason: null,
+    };
+    state.dayStateByDay.set(day, created);
+    return created;
+  };
+
+  const readMinuteCount = (day: string, minuteBucket: string, ip: string): number => {
+    return state.minuteCountsByKey.get(rateKey(day, minuteBucket, ip)) ?? 0;
+  };
+
+  const incrementMinuteCount = (day: string, minuteBucket: string, ip: string): number => {
+    const key = rateKey(day, minuteBucket, ip);
+    const next = (state.minuteCountsByKey.get(key) ?? 0) + 1;
+    state.minuteCountsByKey.set(key, next);
+    return next;
+  };
+
+  const readHourCount = (day: string, hourBucket: string, ip: string): number => {
+    let total = 0;
+    for (const [key, count] of state.minuteCountsByKey.entries()) {
+      if (key.startsWith(`${day}:${hourBucket}:`) && key.endsWith(`:${ip}`)) {
+        total += count;
+      }
+    }
+    return total;
+  };
+
+  const readDayCount = (day: string, ip: string): number => {
+    let total = 0;
+    for (const [key, count] of state.minuteCountsByKey.entries()) {
+      if (key.startsWith(`${day}:`) && key.endsWith(`:${ip}`)) {
+        total += count;
+      }
+    }
+    return total;
   };
 
   return {
     enforceIpLimit({ day, minuteBucket, hourBucket, ip }) {
       ensureDay(day);
-      incrementMinute.run({ day, minuteBucket, ip });
-
-      const minuteRow = readMinute.get(day, minuteBucket, ip) as { request_count: number };
-      if (minuteRow.request_count > rateLimits.perMinute) {
+      const minuteCount = incrementMinuteCount(day, minuteBucket, ip);
+      if (minuteCount > rateLimits.perMinute) {
         rateLimitExceededError.throw({
           message: "Rate limit exceeded for this minute.",
         });
       }
 
-      const hourRow = readHourCount.get(day, `${hourBucket}%`, ip) as {
-        count: number;
-      };
-      if (hourRow.count > rateLimits.perHour) {
+      const hourCount = readHourCount(day, hourBucket, ip);
+      if (hourCount > rateLimits.perHour) {
         rateLimitExceededError.throw({
           message: "Rate limit exceeded for this hour.",
         });
       }
 
-      const dayRow = readDayCount.get(day, ip) as { count: number };
-      if (dayRow.count > rateLimits.perDay) {
+      const dayCount = readDayCount(day, ip);
+      if (dayCount > rateLimits.perDay) {
         rateLimitExceededError.throw({
           message: "Rate limit exceeded for this day.",
         });
@@ -147,13 +167,13 @@ export function createBudgetLedger(
     },
 
     ensureDayCanSpend({ day, projectedCostUsd }) {
-      const snapshot = this.getSnapshot(day);
-      if (snapshot.stopped) {
+      const dayState = ensureDay(day);
+      if (dayState.stopped) {
         dailyBudgetExceededError.throw({
-          message: snapshot.stopReason ?? "Asking is stopped for today.",
+          message: dayState.stopReason ?? "Asking is stopped for today.",
         });
       }
-      if (snapshot.spentUsd + projectedCostUsd > dailyBudgetUsd) {
+      if (dayState.spentUsd + projectedCostUsd > dailyBudgetUsd) {
         dailyBudgetExceededError.throw({
           message: "Projected cost would exceed the daily budget.",
         });
@@ -161,10 +181,15 @@ export function createBudgetLedger(
     },
 
     recordUsage({ day, ip, query, model, estimatedCostUsd, usage, status }) {
-      ensureDay(day);
+      const dayState = ensureDay(day);
       const actualCostUsd = usage ? calculateUsageCost(usage, pricing) : 0;
-      updateUsage.run({ day, actualCostUsd, dailyBudgetUsd });
-      writeAudit.run({
+      dayState.spentUsd = Number((dayState.spentUsd + actualCostUsd).toFixed(8));
+      dayState.requestCount += 1;
+      if (dayState.spentUsd >= dailyBudgetUsd) {
+        dayState.stopped = true;
+        dayState.stopReason = "Daily budget reached.";
+      }
+      state.audit.push({
         timestamp: new Date().toISOString(),
         day,
         ip,
@@ -178,32 +203,28 @@ export function createBudgetLedger(
     },
 
     stopForDay(day, reason) {
-      ensureDay(day);
-      setStop.run({ day, stopped: 1, stopReason: reason });
+      const dayState = ensureDay(day);
+      dayState.stopped = true;
+      dayState.stopReason = reason;
       return this.getSnapshot(day);
     },
 
     resume(day) {
-      ensureDay(day);
-      setStop.run({ day, stopped: 0, stopReason: null });
+      const dayState = ensureDay(day);
+      dayState.stopped = false;
+      dayState.stopReason = null;
       return this.getSnapshot(day);
     },
 
     getSnapshot(day) {
-      ensureDay(day);
-      const row = readDay.get(day) as {
-        spent_usd: number;
-        request_count: number;
-        stopped: number;
-        stop_reason: string | null;
-      };
+      const dayState = ensureDay(day);
       return {
         day,
-        spentUsd: row.spent_usd,
-        requestCount: row.request_count,
-        stopped: row.stopped === 1,
-        stopReason: row.stop_reason,
-        remainingUsd: Math.max(0, dailyBudgetUsd - row.spent_usd),
+        spentUsd: dayState.spentUsd,
+        requestCount: dayState.requestCount,
+        stopped: dayState.stopped,
+        stopReason: dayState.stopReason,
+        remainingUsd: Math.max(0, Number((dailyBudgetUsd - dayState.spentUsd).toFixed(8))),
       };
     },
   };
@@ -240,6 +261,10 @@ export function minuteBucket(date: Date): string {
 
 export function hourBucket(date: Date): string {
   return date.toISOString().slice(0, 13);
+}
+
+function rateKey(day: string, minuteBucket: string, ip: string): string {
+  return `${day}:${minuteBucket}:${ip}`;
 }
 
 function sha1(value: string): string {

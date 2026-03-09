@@ -1,8 +1,13 @@
-import { Match, Semaphore, r } from "@bluelibs/runner";
-import type OpenAI from "openai";
+import { Match, Semaphore, middleware, r } from "@bluelibs/runner";
 
 import { aiDocsPrompt } from "./ai-docs.resource";
-import { buildSystemPrompt } from "./prompt";
+import {
+  type AskRunnerInput,
+  type AskRunnerOutput,
+  type AskRunnerStreamResult,
+  buildAskRunnerRequest,
+} from "./ask-runner-request";
+import { consumeMarkdownResponseStream, type StreamWriter } from "./openai-stream";
 import { openAiClient } from "./openai.resource";
 import { appConfig } from "../config/app-config.resource";
 import { invalidQueryError } from "../errors";
@@ -19,60 +24,9 @@ export const openAiSemaphore = r
   })
   .build();
 
-export interface AskRunnerInput {
-  query: string;
-}
-
-export interface AskRunnerOutput {
-  markdown: string;
-  model: string;
-  usage: OpenAI.Responses.ResponseUsage | null;
-  aiDocsVersion: string;
-}
-
-type AskRunnerResponseCreateParams =
-  OpenAI.Responses.ResponseCreateParamsNonStreaming & {
-    prompt_cache_retention?: "24h";
-  };
-
 const askRunnerInputSchema = Match.compile({
   query: Match.NonEmptyString,
 });
-
-export function buildAskRunnerRequest(input: {
-  model: string;
-  serviceTier: "auto" | "default" | "flex" | "priority";
-  reasoningEffort: "minimal" | "low" | "medium" | "high";
-  maxOutputTokens: number;
-  aiDocsContent: string;
-  aiDocsVersion: string;
-  query: string;
-}): AskRunnerResponseCreateParams {
-  return {
-    stream: false,
-    model: input.model,
-    service_tier: input.serviceTier,
-    reasoning: { effort: input.reasoningEffort },
-    prompt_cache_key: `ask-runner:${input.model}:${input.aiDocsVersion}`,
-    prompt_cache_retention: "24h",
-    max_output_tokens: input.maxOutputTokens,
-    input: [
-      {
-        role: "system",
-        content: [
-          {
-            type: "input_text",
-            text: buildSystemPrompt(input.aiDocsContent),
-          },
-        ],
-      },
-      {
-        role: "user",
-        content: [{ type: "input_text", text: input.query }],
-      },
-    ],
-  };
-}
 
 export const askRunnerTask = r
   .task<AskRunnerInput>("askRunner")
@@ -83,6 +37,18 @@ export const askRunnerTask = r
     openAiClient,
     openAiSemaphore,
   })
+  .middleware([
+    middleware.task.timeout.with({ ttl: 45000 }),
+    middleware.task.retry.with({
+      retries: 2,
+      stopRetryIf: (error) =>
+        /400|401|403|404/.test(error.message),
+    }),
+    middleware.task.circuitBreaker.with({
+      failureThreshold: 5,
+      resetTimeout: 30000,
+    }),
+  ])
   .throws([invalidQueryError])
   .run(
     async (
@@ -119,6 +85,68 @@ export const askRunnerTask = r
         markdown,
         model: response.model,
         usage: response.usage ?? null,
+        aiDocsVersion: aiDocsPrompt.version,
+      };
+    },
+  )
+  .build();
+
+export interface StreamAskRunnerInput extends AskRunnerInput {
+  writer: StreamWriter;
+}
+
+export const streamAskRunnerTask = r
+  .task<StreamAskRunnerInput>("streamAskRunner")
+  .inputSchema(
+    Match.compile({
+      query: Match.NonEmptyString,
+      writer: Match.Any,
+    }),
+  )
+  .dependencies({
+    appConfig,
+    aiDocsPrompt,
+    openAiClient,
+    openAiSemaphore,
+  })
+  .middleware([
+    middleware.task.timeout.with({ ttl: 45000 }),
+    middleware.task.circuitBreaker.with({
+      failureThreshold: 5,
+      resetTimeout: 30000,
+    }),
+  ])
+  .throws([invalidQueryError])
+  .run(
+    async (
+      { query, writer },
+      { appConfig, aiDocsPrompt, openAiClient, openAiSemaphore },
+    ): Promise<AskRunnerStreamResult> => {
+      const normalizedQuery = query.trim();
+      if (normalizedQuery.length === 0) {
+        invalidQueryError.throw({ message: "Query must not be empty." });
+      }
+
+      const stream = await openAiSemaphore.withPermit(() =>
+        openAiClient.responses.create({
+          ...buildAskRunnerRequest({
+            model: appConfig.model,
+            serviceTier: appConfig.serviceTier,
+            reasoningEffort: appConfig.reasoningEffort,
+            maxOutputTokens: appConfig.maxOutputTokens,
+            aiDocsContent: aiDocsPrompt.content,
+            aiDocsVersion: aiDocsPrompt.version,
+            query: normalizedQuery,
+          }),
+          stream: true,
+        }),
+      );
+
+      const result = await consumeMarkdownResponseStream(stream, writer);
+
+      return {
+        model: result.model,
+        usage: result.usage,
         aiDocsVersion: aiDocsPrompt.version,
       };
     },

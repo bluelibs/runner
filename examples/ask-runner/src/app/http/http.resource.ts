@@ -1,8 +1,7 @@
 import express, { type Request, type Response } from "express";
 import { resources, r } from "@bluelibs/runner";
 
-import { askRunnerTask } from "../ai/ask-runner.task";
-import { buildSystemPrompt, estimateTokenCount } from "../ai/prompt";
+import { askRunnerTask, streamAskRunnerTask } from "../ai/ask-runner.task";
 import { appConfig } from "../config/app-config.resource";
 import type { BudgetLedger } from "../budget/budget-ledger.resource";
 import {
@@ -13,8 +12,13 @@ import {
   minuteBucket,
 } from "../budget/budget-ledger.resource";
 import { aiDocsPrompt } from "../ai/ai-docs.resource";
-import type { AskRunnerOutput } from "../ai/ask-runner.task";
 import { missingConfigError } from "../errors";
+import {
+  estimateProjectedCostUsd,
+  prepareQueryRequest,
+  type QueryRouteDeps,
+} from "./query-request";
+import type { AskRunnerOutput } from "../ai/ask-runner-request";
 
 export interface HttpServer {
   app: express.Express;
@@ -47,6 +51,18 @@ export const httpServer = r
         }
         return result as AskRunnerOutput;
       },
+      runStreamTask: async (input) => {
+        const result = await taskRunner.run(streamAskRunnerTask, input);
+        if (!result) {
+          missingConfigError.throw({
+            message: "streamAskRunner task returned no result.",
+          });
+        }
+        return result as {
+          model: string;
+          usage: { input_tokens?: number; output_tokens?: number } | null;
+        };
+      },
     });
     httpServer.server = await new Promise<ReturnType<express.Express["listen"]>>((resolve, reject) => {
       const instance = httpServer.app.listen(appConfig.port, appConfig.host, () => resolve(instance));
@@ -71,27 +87,19 @@ export const httpServer = r
   })
   .build();
 
-export function createHttpApp(deps: {
-  appConfig: {
+export function createHttpApp(deps: QueryRouteDeps & {
+  appConfig: QueryRouteDeps["appConfig"] & {
     adminSecret: string;
-    trustProxy: boolean;
-    maxInputChars: number;
-    maxOutputTokens: number;
-    tokenCharsEstimate: number;
-    pricing: {
-      inputPer1M: number;
-      cachedInputPer1M: number;
-      outputPer1M: number;
-    };
-    model: string;
   };
-  aiDocsPrompt: {
-    content: string;
-    version: string;
-  };
-  budgetLedger: BudgetLedger;
   runTask: (input: { query: string }) => Promise<{
     markdown: string;
+    model: string;
+    usage: { input_tokens?: number; output_tokens?: number } | null;
+  }>;
+  runStreamTask: (input: {
+    query: string;
+    writer: { write(chunk: string): Promise<void> };
+  }) => Promise<{
     model: string;
     usage: { input_tokens?: number; output_tokens?: number } | null;
   }>;
@@ -102,11 +110,23 @@ export function createHttpApp(deps: {
 
   app.get("/health", (_req, res) => {
     const snapshot = deps.budgetLedger.getSnapshot(dayKey(new Date()));
-    res.json({ status: "ok", budget: snapshot });
+    res.json({
+      status: "ok",
+      budget: snapshot,
+      state: {
+        storage: "memory",
+        durable: false,
+        note: "Budget, rate-limit, and admin stop state reset when the process restarts.",
+      },
+    });
   });
 
   app.get("/", async (req, res) => {
     await handleQueryRequest(req, res, deps);
+  });
+
+  app.get("/stream", async (req, res) => {
+    await handleStreamQueryRequest(req, res, deps);
   });
 
   app.post("/admin/stop-for-day", (req, res) => {
@@ -145,24 +165,7 @@ export function createHttpApp(deps: {
 export async function handleQueryRequest(
   req: Request,
   res: Response,
-  deps: {
-    appConfig: {
-      trustProxy: boolean;
-      maxInputChars: number;
-      maxOutputTokens: number;
-      tokenCharsEstimate: number;
-      pricing: {
-        inputPer1M: number;
-        cachedInputPer1M: number;
-        outputPer1M: number;
-      };
-      model: string;
-    };
-    aiDocsPrompt: {
-      content: string;
-      version: string;
-    };
-    budgetLedger: BudgetLedger;
+  deps: QueryRouteDeps & {
     runTask: (input: { query: string }) => Promise<{
       markdown: string;
       model: string;
@@ -170,40 +173,18 @@ export async function handleQueryRequest(
     }>;
   },
 ): Promise<void> {
-  const query = String(req.query.query ?? "").trim();
-  if (query.length === 0) {
-    res.status(400).json({ error: "Query must not be empty." });
+  const request = prepareQueryRequest(req, res, deps);
+  if (!request) {
     return;
   }
 
-  if (query.length > deps.appConfig.maxInputChars) {
-    res.status(400).json({ error: `Query exceeds ${deps.appConfig.maxInputChars} characters.` });
-    return;
-  }
-
-  const now = new Date();
-  const day = dayKey(now);
-  const hour = hourBucket(now);
-  const minute = minuteBucket(now);
-  const ip = requestIp(req);
-
-  deps.budgetLedger.enforceIpLimit({ day, minuteBucket: minute, hourBucket: hour, ip });
-  const estimatedCostUsd = estimateProjectedCostUsd(
-    deps.aiDocsPrompt.content,
-    query,
-    deps.appConfig.maxOutputTokens,
-    deps.appConfig.tokenCharsEstimate,
-    deps.appConfig.pricing,
-  );
-  deps.budgetLedger.ensureDayCanSpend({ day, projectedCostUsd: estimatedCostUsd });
-
-  const result = await deps.runTask({ query });
+  const result = await deps.runTask({ query: request.query });
   deps.budgetLedger.recordUsage({
-    day,
-    ip,
-    query,
+    day: request.day,
+    ip: request.ip,
+    query: request.query,
     model: result.model || deps.appConfig.model,
-    estimatedCostUsd,
+    estimatedCostUsd: request.estimatedCostUsd,
     usage: result.usage,
     status: "ok",
   });
@@ -211,38 +192,60 @@ export async function handleQueryRequest(
   res.type("text/markdown; charset=utf-8").send(result.markdown);
 }
 
-function requestIp(req: Request): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.length > 0) {
-    return forwarded.split(",")[0].trim();
+export async function handleStreamQueryRequest(
+  req: Request,
+  res: Response,
+  deps: QueryRouteDeps & {
+    runStreamTask: (input: {
+      query: string;
+      writer: { write(chunk: string): Promise<void> };
+    }) => Promise<{
+      model: string;
+      usage: { input_tokens?: number; output_tokens?: number } | null;
+    }>;
+  },
+): Promise<void> {
+  const request = prepareQueryRequest(req, res, deps);
+  if (!request) {
+    return;
   }
 
-  return req.ip || req.socket.remoteAddress || "unknown";
-}
+  res.status(200);
+  res.setHeader("Content-Type", "text/markdown; charset=utf-8");
 
-export function estimateProjectedCostUsd(
-  aiDocsContent: string,
-  query: string,
-  maxOutputTokens: number,
-  tokenCharsEstimate: number,
-  pricing: {
-    inputPer1M: number;
-    cachedInputPer1M: number;
-    outputPer1M: number;
-  },
-): number {
-  const promptText = buildSystemPrompt(aiDocsContent);
-  const inputTokens =
-    estimateTokenCount(promptText, tokenCharsEstimate) +
-    estimateTokenCount(query, tokenCharsEstimate);
-  // Preflight stays conservative and treats all input tokens as uncached.
-  const outputTokens = maxOutputTokens;
-  const inputCost = (inputTokens / 1_000_000) * pricing.inputPer1M;
-  const outputCost = (outputTokens / 1_000_000) * pricing.outputPer1M;
-  return Number((inputCost + outputCost).toFixed(8));
+  const result = await deps.runStreamTask({
+    query: request.query,
+    writer: {
+      write: async (chunk) => {
+        await new Promise<void>((resolve, reject) => {
+          res.write(chunk, (error) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+            resolve();
+          });
+        });
+      },
+    },
+  });
+
+  deps.budgetLedger.recordUsage({
+    day: request.day,
+    ip: request.ip,
+    query: request.query,
+    model: result.model || deps.appConfig.model,
+    estimatedCostUsd: request.estimatedCostUsd,
+    usage: result.usage,
+    status: "ok",
+  });
+
+  res.end();
 }
 
 function withAdmin<T>(req: Request, adminSecret: string, run: () => T): T {
   assertAdminSecret(req.header("x-admin-secret") ?? undefined, adminSecret);
   return run();
 }
+
+export { estimateProjectedCostUsd } from "./query-request";

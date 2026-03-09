@@ -4,6 +4,7 @@ import { assertAdminSecret, type BudgetLedger } from "../app/budget/budget-ledge
 import {
   estimateProjectedCostUsd,
   handleQueryRequest,
+  handleStreamQueryRequest,
 } from "../app/http/http.resource";
 
 describe("ask-runner http", () => {
@@ -51,6 +52,8 @@ describe("ask-runner http", () => {
       statusCode: 200,
       body: undefined as unknown,
       contentType: undefined as string | undefined,
+      headers: {} as Record<string, string>,
+      chunks: [] as string[],
       status(code: number) {
         this.statusCode = code;
         return this;
@@ -63,8 +66,26 @@ describe("ask-runner http", () => {
         this.contentType = value;
         return this;
       },
+      setHeader(name: string, value: string) {
+        this.headers[name] = value;
+        return this;
+      },
+      write(payload: string, callback?: (error?: Error | null) => void) {
+        this.chunks.push(payload);
+        if (callback) {
+          callback(null);
+        }
+        return true;
+      },
       send(payload: unknown) {
         this.body = payload;
+        return this;
+      },
+      end(payload?: string) {
+        if (payload) {
+          this.chunks.push(payload);
+        }
+        this.body = this.chunks.join("");
         return this;
       },
     };
@@ -73,6 +94,8 @@ describe("ask-runner http", () => {
       statusCode: number;
       body: unknown;
       contentType?: string;
+      headers: Record<string, string>;
+      chunks: string[];
     };
   }
 
@@ -115,6 +138,67 @@ describe("ask-runner http", () => {
     expect(response.contentType).toBe("text/markdown; charset=utf-8");
     expect(response.body).toBe("# lifecycle");
     expect(ledger.recordUsage).toHaveBeenCalled();
+  });
+
+  test("stream handler writes markdown chunks and records final usage", async () => {
+    const ledger = createLedger();
+    const response = createResponse();
+
+    await handleStreamQueryRequest(createRequest("lifecycle"), response, {
+      appConfig: {
+        trustProxy: true,
+        maxInputChars: 20,
+        maxOutputTokens: 300,
+        tokenCharsEstimate: 4,
+        pricing: { inputPer1M: 0.25, cachedInputPer1M: 0.025, outputPer1M: 2 },
+        model: "gpt-5-mini",
+      },
+      aiDocsPrompt: {
+        content: "Runner docs",
+        version: "v1",
+      },
+      budgetLedger: ledger,
+      runStreamTask: async ({ query, writer }) => {
+        await writer.write(`# ${query}`);
+        await writer.write("\n\nstream");
+        return {
+          model: "gpt-5-mini",
+          usage: { input_tokens: 100, output_tokens: 50 },
+        };
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["Content-Type"]).toBe("text/markdown; charset=utf-8");
+    expect(response.body).toBe("# lifecycle\n\nstream");
+    expect(ledger.recordUsage).toHaveBeenCalled();
+  });
+
+  test("stream handler rejects empty queries before opening the stream", async () => {
+    const response = createResponse();
+
+    await handleStreamQueryRequest(createRequest(""), response, {
+      appConfig: {
+        trustProxy: true,
+        maxInputChars: 20,
+        maxOutputTokens: 300,
+        tokenCharsEstimate: 4,
+        pricing: { inputPer1M: 0.25, cachedInputPer1M: 0.025, outputPer1M: 2 },
+        model: "gpt-5-mini",
+      },
+      aiDocsPrompt: {
+        content: "Runner docs",
+        version: "v1",
+      },
+      budgetLedger: createLedger(),
+      runStreamTask: async () => ({
+        model: "gpt-5-mini",
+        usage: null,
+      }),
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toEqual({ error: "Query must not be empty." });
   });
 
   test("handler rejects empty queries", async () => {
