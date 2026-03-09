@@ -6,6 +6,7 @@ import { durableSupportResource } from "./durable/resources/durable.resource";
 import { durableWorkflowTag } from "./durable/tags/durableWorkflow.tag";
 import { memoryDurableResource } from "./durable/resources/memoryDurableResource";
 import { redisDurableResource } from "./durable/resources/redisDurableResource";
+import { redisCacheProviderResource } from "./cache/redisCacheProvider.resource";
 
 registerRpcLaneHttpPresetsForNode();
 
@@ -14,6 +15,7 @@ export const resources = Object.freeze({
   durable: durableSupportResource,
   memoryWorkflow: memoryDurableResource,
   redisWorkflow: redisDurableResource,
+  redisCacheProvider: redisCacheProviderResource,
 });
 
 export const tags = Object.freeze({
@@ -39,5 +41,6 @@ export type {
   Readable,
 } from "./http";
 export * from "./durable";
+export * from "./cache";
 export * from "./event-lanes";
 export * from "./rpc-lanes";

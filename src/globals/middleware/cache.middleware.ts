@@ -1,33 +1,37 @@
 import {
+  createTaskScopedCacheInstance,
+  createDefaultCacheProvider,
+  createSharedCacheBudgetState,
+  type CacheFactoryOptions,
+  type CacheProvider,
+  type ICacheProvider,
+  type SharedCacheBudgetState,
+  supportsTaskScopedCacheProvider,
+} from "./cache.shared";
+import {
   defineFrameworkResource,
   defineFrameworkTaskMiddleware,
 } from "../../definers/frameworkDefinition";
-import { symbolResource, type IResource } from "../../defs";
+import {
+  symbolResource,
+  symbolResourceWithConfig,
+  type IResource,
+  type IResourceWithConfig,
+} from "../../defs";
+import { extractResourceAndConfig } from "../../tools/extractResourceAndConfig";
 import { loggerResource } from "../resources/logger.resource";
-import { LRUCache } from "lru-cache";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { safeStringify } from "../../models/utils/safeStringify";
 import { Match } from "../../tools/check";
 import { validationError } from "../../errors";
 
-export interface ICacheProvider {
-  set(key: string, value: unknown): unknown | Promise<unknown>;
-  get(key: string): unknown | Promise<unknown>;
-  clear(): void | Promise<void>;
-  /** Optional presence check to disambiguate cached undefined values */
-  has?(key: string): boolean | Promise<boolean>;
-}
+export type {
+  CacheFactoryOptions,
+  CacheProvider,
+  ICacheProvider,
+} from "./cache.shared";
 
-type CacheStoredValue = NonNullable<unknown>;
-type CacheFactoryOptions = Partial<
-  LRUCache.Options<string, CacheStoredValue, unknown>
->;
-
-export type CacheProvider = (
-  options: CacheFactoryOptions,
-) => Promise<ICacheProvider>;
-
-type CacheProviderResource = IResource<
+type CacheProviderResourceDefinition = IResource<
   any,
   Promise<CacheProvider>,
   any,
@@ -37,22 +41,19 @@ type CacheProviderResource = IResource<
   any
 >;
 
+type CacheProviderResource =
+  | CacheProviderResourceDefinition
+  | IResourceWithConfig<any, Promise<CacheProvider>, any, any, any, any, any>;
+
 export const cacheProviderResource = defineFrameworkResource({
   id: "runner.cacheProvider",
-  init: async () => {
-    const provider: CacheProvider = async (
-      options: CacheFactoryOptions,
-    ): Promise<ICacheProvider> =>
-      new LRUCache<string, CacheStoredValue, unknown>(
-        options as LRUCache.Options<string, CacheStoredValue, unknown>,
-      );
-    return provider;
-  },
+  init: async () => createDefaultCacheProvider(),
 });
 
 export interface CacheResourceConfig {
   defaultOptions?: CacheFactoryOptions;
   provider?: CacheProviderResource;
+  totalBudgetBytes?: number;
 }
 
 type CacheMiddlewareConfig = CacheFactoryOptions & {
@@ -70,7 +71,8 @@ function isCacheProviderResource(
   return (
     typeof value === "object" &&
     value !== null &&
-    Boolean((value as Record<symbol, unknown>)[symbolResource]) &&
+    (Boolean((value as Record<symbol, unknown>)[symbolResource]) ||
+      Boolean((value as Record<symbol, unknown>)[symbolResourceWithConfig])) &&
     typeof (value as { id?: unknown }).id === "string"
   );
 }
@@ -80,9 +82,15 @@ const cacheProviderResourcePattern = Match.Where(
     isCacheProviderResource(value),
 );
 
+const totalBudgetBytesPattern = Match.Where(
+  (value: unknown): value is number =>
+    typeof value === "number" && Number.isInteger(value) && value > 0,
+);
+
 const cacheResourceConfigPattern = Match.ObjectIncluding({
   defaultOptions: Match.Optional(cacheFactoryOptionsPattern),
   provider: Match.Optional(cacheProviderResourcePattern),
+  totalBudgetBytes: Match.Optional(totalBudgetBytesPattern),
 });
 
 const cacheMiddlewareConfigPattern = Match.ObjectIncluding({
@@ -131,7 +139,9 @@ export const cacheResource = defineFrameworkResource({
     config?.provider ?? cacheProviderResource,
   ],
   dependencies: (config: CacheResourceConfig) => ({
-    cacheProvider: config?.provider ?? cacheProviderResource,
+    cacheProvider: extractResourceAndConfig(
+      config?.provider ?? cacheProviderResource,
+    ).resource,
   }),
   init: async (config: CacheResourceConfig, { cacheProvider }) => {
     if (typeof cacheProvider !== "function") {
@@ -143,10 +153,28 @@ export const cacheResource = defineFrameworkResource({
       });
     }
 
+    if (
+      config?.totalBudgetBytes &&
+      !supportsTaskScopedCacheProvider(cacheProvider)
+    ) {
+      validationError.throw({
+        subject: "Cache provider",
+        id: "runner.cache",
+        originalError:
+          "Global cache budgets require a provider with task-scoped cache support. Remove totalBudgetBytes or use the default cache provider.",
+      });
+    }
+
+    const sharedBudget = config?.totalBudgetBytes
+      ? createSharedCacheBudgetState(config.totalBudgetBytes)
+      : undefined;
+
     return {
       map: new Map<string, ICacheProvider>(),
       pendingCreates: new Map<string, Promise<ICacheProvider>>(),
       cacheProvider,
+      totalBudgetBytes: config?.totalBudgetBytes,
+      sharedBudget,
       defaultOptions: {
         ttl: 10 * 1000,
         max: 100, // Maximum number of items in cache
@@ -159,6 +187,11 @@ export const cacheResource = defineFrameworkResource({
     cache.pendingCreates?.clear();
     for (const cacheInstance of cache.map.values()) {
       await cacheInstance.clear();
+    }
+    cache.sharedBudget?.entries.clear();
+    cache.sharedBudget?.localCaches.clear();
+    if (cache.sharedBudget) {
+      cache.sharedBudget.totalBytesUsed = 0;
     }
   },
 });
@@ -190,6 +223,36 @@ function assertCacheProviderInstance(
   }
 }
 
+function createCacheInstance({
+  cache,
+  cacheOptions,
+  taskId,
+}: {
+  cache: {
+    cacheProvider: CacheProvider;
+    sharedBudget?: SharedCacheBudgetState;
+  };
+  cacheOptions: CacheFactoryOptions;
+  taskId: string;
+}) {
+  if (supportsTaskScopedCacheProvider(cache.cacheProvider)) {
+    return createTaskScopedCacheInstance(cache.cacheProvider, {
+      taskId,
+      options: cacheOptions,
+      totalBudgetBytes: cache.sharedBudget?.totalBudgetBytes,
+      sharedBudget: cache.sharedBudget,
+    }).then((instance: ICacheProvider) => {
+      assertCacheProviderInstance(instance, cacheProviderResource.id);
+      return instance;
+    });
+  }
+
+  return cache.cacheProvider(cacheOptions).then((instance: ICacheProvider) => {
+    assertCacheProviderInstance(instance, cacheProviderResource.id);
+    return instance;
+  });
+}
+
 export const cacheMiddleware = defineFrameworkTaskMiddleware({
   id: "runner.middleware.task.cache",
   configSchema: cacheMiddlewareConfigPattern,
@@ -219,10 +282,12 @@ export const cacheMiddleware = defineFrameworkTaskMiddleware({
       if (pendingCreate) {
         cacheHolderForTask = await pendingCreate;
       } else {
-        const createPromise = cache
-          .cacheProvider(cacheOptions)
+        const createPromise = createCacheInstance({
+          cache,
+          cacheOptions,
+          taskId,
+        })
           .then((instance: ICacheProvider) => {
-            assertCacheProviderInstance(instance, cacheProviderResource.id);
             cache.map.set(taskId, instance);
             return instance;
           })

@@ -1,6 +1,7 @@
 import { defineResource, defineTask, defineTaskMiddleware } from "../../define";
 import { run } from "../../run";
 import {
+  CacheProvider,
   cacheResource,
   cacheProviderResource,
   cacheMiddleware,
@@ -47,9 +48,16 @@ describe("Caching System", () => {
           defaultOptions: {
             ttl: 1_000,
           },
+          totalBudgetBytes: 10_000,
           provider: cacheProviderResource,
         }),
       ).not.toThrow();
+    });
+
+    it("rejects a non-positive totalBudgetBytes value", () => {
+      expect(() => cacheResource.with({ totalBudgetBytes: 0 })).toThrow(
+        /totalBudgetBytes/i,
+      );
     });
 
     it("should initialize with default cache provider", async () => {
@@ -85,6 +93,33 @@ describe("Caching System", () => {
       });
 
       await expect(run(app)).rejects.toThrow(/must initialize to a function/i);
+    });
+
+    it("fails fast when totalBudgetBytes is used with a custom cache provider", async () => {
+      const customProvider = defineResource({
+        id: "custom-budget-provider",
+        init: async (): Promise<CacheProvider> => async () => ({
+          get: async (_key: string) => undefined,
+          set: async (_key: string, _value: unknown) => undefined,
+          clear: async () => undefined,
+        }),
+      });
+
+      const app = defineResource({
+        id: "cache-budget-provider-app",
+        register: [
+          cacheResource.with({
+            provider: customProvider,
+            totalBudgetBytes: 1_024,
+          }),
+        ],
+        dependencies: { cache: cacheResource },
+        init: async () => "ok",
+      });
+
+      await expect(run(app)).rejects.toThrow(
+        /global cache budgets require a provider with task-scoped cache support/i,
+      );
     });
 
     it("should create separate cache instances per task", async () => {
@@ -869,6 +904,66 @@ describe("Caching System", () => {
       await run(app);
     });
 
+    it("evicts the oldest entry across tasks when totalBudgetBytes is exceeded", async () => {
+      let taskACount = 0;
+      let taskBCount = 0;
+
+      const sharedCacheMiddleware = cacheMiddleware.with({
+        keyBuilder: (_taskId: string, input: unknown) => String(input),
+      });
+
+      const taskA = defineTask({
+        id: "global-budget-task-a",
+        middleware: [sharedCacheMiddleware],
+        run: async (input: string) => {
+          taskACount += 1;
+          return input.toUpperCase().repeat(4);
+        },
+      });
+
+      const taskB = defineTask({
+        id: "global-budget-task-b",
+        middleware: [sharedCacheMiddleware],
+        run: async (input: string) => {
+          taskBCount += 1;
+          return input.toUpperCase().repeat(4);
+        },
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [
+          cacheResource.with({
+            totalBudgetBytes: 9,
+            defaultOptions: {
+              sizeCalculation: (value) => String(value).length,
+            },
+          }),
+          cacheMiddleware,
+          taskA,
+          taskB,
+        ],
+        dependencies: { taskA, taskB, cache: cacheResource },
+        async init(_, { taskA, taskB, cache }) {
+          await taskA("a");
+          await taskB("b");
+          await taskA("c");
+
+          expect(cache.totalBudgetBytes).toBe(9);
+          expect(cache.map.size).toBe(2);
+
+          await taskB("b");
+          await taskA("c");
+          await taskA("a");
+
+          expect(taskACount).toBe(3);
+          expect(taskBCount).toBe(1);
+        },
+      });
+
+      await run(app);
+    });
+
     it("should handle cache clear during execution", async () => {
       let executionCount = 0;
       const testTask = defineTask({
@@ -984,6 +1079,46 @@ describe("Caching System", () => {
   });
 
   describe("Memory and Disposal", () => {
+    it("cleans shared budget state on disposal", async () => {
+      const task = defineTask({
+        id: "budget-disposal-task",
+        middleware: [
+          cacheMiddleware.with({
+            keyBuilder: (_taskId: string, input: unknown) => String(input),
+          }),
+        ],
+        run: async (input: string) => input.toUpperCase().repeat(4),
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [
+          cacheResource.with({
+            totalBudgetBytes: 20,
+            defaultOptions: {
+              sizeCalculation: (value) => String(value).length,
+            },
+          }),
+          cacheMiddleware,
+          task,
+        ],
+        dependencies: { task, cache: cacheResource },
+        async init(_, { task, cache }) {
+          await task("a");
+          expect(cache.sharedBudget?.entries.size).toBe(1);
+          expect(cache.sharedBudget?.totalBytesUsed).toBe(4);
+          return cache;
+        },
+      });
+
+      const result = await run(app);
+      await result.dispose();
+
+      expect(result.value.sharedBudget?.entries.size).toBe(0);
+      expect(result.value.sharedBudget?.localCaches.size).toBe(0);
+      expect(result.value.sharedBudget?.totalBytesUsed).toBe(0);
+    });
+
     it("should properly dispose async cache handlers", async () => {
       class AsyncDisposableCache implements ICacheProvider {
         store = new Map<string, any>();

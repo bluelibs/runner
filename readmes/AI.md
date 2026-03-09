@@ -326,8 +326,14 @@ Runner ships with these resilience-focused built-ins.
 Task middleware:
 
 - `middleware.task.cache.with({ ttl, max, ttlAutopurge, keyBuilder })`
-  - caches task results by task id + input
+  - caches task results per task, using the task input by default or `keyBuilder(taskId, input)` when provided
   - requires `resources.cache` to be registered
+  - `resources.cache.with({ provider?, defaultOptions?, totalBudgetBytes? })`
+    - `provider`: custom cache provider factory; defaults to the built-in memory cache
+    - `defaultOptions`: inherited per-task provider defaults
+    - `totalBudgetBytes`: one shared budget across task cache instances for providers that support task-scoped budgeting
+  - built-in memory cache supports `totalBudgetBytes` out of the box
+  - Node also exposes `resources.redisCacheProvider.with({ redis, prefix? })` as a Redis-backed provider with the same shared-budget model
 - `middleware.task.concurrency.with({ limit, key?, semaphore? })`
   - limits concurrent executions
   - use `key` to share a semaphore across middleware instances

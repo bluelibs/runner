@@ -11,6 +11,7 @@ import {
   middleware as nodeMiddleware,
   run as nodeRun,
 } from "../../node";
+import { RedisCache, redisCacheProviderResource } from "../../cache";
 import { run as coreRun } from "../../../run";
 
 describe("node entry run/shared-contract", () => {
@@ -32,6 +33,9 @@ describe("node entry run/shared-contract", () => {
     expect(resources.durable).toBeDefined();
     expect(resources.memoryWorkflow).toBeDefined();
     expect(resources.redisWorkflow).toBeDefined();
+    expect(resources.redisCacheProvider).toBeDefined();
+    expect(resources.redisCacheProvider).toBe(redisCacheProviderResource);
+    expect(RedisCache).toBeDefined();
     expect(tags.system).toBe(coreTags.system);
     expect(tags.cron).toBe(coreTags.cron);
     expect(tags.durableWorkflow).toBeDefined();

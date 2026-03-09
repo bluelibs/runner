@@ -19,6 +19,7 @@ import type {
     .build();
 
   resources.cache.with({ provider: validProvider });
+  resources.cache.with({ totalBudgetBytes: 1024 });
 
   const invalidProviderResource = r
     .resource("types-cache-provider-invalid-resource")
@@ -57,5 +58,10 @@ import type {
   resources.cache.with({
     // @ts-expect-error has() must return boolean | Promise<boolean>
     provider: invalidHasProvider,
+  });
+
+  resources.cache.with({
+    // @ts-expect-error totalBudgetBytes must be a number
+    totalBudgetBytes: "1024",
   });
 }

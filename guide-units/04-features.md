@@ -24,6 +24,11 @@ type CacheProviderFactory = (
 Notes:
 
 - `options` are merged from `resources.cache.with({ defaultOptions })` and middleware-level cache options.
+- `defaultOptions` remain inherited per-task provider options, not a shared global budget.
+- `resources.cache.with({ totalBudgetBytes })` adds a shared budget across cache entries for providers that support task-scoped budgeting.
+- The built-in in-memory provider supports `totalBudgetBytes` out of the box.
+- Node also ships with `resources.redisCacheProvider`, which supports `totalBudgetBytes` with Redis-backed storage.
+- Custom providers should enforce their own backend budget policy unless they explicitly support task-scoped budgets.
 - `keyBuilder` is middleware-only and is not passed to the provider.
 - `has()` is optional, but recommended when `undefined` can be a valid cached value.
 
@@ -48,22 +53,70 @@ const expensiveTask = r
   })
   .build();
 
-// Global cache configuration
+// Resource-level cache configuration
 const app = r
   .resource("app.cache")
   .register([
     // You have to register it, cache resource is not enabled by default.
     resources.cache.with({
+      totalBudgetBytes: 50 * 1024 * 1024, // Shared 50MB budget across built-in task caches
       defaultOptions: {
-        max: 1000, // Maximum items in cache
-        ttl: 30 * 1000, // Default TTL
+        max: 1000, // Per-task maximum items in cache
+        ttl: 30 * 1000, // Per-task default TTL
       },
     }),
   ])
   .build();
 ```
 
-### Minimal Redis Provider Example
+`totalBudgetBytes` is distinct from `defaultOptions.maxSize`:
+
+- `totalBudgetBytes`: one shared budget across built-in in-memory task caches
+- `defaultOptions.maxSize`: the inherited `lru-cache` size limit for each task cache instance
+
+### Node Redis Cache Provider
+
+Node includes an official Redis-backed cache provider built on top of the optional `ioredis` dependency.
+
+```typescript
+import { middleware, r, resources } from "@bluelibs/runner/node";
+
+const cachedTask = r
+  .task("app.tasks.cached")
+  .middleware([
+    middleware.task.cache.with({
+      ttl: 60 * 1000,
+    }),
+  ])
+  .run(async () => doExpensiveCalculation())
+  .build();
+
+const app = r
+  .resource("app")
+  .register([
+    resources.cache.with({
+      provider: resources.redisCacheProvider.with({
+        redis: process.env.REDIS_URL,
+        prefix: "app:cache",
+      }),
+      totalBudgetBytes: 50 * 1024 * 1024,
+      defaultOptions: {
+        ttl: 30 * 1000,
+      },
+    }),
+    cachedTask,
+  ])
+  .build();
+```
+
+Notes:
+
+- `redis` accepts either a Redis connection string or a compatible client instance.
+- `prefix` scopes the Redis keys used for entries, LRU ordering, and byte accounting.
+- When `prefix` is omitted, Runner generates an isolated per-container namespace.
+- Set an explicit `prefix` when you want multiple Node processes to share the same cache namespace and budget.
+
+### Custom Redis Provider Example
 
 ```typescript
 import { r } from "@bluelibs/runner";
