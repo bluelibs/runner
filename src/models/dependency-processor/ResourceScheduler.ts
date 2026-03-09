@@ -26,6 +26,11 @@ type DependencyTraversalState = {
   visitedTagLookups: Set<string>;
 };
 
+type ResourceDependencyCollectionOptions = {
+  includeTransitiveResourceDependencies?: boolean;
+  targetSet?: Set<string>;
+};
+
 export class ResourceScheduler {
   constructor(
     private readonly store: Store,
@@ -42,7 +47,7 @@ export class ResourceScheduler {
       this.collectResourceDependenciesFromMap(
         middleware.middleware.dependencies,
         middleware.middleware.id,
-        requiredResourceIds,
+        { targetSet: requiredResourceIds },
       );
     }
 
@@ -50,7 +55,7 @@ export class ResourceScheduler {
       this.collectResourceDependenciesFromMap(
         middleware.middleware.dependencies,
         middleware.middleware.id,
-        requiredResourceIds,
+        { targetSet: requiredResourceIds },
       );
     }
 
@@ -58,7 +63,7 @@ export class ResourceScheduler {
       this.collectResourceDependenciesFromMap(
         hook.hook.dependencies,
         hook.hook.id,
-        requiredResourceIds,
+        { targetSet: requiredResourceIds },
       );
     }
 
@@ -66,14 +71,14 @@ export class ResourceScheduler {
       this.collectResourceDependenciesFromMap(
         task.task.dependencies,
         task.task.id,
-        requiredResourceIds,
+        { targetSet: requiredResourceIds },
       );
     }
 
     this.collectResourceDependenciesFromMap(
       this.store.root.resource.dependencies,
       this.store.root.resource.id,
-      requiredResourceIds,
+      { targetSet: requiredResourceIds },
     );
 
     return requiredResourceIds;
@@ -104,9 +109,10 @@ export class ResourceScheduler {
         parallelInitSchedulingError.throw({
           pendingResourceIds: pending.map((resource) => resource.resource.id),
           blockedDependencies: pending.map((resource) => {
-            const dependencyIds = this.collectDirectResourceDependenciesFromMap(
+            const dependencyIds = this.collectResourceDependenciesFromMap(
               resource.resource.dependencies,
               resource.resource.id,
+              { includeTransitiveResourceDependencies: false },
             ).filter((dependencyId) => {
               const dependencyResource = this.store.resources.get(dependencyId);
               return dependencyResource?.isInitialized !== true;
@@ -164,9 +170,10 @@ export class ResourceScheduler {
   isResourceReadyForParallelInit(
     resource: ResourceStoreElementType<any, any, any>,
   ): boolean {
-    const dependencyIds = this.collectDirectResourceDependenciesFromMap(
+    const dependencyIds = this.collectResourceDependenciesFromMap(
       resource.resource.dependencies,
       resource.resource.id,
+      { includeTransitiveResourceDependencies: false },
     );
 
     return dependencyIds.every((dependencyId) => {
@@ -175,155 +182,24 @@ export class ResourceScheduler {
     });
   }
 
-  private collectDirectResourceDependenciesFromMap(
-    dependencies: unknown,
-    consumerId: string,
-  ): string[] {
-    const state: DependencyTraversalState = {
-      resourceIds: new Set<string>(),
-      visitedDefinitions: new Set<string>(),
-      visitedTagLookups: new Set<string>(),
-    };
-
-    this.traverseDirectDependencies(dependencies, consumerId, state);
-
-    return Array.from(state.resourceIds);
-  }
-
-  private traverseDirectDependencies(
-    dependencies: unknown,
-    consumerId: string,
-    state: DependencyTraversalState,
-  ): void {
-    if (!dependencies || typeof dependencies !== "object") {
-      return;
-    }
-
-    for (const dependency of Object.values(
-      dependencies as Record<string, unknown>,
-    )) {
-      this.traverseDirectDependency(dependency, consumerId, state);
-    }
-  }
-
-  private traverseDirectDependency(
-    dependency: unknown,
-    consumerId: string,
-    state: DependencyTraversalState,
-  ): void {
-    const optionalDependency = isOptional(dependency);
-    const rawDependency = optionalDependency
-      ? (dependency as { inner: unknown }).inner
-      : dependency;
-
-    if (isResource(rawDependency)) {
-      const resourceId = this.resolveDefinitionId(rawDependency);
-      const storedResource = this.store.resources.get(resourceId);
-      if (!storedResource) {
-        if (!optionalDependency) {
-          state.resourceIds.add(resourceId);
-        }
-        return;
-      }
-      state.resourceIds.add(resourceId);
-      return;
-    }
-
-    const nestedDependencies = this.getRegisteredDependencies(rawDependency);
-    if (nestedDependencies) {
-      const key = this.getDefinitionVisitKey(rawDependency);
-      if (!state.visitedDefinitions.has(key)) {
-        state.visitedDefinitions.add(key);
-        this.traverseDirectDependencies(
-          nestedDependencies,
-          this.resolveDefinitionId(rawDependency),
-          state,
-        );
-      }
-      return;
-    }
-
-    if (isTagStartup(rawDependency)) {
-      this.expandDirectTagDependency(rawDependency.tag, consumerId, state);
-      return;
-    }
-
-    if (isTag(rawDependency)) {
-      this.expandDirectTagDependency(rawDependency, consumerId, state);
-    }
-  }
-
-  private expandDirectTagDependency(
-    tag: ITag<any, any, any>,
-    consumerId: string,
-    state: DependencyTraversalState,
-  ): void {
-    const tagId = this.resolveDefinitionId(tag);
-    const tagLookupKey = `${consumerId}|${tagId}`;
-    if (state.visitedTagLookups.has(tagLookupKey)) {
-      return;
-    }
-    state.visitedTagLookups.add(tagLookupKey);
-
-    const effectiveTag = this.store.tags.get(tagId)! as ITag<any, any, any>;
-    const accessor = this.store.getTagAccessor(effectiveTag, {
-      consumerId,
-      includeSelf: false,
-    });
-
-    for (const entry of accessor.resources) {
-      this.traverseDirectDependency(
-        entry.definition as IResource<any, any, any>,
-        consumerId,
-        state,
-      );
-    }
-
-    for (const entry of accessor.tasks) {
-      this.traverseDirectDependency(
-        entry.definition as ITask<any, any, any>,
-        consumerId,
-        state,
-      );
-    }
-
-    for (const entry of accessor.hooks) {
-      this.traverseDirectDependency(
-        entry.definition as IHook<any, any, any>,
-        consumerId,
-        state,
-      );
-    }
-
-    for (const entry of accessor.taskMiddlewares) {
-      this.traverseDirectDependency(
-        entry.definition as ITaskMiddleware<any, any, any, any>,
-        consumerId,
-        state,
-      );
-    }
-
-    for (const entry of accessor.resourceMiddlewares) {
-      this.traverseDirectDependency(
-        entry.definition as IResourceMiddleware<any, any, any, any>,
-        consumerId,
-        state,
-      );
-    }
-  }
-
   private collectResourceDependenciesFromMap(
     dependencies: unknown,
     consumerId: string,
-    targetSet?: Set<string>,
+    options: ResourceDependencyCollectionOptions = {},
   ): string[] {
+    const {
+      includeTransitiveResourceDependencies = true,
+      targetSet,
+    } = options;
     const state: DependencyTraversalState = {
       resourceIds: targetSet ?? new Set<string>(),
       visitedDefinitions: new Set<string>(),
       visitedTagLookups: new Set<string>(),
     };
 
-    this.traverseDependencies(dependencies, consumerId, state);
+    this.traverseDependencies(dependencies, consumerId, state, {
+      includeTransitiveResourceDependencies,
+    });
 
     return Array.from(state.resourceIds);
   }
@@ -332,6 +208,9 @@ export class ResourceScheduler {
     dependencies: unknown,
     consumerId: string,
     state: DependencyTraversalState,
+    options: {
+      includeTransitiveResourceDependencies: boolean;
+    },
   ): void {
     if (!dependencies || typeof dependencies !== "object") {
       return;
@@ -340,7 +219,7 @@ export class ResourceScheduler {
     for (const dependency of Object.values(
       dependencies as Record<string, unknown>,
     )) {
-      this.traverseDependency(dependency, consumerId, state);
+      this.traverseDependency(dependency, consumerId, state, options);
     }
   }
 
@@ -348,6 +227,9 @@ export class ResourceScheduler {
     dependency: unknown,
     consumerId: string,
     state: DependencyTraversalState,
+    options: {
+      includeTransitiveResourceDependencies: boolean;
+    },
   ): void {
     const optionalDependency = isOptional(dependency);
     const rawDependency = optionalDependency
@@ -355,7 +237,12 @@ export class ResourceScheduler {
       : dependency;
 
     if (isResource(rawDependency)) {
-      this.collectResourceDependency(rawDependency, optionalDependency, state);
+      this.collectResourceDependency(
+        rawDependency,
+        optionalDependency,
+        state,
+        options,
+      );
       return;
     }
 
@@ -368,18 +255,19 @@ export class ResourceScheduler {
           nestedDependencies,
           this.resolveDefinitionId(rawDependency),
           state,
+          options,
         );
       }
       return;
     }
 
     if (isTagStartup(rawDependency)) {
-      this.expandTagDependency(rawDependency.tag, consumerId, state);
+      this.expandTagDependency(rawDependency.tag, consumerId, state, options);
       return;
     }
 
     if (isTag(rawDependency)) {
-      this.expandTagDependency(rawDependency, consumerId, state);
+      this.expandTagDependency(rawDependency, consumerId, state, options);
     }
   }
 
@@ -387,6 +275,9 @@ export class ResourceScheduler {
     resource: IResource<any, any, any>,
     optionalDependency: boolean,
     state: DependencyTraversalState,
+    options: {
+      includeTransitiveResourceDependencies: boolean;
+    },
   ): void {
     const resourceId = this.resolveDefinitionId(resource);
     const storedResource = this.store.resources.get(resourceId);
@@ -398,6 +289,10 @@ export class ResourceScheduler {
     }
 
     state.resourceIds.add(resourceId);
+    if (!options.includeTransitiveResourceDependencies) {
+      return;
+    }
+
     const key = `resource:${resourceId}`;
     if (state.visitedDefinitions.has(key)) {
       return;
@@ -408,6 +303,7 @@ export class ResourceScheduler {
       storedResource.resource.dependencies,
       storedResource.resource.id,
       state,
+      options,
     );
   }
 
@@ -450,6 +346,9 @@ export class ResourceScheduler {
     tag: ITag<any, any, any>,
     consumerId: string,
     state: DependencyTraversalState,
+    options: {
+      includeTransitiveResourceDependencies: boolean;
+    },
   ): void {
     const tagId = this.resolveDefinitionId(tag);
     const tagLookupKey = `${consumerId}|${tagId}`;
@@ -469,6 +368,7 @@ export class ResourceScheduler {
         entry.definition as IResource<any, any, any>,
         consumerId,
         state,
+        options,
       );
     }
 
@@ -477,6 +377,7 @@ export class ResourceScheduler {
         entry.definition as ITask<any, any, any>,
         consumerId,
         state,
+        options,
       );
     }
 
@@ -485,6 +386,7 @@ export class ResourceScheduler {
         entry.definition as IHook<any, any, any>,
         consumerId,
         state,
+        options,
       );
     }
 
@@ -493,6 +395,7 @@ export class ResourceScheduler {
         entry.definition as ITaskMiddleware<any, any, any, any>,
         consumerId,
         state,
+        options,
       );
     }
 
@@ -501,6 +404,7 @@ export class ResourceScheduler {
         entry.definition as IResourceMiddleware<any, any, any, any>,
         consumerId,
         state,
+        options,
       );
     }
   }

@@ -131,18 +131,7 @@ export class DependencyProcessor {
   private async computeTaskDependencies(
     task: TaskStoreElementType<any, any, any>,
   ) {
-    if (task.isInitialized) {
-      return;
-    }
-
-    const deps = task.task.dependencies as DependencyMapType;
-    task.computedDependencies = await this.extractDependencies(
-      deps,
-      task.task.id,
-    );
-    // Mark task as initialized so subsequent injections don't recompute using
-    // a potentially lazy dependencies() function and lose computed values.
-    task.isInitialized = true;
+    await this.dependencyExtractor.ensureTaskPrepared(task);
   }
 
   // Initialize non-root resources that are registered but not depended upon (side effects/disposers).

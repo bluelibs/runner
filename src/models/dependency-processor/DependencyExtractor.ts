@@ -60,6 +60,31 @@ export class DependencyExtractor {
     ) => Promise<void>,
   ) {}
 
+  async ensureTaskPrepared(
+    task: TaskStoreElementType<any, any, any>,
+  ): Promise<void> {
+    if (task.isInitialized) {
+      return;
+    }
+
+    let initPromise = this.inFlightTaskInitializations.get(task.task.id);
+    if (!initPromise) {
+      initPromise = (async () => {
+        const dependencies = task.task.dependencies as DependencyMapType;
+        task.computedDependencies = await this.extractDependencies(
+          dependencies,
+          task.task.id,
+        );
+        task.isInitialized = true;
+      })().finally(() => {
+        this.inFlightTaskInitializations.delete(task.task.id);
+      });
+      this.inFlightTaskInitializations.set(task.task.id, initPromise);
+    }
+
+    await initPromise;
+  }
+
   wrapResourceDependencies<TD extends DependencyMapType>(
     deps: TD,
     extracted: DependencyValuesType<TD>,
@@ -69,43 +94,36 @@ export class DependencyExtractor {
     for (const key of Object.keys(deps) as Array<keyof TD>) {
       const original = deps[key];
       const value = (extracted as Record<string, unknown>)[key as string];
-      if (utils.isOptional(original)) {
-        const inner = (original as { inner: unknown }).inner;
-        if (utils.isTask(inner)) {
-          wrapped[key as string] = value
-            ? this.makeTaskWithIntercept(inner, ownerResourceId)
-            : undefined;
-        } else if (
-          utils.isResource(inner) &&
-          inner.id === MIDDLEWARE_MANAGER_RESOURCE_ID
-        ) {
-          wrapped[key as string] = this.makeOwnerAwareMiddlewareManager(
-            value,
-            ownerResourceId,
-          );
-        } else {
-          wrapped[key as string] = value as unknown;
-        }
-        continue;
-      }
-      if (utils.isTask(original)) {
-        wrapped[key as string] = this.makeTaskWithIntercept(
-          original,
-          ownerResourceId,
-        );
-      } else if (
-        utils.isResource(original) &&
-        original.id === MIDDLEWARE_MANAGER_RESOURCE_ID
-      ) {
-        wrapped[key as string] = this.makeOwnerAwareMiddlewareManager(
-          value,
-          ownerResourceId,
-        );
-      } else {
-        wrapped[key as string] = value as unknown;
-      }
+      wrapped[key as string] = this.decorateResourceDependency(
+        original,
+        value,
+        ownerResourceId,
+      );
     }
     return wrapped as ResourceDependencyValuesType<TD>;
+  }
+
+  private decorateResourceDependency(
+    original: unknown,
+    extracted: unknown,
+    ownerResourceId: string,
+  ): unknown {
+    const dependency = utils.isOptional(original) ? original.inner : original;
+
+    if (utils.isTask(dependency)) {
+      return extracted === undefined
+        ? undefined
+        : this.makeTaskWithIntercept(dependency, ownerResourceId);
+    }
+
+    if (
+      utils.isResource(dependency) &&
+      dependency.id === MIDDLEWARE_MANAGER_RESOURCE_ID
+    ) {
+      return this.makeOwnerAwareMiddlewareManager(extracted, ownerResourceId);
+    }
+
+    return extracted;
   }
 
   async extractDependencies<T extends DependencyMapType>(
@@ -218,23 +236,7 @@ export class DependencyExtractor {
     }
 
     const st = storeTask!;
-    if (!st.isInitialized) {
-      let initPromise = this.inFlightTaskInitializations.get(st.task.id);
-      if (!initPromise) {
-        initPromise = (async () => {
-          const dependencies = st.task.dependencies as DependencyMapType;
-          st.computedDependencies = await this.extractDependencies(
-            dependencies,
-            st.task.id,
-          );
-          st.isInitialized = true;
-        })().finally(() => {
-          this.inFlightTaskInitializations.delete(st.task.id);
-        });
-        this.inFlightTaskInitializations.set(st.task.id, initPromise);
-      }
-      await initPromise;
-    }
+    await this.ensureTaskPrepared(st);
 
     const runtimeCallSource = this.resolveRuntimeCallSource(
       source ?? st.task.id,
