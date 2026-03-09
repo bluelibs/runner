@@ -22,7 +22,6 @@ import {
   runtimeAccessViolationError,
   runtimeElementNotFoundError,
   runtimeRootNotAvailableError,
-  runtimeRootNotInitializedError,
 } from "../errors";
 import { runtimeSource } from "../types/runtimeSource";
 import { HealthReporter } from "./HealthReporter";
@@ -69,7 +68,7 @@ type RunResultLazyOptions = {
  * - Task execution via `runTask()`
  * - Event emission via `emitEvent()`
  * - Resource access via `getResourceValue()` / `getLazyResourceValue()`
- * - Root access via `getRootValue()`, `getRootConfig()`, `getRootId()`
+ * - Root definition access via `root`
  * - Disposal via `dispose()`
  *
  * @example
@@ -191,6 +190,16 @@ export class RunResult<V> implements IRuntime<V> {
   public get state(): RuntimeState {
     this.ensureRuntimeIsActive();
     return this.getRuntimeState();
+  }
+
+  public get root(): IResource<any, Promise<V>, any, any, any> {
+    return this.getRootOrThrow().resource as IResource<
+      any,
+      Promise<V>,
+      any,
+      any,
+      any
+    >;
   }
 
   /**
@@ -566,46 +575,6 @@ export class RunResult<V> implements IRuntime<V> {
     this.ensureRuntimeIsActive();
     this.ensureAdmissionControlIsAvailable();
     return this.recoveryController.recoverWhen(options);
-  };
-
-  /**
-   * Returns the ID of the root resource.
-   * @returns The root resource identifier
-   *
-   * @example
-   * const rootId = runtime.getRootId(); // "app"
-   */
-  public getRootId = (): string => this.getRootOrThrow().resource.id;
-
-  /**
-   * Returns the configuration passed to the root resource.
-   * @returns The root resource configuration
-   *
-   * @example
-   * const config = runtime.getRootConfig<AppConfig>();
-   */
-  public getRootConfig = <Config = unknown>(): Config =>
-    this.getRootOrThrow().config as Config;
-
-  /**
-   * Returns the initialized value of the root resource.
-   *
-   * This is the value returned by the root resource's `init` function.
-   * The root must have been fully initialized before calling this.
-   *
-   * @returns The root resource's initialized value
-   * @throws RuntimeError if root hasn't been initialized yet
-   *
-   * @example
-   * const app = runtime.getRootValue<App>();
-   */
-  public getRootValue = <Value = unknown>(): Value => {
-    const root = this.getRootOrThrow();
-    if (root.isInitialized !== true) {
-      runtimeRootNotInitializedError.throw({ rootId: root.resource.id });
-    }
-
-    return root.value as Value;
   };
 
   /**

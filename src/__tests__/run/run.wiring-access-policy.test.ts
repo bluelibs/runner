@@ -511,7 +511,7 @@ describe("run-isolate", () => {
     const healthTask = defineTask({
       id: "policy-allow-health-consumer",
       dependencies: { runtime: globalResources.runtime },
-      run: async (_input, deps) => deps.runtime.getRootId(),
+      run: async (_input, deps) => deps.runtime.root.id,
     });
 
     const guarded = defineResource({
@@ -537,7 +537,7 @@ describe("run-isolate", () => {
     const healthTask = defineTask({
       id: "policy-allow-parent-deny-consumer",
       dependencies: { runtime: globalResources.runtime },
-      run: async (_input, deps) => deps.runtime.getRootId(),
+      run: async (_input, deps) => deps.runtime.root.id,
     });
 
     const child = defineResource({
@@ -569,7 +569,7 @@ describe("run-isolate", () => {
     const healthTask = defineTask({
       id: "policy-allow-only-consumer",
       dependencies: { runtime: globalResources.runtime },
-      run: async (_input, deps) => deps.runtime.getRootId(),
+      run: async (_input, deps) => deps.runtime.root.id,
     });
 
     const guarded = defineResource({
@@ -613,7 +613,7 @@ describe("run-isolate", () => {
     const consumer = defineTask({
       id: "policy-allow-missing-targets-consumer",
       dependencies: { runtime: globalResources.runtime },
-      run: async (_input, deps) => deps.runtime.getRootId(),
+      run: async (_input, deps) => deps.runtime.root.id,
     });
 
     const guarded = defineResource({
@@ -656,7 +656,7 @@ describe("run-isolate", () => {
     const consumer = defineTask({
       id: "policy-allow-unknown-consumer",
       dependencies: { runtime: globalResources.runtime },
-      run: async (_input, deps) => deps.runtime.getRootId(),
+      run: async (_input, deps) => deps.runtime.root.id,
     });
 
     const guarded = defineResource({
@@ -679,7 +679,7 @@ describe("run-isolate", () => {
     const consumer = defineTask({
       id: "policy-allow-invalid-channels-consumer",
       dependencies: { runtime: globalResources.runtime },
-      run: async (_input, deps) => deps.runtime.getRootId(),
+      run: async (_input, deps) => deps.runtime.root.id,
     });
 
     const guarded = defineResource({
@@ -708,7 +708,7 @@ describe("run-isolate", () => {
     const consumer = defineTask({
       id: "policy-allow-invalid-channel-shape-consumer",
       dependencies: { runtime: globalResources.runtime },
-      run: async (_input, deps) => deps.runtime.getRootId(),
+      run: async (_input, deps) => deps.runtime.root.id,
     });
 
     const guarded = defineResource({
@@ -737,7 +737,7 @@ describe("run-isolate", () => {
     const healthTask = defineTask({
       id: "policy-allow-nonmatching-target-consumer",
       dependencies: { runtime: globalResources.runtime },
-      run: async (_input, deps) => deps.runtime.getRootId(),
+      run: async (_input, deps) => deps.runtime.root.id,
     });
 
     const guarded = defineResource({

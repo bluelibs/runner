@@ -9,7 +9,7 @@ describe("system.runtime", () => {
     jest.useRealTimers();
   });
 
-  it("works inside resource init and after boot with task/event/resource/root helpers", async () => {
+  it("works inside resource init and after boot with task/event/resource/root access", async () => {
     const double = defineTask({
       id: "runtime-double",
       run: async (input: number) => input * 2,
@@ -39,11 +39,9 @@ describe("system.runtime", () => {
 
         snapshot.accValue = runtime.getResourceValue(acc).value;
         snapshot.accConfig = runtime.getResourceConfig(acc);
-        snapshot.rootId = runtime.getRootId();
-        snapshot.rootConfig = runtime.getRootConfig<{ mode: string }>();
-
-        expect(() => runtime.getRootValue()).toThrow(
-          'Root resource "runtime-app" is not initialized yet.',
+        snapshot.rootId = runtime.root.id;
+        snapshot.rootConfig = runtime.getResourceConfig<{ mode: string }>(
+          runtime.root,
         );
 
         return "probe-ready";
@@ -62,8 +60,10 @@ describe("system.runtime", () => {
         runtime: globalResources.runtime,
       },
       init: async (config, { probe, runtime }) => {
-        expect(runtime.getRootId()).toBe("runtime-app");
-        expect(runtime.getRootConfig<{ mode: string }>()).toEqual({
+        expect(runtime.root.id).toBe("runtime-app");
+        expect(
+          runtime.getResourceConfig<{ mode: string }>(runtime.root),
+        ).toEqual({
           mode: config.mode,
         });
         return `app-ready:${probe}:${config.mode}`;
@@ -82,11 +82,13 @@ describe("system.runtime", () => {
 
     const runtime = runtimeResult.getResourceValue(globalResources.runtime);
     expect(runtime).toBe(runtimeResult);
-    expect(runtime.getRootId()).toBe("runtime-app");
-    expect(runtime.getRootConfig<{ mode: string }>()).toEqual({
+    expect(runtime.root.id).toBe("runtime-app");
+    expect(runtime.getResourceConfig<{ mode: string }>(runtime.root)).toEqual({
       mode: "alpha",
     });
-    expect(runtime.getRootValue<string>()).toBe("app-ready:probe-ready:alpha");
+    expect(runtime.getResourceValue(runtime.root)).toBe(
+      "app-ready:probe-ready:alpha",
+    );
 
     await runtimeResult.dispose();
   });
@@ -170,15 +172,7 @@ describe("system.runtime", () => {
       async () => {},
     );
 
-    expect(() => runtime.getRootId()).toThrow(
-      "Root resource is not available.",
-    );
-    expect(() => runtime.getRootConfig()).toThrow(
-      "Root resource is not available.",
-    );
-    expect(() => runtime.getRootValue()).toThrow(
-      "Root resource is not available.",
-    );
+    expect(() => runtime.root).toThrow("Root resource is not available.");
   });
 
   it("blocks dispose during bootstrap from injected runtime", async () => {

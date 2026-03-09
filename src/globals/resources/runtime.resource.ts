@@ -14,7 +14,7 @@ export const runtimeResource = defineResource<
     meta: {
       title: "Runtime Services",
       description:
-        "Safe runtime facade for advanced in-resource operations (task/event execution, resource reads, root helpers).",
+        "Safe runtime facade for advanced in-resource operations (task/event execution, resource reads, root definition access).",
     },
     tags: [systemTag],
   }),

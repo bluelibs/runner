@@ -650,18 +650,17 @@ describe("RunResult", () => {
     });
   });
 
-  it("exposes root helpers and blocks dispose during bootstrap", async () => {
+  it("exposes the root definition and blocks dispose during bootstrap", async () => {
     const probe = defineResource({
       id: "rr-root-probe",
       dependencies: { runtime: globalResources.runtime },
       init: async (_config, { runtime }) => {
-        expect(runtime.getRootId()).toBe("rr-root-app");
-        expect(runtime.getRootConfig<{ mode: "alpha" }>()).toEqual({
+        expect(runtime.root.id).toBe("rr-root-app");
+        expect(
+          runtime.getResourceConfig<{ mode: "alpha" }>(runtime.root),
+        ).toEqual({
           mode: "alpha",
         });
-        expect(() => runtime.getRootValue()).toThrow(
-          'Root resource "rr-root-app" is not initialized yet.',
-        );
         expect(() => runtime.dispose()).toThrow(
           "RunResult.dispose() is not available during bootstrap. Wait for run() to finish initialization.",
         );
@@ -678,11 +677,11 @@ describe("RunResult", () => {
     const runtime = await run(app.with({ mode: "alpha" }), {
       shutdownHooks: false,
     });
-    expect(runtime.getRootId()).toBe("rr-root-app");
-    expect(runtime.getRootConfig<{ mode: "alpha" }>()).toEqual({
+    expect(runtime.root.id).toBe("rr-root-app");
+    expect(runtime.getResourceConfig<{ mode: "alpha" }>(runtime.root)).toEqual({
       mode: "alpha",
     });
-    expect(runtime.getRootValue<string>()).toBe("app-ready");
+    expect(runtime.getResourceValue(runtime.root)).toBe("app-ready");
 
     await runtime.dispose();
   });

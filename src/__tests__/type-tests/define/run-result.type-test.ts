@@ -177,7 +177,7 @@ void (async () => {
   withContextReport.result.attemptedListeners;
 })();
 
-// Scenario: RunResult root helpers preserve typing.
+// Scenario: RunResult exposes the root definition for generic resource access.
 void (async () => {
   type RootConfig = { mode: "dev" | "prod" };
   type RootValue = { ready: true };
@@ -188,10 +188,10 @@ void (async () => {
   });
 
   const rr = await run(app.with({ mode: "dev" }));
-  const rootId: string = rr.getRootId();
-  const rootConfig = rr.getRootConfig<RootConfig>();
+  const rootId: string = rr.root.id;
+  const rootConfig = rr.getResourceConfig<RootConfig>(rr.root);
   const mode: "dev" | "prod" = rootConfig.mode;
-  const rootValue = rr.getRootValue<RootValue>();
+  const rootValue = rr.getResourceValue(rr.root);
   const ready: true = rootValue.ready;
 
   void rootId;

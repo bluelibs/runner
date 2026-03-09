@@ -116,19 +116,6 @@ export const runtimeRootNotAvailableError = error<DefaultErrorType>(
   )
   .build();
 
-export const runtimeRootNotInitializedError = error<
-  { rootId: string } & DefaultErrorType
->("runner.errors.runtimeRootNotInitialized")
-  .format(
-    ({ rootId }) =>
-      `Root resource "${rootId.toString()}" is not initialized yet.`,
-  )
-  .remediation(
-    ({ rootId }) =>
-      `Await run(...) completion and avoid accessing root "${rootId}" during bootstrap/lazy initialization windows.`,
-  )
-  .build();
-
 export const runResultDisposeDuringBootstrapError = error<DefaultErrorType>(
   "runner.errors.runResultDisposeDuringBootstrap",
 )

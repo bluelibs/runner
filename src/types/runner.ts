@@ -41,6 +41,8 @@ export interface IRuntime<V = unknown> extends IHealthReporter {
   readonly state: RuntimeState;
   /** Normalized run() options captured for this runtime instance. */
   readonly runOptions: ResolvedRunOptions;
+  /** Root resource definition for this runtime. */
+  readonly root: IResource<any, Promise<V>, any, any, any>;
 
   /**
    * Executes a registered task.
@@ -83,13 +85,6 @@ export interface IRuntime<V = unknown> extends IHealthReporter {
   getResourceConfig<Config>(
     resource: string | IResource<Config, any, any, any, any>,
   ): Config;
-
-  /** Returns the ID of the root resource. */
-  getRootId(): string;
-  /** Returns the configuration passed to the root resource. */
-  getRootConfig<Config = unknown>(): Config;
-  /** Returns the initialized value of the root resource. */
-  getRootValue<Value = V>(): Value;
 
   /** Stops admitting new external work while allowing active work to continue. */
   pause(reason?: string): void;

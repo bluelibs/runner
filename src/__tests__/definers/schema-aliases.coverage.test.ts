@@ -65,7 +65,7 @@ describe("schema aliases coverage", () => {
     const runtime = await run(app);
     expect(taskParsed).toBe(true);
     expect(resourceParsed).toBe(true);
-    expect(runtime.getRootValue<{ answer: number; port: number }>()).toEqual({
+    expect(runtime.getResourceValue(runtime.root)).toEqual({
       answer: 4,
       port: 3000,
     });
@@ -238,7 +238,7 @@ describe("schema aliases coverage", () => {
       .build();
 
     const runtime = await run(app);
-    expect(runtime.getRootValue<string>()).toBe("ready");
+    expect(runtime.getResourceValue(runtime.root)).toBe("ready");
     await runtime.dispose();
   });
 });

@@ -12,7 +12,7 @@ const greet = r
 const runtimeInfo = r
   .resource("runtimeInfo")
   .dependencies({ runtime: resources.runtime })
-  .init(async (_config, { runtime }) => runtime.getRootId())
+  .init(async (_config, { runtime }) => runtime.root.id)
   .build();
 
 const app = r.resource("app").register([greet, runtimeInfo]).build();
