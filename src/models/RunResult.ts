@@ -364,12 +364,12 @@ export class RunResult<V> implements IRuntime<V> {
         elementId: eventId,
       });
     }
-    event = this.store.events.get(eventId)!.event as IEvent<P>;
+    event = this.store.events.get(eventId)!.event;
 
     // Violations return a rejected Promise rather than throwing synchronously
     // so callers can always use .catch() / await idioms on the returned Promise.
     try {
-      this.assertRuntimeAccess((event as IEvent<P>).id, "Event");
+      this.assertRuntimeAccess(event.id, "Event");
     } catch (e) {
       return Promise.reject(e);
     }
