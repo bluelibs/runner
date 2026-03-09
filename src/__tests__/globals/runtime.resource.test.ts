@@ -2,6 +2,7 @@ import { defineEvent, defineResource, defineTask } from "../../define";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
 import { RunResult } from "../../models/RunResult";
+import { ResourceLifecycleMode, RunnerMode } from "../../types/runner";
 
 describe("system.runtime", () => {
   afterEach(() => {
@@ -149,6 +150,23 @@ describe("system.runtime", () => {
       } as any,
       {} as any,
       {} as any,
+      {
+        logs: {
+          printThreshold: "info",
+          printStrategy: "pretty",
+          bufferLogs: false,
+        },
+        errorBoundary: true,
+        shutdownHooks: false,
+        disposeBudgetMs: 30_000,
+        disposeDrainBudgetMs: 30_000,
+        onUnhandledError: async () => {},
+        dryRun: false,
+        executionContext: null,
+        lazy: false,
+        lifecycleMode: ResourceLifecycleMode.Sequential,
+        mode: RunnerMode.TEST,
+      },
       async () => {},
     );
 

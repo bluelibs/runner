@@ -1,5 +1,5 @@
 import { createRuntimeServices } from "../../tools/createRuntimeServices";
-import { ResourceLifecycleMode } from "../../types/runner";
+import { ResourceLifecycleMode, RunnerMode } from "../../types/runner";
 import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { Logger, PrintStrategy } from "../../models/Logger";
@@ -7,6 +7,7 @@ import { TaskRunner } from "../../models/TaskRunner";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 
 const defaults = {
+  mode: RunnerMode.TEST,
   lifecycleMode: ResourceLifecycleMode.Sequential,
   executionContextConfig: null,
   lazy: false,

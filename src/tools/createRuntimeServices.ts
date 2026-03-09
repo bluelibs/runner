@@ -9,12 +9,13 @@ import {
   bindProcessErrorHandler,
 } from "../models/UnhandledError";
 import { registerProcessLevelSafetyNets } from "./processShutdownHooks";
-import { ResourceLifecycleMode } from "../types/runner";
+import { ResourceLifecycleMode, RunnerMode } from "../types/runner";
 import { LifecycleAdmissionController } from "../models/runtime/LifecycleAdmissionController";
 import { ExecutionContextStore } from "../models/ExecutionContextStore";
 import type { ExecutionContextConfig } from "../types/executionContext";
 
 export type CreateRuntimeServicesInput = {
+  mode: RunnerMode;
   lifecycleMode: ResourceLifecycleMode;
   executionContextConfig: ExecutionContextConfig | null;
   lazy: boolean;
@@ -64,7 +65,7 @@ export function createRuntimeServices(
     eventManager,
     logger,
     onUnhandledError,
-    undefined,
+    input.mode,
     lifecycleAdmissionController,
   );
   const taskRunner = new TaskRunner(

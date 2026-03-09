@@ -1,6 +1,7 @@
 import { defineResource } from "../../define";
 import { RunResult } from "../../models";
 import { createTestFixture } from "../test-utils";
+import { ResourceLifecycleMode, RunnerMode } from "../../types/runner";
 
 enum ResourceId {
   Root = "store-regression-root",
@@ -15,6 +16,23 @@ describe("Store regressions", () => {
       store,
       eventManager,
       createTaskRunner(),
+      {
+        logs: {
+          printThreshold: "info",
+          printStrategy: "pretty",
+          bufferLogs: false,
+        },
+        errorBoundary: true,
+        shutdownHooks: false,
+        disposeBudgetMs: 30_000,
+        disposeDrainBudgetMs: 30_000,
+        onUnhandledError: async () => {},
+        dryRun: false,
+        executionContext: null,
+        lazy: false,
+        lifecycleMode: ResourceLifecycleMode.Sequential,
+        mode: RunnerMode.TEST,
+      },
       async () => store.dispose(),
     );
     const root = defineResource({

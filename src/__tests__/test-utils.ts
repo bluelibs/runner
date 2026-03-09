@@ -1,5 +1,27 @@
 import { EventManager, Logger, RunResult, Store, TaskRunner } from "../models";
 import { RunnerMode } from "../defs";
+import {
+  ResourceLifecycleMode,
+  type ResolvedRunOptions,
+} from "../types/runner";
+
+const testRunOptions: ResolvedRunOptions = {
+  logs: {
+    printThreshold: "info",
+    printStrategy: "pretty",
+    bufferLogs: false,
+  },
+  errorBoundary: true,
+  shutdownHooks: false,
+  disposeBudgetMs: 30_000,
+  disposeDrainBudgetMs: 30_000,
+  onUnhandledError: jest.fn(),
+  dryRun: false,
+  executionContext: null,
+  lazy: false,
+  lifecycleMode: ResourceLifecycleMode.Sequential,
+  mode: RunnerMode.TEST,
+};
 
 /**
  * Creates a standard test fixture with EventManager, Logger, and Store.
@@ -32,6 +54,7 @@ export function createTestFixture() {
         store,
         eventManager,
         taskRunner ?? new TaskRunner(store, eventManager, logger),
+        testRunOptions,
         async () => store.dispose(),
       ),
   };

@@ -4,6 +4,7 @@ import { run, system } from "../../../";
 import type { IEventEmitReport } from "../../../types/event";
 import type { ExecutionRecordResult } from "../../../types/executionContext";
 import type { IResourceHealthReport } from "../../../types/resource";
+import { RunnerMode } from "../../../types/runner";
 
 // Type-only tests for RunResult API typing.
 
@@ -196,4 +197,21 @@ void (async () => {
   void rootId;
   void mode;
   void ready;
+})();
+
+// Scenario: RunResult exposes normalized runOptions typing.
+void (async () => {
+  const app = defineResource({
+    id: "types-run-options-app",
+  });
+
+  const rr = await run(app, { mode: RunnerMode.PROD, executionContext: true });
+  const runtimeMode: RunnerMode = rr.runOptions.mode;
+  const printThreshold = rr.runOptions.logs.printThreshold;
+  const cycleDetection = rr.runOptions.executionContext?.cycleDetection;
+  const maxDepth: number | undefined = cycleDetection?.maxDepth;
+
+  void runtimeMode;
+  void printThreshold;
+  void maxDepth;
 })();

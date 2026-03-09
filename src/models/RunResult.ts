@@ -30,6 +30,7 @@ import { RuntimeLifecyclePhase } from "./runtime/LifecycleAdmissionController";
 import {
   IRuntimeRecoveryHandle,
   IRuntimeRecoveryOptions,
+  ResolvedRunOptions,
   RuntimeState,
 } from "../types/runner";
 import { globalResources } from "../globals/globalResources";
@@ -145,6 +146,11 @@ export class RunResult<V> implements IRuntime<V> {
      * Handles dependency injection, validation, and error handling.
      */
     private readonly taskRunner: TaskRunner,
+    /**
+     * Normalized run() options captured for this runtime instance.
+     * This lets tooling inspect the effective runtime configuration directly.
+     */
+    public readonly runOptions: ResolvedRunOptions,
     /**
      * Function to call during disposal.
      * Disposes all resources in reverse initialization order.

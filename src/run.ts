@@ -2,7 +2,11 @@ import { IResource, IResourceWithConfig } from "./defs";
 import { globalEvents } from "./globals/globalEvents";
 import { registerShutdownHook } from "./tools/processShutdownHooks";
 import { RunResult } from "./models/RunResult";
-import { ResourceLifecycleMode, RunOptions } from "./types/runner";
+import {
+  ResolvedRunOptions,
+  ResourceLifecycleMode,
+  RunOptions,
+} from "./types/runner";
 import { getPlatform } from "./platform";
 import { runtimeSource } from "./types/runtimeSource";
 import {
@@ -14,8 +18,63 @@ import { BootstrapCoordinator } from "./tools/BootstrapCoordinator";
 import { createRuntimeServices } from "./tools/createRuntimeServices";
 import { extractResourceAndConfig } from "./tools/extractResourceAndConfig";
 import { resolveExecutionContextConfig } from "./tools/resolveExecutionContextConfig";
+import { detectRunnerMode } from "./tools/detectRunnerMode";
 
 const activeRunResults = new Set<RunResult<any>>();
+
+function normalizeRunOptions(options: RunOptions | undefined): Omit<
+  ResolvedRunOptions,
+  "onUnhandledError"
+> & {
+  onUnhandledErrorInput?: ResolvedRunOptions["onUnhandledError"];
+} {
+  const debug = options?.debug;
+  const errorBoundary = options?.errorBoundary ?? true;
+  const shutdownHooks = options?.shutdownHooks ?? true;
+  const disposeBudgetMs = options?.disposeBudgetMs ?? 30_000;
+  const disposeDrainBudgetMs = options?.disposeDrainBudgetMs ?? 30_000;
+  const dryRun = options?.dryRun ?? false;
+  const lazy = options?.lazy ?? false;
+  const executionContext = resolveExecutionContextConfig(
+    options?.executionContext,
+  );
+  const lifecycleMode =
+    options?.lifecycleMode === ResourceLifecycleMode.Parallel
+      ? ResourceLifecycleMode.Parallel
+      : ResourceLifecycleMode.Sequential;
+  const mode = detectRunnerMode(options?.mode);
+  const logs = {
+    printThreshold:
+      options?.logs?.printThreshold ??
+      (getPlatform().getEnv("NODE_ENV") === "test" ? null : "info"),
+    printStrategy: options?.logs?.printStrategy ?? "pretty",
+    bufferLogs: options?.logs?.bufferLogs ?? false,
+  };
+
+  return {
+    debug,
+    logs: Object.freeze(logs),
+    errorBoundary,
+    shutdownHooks,
+    disposeBudgetMs,
+    disposeDrainBudgetMs,
+    onUnhandledErrorInput: options?.onUnhandledError,
+    dryRun,
+    executionContext:
+      executionContext === null
+        ? null
+        : Object.freeze({
+            ...executionContext,
+            cycleDetection:
+              executionContext.cycleDetection === null
+                ? null
+                : Object.freeze({ ...executionContext.cycleDetection }),
+          }),
+    lazy,
+    lifecycleMode,
+    mode,
+  };
+}
 
 /**
  * This is the central function that kicks off your runner. You can run as many resources as you want in a single process, they will run in complete isolation.
@@ -45,37 +104,7 @@ export async function run<C, V extends Promise<any>>(
   options?: RunOptions,
 ): Promise<RunResult<V extends Promise<infer U> ? U : V>> {
   await getPlatform().init();
-
-  // --- Option normalization ---
-  const {
-    debug = undefined,
-    logs = {},
-    errorBoundary = true,
-    shutdownHooks = true,
-    disposeBudgetMs = 30_000,
-    disposeDrainBudgetMs = 30_000,
-    dryRun = false,
-    lazy = false,
-    onUnhandledError: onUnhandledErrorOpt,
-    executionContext: executionContextOpt,
-    lifecycleMode,
-  } = options || {};
-
-  const executionContextConfig =
-    resolveExecutionContextConfig(executionContextOpt);
-
-  const normalizedLifecycleMode =
-    lifecycleMode === ResourceLifecycleMode.Parallel
-      ? ResourceLifecycleMode.Parallel
-      : ResourceLifecycleMode.Sequential;
-
-  const {
-    printThreshold = getPlatform().getEnv("NODE_ENV") === "test"
-      ? null
-      : "info",
-    printStrategy = "pretty",
-    bufferLogs = false,
-  } = logs;
+  const normalizedOptions = normalizeRunOptions(options);
 
   // --- Service creation ---
   const { resource, config } = extractResourceAndConfig(
@@ -83,17 +112,24 @@ export async function run<C, V extends Promise<any>>(
   );
 
   const services = createRuntimeServices({
-    lifecycleMode: normalizedLifecycleMode,
-    executionContextConfig,
-    lazy,
-    errorBoundary,
-    onUnhandledError: onUnhandledErrorOpt,
-    printThreshold,
-    printStrategy,
-    bufferLogs,
+    mode: normalizedOptions.mode,
+    lifecycleMode: normalizedOptions.lifecycleMode,
+    executionContextConfig: normalizedOptions.executionContext,
+    lazy: normalizedOptions.lazy,
+    errorBoundary: normalizedOptions.errorBoundary,
+    onUnhandledError: normalizedOptions.onUnhandledErrorInput,
+    printThreshold: normalizedOptions.logs.printThreshold,
+    printStrategy: normalizedOptions.logs.printStrategy,
+    bufferLogs: normalizedOptions.logs.bufferLogs,
   });
 
   const { logger, store, eventManager, processor, taskRunner } = services;
+  const { onUnhandledErrorInput: _onUnhandledErrorInput, ...publicRunOptions } =
+    normalizedOptions;
+  const runOptions: ResolvedRunOptions = Object.freeze({
+    ...publicRunOptions,
+    onUnhandledError: services.onUnhandledError,
+  });
   let { unhookProcessSafetyNets } = services;
 
   // --- Bootstrap coordination ---
@@ -131,8 +167,8 @@ export async function run<C, V extends Promise<any>>(
       eventManager,
       runLogger,
       runtimeLifecycleSource,
-      disposeBudgetMs,
-      disposeDrainBudgetMs,
+      disposeBudgetMs: normalizedOptions.disposeBudgetMs,
+      disposeDrainBudgetMs: normalizedOptions.disposeDrainBudgetMs,
       disposeAll,
     });
 
@@ -141,10 +177,11 @@ export async function run<C, V extends Promise<any>>(
     store,
     eventManager,
     taskRunner,
+    runOptions,
     disposeWithShutdownLifecycle,
   );
 
-  if (shutdownHooks) {
+  if (normalizedOptions.shutdownHooks) {
     unhookShutdown = registerShutdownHook(async () => {
       if (!bootstrap.isCompleted) {
         bootstrap.requestShutdown();
@@ -161,7 +198,9 @@ export async function run<C, V extends Promise<any>>(
 
   // --- Bootstrap sequence ---
   try {
-    store.initializeStore(resource, config, runtimeResult, { debug });
+    store.initializeStore(resource, config, runtimeResult, {
+      debug: normalizedOptions.debug,
+    });
     bootstrap.throwIfShutdownRequested("store initialization");
 
     await store.processOverrides();
@@ -170,7 +209,7 @@ export async function run<C, V extends Promise<any>>(
     store.validateDependencyGraph();
     store.validateEventEmissionGraph();
 
-    if (dryRun) {
+    if (normalizedOptions.dryRun) {
       await runLogger.debug("Dry run mode. Skipping initialization...");
       runtimeResult.setValue(store.root.value);
       return runtimeResult as RunResult<V extends Promise<infer U> ? U : V>;
@@ -211,7 +250,7 @@ export async function run<C, V extends Promise<any>>(
     await runLogger.info("Runner online. Awaiting tasks and events.");
 
     runtimeResult.setLazyOptions({
-      lazyMode: lazy,
+      lazyMode: normalizedOptions.lazy,
       startupUnusedResourceIds,
       lazyResourceLoader: async (resourceId: string) => {
         const res = store.resources.get(resourceId)!.resource;

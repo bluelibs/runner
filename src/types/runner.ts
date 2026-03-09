@@ -5,7 +5,10 @@ import { IEvent, IEventEmitOptions, IEventEmitReport } from "../defs";
 import { IResource, IResourceHealthReport } from "./resource";
 import { ITask } from "./task";
 import { TaskCallOptions } from "./utilities";
-import type { ExecutionContextOptions } from "./executionContext";
+import type {
+  ExecutionContextConfig,
+  ExecutionContextOptions,
+} from "./executionContext";
 
 export interface IHealthReporter {
   /**
@@ -36,6 +39,8 @@ export interface IRuntimeRecoveryOptions {
 export interface IRuntime<V = unknown> extends IHealthReporter {
   /** Current admission state for new work. */
   readonly state: RuntimeState;
+  /** Normalized run() options captured for this runtime instance. */
+  readonly runOptions: ResolvedRunOptions;
 
   /**
    * Executes a registered task.
@@ -185,6 +190,25 @@ export type RunOptions = {
    * If inside Node this is automatically detected from the NODE_ENV environment variable if not provided.
    */
   mode?: RunnerMode;
+};
+
+export type ResolvedRunOptions = {
+  debug?: DebugFriendlyConfig;
+  logs: {
+    printThreshold: null | LogLevels;
+    printStrategy: PrintStrategy;
+    bufferLogs: boolean;
+  };
+  errorBoundary: boolean;
+  shutdownHooks: boolean;
+  disposeBudgetMs: number;
+  disposeDrainBudgetMs: number;
+  onUnhandledError: OnUnhandledError;
+  dryRun: boolean;
+  executionContext: ExecutionContextConfig | null;
+  lazy: boolean;
+  lifecycleMode: ResourceLifecycleMode;
+  mode: RunnerMode;
 };
 
 /**

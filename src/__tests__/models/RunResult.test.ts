@@ -12,6 +12,7 @@ import { run } from "../../run";
 import { createTestFixture } from "../test-utils";
 import { createMessageError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
+import { ResourceLifecycleMode, RunnerMode } from "../../types/runner";
 
 describe("RunResult", () => {
   it("exposes runTask, emitEvent, getResourceValue, getResourceConfig, logger and they work", async () => {
@@ -682,6 +683,62 @@ describe("RunResult", () => {
       mode: "alpha",
     });
     expect(runtime.getRootValue<string>()).toBe("app-ready");
+
+    await runtime.dispose();
+  });
+
+  it("exposes normalized runOptions on the runtime", async () => {
+    const onUnhandledError = jest.fn();
+    const app = defineResource({
+      id: "rr-run-options-app",
+      init: async () => "ready",
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      logs: {
+        printThreshold: "debug",
+        printStrategy: "json",
+        bufferLogs: true,
+      },
+      errorBoundary: false,
+      disposeBudgetMs: 1234,
+      disposeDrainBudgetMs: 567,
+      onUnhandledError,
+      dryRun: true,
+      lazy: true,
+      lifecycleMode: ResourceLifecycleMode.Parallel,
+      executionContext: {
+        cycleDetection: { maxDepth: 10, maxRepetitions: 2 },
+      },
+      mode: RunnerMode.PROD,
+    });
+
+    expect(runtime.runOptions).toEqual({
+      debug: undefined,
+      logs: {
+        printThreshold: "debug",
+        printStrategy: "json",
+        bufferLogs: true,
+      },
+      errorBoundary: false,
+      shutdownHooks: false,
+      disposeBudgetMs: 1234,
+      disposeDrainBudgetMs: 567,
+      onUnhandledError,
+      dryRun: true,
+      executionContext: {
+        createCorrelationId: expect.any(Function),
+        cycleDetection: {
+          maxDepth: 10,
+          maxRepetitions: 2,
+        },
+      },
+      lazy: true,
+      lifecycleMode: ResourceLifecycleMode.Parallel,
+      mode: RunnerMode.PROD,
+    });
+    expect(runtime.store.mode).toBe(RunnerMode.PROD);
 
     await runtime.dispose();
   });

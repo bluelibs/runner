@@ -645,6 +645,7 @@ Practical rule:
 Runtime:
 
 - `run(app, options?)` wires dependencies, initializes resources, emits lifecycle events, and returns the runtime API.
+- The returned runtime exposes `runOptions`, the normalized effective `run(...)` options for that container.
 - Main runtime helpers:
   - `runTask`
   - `emitEvent`
