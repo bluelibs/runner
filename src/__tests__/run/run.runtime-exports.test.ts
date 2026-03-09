@@ -480,6 +480,79 @@ describe("run-runtime-exports", () => {
     });
   });
 
+  // ─── getHealth ─────────────────────────────────────────────────────────
+
+  describe("getHealth", () => {
+    it("returns only exported health-enabled resources when root exports are restricted", async () => {
+      const exported = defineResource({
+        id: "runtime-exports-health-public",
+        async init() {
+          return "public";
+        },
+        async health() {
+          return { status: "healthy" };
+        },
+      });
+      const hidden = defineResource({
+        id: "runtime-exports-health-private",
+        async init() {
+          return "private";
+        },
+        async health() {
+          return { status: "unhealthy" };
+        },
+      });
+
+      const root = defineResource({
+        id: "runtime-exports-health-root",
+        register: [exported, hidden],
+        isolate: { exports: [exported] },
+      });
+
+      const runtime = await run(root, { shutdownHooks: false });
+      const report = await runtime.getHealth();
+
+      expect(report.totals).toEqual({
+        resources: 1,
+        healthy: 1,
+        degraded: 0,
+        unhealthy: 0,
+      });
+      expect(report.report).toEqual([
+        expect.objectContaining({
+          id: "runtime-exports-health-public",
+          status: "healthy",
+        }),
+      ]);
+
+      await runtime.dispose();
+    });
+
+    it("blocks filtered access to non-exported health-enabled resources", async () => {
+      const hidden = defineResource({
+        id: "runtime-exports-health-filter-private",
+        async init() {
+          return "private";
+        },
+        async health() {
+          return { status: "healthy" };
+        },
+      });
+
+      const root = defineResource({
+        id: "runtime-exports-health-filter-root",
+        register: [hidden],
+        isolate: { exports: "none" },
+      });
+
+      const runtime = await run(root, { shutdownHooks: false });
+      await expect(runtime.getHealth([hidden])).rejects.toMatchObject({
+        id: "runner.errors.runtimeAccessViolation",
+      });
+      await runtime.dispose();
+    });
+  });
+
   // ─── exports([]) — fully locked surface ──────────────────────────────────
 
   describe("empty exports list locks the entire runtime surface", () => {

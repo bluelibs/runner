@@ -17,12 +17,14 @@ import {
   lazyResourceSyncAccessError,
   runResultDisposeDuringBootstrapError,
   runResultDisposedError,
+  runtimeHealthDuringBootstrapError,
   runtimeAccessViolationError,
   runtimeElementNotFoundError,
   runtimeRootNotAvailableError,
   runtimeRootNotInitializedError,
 } from "../errors";
 import { runtimeSource } from "../types/runtimeSource";
+import { HealthReporter } from "./HealthReporter";
 
 /**
  * Options for configuring lazy resource loading behavior.
@@ -100,6 +102,7 @@ export class RunResult<V> implements IRuntime<V> {
    * When enabled, unused resources are not initialized until accessed.
    */
   private lazyOptions: RunResultLazyOptions = {};
+  private readonly healthReporter: HealthReporter;
 
   /**
    * Creates a new RunResult instance.
@@ -136,7 +139,22 @@ export class RunResult<V> implements IRuntime<V> {
      * Disposes all resources in reverse initialization order.
      */
     private readonly disposeFn: () => Promise<void>,
-  ) {}
+  ) {
+    this.healthReporter = new HealthReporter(this.store, {
+      ensureAvailable: () => {
+        this.ensureRuntimeIsActive();
+        if (this.#isBootstrapping) {
+          runtimeHealthDuringBootstrapError.throw();
+        }
+      },
+      assertResourceAccess: (resourceId) =>
+        this.assertRuntimeAccess(resourceId, "Resource"),
+      isResourceAccessible: (resourceId) =>
+        this.isRuntimeAccessible(resourceId),
+      isSleepingResource: (resourceId) =>
+        this.store.resources.get(resourceId)!.isInitialized !== true,
+    });
+  }
 
   /**
    * Returns the root value initialized by the root resource.
@@ -192,6 +210,20 @@ export class RunResult<V> implements IRuntime<V> {
         exportedIds,
       });
     }
+  }
+
+  /**
+   * Returns whether a target is reachable through the root runtime API surface.
+   * @internal
+   */
+  private isRuntimeAccessible(targetId: string): boolean {
+    const rootId = this.store.root?.resource.id;
+    /* istanbul ignore next */
+    if (!rootId) {
+      return true;
+    }
+
+    return this.store.getRootAccessInfo(targetId, rootId).accessible;
   }
 
   /**
@@ -473,6 +505,13 @@ export class RunResult<V> implements IRuntime<V> {
   };
 
   /**
+   * Evaluates async health checks for all health-enabled resources or a filtered subset.
+   */
+  public getHealth = async (
+    resourceDefs?: Array<string | IResource<any, any, any, any, any>>,
+  ) => this.healthReporter.getHealth(resourceDefs);
+
+  /**
    * Returns the ID of the root resource.
    * @returns The root resource identifier
    *
@@ -566,6 +605,7 @@ export class RunResult<V> implements IRuntime<V> {
     }
 
     this.#disposing = true;
+    this.store.beginDisposing();
 
     this.#disposePromise = Promise.resolve()
       .then(() => this.disposeFn())

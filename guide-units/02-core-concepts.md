@@ -104,6 +104,8 @@ Here's a friendly guideline (not a strict rule!):
 
 Resources are the long-lived parts of your app – things like database connections, configuration, services, and caches. They **initialize once when your app starts** and **clean up when it shuts down**. Think of them as the foundation your tasks build upon.
 
+Resources can also expose an optional async `health(value, config, deps, context)` probe. Runner does not assume every resource is health-reportable: only resources that explicitly define `health()` participate in `resources.health.getHealth(...)` and `runtime.getHealth(...)` results.
+
 ```typescript
 import { r } from "@bluelibs/runner";
 
@@ -130,6 +132,21 @@ const userService = r
   }))
   .build();
 ```
+
+When you want operator-facing health data, keep the probe small and explicit:
+
+```typescript
+const database = r
+  .resource("app.db")
+  .init(async () => connectDb())
+  .health(async (client) => ({
+    status: client?.isConnected() ? "healthy" : "unhealthy",
+    message: "database connectivity",
+  }))
+  .build();
+```
+
+Resources without `health()` are skipped entirely. Lazy resources that were never initialized stay asleep and are skipped instead of being probed.
 
 #### Resource Configuration
 
@@ -339,7 +356,7 @@ const billing = r
 
 #### Wiring Access Policy
 
-Use `.isolate({ deny: [...] })` (blocklist) or `.isolate({ only: [...] })` (boundary-scoped external allowlist) when a resource subtree must have restricted dependency access, even if visibility would otherwise allow it.
+Use `.isolate({ deny: [...] })` (blocklist) or `.isolate({ only: [...] })` (boundary-scoped external allowlist) when a resource subtree must have restricted dependency access, even if visibility would otherwise allow it. Use `.isolate({ whitelist: [...] })` for narrow per-boundary grants to specific consumers without reopening ancestor restrictions.
 
 **`scope(..., options)` channel options (all default to `true`):**
 
@@ -399,6 +416,8 @@ const payments = r
 
 - A resource uses **either** `deny` **or** `only` — providing both (even `deny: []` alongside `only`) throws `isolateConflictError` at bootstrap.
 - `deny` / `only` accept definitions, `subtreeOf(...)`, or `scope(...)` entries.
+- `whitelist` entries use `{ for: [...], targets: [...], channels? }`.
+- `whitelist.for` and `whitelist.targets` accept the same selector shapes as `deny` / `only`, including `subtreeOf(...)` for subtree-wide grants.
 - Bare strings are invalid in `deny` / `only`; string selectors are supported only in `isolate.exports`.
 - Tag definition entries and tag-id selector entries are intentionally different:
   - `deny: [internalOnlyTag]` / `only: [internalOnlyTag]` apply tag semantics (tag dependency itself + all definitions carrying that tag).
@@ -406,6 +425,7 @@ const payments = r
 - `scope(target, options)` applies the same channel options to every wrapped target, including combinations like `scope([paymentsApi, subtreeOf(agentResource), tags.system], { dependencies: false })`.
 - **`only` automatically exempts internal items**: anything registered by the resource or its children is always accessible without being listed. `only: []` blocks all external dependencies while keeping internal ones reachable.
 - **`only` is checked at every ancestor boundary** for the consumer. For external dependencies, effective access behaves like the intersection of ancestor `only` lists (with the internal-subtree exemption still applied at each boundary).
+- **`whitelist` is checked only on the declaring boundary**: it can relax that boundary's own `deny` / `only` decision for matching consumer-target pairs, but it cannot override `isolate.exports` or ancestor restrictions.
 - Rules are validated at bootstrap; malformed export entries and unknown object references fail fast.
 - Enforcement scope includes dependency wiring, hook `.on(event)` subscriptions, tag attachments (`.tags([...])`), and middleware attachments, so the same policy semantics apply when targets are events, tags, or middleware definitions.
 - **Parent and child policies compose additively**; children cannot relax parent restrictions:

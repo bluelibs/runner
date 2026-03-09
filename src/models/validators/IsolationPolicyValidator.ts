@@ -6,6 +6,7 @@ import {
   isolateInvalidExportsError,
 } from "../../errors";
 import type {
+  IsolationWhitelistEntry,
   IsolationExportsTarget,
   IsolationPolicy,
   IsolationSubtreeFilter,
@@ -45,6 +46,8 @@ export function validateIsolationPolicies(ctx: ValidatorContext): void {
 
     const denyPresent = "deny" in policy && policy.deny !== undefined;
     const onlyPresent = "only" in policy && policy.only !== undefined;
+    const whitelistPresent =
+      "whitelist" in policy && policy.whitelist !== undefined;
 
     if (denyPresent && !Array.isArray(policy.deny)) {
       isolateInvalidEntryError.throw({
@@ -57,6 +60,13 @@ export function validateIsolationPolicies(ctx: ValidatorContext): void {
       isolateInvalidEntryError.throw({
         policyResourceId: resource.id,
         entry: policy.only,
+      });
+    }
+
+    if (whitelistPresent && !Array.isArray(policy.whitelist)) {
+      isolateInvalidEntryError.throw({
+        policyResourceId: resource.id,
+        entry: policy.whitelist,
       });
     }
 
@@ -75,6 +85,7 @@ export function validateIsolationPolicies(ctx: ValidatorContext): void {
     const normalizedPolicy: IsolationPolicy = {
       ...(denyPresent ? { deny: policy.deny } : {}),
       ...(onlyPresent ? { only: policy.only } : {}),
+      ...(whitelistPresent ? { whitelist: policy.whitelist } : {}),
     };
 
     if (
@@ -134,6 +145,23 @@ export function validateIsolationPolicies(ctx: ValidatorContext): void {
       }
     }
 
+    if (Array.isArray(policy.whitelist) && policy.whitelist.length > 0) {
+      normalizedPolicy.whitelist = normalizeWhitelistEntries(ctx, {
+        entries: policy.whitelist,
+        policyResourceId: resource.id,
+        onInvalidEntry: (entry) =>
+          isolateInvalidEntryError.throw({
+            policyResourceId: resource.id,
+            entry,
+          }),
+        onUnknownTarget: (targetId) =>
+          isolateUnknownTargetError.throw({
+            policyResourceId: resource.id,
+            targetId,
+          }),
+      });
+    }
+
     resource.isolate = normalizedPolicy;
     ctx.registry.visibilityTracker.recordIsolation(
       resource.id,
@@ -147,6 +175,66 @@ export function validateIsolationPolicies(ctx: ValidatorContext): void {
       );
     }
   }
+}
+
+export function normalizeWhitelistEntries(
+  ctx: ValidatorContext,
+  input: {
+    entries: ReadonlyArray<unknown>;
+    policyResourceId?: string;
+    onInvalidEntry: (entry: unknown) => never;
+    onUnknownTarget: (targetId: string) => never;
+  },
+): Array<IsolationWhitelistEntry> {
+  const normalizedEntries: IsolationWhitelistEntry[] = [];
+
+  for (const entry of input.entries) {
+    if (!entry || typeof entry !== "object") {
+      input.onInvalidEntry(entry);
+    }
+
+    const candidate = entry as {
+      for?: ReadonlyArray<unknown>;
+      targets?: ReadonlyArray<unknown>;
+      channels?: unknown;
+    };
+
+    if (!Array.isArray(candidate.for) || candidate.for.length === 0) {
+      input.onInvalidEntry(entry);
+    }
+
+    if (!Array.isArray(candidate.targets) || candidate.targets.length === 0) {
+      input.onInvalidEntry(entry);
+    }
+
+    const normalizedFor = expandScopeTargets(ctx, {
+      targets: candidate.for,
+      policyResourceId: input.policyResourceId,
+      onInvalidEntry: input.onInvalidEntry,
+      onUnknownTarget: input.onUnknownTarget,
+    });
+
+    const normalizedTargets = expandScopeTargets(ctx, {
+      targets: candidate.targets,
+      policyResourceId: input.policyResourceId,
+      onInvalidEntry: input.onInvalidEntry,
+      onUnknownTarget: input.onUnknownTarget,
+    });
+
+    const channels = normalizeChannels(
+      candidate.channels,
+      input.onInvalidEntry,
+      entry,
+    );
+
+    normalizedEntries.push({
+      for: normalizedFor,
+      targets: normalizedTargets,
+      ...(channels ? { channels } : {}),
+    });
+  }
+
+  return normalizedEntries;
 }
 
 type EntryErrorCallbacks = {
@@ -374,6 +462,36 @@ function validateSubtreeFilterTypes(
   }
 
   return types.every((type) => isSubtreeFilterItemType(type));
+}
+
+function normalizeChannels(
+  value: unknown,
+  onInvalidEntry: (entry: unknown) => never,
+  originalEntry: unknown,
+) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    onInvalidEntry(originalEntry);
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const allowedKeys = new Set([
+    "dependencies",
+    "listening",
+    "tagging",
+    "middleware",
+  ]);
+
+  for (const [key, channelValue] of Object.entries(candidate)) {
+    if (!allowedKeys.has(key) || typeof channelValue !== "boolean") {
+      onInvalidEntry(originalEntry);
+    }
+  }
+
+  return candidate as IsolationWhitelistEntry["channels"];
 }
 
 /**

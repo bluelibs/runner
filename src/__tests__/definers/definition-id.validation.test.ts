@@ -10,6 +10,7 @@ import {
   defineTaskMiddleware,
 } from "../../define";
 import { defineAsyncContext } from "../../definers/defineAsyncContext";
+import { frameworkResource } from "../../definers/builders/resource";
 import { assertDefinitionId } from "../../definers/assertDefinitionId";
 import { defineError } from "../../definers/defineError";
 import { frameworkError } from "../../definers/builders/error";
@@ -199,6 +200,7 @@ describe("definition id validation", () => {
       }),
     ).not.toThrow();
 
+    expect(() => frameworkResource("runner.health").build()).not.toThrow();
     expect(() => frameworkTag("runner.tags.cron").build()).not.toThrow();
     expect(() =>
       frameworkError("runner.errors.validation").build(),

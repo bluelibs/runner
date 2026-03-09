@@ -14,6 +14,12 @@ export type CompiledIsolationPolicy = {
   deny: Record<IsolationChannel, CompiledChannelSets>;
   onlyMode: boolean;
   only: Record<IsolationChannel, CompiledChannelSets>;
+  whitelist: CompiledIsolationWhitelistEntry[];
+};
+
+export type CompiledIsolationWhitelistEntry = {
+  consumers: Record<IsolationChannel, CompiledChannelSets>;
+  targets: Record<IsolationChannel, CompiledChannelSets>;
 };
 
 export type AccessViolation =

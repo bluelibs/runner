@@ -402,6 +402,33 @@ export function makeResourceBuilder<
         THasInit
       >(next);
     },
+    health(
+      fn: NonNullable<
+        IResourceDefinition<
+          TConfig,
+          TValue,
+          TDeps,
+          TContext,
+          any,
+          any,
+          TMeta,
+          TTags,
+          TMiddleware
+        >["health"]
+      >,
+    ) {
+      const next = clone(state, { health: fn });
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        THasInit
+      >(next);
+    },
     meta<TNewMeta extends IResourceMeta>(m: TNewMeta) {
       const next = clone<
         TConfig,
@@ -473,6 +500,7 @@ export function makeResourceBuilder<
       // clearer stack trace and earlier feedback.
       const existingDeny = state.isolate?.deny ?? [];
       const existingOnly = state.isolate?.only ?? [];
+      const existingWhitelist = state.isolate?.whitelist ?? [];
       const existingExports = state.isolate?.exports;
       const merged: IsolationPolicy = {};
       if (existingDeny.length > 0 || policy.deny) {
@@ -480,6 +508,9 @@ export function makeResourceBuilder<
       }
       if (existingOnly.length > 0 || policy.only) {
         merged.only = [...existingOnly, ...(policy.only ?? [])];
+      }
+      if (existingWhitelist.length > 0 || policy.whitelist) {
+        merged.whitelist = [...existingWhitelist, ...(policy.whitelist ?? [])];
       }
 
       // Both fields being set — even via separate chained .isolate() calls — is
@@ -561,6 +592,7 @@ export function makeResourceBuilder<
         dispose: state.dispose,
         ready: state.ready,
         cooldown: state.cooldown,
+        health: state.health,
         configSchema: state.configSchema,
         resultSchema: state.resultSchema,
         meta: state.meta,

@@ -149,6 +149,8 @@ Resources model shared services and state.
 - `ready(value, config, deps, context)` starts ingress after startup lock.
 - `cooldown(value, config, deps, context)` stops ingress quickly at shutdown start.
 - `dispose(value, config, deps, context)` performs final teardown after drain.
+- `health(value, config, deps, context)` is an optional async probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.
+  Return `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
 - Config-only resources can omit `.init()`.
 - `r.resource(id, { gateway: true })` prevents the resource from adding its own namespace segment.
 - If you register something, you are a non-leaf resource.
@@ -161,6 +163,15 @@ Use the lifecycle intentionally:
 - `ready()` for starting HTTP listeners, consumers, schedulers, and similar ingress
 - `cooldown()` for stopping new work immediately
 - `dispose()` for final cleanup
+
+Health reporting:
+
+- Only resources that define `health()` participate.
+- Prefer `resources.health.getHealth()` inside resources; keep `runtime.getHealth()` for operator/runtime callers.
+- Health checks are available only after `run(...)` resolves and before disposal starts.
+- Startup-unused lazy resources stay asleep and are skipped; requested resources without `health()` are ignored.
+- Result shape is `{ totals, report }`, with counts for `healthy`, `degraded`, and `unhealthy`.
+- `report` entries look like `{ id, path, initialized, status, message?, details? }`.
 
 Do not use `cooldown()` as a general teardown phase for support resources like databases.
 
@@ -426,8 +437,10 @@ Runner treats composition boundaries as first-class.
 - `exports: []` or `exports: "none"` makes a subtree private.
 - `exports` array entries must be explicit Runner definition or resource references.
 - `deny` and `only` control cross-boundary wiring by channel.
+- `whitelist` adds narrow per-boundary grants for specific consumers without reopening ancestor restrictions.
 - Use definition refs, `subtreeOf(resource)`, or `scope(target, channels?)`.
 - Bare strings are invalid in `deny` and `only`.
+- `whitelist.for` and `whitelist.targets` accept the same selector forms, so subtree grants such as `{ for: [subtreeOf(agentResource)], targets: [resources.health] }` are valid.
 - Isolation rules are additive through ancestors.
 - Unknown isolation targets fail fast at bootstrap.
 - Runtime operator APIs are gated only by the root resource's `isolate.exports` surface.
@@ -437,6 +450,7 @@ Runner treats composition boundaries as first-class.
 ```ts
 .isolate({
   deny: [subtreeOf(adminResource), scope([internalEvent], { listening: false })],
+  whitelist: [{ for: [healthTask], targets: [resources.health] }],
 })
 ```
 
@@ -619,6 +633,7 @@ Runtime:
   - `getResourceValue`
   - `getLazyResourceValue`
   - `getResourceConfig`
+  - `getHealth`
   - `getRootId`
   - `getRootConfig`
   - `getRootValue`

@@ -2,16 +2,25 @@ import { DebugFriendlyConfig } from "../globals/resources/debug";
 import { LogLevels, PrintStrategy } from "../models/Logger";
 import { OnUnhandledError } from "../models/UnhandledError";
 import { IEvent, IEventEmitOptions, IEventEmitReport } from "../defs";
-import { IResource } from "./resource";
+import { IResource, IResourceHealthReport } from "./resource";
 import { ITask } from "./task";
 import { TaskCallOptions } from "./utilities";
 import type { ExecutionContextOptions } from "./executionContext";
+
+export interface IHealthReporter {
+  /**
+   * Evaluates async health checks for all health-enabled resources or a filtered subset.
+   */
+  getHealth(
+    resourceDefs?: Array<string | IResource<any, any, any, any, any>>,
+  ): Promise<IResourceHealthReport>;
+}
 
 /**
  * Common interface for the Runner runtime instance.
  * Provides access to tasks, events, resources, and lifecycle management.
  */
-export interface IRuntime<V = unknown> {
+export interface IRuntime<V = unknown> extends IHealthReporter {
   /**
    * Executes a registered task.
    */

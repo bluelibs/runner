@@ -129,6 +129,18 @@ export const runResultDisposeDuringBootstrapError = error<DefaultErrorType>(
   )
   .build();
 
+export const runtimeHealthDuringBootstrapError = error<DefaultErrorType>(
+  "runner.errors.runtimeHealthDuringBootstrap",
+)
+  .format(
+    () =>
+      "Health checks are not available during bootstrap. Wait for run() to finish initialization.",
+  )
+  .remediation(
+    "Call getHealth() only after run(...) resolves and before dispose() starts.",
+  )
+  .build();
+
 export const runtimeElementNotFoundError = error<
   { type: string; elementId: string } & DefaultErrorType
 >("runner.errors.runtimeElementNotFound")

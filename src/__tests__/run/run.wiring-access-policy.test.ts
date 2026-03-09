@@ -506,6 +506,262 @@ describe("run-isolate", () => {
     const error = await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
     expect(error.message).toContain(`"${globalResources.eventManager.id}"`);
   });
+
+  it("allows a same-boundary whitelist carve-out for specific consumers", async () => {
+    const healthTask = defineTask({
+      id: "policy-allow-health-consumer",
+      dependencies: { runtime: globalResources.runtime },
+      run: async (_input, deps) => deps.runtime.getRootId(),
+    });
+
+    const guarded = defineResource({
+      id: "policy-allow-guarded",
+      register: [healthTask],
+      isolate: {
+        deny: [globalResources.runtime],
+        whitelist: [{ for: [healthTask], targets: [globalResources.runtime] }],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy-allow-app",
+      register: [guarded],
+    });
+
+    const runtime = await run(app);
+    await expect(runtime.runTask(healthTask)).resolves.toBe("policy-allow-app");
+    await runtime.dispose();
+  });
+
+  it("does not let child whitelist rules override parent deny rules", async () => {
+    const healthTask = defineTask({
+      id: "policy-allow-parent-deny-consumer",
+      dependencies: { runtime: globalResources.runtime },
+      run: async (_input, deps) => deps.runtime.getRootId(),
+    });
+
+    const child = defineResource({
+      id: "policy-allow-parent-deny-child",
+      register: [healthTask],
+      isolate: {
+        whitelist: [{ for: [healthTask], targets: [globalResources.runtime] }],
+      },
+    });
+
+    const parent = defineResource({
+      id: "policy-allow-parent-deny-parent",
+      register: [child],
+      isolate: {
+        deny: [globalResources.runtime],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy-allow-parent-deny-app",
+      register: [parent],
+    });
+
+    const error = await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
+    expect(error.message).toContain(parent.id);
+  });
+
+  it("allows a same-boundary whitelist carve-out in only mode", async () => {
+    const healthTask = defineTask({
+      id: "policy-allow-only-consumer",
+      dependencies: { runtime: globalResources.runtime },
+      run: async (_input, deps) => deps.runtime.getRootId(),
+    });
+
+    const guarded = defineResource({
+      id: "policy-allow-only-guarded",
+      register: [healthTask],
+      isolate: {
+        only: [],
+        whitelist: [{ for: [healthTask], targets: [globalResources.runtime] }],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy-allow-only-app",
+      register: [guarded],
+    });
+
+    const runtime = await run(app);
+    await expect(runtime.runTask(healthTask)).resolves.toBe(
+      "policy-allow-only-app",
+    );
+    await runtime.dispose();
+  });
+
+  it("fails fast when a whitelist entry has an invalid shape", async () => {
+    const guarded = defineResource({
+      id: "policy-allow-invalid-resource",
+      isolate: {
+        whitelist: [{ for: [], targets: [globalResources.runtime] } as any],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy-allow-invalid-app",
+      register: [guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_INVALID_ENTRY_ID);
+  });
+
+  it("fails fast when a whitelist entry omits targets", async () => {
+    const consumer = defineTask({
+      id: "policy-allow-missing-targets-consumer",
+      dependencies: { runtime: globalResources.runtime },
+      run: async (_input, deps) => deps.runtime.getRootId(),
+    });
+
+    const guarded = defineResource({
+      id: "policy-allow-missing-targets-resource",
+      register: [consumer],
+      isolate: {
+        whitelist: [{ for: [consumer], targets: [] } as any],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy-allow-missing-targets-app",
+      register: [guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_INVALID_ENTRY_ID);
+  });
+
+  it("fails fast when whitelist is not an array", async () => {
+    const guarded = defineResource({
+      id: "policy-allow-invalid-shape-resource",
+      isolate: {
+        whitelist: { for: [], targets: [] } as any,
+      },
+    });
+
+    const app = defineResource({
+      id: "policy-allow-invalid-shape-app",
+      register: [guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_INVALID_ENTRY_ID);
+  });
+
+  it("fails fast when a whitelist entry targets an unknown definition", async () => {
+    const unknownTask = defineTask({
+      id: "policy-allow-unknown-missing",
+      run: async () => "never",
+    });
+    const consumer = defineTask({
+      id: "policy-allow-unknown-consumer",
+      dependencies: { runtime: globalResources.runtime },
+      run: async (_input, deps) => deps.runtime.getRootId(),
+    });
+
+    const guarded = defineResource({
+      id: "policy-allow-unknown-resource",
+      register: [consumer],
+      isolate: {
+        whitelist: [{ for: [consumer], targets: [unknownTask] }],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy-allow-unknown-app",
+      register: [guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_UNKNOWN_TARGET_ID);
+  });
+
+  it("fails fast when whitelist channels are invalid", async () => {
+    const consumer = defineTask({
+      id: "policy-allow-invalid-channels-consumer",
+      dependencies: { runtime: globalResources.runtime },
+      run: async (_input, deps) => deps.runtime.getRootId(),
+    });
+
+    const guarded = defineResource({
+      id: "policy-allow-invalid-channels-resource",
+      register: [consumer],
+      isolate: {
+        whitelist: [
+          {
+            for: [consumer],
+            targets: [globalResources.runtime],
+            channels: { dependencies: "yes" } as any,
+          },
+        ],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy-allow-invalid-channels-app",
+      register: [guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_INVALID_ENTRY_ID);
+  });
+
+  it("fails fast when whitelist channels are not an object", async () => {
+    const consumer = defineTask({
+      id: "policy-allow-invalid-channel-shape-consumer",
+      dependencies: { runtime: globalResources.runtime },
+      run: async (_input, deps) => deps.runtime.getRootId(),
+    });
+
+    const guarded = defineResource({
+      id: "policy-allow-invalid-channel-shape-resource",
+      register: [consumer],
+      isolate: {
+        whitelist: [
+          {
+            for: [consumer],
+            targets: [globalResources.runtime],
+            channels: [] as any,
+          },
+        ],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy-allow-invalid-channel-shape-app",
+      register: [guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_INVALID_ENTRY_ID);
+  });
+
+  it("does not apply a grant when the target side does not match", async () => {
+    const healthTask = defineTask({
+      id: "policy-allow-nonmatching-target-consumer",
+      dependencies: { runtime: globalResources.runtime },
+      run: async (_input, deps) => deps.runtime.getRootId(),
+    });
+
+    const guarded = defineResource({
+      id: "policy-allow-nonmatching-target-guarded",
+      register: [healthTask],
+      isolate: {
+        deny: [globalResources.runtime],
+        whitelist: [
+          {
+            for: [healthTask],
+            targets: [globalResources.eventManager],
+            channels: { dependencies: true },
+          },
+        ],
+      },
+    });
+
+    const app = defineResource({
+      id: "policy-allow-nonmatching-target-app",
+      register: [guarded],
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
+  });
 });
 
 describe("run-isolate (only mode)", () => {

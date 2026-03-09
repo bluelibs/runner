@@ -29,7 +29,7 @@ export const isolateInvalidEntryError = error<
   )
   .remediation(
     ({ policyResourceId }) =>
-      `Use .isolate({ deny: [...] }) or .isolate({ only: [...] }) with Runner definitions, subtreeOf() filters, or scope() entries. String targets are not supported. Review "${policyResourceId}" and fix malformed entries.`,
+      `Use .isolate({ deny: [...] }), .isolate({ only: [...] }), or .isolate({ whitelist: [{ for: [...], targets: [...] }] }) with Runner definitions, subtreeOf() filters, or scope() entries. String targets are not supported. Review "${policyResourceId}" and fix malformed entries.`,
   )
   .build();
 

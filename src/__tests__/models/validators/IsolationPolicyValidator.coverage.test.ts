@@ -1,4 +1,5 @@
 import {
+  normalizeWhitelistEntries,
   normalizeIsolationEntries,
   validateIsolationPolicies,
 } from "../../../models/validators/IsolationPolicyValidator";
@@ -354,5 +355,150 @@ describe("IsolationPolicyValidator coverage", () => {
         },
       }),
     ).toThrow("invalid");
+  });
+
+  it("normalizes whitelist entries with channels", () => {
+    const ctx = createValidatorContext({
+      registeredIds: ["validator-allow-consumer", "validator-allow-target"],
+      resolveDefinitionId: (reference) =>
+        reference && typeof reference === "object"
+          ? ((reference as { id?: string }).id ?? undefined)
+          : undefined,
+    });
+
+    const normalized = normalizeWhitelistEntries(ctx, {
+      entries: [
+        {
+          for: [{ id: "validator-allow-consumer" }],
+          targets: [{ id: "validator-allow-target" }],
+          channels: { dependencies: true },
+        },
+      ],
+      onInvalidEntry: () => {
+        throw new Error("invalid");
+      },
+      onUnknownTarget: () => {
+        throw new Error("unknown");
+      },
+    });
+
+    expect(normalized).toEqual([
+      {
+        for: [{ id: "validator-allow-consumer" }],
+        targets: [{ id: "validator-allow-target" }],
+        channels: { dependencies: true },
+      },
+    ]);
+  });
+
+  it("rejects malformed whitelist entries and invalid whitelist channels", () => {
+    const ctx = createValidatorContext();
+
+    expect(() =>
+      normalizeWhitelistEntries(ctx, {
+        entries: [42 as any],
+        onInvalidEntry: () => {
+          throw new Error("invalid");
+        },
+        onUnknownTarget: () => {
+          throw new Error("unknown");
+        },
+      }),
+    ).toThrow("invalid");
+
+    expect(() =>
+      normalizeWhitelistEntries(ctx, {
+        entries: [{ for: [], targets: [] } as any],
+        onInvalidEntry: () => {
+          throw new Error("invalid");
+        },
+        onUnknownTarget: () => {
+          throw new Error("unknown");
+        },
+      }),
+    ).toThrow("invalid");
+
+    expect(() =>
+      normalizeWhitelistEntries(ctx, {
+        entries: [
+          {
+            for: [{ id: "validator-allow-consumer" }],
+            targets: [{ id: "validator-allow-target" }],
+            channels: [] as any,
+          },
+        ],
+        onInvalidEntry: () => {
+          throw new Error("invalid");
+        },
+        onUnknownTarget: () => {
+          throw new Error("unknown");
+        },
+      }),
+    ).toThrow("invalid");
+
+    expect(() =>
+      normalizeWhitelistEntries(ctx, {
+        entries: [
+          {
+            for: [{ id: "validator-allow-consumer" }],
+            targets: [{ id: "validator-allow-target" }],
+            channels: { dependencies: "yes" } as any,
+          },
+        ],
+        onInvalidEntry: () => {
+          throw new Error("invalid");
+        },
+        onUnknownTarget: () => {
+          throw new Error("unknown");
+        },
+      }),
+    ).toThrow("invalid");
+  });
+
+  it("reports unknown targets from whitelist entries during policy validation", () => {
+    const resourceId = "validator-coverage-allow-unknown";
+    const ctx = createValidatorContext({
+      resources: [
+        {
+          id: resourceId,
+          isolate: {
+            whitelist: [
+              {
+                for: [{ id: "validator-coverage-allow-consumer" }],
+                targets: [{ id: "validator-coverage-allow-target" }],
+              },
+            ],
+          },
+        },
+      ],
+      registeredIds: [resourceId, "validator-coverage-allow-consumer"],
+      resolveDefinitionId: (reference) =>
+        reference && typeof reference === "object"
+          ? ((reference as { id?: string }).id ?? undefined)
+          : undefined,
+    });
+
+    expectThrownErrorId(
+      () => validateIsolationPolicies(ctx),
+      "runner.errors.isolationUnknownTarget",
+    );
+  });
+
+  it("rejects non-array whitelist policies during validation", () => {
+    const ctx = createValidatorContext({
+      resources: [
+        {
+          id: "validator-coverage-allow-invalid-shape",
+          isolate: {
+            whitelist: {} as any,
+          },
+        },
+      ],
+    });
+
+    expectThrownErrorId(
+      () => validateIsolationPolicies(ctx),
+      "runner.errors.isolationInvalidEntry",
+    );
   });
 });

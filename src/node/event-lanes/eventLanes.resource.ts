@@ -1,6 +1,7 @@
-import { r, resources } from "../../index";
+import { resources } from "../../index";
 import { debugConfig } from "../../globals/resources/debug";
 import type { DebugConfig } from "../../globals/resources/debug";
+import { frameworkResource } from "../../definers/builders/resource";
 import { EventLanesDiagnostics } from "./EventLanesDiagnostics";
 import {
   EventLanesController,
@@ -24,10 +25,9 @@ type EventLanesPrivateContext = EventLanesResourceContext & {
 
 export const EVENT_LANES_RESOURCE_ID = "runner.node.eventLanes";
 
-const eventLanesResourceBase = r
-  .resource<EventLanesResourceConfig>(EVENT_LANES_RESOURCE_ID, {
-    frameworkOwned: true,
-  })
+const eventLanesResourceBase = frameworkResource<EventLanesResourceConfig>(
+  EVENT_LANES_RESOURCE_ID,
+)
   .configSchema(eventLanesResourceConfigSchema)
   .dependencies({
     eventManager: resources.eventManager,

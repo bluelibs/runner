@@ -180,4 +180,83 @@ describe("system.runtime", () => {
     const runtime = await run(app, { shutdownHooks: false });
     await runtime.dispose();
   });
+
+  it("exposes getHealth through system.runtime", async () => {
+    const monitored = defineResource({
+      id: "runtime-health-monitored",
+      async init() {
+        return { ok: true };
+      },
+      async health(value) {
+        return {
+          status: value?.ok ? "healthy" : "unhealthy",
+          message: "checked",
+        };
+      },
+    });
+
+    const app = defineResource({
+      id: "runtime-health-app",
+      register: [monitored],
+      dependencies: { runtime: globalResources.runtime },
+      async init() {
+        return "ready";
+      },
+    });
+
+    const runtimeResult = await run(app, { shutdownHooks: false });
+    const runtime = runtimeResult.getResourceValue(globalResources.runtime);
+    const report = await runtime.getHealth([monitored]);
+
+    expect(report.totals).toEqual({
+      resources: 1,
+      healthy: 1,
+      degraded: 0,
+      unhealthy: 0,
+    });
+    expect(report.report).toEqual([
+      expect.objectContaining({
+        id: "runtime-health-monitored",
+        status: "healthy",
+        initialized: true,
+      }),
+    ]);
+
+    await runtimeResult.dispose();
+  });
+
+  it("blocks runtime.getHealth during bootstrap", async () => {
+    const monitored = defineResource({
+      id: "runtime-health-bootstrap-monitored",
+      async init() {
+        return { ok: true };
+      },
+      async health() {
+        return { status: "healthy" as const };
+      },
+    });
+
+    const probe = defineResource({
+      id: "runtime-health-bootstrap-probe",
+      dependencies: { runtime: globalResources.runtime },
+      async init(_config, { runtime }) {
+        await expect(runtime.getHealth([monitored])).rejects.toMatchObject({
+          id: "runner.errors.runtimeHealthDuringBootstrap",
+        });
+        return "ok";
+      },
+    });
+
+    const app = defineResource({
+      id: "runtime-health-bootstrap-app",
+      register: [monitored, probe],
+      dependencies: { probe },
+      async init() {
+        return "ready";
+      },
+    });
+
+    const runtime = await run(app, { shutdownHooks: false });
+    await runtime.dispose();
+  });
 });

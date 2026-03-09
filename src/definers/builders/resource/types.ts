@@ -83,6 +83,19 @@ export type BuilderState<
       TMiddleware
     >["cooldown"]
   >;
+  health?: NonNullable<
+    IResourceDefinition<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >["health"]
+  >;
   configSchema?: ValidationSchemaInput<any>;
   resultSchema?: ValidationSchemaInput<any>;
   meta?: TMeta;

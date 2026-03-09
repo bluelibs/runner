@@ -1,5 +1,9 @@
 import type { IsolationChannel, IsolationSubtreeFilter } from "../../defs";
-import type { AccessViolation } from "./contracts";
+import type {
+  AccessViolation,
+  CompiledChannelSets,
+  CompiledIsolationPolicy,
+} from "./contracts";
 import type { VisibilityTrackerState } from "./state";
 
 export function findIsolationViolation(
@@ -21,53 +25,21 @@ export function findIsolationViolation(
       continue;
     }
 
+    const whitelistedByGrant = isWhitelistedByPolicyGrant(
+      state,
+      policy,
+      consumerId,
+      targetId,
+      channel,
+    );
     const denySets = policy.deny[channel];
-    if (denySets.ids.has(targetId)) {
+    const denyMatch = matchCompiledSets(state, targetId, denySets);
+    if (denyMatch && !whitelistedByGrant) {
       return {
         kind: "isolate",
         policyResourceId,
-        matchedRuleType: "id",
-        matchedRuleId: targetId,
-        channel,
-      };
-    }
-
-    if (denySets.tagIds.has(targetId)) {
-      return {
-        kind: "isolate",
-        policyResourceId,
-        matchedRuleType: "tag",
-        matchedRuleId: targetId,
-        channel,
-      };
-    }
-
-    if (targetTags) {
-      for (const tagId of targetTags) {
-        if (!denySets.tagIds.has(tagId)) {
-          continue;
-        }
-
-        return {
-          kind: "isolate",
-          policyResourceId,
-          matchedRuleType: "tag",
-          matchedRuleId: tagId,
-          channel,
-        };
-      }
-    }
-
-    for (const filter of denySets.subtreeFilters) {
-      if (!matchesSubtreeFilter(state, targetId, filter)) {
-        continue;
-      }
-
-      return {
-        kind: "isolate",
-        policyResourceId,
-        matchedRuleType: "subtree",
-        matchedRuleId: filter.resourceId,
+        matchedRuleType: denyMatch.matchedRuleType,
+        matchedRuleId: denyMatch.matchedRuleId,
         channel,
       };
     }
@@ -85,16 +57,9 @@ export function findIsolationViolation(
     }
 
     const onlySets = policy.only[channel];
-    const matchedByOnlyId = onlySets.ids.has(targetId);
-    const matchedByOnlyTag =
-      onlySets.tagIds.has(targetId) ||
-      (targetTags !== undefined &&
-        [...targetTags].some((tagId) => onlySets.tagIds.has(tagId)));
-    const matchedByOnlySubtree = onlySets.subtreeFilters.some((filter) =>
-      matchesSubtreeFilter(state, targetId, filter),
-    );
+    const onlyMatch = matchCompiledSets(state, targetId, onlySets, targetTags);
 
-    if (!matchedByOnlyId && !matchedByOnlyTag && !matchedByOnlySubtree) {
+    if (!onlyMatch && !whitelistedByGrant) {
       return {
         kind: "isolate",
         policyResourceId,
@@ -103,6 +68,79 @@ export function findIsolationViolation(
         channel,
       };
     }
+  }
+
+  return null;
+}
+
+function isWhitelistedByPolicyGrant(
+  state: VisibilityTrackerState,
+  policy: CompiledIsolationPolicy,
+  consumerId: string,
+  targetId: string,
+  channel: IsolationChannel,
+): boolean {
+  for (const grant of policy.whitelist) {
+    if (
+      !matchCompiledSets(state, consumerId, grant.consumers[channel]) ||
+      !matchCompiledSets(state, targetId, grant.targets[channel])
+    ) {
+      continue;
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+function matchCompiledSets(
+  state: VisibilityTrackerState,
+  candidateId: string,
+  compiledSets: CompiledChannelSets,
+  candidateTags: ReadonlySet<string> | undefined = state.definitionTagIds.get(
+    candidateId,
+  ),
+): {
+  matchedRuleType: "id" | "tag" | "subtree";
+  matchedRuleId: string;
+} | null {
+  if (compiledSets.ids.has(candidateId)) {
+    return {
+      matchedRuleType: "id",
+      matchedRuleId: candidateId,
+    };
+  }
+
+  if (compiledSets.tagIds.has(candidateId)) {
+    return {
+      matchedRuleType: "tag",
+      matchedRuleId: candidateId,
+    };
+  }
+
+  if (candidateTags) {
+    for (const tagId of candidateTags) {
+      if (!compiledSets.tagIds.has(tagId)) {
+        continue;
+      }
+
+      return {
+        matchedRuleType: "tag",
+        matchedRuleId: tagId,
+      };
+    }
+  }
+
+  for (const filter of compiledSets.subtreeFilters) {
+    if (!matchesSubtreeFilter(state, candidateId, filter)) {
+      continue;
+    }
+
+    return {
+      matchedRuleType: "subtree",
+      matchedRuleId: filter.resourceId,
+    };
   }
 
   return null;

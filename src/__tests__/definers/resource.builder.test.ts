@@ -146,6 +146,7 @@ describe("resource builder", () => {
       .meta({ title: "X" } as unknown as IResourceMeta)
       .ready(async () => {})
       .cooldown(async () => {})
+      .health(async () => ({ status: "healthy" }))
       .dispose(async () => {})
       .build();
 
@@ -156,6 +157,7 @@ describe("resource builder", () => {
     expect(app.context).toBeDefined();
     expect(app.ready).toBeDefined();
     expect(app.cooldown).toBeDefined();
+    expect(app.health).toBeDefined();
     expect(app.meta).toEqual({ title: "X" });
   });
 
@@ -315,6 +317,43 @@ describe("resource builder", () => {
 
     expect(resourceWithPolicy.isolate).toEqual({
       only: [onlyTag, onlyTask],
+    });
+  });
+
+  it("isolate preserves and merges whitelist rules across calls", () => {
+    const consumerA = r
+      .task("tests-builder-policy-allow-consumer-a")
+      .run(async () => 1)
+      .build();
+    const consumerB = r
+      .task("tests-builder-policy-allow-consumer-b")
+      .run(async () => 2)
+      .build();
+    const targetA = r
+      .task("tests-builder-policy-allow-target-a")
+      .run(async () => 3)
+      .build();
+    const targetB = r
+      .task("tests-builder-policy-allow-target-b")
+      .run(async () => 4)
+      .build();
+
+    const resourceWithPolicy = r
+      .resource("tests-builder-policy-allow-resource")
+      .isolate({
+        whitelist: [{ for: [consumerA], targets: [targetA] }],
+      })
+      .isolate({})
+      .isolate({
+        whitelist: [{ for: [consumerB], targets: [targetB] }],
+      })
+      .build();
+
+    expect(resourceWithPolicy.isolate).toEqual({
+      whitelist: [
+        { for: [consumerA], targets: [targetA] },
+        { for: [consumerB], targets: [targetB] },
+      ],
     });
   });
 

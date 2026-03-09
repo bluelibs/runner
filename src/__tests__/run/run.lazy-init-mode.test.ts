@@ -128,6 +128,55 @@ describe("run lazy init mode behavior", () => {
     await runtime.dispose();
   });
 
+  it("getHealth skips startup-unused lazy resources", async () => {
+    const lazyInit = jest.fn(async () => ({ ready: true }));
+    const health = jest.fn(async (value: { ready: boolean } | undefined) => {
+      const status: "healthy" | "degraded" = value?.ready
+        ? "healthy"
+        : "degraded";
+
+      return {
+        status,
+        message: value?.ready ? "initialized" : "not-initialized",
+      };
+    });
+
+    const lazyResource = defineResource({
+      id: "init-mode-lazy-health-resource",
+      init: lazyInit,
+      health,
+    });
+
+    const app = defineResource({
+      id: "init-mode-lazy-health-app",
+      register: [lazyResource],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app, {
+      lazy: true,
+      shutdownHooks: false,
+    });
+
+    expect(lazyInit).toHaveBeenCalledTimes(0);
+
+    const report = await runtime.getHealth([lazyResource]);
+
+    expect(lazyInit).toHaveBeenCalledTimes(0);
+    expect(health).toHaveBeenCalledTimes(0);
+    expect(report.totals).toEqual({
+      resources: 0,
+      healthy: 0,
+      degraded: 0,
+      unhealthy: 0,
+    });
+    expect(report.report).toEqual([]);
+
+    await runtime.dispose();
+  });
+
   it("initializes startup-required resources eagerly in lazy mode when lifecycleMode is sequential", async () => {
     let releaseInit!: () => void;
     const initGate = new Promise<void>((resolve) => {

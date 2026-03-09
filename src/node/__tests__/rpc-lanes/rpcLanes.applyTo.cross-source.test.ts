@@ -1,4 +1,5 @@
 import { defineEvent, defineResource } from "../../../define";
+import { frameworkResource } from "../../../definers/builders/resource";
 import { run } from "../../../run";
 import { r } from "../../../public";
 import { rpcLanesResource } from "../../rpc-lanes";
@@ -19,10 +20,7 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
         event: async () => undefined,
       }),
     });
-    const fakeEventLanesState = r
-      .resource<any>(EVENT_LANES_RESOURCE_ID, {
-        frameworkOwned: true,
-      })
+    const fakeEventLanesState = frameworkResource<any>(EVENT_LANES_RESOURCE_ID)
       .init(async () => null)
       .build();
 
@@ -80,10 +78,7 @@ describe("rpcLanes applyTo cross-source topology checks", () => {
         task: async () => "remote",
       }),
     });
-    const fakeEventLanesState = r
-      .resource<any>(EVENT_LANES_RESOURCE_ID, {
-        frameworkOwned: true,
-      })
+    const fakeEventLanesState = frameworkResource<any>(EVENT_LANES_RESOURCE_ID)
       .init(async () => null)
       .build();
 

@@ -10,17 +10,18 @@ export * from "./fluent-builder";
 export * from "./types";
 export * from "./utils";
 
-/**
- * Entry point for creating an error builder.
- */
-export function errorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
+type InternalErrorBuilderOptions = {
+  frameworkOwned?: boolean;
+  filePath: string;
+};
+
+function createErrorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
   id: string,
-  options?: { frameworkOwned?: boolean },
+  options: InternalErrorBuilderOptions,
 ): ErrorFluentBuilder<TData> {
-  const filePath = getCallerFile();
   const initial: BuilderState<TData> = Object.freeze({
     id,
-    filePath,
+    filePath: options.filePath,
     frameworkOwned: options?.frameworkOwned === true,
     httpCode: undefined,
     serialize: undefined,
@@ -30,6 +31,17 @@ export function errorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
   });
 
   return makeErrorBuilder(initial);
+}
+
+/**
+ * Entry point for creating an error builder.
+ */
+export function errorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
+  id: string,
+): ErrorFluentBuilder<TData> {
+  return createErrorBuilder(id, {
+    filePath: getCallerFile(),
+  });
 }
 
 /**
@@ -64,5 +76,8 @@ export const error = Object.assign(errorBuilder, {
 export function frameworkError<
   TData extends DefaultErrorType = DefaultErrorType,
 >(id: string): ErrorFluentBuilder<TData> {
-  return errorBuilder<TData>(id, { frameworkOwned: true });
+  return createErrorBuilder<TData>(id, {
+    filePath: getCallerFile(),
+    frameworkOwned: true,
+  });
 }

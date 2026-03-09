@@ -9,19 +9,20 @@ export * from "./fluent-builder";
 export * from "./types";
 export * from "./utils";
 
-/**
- * Entry point for creating a tag builder.
- */
-export function tagBuilder<
+type InternalTagBuilderOptions = {
+  frameworkOwned?: boolean;
+  filePath: string;
+};
+
+function createTagBuilder<
   TConfig = void,
   TEnforceIn = void,
   TEnforceOut = void,
   TAllowedTargets extends TagTarget | void = void,
 >(
   id: string,
-  options?: { frameworkOwned?: boolean },
+  options: InternalTagBuilderOptions,
 ): TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets> {
-  const filePath = getCallerFile();
   const initial: BuilderState<
     TConfig,
     TEnforceIn,
@@ -29,7 +30,7 @@ export function tagBuilder<
     TAllowedTargets
   > = Object.freeze({
     id,
-    filePath,
+    filePath: options.filePath,
     frameworkOwned: options?.frameworkOwned === true,
     meta: {} as BuilderState<
       TConfig,
@@ -60,6 +61,22 @@ export function tagBuilder<
   return makeTagBuilder(initial);
 }
 
+/**
+ * Entry point for creating a tag builder.
+ */
+export function tagBuilder<
+  TConfig = void,
+  TEnforceIn = void,
+  TEnforceOut = void,
+  TAllowedTargets extends TagTarget | void = void,
+>(
+  id: string,
+): TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets> {
+  return createTagBuilder(id, {
+    filePath: getCallerFile(),
+  });
+}
+
 export const tag = tagBuilder;
 
 export function frameworkTag<
@@ -70,7 +87,11 @@ export function frameworkTag<
 >(
   id: string,
 ): TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets> {
-  return tagBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets>(id, {
-    frameworkOwned: true,
-  });
+  return createTagBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets>(
+    id,
+    {
+      filePath: getCallerFile(),
+      frameworkOwned: true,
+    },
+  );
 }

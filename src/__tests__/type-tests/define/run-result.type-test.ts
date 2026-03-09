@@ -3,6 +3,7 @@ import { EventEmissionFailureMode } from "../../../defs";
 import { run, system } from "../../../";
 import type { IEventEmitReport } from "../../../types/event";
 import type { ExecutionRecordResult } from "../../../types/executionContext";
+import type { IResourceHealthReport } from "../../../types/resource";
 
 // Type-only tests for RunResult API typing.
 
@@ -57,6 +58,46 @@ void (async () => {
 
   // @ts-expect-error wrong deps override type
   await rr.runTask(main, { x: 2 }, { depTask: async (input: number) => "x" });
+})();
+
+// Scenario: RunResult.getHealth returns the aggregate health report type.
+void (async () => {
+  const healthy = defineResource({
+    id: "types-health-resource",
+    async init() {
+      return { ok: true };
+    },
+    async health(value) {
+      return {
+        status: value?.ok ? "healthy" : "unhealthy",
+        message: "checked",
+      } as const;
+    },
+  });
+
+  const ignored = defineResource({
+    id: "types-health-ignored",
+    async init() {
+      return { ok: true };
+    },
+  });
+
+  const app = defineResource({
+    id: "types-health-app",
+    register: [healthy, ignored],
+  });
+
+  const rr = await run(app);
+  const report = await rr.getHealth([healthy, ignored]);
+  const typedReport: IResourceHealthReport = report;
+  const resources: number = typedReport.totals.resources;
+  const firstStatus: "healthy" | "degraded" | "unhealthy" | undefined =
+    typedReport.report[0]?.status;
+
+  void resources;
+  void firstStatus;
+
+  await rr.getHealth(["types-health-resource"]);
 })();
 
 // Scenario: RunResult.getResourceConfig should preserve resource config typing.

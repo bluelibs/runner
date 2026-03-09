@@ -1035,6 +1035,8 @@ Here's a friendly guideline (not a strict rule!):
 
 Resources are the long-lived parts of your app – things like database connections, configuration, services, and caches. They **initialize once when your app starts** and **clean up when it shuts down**. Think of them as the foundation your tasks build upon.
 
+Resources can also expose an optional async `health(value, config, deps, context)` probe. Runner does not assume every resource is health-reportable: only resources that explicitly define `health()` participate in `resources.health.getHealth(...)` and `runtime.getHealth(...)` results.
+
 ```typescript
 import { r } from "@bluelibs/runner";
 
@@ -1061,6 +1063,21 @@ const userService = r
   }))
   .build();
 ```
+
+When you want operator-facing health data, keep the probe small and explicit:
+
+```typescript
+const database = r
+  .resource("app.db")
+  .init(async () => connectDb())
+  .health(async (client) => ({
+    status: client?.isConnected() ? "healthy" : "unhealthy",
+    message: "database connectivity",
+  }))
+  .build();
+```
+
+Resources without `health()` are skipped entirely. Lazy resources that were never initialized stay asleep and are skipped instead of being probed.
 
 #### Resource Configuration
 
@@ -1270,7 +1287,7 @@ const billing = r
 
 #### Wiring Access Policy
 
-Use `.isolate({ deny: [...] })` (blocklist) or `.isolate({ only: [...] })` (boundary-scoped external allowlist) when a resource subtree must have restricted dependency access, even if visibility would otherwise allow it.
+Use `.isolate({ deny: [...] })` (blocklist) or `.isolate({ only: [...] })` (boundary-scoped external allowlist) when a resource subtree must have restricted dependency access, even if visibility would otherwise allow it. Use `.isolate({ whitelist: [...] })` for narrow per-boundary grants to specific consumers without reopening ancestor restrictions.
 
 **`scope(..., options)` channel options (all default to `true`):**
 
@@ -1330,6 +1347,8 @@ const payments = r
 
 - A resource uses **either** `deny` **or** `only` — providing both (even `deny: []` alongside `only`) throws `isolateConflictError` at bootstrap.
 - `deny` / `only` accept definitions, `subtreeOf(...)`, or `scope(...)` entries.
+- `whitelist` entries use `{ for: [...], targets: [...], channels? }`.
+- `whitelist.for` and `whitelist.targets` accept the same selector shapes as `deny` / `only`, including `subtreeOf(...)` for subtree-wide grants.
 - Bare strings are invalid in `deny` / `only`; string selectors are supported only in `isolate.exports`.
 - Tag definition entries and tag-id selector entries are intentionally different:
   - `deny: [internalOnlyTag]` / `only: [internalOnlyTag]` apply tag semantics (tag dependency itself + all definitions carrying that tag).
@@ -1337,6 +1356,7 @@ const payments = r
 - `scope(target, options)` applies the same channel options to every wrapped target, including combinations like `scope([paymentsApi, subtreeOf(agentResource), tags.system], { dependencies: false })`.
 - **`only` automatically exempts internal items**: anything registered by the resource or its children is always accessible without being listed. `only: []` blocks all external dependencies while keeping internal ones reachable.
 - **`only` is checked at every ancestor boundary** for the consumer. For external dependencies, effective access behaves like the intersection of ancestor `only` lists (with the internal-subtree exemption still applied at each boundary).
+- **`whitelist` is checked only on the declaring boundary**: it can relax that boundary's own `deny` / `only` decision for matching consumer-target pairs, but it cannot override `isolate.exports` or ancestor restrictions.
 - Rules are validated at bootstrap; malformed export entries and unknown object references fail fast.
 - Enforcement scope includes dependency wiring, hook `.on(event)` subscriptions, tag attachments (`.tags([...])`), and middleware attachments, so the same policy semantics apply when targets are events, tags, or middleware definitions.
 - **Parent and child policies compose additively**; children cannot relax parent restrictions:
@@ -2669,6 +2689,7 @@ An object with the following properties and methods:
 | `getResourceValue(...)`     | Read a resource's value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `getLazyResourceValue(...)` | Initialize/read a resource on demand. Available only when `run(..., { lazy: true })` is enabled.                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `getResourceConfig(...)`    | Read a resource's resolved config                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `getHealth(resourceDefs?)`  | Evaluate async health probes for all visible health-enabled resources or only the requested subset. Returns `{ totals, report }`. Resources without `health()` are excluded. For in-resource dependencies, prefer `resources.health.getHealth(...)`.                                                                                                                                                                                                                                                                      |
 | `getRootId()`               | Read the root resource id                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `getRootConfig()`           | Read the root resource config                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `getRootValue()`            | Read the initialized root resource value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -2681,6 +2702,8 @@ Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes av
 This object is your main interface to interact with the running application. It can also be declared as a dependency via `resources.runtime`.
 
 Important bootstrap note: when `runtime` is declared as a dependency inside a resource `init()`, startup may still be in progress. You are guaranteed your current resource dependencies are ready, but not that all registered resources in the app are already initialized.
+
+`runtime.getHealth(...)` and `resources.health.getHealth(...)` are available only after `run(...)` finishes bootstrapping and before disposal starts. They only evaluate resources that define `health()`. Resources without `health()` are skipped, and startup-unused lazy resources stay asleep instead of being probed.
 
 ### Ready-phase startup orchestration
 
@@ -3767,6 +3790,18 @@ Why this pattern works:
 - Infrastructure dependencies (database connections, cache clients, brokers) should usually skip `cooldown()` and only clean up in `dispose()`, so in-flight work can still finish during drain.
 
 `cooldown()` can be async, but keep it short. Trigger intake stop and return quickly; let Runner's drain phase do the waiting.
+
+When you also want an operator-facing summary, pair ingress readiness with resource-level health probes:
+
+```typescript
+const report = await health.getHealth();
+// {
+//   totals: { resources: 3, healthy: 2, degraded: 1, unhealthy: 0 },
+//   report: [...]
+// }
+```
+
+Only resources that explicitly define `health()` participate. This keeps health reporting intentional instead of synthesizing fake status for every resource in the graph. Lazy resources that are still sleeping are skipped. Prefer `resources.health` inside resources; keep `runtime.getHealth()` for operator-facing runtime access.
 
 ---
 
@@ -4855,6 +4890,8 @@ Runner gives you primitives for all three observability signals:
 Use all three together. Logs explain what happened, metrics tell you when it is happening repeatedly, and traces show where latency accumulates.
 Runner provides the integration points (interceptors, context propagation, structured logs), while tracer backends are installed and configured by your application.
 
+For resource-level operational status, Runner also supports optional async `resource.health(...)` probes and aggregates them through `resources.health.getHealth(...)` and `runtime.getHealth(...)`. Only resources that explicitly opt in are counted, and sleeping lazy resources are skipped, which keeps the report aligned with the checks you actually trust.
+
 ### Naming conventions
 
 Keep names stable and low-cardinality:
@@ -5350,7 +5387,6 @@ await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
 > **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it's off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
-
 ## Advanced Patterns
 
 This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.

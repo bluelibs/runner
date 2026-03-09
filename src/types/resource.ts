@@ -14,7 +14,11 @@ import {
 import { ResourceTagType } from "./tag";
 import { IResourceMeta } from "./meta";
 import type { ThrowsList } from "./error";
-import type { IsolationScope } from "../tools/scope";
+import type {
+  IsolationChannels,
+  IsolationScope,
+  IsolationScopeTarget,
+} from "../tools/scope";
 export type {
   IsolationScope,
   IsolationChannels,
@@ -132,6 +136,14 @@ export interface IsolationPolicy {
    */
   only?: ReadonlyArray<IsolationTarget>;
   /**
+   * Additional per-boundary grants for specific consumers.
+   *
+   * `whitelist` can relax this boundary's own `deny` / `only` checks for the
+   * matching consumer-target relation, but it does not override visibility
+   * rules or restrictions imposed by ancestor resources.
+   */
+  whitelist?: ReadonlyArray<IsolationWhitelistEntry>;
+  /**
    * Declares which registered items are visible outside this resource's
    * registration subtree.
    *
@@ -140,6 +152,23 @@ export interface IsolationPolicy {
    * - Array entries must be explicit Runner definition/resource references
    */
   exports?: IsolationExportsConfig;
+}
+
+export interface IsolationWhitelistEntry {
+  /**
+   * Consumers that receive the grant. Supports definitions, tags,
+   * `subtreeOf(...)`, and `scope(...)` targets.
+   */
+  for: ReadonlyArray<IsolationScopeTarget>;
+  /**
+   * Targets that become accessible to the matching consumers for the selected
+   * channels on this boundary only.
+   */
+  targets: ReadonlyArray<IsolationScopeTarget>;
+  /**
+   * Channels controlled by this grant. Defaults to all channels when omitted.
+   */
+  channels?: IsolationChannels;
 }
 
 // Helper to detect `any` so we can treat it as "unspecified"
@@ -151,6 +180,30 @@ export type IsUnspecified<T> = [T] extends [undefined]
     : IsAny<T> extends true
       ? true
       : false;
+
+export type ResourceHealthStatus = "healthy" | "degraded" | "unhealthy";
+
+export interface IResourceHealthResult {
+  status: ResourceHealthStatus;
+  message?: string;
+  details?: unknown;
+}
+
+export interface IResourceHealthReportEntry extends IResourceHealthResult {
+  id: string;
+  path: string;
+  initialized: boolean;
+}
+
+export interface IResourceHealthReport {
+  totals: {
+    resources: number;
+    healthy: number;
+    degraded: number;
+    unhealthy: number;
+  };
+  report: IResourceHealthReportEntry[];
+}
 
 export interface IResourceDefinition<
   TConfig = any,
@@ -240,6 +293,18 @@ export interface IResourceDefinition<
     dependencies: ResourceDependencyValuesType<TDependencies>,
     context: TContext,
   ) => Promise<void>;
+  /**
+   * Optional async health probe for this resource.
+   *
+   * Resources without `health` are excluded from runtime health reports.
+   */
+  health?: (
+    this: unknown,
+    value: (TValue extends Promise<infer U> ? U : TValue) | undefined,
+    config: TConfig,
+    dependencies: ResourceDependencyValuesType<TDependencies>,
+    context: TContext,
+  ) => Promise<IResourceHealthResult>;
   meta?: TMeta;
   /**
    * Declares which typed errors are part of this resource's contract.

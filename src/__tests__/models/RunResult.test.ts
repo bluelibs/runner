@@ -262,6 +262,290 @@ describe("RunResult", () => {
     await r.dispose();
   });
 
+  it("getHealth aggregates async health-enabled resources only", async () => {
+    const healthy = defineResource({
+      id: "rr-health-healthy",
+      async init() {
+        return "healthy-value";
+      },
+      async health(value) {
+        return { status: "healthy", message: String(value) };
+      },
+    });
+
+    const degraded = defineResource({
+      id: "rr-health-degraded",
+      async init() {
+        return "degraded-value";
+      },
+      async health() {
+        return { status: "degraded", message: "slow" };
+      },
+    });
+
+    const unhealthy = defineResource({
+      id: "rr-health-unhealthy",
+      async init() {
+        return "unhealthy-value";
+      },
+      async health() {
+        throw createMessageError("down");
+      },
+    });
+
+    const ignored = defineResource({
+      id: "rr-health-ignored",
+      async init() {
+        return "ignored";
+      },
+    });
+
+    const app = defineResource({
+      id: "rr-health-app",
+      register: [healthy, degraded, unhealthy, ignored],
+      async init() {
+        return "ready";
+      },
+    });
+
+    const runtime = await run(app, { shutdownHooks: false });
+    const report = await runtime.getHealth();
+
+    expect(report.totals).toEqual({
+      resources: 3,
+      healthy: 1,
+      degraded: 1,
+      unhealthy: 1,
+    });
+    expect(report.report).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "rr-health-healthy",
+          initialized: true,
+          status: "healthy",
+          message: "healthy-value",
+        }),
+        expect.objectContaining({
+          id: "rr-health-degraded",
+          initialized: true,
+          status: "degraded",
+          message: "slow",
+        }),
+        expect.objectContaining({
+          id: "rr-health-unhealthy",
+          initialized: true,
+          status: "unhealthy",
+          message: "down",
+        }),
+      ]),
+    );
+
+    await runtime.dispose();
+  });
+
+  it("getHealth supports filtered resource queries and excludes requested resources without health", async () => {
+    const healthy = defineResource({
+      id: "rr-health-filter-healthy",
+      async init() {
+        return "ok";
+      },
+      async health() {
+        return { status: "healthy" };
+      },
+    });
+
+    const noHealth = defineResource({
+      id: "rr-health-filter-none",
+      async init() {
+        return "skip";
+      },
+    });
+
+    const app = defineResource({
+      id: "rr-health-filter-app",
+      register: [healthy, noHealth],
+      async init() {
+        return "ready";
+      },
+    });
+
+    const runtime = await run(app, { shutdownHooks: false });
+    const healthyId = runtime.store.resolveDefinitionId(healthy)!;
+
+    await expect(
+      runtime.getHealth(["rr-health-filter-missing"]),
+    ).rejects.toThrow('Resource "rr-health-filter-missing" not found.');
+
+    const filtered = await runtime.getHealth([healthyId, noHealth]);
+    expect(filtered.totals).toEqual({
+      resources: 1,
+      healthy: 1,
+      degraded: 0,
+      unhealthy: 0,
+    });
+    expect(filtered.report).toEqual([
+      expect.objectContaining({
+        id: "rr-health-filter-healthy",
+        status: "healthy",
+      }),
+    ]);
+
+    const skipped = await runtime.getHealth([noHealth]);
+    expect(skipped.totals).toEqual({
+      resources: 0,
+      healthy: 0,
+      degraded: 0,
+      unhealthy: 0,
+    });
+    expect(skipped.report).toEqual([]);
+
+    await runtime.dispose();
+  });
+
+  it("getHealth de-duplicates repeated filtered resources", async () => {
+    const healthy = defineResource({
+      id: "rr-health-dedupe-resource",
+      async init() {
+        return "ok";
+      },
+      async health() {
+        return { status: "healthy" };
+      },
+    });
+
+    const app = defineResource({
+      id: "rr-health-dedupe-app",
+      register: [healthy],
+      async init() {
+        return "ready";
+      },
+    });
+
+    const runtime = await run(app, { shutdownHooks: false });
+    const report = await runtime.getHealth([healthy, healthy, healthy.id]);
+
+    expect(report.totals).toEqual({
+      resources: 1,
+      healthy: 1,
+      degraded: 0,
+      unhealthy: 0,
+    });
+    expect(report.report).toHaveLength(1);
+
+    await runtime.dispose();
+  });
+
+  it("getHealth normalizes non-Error health throws into unhealthy entries", async () => {
+    const unhealthy = defineResource({
+      id: "rr-health-nonerror-resource",
+      async init() {
+        return "ok";
+      },
+      async health() {
+        throw "plain-string-error";
+      },
+    });
+
+    const app = defineResource({
+      id: "rr-health-nonerror-app",
+      register: [unhealthy],
+      async init() {
+        return "ready";
+      },
+    });
+
+    const runtime = await run(app, { shutdownHooks: false });
+    const report = await runtime.getHealth([unhealthy]);
+
+    expect(report.totals).toEqual({
+      resources: 1,
+      healthy: 0,
+      degraded: 0,
+      unhealthy: 1,
+    });
+    expect(report.report).toEqual([
+      expect.objectContaining({
+        id: "rr-health-nonerror-resource",
+        status: "unhealthy",
+        message: "plain-string-error",
+        details: expect.any(Error),
+      }),
+    ]);
+
+    await runtime.dispose();
+  });
+
+  it("getHealth falls back to raw object ids when definition resolution is unavailable", async () => {
+    const app = defineResource({
+      id: "rr-health-raw-object-app",
+      async init() {
+        return "ready";
+      },
+      async health() {
+        return { status: "healthy" as const };
+      },
+    });
+
+    const runtime = await run(app, { shutdownHooks: false });
+    const report = await runtime.getHealth([
+      { id: "rr-health-raw-object-app" } as any,
+    ]);
+
+    expect(report.totals).toEqual({
+      resources: 1,
+      healthy: 1,
+      degraded: 0,
+      unhealthy: 0,
+    });
+    expect(report.report).toEqual([
+      expect.objectContaining({
+        id: "rr-health-raw-object-app",
+        status: "healthy",
+      }),
+    ]);
+
+    await runtime.dispose();
+  });
+
+  it("getHealth falls back to raw runtime path strings when alias resolution is unavailable", async () => {
+    const healthy = defineResource({
+      id: "rr-health-raw-string-resource",
+      async init() {
+        return "ok";
+      },
+      async health() {
+        return { status: "healthy" as const };
+      },
+    });
+
+    const app = defineResource({
+      id: "rr-health-raw-string-app",
+      register: [healthy],
+      async init() {
+        return "ready";
+      },
+    });
+
+    const runtime = await run(app, { shutdownHooks: false });
+    const resourcePath = runtime.store.getRuntimeMetadata(healthy).path;
+    const report = await runtime.getHealth([resourcePath]);
+
+    expect(report.totals).toEqual({
+      resources: 1,
+      healthy: 1,
+      degraded: 0,
+      unhealthy: 0,
+    });
+    expect(report.report).toEqual([
+      expect.objectContaining({
+        id: "rr-health-raw-string-resource",
+        status: "healthy",
+      }),
+    ]);
+
+    await runtime.dispose();
+  });
+
   it("supports explicit lazy resource access and blocks getResourceValue for startup-unused resources", async () => {
     const lazyInit = jest.fn(async () => ({ lazy: true }));
     const lazyOnly = defineResource({

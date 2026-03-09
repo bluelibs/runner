@@ -9,6 +9,8 @@ Runner gives you primitives for all three observability signals:
 Use all three together. Logs explain what happened, metrics tell you when it is happening repeatedly, and traces show where latency accumulates.
 Runner provides the integration points (interceptors, context propagation, structured logs), while tracer backends are installed and configured by your application.
 
+For resource-level operational status, Runner also supports optional async `resource.health(...)` probes and aggregates them through `resources.health.getHealth(...)` and `runtime.getHealth(...)`. Only resources that explicitly opt in are counted, and sleeping lazy resources are skipped, which keeps the report aligned with the checks you actually trust.
+
 ### Naming conventions
 
 Keep names stable and low-cardinality:
@@ -504,4 +506,3 @@ await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
 > **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it's off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
-

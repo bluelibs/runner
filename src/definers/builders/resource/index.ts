@@ -17,12 +17,16 @@ export * from "./types";
  */
 export type ResourceBuilderOptions = {
   gateway?: boolean;
-  frameworkOwned?: boolean;
 };
 
-export function resourceBuilder<TConfig = void>(
+type InternalResourceBuilderOptions = ResourceBuilderOptions & {
+  frameworkOwned?: boolean;
+  filePath: string;
+};
+
+function createResourceBuilder<TConfig = void>(
   id: string,
-  options?: ResourceBuilderOptions,
+  options: InternalResourceBuilderOptions,
 ): ResourceFluentBuilder<
   TConfig,
   Promise<any>,
@@ -32,7 +36,6 @@ export function resourceBuilder<TConfig = void>(
   ResourceTagType[],
   ResourceMiddlewareAttachmentType[]
 > {
-  const filePath = getCallerFile();
   const initial: BuilderState<
     TConfig,
     Promise<any>,
@@ -45,7 +48,7 @@ export function resourceBuilder<TConfig = void>(
     id,
     gateway: options?.gateway === true,
     frameworkOwned: options?.frameworkOwned === true,
-    filePath,
+    filePath: options.filePath,
     dependencies: undefined,
     register: undefined,
     middleware: [],
@@ -63,6 +66,41 @@ export function resourceBuilder<TConfig = void>(
     subtree: undefined,
   });
   return makeResourceBuilder(initial);
+}
+
+export function resourceBuilder<TConfig = void>(
+  id: string,
+  options?: ResourceBuilderOptions,
+): ResourceFluentBuilder<
+  TConfig,
+  Promise<any>,
+  {},
+  any,
+  IResourceMeta,
+  ResourceTagType[],
+  ResourceMiddlewareAttachmentType[]
+> {
+  return createResourceBuilder(id, {
+    ...options,
+    filePath: getCallerFile(),
+  });
+}
+
+export function frameworkResource<TConfig = void>(
+  id: string,
+): ResourceFluentBuilder<
+  TConfig,
+  Promise<any>,
+  {},
+  any,
+  IResourceMeta,
+  ResourceTagType[],
+  ResourceMiddlewareAttachmentType[]
+> {
+  return createResourceBuilder<TConfig>(id, {
+    filePath: getCallerFile(),
+    frameworkOwned: true,
+  });
 }
 
 /**

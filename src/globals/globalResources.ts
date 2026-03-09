@@ -8,6 +8,7 @@ import { rateLimitResource } from "./middleware/rateLimit.middleware";
 import { temporalResource } from "./middleware/temporal.middleware";
 import { cronResource as cron } from "./cron/cron.resource";
 import { queueResource } from "./resources/queue.resource";
+import { healthResource } from "./resources/health.resource";
 import { runtimeResource } from "./resources/runtime.resource";
 import { storeResource } from "./resources/store.resource";
 import { debugResource as debug } from "./resources/debug/debug.resource";
@@ -17,7 +18,7 @@ import { middlewareManagerResource as middlewareManager } from "./resources/midd
 import { eventManagerResource as eventManager } from "./resources/eventManager.resource";
 import { taskRunnerResource as taskRunner } from "./resources/taskRunner.resource";
 
-export { storeResource as store, serializer };
+export { healthResource as health, storeResource as store, serializer };
 
 export const systemResources = {
   store: storeResource,
@@ -28,6 +29,7 @@ export const systemResources = {
 } as const;
 
 export const runnerResources = {
+  health: healthResource,
   logger,
   debug,
   serializer,

@@ -670,6 +670,18 @@ Why this pattern works:
 
 `cooldown()` can be async, but keep it short. Trigger intake stop and return quickly; let Runner's drain phase do the waiting.
 
+When you also want an operator-facing summary, pair ingress readiness with resource-level health probes:
+
+```typescript
+const report = await health.getHealth();
+// {
+//   totals: { resources: 3, healthy: 2, degraded: 1, unhealthy: 0 },
+//   report: [...]
+// }
+```
+
+Only resources that explicitly define `health()` participate. This keeps health reporting intentional instead of synthesizing fake status for every resource in the graph. Lazy resources that are still sleeping are skipped. Prefer `resources.health` inside resources; keep `runtime.getHealth()` for operator-facing runtime access.
+
 ---
 
 ## Cron Scheduling
