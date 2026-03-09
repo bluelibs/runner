@@ -1,6 +1,7 @@
 import { Match, middleware, r } from "@bluelibs/runner";
 
 import { budgetLedger, dayKey, type BudgetSnapshot } from "../budget/budget-ledger.resource";
+import { httpRoute } from "./http-route.tag";
 
 export interface AskRunnerHealthOutput {
   status: "ok";
@@ -21,6 +22,14 @@ export const getAskRunnerHealthTask = r
   .inputSchema(Match.compile({}))
   .dependencies({ budgetLedger })
   .middleware(endpointTaskMiddleware)
+  .tags([
+    httpRoute.with({
+      method: "get",
+      path: "/health",
+      responseType: "json",
+      inputFrom: "none",
+    }),
+  ])
   .run(async (_input, { budgetLedger }): Promise<AskRunnerHealthOutput> => {
     return {
       status: "ok",
@@ -35,36 +44,65 @@ export const getAskRunnerHealthTask = r
   .build();
 
 export const getBudgetSnapshotTask = r
-  .task<{ day: string }>("getBudgetSnapshot")
-  .inputSchema(Match.compile({ day: Match.NonEmptyString }))
+  .task("getBudgetSnapshot")
+  .inputSchema(Match.compile({}))
   .dependencies({ budgetLedger })
   .middleware(endpointTaskMiddleware)
-  .run(async ({ day }, { budgetLedger }): Promise<BudgetSnapshot> => {
-    return budgetLedger.getSnapshot(day);
+  .tags([
+    httpRoute.with({
+      method: "get",
+      path: "/admin/budget",
+      responseType: "json",
+      inputFrom: "none",
+      admin: true,
+    }),
+  ])
+  .run(async (_input, { budgetLedger }): Promise<BudgetSnapshot> => {
+    return budgetLedger.getSnapshot(dayKey(new Date()));
   })
   .build();
 
 export const stopBudgetForDayTask = r
-  .task<{ day: string; reason: string }>("stopBudgetForDay")
+  .task<{ reason?: string }>("stopBudgetForDay")
   .inputSchema(
     Match.compile({
-      day: Match.NonEmptyString,
-      reason: Match.NonEmptyString,
+      reason: Match.Optional(String),
     }),
   )
   .dependencies({ budgetLedger })
   .middleware(endpointTaskMiddleware)
-  .run(async ({ day, reason }, { budgetLedger }): Promise<BudgetSnapshot> => {
-    return budgetLedger.stopForDay(day, reason);
+  .tags([
+    httpRoute.with({
+      method: "post",
+      path: "/admin/stop-for-day",
+      responseType: "json",
+      inputFrom: "body",
+      admin: true,
+    }),
+  ])
+  .run(async ({ reason }, { budgetLedger }): Promise<BudgetSnapshot> => {
+    return budgetLedger.stopForDay(
+      dayKey(new Date()),
+      reason?.trim() || "Stopped manually.",
+    );
   })
   .build();
 
 export const resumeBudgetTask = r
-  .task<{ day: string }>("resumeBudget")
-  .inputSchema(Match.compile({ day: Match.NonEmptyString }))
+  .task("resumeBudget")
+  .inputSchema(Match.compile({}))
   .dependencies({ budgetLedger })
   .middleware(endpointTaskMiddleware)
-  .run(async ({ day }, { budgetLedger }): Promise<BudgetSnapshot> => {
-    return budgetLedger.resume(day);
+  .tags([
+    httpRoute.with({
+      method: "post",
+      path: "/admin/resume",
+      responseType: "json",
+      inputFrom: "none",
+      admin: true,
+    }),
+  ])
+  .run(async (_input, { budgetLedger }): Promise<BudgetSnapshot> => {
+    return budgetLedger.resume(dayKey(new Date()));
   })
   .build();

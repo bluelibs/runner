@@ -30,7 +30,9 @@ Registered pieces:
 - OpenAI semaphore resource
 - ask-task budget middleware
 - ask tasks
+- HTTP route tag
 - admin/health endpoint tasks
+- HTTP router resource
 - HTTP server resource
 
 Important rule:
@@ -73,25 +75,41 @@ Design decision:
 
 Relevant files:
 
+- `src/app/http/http-route.tag.ts`
+- `src/app/http/http-router.resource.ts`
 - `src/app/http/http.resource.ts`
 - `src/app/http/http-endpoints.task.ts`
 - `src/app/http/query-request.ts`
+- `src/app/http/stream-html-page.ts`
 
 Responsibilities:
 
+- `http-route.tag.ts`
+  - owns typed route metadata for task discovery
+  - stays intentionally small and only describes route-level transport metadata
+- `http-router.resource.ts`
+  - discovers tagged endpoint tasks
+  - registers normal task-backed routes on the shared Express app
+  - handles router-level HTTP-only concerns such as admin header auth and simple response serialization
 - `http.resource.ts`
   - owns Express lifecycle only
-  - wires routes to tasks
-  - handles HTTP-only concerns: headers, request body parsing, admin header auth, stream sink writing, error serialization
+  - registers only the special explicit routes (`/`, `/stream`, `/stream-html`)
+  - handles shared Express setup plus final error serialization
 - `http-endpoints.task.ts`
   - owns `/health`, `/admin/budget`, `/admin/resume`, `/admin/stop-for-day`
+  - carries route metadata for the tagged router
 - `query-request.ts`
   - should stay a transport helper
   - currently extracts `{ query, ip }` and contains projected-cost estimation helper used by task middleware
+- `stream-html-page.ts`
+  - owns the static browser viewer served by `/stream-html`
+  - keeps client-side markdown rendering separate from route wiring
 
 Design decision:
 - Do not reintroduce large `handleRequest` abstractions unless they reduce duplication materially.
 - Keep the route handlers easy to read: parse HTTP input, call task, serialize response.
+- Use tags plus the router resource for simple task-backed endpoints, but keep special streaming/page routes explicit.
+- Keep `/stream-html` as a page-level transport adapter over `/stream`, not as a new business task.
 
 ## What To Preserve
 

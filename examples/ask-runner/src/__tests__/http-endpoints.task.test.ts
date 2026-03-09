@@ -53,7 +53,7 @@ describe("http endpoint tasks", () => {
     const budgetLedger = createLedger();
 
     const result = await getBudgetSnapshotTask.run(
-      { day: "2026-03-09" },
+      {},
       { budgetLedger },
     );
 
@@ -65,7 +65,7 @@ describe("http endpoint tasks", () => {
     const budgetLedger = createLedger();
 
     const result = await stopBudgetForDayTask.run(
-      { day: "2026-03-09", reason: "manual" },
+      { reason: "manual" },
       { budgetLedger },
     );
 
@@ -77,7 +77,7 @@ describe("http endpoint tasks", () => {
     const budgetLedger = createLedger();
 
     const result = await resumeBudgetTask.run(
-      { day: "2026-03-09" },
+      {},
       { budgetLedger },
     );
 

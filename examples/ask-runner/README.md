@@ -9,6 +9,7 @@ It demonstrates:
 - durable SQLite-backed budget and rate-limit state
 - public `GET /?query=...` markdown responses
 - public `GET /stream?query=...` streaming markdown responses
+- public `GET /stream-html?query=...` browser page that live-renders streamed markdown as HTML
 - admin controls for stopping or resuming answering for the current day
 - prompt-cache aware usage accounting with separate cached-input pricing
 - a concurrency cap around OpenAI calls using Runner's `Semaphore`
@@ -17,6 +18,7 @@ It demonstrates:
 
 - `GET /?query=...` -> returns `text/markdown`
 - `GET /stream?query=...` -> streams `text/markdown`
+- `GET /stream-html?query=...` -> returns `text/html` and renders the `/stream` response live in the browser
 - `GET /health` -> returns JSON health and budget snapshot
 - `POST /admin/stop-for-day` -> requires `x-admin-secret`
 - `POST /admin/resume` -> requires `x-admin-secret`
@@ -51,4 +53,5 @@ npm run dev
 
 ```text
 GET https://ask-runner.bluelibs.com/?query=How%20does%20Runner%20handle%20resource%20lifecycle%3F
+GET https://ask-runner.bluelibs.com/stream-html?query=How%20does%20Runner%20handle%20resource%20lifecycle%3F
 ```

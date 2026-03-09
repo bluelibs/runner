@@ -14,6 +14,8 @@ import {
   resumeBudgetTask,
   stopBudgetForDayTask,
 } from "./http/http-endpoints.task";
+import { httpRoute } from "./http/http-route.tag";
+import { httpRouter } from "./http/http-router.resource";
 import { httpServer } from "./http/http.resource";
 
 export const app = r
@@ -27,10 +29,12 @@ export const app = r
     askRunnerBudgetMiddleware,
     askRunnerTask,
     streamAskRunnerTask,
+    httpRoute,
     getAskRunnerHealthTask,
     getBudgetSnapshotTask,
     stopBudgetForDayTask,
     resumeBudgetTask,
+    httpRouter,
     httpServer,
   ])
   .build();
