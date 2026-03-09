@@ -13,6 +13,7 @@ import {
 import { BootstrapCoordinator } from "./tools/BootstrapCoordinator";
 import { createRuntimeServices } from "./tools/createRuntimeServices";
 import { extractResourceAndConfig } from "./tools/extractResourceAndConfig";
+import { resolveExecutionContextConfig } from "./tools/resolveExecutionContextConfig";
 
 const activeRunResults = new Set<RunResult<any>>();
 
@@ -56,9 +57,12 @@ export async function run<C, V extends Promise<any>>(
     dryRun = false,
     lazy = false,
     onUnhandledError: onUnhandledErrorOpt,
-    runtimeEventCycleDetection = true,
+    executionContext: executionContextOpt,
     lifecycleMode,
   } = options || {};
+
+  const executionContextConfig =
+    resolveExecutionContextConfig(executionContextOpt);
 
   const normalizedLifecycleMode =
     lifecycleMode === ResourceLifecycleMode.Parallel
@@ -80,7 +84,7 @@ export async function run<C, V extends Promise<any>>(
 
   const services = createRuntimeServices({
     lifecycleMode: normalizedLifecycleMode,
-    runtimeEventCycleDetection,
+    executionContextConfig,
     lazy,
     errorBoundary,
     onUnhandledError: onUnhandledErrorOpt,

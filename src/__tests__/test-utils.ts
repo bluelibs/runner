@@ -6,7 +6,7 @@ import { RunnerMode } from "../defs";
  * This ensures consistency across model tests and avoids boilerplate.
  */
 export function createTestFixture() {
-  const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+  const eventManager = new EventManager();
   const logger = new Logger({
     printThreshold: "info",
     printStrategy: "pretty",

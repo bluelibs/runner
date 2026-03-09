@@ -4,7 +4,6 @@ import {
   IEventEmission,
 } from "../../defs";
 import { IHook } from "../../types/hook";
-import { RuntimeCallSource } from "../../types/runtimeSource";
 
 /**
  * Default options for event handlers.
@@ -61,11 +60,3 @@ export type HookExecutor = (
   event: IEventEmission<any>,
   computedDependencies: DependencyValuesType<any>,
 ) => Promise<any>;
-
-/**
- * Utility shape representing an emission frame used for cycle detection.
- */
-export interface IEmissionFrame {
-  id: string;
-  source: RuntimeCallSource;
-}

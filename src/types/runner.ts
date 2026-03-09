@@ -5,6 +5,7 @@ import { IEvent, IEventEmitOptions, IEventEmitReport } from "../defs";
 import { IResource } from "./resource";
 import { ITask } from "./task";
 import { TaskCallOptions } from "./utilities";
+import type { ExecutionContextOptions } from "./executionContext";
 
 /**
  * Common interface for the Runner runtime instance.
@@ -125,11 +126,15 @@ export type RunOptions = {
    */
   dryRun?: boolean;
   /**
-   * Defaults to true.
-   * When set, forces runtime cycle detection for event emissions. Disable if you're sure
-   * you don't have event deadlocks to improve event emission performance.
+   * Opt-in execution context. Exposes the current causal chain through
+   * `system.ctx.executionContext`, automatically assigns a correlation id
+   * per top-level execution, and enables cycle detection by default.
+   *
+   * - `true` → enabled with default correlation ids and cycle detection
+   * - `false` or omitted → disabled (zero overhead)
+   * - `{ createCorrelationId?, cycleDetection? }` → enabled with custom behavior
    */
-  runtimeEventCycleDetection?: boolean;
+  executionContext?: boolean | ExecutionContextOptions;
   /**
    * Defaults to false.
    * When true, startup skips initializing resources that are not used during bootstrap.

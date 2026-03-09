@@ -628,8 +628,12 @@ Runtime:
 - `dryRun: true` validates the graph without starting resources.
 - `lazy: true` defers startup-unused resources until on-demand access.
 - `lifecycleMode: "parallel"` enables dependency-safe parallel startup and disposal waves.
-
-Lifecycle:
+- `executionContext: true | { createCorrelationId?, cycleDetection? }` enables runtime execution context (opt-in). Import `{ system }` and read `system.ctx.executionContext.use()` or `.tryUse()` inside tasks, hooks, and interceptors. Runner assigns a correlation id to each top-level execution and enables cycle detection by default. Use `cycleDetection: false` to keep context/correlation ids without repetition-depth guards. Requires AsyncLocalStorage (Node-only in practice).
+- `system.ctx.executionContext.use()` returns the current branch snapshot: `{ correlationId, startedAt, depth, currentFrame, frames }`.
+- The execution chain includes nested task calls, event emissions, and hook executions. Parallel child tasks inherit the same `correlationId` and parent frames, then append their own branch-local frame.
+- `system.ctx.executionContext.provide({ correlationId? }, fn)` seeds correlation at the execution boundary before you call `runTask()` / `emitEvent()`.
+- `system.ctx.executionContext.record({ correlationId? }, fn)` returns `{ result, recording }` with the full recorded execution tree for that scope.
+- Lifecycle:
 
 - Startup order:
   - wire dependencies

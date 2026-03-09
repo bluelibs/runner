@@ -9,7 +9,7 @@ describe("EventManager Parallel Execution", () => {
   let parallelEvent: IEvent<string>;
 
   beforeEach(() => {
-    eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    eventManager = new EventManager();
     parallelEvent = defineEvent<string>({
       id: "parallelEvent",
       parallel: true,

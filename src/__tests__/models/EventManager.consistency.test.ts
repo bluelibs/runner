@@ -42,7 +42,7 @@ describe("EventManager Consistency", () => {
 
   describe("Cycle Detection", () => {
     it("should strictly prevent infinite recursion even if hook re-emits same event", async () => {
-      const mgr = new EventManager({ runtimeEventCycleDetection: true });
+      const mgr = new EventManager();
       const event = defineEvent<void>({ id: "loop-event" });
 
       let callCount = 0;

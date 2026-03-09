@@ -55,6 +55,7 @@ import { onAnyOf, isOneOf } from "./types/event";
 import { subtreeOf as subtreeOfFn } from "./tools/subtreeOf";
 import { scope as scopeFn } from "./tools/scope";
 import { isSameDefinition } from "./tools/isSameDefinition";
+import { system } from "./system";
 
 export const resources = Object.freeze({ ...globalResources });
 export const events = Object.freeze({ ...globalEvents });
@@ -98,6 +99,7 @@ export {
   isSameDefinition,
   subtreeOfFn as subtreeOf,
   scopeFn as scope,
+  system,
 };
 
 /**

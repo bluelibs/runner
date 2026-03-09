@@ -1,7 +1,8 @@
 import { defineEvent, defineResource, defineTask } from "../../../define";
 import { EventEmissionFailureMode } from "../../../defs";
-import { run } from "../../../";
+import { run, system } from "../../../";
 import type { IEventEmitReport } from "../../../types/event";
+import type { ExecutionRecordResult } from "../../../types/executionContext";
 
 // Type-only tests for RunResult API typing.
 
@@ -46,6 +47,13 @@ void (async () => {
 
   const valid2: number | undefined = await rr.runTask(main, { x: 2 });
   void valid2;
+
+  const withContext = await system.ctx.executionContext.record(() =>
+    rr.runTask(add, { x: 3 }),
+  );
+  const withContextValue: ExecutionRecordResult<number | undefined> =
+    withContext;
+  withContextValue.recording?.correlationId;
 
   // @ts-expect-error wrong deps override type
   await rr.runTask(main, { x: 2 }, { depTask: async (input: number) => "x" });
@@ -115,6 +123,13 @@ void (async () => {
   const dynamic = await rr.emitEvent(appEvent, { v: 4 }, dynamicOptions);
   // @ts-expect-error dynamic report option yields union
   const mustBeReport: IEventEmitReport = dynamic;
+
+  const withContext = await system.ctx.executionContext.record(() =>
+    rr.emitEvent(appEvent, { v: 5 }, { report: true }),
+  );
+  const withContextReport: ExecutionRecordResult<IEventEmitReport> =
+    withContext;
+  withContextReport.result.attemptedListeners;
 })();
 
 // Scenario: RunResult root helpers preserve typing.

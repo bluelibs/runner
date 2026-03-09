@@ -7,7 +7,7 @@ describe("EventManager transactional execution", () => {
   let eventManager: EventManager;
 
   beforeEach(() => {
-    eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    eventManager = new EventManager();
   });
 
   it("runs listeners successfully without automatic rollback", async () => {

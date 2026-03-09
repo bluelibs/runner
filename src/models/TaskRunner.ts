@@ -16,6 +16,8 @@ import {
 } from "../types/runtimeSource";
 import type { LifecycleAdmissionController } from "./runtime/LifecycleAdmissionController";
 import { toPublicDefinition } from "./utils/toPublicDefinition";
+import { ExecutionContextStore } from "./ExecutionContextStore";
+import type { ExecutionFrame } from "../types/executionContext";
 
 type CachedTaskRunner = (
   input: unknown,
@@ -58,6 +60,9 @@ export class TaskRunner {
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
     protected readonly logger: Logger,
+    private readonly executionContextStore: ExecutionContextStore = new ExecutionContextStore(
+      null,
+    ),
   ) {
     // Use the same MiddlewareManager instance from the Store so that
     // any interceptors registered via resources (like debug) affect task runs.
@@ -115,10 +120,17 @@ export class TaskRunner {
 
     const executeTask = () => runner(input as TInput, options?.journal, source);
     const executionSource = this.store.createRuntimeSource("task", task);
-    // Pass journal if provided; composer will use it or create new
+
+    const traceFrame: ExecutionFrame = {
+      kind: "task",
+      id: taskId as string,
+      source: executionSource,
+      timestamp: Date.now(),
+    };
+
     return this.lifecycleAdmissionController.trackTaskExecution(
       executionSource,
-      executeTask,
+      () => this.executionContextStore.runWithFrame(traceFrame, executeTask),
     );
   }
 

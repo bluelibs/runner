@@ -50,7 +50,7 @@ export class DependencyProcessor {
     logger: Logger,
     lifecycleMode: ResourceLifecycleMode = ResourceLifecycleMode.Sequential,
     lazy = false,
-    runtimeEventCycleDetection = true,
+    cycleDetectionEnabled = false,
   ) {
     this.logger = logger.with({ source: "dependencyProcessor" });
     this.lifecycleMode = lifecycleMode;
@@ -62,7 +62,7 @@ export class DependencyProcessor {
     );
     this.hookEventBuffer = new HookEventBuffer(
       eventManager,
-      runtimeEventCycleDetection,
+      cycleDetectionEnabled,
     );
     this.pendingHookEvents = this.hookEventBuffer.pendingHookEvents;
     this.drainingHookIds = this.hookEventBuffer.drainingHookIds;

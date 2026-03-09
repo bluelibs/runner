@@ -2718,10 +2718,75 @@ Pass as the second argument to `run(app, options)`.
 | `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                                   |
 | `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `lifecycleMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred. |
 | `lifecycleMode`              | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup/disposal scheduling strategy. Use string values directly (for example `lifecycleMode: "parallel"`), no enum import required.                                                                                                                                                                                                                                                                                                                                |
-| `runtimeEventCycleDetection` | `boolean`                                       | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                                                                                                                                                                                                                                                                                           |
+| `executionContext`           | `boolean \| ExecutionContextOptions`            | (default: disabled) Opt-in execution context that exposes `system.ctx.executionContext`, assigns a correlation id to each top-level task/event execution, and enables cycle detection by default. `true` uses defaults. Pass an object to customize: `{ createCorrelationId?: () => string, cycleDetection?: false \| { maxDepth?: number, maxRepetitions?: number } }`. Distinct runtime hook instances are tracked independently by runtime path. Requires AsyncLocalStorage (Node-only); silently disabled on platforms without it. |
 | `mode`                       | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).
+
+### Execution Context
+
+When enabled, Runner exposes the current execution state via `system.ctx.executionContext`.
+
+```typescript
+import { run, system } from "@bluelibs/runner";
+
+const runtime = await run(app, {
+  executionContext: true,
+});
+
+// Inside a task, hook, or interceptor:
+const ctx = system.ctx.executionContext.use();
+ctx.correlationId;
+ctx.currentFrame.kind;
+ctx.frames;
+```
+
+`use()` fails fast when no execution is active. Use `system.ctx.executionContext.tryUse()` when the context is optional.
+
+The snapshot shape is:
+
+```typescript
+{
+  correlationId: string;
+  startedAt: number;
+  depth: number;
+  currentFrame: ExecutionFrame;
+  frames: readonly ExecutionFrame[];
+}
+```
+
+Execution context is branch-local:
+
+- Nested task calls, event emissions, and hook executions append frames to the same causal chain.
+- Multiple hooks listening to the same event share the same `correlationId`, but each hook sees its own `currentFrame`.
+- Parallel child tasks inherit the parent frames and correlation id, then append their own child frame. Sibling branches are not merged into one shared timeline.
+
+Use `executionContext: { cycleDetection: false }` if you only want correlation ids and causal-chain access without repetition/depth guards.
+
+You can also seed or record execution context at the boundary:
+
+```typescript
+await system.ctx.executionContext.provide(
+  { correlationId: "req-123" },
+  async () => {
+    await runtime.runTask(myTask, input);
+  },
+);
+
+const taskResult = await system.ctx.executionContext.record(
+  { correlationId: "req-123" },
+  () => runtime.runTask(myTask, input),
+);
+taskResult.result;
+taskResult.recording?.roots[0]?.frame;
+
+const eventResult = await system.ctx.executionContext.record(
+  { correlationId: "req-456" },
+  () => runtime.emitEvent(myEvent, payload, { report: true }),
+);
+eventResult.result.attemptedListeners;
+eventResult.recording?.roots;
+```
 
 ```typescript
 const result = await run(app, { dryRun: true });
@@ -4053,7 +4118,7 @@ const processFiles = queue.run(async (signal) => {
 - `tail`: The promise chain that maintains FIFO execution order
 - `disposed`: Boolean flag indicating whether the queue accepts new tasks
 - `abortController`: Centralized cancellation controller that provides `AbortSignal` to all tasks
-- `executionContext`: AsyncLocalStorage-based deadlock detection mechanism
+- `executionContext`: AsyncLocalStorage-based execution bookkeeping for correlation ids and causal-chain tracking
 
 #### Implement Cooperative Cancellation
 

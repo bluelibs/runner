@@ -22,7 +22,9 @@ import {
 } from "./event/types";
 import { ListenerRegistry, createListener } from "./event/ListenerRegistry";
 import { composeInterceptors } from "./event/InterceptorPipeline";
-import { CycleContext } from "./event/CycleContext";
+import { ExecutionContextStore } from "./ExecutionContextStore";
+import { type ExecutionFrame } from "../types/executionContext";
+import { EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS } from "../types/executionContext";
 import { EmissionContext, EventEmissionImpl } from "./event/EmissionContext";
 import {
   createAggregateError,
@@ -56,22 +58,23 @@ export class EventManager {
   private hookInterceptors: HookExecutionInterceptor[] = [];
 
   private readonly registry: ListenerRegistry;
-  private readonly cycleContext: CycleContext;
+  private readonly executionContextStore: ExecutionContextStore;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
   private store?: EventManagerStoreBindings;
 
   #isLocked = false;
 
-  private readonly runtimeEventCycleDetection: boolean;
-
   constructor(options?: {
-    runtimeEventCycleDetection?: boolean;
+    executionContextStore?: ExecutionContextStore;
     lifecycleAdmissionController?: LifecycleAdmissionController;
   }) {
-    this.runtimeEventCycleDetection =
-      options?.runtimeEventCycleDetection ?? true;
+    this.executionContextStore =
+      options?.executionContextStore ??
+      new ExecutionContextStore({
+        createCorrelationId: () => "event-manager",
+        cycleDetection: EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
+      });
     this.registry = new ListenerRegistry();
-    this.cycleContext = new CycleContext(this.runtimeEventCycleDetection);
     this.lifecycleAdmissionController =
       options?.lifecycleAdmissionController ??
       new LifecycleAdmissionController();
@@ -243,12 +246,19 @@ export class EventManager {
       this.store?.createRuntimeSource(RuntimeCallSourceKind.Hook, hook) ??
       runtimeSource.hook(hookId);
 
+    const hookFrame: ExecutionFrame = {
+      kind: "hook",
+      id: hookSource.path ?? hookId,
+      source: hookSource,
+      timestamp: Date.now(),
+    };
+
     return this.lifecycleAdmissionController.trackHookExecution(
       hookSource,
       () =>
-        this.cycleContext.isEnabled
-          ? this.cycleContext.runHook(hookId, () => execute(hook, event))
-          : execute(hook, event),
+        this.executionContextStore.runWithFrame(hookFrame, () =>
+          execute(hook, event),
+        ),
     );
   }
 
@@ -274,7 +284,11 @@ export class EventManager {
     inputData: TInput,
     rawSource: RuntimeCallSource,
     options?: EventEmissionInternalOptions,
-  ): Promise<{ emission: IEventEmission<TInput>; report: IEventEmitReport }> {
+  ): Promise<{
+    emission: IEventEmission<TInput>;
+    report: IEventEmitReport;
+    executionContext?: ReturnType<ExecutionContextStore["getSnapshot"]>;
+  }> {
     if (
       !this.lifecycleAdmissionController.canAdmitEvent(rawSource, {
         allowLifecycleBypass: options?.allowLifecycleBypass === true,
@@ -303,12 +317,12 @@ export class EventManager {
 
     const emissionConfig = this.resolveEmissionConfig(eventDefinition, options);
 
-    const frame = { id: metadata.runtimeId, source };
     const identity = getDefinitionIdentity(eventDefinition);
 
     const processEmission = async (): Promise<{
       emission: IEventEmission<TInput>;
       report: IEventEmitReport;
+      executionContext?: ReturnType<ExecutionContextStore["getSnapshot"]>;
     }> => {
       const allListeners = this.registry.getListenersForEmit(eventDefinition);
       const event = this.createEmission(
@@ -324,6 +338,7 @@ export class EventManager {
         return {
           emission: event as IEventEmission<TInput>,
           report: createEmptyReport(0),
+          executionContext: this.executionContextStore.getSnapshot(),
         };
       }
 
@@ -346,11 +361,30 @@ export class EventManager {
       return {
         emission: context.deepestEvent as IEventEmission<TInput>,
         report: context.executionReport,
+        executionContext: this.executionContextStore.getSnapshot(),
       };
     };
 
-    return this.lifecycleAdmissionController.trackEventEmission(source, () =>
-      this.cycleContext.runEmission(frame, processEmission),
+    const traceFrame: ExecutionFrame = {
+      kind: "event",
+      id: metadata.runtimeId,
+      source,
+      timestamp: Date.now(),
+    };
+
+    return this.lifecycleAdmissionController.trackEventEmission(
+      source,
+      async () => {
+        const result = await this.executionContextStore.runWithFrame(
+          traceFrame,
+          processEmission,
+        );
+        return {
+          emission: result.emission,
+          report: result.report,
+          executionContext: result.executionContext,
+        };
+      },
     );
   }
 

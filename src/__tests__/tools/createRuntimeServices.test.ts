@@ -8,7 +8,7 @@ import { DependencyProcessor } from "../../models/DependencyProcessor";
 
 const defaults = {
   lifecycleMode: ResourceLifecycleMode.Sequential,
-  runtimeEventCycleDetection: false,
+  executionContextConfig: null,
   lazy: false,
   errorBoundary: false,
   printThreshold: null,

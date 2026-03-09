@@ -1,12 +1,13 @@
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
 import { EventManager } from "../../models/EventManager";
+import { ExecutionContextStore } from "../../models/ExecutionContextStore";
 import { createMessageError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
 
 describe("EventManager regressions", () => {
   it("dispose clears listeners and interceptors even after lock", async () => {
-    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const eventManager = new EventManager();
     const event = defineEvent<string>({ id: "reg-dispose" });
     const listener = jest.fn();
     const interceptor = jest.fn(async (next, e) => next(e));
@@ -32,7 +33,7 @@ describe("EventManager regressions", () => {
   });
 
   it("keeps using interceptor snapshot when dispose happens mid-emission", async () => {
-    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const eventManager = new EventManager();
     const event = defineEvent<string>({ id: "reg-dispose-snapshot" });
     const executionOrder: string[] = [];
 
@@ -83,7 +84,7 @@ describe("EventManager regressions", () => {
   });
 
   it("rejects new emissions when shutdown lockdown is active", async () => {
-    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const eventManager = new EventManager();
     const event = defineEvent<string>({ id: "reg-shutdown-lockdown" });
 
     eventManager.enterShutdownLockdown();
@@ -96,7 +97,7 @@ describe("EventManager regressions", () => {
   });
 
   it("emission snapshots meta and tags to avoid mutating event definition", async () => {
-    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const eventManager = new EventManager();
     const event = defineEvent<string>({
       id: "reg-snapshot",
       meta: { title: "base" },
@@ -116,7 +117,7 @@ describe("EventManager regressions", () => {
   });
 
   it("rejects interceptor overrides of propagation methods", async () => {
-    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const eventManager = new EventManager();
     const event = defineEvent<string>({ id: "reg-stop-prop", parallel: false });
     const secondListener = jest.fn();
 
@@ -148,7 +149,7 @@ describe("EventManager regressions", () => {
   });
 
   it("rejects interceptor payloads that drop propagation methods", async () => {
-    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const eventManager = new EventManager();
     const event = defineEvent<string>({ id: "reg-restore-prop" });
 
     eventManager.intercept(async (next, emission) => {
@@ -170,7 +171,7 @@ describe("EventManager regressions", () => {
   });
 
   it("allows interceptor replacement when propagation methods are preserved", async () => {
-    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const eventManager = new EventManager();
     const event = defineEvent<string>({ id: "reg-keep-prop", parallel: false });
     const secondListener = jest.fn();
 
@@ -198,7 +199,7 @@ describe("EventManager regressions", () => {
   });
 
   it("rejects interceptors that call next() more than once", async () => {
-    const eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    const eventManager = new EventManager();
     const event = defineEvent<string>({ id: "reg-next-once" });
 
     eventManager.intercept(async (next, emission) => {
@@ -209,5 +210,78 @@ describe("EventManager regressions", () => {
     await expect(
       eventManager.emit(event, "data", runtimeSource.runtime("src")),
     ).rejects.toThrow("Interceptors can call next() only once per emission.");
+  });
+
+  it("does not treat distinct runtime hook instances as repetition cycle", async () => {
+    const eventManager = new EventManager({
+      executionContextStore: new ExecutionContextStore({
+        maxDepth: 100,
+        maxRepetitions: 2,
+      }),
+    });
+
+    let currentHookPath = "root/first/shared-hook";
+    eventManager.bindStore({
+      createRuntimeSource: () =>
+        runtimeSource.hook("shared-hook", currentHookPath),
+      events: new Map() as any,
+      getRuntimeMetadata: () => {
+        throw createMessageError("getRuntimeMetadata should not be called");
+      },
+      resolveDefinitionId: () => undefined,
+      toRuntimeSource: (source) => source,
+    });
+
+    const hook = {
+      id: "shared-hook",
+      run: jest.fn(async () => {
+        if (currentHookPath === "root/first/shared-hook") {
+          currentHookPath = "root/second/shared-hook";
+          await eventManager.executeHookWithInterceptors(
+            hook as any,
+            {} as any,
+            {},
+          );
+        }
+        return undefined;
+      }),
+    };
+
+    await expect(
+      eventManager.executeHookWithInterceptors(hook as any, {} as any, {}),
+    ).resolves.toBeUndefined();
+
+    expect(hook.run).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to definition hook id when runtime source path is missing", async () => {
+    const eventManager = new EventManager({
+      executionContextStore: new ExecutionContextStore({
+        maxDepth: 100,
+        maxRepetitions: 2,
+      }),
+    });
+
+    const hook = {
+      id: "pathless-hook",
+      run: jest.fn(async () => undefined),
+    };
+
+    eventManager.bindStore({
+      createRuntimeSource: () => ({
+        kind: "hook",
+        id: "pathless-hook",
+      }),
+      events: new Map() as any,
+      getRuntimeMetadata: () => {
+        throw createMessageError("getRuntimeMetadata should not be called");
+      },
+      resolveDefinitionId: () => undefined,
+      toRuntimeSource: (source) => source,
+    });
+
+    await expect(
+      eventManager.executeHookWithInterceptors(hook as any, {} as any, {}),
+    ).resolves.toBeUndefined();
   });
 });

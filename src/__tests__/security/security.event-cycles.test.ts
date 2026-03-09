@@ -1,10 +1,6 @@
-// This suite targets denial-of-service vectors via event emission cycles.
-// If a hook emits an event that leads back to the same event in the same
-// emission chain (A -> B -> A), the EventManager must detect and stop it.
-//
-// The goal is to verify the runtime guard (AsyncLocalStorage-based stack)
-// catches cycles even when constructed indirectly through multiple hooks,
-// and throws EventCycleError instead of hanging the event loop.
+// Verifies the runtime execution trace guard catches event emission cycles
+// (A -> B -> A) constructed indirectly through hooks, and throws a cycle
+// error instead of hanging the event loop.
 import { defineEvent, defineHook, defineResource } from "../../define";
 import { run } from "../../run";
 import { resources } from "../../index";
@@ -12,9 +8,6 @@ import { runtimeSource } from "../../types/runtimeSource";
 
 describe("Security: Event cycle detection", () => {
   it("prevents emission cycles (A -> B -> A)", async () => {
-    // Two events that emit into each other via hooks are a classic cycle.
-    // The first re-emit will push the same event id back onto the stack,
-    // and the manager must throw an EventCycleError.
     const e1 = defineEvent<{ v: number }>({ id: "sec-events-e1" });
     const e2 = defineEvent<{ v: number }>({ id: "sec-events-e2" });
 
@@ -51,8 +44,8 @@ describe("Security: Event cycle detection", () => {
       init: async () => "ok",
     });
 
-    const rr = await run(app);
-    await expect(rr.emitEvent(e1, { v: 1 })).rejects.toThrow();
+    const rr = await run(app, { executionContext: true });
+    await expect(rr.emitEvent(e1, { v: 1 })).rejects.toThrow(/cycle detected/i);
     await rr.dispose();
   });
 });

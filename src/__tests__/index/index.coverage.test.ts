@@ -70,6 +70,9 @@ describe("package root exports coverage", () => {
     expect((root as any).hook).toBeUndefined();
     expect((root as any).globals).toBeUndefined();
     expect((root as any).runner).toBeUndefined();
-    expect((root as any).system).toBeUndefined();
+    expect((root as any).system).toBeDefined();
+    expect((root as any).system.ctx.executionContext.id).toBe(
+      "system.ctx.executionContext",
+    );
   });
 });

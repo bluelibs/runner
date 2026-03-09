@@ -1020,7 +1020,7 @@ const processFiles = queue.run(async (signal) => {
 - `tail`: The promise chain that maintains FIFO execution order
 - `disposed`: Boolean flag indicating whether the queue accepts new tasks
 - `abortController`: Centralized cancellation controller that provides `AbortSignal` to all tasks
-- `executionContext`: AsyncLocalStorage-based deadlock detection mechanism
+- `executionContext`: AsyncLocalStorage-based execution bookkeeping for correlation ids and causal-chain tracking
 
 #### Implement Cooperative Cancellation
 

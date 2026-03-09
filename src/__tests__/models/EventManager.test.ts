@@ -9,13 +9,14 @@ import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
 import { createMessageError } from "../../errors";
 import { RuntimeCallSource, runtimeSource } from "../../types/runtimeSource";
+import { ExecutionContextStore } from "../../models/ExecutionContextStore";
 
 describe("EventManager", () => {
   let eventManager: EventManager;
   let eventDefinition: IEvent<string>;
 
   beforeEach(() => {
-    eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    eventManager = new EventManager();
     eventDefinition = defineEvent<string>({ id: "testEvent" });
   });
 
@@ -1623,8 +1624,8 @@ describe("EventManager", () => {
       expect(mockHook.run).toHaveBeenCalled();
     });
 
-    it("executes hook directly when runtimeEventCycleDetection is false", async () => {
-      const em = new EventManager({ runtimeEventCycleDetection: false });
+    it("executes hook directly when no trace context is set", async () => {
+      const em = new EventManager();
       const mockHook = {
         id: "noContextHook",
         run: jest.fn().mockResolvedValue("ok-no-context"),
@@ -1865,7 +1866,7 @@ describe("EventManager", () => {
   // Hook lifecycle events are no longer emitted by EventManager; related tests removed
 
   describe("cycle detection", () => {
-    it("constructor default enables runtimeEventCycleDetection and throws on self-cycle", async () => {
+    it("constructor default throws on self-cycle", async () => {
       const em = new EventManager();
       const A = defineEvent<string>({ id: "A_default" });
       em.addListener(A, async () => {
@@ -1874,11 +1875,11 @@ describe("EventManager", () => {
 
       await expect(
         em.emit(A, "init", runtimeSource.runtime("test")),
-      ).rejects.toThrow();
+      ).rejects.toThrow(/cycle detected/i);
     });
 
     it("safe re-emit by same hook does not throw", async () => {
-      const em = new EventManager({ runtimeEventCycleDetection: true });
+      const em = new EventManager();
       const A = defineEvent<string>({ id: "A_hook" });
 
       const hook = {
@@ -1910,7 +1911,7 @@ describe("EventManager", () => {
 
       await expect(
         eventManager.emit(A, "init", runtimeSource.runtime("test")),
-      ).rejects.toThrow();
+      ).rejects.toThrow(/cycle detected/i);
     });
 
     it("throws on cross-cycle (A -> B -> A)", async () => {
@@ -1926,7 +1927,7 @@ describe("EventManager", () => {
 
       await expect(
         eventManager.emit(A, "init", runtimeSource.runtime("test")),
-      ).rejects.toThrow();
+      ).rejects.toThrow(/cycle detected/i);
     });
 
     it("allows acyclic chains (A -> B -> C)", async () => {
@@ -1953,13 +1954,15 @@ describe("EventManager", () => {
       expect(calls).toEqual(["A", "B", "C"]);
     });
 
-    it("does not throw when runtimeEventCycleDetection is false (A -> B -> A)", async () => {
+    it("does not throw when cycle detection is disabled (A -> B -> A)", async () => {
       const calls: string[] = [];
       const max = 2;
       const A = defineEvent<{ count: number }>({ id: "A_disabled" });
       const B = defineEvent<{ count: number }>({ id: "B_disabled" });
 
-      const em = new EventManager({ runtimeEventCycleDetection: false });
+      const em = new EventManager({
+        executionContextStore: new ExecutionContextStore(null),
+      });
 
       em.addListener(A, async (event) => {
         calls.push("A");

@@ -11,10 +11,12 @@ import {
 import { registerProcessLevelSafetyNets } from "./processShutdownHooks";
 import { ResourceLifecycleMode } from "../types/runner";
 import { LifecycleAdmissionController } from "../models/runtime/LifecycleAdmissionController";
+import { ExecutionContextStore } from "../models/ExecutionContextStore";
+import type { ExecutionContextConfig } from "../types/executionContext";
 
 export type CreateRuntimeServicesInput = {
   lifecycleMode: ResourceLifecycleMode;
-  runtimeEventCycleDetection: boolean;
+  executionContextConfig: ExecutionContextConfig | null;
   lazy: boolean;
   errorBoundary: boolean;
   onUnhandledError?: OnUnhandledError;
@@ -41,8 +43,11 @@ export function createRuntimeServices(
   input: CreateRuntimeServicesInput,
 ): RuntimeServices {
   const lifecycleAdmissionController = new LifecycleAdmissionController();
+  const executionContextStore = new ExecutionContextStore(
+    input.executionContextConfig,
+  );
   const eventManager = new EventManager({
-    runtimeEventCycleDetection: input.runtimeEventCycleDetection,
+    executionContextStore,
     lifecycleAdmissionController,
   });
 
@@ -62,7 +67,12 @@ export function createRuntimeServices(
     undefined,
     lifecycleAdmissionController,
   );
-  const taskRunner = new TaskRunner(store, eventManager, logger);
+  const taskRunner = new TaskRunner(
+    store,
+    eventManager,
+    logger,
+    executionContextStore,
+  );
   store.setTaskRunner(taskRunner);
 
   let unhookProcessSafetyNets: (() => void) | undefined;
@@ -79,7 +89,7 @@ export function createRuntimeServices(
     logger,
     input.lifecycleMode,
     input.lazy,
-    input.runtimeEventCycleDetection,
+    executionContextStore.isCycleDetectionEnabled,
   );
 
   return {

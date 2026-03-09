@@ -29,6 +29,7 @@ import {
   r,
   scope,
   subtreeOf,
+  system,
 } from "../../public";
 import { defineError } from "../../definers/defineError";
 
@@ -95,6 +96,7 @@ describe("public barrel coverage", () => {
     expect(isOverrideDefinition(override)).toBe(true);
     expect(isSubtreeFilter(filter)).toBe(true);
     expect(isIsolationScope(scoped)).toBe(true);
+    expect(system.ctx.executionContext.id).toBe("system.ctx.executionContext");
     expect(isTask({ id: "plain-object" })).toBe(false);
   });
 });

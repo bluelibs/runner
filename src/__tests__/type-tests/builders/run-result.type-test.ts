@@ -1,6 +1,7 @@
-import { r, run } from "../../../";
+import { r, run, system } from "../../../";
 import { EventEmissionFailureMode } from "../../../defs";
 import type { IEventEmitReport } from "../../../types/event";
+import type { ExecutionRecordResult } from "../../../types/executionContext";
 
 // Type-only tests for builder RunResult typing.
 
@@ -45,6 +46,13 @@ void (async () => {
   const valid2: number | undefined = await rr.runTask(main, { x: 2 });
   void valid2;
 
+  const withContext = await system.ctx.executionContext.record(() =>
+    rr.runTask(add, { x: 3 }),
+  );
+  const withContextValue: ExecutionRecordResult<number | undefined> =
+    withContext;
+  withContextValue.recording?.correlationId;
+
   // @ts-expect-error wrong deps override type
   await rr.runTask(main, { x: 2 }, { depTask: async (input: number) => "x" });
 })();
@@ -83,4 +91,11 @@ void (async () => {
   const dynamicResult = await rr.emitEvent(evt, { id: "4" }, dynamicOptions);
   // @ts-expect-error dynamic report option yields a union return type
   const mustBeReport: IEventEmitReport = dynamicResult;
+
+  const withContext = await system.ctx.executionContext.record(() =>
+    rr.emitEvent(evt, { id: "5" }, { report: true }),
+  );
+  const withContextReport: ExecutionRecordResult<IEventEmitReport> =
+    withContext;
+  withContextReport.result.errors;
 })();

@@ -36,7 +36,7 @@ export const circularDependenciesError = circularDependencyError;
 /** @deprecated Use circularDependencyError instead. */
 export const dependencyCycleError = circularDependencyError;
 
-// Event cycle (runtime)
+/** @deprecated Replaced by `executionCycleError` — kept for public API compatibility. */
 export const eventCycleError = error<
   {
     path: Array<{
@@ -56,6 +56,7 @@ export const eventCycleError = error<
   )
   .build();
 
+/** @deprecated Replaced by `executionDepthExceededError` — kept for public API compatibility. */
 export const eventCycleDepthExceededError = error<
   { eventId: string; currentDepth: number; maxDepth: number } & DefaultErrorType
 >("runner.errors.eventCycleDepthExceeded")
@@ -65,7 +66,56 @@ export const eventCycleDepthExceededError = error<
   )
   .remediation(
     ({ eventId }) =>
-      `Inspect hooks emitting "${eventId}" for runaway re-emission loops, or disable runtimeEventCycleDetection only when you can guarantee bounded emissions.`,
+      `Inspect hooks emitting "${eventId}" for runaway re-emission loops, or disable with executionContext: { cycleDetection: false } if bounded emissions are guaranteed.`,
+  )
+  .build();
+
+// Execution trace cycle (runtime — repetition-based)
+export const executionCycleError = error<
+  {
+    frame: {
+      kind: string;
+      id: string;
+      source: { kind: string; id: string; path?: string };
+    };
+    repetitions: number;
+    maxRepetitions: number;
+    trace: readonly {
+      kind: string;
+      id: string;
+      source: { kind: string; id: string; path?: string };
+    }[];
+  } & DefaultErrorType
+>("runner.errors.executionCycle")
+  .format(({ frame, repetitions, maxRepetitions, trace }) => {
+    const matching = trace
+      .filter((f) => f.kind === frame.kind && f.id === frame.id)
+      .map(
+        (f) =>
+          `${f.kind}:${f.id}<-${f.source.kind}:${f.source.path ?? f.source.id}`,
+      )
+      .join(" → ");
+    return `Execution cycle detected: ${frame.kind} "${frame.id}" appeared ${repetitions} times (max: ${maxRepetitions}).\n  ${matching}`;
+  })
+  .remediation(
+    "Break the cycle by restructuring task/event/hook dependencies, using conditional guards, or reducing re-entrant calls.",
+  )
+  .build();
+
+// Execution trace depth exceeded (runtime)
+export const executionDepthExceededError = error<
+  {
+    frame: { kind: string; id: string };
+    currentDepth: number;
+    maxDepth: number;
+  } & DefaultErrorType
+>("runner.errors.executionDepthExceeded")
+  .format(
+    ({ frame, currentDepth, maxDepth }) =>
+      `Execution trace exceeded ${maxDepth} frames while processing ${frame.kind} "${frame.id}" (current depth: ${currentDepth}).`,
+  )
+  .remediation(
+    "Inspect the call chain for runaway recursion. Consider increasing maxDepth in executionContext.cycleDetection if the depth is expected.",
   )
   .build();
 

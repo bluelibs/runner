@@ -13,7 +13,7 @@ export class HookEventBuffer {
 
   constructor(
     private readonly eventManager: EventManager,
-    private readonly runtimeEventCycleDetection: boolean,
+    private readonly cycleDetectionEnabled: boolean,
   ) {}
 
   enqueue(hookId: string, event: IEventEmission<any>): void {
@@ -45,7 +45,7 @@ export class HookEventBuffer {
       while (true) {
         flushPasses += 1;
         if (
-          !this.runtimeEventCycleDetection &&
+          !this.cycleDetectionEnabled &&
           flushPasses > HookEventBuffer.MAX_FLUSH_PASSES_WITHOUT_CYCLE_DETECTION
         ) {
           hookEventBufferFlushAbortedError.throw({

@@ -32,6 +32,7 @@ export * from "./types/meta";
 export * from "./types/runner";
 export * from "./types/runtimeSource";
 export * from "./types/asyncContext";
+export * from "./types/executionContext";
 export * from "./types/error";
 export * from "./types/contracts";
 export * from "./types/tagged";
