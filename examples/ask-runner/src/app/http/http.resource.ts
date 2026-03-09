@@ -62,8 +62,14 @@ export const httpServer = r
   })
   .ready(async (httpServer, _config, deps) => {
     registerHttpErrorHandler(httpServer.app);
-    httpServer.server = await new Promise<ReturnType<express.Express["listen"]>>((resolve, reject) => {
-      const instance = httpServer.app.listen(deps.appConfig.port, deps.appConfig.host, () => resolve(instance));
+    httpServer.server = await new Promise<
+      ReturnType<express.Express["listen"]>
+    >((resolve, reject) => {
+      const instance = httpServer.app.listen(
+        deps.appConfig.port,
+        deps.appConfig.host,
+        () => resolve(instance),
+      );
       instance.once("error", reject);
     });
     await logHttpServerReady(deps.logger, {
@@ -89,21 +95,24 @@ export const httpServer = r
   })
   .build();
 
-export function registerExplicitHttpRoutes(app: express.Express, deps: {
-  runAskRunnerTask: (input: { query: string; ip: string }) => Promise<{
-    markdown: string;
-    model: string;
-    usage: { input_tokens?: number; output_tokens?: number } | null;
-  }>;
-  runStreamAskRunnerTask: (input: {
-    query: string;
-    ip: string;
-    writer: { write(chunk: string): Promise<void> };
-  }) => Promise<{
-    model: string;
-    usage: { input_tokens?: number; output_tokens?: number } | null;
-  }>;
-}): void {
+export function registerExplicitHttpRoutes(
+  app: express.Express,
+  deps: {
+    runAskRunnerTask: (input: { query: string; ip: string }) => Promise<{
+      markdown: string;
+      model: string;
+      usage: { input_tokens?: number; output_tokens?: number } | null;
+    }>;
+    runStreamAskRunnerTask: (input: {
+      query: string;
+      ip: string;
+      writer: { write(chunk: string): Promise<void> };
+    }) => Promise<{
+      model: string;
+      usage: { input_tokens?: number; output_tokens?: number } | null;
+    }>;
+  },
+): void {
   app.get("/", async (req, res) => {
     const request = prepareQueryRequest(req);
     const result = await deps.runAskRunnerTask(request);
@@ -146,33 +155,49 @@ export function registerExplicitHttpRoutes(app: express.Express, deps: {
 }
 
 export function registerHttpErrorHandler(app: express.Express): void {
-  app.use((error: unknown, _req: Request, res: Response, _next: express.NextFunction) => {
-    if (res.headersSent) {
-      res.end();
-      return;
-    }
+  app.use(
+    (
+      error: unknown,
+      _req: Request,
+      res: Response,
+      _next: express.NextFunction,
+    ) => {
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
 
-    const statusCode =
-      typeof error === "object" && error && "httpCode" in error && typeof error.httpCode === "number"
-        ? error.httpCode
-        : 500;
-    const message = error instanceof Error ? error.message : "Internal Server Error";
-    res.status(statusCode).json({ error: message });
-  });
+      const statusCode =
+        typeof error === "object" &&
+        error &&
+        "httpCode" in error &&
+        typeof error.httpCode === "number"
+          ? error.httpCode
+          : 500;
+      const message =
+        error instanceof Error ? error.message : "Internal Server Error";
+      res.status(statusCode).json({ error: message });
+    },
+  );
 }
 
 export async function logHttpServerReady(
   logger: { info(message: string): Promise<void> | void },
   input: { host: string; port: number },
 ): Promise<void> {
-  await logger.info(`Ask Runner is listening on ${buildBoundHttpBaseUrl(input)}.`);
+  await logger.info(
+    `Ask Runner is listening on ${buildBoundHttpBaseUrl(input)}.`,
+  );
 
   for (const url of buildHttpExampleUrls(input.port)) {
     await logger.info(url);
   }
 }
 
-export function buildBoundHttpBaseUrl(input: { host: string; port: number }): string {
+export function buildBoundHttpBaseUrl(input: {
+  host: string;
+  port: number;
+}): string {
   return `http://${input.host}:${input.port}`;
 }
 

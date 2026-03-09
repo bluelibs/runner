@@ -1,7 +1,11 @@
-const markedCdnUrl = "https://cdn.jsdelivr.net/npm/marked@15.0.12/lib/marked.umd.min.js";
-const markedCdnIntegrity = "sha384-zCewoQXXb5Xf+2nvCjab0EbMl7FWVpJMsKyrc8M8DqxjFra4DY4XHwheVdHXa34k";
-const domPurifyCdnUrl = "https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js";
-const domPurifyCdnIntegrity = "sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3";
+const markedCdnUrl =
+  "https://cdn.jsdelivr.net/npm/marked@15.0.12/lib/marked.umd.min.js";
+const markedCdnIntegrity =
+  "sha384-zCewoQXXb5Xf+2nvCjab0EbMl7FWVpJMsKyrc8M8DqxjFra4DY4XHwheVdHXa34k";
+const domPurifyCdnUrl =
+  "https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js";
+const domPurifyCdnIntegrity =
+  "sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3";
 
 export function buildStreamHtmlPage(): string {
   return `<!doctype html>

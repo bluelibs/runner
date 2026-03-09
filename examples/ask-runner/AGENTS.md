@@ -36,6 +36,7 @@ Registered pieces:
 - HTTP server resource
 
 Important rule:
+
 - Custom middleware must be registered in the app graph, not only attached to tasks. If you add a task middleware and forget to register it, runtime boot will fail with `middlewareNotRegistered`.
 
 ### AI path
@@ -69,6 +70,7 @@ Responsibilities:
   - consumes OpenAI stream events and writes markdown deltas to a provided writer
 
 Design decision:
+
 - Budget admission and usage recording were intentionally moved out of the HTTP resource and into task middleware so the task boundary is the policy boundary.
 
 ### HTTP path
@@ -106,6 +108,7 @@ Responsibilities:
   - keeps client-side markdown rendering separate from route wiring
 
 Design decision:
+
 - Do not reintroduce large `handleRequest` abstractions unless they reduce duplication materially.
 - Keep the route handlers easy to read: parse HTTP input, call task, serialize response.
 - Use tags plus the router resource for simple task-backed endpoints, but keep special streaming/page routes explicit.

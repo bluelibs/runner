@@ -19,10 +19,22 @@ import {
   prepareQueryRequest,
 } from "../app/http/query-request";
 
-const healthTask = r.task("healthRouteTest").run(async () => undefined).build();
-const budgetTask = r.task("budgetRouteTest").run(async () => undefined).build();
-const stopTask = r.task("stopRouteTest").run(async () => undefined).build();
-const resumeTask = r.task("resumeRouteTest").run(async () => undefined).build();
+const healthTask = r
+  .task("healthRouteTest")
+  .run(async () => undefined)
+  .build();
+const budgetTask = r
+  .task("budgetRouteTest")
+  .run(async () => undefined)
+  .build();
+const stopTask = r
+  .task("stopRouteTest")
+  .run(async () => undefined)
+  .build();
+const resumeTask = r
+  .task("resumeRouteTest")
+  .run(async () => undefined)
+  .build();
 
 describe("ask-runner http", () => {
   function createTaggedRoutes(): TaggedTaskRoute[] {
@@ -204,18 +216,23 @@ describe("ask-runner http", () => {
     },
   ) {
     const server = http.createServer(app);
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
 
     const address = server.address();
     if (!address || typeof address === "string") {
       throw new Error("Expected an ephemeral HTTP port.");
     }
 
-    const response = await fetch(`http://127.0.0.1:${address.port}${input.path}`, {
-      method: input.method,
-      headers: input.headers,
-      body: input.body ? JSON.stringify(input.body) : undefined,
-    });
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}${input.path}`,
+      {
+        method: input.method,
+        headers: input.headers,
+        body: input.body ? JSON.stringify(input.body) : undefined,
+      },
+    );
     const text = await response.text();
 
     await new Promise<void>((resolve, reject) => {
@@ -236,11 +253,13 @@ describe("ask-runner http", () => {
   }
 
   test("query route passes parsed input to the task", async () => {
-    const runAskRunnerTask = jest.fn(async ({ query }: { query: string; ip: string }) => ({
-      markdown: `# ${query}`,
-      model: "gpt-5-mini",
-      usage: { input_tokens: 100, output_tokens: 50 },
-    }));
+    const runAskRunnerTask = jest.fn(
+      async ({ query }: { query: string; ip: string }) => ({
+        markdown: `# ${query}`,
+        model: "gpt-5-mini",
+        usage: { input_tokens: 100, output_tokens: 50 },
+      }),
+    );
 
     const { app } = createApp({ runAskRunnerTask });
     const response = await request(app, {
@@ -297,7 +316,9 @@ describe("ask-runner http", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
-    expect(response.headers.get("content-security-policy")).toContain("script-src 'unsafe-inline' https://cdn.jsdelivr.net");
+    expect(response.headers.get("content-security-policy")).toContain(
+      "script-src 'unsafe-inline' https://cdn.jsdelivr.net",
+    );
     expect(response.headers.get("x-frame-options")).toBe("DENY");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.text).toContain("Ask Runner Stream Viewer");
@@ -305,8 +326,12 @@ describe("ask-runner http", () => {
     expect(response.text).toContain("https://cdn.jsdelivr.net/npm/dompurify@");
     expect(response.text).toContain('integrity="sha384-');
     expect(response.text).toContain('crossorigin="anonymous"');
-    expect(response.text).toContain('fetch("/stream?query=" + encodeURIComponent(query)');
-    expect(response.text).toContain('new URLSearchParams(window.location.search)');
+    expect(response.text).toContain(
+      'fetch("/stream?query=" + encodeURIComponent(query)',
+    );
+    expect(response.text).toContain(
+      "new URLSearchParams(window.location.search)",
+    );
   });
 
   test("query request uses req.ip instead of manually trusting x-forwarded-for", () => {
@@ -349,7 +374,9 @@ describe("ask-runner http", () => {
 
     expect(response.status).toBe(200);
     expect(taskRunner.run).toHaveBeenCalledWith(healthTask, {});
-    expect(JSON.parse(response.text)).toEqual(await runHealthTask.mock.results[0]?.value);
+    expect(JSON.parse(response.text)).toEqual(
+      await runHealthTask.mock.results[0]?.value,
+    );
   });
 
   test("admin budget route runs budget snapshot task after auth", async () => {
@@ -375,14 +402,16 @@ describe("ask-runner http", () => {
   });
 
   test("admin stop route runs stop task with default reason", async () => {
-    const runStopBudgetForDayTask = jest.fn(async ({ reason }: { reason?: string }) => ({
-      day: "2026-03-09",
-      spentUsd: 0,
-      requestCount: 0,
-      stopped: true,
-      stopReason: reason?.trim() || "Stopped manually.",
-      remainingUsd: 1,
-    }));
+    const runStopBudgetForDayTask = jest.fn(
+      async ({ reason }: { reason?: string }) => ({
+        day: "2026-03-09",
+        spentUsd: 0,
+        requestCount: 0,
+        stopped: true,
+        stopReason: reason?.trim() || "Stopped manually.",
+        remainingUsd: 1,
+      }),
+    );
 
     const { app, taskRunner } = createApp({ runStopBudgetForDayTask });
     const response = await request(app, {
@@ -434,21 +463,23 @@ describe("ask-runner http", () => {
 
     expect(response.status).toBe(401);
     expect(taskRunner.run).not.toHaveBeenCalled();
-    expect(JSON.parse(response.text)).toEqual({ error: "Invalid admin secret." });
+    expect(JSON.parse(response.text)).toEqual({
+      error: "Invalid admin secret.",
+    });
   });
 
   test("admin secret validation fails fast", () => {
-    expect(() => assertAdminSecret(undefined, "top-secret")).toThrow(/Invalid admin secret/);
+    expect(() => assertAdminSecret(undefined, "top-secret")).toThrow(
+      /Invalid admin secret/,
+    );
   });
 
   test("projected cost includes docs and output allowance", () => {
-    const small = estimateProjectedCostUsd(
-      "short docs",
-      "hi",
-      100,
-      4,
-      { inputPer1M: 1, cachedInputPer1M: 0.1, outputPer1M: 1 },
-    );
+    const small = estimateProjectedCostUsd("short docs", "hi", 100, 4, {
+      inputPer1M: 1,
+      cachedInputPer1M: 0.1,
+      outputPer1M: 1,
+    });
     const large = estimateProjectedCostUsd(
       "very long docs ".repeat(100),
       "hi",
@@ -471,7 +502,9 @@ describe("ask-runner http", () => {
       port: 3000,
     });
 
-    expect(buildBoundHttpBaseUrl({ host: "127.0.0.1", port: 3000 })).toBe("http://127.0.0.1:3000");
+    expect(buildBoundHttpBaseUrl({ host: "127.0.0.1", port: 3000 })).toBe(
+      "http://127.0.0.1:3000",
+    );
     expect(buildHttpExampleUrls(3000)).toEqual([
       "http://localhost:3000/?query=xxx",
       "http://localhost:3000/stream?query=xxx",
