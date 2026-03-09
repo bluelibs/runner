@@ -5,12 +5,7 @@
 // Then use it like this:
 
 import { z } from "zod";
-import {
-  task as defineTask,
-  resource as defineResource,
-  event as defineEvent,
-  taskMiddleware as defineMiddleware,
-} from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import type { IValidationSchema } from "@bluelibs/runner";
 
 // Zod schemas already implement IValidationSchema<T>!
@@ -22,14 +17,13 @@ const UserSchema = z.object({
   age: z.number().int().min(0).max(150),
 });
 
-const createUserTask = defineTask({
-  id: "createUserWithZod",
-  inputSchema: UserSchema, // Works directly!
-  run: async (userData) => {
-    // userData is properly typed and validated
+const createUserTask = r
+  .task("createUserWithZod")
+  .inputSchema(UserSchema)
+  .run(async (userData) => {
     return { id: "user-123", ...userData };
-  },
-});
+  })
+  .build();
 
 const DatabaseConfigSchema = z.object({
   host: z.string(),
@@ -37,37 +31,36 @@ const DatabaseConfigSchema = z.object({
   ssl: z.boolean().default(false),
 });
 
-const databaseResource = defineResource({
-  id: "databaseWithZod",
-  configSchema: DatabaseConfigSchema, // Works directly!
-  init: async (config) => {
-    // config is properly typed with defaults applied
+const databaseResource = r
+  .resource("databaseWithZod")
+  .configSchema(DatabaseConfigSchema)
+  .init(async (config) => {
     return {
       connect: () =>
         `Connected to ${config.host}:${config.port} (SSL: ${config.ssl})`,
     };
-  },
-});
+  })
+  .build();
 
 const EventPayloadSchema = z.object({
   userId: z.string(),
   action: z.enum(["created", "updated", "deleted"]),
 });
 
-const userActionEvent = defineEvent({
-  id: "userActionWithZod",
-  payloadSchema: EventPayloadSchema, // Works directly!
-});
+const userActionEvent = r
+  .event("userActionWithZod")
+  .payloadSchema(EventPayloadSchema)
+  .build();
 
 const TimingConfigSchema = z.object({
   timeout: z.number().positive(),
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 
-const timingMiddleware = defineMiddleware({
-  id: "timingWithZod",
-  configSchema: TimingConfigSchema, // Works directly!
-  run: async ({ next }, _, config) => {
+const timingMiddleware = r.middleware
+  .task("timingWithZod")
+  .configSchema(TimingConfigSchema)
+  .run(async ({ next }, _, config) => {
     const start = Date.now();
     try {
       const result = await next();
@@ -81,22 +74,21 @@ const timingMiddleware = defineMiddleware({
       console.log(`Operation failed after ${duration}ms`);
       throw error;
     }
-  },
-});
+  })
+  .build();
 
 // Usage examples:
 
 // Zod also works with transformations
 const StringToNumberSchema = z.string().transform((val) => parseInt(val, 10));
 
-const mathTask = defineTask({
-  id: "mathWithZodTransform",
-  inputSchema: StringToNumberSchema,
-  run: async (input: number) => {
-    // input is transformed to number
+const mathTask = r
+  .task("mathWithZodTransform")
+  .inputSchema(StringToNumberSchema)
+  .run(async (input: number) => {
     return input * 2;
-  },
-});
+  })
+  .build();
 
 // And with custom validation libraries that implement IValidationSchema
 class CustomValidator<T> implements IValidationSchema<T> {
@@ -116,13 +108,13 @@ const customSchema = new CustomValidator<{ value: string }>(
   },
 );
 
-const customTask = defineTask({
-  id: "customValidation",
-  inputSchema: customSchema,
-  run: async (input) => {
+const customTask = r
+  .task("customValidation")
+  .inputSchema(customSchema)
+  .run(async (input) => {
     return `Received: ${input.value}`;
-  },
-});
+  })
+  .build();
 
 export {
   createUserTask,

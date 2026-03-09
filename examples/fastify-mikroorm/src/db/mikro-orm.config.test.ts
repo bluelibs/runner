@@ -11,10 +11,14 @@ describe("mikro-orm.config bootstrap", () => {
   it("builds config via run(cli) and defineConfig", async () => {
     const mockCfg = { some: "config" } as any;
     const defineSpy = jest.fn((x) => x);
+    const buildSpy = jest.fn(() => "cli");
+    const registerSpy = jest.fn(() => ({ build: buildSpy }));
 
     jest.isolateModules(async () => {
       jest.doMock("@bluelibs/runner", () => ({
-        resource: (x: any) => x,
+        r: {
+          resource: jest.fn(() => ({ register: registerSpy })),
+        },
         run: async () => ({ getResourceValue: () => mockCfg }),
       }));
       jest.doMock("@mikro-orm/core", () => ({ defineConfig: defineSpy }));

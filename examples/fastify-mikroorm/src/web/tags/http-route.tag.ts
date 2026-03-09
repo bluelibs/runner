@@ -17,7 +17,7 @@ export interface HttpRouteConfig {
 }
 
 export const httpRoute = r
-  .tag("http.tags.httpRoute")
+  .tag("http-route")
   .configSchema(
     M.compile({
       method: M.OneOf(

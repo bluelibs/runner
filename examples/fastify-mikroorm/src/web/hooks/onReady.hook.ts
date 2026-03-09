@@ -1,4 +1,4 @@
-import { r } from "@bluelibs/runner";
+import { events, r, resources } from "@bluelibs/runner";
 import { fastify } from "#/web/resources/fastify.resource";
 import { env } from "#/general/resources/env.resource";
 
@@ -10,10 +10,10 @@ export const onReady = r
     description:
       "Starts the Fastify server on port 3000 when the application is ready",
   })
-  .on(r.system.events.ready)
+  .on(events.ready)
   .dependencies({
     fastify: fastify,
-    logger: r.runner.logger,
+    logger: resources.logger,
     env,
   })
   .run(async (_, { fastify, logger, env }) => {

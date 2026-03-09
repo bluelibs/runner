@@ -5,7 +5,7 @@
  * - Client: rpcLane smart communicator uploads Node File sentinels via multipart
  */
 
-import { InputFile, r, run } from "@bluelibs/runner";
+import { InputFile, r, run, tags } from "@bluelibs/runner";
 import { createNodeFile, rpcLanesResource } from "@bluelibs/runner/node";
 import { Readable, Transform } from "stream";
 
@@ -70,7 +70,7 @@ function tap(label: string): Transform {
 
 const appendTask = r
   .task<{ file: InputFile<Readable> }>(IDS.task)
-  .tags([r.runner.tags.rpcLane.with({ lane: appendLane })])
+  .tags([tags.rpcLane.with({ lane: appendLane })])
   .meta({
     title: "Append magic",
     description: "Appends 'a' to every character (file stream)",
@@ -100,7 +100,7 @@ const appendTask = r
 
 const appendRemoteTask = r
   .task<{ file: InputFile<Readable> }>(IDS.task)
-  .tags([r.runner.tags.rpcLane.with({ lane: appendLane })])
+  .tags([tags.rpcLane.with({ lane: appendLane })])
   .run(async (): Promise<string> => {
     throw new Error("This task must be routed through rpcLanes.");
   })
@@ -146,7 +146,10 @@ function buildServerApp() {
   });
 
   return {
-    app: r.resource(IDS.app).register([appendTask, communicator, rpcLanes]).build(),
+    app: r
+      .resource(IDS.app)
+      .register([appendTask, communicator, rpcLanes])
+      .build(),
     rpcLanes,
   };
 }
@@ -184,7 +187,8 @@ export async function runStreamingAppendExample(): Promise<void> {
     const payload = "Runner streaming demo";
     const expected = appendMagic(payload);
 
-    const serverRpcLanesValue = await serverRuntime.getResourceValue(serverRpcLanes);
+    const serverRpcLanesValue =
+      await serverRuntime.getResourceValue(serverRpcLanes);
     const baseUrl = getExposureBaseUrl(serverRpcLanesValue);
 
     const clientApp = buildClientApp(baseUrl);
@@ -201,7 +205,9 @@ export async function runStreamingAppendExample(): Promise<void> {
     console.log(`[result] ${result}`);
 
     if (result !== expected) {
-      throw new Error("RPC lane result did not match expected transform output");
+      throw new Error(
+        "RPC lane result did not match expected transform output",
+      );
     }
   } finally {
     if (clientRuntime) {

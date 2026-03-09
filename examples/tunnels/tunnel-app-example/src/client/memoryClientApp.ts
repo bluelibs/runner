@@ -1,7 +1,13 @@
 import { r, run } from "@bluelibs/runner";
 import { rpcLanesResource } from "@bluelibs/runner/node";
 
-import { AuthToken, ResourceId, RpcProfile, RuntimeTaskId } from "../ids.js";
+import {
+  AuthToken,
+  ResourceId,
+  RpcProfile,
+  RuntimeTaskId,
+  TaskId,
+} from "../ids.js";
 import { appRpcLane } from "../rpcLane.js";
 import type {
   AuditEntry,
@@ -95,14 +101,18 @@ export function buildMemoryClientApp() {
     .init(async () => ({
       task: async (taskId: string, input?: unknown): Promise<unknown> => {
         switch (taskId) {
+          case TaskId.CreateNote:
           case RuntimeTaskId.CreateNote:
             assertNoteInput(input);
             return state.createNote(input);
+          case TaskId.ListNotes:
           case RuntimeTaskId.ListNotes:
             return state.listNotes();
+          case TaskId.LogAudit:
           case RuntimeTaskId.LogAudit:
             assertAuditInput(input);
             return state.logAudit(input);
+          case TaskId.ListAudits:
           case RuntimeTaskId.ListAudits:
             return state.listAudits();
           default:

@@ -2,12 +2,15 @@
  * Duplex streaming over RPC Lanes HTTP transport.
  *
  * - Server: rpcLanes HTTP exposure
- * - Task uses useExposureContext() to read request body and stream response
+ * - Task uses useRpcLaneRequestContext() to read request body and stream response
  * - Client: rpcLane smart communicator uploads a slow stream and reads streamed response
  */
 
-import { r, run } from "@bluelibs/runner";
-import { rpcLanesResource, useExposureContext } from "@bluelibs/runner/node";
+import { r, run, tags } from "@bluelibs/runner";
+import {
+  rpcLanesResource,
+  useRpcLaneRequestContext,
+} from "@bluelibs/runner/node";
 import { Readable, Transform } from "stream";
 
 import { createSlowReadable, getExposureBaseUrl } from "./utils";
@@ -42,7 +45,7 @@ async function respondDuplex(
   opts: { contentType?: string } = {},
   transform: (chunk: Buffer) => string,
 ): Promise<void> {
-  const { req, res } = useExposureContext();
+  const { req, res } = useRpcLaneRequestContext();
 
   res.statusCode = 200;
   res.setHeader(
@@ -73,7 +76,7 @@ async function respondDuplex(
 
 const duplexTask = r
   .task<Readable>(IDS.task)
-  .tags([r.runner.tags.rpcLane.with({ lane: duplexLane })])
+  .tags([tags.rpcLane.with({ lane: duplexLane })])
   .meta({
     title: "Duplex demo",
     description: "Streams request -> transforms -> streams response",
@@ -89,7 +92,7 @@ const duplexTask = r
 
 const duplexRemoteTask = r
   .task<Readable>(IDS.task)
-  .tags([r.runner.tags.rpcLane.with({ lane: duplexLane })])
+  .tags([tags.rpcLane.with({ lane: duplexLane })])
   .run(async (): Promise<string> => {
     throw new Error("This task must be routed through rpcLanes.");
   })
@@ -135,7 +138,10 @@ function buildServerApp() {
   });
 
   return {
-    app: r.resource(IDS.app).register([duplexTask, communicator, rpcLanes]).build(),
+    app: r
+      .resource(IDS.app)
+      .register([duplexTask, communicator, rpcLanes])
+      .build(),
     rpcLanes,
   };
 }
@@ -170,7 +176,8 @@ export async function runStreamingDuplexExample(): Promise<void> {
   let clientRuntime: Awaited<ReturnType<typeof run>> | null = null;
 
   try {
-    const serverRpcLanesValue = await serverRuntime.getResourceValue(serverRpcLanes);
+    const serverRpcLanesValue =
+      await serverRuntime.getResourceValue(serverRpcLanes);
     const baseUrl = getExposureBaseUrl(serverRpcLanesValue);
     console.log(`Exposure listening at ${baseUrl}`);
 

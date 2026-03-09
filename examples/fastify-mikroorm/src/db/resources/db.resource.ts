@@ -3,7 +3,7 @@
  * - Namespace: db
  * - File: src/db/resources/db.resource.ts
  */
-import { r } from "@bluelibs/runner";
+import { r, resources } from "@bluelibs/runner";
 import { MikroORM } from "@mikro-orm/core";
 import { entities } from "./entities/index";
 import { ormConfig } from "./orm.config";
@@ -20,7 +20,7 @@ export const db = r
       "MikroORM database connection with entity management and migration support",
   })
   .register([ormConfig, entities])
-  .dependencies({ entities, ormConfig, logger: r.runner.logger })
+  .dependencies({ entities, ormConfig, logger: resources.logger })
   .init(async (_config, { entities, ormConfig, logger }) => {
     const orm = await MikroORM.init(ormConfig);
     logger.info("Database connected");

@@ -3,31 +3,31 @@
  * Shows how to use intercept and interceptHook through the runtime DI instance.
  */
 
-import { event, hook, resource, run, r } from "@bluelibs/runner";
+import { r, resources, run } from "@bluelibs/runner";
 
 // Define an event
-const userActionEvent = event<{ action: string; userId: string }>({
-  id: "userAction",
-  meta: { title: "User Action Event" },
-});
+const userActionEvent = r
+  .event<{ action: string; userId: string }>("userAction")
+  .meta({ title: "User Action Event" })
+  .build();
 
 // Define a hook that listens to the event
-const userActionHook = hook({
-  id: "userActionLogger",
-  on: userActionEvent,
-  run: async (event: any) => {
+const userActionHook = r
+  .hook("userActionLogger")
+  .on(userActionEvent)
+  .run(async (event: any) => {
     console.log(
       `User ${event.data.userId} performed action: ${event.data.action}`,
     );
-  },
-});
+  })
+  .build();
 
 // Create a simple app
-const app = resource({
-  id: "interceptor-example-app",
-  register: [userActionEvent, userActionHook],
-  dependencies: { eventManager: r.system.eventManager },
-  init: async (_, { eventManager }) => {
+const app = r
+  .resource("interceptor-example-app")
+  .register([userActionEvent, userActionHook])
+  .dependencies({ eventManager: resources.eventManager })
+  .init(async (_, { eventManager }) => {
     console.log("App initialized");
     console.log("1. Adding emission interceptors:");
 
@@ -66,8 +66,8 @@ const app = resource({
         `[Listener] Received event: ${event.data.userId} -> ${event.data.action}`,
       );
     });
-  },
-});
+  })
+  .build();
 
 // Example usage
 async function demonstrateInterceptors() {

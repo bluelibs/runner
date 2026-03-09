@@ -1,4 +1,4 @@
-import { r } from "@bluelibs/runner";
+import { r, resources } from "@bluelibs/runner";
 import BetterSqlite3, {
   type Database as BetterSqlite3Database,
 } from "better-sqlite3";
@@ -23,7 +23,7 @@ export interface Database {
 
 export const db = r
   .resource<DatabaseConfig>("database")
-  .dependencies({ logger: r.runner.logger })
+  .dependencies({ logger: resources.logger })
   .init(async (config, { logger }): Promise<Database> => {
     const { filename = ":memory:", verbose = false } = config;
 

@@ -1,4 +1,4 @@
-import { r } from "@bluelibs/runner";
+import { r, resources } from "@bluelibs/runner";
 import express, { Express, Request, Response } from "express";
 import cors from "cors";
 import { httpTag } from "../tags/http.tag";
@@ -18,7 +18,7 @@ export const expressServerResource = r
   .resource("expressServer")
   .dependencies({
     appConfig,
-    logger: r.runner.logger,
+    logger: resources.logger,
   })
   .register([httpTag])
   .init(async (_, { appConfig, logger }): Promise<ExpressServer> => {
@@ -41,7 +41,8 @@ export const expressServerResource = r
       };
 
       // Store request data for use in tasks
-      (req as unknown as { requestData: RequestData }).requestData = requestData;
+      (req as unknown as { requestData: RequestData }).requestData =
+        requestData;
       next();
     });
 

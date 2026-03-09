@@ -14,7 +14,7 @@ import { createUserTask } from "./create-user.task";
 // Validation schemas
 const registerSchema = z.object({
   email: z.email().meta({ example: "test@example.com" }),
-  password: z.string().min(6),
+  password: z.string().min(8),
   name: z.string().min(2),
 });
 

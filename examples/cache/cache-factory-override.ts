@@ -1,4 +1,4 @@
-import { task, resource, run, r } from "@bluelibs/runner";
+import { middleware, r, resources, run } from "@bluelibs/runner";
 
 // Custom cache implementation (could be Redis, Memcached, etc.)
 class CustomCache {
@@ -38,86 +38,79 @@ class CustomCache {
   }
 }
 
-// Override the default cache factory task
-const customCacheFactory = task({
-  id: "global.tasks.cacheFactory", // Same ID as the default
-  run: async (options: any) => {
-    return new CustomCache({ name: "MyCustomCache", ...options });
-  },
+// Override the default cache provider so task cache middleware uses our custom implementation.
+const customCacheProvider = r.override(resources.cacheProvider, async () => {
+  return async (options = {}) =>
+    new CustomCache({
+      name: "MyCustomCache",
+      ttl: typeof options.ttl === "number" ? options.ttl : undefined,
+    });
 });
 
 // Create some tasks that use caching
-const expensiveCalculation = task({
-  id: "expensiveCalculation",
-  middleware: [r.runner.middleware.task.cache.with({ ttl: 3000 })],
-  run: async (input: { number: number }) => {
+const expensiveCalculation = r
+  .task<{ number: number }>("expensiveCalculation")
+  .middleware([middleware.task.cache.with({ ttl: 3000 })])
+  .run(async (input) => {
     console.log(`🔢 Performing expensive calculation for ${input.number}`);
-    // Simulate expensive work
     await new Promise((resolve) => setTimeout(resolve, 100));
     return input.number * input.number;
-  },
-});
+  })
+  .build();
 
-const fetchUserData = task({
-  id: "fetchUserData",
-  middleware: [r.runner.middleware.task.cache.with({ ttl: 2000 })],
-  run: async (input: { userId: string }) => {
+const fetchUserData = r
+  .task<{ userId: string }>("fetchUserData")
+  .middleware([middleware.task.cache.with({ ttl: 2000 })])
+  .run(async (input) => {
     console.log(`👤 Fetching user data for ${input.userId}`);
-    // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 50));
     return {
       id: input.userId,
       name: `User ${input.userId}`,
       email: `user${input.userId}@example.com`,
     };
-  },
-});
+  })
+  .build();
 
 // Main application
-const app = resource({
-  id: "app",
-  register: [
-    r.runner.cache, // Register the cache resource
-    expensiveCalculation,
-    fetchUserData,
-  ],
-  overrides: [customCacheFactory], // Override the default cache factory
-  dependencies: { expensiveCalculation, fetchUserData },
-  async init(_, { expensiveCalculation, fetchUserData }) {
+const app = r
+  .resource("app")
+  .register([resources.cache, expensiveCalculation, fetchUserData])
+  .overrides([customCacheProvider])
+  .dependencies({ expensiveCalculation, fetchUserData })
+  .init(async (_, { expensiveCalculation, fetchUserData }) => {
     console.log("🚀 Starting cache factory override example...\n");
 
-    // Test expensive calculation with caching
     console.log("=== Testing Expensive Calculation ===");
     const result1 = await expensiveCalculation({ number: 5 });
     console.log(`Result 1: ${result1}`);
 
-    const result2 = await expensiveCalculation({ number: 5 }); // Should be cached
+    const result2 = await expensiveCalculation({ number: 5 });
     console.log(`Result 2: ${result2}`);
 
-    const result3 = await expensiveCalculation({ number: 10 }); // Different input
+    const result3 = await expensiveCalculation({ number: 10 });
     console.log(`Result 3: ${result3}\n`);
 
-    // Test user data fetching with caching
     console.log("=== Testing User Data Fetching ===");
     const user1 = await fetchUserData({ userId: "123" });
-    console.log(`User 1:`, user1);
+    console.log("User 1:", user1);
 
-    const user2 = await fetchUserData({ userId: "123" }); // Should be cached
-    console.log(`User 2:`, user2);
+    const user2 = await fetchUserData({ userId: "123" });
+    console.log("User 2:", user2);
 
-    const user3 = await fetchUserData({ userId: "456" }); // Different user
-    console.log(`User 3:`, user3);
+    const user3 = await fetchUserData({ userId: "456" });
+    console.log("User 3:", user3);
 
     console.log("\n⏳ Waiting for cache to expire...");
     await new Promise((resolve) => setTimeout(resolve, 6000));
 
     console.log("\n=== Testing After Cache Expiry ===");
-    const result4 = await expensiveCalculation({ number: 5 }); // Should recalculate
+    const result4 = await expensiveCalculation({ number: 5 });
     console.log(`Result 4: ${result4}`);
 
     console.log("\n✨ Example completed!");
-  },
-});
+  })
+  .build();
 
 // Run the example
 run(app)

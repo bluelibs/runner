@@ -1,8 +1,8 @@
-import { r, run } from "@bluelibs/runner";
+import { r, resources, run } from "@bluelibs/runner";
 
 const greet = r
   .task<string>("greet")
-  .dependencies({ logger: r.runner.logger })
+  .dependencies({ logger: resources.logger })
   .run(async (name, { logger }) => {
     await logger.info(`Greeting ${name}`);
     return `Hello, ${name}!`;
@@ -11,7 +11,7 @@ const greet = r
 
 const runtimeInfo = r
   .resource("runtimeInfo")
-  .dependencies({ runtime: r.system.runtime })
+  .dependencies({ runtime: resources.runtime })
   .init(async (_config, { runtime }) => runtime.getRootId())
   .build();
 

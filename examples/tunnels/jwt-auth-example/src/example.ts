@@ -1,4 +1,4 @@
-import { createHttpClient, r, resources, run } from "@bluelibs/runner";
+import { createHttpClient, r, resources, run, tags } from "@bluelibs/runner";
 import {
   rpcLanesResource,
   type RpcLanesResourceValue,
@@ -38,7 +38,7 @@ type HelloTaskInput = { message: string };
 
 const helloServerTask = r
   .task<HelloTaskInput>(TaskId.Hello)
-  .tags([r.runner.tags.rpcLane.with({ lane: jwtProtectedLane })])
+  .tags([tags.rpcLane.with({ lane: jwtProtectedLane })])
   .run(async (input): Promise<void> => {
     console.log(
       `[server] Received protected message: "${input.message}" via rpcLanes`,
@@ -58,7 +58,7 @@ const ErrorMessage = {
 
 const helloRemoteTask = r
   .task<HelloTaskInput>(TaskId.Hello)
-  .tags([r.runner.tags.rpcLane.with({ lane: jwtProtectedLane })])
+  .tags([tags.rpcLane.with({ lane: jwtProtectedLane })])
   .run(async (): Promise<void> => {
     throw new Error(ErrorMessage.MustRouteThroughRpcLanes);
   })
