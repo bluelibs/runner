@@ -678,9 +678,42 @@ const report = await health.getHealth();
 //   totals: { resources: 3, healthy: 2, degraded: 1, unhealthy: 0 },
 //   report: [...]
 // }
+
+const dbStatus = report.find(db).status;
 ```
 
 Only resources that explicitly define `health()` participate. This keeps health reporting intentional instead of synthesizing fake status for every resource in the graph. Lazy resources that are still sleeping are skipped. Prefer `resources.health` inside resources; keep `runtime.getHealth()` for operator-facing runtime access.
+
+Tasks can also declare a fail-fast policy around critical resources:
+
+```typescript
+const writeOrder = r
+  .task("app.tasks.writeOrder")
+  .tags([tags.failWhenUnhealthy.with([db])])
+  .run(async (input) => persistOrder(input))
+  .build();
+```
+
+When `db.health()` reports `unhealthy`, Runner blocks the task before its logic runs. `degraded` still executes, bootstrap-time task calls are not gated, and sleeping lazy resources remain skipped until they wake up.
+
+For lightweight lifecycle-owned polling or recovery loops, use `resources.timers`:
+
+```typescript
+const app = r
+  .resource("app")
+  .dependencies({ timers: resources.timers, health: resources.health })
+  .ready(async (_value, _config, { timers, health }) => {
+    const interval = timers.setInterval(async () => {
+      const report = await health.getHealth([db]);
+      if (report.report[0]?.status === "healthy") {
+        interval.cancel();
+      }
+    }, 1000);
+  })
+  .build();
+```
+
+`resources.timers` is available during `init()` as well. Once the timers resource enters `cooldown()`, it stops accepting new timers, and its `dispose()` clears anything still pending.
 
 ---
 

@@ -3,7 +3,10 @@ import {
   IResourceHealthReport,
   IResourceHealthReportEntry,
 } from "../defs";
-import { runtimeElementNotFoundError } from "../errors";
+import {
+  healthReportEntryNotFoundError,
+  runtimeElementNotFoundError,
+} from "../errors";
 import type { Store } from "./Store";
 import type { IHealthReporter } from "../types/runner";
 
@@ -51,8 +54,27 @@ export class HealthReporter implements IHealthReporter {
       totals.unhealthy += 1;
     }
 
-    return { totals, report };
+    return this.createHealthReport(totals, report);
   };
+
+  private createHealthReport(
+    totals: IResourceHealthReport["totals"],
+    report: IResourceHealthReportEntry[],
+  ): IResourceHealthReport {
+    return {
+      totals,
+      report,
+      find: (resource) => {
+        const resourceId = this.resolveResourceId(resource);
+        const entry = report.find((candidate) => candidate.id === resourceId);
+        if (entry) {
+          return entry;
+        }
+
+        throw healthReportEntryNotFoundError.create({ resourceId });
+      },
+    };
+  }
 
   private resolveHealthResourceIds(
     resourceDefs?: Array<string | IResource<any, any, any, any, any>>,
@@ -104,8 +126,7 @@ export class HealthReporter implements IHealthReporter {
     const entry = this.store.resources.get(resourceId)!;
     const metadata = this.store.getRuntimeMetadata(entry.resource);
     const baseEntry = {
-      id: metadata.id,
-      path: metadata.path,
+      id: metadata.path,
       initialized: entry.isInitialized === true,
     };
 

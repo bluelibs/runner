@@ -59,6 +59,8 @@ describe("runner.health", () => {
       degraded: 0,
       unhealthy: 0,
     });
+    expect(report.find(monitored)?.status).toBe("healthy");
+    expect(report.find("health-resource-monitored")?.status).toBe("healthy");
 
     await runtime.dispose();
   });

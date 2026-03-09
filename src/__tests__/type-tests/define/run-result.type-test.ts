@@ -93,9 +93,12 @@ void (async () => {
   const resources: number = typedReport.totals.resources;
   const firstStatus: "healthy" | "degraded" | "unhealthy" | undefined =
     typedReport.report[0]?.status;
+  const findStatus: "healthy" | "degraded" | "unhealthy" =
+    typedReport.find(healthy).status;
 
   void resources;
   void firstStatus;
+  void findStatus;
 
   await rr.getHealth(["types-health-resource"]);
 })();

@@ -141,6 +141,18 @@ export const runtimeHealthDuringBootstrapError = error<DefaultErrorType>(
   )
   .build();
 
+export const runtimeTimersNotAcceptingError = error<DefaultErrorType>(
+  "runner.errors.runtimeTimersNotAccepting",
+)
+  .format(
+    () =>
+      "Runner timers are no longer accepting new timers because cooldown or disposal has started.",
+  )
+  .remediation(
+    "Schedule timers before shutdown begins, or create a fresh runtime if you need new lifecycle-owned timers.",
+  )
+  .build();
+
 export const runtimeElementNotFoundError = error<
   { type: string; elementId: string } & DefaultErrorType
 >("runner.errors.runtimeElementNotFound")
@@ -151,6 +163,19 @@ export const runtimeElementNotFoundError = error<
   .remediation(
     ({ type, elementId }) =>
       `Register ${type.toString()} "${elementId.toString()}" in the root resource tree before requesting it from the runtime.`,
+  )
+  .build();
+
+export const healthReportEntryNotFoundError = error<
+  { resourceId: string } & DefaultErrorType
+>("runner.errors.healthReportEntryNotFound")
+  .format(
+    ({ resourceId }) =>
+      `Health report entry for resource "${resourceId}" was not found.`,
+  )
+  .remediation(
+    ({ resourceId }) =>
+      `Ensure resource "${resourceId}" was included in getHealth(...), defines health(), and was not skipped as a sleeping lazy resource.`,
   )
   .build();
 
@@ -174,4 +199,36 @@ export const runtimeAccessViolationError = error<
         : `Root "${rootId}" has no exports declared.`;
     return `${exported} Add "${targetId}" to the root's .isolate({ exports: [...] }) to allow runtime API access.`;
   })
+  .build();
+
+export const taskHealthResourceNotReportableError = error<
+  {
+    taskId: string;
+    resourceIds: string[];
+  } & DefaultErrorType
+>("runner.errors.taskHealthResourceNotReportable")
+  .format(
+    ({ taskId, resourceIds }) =>
+      `Task "${taskId}" uses failWhenUnhealthy for resources without health(): [${resourceIds.join(", ")}].`,
+  )
+  .remediation(
+    ({ resourceIds }) =>
+      `Add health() to these resources or remove them from tags.failWhenUnhealthy.with([...]): [${resourceIds.join(", ")}].`,
+  )
+  .build();
+
+export const taskBlockedByResourceHealthError = error<
+  {
+    taskId: string;
+    resourceIds: string[];
+  } & DefaultErrorType
+>("runner.errors.taskBlockedByResourceHealth")
+  .format(
+    ({ taskId, resourceIds }) =>
+      `Task "${taskId}" was blocked because these resources are unhealthy: [${resourceIds.join(", ")}].`,
+  )
+  .remediation(
+    ({ resourceIds }) =>
+      `Restore resource health before retrying the task, or remove them from tags.failWhenUnhealthy.with([...]): [${resourceIds.join(", ")}].`,
+  )
   .build();

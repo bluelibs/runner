@@ -191,7 +191,6 @@ export interface IResourceHealthResult {
 
 export interface IResourceHealthReportEntry extends IResourceHealthResult {
   id: string;
-  path: string;
   initialized: boolean;
 }
 
@@ -203,6 +202,9 @@ export interface IResourceHealthReport {
     unhealthy: number;
   };
   report: IResourceHealthReportEntry[];
+  find(
+    resource: string | IResource<any, any, any, any, any>,
+  ): IResourceHealthReportEntry;
 }
 
 export interface IResourceDefinition<

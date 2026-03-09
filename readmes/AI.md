@@ -170,8 +170,12 @@ Health reporting:
 - Prefer `resources.health.getHealth()` inside resources; keep `runtime.getHealth()` for operator/runtime callers.
 - Health checks are available only after `run(...)` resolves and before disposal starts.
 - Startup-unused lazy resources stay asleep and are skipped; requested resources without `health()` are ignored.
-- Result shape is `{ totals, report }`, with counts for `healthy`, `degraded`, and `unhealthy`.
-- `report` entries look like `{ id, path, initialized, status, message?, details? }`.
+- Result shape is `{ totals, report, find(...) }`, with counts for `healthy`, `degraded`, and `unhealthy`.
+- `report` entries look like `{ id, initialized, status, message?, details? }`, where `id` is the canonical global runtime id.
+- Use `report.find(resourceOrId).status` when you want one specific resource entry.
+  It returns the entry or throws if that resource is not present in the report.
+- Tasks can opt into runtime health gating with `tags.failWhenUnhealthy.with([db, cache])`.
+  It blocks only when one of those resources reports `unhealthy`; `degraded` still runs, bootstrap-time task calls are not gated, and sleeping lazy resources stay skipped.
 
 Do not use `cooldown()` as a general teardown phase for support resources like databases.
 
@@ -186,6 +190,8 @@ Tasks are your main business actions.
 - Task `run(..., deps, context)` receives auto-injected execution context:
   - `journal`: per-task typed state
   - `source`: `{ kind, id }`
+- `resources.timers.setTimeout()` and `resources.timers.setInterval()` create lifecycle-owned timers.
+  They can be used during `init()`, stop accepting new timers once `cooldown()` starts, and clear pending timers during `dispose()`.
 
 Example:
 

@@ -65,3 +65,5 @@ export type {
   RuntimeCallSource,
   RuntimeCallSourceKind,
 } from "./types/runtimeSource";
+
+export type { ITimerHandle, ITimers } from "./types/timers";

@@ -207,6 +207,7 @@ describe("system.runtime", () => {
     const runtimeResult = await run(app, { shutdownHooks: false });
     const runtime = runtimeResult.getResourceValue(globalResources.runtime);
     const report = await runtime.getHealth([monitored]);
+    const monitoredId = runtimeResult.store.getRuntimeMetadata(monitored).path;
 
     expect(report.totals).toEqual({
       resources: 1,
@@ -216,7 +217,7 @@ describe("system.runtime", () => {
     });
     expect(report.report).toEqual([
       expect.objectContaining({
-        id: "runtime-health-monitored",
+        id: monitoredId,
         status: "healthy",
         initialized: true,
       }),

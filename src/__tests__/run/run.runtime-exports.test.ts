@@ -520,7 +520,7 @@ describe("run-runtime-exports", () => {
       });
       expect(report.report).toEqual([
         expect.objectContaining({
-          id: "runtime-exports-health-public",
+          id: "runtime-exports-health-root.runtime-exports-health-public",
           status: "healthy",
         }),
       ]);

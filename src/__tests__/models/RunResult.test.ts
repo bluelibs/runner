@@ -310,6 +310,9 @@ describe("RunResult", () => {
 
     const runtime = await run(app, { shutdownHooks: false });
     const report = await runtime.getHealth();
+    const healthyId = runtime.store.getRuntimeMetadata(healthy).path;
+    const degradedId = runtime.store.getRuntimeMetadata(degraded).path;
+    const unhealthyId = runtime.store.getRuntimeMetadata(unhealthy).path;
 
     expect(report.totals).toEqual({
       resources: 3,
@@ -320,24 +323,29 @@ describe("RunResult", () => {
     expect(report.report).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: "rr-health-healthy",
+          id: healthyId,
           initialized: true,
           status: "healthy",
           message: "healthy-value",
         }),
         expect.objectContaining({
-          id: "rr-health-degraded",
+          id: degradedId,
           initialized: true,
           status: "degraded",
           message: "slow",
         }),
         expect.objectContaining({
-          id: "rr-health-unhealthy",
+          id: unhealthyId,
           initialized: true,
           status: "unhealthy",
           message: "down",
         }),
       ]),
+    );
+    expect(report.find(healthy)?.status).toBe("healthy");
+    expect(report.find(degradedId)?.status).toBe("degraded");
+    expect(() => report.find("rr-health-missing")).toThrow(
+      'Health report entry for resource "rr-health-missing" was not found.',
     );
 
     await runtime.dispose();
@@ -371,6 +379,7 @@ describe("RunResult", () => {
 
     const runtime = await run(app, { shutdownHooks: false });
     const healthyId = runtime.store.resolveDefinitionId(healthy)!;
+    const healthyReportId = runtime.store.getRuntimeMetadata(healthy).path;
 
     await expect(
       runtime.getHealth(["rr-health-filter-missing"]),
@@ -385,7 +394,7 @@ describe("RunResult", () => {
     });
     expect(filtered.report).toEqual([
       expect.objectContaining({
-        id: "rr-health-filter-healthy",
+        id: healthyReportId,
         status: "healthy",
       }),
     ]);
@@ -398,6 +407,9 @@ describe("RunResult", () => {
       unhealthy: 0,
     });
     expect(skipped.report).toEqual([]);
+    expect(() => skipped.find(noHealth)).toThrow(
+      'Health report entry for resource "rr-health-filter-app.rr-health-filter-none" was not found.',
+    );
 
     await runtime.dispose();
   });
@@ -456,6 +468,7 @@ describe("RunResult", () => {
 
     const runtime = await run(app, { shutdownHooks: false });
     const report = await runtime.getHealth([unhealthy]);
+    const unhealthyId = runtime.store.getRuntimeMetadata(unhealthy).path;
 
     expect(report.totals).toEqual({
       resources: 1,
@@ -465,7 +478,7 @@ describe("RunResult", () => {
     });
     expect(report.report).toEqual([
       expect.objectContaining({
-        id: "rr-health-nonerror-resource",
+        id: unhealthyId,
         status: "unhealthy",
         message: "plain-string-error",
         details: expect.any(Error),
@@ -538,7 +551,7 @@ describe("RunResult", () => {
     });
     expect(report.report).toEqual([
       expect.objectContaining({
-        id: "rr-health-raw-string-resource",
+        id: resourcePath,
         status: "healthy",
       }),
     ]);

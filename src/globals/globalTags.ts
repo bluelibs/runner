@@ -1,6 +1,10 @@
 import { defineFrameworkTag } from "../definers/frameworkDefinition";
 import { frameworkTag as tagBuilder } from "../definers/builders/tag";
-import type { IEventLaneDefinition, IRpcLaneDefinition } from "../defs";
+import type {
+  IEventLaneDefinition,
+  IResource,
+  IRpcLaneDefinition,
+} from "../defs";
 import { cronTag } from "./cron/cron.tag";
 import { debugTag } from "./resources/debug/debug.tag";
 
@@ -67,6 +71,16 @@ const globalTagsBase = {
       title: "Auth Validator",
       description:
         "Marks tasks that validate HTTP requests for remote lane exposure authentication.",
+    })
+    .build(),
+  failWhenUnhealthy: tagBuilder<
+    ReadonlyArray<string | IResource<any, any, any, any, any>>
+  >("runner.tags.failWhenUnhealthy")
+    .for("tasks")
+    .meta({
+      title: "Fail When Unhealthy",
+      description:
+        "Blocks task execution when any selected resource currently reports unhealthy health status.",
     })
     .build(),
 };

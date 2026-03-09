@@ -19,6 +19,7 @@ describe("system namespace separation", () => {
 
   it("keeps health under the runner.* namespace", () => {
     expect(globalResources.health.id).toBe("runner.health");
+    expect(globalResources.timers.id).toBe("runner.timers");
   });
 
   it("does not expose the removed containerInternals tag", () => {

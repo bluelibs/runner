@@ -4,12 +4,17 @@ import { Store } from "./Store";
 import { Logger } from "./Logger";
 import { MiddlewareManager } from "./MiddlewareManager";
 import { interceptAfterLockError, shutdownLockdownError } from "../errors";
+import {
+  taskBlockedByResourceHealthError,
+  taskHealthResourceNotReportableError,
+} from "../errors";
 import type { ExecutionJournal } from "../types/executionJournal";
 import type {
   TaskRunnerInterceptOptions,
   TaskRunnerInterceptor,
 } from "../types/taskRunner";
 import type { TaskCallOptions } from "../types/utilities";
+import type { IResource } from "../defs";
 import {
   RuntimeCallSource,
   RuntimeCallSourceKind,
@@ -18,6 +23,8 @@ import type { LifecycleAdmissionController } from "./runtime/LifecycleAdmissionC
 import { toPublicDefinition } from "./utils/toPublicDefinition";
 import { ExecutionContextStore } from "./ExecutionContextStore";
 import type { ExecutionFrame } from "../types/executionContext";
+import { globalTags } from "../globals/globalTags";
+import { HealthReporter } from "./HealthReporter";
 
 type CachedTaskRunner = (
   input: unknown,
@@ -73,6 +80,11 @@ export class TaskRunner {
 
   private readonly middlewareManager: MiddlewareManager;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
+  private readonly healthReporter = new HealthReporter(this.store, {
+    ensureAvailable: () => undefined,
+    isSleepingResource: (resourceId) =>
+      this.store.resources.get(resourceId)!.isInitialized !== true,
+  });
 
   /**
    * Begins the execution of a task. These are registered tasks and all sanity checks have been performed at this stage to ensure consistency of the object.
@@ -118,7 +130,13 @@ export class TaskRunner {
       }
     }
 
-    const executeTask = () => runner(input as TInput, options?.journal, source);
+    const executeTask = async () => {
+      const healthPolicyCheck = this.assertTaskHealthPolicy(task);
+      if (healthPolicyCheck) {
+        await healthPolicyCheck;
+      }
+      return runner(input as TInput, options?.journal, source);
+    };
     const executionSource = this.store.createRuntimeSource("task", task);
 
     const traceFrame: ExecutionFrame = {
@@ -182,5 +200,66 @@ export class TaskRunner {
     TDeps extends DependencyMapType,
   >(task: ITask<TInput, TOutput, TDeps>) {
     return this.middlewareManager.composeTaskRunner(task);
+  }
+
+  private assertTaskHealthPolicy(
+    task: ITask<any, any, any>,
+  ): Promise<void> | void {
+    if (!this.store.isLocked) {
+      return;
+    }
+
+    const monitoredResources = globalTags.failWhenUnhealthy.extract(task);
+    if (!monitoredResources || monitoredResources.length === 0) {
+      return;
+    }
+
+    return this.assertMonitoredResourcesHealthy(task, monitoredResources);
+  }
+
+  private async assertMonitoredResourcesHealthy(
+    task: ITask<any, any, any>,
+    monitoredResources: ReadonlyArray<
+      string | IResource<any, any, any, any, any>
+    >,
+  ): Promise<void> {
+    const resourceIds = monitoredResources.map((resource) =>
+      this.resolveResourceId(resource),
+    );
+    const nonReportableResourceIds = resourceIds.filter((resourceId) => {
+      const resourceEntry = this.store.resources.get(resourceId);
+      return !resourceEntry?.resource.health;
+    });
+
+    if (nonReportableResourceIds.length > 0) {
+      taskHealthResourceNotReportableError.throw({
+        taskId: this.store.getRuntimeMetadata(task).id,
+        resourceIds: nonReportableResourceIds.map((resourceId) =>
+          this.store.toPublicId(resourceId),
+        ),
+      });
+    }
+
+    const report = await this.healthReporter.getHealth(resourceIds);
+    const unhealthyResourceIds = report.report
+      .filter((entry) => entry.status === "unhealthy")
+      .map((entry) => entry.id);
+
+    if (unhealthyResourceIds.length > 0) {
+      taskBlockedByResourceHealthError.throw({
+        taskId: this.store.getRuntimeMetadata(task).id,
+        resourceIds: unhealthyResourceIds,
+      });
+    }
+  }
+
+  private resolveResourceId(
+    resource: string | IResource<any, any, any, any, any>,
+  ): string {
+    if (typeof resource === "string") {
+      return resource;
+    }
+
+    return this.store.getRuntimeDefinitionId(resource);
   }
 }
