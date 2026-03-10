@@ -7,6 +7,17 @@ import {
 } from "../app/http/http-endpoints.task";
 
 describe("http endpoint tasks", () => {
+  const fixedDate = new Date("2026-03-09T10:00:00.000Z");
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(fixedDate);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   function createLedger(): BudgetLedger {
     return {
       enforceIpLimit: jest.fn(),
