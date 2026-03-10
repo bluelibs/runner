@@ -17,29 +17,29 @@ import type { IsolationExportsTarget, IsolationTarget } from "../defs";
  * Delegates to specialized validators for each concern.
  */
 export class StoreValidator {
-  private readonly ctx: ValidatorContext;
+  private readonly validatorContext: ValidatorContext;
 
   /**
    * Direct access to the registeredIds set for testing purposes.
    * @internal
    */
   get registeredIds(): Set<string> {
-    return this.ctx.getRegisteredIdsMutable();
+    return this.validatorContext.getRegisteredIdsMutable();
   }
 
   constructor(private registry: StoreRegistry) {
-    this.ctx = new ValidatorContext(registry);
+    this.validatorContext = new ValidatorContext(registry);
   }
 
   trackRegisteredId(id: string): void {
-    this.ctx.trackRegisteredId(id);
+    this.validatorContext.trackRegisteredId(id);
   }
 
   checkIfIDExists(id: string): void | never {
-    if (!this.ctx.hasRegisteredId(id)) {
+    if (!this.validatorContext.hasRegisteredId(id)) {
       return;
     }
-    const publicId = this.ctx.toPublicId(id);
+    const publicId = this.validatorContext.toPublicId(id);
 
     if (this.registry.tasks.has(id)) {
       duplicateRegistrationError.throw({ type: "Task", id: publicId });
@@ -73,11 +73,11 @@ export class StoreValidator {
   }
 
   runSanityChecks(): void {
-    validateMiddlewareRegistrations(this.ctx);
-    validateEventConstraints(this.ctx);
-    validateSubtreePolicies(this.ctx);
-    validateTagConstraints(this.ctx);
-    validateIsolationPolicies(this.ctx);
+    validateMiddlewareRegistrations(this.validatorContext);
+    validateEventConstraints(this.validatorContext);
+    validateSubtreePolicies(this.validatorContext);
+    validateTagConstraints(this.validatorContext);
+    validateIsolationPolicies(this.validatorContext);
 
     // Validate module boundary visibility after all items are registered
     this.registry.visibilityTracker.validateVisibility(this.registry);
@@ -92,7 +92,10 @@ export class StoreValidator {
     onInvalidEntry: (entry: unknown) => never;
     onUnknownTarget: (targetId: string) => never;
   }): Array<IsolationTarget> {
-    return normalizeIsolationEntriesImpl<IsolationTarget>(this.ctx, input);
+    return normalizeIsolationEntriesImpl<IsolationTarget>(
+      this.validatorContext,
+      input,
+    );
   }
 
   /**
@@ -104,6 +107,6 @@ export class StoreValidator {
     onInvalidEntry: (entry: unknown) => never;
     onUnknownTarget: (targetId: string) => never;
   }): Array<IsolationExportsTarget> {
-    return normalizeExportEntriesImpl(this.ctx, input);
+    return normalizeExportEntriesImpl(this.validatorContext, input);
   }
 }

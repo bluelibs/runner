@@ -57,9 +57,9 @@ export function buildOrderApp(ns: string) {
         input: { orderId: string; customerId: string; amount: number },
         { durable },
       ) => {
-        const ctx = durable.use();
+        const durableContext = durable.use();
 
-        const validated = await ctx.step("validateOrder", async () => {
+        const validated = await durableContext.step("validateOrder", async () => {
           if (!input.orderId || input.amount <= 0) {
             throw new Error("Invalid order");
           }
@@ -70,25 +70,25 @@ export function buildOrderApp(ns: string) {
           };
         });
 
-        const charge = await ctx.step("chargeCustomer", async () => ({
+        const charge = await durableContext.step("chargeCustomer", async () => ({
           chargeId: `chg_${validated.orderId}`,
           charged: validated.amount,
         }));
 
-        await ctx.sleep(50);
+        await durableContext.sleep(50);
 
-        const confirmation = await ctx.waitForSignal(PaymentConfirmed, {
+        const confirmation = await durableContext.waitForSignal(PaymentConfirmed, {
           stepId: "awaitPaymentConfirmation",
         });
 
-        const shipment = await ctx.step("shipOrder", async () => ({
+        const shipment = await durableContext.step("shipOrder", async () => ({
           orderId: validated.orderId,
           transactionId: confirmation.transactionId,
           status: "shipped" as const,
           shippedAt: Date.now(),
         }));
 
-        await ctx.note(
+        await durableContext.note(
           `Order ${validated.orderId} shipped via charge ${charge.chargeId}`,
         );
         return shipment;
@@ -112,27 +112,27 @@ export function buildOnboardingApp(ns: string, signalTimeoutMs: number) {
     .dependencies({ durable })
     .run(
       async (input: { email: string; plan: "free" | "pro" }, { durable }) => {
-        const ctx = durable.use();
+        const durableContext = durable.use();
 
-        const account = await ctx.step("createAccount", async () => ({
+        const account = await durableContext.step("createAccount", async () => ({
           userId: `user_${Date.now()}`,
           email: input.email,
           plan: input.plan,
         }));
 
-        await ctx.note(`Account created for ${account.email}`);
+        await durableContext.note(`Account created for ${account.email}`);
 
-        await ctx.step("sendVerificationEmail", async () => ({
+        await durableContext.step("sendVerificationEmail", async () => ({
           sentTo: account.email,
           sentAt: Date.now(),
         }));
 
-        const verification = await ctx.waitForSignal(EmailVerified, {
+        const verification = await durableContext.waitForSignal(EmailVerified, {
           stepId: "awaitEmailVerification",
           timeoutMs: signalTimeoutMs,
         });
 
-        const workspace: string | null = await ctx.switch(
+        const workspace: string | null = await durableContext.switch(
           "provisionBranch",
           verification,
           [
@@ -140,7 +140,7 @@ export function buildOnboardingApp(ns: string, signalTimeoutMs: number) {
               id: "verified",
               match: (v: typeof verification) => v.kind === "signal",
               run: async () => {
-                return await ctx.step("provisionResources", async () => {
+                return await durableContext.step("provisionResources", async () => {
                   return `workspace_${account.userId}`;
                 });
               },
@@ -149,14 +149,14 @@ export function buildOnboardingApp(ns: string, signalTimeoutMs: number) {
               id: "timed-out",
               match: (v: typeof verification) => v.kind === "timeout",
               run: async () => {
-                await ctx.note("Email verification timed out");
+                await durableContext.note("Email verification timed out");
                 return null;
               },
             },
           ],
         );
 
-        await ctx.step("sendWelcomeEmail", async () => ({
+        await durableContext.step("sendWelcomeEmail", async () => ({
           sentTo: account.email,
           verified: verification.kind === "signal",
           sentAt: Date.now(),

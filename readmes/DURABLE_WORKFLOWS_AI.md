@@ -12,16 +12,16 @@ They're designed for flows that span time (minutes → days): approvals, payment
 
 - A workflow does not "resume the instruction pointer".
 - On every wake-up (sleep/signal/retry/recover), it **re-runs from the top** and fast-forwards using stored results:
-  - `ctx.step("id", fn)` runs once, persists result, returns cached on replay.
-  - `ctx.sleep(...)` and `ctx.waitForSignal(...)` persist durable checkpoints.
+  - `durableContext.step("id", fn)` runs once, persists result, returns cached on replay.
+  - `durableContext.sleep(...)` and `durableContext.waitForSignal(...)` persist durable checkpoints.
 
-Rule: side effects belong inside `ctx.step(...)`.
+Rule: side effects belong inside `durableContext.step(...)`.
 
 ## The happy path
 
 1. **Register a durable resource** (store + queue + event bus).
 2. **Write a durable task**:
-   - stable `ctx.step("...")` ids
+   - stable `durableContext.step("...")` ids
    - explicit `{ stepId }` for `sleep/emit/waitForSignal` in production
 3. **Start the workflow**:
    - `executionId = await service.start(taskOrTaskId, input)`
@@ -67,8 +67,8 @@ const onboarding = r
     }),
   ])
   .run(async (_input, { durable }) => {
-    const ctx = durable.use();
-    await ctx.step("create-user", async () => ({ ok: true }));
+    const durableContext = durable.use();
+    await durableContext.step("create-user", async () => ({ ok: true }));
     return { ok: true };
   })
   .build();
@@ -100,8 +100,8 @@ const approveOrder = r
   .dependencies({ durable })
   .tags([tags.durableWorkflow.with({ category: "orders" })])
   .run(async (input: { orderId: string }, { durable }) => {
-    const ctx = durable.use();
-    await ctx.step("approve", async () => ({ approved: true }));
+    const durableContext = durable.use();
+    await durableContext.step("approve", async () => ({ approved: true }));
     return { orderId: input.orderId, status: "approved" as const };
   })
   .build();
@@ -148,8 +148,8 @@ const durableProd = resources.redisWorkflow.fork("app-durable").with({
 
 `waitForSignal()` return shapes:
 
-- `await ctx.waitForSignal(Signal)` → `payload` (throws on timeout)
-- `await ctx.waitForSignal(Signal, { timeoutMs })` → `{ kind: "signal", payload } | { kind: "timeout" }`
+- `await durableContext.waitForSignal(Signal)` → `payload` (throws on timeout)
+- `await durableContext.waitForSignal(Signal, { timeoutMs })` → `{ kind: "signal", payload } | { kind: "timeout" }`
 
 ## Scheduling
 
@@ -173,7 +173,7 @@ const durableProd = resources.redisWorkflow.fork("app-durable").with({
 
 "Internal steps" are recorded steps created by durable primitives (`sleep/waitForSignal/emit` and some bookkeeping). They typically use reserved step id prefixes like `__...` or `rollback:...`.
 
-Audit can be enabled via `audit: { enabled: true }`; inside workflows you can add replay-safe notes via `ctx.note("msg", meta)`. In Runner integration, audit entries are also emitted via `durableEvents.*`.
+Audit can be enabled via `audit: { enabled: true }`; inside workflows you can add replay-safe notes via `durableContext.note("msg", meta)`. In Runner integration, audit entries are also emitted via `durableEvents.*`.
 
 Runner integration detail: durable events emission does not depend on `audit.enabled` (it controls store persistence); events are emitted as long as an audit emitter is configured (the built-in durable workflow resources wire one by default).
 
@@ -181,15 +181,15 @@ Import and subscribe using event definitions (not strings): `import { durableEve
 
 ## Compensation / rollback
 
-- `ctx.step("id").up(...).down(...)` registers compensations.
-- `await ctx.rollback()` runs compensations in reverse order.
+- `durableContext.step("id").up(...).down(...)` registers compensations.
+- `await durableContext.rollback()` runs compensations in reverse order.
 
-## Branching with ctx.switch()
+## Branching with durableContext.switch()
 
-`ctx.switch()` is a replay-safe branching primitive. It evaluates matchers against a value, persists which branch was taken, and on replay skips the matchers entirely.
+`durableContext.switch()` is a replay-safe branching primitive. It evaluates matchers against a value, persists which branch was taken, and on replay skips the matchers entirely.
 
 ```ts
-const result = await ctx.switch(
+const result = await durableContext.switch(
   "route-order",
   order.status,
   [
@@ -210,7 +210,7 @@ const result = await ctx.switch(
 ); // optional default
 ```
 
-- First arg is the step id (must be unique, like `ctx.step`).
+- First arg is the step id (must be unique, like `durableContext.step`).
 - Matchers evaluate in order; first match wins.
 - The matched branch `id` + result are persisted; on replay the cached result is returned immediately.
 - Throws if no branch matches and no default is provided.
@@ -234,17 +234,17 @@ const shape2 = await durableRuntime.describe<{ orderId: string }>(myTask, {
 });
 ```
 
-The recorder shims `durable.use()` inside the task's `run` and records every `ctx.*` operation.
+The recorder shims `durable.use()` inside the task's `run` and records every `durableContext.*` operation.
 
 If the task uses `tags.durableWorkflow.with({ defaults: {...} })`, `describe(task)` uses those defaults.
 `describe(task, input)` always overrides tag defaults.
 
 Notes:
 
-- The recorder captures each `ctx.*` call as a `FlowNode`; step bodies are never executed.
+- The recorder captures each `durableContext.*` call as a `FlowNode`; step bodies are never executed.
 - Supported node kinds: `step`, `sleep`, `waitForSignal`, `emit`, `switch`, `note`.
 - `DurableFlowShape` and all `FlowNode` types are exported for type-safe consumption.
-- Conditional logic should be modeled with `ctx.switch()` (not JS `if/else`) for the shape to capture it.
+- Conditional logic should be modeled with `durableContext.switch()` (not JS `if/else`) for the shape to capture it.
 
 ## Versioning (don't get burned)
 
@@ -254,5 +254,5 @@ Notes:
 
 ## Operational notes
 
-- `ctx.emit(...)` is best-effort (notifications), not guaranteed delivery.
+- `durableContext.emit(...)` is best-effort (notifications), not guaranteed delivery.
 - Queue mode is at-least-once; correctness comes from the store + step memoization.

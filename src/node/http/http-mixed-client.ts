@@ -31,10 +31,13 @@ export interface MixedHttpClientConfig {
    */
   forceSmart?:
     | boolean
-    | ((ctx: { id: string; input: unknown }) => boolean | Promise<boolean>);
+    | ((requestContext: {
+        id: string;
+        input: unknown;
+      }) => boolean | Promise<boolean>);
   serializer: SerializerLike;
   // Propagated to both JSON and Smart client paths
-  onRequest?: (ctx: {
+  onRequest?: (requestContext: {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;

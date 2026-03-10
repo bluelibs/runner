@@ -58,14 +58,14 @@ export class DurableResource implements IDurableResource {
   }
 
   use(): IDurableContext {
-    const ctx = this.contextStorage.getStore();
-    if (!ctx) {
-      durableExecutionInvariantError.throw({
+    const durableContext = this.contextStorage.getStore();
+    if (!durableContext) {
+      return durableExecutionInvariantError.throw({
         message:
           "Durable context is not available. Did you call durable.use() outside a durable task execution?",
       });
     }
-    return ctx!;
+    return durableContext;
   }
 
   async describe<TInput>(
@@ -86,8 +86,11 @@ export class DurableResource implements IDurableResource {
     const deps = storeTask.computedDependencies as Record<string, unknown>;
     const resolvedInput = this.resolveDescribeInput(effectiveTask, input);
 
-    return await recordFlowShape(async (ctx) => {
-      const depsWithRecorder = this.injectRecorderIntoDurableDeps(deps, ctx);
+    return await recordFlowShape(async (recordingContext) => {
+      const depsWithRecorder = this.injectRecorderIntoDurableDeps(
+        deps,
+        recordingContext,
+      );
       await effectiveTask.run(
         resolvedInput as TInput,
         depsWithRecorder as DependencyValuesType<DependencyMapType>,
@@ -153,7 +156,7 @@ export class DurableResource implements IDurableResource {
 
   private injectRecorderIntoDurableDeps(
     deps: Record<string, unknown>,
-    ctx: unknown,
+    recordingContext: unknown,
   ): Record<string, unknown> {
     const next: Record<string, unknown> = { ...deps };
 
@@ -165,7 +168,7 @@ export class DurableResource implements IDurableResource {
       next[key] = new Proxy(value, {
         get(target, prop, receiver) {
           if (prop === "use") {
-            return () => ctx;
+            return () => recordingContext;
           }
           return Reflect.get(target, prop, receiver);
         },

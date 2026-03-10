@@ -551,7 +551,7 @@ export class StoreRegistryWriter {
         case RegisterableKind.Error:
           return `errors.${currentId}`;
         case RegisterableKind.AsyncContext:
-          return `ctx.${currentId}`;
+          return `asyncContexts.${currentId}`;
         default:
           return currentId;
       }
@@ -575,7 +575,7 @@ export class StoreRegistryWriter {
       case RegisterableKind.Error:
         return `${ownerResourceId}.errors.${currentId}`;
       case RegisterableKind.AsyncContext:
-        return `${ownerResourceId}.ctx.${currentId}`;
+        return `${ownerResourceId}.asyncContexts.${currentId}`;
       default:
         return `${ownerResourceId}.${currentId}`;
     }

@@ -1,6 +1,6 @@
 import { defineEvent, defineResource, defineTask } from "../../../define";
 import { EventEmissionFailureMode } from "../../../defs";
-import { run, system } from "../../../";
+import { asyncContexts, run } from "../../../";
 import type { IEventEmitReport } from "../../../types/event";
 import type { ExecutionRecordResult } from "../../../types/executionContext";
 import type { IResourceHealthReport } from "../../../types/resource";
@@ -50,7 +50,7 @@ void (async () => {
   const valid2: number | undefined = await rr.runTask(main, { x: 2 });
   void valid2;
 
-  const withContext = await system.ctx.executionContext.record(() =>
+  const withContext = await asyncContexts.execution.record(() =>
     rr.runTask(add, { x: 3 }),
   );
   const withContextValue: ExecutionRecordResult<number | undefined> =
@@ -169,7 +169,7 @@ void (async () => {
   // @ts-expect-error dynamic report option yields union
   const mustBeReport: IEventEmitReport = dynamic;
 
-  const withContext = await system.ctx.executionContext.record(() =>
+  const withContext = await asyncContexts.execution.record(() =>
     rr.emitEvent(appEvent, { v: 5 }, { report: true }),
   );
   const withContextReport: ExecutionRecordResult<IEventEmitReport> =

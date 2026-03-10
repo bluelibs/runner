@@ -59,7 +59,7 @@ describe("StoreRegistryWriter branches", () => {
     );
     expect(
       writer.computeCanonicalId("app", false, "asyncContext", "request"),
-    ).toBe("app.ctx.request");
+    ).toBe("app.asyncContexts.request");
     expect(
       writer.computeCanonicalId("app", false, "unknown-kind", "item"),
     ).toBe("app.item");
@@ -106,7 +106,7 @@ describe("StoreRegistryWriter branches", () => {
     );
     expect(
       writer.computeCanonicalId("gateway", true, "asyncContext", "child"),
-    ).toBe("ctx.child");
+    ).toBe("asyncContexts.child");
     expect(writer.computeCanonicalId("gateway", true, "unknown", "child")).toBe(
       "child",
     );

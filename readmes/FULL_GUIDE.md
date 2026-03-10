@@ -78,9 +78,9 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](./AI.md)                                                                                         | Docs    | Compact summary (<5000 tokens)      |
-| [Full Guide](./FULL_GUIDE.md)                                                                                       | Docs    | Complete documentation (composed)   |
-| [Support & Release Policy](./ENTERPRISE.md)                                                                         | Docs    | Support windows and deprecation     |
+| [AI-Friendly Docs](./AI.md)                                                                                 | Docs    | Compact summary (<5000 tokens)      |
+| [Full Guide](./FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
+| [Support & Release Policy](./ENTERPRISE.md)                                                                 | Docs    | Support windows and deprecation     |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
@@ -104,13 +104,13 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 ## Platform Support (Quick Summary)
 
-| Capability                                             | Node.js | Browser | Edge | Notes                                          |
-| ------------------------------------------------------ | ------- | ------- | ---- | ---------------------------------------------- |
-| Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences     |
-| Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires Node.js `AsyncLocalStorage`           |
-| Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                               |
+| Capability                                             | Node.js | Browser | Edge | Notes                                      |
+| ------------------------------------------------------ | ------- | ------- | ---- | ------------------------------------------ |
+| Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
+| Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
+| Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                           |
 | Remote Lanes client (`createHttpClient`)               | Full    | Full    | Full | Explicit universal client for `fetch` runtimes |
-| Remote Lanes server (`@bluelibs/runner/node`)          | Full    | None    | None | Exposes tasks/events over HTTP                 |
+| Remote Lanes server (`@bluelibs/runner/node`)          | Full    | None    | None | Exposes tasks/events over HTTP             |
 
 ---
 
@@ -118,17 +118,16 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 Use these minimums before starting:
 
-| Requirement     | Minimum                 | Notes                                                          |
-| --------------- | ----------------------- | -------------------------------------------------------------- |
-| Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                        |
-| TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository          |
-| Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works         |
+| Requirement     | Minimum                 | Notes                                                                   |
+| --------------- | ----------------------- | ----------------------------------------------------------------------- |
+| Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                                 |
+| TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository                   |
+| Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works                  |
 | `fetch` runtime | Built-in or polyfilled  | Required for explicit remote lane clients (`createHttpClient`) |
 
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
-
 ## Why Runner?
 
 When a TypeScript service grows past a few dependencies, the pain usually shows up in the same places: startup order becomes tribal knowledge, cross-cutting concerns leak into business logic, and testing means reconstructing half the app. Runner makes those seams explicit. You wire dependencies in code, keep lifecycle in one place, and choose when to execute a unit directly versus through the full runtime.
@@ -231,7 +230,6 @@ For specialized features beyond the core concepts:
 - **Durable Workflows** (Node-only): replay-safe orchestration primitives in [DURABLE_WORKFLOWS.md](./DURABLE_WORKFLOWS.md)
 - **Remote Lanes** (Node): distributed events and RPC in [REMOTE_LANES.md](./REMOTE_LANES.md)
 - **Serialization**: custom value transport in [SERIALIZER_PROTOCOL.md](./SERIALIZER_PROTOCOL.md)
-
 ## Resources
 
 Resources are the long-lived parts of your app: database clients, configuration surfaces, queues, services, caches, and ownership boundaries.
@@ -761,14 +759,14 @@ const dbResource = r
     connections: new Map<string, unknown>(),
     pools: [] as Array<{ drain(): Promise<void> }>,
   }))
-  .init(async (_config, _deps, ctx) => {
+  .init(async (_config, _deps, resourceContext) => {
     const db = await connectToDatabase();
-    ctx.connections.set("main", db);
-    ctx.pools.push(createPool(db));
+    resourceContext.connections.set("main", db);
+    resourceContext.pools.push(createPool(db));
     return db;
   })
-  .dispose(async (_db, _config, _deps, ctx) => {
-    for (const pool of ctx.pools) {
+  .dispose(async (_db, _config, _deps, resourceContext) => {
+    for (const pool of resourceContext.pools) {
       await pool.drain();
     }
   })
@@ -777,7 +775,6 @@ const dbResource = r
 ```
 
 > **runtime:** "Resources: I nurse them to life, let them work, then mercifully pull the plug in reverse order. It's a lot like IT support, except I actually follow the runbook."
-
 ## Tasks
 
 Tasks are Runner's main business operations. They are async functions with explicit dependency injection, validation, middleware support, and typed outputs.
@@ -998,7 +995,6 @@ For lifecycle-owned timers inside tasks or resources, depend on `resources.timer
 `timers.setTimeout()` and `timers.setInterval()` stop accepting new timers once `cooldown()` starts and are cleared during `dispose()`.
 
 > **runtime:** "Tasks: glorified functions with a resume, a chaperone, and a journal. But at least they show up in the logs when something goes wrong—unlike that anonymous arrow function in line 47."
-
 ## Events and Hooks
 
 Events let different parts of your app communicate without direct references. Hooks subscribe to those events so producers stay decoupled from listeners.
@@ -1227,7 +1223,6 @@ const emergencyHook = r
 ```
 
 > **runtime:** "Events and hooks: the pub/sub contract where nobody reads the terms. You emit, I deliver, hooks react, and somehow the welcome email always fires twice in staging."
-
 ## Middleware
 
 Middleware wraps tasks and resources so cross-cutting behavior stays explicit and reusable instead of leaking into business logic.
@@ -1459,7 +1454,6 @@ For context enforcement, use `middleware.task.requireContext.with({ context })` 
 See [Advanced Patterns](#advanced-patterns) for interception ordering and runtime-wide interception details.
 
 > **runtime:** "Middleware: the onion pattern, except every layer has opinions and a config object. I peel them in order, cry a little, and hand you the result."
-
 ## Tags
 
 Tags are Runner's typed discovery system. They attach metadata to definitions, influence framework behavior, and can be consumed as dependencies to discover matching definitions at runtime.
@@ -1656,7 +1650,6 @@ const profileTask = r
 Fail-fast rule: if a tagged item depends on the same tag, Runner throws during store sanity checks.
 
 > **runtime:** "Tags: metadata with a mission. You stick labels on everything, I index them, and at startup someone finally discovers why three tasks share a route prefix. It's like naming your pets—except these ones actually come when called."
-
 ## Errors
 
 Typed Runner errors are declared once and injected anywhere. Register them alongside other items and consume them through dependencies.
@@ -1780,7 +1773,6 @@ The `throws` list is normalized and deduplicated at definition time.
 For dependency cycle detection, use the canonical helper name `circularDependencyError`.
 
 > **runtime:** "Typed errors: because 'Error: something went wrong' is the stack trace equivalent of a shrug emoji. Give your errors a name, a code, and a remediation plan—future-you will mass an appreciation card at 2 AM."
-
 ## run() and RunOptions
 
 The `run()` function is your application's entry point. It initializes all resources, wires up dependencies, and returns handles for interacting with your system.
@@ -1876,17 +1868,17 @@ Pass as the second argument to `run(app, options)`.
 | `dryRun`           | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `lazy`             | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `lifecycleMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred.                                 |
 | `lifecycleMode`    | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup/disposal scheduling strategy. Use string values directly (for example `lifecycleMode: "parallel"`), no enum import required.                                                                                                                                                                                                                                                                                                                                                                |
-| `executionContext` | `boolean \| ExecutionContextOptions`            | (default: disabled) Opt-in execution context that exposes `system.ctx.executionContext`, assigns a correlation id to each top-level task/event execution, and enables cycle detection by default. `true` uses defaults. Pass an object to customize: `{ createCorrelationId?: () => string, cycleDetection?: false \| { maxDepth?: number, maxRepetitions?: number } }`. Distinct runtime hook instances are tracked independently by runtime path. Requires AsyncLocalStorage (Node-only); silently disabled on platforms without it. |
+| `executionContext` | `boolean \| ExecutionContextOptions`            | (default: disabled) Opt-in execution context that exposes `asyncContexts.execution`, assigns a correlation id to each top-level task/event execution, and enables cycle detection by default. `true` uses defaults. Pass an object to customize: `{ createCorrelationId?: () => string, cycleDetection?: false \| { maxDepth?: number, maxRepetitions?: number } }`. Distinct runtime hook instances are tracked independently by runtime path. Requires AsyncLocalStorage (Node-only); silently disabled on platforms without it. |
 | `mode`             | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).
 
 ### Execution Context
 
-When enabled, Runner exposes the current execution state via `system.ctx.executionContext`.
+When enabled, Runner exposes the current execution state via `asyncContexts.execution`.
 
 ```typescript
-import { run, system } from "@bluelibs/runner";
+import { asyncContexts, run } from "@bluelibs/runner";
 
 const runtime = await run(app, {
   executionContext: true,
@@ -1896,15 +1888,15 @@ await runtime.runTask(myTask, input);
 await runtime.emitEvent(myEvent, payload);
 
 // Inside a task, hook, or interceptor:
-const ctx = system.ctx.executionContext.use();
-ctx.correlationId;
-ctx.currentFrame.kind;
-ctx.frames;
+const executionContext = asyncContexts.execution.use();
+executionContext.correlationId;
+executionContext.currentFrame.kind;
+executionContext.frames;
 ```
 
 With `executionContext: true`, Runner automatically creates execution context for top-level runtime task runs and event emissions. You do not need `provide()` just to turn propagation on.
 
-`use()` fails fast when no execution is active. Use `system.ctx.executionContext.tryUse()` when the context is optional.
+`use()` fails fast when no execution is active. Use `asyncContexts.execution.tryUse()` when the context is optional.
 
 The snapshot shape is:
 
@@ -1929,21 +1921,21 @@ Use `executionContext: { cycleDetection: false }` if you only want correlation i
 Use `provide()` only when you want to seed or override the correlation id from an external boundary. Use `record()` when you want the execution tree back.
 
 ```typescript
-await system.ctx.executionContext.provide(
+await asyncContexts.execution.provide(
   { correlationId: "req-123" },
   async () => {
     await runtime.runTask(myTask, input);
   },
 );
 
-const taskResult = await system.ctx.executionContext.record(
+const taskResult = await asyncContexts.execution.record(
   { correlationId: "req-123" },
   () => runtime.runTask(myTask, input),
 );
 taskResult.result;
 taskResult.recording?.roots[0]?.frame;
 
-const eventResult = await system.ctx.executionContext.record(
+const eventResult = await asyncContexts.execution.record(
   { correlationId: "req-456" },
   () => runtime.emitEvent(myEvent, payload, { report: true }),
 );
@@ -2267,7 +2259,6 @@ await run(app, {
 - Stop accepting new work before cleaning up
 
 > **runtime:** "An error boundary: a trampoline under your tightrope. I'm the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
-
 ## Caching
 
 Avoid recomputing expensive work by caching task results with TTL-based eviction.
@@ -2732,7 +2723,7 @@ Fail fast when a task must run inside a specific async context. This middleware 
 import { r } from "@bluelibs/runner";
 
 const RequestContext = r
-  .asyncContext<{ requestId: string }>("app.ctx.request")
+  .asyncContext<{ requestId: string }>("app.asyncContexts.request")
   .build();
 
 const getAuditTrail = r
@@ -2752,7 +2743,7 @@ If you prefer the explicit middleware form (useful in documentation and composit
 import { r } from "@bluelibs/runner";
 
 const TenantContext = r
-  .asyncContext<{ tenantId: string }>("app.ctx.tenant")
+  .asyncContext<{ tenantId: string }>("app.asyncContexts.tenant")
   .build();
 
 const listProjects = r
@@ -3564,7 +3555,6 @@ In `mode: "network"`, Event Lane bindings support `prefetch`, `maxAttempts`, and
 For complete examples, common patterns, testing strategies, debugging, migration notes, and RabbitMQ configuration, see [REMOTE_LANES.md](./REMOTE_LANES.md).
 
 > **runtime:** "Serve it or ship it. There is no 'maybe call the other service.'"
-
 ## Serialization
 
 Serialization is where data crosses boundaries: HTTP, queues, storage, or process hops.
@@ -3766,13 +3756,13 @@ Start with functional schemas and explicit parsers. Use classes when they improv
 
 ### Choosing a Style
 
-| Situation                                   | Prefer Functional (`Match.*` / plain schemas) | Prefer Class (`@Match.Schema`, `@Match.Field`) |
-| ------------------------------------------- | --------------------------------------------- | ---------------------------------------------- |
-| Request/response boundaries                 | Best for explicit, local contracts            | Good when boundary DTOs are shared widely      |
-| Dynamic shapes (maps, conditional payloads) | Best fit (`Match.MapOf`, composable patterns) | Usually more verbose                           |
-| Large domain models reused across features  | Possible but can become repetitive            | Best readability and reuse                     |
-| Wire-field remapping/transforms             | Works, but manual                             | Best DX with `@Serializer.Field(...)`          |
-| Team preference                             | Functional programming style                  | OOP/DTO-centric style                          |
+| Situation | Prefer Functional (`Match.*` / plain schemas) | Prefer Class (`@Match.Schema`, `@Match.Field`) |
+| --------- | ---------------------------------------------- | ------------------------------------------------ |
+| Request/response boundaries | Best for explicit, local contracts | Good when boundary DTOs are shared widely |
+| Dynamic shapes (maps, conditional payloads) | Best fit (`Match.MapOf`, composable patterns) | Usually more verbose |
+| Large domain models reused across features | Possible but can become repetitive | Best readability and reuse |
+| Wire-field remapping/transforms | Works, but manual | Best DX with `@Serializer.Field(...)` |
+| Team preference | Functional programming style | OOP/DTO-centric style |
 
 Rule of thumb:
 
@@ -3802,10 +3792,7 @@ const userInputSchema = Match.compile({
   age: Match.Integer,
 });
 
-const parsed = check(
-  { id: "u1", email: "ada@example.com", age: 42 },
-  userInputSchema,
-);
+const parsed = check({ id: "u1", email: "ada@example.com", age: 42 }, userInputSchema);
 parsed.age; // number
 ```
 
@@ -3885,38 +3872,38 @@ check(
 
 ### Match Reference
 
-| Pattern / Helper                                             | What It Does                                                   |
-| ------------------------------------------------------------ | -------------------------------------------------------------- |
-| `String`, `Number`, `Boolean`, `Function`, `Object`, `Array` | Constructor-based validation                                   |
-| Class constructor (for example `Date`, `MyClass`)            | Validates via constructor semantics                            |
-| Literal values (`"x"`, `42`, `true`, `null`, `undefined`)    | Exact literal match                                            |
-| `[pattern]`                                                  | Array where every element matches `pattern`                    |
-| Plain object (`{ a: String }`)                               | Strict object validation (same as `Match.ObjectStrict`)        |
-| `Match.ObjectStrict({ ... })`                                | Strict object shape (`additionalProperties: false` semantics)  |
-| `Match.ObjectIncluding({ ... })`                             | Partial object shape (unknown keys allowed)                    |
-| `Match.MapOf(valuePattern)`                                  | Dynamic-key object with uniform value pattern                  |
-| `Match.Any`                                                  | Accepts any value                                              |
-| `Match.Integer`                                              | Signed 32-bit integer                                          |
-| `Match.NonEmptyString`                                       | Non-empty string                                               |
-| `Match.Email`                                                | Email-shaped string                                            |
-| `Match.UUID`                                                 | Canonical UUID string                                          |
-| `Match.URL`                                                  | Absolute URL string                                            |
-| `Match.IsoDateString`                                        | ISO datetime string with timezone                              |
-| `Match.RegExp(re)`                                           | String matching given regexp                                   |
-| `Match.ArrayOf(pattern)`                                     | Array of elements matching pattern                             |
-| `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`     | Non-empty array, optional element validation                   |
-| `Match.Optional(pattern)`                                    | `undefined` or pattern                                         |
-| `Match.Maybe(pattern)`                                       | `undefined`, `null`, or pattern                                |
-| `Match.OneOf(...patterns)`                                   | Any one of given patterns                                      |
-| `Match.Where(predicate)`                                     | Custom predicate / type guard                                  |
-| `Match.Lazy(() => pattern)`                                  | Lazy/recursive pattern                                         |
-| `Match.Schema(options?)`                                     | Class schema decorator                                         |
-| `Match.Schema({ base: BaseClass \| () => BaseClass })`       | Composes schema classes without requiring TypeScript `extends` |
-| `Match.Field(pattern)`                                       | Decorated field validator                                      |
-| `Match.fromSchema(Class, options?)`                          | Schema-like matcher from class metadata                        |
-| `Match.compile(pattern)`                                     | Compiles pattern into `{ parse, test, toJSONSchema }`          |
-| `Match.test(value, pattern)`                                 | Boolean helper for validation check                            |
-| `Match.Error`                                                | Error class thrown on match failure                            |
+| Pattern / Helper | What It Does |
+| ---------------- | ------------ |
+| `String`, `Number`, `Boolean`, `Function`, `Object`, `Array` | Constructor-based validation |
+| Class constructor (for example `Date`, `MyClass`) | Validates via constructor semantics |
+| Literal values (`"x"`, `42`, `true`, `null`, `undefined`) | Exact literal match |
+| `[pattern]` | Array where every element matches `pattern` |
+| Plain object (`{ a: String }`) | Strict object validation (same as `Match.ObjectStrict`) |
+| `Match.ObjectStrict({ ... })` | Strict object shape (`additionalProperties: false` semantics) |
+| `Match.ObjectIncluding({ ... })` | Partial object shape (unknown keys allowed) |
+| `Match.MapOf(valuePattern)` | Dynamic-key object with uniform value pattern |
+| `Match.Any` | Accepts any value |
+| `Match.Integer` | Signed 32-bit integer |
+| `Match.NonEmptyString` | Non-empty string |
+| `Match.Email` | Email-shaped string |
+| `Match.UUID` | Canonical UUID string |
+| `Match.URL` | Absolute URL string |
+| `Match.IsoDateString` | ISO datetime string with timezone |
+| `Match.RegExp(re)` | String matching given regexp |
+| `Match.ArrayOf(pattern)` | Array of elements matching pattern |
+| `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)` | Non-empty array, optional element validation |
+| `Match.Optional(pattern)` | `undefined` or pattern |
+| `Match.Maybe(pattern)` | `undefined`, `null`, or pattern |
+| `Match.OneOf(...patterns)` | Any one of given patterns |
+| `Match.Where(predicate)` | Custom predicate / type guard |
+| `Match.Lazy(() => pattern)` | Lazy/recursive pattern |
+| `Match.Schema(options?)` | Class schema decorator |
+| `Match.Schema({ base: BaseClass \| () => BaseClass })` | Composes schema classes without requiring TypeScript `extends` |
+| `Match.Field(pattern)` | Decorated field validator |
+| `Match.fromSchema(Class, options?)` | Schema-like matcher from class metadata |
+| `Match.compile(pattern)` | Compiles pattern into `{ parse, test, toJSONSchema }` |
+| `Match.test(value, pattern)` | Boolean helper for validation check |
+| `Match.Error` | Error class thrown on match failure |
 
 ### Additional `check()` Details
 
@@ -4665,7 +4652,6 @@ await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
 > **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it's off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
-
 ## Advanced Patterns
 
 This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.
@@ -4914,10 +4900,10 @@ const inspector = r
 
 Durable workflows provide replay-safe, crash-recoverable orchestration primitives:
 
-- `ctx.step(...)` for deterministic checkpoints
-- `ctx.sleep(...)` for durable timers
-- `ctx.waitForSignal(...)` for durable external synchronization
-- `ctx.switch(...)` for replay-safe branching
+- `durableContext.step(...)` for deterministic checkpoints
+- `durableContext.sleep(...)` for durable timers
+- `durableContext.waitForSignal(...)` for durable external synchronization
+- `durableContext.switch(...)` for replay-safe branching
 
 Use them when business processes must survive process restarts and resume correctly.
 
@@ -5358,7 +5344,7 @@ At runtime/store level, IDs become canonical:
 | Resource Middleware | `audit` -> `app.middleware.resource.audit`         |
 | Tag                 | `public` -> `app.tags.public`                      |
 | Error               | `invalidInput` -> `app.errors.invalidInput`        |
-| Async Context       | `request` -> `app.ctx.request`                     |
+| Async Context       | `request` -> `app.asyncContexts.request`           |
 
 Important behavior:
 
@@ -5366,7 +5352,7 @@ Important behavior:
 - Original definition objects are not mutated; per-run compiled definitions are stored internally (run isolation safe).
 - Canonical ids are composed structurally from owner resources; prefer local definition ids and reference-based wiring.
 - Use `defineResource({ id, gateway: true })` for namespace gateways when a resource should not add its own segment to compiled canonical ids.
-- Local names fail fast if they use reserved segments: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `ctx`.
+- Local names fail fast if they use reserved segments: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `asyncContexts`.
 - All definition ids fail fast when they start/end with `.`, contain empty segments (`..`), or equal a reserved standalone local name.
 
 > **runtime:** "You give me short names in your little subtree village. I issue passports with full addresses at the border. Everybody wins, and nobody argues about dots all day."
@@ -5702,7 +5688,6 @@ export const problematicResource = r
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
 > **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
-
 ## Testing
 
 Runner's explicit dependency injection makes testing straightforward. Call `.run()` on a task with plain mocks for fast unit tests, or spin up the full runtime when you need middleware and lifecycle behavior.
@@ -5843,3 +5828,4 @@ await run(app, { debug: "verbose" });
 ```
 
 > **runtime:** "Testing: an elaborate puppet show where every string behaves. Then production walks in, kicks the stage, and asks for pagination. Still — nice coverage badge."
+

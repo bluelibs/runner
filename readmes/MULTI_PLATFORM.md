@@ -144,6 +144,7 @@ export class NodePlatformAdapter implements IPlatformAdapter {
 
 **Why Node.js is special:** It has the richest feature set - real process control, proper signal handling, and native async context tracking.
 Deno can also expose `AsyncLocalStorage` via compatibility APIs, and the universal path can use it when present.
+That same capability gates Runner's `asyncContexts.execution` accessor: it is fully available only on runtimes that expose `AsyncLocalStorage`, while platforms without it degrade gracefully (`tryUse()` returns `undefined`, and `provide()` / `record()` still execute callbacks without recording state).
 
 ### BrowserPlatformAdapter
 

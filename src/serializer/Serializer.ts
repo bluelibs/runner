@@ -239,7 +239,7 @@ export class Serializer {
    * Serialize an arbitrary value into a JSON string.
    */
   public serialize<T>(value: T, context?: SerializationContext): string {
-    const ctx: SerializationContext = context ?? {
+    const serializationContext: SerializationContext = context ?? {
       objectIds: new WeakMap(),
       idCounter: 0,
       nodeCount: 0,
@@ -251,8 +251,14 @@ export class Serializer {
       excludedTypeIds: [],
     };
 
-    const root = serializeValue(value, ctx, state, 0, this.runtimeOptions);
-    if (ctx.nodeCount === 0 && !isObjectReference(root)) {
+    const root = serializeValue(
+      value,
+      serializationContext,
+      state,
+      0,
+      this.runtimeOptions,
+    );
+    if (serializationContext.nodeCount === 0 && !isObjectReference(root)) {
       return this.jsonStringify(root);
     }
 
@@ -260,7 +266,7 @@ export class Serializer {
       __graph: true,
       version: GRAPH_VERSION,
       root,
-      nodes: ctx.nodes,
+      nodes: serializationContext.nodes,
     };
 
     return this.jsonStringify(graph);

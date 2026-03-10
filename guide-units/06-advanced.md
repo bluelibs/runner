@@ -246,10 +246,10 @@ const inspector = r
 
 Durable workflows provide replay-safe, crash-recoverable orchestration primitives:
 
-- `ctx.step(...)` for deterministic checkpoints
-- `ctx.sleep(...)` for durable timers
-- `ctx.waitForSignal(...)` for durable external synchronization
-- `ctx.switch(...)` for replay-safe branching
+- `durableContext.step(...)` for deterministic checkpoints
+- `durableContext.sleep(...)` for durable timers
+- `durableContext.waitForSignal(...)` for durable external synchronization
+- `durableContext.switch(...)` for replay-safe branching
 
 Use them when business processes must survive process restarts and resume correctly.
 
@@ -690,7 +690,7 @@ At runtime/store level, IDs become canonical:
 | Resource Middleware | `audit` -> `app.middleware.resource.audit`         |
 | Tag                 | `public` -> `app.tags.public`                      |
 | Error               | `invalidInput` -> `app.errors.invalidInput`        |
-| Async Context       | `request` -> `app.ctx.request`                     |
+| Async Context       | `request` -> `app.asyncContexts.request`           |
 
 Important behavior:
 
@@ -698,7 +698,7 @@ Important behavior:
 - Original definition objects are not mutated; per-run compiled definitions are stored internally (run isolation safe).
 - Canonical ids are composed structurally from owner resources; prefer local definition ids and reference-based wiring.
 - Use `defineResource({ id, gateway: true })` for namespace gateways when a resource should not add its own segment to compiled canonical ids.
-- Local names fail fast if they use reserved segments: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `ctx`.
+- Local names fail fast if they use reserved segments: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `asyncContexts`.
 - All definition ids fail fast when they start/end with `.`, contain empty segments (`..`), or equal a reserved standalone local name.
 
 > **runtime:** "You give me short names in your little subtree village. I issue passports with full addresses at the border. Everybody wins, and nobody argues about dots all day."

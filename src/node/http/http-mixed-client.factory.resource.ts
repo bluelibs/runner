@@ -7,7 +7,7 @@ export interface HttpMixedClientFactoryConfig {
   auth?: { header?: string; token: string };
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
-  onRequest?: (ctx: {
+  onRequest?: (requestContext: {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;

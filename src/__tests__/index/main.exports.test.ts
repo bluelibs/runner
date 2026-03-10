@@ -78,9 +78,10 @@ describe("main exports", () => {
     expect((mainExports as any).taskMiddleware).toBeUndefined();
     expect((mainExports as any).resourceMiddleware).toBeUndefined();
     expect((mainExports as any).runner).toBeUndefined();
-    expect((mainExports as any).system).toBeDefined();
-    expect((mainExports as any).system.ctx.executionContext.id).toBe(
-      "system.ctx.executionContext",
+    expect((mainExports as any).system).toBeUndefined();
+    expect((mainExports as any).asyncContexts).toBeDefined();
+    expect((mainExports as any).asyncContexts.execution.id).toBe(
+      "asyncContexts.execution",
     );
     expect((mainExports as any).globals).toBeUndefined();
   });

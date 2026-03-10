@@ -6,7 +6,7 @@ export interface HttpSmartClientFactoryConfig {
   baseUrl: string;
   auth?: { header?: string; token: string };
   timeoutMs?: number;
-  onRequest?: (ctx: {
+  onRequest?: (requestContext: {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;

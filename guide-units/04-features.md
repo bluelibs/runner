@@ -462,7 +462,7 @@ Fail fast when a task must run inside a specific async context. This middleware 
 import { r } from "@bluelibs/runner";
 
 const RequestContext = r
-  .asyncContext<{ requestId: string }>("app.ctx.request")
+  .asyncContext<{ requestId: string }>("app.asyncContexts.request")
   .build();
 
 const getAuditTrail = r
@@ -482,7 +482,7 @@ If you prefer the explicit middleware form (useful in documentation and composit
 import { r } from "@bluelibs/runner";
 
 const TenantContext = r
-  .asyncContext<{ tenantId: string }>("app.ctx.tenant")
+  .asyncContext<{ tenantId: string }>("app.asyncContexts.tenant")
   .build();
 
 const listProjects = r

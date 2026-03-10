@@ -297,15 +297,15 @@ describe("run behavioral scenarios", () => {
 
     // Shared async context definition — same object registered in all runtimes
     const requestContext = r
-      .asyncContext<{ runtimeId: number }>("test-parallel-ctx")
+      .asyncContext<{ runtimeId: number }>("test-parallel-async-context")
       .build();
 
     // Task that captures and returns the context value
     const captureTask = r
       .task<void>("test-parallel-capture")
       .run(async () => {
-        const ctx = requestContext.use();
-        return ctx.runtimeId;
+        const runtimeContext = requestContext.use();
+        return runtimeContext.runtimeId;
       })
       .build();
 

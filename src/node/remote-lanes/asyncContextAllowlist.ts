@@ -64,17 +64,17 @@ export function buildAsyncContextHeader(options: {
   const map: Record<string, string> = {};
 
   const collect = (id: string) => {
-    const ctx = registry.get(id);
-    if (!ctx) {
+    const asyncContext = registry.get(id);
+    if (!asyncContext) {
       return;
     }
 
     try {
-      const serialized = ctx.serialize(ctx.use());
+      const serialized = asyncContext.serialize(asyncContext.use());
       // Always include canonical id for strict hydration on receivers.
-      map[ctx.id] = serialized;
+      map[asyncContext.id] = serialized;
       // Preserve requested/public id when it differs for compatibility.
-      if (id !== ctx.id) {
+      if (id !== asyncContext.id) {
         map[id] = serialized;
       }
     } catch {

@@ -101,10 +101,10 @@ const app = r
   .context(() => ({ reqId: Math.random() }))
   .configSchema<{ feature: boolean }>({ parse: (x: any) => x }) // or configSchema(zodObject)
   .resultSchema<{ status: string }>({ parse: (x: any) => x }) // or resultSchema(zodObject)
-  .init(async ({ deps, ctx, config }) => {
+  .init(async (config, deps, resourceContext) => {
     const sum = deps.svc.add(2, 3);
     return {
-      status: `id=${ctx.reqId}; sum=${sum}; feature=${!!config?.feature}`,
+      status: `id=${resourceContext.reqId}; sum=${sum}; feature=${!!config?.feature}`,
     };
   })
   .build();
@@ -289,7 +289,7 @@ Use `taskRunner.intercept(interceptor, { when })` for cross-cutting catch-all ta
 
 Note on `.init()`:
 
-- `.init` uses the classic `(config, deps, ctx)` signature; destructure inside the body when needed.
+- `.init` uses the classic `(config, deps, resourceContext)` signature; destructure inside the body when needed.
 - If you skip seeding a config type, annotate the first argument in `init` and the builder will adopt that type.
 
 Note on `.middleware()` and `.tags()`:
@@ -373,7 +373,7 @@ await rr.dispose();
 
 - Builder generics propagate across the chain: config, value/result, dependencies, context, meta, tags, and middleware are strongly typed.
 - You can pre-seed a resource's config type at the entry point: `r.resource<MyConfig>(id)` — this provides typed `config` for `.dependencies((config) => ...)` and `.register((config) => ...)` callables.
-- Resource `.init` follows `(config, deps, ctx)`; task `.run` still supports the object-style helper `({ input, deps })` and will adopt the typed first parameter when you skip `.configSchema()`.
+- Resource `.init` follows `(config, deps, resourceContext)`; task `.run` still supports the object-style helper `({ input, deps })` and will adopt the typed first parameter when you skip `.configSchema()`.
 - Tags and middleware must be registered; otherwise, sanity checks will fail at runtime. Builders keep tag and middleware types intact for compile-time checks.
 - Schemas can be passed as plain objects with `parse` or libraries like `zod`—inference will flow accordingly.
 

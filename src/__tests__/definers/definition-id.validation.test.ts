@@ -139,6 +139,7 @@ describe("definition id validation", () => {
     "rejects reserved standalone ids for $label",
     ({ create }) => {
       expect(() => create("resources")).toThrow(/reserved by Runner/i);
+      expect(() => create("asyncContexts")).toThrow(/reserved by Runner/i);
     },
   );
 

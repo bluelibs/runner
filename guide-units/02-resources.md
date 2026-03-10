@@ -527,14 +527,14 @@ const dbResource = r
     connections: new Map<string, unknown>(),
     pools: [] as Array<{ drain(): Promise<void> }>,
   }))
-  .init(async (_config, _deps, ctx) => {
+  .init(async (_config, _deps, resourceContext) => {
     const db = await connectToDatabase();
-    ctx.connections.set("main", db);
-    ctx.pools.push(createPool(db));
+    resourceContext.connections.set("main", db);
+    resourceContext.pools.push(createPool(db));
     return db;
   })
-  .dispose(async (_db, _config, _deps, ctx) => {
-    for (const pool of ctx.pools) {
+  .dispose(async (_db, _config, _deps, resourceContext) => {
+    for (const pool of resourceContext.pools) {
       await pool.drain();
     }
   })

@@ -176,7 +176,7 @@ export type RunOptions = {
   dryRun?: boolean;
   /**
    * Opt-in execution context. Exposes the current causal chain through
-   * `system.ctx.executionContext`, automatically assigns a correlation id
+   * `asyncContexts.execution`, automatically assigns a correlation id
    * per top-level execution, and enables cycle detection by default.
    *
    * - `true` → enabled with default correlation ids and cycle detection

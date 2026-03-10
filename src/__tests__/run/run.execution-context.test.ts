@@ -4,7 +4,7 @@ import {
   defineResource,
   defineTask,
 } from "../../define";
-import { resources, run, system } from "../../public";
+import { asyncContexts, resources, run } from "../../public";
 
 describe("Execution Context (integration)", () => {
   it("exposes correlationId and current frame inside task interceptors and task bodies", async () => {
@@ -14,13 +14,13 @@ describe("Execution Context (integration)", () => {
     const task = defineTask({
       id: "execution-context-task",
       run: async () => {
-        const ctx = system.ctx.executionContext.use();
-        taskCorrelationId = ctx.correlationId;
-        expect(ctx.currentFrame.kind).toBe("task");
-        expect(ctx.currentFrame.id).toBe(
+        const executionContext = asyncContexts.execution.use();
+        taskCorrelationId = executionContext.correlationId;
+        expect(executionContext.currentFrame.kind).toBe("task");
+        expect(executionContext.currentFrame.id).toBe(
           "execution-context-app.tasks.execution-context-task",
         );
-        return ctx.depth;
+        return executionContext.depth;
       },
     });
 
@@ -29,10 +29,10 @@ describe("Execution Context (integration)", () => {
       dependencies: { taskRunner: resources.taskRunner },
       init: async (_config, { taskRunner }) => {
         taskRunner.intercept(async (next, input) => {
-          const ctx = system.ctx.executionContext.use();
-          interceptorCorrelationId = ctx.correlationId;
-          expect(ctx.currentFrame.kind).toBe("task");
-          expect(ctx.currentFrame.id).toBe(
+          const executionContext = asyncContexts.execution.use();
+          interceptorCorrelationId = executionContext.correlationId;
+          expect(executionContext.currentFrame.kind).toBe("task");
+          expect(executionContext.currentFrame.id).toBe(
             "execution-context-app.tasks.execution-context-task",
           );
           return next(input);
@@ -65,11 +65,11 @@ describe("Execution Context (integration)", () => {
       id: "execution-context-hook",
       on: event,
       run: async () => {
-        const ctx = system.ctx.executionContext.use();
+        const executionContext = asyncContexts.execution.use();
         snapshots.push({
-          kind: ctx.currentFrame.kind,
-          depth: ctx.depth,
-          correlationId: ctx.correlationId,
+          kind: executionContext.currentFrame.kind,
+          depth: executionContext.depth,
+          correlationId: executionContext.correlationId,
         });
       },
     });
@@ -78,11 +78,11 @@ describe("Execution Context (integration)", () => {
       id: "execution-context-emitter-task",
       dependencies: { eventManager: resources.eventManager },
       run: async (_input, { eventManager }) => {
-        const ctx = system.ctx.executionContext.use();
+        const executionContext = asyncContexts.execution.use();
         snapshots.push({
-          kind: ctx.currentFrame.kind,
-          depth: ctx.depth,
-          correlationId: ctx.correlationId,
+          kind: executionContext.currentFrame.kind,
+          depth: executionContext.depth,
+          correlationId: executionContext.correlationId,
         });
         await eventManager.emit(event, "hello", {
           kind: "task",
@@ -119,7 +119,7 @@ describe("Execution Context (integration)", () => {
   it("keeps execution context available when cycle detection is disabled", async () => {
     const task = defineTask({
       id: "execution-context-no-cycles",
-      run: async () => system.ctx.executionContext.use().correlationId,
+      run: async () => asyncContexts.execution.use().correlationId,
     });
 
     const app = defineResource({
@@ -142,7 +142,7 @@ describe("Execution Context (integration)", () => {
     const task = defineTask({
       id: "execution-context-provided-task",
       run: async () => {
-        seenCorrelationId = system.ctx.executionContext.use().correlationId;
+        seenCorrelationId = asyncContexts.execution.use().correlationId;
       },
     });
 
@@ -153,7 +153,7 @@ describe("Execution Context (integration)", () => {
     });
 
     const runtime = await run(app, { executionContext: true });
-    await system.ctx.executionContext.provide(
+    await asyncContexts.execution.provide(
       { correlationId: "req-123" },
       async () => runtime.runTask(task),
     );
@@ -182,7 +182,7 @@ describe("Execution Context (integration)", () => {
     });
 
     const runtime = await run(app, { executionContext: true });
-    const output = await system.ctx.executionContext.record(
+    const output = await asyncContexts.execution.record(
       { correlationId: "req-record-parallel" },
       () => runtime.runTask(parentTask),
     );
@@ -205,8 +205,8 @@ describe("Execution Context (integration)", () => {
     const task = defineTask({
       id: "execution-context-record-nested-task",
       run: async () => {
-        const nested = await system.ctx.executionContext.record(async () => {
-          nestedSnapshots.push(system.ctx.executionContext.use().correlationId);
+        const nested = await asyncContexts.execution.record(async () => {
+          nestedSnapshots.push(asyncContexts.execution.use().correlationId);
           return "nested";
         });
 
@@ -222,7 +222,7 @@ describe("Execution Context (integration)", () => {
     });
 
     const runtime = await run(app, { executionContext: true });
-    const output = await system.ctx.executionContext.record(
+    const output = await asyncContexts.execution.record(
       { correlationId: "req-record-nested" },
       () => runtime.runTask(task),
     );
@@ -250,7 +250,7 @@ describe("Execution Context (integration)", () => {
 
     const runtime = await run(app, { executionContext: true });
     await expect(
-      system.ctx.executionContext.record(
+      asyncContexts.execution.record(
         { correlationId: "req-record-failed" },
         () => runtime.runTask(task),
       ),
@@ -262,13 +262,13 @@ describe("Execution Context (integration)", () => {
   it("keeps disabled runtimes isolated from parent execution contexts", async () => {
     const childTask = defineTask({
       id: "execution-context-child-task",
-      run: async () => system.ctx.executionContext.tryUse(),
+      run: async () => asyncContexts.execution.tryUse(),
     });
 
     const parentTask = defineTask({
       id: "execution-context-parent-task",
       run: async () => {
-        expect(system.ctx.executionContext.use().correlationId).toEqual(
+        expect(asyncContexts.execution.use().correlationId).toEqual(
           expect.any(String),
         );
         return childRuntime.runTask(childTask);

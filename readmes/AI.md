@@ -110,7 +110,7 @@ await runtime.dispose();
   - `hooks`
   - `tags`
   - `errors`
-  - `ctx`
+  - `asyncContexts`
 - Ids cannot start or end with `.`, and cannot contain `..`.
 
 Schema quick guide:
@@ -186,7 +186,7 @@ userInput.toJSONSchema(); // machine-readable contract for tooling
 - `runtime.resume()` reopens admissions immediately.
 - `runtime.recoverWhen({ everyMs, check })` registers paused-state recovery conditions; Runner auto-resumes only after all active conditions for the current pause episode pass.
 - `executionContext: true | { createCorrelationId?, cycleDetection? }` enables correlation tracking and execution tree recording (Node-only; requires `AsyncLocalStorage`). See "Execution Context and Request Tracing" below.
-- `system.ctx.executionContext.use()` returns the current branch snapshot: `{ correlationId, startedAt, depth, currentFrame, frames }`.
+- `asyncContexts.execution.use()` returns the current branch snapshot: `{ correlationId, startedAt, depth, currentFrame, frames }`.
 
 Lifecycle:
 
@@ -598,18 +598,18 @@ await runtime.emitEvent(userSeen, payload);
 const myTask = r
   .task("myTask")
   .run(async () => {
-    const { correlationId, depth, frames } = system.ctx.executionContext.use();
+    const { correlationId, depth, frames } = asyncContexts.execution.use();
   })
   .build();
 
 // Optional: seed your own correlation id at an external boundary
-await system.ctx.executionContext.provide(
+await asyncContexts.execution.provide(
   { correlationId: req.headers["x-id"] },
   () => runtime.runTask(handleRequest, input),
 );
 
 // Optional: capture the exact execution tree during testing/tracing
-const { result, recording } = await system.ctx.executionContext.record(() =>
+const { result, recording } = await asyncContexts.execution.record(() =>
   runtime.runTask(myTask, input),
 );
 ```

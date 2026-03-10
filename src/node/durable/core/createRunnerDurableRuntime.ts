@@ -93,7 +93,8 @@ export async function createRunnerDurableRuntime(
       const storeTask = deps.runnerStore.tasks.get(taskId);
       return storeTask?.task;
     },
-    contextProvider: (ctx, fn) => contextStorage.run(ctx, fn),
+    contextProvider: (durableContext, fn) =>
+      contextStorage.run(durableContext, fn),
   });
 
   if (config.worker === true && config.queue) {

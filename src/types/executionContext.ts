@@ -64,7 +64,7 @@ export interface ExecutionContextConfig {
 }
 
 export interface ExecutionContextAccessor {
-  readonly id: "system.ctx.executionContext";
+  readonly id: "asyncContexts.execution";
   use(): ExecutionContextSnapshot;
   tryUse(): ExecutionContextSnapshot | undefined;
   provide<T>(fn: () => T): T;

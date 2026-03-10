@@ -40,7 +40,7 @@ function record<T>(
 }
 
 const executionContextAccessor: ExecutionContextAccessor = Object.freeze({
-  id: "system.ctx.executionContext",
+  id: "asyncContexts.execution",
   use() {
     const current = getCurrentExecutionContext();
     if (!current) {
@@ -58,8 +58,6 @@ const executionContextAccessor: ExecutionContextAccessor = Object.freeze({
   record,
 });
 
-export const system = Object.freeze({
-  ctx: Object.freeze({
-    executionContext: executionContextAccessor,
-  }),
+export const asyncContexts = Object.freeze({
+  execution: executionContextAccessor,
 });

@@ -7,7 +7,7 @@ export const RESERVED_DEFINITION_LOCAL_NAMES = Object.freeze([
   "resources",
   "tags",
   "errors",
-  "ctx",
+  "asyncContexts",
 ] as const);
 
 const FRAMEWORK_DOTTED_ID_PREFIXES = Object.freeze([

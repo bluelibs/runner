@@ -25,7 +25,7 @@ async function postSerialized<T = any>(options: {
   headers: Record<string, string>;
   timeoutMs?: number;
   serializer: SerializerLike;
-  onRequest?: (ctx: {
+  onRequest?: (requestContext: {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;
@@ -156,10 +156,10 @@ export function createExposureFetch(
   const buildContextHeader = () => {
     if (!cfg.contexts || cfg.contexts.length === 0) return undefined;
     const map: Record<string, string> = {};
-    for (const ctx of cfg.contexts) {
+    for (const asyncContext of cfg.contexts) {
       try {
-        const v = ctx.use();
-        map[ctx.id] = ctx.serialize(v);
+        const value = asyncContext.use();
+        map[asyncContext.id] = asyncContext.serialize(value);
       } catch {
         // context absent; ignore
       }

@@ -15,7 +15,7 @@ export interface ExposureFetchConfig {
   timeoutMs?: number; // optional request timeout
   fetchImpl?: typeof fetch; // custom fetch (optional)
   serializer: SerializerLike; // required serializer
-  onRequest?: (ctx: {
+  onRequest?: (requestContext: {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;

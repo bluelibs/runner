@@ -5,11 +5,11 @@ import { durableStepDefinitionError } from "../../../errors";
 /**
  * Fluent helper for building a durable step.
  *
- * This is the ergonomic layer behind `ctx.step("id")`:
+ * This is the ergonomic layer behind `durableContext.step("id")`:
  * - `up()` defines the memoized computation
- * - `down()` registers a compensation to be invoked by `ctx.rollback()`
+ * - `down()` registers a compensation to be invoked by `durableContext.rollback()`
  *
- * It is `PromiseLike`, so users can `await ctx.step("x").up(...).down(...)`.
+ * It is `PromiseLike`, so users can `await durableContext.step("x").up(...).down(...)`.
  */
 export class StepBuilder<T> implements IStepBuilder<T> {
   private upFn?: () => Promise<T>;

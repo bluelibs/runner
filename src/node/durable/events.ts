@@ -139,7 +139,7 @@ export const durableEvents = {
       .meta({
         title: "Durable Emit Published",
         description:
-          "Emitted when ctx.emit(...) publishes to the durable event bus (replay-safe).",
+          "Emitted when durableContext.emit(...) publishes to the durable event bus (replay-safe).",
       })
       .tags([systemTag, excludeFromGlobalHooksTag])
       .build(),
@@ -152,7 +152,8 @@ export const durableEvents = {
       >("durable-note-created")
       .meta({
         title: "Durable Note Created",
-        description: "Emitted when ctx.note(...) records an audit note.",
+        description:
+          "Emitted when durableContext.note(...) records an audit note.",
       })
       .tags([systemTag, excludeFromGlobalHooksTag])
       .build(),

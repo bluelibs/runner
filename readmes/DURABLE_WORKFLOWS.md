@@ -19,7 +19,7 @@
 - [Signals (wait for external events)](#signals-wait-for-external-events)
 - [Testing Utilities](#testing-utilities)
 - [Compensation / Rollback Pattern](#compensation--rollback-pattern)
-- [Branching with ctx.switch()](#branching-with-ctxswitch)
+- [Branching with durableContext.switch()](#branching-with-durablecontextswitch)
 - [Describing a Flow (Static Shape Export)](#describing-a-flow-static-shape-export)
 - [Scheduling & Cron Jobs](#scheduling--cron-jobs)
 - [Gotchas & Troubleshooting](#gotchas--troubleshooting)
@@ -63,21 +63,21 @@ const approveOrder = r
   .task("app.tasks.approveOrder")
   .dependencies({ durable })
   .run(async (input: { orderId: string }, { durable }) => {
-    const ctx = durable.use();
+    const durableContext = durable.use();
 
-    await ctx.step("validate", async () => {
+    await durableContext.step("validate", async () => {
       // fetch order, validate invariants, etc.
       return { ok: true };
     });
 
-    const outcome = await ctx.waitForSignal(Approved, {
+    const outcome = await durableContext.waitForSignal(Approved, {
       timeoutMs: 86_400_000,
     });
     if (outcome.kind === "timeout") {
       return { status: "timed_out" };
     }
 
-    await ctx.step("ship", async () => {
+    await durableContext.step("ship", async () => {
       // ship only after approval
       return { shipped: true };
     });
@@ -118,8 +118,8 @@ const onboarding = r
     }),
   ])
   .run(async (_input, { durable }) => {
-    const ctx = durable.use();
-    await ctx.step("create-user", async () => ({ ok: true }));
+    const durableContext = durable.use();
+    await durableContext.step("create-user", async () => ({ ok: true }));
     return { ok: true };
   })
   .build();
@@ -159,8 +159,8 @@ const approveOrder = r
   .dependencies({ durable })
   .tags([tags.durableWorkflow.with({ category: "orders" })])
   .run(async (input: { orderId: string }, { durable }) => {
-    const ctx = durable.use();
-    await ctx.step("approve", async () => ({ approved: true }));
+    const durableContext = durable.use();
+    await durableContext.step("approve", async () => ({ approved: true }));
     return { orderId: input.orderId, status: "approved" as const };
   })
   .build();
@@ -265,7 +265,7 @@ const durableRegistration = durable.with({
 
 **Timers, sleeps, and schedules (important):**
 
-Timers (used by `ctx.sleep(...)`, signal timeouts, and scheduling) are driven by the durable polling loop.
+Timers (used by `durableContext.sleep(...)`, signal timeouts, and scheduling) are driven by the durable polling loop.
 In multi-process setups you typically either:
 
 - run a **single poller** (one worker replica with `polling.enabled: true`), or
@@ -678,7 +678,7 @@ graph TB
 
 ### Basic Usage
 
-Durable workflows are **normal Runner tasks** that inject a **durable backend resource** (created via `resources.memoryWorkflow.fork(id)` or `resources.redisWorkflow.fork(id)` and registered via `.with(config)`) and call `ctx.step(...)` / `ctx.sleep(...)` from inside their `run` function.
+Durable workflows are **normal Runner tasks** that inject a **durable backend resource** (created via `resources.memoryWorkflow.fork(id)` or `resources.redisWorkflow.fork(id)` and registered via `.with(config)`) and call `durableContext.step(...)` / `durableContext.sleep(...)` from inside their `run` function.
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
@@ -702,25 +702,25 @@ const processOrder = r
   .inputSchema<{ orderId: string; customerId: string }>()
   .dependencies({ durable })
   .run(async (input, { durable }) => {
-    const ctx = durable.use();
+    const durableContext = durable.use();
 
     // Step 1: Validate order (checkpointed)
-    const order = await ctx.step("validate", async () => {
+    const order = await durableContext.step("validate", async () => {
       const o = await db.orders.find(input.orderId);
       if (!o) throw new Error("Order not found");
       return o;
     });
 
     // Step 2: Process payment (checkpointed)
-    const payment = await ctx.step("charge-payment", async () => {
+    const payment = await durableContext.step("charge-payment", async () => {
       return await payments.charge(order.customerId, order.total);
     });
 
     // Durable sleep - survives restart
-    await ctx.sleep(5000);
+    await durableContext.sleep(5000);
 
     // Step 3: Ship order (checkpointed)
-    const shipment = await ctx.step("create-shipment", async () => {
+    const shipment = await durableContext.step("create-shipment", async () => {
       return await shipping.create(order.id);
     });
 
@@ -753,11 +753,11 @@ const result = await d.startAndWait(processOrder, {
 1. **`durable.startAndWait(task, input)`** creates an execution record and runs the task
    - Prefer `startAndWait()` when you want "start and wait for result" in one call.
    - Prefer `start()` + `signal()` + `wait()` when the outside world must resume the workflow later (webhooks, approvals).
-2. **`ctx.step(id, fn)`** checks if step was already executed:
+2. **`durableContext.step(id, fn)`** checks if step was already executed:
    - If yes: returns cached result (replay)
    - If no: executes fn, caches result, returns result
-3. **`ctx.sleep(ms)`** creates a timer record, suspends execution, resumes when timer fires
-4. **`ctx.waitForSignal(signal)`** records a durable wait checkpoint and suspends execution
+3. **`durableContext.sleep(ms)`** creates a timer record, suspends execution, resumes when timer fires
+4. **`durableContext.waitForSignal(signal)`** records a durable wait checkpoint and suspends execution
 5. **`durable.signal(executionId, signal, payload)`** completes the signal checkpoint and resumes the execution
 6. If process crashes, **`durableService.recover()`** resumes incomplete executions from their last checkpoint
 
@@ -882,21 +882,21 @@ This section summarizes the safety guarantees and expectations of the durable wo
 
 - **At-least-once execution, effectively-once steps**
   - Executions are retried on failure, so the same logical workflow may run more than once.
-  - `ctx.step(stepId, fn)` ensures each step function is _observably_ executed at most once per execution: results are memoized in the store and returned on replay.
+  - `durableContext.step(stepId, fn)` ensures each step function is _observably_ executed at most once per execution: results are memoized in the store and returned on replay.
   - External side effects inside a step must still be designed to be idempotent or safely repeatable (for example, idempotent payment/refund APIs).
 
 - **Sleep and resumption**
-  - `ctx.sleep(ms)` persists a timer and marks the execution as `sleeping`.
+  - `durableContext.sleep(ms)` persists a timer and marks the execution as `sleeping`.
   - When the timer fires, execution is resumed from the code _after_ `sleep`, and all previous steps are replayed via cached results (no re‑issuing of side effects wrapped in `step`).
 
 - **Event emission without duplicates**
-  - `ctx.emit(event, data)` is implemented as one or more internal `step`s under the hood.
+  - `durableContext.emit(event, data)` is implemented as one or more internal `step`s under the hood.
   - Each call is assigned a deterministic internal id like `__emit:<eventId>:<index>` so you can emit the same event type multiple times in one workflow.
   - On replay, memoization prevents duplicates for each individual emission.
   - **Determinism note:** those internal `:<index>` suffixes are derived from call order within the workflow. If you change the workflow structure (branching / adding/removing calls), the internal step ids may shift and past executions may no longer replay cleanly.
 
 - **Signals (wait until external confirmation)**
-  - `ctx.waitForSignal(signal)` suspends an execution until `durable.signal(executionId, signal, payload)` is called.
+  - `durableContext.waitForSignal(signal)` suspends an execution until `durable.signal(executionId, signal, payload)` is called.
   - `stepId` keeps the same return type (payload + timeout error), while `timeoutMs` switches to a `{ kind: "signal" | "timeout" }` outcome.
   - Signals are memoized as steps under `__signal:<signal.id>[:index]` (or `__signal:<id>[:index]` for string ids).
   - Repeated waits use `__signal:<id>:<index>` and are resolved by the first available slot; payloads can be buffered for future waits.
@@ -916,7 +916,7 @@ This section summarizes the safety guarantees and expectations of the durable wo
   - Timers (`sleep`, signal timeouts, schedules) are driven by the durable poller (`DurableService` polling loop). In multi-process setups, run a single poller (`polling: { enabled: true }`) or implement atomic timer claiming in your store.
 
 - **Reserved step ids**
-  - Step ids starting with `__` and `rollback:` are reserved for durable internals. Avoid using them in `ctx.step(...)` to prevent collisions with system steps.
+  - Step ids starting with `__` and `rollback:` are reserved for durable internals. Avoid using them in `durableContext.step(...)` to prevent collisions with system steps.
 
 These semantics intentionally favor **safety and debuggability** over perfect "exactly-once" guarantees at the infrastructure level. Application code remains explicit and testable, while the system provides strong, well-defined durability guarantees around that code.
 
@@ -924,7 +924,7 @@ These semantics intentionally favor **safety and debuggability** over perfect "e
 
 ## Signals (wait for external events)
 
-Durable workflows often need to pause until the outside world confirms something (eg. payment provider callbacks). Use `ctx.waitForSignal()` inside the workflow, and `durable.signal()` from the outside.
+Durable workflows often need to pause until the outside world confirms something (eg. payment provider callbacks). Use `durableContext.waitForSignal()` inside the workflow, and `durable.signal()` from the outside.
 
 Signal summary:
 
@@ -956,16 +956,16 @@ export const processOrder = r
   .task("app.tasks.processOrder")
   .dependencies({ durable })
   .run(async (input: { orderId: string }, { durable }) => {
-    const ctx = durable.use();
+    const durableContext = durable.use();
 
-    await ctx.step("reserve", async () => {
+    await durableContext.step("reserve", async () => {
       // reserve inventory, create payment intent, etc.
       return { ok: true };
     });
 
-    const payment = await ctx.waitForSignal(Paid);
+    const payment = await durableContext.waitForSignal(Paid);
 
-    await ctx.step("ship", async () => {
+    await durableContext.step("ship", async () => {
       // ship only after payment is confirmed
       return { ok: true, paidAt: payment.paidAt };
     });
@@ -987,7 +987,9 @@ await d.signal(executionId, Paid, { paidAt: Date.now() });
 If you need "wait for payment confirmation or continue after 1 day", use the timeout variant:
 
 ```typescript
-const outcome = await ctx.waitForSignal(Paid, { timeoutMs: 86_400_000 });
+const outcome = await durableContext.waitForSignal(Paid, {
+  timeoutMs: 86_400_000,
+});
 
 if (outcome.kind === "timeout") {
   // mark order as expired, notify user, etc.
@@ -995,7 +997,9 @@ if (outcome.kind === "timeout") {
 }
 
 // outcome.kind === "signal"
-await ctx.step("ship", async () => ({ paidAt: outcome.payload.paidAt }));
+await durableContext.step("ship", async () => ({
+  paidAt: outcome.payload.paidAt,
+}));
 ```
 
 ### Stable `stepId` without changing behavior
@@ -1003,7 +1007,9 @@ await ctx.step("ship", async () => ({ paidAt: outcome.payload.paidAt }));
 You can pass a stable step id for replay stability without changing the return type:
 
 ```typescript
-const payment = await ctx.waitForSignal(Paid, { stepId: "stable-paid" });
+const payment = await durableContext.waitForSignal(Paid, {
+  stepId: "stable-paid",
+});
 ```
 
 ---
@@ -1017,28 +1023,28 @@ const processOrderWithRollback = r
   .task("app.tasks.processOrder")
   .dependencies({ durable })
   .run(async (input, { durable }) => {
-    const ctx = durable.use();
+    const durableContext = durable.use();
 
     // Reserve inventory
-    const reservation = await ctx
+    const reservation = await durableContext
       .step("reserve-inventory")
       .up(async () => inventory.reserve(input.items))
       .down(async (res) => inventory.release(res.reservationId));
 
     // Charge payment
-    const payment = await ctx
+    const payment = await durableContext
       .step("charge-payment")
       .up(async () => payments.charge(input.customerId, input.amount))
       .down(async (p) => payments.refund(p.chargeId));
 
     try {
       // Ship order - might fail
-      const shipment = await ctx.step("ship-order", async () => {
+      const shipment = await durableContext.step("ship-order", async () => {
         return await shipping.ship(input.orderId);
       });
       return { success: true, shipment };
     } catch (error) {
-      await ctx.rollback();
+      await durableContext.rollback();
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
@@ -1052,9 +1058,9 @@ This is more explicit and readable than an automatic saga system.
 
 ---
 
-## Branching with ctx.switch()
+## Branching with durableContext.switch()
 
-`ctx.switch()` is a replay-safe branching primitive for durable workflows. Instead of using plain `if/else` (which the flow shape exporter can't capture), model conditional logic with `switch` so that:
+`durableContext.switch()` is a replay-safe branching primitive for durable workflows. Instead of using plain `if/else` (which the flow shape exporter can't capture), model conditional logic with `switch` so that:
 
 1. The branch decision is **persisted** — on replay, matchers are skipped and the cached branch result is returned.
 2. The branch structure is **visible** to the flow-shape recorder (via `durable.describe(...)`) for documentation and visualization.
@@ -1062,8 +1068,8 @@ This is more explicit and readable than an automatic saga system.
 ### API
 
 ```typescript
-const result = await ctx.switch<TValue, TResult>(
-  stepId,      // unique step ID (like ctx.step)
+const result = await durableContext.switch<TValue, TResult>(
+  stepId,      // unique step ID (like durableContext.step)
   value,       // the value to match against
   branches,    // array of { id, match, run }
   defaultBranch?, // optional { id, run } (no match needed)
@@ -1077,13 +1083,13 @@ const fulfillOrder = r
   .task("app.tasks.fulfillOrder")
   .dependencies({ durable })
   .run(async (input: { orderId: string; tier: string }, { durable }) => {
-    const ctx = durable.use();
+    const durableContext = durable.use();
 
-    const order = await ctx.step("fetch-order", async () => {
+    const order = await durableContext.step("fetch-order", async () => {
       return await db.orders.findById(input.orderId);
     });
 
-    const result = await ctx.switch(
+    const result = await durableContext.switch(
       "fulfillment-route",
       order.tier,
       [
@@ -1091,7 +1097,9 @@ const fulfillOrder = r
           id: "premium",
           match: (tier) => tier === "premium",
           run: async () => {
-            await ctx.step("express-ship", async () => shipping.express(order));
+            await durableContext.step("express-ship", async () =>
+              shipping.express(order),
+            );
             return "express-shipped";
           },
         },
@@ -1099,7 +1107,7 @@ const fulfillOrder = r
           id: "standard",
           match: (tier) => tier === "standard",
           run: async () => {
-            await ctx.step("standard-ship", async () =>
+            await durableContext.step("standard-ship", async () =>
               shipping.standard(order),
             );
             return "standard-shipped";
@@ -1109,7 +1117,9 @@ const fulfillOrder = r
       {
         id: "manual-review",
         run: async () => {
-          await ctx.step("flag-review", async () => flagForReview(order));
+          await durableContext.step("flag-review", async () =>
+            flagForReview(order),
+          );
           return "needs-review";
         },
       },
@@ -1125,7 +1135,7 @@ const fulfillOrder = r
 - **First execution**: matchers evaluate in order; the first matching branch's `run()` is called. The branch `id` and result are persisted as a step result.
 - **Replay**: the cached `{ branchId, result }` is returned immediately — no matchers or `run()` are re-executed.
 - **Audit**: emits a `switch_evaluated` audit entry with `branchId` and `durationMs`.
-- **Determinism**: the step ID is user-provided (required), so it's stable across refactors (like `ctx.step`).
+- **Determinism**: the step ID is user-provided (required), so it's stable across refactors (like `durableContext.step`).
 - **Fail-fast**: throws if no branch matches and no default is provided.
 
 ### Interface
@@ -1151,7 +1161,7 @@ Use `durable.describe(...)` to capture the **structure** of a durable workflow w
 
 ### From an existing task (recommended)
 
-Call `describe()` on your durable dependency, then pass your task directly — it shims `durable.use()` and records every `ctx.*` operation:
+Call `describe()` on your durable dependency, then pass your task directly — it shims `durable.use()` and records every `durableContext.*` operation:
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
@@ -1210,7 +1220,7 @@ type FlowNode =
 
 ### How it works
 
-The recorder runs your task's `run` function with **real runtime dependencies**, but wraps durable resource dependencies so `durable.use()` returns a **recording context**. That context implements `IDurableContext` and captures each `ctx.*` call as a `FlowNode` instead of executing it.
+The recorder runs your task's `run` function with **real runtime dependencies**, but wraps durable resource dependencies so `durable.use()` returns a **recording context**. That context implements `IDurableContext` and captures each `durableContext.*` call as a `FlowNode` instead of executing it.
 
 The step builder API (`.up()` / `.down()`) is also supported: `hasCompensation` reflects whether `.down()` was called.
 
@@ -1250,13 +1260,13 @@ const dailyCleanup = r
   .task("app.tasks.dailyCleanup")
   .dependencies({ durable, db })
   .run(async (input, { durable, db }) => {
-    const ctx = durable.use();
+    const durableContext = durable.use();
 
-    await ctx.step("cleanup-old-sessions", async () => {
+    await durableContext.step("cleanup-old-sessions", async () => {
       await db.sessions.deleteOlderThan(7, "days");
     });
 
-    await ctx.step("cleanup-temp-files", async () => {
+    await durableContext.step("cleanup-temp-files", async () => {
       await fs.rm("./tmp/*", { recursive: true });
     });
 
@@ -1327,7 +1337,7 @@ t=0          t=10         t=12
 If you need "completion-based" intervals (no overlap), implement it explicitly inside the workflow:
 
 - run the work
-- then `await ctx.sleep(intervalMs)`
+- then `await durableContext.sleep(intervalMs)`
 - then loop / re-run (or have the schedule fire less frequently and use durable sleeps inside)
 
 ### Cron Expression Format
@@ -1799,7 +1809,7 @@ export class RabbitMQQueue implements IDurableQueue {
 - **Concurrency & Atomicity**:
   - `updateExecution()` uses a Lua script to perform a read/merge/write update atomically.
   - Execution processing is guarded by `acquireLock()` so only one worker runs an execution attempt at a time.
-  - Signal delivery (`durable.signal`) and signal waits (`ctx.waitForSignal`) use a per-execution/per-signal lock when supported by the store, to prevent races between "signal arrives" and "wait is being recorded".
+  - Signal delivery (`durable.signal`) and signal waits (`durableContext.waitForSignal`) use a per-execution/per-signal lock when supported by the store, to prevent races between "signal arrives" and "wait is being recorded".
 
 ### Optimized Client Waiting
 
@@ -1917,7 +1927,7 @@ const processOrder = r
   .task("app.tasks.processOrder")
   .dependencies({ durable })
   .run(async (input, { durable }) => {
-    const ctx = durable.use();
+    const durableContext = durable.use();
     // ... durable task logic
   })
   .build();
@@ -2036,8 +2046,8 @@ const task = r
   .task("spec.durable.waitForSignal")
   .dependencies({ durable, Paid })
   .run(async (_input: undefined, { durable, Paid }) => {
-    const ctx = durable.use();
-    const payment = await ctx.waitForSignal(Paid);
+    const durableContext = durable.use();
+    const payment = await durableContext.waitForSignal(Paid);
     return { ok: true, paidAt: payment.paidAt };
   })
   .build();
@@ -2106,7 +2116,7 @@ npm run coverage:ai
 The **durable store** (`IDurableStore`) is the persistence layer for durable workflows. It is responsible for saving and loading:
 
 - executions (id, task id, input, status, attempt/error, timestamps)
-- step results (memoized outputs for `ctx.step(...)`)
+- step results (memoized outputs for `durableContext.step(...)`)
 - timers and schedules (for `sleep`, signal timeouts, cron/interval scheduling)
 - optional audit entries (timeline), and optional operator actions (manual interventions)
 
@@ -2133,7 +2143,7 @@ In addition to `StepResult` records, durable can persist a structured audit trai
 - step completions (with durations)
 - sleep scheduled/completed
 - signal waiting/delivered/timed-out
-- user-added notes via `ctx.note(...)`
+- user-added notes via `durableContext.note(...)`
 
 This is implemented via optional `IDurableStore` capabilities:
 
@@ -2141,7 +2151,7 @@ This is implemented via optional `IDurableStore` capabilities:
 - `appendAuditEntry(entry)`
 - `listAuditEntries(executionId)`
 
-Notes are replay-safe: if the workflow replays after a suspend, the same `ctx.note(...)` call does not create duplicates.
+Notes are replay-safe: if the workflow replays after a suspend, the same `durableContext.note(...)` call does not create duplicates.
 
 ### Stream audit entries via Runner events (for mirroring)
 
@@ -2169,13 +2179,13 @@ const mirrorAudit = r
 
 ## Gotchas & Troubleshooting
 
-- **Always put side effects inside `ctx.step(...)`**: anything outside a step can run multiple times on retries/replays.
+- **Always put side effects inside `durableContext.step(...)`**: anything outside a step can run multiple times on retries/replays.
 - **Keep step ids stable**: renaming a step id (or changing control-flow so a different call order happens) can break replay determinism for existing executions.
 - **Call-order indexing is real**: `emit()` and repeated `waitForSignal()` allocate `:<index>` internally based on call order; refactors that add/remove calls can shift indexes.
 - **Signals are "deliver to current wait"**: `durableService.signal(executionId, ...)` delivers to the base signal slot if it's not completed yet (this can buffer the first signal even if the workflow hasn't reached the wait). Additional signals only deliver to subsequent indexed waits; otherwise they are ignored.
 - **Don't hang forever**: prefer `durableService.wait(executionId, { timeout: ... })` unless you intentionally want an unbounded wait.
-- **Compensation failures are terminal**: if `ctx.rollback()` fails, execution becomes `compensation_failed` and `wait()` rejects. Use `DurableOperator.retryRollback(executionId)` after fixing the underlying issue.
-- **Intervals can overlap**: interval schedules are currently measured from kickoff time, not completion time. If you need non-overlapping behavior, implement it via `ctx.sleep()` inside the workflow.
+- **Compensation failures are terminal**: if `durableContext.rollback()` fails, execution becomes `compensation_failed` and `wait()` rejects. Use `DurableOperator.retryRollback(executionId)` after fixing the underlying issue.
+- **Intervals can overlap**: interval schedules are currently measured from kickoff time, not completion time. If you need non-overlapping behavior, implement it via `durableContext.sleep()` inside the workflow.
 - **Debugging**: inspect step results + timers via `DurableOperator`/store queries (Redis keys are prefixed by `durable:` by default).
 
 ## Idempotency & Deduplication
@@ -2206,7 +2216,7 @@ Semantics:
 
 - Cancellation is **cooperative**, not preemptive: Node cannot reliably interrupt arbitrary async work.
 - Cancelling marks the execution as terminal (`cancelled`), unblocks `wait()` / `startAndWait()`, and prevents future resumes (timers/signals won't continue it).
-- Already-running code will only stop at the next durable checkpoint (for example the next `ctx.step(...)`, `ctx.sleep(...)`, `ctx.waitForSignal(...)`, or `ctx.emit(...)`).
+- Already-running code will only stop at the next durable checkpoint (for example the next `durableContext.step(...)`, `durableContext.sleep(...)`, `durableContext.waitForSignal(...)`, or `durableContext.emit(...)`).
 
 Administrative alternatives still exist:
 
@@ -2216,7 +2226,7 @@ Administrative alternatives still exist:
 
 1. **Exactly-once external side effects** – The system provides at-least-once execution with effectively-once steps; true exactly-once semantics at the boundary (e.g., payment processors) are left to idempotent APIs and application logic.
 2. **Event sourcing** – Steps are modeled as checkpoints, not a full event stream. This keeps the model simple.
-3. **Automatic saga orchestration DSLs** – There is no separate workflow language or visual designer. Compensation is regular TypeScript code using `try/catch` and `ctx.step`.
+3. **Automatic saga orchestration DSLs** – There is no separate workflow language or visual designer. Compensation is regular TypeScript code using `try/catch` and `durableContext.step`.
 4. **Built-in dashboards** – not included in core; observability UIs are intentionally external to the runtime package.
 5. **Cross-region or multi-tenant sharding logic** – Multi-region replication and advanced topology concerns are out of scope for v1.
 

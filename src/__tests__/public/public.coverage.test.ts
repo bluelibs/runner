@@ -29,7 +29,7 @@ import {
   r,
   scope,
   subtreeOf,
-  system,
+  asyncContexts,
 } from "../../public";
 import { defineError } from "../../definers/defineError";
 
@@ -73,7 +73,7 @@ describe("public barrel coverage", () => {
       format: () => "boom",
     });
     const asyncContext = defineAsyncContext<{ requestId: string }>({
-      id: "public-coverage-ctx",
+      id: "public-coverage-async-context",
     });
     const override = r.override(task, async () => "override");
     const filter = subtreeOf(resource);
@@ -96,7 +96,7 @@ describe("public barrel coverage", () => {
     expect(isOverrideDefinition(override)).toBe(true);
     expect(isSubtreeFilter(filter)).toBe(true);
     expect(isIsolationScope(scoped)).toBe(true);
-    expect(system.ctx.executionContext.id).toBe("system.ctx.executionContext");
+    expect(asyncContexts.execution.id).toBe("asyncContexts.execution");
     expect(isTask({ id: "plain-object" })).toBe(false);
   });
 });

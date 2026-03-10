@@ -37,7 +37,7 @@ export const memoryDurableResource = r
     this: { id: string },
     config,
     { taskRunner, eventManager, runnerStore, logger },
-    ctx,
+    resourceContext,
   ): Promise<DurableResource> {
     const baseLogger =
       config.logger ??
@@ -64,7 +64,7 @@ export const memoryDurableResource = r
       queue,
     };
 
-    ctx.runtimeConfig = runtimeConfig;
+    resourceContext.runtimeConfig = runtimeConfig;
 
     return await createRunnerDurableRuntime(runtimeConfig, {
       taskRunner,
@@ -73,8 +73,8 @@ export const memoryDurableResource = r
       logger: durableLogger,
     });
   })
-  .dispose(async (durable, _config, _deps, ctx) => {
-    if (!ctx.runtimeConfig) return;
-    await disposeDurableService(durable.service, ctx.runtimeConfig);
+  .dispose(async (durable, _config, _deps, resourceContext) => {
+    if (!resourceContext.runtimeConfig) return;
+    await disposeDurableService(durable.service, resourceContext.runtimeConfig);
   })
   .build();

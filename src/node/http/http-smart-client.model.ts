@@ -26,7 +26,7 @@ export interface HttpSmartClientConfig {
   auth?: HttpSmartClientAuthConfig;
   timeoutMs?: number; // optional request timeout for JSON/multipart
   serializer: SerializerLike;
-  onRequest?: (ctx: {
+  onRequest?: (requestContext: {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;
@@ -82,15 +82,15 @@ function buildContextHeaderOrThrow(options: {
   if (!contexts || contexts.length === 0) return undefined;
 
   const map: Record<string, string> = {};
-  for (const ctx of contexts) {
+  for (const asyncContext of contexts) {
     try {
-      const value = ctx.use();
-      map[ctx.id] = ctx.serialize(value);
+      const value = asyncContext.use();
+      map[asyncContext.id] = asyncContext.serialize(value);
     } catch (error) {
       const normalizedError =
         error instanceof Error ? error : new Error(String(error));
       httpContextSerializationError.throw({
-        contextId: ctx.id,
+        contextId: asyncContext.id,
         reason: normalizedError.message,
       });
     }

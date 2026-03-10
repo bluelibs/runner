@@ -45,7 +45,7 @@ export const redisCacheProviderResource = r
     this: { id: string },
     config,
     { serializer },
-    ctx,
+    resourceContext,
   ): Promise<CacheProvider> {
     const redis = resolveRedisClient(config.redis);
     const prefix = config.prefix ?? `runner:cache:${randomUUID()}`;
@@ -59,8 +59,8 @@ export const redisCacheProviderResource = r
       });
     }
 
-    ctx.redis = redis;
-    ctx.ownsRedisClient =
+    resourceContext.redis = redis;
+    resourceContext.ownsRedisClient =
       config.redis === undefined || typeof config.redis === "string";
 
     const provider: CacheProvider = async (options: CacheFactoryOptions) =>
@@ -89,12 +89,12 @@ export const redisCacheProviderResource = r
       ),
     );
   })
-  .dispose(async (_provider, _config, _deps, ctx) => {
-    if (!ctx.ownsRedisClient || !ctx.redis?.quit) {
+  .dispose(async (_provider, _config, _deps, resourceContext) => {
+    if (!resourceContext.ownsRedisClient || !resourceContext.redis?.quit) {
       return;
     }
 
-    await ctx.redis.quit();
+    await resourceContext.redis.quit();
   })
   .build();
 

@@ -1,28 +1,28 @@
 import { PlatformAdapter, resetPlatform, setPlatform } from "../../platform";
-import { system } from "../../system";
+import { asyncContexts } from "../../asyncContexts";
 
-describe("system.ctx.executionContext", () => {
+describe("asyncContexts.execution", () => {
   afterEach(() => {
     resetPlatform();
   });
 
   it("tryUse returns undefined outside an active execution", () => {
-    expect(system.ctx.executionContext.tryUse()).toBeUndefined();
+    expect(asyncContexts.execution.tryUse()).toBeUndefined();
   });
 
   it("use throws outside an active execution", () => {
-    expect(() => system.ctx.executionContext.use()).toThrow(
+    expect(() => asyncContexts.execution.use()).toThrow(
       /Execution context is not available/i,
     );
   });
 
   it("stays unavailable on platforms without async local storage", () => {
     setPlatform(new PlatformAdapter("universal"));
-    expect(system.ctx.executionContext.tryUse()).toBeUndefined();
+    expect(asyncContexts.execution.tryUse()).toBeUndefined();
   });
 
   it("provide returns the callback result even when no frames are entered", () => {
-    const result = system.ctx.executionContext.provide(
+    const result = asyncContexts.execution.provide(
       { correlationId: "req-seeded" },
       () => "ok",
     );
@@ -31,7 +31,7 @@ describe("system.ctx.executionContext", () => {
   });
 
   it("record returns the callback result and no recording without frames", async () => {
-    const result = await system.ctx.executionContext.record(
+    const result = await asyncContexts.execution.record(
       { correlationId: "req-capture-empty" },
       async () => "ok",
     );
@@ -43,12 +43,10 @@ describe("system.ctx.executionContext", () => {
   });
 
   it("supports the function-only provide/record overloads", async () => {
-    expect(system.ctx.executionContext.provide(() => "provided")).toBe(
-      "provided",
-    );
+    expect(asyncContexts.execution.provide(() => "provided")).toBe("provided");
 
     await expect(
-      system.ctx.executionContext.record(async () => "captured"),
+      asyncContexts.execution.record(async () => "captured"),
     ).resolves.toEqual({
       result: "captured",
       recording: undefined,
@@ -58,11 +56,9 @@ describe("system.ctx.executionContext", () => {
   it("provide and record still return callback results without async local storage", async () => {
     setPlatform(new PlatformAdapter("universal"));
 
-    expect(system.ctx.executionContext.provide(() => "provided")).toBe(
-      "provided",
-    );
+    expect(asyncContexts.execution.provide(() => "provided")).toBe("provided");
     await expect(
-      system.ctx.executionContext.record(async () => "captured"),
+      asyncContexts.execution.record(async () => "captured"),
     ).resolves.toEqual({
       result: "captured",
       recording: undefined,
