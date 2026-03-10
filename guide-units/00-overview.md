@@ -31,10 +31,7 @@ const createUser = r
   })
   .build();
 
-const app = r
-  .resource("app")
-  .register([userStore, createUser])
-  .build();
+const app = r.resource("app").register([userStore, createUser]).build();
 
 const { runTask, dispose } = await run(app);
 
@@ -44,28 +41,14 @@ await dispose();
 
 **What this proves**: the smallest Runner app still has explicit wiring, a runtime boundary, and reusable units.
 
-### Starter Map
-
-Use this instead of scanning the whole guide first:
-
-- [Your First 5 Minutes](#your-first-5-minutes) - shortest path to a working runtime
-- [What Is This Thing?](#what-is-this-thing) - the mental model
-- [How Does It Compare?](#how-does-it-compare) - where Runner fits
-- [Resources](./02-resources.md#resources) - shared state, lifecycle, and boundaries
-- [Tasks](./02b-tasks.md#tasks) - typed execution with runtime or unit-test entry points
-- [Events and Hooks](./02c-events-hooks.md#events-and-hooks) - decoupled reactions and orchestration
-- [Middleware](./02d-middleware.md#middleware) - cross-cutting execution policies
-- [Tags](./02e-tags.md#tags) - typed discovery and scheduling metadata
-- [Testing](#testing) - unit vs runtime execution
-- [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md) - Node, browser, and edge boundaries
-
 ### Why It Appeals to Senior TypeScript Teams
 
-- **Explicit wiring**: dependencies are declared in code, not discovered at runtime
-- **Honest execution boundaries**: call `.run()` for isolated unit tests or `runTask()` for the full runtime path
-- **Lifecycle as a first-class concern**: startup and shutdown live with the resource, not in scattered bootstrap code
-- **Incremental adoption**: wrap one service or one task before deciding whether to expand
-- **Traceability**: ids, logs, and runtime behavior stay aligned with source code
+- **Architecture you can enforce, not just document**: dependency graphs, isolation boundaries, and lifecycle contracts are validated at bootstrap — not left to code review
+- **No decorators, no reflection, no magic**: composition is plain TypeScript functions and explicit builder chains — fully tree-shakeable, fully debuggable
+- **Lifecycle that doesn't leak**: `init → ready → cooldown → dispose` lives with the resource definition, so startup order and graceful shutdown stop being tribal knowledge
+- **Test any unit in isolation or through the full runtime**: call `.run()` directly for a pure unit test, or `runTask()` for the real middleware + validation + DI path — same definition, both modes
+- **Cross-cutting concerns without pollution**: retry, rate-limit, caching, circuit-breaker, timeout — attach as middleware instead of wrapping every handler
+- **Incremental adoption**: wrap one service or one task, prove the value, then expand — Runner doesn't need to own your whole app
 
 ### Tradeoffs and Boundaries
 
@@ -117,5 +100,3 @@ For specialized features beyond the core concepts:
 - **Durable Workflows** (Node-only): replay-safe orchestration primitives in [DURABLE_WORKFLOWS.md](../readmes/DURABLE_WORKFLOWS.md)
 - **Remote Lanes** (Node): distributed events and RPC in [REMOTE_LANES.md](../readmes/REMOTE_LANES.md)
 - **Serialization**: custom value transport in [SERIALIZER_PROTOCOL.md](../readmes/SERIALIZER_PROTOCOL.md)
-
-**Next step**: go to [Your First 5 Minutes](#your-first-5-minutes) if you want the fastest proof, or [How Does It Compare?](#how-does-it-compare) if you are still evaluating alternatives.

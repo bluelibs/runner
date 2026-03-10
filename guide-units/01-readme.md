@@ -9,14 +9,6 @@ This page is the shortest path from "what is Runner?" to "I ran it once and I tr
 3. **You compose everything** under an `app` resource with `.register([...])`
 4. **You run it** with `run(app)` which gives you `runTask()` and `dispose()` first, plus more runtime helpers as you grow (`emitEvent()`, resource getters)
 
-If you are here to evaluate fit instead of running code immediately:
-
-- Read [What Is This Thing?](#what-is-this-thing) for the mental model
-- Read [How Does It Compare?](#how-does-it-compare) for framework tradeoffs
-- Read [Middleware](./readmes/FULL_GUIDE.md#middleware) for resilience and policy wiring
-
-Now let's get you to a first successful run.
-
 ---
 
 ## Quick Start
@@ -28,7 +20,7 @@ This is the fastest way to run the TypeScript example at the top of this README:
 1. Install dependencies:
 
 ```bash
-npm i @bluelibs/runner zod
+npm i @bluelibs/runner
 npm i -D typescript tsx
 ```
 
@@ -101,7 +93,7 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
   - [GitHub Releases](https://github.com/bluelibs/runner/releases)
   - [Support & Release Policy](./readmes/ENTERPRISE.md)
 - **Operational baseline**:
-  - [Production Readiness Checklist](./readmes/FULL_GUIDE.md#production-readiness-checklist)
+  - [Production Readiness](./readmes/FULL_GUIDE.md#observability-strategy-logs-metrics-and-traces)
 - **Multi-platform architecture**: Read [MULTI_PLATFORM.md](./readmes/MULTI_PLATFORM.md)
 
 ---

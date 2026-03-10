@@ -141,8 +141,8 @@ This page is the shortest path from "what is Runner?" to "I ran it once and I tr
 
 If you are here to evaluate fit instead of running code immediately:
 
-- Read [What Is This Thing?](#what-is-this-thing) for the mental model
-- Read [How Does It Compare?](#how-does-it-compare) for framework tradeoffs
+- Read [What Is This Thing?](./readmes/FULL_GUIDE.md#why-runner) for the mental model
+- Read [How Does It Compare?](./readmes/COMPARISON.md) for framework tradeoffs
 - Read [Middleware](./readmes/FULL_GUIDE.md#middleware) for resilience and policy wiring
 
 Now let's get you to a first successful run.
@@ -231,7 +231,7 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
   - [GitHub Releases](https://github.com/bluelibs/runner/releases)
   - [Support & Release Policy](./readmes/ENTERPRISE.md)
 - **Operational baseline**:
-  - [Production Readiness Checklist](./readmes/FULL_GUIDE.md#production-readiness-checklist)
+  - [Production Readiness](./readmes/FULL_GUIDE.md#observability-strategy-logs-metrics-and-traces)
 - **Multi-platform architecture**: Read [MULTI_PLATFORM.md](./readmes/MULTI_PLATFORM.md)
 
 ---

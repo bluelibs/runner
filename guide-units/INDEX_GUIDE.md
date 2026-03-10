@@ -1,6 +1,5 @@
 !include: 00-header.md
 !include: 00-overview.md
-!include: 01-getting-started.md
 !include: 02-resources.md
 !include: 02b-tasks.md
 !include: 02c-events-hooks.md
