@@ -123,7 +123,7 @@ The logger accepts rich, structured data that makes debugging actually useful:
 
 ```typescript
 const userTask = r
-  .task("app.tasks.user.create")
+  .task("createUser")
   .dependencies({ logger: resources.logger })
   .run(async (input, { logger }) => {
     // Basic message
@@ -164,17 +164,55 @@ const userTask = r
   .build();
 ```
 
+### Add Structured Logging Early
+
+When production visibility is weak, structured task logging is usually the first policy worth adding.
+
+```typescript
+import { resources, r } from "@bluelibs/runner";
+
+const chargeCard = async (input: { orderId: string; amount: number }) => ({
+  id: `txn:${input.orderId}`,
+});
+
+const processPayment = r
+  .task("processPayment")
+  .dependencies({ logger: resources.logger })
+  .run(async (input: { orderId: string; amount: number }, { logger }) => {
+    await logger.info("Processing payment", {
+      data: { orderId: input.orderId, amount: input.amount },
+    });
+
+    try {
+      const result = await chargeCard(input);
+      await logger.info("Payment successful", {
+        data: { transactionId: result.id },
+      });
+      return result;
+    } catch (error) {
+      await logger.error("Payment failed", {
+        error,
+        data: { orderId: input.orderId, amount: input.amount },
+      });
+      throw error;
+    }
+  })
+  .build();
+```
+
+This keeps operational context close to the business action without inventing ad hoc logging conventions per task.
+
 ### Context-Aware Logging
 
 Create logger instances with bound context for consistent metadata across related operations:
 
 ```typescript
 const RequestContext = r
-  .asyncContext<{ requestId: string; userId: string }>("app.ctx.request")
+  .asyncContext<{ requestId: string; userId: string }>("request")
   .build();
 
 const requestHandler = r
-  .task("app.tasks.handleRequest")
+  .task("handleRequest")
   .dependencies({ logger: resources.logger })
   .run(async (requestData, { logger }) => {
     const request = RequestContext.use();
@@ -234,7 +272,7 @@ const winstonLogger = winston.createLogger({
 
 // Bridge BlueLibs logs to Winston using hooks
 const winstonBridgeResource = r
-  .resource("app.resources.winstonBridge")
+  .resource("winstonBridge")
   .dependencies({ logger: resources.logger })
   .init(async (_config, { logger }) => {
     // Map log levels (BlueLibs -> Winston)
@@ -292,7 +330,7 @@ class JSONLogger extends Logger {
 
 // Custom logger resource
 const customLogger = r
-  .resource("app.logger.custom")
+  .resource("customLogger")
   .init(
     async () =>
       new JSONLogger({
@@ -404,7 +442,7 @@ Use debug tags to configure debugging on individual components, when you're inte
 import { r } from "@bluelibs/runner";
 
 const criticalTask = r
-  .task("app.tasks.critical")
+  .task("critical")
   .tags([tags.debug.with("verbose")])
   .run(async (input) => {
     // This task will have verbose debug logging

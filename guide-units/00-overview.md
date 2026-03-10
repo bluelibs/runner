@@ -50,10 +50,12 @@ Use this instead of scanning the whole guide first:
 
 - [Your First 5 Minutes](#your-first-5-minutes) - shortest path to a working runtime
 - [What Is This Thing?](#what-is-this-thing) - the mental model
-- [Quick Wins](#quick-wins-pressure-tested-recipes) - production recipes you can paste
 - [How Does It Compare?](#how-does-it-compare) - where Runner fits
-- [Tasks](#tasks) - core execution unit
-- [Resources](#resources) - shared state and lifecycle
+- [Resources](./02-resources.md#resources) - shared state, lifecycle, and boundaries
+- [Tasks](./02b-tasks.md#tasks) - typed execution with runtime or unit-test entry points
+- [Events and Hooks](./02c-events-hooks.md#events-and-hooks) - decoupled reactions and orchestration
+- [Middleware](./02d-middleware.md#middleware) - cross-cutting execution policies
+- [Tags](./02e-tags.md#tags) - typed discovery and scheduling metadata
 - [Testing](#testing) - unit vs runtime execution
 - [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md) - Node, browser, and edge boundaries
 
@@ -73,5 +75,47 @@ Runner is not trying to be the lowest-ceremony option for tiny scripts.
 - The best payoff appears once your app has multiple long-lived services or cross-cutting policies.
 - Some features are intentionally platform-specific.
   Async Context, Durable Workflows, and server-side Remote Lanes are Node-only.
+
+### Resources, Tasks, Events, Hooks, Middleware, and Tags
+
+Runner stays understandable because the runtime is built from a small set of definition types with explicit contracts.
+
+> **Naming rule:** User-defined ids are local ids and must not contain `.`. Prefer `send-email` or `user-store`. Dotted `runner.*` and `system.*` ids are reserved for framework internals.
+
+```mermaid
+graph LR
+    subgraph "Runner Core"
+        T[Tasks] --> |use| R[Resources]
+        R --> |emit| E[Events]
+        E --> |trigger| H[Hooks]
+        M[Middleware] --> |wrap| T
+        M --> |wrap| R
+        Tags --> |annotate| T
+        Tags --> |annotate| R
+    end
+
+    style T fill:#4CAF50,color:#fff
+    style R fill:#2196F3,color:#fff
+    style E fill:#FF9800,color:#fff
+    style H fill:#FF9800,color:#fff
+    style M fill:#9C27B0,color:#fff
+    style Tags fill:#607D8B,color:#fff
+```
+
+Use the next chapters in this order:
+
+- **Resources**: lifecycle-owned services, config, boundaries, and ownership
+- **Tasks**: typed business operations and execution-local context
+- **Events & Hooks**: decoupled signaling, reactions, and emission controls
+- **Middleware**: reusable policies around tasks and resources
+- **Tags**: typed discovery, metadata, and framework behaviors
+- **Errors**: reusable typed error helpers and declarative `.throws()` contracts
+
+For specialized features beyond the core concepts:
+
+- **Async Context**: per-request or thread-local state via `r.asyncContext()`
+- **Durable Workflows** (Node-only): replay-safe orchestration primitives in [DURABLE_WORKFLOWS.md](../readmes/DURABLE_WORKFLOWS.md)
+- **Remote Lanes** (Node): distributed events and RPC in [REMOTE_LANES.md](../readmes/REMOTE_LANES.md)
+- **Serialization**: custom value transport in [SERIALIZER_PROTOCOL.md](../readmes/SERIALIZER_PROTOCOL.md)
 
 **Next step**: go to [Your First 5 Minutes](#your-first-5-minutes) if you want the fastest proof, or [How Does It Compare?](#how-does-it-compare) if you are still evaluating alternatives.

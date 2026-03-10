@@ -77,7 +77,7 @@ Avoid in every paragraph - save for milestone moments.
 
 ### Intro Docs Rules
 
-Intro-facing docs (`00-overview.md`, `01-getting-started.md`, `01-readme.md`, `01b-quick-wins.md`) have a stricter job than the full guide:
+Intro-facing docs (`00-overview.md`, `01-getting-started.md`, `01-readme.md`) have a stricter job than the full guide:
 
 - Lead with one sharp problem statement, not a generic framework pitch
 - Put the first runnable success before comparison tables or feature inventories
@@ -204,7 +204,7 @@ Include sardonic "runtime" quotes at the end of major sections for personality. 
 ```markdown
 **Good:**
 
-## Quick Wins: Pressure-Tested Recipes
+## Pressure-Tested Middleware Patterns
 
 ## Tasks
 
@@ -218,7 +218,7 @@ Include sardonic "runtime" quotes at the end of major sections for personality. 
 
 **Bad:**
 
-## Quick Wins!!! (with decorative symbols)
+## Middleware Patterns!!! (with decorative symbols)
 
 ### Creating Tasks!!!
 ```
@@ -254,12 +254,17 @@ The main README follows this high-level structure:
 - How Does It Compare? (framework comparison)
 - What's in the Box? (feature matrix)
 - Learning Guide (common patterns)
-- Quick Wins (pressure-tested recipes)
-- The Big Five (core concepts)
+- Core concepts overview
+- Resources, Tasks, Events & Hooks, Middleware, Tags, Errors
 
-## Core Concepts (Alphabetical)
+## Core Concepts (Grouped for learning)
 
-- Tasks, Resources, Events, Hooks, Middleware, Tags, Errors
+- Resources
+- Tasks
+- Events & Hooks
+- Middleware
+- Tags
+- Errors
 
 ## Runtime & Execution
 
@@ -796,7 +801,7 @@ The main `README.md` and `FULL_GUIDE.md` are not edited directly. They are compo
 
 ### Chapter Files (guide-units/)
 
-- **Naming**: `NN-chapter-name.md` (e.g., `02-core-concepts.md`)
+- **Naming**: `NN-chapter-name.md` (e.g., `02-resources.md`)
 - **Order**: Numbered for composition order
 - **Size**: Keep under 400 lines when possible; split if larger
 - **Self-contained**: Each chapter should make sense on its own
@@ -837,7 +842,7 @@ Before committing documentation changes:
 
 ```bash
 # 1. Edit the relevant chapter
-nano guide-units/02-core-concepts.md
+nano guide-units/02-resources.md
 
 # 2. Regenerate docs
 npm run guide:compose
@@ -855,44 +860,32 @@ git commit -m "docs: your change description"
 
 ---
 
-## Quick Wins Section Pattern
+## Concept Chapter Pattern
 
-The "Quick Wins" section is a special format designed for production-oriented recipes. It should follow this structure:
+Concept chapters should teach one ownership surface at a time.
 
 ```markdown
-## Quick Wins: Pressure-Tested Recipes
+## Resources
 
-**5 real-world problems, solved with explicit boundaries.** Adapt the recipe to your app.
-
-### 1. Problem Name (with result description)
+Resources own lifecycle, configuration, and subtree boundaries.
 
 \`\`\`typescript
 import { r } from "@bluelibs/runner";
 
-const solution = r
-.task("solution")
-.middleware([/* key feature */])
-.run(async (input) => {
-// Implementation with inline comments explaining key points
-})
-.build();
-
-// First call: hits database
-// Next 60 seconds: instant from cache
-// After 60s: refreshes automatically
+const database = r
+  .resource("database")
+  .init(async () => connectDb())
+  .build();
 \`\`\`
-
-### 2. Next Problem...
 ```
 
 **Guidelines:**
 
-- Use problem-oriented headings
-- Include import statements
-- State boundaries or assumptions when the snippet is partial
-- Show results or runtime effects below code blocks
-- Keep examples focused (one concept per win)
-- Include realistic use cases
+- Keep the intro focused on what the concept owns
+- Use complete imports
+- Prefer one runnable example before long rule lists
+- Move advanced edge cases to later guide chapters when possible
+- Keep cross-links explicit when a concept depends on a later chapter
 
 ---
 

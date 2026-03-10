@@ -143,7 +143,7 @@ If you are here to evaluate fit instead of running code immediately:
 
 - Read [What Is This Thing?](#what-is-this-thing) for the mental model
 - Read [How Does It Compare?](#how-does-it-compare) for framework tradeoffs
-- Read [Quick Wins](#quick-wins-pressure-tested-recipes) for production recipes
+- Read [Middleware](./readmes/FULL_GUIDE.md#middleware) for resilience and policy wiring
 
 Now let's get you to a first successful run.
 

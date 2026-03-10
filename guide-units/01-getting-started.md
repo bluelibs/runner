@@ -415,7 +415,7 @@ const myTask = r
   .build();
 ```
 
-See [Quick Wins](#quick-wins-pressure-tested-recipes) for ready-to-use examples with built-in Runner APIs.
+See [Middleware](./02d-middleware.md#middleware) for ready-to-use resilience and policy patterns built on Runner APIs.
 
 ### Pattern 7: Typed Errors
 
@@ -460,12 +460,12 @@ See [Errors](#errors) for `throws` contracts and advanced patterns.
 
 Now that you know the patterns, here's your learning path:
 
-1. **[Quick Wins](#quick-wins-pressure-tested-recipes)** - Production recipes for caching, retry, timeouts
-2. **[The Big Five](#the-big-five)** - Deep dive into Tasks, Resources, Events, Middleware, Tags
-3. **[Events & Hooks](#events)** - Decouple your app with event-driven patterns
-4. **[Middleware](#middleware)** - Add cross-cutting concerns cleanly
-5. **[Testing](#testing)** - Unit tests, integration tests, overrides, and isolation
-6. **[Troubleshooting](#troubleshooting)** - Common issues and how to fix them
+1. **[Resources](./02-resources.md#resources)** - Shared services, lifecycle, and boundaries
+2. **[Tasks](./02b-tasks.md#tasks)** - Core business operations and execution context
+3. **[Events and Hooks](./02c-events-hooks.md#events-and-hooks)** - Decouple your app with event-driven patterns
+4. **[Middleware](./02d-middleware.md#middleware)** - Add cross-cutting concerns cleanly
+5. **[Errors](./02f-errors.md#errors)** - Typed failures and `.throws()` contracts
+6. **[Testing](#testing)** - Unit tests, integration tests, overrides, and isolation
 
 > **runtime:** "Seven patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
 
