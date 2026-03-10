@@ -7,7 +7,7 @@ import {
 import { withUserContexts } from "../exposure/handlers/contextWrapper";
 import {
   buildAsyncContextHeader,
-  resolveLaneAsyncContextAllowList,
+  resolveLaneAsyncContextPolicy,
 } from "../remote-lanes/asyncContextAllowlist";
 import {
   issueRemoteLaneToken,
@@ -92,17 +92,10 @@ function createLocalSimulatedScopeRunner(context: RpcLanesRuntimeContext) {
     const configuredBinding = config.topology.bindings.find(
       (entry) => entry.lane.id === lane.id,
     );
-    const allowList = resolveLaneAsyncContextAllowList({
+    return resolveLaneAsyncContextPolicy({
       laneAsyncContexts: lane.asyncContexts,
       legacyAllowAsyncContext: configuredBinding?.allowAsyncContext,
     });
-    const allowAsyncContext =
-      allowList === undefined ? true : allowList.length > 0;
-
-    return {
-      allowList,
-      allowAsyncContext,
-    };
   };
 
   return async <T>(

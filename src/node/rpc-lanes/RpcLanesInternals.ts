@@ -17,8 +17,9 @@ import {
 } from "../remote-lanes/mode";
 import { collectRpcTopologyLanes } from "../remote-lanes/topologyLanes";
 import { resolveRpcLaneAssignments } from "./RpcLaneAssignments";
-import { resolveLaneAsyncContextAllowList } from "../remote-lanes/asyncContextAllowlist";
+import { resolveLaneAsyncContextPolicy } from "../remote-lanes/asyncContextAllowlist";
 import type { NodeExposurePolicySnapshot } from "../exposure/policy";
+import { collectRemoteLaneResourceDependencies } from "../remote-lanes/resourceDependencies";
 
 const RPC_LANE_COMMUNICATOR_DEPENDENCY_PREFIX = "__rpcLaneCommunicator__:";
 
@@ -49,18 +50,12 @@ export interface RpcLaneResolvedState {
 export function collectRpcLaneCommunicatorResourceDependencies(
   config: RpcLanesResourceConfig,
 ): Record<string, any> {
-  if (resolveRemoteLanesMode(config.mode) !== "network") {
-    return {};
-  }
-
-  const deps: Record<string, any> = {};
-
-  for (const binding of config.topology.bindings) {
-    deps[toCommunicatorDependencyKey(binding.communicator.id)] =
-      binding.communicator;
-  }
-
-  return deps;
+  return collectRemoteLaneResourceDependencies({
+    mode: config.mode,
+    bindings: config.topology.bindings,
+    getResource: (binding) => binding.communicator,
+    toDependencyKey: toCommunicatorDependencyKey,
+  });
 }
 
 export function resolveRpcLaneState(
@@ -300,7 +295,7 @@ function resolveBindings(
       });
     }
 
-    const asyncContextAllowList = resolveLaneAsyncContextAllowList({
+    const asyncContextPolicy = resolveLaneAsyncContextPolicy({
       laneAsyncContexts: binding.lane.asyncContexts,
       legacyAllowAsyncContext: binding.allowAsyncContext,
     });
@@ -308,9 +303,8 @@ function resolveBindings(
     map.set(binding.lane.id, {
       lane: binding.lane,
       communicator: communicator as IRpcLaneCommunicator,
-      allowAsyncContext:
-        asyncContextAllowList === undefined || asyncContextAllowList.length > 0,
-      asyncContextAllowList,
+      allowAsyncContext: asyncContextPolicy.allowAsyncContext,
+      asyncContextAllowList: asyncContextPolicy.allowList,
       auth: binding.auth,
     });
   }

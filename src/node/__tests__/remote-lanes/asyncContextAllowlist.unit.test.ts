@@ -1,6 +1,7 @@
 import {
   buildAsyncContextHeader,
   resolveLaneAsyncContextAllowList,
+  resolveLaneAsyncContextPolicy,
 } from "../../remote-lanes/asyncContextAllowlist";
 
 describe("asyncContext allowlist helpers", () => {
@@ -22,6 +23,25 @@ describe("asyncContext allowlist helpers", () => {
         ],
       }),
     ).toEqual(["ctx.string", "ctx-object"]);
+
+    expect(
+      resolveLaneAsyncContextPolicy({
+        laneAsyncContexts: ["ctx.allowed"],
+      }),
+    ).toEqual({
+      allowList: ["ctx.allowed"],
+      allowAsyncContext: true,
+    });
+    expect(resolveLaneAsyncContextPolicy({})).toEqual({
+      allowList: [],
+      allowAsyncContext: false,
+    });
+    expect(
+      resolveLaneAsyncContextPolicy({ legacyAllowAsyncContext: true }),
+    ).toEqual({
+      allowList: undefined,
+      allowAsyncContext: true,
+    });
   });
 
   it("builds context header for allowlisted/all contexts and skips unavailable ones", () => {

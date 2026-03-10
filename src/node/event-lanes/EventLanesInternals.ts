@@ -16,6 +16,7 @@ import type {
   IEventLaneQueue,
 } from "./types";
 import { resolveRemoteLanesMode } from "../remote-lanes/mode";
+import { collectRemoteLaneResourceDependencies } from "../remote-lanes/resourceDependencies";
 
 const EVENT_LANE_QUEUE_DEPENDENCY_PREFIX = "__eventLaneQueue__:";
 export const DEFAULT_RELAY_SOURCE_PREFIX = "runner.event-lanes.relay:";
@@ -64,19 +65,13 @@ export function createDefaultEventLanesContext(): EventLanesResourceContext {
 export function collectEventLaneQueueResourceDependencies(
   config: EventLanesResourceConfig,
 ): Record<string, EventLaneQueueResource> {
-  if (resolveRemoteLanesMode(config.mode) !== "network") {
-    return {};
-  }
-
-  const deps: Record<string, EventLaneQueueResource> = {};
-
-  for (const binding of config.topology.bindings) {
-    if (isResource(binding.queue)) {
-      deps[toQueueDependencyKey(binding.queue.id)] = binding.queue;
-    }
-  }
-
-  return deps;
+  return collectRemoteLaneResourceDependencies({
+    mode: config.mode,
+    bindings: config.topology.bindings,
+    getResource: (binding) =>
+      isResource(binding.queue) ? binding.queue : undefined,
+    toDependencyKey: toQueueDependencyKey,
+  });
 }
 
 export function resolveEventLaneBindings(

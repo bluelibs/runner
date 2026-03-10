@@ -40,6 +40,21 @@ export function resolveLaneAsyncContextAllowList(options: {
   return Array.from(ids);
 }
 
+export function resolveLaneAsyncContextPolicy(options: {
+  laneAsyncContexts?: readonly AsyncContextRef[];
+  legacyAllowAsyncContext?: boolean;
+}): {
+  allowList: readonly string[] | undefined;
+  allowAsyncContext: boolean;
+} {
+  const allowList = resolveLaneAsyncContextAllowList(options);
+
+  return {
+    allowList,
+    allowAsyncContext: allowList === undefined || allowList.length > 0,
+  };
+}
+
 export function buildAsyncContextHeader(options: {
   allowList: readonly string[] | undefined;
   registry: ReadonlyMap<string, IAsyncContext<unknown>>;

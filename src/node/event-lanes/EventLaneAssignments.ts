@@ -10,10 +10,12 @@ import { globalTags } from "../../globals/globalTags";
 import type { Store } from "../../models/Store";
 import { collectRpcTopologyLanes } from "../remote-lanes/topologyLanes";
 import {
+  assignLaneTargetOrThrow,
   readTargetId,
   isRegisteredDefinitionId,
   collectCrossLaneApplyToEventIds,
   toPublicPredicateCandidate,
+  visitLaneApplyTo,
 } from "../remote-lanes/laneAssignmentUtils";
 
 const RPC_LANES_RESOURCE_ID = "platform-node-resources-rpcLanes";
@@ -26,68 +28,41 @@ export function resolveEventLaneAssignments(
   store: Store,
   lanes: readonly IEventLaneDefinition[],
 ): Map<string, EventLaneRoute> {
-  const routesByEventId = new Map<string, EventLaneRoute>();
+  const laneByEventId = new Map<string, IEventLaneDefinition>();
   const rpcLaneApplyToEventIds = collectRpcLaneApplyToEventIds(store);
 
   for (const lane of lanes) {
     const applyTo = lane.applyTo;
     if (applyTo === undefined) continue;
 
-    if (typeof applyTo === "function") {
-      for (const eventEntry of store.events.values()) {
-        if (!applyTo(toPublicPredicateCandidate(store, eventEntry.event))) {
-          continue;
-        }
-        const eventId = eventEntry.event.id;
-        assertEventIsNotExplicitlyAssignedToRpcLane(
+    visitLaneApplyTo({
+      store,
+      laneId: lane.id,
+      applyTo,
+      invalidTargetError: eventLaneApplyToInvalidTargetError,
+      predicateSources: store.events.values(),
+      toPredicateCandidate: (eventEntry) =>
+        toPublicPredicateCandidate(store, eventEntry.event),
+      onPredicateMatch: (eventEntry) => {
+        assignEventToLane({
+          laneByEventId,
+          rpcLaneApplyToEventIds,
+          eventId: eventEntry.event.id,
+          lane,
+          store,
+        });
+      },
+      resolveTarget: resolveEventLaneTarget,
+      onResolvedTarget: (eventId) => {
+        assignEventToLane({
+          laneByEventId,
           rpcLaneApplyToEventIds,
           eventId,
-          lane.id,
+          lane,
           store,
-        );
-
-        const current = routesByEventId.get(eventId);
-        if (current && current.lane.id !== lane.id) {
-          eventLaneAssignmentConflictError.throw({
-            eventId: store.toPublicId(eventId),
-            currentLaneId: current.lane.id,
-            attemptedLaneId: lane.id,
-          });
-        }
-
-        if (!current) {
-          routesByEventId.set(eventId, { lane });
-        }
-      }
-      continue;
-    }
-
-    if (!Array.isArray(applyTo)) {
-      eventLaneApplyToInvalidTargetError.throw({ laneId: lane.id });
-    }
-
-    for (const target of applyTo) {
-      const eventId = resolveEventLaneTarget(target, lane.id, store);
-      assertEventIsNotExplicitlyAssignedToRpcLane(
-        rpcLaneApplyToEventIds,
-        eventId,
-        lane.id,
-        store,
-      );
-
-      const current = routesByEventId.get(eventId);
-      if (current && current.lane.id !== lane.id) {
-        eventLaneAssignmentConflictError.throw({
-          eventId: store.toPublicId(eventId),
-          currentLaneId: current.lane.id,
-          attemptedLaneId: lane.id,
         });
-      }
-
-      if (!current) {
-        routesByEventId.set(eventId, { lane });
-      }
-    }
+      },
+    });
   }
 
   for (const eventEntry of store.events.values()) {
@@ -97,7 +72,7 @@ export function resolveEventLaneAssignments(
     }
 
     const eventId = eventEntry.event.id;
-    if (routesByEventId.has(eventId)) {
+    if (laneByEventId.has(eventId)) {
       // applyTo is authoritative; tags only apply when no applyTo matched.
       continue;
     }
@@ -115,12 +90,41 @@ export function resolveEventLaneAssignments(
       });
     }
 
-    routesByEventId.set(eventId, {
-      lane: laneConfig.lane,
-    });
+    laneByEventId.set(eventId, laneConfig.lane);
   }
 
-  return routesByEventId;
+  return new Map(
+    Array.from(laneByEventId.entries(), ([eventId, lane]) => [
+      eventId,
+      { lane },
+    ]),
+  );
+}
+
+function assignEventToLane(options: {
+  laneByEventId: Map<string, IEventLaneDefinition>;
+  rpcLaneApplyToEventIds: Set<string>;
+  eventId: string;
+  lane: IEventLaneDefinition;
+  store: Store;
+}): void {
+  const { laneByEventId, rpcLaneApplyToEventIds, eventId, lane, store } =
+    options;
+  assertEventIsNotExplicitlyAssignedToRpcLane(
+    rpcLaneApplyToEventIds,
+    eventId,
+    lane.id,
+    store,
+  );
+
+  assignLaneTargetOrThrow({
+    assignments: laneByEventId,
+    targetId: eventId,
+    lane,
+    store,
+    targetField: "eventId",
+    conflictError: eventLaneAssignmentConflictError,
+  });
 }
 
 function assertEventIsNotExplicitlyAssignedToRpcLane(

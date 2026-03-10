@@ -12,10 +12,12 @@ import type { Store } from "../../models/Store";
 import { collectEventTopologyLanes } from "../remote-lanes/topologyLanes";
 import { EVENT_LANES_RESOURCE_ID } from "../event-lanes/eventLanes.resource";
 import {
+  assignLaneTargetOrThrow,
   readTargetId,
   isRegisteredDefinitionId,
   collectCrossLaneApplyToEventIds,
   toPublicPredicateCandidate,
+  visitLaneApplyTo,
 } from "../remote-lanes/laneAssignmentUtils";
 
 type ResolvedTarget =
@@ -39,47 +41,55 @@ export function resolveRpcLaneAssignments(
     const applyTo = lane.applyTo;
     if (applyTo === undefined) continue;
 
-    if (typeof applyTo === "function") {
-      for (const taskEntry of store.tasks.values()) {
-        if (applyTo(toPublicPredicateCandidate(store, taskEntry.task))) {
-          assignTask(taskLaneByTaskId, taskEntry.task.id, lane, store);
+    visitLaneApplyTo({
+      store,
+      laneId: lane.id,
+      applyTo,
+      invalidTargetError: rpcLaneApplyToInvalidTargetError,
+      predicateSources: [
+        ...Array.from(store.tasks.values(), (taskEntry) => ({
+          kind: "task" as const,
+          entry: taskEntry,
+        })),
+        ...Array.from(store.events.values(), (eventEntry) => ({
+          kind: "event" as const,
+          entry: eventEntry,
+        })),
+      ],
+      toPredicateCandidate: (candidate) =>
+        candidate.kind === "task"
+          ? toPublicPredicateCandidate(store, candidate.entry.task)
+          : toPublicPredicateCandidate(store, candidate.entry.event),
+      onPredicateMatch: (candidate) => {
+        if (candidate.kind === "task") {
+          assignTask(taskLaneByTaskId, candidate.entry.task.id, lane, store);
+          return;
         }
-      }
 
-      for (const eventEntry of store.events.values()) {
-        if (!applyTo(toPublicPredicateCandidate(store, eventEntry.event))) {
-          continue;
-        }
         assertEventIsNotExplicitlyAssignedToEventLane(
           eventLaneApplyToEventIds,
-          eventEntry.event.id,
+          candidate.entry.event.id,
           lane.id,
           store,
         );
-        assignEvent(eventLaneByEventId, eventEntry.event.id, lane, store);
-      }
-      continue;
-    }
+        assignEvent(eventLaneByEventId, candidate.entry.event.id, lane, store);
+      },
+      resolveTarget: resolveRpcLaneTarget,
+      onResolvedTarget: (resolvedTarget) => {
+        if (resolvedTarget.kind === "task") {
+          assignTask(taskLaneByTaskId, resolvedTarget.id, lane, store);
+          return;
+        }
 
-    if (!Array.isArray(applyTo)) {
-      rpcLaneApplyToInvalidTargetError.throw({ laneId: lane.id });
-    }
-
-    for (const target of applyTo) {
-      const resolvedTarget = resolveRpcLaneTarget(target, lane.id, store);
-      if (resolvedTarget.kind === "task") {
-        assignTask(taskLaneByTaskId, resolvedTarget.id, lane, store);
-        continue;
-      }
-
-      assertEventIsNotExplicitlyAssignedToEventLane(
-        eventLaneApplyToEventIds,
-        resolvedTarget.id,
-        lane.id,
-        store,
-      );
-      assignEvent(eventLaneByEventId, resolvedTarget.id, lane, store);
-    }
+        assertEventIsNotExplicitlyAssignedToEventLane(
+          eventLaneApplyToEventIds,
+          resolvedTarget.id,
+          lane.id,
+          store,
+        );
+        assignEvent(eventLaneByEventId, resolvedTarget.id, lane, store);
+      },
+    });
   }
 
   for (const taskEntry of store.tasks.values()) {
@@ -152,18 +162,14 @@ function assignTask(
   lane: IRpcLaneDefinition,
   store: Store,
 ): void {
-  const current = assignments.get(taskId);
-  if (current && current.id !== lane.id) {
-    rpcLaneTaskAssignmentConflictError.throw({
-      taskId: store.toPublicId(taskId),
-      currentLaneId: current.id,
-      attemptedLaneId: lane.id,
-    });
-  }
-
-  if (!current) {
-    assignments.set(taskId, lane);
-  }
+  assignLaneTargetOrThrow({
+    assignments,
+    targetId: taskId,
+    lane,
+    store,
+    targetField: "taskId",
+    conflictError: rpcLaneTaskAssignmentConflictError,
+  });
 }
 
 function assignEvent(
@@ -172,18 +178,14 @@ function assignEvent(
   lane: IRpcLaneDefinition,
   store: Store,
 ): void {
-  const current = assignments.get(eventId);
-  if (current && current.id !== lane.id) {
-    rpcLaneEventAssignmentConflictError.throw({
-      eventId: store.toPublicId(eventId),
-      currentLaneId: current.id,
-      attemptedLaneId: lane.id,
-    });
-  }
-
-  if (!current) {
-    assignments.set(eventId, lane);
-  }
+  assignLaneTargetOrThrow({
+    assignments,
+    targetId: eventId,
+    lane,
+    store,
+    targetField: "eventId",
+    conflictError: rpcLaneEventAssignmentConflictError,
+  });
 }
 
 function resolveRpcLaneTarget(
