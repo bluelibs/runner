@@ -214,6 +214,16 @@ export class RunResult<V> implements IRuntime<V> {
   }
 
   /**
+   * Business admissions stay queryable through shutdown so lifecycle admission
+   * can decide whether a call is still allowed for the current phase.
+   */
+  private ensureRuntimeAvailableForBusinessCalls() {
+    if (this.#disposed) {
+      runResultDisposedError.throw();
+    }
+  }
+
+  /**
    * Enforces the root resource's exported API surface for runtime callers.
    *
    * When the root resource declares `.isolate({ exports: [...] })`, only those items may be
@@ -320,7 +330,7 @@ export class RunResult<V> implements IRuntime<V> {
         : [input: I, options?: TaskCallOptions]
       : [input?: unknown, options?: TaskCallOptions]
   ): TTask extends ITask<any, infer O, any> ? O : Promise<any> => {
-    this.ensureRuntimeIsActive();
+    this.ensureRuntimeAvailableForBusinessCalls();
     const [input, options] = args as [unknown, TaskCallOptions | undefined];
     const taskId = this.resolveRuntimeElementId(task);
     if (!this.store.tasks.has(taskId)) {
@@ -370,7 +380,7 @@ export class RunResult<V> implements IRuntime<V> {
     payload?: P extends undefined | void ? undefined : P,
     options?: IEventEmitOptions,
   ) => {
-    this.ensureRuntimeIsActive();
+    this.ensureRuntimeAvailableForBusinessCalls();
 
     const eventId = this.resolveRuntimeElementId(event);
     if (!this.store.events.has(eventId)) {
@@ -653,7 +663,7 @@ export class RunResult<V> implements IRuntime<V> {
 
     this.#disposing = true;
     this.recoveryController.dispose();
-    this.store.beginDisposing();
+    this.store.beginCoolingDown();
 
     this.#disposePromise = Promise.resolve()
       .then(() => this.disposeFn())

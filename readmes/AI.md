@@ -189,7 +189,9 @@ Lifecycle:
   - run `ready()` in dependency order
   - emit `events.ready`
 - Shutdown order:
+  - enter `coolingDown`
   - run `cooldown()` in reverse dependency order
+  - enter `disposing`
   - emit `events.disposing`
   - drain in-flight work
   - emit `events.drained`
@@ -205,7 +207,7 @@ They are Runner's main composition and ownership unit: a resource can register c
 
 - `init(config, deps, context)` creates the value.
 - `ready(value, config, deps, context)` starts ingress after startup lock and runs after dependencies are all initialized.
-- `cooldown(value, config, deps, context)` stops ingress quickly at shutdown start and runs before dependencies are torn down.
+- `cooldown(value, config, deps, context)` stops ingress quickly at shutdown start and runs during `coolingDown`, before `disposing` begins. Task runs and event emissions stay open during `coolingDown`. Once `disposing` begins, the cooling resource itself remains allowed as a resource-origin source during the shutdown drain window, and `cooldown()` may optionally return additional resource definitions whose resource-origin task/event admissions should remain allowed too.
 - `dispose(value, config, deps, context)` performs final teardown after drain and runs in reverse dependency order.
 - `health(value, config, deps, context)` is an optional async probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.
   Return `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.

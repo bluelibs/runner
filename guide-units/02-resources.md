@@ -189,11 +189,12 @@ runtime.recoverWhen({
 
 ### Lifecycle and Ownership Rules
 
-Resources move through a deliberate sequence of phases. Understanding which phase to use—and which to leave alone—prevents subtle shutdown bugs.
+Resources move through a deliberate sequence of phases. Understanding which phase to use—and which to leave alone—prevents subtle shutdown bugs. All lifecycle methods are async.
 
 - `init(config, deps, context)` creates the resource value
 - `ready(value, config, deps, context)` starts ingress after startup lock
-- `cooldown(value, config, deps, context)` stops new ingress quickly at shutdown start, a way of saying "stop any additional work, but let in-flight work finish"
+- `cooldown(value, config, deps, context)` stops new ingress **quickly**, a way of saying "stop any additional work, but let in-flight work finish".
+  The cooling resource itself stays allowed as a resource-origin source while Runner drains this shutdown, and `cooldown()` may optionally return additional resource definitions whose resource-origin task/event admissions should stay allowed too.
 - `dispose(value, config, deps, context)` performs final teardown after task/event drain.
 - Config-only resources can omit `.init()` and resolve to `undefined`
 - `r.resource(id, { gateway: true })` suppresses the resource's own namespace segment
@@ -201,15 +202,9 @@ Resources move through a deliberate sequence of phases. Understanding which phas
 - If a resource declares `.register(...)`, it is non-leaf and cannot be forked
 - `.context(() => initialContext)` provides private and mutable resource-local state shared across lifecycle methods
 
-Use the phases intentionally:
+Do not use `cooldown()` as a general teardown phase for support resources such as databases. Cooldown is designed for ingress points that need to stop accepting new work quickly while letting in-flight work finish.
 
-- `ready()` for listeners, schedulers, consumers, or other ingress
-- `cooldown()` to stop admitting fresh work
-- `dispose()` for final cleanup after in-flight work drains
-
-Do not use `cooldown()` as a general teardown phase for support resources such as databases.
-
-Gateway resources are structural parents. A gateway resource still owns registration and lifecycle, but it does not add its own id segment when child ids are compiled. Use `{ gateway: true }` when you want a module boundary without another namespace layer in the final ids, then mount that gateway under a separate non-gateway app root when calling `run(...)`.
+Gateway resources are structural parents. A gateway resource still owns registration and lifecycle, but it does not add its own id segment when child ids are compiled. Use `r.resource(id, { gateway: true })` when you want a module boundary without another namespace layer in the final ids, then mount that gateway under a separate non-gateway app root when calling `run(...)`.
 
 ### Resource Configuration
 

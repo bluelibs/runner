@@ -2,7 +2,10 @@ import {
   LifecycleAdmissionController,
   RuntimeLifecyclePhase,
 } from "../../../models/runtime/LifecycleAdmissionController";
-import { runtimeSource } from "../../../types/runtimeSource";
+import {
+  RuntimeCallSourceKind,
+  runtimeSource,
+} from "../../../types/runtimeSource";
 
 describe("LifecycleAdmissionController", () => {
   it("keeps disposed phase when beginDrained is called after markDisposed", () => {
@@ -71,5 +74,100 @@ describe("LifecycleAdmissionController", () => {
     controller.resume();
     controller.resume();
     expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.Running);
+  });
+
+  it("keeps admissions open during coolingDown and applies resource allowlists only once disposing starts", () => {
+    const controller = new LifecycleAdmissionController();
+    const runtimeCall = runtimeSource.runtime("runtime-api");
+    const resourceCall = runtimeSource.resource("resource-a", "app.resource-a");
+
+    controller.beginCoolingDown();
+
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.CoolingDown);
+    expect(controller.canAdmitTask(runtimeCall)).toBe(true);
+    expect(controller.canAdmitTask(resourceCall)).toBe(true);
+
+    controller.allowShutdownResourceSource("app.resource-a");
+    controller.beginDisposing();
+
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.Disposing);
+    expect(controller.canAdmitTask(runtimeCall)).toBe(false);
+    expect(controller.canAdmitTask(resourceCall)).toBe(true);
+  });
+
+  it("keeps beginCoolingDown idempotent once shutdown has progressed", () => {
+    const controller = new LifecycleAdmissionController();
+
+    controller.beginCoolingDown();
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.CoolingDown);
+
+    controller.beginCoolingDown();
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.CoolingDown);
+
+    controller.beginDisposing();
+    controller.beginCoolingDown();
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.Disposing);
+  });
+
+  it("keeps beginDisposing idempotent once shutdown has progressed", () => {
+    const controller = new LifecycleAdmissionController();
+
+    controller.beginDisposing();
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.Disposing);
+
+    controller.beginDisposing();
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.Disposing);
+
+    controller.beginDrained();
+    controller.beginDisposing();
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.Drained);
+
+    controller.markDisposed();
+    controller.beginDisposing();
+    expect(controller.getPhase()).toBe(RuntimeLifecyclePhase.Disposed);
+  });
+
+  it("admits explicitly allowed resource sources during disposing only", () => {
+    const controller = new LifecycleAdmissionController();
+    const allowedResource = runtimeSource.resource(
+      "resource-a",
+      "app.resource-a",
+    );
+    const otherResource = runtimeSource.resource(
+      "resource-b",
+      "app.resource-b",
+    );
+
+    controller.beginDisposing();
+
+    expect(controller.canAdmitTask(allowedResource)).toBe(false);
+
+    controller.allowShutdownResourceSource("app.resource-a");
+
+    expect(controller.canAdmitTask(allowedResource)).toBe(true);
+    expect(controller.canAdmitTask(otherResource)).toBe(false);
+
+    controller.beginDrained();
+
+    expect(controller.canAdmitTask(allowedResource)).toBe(false);
+  });
+
+  it("ignores shutdown resource allows outside disposing and falls back to resource id when path is missing", () => {
+    const controller = new LifecycleAdmissionController();
+    const resourceSource = {
+      kind: RuntimeCallSourceKind.Resource,
+      id: "resource-no-path",
+    };
+
+    controller.beginPausing();
+    controller.allowShutdownResourceSource("resource-no-path");
+    expect(controller.canAdmitTask(resourceSource)).toBe(false);
+
+    controller.resume();
+    controller.beginDisposing();
+    expect(controller.canAdmitTask(resourceSource)).toBe(false);
+
+    controller.allowShutdownResourceSource("resource-no-path");
+    expect(controller.canAdmitTask(resourceSource)).toBe(true);
   });
 });

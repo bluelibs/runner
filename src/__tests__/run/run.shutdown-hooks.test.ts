@@ -4,6 +4,7 @@ import {
   defineResource,
   defineTask,
 } from "../../define";
+import { globalResources } from "../../globals/globalResources";
 import { globalEvents } from "../../globals/globalEvents";
 import { run } from "../../run";
 import { createMessageError } from "../../errors";
@@ -830,8 +831,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     expect(disposed).toBe(true);
   });
 
-  it("aggregates cooldown and dispose errors while continuing shutdown", async () => {
+  it("logs cooldown errors and still rejects only on dispose errors", async () => {
     let disposeCalled = false;
+    const logs: Array<{ level: string; message: unknown; error?: string }> = [];
 
     const app = defineResource({
       id: "tests-app-dispose-cooldown-errors",
@@ -851,20 +853,24 @@ describe("run.ts shutdown hooks & error boundary", () => {
       shutdownHooks: false,
       errorBoundary: false,
     });
+    runtime.logger.onLog((log) => {
+      logs.push({
+        level: log.level,
+        message: log.message,
+        error: log.error?.message,
+      });
+    });
 
-    let caught: unknown;
-    try {
-      await runtime.dispose();
-    } catch (error) {
-      caught = error;
-    }
-
+    await expect(runtime.dispose()).rejects.toThrow(/dispose failed/);
     expect(disposeCalled).toBe(true);
-
-    const aggregateError = caught as Error & { name: string; errors: Error[] };
-    expect(aggregateError.name).toBe("AggregateError");
-    expect(aggregateError.errors.map((error) => error.message)).toEqual(
-      expect.arrayContaining(["cooldown failed", "dispose failed"]),
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          message: "Resource cooldown failed; continuing shutdown.",
+          error: "cooldown failed",
+        }),
+      ]),
     );
   });
 
@@ -895,9 +901,10 @@ describe("run.ts shutdown hooks & error boundary", () => {
     expect(dispose).toHaveBeenCalledTimes(1);
   });
 
-  it("normalizes non-error cooldown failures in parallel waves and still disposes", async () => {
+  it("normalizes non-error cooldown failures in parallel waves, logs them, and still disposes", async () => {
     let firstDisposed = false;
     let secondDisposed = false;
+    const logs: Array<{ level: string; error?: string }> = [];
 
     const first = defineResource({
       id: "tests-app-dispose-cooldown-non-error-parallel-first",
@@ -938,11 +945,289 @@ describe("run.ts shutdown hooks & error boundary", () => {
       errorBoundary: false,
       lifecycleMode: "parallel",
     });
-
-    await expect(runtime.dispose()).rejects.toMatchObject({
-      message: "cooldown-string-failure",
+    runtime.logger.onLog((log) => {
+      logs.push({
+        level: log.level,
+        error: log.error?.message,
+      });
     });
+
+    await expect(runtime.dispose()).resolves.toBeUndefined();
     expect(firstDisposed).toBe(true);
     expect(secondDisposed).toBe(true);
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          error: "cooldown-string-failure",
+        }),
+      ]),
+    );
+  });
+
+  it("allows resource-origin drain work from cooldown-declared resources during disposing", async () => {
+    let releaseGate: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    let resolveTaskStarted: (() => void) | undefined;
+    const taskStarted = new Promise<void>((resolve) => {
+      resolveTaskStarted = resolve;
+    });
+    let resolveDisposingHook: (() => void) | undefined;
+    const disposingHookRan = new Promise<void>((resolve) => {
+      resolveDisposingHook = resolve;
+    });
+    const calls: string[] = [];
+    const taskErrors: unknown[] = [];
+
+    const drainTask = defineTask({
+      id: "tests-app-dispose-cooldown-drain-task",
+      async run() {
+        calls.push("task-start");
+        resolveTaskStarted?.();
+        await gate;
+        calls.push("task-end");
+      },
+    });
+
+    const disposingHook = defineHook({
+      id: "tests-app-dispose-cooldown-drain-disposing-hook",
+      on: globalEvents.disposing,
+      async run() {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        calls.push("disposing-hook");
+        resolveDisposingHook?.();
+      },
+    });
+
+    const drainWorker = defineResource({
+      id: "tests-app-dispose-cooldown-drain-worker",
+      async init() {
+        return "worker";
+      },
+    });
+
+    const drainingIngress = defineResource({
+      id: "tests-app-dispose-cooldown-drain-resource",
+      register: [drainTask, disposingHook, drainWorker],
+      dependencies: {
+        store: globalResources.store,
+        taskRunner: globalResources.taskRunner,
+      },
+      async init() {
+        return "ready";
+      },
+      async cooldown(_value, _config, deps) {
+        calls.push("cooldown");
+        setTimeout(() => {
+          void deps.taskRunner
+            .run(drainTask, undefined, {
+              source: deps.store.createRuntimeSource("resource", drainWorker),
+            })
+            .catch((error) => {
+              taskErrors.push(error);
+            });
+        }, 0);
+        return [drainWorker];
+      },
+      async dispose() {
+        calls.push("dispose");
+      },
+    });
+
+    const runtime = await run(drainingIngress, {
+      shutdownHooks: false,
+      errorBoundary: false,
+      disposeDrainBudgetMs: 150,
+    });
+
+    const disposePromise = runtime.dispose();
+    await Promise.all([taskStarted, disposingHookRan]);
+
+    expect(taskErrors).toEqual([]);
+    expect(calls).toEqual(
+      expect.arrayContaining(["cooldown", "task-start", "disposing-hook"]),
+    );
+
+    if (!releaseGate) {
+      throw createMessageError("Expected release gate handler");
+    }
+
+    releaseGate();
+    await disposePromise;
+
+    expect(calls).toEqual([
+      "cooldown",
+      "task-start",
+      "disposing-hook",
+      "task-end",
+      "dispose",
+    ]);
+  });
+
+  it("implicitly allows the resource with cooldown() when no admission targets are returned", async () => {
+    let releaseGate: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    let resolveTaskStarted: (() => void) | undefined;
+    const taskStarted = new Promise<void>((resolve) => {
+      resolveTaskStarted = resolve;
+    });
+    const calls: string[] = [];
+    const taskErrors: unknown[] = [];
+
+    const drainTask = defineTask({
+      id: "tests-app-dispose-cooldown-implicit-self-task",
+      async run() {
+        calls.push("task-start");
+        resolveTaskStarted?.();
+        await gate;
+        calls.push("task-end");
+      },
+    });
+
+    const disposingHook = defineHook({
+      id: "tests-app-dispose-cooldown-implicit-self-disposing-hook",
+      on: globalEvents.disposing,
+      async run() {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      },
+    });
+
+    const selfDrainingResource = defineResource({
+      id: "tests-app-dispose-cooldown-implicit-self-resource",
+      register: [drainTask, disposingHook],
+      dependencies: {
+        store: globalResources.store,
+        taskRunner: globalResources.taskRunner,
+      },
+      async init() {
+        return "ready";
+      },
+      async cooldown(_value, _config, deps) {
+        calls.push("cooldown");
+        setTimeout(() => {
+          void deps.taskRunner
+            .run(drainTask, undefined, {
+              source: deps.store.createRuntimeSource(
+                "resource",
+                selfDrainingResource,
+              ),
+            })
+            .catch((error) => {
+              taskErrors.push(error);
+            });
+        }, 0);
+      },
+      async dispose() {
+        calls.push("dispose");
+      },
+    });
+
+    const app = defineResource({
+      id: "tests-app-dispose-cooldown-implicit-self",
+      register: [selfDrainingResource],
+      async init() {
+        return "root";
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+      disposeDrainBudgetMs: 150,
+    });
+
+    const disposePromise = runtime.dispose();
+    await taskStarted;
+
+    expect(taskErrors).toEqual([]);
+    expect(calls).toEqual(["cooldown", "task-start"]);
+
+    if (!releaseGate) {
+      throw createMessageError("Expected implicit self release gate handler");
+    }
+
+    releaseGate();
+    await disposePromise;
+
+    expect(calls).toEqual(["cooldown", "task-start", "task-end", "dispose"]);
+  });
+
+  it("logs cooldown admission targets that are not part of the current runtime", async () => {
+    const foreignResource = defineResource({
+      id: "tests-app-dispose-cooldown-foreign-target",
+      async init() {
+        return "foreign";
+      },
+    });
+
+    const app = defineResource({
+      id: "tests-app-dispose-cooldown-invalid-target",
+      async init() {
+        return "ok";
+      },
+      async cooldown() {
+        return [foreignResource];
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+    });
+    const logs: Array<{ level: string; error?: string }> = [];
+    runtime.logger.onLog((log) => {
+      logs.push({
+        level: log.level,
+        error: log.error?.message,
+      });
+    });
+
+    await expect(runtime.dispose()).resolves.toBeUndefined();
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          error: expect.stringMatching(/invalid cooldown admission target/i),
+        }),
+      ]),
+    );
+  });
+
+  it("logs malformed cooldown admission targets", async () => {
+    const app = defineResource({
+      id: "tests-app-dispose-cooldown-malformed-target",
+      async init() {
+        return "ok";
+      },
+      async cooldown() {
+        return [{} as never];
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+    });
+    const logs: Array<{ level: string; error?: string }> = [];
+    runtime.logger.onLog((log) => {
+      logs.push({
+        level: log.level,
+        error: log.error?.message,
+      });
+    });
+
+    await expect(runtime.dispose()).resolves.toBeUndefined();
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          error: expect.stringMatching(/invalid cooldown admission target/i),
+        }),
+      ]),
+    );
   });
 });

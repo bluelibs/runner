@@ -5,6 +5,7 @@ import {
   defineTask,
   defineTaskMiddleware,
 } from "../../define";
+import { createMessageError } from "../../errors";
 import { run } from "../../run";
 
 const SHUTDOWN_REJECTION = /(shutting down|disposed)/i;
@@ -22,6 +23,84 @@ function createGate() {
 }
 
 describe("run source-admission during shutdown drain", () => {
+  it("keeps task runs and event emissions open during coolingDown, then locks them when disposing begins", async () => {
+    let releaseCooldown: (() => void) | undefined;
+    const cooldownGate = new Promise<void>((resolve) => {
+      releaseCooldown = resolve;
+    });
+    let cooldownStarted!: () => void;
+    const cooldownReady = new Promise<void>((resolve) => {
+      cooldownStarted = resolve;
+    });
+
+    const quickTask = defineTask({
+      id: "tests-source-coolingdown-quick",
+      run: async () => "ok",
+    });
+    const blocker = createGate();
+    const blockerTask = defineTask({
+      id: "tests-source-coolingdown-blocker",
+      run: async () => {
+        await blocker.wait;
+      },
+    });
+    const quickEvent = defineEvent<void>({
+      id: "tests-source-coolingdown-event",
+    });
+    const eventHandler = jest.fn();
+    const quickHook = defineHook({
+      id: "tests-source-coolingdown-hook",
+      on: quickEvent,
+      async run() {
+        eventHandler();
+      },
+    });
+
+    const coolingResource = defineResource({
+      id: "tests-source-coolingdown-resource",
+      register: [quickTask, blockerTask, quickEvent, quickHook],
+      async cooldown() {
+        cooldownStarted();
+        await cooldownGate;
+      },
+    });
+
+    const app = defineResource({
+      id: "tests-source-coolingdown-app",
+      register: [coolingResource],
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      disposeDrainBudgetMs: 200,
+    });
+
+    const disposePromise = runtime.dispose();
+    await cooldownReady;
+
+    await expect(runtime.runTask(quickTask)).resolves.toBe("ok");
+    const inFlightBlocker = runtime.runTask(blockerTask);
+    await expect(runtime.emitEvent(quickEvent)).resolves.toBeUndefined();
+    expect(eventHandler).toHaveBeenCalledTimes(1);
+
+    if (!releaseCooldown) {
+      throw createMessageError("Expected coolingDown gate release handler");
+    }
+    releaseCooldown();
+    await new Promise((r) => setTimeout(r, 0));
+
+    await expect(
+      Promise.resolve().then(() => runtime.runTask(quickTask)),
+    ).rejects.toThrow(SHUTDOWN_REJECTION);
+    await expect(
+      Promise.resolve().then(() => runtime.emitEvent(quickEvent)),
+    ).rejects.toThrow(SHUTDOWN_REJECTION);
+
+    blocker.release();
+    await inFlightBlocker;
+    await disposePromise;
+  });
+
   it("blocks new runtime calls during disposing", async () => {
     const blocker = createGate();
     const slowTask = defineTask({

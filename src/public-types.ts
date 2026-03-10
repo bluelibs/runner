@@ -66,4 +66,6 @@ export type {
   RuntimeCallSourceKind,
 } from "./types/runtimeSource";
 
+export type { ResourceCooldownAdmissionTargets } from "./types/resource";
+
 export type { ITimerHandle, ITimers } from "./types/timers";

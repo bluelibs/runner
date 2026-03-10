@@ -7,6 +7,7 @@ import { waitForDisposeDrainBudget } from "./processShutdownHooks";
 import { resolveShutdownDrainWarningDecision } from "./shutdownDrainWarning";
 
 type LifecycleStore = {
+  beginCoolingDown(): void;
   beginDisposing(): void;
   cooldown(): Promise<void>;
   beginDrained(): void;
@@ -51,9 +52,12 @@ export async function runShutdownDisposalLifecycle(
   input: ShutdownDisposalLifecycleInput,
 ): Promise<void> {
   const disposalBudget = createDisposalBudget(input.disposeBudgetMs);
-  input.store.beginDisposing();
+  input.store.beginCoolingDown();
 
   await disposalBudget.waitWithinBudget(() => input.store.cooldown());
+  // Freeze admissions only after all cooldown hooks had a chance to stop ingress
+  // and register any shutdown-specific source allowances.
+  input.store.beginDisposing();
   await disposalBudget.waitWithinBudget(() =>
     emitLifecycleEvent(
       input.eventManager,

@@ -199,6 +199,19 @@ export const runtimeRecoverWhenRequiresPausedStateError =
     )
     .build();
 
+export const resourceCooldownAdmissionTargetInvalidError = error<
+  { resourceId: string; targetId: string } & DefaultErrorType
+>("runner.errors.resourceCooldownAdmissionTargetInvalid")
+  .format(
+    ({ resourceId, targetId }) =>
+      `Resource "${resourceId}" returned invalid cooldown admission target "${targetId}".`,
+  )
+  .remediation(
+    ({ targetId }) =>
+      `Return only registered resource definitions from cooldown(). The target "${targetId}" must belong to the current runtime.`,
+  )
+  .build();
+
 // Runtime API access blocked — target is not in the root resource's exported set
 export const runtimeAccessViolationError = error<
   {

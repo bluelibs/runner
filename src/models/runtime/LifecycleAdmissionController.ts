@@ -6,6 +6,7 @@ import {
 export const RuntimeLifecyclePhase = {
   Running: "running",
   Paused: "paused",
+  CoolingDown: "coolingDown",
   Disposing: "disposing",
   Drained: "drained",
   Disposed: "disposed",
@@ -30,6 +31,7 @@ export class LifecycleAdmissionController {
   private inFlightTaskCount = 0;
   private inFlightEventCount = 0;
   private readonly activeInternalSources = new Map<string, number>();
+  private readonly shutdownAllowedResourcePaths = new Set<string>();
   private readonly drainWaiters = new Set<DrainWaiter>();
 
   public getPhase(): RuntimeLifecyclePhase {
@@ -61,6 +63,31 @@ export class LifecycleAdmissionController {
     this.phase = RuntimeLifecyclePhase.Running;
   }
 
+  public allowShutdownResourceSource(resourcePath: string): void {
+    if (
+      this.phase !== RuntimeLifecyclePhase.CoolingDown &&
+      this.phase !== RuntimeLifecyclePhase.Disposing
+    ) {
+      return;
+    }
+
+    this.shutdownAllowedResourcePaths.add(resourcePath);
+  }
+
+  public beginCoolingDown(): void {
+    if (
+      this.phase === RuntimeLifecyclePhase.CoolingDown ||
+      this.phase === RuntimeLifecyclePhase.Disposing ||
+      this.phase === RuntimeLifecyclePhase.Drained ||
+      this.phase === RuntimeLifecyclePhase.Disposed
+    ) {
+      return;
+    }
+    this.shutdownAllowedResourcePaths.clear();
+    this.phase = RuntimeLifecyclePhase.CoolingDown;
+    this.resolveDrainWaitersIfDrained();
+  }
+
   public beginDisposing(): void {
     if (
       this.phase === RuntimeLifecyclePhase.Disposing ||
@@ -78,11 +105,13 @@ export class LifecycleAdmissionController {
       return;
     }
     this.phase = RuntimeLifecyclePhase.Drained;
+    this.shutdownAllowedResourcePaths.clear();
     this.resolveDrainWaitersIfDrained();
   }
 
   public markDisposed(): void {
     this.phase = RuntimeLifecyclePhase.Disposed;
+    this.shutdownAllowedResourcePaths.clear();
     this.resolveDrainWaitersIfDrained();
   }
 
@@ -164,12 +193,16 @@ export class LifecycleAdmissionController {
       return this.getActiveInternalSourceCount(source) > 0;
     }
 
+    if (this.phase === RuntimeLifecyclePhase.CoolingDown) {
+      return true;
+    }
+
     if (this.phase === RuntimeLifecyclePhase.Disposing) {
-      if (
-        source.kind === RuntimeCallSourceKind.Runtime ||
-        source.kind === RuntimeCallSourceKind.Resource
-      ) {
+      if (source.kind === RuntimeCallSourceKind.Runtime) {
         return false;
+      }
+      if (source.kind === RuntimeCallSourceKind.Resource) {
+        return this.shutdownAllowedResourcePaths.has(source.path ?? source.id);
       }
       return this.getActiveInternalSourceCount(source) > 0;
     }

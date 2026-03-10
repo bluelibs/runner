@@ -7,6 +7,7 @@ import {
 import { findCircularDependencies } from "./utils/findCircularDependencies";
 import {
   circularDependencyError,
+  resourceCooldownAdmissionTargetInvalidError,
   storeAlreadyInitializedError,
   eventEmissionCycleError,
   lockedError,
@@ -47,6 +48,7 @@ import { createFrameworkRootGateway } from "./createFrameworkRootGateway";
 import type { DebugFriendlyConfig } from "../globals/resources/debug";
 import { symbolRuntimeId } from "../types/symbols";
 import { getRuntimeId } from "../tools/runtimeMetadata";
+import type { ResourceCooldownAdmissionTargets } from "../types/resource";
 
 // Re-export types for backward compatibility
 export type {
@@ -70,7 +72,6 @@ export class Store {
   private readonly initWaves: InitWave[] = [];
   private readonly initializedResourceIds = new Set<string>();
   private readonly readyResourceIds = new Set<string>();
-  private readonly pendingCooldownErrors: Error[] = [];
   private hasRunCooldown = false;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
 
@@ -268,6 +269,16 @@ export class Store {
     return this.lifecycleAdmissionController.isShutdownLockdown();
   }
 
+  public isDisposalStarted() {
+    const phase = this.lifecycleAdmissionController.getPhase();
+    return (
+      phase === RuntimeLifecyclePhase.CoolingDown ||
+      phase === RuntimeLifecyclePhase.Disposing ||
+      phase === RuntimeLifecyclePhase.Drained ||
+      phase === RuntimeLifecyclePhase.Disposed
+    );
+  }
+
   public canAdmitTaskCall(source: RuntimeCallSource): boolean {
     return this.lifecycleAdmissionController.canAdmitTask(source);
   }
@@ -281,8 +292,20 @@ export class Store {
     ) {
       return;
     }
-    this.eventManager.enterShutdownLockdown();
     this.lifecycleAdmissionController.beginDisposing();
+  }
+
+  public beginCoolingDown() {
+    const phase = this.lifecycleAdmissionController.getPhase();
+    if (
+      phase === RuntimeLifecyclePhase.CoolingDown ||
+      phase === RuntimeLifecyclePhase.Disposing ||
+      phase === RuntimeLifecyclePhase.Drained ||
+      phase === RuntimeLifecyclePhase.Disposed
+    ) {
+      return;
+    }
+    this.lifecycleAdmissionController.beginCoolingDown();
   }
 
   public beginDrained() {
@@ -421,7 +444,7 @@ export class Store {
   }
 
   public async dispose() {
-    const disposalErrors: Error[] = [...this.pendingCooldownErrors];
+    const disposalErrors: Error[] = [];
 
     for (const wave of this.getResourcesInDisposeWaves()) {
       const waveErrors = await this.disposeWave(wave);
@@ -507,11 +530,10 @@ export class Store {
     }
 
     this.hasRunCooldown = true;
-    this.pendingCooldownErrors.length = 0;
 
     for (const wave of this.getResourcesInDisposeWaves()) {
       const waveErrors = await this.cooldownWave(wave);
-      this.pendingCooldownErrors.push(...waveErrors);
+      await this.logCooldownErrors(waveErrors);
     }
   }
 
@@ -526,7 +548,6 @@ export class Store {
     this.initWaves.length = 0;
     this.initializedResourceIds.clear();
     this.readyResourceIds.clear();
-    this.pendingCooldownErrors.length = 0;
     this.hasRunCooldown = false;
     this.markDisposed();
   }
@@ -602,6 +623,22 @@ export class Store {
     return error instanceof Error ? error : new Error(String(error));
   }
 
+  private async logCooldownErrors(errors: readonly Error[]): Promise<void> {
+    for (const error of errors) {
+      try {
+        await this.logger.warn(
+          "Resource cooldown failed; continuing shutdown.",
+          {
+            source: "store.cooldown",
+            error,
+          },
+        );
+      } catch {
+        // Logging must never promote cooldown failures into shutdown failures.
+      }
+    }
+  }
+
   private async runReadyResource(
     resource: ResourceStoreElementType,
   ): Promise<void> {
@@ -645,12 +682,60 @@ export class Store {
       return;
     }
 
-    await resource.resource.cooldown(
+    const admissionTargets = await resource.resource.cooldown(
       resource.value,
       resource.config,
       resource.computedDependencies ?? {},
       resource.context,
     );
+
+    this.registerCooldownAdmissionTargets(
+      this.getRuntimeDefinitionId(resource.resource),
+      resource.resource,
+      admissionTargets,
+    );
+  }
+
+  private registerCooldownAdmissionTargets(
+    resourceRuntimePath: string,
+    resource: IResource<any, any, any, any, any>,
+    targets: void | ResourceCooldownAdmissionTargets,
+  ): void {
+    this.lifecycleAdmissionController.allowShutdownResourceSource(
+      resourceRuntimePath,
+    );
+
+    if (!targets || targets.length === 0) {
+      return;
+    }
+
+    for (const target of targets) {
+      const resolvedRuntimePath = this.resolveCooldownAdmissionTargetPath(
+        resource,
+        target,
+      );
+      this.lifecycleAdmissionController.allowShutdownResourceSource(
+        resolvedRuntimePath,
+      );
+    }
+  }
+
+  private resolveCooldownAdmissionTargetPath(
+    resource: IResource<any, any, any, any, any>,
+    target: ResourceCooldownAdmissionTargets[number],
+  ): string {
+    const resolvedRuntimePath = this.resolveDefinitionId(target);
+    if (
+      typeof resolvedRuntimePath !== "string" ||
+      !this.resources.has(resolvedRuntimePath)
+    ) {
+      throw resourceCooldownAdmissionTargetInvalidError.new({
+        resourceId: this.toPublicId(resource),
+        targetId: String(target?.id ?? target),
+      });
+    }
+
+    return resolvedRuntimePath;
   }
 
   /**

@@ -234,6 +234,10 @@ export interface IResourceHealthReport {
   ): IResourceHealthReportEntry;
 }
 
+export type ResourceCooldownAdmissionTargets = ReadonlyArray<
+  IResource<any, any, any, any, any, any, any>
+>;
+
 export interface IResourceDefinition<
   TConfig = any,
   TValue extends Promise<any> = Promise<any>,
@@ -313,7 +317,9 @@ export interface IResourceDefinition<
    * quickly before runtime drains in-flight business work.
    *
    * Keep this fast and non-blocking in intent: trigger ingress stop, capture
-   * handles/promises in context, and return promptly.
+   * handles/promises in context, and return promptly. The cooling resource is
+   * always allowed as a resource-origin source during the later drain window.
+   * Returning additional resource definitions extends that shutdown allowlist.
    */
   cooldown?: (
     this: unknown,
@@ -321,7 +327,7 @@ export interface IResourceDefinition<
     config: TConfig,
     dependencies: ResourceDependencyValuesType<TDependencies>,
     context: TContext,
-  ) => Promise<void>;
+  ) => Promise<void | ResourceCooldownAdmissionTargets>;
   /**
    * Optional async health probe for this resource.
    *

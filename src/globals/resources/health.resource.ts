@@ -23,7 +23,7 @@ export const healthResource = defineResource<
             runtimeHealthDuringBootstrapError.throw();
           }
 
-          if (store.isInShutdownLockdown()) {
+          if (store.isDisposalStarted()) {
             runResultDisposedError.throw();
           }
         },

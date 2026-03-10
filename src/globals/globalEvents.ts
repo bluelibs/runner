@@ -20,7 +20,7 @@ export const globalEvents = {
    */
   ready: readyEvent,
   /**
-   * Emitted when runtime enters the `disposing` phase.
+   * Emitted after `coolingDown` completes and runtime enters the `disposing` phase.
    */
   disposing: defineEvent(
     markFrameworkDefinition({
@@ -28,7 +28,7 @@ export const globalEvents = {
       meta: {
         title: "System Disposing",
         description:
-          "Emitted when runtime enters disposing and starts draining in-flight work.",
+          "Emitted after cooldown completes, when runtime locks new business admissions and starts draining in-flight work.",
       },
     }),
   ),
