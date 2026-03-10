@@ -136,7 +136,7 @@ import { r } from "../../../";
     .register([child])
     .overrides([])
     .isolate({})
-    .exports([])
+    .isolate({ exports: [] })
     .ready(async (value, config, deps, context) => {
       const valueReady: boolean = value.ready;
       const configEnabled: boolean = config.enabled;

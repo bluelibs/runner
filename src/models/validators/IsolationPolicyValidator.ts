@@ -169,10 +169,13 @@ export function validateIsolationPolicies(ctx: ValidatorContext): void {
       normalizedPolicy,
     );
 
-    if (Array.isArray(normalizedPolicy.exports)) {
+    if (
+      Array.isArray(normalizedPolicy.exports) ||
+      normalizedPolicy.exports === "none"
+    ) {
       ctx.registry.visibilityTracker.recordExports(
         resource.id,
-        normalizedPolicy.exports,
+        normalizedPolicy.exports === "none" ? [] : normalizedPolicy.exports,
       );
     }
   }

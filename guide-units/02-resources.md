@@ -29,9 +29,6 @@ Once `run(app)` resolves, the returned runtime is your operator-facing handle. T
 - `runtime.pause()`, `runtime.resume()`, and `runtime.recoverWhen(...)` to control admissions
 - `runtime.dispose()` to stop the runtime cleanly
 
-Resources can also expose an optional async `health(value, config, deps, context)` probe.
-Only resources that explicitly define `health()` participate in `resources.health.getHealth(...)` and `runtime.getHealth(...)`.
-
 ```typescript
 import { r } from "@bluelibs/runner";
 import { MongoClient } from "mongodb";
@@ -344,6 +341,12 @@ Semantics:
 - Exporting a child resource makes that child's own exported surface transitively visible
 - Validation happens during `run(app)`, not declaration time
 - Runtime operator APIs are gated only by the root resource's exported surface
+
+Migration note:
+
+- Legacy resource-level `exports` and fluent `.exports(...)` were removed in 6.x
+- Use `isolate: { exports: [...] }` with `defineResource(...)`
+- Use `.isolate({ exports: [...] })` with fluent builders
 
 ### Wiring Access Policy
 

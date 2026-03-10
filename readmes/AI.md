@@ -166,9 +166,6 @@ userInput.toJSONSchema(); // machine-readable contract for tooling
   - `getLazyResourceValue`
   - `getResourceConfig`
   - `getHealth`
-  - `getRootId`
-  - `getRootConfig`
-  - `getRootValue`
   - `dispose`
 - Use `run(app, { debug: "verbose" })` for structured debug output.
 - Use `run(app, { logs: { printThreshold: null } })` to silence console output.
@@ -486,6 +483,7 @@ Runner treats composition boundaries as first-class.
 - Dynamic isolate callbacks are resolved per configured resource instance during registration.
 - `subtreeOf(resource)` matches by ownership subtree instead of id string matching.
 - `scope(target, channels?)` applies channel-specific isolation rules such as `dependencies`, `listening`, `tagging`, or `middleware`.
+- Legacy resource-level `exports` and fluent `.exports(...)` were removed in 6.x; use `isolate: { exports: [...] }` or `.isolate({ exports: [...] })`.
 
 ```ts
 .isolate({

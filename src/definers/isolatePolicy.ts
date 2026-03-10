@@ -1,6 +1,5 @@
-import { isolateConflictError, isolateExportsConflictError } from "../errors";
+import { isolateConflictError } from "../errors";
 import type {
-  IsolationExportsTarget,
   IsolationPolicy,
   IsolationPolicyDeclaration,
   IsolationPolicyInput,
@@ -206,53 +205,8 @@ export function createDisplayIsolatePolicy<TConfig>(
     ) as IsolationPolicy;
 }
 
-export function mergeLegacyExportsIntoIsolationInput<TConfig>(
-  resourceId: string,
-  legacyExports: Array<IsolationExportsTarget> | undefined,
-  isolate: IsolationPolicyInput<TConfig> | undefined,
-): IsolationPolicyInput<TConfig> | undefined {
-  if (legacyExports === undefined) {
-    return isolate;
-  }
-
-  if (!isolate) {
-    return { exports: legacyExports };
-  }
-
-  if (typeof isolate === "function") {
-    return (config: TConfig) => {
-      const resolved = isolate(config);
-      if (resolved.exports !== undefined) {
-        isolateExportsConflictError.throw({ resourceId });
-      }
-
-      return { ...resolved, exports: legacyExports };
-    };
-  }
-
-  if (isolate.exports !== undefined) {
-    isolateExportsConflictError.throw({ resourceId });
-  }
-
-  return { ...isolate, exports: legacyExports };
-}
-
 export function getStoredIsolationPolicy<TConfig>(resource: {
   isolate?: IsolationPolicyInput<TConfig>;
 }): IsolationPolicy | undefined {
   return resource.isolate as IsolationPolicy | undefined;
-}
-
-export function getDeprecatedExportsFromIsolation(
-  isolate: IsolationPolicyInput<any> | undefined,
-): Array<IsolationExportsTarget> | undefined {
-  if (!isolate || typeof isolate === "function") {
-    return undefined;
-  }
-
-  if (isolate.exports === "none") {
-    return [];
-  }
-
-  return Array.isArray(isolate.exports) ? [...isolate.exports] : undefined;
 }

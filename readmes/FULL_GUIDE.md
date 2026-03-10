@@ -78,9 +78,9 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](./AI.md)                                                                                         | Docs    | Compact summary (<5000 tokens)      |
-| [Full Guide](./FULL_GUIDE.md)                                                                                       | Docs    | Complete documentation (composed)   |
-| [Support & Release Policy](./ENTERPRISE.md)                                                                         | Docs    | Support windows and deprecation     |
+| [AI-Friendly Docs](./AI.md)                                                                                 | Docs    | Compact summary (<5000 tokens)      |
+| [Full Guide](./FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
+| [Support & Release Policy](./ENTERPRISE.md)                                                                 | Docs    | Support windows and deprecation     |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
@@ -104,13 +104,13 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 ## Platform Support (Quick Summary)
 
-| Capability                                             | Node.js | Browser | Edge | Notes                                          |
-| ------------------------------------------------------ | ------- | ------- | ---- | ---------------------------------------------- |
-| Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences     |
-| Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires Node.js `AsyncLocalStorage`           |
-| Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                               |
+| Capability                                             | Node.js | Browser | Edge | Notes                                      |
+| ------------------------------------------------------ | ------- | ------- | ---- | ------------------------------------------ |
+| Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
+| Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
+| Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                           |
 | Remote Lanes client (`createHttpClient`)               | Full    | Full    | Full | Explicit universal client for `fetch` runtimes |
-| Remote Lanes server (`@bluelibs/runner/node`)          | Full    | None    | None | Exposes tasks/events over HTTP                 |
+| Remote Lanes server (`@bluelibs/runner/node`)          | Full    | None    | None | Exposes tasks/events over HTTP             |
 
 ---
 
@@ -118,17 +118,16 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 Use these minimums before starting:
 
-| Requirement     | Minimum                 | Notes                                                          |
-| --------------- | ----------------------- | -------------------------------------------------------------- |
-| Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                        |
-| TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository          |
-| Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works         |
+| Requirement     | Minimum                 | Notes                                                                   |
+| --------------- | ----------------------- | ----------------------------------------------------------------------- |
+| Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                                 |
+| TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository                   |
+| Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works                  |
 | `fetch` runtime | Built-in or polyfilled  | Required for explicit remote lane clients (`createHttpClient`) |
 
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
-
 ## Why Runner?
 
 When a TypeScript service grows past a few dependencies, the pain usually shows up in the same places: startup order becomes tribal knowledge, cross-cutting concerns leak into business logic, and testing means reconstructing half the app. Runner makes those seams explicit. You wire dependencies in code, keep lifecycle in one place, and choose when to execute a unit directly versus through the full runtime.
@@ -231,7 +230,6 @@ For specialized features beyond the core concepts:
 - **Durable Workflows** (Node-only): replay-safe orchestration primitives in [DURABLE_WORKFLOWS.md](./DURABLE_WORKFLOWS.md)
 - **Remote Lanes** (Node): distributed events and RPC in [REMOTE_LANES.md](./REMOTE_LANES.md)
 - **Serialization**: custom value transport in [SERIALIZER_PROTOCOL.md](./SERIALIZER_PROTOCOL.md)
-
 ## Resources
 
 Resources are the long-lived parts of your app: database clients, configuration surfaces, queues, services, caches, and ownership boundaries.
@@ -579,6 +577,12 @@ Semantics:
 - Validation happens during `run(app)`, not declaration time
 - Runtime operator APIs are gated only by the root resource's exported surface
 
+Migration note:
+
+- Legacy resource-level `exports` and fluent `.exports(...)` were removed in 6.x
+- Use `isolate: { exports: [...] }` with `defineResource(...)`
+- Use `.isolate({ exports: [...] })` with fluent builders
+
 ### Wiring Access Policy
 
 Use `.isolate({ deny: [...] })`, `.isolate({ only: [...] })`, and `.isolate({ whitelist: [...] })` when visibility alone is not enough.
@@ -648,25 +652,22 @@ const app = r
   .resource("app")
   .subtree({
     validate: (definition): SubtreeViolation[] => {
+      const violations: SubtreeViolation[] = [];
       if (isTask(definition) && !definition.meta?.title) {
-        return [
-          {
-            code: "missing-task-title",
-            message: `Task "${definition.id}" must define meta.title`,
-          },
-        ];
+        violations.push({
+          code: "missing-task-title",
+          message: `Task "${definition.id}" must define meta.title`,
+        });
       }
 
       if (isResource(definition) && definition.init == null) {
-        return [
-          {
-            code: "resource-must-init",
-            message: `Resource "${definition.id}" must define init()`,
-          },
-        ];
+        violations.push({
+          code: "resource-must-init",
+          message: `Resource "${definition.id}" must define init()`,
+        });
       }
 
-      return [];
+      return violations;
     },
   })
   .build();
@@ -781,7 +782,6 @@ const dbResource = r
 ```
 
 > **runtime:** "Resources: I nurse them to life, let them work, then mercifully pull the plug in reverse order. It's a lot like IT support, except I actually follow the runbook."
-
 ## Tasks
 
 Tasks are Runner's main business operations. They are async functions with explicit dependency injection, validation, middleware support, and typed outputs.
@@ -905,7 +905,7 @@ const sendEmail = r
   .build();
 ```
 
-### ExecutionJournal
+### Execution Journal
 
 `ExecutionJournal` is typed state scoped to a single task execution.
 
@@ -1002,7 +1002,6 @@ For lifecycle-owned timers inside tasks or resources, depend on `resources.timer
 `timers.setTimeout()` and `timers.setInterval()` stop accepting new timers once `cooldown()` starts and are cleared during `dispose()`.
 
 > **runtime:** "Tasks: glorified functions with a resume, a chaperone, and a journal. But at least they show up in the logs when something goes wrong—unlike that anonymous arrow function in line 47."
-
 ## Events and Hooks
 
 Events let different parts of your app communicate without direct references. Hooks subscribe to those events so producers stay decoupled from listeners.
@@ -1231,7 +1230,6 @@ const emergencyHook = r
 ```
 
 > **runtime:** "Events and hooks: the pub/sub contract where nobody reads the terms. You emit, I deliver, hooks react, and somehow the welcome email always fires twice in staging."
-
 ## Middleware
 
 Middleware wraps tasks and resources so cross-cutting behavior stays explicit and reusable instead of leaking into business logic.
@@ -1463,7 +1461,6 @@ For context enforcement, use `middleware.task.requireContext.with({ context })` 
 See [Advanced Patterns](#advanced-patterns) for interception ordering and runtime-wide interception details.
 
 > **runtime:** "Middleware: the onion pattern, except every layer has opinions and a config object. I peel them in order, cry a little, and hand you the result."
-
 ## Tags
 
 Tags are Runner's typed discovery system. They attach metadata to definitions, influence framework behavior, and can be consumed as dependencies to discover matching definitions at runtime.
@@ -1652,6 +1649,7 @@ const userContract = r.tag<void, InputType, OutputType>("userContract").build();
 const profileTask = r
   .task("getProfile")
   .tags([userContract])
+  // if you use .inputSchema it must be a superset of userInput contract tag, same with resultSchema
   .run(async (input) => ({ name: input.id + "Ada" }))
   .build();
 ```
@@ -1659,7 +1657,6 @@ const profileTask = r
 Fail-fast rule: if a tagged item depends on the same tag, Runner throws during store sanity checks.
 
 > **runtime:** "Tags: metadata with a mission. You stick labels on everything, I index them, and at startup someone finally discovers why three tasks share a route prefix. It's like naming your pets—except these ones actually come when called."
-
 ## Errors
 
 Typed Runner errors are declared once and injected anywhere. Register them alongside other items and consume them through dependencies.
@@ -1789,7 +1786,6 @@ For dependency cycle detection, use the canonical helper name `circularDependenc
 Legacy aliases `circularDependenciesError` and `dependencyCycleError` remain available as compatibility exports.
 
 > **runtime:** "Typed errors: because 'Error: something went wrong' is the stack trace equivalent of a shrug emoji. Give your errors a name, a code, and a remediation plan—future-you will mass an appreciation card at 2 AM."
-
 ## run() and RunOptions
 
 The `run()` function is your application's entry point. It initializes all resources, wires up dependencies, and returns handles for interacting with your system.
@@ -1828,12 +1824,12 @@ An object with the following properties and methods:
 | `getResourceValue(...)`     | Read a resource's value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `getLazyResourceValue(...)` | Initialize/read a resource on demand. Available only when `run(..., { lazy: true })` is enabled.                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `getResourceConfig(...)`    | Read a resource's resolved config                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `getHealth(resourceDefs?)`  | Evaluate async health probes for all visible health-enabled resources or only the requested subset. Returns `{ totals, report, find(...) }`. Resources without `health()` are excluded. For in-resource dependencies, prefer `resources.health.getHealth(...)`.                                                                                                                                                                                                                                                             |
+| `getHealth(resourceDefs?)`  | Evaluate async health probes for all visible health-enabled resources or only the requested subset. Returns `{ totals, report, find(...) }`. Resources without `health()` are excluded. For in-resource dependencies, prefer `resources.health.getHealth(...)`.                                                                                                                                                                                                                                                        |
 | `state`                     | Current admission state for new work: `"running"` or `"paused"`                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `pause(reason?)`            | Synchronous idempotent switch that stops new runtime/resource-origin task and event admissions while allowing already-running work to continue                                                                                                                                                                                                                                                                                                                                                                              |
-| `resume()`                  | Reopen admissions immediately                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `pause(reason?)`            | Synchronous idempotent switch that stops new runtime/resource-origin task and event admissions while allowing already-running work to continue                                                                                                                                                                                                                                                                                                                                                                               |
+| `resume()`                  | Reopen admissions immediately                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `recoverWhen(...)`          | Register paused-state recovery conditions; Runner auto-resumes only when all active conditions for the current pause episode pass                                                                                                                                                                                                                                                                                                                                                                                           |
-| `root`                      | Read the root resource definition and use `getResourceValue(root)` / `getResourceConfig(root)`                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `root`                      | Read the root resource definition and use `getResourceValue(root)` / `getResourceConfig(root)`                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `logger`                    | Logger instance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `store`                     | Runtime store with registered resources, tasks, middleware, events, and runtime internals                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `dispose()`                 | Transitions to `disposing` (stops admitting fresh external work), runs resource `cooldown()` in reverse dependency order, emits `events.disposing` (awaited), waits for in-flight tasks + event hooks to drain (up to `disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`), logs a structured `warn` if drain did not complete in time, transitions to `drained` (blocks all new business task/event admissions), emits `events.drained` (lifecycle-bypassed, awaited), then disposes resources and removes hooks |
@@ -2264,7 +2260,6 @@ await run(app, {
 - Stop accepting new work before cleaning up
 
 > **runtime:** "An error boundary: a trampoline under your tightrope. I'm the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
-
 ## Caching
 
 Avoid recomputing expensive work by caching task results with TTL-based eviction.
@@ -3561,7 +3556,6 @@ In `mode: "network"`, Event Lane bindings support `prefetch`, `maxAttempts`, and
 For complete examples, common patterns, testing strategies, debugging, migration notes, and RabbitMQ configuration, see [REMOTE_LANES.md](./REMOTE_LANES.md).
 
 > **runtime:** "Serve it or ship it. There is no 'maybe call the other service.'"
-
 ## Serialization
 
 Serialization is where data crosses boundaries: HTTP, queues, storage, or process hops.
@@ -3763,13 +3757,13 @@ Start with functional schemas and explicit parsers. Use classes when they improv
 
 ### Choosing a Style
 
-| Situation                                   | Prefer Functional (`Match.*` / plain schemas) | Prefer Class (`@Match.Schema`, `@Match.Field`) |
-| ------------------------------------------- | --------------------------------------------- | ---------------------------------------------- |
-| Request/response boundaries                 | Best for explicit, local contracts            | Good when boundary DTOs are shared widely      |
-| Dynamic shapes (maps, conditional payloads) | Best fit (`Match.MapOf`, composable patterns) | Usually more verbose                           |
-| Large domain models reused across features  | Possible but can become repetitive            | Best readability and reuse                     |
-| Wire-field remapping/transforms             | Works, but manual                             | Best DX with `@Serializer.Field(...)`          |
-| Team preference                             | Functional programming style                  | OOP/DTO-centric style                          |
+| Situation | Prefer Functional (`Match.*` / plain schemas) | Prefer Class (`@Match.Schema`, `@Match.Field`) |
+| --------- | ---------------------------------------------- | ------------------------------------------------ |
+| Request/response boundaries | Best for explicit, local contracts | Good when boundary DTOs are shared widely |
+| Dynamic shapes (maps, conditional payloads) | Best fit (`Match.MapOf`, composable patterns) | Usually more verbose |
+| Large domain models reused across features | Possible but can become repetitive | Best readability and reuse |
+| Wire-field remapping/transforms | Works, but manual | Best DX with `@Serializer.Field(...)` |
+| Team preference | Functional programming style | OOP/DTO-centric style |
 
 Rule of thumb:
 
@@ -3799,10 +3793,7 @@ const userInputSchema = Match.compile({
   age: Match.Integer,
 });
 
-const parsed = check(
-  { id: "u1", email: "ada@example.com", age: 42 },
-  userInputSchema,
-);
+const parsed = check({ id: "u1", email: "ada@example.com", age: 42 }, userInputSchema);
 parsed.age; // number
 ```
 
@@ -3882,38 +3873,38 @@ check(
 
 ### Match Reference
 
-| Pattern / Helper                                             | What It Does                                                   |
-| ------------------------------------------------------------ | -------------------------------------------------------------- |
-| `String`, `Number`, `Boolean`, `Function`, `Object`, `Array` | Constructor-based validation                                   |
-| Class constructor (for example `Date`, `MyClass`)            | Validates via constructor semantics                            |
-| Literal values (`"x"`, `42`, `true`, `null`, `undefined`)    | Exact literal match                                            |
-| `[pattern]`                                                  | Array where every element matches `pattern`                    |
-| Plain object (`{ a: String }`)                               | Strict object validation (same as `Match.ObjectStrict`)        |
-| `Match.ObjectStrict({ ... })`                                | Strict object shape (`additionalProperties: false` semantics)  |
-| `Match.ObjectIncluding({ ... })`                             | Partial object shape (unknown keys allowed)                    |
-| `Match.MapOf(valuePattern)`                                  | Dynamic-key object with uniform value pattern                  |
-| `Match.Any`                                                  | Accepts any value                                              |
-| `Match.Integer`                                              | Signed 32-bit integer                                          |
-| `Match.NonEmptyString`                                       | Non-empty string                                               |
-| `Match.Email`                                                | Email-shaped string                                            |
-| `Match.UUID`                                                 | Canonical UUID string                                          |
-| `Match.URL`                                                  | Absolute URL string                                            |
-| `Match.IsoDateString`                                        | ISO datetime string with timezone                              |
-| `Match.RegExp(re)`                                           | String matching given regexp                                   |
-| `Match.ArrayOf(pattern)`                                     | Array of elements matching pattern                             |
-| `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`     | Non-empty array, optional element validation                   |
-| `Match.Optional(pattern)`                                    | `undefined` or pattern                                         |
-| `Match.Maybe(pattern)`                                       | `undefined`, `null`, or pattern                                |
-| `Match.OneOf(...patterns)`                                   | Any one of given patterns                                      |
-| `Match.Where(predicate)`                                     | Custom predicate / type guard                                  |
-| `Match.Lazy(() => pattern)`                                  | Lazy/recursive pattern                                         |
-| `Match.Schema(options?)`                                     | Class schema decorator                                         |
-| `Match.Schema({ base: BaseClass \| () => BaseClass })`       | Composes schema classes without requiring TypeScript `extends` |
-| `Match.Field(pattern)`                                       | Decorated field validator                                      |
-| `Match.fromSchema(Class, options?)`                          | Schema-like matcher from class metadata                        |
-| `Match.compile(pattern)`                                     | Compiles pattern into `{ parse, test, toJSONSchema }`          |
-| `Match.test(value, pattern)`                                 | Boolean helper for validation check                            |
-| `Match.Error`                                                | Error class thrown on match failure                            |
+| Pattern / Helper | What It Does |
+| ---------------- | ------------ |
+| `String`, `Number`, `Boolean`, `Function`, `Object`, `Array` | Constructor-based validation |
+| Class constructor (for example `Date`, `MyClass`) | Validates via constructor semantics |
+| Literal values (`"x"`, `42`, `true`, `null`, `undefined`) | Exact literal match |
+| `[pattern]` | Array where every element matches `pattern` |
+| Plain object (`{ a: String }`) | Strict object validation (same as `Match.ObjectStrict`) |
+| `Match.ObjectStrict({ ... })` | Strict object shape (`additionalProperties: false` semantics) |
+| `Match.ObjectIncluding({ ... })` | Partial object shape (unknown keys allowed) |
+| `Match.MapOf(valuePattern)` | Dynamic-key object with uniform value pattern |
+| `Match.Any` | Accepts any value |
+| `Match.Integer` | Signed 32-bit integer |
+| `Match.NonEmptyString` | Non-empty string |
+| `Match.Email` | Email-shaped string |
+| `Match.UUID` | Canonical UUID string |
+| `Match.URL` | Absolute URL string |
+| `Match.IsoDateString` | ISO datetime string with timezone |
+| `Match.RegExp(re)` | String matching given regexp |
+| `Match.ArrayOf(pattern)` | Array of elements matching pattern |
+| `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)` | Non-empty array, optional element validation |
+| `Match.Optional(pattern)` | `undefined` or pattern |
+| `Match.Maybe(pattern)` | `undefined`, `null`, or pattern |
+| `Match.OneOf(...patterns)` | Any one of given patterns |
+| `Match.Where(predicate)` | Custom predicate / type guard |
+| `Match.Lazy(() => pattern)` | Lazy/recursive pattern |
+| `Match.Schema(options?)` | Class schema decorator |
+| `Match.Schema({ base: BaseClass \| () => BaseClass })` | Composes schema classes without requiring TypeScript `extends` |
+| `Match.Field(pattern)` | Decorated field validator |
+| `Match.fromSchema(Class, options?)` | Schema-like matcher from class metadata |
+| `Match.compile(pattern)` | Compiles pattern into `{ parse, test, toJSONSchema }` |
+| `Match.test(value, pattern)` | Boolean helper for validation check |
+| `Match.Error` | Error class thrown on match failure |
 
 ### Additional `check()` Details
 
@@ -4662,7 +4653,6 @@ await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
 > **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it's off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
-
 ## Advanced Patterns
 
 This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.
@@ -5354,7 +5344,7 @@ At runtime/store level, IDs become canonical:
 | Task Middleware     | `auth` -> `app.middleware.task.auth`               |
 | Resource Middleware | `audit` -> `app.middleware.resource.audit`         |
 | Tag                 | `public` -> `app.tags.public`                      |
-| Error               | `InvalidInput` -> `app.errors.InvalidInput`        |
+| Error               | `invalidInput` -> `app.errors.invalidInput`        |
 | Async Context       | `request` -> `app.ctx.request`                     |
 
 Important behavior:
@@ -5699,7 +5689,6 @@ export const problematicResource = r
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
 > **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
-
 ## Testing
 
 Runner's explicit dependency injection makes testing straightforward. Call `.run()` on a task with plain mocks for fast unit tests, or spin up the full runtime when you need middleware and lifecycle behavior.
@@ -5840,3 +5829,4 @@ await run(app, { debug: "verbose" });
 ```
 
 > **runtime:** "Testing: an elaborate puppet show where every string behaves. Then production walks in, kicks the stage, and asks for pagination. Still — nice coverage badge."
+

@@ -49,21 +49,6 @@ export const isolateUnknownTargetError = error<
   )
   .build();
 
-export const isolateExportsConflictError = error<
-  {
-    resourceId: string;
-  } & DefaultErrorType
->("runner.errors.isolateExportsConflict")
-  .format(
-    ({ resourceId }) =>
-      `Resource "${resourceId}" declares exports in both .exports(...) and .isolate({ exports: ... }).`,
-  )
-  .remediation(
-    ({ resourceId }) =>
-      `Remove the legacy "exports" declaration from "${resourceId}" and keep exports only under .isolate({ exports: ... }).`,
-  )
-  .build();
-
 export const isolateInvalidExportsError = error<
   {
     policyResourceId: string;

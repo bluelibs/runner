@@ -2,7 +2,6 @@ import {
   assertIsolationConflict,
   createDisplayIsolatePolicy,
   mergeIsolationPolicy,
-  mergeLegacyExportsIntoIsolationInput,
   resolveIsolatePolicyDeclarations,
 } from "../../definers/isolatePolicy";
 import { r } from "../..";
@@ -183,49 +182,6 @@ describe("isolatePolicy helpers", () => {
           '"tests-isolatePolicy-conflict-id-resource"',
         ),
       }),
-    );
-  });
-
-  it("merges legacy exports into dynamic isolate callbacks", () => {
-    const exported = r
-      .task("tests-isolatePolicy-exported")
-      .run(async () => 1)
-      .build();
-    const isolate = mergeLegacyExportsIntoIsolationInput(
-      "tests-isolatePolicy-legacy",
-      [exported],
-      () => ({ deny: [] }),
-    );
-
-    expect(typeof isolate).toBe("function");
-    if (typeof isolate !== "function") {
-      return;
-    }
-
-    expect(isolate({})).toEqual({
-      deny: [],
-      exports: [exported],
-    });
-  });
-
-  it("throws when dynamic isolate and legacy exports both declare exports", () => {
-    const exported = r
-      .task("tests-isolatePolicy-conflict")
-      .run(async () => 1)
-      .build();
-    const isolate = mergeLegacyExportsIntoIsolationInput(
-      "tests-isolatePolicy-conflict-resource",
-      [exported],
-      () => ({ exports: [exported] }),
-    );
-
-    expect(typeof isolate).toBe("function");
-    if (typeof isolate !== "function") {
-      return;
-    }
-
-    expect(() => isolate({})).toThrow(
-      expect.objectContaining({ id: "runner.errors.isolateExportsConflict" }),
     );
   });
 });

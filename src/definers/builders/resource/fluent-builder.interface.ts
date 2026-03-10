@@ -4,7 +4,6 @@ import type {
   IResource,
   IResourceDefinition,
   IResourceMeta,
-  IsolationExportsTarget,
   IsolationPolicyInput,
   OverridableElements,
   RegisterableItems,
@@ -312,25 +311,6 @@ export interface ResourceFluentBuilderBeforeInit<
   >;
 
   /**
-   * Declares which registered items are visible outside this resource's
-   * registration subtree.
-   *
-   * @deprecated Use `.isolate({ exports: [...] })` instead (or `exports: "none"`).
-   */
-  exports(
-    items: Array<IsolationExportsTarget>,
-    options?: { override?: boolean },
-  ): ResourceFluentBuilderBeforeInit<
-    TConfig,
-    TValue,
-    TDeps,
-    TContext,
-    TMeta,
-    TTags,
-    TMiddleware
-  >;
-
-  /**
    * Restricts wiring access for this resource boundary.
    * Multiple calls are additive.
    */
@@ -519,21 +499,6 @@ export interface ResourceFluentBuilderAfterInit<
   >;
   throws(
     list: ThrowsList,
-  ): ResourceFluentBuilderAfterInit<
-    TConfig,
-    TValue,
-    TDeps,
-    TContext,
-    TMeta,
-    TTags,
-    TMiddleware
-  >;
-  /**
-   * @deprecated Use `.isolate({ exports: [...] })` instead (or `exports: "none"`).
-   */
-  exports(
-    items: Array<IsolationExportsTarget>,
-    options?: { override?: boolean },
   ): ResourceFluentBuilderAfterInit<
     TConfig,
     TValue,

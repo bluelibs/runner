@@ -36,8 +36,6 @@ import {
 import {
   createDisplayIsolatePolicy,
   createIsolatePolicyDeclaration,
-  getDeprecatedExportsFromIsolation,
-  mergeLegacyExportsIntoIsolationInput,
 } from "./isolatePolicy";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
@@ -100,19 +98,12 @@ export function defineResource<
   );
   assertTagTargetsApplicableTo("resources", "Resource", id, constConfig.tags);
 
-  const isolateInput = mergeLegacyExportsIntoIsolationInput(
-    id,
-    constConfig.exports,
-    constConfig.isolate,
-  );
   const isolateDeclarations =
     constConfig[symbolResourceIsolateDeclarations] ??
-    (isolateInput
-      ? Object.freeze([createIsolatePolicyDeclaration(isolateInput)])
+    (constConfig.isolate
+      ? Object.freeze([createIsolatePolicyDeclaration(constConfig.isolate)])
       : undefined);
   const isolate = createDisplayIsolatePolicy(isolateDeclarations, id);
-  const exports =
-    getDeprecatedExportsFromIsolation(isolate) ?? constConfig.exports;
 
   const subtreeDeclarations =
     constConfig[symbolResourceSubtreeDeclarations] ??
@@ -143,7 +134,6 @@ export function defineResource<
     throws: normalizeThrows({ kind: "resource", id }, constConfig.throws),
     meta: (constConfig.meta || {}) as TMeta,
     middleware: constConfig.middleware ?? [],
-    exports,
     isolate,
     subtree,
     [symbolResourceIsolateDeclarations]: isolateDeclarations,

@@ -1,21 +1,6 @@
 import { r } from "../..";
 
 describe("resource builder: isolate.exports", () => {
-  it("deprecated .exports() maps to isolate.exports", () => {
-    const publicTask = r
-      .task("tests-isolate-exports-deprecated-public")
-      .run(async () => undefined)
-      .build();
-
-    const res = r
-      .resource("tests-isolate-exports-deprecated-resource")
-      .register([publicTask])
-      .exports([publicTask])
-      .build();
-
-    expect(res.isolate).toEqual({ exports: [publicTask] });
-  });
-
   it("appends isolate.exports arrays by default", () => {
     const a = r
       .task("tests-isolate-exports-append-a")
@@ -117,16 +102,5 @@ describe("resource builder: isolate.exports", () => {
       .build();
 
     expect(res.isolate).toEqual({ exports: [a] });
-  });
-
-  it("deprecated .exports() still stores string entries until runtime validation", () => {
-    const res = r
-      .resource("tests-isolate-exports-deprecated-selector-resource")
-      .exports(["tests.isolate.exports.deprecated.selector.*"] as any)
-      .build();
-
-    expect(res.isolate).toEqual({
-      exports: ["tests.isolate.exports.deprecated.selector.*"],
-    });
   });
 });

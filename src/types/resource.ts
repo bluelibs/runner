@@ -364,15 +364,6 @@ export interface IResourceDefinition<
    */
   context?: () => TContext;
   /**
-   * Declares which registered items are visible outside this resource's
-   * registration subtree. When present, only listed items (and items registered
-   * by child resources that also export them) are accessible from outside.
-   * Omitting `exports` means everything is public (default).
-   *
-   * @deprecated Use `isolate: { exports: [...] }` instead.
-   */
-  exports?: Array<IsolationExportsTarget>;
-  /**
    * Isolates this resource boundary, restricting which external definitions can
    * be referenced by this resource and its subtree.
    *
@@ -486,13 +477,6 @@ export interface IResource<
   [symbolForkedFrom]?: ResourceForkInfo;
   /** Normalized list of error ids declared via `throws`. */
   throws?: readonly string[];
-  /**
-   * Items visible outside this resource's subtree. When set, only listed items
-   * can be referenced from outside.
-   *
-   * @deprecated Use `isolate: { exports: ... }` instead.
-   */
-  exports?: Array<IsolationExportsTarget>;
   /**
    * Wiring isolation policy for this resource and its subtree.
    */

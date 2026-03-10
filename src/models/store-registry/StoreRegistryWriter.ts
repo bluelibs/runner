@@ -44,10 +44,7 @@ import {
 } from "../../tools/subtreeMiddleware";
 import { isReservedDefinitionLocalName } from "../../definers/assertDefinitionId";
 import { resolveResourceSubtreeDeclarations } from "../../definers/subtreePolicy";
-import {
-  getDeprecatedExportsFromIsolation,
-  resolveIsolatePolicyDeclarations,
-} from "../../definers/isolatePolicy";
+import { resolveIsolatePolicyDeclarations } from "../../definers/isolatePolicy";
 
 type StoreRegistryCollections = {
   tasks: Map<string, TaskStoreElementType>;
@@ -338,7 +335,6 @@ export class StoreRegistryWriter {
       item.config,
       prepared.id,
     );
-    prepared.exports = getDeprecatedExportsFromIsolation(prepared.isolate);
     prepared.subtree = this.normalizeResourceSubtreeMiddlewareAttachments(
       prepared,
       item.config,
@@ -393,26 +389,6 @@ export class StoreRegistryWriter {
         throw error;
       }
     }
-
-    if (element.exports) {
-      this.visibilityTracker.recordExports(
-        element.id,
-        this.resolveExports(element.exports),
-      );
-    }
-  }
-
-  private resolveExports(
-    entries: Array<RegisterableItems | string>,
-  ): Array<RegisterableItems | string> {
-    return entries.map((entry) => {
-      if (typeof entry === "string") {
-        return entry;
-      }
-
-      const resolved = this.aliasResolver.resolveDefinitionId(entry);
-      return resolved ?? entry;
-    });
   }
 
   private assignNormalizedRegisterEntries<_C>(
@@ -669,7 +645,6 @@ export class StoreRegistryWriter {
       configForResource,
       prepared.id,
     );
-    prepared.exports = getDeprecatedExportsFromIsolation(prepared.isolate);
     prepared.middleware = this.normalizeResourceMiddlewareAttachments(prepared);
     prepared.subtree = this.normalizeResourceSubtreeMiddlewareAttachments(
       prepared,

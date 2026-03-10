@@ -3,7 +3,6 @@ import type {
   EnsureTagsForTarget,
   IResourceDefinition,
   IResourceMeta,
-  IsolationExportsTarget,
   IsolationPolicyInput,
   OverridableElements,
   RegisterableItems,
@@ -495,13 +494,6 @@ export function makeResourceBuilder<
         TMiddleware,
         THasInit
       >(next);
-    },
-    /** @deprecated Use `.isolate({ exports: ... })` instead. */
-    exports(
-      items: Array<IsolationExportsTarget>,
-      options?: { override?: boolean },
-    ) {
-      return this.isolate({ exports: items }, options);
     },
     isolate(
       policy: IsolationPolicyInput<TConfig>,

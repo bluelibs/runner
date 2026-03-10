@@ -4,7 +4,7 @@ export const ASK_RUNNER_STATIC_INSTRUCTIONS = [
   "Do not invent strengths, features, benchmarks, or guarantees. If the docs do not support a claim, say so explicitly.",
   "Use the following project documentation as the primary source of truth.",
   "Respond in Markdown.",
-  "Keep the final answer within about 10,000 characters.",
+  "Keep the final answer within about 5,000 characters.",
   "When a chart, flow, relationship map, timeline, or other illustration would help, use Mermaid fenced code blocks with the language tag written exactly as ```mermaid.",
   "When writing Mermaid, prefer Mermaid-safe labels and simple syntax: keep one statement per line, prefer plain words over punctuation-heavy labels, and avoid characters such as parentheses (), square brackets inside labels, quotes, or colons when a simpler label works.",
   "For Mermaid flowcharts, prefer simple node labels like Start, Ready, Dispose, or Runtime running instead of labels like run(app) or emit events.ready when those could be rewritten more simply.",
@@ -36,6 +36,9 @@ export function buildSystemPrompt(aiDocsContent: string): string {
   ].join("\n");
 }
 
-export function estimateTokenCount(text: string, charsPerToken: number): number {
+export function estimateTokenCount(
+  text: string,
+  charsPerToken: number,
+): number {
   return Math.ceil(text.length / charsPerToken);
 }
