@@ -1,11 +1,11 @@
 import {
-  createContext,
+  defineAsyncContext,
   getCurrentStore,
 } from "../../definers/defineAsyncContext";
 
-describe("defineAsyncContext direct createContext", () => {
-  it("covers createContext function", () => {
-    const C = createContext<string>("direct-ctx");
+describe("defineAsyncContext direct exports", () => {
+  it("covers defineAsyncContext function", () => {
+    const C = defineAsyncContext<string>({ id: "direct-ctx" });
     expect(C.id).toBeDefined();
   });
 

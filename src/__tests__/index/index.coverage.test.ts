@@ -1,6 +1,10 @@
 import * as root from "../../index";
 
 describe("package root exports coverage", () => {
+  afterEach(() => {
+    jest.resetModules();
+  });
+
   it("exposes all expected root exports", () => {
     const functionType = typeof root.defineTask;
     // Access all named exports to trigger any getter-based re-exports
@@ -19,7 +23,6 @@ describe("package root exports coverage", () => {
     expect(typeof root.tags).toBe("object");
     expect(typeof root.debug).toBe("object");
     expect(typeof root.run).toBe("function");
-    expect(typeof root.createContext).toBe("function");
 
     // Namespaced exports
     expect(root.r).toBeDefined();
@@ -74,5 +77,38 @@ describe("package root exports coverage", () => {
     expect((root as any).system.ctx.executionContext.id).toBe(
       "system.ctx.executionContext",
     );
+  });
+
+  it("deduplicates built-in tags when composing framework registries", () => {
+    jest.isolateModules(() => {
+      const { globalTags } =
+        require("../../globals/globalTags") as typeof import("../../globals/globalTags");
+
+      (
+        globalTags as typeof globalTags & {
+          systemDuplicate?: (typeof globalTags)[keyof typeof globalTags];
+          runnerDuplicate?: (typeof globalTags)[keyof typeof globalTags];
+        }
+      ).systemDuplicate = globalTags.system;
+      (
+        globalTags as typeof globalTags & {
+          systemDuplicate?: (typeof globalTags)[keyof typeof globalTags];
+          runnerDuplicate?: (typeof globalTags)[keyof typeof globalTags];
+        }
+      ).runnerDuplicate = globalTags.debug;
+
+      const { SYSTEM_FRAMEWORK_ITEMS, RUNNER_FRAMEWORK_ITEMS } =
+        require("../../models/BuiltinsRegistry") as typeof import("../../models/BuiltinsRegistry");
+
+      const systemTagIds = SYSTEM_FRAMEWORK_ITEMS.map((item) => item.id).filter(
+        (id) => id === globalTags.system.id,
+      );
+      const runnerTagIds = RUNNER_FRAMEWORK_ITEMS.map((item) => item.id).filter(
+        (id) => id === globalTags.debug.id,
+      );
+
+      expect(systemTagIds).toHaveLength(1);
+      expect(runnerTagIds).toHaveLength(1);
+    });
   });
 });

@@ -23,8 +23,6 @@ const internalTag = defineTag<{
 
 const globalTagsBase = {
   system: internalTag,
-  /** @deprecated Use `globalTags.system`. Kept for backward compatibility. */
-  internal: internalTag,
   excludeFromGlobalHooks: defineTag<{
     metadata?: Record<string, any>;
   }>(

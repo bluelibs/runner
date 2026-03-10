@@ -1,6 +1,6 @@
-import { circularDependenciesError } from "../../errors";
+import { circularDependencyError } from "../../errors";
 
-describe("Errors: CircularDependenciesError guidance without middleware", () => {
+describe("Errors: circularDependencyError guidance without middleware", () => {
   it("omits middleware-specific guidance when cycles lack 'middleware'", () => {
     expect.assertions(3);
     const cycles = [
@@ -8,7 +8,7 @@ describe("Errors: CircularDependenciesError guidance without middleware", () => 
       "resourceX -> resourceY -> resourceX",
     ];
     try {
-      circularDependenciesError.throw({ cycles });
+      circularDependencyError.throw({ cycles });
     } catch (err: any) {
       expect(String(err?.message)).toContain("Circular dependencies detected:");
       expect(String(err?.message)).toContain("taskA -> taskB -> taskA");
@@ -20,7 +20,7 @@ describe("Errors: CircularDependenciesError guidance without middleware", () => 
     expect.assertions(2);
     const cycles = ["middlewareA -> taskX -> middlewareA"];
     try {
-      circularDependenciesError.throw({ cycles });
+      circularDependencyError.throw({ cycles });
     } catch (err: any) {
       expect(String(err?.message)).toContain("taskRunner.intercept");
       expect(String(err?.message)).toContain("subtree-scoped middleware");

@@ -30,46 +30,6 @@ export const circularDependencyError = error<
   )
   .build();
 
-/** @deprecated Use circularDependencyError instead. */
-export const circularDependenciesError = circularDependencyError;
-
-/** @deprecated Use circularDependencyError instead. */
-export const dependencyCycleError = circularDependencyError;
-
-/** @deprecated Replaced by `executionCycleError` — kept for public API compatibility. */
-export const eventCycleError = error<
-  {
-    path: Array<{
-      id: string;
-      source: { kind: string; id: string; path?: string };
-    }>;
-  } & DefaultErrorType
->("runner.errors.eventCycle")
-  .format(({ path }) => {
-    const chain = path
-      .map((p) => `${p.id}<-${p.source.kind}:${p.source.path ?? p.source.id}`)
-      .join("  ->  ");
-    return `Event emission cycle detected:\n  ${chain}\n\nBreak the cycle by changing hook logic (avoid mutual emits) or gate with conditions/tags.`;
-  })
-  .remediation(
-    "Refactor hooks to avoid circular event emissions. Use conditional guards, split events into finer-grained signals, or introduce an intermediate task to break the cycle.",
-  )
-  .build();
-
-/** @deprecated Replaced by `executionDepthExceededError` — kept for public API compatibility. */
-export const eventCycleDepthExceededError = error<
-  { eventId: string; currentDepth: number; maxDepth: number } & DefaultErrorType
->("runner.errors.eventCycleDepthExceeded")
-  .format(
-    ({ eventId, currentDepth, maxDepth }) =>
-      `Emission stack exceeded ${maxDepth} frames while processing event "${eventId}" (current depth: ${currentDepth}).`,
-  )
-  .remediation(
-    ({ eventId }) =>
-      `Inspect hooks emitting "${eventId}" for runaway re-emission loops, or disable with executionContext: { cycleDetection: false } if bounded emissions are guaranteed.`,
-  )
-  .build();
-
 // Execution trace cycle (runtime — repetition-based)
 export const executionCycleError = error<
   {

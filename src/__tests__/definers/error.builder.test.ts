@@ -72,21 +72,7 @@ describe("error builder", () => {
     expect(r.error.is(error)).toBe(true);
   });
 
-  it("create() is an alias for new()", () => {
-    const AppError = r
-      .error<{ code: number }>("tests-errors-create-alias")
-      .format((d) => `Code ${d.code}`)
-      .build();
-
-    const createdError = AppError.create({ code: 7 });
-
-    expect(createdError).toBeInstanceOf(RunnerError);
-    expect(createdError.id).toBe("tests-errors-create-alias");
-    expect(createdError.message).toBe("Code 7");
-    expect(AppError.is(createdError, { code: 7 })).toBe(true);
-  });
-
-  it("applies dataSchema.parse on new() and create()", () => {
+  it("applies dataSchema.parse on new()", () => {
     const TypedError = r
       .error<{ code: number; message: string }>("tests-errors-new-schema")
       .dataSchema({
@@ -103,21 +89,16 @@ describe("error builder", () => {
     expect(() =>
       TypedError.new({ code: "x" as any, message: 1 as any }),
     ).toThrow("invalid");
-    expect(() =>
-      TypedError.create({ code: "x" as any, message: 1 as any }),
-    ).toThrow("invalid");
   });
 
-  it("allows zero-arg new()/create() when data has no required keys", () => {
+  it("allows zero-arg new() when data has no required keys", () => {
     const OptionalError = r
       .error<{ code?: number }>("tests-errors-new-optional")
       .build();
 
     const fromNew = OptionalError.new();
-    const fromCreate = OptionalError.create();
 
     expect(fromNew.data).toEqual({});
-    expect(fromCreate.data).toEqual({});
   });
 
   it("is() narrows unknown to a typed runner error shape", () => {

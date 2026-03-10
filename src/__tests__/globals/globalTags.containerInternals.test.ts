@@ -4,7 +4,9 @@ import { globalTags } from "../../globals/globalTags";
 describe("system namespace separation", () => {
   it("uses system.tags.internal as the built-in internal tag", () => {
     expect(globalTags.system.id).toBe("system.tags.internal");
-    expect(globalTags.internal.id).toBe("system.tags.internal");
+    expect((globalTags as unknown as Record<string, unknown>).internal).toBe(
+      undefined,
+    );
   });
 
   it("keeps privileged container resources under the system.* namespace", () => {

@@ -1,4 +1,4 @@
-import { definitions, r, defineAsyncContext, createContext } from "../..";
+import { definitions, r, defineAsyncContext } from "../..";
 import { createMessageError } from "../../errors";
 
 describe("async context builder and defineAsyncContext", () => {
@@ -47,7 +47,9 @@ describe("async context builder and defineAsyncContext", () => {
   });
 
   it("default serializer/parse path works when no custom provided", () => {
-    const ctx = createContext<{ when: Date }>("tests-ctx-default");
+    const ctx = defineAsyncContext<{ when: Date }>({
+      id: "tests-ctx-default",
+    });
     const encoded = ctx.serialize({
       when: new Date("2024-01-01T00:00:00.000Z"),
     });

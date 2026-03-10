@@ -223,29 +223,6 @@ export class DurableResource implements IDurableResource {
     return this.service.start(task, input, options);
   }
 
-  /** @deprecated Use start(task, input, options). */
-  startExecution<TInput, TResult>(
-    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<string>;
-  /** @deprecated Use start(task, input, options). */
-  startExecution(
-    task: string,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<string>;
-  startExecution(
-    task: string | ITask<any, Promise<any>, any, any, any, any>,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<string> {
-    if (typeof task === "string") {
-      return this.start(task, input, options);
-    }
-    return this.start(task, input, options);
-  }
-
   cancelExecution(executionId: string, reason?: string): Promise<void> {
     return this.service.cancelExecution(executionId, reason);
   }
@@ -276,54 +253,6 @@ export class DurableResource implements IDurableResource {
       return this.service.startAndWait(task, input, options);
     }
     return this.service.startAndWait(task, input, options);
-  }
-
-  /** @deprecated Use startAndWait(task, input, options) and read `result.data`. */
-  execute<TInput, TResult>(
-    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<TResult>;
-  /** @deprecated Use startAndWait(task, input, options) and read `result.data`. */
-  execute<TResult = unknown>(
-    task: string,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<TResult>;
-  async execute(
-    task: string | ITask<any, Promise<any>, any, any, any, any>,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<unknown> {
-    const result =
-      typeof task === "string"
-        ? await this.startAndWait(task, input, options)
-        : await this.startAndWait(task, input, options);
-
-    return result.data;
-  }
-
-  /** @deprecated Use startAndWait(task, input, options). */
-  executeStrict<TInput, TResult>(
-    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<DurableStartAndWaitResult<TResult>>;
-  /** @deprecated Use startAndWait(task, input, options). */
-  executeStrict<TResult = unknown>(
-    task: string,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<DurableStartAndWaitResult<TResult>>;
-  executeStrict(
-    task: string | ITask<any, Promise<any>, any, any, any, any>,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<DurableStartAndWaitResult<unknown>> {
-    if (typeof task === "string") {
-      return this.startAndWait(task, input, options);
-    }
-    return this.startAndWait(task, input, options);
   }
 
   schedule<TInput, TResult>(

@@ -71,7 +71,7 @@ export class HealthReporter implements IHealthReporter {
           return entry;
         }
 
-        throw healthReportEntryNotFoundError.create({ resourceId });
+        throw healthReportEntryNotFoundError.new({ resourceId });
       },
     };
   }

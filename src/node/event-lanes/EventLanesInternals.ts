@@ -184,7 +184,7 @@ function requireEventLaneQueue(
   if (isEventLaneQueue(value)) {
     return value;
   }
-  throw eventLaneQueueReferenceInvalidError.create({ source });
+  throw eventLaneQueueReferenceInvalidError.new({ source });
 }
 
 function resolveQueueReference(

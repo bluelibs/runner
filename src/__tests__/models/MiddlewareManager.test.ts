@@ -13,7 +13,13 @@ import {
 import { OnUnhandledError } from "../../index";
 import { RunnerMode } from "../../types/runner";
 import { TaskStoreElementType } from "../../types/storeTypes";
-import { ITaskMiddleware, IResource, symbolRpcLanePolicy } from "../../defs";
+import {
+  ITask,
+  ITaskMiddleware,
+  IResource,
+  IResourceMiddleware,
+  symbolRpcLanePolicy,
+} from "../../defs";
 import { createMessageError } from "../../errors";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
@@ -37,6 +43,20 @@ describe("MiddlewareManager", () => {
     manager = (store as unknown as { middlewareManager: MiddlewareManager })
       .middlewareManager;
   });
+
+  const getMiddlewareResolver = () =>
+    (
+      manager as unknown as {
+        middlewareResolver: {
+          getEverywhereTaskMiddlewares: (
+            task: ITask<any, any, any>,
+          ) => ITaskMiddleware[];
+          getEverywhereResourceMiddlewares: (
+            resource: IResource<any, any, any, any>,
+          ) => IResourceMiddleware[];
+        };
+      }
+    ).middlewareResolver;
 
   it("composes task runner with interceptors inside middleware and preserves order", async () => {
     const order: string[] = [];
@@ -159,7 +179,7 @@ describe("MiddlewareManager", () => {
 
     // Stub global middleware provider to return one with same id as local; manager should dedupe it
     const spy = jest
-      .spyOn(manager, "getEverywhereMiddlewareForTasks")
+      .spyOn(getMiddlewareResolver(), "getEverywhereTaskMiddlewares")
       .mockReturnValue([mGlobalSameId]);
 
     const runner = manager.composeTaskRunner(task);
@@ -210,21 +230,21 @@ describe("MiddlewareManager", () => {
     expect(result).toBeUndefined();
   });
 
-  it("should call getEverywhereMiddlewareForTasks method", () => {
+  it("resolves subtree task middleware through the middleware resolver", () => {
     // Create a minimal, typed task
     const t = defineTask({ id: "t-method", run: async () => 0 });
-    const result = manager.getEverywhereMiddlewareForTasks(t);
+    const result = getMiddlewareResolver().getEverywhereTaskMiddlewares(t);
     expect(Array.isArray(result)).toBe(true);
   });
 
-  it("should call getEverywhereMiddlewareForResources method", () => {
+  it("resolves subtree resource middleware through the middleware resolver", () => {
     // Create a minimal, typed resource
     const r = defineResource({ id: "r-method" });
-    const result = manager.getEverywhereMiddlewareForResources(r);
+    const result = getMiddlewareResolver().getEverywhereResourceMiddlewares(r);
     expect(Array.isArray(result)).toBe(true);
   });
 
-  it("getEverywhereMiddlewareForResources includes subtree middleware", () => {
+  it("middleware resolver includes subtree resource middleware", () => {
     const r = defineResource({ id: "r-test" });
     const mw = defineResourceMiddleware({
       id: "mw-everywhere-true",
@@ -240,11 +260,13 @@ describe("MiddlewareManager", () => {
       register: [mw, r],
     });
     store.storeGenericItem(owner);
-    const result = manager.getEverywhereMiddlewareForResources(r);
-    expect(result.some((m) => m.id === "mw-everywhere-true")).toBe(true);
+    const result = getMiddlewareResolver().getEverywhereResourceMiddlewares(r);
+    expect(
+      result.some((m) => store.toPublicId(m) === "mw-everywhere-true"),
+    ).toBe(true);
   });
 
-  it("getEverywhereMiddlewareForResources fails fast on duplicate subtree middleware ids", () => {
+  it("middleware resolver fails fast on duplicate subtree resource middleware ids", () => {
     const r = defineResource({ id: "r-test-func" });
     const baseMw = defineResourceMiddleware({
       id: "mw-everywhere-func",
@@ -270,9 +292,9 @@ describe("MiddlewareManager", () => {
       register: [baseMw, child],
     });
     store.storeGenericItem(owner);
-    expect(() => manager.getEverywhereMiddlewareForResources(r)).toThrow(
-      'Duplicate middleware id "mw-everywhere-func"',
-    );
+    expect(() =>
+      getMiddlewareResolver().getEverywhereResourceMiddlewares(r),
+    ).toThrow('Duplicate middleware id "mw-everywhere-func"');
   });
 
   it("should access resourceMiddlewareInterceptors getter", () => {
@@ -304,7 +326,7 @@ describe("MiddlewareManager", () => {
     expect(taskInterceptorsAfterMutationAttempt).toHaveLength(1);
   });
 
-  it("getEverywhereMiddlewareForTasks includes subtree middleware", () => {
+  it("middleware resolver includes subtree task middleware", () => {
     const task = defineTask({ id: "task-true", run: async () => 0 });
     const mw = defineTaskMiddleware({
       id: "mw-task-everywhere-true",
@@ -320,11 +342,13 @@ describe("MiddlewareManager", () => {
       register: [mw, task],
     });
     store.storeGenericItem(owner);
-    const res = manager.getEverywhereMiddlewareForTasks(task);
-    expect(res.some((m) => m.id === "mw-task-everywhere-true")).toBe(true);
+    const res = getMiddlewareResolver().getEverywhereTaskMiddlewares(task);
+    expect(
+      res.some((m) => store.toPublicId(m) === "mw-task-everywhere-true"),
+    ).toBe(true);
   });
 
-  it("getEverywhereMiddlewareForTasks fails fast on duplicate subtree middleware ids", () => {
+  it("middleware resolver fails fast on duplicate subtree task middleware ids", () => {
     const task = defineTask({ id: "task-dep", run: async () => 0 });
     const baseMw = defineTaskMiddleware({
       id: "mw-shared",
@@ -351,9 +375,9 @@ describe("MiddlewareManager", () => {
       register: [baseMw, child],
     });
     store.storeGenericItem(owner);
-    expect(() => manager.getEverywhereMiddlewareForTasks(task)).toThrow(
-      'Duplicate middleware id "mw-shared"',
-    );
+    expect(() =>
+      getMiddlewareResolver().getEverywhereTaskMiddlewares(task),
+    ).toThrow('Duplicate middleware id "mw-shared"');
   });
 
   it("should export middleware classes from barrel file", () => {

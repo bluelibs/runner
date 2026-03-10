@@ -21,7 +21,6 @@ describe("main exports", () => {
     expect(typeof mainExports.tags).toBe("object");
     expect(typeof mainExports.debug).toBe("object");
     expect(typeof mainExports.run).toBe("function");
-    expect(typeof mainExports.createContext).toBe("function");
     expect(typeof mainExports.definitions).toBe("object");
     expect(typeof mainExports.Store).toBe("function");
     expect(typeof mainExports.EventManager).toBe("function");
@@ -56,11 +55,6 @@ describe("main exports", () => {
     expect(testTag2.id).toBe("test-tag2");
     expect(typeof testTag.with).toBe("function");
     expect(typeof testTag2.extract).toBe("function");
-
-    // Test createContext export
-    const TestContext = mainExports.createContext<string>("test-context");
-    expect(typeof TestContext.provide).toBe("function");
-    expect(typeof TestContext.use).toBe("function");
 
     // Test namespaced sub-properties for complete coverage
     expect(typeof mainExports.resources.runtime).toBe("object");

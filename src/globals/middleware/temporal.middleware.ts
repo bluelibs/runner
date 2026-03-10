@@ -43,7 +43,7 @@ const TEMPORAL_DISPOSED_ERROR_MESSAGE =
   "Temporal middleware resource has been disposed.";
 
 function createTemporalDisposedError() {
-  return middlewareTemporalDisposedError.create({
+  return middlewareTemporalDisposedError.new({
     message: TEMPORAL_DISPOSED_ERROR_MESSAGE,
   });
 }

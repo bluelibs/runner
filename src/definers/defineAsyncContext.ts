@@ -111,12 +111,3 @@ export function defineAsyncContext<T>(
 }
 
 export type { IAsyncContext } from "../types/asyncContext";
-
-/** Convenience creator allowing optional name. Used by tests and legacy API. */
-/** @deprecated Use defineAsyncContext instead */
-/* istanbul ignore next */
-export function createContext<T>(name?: string): IAsyncContext<T> {
-  const id =
-    name ?? `context-${Math.random().toString(36).slice(2)}-${Date.now()}`;
-  return defineAsyncContext<T>({ id });
-}

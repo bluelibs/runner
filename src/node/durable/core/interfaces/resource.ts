@@ -23,23 +23,6 @@ export interface IDurableResource extends Pick<
   | "recover"
   | "signal"
 > {
-  /**
-   * @deprecated Use start(task, input, options).
-   */
-  startExecution<TInput, TResult>(
-    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<string>;
-  /**
-   * @deprecated Use start(task, input, options).
-   */
-  startExecution(
-    task: string,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<string>;
-
   start<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
@@ -57,40 +40,6 @@ export interface IDurableResource extends Pick<
     options?: ExecuteOptions,
   ): Promise<DurableStartAndWaitResult<TResult>>;
   startAndWait<TResult = unknown>(
-    task: string,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<DurableStartAndWaitResult<TResult>>;
-
-  /**
-   * @deprecated Use startAndWait(task, input, options) and read `result.data`.
-   */
-  execute<TInput, TResult>(
-    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<TResult>;
-  /**
-   * @deprecated Use startAndWait(task, input, options) and read `result.data`.
-   */
-  execute<TResult = unknown>(
-    task: string,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<TResult>;
-
-  /**
-   * @deprecated Use startAndWait(task, input, options).
-   */
-  executeStrict<TInput, TResult>(
-    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<DurableStartAndWaitResult<TResult>>;
-  /**
-   * @deprecated Use startAndWait(task, input, options).
-   */
-  executeStrict<TResult = unknown>(
     task: string,
     input?: unknown,
     options?: ExecuteOptions,

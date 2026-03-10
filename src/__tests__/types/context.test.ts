@@ -1,9 +1,16 @@
-import { createContext, defineResource, defineTask, run } from "../../index";
+import {
+  defineAsyncContext,
+  defineResource,
+  defineTask,
+  run,
+} from "../../index";
 import { Logger } from "../../models/Logger";
 import { CONTRACT } from "../../types/contracts";
 
 describe("Context System", () => {
-  const TestContext = createContext<{ id: string }>();
+  const TestContext = defineAsyncContext<{ id: string }>({
+    id: "test-context",
+  });
 
   test("useContext throws when missing", async () => {
     const r = defineResource({

@@ -127,22 +127,23 @@ describe("parseMultipartInput - Errors", () => {
       ),
     ]);
 
-    const originalCreate = nodeExposureMultipartLimitExceededError.create.bind(
+    const originalNew = nodeExposureMultipartLimitExceededError.new.bind(
       nodeExposureMultipartLimitExceededError,
     );
     const errorHelperPrototype = Object.getPrototypeOf(
       nodeExposureMultipartLimitExceededError,
     ) as {
-      create: (...args: any[]) => Error;
+      new: (...args: any[]) => Error;
     };
-    const originalPrototypeCreate = errorHelperPrototype.create;
+    const originalPrototypeNew = errorHelperPrototype.new;
     const createSpy = jest
-      .spyOn(errorHelperPrototype, "create")
+      .spyOn(errorHelperPrototype, "new")
       .mockImplementation(function (this: unknown, ...args: any[]) {
         if (this !== nodeExposureMultipartLimitExceededError) {
-          return originalPrototypeCreate.call(this, ...args);
+          return originalPrototypeNew.call(this, ...args);
         }
-        return originalCreate({ message: "Multipart limit exceeded" } as any);
+
+        return originalNew({ message: "Multipart limit exceeded" } as any);
       });
 
     try {

@@ -97,28 +97,28 @@ describe("Typed Infrastructure Errors", () => {
   });
 
   it("builds middleware and durable helper errors with remediation/http metadata", () => {
-    const timeout = middlewareTimeoutError.create({
+    const timeout = middlewareTimeoutError.new({
       message: "timeout helper",
     });
     expect(timeout.httpCode).toBe(408);
     expect(timeout.message).toContain("timeout helper");
     expect(timeout.remediation).toContain("Increase timeout");
 
-    const circuit = middlewareCircuitBreakerOpenError.create({
+    const circuit = middlewareCircuitBreakerOpenError.new({
       message: "circuit helper",
     });
     expect(circuit.httpCode).toBe(503);
     expect(circuit.message).toContain("circuit helper");
     expect(circuit.remediation).toContain("Reduce downstream failures");
 
-    const rateLimit = middlewareRateLimitExceededError.create({
+    const rateLimit = middlewareRateLimitExceededError.new({
       message: "rate limit helper",
     });
     expect(rateLimit.httpCode).toBe(429);
     expect(rateLimit.message).toContain("rate limit helper");
     expect(rateLimit.remediation).toContain("Reduce request frequency");
 
-    const durable = durableExecutionError.create({
+    const durable = durableExecutionError.new({
       message: "durable helper",
       executionId: "exec-99",
       taskId: "task-7",

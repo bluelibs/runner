@@ -769,13 +769,7 @@ const result = await d.startAndWait(processOrder, {
   convenience wrapper for `start(...)` + `wait(executionId)`; returns
   `{ durable: { executionId }, data }`.
 
-`start()` and `startAndWait()` are the canonical APIs and are not deprecated.
-
-Deprecated compatibility aliases are still available:
-
-- `startExecution(taskOrTaskId, input)` -> `start(taskOrTaskId, input)`
-- `execute(taskOrTaskId, input)` -> `const { data } = await startAndWait(taskOrTaskId, input)`
-- `executeStrict(taskOrTaskId, input)` -> `startAndWait(taskOrTaskId, input)`
+`start()` and `startAndWait()` are the only supported durable execution APIs.
 
 `taskOrTaskId` can be:
 
@@ -1938,7 +1932,12 @@ const recoverDurable = r
 
 const app = r
   .resource("app")
-  .register([resources.durable, durableRegistration, processOrder, recoverDurable])
+  .register([
+    resources.durable,
+    durableRegistration,
+    processOrder,
+    recoverDurable,
+  ])
   .build();
 await run(app);
 ```

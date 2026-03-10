@@ -84,7 +84,7 @@ interface MultipartSuccess {
 type MultipartResult = MultipartSuccess | { ok: false; response: JsonResponse };
 
 function createMultipartLimitError(response: JsonResponse): Error {
-  return nodeExposureMultipartLimitExceededError.create({
+  return nodeExposureMultipartLimitExceededError.new({
     message: "Multipart limit exceeded",
     response,
   });

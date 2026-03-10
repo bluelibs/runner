@@ -17,6 +17,7 @@
   - [Common Elements](#common-elements)
     - [Serialization](#serialization)
     - [Authentication](#authentication)
+    - [Header Reference](#header-reference)
     - [Error Handling](#error-handling)
     - [CORS](#cors)
   - [Endpoints](#endpoints)
@@ -98,14 +99,14 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 
 ### Header Reference
 
-| Header | Direction | Required | Description |
-| --- | --- | --- | --- |
-| `x-runner-token` | client -> server | Yes (unless `auth.allowAnonymous: true`) | Authentication token. Header name can be overridden by `auth.header`. |
-| `x-runner-request-id` | client <-> server | Optional | Correlation id. Server accepts valid incoming ids and otherwise generates one; response echoes final id. |
-| `x-runner-context` | client -> server | Optional | Serializer-encoded async-context map. Server restores only registered contexts and applies lane/exposure async-context policy (lane `asyncContexts` allowlist defaults to none; legacy `allowAsyncContext` bridge can temporarily allow all). Invalid entries are ignored. |
-| `content-type` | client -> server | Yes | Request mode selector (`application/json`, `multipart/form-data`, `application/octet-stream`). |
-| `x-content-type-options` | server -> client | Always | Security header set to `nosniff`. |
-| `x-frame-options` | server -> client | Always | Security header set to `DENY`. |
+| Header                   | Direction         | Required                                 | Description                                                                                                                                                                                                                                                                |
+| ------------------------ | ----------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `x-runner-token`         | client -> server  | Yes (unless `auth.allowAnonymous: true`) | Authentication token. Header name can be overridden by `auth.header`.                                                                                                                                                                                                      |
+| `x-runner-request-id`    | client <-> server | Optional                                 | Correlation id. Server accepts valid incoming ids and otherwise generates one; response echoes final id.                                                                                                                                                                   |
+| `x-runner-context`       | client -> server  | Optional                                 | Serializer-encoded async-context map. Server restores only registered contexts and applies lane/exposure async-context policy (lane `asyncContexts` allowlist defaults to none; legacy `allowAsyncContext` bridge can temporarily allow all). Invalid entries are ignored. |
+| `content-type`           | client -> server  | Yes                                      | Request mode selector (`application/json`, `multipart/form-data`, `application/octet-stream`).                                                                                                                                                                             |
+| `x-content-type-options` | server -> client  | Always                                   | Security header set to `nosniff`.                                                                                                                                                                                                                                          |
+| `x-frame-options`        | server -> client  | Always                                   | Security header set to `DENY`.                                                                                                                                                                                                                                             |
 
 ### Error Handling
 
@@ -257,7 +258,7 @@ Server routes by `Content-Type`.
 
 ### Context Propagation (Node-Only)
 
-- **Mechanism**: Snapshots `AsyncLocalStorage` (created via `createContext(id: string)`).
+- **Mechanism**: Snapshots registered async contexts created via `defineAsyncContext({ id })`.
 - **Transport**: A Serializer-encoded map sent in `x-runner-context` header (applies to JSON, multipart, and octet-stream).
 - **Rules**: Stable IDs; optional `serialize`/`parse` hooks. Filtered for size/serializability.
 - **Security**: Server only restores known registered contexts; invalid headers/entries are ignored.

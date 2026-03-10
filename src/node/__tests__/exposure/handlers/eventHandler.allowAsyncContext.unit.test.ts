@@ -114,7 +114,7 @@ describe("eventHandler allowAsyncContext option", () => {
     jest
       .spyOn(requestBodyModule, "readJsonBody")
       .mockRejectedValue(
-        cancellationError.create({ reason: "Client Closed Request" }),
+        cancellationError.new({ reason: "Client Closed Request" }),
       );
 
     const handler = createEventHandler({

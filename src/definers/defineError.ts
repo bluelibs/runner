@@ -178,10 +178,6 @@ export class ErrorHelper<
   ["new"](...args: ErrorThrowArgs<TData>): RunnerError<TData> {
     return this.buildRunnerError(...args);
   }
-  /** @deprecated use .new() or .throw() for better DX */
-  create(...args: ErrorThrowArgs<TData>): RunnerError<TData> {
-    return this["new"](...args);
-  }
   throw(...args: ErrorThrowArgs<TData>): never {
     throw this.buildRunnerError(...args);
   }

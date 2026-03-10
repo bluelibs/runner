@@ -80,8 +80,6 @@ export interface IErrorHelper<
   tags: ErrorTagType[];
   /** Construct a typed error with the given data without throwing it */
   "new"(...args: ErrorThrowArgs<TData>): IRunnerError<TData>;
-  /** Alias for .new() */
-  create(...args: ErrorThrowArgs<TData>): IRunnerError<TData>;
   /** Throw a typed error with the given data */
   throw(...args: ErrorThrowArgs<TData>): never;
   /**

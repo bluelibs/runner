@@ -27,10 +27,7 @@ import {
   isSubtreeFilter,
   isIsolationScope,
 } from "./define";
-import {
-  defineAsyncContext,
-  createContext,
-} from "./definers/defineAsyncContext";
+import { defineAsyncContext } from "./definers/defineAsyncContext";
 import { globalEvents } from "./globals/globalEvents";
 import { globalResources } from "./globals/globalResources";
 import { globalMiddlewares } from "./globals/globalMiddleware";
@@ -92,7 +89,6 @@ export {
   isOverrideDefinition,
   isSubtreeFilter,
   isIsolationScope,
-  createContext,
   run,
   onAnyOf,
   isOneOf,

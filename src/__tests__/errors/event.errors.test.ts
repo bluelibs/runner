@@ -1,29 +1,8 @@
-import {
-  eventCycleError,
-  eventCycleDepthExceededError,
-  executionCycleError,
-  executionDepthExceededError,
-} from "../../errors";
+import { executionCycleError, executionDepthExceededError } from "../../errors";
 
 describe("event errors", () => {
-  it("formats event cycles with source ids when source paths are absent", () => {
-    const error = eventCycleError.create({
-      path: [
-        {
-          id: "event.alpha",
-          source: {
-            kind: "runtime",
-            id: "relay.raw-source",
-          },
-        },
-      ],
-    });
-
-    expect(error.message).toContain("event.alpha<-runtime:relay.raw-source");
-  });
-
   it("formats execution cycle error with trace info", () => {
-    const error = executionCycleError.create({
+    const error = executionCycleError.new({
       frame: {
         kind: "event",
         id: "e1",
@@ -57,7 +36,7 @@ describe("event errors", () => {
   });
 
   it("formats execution depth exceeded error", () => {
-    const error = executionDepthExceededError.create({
+    const error = executionDepthExceededError.new({
       frame: { kind: "task", id: "t1" },
       currentDepth: 1000,
       maxDepth: 1000,
@@ -65,17 +44,5 @@ describe("event errors", () => {
 
     expect(error.message).toContain("depth");
     expect(error.message).toContain("1000");
-  });
-
-  it("formats legacy eventCycleDepthExceededError", () => {
-    const error = eventCycleDepthExceededError.create({
-      eventId: "deep-event",
-      currentDepth: 500,
-      maxDepth: 500,
-    });
-
-    expect(error.message).toContain("500");
-    expect(error.message).toContain("deep-event");
-    expect(error.remediation).toContain("deep-event");
   });
 });

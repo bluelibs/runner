@@ -261,9 +261,6 @@ Once `run(app)` resolves, the returned runtime is your operator-facing handle. T
 - `runtime.pause()`, `runtime.resume()`, and `runtime.recoverWhen(...)` to control admissions
 - `runtime.dispose()` to stop the runtime cleanly
 
-Resources can also expose an optional async `health(value, config, deps, context)` probe.
-Only resources that explicitly define `health()` participate in `resources.health.getHealth(...)` and `runtime.getHealth(...)`.
-
 ```typescript
 import { r } from "@bluelibs/runner";
 import { MongoClient } from "mongodb";
@@ -1664,7 +1661,6 @@ Typed Runner errors are declared once and injected anywhere. Register them along
 The injected value is the error helper itself, exposing:
 
 - `.new()`
-- `.create()`
 - `.throw()`
 - `.is()`
 - `id`
@@ -1711,10 +1707,7 @@ const error = userNotFoundError.new({
   message: "User not found",
 });
 
-throw userNotFoundError.create({
-  code: 404,
-  message: "User not found",
-});
+throw error;
 ```
 
 Notes:
@@ -1722,7 +1715,6 @@ Notes:
 - `errorHelper.is(err, partialData?)` is lineage-aware
 - `partialData` uses shallow strict matching
 - `errorHelper.new(data)` returns the typed `RunnerError` without throwing
-- `errorHelper.create(data)` is an alias of `.new(data)`
 
 ### Dynamic Remediation
 
@@ -1783,7 +1775,6 @@ console.log(getUser.throws);
 The `throws` list is normalized and deduplicated at definition time.
 
 For dependency cycle detection, use the canonical helper name `circularDependencyError`.
-Legacy aliases `circularDependenciesError` and `dependencyCycleError` remain available as compatibility exports.
 
 > **runtime:** "Typed errors: because 'Error: something went wrong' is the stack trace equivalent of a shrug emoji. Give your errors a name, a code, and a remediation plan—future-you will mass an appreciation card at 2 AM."
 ## run() and RunOptions
