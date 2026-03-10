@@ -701,8 +701,11 @@ describe("RunResult", () => {
         bufferLogs: true,
       },
       errorBoundary: false,
-      disposeBudgetMs: 1234,
-      disposeDrainBudgetMs: 567,
+      dispose: {
+        totalBudgetMs: 1234,
+        drainingBudgetMs: 567,
+        cooldownWindowMs: 89,
+      },
       onUnhandledError,
       dryRun: true,
       lazy: true,
@@ -722,8 +725,11 @@ describe("RunResult", () => {
       },
       errorBoundary: false,
       shutdownHooks: false,
-      disposeBudgetMs: 1234,
-      disposeDrainBudgetMs: 567,
+      dispose: {
+        totalBudgetMs: 1234,
+        drainingBudgetMs: 567,
+        cooldownWindowMs: 89,
+      },
       onUnhandledError,
       dryRun: true,
       executionContext: {

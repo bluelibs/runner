@@ -169,9 +169,9 @@ export function registerShutdownHook(disposeOnce: () => Promise<void>) {
 
 export async function waitForDisposeDrainBudget(
   target: ShutdownDrainTarget,
-  disposeDrainBudgetMs: number,
+  drainingBudgetMs: number,
 ): Promise<boolean> {
-  return target.waitForDrain(disposeDrainBudgetMs);
+  return target.waitForDrain(drainingBudgetMs);
 }
 
 export async function __waitForProcessHooksIdleForTests(): Promise<void> {

@@ -35,7 +35,9 @@ describe("RuntimeTimers", () => {
 
     jest.useFakeTimers();
     try {
-      const runtime = await run(app, { shutdownHooks: false });
+      const runtime = await run(app, {
+        shutdownHooks: false,
+      });
       await runtime.dispose();
     } finally {
       jest.useRealTimers();
@@ -52,7 +54,9 @@ describe("RuntimeTimers", () => {
       },
     });
 
-    const runtime = await run(app, { shutdownHooks: false });
+    const runtime = await run(app, {
+      shutdownHooks: false,
+    });
     const timers = runtime.getResourceValue(globalResources.timers);
     const timeoutCalls: number[] = [];
     const intervalCalls: number[] = [];

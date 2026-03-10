@@ -35,7 +35,9 @@ describe("runner.timers", () => {
       },
     });
 
-    const runtime = await run(app, { shutdownHooks: false });
+    const runtime = await run(app, {
+      shutdownHooks: false,
+    });
 
     expect(snapshot.fired).toBe(true);
     expect(globalResources.timers.tags?.includes(globalTags.system)).not.toBe(
@@ -71,7 +73,9 @@ describe("runner.timers", () => {
       },
     });
 
-    const runtime = await run(app, { shutdownHooks: false });
+    const runtime = await run(app, {
+      shutdownHooks: false,
+    });
     await runtime.dispose();
     jest.runOnlyPendingTimers();
 

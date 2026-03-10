@@ -17,7 +17,7 @@ It treats architecture as runtime-enforced structure rather than team convention
 - `error`: a typed Runner error helper
 - `run(app)`: bootstraps the graph and returns the runtime API
 
-Prefer the flat globals for built-ins:
+Prefer the flat globals for built-ins, exported by runner:
 
 - `resources.*`
 - `events.*`
@@ -167,11 +167,19 @@ userInput.toJSONSchema(); // machine-readable contract for tooling
   - `getResourceConfig`
   - `getHealth`
   - `dispose`
+- Lifecycle-shaping run options:
+  - `dryRun: true`: validate the graph without running `init()` / `ready()` or starting ingress.
+  - `lazy: true`: keep startup-unused resources asleep until `getLazyResourceValue(...)` wakes them; their `ready()` runs when they initialize.
+  - `lifecycleMode: "parallel"`: keep dependency ordering, but allow same-wave `init`, `ready`, `cooldown`, and `dispose` to run in parallel.
+  - `shutdownHooks: true`: install `SIGINT` / `SIGTERM` graceful shutdown hooks; signals during bootstrap cancel startup and roll back initialized resources.
+  - `dispose: { totalBudgetMs, drainingBudgetMs, cooldownWindowMs }`: control shutdown budget, drain wait, and the short post-`cooldown()` admissions window.
+  - `errorBoundary: true`: install process-level unhandled error capture and route it through `onUnhandledError`.
+  - `executionContext: true | { ... }`: enable correlation ids, causal-chain tracking, and cycle detection for task/event execution.
+  - `mode: "dev" | "prod" | "test"`: override environment-based mode detection.
+- `debug` and `logs` tune observability; they do not change lifecycle semantics.
+- For the full option table, see the `run() and RunOptions` section in [FULL_GUIDE.md](./FULL_GUIDE.md).
 - Use `run(app, { debug: "verbose" })` for structured debug output.
 - Use `run(app, { logs: { printThreshold: null } })` to silence console output.
-- `dryRun: true` validates the graph without starting resources.
-- `lazy: true` defers startup-unused resources until on-demand access.
-- `lifecycleMode: "parallel"` enables dependency-safe parallel startup/init and disposal waves (applies to `ready()` and `cooldown()` too).
 - `runtime.pause()` is a synchronous, idempotent admission switch.
   It stops new runtime-origin task and event admissions immediately, while already-running work can finish.
 - `runtime.state` is `"running" | "paused"`.
@@ -191,6 +199,7 @@ Lifecycle:
 - Shutdown order:
   - enter `coolingDown`
   - run `cooldown()` in reverse dependency order
+  - keep admissions open during `dispose.cooldownWindowMs`
   - enter `disposing`
   - emit `events.disposing`
   - drain in-flight work
@@ -207,7 +216,7 @@ They are Runner's main composition and ownership unit: a resource can register c
 
 - `init(config, deps, context)` creates the value.
 - `ready(value, config, deps, context)` starts ingress after startup lock and runs after dependencies are all initialized.
-- `cooldown(value, config, deps, context)` stops ingress quickly at shutdown start and runs during `coolingDown`, before `disposing` begins. Task runs and event emissions stay open during `coolingDown`. Once `disposing` begins, the cooling resource itself remains allowed as a resource-origin source during the shutdown drain window, and `cooldown()` may optionally return additional resource definitions whose resource-origin task/event admissions should remain allowed too.
+- `cooldown(value, config, deps, context)` stops ingress quickly at shutdown start and runs during `coolingDown`, before `disposing` begins. Task runs and event emissions stay open during `coolingDown`, and if `dispose.cooldownWindowMs` is greater than `0` Runner keeps that broader admission policy open for the extra bounded window after cooldown completes. At the default `0`, Runner skips that wait. Once `disposing` begins, fresh admissions narrow to the cooling resource itself, any additional resource definitions returned from `cooldown()`, and in-flight continuations.
 - `dispose(value, config, deps, context)` performs final teardown after drain and runs in reverse dependency order.
 - `health(value, config, deps, context)` is an optional async probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.
   Return `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
@@ -569,6 +578,7 @@ Key rules:
 Cron:
 
 - `tags.cron` schedules tasks with cron expressions.
+- Attach it on the task with `tags.cron.with({ expression: "* * * * *" })`; for example: `.tags([tags.cron.with({ expression: "0 9 * * *", immediate: true, ... })])`.
 - Cron runs only when `resources.cron` is registered.
 - One cron tag per task is supported.
 - If `resources.cron` is not registered, cron tags remain metadata only.
@@ -578,14 +588,11 @@ Cron:
 > `ExecutionContext`: auto-managed bookkeeping (`correlationId`, `depth`, cycle detection). Different from `AsyncContext` (user-owned state).
 
 ```ts
-// Enable globally
+// Enable globally. Top-level runtime task/event calls now get a correlation id automatically.
 const runtime = await run(app, { executionContext: true }); // or { cycleDetection: false }
 
-// Seed correlation at entry boundary
-await system.ctx.executionContext.provide(
-  { correlationId: req.headers["x-id"] },
-  () => runtime.runTask(handleRequest, input),
-);
+await runtime.runTask(handleRequest, input);
+await runtime.emitEvent(userSeen, payload);
 
 // Use inside tasks/hooks/interceptors
 const myTask = r
@@ -595,11 +602,23 @@ const myTask = r
   })
   .build();
 
-// Record exact call tree during testing/tracing
-const { result, recording } = await system.ctx.executionContext.record({}, () =>
+// Optional: seed your own correlation id at an external boundary
+await system.ctx.executionContext.provide(
+  { correlationId: req.headers["x-id"] },
+  () => runtime.runTask(handleRequest, input),
+);
+
+// Optional: capture the exact execution tree during testing/tracing
+const { result, recording } = await system.ctx.executionContext.record(() =>
   runtime.runTask(myTask, input),
 );
 ```
+
+`executionContext: true` already creates execution context for top-level runtime task runs and event emissions. You do not need `provide()` just to enable propagation.
+
+Use `provide()` when you want to seed or override the correlation id from an external boundary such as HTTP, RPC, or a queue consumer.
+
+Use `record()` when you want the execution tree back for assertions, tracing, or debugging.
 
 ## Async Context
 
@@ -669,17 +688,3 @@ Full detail: `readmes/REMOTE_LANES_AI.md`, `readmes/REMOTE_LANES.md`
   - `*.middleware.ts`
   - `*.tag.ts`
   - `*.error.ts`
-
-## When To Leave This File
-
-Use the dedicated docs when you need:
-
-- deeper isolation policy behavior
-- override edge cases and precedence rules
-- full observability guidance
-- full Remote Lanes behavior
-- transport-specific RPC HTTP details
-- exhaustive cron options
-- the full `Match` pattern catalog
-- serializer customization detail
-- platform-specific Node helpers

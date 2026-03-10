@@ -166,8 +166,10 @@ describe("global cron resource (additional)", () => {
 
     const app = createCronApp([blockerTask, shutdownAwareCronTask]);
     const runtime = await run(app, {
-      disposeBudgetMs: 1_000_000,
-      disposeDrainBudgetMs: 1_000_000,
+      dispose: {
+        totalBudgetMs: 1_000_000,
+        drainingBudgetMs: 1_000_000,
+      },
     });
     const cron = runtime.getResourceValue(resources.cron);
     const getShutdownSchedule = () =>

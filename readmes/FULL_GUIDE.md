@@ -78,9 +78,9 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](./AI.md)                                                                                 | Docs    | Compact summary (<5000 tokens)      |
-| [Full Guide](./FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
-| [Support & Release Policy](./ENTERPRISE.md)                                                                 | Docs    | Support windows and deprecation     |
+| [AI-Friendly Docs](./AI.md)                                                                                         | Docs    | Compact summary (<5000 tokens)      |
+| [Full Guide](./FULL_GUIDE.md)                                                                                       | Docs    | Complete documentation (composed)   |
+| [Support & Release Policy](./ENTERPRISE.md)                                                                         | Docs    | Support windows and deprecation     |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
@@ -104,13 +104,13 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 ## Platform Support (Quick Summary)
 
-| Capability                                             | Node.js | Browser | Edge | Notes                                      |
-| ------------------------------------------------------ | ------- | ------- | ---- | ------------------------------------------ |
-| Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
-| Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
-| Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                           |
+| Capability                                             | Node.js | Browser | Edge | Notes                                          |
+| ------------------------------------------------------ | ------- | ------- | ---- | ---------------------------------------------- |
+| Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences     |
+| Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires Node.js `AsyncLocalStorage`           |
+| Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                               |
 | Remote Lanes client (`createHttpClient`)               | Full    | Full    | Full | Explicit universal client for `fetch` runtimes |
-| Remote Lanes server (`@bluelibs/runner/node`)          | Full    | None    | None | Exposes tasks/events over HTTP             |
+| Remote Lanes server (`@bluelibs/runner/node`)          | Full    | None    | None | Exposes tasks/events over HTTP                 |
 
 ---
 
@@ -118,16 +118,17 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 Use these minimums before starting:
 
-| Requirement     | Minimum                 | Notes                                                                   |
-| --------------- | ----------------------- | ----------------------------------------------------------------------- |
-| Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                                 |
-| TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository                   |
-| Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works                  |
+| Requirement     | Minimum                 | Notes                                                          |
+| --------------- | ----------------------- | -------------------------------------------------------------- |
+| Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                        |
+| TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository          |
+| Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works         |
 | `fetch` runtime | Built-in or polyfilled  | Required for explicit remote lane clients (`createHttpClient`) |
 
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
+
 ## Why Runner?
 
 When a TypeScript service grows past a few dependencies, the pain usually shows up in the same places: startup order becomes tribal knowledge, cross-cutting concerns leak into business logic, and testing means reconstructing half the app. Runner makes those seams explicit. You wire dependencies in code, keep lifecycle in one place, and choose when to execute a unit directly versus through the full runtime.
@@ -230,6 +231,7 @@ For specialized features beyond the core concepts:
 - **Durable Workflows** (Node-only): replay-safe orchestration primitives in [DURABLE_WORKFLOWS.md](./DURABLE_WORKFLOWS.md)
 - **Remote Lanes** (Node): distributed events and RPC in [REMOTE_LANES.md](./REMOTE_LANES.md)
 - **Serialization**: custom value transport in [SERIALIZER_PROTOCOL.md](./SERIALIZER_PROTOCOL.md)
+
 ## Resources
 
 Resources are the long-lived parts of your app: database clients, configuration surfaces, queues, services, caches, and ownership boundaries.
@@ -426,7 +428,7 @@ Resources move through a deliberate sequence of phases. Understanding which phas
 - `init(config, deps, context)` creates the resource value
 - `ready(value, config, deps, context)` starts ingress after startup lock
 - `cooldown(value, config, deps, context)` stops new ingress **quickly**, a way of saying "stop any additional work, but let in-flight work finish".
-  The cooling resource itself stays allowed as a resource-origin source while Runner drains this shutdown, and `cooldown()` may optionally return additional resource definitions whose resource-origin task/event admissions should stay allowed too.
+  When `dispose.cooldownWindowMs` is greater than `0`, Runner keeps the broader `coolingDown` admission policy open for that bounded post-cooldown window before it enters `disposing`. At the default `0`, Runner skips that wait. Once `disposing` begins, admissions narrow to in-flight continuations plus resource-origin calls from the cooling resource itself and any additional resource definitions returned from `cooldown()`.
 - `dispose(value, config, deps, context)` performs final teardown after task/event drain.
 - Config-only resources can omit `.init()` and resolve to `undefined`
 - `r.resource(id, { gateway: true })` suppresses the resource's own namespace segment
@@ -775,6 +777,7 @@ const dbResource = r
 ```
 
 > **runtime:** "Resources: I nurse them to life, let them work, then mercifully pull the plug in reverse order. It's a lot like IT support, except I actually follow the runbook."
+
 ## Tasks
 
 Tasks are Runner's main business operations. They are async functions with explicit dependency injection, validation, middleware support, and typed outputs.
@@ -995,6 +998,7 @@ For lifecycle-owned timers inside tasks or resources, depend on `resources.timer
 `timers.setTimeout()` and `timers.setInterval()` stop accepting new timers once `cooldown()` starts and are cleared during `dispose()`.
 
 > **runtime:** "Tasks: glorified functions with a resume, a chaperone, and a journal. But at least they show up in the logs when something goes wrong—unlike that anonymous arrow function in line 47."
+
 ## Events and Hooks
 
 Events let different parts of your app communicate without direct references. Hooks subscribe to those events so producers stay decoupled from listeners.
@@ -1223,6 +1227,7 @@ const emergencyHook = r
 ```
 
 > **runtime:** "Events and hooks: the pub/sub contract where nobody reads the terms. You emit, I deliver, hooks react, and somehow the welcome email always fires twice in staging."
+
 ## Middleware
 
 Middleware wraps tasks and resources so cross-cutting behavior stays explicit and reusable instead of leaking into business logic.
@@ -1454,6 +1459,7 @@ For context enforcement, use `middleware.task.requireContext.with({ context })` 
 See [Advanced Patterns](#advanced-patterns) for interception ordering and runtime-wide interception details.
 
 > **runtime:** "Middleware: the onion pattern, except every layer has opinions and a config object. I peel them in order, cry a little, and hand you the result."
+
 ## Tags
 
 Tags are Runner's typed discovery system. They attach metadata to definitions, influence framework behavior, and can be consumed as dependencies to discover matching definitions at runtime.
@@ -1650,6 +1656,7 @@ const profileTask = r
 Fail-fast rule: if a tagged item depends on the same tag, Runner throws during store sanity checks.
 
 > **runtime:** "Tags: metadata with a mission. You stick labels on everything, I index them, and at startup someone finally discovers why three tasks share a route prefix. It's like naming your pets—except these ones actually come when called."
+
 ## Errors
 
 Typed Runner errors are declared once and injected anywhere. Register them alongside other items and consume them through dependencies.
@@ -1773,6 +1780,7 @@ The `throws` list is normalized and deduplicated at definition time.
 For dependency cycle detection, use the canonical helper name `circularDependencyError`.
 
 > **runtime:** "Typed errors: because 'Error: something went wrong' is the stack trace equivalent of a shrug emoji. Give your errors a name, a code, and a remediation plan—future-you will mass an appreciation card at 2 AM."
+
 ## run() and RunOptions
 
 The `run()` function is your application's entry point. It initializes all resources, wires up dependencies, and returns handles for interacting with your system.
@@ -1802,24 +1810,24 @@ await result.dispose();
 
 An object with the following properties and methods:
 
-| Property                    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `value`                     | Value returned by the `app` resource's `init()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `runOptions`                | Normalized effective `run(...)` options captured for this runtime instance, including defaults such as `logs`, `lifecycleMode`, and the resolved `mode`                                                                                                                                                                                                                                                                                                                                                                     |
-| `runTask(...)`              | Run a task by reference or string id                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `emitEvent(...)`            | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`)                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `getResourceValue(...)`     | Read a resource's value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `getLazyResourceValue(...)` | Initialize/read a resource on demand. Available only when `run(..., { lazy: true })` is enabled.                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `getResourceConfig(...)`    | Read a resource's resolved config                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `getHealth(resourceDefs?)`  | Evaluate async health probes for all visible health-enabled resources or only the requested subset. Returns `{ totals, report, find(...) }`. Resources without `health()` are excluded. For in-resource dependencies, prefer `resources.health.getHealth(...)`.                                                                                                                                                                                                                                                        |
-| `state`                     | Current admission state for new work: `"running"` or `"paused"`                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `pause(reason?)`            | Synchronous idempotent switch that stops new runtime/resource-origin task and event admissions while allowing already-running work to continue                                                                                                                                                                                                                                                                                                                                                                               |
-| `resume()`                  | Reopen admissions immediately                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `recoverWhen(...)`          | Register paused-state recovery conditions; Runner auto-resumes only when all active conditions for the current pause episode pass                                                                                                                                                                                                                                                                                                                                                                                           |
-| `root`                      | Read the root resource definition and use `getResourceValue(root)` / `getResourceConfig(root)`                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `logger`                    | Logger instance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `store`                     | Runtime store with registered resources, tasks, middleware, events, and runtime internals                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `dispose()`                 | Transitions to `coolingDown`, runs resource `cooldown()` in reverse dependency order while business admissions remain open, then transitions to `disposing` (locks new business admissions using the cooldown-assembled allowlist), emits `events.disposing` (awaited), waits for in-flight tasks + event hooks to drain (up to `disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`), logs a structured `warn` if drain did not complete in time, transitions to `drained` (blocks all new business task/event admissions), emits `events.drained` (lifecycle-bypassed, awaited), then disposes resources and removes hooks |
+| Property                    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `value`                     | Value returned by the `app` resource's `init()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `runOptions`                | Normalized effective `run(...)` options captured for this runtime instance, including defaults such as `logs`, `lifecycleMode`, and the resolved `mode`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `runTask(...)`              | Run a task by reference or string id                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `emitEvent(...)`            | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `getResourceValue(...)`     | Read a resource's value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `getLazyResourceValue(...)` | Initialize/read a resource on demand. Available only when `run(..., { lazy: true })` is enabled.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `getResourceConfig(...)`    | Read a resource's resolved config                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `getHealth(resourceDefs?)`  | Evaluate async health probes for all visible health-enabled resources or only the requested subset. Returns `{ totals, report, find(...) }`. Resources without `health()` are excluded. For in-resource dependencies, prefer `resources.health.getHealth(...)`.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `state`                     | Current admission state for new work: `"running"` or `"paused"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `pause(reason?)`            | Synchronous idempotent switch that stops new runtime/resource-origin task and event admissions while allowing already-running work to continue                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `resume()`                  | Reopen admissions immediately                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `recoverWhen(...)`          | Register paused-state recovery conditions; Runner auto-resumes only when all active conditions for the current pause episode pass                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `root`                      | Read the root resource definition and use `getResourceValue(root)` / `getResourceConfig(root)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `logger`                    | Logger instance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `store`                     | Runtime store with registered resources, tasks, middleware, events, and runtime internals                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `dispose()`                 | Transitions to `coolingDown`, runs resource `cooldown()` in reverse dependency order while business admissions remain open, keeps admissions open for `dispose.cooldownWindowMs`, then transitions to `disposing` (locks new business admissions using the cooldown-assembled allowlist), emits `events.disposing` (awaited), waits for in-flight tasks + event hooks to drain (up to `dispose.drainingBudgetMs`, capped by remaining `dispose.totalBudgetMs`), logs a structured `warn` if drain did not complete in time, transitions to `drained` (blocks all new business task/event admissions), emits `events.drained` (lifecycle-bypassed, awaited), then disposes resources and removes hooks |
 
 Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.
 
@@ -1857,20 +1865,19 @@ If a component may process external work immediately, prefer `ready` over direct
 
 Pass as the second argument to `run(app, options)`.
 
-| Option                 | Type                                            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ---------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug`                | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                                                                                                                                                                                                                                                                                                                                   |
-| `logs`                 | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                                                          |
-| `errorBoundary`        | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `shutdownHooks`        | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` signal handlers for graceful shutdown. If a signal arrives during bootstrap, startup is cancelled and initialized resources are rolled back.                                                                                                                                                                                                                                                                                                                                             |
-| `disposeBudgetMs`      | `number`                                        | (default: `30_000`) Total disposal budget in milliseconds. Covers resource `cooldown()`, `disposing` hooks, drain wait, `drained` hooks, and resource disposal wait. When exhausted, Runner stops waiting and returns.                                                                                                                                                                                                                                                                                                                 |
-| `disposeDrainBudgetMs` | `number`                                        | (default: `30_000`) Drain wait budget in milliseconds while in `disposing`. Runner starts this wait after `coolingDown` completes and `disposing` begins. It waits for in-flight business work (tasks + event hook execution) up to this value, capped by remaining `disposeBudgetMs`. If drain times out, Runner logs a structured warning and continues shutdown. Set to `0` to skip drain waiting.                                                                                                                                                                                    |
-| `onUnhandledError`     | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                                                                                                                                                                                                                          |
-| `dryRun`               | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `lazy`                 | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `lifecycleMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred.                                 |
-| `lifecycleMode`        | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup/disposal scheduling strategy. Use string values directly (for example `lifecycleMode: "parallel"`), no enum import required.                                                                                                                                                                                                                                                                                                                                                                |
-| `executionContext`     | `boolean \| ExecutionContextOptions`            | (default: disabled) Opt-in execution context that exposes `system.ctx.executionContext`, assigns a correlation id to each top-level task/event execution, and enables cycle detection by default. `true` uses defaults. Pass an object to customize: `{ createCorrelationId?: () => string, cycleDetection?: false \| { maxDepth?: number, maxRepetitions?: number } }`. Distinct runtime hook instances are tracked independently by runtime path. Requires AsyncLocalStorage (Node-only); silently disabled on platforms without it. |
-| `mode`                 | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Option             | Type                                            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------ | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug`            | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                                                                                                                                                                                                                                                                                                                                   |
+| `logs`             | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                                                          |
+| `errorBoundary`    | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `shutdownHooks`    | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` signal handlers for graceful shutdown. If a signal arrives during bootstrap, startup is cancelled and initialized resources are rolled back.                                                                                                                                                                                                                                                                                                                                             |
+| `dispose`          | `object`                                        | Shutdown configuration. Defaults to `{ totalBudgetMs: 30_000, drainingBudgetMs: 20_000, cooldownWindowMs: 0 }`. `totalBudgetMs` caps the whole shutdown lifecycle. `drainingBudgetMs` caps the in-flight task/event drain wait once `disposing` begins. `cooldownWindowMs` is an optional short bounded post-cooldown window before `disposing`; leave it at `0` to skip the wait, or raise it when you want to keep the broader `coolingDown` admission policy open a bit longer before `disposing` narrows admissions.               |
+| `onUnhandledError` | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                                                                                                                                                                                                                          |
+| `dryRun`           | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `lazy`             | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `lifecycleMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred.                                 |
+| `lifecycleMode`    | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup/disposal scheduling strategy. Use string values directly (for example `lifecycleMode: "parallel"`), no enum import required.                                                                                                                                                                                                                                                                                                                                                                |
+| `executionContext` | `boolean \| ExecutionContextOptions`            | (default: disabled) Opt-in execution context that exposes `system.ctx.executionContext`, assigns a correlation id to each top-level task/event execution, and enables cycle detection by default. `true` uses defaults. Pass an object to customize: `{ createCorrelationId?: () => string, cycleDetection?: false \| { maxDepth?: number, maxRepetitions?: number } }`. Distinct runtime hook instances are tracked independently by runtime path. Requires AsyncLocalStorage (Node-only); silently disabled on platforms without it. |
+| `mode`             | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).
 
@@ -1885,12 +1892,17 @@ const runtime = await run(app, {
   executionContext: true,
 });
 
+await runtime.runTask(myTask, input);
+await runtime.emitEvent(myEvent, payload);
+
 // Inside a task, hook, or interceptor:
 const ctx = system.ctx.executionContext.use();
 ctx.correlationId;
 ctx.currentFrame.kind;
 ctx.frames;
 ```
+
+With `executionContext: true`, Runner automatically creates execution context for top-level runtime task runs and event emissions. You do not need `provide()` just to turn propagation on.
 
 `use()` fails fast when no execution is active. Use `system.ctx.executionContext.tryUse()` when the context is optional.
 
@@ -1914,7 +1926,7 @@ Execution context is branch-local:
 
 Use `executionContext: { cycleDetection: false }` if you only want correlation ids and causal-chain access without repetition/depth guards.
 
-You can also seed or record execution context at the boundary:
+Use `provide()` only when you want to seed or override the correlation id from an external boundary. Use `record()` when you want the execution tree back.
 
 ```typescript
 await system.ctx.executionContext.provide(
@@ -1996,12 +2008,12 @@ When your app stops—whether from Ctrl+C, a deployment, or a crash—you need t
 
 Runner applies source-aware admission rules during shutdown:
 
-| Phase       | Admission Policy                                                                                                                                                                                                                               |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `running`   | Admit all task/event calls.                                                                                                                                                                                                                    |
-| `coolingDown` | Shutdown has started and resources are running `cooldown()`, but business admissions remain open until cooldown completes.                                                                                                                       |
-| `disposing` | Reject fresh external admissions (`runtime`, `resource`) except for cooldown-assembled resource-origin allowances. Allow in-flight internal continuations (`task`, `hook`, `middleware`) while their originating execution is still active. |
-| `drained`   | Reject all new business task/event admissions. Lifecycle events (`events.drained`) are lifecycle-bypassed — their hooks fire, but those hooks cannot start new tasks or emit additional events. Lifecycle flow continues to resource disposal. |
+| Phase         | Admission Policy                                                                                                                                                                                                                               |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `running`     | Admit all task/event calls.                                                                                                                                                                                                                    |
+| `coolingDown` | Shutdown has started and resources are running `cooldown()`. Business admissions remain open through cooldown execution and, when configured, the bounded `dispose.cooldownWindowMs` window that follows.                                      |
+| `disposing`   | Reject fresh external admissions (`runtime`, `resource`) except for cooldown-assembled resource-origin allowances. Allow in-flight internal continuations (`task`, `hook`, `middleware`) while their originating execution is still active.    |
+| `drained`     | Reject all new business task/event admissions. Lifecycle events (`events.drained`) are lifecycle-bypassed — their hooks fire, but those hooks cannot start new tasks or emit additional events. Lifecycle flow continues to resource disposal. |
 
 Practical effect for HTTP resources:
 
@@ -2012,11 +2024,12 @@ Practical effect for HTTP resources:
 
 ### Resource `cooldown()` in Shutdown
 
-`resource.cooldown(...)` is a pre-drain ingress-stop hook. It runs during `coolingDown`, before `disposing`, before `events.disposing`, and before drain waiting.
+`resource.cooldown(...)` is a pre-drain ingress-stop hook. It runs during `coolingDown`, before any optional `dispose.cooldownWindowMs` window, before `disposing`, before `events.disposing`, and before drain waiting.
 
 - Use it to stop intake quickly (for example: stop accepting HTTP requests, mark readiness as false, stop new queue consumption).
 - It can be async, but keep it fast and return promptly. Let Runner's drain phase wait for business work.
-- Do not use `cooldown()` as "wait until all work is done"; that is the runtime drain phase (`disposeDrainBudgetMs`).
+- After all cooldown hooks finish, Runner keeps the broader `coolingDown` admission policy open for `dispose.cooldownWindowMs` only when that value is greater than `0`. Once `disposing` begins, fresh admissions narrow to allowlisted resource-origin calls and in-flight continuations.
+- Do not use `cooldown()` as "wait until all work is done"; that is the runtime drain phase (`dispose.drainingBudgetMs`).
 - Apply `cooldown()` primarily to ingress/front-door resources that admit external work into Runner (HTTP APIs, tRPC gateways, queue consumers, websocket gateways).
 - Supporting resources that in-flight tasks depend on (for example: database pools, cache clients, message producers) should usually not perform teardown in `cooldown()`. Keep them available until `dispose()`.
 - Execution order mirrors resource disposal: reverse dependency waves, with same-wave parallelism when `lifecycleMode: "parallel"` is enabled.
@@ -2150,8 +2163,11 @@ Signal-based shutdown and manual `runtime.dispose()` follow the same shutdown li
 ```typescript
 await run(app, {
   shutdownHooks: true, // default: true
-  disposeBudgetMs: 30_000, // total shutdown/disposal wait budget
-  disposeDrainBudgetMs: 30_000, // drain wait budget (capped by remaining disposeBudgetMs)
+  dispose: {
+    totalBudgetMs: 30_000,
+    drainingBudgetMs: 20_000,
+    cooldownWindowMs: 0,
+  },
 });
 ```
 
@@ -2173,12 +2189,13 @@ Manual `runtime.dispose()` and signal-based shutdown both follow:
 
 1. transition to `coolingDown`
 2. resource `cooldown()` (reverse dependency order)
-3. transition to `disposing`
-4. `events.disposing` (awaited)
-5. drain wait (`disposeDrainBudgetMs`, capped by remaining `disposeBudgetMs`)
-6. transition to `drained`
-7. `events.drained` (lifecycle-bypassed, awaited)
-8. resource disposal (within remaining `disposeBudgetMs`)
+3. optionally keep business admissions open for `dispose.cooldownWindowMs`
+4. transition to `disposing`
+5. `events.disposing` (awaited)
+6. drain wait (`dispose.drainingBudgetMs`, capped by remaining `dispose.totalBudgetMs`)
+7. transition to `drained`
+8. `events.drained` (lifecycle-bypassed, awaited)
+9. resource disposal (within remaining `dispose.totalBudgetMs`)
 
 Important: hooks registered on `events.drained` **do fire** (the emission is lifecycle-bypassed), but those hooks cannot start new tasks or emit additional events — all regular business admissions are blocked once `drained` begins.
 
@@ -2250,6 +2267,7 @@ await run(app, {
 - Stop accepting new work before cleaning up
 
 > **runtime:** "An error boundary: a trampoline under your tightrope. I'm the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
+
 ## Caching
 
 Avoid recomputing expensive work by caching task results with TTL-based eviction.
@@ -2969,7 +2987,7 @@ const httpServer = r
 Why this pattern works:
 
 - `cooldown()` runs before `events.disposing` and before drain wait, so it prevents new HTTP requests from entering.
-- In-flight requests/tasks/events still get the normal drain window (`disposeDrainBudgetMs`).
+- In-flight requests/tasks/events still get the normal drain window (`dispose.drainingBudgetMs`).
 - `dispose()` runs after drain, so cleanup can focus on leftovers only.
 - This is the intended `cooldown()` shape: ingress resources that route to tasks/events.
 - Infrastructure dependencies (database connections, cache clients, brokers) should usually skip `cooldown()` and only clean up in `dispose()`, so in-flight work can still finish during drain.
@@ -3546,6 +3564,7 @@ In `mode: "network"`, Event Lane bindings support `prefetch`, `maxAttempts`, and
 For complete examples, common patterns, testing strategies, debugging, migration notes, and RabbitMQ configuration, see [REMOTE_LANES.md](./REMOTE_LANES.md).
 
 > **runtime:** "Serve it or ship it. There is no 'maybe call the other service.'"
+
 ## Serialization
 
 Serialization is where data crosses boundaries: HTTP, queues, storage, or process hops.
@@ -3747,13 +3766,13 @@ Start with functional schemas and explicit parsers. Use classes when they improv
 
 ### Choosing a Style
 
-| Situation | Prefer Functional (`Match.*` / plain schemas) | Prefer Class (`@Match.Schema`, `@Match.Field`) |
-| --------- | ---------------------------------------------- | ------------------------------------------------ |
-| Request/response boundaries | Best for explicit, local contracts | Good when boundary DTOs are shared widely |
-| Dynamic shapes (maps, conditional payloads) | Best fit (`Match.MapOf`, composable patterns) | Usually more verbose |
-| Large domain models reused across features | Possible but can become repetitive | Best readability and reuse |
-| Wire-field remapping/transforms | Works, but manual | Best DX with `@Serializer.Field(...)` |
-| Team preference | Functional programming style | OOP/DTO-centric style |
+| Situation                                   | Prefer Functional (`Match.*` / plain schemas) | Prefer Class (`@Match.Schema`, `@Match.Field`) |
+| ------------------------------------------- | --------------------------------------------- | ---------------------------------------------- |
+| Request/response boundaries                 | Best for explicit, local contracts            | Good when boundary DTOs are shared widely      |
+| Dynamic shapes (maps, conditional payloads) | Best fit (`Match.MapOf`, composable patterns) | Usually more verbose                           |
+| Large domain models reused across features  | Possible but can become repetitive            | Best readability and reuse                     |
+| Wire-field remapping/transforms             | Works, but manual                             | Best DX with `@Serializer.Field(...)`          |
+| Team preference                             | Functional programming style                  | OOP/DTO-centric style                          |
 
 Rule of thumb:
 
@@ -3783,7 +3802,10 @@ const userInputSchema = Match.compile({
   age: Match.Integer,
 });
 
-const parsed = check({ id: "u1", email: "ada@example.com", age: 42 }, userInputSchema);
+const parsed = check(
+  { id: "u1", email: "ada@example.com", age: 42 },
+  userInputSchema,
+);
 parsed.age; // number
 ```
 
@@ -3863,38 +3885,38 @@ check(
 
 ### Match Reference
 
-| Pattern / Helper | What It Does |
-| ---------------- | ------------ |
-| `String`, `Number`, `Boolean`, `Function`, `Object`, `Array` | Constructor-based validation |
-| Class constructor (for example `Date`, `MyClass`) | Validates via constructor semantics |
-| Literal values (`"x"`, `42`, `true`, `null`, `undefined`) | Exact literal match |
-| `[pattern]` | Array where every element matches `pattern` |
-| Plain object (`{ a: String }`) | Strict object validation (same as `Match.ObjectStrict`) |
-| `Match.ObjectStrict({ ... })` | Strict object shape (`additionalProperties: false` semantics) |
-| `Match.ObjectIncluding({ ... })` | Partial object shape (unknown keys allowed) |
-| `Match.MapOf(valuePattern)` | Dynamic-key object with uniform value pattern |
-| `Match.Any` | Accepts any value |
-| `Match.Integer` | Signed 32-bit integer |
-| `Match.NonEmptyString` | Non-empty string |
-| `Match.Email` | Email-shaped string |
-| `Match.UUID` | Canonical UUID string |
-| `Match.URL` | Absolute URL string |
-| `Match.IsoDateString` | ISO datetime string with timezone |
-| `Match.RegExp(re)` | String matching given regexp |
-| `Match.ArrayOf(pattern)` | Array of elements matching pattern |
-| `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)` | Non-empty array, optional element validation |
-| `Match.Optional(pattern)` | `undefined` or pattern |
-| `Match.Maybe(pattern)` | `undefined`, `null`, or pattern |
-| `Match.OneOf(...patterns)` | Any one of given patterns |
-| `Match.Where(predicate)` | Custom predicate / type guard |
-| `Match.Lazy(() => pattern)` | Lazy/recursive pattern |
-| `Match.Schema(options?)` | Class schema decorator |
-| `Match.Schema({ base: BaseClass \| () => BaseClass })` | Composes schema classes without requiring TypeScript `extends` |
-| `Match.Field(pattern)` | Decorated field validator |
-| `Match.fromSchema(Class, options?)` | Schema-like matcher from class metadata |
-| `Match.compile(pattern)` | Compiles pattern into `{ parse, test, toJSONSchema }` |
-| `Match.test(value, pattern)` | Boolean helper for validation check |
-| `Match.Error` | Error class thrown on match failure |
+| Pattern / Helper                                             | What It Does                                                   |
+| ------------------------------------------------------------ | -------------------------------------------------------------- |
+| `String`, `Number`, `Boolean`, `Function`, `Object`, `Array` | Constructor-based validation                                   |
+| Class constructor (for example `Date`, `MyClass`)            | Validates via constructor semantics                            |
+| Literal values (`"x"`, `42`, `true`, `null`, `undefined`)    | Exact literal match                                            |
+| `[pattern]`                                                  | Array where every element matches `pattern`                    |
+| Plain object (`{ a: String }`)                               | Strict object validation (same as `Match.ObjectStrict`)        |
+| `Match.ObjectStrict({ ... })`                                | Strict object shape (`additionalProperties: false` semantics)  |
+| `Match.ObjectIncluding({ ... })`                             | Partial object shape (unknown keys allowed)                    |
+| `Match.MapOf(valuePattern)`                                  | Dynamic-key object with uniform value pattern                  |
+| `Match.Any`                                                  | Accepts any value                                              |
+| `Match.Integer`                                              | Signed 32-bit integer                                          |
+| `Match.NonEmptyString`                                       | Non-empty string                                               |
+| `Match.Email`                                                | Email-shaped string                                            |
+| `Match.UUID`                                                 | Canonical UUID string                                          |
+| `Match.URL`                                                  | Absolute URL string                                            |
+| `Match.IsoDateString`                                        | ISO datetime string with timezone                              |
+| `Match.RegExp(re)`                                           | String matching given regexp                                   |
+| `Match.ArrayOf(pattern)`                                     | Array of elements matching pattern                             |
+| `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`     | Non-empty array, optional element validation                   |
+| `Match.Optional(pattern)`                                    | `undefined` or pattern                                         |
+| `Match.Maybe(pattern)`                                       | `undefined`, `null`, or pattern                                |
+| `Match.OneOf(...patterns)`                                   | Any one of given patterns                                      |
+| `Match.Where(predicate)`                                     | Custom predicate / type guard                                  |
+| `Match.Lazy(() => pattern)`                                  | Lazy/recursive pattern                                         |
+| `Match.Schema(options?)`                                     | Class schema decorator                                         |
+| `Match.Schema({ base: BaseClass \| () => BaseClass })`       | Composes schema classes without requiring TypeScript `extends` |
+| `Match.Field(pattern)`                                       | Decorated field validator                                      |
+| `Match.fromSchema(Class, options?)`                          | Schema-like matcher from class metadata                        |
+| `Match.compile(pattern)`                                     | Compiles pattern into `{ parse, test, toJSONSchema }`          |
+| `Match.test(value, pattern)`                                 | Boolean helper for validation check                            |
+| `Match.Error`                                                | Error class thrown on match failure                            |
 
 ### Additional `check()` Details
 
@@ -4643,6 +4665,7 @@ await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
 > **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it's off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
+
 ## Advanced Patterns
 
 This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.
@@ -5679,6 +5702,7 @@ export const problematicResource = r
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
 > **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
+
 ## Testing
 
 Runner's explicit dependency injection makes testing straightforward. Call `.run()` on a task with plain mocks for fast unit tests, or spin up the full runtime when you need middleware and lifecycle behavior.
@@ -5819,4 +5843,3 @@ await run(app, { debug: "verbose" });
 ```
 
 > **runtime:** "Testing: an elaborate puppet show where every string behaves. Then production walks in, kicks the stage, and asks for pagination. Still — nice coverage badge."
-

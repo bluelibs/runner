@@ -72,7 +72,10 @@ describe("run source-admission during shutdown drain", () => {
 
     const runtime = await run(app, {
       shutdownHooks: false,
-      disposeDrainBudgetMs: 200,
+      dispose: {
+        drainingBudgetMs: 200,
+        cooldownWindowMs: 20,
+      },
     });
 
     const disposePromise = runtime.dispose();
@@ -87,13 +90,20 @@ describe("run source-admission during shutdown drain", () => {
       throw createMessageError("Expected coolingDown gate release handler");
     }
     releaseCooldown();
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 5));
+
+    await expect(runtime.runTask(quickTask)).resolves.toBe("ok");
+    await expect(runtime.emitEvent(quickEvent)).resolves.toBeUndefined();
 
     await expect(
-      Promise.resolve().then(() => runtime.runTask(quickTask)),
+      new Promise((resolve) => setTimeout(resolve, 30)).then(() =>
+        runtime.runTask(quickTask),
+      ),
     ).rejects.toThrow(SHUTDOWN_REJECTION);
     await expect(
-      Promise.resolve().then(() => runtime.emitEvent(quickEvent)),
+      Promise.resolve()
+        .then(() => new Promise((resolve) => setTimeout(resolve, 0)))
+        .then(() => runtime.emitEvent(quickEvent)),
     ).rejects.toThrow(SHUTDOWN_REJECTION);
 
     blocker.release();
@@ -121,7 +131,9 @@ describe("run source-admission during shutdown drain", () => {
 
     const runtime = await run(app, {
       shutdownHooks: false,
-      disposeDrainBudgetMs: 200,
+      dispose: {
+        drainingBudgetMs: 200,
+      },
     });
 
     const inFlight = runtime.runTask(slowTask);
@@ -171,7 +183,9 @@ describe("run source-admission during shutdown drain", () => {
 
     const runtime = await run(app, {
       shutdownHooks: false,
-      disposeDrainBudgetMs: 200,
+      dispose: {
+        drainingBudgetMs: 200,
+      },
     });
 
     const inFlight = runtime.runTask(slowTask);
@@ -229,7 +243,9 @@ describe("run source-admission during shutdown drain", () => {
 
     const runtime = await run(app, {
       shutdownHooks: false,
-      disposeDrainBudgetMs: 200,
+      dispose: {
+        drainingBudgetMs: 200,
+      },
     });
 
     const inFlightParent = runtime.runTask(parentTask);
@@ -285,7 +301,9 @@ describe("run source-admission during shutdown drain", () => {
 
     const runtime = await run(app, {
       shutdownHooks: false,
-      disposeDrainBudgetMs: 200,
+      dispose: {
+        drainingBudgetMs: 200,
+      },
     });
 
     const inFlightEvent = runtime.emitEvent(triggerEvent);
@@ -341,7 +359,9 @@ describe("run source-admission during shutdown drain", () => {
 
     const runtime = await run(app, {
       shutdownHooks: false,
-      disposeDrainBudgetMs: 200,
+      dispose: {
+        drainingBudgetMs: 200,
+      },
     });
 
     const inFlightParent = runtime.runTask(parentTask);
@@ -391,7 +411,9 @@ describe("run source-admission during shutdown drain", () => {
 
     const runtime = await run(app, {
       shutdownHooks: false,
-      disposeDrainBudgetMs: 200,
+      dispose: {
+        drainingBudgetMs: 200,
+      },
     });
 
     await expect(runtime.runTask(parentTask)).resolves.toBe("parent-done");

@@ -717,7 +717,7 @@ const httpServer = r
 Why this pattern works:
 
 - `cooldown()` runs before `events.disposing` and before drain wait, so it prevents new HTTP requests from entering.
-- In-flight requests/tasks/events still get the normal drain window (`disposeDrainBudgetMs`).
+- In-flight requests/tasks/events still get the normal drain window (`dispose.drainingBudgetMs`).
 - `dispose()` runs after drain, so cleanup can focus on leftovers only.
 - This is the intended `cooldown()` shape: ingress resources that route to tasks/events.
 - Infrastructure dependencies (database connections, cache clients, brokers) should usually skip `cooldown()` and only clean up in `dispose()`, so in-flight work can still finish during drain.

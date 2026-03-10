@@ -42,7 +42,9 @@ describe("run shutdown drain warning", () => {
     const runtime = await run(app, {
       shutdownHooks: false,
       errorBoundary: false,
-      disposeDrainBudgetMs: 20,
+      dispose: {
+        drainingBudgetMs: 20,
+      },
     });
 
     runtime.logger.onLog((log) => {
@@ -94,7 +96,9 @@ describe("run shutdown drain warning", () => {
       const runtime = await run(app, {
         shutdownHooks: true,
         errorBoundary: false,
-        disposeDrainBudgetMs: 20,
+        dispose: {
+          drainingBudgetMs: 20,
+        },
       });
 
       runtime.logger.onLog((log) => {
@@ -141,7 +145,9 @@ describe("run shutdown drain warning", () => {
     const runtime = await run(app, {
       shutdownHooks: false,
       errorBoundary: false,
-      disposeDrainBudgetMs: 100,
+      dispose: {
+        drainingBudgetMs: 100,
+      },
     });
 
     runtime.logger.onLog((log) => {
@@ -180,7 +186,9 @@ describe("run shutdown drain warning", () => {
     const runtime = await run(app, {
       shutdownHooks: false,
       errorBoundary: false,
-      disposeDrainBudgetMs: 0,
+      dispose: {
+        drainingBudgetMs: 0,
+      },
     });
 
     runtime.logger.onLog((log) => {
@@ -220,7 +228,9 @@ describe("run shutdown drain warning", () => {
       const runtime = await run(app, {
         shutdownHooks: false,
         errorBoundary: false,
-        disposeDrainBudgetMs: 20,
+        dispose: {
+          drainingBudgetMs: 20,
+        },
       });
 
       void runtime.runTask(neverTask);

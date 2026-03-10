@@ -24,8 +24,11 @@ describe("Store regressions", () => {
         },
         errorBoundary: true,
         shutdownHooks: false,
-        disposeBudgetMs: 30_000,
-        disposeDrainBudgetMs: 30_000,
+        dispose: {
+          totalBudgetMs: 30_000,
+          drainingBudgetMs: 20_000,
+          cooldownWindowMs: 0,
+        },
         onUnhandledError: async () => {},
         dryRun: false,
         executionContext: null,

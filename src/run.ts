@@ -32,8 +32,11 @@ function normalizeRunOptions(options: RunOptions | undefined): Omit<
   const debug = options?.debug;
   const errorBoundary = options?.errorBoundary ?? true;
   const shutdownHooks = options?.shutdownHooks ?? true;
-  const disposeBudgetMs = options?.disposeBudgetMs ?? 30_000;
-  const disposeDrainBudgetMs = options?.disposeDrainBudgetMs ?? 30_000;
+  const dispose = Object.freeze({
+    totalBudgetMs: options?.dispose?.totalBudgetMs ?? 30_000,
+    drainingBudgetMs: options?.dispose?.drainingBudgetMs ?? 20_000,
+    cooldownWindowMs: options?.dispose?.cooldownWindowMs ?? 0,
+  });
   const dryRun = options?.dryRun ?? false;
   const lazy = options?.lazy ?? false;
   const executionContext = resolveExecutionContextConfig(
@@ -57,8 +60,7 @@ function normalizeRunOptions(options: RunOptions | undefined): Omit<
     logs: Object.freeze(logs),
     errorBoundary,
     shutdownHooks,
-    disposeBudgetMs,
-    disposeDrainBudgetMs,
+    dispose,
     onUnhandledErrorInput: options?.onUnhandledError,
     dryRun,
     executionContext:
@@ -171,8 +173,7 @@ export async function run<C, V extends Promise<any>>(
       eventManager,
       runLogger,
       runtimeLifecycleSource,
-      disposeBudgetMs: normalizedOptions.disposeBudgetMs,
-      disposeDrainBudgetMs: normalizedOptions.disposeDrainBudgetMs,
+      dispose: normalizedOptions.dispose,
       disposeAll,
     });
 

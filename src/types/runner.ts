@@ -99,6 +99,30 @@ export interface IRuntime<V = unknown> extends IHealthReporter {
   dispose(): Promise<void>;
 }
 
+export type DisposeOptions = {
+  /**
+   * Total disposal budget (milliseconds) for the shutdown lifecycle.
+   * This budget covers `cooldown()`, the post-cooldown window, `disposing`
+   * hooks, drain wait, `drained` hooks, and resource disposal.
+   * Once exhausted, Runner stops waiting and returns.
+   */
+  totalBudgetMs?: number;
+  /**
+   * Drain budget (milliseconds) used while waiting for in-flight business work
+   * (tasks + event listeners) after entering `disposing`.
+   * Effective wait is capped by remaining `dispose.totalBudgetMs`.
+   * Set to `0` to skip drain waiting.
+   */
+  drainingBudgetMs?: number;
+  /**
+   * Short bounded post-cooldown window before `disposing` begins.
+   * Runner keeps the broader `coolingDown` admission policy open during this
+   * window before switching to the stricter `disposing` allowlist. Set to `0`
+   * to skip this wait.
+   */
+  cooldownWindowMs?: number;
+};
+
 export type RunOptions = {
   /**
    * Defaults to undefined. If true, we introduce logging to the console.
@@ -134,18 +158,9 @@ export type RunOptions = {
    */
   shutdownHooks?: boolean;
   /**
-   * Total disposal budget (milliseconds) for the shutdown lifecycle.
-   * This budget covers `disposing` hooks, drain wait, `drained` hooks, and
-   * resource disposal. Once exhausted, Runner stops waiting and returns.
+   * Shutdown disposal configuration.
    */
-  disposeBudgetMs?: number;
-  /**
-   * Drain budget (milliseconds) used while waiting for in-flight business work
-   * (tasks + event listeners) after entering `disposing`.
-   * Effective wait is capped by remaining `disposeBudgetMs`.
-   * Set to `0` to skip drain waiting.
-   */
-  disposeDrainBudgetMs?: number;
+  dispose?: DisposeOptions;
   /**
    * Custom handler for any unhandled error caught by Runner. Defaults to logging via the created logger.
    */
@@ -196,8 +211,11 @@ export type ResolvedRunOptions = {
   };
   errorBoundary: boolean;
   shutdownHooks: boolean;
-  disposeBudgetMs: number;
-  disposeDrainBudgetMs: number;
+  dispose: {
+    totalBudgetMs: number;
+    drainingBudgetMs: number;
+    cooldownWindowMs: number;
+  };
   onUnhandledError: OnUnhandledError;
   dryRun: boolean;
   executionContext: ExecutionContextConfig | null;

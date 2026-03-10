@@ -36,7 +36,9 @@ describe("Temporal Middleware: Dispose", () => {
     });
 
     const runtime = await run(app, {
-      disposeDrainBudgetMs: 0,
+      dispose: {
+        drainingBudgetMs: 0,
+      },
     });
     const pending = runtime.runTask(task, "a");
 
@@ -65,7 +67,9 @@ describe("Temporal Middleware: Dispose", () => {
     });
 
     const runtime = await run(app, {
-      disposeDrainBudgetMs: 0,
+      dispose: {
+        drainingBudgetMs: 0,
+      },
     });
     await expect(runtime.runTask(task, "a")).resolves.toBe("a");
     const pending = runtime.runTask(task, "b");

@@ -148,7 +148,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtimePromise = run(app, {
       errorBoundary: false,
       shutdownHooks: true,
-      disposeDrainBudgetMs: 50,
+      dispose: {
+        drainingBudgetMs: 50,
+      },
     });
 
     await new Promise((r) => setTimeout(r, 0));
@@ -285,7 +287,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtime = await run(app, {
       errorBoundary: false,
       shutdownHooks: true,
-      disposeDrainBudgetMs: 150,
+      dispose: {
+        drainingBudgetMs: 150,
+      },
     });
 
     const inFlightTask = runtime.runTask(slowTask);
@@ -345,7 +349,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtime = await run(app, {
       errorBoundary: false,
       shutdownHooks: true,
-      disposeDrainBudgetMs: 20,
+      dispose: {
+        drainingBudgetMs: 20,
+      },
     });
 
     void runtime.runTask(neverTask);
@@ -412,7 +418,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtime = await run(app, {
       errorBoundary: false,
       shutdownHooks: false,
-      disposeDrainBudgetMs: 150,
+      dispose: {
+        drainingBudgetMs: 150,
+      },
     });
 
     const inFlightTask = runtime.runTask(slowTask);
@@ -473,7 +481,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtime = await run(app, {
       errorBoundary: false,
       shutdownHooks: false,
-      disposeDrainBudgetMs: 20,
+      dispose: {
+        drainingBudgetMs: 20,
+      },
     });
 
     void runtime.runTask(neverTask);
@@ -514,11 +524,57 @@ describe("run.ts shutdown hooks & error boundary", () => {
       const runtime = await run(app, {
         errorBoundary: false,
         shutdownHooks: false,
-        disposeBudgetMs: 30,
-        disposeDrainBudgetMs: 1_000,
+        dispose: {
+          totalBudgetMs: 30,
+          drainingBudgetMs: 1_000,
+        },
       });
 
       void runtime.runTask(neverTask);
+      const disposePromise = runtime.dispose();
+      await Promise.resolve();
+
+      jest.advanceTimersByTime(29);
+      await Promise.resolve();
+      expect(disposed).toBe(false);
+
+      jest.advanceTimersByTime(2);
+      await Promise.resolve();
+      await expect(disposePromise).resolves.toBeUndefined();
+      expect(disposed).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("caps the cooldown window by remaining dispose budget", async () => {
+    jest.useFakeTimers();
+
+    try {
+      let disposed = false;
+      const app = defineResource({
+        id: "tests-app-shutdown-cooldown-window-budget-cap",
+        async init() {
+          return "ok" as const;
+        },
+        async cooldown() {
+          return;
+        },
+        async dispose() {
+          disposed = true;
+        },
+      });
+
+      const runtime = await run(app, {
+        errorBoundary: false,
+        shutdownHooks: false,
+        dispose: {
+          totalBudgetMs: 30,
+          drainingBudgetMs: 0,
+          cooldownWindowMs: 1_000,
+        },
+      });
+
       const disposePromise = runtime.dispose();
       await Promise.resolve();
 
@@ -551,8 +607,10 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtime = await run(app, {
       errorBoundary: false,
       shutdownHooks: false,
-      disposeBudgetMs: 0,
-      disposeDrainBudgetMs: 0,
+      dispose: {
+        totalBudgetMs: 0,
+        drainingBudgetMs: 0,
+      },
     });
 
     await expect(runtime.dispose()).resolves.toBeUndefined();
@@ -585,8 +643,10 @@ describe("run.ts shutdown hooks & error boundary", () => {
       const runtime = await run(app, {
         errorBoundary: false,
         shutdownHooks: false,
-        disposeBudgetMs: 20,
-        disposeDrainBudgetMs: 0,
+        dispose: {
+          totalBudgetMs: 20,
+          drainingBudgetMs: 0,
+        },
       });
 
       const disposePromise = runtime.dispose();
@@ -809,7 +869,10 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtime = await run(app, {
       shutdownHooks: false,
       errorBoundary: false,
-      disposeDrainBudgetMs: 150,
+      dispose: {
+        drainingBudgetMs: 150,
+        cooldownWindowMs: 30,
+      },
     });
 
     const inFlightTask = runtime.runTask(slowTask);
@@ -1039,7 +1102,10 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtime = await run(drainingIngress, {
       shutdownHooks: false,
       errorBoundary: false,
-      disposeDrainBudgetMs: 150,
+      dispose: {
+        drainingBudgetMs: 150,
+        cooldownWindowMs: 30,
+      },
     });
 
     const disposePromise = runtime.dispose();
@@ -1137,7 +1203,10 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const runtime = await run(app, {
       shutdownHooks: false,
       errorBoundary: false,
-      disposeDrainBudgetMs: 150,
+      dispose: {
+        drainingBudgetMs: 150,
+        cooldownWindowMs: 30,
+      },
     });
 
     const disposePromise = runtime.dispose();

@@ -160,8 +160,11 @@ describe("system.runtime", () => {
         },
         errorBoundary: true,
         shutdownHooks: false,
-        disposeBudgetMs: 30_000,
-        disposeDrainBudgetMs: 30_000,
+        dispose: {
+          totalBudgetMs: 30_000,
+          drainingBudgetMs: 20_000,
+          cooldownWindowMs: 0,
+        },
         onUnhandledError: async () => {},
         dryRun: false,
         executionContext: null,
@@ -193,7 +196,9 @@ describe("system.runtime", () => {
       init: async () => "ready",
     });
 
-    const runtime = await run(app, { shutdownHooks: false });
+    const runtime = await run(app, {
+      shutdownHooks: false,
+    });
     await runtime.dispose();
   });
 
@@ -273,7 +278,9 @@ describe("system.runtime", () => {
       },
     });
 
-    const runtime = await run(app, { shutdownHooks: false });
+    const runtime = await run(app, {
+      shutdownHooks: false,
+    });
     await runtime.dispose();
   });
 
@@ -306,7 +313,9 @@ describe("system.runtime", () => {
       },
     });
 
-    const runtime = await run(app, { shutdownHooks: false });
+    const runtime = await run(app, {
+      shutdownHooks: false,
+    });
 
     expect(runtime.state).toBe("running");
 
@@ -367,7 +376,9 @@ describe("system.runtime", () => {
       },
     });
 
-    const runtime = await run(app, { shutdownHooks: false });
+    const runtime = await run(app, {
+      shutdownHooks: false,
+    });
 
     await expect(runtime.runTask(pauseTask)).resolves.toBe("paused");
     expect(runtime.state).toBe("paused");
@@ -424,7 +435,9 @@ describe("system.runtime", () => {
       },
     });
 
-    const runtime = await run(app, { shutdownHooks: false });
+    const runtime = await run(app, {
+      shutdownHooks: false,
+    });
 
     await runtime.runTask(pauseTask);
     expect(runtime.state).toBe("paused");

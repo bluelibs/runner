@@ -30,7 +30,7 @@
 - Always run `npm run qa` to ensure type safety and linting. (Expected to take around 30 seconds, if working only on docs, don't run it)
 - Never revert changes from other files that you did not modify.
 - Apply fail-fast principles. If something is not as expected, throw an error immediately.
-- This is a framework, it's documentation is composed dynamically, read guide-units/DOCS_STYLE_GUIDE.md for more info, useful when we make changes or new features.
+- This is a framework, it's documentation is composed dynamically into FULL_GUIDE.md (which should not be read/manipulated by AI), read guide-units/DOCS_STYLE_GUIDE.md for more info, useful when we make changes or new features.
 - Attention when coding defensively (especially when using 'unknown' and lots of typeof), we use typescript and we want to offer public and inner surface absolute type-safety. This means once the trust-boundary has passed (user-input ended), we can be sure of the types.
 </specifics>
 

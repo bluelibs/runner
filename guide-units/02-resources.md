@@ -194,7 +194,7 @@ Resources move through a deliberate sequence of phases. Understanding which phas
 - `init(config, deps, context)` creates the resource value
 - `ready(value, config, deps, context)` starts ingress after startup lock
 - `cooldown(value, config, deps, context)` stops new ingress **quickly**, a way of saying "stop any additional work, but let in-flight work finish".
-  The cooling resource itself stays allowed as a resource-origin source while Runner drains this shutdown, and `cooldown()` may optionally return additional resource definitions whose resource-origin task/event admissions should stay allowed too.
+  When `dispose.cooldownWindowMs` is greater than `0`, Runner keeps the broader `coolingDown` admission policy open for that bounded post-cooldown window before it enters `disposing`. At the default `0`, Runner skips that wait. Once `disposing` begins, admissions narrow to in-flight continuations plus resource-origin calls from the cooling resource itself and any additional resource definitions returned from `cooldown()`.
 - `dispose(value, config, deps, context)` performs final teardown after task/event drain.
 - Config-only resources can omit `.init()` and resolve to `undefined`
 - `r.resource(id, { gateway: true })` suppresses the resource's own namespace segment

@@ -31,8 +31,11 @@ export type ShutdownDisposalLifecycleInput = {
   eventManager: LifecycleEventManager;
   runLogger: Logger;
   runtimeLifecycleSource: RuntimeCallSource;
-  disposeBudgetMs: number;
-  disposeDrainBudgetMs: number;
+  dispose: {
+    totalBudgetMs: number;
+    drainingBudgetMs: number;
+    cooldownWindowMs: number;
+  };
   disposeAll: (
     disposalBudget: ReturnType<typeof createDisposalBudget>,
   ) => Promise<void>;
@@ -51,10 +54,11 @@ export type DisposeRunArtifactsInput = {
 export async function runShutdownDisposalLifecycle(
   input: ShutdownDisposalLifecycleInput,
 ): Promise<void> {
-  const disposalBudget = createDisposalBudget(input.disposeBudgetMs);
+  const disposalBudget = createDisposalBudget(input.dispose.totalBudgetMs);
   input.store.beginCoolingDown();
 
   await disposalBudget.waitWithinBudget(() => input.store.cooldown());
+  await waitForCooldownWindow(disposalBudget, input.dispose.cooldownWindowMs);
   // Freeze admissions only after all cooldown hooks had a chance to stop ingress
   // and register any shutdown-specific source allowances.
   input.store.beginDisposing();
@@ -67,13 +71,13 @@ export async function runShutdownDisposalLifecycle(
   );
 
   const effectiveDrainBudgetMs = disposalBudget.capByRemainingBudget(
-    input.disposeDrainBudgetMs,
+    input.dispose.drainingBudgetMs,
   );
   const drainWait = await disposalBudget.waitWithinBudget(() =>
     waitForDisposeDrainBudget(input.store, effectiveDrainBudgetMs),
   );
   const drainWarning = resolveShutdownDrainWarningDecision({
-    requestedDrainBudgetMs: input.disposeDrainBudgetMs,
+    requestedDrainBudgetMs: input.dispose.drainingBudgetMs,
     effectiveDrainBudgetMs,
     drainWaitResult: drainWait.completed
       ? {
@@ -91,7 +95,7 @@ export async function runShutdownDisposalLifecycle(
           source: "run",
           data: {
             reason: drainWarning.reason,
-            requestedDrainBudgetMs: input.disposeDrainBudgetMs,
+            requestedDrainBudgetMs: input.dispose.drainingBudgetMs,
             effectiveDrainBudgetMs,
             remainingDisposeBudgetMs: disposalBudget.remainingMs(),
           },
@@ -135,6 +139,24 @@ async function emitLifecycleEvent(
     throwOnError: false,
     failureMode: "aggregate",
   });
+}
+
+async function waitForCooldownWindow(
+  disposalBudget: ReturnType<typeof createDisposalBudget>,
+  cooldownWindowMs: number,
+): Promise<void> {
+  const effectiveCooldownWindowMs =
+    disposalBudget.capByRemainingBudget(cooldownWindowMs);
+  if (effectiveCooldownWindowMs <= 0) {
+    return;
+  }
+
+  await disposalBudget.waitWithinBudget(
+    () =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, effectiveCooldownWindowMs);
+      }),
+  );
 }
 
 async function waitForStoreDisposeWithinBudget(

@@ -312,8 +312,8 @@ export class Store {
     this.lifecycleAdmissionController.beginDrained();
   }
 
-  public async waitForDrain(disposeDrainBudgetMs: number): Promise<boolean> {
-    return this.lifecycleAdmissionController.waitForDrain(disposeDrainBudgetMs);
+  public async waitForDrain(drainingBudgetMs: number): Promise<boolean> {
+    return this.lifecycleAdmissionController.waitForDrain(drainingBudgetMs);
   }
 
   public markDisposed() {
