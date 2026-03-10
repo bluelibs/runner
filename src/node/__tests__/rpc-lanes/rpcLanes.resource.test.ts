@@ -707,7 +707,7 @@ describe("rpcLanesResource", () => {
     await rr.dispose();
   });
 
-  it("can auto-start and dispose exposure when exposure config is provided", async () => {
+  it("can auto-start exposure and closes it during cooldown with dispose fallback", async () => {
     const close = jest.fn(async () => undefined);
     const createExposureSpy = jest
       .spyOn(exposureModule, "createNodeExposure")
@@ -752,7 +752,7 @@ describe("rpcLanesResource", () => {
     const rr = await run(app);
     expect(createExposureSpy).toHaveBeenCalledTimes(1);
     await rr.dispose();
-    expect(close).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(2);
   });
 
   it("does not start exposure when active profile serves no lanes", async () => {

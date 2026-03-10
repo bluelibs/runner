@@ -261,21 +261,6 @@ Once `run(app)` resolves, the returned runtime is your operator-facing handle. T
 - `runtime.pause()`, `runtime.resume()`, and `runtime.recoverWhen(...)` to control admissions
 - `runtime.dispose()` to stop the runtime cleanly
 
-Gateway resources are structural-only and cannot be passed directly to `run(...)`. When you want namespace suppression, mount the gateway under a distinct non-gateway root resource:
-
-```typescript
-const httpGateway = r
-  .resource("http", { gateway: true })
-  .register([
-    // tasks, events, hooks
-  ])
-  .build();
-
-const app = r.resource("app").register([httpGateway]).build();
-
-const runtime = await run(app);
-```
-
 ```typescript
 import { r } from "@bluelibs/runner";
 import { MongoClient } from "mongodb";

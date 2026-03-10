@@ -56,6 +56,11 @@ export const rpcLanesResource = defineResource<
       store.toPublicId(id),
     );
   },
+  async cooldown(value) {
+    if (value?.exposure) {
+      await value.exposure.close();
+    }
+  },
   async dispose(value) {
     if (value?.exposure) {
       await value.exposure.close();

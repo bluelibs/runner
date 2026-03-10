@@ -186,14 +186,14 @@ Lifecycle:
   - wire dependencies
   - `init` resources
   - lock runtime mutation surfaces
-  - run `ready()`
+  - run `ready()` in dependency order
   - emit `events.ready`
 - Shutdown order:
-  - run `cooldown()`
+  - run `cooldown()` in reverse dependency order
   - emit `events.disposing`
   - drain in-flight work
   - emit `events.drained`
-  - run `dispose()`
+  - run `dispose()` in reverse dependency order
 
 ## Resources
 
@@ -204,9 +204,9 @@ They are Runner's main composition and ownership unit: a resource can register c
 - The runtime then gives you `runTask(...)`, `emitEvent(...)`, `getResourceValue(...)`, `getLazyResourceValue(...)`, `getResourceConfig(...)`, `getHealth(...)`, `pause()`, `resume()`, `recoverWhen(...)`, and `dispose()`.
 
 - `init(config, deps, context)` creates the value.
-- `ready(value, config, deps, context)` starts ingress after startup lock.
-- `cooldown(value, config, deps, context)` stops ingress quickly at shutdown start.
-- `dispose(value, config, deps, context)` performs final teardown after drain.
+- `ready(value, config, deps, context)` starts ingress after startup lock and runs after dependencies are all initialized.
+- `cooldown(value, config, deps, context)` stops ingress quickly at shutdown start and runs before dependencies are torn down.
+- `dispose(value, config, deps, context)` performs final teardown after drain and runs in reverse dependency order.
 - `health(value, config, deps, context)` is an optional async probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.
   Return `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
 - Config-only resources can omit `.init()` — their resolved value is `undefined`; they are used purely for configuration access and registration.
