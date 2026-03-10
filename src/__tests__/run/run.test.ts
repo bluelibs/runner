@@ -6,11 +6,25 @@ import {
   defineTaskMiddleware,
   defineResourceMiddleware,
 } from "../../define";
-import { run } from "../../run";
+import { RunnerErrorId, createMessageError } from "../../errors";
 import { globalEvents } from "../../globals/globalEvents";
-import { createMessageError } from "../../errors";
+import { run } from "../../run";
 
 describe("run", () => {
+  async function expectRunnerErrorId(
+    promise: Promise<unknown>,
+    errorId: string,
+  ): Promise<any> {
+    try {
+      await promise;
+      throw new Error(`Expected error id "${errorId}"`);
+    } catch (error) {
+      const candidate = error as { id?: string };
+      expect(candidate.id).toBe(errorId);
+      return error;
+    }
+  }
+
   // Initial run
   it("should be able to instantiate with or without config", async () => {
     const testResource = defineResource({
@@ -34,6 +48,58 @@ describe("run", () => {
 
     await run1.dispose();
     await run2.dispose();
+  });
+
+  it("fails fast when a gateway resource is passed directly to run()", async () => {
+    const gateway = defineResource({
+      id: "test-run-root-gateway",
+      gateway: true,
+    });
+
+    const error = await expectRunnerErrorId(
+      run(gateway),
+      RunnerErrorId.RunRootGatewayUnsupported,
+    );
+
+    expect(error.message).toContain(gateway.id);
+  });
+
+  it("fails fast when a configured gateway resource is passed to run()", async () => {
+    const gateway = defineResource<{ enabled: boolean }>({
+      id: "test-run-root-gateway-configured",
+      gateway: true,
+      configSchema: { enabled: Boolean },
+    });
+
+    const error = await expectRunnerErrorId(
+      run(gateway.with({ enabled: true })),
+      RunnerErrorId.RunRootGatewayUnsupported,
+    );
+
+    expect(error.message).toContain(gateway.id);
+  });
+
+  it("allows running a non-gateway root that registers a gateway child", async () => {
+    const ping = defineTask({
+      id: "test-run-root-gateway-child-ping",
+      run: async () => "ok",
+    });
+    const gateway = defineResource({
+      id: "test-run-root-gateway-child",
+      gateway: true,
+      register: [ping],
+    });
+    const app = defineResource({
+      id: "test-run-root-non-gateway",
+      register: [gateway],
+      dependencies: { ping },
+      init: async (_, { ping }) => ping(),
+    });
+
+    const result = await run(app);
+
+    expect(result.value).toBe("ok");
+    await result.dispose();
   });
 
   // Tasks

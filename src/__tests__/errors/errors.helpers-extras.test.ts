@@ -27,6 +27,7 @@ import {
   remoteLaneAuthVerifierMissingError,
   resourceForkGatewayUnsupportedError,
   resourceForkNonLeafUnsupportedError,
+  runRootGatewayUnsupportedError,
 } from "../../errors";
 
 describe("error helpers extra branches", () => {
@@ -292,6 +293,20 @@ describe("error helpers extra branches", () => {
         );
         expect(e.remediation).toContain("non-leaf resource");
         expect(e.remediation).toContain("dedicated factory API");
+      }
+    });
+
+    it("includes root-wrapper remediation for gateway run failures", () => {
+      expect.assertions(3);
+      try {
+        runRootGatewayUnsupportedError.throw({ id: "http-gateway" });
+        fail("Expected throw");
+      } catch (e: any) {
+        expect(e.message).toContain(
+          'Resource "http-gateway" cannot be passed to run()',
+        );
+        expect(e.message).toContain("structural-only");
+        expect(e.remediation).toContain("non-gateway root resource");
       }
     });
 

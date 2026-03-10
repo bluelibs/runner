@@ -385,6 +385,19 @@ export const resourceForkGatewayUnsupportedError = error<
   )
   .build();
 
+export const runRootGatewayUnsupportedError = error<
+  { id: string } & DefaultErrorType
+>(RunnerErrorId.RunRootGatewayUnsupported)
+  .format(
+    ({ id }) =>
+      `Resource "${id}" cannot be passed to run() because gateway resources are structural-only.`,
+  )
+  .remediation(
+    ({ id }) =>
+      `Wrap gateway resource "${id}" in a distinct non-gateway root resource, then call run(root) instead.`,
+  )
+  .build();
+
 export const builderInvalidHttpCodeError = error<
   { value: number } & DefaultErrorType
 >(RunnerErrorId.BuilderInvalidHttpCode)

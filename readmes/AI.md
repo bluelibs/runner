@@ -211,6 +211,7 @@ They are Runner's main composition and ownership unit: a resource can register c
   Return `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
 - Config-only resources can omit `.init()` — their resolved value is `undefined`; they are used purely for configuration access and registration.
 - `r.resource(id, { gateway: true })` prevents the resource from adding its own namespace segment.
+- Gateway resources cannot be passed directly to `run(...)`; wrap them in a non-gateway root resource first.
 - If you register something, you are a non-leaf resource.
 - Non-leaf resources cannot be forked.
 - Gateway resources cannot be forked with `.fork()` because multiple gateway instances would compile the same child canonical ids.

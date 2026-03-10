@@ -193,10 +193,11 @@ Resources move through a deliberate sequence of phases. Understanding which phas
 
 - `init(config, deps, context)` creates the resource value
 - `ready(value, config, deps, context)` starts ingress after startup lock
-- `cooldown(value, config, deps, context)` stops new ingress quickly at shutdown start
-- `dispose(value, config, deps, context)` performs final teardown after drain
+- `cooldown(value, config, deps, context)` stops new ingress quickly at shutdown start, a way of saying "stop any additional work, but let in-flight work finish"
+- `dispose(value, config, deps, context)` performs final teardown after task/event drain.
 - Config-only resources can omit `.init()` and resolve to `undefined`
 - `r.resource(id, { gateway: true })` suppresses the resource's own namespace segment
+- gateway resources cannot be passed directly to `run(...)`; wrap them in a non-gateway root
 - If a resource declares `.register(...)`, it is non-leaf and cannot be forked
 - `.context(() => initialContext)` provides private and mutable resource-local state shared across lifecycle methods
 
@@ -208,7 +209,7 @@ Use the phases intentionally:
 
 Do not use `cooldown()` as a general teardown phase for support resources such as databases.
 
-Gateway resources are structural parents. A gateway resource still owns registration and lifecycle, but it does not add its own id segment when child ids are compiled. Use `{ gateway: true }` when you want a module boundary without another namespace layer in the final ids.
+Gateway resources are structural parents. A gateway resource still owns registration and lifecycle, but it does not add its own id segment when child ids are compiled. Use `{ gateway: true }` when you want a module boundary without another namespace layer in the final ids, then mount that gateway under a separate non-gateway app root when calling `run(...)`.
 
 ### Resource Configuration
 
