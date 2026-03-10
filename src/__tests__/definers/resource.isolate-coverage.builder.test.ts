@@ -73,7 +73,7 @@ describe("isolation entry normalization coverage", () => {
       await expectRunnerErrorId(run(resource), POLICY_INVALID_ENTRY_ID);
     });
 
-    it("throws isolateInvalidEntryError for scope string targets", async () => {
+    it("throws isolateUnknownTargetError for unknown scope string selectors", async () => {
       const task = defineTask({
         id: "coverage-isolate-zero-match-wildcard-task",
         run: async () => 42,
@@ -84,7 +84,7 @@ describe("isolation entry normalization coverage", () => {
         register: [task],
       });
 
-      await expectRunnerErrorId(run(resource), POLICY_INVALID_ENTRY_ID);
+      await expectRunnerErrorId(run(resource), POLICY_UNKNOWN_TARGET_ID);
     });
   });
 

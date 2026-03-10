@@ -8,7 +8,7 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
-import { scope } from "../../public";
+import { scope, subtreeOf } from "../../public";
 
 const POLICY_VIOLATION_ID = "runner.errors.isolationViolation";
 const POLICY_UNKNOWN_TARGET_ID = "runner.errors.isolationUnknownTarget";
@@ -257,10 +257,24 @@ describe("run-isolate", () => {
   });
 
   it("supports deny wildcard selectors", async () => {
+    const blocked = defineTask({
+      id: "policy-wildcard-deny-blocked",
+      run: async () => "blocked",
+    });
+    const consumer = defineTask({
+      id: "policy-wildcard-deny-consumer",
+      dependencies: { blocked },
+      run: async (_input, deps) => deps.blocked(),
+    });
     const guarded = defineResource({
       id: "policy-wildcard-deny-resource",
+      register: [blocked, consumer],
       isolate: {
-        deny: [scope("policy-wildcard-deny-*" as any)],
+        deny: [
+          scope(
+            "policy-wildcard-deny-app.policy-wildcard-deny-resource.tasks.policy-wildcard-deny-*",
+          ),
+        ],
       },
     });
 
@@ -269,7 +283,7 @@ describe("run-isolate", () => {
       register: [guarded],
     });
 
-    await expectRunnerErrorId(run(app), POLICY_INVALID_ENTRY_ID);
+    await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
   });
 
   it("fails fast when deny wildcard matches no ids", async () => {
@@ -285,14 +299,33 @@ describe("run-isolate", () => {
       register: [guarded],
     });
 
-    await expectRunnerErrorId(run(app), POLICY_INVALID_ENTRY_ID);
+    await expectRunnerErrorId(run(app), POLICY_UNKNOWN_TARGET_ID);
   });
 
   it("deny wildcard matches ids only and does not expand to tag carriers", async () => {
+    const denyTag = defineTag({
+      id: "policy-wildcard-scope-tag-secret",
+    });
+    const taggedTask = defineTask({
+      id: "policy-wildcard-scope-tagged-task",
+      tags: [denyTag],
+      run: async () => "ok",
+    });
+    const consumer = defineTask({
+      id: "policy-wildcard-scope-tag-consumer",
+      dependencies: { taggedTask },
+      run: async (_input, deps) => deps.taggedTask(),
+    });
     const guarded = defineResource({
       id: "policy-wildcard-scope-resource",
+      register: [denyTag, taggedTask, consumer],
       isolate: {
-        deny: [scope("policy-wildcard-scope-tag-*" as any, { tagging: false })],
+        deny: [
+          scope(
+            "policy-wildcard-scope-app.policy-wildcard-scope-resource.tags.policy-wildcard-scope-tag-*",
+            { tagging: false },
+          ),
+        ],
       },
     });
 
@@ -301,7 +334,9 @@ describe("run-isolate", () => {
       register: [guarded],
     });
 
-    await expectRunnerErrorId(run(app), POLICY_INVALID_ENTRY_ID);
+    const runtime = await run(app);
+    await expect(runtime.runTask(consumer)).resolves.toBe("ok");
+    await runtime.dispose();
   });
 
   it("fails fast when a deny entry is invalid", async () => {
@@ -568,6 +603,139 @@ describe("run-isolate", () => {
     const runtime = await run(app);
     await expect(runtime.runTask(healthTask)).resolves.toBe("policy-allow-app");
     await runtime.dispose();
+  });
+
+  it("allows scoped whitelist grants for matching consumers only", async () => {
+    const runtimeReader = defineTask({
+      id: "policy-allow-scoped-runtime-reader",
+      dependencies: { runtime: globalResources.runtime },
+      run: async (_input, deps) => deps.runtime.root.id,
+    });
+    const blockedReader = defineTask({
+      id: "policy-allow-scoped-blocked-reader",
+      dependencies: { runtime: globalResources.runtime },
+      run: async (_input, deps) => deps.runtime.root.id,
+    });
+    const runnerDev = defineResource({
+      id: "policy-allow-scoped-runner-dev",
+      register: [runtimeReader],
+    });
+    const feature = defineResource({
+      id: "policy-allow-scoped-feature",
+      register: [blockedReader],
+    });
+
+    const allowedApp = defineResource({
+      id: "policy-allow-scoped-allowed-app",
+      register: [runnerDev],
+      isolate: {
+        deny: [globalResources.runtime],
+        whitelist: [
+          {
+            for: [scope(subtreeOf(runnerDev), { dependencies: true })],
+            targets: [scope("system.*", { dependencies: true })],
+          },
+        ],
+      },
+    });
+
+    const allowedRuntime = await run(allowedApp);
+    await expect(allowedRuntime.runTask(runtimeReader)).resolves.toBe(
+      "policy-allow-scoped-allowed-app",
+    );
+    await allowedRuntime.dispose();
+
+    const blockedApp = defineResource({
+      id: "policy-allow-scoped-blocked-app",
+      register: [runnerDev, feature],
+      isolate: {
+        deny: [globalResources.runtime],
+        whitelist: [
+          {
+            for: [scope(subtreeOf(runnerDev), { dependencies: true })],
+            targets: [scope("system.*", { dependencies: true })],
+          },
+        ],
+      },
+    });
+
+    const error = await expectRunnerErrorId(
+      run(blockedApp),
+      POLICY_VIOLATION_ID,
+    );
+    expect(error.message).toContain(blockedReader.id);
+  });
+
+  it("allows wildcard whitelist targets to reopen a denied boundary", async () => {
+    const internal = defineTask({
+      id: "policy-allow-wildcard-target",
+      run: async () => "internal",
+    });
+    const devReader = defineTask({
+      id: "policy-allow-wildcard-reader",
+      dependencies: { internal },
+      run: async (_input, deps) => deps.internal(),
+    });
+    const runnerDev = defineResource({
+      id: "policy-allow-wildcard-runner-dev",
+      register: [devReader],
+    });
+
+    const app = defineResource({
+      id: "policy-allow-wildcard-app",
+      register: [internal, runnerDev],
+      isolate: {
+        deny: [scope("*")],
+        whitelist: [
+          {
+            for: [scope(subtreeOf(runnerDev), { dependencies: true })],
+            targets: [scope("*", { dependencies: true })],
+          },
+        ],
+      },
+    });
+
+    const runtime = await run(app);
+    await expect(runtime.runTask(devReader)).resolves.toBe("internal");
+    await runtime.dispose();
+  });
+
+  it("applies whitelist entry channels as a mask over scoped grants", async () => {
+    const internal = defineTask({
+      id: "policy-allow-channel-mask-target",
+      run: async () => "internal",
+    });
+    const devReader = defineTask({
+      id: "policy-allow-channel-mask-reader",
+      dependencies: { internal },
+      run: async (_input, deps) => deps.internal(),
+    });
+    const runnerDev = defineResource({
+      id: "policy-allow-channel-mask-runner-dev",
+      register: [devReader],
+    });
+
+    const app = defineResource({
+      id: "policy-allow-channel-mask-app",
+      register: [internal, runnerDev],
+      isolate: {
+        deny: [scope("*")],
+        whitelist: [
+          {
+            for: [scope(subtreeOf(runnerDev), { dependencies: true })],
+            targets: [scope("*", { dependencies: true })],
+            channels: {
+              dependencies: false,
+              listening: true,
+              tagging: false,
+              middleware: false,
+            },
+          },
+        ],
+      },
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
   });
 
   it("does not let child whitelist rules override parent deny rules", async () => {
@@ -1070,7 +1238,7 @@ describe("run-isolate (only mode)", () => {
       register: [guarded],
     });
 
-    await expectRunnerErrorId(run(app), POLICY_INVALID_ENTRY_ID);
+    await expectRunnerErrorId(run(app), POLICY_UNKNOWN_TARGET_ID);
   });
 
   it("fails fast when only contains an invalid entry", async () => {

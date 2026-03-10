@@ -26,8 +26,21 @@ export type IsolationChannel =
   | "tagging"
   | "middleware";
 
-/** The set of target types that scope() accepts (same as pre-scope IsolationTarget). */
-export type IsolationScopeTarget = RegisterableItems | IsolationSubtreeFilter;
+export const ISOLATION_WILDCARD = "*" as const;
+export type IsolationWildcard = typeof ISOLATION_WILDCARD;
+
+/**
+ * The set of target types that scope() accepts.
+ *
+ * String selectors are only valid inside scope(), where they resolve against
+ * registered canonical ids. Use `"*"` for a full wildcard or patterns such as
+ * `"system.*"` / `"app.resources.*"` for segment-based matches.
+ */
+export type IsolationScopeTarget =
+  | RegisterableItems
+  | IsolationSubtreeFilter
+  | IsolationWildcard
+  | string;
 
 /**
  * A scope entry created by `scope()`.

@@ -22,7 +22,12 @@ const ALL_CHANNELS: readonly IsolationChannel[] = [
 ] as const;
 
 function emptyChannelSets(): CompiledChannelSets {
-  return { ids: new Set(), tagIds: new Set(), subtreeFilters: [] };
+  return {
+    matchAll: false,
+    ids: new Set(),
+    tagIds: new Set(),
+    subtreeFilters: [],
+  };
 }
 
 function emptyChannelRecord(): Record<IsolationChannel, CompiledChannelSets> {
@@ -60,6 +65,11 @@ function addClassifiedTarget(
     case "tag":
       forEachEnabledChannel(channels, (channel) => {
         channelRecord[channel].tagIds.add(classified.id);
+      });
+      break;
+    case "wildcard":
+      forEachEnabledChannel(channels, (channel) => {
+        channelRecord[channel].matchAll = true;
       });
       break;
     case "string":
@@ -116,11 +126,19 @@ function compileWhitelistEntry(
   } as const;
 
   for (const consumer of entry.for) {
-    addClassifiedTarget(classifyScopeTarget(consumer), channels, consumers);
+    compileIsolationEntry(consumer, consumers);
   }
 
   for (const target of entry.targets) {
-    addClassifiedTarget(classifyScopeTarget(target), channels, targets);
+    compileIsolationEntry(target, targets);
+  }
+
+  for (const channel of ALL_CHANNELS) {
+    if (channels[channel]) {
+      continue;
+    }
+    consumers[channel] = emptyChannelSets();
+    targets[channel] = emptyChannelSets();
   }
 
   return { consumers, targets };

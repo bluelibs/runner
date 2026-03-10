@@ -5,6 +5,7 @@ import type {
 } from "../../defs";
 
 export type CompiledChannelSets = {
+  matchAll: boolean;
   ids: Set<string>;
   tagIds: Set<string>;
   subtreeFilters: IsolationSubtreeFilter[];
@@ -31,7 +32,7 @@ export type AccessViolation =
   | {
       kind: "isolate";
       policyResourceId: string;
-      matchedRuleType: "id" | "tag" | "only" | "subtree";
+      matchedRuleType: "id" | "tag" | "only" | "subtree" | "wildcard";
       matchedRuleId: string;
       channel: IsolationChannel;
     };

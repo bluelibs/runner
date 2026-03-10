@@ -4,6 +4,7 @@ import type {
   IResourceWithConfig,
 } from "../defs";
 import type { IsolationScope, IsolationScopeTarget } from "./scope";
+import { ISOLATION_WILDCARD } from "./scope";
 import { isSubtreeFilter, isIsolationScope, isTag } from "../define";
 
 export type ClassifiedIsolationEntry =
@@ -18,6 +19,7 @@ export type ClassifiedScopeTarget =
   | { kind: "subtreeFilter"; filter: IsolationSubtreeFilter }
   | { kind: "tag"; id: string; entry: RegisterableItems }
   | { kind: "definition"; id: string; entry: RegisterableItems }
+  | { kind: "wildcard" }
   | { kind: "string"; value: string }
   | { kind: "unknown"; entry: unknown };
 
@@ -70,6 +72,9 @@ export function classifyIsolationEntry(
 export function classifyScopeTarget(
   target: IsolationScopeTarget | unknown,
 ): ClassifiedScopeTarget {
+  if (target === ISOLATION_WILDCARD) {
+    return { kind: "wildcard" };
+  }
   if (isSubtreeFilter(target)) {
     return { kind: "subtreeFilter", filter: target };
   }

@@ -14,8 +14,8 @@ import type {
   ItemType,
 } from "../../defs";
 import { isTag } from "../../define";
-import type { IsolationScopeTarget } from "../../tools/scope";
 import { scope } from "../../tools/scope";
+import type { IsolationScopeTarget } from "../../tools/scope";
 import {
   getSubtreeFilterResourceReference,
   isSubtreeFilterItemType,
@@ -24,6 +24,7 @@ import {
   classifyIsolationEntry,
   classifyScopeTarget,
 } from "../../tools/classifyIsolationEntry";
+import { resolveIsolationSelector } from "../utils/isolationSelectors";
 import { getStoredIsolationPolicy } from "../../definers/isolatePolicy";
 import type { ValidatorContext } from "./ValidatorContext";
 
@@ -211,15 +212,15 @@ export function normalizeWhitelistEntries(
       input.onInvalidEntry(entry);
     }
 
-    const normalizedFor = expandScopeTargets(ctx, {
-      targets: candidate.for,
+    const normalizedFor = normalizeIsolationEntries<IsolationTarget>(ctx, {
+      entries: candidate.for,
       policyResourceId: input.policyResourceId,
       onInvalidEntry: input.onInvalidEntry,
       onUnknownTarget: input.onUnknownTarget,
     });
 
-    const normalizedTargets = expandScopeTargets(ctx, {
-      targets: candidate.targets,
+    const normalizedTargets = normalizeIsolationEntries<IsolationTarget>(ctx, {
+      entries: candidate.targets,
       policyResourceId: input.policyResourceId,
       onInvalidEntry: input.onInvalidEntry,
       onUnknownTarget: input.onUnknownTarget,
@@ -334,7 +335,7 @@ export function normalizeIsolationEntries<TEntry extends object>(
 function expandScopeTargets(
   ctx: ValidatorContext,
   input: {
-    targets: ReadonlyArray<IsolationScopeTarget>;
+    targets: ReadonlyArray<unknown>;
     policyResourceId?: string;
     onInvalidEntry: (entry: unknown) => never;
     onUnknownTarget: (targetId: string) => never;
@@ -357,13 +358,29 @@ function expandScopeTargets(
           }),
         );
         break;
+      case "wildcard":
+        expanded.push("*");
+        break;
       case "string":
-        input.onInvalidEntry(target);
-      // falls through (onInvalidEntry returns never)
+        if (classified.value.length === 0) {
+          input.onInvalidEntry(target);
+        }
+        for (const resolvedTarget of resolveSelectorTargets(
+          ctx,
+          classified.value,
+          input.onUnknownTarget,
+        )) {
+          expanded.push(resolvedTarget);
+        }
+        break;
       case "tag":
       case "definition":
         expanded.push(
-          normalizeResolvedTarget<IsolationScopeTarget>(ctx, target, callbacks),
+          normalizeResolvedTarget(
+            ctx,
+            target,
+            callbacks,
+          ) as IsolationScopeTarget,
         );
         break;
       case "unknown":
@@ -372,6 +389,24 @@ function expandScopeTargets(
   }
 
   return expanded;
+}
+
+function resolveSelectorTargets(
+  ctx: ValidatorContext,
+  selector: string,
+  onUnknownTarget: (targetId: string) => never,
+): IsolationScopeTarget[] {
+  const resolvedIds = resolveIsolationSelector(
+    selector,
+    ctx.getRegisteredIds(),
+  );
+  if (resolvedIds.length === 0) {
+    onUnknownTarget(selector);
+  }
+
+  return resolvedIds.map(
+    (resolvedId) => ({ id: resolvedId }) as IsolationScopeTarget,
+  );
 }
 
 function normalizeResolvedDefinitionEntry<TEntry extends object>(

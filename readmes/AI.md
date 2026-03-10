@@ -479,28 +479,70 @@ Runner treats composition boundaries as first-class.
 
 ### Isolation
 
-- `.isolate({ exports: [...] })` controls what a resource exposes outside its subtree.
-- `.isolate((config) => ({ ... }))` makes exports and isolation rules depend on resource config.
-- `exports: []` or `exports: "none"` makes a subtree private.
-- `exports` array entries must be explicit Runner definition or resource references.
-- `deny` and `only` control cross-boundary wiring by channel.
-- `whitelist` adds narrow per-boundary grants for specific consumers without reopening ancestor restrictions.
-- Use definition refs, `subtreeOf(resource)`, or `scope(target, channels?)`.
-- Bare strings are invalid in `deny` and `only`.
-- `whitelist.for` and `whitelist.targets` accept the same selector forms, so subtree grants such as `{ for: [subtreeOf(agentResource)], targets: [resources.health] }` are valid.
-- Isolation rules are additive through ancestors.
-- Unknown isolation targets fail fast at bootstrap.
-- Isolation access violations are rejected during bootstrap wiring; they are not deferred to first runtime use.
-- Runtime operator APIs are gated only by the root resource's `isolate.exports` surface.
-- Dynamic isolate callbacks are resolved per configured resource instance during registration.
-- `subtreeOf(resource)` matches by ownership subtree instead of id string matching.
-- `scope(target, channels?)` applies channel-specific isolation rules such as `dependencies`, `listening`, `tagging`, or `middleware`.
-- Legacy resource-level `exports` and fluent `.exports(...)` were removed in 6.x; use `isolate: { exports: [...] }` or `.isolate({ exports: [...] })`.
+- Think of `.isolate(...)` as two controls on one boundary:
+  - `exports`: what this subtree exposes outward
+  - `deny` / `only` / `whitelist`: what consumers in this subtree may wire to across boundaries
+- `exports: []` or `exports: "none"` makes the subtree private. Export entries must be explicit Runner definition or resource references.
+- Runtime operator APIs such as `runTask`, `emitEvent`, and `getResourceValue` are gated only by the root resource's `isolate.exports` surface.
+- `.isolate((config) => ({ ... }))` resolves once per configured resource instance.
+
+Selector model:
+
+- direct ref: one concrete definition/resource/tag
+- `subtreeOf(resource, { types? })`: everything owned by that resource subtree
+- `scope(target, channels?)`: apply the rule only to selected channels: `dependencies`, `listening`, `tagging`, `middleware`
+- string selectors are valid only inside `scope(...)`
+  - `scope("*")`: everything
+  - `scope("system.*")`: all registered canonical ids matching that segment wildcard
+  - `scope("app.resources.*")`: one dotted segment per `*`
+- `subtreeOf(resource)` is ownership-based, not string-prefix-based
+
+Rule model:
+
+- `deny`: block matching cross-boundary targets
+- `only`: allow only matching cross-boundary targets
+- `whitelist`: per-boundary consumer -> target carve-out; it relaxes this boundary's `deny` / `only`, but does not override ancestor restrictions or make private exports public
+- `whitelist.for` and `whitelist.targets` accept the same selector forms as `deny` and `only`
+- unknown targets or selectors that resolve to nothing fail fast at bootstrap
+- violations fail during bootstrap wiring, not first runtime use
+- legacy resource-level `exports` and fluent `.exports(...)` were removed in 6.x; use `isolate: { exports: [...] }` or `.isolate({ exports: [...] })`
 
 ```ts
 .isolate({
   deny: [subtreeOf(adminResource), scope([internalEvent], { listening: false })],
   whitelist: [{ for: [healthTask], targets: [resources.health] }],
+})
+```
+
+Examples:
+
+- Hide everything except one task from the outside:
+
+```ts
+.isolate({
+  exports: [createInvoice],
+})
+```
+
+- Block all `system.*` dependencies for this subtree except `runnerDev`:
+
+```ts
+.isolate({
+  deny: [scope("system.*", { dependencies: true })],
+  whitelist: [
+    {
+      for: [scope(subtreeOf(runnerDev), { dependencies: true })],
+      targets: [scope("system.*", { dependencies: true })],
+    },
+  ],
+})
+```
+
+- Allow only tasks owned by another subtree:
+
+```ts
+.isolate({
+  only: [subtreeOf(agentResource, { types: ["task"] })],
 })
 ```
 

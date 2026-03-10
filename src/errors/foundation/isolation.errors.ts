@@ -29,7 +29,7 @@ export const isolateInvalidEntryError = error<
   )
   .remediation(
     ({ policyResourceId }) =>
-      `Use .isolate({ deny: [...] }), .isolate({ only: [...] }), or .isolate({ whitelist: [{ for: [...], targets: [...] }] }) with Runner definitions, subtreeOf() filters, or scope() entries. String targets are not supported. Review "${policyResourceId}" and fix malformed entries.`,
+      `Use .isolate({ deny: [...] }), .isolate({ only: [...] }), or .isolate({ whitelist: [{ for: [...], targets: [...] }] }) with Runner definitions, subtreeOf() filters, or scope() entries. String selectors are only valid inside scope() (for example scope("system.*") or scope("*")). Review "${policyResourceId}" and fix malformed entries.`,
   )
   .build();
 
@@ -45,7 +45,7 @@ export const isolateUnknownTargetError = error<
   )
   .remediation(
     ({ targetId }) =>
-      `Register "${targetId}" in the same runtime graph and pass the definition reference (or subtreeOf filter) instead of raw ids.`,
+      `Register "${targetId}" in the same runtime graph, or use a scope("prefix.*") selector that resolves to known ids.`,
   )
   .build();
 
@@ -88,7 +88,7 @@ export const isolateViolationError = error<
     consumerId: string;
     consumerType: string;
     policyResourceId: string;
-    matchedRuleType: "id" | "tag" | "only" | "subtree";
+    matchedRuleType: "id" | "tag" | "only" | "subtree" | "wildcard";
     matchedRuleId: string;
     channel: IsolationChannel;
   } & DefaultErrorType
@@ -114,6 +114,9 @@ export const isolateViolationError = error<
       }
       if (matchedRuleType === "subtree") {
         return `Denied by subtreeOf("${matchedRuleId}") filter on "${policyResourceId}" (channel: ${channel}). Remove or narrow the subtreeOf() filter, or move the consumer outside that resource subtree.`;
+      }
+      if (matchedRuleType === "wildcard") {
+        return `Denied by scope("*") on "${policyResourceId}" (channel: ${channel}). Remove the wildcard or narrow it to explicit targets.`;
       }
       const rule =
         matchedRuleType === "tag"

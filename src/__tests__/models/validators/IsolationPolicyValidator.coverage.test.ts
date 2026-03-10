@@ -307,20 +307,43 @@ describe("IsolationPolicyValidator coverage", () => {
     ).toThrow("invalid");
   });
 
-  it("rejects raw strings inside scope targets", () => {
+  it("resolves scope string selectors against registered ids", () => {
+    const ctx = createValidatorContext({
+      registeredIds: ["system.runtime", "system.eventManager"],
+    });
+
+    const normalized = normalizeIsolationEntries(ctx, {
+      entries: [scope("system.*" as any)],
+      onInvalidEntry: () => {
+        throw new Error("invalid");
+      },
+      onUnknownTarget: () => {
+        throw new Error("unknown");
+      },
+    });
+
+    expect(normalized).toEqual([
+      scope([
+        { id: "system.runtime" } as any,
+        { id: "system.eventManager" } as any,
+      ]),
+    ]);
+  });
+
+  it("accepts wildcard scope targets", () => {
     const ctx = createValidatorContext();
 
-    expect(() =>
-      normalizeIsolationEntries(ctx, {
-        entries: [scope("raw-string-target" as any)],
-        onInvalidEntry: () => {
-          throw new Error("invalid");
-        },
-        onUnknownTarget: () => {
-          throw new Error("unknown");
-        },
-      }),
-    ).toThrow("invalid");
+    const normalized = normalizeIsolationEntries(ctx, {
+      entries: [scope("*")],
+      onInvalidEntry: () => {
+        throw new Error("invalid");
+      },
+      onUnknownTarget: () => {
+        throw new Error("unknown");
+      },
+    });
+
+    expect(normalized).toEqual([scope("*")]);
   });
 
   it("rejects unknown entry types inside scope targets", () => {
@@ -387,6 +410,38 @@ describe("IsolationPolicyValidator coverage", () => {
         for: [{ id: "validator-allow-consumer" }],
         targets: [{ id: "validator-allow-target" }],
         channels: { dependencies: true },
+      },
+    ]);
+  });
+
+  it("normalizes scoped whitelist entries", () => {
+    const ctx = createValidatorContext({
+      registeredIds: ["validator-allow-consumer", "validator-allow-target"],
+      resolveDefinitionId: (reference) =>
+        reference && typeof reference === "object"
+          ? ((reference as { id?: string }).id ?? undefined)
+          : undefined,
+    });
+
+    const normalized = normalizeWhitelistEntries(ctx, {
+      entries: [
+        {
+          for: [scope({ id: "validator-allow-consumer" } as any)],
+          targets: [scope({ id: "validator-allow-target" } as any)],
+        },
+      ],
+      onInvalidEntry: () => {
+        throw new Error("invalid");
+      },
+      onUnknownTarget: () => {
+        throw new Error("unknown");
+      },
+    });
+
+    expect(normalized).toEqual([
+      {
+        for: [scope({ id: "validator-allow-consumer" } as any)],
+        targets: [scope({ id: "validator-allow-target" } as any)],
       },
     ]);
   });

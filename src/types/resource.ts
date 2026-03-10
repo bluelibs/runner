@@ -14,11 +14,7 @@ import {
 import { ResourceTagType } from "./tag";
 import { IResourceMeta } from "./meta";
 import type { ThrowsList } from "./error";
-import type {
-  IsolationChannels,
-  IsolationScope,
-  IsolationScopeTarget,
-} from "../tools/scope";
+import type { IsolationChannels, IsolationScope } from "../tools/scope";
 export type {
   IsolationScope,
   IsolationChannels,
@@ -169,14 +165,14 @@ export interface IsolationPolicy {
 export interface IsolationWhitelistEntry {
   /**
    * Consumers that receive the grant. Supports definitions, tags,
-   * `subtreeOf(...)`, and `scope(...)` targets.
+   * `subtreeOf(...)`, wildcard `scope("*")`, and `scope(...)` targets.
    */
-  for: ReadonlyArray<IsolationScopeTarget>;
+  for: ReadonlyArray<IsolationTarget>;
   /**
    * Targets that become accessible to the matching consumers for the selected
    * channels on this boundary only.
    */
-  targets: ReadonlyArray<IsolationScopeTarget>;
+  targets: ReadonlyArray<IsolationTarget>;
   /**
    * Channels controlled by this grant. Defaults to all channels when omitted.
    */

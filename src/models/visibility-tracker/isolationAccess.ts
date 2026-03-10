@@ -102,9 +102,16 @@ function matchCompiledSets(
     candidateId,
   ),
 ): {
-  matchedRuleType: "id" | "tag" | "subtree";
+  matchedRuleType: "id" | "tag" | "subtree" | "wildcard";
   matchedRuleId: string;
 } | null {
+  if (compiledSets.matchAll) {
+    return {
+      matchedRuleType: "wildcard",
+      matchedRuleId: "*",
+    };
+  }
+
   if (compiledSets.ids.has(candidateId)) {
     return {
       matchedRuleType: "id",

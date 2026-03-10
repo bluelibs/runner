@@ -380,16 +380,35 @@ const selective = r
   .build();
 ```
 
-Key rules:
+Mental model:
+
+- `exports` answers: "what does this subtree expose to the outside?"
+- `deny` / `only` / `whitelist` answer: "what may consumers inside this subtree wire to across boundaries?"
+- Use a direct definition/resource/tag reference for one concrete item.
+- Use `subtreeOf(resource, { types? })` for "everything owned by that resource subtree".
+- Use `scope(target, channels?)` when the rule should only affect selected channels.
+
+Selector rules:
 
 - `deny` and `only` are mutually exclusive on the same resource
 - `deny` and `only` accept definitions, `subtreeOf(...)`, or `scope(...)`
-- `whitelist` uses `{ for: [...], targets: [...], channels? }`
+- `whitelist` uses `{ for: [...], targets: [...], channels? }`, and `for` / `targets` accept the same selector forms as `deny` / `only`
+- bare strings are invalid in isolation policies; use string selectors only inside `scope(...)`
+- `scope("*")` means "everything"
+- `scope("system.*")` means "all registered canonical ids matching that segment wildcard"
+- `subtreeOf(resource)` is ownership-based, not string-prefix-based
 - `.isolate((config) => ({ ... }))` can switch `deny`, `only`, `whitelist`, and `exports` from resource config
-- bare strings are invalid in `deny` and `only`
+
+Behavior rules:
+
+- `deny` blocks matching cross-boundary references
+- `only` allows only matching cross-boundary references
+- `whitelist` adds carve-outs for specific consumer -> target relations on this boundary only
+- `whitelist` does not override ancestor isolation rules
+- `whitelist` does not make private exports public
 - enforcement covers dependencies, listening, tagging, and middleware channels
 - parent and child isolation rules compose additively
-- unknown targets fail fast at bootstrap
+- unknown targets and selector patterns that resolve to nothing fail fast at bootstrap
 
 ### Subtree Policies
 
