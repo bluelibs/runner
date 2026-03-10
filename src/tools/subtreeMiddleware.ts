@@ -6,6 +6,7 @@ import type {
   SubtreeResourceMiddlewareEntry,
   SubtreeTaskMiddlewareEntry,
 } from "../defs";
+import { getStoredSubtreePolicy } from "../definers/subtreePolicy";
 import { validationError } from "../errors";
 
 type SubtreeLookup = {
@@ -317,7 +318,7 @@ export function resolveApplicableSubtreeTaskMiddlewares(
     lookup,
     chain,
     task,
-    (resource) => resource.subtree?.tasks?.middleware,
+    (resource) => getStoredSubtreePolicy(resource)?.tasks?.middleware,
     resolveTaskSubtreeMiddlewareEntry,
   );
 }
@@ -335,7 +336,8 @@ export function resolveApplicableSubtreeResourceMiddlewares(
     lookup,
     chain,
     resource,
-    (ownerResource) => ownerResource.subtree?.resources?.middleware,
+    (ownerResource) =>
+      getStoredSubtreePolicy(ownerResource)?.resources?.middleware,
     resolveResourceSubtreeMiddlewareEntry,
   );
 }

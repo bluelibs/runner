@@ -13,11 +13,12 @@ import {
   symbolResource,
   symbolFilePath,
   symbolOptionalDependency,
+  symbolResourceIsolateDeclarations,
   symbolResourceRegistersChildren,
+  symbolResourceSubtreeDeclarations,
   symbolResourceWithConfig,
 } from "../types/symbols";
 import {
-  isolateExportsConflictError,
   resourceForkNonLeafUnsupportedError,
   resourceForkGatewayUnsupportedError,
   validationError,
@@ -28,7 +29,16 @@ import { normalizeThrows } from "../tools/throws";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
 import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
-import { normalizeResourceSubtreePolicy } from "./subtreePolicy";
+import {
+  createDisplaySubtreePolicy,
+  createSubtreePolicyDeclaration,
+} from "./subtreePolicy";
+import {
+  createDisplayIsolatePolicy,
+  createIsolatePolicyDeclaration,
+  getDeprecatedExportsFromIsolation,
+  mergeLegacyExportsIntoIsolationInput,
+} from "./isolatePolicy";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 export function defineResource<
@@ -90,37 +100,26 @@ export function defineResource<
   );
   assertTagTargetsApplicableTo("resources", "Resource", id, constConfig.tags);
 
-  const isolate = (() => {
-    const legacyExports = constConfig.exports;
-    const candidate = constConfig.isolate;
+  const isolateInput = mergeLegacyExportsIntoIsolationInput(
+    id,
+    constConfig.exports,
+    constConfig.isolate,
+  );
+  const isolateDeclarations =
+    constConfig[symbolResourceIsolateDeclarations] ??
+    (isolateInput
+      ? Object.freeze([createIsolatePolicyDeclaration(isolateInput)])
+      : undefined);
+  const isolate = createDisplayIsolatePolicy(isolateDeclarations, id);
+  const exports =
+    getDeprecatedExportsFromIsolation(isolate) ?? constConfig.exports;
 
-    if (legacyExports === undefined) {
-      return candidate;
-    }
-
-    if (!candidate) {
-      return { exports: legacyExports };
-    }
-
-    if (candidate.exports !== undefined) {
-      isolateExportsConflictError.throw({ resourceId: id });
-    }
-
-    return { ...candidate, exports: legacyExports };
-  })();
-
-  const exports = (() => {
-    const cfg = isolate?.exports;
-    if (cfg === undefined) {
-      return constConfig.exports;
-    }
-    if (cfg === "none") {
-      return [];
-    }
-    return Array.isArray(cfg) ? [...cfg] : constConfig.exports;
-  })();
-
-  const subtree = normalizeResourceSubtreePolicy(constConfig.subtree);
+  const subtreeDeclarations =
+    constConfig[symbolResourceSubtreeDeclarations] ??
+    (constConfig.subtree
+      ? Object.freeze([createSubtreePolicyDeclaration(constConfig.subtree)])
+      : undefined);
+  const subtree = createDisplaySubtreePolicy(subtreeDeclarations);
 
   const base = {
     [symbolResource]: true,
@@ -147,6 +146,8 @@ export function defineResource<
     exports,
     isolate,
     subtree,
+    [symbolResourceIsolateDeclarations]: isolateDeclarations,
+    [symbolResourceSubtreeDeclarations]: subtreeDeclarations,
   } as IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>;
 
   const resolveCurrent = (
@@ -209,6 +210,10 @@ export function defineResource<
     meta: current.meta,
     isolate: current.isolate,
     subtree: current.subtree,
+    [symbolResourceIsolateDeclarations]:
+      current[symbolResourceIsolateDeclarations],
+    [symbolResourceSubtreeDeclarations]:
+      current[symbolResourceSubtreeDeclarations],
     gateway: current.gateway,
   });
 

@@ -160,6 +160,44 @@ describe("run-exports-visibility", () => {
         /exports-block-res-inner.*internal.*exports-block-res-child/,
       );
     });
+
+    it("resolves isolate exports from resource config", async () => {
+      const publicTask = defineTask({
+        id: "exports-dynamic-public",
+        run: async () => "public",
+      });
+
+      const child = defineResource<{ visible: boolean }>({
+        id: "exports-dynamic-child",
+        register: [publicTask],
+        isolate: (config) => ({
+          exports: config.visible ? [publicTask] : "none",
+        }),
+      });
+
+      const root = defineResource({
+        id: "exports-dynamic-root",
+        register: [child.with({ visible: true })],
+        dependencies: { publicTask },
+        async init(_, deps) {
+          return await deps.publicTask();
+        },
+      });
+
+      const allowed = await run(root);
+      expect(allowed.value).toBe("public");
+      await allowed.dispose();
+
+      const blockedRoot = defineResource({
+        id: "exports-dynamic-root-blocked",
+        register: [child.with({ visible: false })],
+        dependencies: { publicTask },
+      });
+
+      await expect(run(blockedRoot)).rejects.toThrow(
+        /exports-dynamic-public.*internal.*exports-dynamic-child/,
+      );
+    });
   });
 
   describe("subtree and transitive behavior", () => {

@@ -201,6 +201,10 @@ Lifecycle:
 ## Resources
 
 Resources model shared services and state.
+They are Runner's main composition and ownership unit: a resource can register child definitions, expose a value, enforce boundaries, and define lifecycle behavior.
+
+- Start most apps with `const runtime = await run(appResource)`.
+- The runtime then gives you `runTask(...)`, `emitEvent(...)`, `getResourceValue(...)`, `getLazyResourceValue(...)`, `getResourceConfig(...)`, `getHealth(...)`, `pause()`, `resume()`, `recoverWhen(...)`, and `dispose()`.
 
 - `init(config, deps, context)` creates the value.
 - `ready(value, config, deps, context)` starts ingress after startup lock.
@@ -224,6 +228,7 @@ Use the lifecycle intentionally:
 Health reporting:
 
 - Only resources that define `health()` participate.
+- `resources.health` is the built-in health reporter resource from the exported `resources` namespace.
 - Prefer `resources.health.getHealth()` inside resources; keep `runtime.getHealth()` for operator/runtime callers.
 - Health checks are available only after `run(...)` resolves and before disposal starts.
 - Calling `getHealth()` during disposal or after `dispose()` starts is invalid; treat health APIs as unavailable once shutdown begins.
@@ -232,6 +237,11 @@ Health reporting:
 - `report` entries look like `{ id, initialized, status, message?, details? }`, where `id` is the canonical global runtime id.
 - Use `report.find(resourceOrId).status` when you want one specific resource entry.
   It returns the entry or throws if that resource is not present in the report.
+- If `health()` throws, Runner records that resource as `unhealthy` and places the normalized error on `details`.
+- When health indicates temporary pressure or outage, prefer `runtime.pause()` over shutdown.
+  It simply stops new runtime-origin and resource-origin task runs and event emissions while already-running work continues.
+- `runtime.recoverWhen({ everyMs, check })` belongs on that paused path.
+  Register it after `pause()` when you want Runner to poll a recovery condition and auto-resume once the current incident is cleared.
 
 Do not use `cooldown()` as a general teardown phase for support resources like databases. Use `cooldown()` to stop accepting new external work; use `dispose()` for final teardown.
 
@@ -461,6 +471,7 @@ Runner treats composition boundaries as first-class.
 ### Isolation
 
 - `.isolate({ exports: [...] })` controls what a resource exposes outside its subtree.
+- `.isolate((config) => ({ ... }))` makes exports and isolation rules depend on resource config.
 - `exports: []` or `exports: "none"` makes a subtree private.
 - `exports` array entries must be explicit Runner definition or resource references.
 - `deny` and `only` control cross-boundary wiring by channel.
@@ -472,6 +483,7 @@ Runner treats composition boundaries as first-class.
 - Unknown isolation targets fail fast at bootstrap.
 - Isolation access violations are rejected during bootstrap wiring; they are not deferred to first runtime use.
 - Runtime operator APIs are gated only by the root resource's `isolate.exports` surface.
+- Dynamic isolate callbacks are resolved per configured resource instance during registration.
 - `subtreeOf(resource)` matches by ownership subtree instead of id string matching.
 - `scope(target, channels?)` applies channel-specific isolation rules such as `dependencies`, `listening`, `tagging`, or `middleware`.
 
@@ -484,8 +496,13 @@ Runner treats composition boundaries as first-class.
 
 ### Subtrees
 
-- `.subtree(policy)` can auto-attach middleware to nested tasks/resources.
+- `.subtree(policy)` and `.subtree((config) => policy)` can auto-attach middleware to nested tasks/resources.
 - Subtrees can validate contained definitions.
+- `subtree.validate` is generic for compiled subtree definitions and can be one function or an array.
+- Typed validation is also available on `tasks`, `resources`, `hooks`, `events`, `tags`, `taskMiddleware`, and `resourceMiddleware`.
+- Generic and typed validators both run when they match the same compiled definition.
+- Validators receive only the compiled definition. Use `subtree((config) => ({ ... }))` when the policy depends on resource config.
+- Use exported guards such as `isTask(...)` and `isResource(...)` inside `subtree.validate(...)` for cross-type checks.
 - Validators are return-based:
   - return `SubtreeViolation[]` for normal policy failures
   - do not throw for expected validation failures

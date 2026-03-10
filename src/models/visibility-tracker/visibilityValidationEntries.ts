@@ -2,6 +2,7 @@ import {
   getSubtreeResourceMiddlewareAttachment,
   getSubtreeTaskMiddlewareAttachment,
 } from "../../tools/subtreeMiddleware";
+import { getStoredSubtreePolicy } from "../../definers/subtreePolicy";
 import type { StoreRegistry } from "../StoreRegistry";
 import type {
   DependencyValidationEntry,
@@ -104,7 +105,7 @@ export function collectMiddlewareVisibilityEntries(
       targetType: "Task middleware",
       targetIds: resolveSubtreeMiddlewareReferenceIds(
         registry,
-        resource.subtree?.tasks?.middleware ?? [],
+        getStoredSubtreePolicy(resource)?.tasks?.middleware ?? [],
         getSubtreeTaskMiddlewareAttachment,
       ),
     })),
@@ -114,7 +115,7 @@ export function collectMiddlewareVisibilityEntries(
       targetType: "Resource middleware",
       targetIds: resolveSubtreeMiddlewareReferenceIds(
         registry,
-        resource.subtree?.resources?.middleware ?? [],
+        getStoredSubtreePolicy(resource)?.resources?.middleware ?? [],
         getSubtreeResourceMiddlewareAttachment,
       ),
     })),

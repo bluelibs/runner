@@ -60,8 +60,8 @@ function createResourceBuilder<TConfig = void>(
     resultSchema: undefined,
     meta: undefined,
     overrides: undefined,
-    isolate: undefined,
-    subtree: undefined,
+    isolateDeclarations: undefined,
+    subtreeDeclarations: undefined,
   });
   return makeResourceBuilder(initial);
 }

@@ -104,3 +104,12 @@ export const symbolAsyncContext: unique symbol = Symbol.for(
 export const symbolIsolationSubtreeResource: unique symbol = Symbol.for(
   "runner.isolationSubtreeResource",
 );
+
+/** @internal Stores unresolved subtree declarations until resource config is known. */
+export const symbolResourceSubtreeDeclarations: unique symbol = Symbol.for(
+  "runner.resourceSubtreeDeclarations",
+);
+/** @internal Stores unresolved isolate declarations until resource config is known. */
+export const symbolResourceIsolateDeclarations: unique symbol = Symbol.for(
+  "runner.resourceIsolateDeclarations",
+);

@@ -357,6 +357,33 @@ describe("resource builder", () => {
     });
   });
 
+  it("supports config-driven isolate declarations", () => {
+    const publicTask = r
+      .task("tests-builder-policy-dynamic-public")
+      .run(async () => 1)
+      .build();
+
+    const built = r
+      .resource<{ visible: boolean }>("tests-builder-policy-dynamic-resource")
+      .isolate((config) => ({
+        exports: config.visible ? [publicTask] : "none",
+      }))
+      .init(async () => "ok")
+      .build();
+
+    expect(typeof built.isolate).toBe("function");
+    if (typeof built.isolate !== "function") {
+      return;
+    }
+
+    expect(built.isolate({ visible: true })).toEqual({
+      exports: [publicTask],
+    });
+    expect(built.isolate({ visible: false })).toEqual({
+      exports: "none",
+    });
+  });
+
   it("isolate throws immediately when deny and only would coexist (fail-fast)", () => {
     const onlyTask = r
       .task("tests-builder-policy-conflict-only")

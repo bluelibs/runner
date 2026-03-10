@@ -163,6 +163,12 @@ import { r } from "../../../";
 
   resourceAfterInit.build();
 
+  r.resource<{ strict: boolean }>("types-order-resource-dynamic-isolate")
+    .isolate((config) => ({
+      exports: config.strict ? "none" : [],
+    }))
+    .build();
+
   const resourceDepsLocked = r
     .resource("types-order-resource-locked-deps")
     .init(async () => "ok");

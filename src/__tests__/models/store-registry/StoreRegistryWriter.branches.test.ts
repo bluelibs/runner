@@ -38,7 +38,10 @@ describe("StoreRegistryWriter branches", () => {
         ownerResourceId: string,
         entry: unknown,
       ) => unknown;
-      normalizeResourceSubtreeMiddlewareAttachments: (resource: any) => unknown;
+      normalizeResourceSubtreeMiddlewareAttachments: (
+        resource: any,
+        config: unknown,
+      ) => unknown;
       normalizeDefinitionTags: (tags: unknown) => Array<{ id: string }>;
       didArrayChange: <T>(
         source: ReadonlyArray<T>,
@@ -161,7 +164,10 @@ describe("StoreRegistryWriter branches", () => {
     const { store } = createTestFixture();
     const registry = (store as unknown as { registry: any }).registry;
     const writer = registry.writer as {
-      normalizeResourceSubtreeMiddlewareAttachments: (resource: any) => unknown;
+      normalizeResourceSubtreeMiddlewareAttachments: (
+        resource: any,
+        config: unknown,
+      ) => unknown;
     };
     const middleware = defineResourceMiddleware({
       id: "localSubtreeMw",
@@ -178,6 +184,7 @@ describe("StoreRegistryWriter branches", () => {
     });
     const changed = writer.normalizeResourceSubtreeMiddlewareAttachments(
       changedResource,
+      {},
     ) as {
       resources?: { middleware?: Array<{ use: { id: string } }> };
     };
@@ -206,8 +213,10 @@ describe("StoreRegistryWriter branches", () => {
         },
       },
     });
-    const unchanged =
-      writer.normalizeResourceSubtreeMiddlewareAttachments(unchangedResource);
+    const unchanged = writer.normalizeResourceSubtreeMiddlewareAttachments(
+      unchangedResource,
+      {},
+    );
     const normalizedUnchanged = unchanged as ResourceSubtreeWithMiddlewareIds;
     expect(normalizedUnchanged.resources?.middleware?.[0]?.use.id).toBe(
       "app-owner.middleware.resource.absolute",
@@ -232,6 +241,7 @@ describe("StoreRegistryWriter branches", () => {
 
     const normalized = writer.normalizeResourceSubtreeMiddlewareAttachments(
       resource,
+      {},
     ) as {
       tasks?: { middleware?: Array<{ id: string }> };
       resources?: unknown;
@@ -377,7 +387,10 @@ describe("StoreRegistryWriter branches", () => {
     const { store } = createTestFixture();
     const registry = (store as unknown as { registry: any }).registry;
     const writer = registry.writer as {
-      normalizeResourceSubtreeMiddlewareAttachments: (resource: any) => unknown;
+      normalizeResourceSubtreeMiddlewareAttachments: (
+        resource: any,
+        config: unknown,
+      ) => unknown;
       normalizeSubtreeTaskMiddlewareEntry: (
         ownerResourceId: string,
         entry: unknown,
@@ -422,8 +435,8 @@ describe("StoreRegistryWriter branches", () => {
         resourceEntry,
       ),
     ).toBe(resourceEntry);
-    expect(writer.normalizeResourceSubtreeMiddlewareAttachments(resource)).toBe(
-      resource.subtree,
-    );
+    expect(
+      writer.normalizeResourceSubtreeMiddlewareAttachments(resource, {}),
+    ).toEqual(resource.subtree);
   });
 });

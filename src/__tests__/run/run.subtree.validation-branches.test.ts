@@ -169,4 +169,83 @@ describe("run subtree validation branches", () => {
     expect(message).toContain("validator exploded");
     expect(message).toContain("validator error object");
   });
+
+  it("runs generic and typed validators together for matching items", async () => {
+    const task = defineTask({
+      id: "tests-subtree-branches-typed-validator-task",
+      async run() {
+        return "ok";
+      },
+    });
+
+    const counts = {
+      generic: 0,
+      typed: 0,
+    };
+
+    const app = defineResource({
+      id: "tests-subtree-branches-typed-validator-app",
+      register: [task],
+      subtree: {
+        validate: (definition) => {
+          if (isTask(definition) && definition.id.endsWith(task.id)) {
+            counts.generic += 1;
+          }
+          return [];
+        },
+        tasks: {
+          validate: (definition) => {
+            if (definition.id.endsWith(task.id)) {
+              counts.typed += 1;
+            }
+            return [];
+          },
+        },
+      },
+      async init() {
+        return "ok";
+      },
+    });
+
+    await run(app);
+
+    expect(counts).toEqual({
+      generic: 2,
+      typed: 2,
+    });
+  });
+
+  it("resolves subtree callbacks against resource config", async () => {
+    const task = defineTask({
+      id: "tests-subtree-branches-dynamic-task",
+      async run() {
+        return "ok";
+      },
+    });
+
+    const app = defineResource({
+      id: "tests-subtree-branches-dynamic-app",
+      register: [task],
+      subtree: (config: { enabled: boolean }) => ({
+        tasks: {
+          validate: config.enabled
+            ? () => [
+                {
+                  code: "dynamic-task-check",
+                  message: "dynamic subtree validation fired",
+                },
+              ]
+            : [],
+        },
+      }),
+      async init() {
+        return "ok";
+      },
+    });
+
+    await expect(run(app.with({ enabled: false }))).resolves.toBeDefined();
+    await expect(run(app.with({ enabled: true }))).rejects.toMatchObject({
+      id: "runner.errors.subtreeValidationFailed",
+    });
+  });
 });

@@ -2,12 +2,12 @@ import type {
   DependencyMapType,
   IResourceDefinition,
   IResourceMeta,
+  IsolationPolicyDeclaration,
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
+  ResourceSubtreePolicyDeclaration,
   ResourceTagType,
-  IsolationPolicy,
-  NormalizedResourceSubtreePolicy,
   ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
@@ -100,8 +100,10 @@ export type BuilderState<
   meta?: TMeta;
   overrides?: Array<any>;
   throws?: ThrowsList;
-  isolate?: IsolationPolicy;
-  subtree?: NormalizedResourceSubtreePolicy;
+  isolateDeclarations?: ReadonlyArray<IsolationPolicyDeclaration<TConfig>>;
+  subtreeDeclarations?: ReadonlyArray<
+    ResourceSubtreePolicyDeclaration<TConfig>
+  >;
 }>;
 
 /**

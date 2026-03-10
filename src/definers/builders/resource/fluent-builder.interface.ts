@@ -5,12 +5,12 @@ import type {
   IResourceDefinition,
   IResourceMeta,
   IsolationExportsTarget,
-  IsolationPolicy,
+  IsolationPolicyInput,
   OverridableElements,
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
-  ResourceSubtreePolicy,
+  ResourceSubtreePolicyInput,
   ResourceTagType,
   SubtreePolicyOptions,
   TagType,
@@ -335,7 +335,7 @@ export interface ResourceFluentBuilderBeforeInit<
    * Multiple calls are additive.
    */
   isolate(
-    policy: IsolationPolicy,
+    policy: IsolationPolicyInput<TConfig>,
     options?: { override?: boolean },
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
@@ -348,7 +348,7 @@ export interface ResourceFluentBuilderBeforeInit<
   >;
 
   subtree(
-    policy: ResourceSubtreePolicy,
+    policy: ResourceSubtreePolicyInput<TConfig>,
     options?: SubtreePolicyOptions,
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
@@ -544,7 +544,7 @@ export interface ResourceFluentBuilderAfterInit<
     TMiddleware
   >;
   isolate(
-    policy: IsolationPolicy,
+    policy: IsolationPolicyInput<TConfig>,
     options?: { override?: boolean },
   ): ResourceFluentBuilderAfterInit<
     TConfig,
@@ -556,7 +556,7 @@ export interface ResourceFluentBuilderAfterInit<
     TMiddleware
   >;
   subtree(
-    policy: ResourceSubtreePolicy,
+    policy: ResourceSubtreePolicyInput<TConfig>,
     options?: SubtreePolicyOptions,
   ): ResourceFluentBuilderAfterInit<
     TConfig,

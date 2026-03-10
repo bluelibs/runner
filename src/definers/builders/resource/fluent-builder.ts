@@ -4,17 +4,21 @@ import type {
   IResourceDefinition,
   IResourceMeta,
   IsolationExportsTarget,
-  IsolationPolicy,
+  IsolationPolicyInput,
   OverridableElements,
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
-  ResourceSubtreePolicy,
+  ResourceSubtreePolicyInput,
   ResourceTagType,
   TagType,
   ValidationSchemaInput,
 } from "../../../defs";
-import { symbolFilePath } from "../../../defs";
+import {
+  symbolFilePath,
+  symbolResourceIsolateDeclarations,
+  symbolResourceSubtreeDeclarations,
+} from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { defineResource } from "../../defineResource";
@@ -25,8 +29,15 @@ import type {
 } from "./fluent-builder.interface";
 import type { BuilderState, ResolveConfig } from "./types";
 import { clone, mergeArray, mergeDependencies, mergeRegister } from "./utils";
-import { isolateConflictError } from "../../../errors";
-import { mergeResourceSubtreePolicy } from "../../subtreePolicy";
+import {
+  createDisplaySubtreePolicy,
+  mergeResourceSubtreeDeclarations,
+} from "../../subtreePolicy";
+import {
+  assertIsolationConflict,
+  createDisplayIsolatePolicy,
+  mergeIsolatePolicyDeclarations,
+} from "../../isolatePolicy";
 
 /**
  * Creates a ResourceFluentBuilder from the given state.
@@ -492,56 +503,34 @@ export function makeResourceBuilder<
     ) {
       return this.isolate({ exports: items }, options);
     },
-    isolate(policy: IsolationPolicy, options?: { override?: boolean }) {
-      // Merging rules: deny merges with deny, only merges with only.
-      // Fail fast here rather than deferring to bootstrap — mixing deny+only
-      // is always a programming error and catching it at the call-site gives a
-      // clearer stack trace and earlier feedback.
-      const existingDeny = state.isolate?.deny ?? [];
-      const existingOnly = state.isolate?.only ?? [];
-      const existingWhitelist = state.isolate?.whitelist ?? [];
-      const existingExports = state.isolate?.exports;
-      const merged: IsolationPolicy = {};
-      if (existingDeny.length > 0 || policy.deny) {
-        merged.deny = [...existingDeny, ...(policy.deny ?? [])];
-      }
-      if (existingOnly.length > 0 || policy.only) {
-        merged.only = [...existingOnly, ...(policy.only ?? [])];
-      }
-      if (existingWhitelist.length > 0 || policy.whitelist) {
-        merged.whitelist = [...existingWhitelist, ...(policy.whitelist ?? [])];
+    isolate(
+      policy: IsolationPolicyInput<TConfig>,
+      options?: { override?: boolean },
+    ) {
+      const existingDisplayPolicy = createDisplayIsolatePolicy(
+        state.isolateDeclarations,
+        state.id,
+      );
+
+      if (
+        typeof existingDisplayPolicy !== "function" &&
+        typeof policy !== "function"
+      ) {
+        assertIsolationConflict(
+          state.id,
+          existingDisplayPolicy,
+          policy,
+          options,
+        );
       }
 
-      // Both fields being set — even via separate chained .isolate() calls — is
-      // an invalid combination; throw immediately instead of waiting for bootstrap.
-      if (merged.deny !== undefined && merged.only !== undefined) {
-        isolateConflictError.throw({ policyResourceId: state.id });
-      }
-
-      if (policy.exports !== undefined) {
-        if (policy.exports === "none") {
-          merged.exports = "none";
-        } else if (Array.isArray(policy.exports)) {
-          const override = options?.override === true;
-          if (
-            override ||
-            existingExports === undefined ||
-            existingExports === "none"
-          ) {
-            merged.exports = [...policy.exports];
-          } else if (Array.isArray(existingExports)) {
-            merged.exports = [...existingExports, ...policy.exports];
-          } else {
-            merged.exports = [...policy.exports];
-          }
-        } else {
-          merged.exports = policy.exports;
-        }
-      } else if (existingExports !== undefined) {
-        merged.exports = existingExports;
-      }
-
-      const next = clone(state, { isolate: merged });
+      const next = clone(state, {
+        isolateDeclarations: mergeIsolatePolicyDeclarations(
+          state.isolateDeclarations,
+          policy,
+          options,
+        ),
+      });
       return makeResourceBuilder<
         TConfig,
         TValue,
@@ -553,9 +542,16 @@ export function makeResourceBuilder<
         THasInit
       >(next);
     },
-    subtree(policy: ResourceSubtreePolicy, options?: { override?: boolean }) {
+    subtree(
+      policy: ResourceSubtreePolicyInput<TConfig>,
+      options?: { override?: boolean },
+    ) {
       const next = clone(state, {
-        subtree: mergeResourceSubtreePolicy(state.subtree, policy, options),
+        subtreeDeclarations: mergeResourceSubtreeDeclarations(
+          state.subtreeDeclarations,
+          policy,
+          options,
+        ),
       });
       return makeResourceBuilder<
         TConfig,
@@ -597,8 +593,13 @@ export function makeResourceBuilder<
         meta: state.meta,
         overrides: state.overrides,
         throws: state.throws,
-        isolate: state.isolate,
-        subtree: state.subtree,
+        isolate: createDisplayIsolatePolicy(
+          state.isolateDeclarations,
+          state.id,
+        ),
+        subtree: createDisplaySubtreePolicy(state.subtreeDeclarations),
+        [symbolResourceIsolateDeclarations]: state.isolateDeclarations,
+        [symbolResourceSubtreeDeclarations]: state.subtreeDeclarations,
       };
       const resource = defineResource(definition);
       return deepFreeze({

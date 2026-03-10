@@ -1,4 +1,5 @@
 import { middlewareNotRegisteredError } from "../../errors";
+import { getStoredSubtreePolicy } from "../../definers/subtreePolicy";
 import {
   getSubtreeResourceMiddlewareAttachment,
   getSubtreeTaskMiddlewareAttachment,
@@ -49,7 +50,7 @@ function validateResourceMiddlewareAttachments(ctx: ValidatorContext): void {
 
 function validateSubtreeMiddlewareAttachments(ctx: ValidatorContext): void {
   for (const { resource: ownerResource } of ctx.registry.resources.values()) {
-    const subtreePolicy = ownerResource.subtree;
+    const subtreePolicy = getStoredSubtreePolicy(ownerResource);
     if (!subtreePolicy) {
       continue;
     }

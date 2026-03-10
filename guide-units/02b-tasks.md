@@ -121,7 +121,7 @@ const sendEmail = r
   .build();
 ```
 
-### ExecutionJournal
+### Execution Journal
 
 `ExecutionJournal` is typed state scoped to a single task execution.
 

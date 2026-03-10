@@ -186,6 +186,7 @@ const userContract = r.tag<void, InputType, OutputType>("userContract").build();
 const profileTask = r
   .task("getProfile")
   .tags([userContract])
+  // if you use .inputSchema it must be a superset of userInput contract tag, same with resultSchema
   .run(async (input) => ({ name: input.id + "Ada" }))
   .build();
 ```

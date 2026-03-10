@@ -27,8 +27,10 @@ export type {
 import {
   symbolFilePath,
   symbolForkedFrom,
+  symbolResourceIsolateDeclarations,
   symbolResource,
   symbolResourceRegistersChildren,
+  symbolResourceSubtreeDeclarations,
   symbolRuntimeId,
   symbolResourceWithConfig,
 } from "./symbols";
@@ -41,7 +43,8 @@ import {
 } from "./contracts";
 import type {
   NormalizedResourceSubtreePolicy,
-  ResourceSubtreePolicy,
+  ResourceSubtreePolicyDeclaration,
+  ResourceSubtreePolicyInput,
 } from "./subtree";
 
 export type {
@@ -58,13 +61,22 @@ export type { ResourceTagType, TagType } from "./tag";
 export type { IResourceMeta } from "./meta";
 export type {
   ResourceSubtreePolicy,
+  ResourceSubtreePolicyDeclaration,
+  ResourceSubtreePolicyInput,
   SubtreeElementValidator,
+  SubtreeEventValidator,
+  SubtreeHookValidator,
   SubtreeValidatableElement,
   SubtreeResourceMiddlewareEntry,
   SubtreeResourceMiddlewarePredicate,
+  SubtreeResourceMiddlewareValidator,
+  SubtreeResourceValidator,
   SubtreePolicyOptions,
+  SubtreeTagValidator,
   SubtreeTaskMiddlewareEntry,
   SubtreeTaskMiddlewarePredicate,
+  SubtreeTaskMiddlewareValidator,
+  SubtreeTaskValidator,
   SubtreeViolation,
 } from "./subtree";
 
@@ -170,6 +182,21 @@ export interface IsolationWhitelistEntry {
    */
   channels?: IsolationChannels;
 }
+
+export type IsolationPolicyResolver<TConfig = unknown> = (
+  config: TConfig,
+) => IsolationPolicy;
+
+export type IsolationPolicyInput<TConfig = unknown> =
+  | IsolationPolicy
+  | IsolationPolicyResolver<TConfig>;
+
+export type IsolationPolicyDeclaration<TConfig = unknown> = {
+  policy: IsolationPolicyInput<TConfig>;
+  options?: {
+    override?: boolean;
+  };
+};
 
 // Helper to detect `any` so we can treat it as "unspecified"
 export type IsAny<T> = 0 extends 1 & T ? true : false;
@@ -352,7 +379,7 @@ export interface IResourceDefinition<
    * Why: this provides a fail-fast dependency boundary that prevents accidental
    * cross-module wiring, even when visibility rules would otherwise allow it.
    */
-  isolate?: IsolationPolicy;
+  isolate?: IsolationPolicyInput<TConfig>;
   /**
    * This is optional and used from an index resource to get the correct caller.
    * This is the reason we allow it here as well.
@@ -361,7 +388,15 @@ export interface IResourceDefinition<
   /**
    * Declares subtree policies for tasks/resources registered under this resource.
    */
-  subtree?: ResourceSubtreePolicy;
+  subtree?: ResourceSubtreePolicyInput<TConfig>;
+  /** @internal Ordered subtree declarations preserved across builder composition. */
+  [symbolResourceSubtreeDeclarations]?: ReadonlyArray<
+    ResourceSubtreePolicyDeclaration<TConfig>
+  >;
+  /** @internal Ordered isolate declarations preserved across builder composition. */
+  [symbolResourceIsolateDeclarations]?: ReadonlyArray<
+    IsolationPolicyDeclaration<TConfig>
+  >;
   /**
    * When true, this resource acts as a namespace gateway and does not add its
    * own id prefix when compiling ids for items in its register tree.
@@ -461,11 +496,21 @@ export interface IResource<
   /**
    * Wiring isolation policy for this resource and its subtree.
    */
-  isolate?: IsolationPolicy;
+  isolate?: IsolationPolicyInput<TConfig>;
   /**
    * Normalized subtree policy declarations owned by this resource.
    */
-  subtree?: NormalizedResourceSubtreePolicy;
+  subtree?:
+    | ResourceSubtreePolicyInput<TConfig>
+    | NormalizedResourceSubtreePolicy;
+  /** @internal Ordered subtree declarations preserved across builder composition. */
+  [symbolResourceSubtreeDeclarations]?: ReadonlyArray<
+    ResourceSubtreePolicyDeclaration<TConfig>
+  >;
+  /** @internal Ordered isolate declarations preserved across builder composition. */
+  [symbolResourceIsolateDeclarations]?: ReadonlyArray<
+    IsolationPolicyDeclaration<TConfig>
+  >;
   /**
    * Namespace gateway flag copied from the definition.
    */

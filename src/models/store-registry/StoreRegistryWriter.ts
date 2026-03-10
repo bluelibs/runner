@@ -21,6 +21,8 @@ import {
   symbolEvent,
   symbolHook,
   symbolResource,
+  symbolResourceIsolateDeclarations,
+  symbolResourceSubtreeDeclarations,
   symbolResourceMiddleware,
   symbolResourceWithConfig,
   symbolTag,
@@ -41,6 +43,11 @@ import {
   getSubtreeTaskMiddlewareAttachment,
 } from "../../tools/subtreeMiddleware";
 import { isReservedDefinitionLocalName } from "../../definers/assertDefinitionId";
+import { resolveResourceSubtreeDeclarations } from "../../definers/subtreePolicy";
+import {
+  getDeprecatedExportsFromIsolation,
+  resolveIsolatePolicyDeclarations,
+} from "../../definers/isolatePolicy";
 
 type StoreRegistryCollections = {
   tasks: Map<string, TaskStoreElementType>;
@@ -326,6 +333,16 @@ export class StoreRegistryWriter {
       config: item.config,
       overrideTargetType: "Resource",
     });
+    prepared.isolate = resolveIsolatePolicyDeclarations(
+      prepared[symbolResourceIsolateDeclarations],
+      item.config,
+      prepared.id,
+    );
+    prepared.exports = getDeprecatedExportsFromIsolation(prepared.isolate);
+    prepared.subtree = this.normalizeResourceSubtreeMiddlewareAttachments(
+      prepared,
+      item.config,
+    );
 
     this.collections.resources.set(prepared.id, {
       resource: prepared,
@@ -647,9 +664,17 @@ export class StoreRegistryWriter {
       config: configForResource,
       overrideTargetType: "Resource",
     });
+    prepared.isolate = resolveIsolatePolicyDeclarations(
+      prepared[symbolResourceIsolateDeclarations],
+      configForResource,
+      prepared.id,
+    );
+    prepared.exports = getDeprecatedExportsFromIsolation(prepared.isolate);
     prepared.middleware = this.normalizeResourceMiddlewareAttachments(prepared);
-    prepared.subtree =
-      this.normalizeResourceSubtreeMiddlewareAttachments(prepared);
+    prepared.subtree = this.normalizeResourceSubtreeMiddlewareAttachments(
+      prepared,
+      configForResource as _C,
+    );
 
     this.collections.resources.set(prepared.id, {
       resource: prepared,
@@ -729,8 +754,12 @@ export class StoreRegistryWriter {
 
   private normalizeResourceSubtreeMiddlewareAttachments(
     resource: IResource<any, any, any>,
+    config: unknown,
   ): IResource<any, any, any>["subtree"] {
-    const subtree = resource.subtree;
+    const subtree = resolveResourceSubtreeDeclarations(
+      resource[symbolResourceSubtreeDeclarations],
+      config,
+    );
     if (!subtree) {
       return subtree;
     }

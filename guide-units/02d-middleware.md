@@ -72,32 +72,29 @@ const app = r
 
 Subtree rules:
 
-- `.subtree({ tasks/resources: { middleware: [...] } })` applies only to the declaring resource subtree
+Subtree validation is return-based. You can import `SubtreeViolation` from Runner, or return the same `{ code, message }` shape inline.
+
 - subtree middleware entries can be conditional with `{ use, when }`
 - subtree middleware resolves before local `.middleware([...])`
-- local attachment wins when the same middleware id appears both ways
-
-### Subtree Validation
-
-Subtree validation is return-based. The `SubtreeViolation` shape is your own\u2014Runner expects `{ code, message }` objects.
+  import { isTask, r, run } from "@bluelibs/runner";
+  import type { SubtreeViolation } from "@bluelibs/runner";
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
 type SubtreeViolation = {
-  code: string;
-  message: string;
-};
+    validate: (definition): SubtreeViolation[] => {
+      if (!isTask(definition) || definition.meta?.title) {
+        return [];
+      }
 
-const app = r
-  .resource("app")
-  .subtree({
-    tasks: {
-      validate: (taskDefinition): SubtreeViolation[] => {
-        if (taskDefinition.meta?.title) {
-          return [];
-        }
-        return [
+      return [
+        {
+          code: "missing-meta-title",
+          message: `Task "${definition.id}" must define meta.title`,
+        },
+      ];
+    },
           {
             code: "missing-meta-title",
             message: `Task "${taskDefinition.id}" must define meta.title`,
@@ -107,6 +104,7 @@ const app = r
     },
   })
   .build();
+- use exported type guards inside `subtree.validate(...)` when the policy only targets tasks, resources, events, hooks, tags, or middleware
 
 await run(app);
 ```

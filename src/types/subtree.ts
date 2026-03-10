@@ -26,7 +26,34 @@ export type SubtreeValidatableElement =
 
 export type SubtreeElementValidator = (
   element: SubtreeValidatableElement,
-  ownerResourceConfig: unknown,
+) => SubtreeViolation[];
+
+export type SubtreeTaskValidator = (
+  taskDefinition: ITask<any, any, any, any, any, any>,
+) => SubtreeViolation[];
+
+export type SubtreeResourceValidator = (
+  resourceDefinition: IResource<any, any, any, any, any, any, any>,
+) => SubtreeViolation[];
+
+export type SubtreeHookValidator = (
+  hookDefinition: IHook<any, any, any>,
+) => SubtreeViolation[];
+
+export type SubtreeEventValidator = (
+  eventDefinition: IEvent<any>,
+) => SubtreeViolation[];
+
+export type SubtreeTagValidator = (
+  tagDefinition: ITag<any, any, any, any>,
+) => SubtreeViolation[];
+
+export type SubtreeTaskMiddlewareValidator = (
+  middlewareDefinition: ITaskMiddleware<any, any, any, any>,
+) => SubtreeViolation[];
+
+export type SubtreeResourceMiddlewareValidator = (
+  middlewareDefinition: IResourceMiddleware<any, any, any, any>,
 ) => SubtreeViolation[];
 
 export type SubtreeTaskMiddlewarePredicate = (
@@ -53,34 +80,103 @@ export type SubtreeResourceMiddlewareEntry =
 
 export type ResourceSubtreeTaskPolicy = {
   middleware?: SubtreeTaskMiddlewareEntry[];
+  validate?: SubtreeTaskValidator | SubtreeTaskValidator[];
 };
 
 export type ResourceSubtreeResourcePolicy = {
   middleware?: SubtreeResourceMiddlewareEntry[];
+  validate?: SubtreeResourceValidator | SubtreeResourceValidator[];
+};
+
+export type ResourceSubtreeHookPolicy = {
+  validate?: SubtreeHookValidator | SubtreeHookValidator[];
+};
+
+export type ResourceSubtreeEventPolicy = {
+  validate?: SubtreeEventValidator | SubtreeEventValidator[];
+};
+
+export type ResourceSubtreeTagPolicy = {
+  validate?: SubtreeTagValidator | SubtreeTagValidator[];
+};
+
+export type ResourceSubtreeTaskMiddlewarePolicy = {
+  validate?: SubtreeTaskMiddlewareValidator | SubtreeTaskMiddlewareValidator[];
+};
+
+export type ResourceSubtreeResourceMiddlewarePolicy = {
+  validate?:
+    | SubtreeResourceMiddlewareValidator
+    | SubtreeResourceMiddlewareValidator[];
 };
 
 export type ResourceSubtreePolicy = {
   tasks?: ResourceSubtreeTaskPolicy;
   resources?: ResourceSubtreeResourcePolicy;
+  hooks?: ResourceSubtreeHookPolicy;
+  events?: ResourceSubtreeEventPolicy;
+  tags?: ResourceSubtreeTagPolicy;
+  taskMiddleware?: ResourceSubtreeTaskMiddlewarePolicy;
+  resourceMiddleware?: ResourceSubtreeResourceMiddlewarePolicy;
   validate?: SubtreeElementValidator | SubtreeElementValidator[];
 };
 
 export type NormalizedResourceSubtreeTaskPolicy = {
   middleware: SubtreeTaskMiddlewareEntry[];
+  validate?: SubtreeTaskValidator[];
 };
 
 export type NormalizedResourceSubtreeResourcePolicy = {
   middleware: SubtreeResourceMiddlewareEntry[];
+  validate?: SubtreeResourceValidator[];
+};
+
+export type NormalizedResourceSubtreeHookPolicy = {
+  validate?: SubtreeHookValidator[];
+};
+
+export type NormalizedResourceSubtreeEventPolicy = {
+  validate?: SubtreeEventValidator[];
+};
+
+export type NormalizedResourceSubtreeTagPolicy = {
+  validate?: SubtreeTagValidator[];
+};
+
+export type NormalizedResourceSubtreeTaskMiddlewarePolicy = {
+  validate?: SubtreeTaskMiddlewareValidator[];
+};
+
+export type NormalizedResourceSubtreeResourceMiddlewarePolicy = {
+  validate?: SubtreeResourceMiddlewareValidator[];
 };
 
 export type NormalizedResourceSubtreePolicy = {
   tasks?: NormalizedResourceSubtreeTaskPolicy;
   resources?: NormalizedResourceSubtreeResourcePolicy;
+  hooks?: NormalizedResourceSubtreeHookPolicy;
+  events?: NormalizedResourceSubtreeEventPolicy;
+  tags?: NormalizedResourceSubtreeTagPolicy;
+  taskMiddleware?: NormalizedResourceSubtreeTaskMiddlewarePolicy;
+  resourceMiddleware?: NormalizedResourceSubtreeResourceMiddlewarePolicy;
   validate?: SubtreeElementValidator[];
 };
 
 export type SubtreePolicyOptions = {
   override?: boolean;
+};
+
+export type ResourceSubtreePolicyResolver<TConfig = unknown> = (
+  config: TConfig,
+) => ResourceSubtreePolicy;
+
+export type ResourceSubtreePolicyInput<TConfig = unknown> =
+  | ResourceSubtreePolicy
+  | ResourceSubtreePolicyResolver<TConfig>;
+
+export type ResourceSubtreePolicyDeclaration<TConfig = unknown> = {
+  policy: ResourceSubtreePolicyInput<TConfig>;
+  options?: SubtreePolicyOptions;
 };
 
 export type SubtreeValidationTargetType =

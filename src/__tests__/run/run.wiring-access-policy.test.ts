@@ -413,6 +413,43 @@ describe("run-isolate", () => {
     await runtime.dispose();
   });
 
+  it("resolves isolate deny policies from resource config", async () => {
+    const deniedTask = defineTask({
+      id: "policy-dynamic-denied-task",
+      run: async () => "denied",
+    });
+
+    const consumer = defineTask({
+      id: "policy-dynamic-denied-consumer",
+      dependencies: { deniedTask },
+      run: async (_input, deps) => deps.deniedTask(),
+    });
+
+    const guarded = defineResource<{ strict: boolean }>({
+      id: "policy-dynamic-denied-resource",
+      register: [deniedTask, consumer],
+      isolate: (config) => ({
+        deny: config.strict ? [deniedTask] : [],
+      }),
+    });
+
+    const allowedApp = defineResource({
+      id: "policy-dynamic-denied-app-allowed",
+      register: [guarded.with({ strict: false })],
+    });
+
+    const allowedRuntime = await run(allowedApp);
+    await expect(allowedRuntime.runTask(consumer)).resolves.toBe("denied");
+    await allowedRuntime.dispose();
+
+    const blockedApp = defineResource({
+      id: "policy-dynamic-denied-app-blocked",
+      register: [guarded.with({ strict: true })],
+    });
+
+    await expectRunnerErrorId(run(blockedApp), POLICY_VIOLATION_ID);
+  });
+
   it("enforces policy checks for explicitly wired cron dependencies", async () => {
     const app = defineResource({
       id: "policy-internal-app",

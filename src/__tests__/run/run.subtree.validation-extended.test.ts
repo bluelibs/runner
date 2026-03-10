@@ -145,4 +145,90 @@ describe("subtree validation extended targets", () => {
       tag: true,
     });
   });
+
+  it("supports typed subtree validators for non-task/resource targets", async () => {
+    const policyTag = defineTag({
+      id: "tests-subtree-typed-tag",
+    });
+    const policyEvent = defineEvent({
+      id: "tests-subtree-typed-event",
+    });
+    const policyTaskMiddleware = defineTaskMiddleware({
+      id: "tests-subtree-typed-task-middleware",
+      run: async ({ next }) => next(),
+    });
+    const policyResourceMiddleware = defineResourceMiddleware({
+      id: "tests-subtree-typed-resource-middleware",
+      run: async ({ next }) => next(),
+    });
+    const policyHook = defineHook({
+      id: "tests-subtree-typed-hook",
+      on: policyEvent,
+      run: async () => undefined,
+    });
+
+    const calls = {
+      hook: 0,
+      event: 0,
+      tag: 0,
+      taskMiddleware: 0,
+      resourceMiddleware: 0,
+    };
+
+    const app = defineResource({
+      id: "tests-subtree-typed-app",
+      register: [
+        policyTag,
+        policyEvent,
+        policyTaskMiddleware,
+        policyResourceMiddleware,
+        policyHook,
+      ],
+      subtree: {
+        hooks: {
+          validate: () => {
+            calls.hook += 1;
+            return [];
+          },
+        },
+        events: {
+          validate: () => {
+            calls.event += 1;
+            return [];
+          },
+        },
+        tags: {
+          validate: () => {
+            calls.tag += 1;
+            return [];
+          },
+        },
+        taskMiddleware: {
+          validate: () => {
+            calls.taskMiddleware += 1;
+            return [];
+          },
+        },
+        resourceMiddleware: {
+          validate: () => {
+            calls.resourceMiddleware += 1;
+            return [];
+          },
+        },
+      },
+      async init() {
+        return "ok";
+      },
+    });
+
+    await run(app);
+
+    expect(calls).toEqual({
+      hook: 2,
+      event: 2,
+      tag: 2,
+      taskMiddleware: 2,
+      resourceMiddleware: 2,
+    });
+  });
 });

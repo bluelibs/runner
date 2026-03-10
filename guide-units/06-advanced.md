@@ -689,7 +689,7 @@ At runtime/store level, IDs become canonical:
 | Task Middleware     | `auth` -> `app.middleware.task.auth`               |
 | Resource Middleware | `audit` -> `app.middleware.resource.audit`         |
 | Tag                 | `public` -> `app.tags.public`                      |
-| Error               | `InvalidInput` -> `app.errors.InvalidInput`        |
+| Error               | `invalidInput` -> `app.errors.invalidInput`        |
 | Async Context       | `request` -> `app.ctx.request`                     |
 
 Important behavior:

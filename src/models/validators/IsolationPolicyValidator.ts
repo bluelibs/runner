@@ -24,6 +24,7 @@ import {
   classifyIsolationEntry,
   classifyScopeTarget,
 } from "../../tools/classifyIsolationEntry";
+import { getStoredIsolationPolicy } from "../../definers/isolatePolicy";
 import type { ValidatorContext } from "./ValidatorContext";
 
 /** Input for normalization functions */
@@ -39,7 +40,7 @@ export type NormalizationInput = {
  */
 export function validateIsolationPolicies(ctx: ValidatorContext): void {
   for (const { resource } of ctx.registry.resources.values()) {
-    const policy = resource.isolate;
+    const policy = getStoredIsolationPolicy(resource);
     if (!policy) {
       continue;
     }
