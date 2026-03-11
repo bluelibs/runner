@@ -663,4 +663,109 @@ describe("mergeResourceSubtreePolicy", () => {
       },
     });
   });
+
+  it("treats a static policy array like sequential subtree declarations", () => {
+    const firstValidator = jest.fn(() => []);
+    const secondValidator = jest.fn(() => []);
+
+    const declarations = mergeResourceSubtreeDeclarations(undefined, [
+      {
+        validate: [firstValidator],
+      },
+      {
+        hooks: {
+          validate: [secondValidator],
+        },
+      },
+    ]);
+
+    expect(resolveResourceSubtreeDeclarations(declarations, {})).toEqual({
+      hooks: {
+        validate: [secondValidator],
+      },
+      validate: [firstValidator],
+    });
+    expect(createDisplaySubtreePolicy(declarations)).toEqual({
+      hooks: {
+        validate: [secondValidator],
+      },
+      validate: [firstValidator],
+    });
+  });
+
+  it("applies override semantics to every policy in a static array", () => {
+    const firstValidator = jest.fn(() => []);
+    const secondValidator = jest.fn(() => []);
+
+    const declarations = mergeResourceSubtreeDeclarations(
+      mergeResourceSubtreeDeclarations(undefined, {
+        validate: [firstValidator],
+      }),
+      [
+        {
+          hooks: {},
+        },
+        {
+          validate: [secondValidator],
+        },
+      ],
+      { override: true },
+    );
+
+    expect(resolveResourceSubtreeDeclarations(declarations, {})).toEqual({
+      hooks: {},
+      validate: [secondValidator],
+    });
+  });
+
+  it("resolves config-driven policy arrays in declaration order", () => {
+    const firstValidator = jest.fn(() => []);
+    const secondValidator = jest.fn(() => []);
+
+    const declarations = mergeResourceSubtreeDeclarations(
+      undefined,
+      (config: { enabled: boolean }) => [
+        {
+          validate: [firstValidator],
+        },
+        {
+          tasks: {
+            middleware: [],
+            validate: config.enabled ? [secondValidator] : [],
+          },
+        },
+      ],
+    );
+
+    expect(
+      resolveResourceSubtreeDeclarations(declarations, { enabled: true }),
+    ).toEqual({
+      tasks: {
+        middleware: [],
+        validate: [secondValidator],
+      },
+      validate: [firstValidator],
+    });
+
+    const display = createDisplaySubtreePolicy(declarations);
+    expect(typeof display).toBe("function");
+    if (typeof display !== "function") {
+      return;
+    }
+
+    expect(display({ enabled: false })).toEqual({
+      tasks: {
+        middleware: [],
+        validate: [],
+      },
+      validate: [firstValidator],
+    });
+  });
+
+  it("accepts empty subtree policy arrays without throwing", () => {
+    const declarations = mergeResourceSubtreeDeclarations(undefined, []);
+
+    expect(resolveResourceSubtreeDeclarations(declarations, {})).toEqual({});
+    expect(createDisplaySubtreePolicy(declarations)).toEqual({});
+  });
 });

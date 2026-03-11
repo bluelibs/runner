@@ -2,6 +2,7 @@ import type {
   NormalizedResourceSubtreePolicy,
   ResourceSubtreePolicyDeclaration,
   ResourceSubtreePolicyInput,
+  ResourceSubtreePolicyList,
   ResourceSubtreePolicy,
   SubtreeElementValidator,
   SubtreeEventValidator,
@@ -205,6 +206,32 @@ export function normalizeResourceSubtreePolicy(
   return normalized;
 }
 
+function toSubtreePolicyArray(
+  policy: ResourceSubtreePolicyList | undefined,
+): ResourceSubtreePolicy[] {
+  if (policy === undefined) {
+    return [];
+  }
+
+  return Array.isArray(policy) ? [...policy] : [policy];
+}
+
+function mergeSubtreePolicyList(
+  existing: NormalizedResourceSubtreePolicy | undefined,
+  incoming: ResourceSubtreePolicyList | undefined,
+  options?: {
+    override?: boolean;
+  },
+): NormalizedResourceSubtreePolicy {
+  let merged = cloneNormalizedSubtreePolicy(existing);
+
+  for (const policy of toSubtreePolicyArray(incoming)) {
+    merged = mergeResourceSubtreePolicy(merged, policy, options);
+  }
+
+  return merged;
+}
+
 function mergeSubtreeMiddlewareBranch<
   TEntry,
   TValidator,
@@ -387,11 +414,11 @@ export function resolveResourceSubtreeDeclarations<TConfig>(
   let merged: NormalizedResourceSubtreePolicy | undefined;
 
   for (const declaration of declarations ?? []) {
-    const policy =
+    const policyList =
       typeof declaration.policy === "function"
         ? declaration.policy(config)
         : declaration.policy;
-    merged = mergeResourceSubtreePolicy(merged, policy, declaration.options);
+    merged = mergeSubtreePolicyList(merged, policyList, declaration.options);
   }
 
   return merged;
@@ -414,9 +441,9 @@ export function createDisplaySubtreePolicy<TConfig>(
     let merged: NormalizedResourceSubtreePolicy | undefined;
 
     for (const declaration of declarations) {
-      merged = mergeResourceSubtreePolicy(
+      merged = mergeSubtreePolicyList(
         merged,
-        declaration.policy as ResourceSubtreePolicy,
+        declaration.policy as ResourceSubtreePolicyList,
         declaration.options,
       );
     }
