@@ -237,6 +237,32 @@ describe("Temporal Middleware: Throttle", () => {
     await run(app);
   });
 
+  it("fails fast when throttle keyBuilder returns a non-string", async () => {
+    const task = defineTask({
+      id: "throttle-keyBuilder-invalid-return",
+      middleware: [
+        throttleTaskMiddleware.with({
+          ms: 50,
+          keyBuilder: () => Promise.resolve("invalid") as unknown as string,
+        }),
+      ],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "app-throttle-keyBuilder-invalid-return",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await expect(task()).rejects.toThrow(
+          'Temporal middleware keyBuilder must return a string for task "throttle-keyBuilder-invalid-return". Received object.',
+        );
+      },
+    });
+
+    await run(app);
+  });
+
   it("prunes idle keyed throttle state lazily once the keyed state map grows large", async () => {
     const config = { ms: 50 };
     const idleStates = new Map<string, ThrottleState>();

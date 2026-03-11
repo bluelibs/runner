@@ -191,6 +191,32 @@ describe("Temporal Middleware: Debounce", () => {
     await run(app);
   });
 
+  it("fails fast when debounce keyBuilder returns a non-string", async () => {
+    const task = defineTask({
+      id: "debounce-keyBuilder-invalid-return",
+      middleware: [
+        debounceTaskMiddleware.with({
+          ms: 50,
+          keyBuilder: () => ({ invalid: true }) as unknown as string,
+        }),
+      ],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "app-keyBuilder-invalid-return",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await expect(task()).rejects.toThrow(
+          'Temporal middleware keyBuilder must return a string for task "debounce-keyBuilder-invalid-return". Received object.',
+        );
+      },
+    });
+
+    await run(app);
+  });
+
   it("should handle errors in debounced task", async () => {
     jest.useFakeTimers();
     let callCount = 0;

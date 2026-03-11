@@ -1,6 +1,7 @@
 import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
+import { createMessageError } from "../../errors";
 import { globalTags } from "../globalTags";
 import { middlewareTemporalDisposedError } from "../../errors";
 import { Match } from "../../tools/check";
@@ -34,6 +35,22 @@ function createTemporalDisposedError() {
   return middlewareTemporalDisposedError.new({
     message: TEMPORAL_DISPOSED_ERROR_MESSAGE,
   });
+}
+
+function buildTemporalMiddlewareKey(
+  config: TemporalMiddlewareConfig,
+  taskId: string,
+  input: unknown,
+): string {
+  const key = (config.keyBuilder ?? defaultTaskKeyBuilder)(taskId, input);
+
+  if (typeof key !== "string") {
+    throw createMessageError(
+      `Temporal middleware keyBuilder must return a string for task "${taskId}". Received ${typeof key}.`,
+    );
+  }
+
+  return key;
 }
 
 function getDebounceStatesForConfig(
@@ -124,10 +141,7 @@ export const debounceTaskMiddleware = defineTaskMiddleware(
       }
 
       const taskId = task.definition.id;
-      const key = (config.keyBuilder ?? defaultTaskKeyBuilder)(
-        taskId,
-        task.input,
-      );
+      const key = buildTemporalMiddlewareKey(config, taskId, task.input);
       const debounceStates = getDebounceStatesForConfig(state, config);
       const trackedDebounceStates = state.trackedDebounceStates;
       let debounceState = debounceStates.get(key);
@@ -202,10 +216,7 @@ export const throttleTaskMiddleware = defineTaskMiddleware(
       }
 
       const taskId = task.definition.id;
-      const key = (config.keyBuilder ?? defaultTaskKeyBuilder)(
-        taskId,
-        task.input,
-      );
+      const key = buildTemporalMiddlewareKey(config, taskId, task.input);
       const throttleStates = getThrottleStatesForConfig(state, config);
       const trackedThrottleStates = state.trackedThrottleStates;
       pruneIdleThrottleStates(
