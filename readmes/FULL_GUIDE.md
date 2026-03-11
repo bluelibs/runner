@@ -5619,7 +5619,7 @@ The function pattern essentially gives you "just-in-time" dependency resolution 
 
 Separate two different problems:
 
-- **Declared dependency cycles** in Runner's graph are rejected during bootstrap. If `resourceA -> taskA -> taskB -> resourceA` is expressed through `.dependencies(...)`, `run(app)` fails fast before startup completes.
+- **Declared dependency cycles** in Runner's graph are rejected during bootstrap. If `resourceA -> taskA -> taskB -> resourceA` is expressed through `.dependencies(...)` + `.middleware(...)`, `run(app)` fails fast before startup completes.
 - **Execution cycles** created dynamically at runtime are different. For example `taskA -> emit(eventA) -> hookA -> taskB -> taskA` is not a declared dependency cycle, so bootstrap can succeed. To guard those dynamic event/task re-entry loops, enable `executionContext` cycle detection. This protection is Node-only because it depends on `AsyncLocalStorage`.
 
 Sometimes you'll run into circular type dependencies because of your file structure, not because of a real Runner dependency cycle. TypeScript struggles with these, but there's a way to handle it gracefully.
@@ -5717,7 +5717,7 @@ This pattern allows you to maintain clean, type-safe code while handling the ine
 
 Runner has more than one kind of cycle protection, and they trigger at different times:
 
-- **Dependency graph validation** happens during `run(app)`. Declared `.dependencies(...)` cycles across resources, tasks, hooks, and middleware fail fast before the runtime starts.
+- **Dependency graph validation** happens during `run(app)`. Declared `.dependencies(...)` (middleware-aware too) cycles across resources, tasks, hooks, and middleware fail fast before the runtime starts.
 - **Event emission graph validation** also happens during `run(app)`. It catches declared event-to-event bounce graphs that hooks create through their listened events and event dependencies.
 - **Execution context cycle detection** happens while work is running. Use `run(app, { executionContext: true })` when you want protection against dynamic loops such as `task -> event -> hook -> task` or repeated event re-entry that is not visible as a declared dependency edge.
 
@@ -5726,12 +5726,6 @@ const runtime = await run(app, {
   executionContext: true,
 });
 ```
-
-Notes:
-
-- `executionContext` is available only on Node-capable platforms because it requires `AsyncLocalStorage`.
-- If you only want correlation ids and tracing, but not cycle rejection, use `executionContext: { cycleDetection: false }`.
-- If you want protection against dynamic event cycles, leave cycle detection enabled.
 ## Testing
 
 Runner's explicit dependency injection makes testing straightforward. Call `.run()` on a task with plain mocks for fast unit tests, or spin up the full runtime when you need middleware and lifecycle behavior.
