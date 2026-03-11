@@ -1,9 +1,8 @@
 import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
-import { createMessageError } from "../../errors";
 import { globalTags } from "../globalTags";
-import { middlewareTemporalDisposedError } from "../../errors";
+import { middlewareTemporalDisposedError, validationError } from "../../errors";
 import { Match } from "../../tools/check";
 import {
   defaultTaskKeyBuilder,
@@ -45,9 +44,11 @@ function buildTemporalMiddlewareKey(
   const key = (config.keyBuilder ?? defaultTaskKeyBuilder)(taskId, input);
 
   if (typeof key !== "string") {
-    throw createMessageError(
-      `Temporal middleware keyBuilder must return a string for task "${taskId}". Received ${typeof key}.`,
-    );
+    validationError.throw({
+      subject: "Middleware config",
+      id: taskId,
+      originalError: `Temporal middleware keyBuilder must return a string. Received ${typeof key}.`,
+    });
   }
 
   return key;

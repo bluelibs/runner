@@ -255,7 +255,7 @@ describe("Temporal Middleware: Throttle", () => {
       dependencies: { task },
       async init(_, { task }) {
         await expect(task()).rejects.toThrow(
-          'Temporal middleware keyBuilder must return a string for task "throttle-keyBuilder-invalid-return". Received object.',
+          "Middleware config validation failed for throttle-keyBuilder-invalid-return: Temporal middleware keyBuilder must return a string. Received object.",
         );
       },
     });

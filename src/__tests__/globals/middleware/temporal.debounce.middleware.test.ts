@@ -209,7 +209,7 @@ describe("Temporal Middleware: Debounce", () => {
       dependencies: { task },
       async init(_, { task }) {
         await expect(task()).rejects.toThrow(
-          'Temporal middleware keyBuilder must return a string for task "debounce-keyBuilder-invalid-return". Received object.',
+          "Middleware config validation failed for debounce-keyBuilder-invalid-return: Temporal middleware keyBuilder must return a string. Received object.",
         );
       },
     });
