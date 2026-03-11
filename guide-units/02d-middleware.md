@@ -152,17 +152,17 @@ If you use multiple contract middleware, their contracts combine.
 
 Runner ships with built-in middleware for common reliability concerns:
 
-| Middleware     | Config                                    | Notes                                                         |
-| -------------- | ----------------------------------------- | ------------------------------------------------------------- |
-| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | requires `resources.cache`; Node exposes `redisCacheProvider` |
-| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                   |
-| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                         |
-| debounce       | `{ ms }`                                  | runs only after inactivity                                    |
-| throttle       | `{ ms }`                                  | runs at most once per window                                  |
-| fallback       | `{ fallback }`                            | static value, function, or task fallback                      |
-| rateLimit      | `{ windowMs, max }`                       | fixed-window admission limit per instance                     |
-| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                    |
-| timeout        | `{ ttl }`                                 | aborts long-running executions via AbortController            |
+| Middleware     | Config                                    | Notes                                                                     |
+| -------------- | ----------------------------------------- | ------------------------------------------------------------------------- |
+| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; customize with `resources.cache.with(...)`   |
+| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                               |
+| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                     |
+| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key   |
+| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends       |
+| fallback       | `{ fallback }`                            | static value, function, or task fallback                                  |
+| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, for cases like "50 per second"      |
+| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                |
+| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal`  |
 
 Resource equivalents:
 
@@ -173,7 +173,7 @@ Recommended ordering:
 
 - fallback outermost
 - timeout inside retry when you want per-attempt budgets
-- rate-limit for admission
+- rate-limit for admission control such as "max 50 calls per second"
 - concurrency for in-flight control
 - cache for idempotent reads
 
@@ -215,6 +215,10 @@ const getUser = r
   })
   .build();
 ```
+
+> **Note:** `throttle` and `debounce` shape bursty traffic, but they do not express quotas like "50 calls per second". Use `rateLimit` for that kind of policy.
+
+> **Note:** `rateLimit`, `debounce`, and `throttle` all default to partitioning by `taskId`. Provide `keyBuilder(taskId, input)` when you want per-user, per-tenant, or per-IP behavior. If that key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
 
 ### Global Interception
 

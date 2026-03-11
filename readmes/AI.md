@@ -401,17 +401,17 @@ const installer = r
 
 Runner ships with these resilience-focused built-ins.
 
-| Middleware     | Config                                    | Notes                                                         |
-| -------------- | ----------------------------------------- | ------------------------------------------------------------- |
-| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | requires `resources.cache`; Node exposes `redisCacheProvider` |
-| concurrency    | `{ limit, key?, semaphore? }`             | limits executions; share concurrency logic via `semaphore`    |
-| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, fails fast until recovery               |
-| debounce       | `{ ms }`                                  | runs only after inactivity                                    |
-| throttle       | `{ ms }`                                  | max once per `ms`                                             |
-| fallback       | `{ fallback }`                            | static value, function, or task fallback                      |
-| rateLimit      | `{ windowMs, max }`                       | fixed-window limit per instance                               |
-| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                    |
-| timeout        | `{ ttl }`                                 | aborts long-running executions via AbortController            |
+| Middleware     | Config                                    | Notes                                                                     |
+| -------------- | ----------------------------------------- | ------------------------------------------------------------------------- |
+| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; customize with `resources.cache.with(...)`   |
+| concurrency    | `{ limit, key?, semaphore? }`             | limits executions; share concurrency logic via `semaphore`                |
+| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, fails fast until recovery                           |
+| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key   |
+| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends       |
+| fallback       | `{ fallback }`                            | static value, function, or task fallback                                  |
+| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, eg "50 per second"                  |
+| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                |
+| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal`  |
 
 Resource: `middleware.resource.retry`, `middleware.resource.timeout` (same semantics).
 Non-resilience: `middleware.task.requireContext.with({ context })` — enforces async context.
@@ -421,10 +421,12 @@ Non-resilience: `middleware.task.requireContext.with({ context })` — enforces 
 r.task("cached").middleware([middleware.task.cache.with({ ttl: 60_000 })]).run(...).build();
 r.task("fallback-retry").middleware([middleware.task.fallback.with({fallback:"default"}), middleware.task.retry.with({retries:3})]).run(...).build();
 r.task("ratelimit-concurrency").middleware([middleware.task.rateLimit.with({windowMs:60_000,max:10}), middleware.task.concurrency.with({limit:5})]).run(...).build();
+r.task("ratelimit-ip").middleware([middleware.task.rateLimit.with({windowMs:1_000,max:50,keyBuilder:() => RequestContext.use().ip})]).run(...).build();
 ```
 
 **Order:** fallback (outermost) → timeout (inside retry if per-attempt budgets needed) → others.
-**Use:** rate-limit for admission, concurrency for in-flight, circuit-breaker for fail-fast, cache for idempotent reads, debounce/throttle for bursty calls.
+**Use:** rate-limit for quotas like "50/s", concurrency for in-flight, circuit-breaker for fail-fast, cache for idempotent reads, debounce/throttle for burst shaping.
+**Partitioning:** `rateLimit`, `debounce`, and `throttle` default to `taskId`; pass `keyBuilder(taskId, input)` to partition by async-context values, user ids, tenants, or similar keys.
 
 Built-in journal keys exist for middleware introspection:
 

@@ -7,6 +7,10 @@ import { RunnerError } from "../../definers/defineError";
 import { middlewareRateLimitExceededError, RunnerErrorId } from "../../errors";
 import { Match } from "../../tools/check";
 import { symbolDefinitionIdentity } from "../../types/symbols";
+import {
+  defaultTaskKeyBuilder,
+  type MiddlewareKeyBuilder,
+} from "./keyBuilder.shared";
 
 export interface RateLimitMiddlewareConfig {
   /**
@@ -17,11 +21,17 @@ export interface RateLimitMiddlewareConfig {
    * Maximum number of requests within the window
    */
   max: number;
+  /**
+   * Builds the partition key used to isolate fixed-window counters.
+   * Defaults to the task id.
+   */
+  keyBuilder?: MiddlewareKeyBuilder;
 }
 
 const rateLimitConfigPattern = Match.ObjectIncluding({
   windowMs: Match.PositiveInteger,
   max: Match.PositiveInteger,
+  keyBuilder: Match.Optional(Function),
 });
 
 /**
@@ -44,6 +54,8 @@ export interface RateLimitState {
   count: number;
   resetTime: number;
 }
+
+const RATE_LIMIT_STATE_PRUNE_THRESHOLD = 1_000;
 
 /**
  * Journal keys exposed by the rate limit middleware.
@@ -70,11 +82,29 @@ export const rateLimitResource = defineResource(
     tags: [globalTags.system],
     init: async () => {
       return {
-        states: new WeakMap<RateLimitMiddlewareConfig, RateLimitState>(),
+        states: new WeakMap<
+          RateLimitMiddlewareConfig,
+          Map<string, RateLimitState>
+        >(),
       };
     },
   }),
 );
+
+function pruneExpiredRateLimitStates(
+  keyedStates: Map<string, RateLimitState>,
+  now: number,
+) {
+  if (keyedStates.size < RATE_LIMIT_STATE_PRUNE_THRESHOLD) {
+    return;
+  }
+
+  for (const [key, keyedState] of keyedStates) {
+    if (now >= keyedState.resetTime) {
+      keyedStates.delete(key);
+    }
+  }
+}
 
 /**
  * Rate limit middleware: limits the number of executions within a fixed time window.
@@ -90,16 +120,28 @@ export const rateLimitTaskMiddleware = defineTaskMiddleware(
       { state },
       config: RateLimitMiddlewareConfig,
     ) {
+      const taskId = task.definition.id;
+      const keyBuilder = config.keyBuilder ?? defaultTaskKeyBuilder;
+      const key = keyBuilder(taskId, task.input);
       const { states } = state;
-      let limitState = states.get(config);
       const now = Date.now();
+      let keyedStates = states.get(config);
+
+      if (!keyedStates) {
+        keyedStates = new Map<string, RateLimitState>();
+        states.set(config, keyedStates);
+      }
+
+      pruneExpiredRateLimitStates(keyedStates, now);
+
+      let limitState = keyedStates.get(key);
 
       if (!limitState || now >= limitState.resetTime) {
         limitState = {
           count: 0,
           resetTime: now + config.windowMs,
         };
-        states.set(config, limitState);
+        keyedStates.set(key, limitState);
       }
 
       // Set journal values before checking limits
