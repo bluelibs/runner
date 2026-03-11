@@ -221,11 +221,12 @@ They are Runner's main composition and ownership unit: a resource can register c
 - `health(value, config, deps, context)` is an optional async probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.
   Return `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
 - Config-only resources can omit `.init()` — their resolved value is `undefined`; they are used purely for configuration access and registration.
-- `r.resource(id, { gateway: true })` prevents the resource from adding its own namespace segment.
-- Gateway resources may be passed directly to `run(...)` only when they directly register non-gateway resources exclusively.
-- Direct root-gateway registration of tasks, events, hooks, middleware, tags, errors, async contexts, or other gateway resources fails fast.
+- `r.resource(id, { gateway: true })` makes the resource structurally transparent for descendant ids.
+- Gateways may directly register only resources, including nested gateways, and may be passed to `run(...)` only when that rule is satisfied.
+- Nested gateways keep a gateway-only ancestry for their own resource ids, such as `gateway-a.gateway-b`, but descendant task/event/middleware/error/tag ids still skip gateway segments.
+- Direct gateway registration of tasks, events, hooks, middleware, tags, errors, or async contexts fails fast.
 - If you register something, you are a non-leaf resource.
-- resources that register things cannot be forked.
+- Non-leaf resources cannot be forked.
 - Gateway resources cannot be forked with `.fork()` because multiple gateway instances would compile the same child canonical ids.
 - `.context(() => initialContext)` can hold mutable resource-local state used across lifecycle phases.
 

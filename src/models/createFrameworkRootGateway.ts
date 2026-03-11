@@ -13,7 +13,7 @@ import {
 
 export const FRAMEWORK_RUNNER_RESOURCE_ID = "runner";
 export const FRAMEWORK_SYSTEM_RESOURCE_ID = "system";
-const FRAMEWORK_ROOT_GATEWAY_ID = "runtime-framework-root";
+export const FRAMEWORK_ROOT_GATEWAY_ID = "runtime-framework-root";
 
 type FrameworkRootInput = {
   rootItem: IResource<any, any, any, any, any> | IResourceWithConfig<any, any>;

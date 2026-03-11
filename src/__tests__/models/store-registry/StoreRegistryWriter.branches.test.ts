@@ -5,7 +5,9 @@ import {
   defineTask,
   defineTaskMiddleware,
 } from "../../../define";
+import type { IResource } from "../../../defs";
 import { defineError } from "../../../definers/defineError";
+import { RunnerErrorId } from "../../../errors";
 import { createTestFixture } from "../../test-utils";
 
 describe("StoreRegistryWriter branches", () => {
@@ -28,6 +30,7 @@ describe("StoreRegistryWriter branches", () => {
         ownerIsGateway: boolean,
         kind: string,
         currentId: string,
+        childIsGateway?: boolean,
       ) => string;
       normalizeTaskMiddlewareAttachments: (task: any) => unknown;
       normalizeSubtreeTaskMiddlewareEntry: (
@@ -48,6 +51,10 @@ describe("StoreRegistryWriter branches", () => {
         next: ReadonlyArray<T>,
       ) => boolean;
       resolveOwnerResourceIdFromTaskId: (taskId: string) => string | null;
+      computeRegistrationDeeply: <C>(
+        element: IResource<C, any, any, any, any>,
+        config?: C,
+      ) => void;
     };
   };
 
@@ -65,12 +72,19 @@ describe("StoreRegistryWriter branches", () => {
     ).toBe("app.item");
   });
 
-  it("keeps gateway resources unchanged and prefixes other gateway-owned definitions", () => {
+  it("keeps first-level gateways local and accumulates gateway-only ancestry for nested gateways", () => {
     const writer = getWriter();
     const gatewayResource = defineResource({
       id: "child",
+      gateway: true,
+    });
+    const nonGatewayResource = defineResource({
+      id: "leaf",
     });
 
+    expect(
+      writer.compileOwnedDefinition("app", false, gatewayResource, "resource"),
+    ).toBe(gatewayResource);
     expect(
       writer.compileOwnedDefinition(
         "gateway",
@@ -78,11 +92,25 @@ describe("StoreRegistryWriter branches", () => {
         gatewayResource,
         "resource",
       ),
-    ).toBe(gatewayResource);
+    ).toEqual(expect.objectContaining({ id: "gateway.child" }));
+    expect(
+      writer.compileOwnedDefinition(
+        "gateway",
+        true,
+        nonGatewayResource,
+        "resource",
+      ),
+    ).toBe(nonGatewayResource);
 
     expect(
-      writer.computeCanonicalId("gateway", true, "resource", "child"),
+      writer.computeCanonicalId("app", false, "resource", "child", true),
     ).toBe("child");
+    expect(
+      writer.computeCanonicalId("gateway", true, "resource", "child", true),
+    ).toBe("gateway.child");
+    expect(
+      writer.computeCanonicalId("gateway", true, "resource", "leaf", false),
+    ).toBe("leaf");
     expect(writer.computeCanonicalId("gateway", true, "task", "child")).toBe(
       "tasks.child",
     );
@@ -110,6 +138,71 @@ describe("StoreRegistryWriter branches", () => {
     expect(writer.computeCanonicalId("gateway", true, "unknown", "child")).toBe(
       "child",
     );
+  });
+
+  it("allows gateway resources to directly register both gateway and non-gateway resources", () => {
+    const writer = getWriter();
+    const leaf = defineResource({
+      id: "gateway-leaf",
+    });
+    const nestedGateway = defineResource({
+      id: "gateway-nested",
+      gateway: true,
+      register: [leaf],
+    });
+    const rootGateway = defineResource({
+      id: "gateway-root",
+      gateway: true,
+      register: [nestedGateway],
+    });
+
+    expect(() => writer.computeRegistrationDeeply(rootGateway)).not.toThrow();
+  });
+
+  it("fails fast when a gateway directly registers a task", () => {
+    const writer = getWriter();
+    const task = defineTask({
+      id: "gateway-invalid-task",
+      run: async () => "ok",
+    });
+    const gateway = defineResource({
+      id: "gateway-invalid-root",
+      gateway: true,
+      register: [task],
+    });
+
+    try {
+      writer.computeRegistrationDeeply(gateway);
+      fail("Expected gateway validation to throw");
+    } catch (error) {
+      expect((error as { id?: string }).id).toBe(
+        RunnerErrorId.ResourceGatewayInvalidContents,
+      );
+      expect((error as { message?: string }).message).toContain(
+        'Task "gateway-invalid-task"',
+      );
+    }
+  });
+
+  it("renders unknown gateway direct registrations with a safe fallback id", () => {
+    const writer = getWriter();
+    const gateway = defineResource({
+      id: "gateway-invalid-unknown-root",
+      gateway: true,
+      register: [{ nope: true } as never],
+    });
+
+    try {
+      writer.computeRegistrationDeeply(gateway);
+      fail("Expected gateway validation to throw");
+    } catch (error) {
+      expect((error as { id?: string }).id).toBe(
+        RunnerErrorId.ResourceGatewayInvalidContents,
+      );
+      expect((error as { message?: string }).message).toContain(
+        'Unknown registration "<unknown>"',
+      );
+    }
   });
 
   it("fails fast on empty and reserved local names", () => {

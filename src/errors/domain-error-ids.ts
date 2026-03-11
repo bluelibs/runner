@@ -19,7 +19,7 @@ export enum RunnerErrorId {
   RpcLaneExposureOwnerInvalid = "runner.errors.rpcLane.exposureOwnerInvalid",
   ResourceForkNonLeafUnsupported = "runner.errors.resourceFork.nonLeafUnsupported",
   ResourceForkGatewayUnsupported = "runner.errors.resourceFork.gatewayUnsupported",
-  RunRootGatewayUnsupported = "runner.errors.run.rootGatewayUnsupported",
+  ResourceGatewayInvalidContents = "runner.errors.resource.gatewayInvalidContents",
   BuilderInvalidHttpCode = "runner.errors.builder.invalidHttpCode",
   OverrideUnsupportedBase = "runner.errors.override.unsupportedBase",
   OverrideDefinitionRequired = "runner.errors.overrideDefinitionRequired",

@@ -101,6 +101,29 @@ describe("Store", () => {
     expect(store.resources.has("root")).toBe(true);
   });
 
+  it("should allow gateway roots when direct registrations resolve only to resources", () => {
+    const child = defineResource({
+      id: "store-root-gateway-valid-child",
+      init: async () => "child",
+    });
+    const nestedGateway = defineResource({
+      id: "store-root-gateway-valid-nested",
+      gateway: true,
+      register: [child],
+    });
+    const rootGateway = defineResource<{ enabled: boolean }>({
+      id: "store-root-gateway-valid-root",
+      gateway: true,
+      configSchema: { enabled: Boolean },
+      register: ({ enabled }) => (enabled ? [nestedGateway] : []),
+    });
+
+    expect(() =>
+      store.initializeStore(rootGateway, { enabled: true }, runtimeResult),
+    ).not.toThrow();
+    expect(store.root.resource.id).toBe(rootGateway.id);
+  });
+
   it("should lock the store and prevent modifications", () => {
     store.lock();
     expect(store.isLocked).toBe(true);

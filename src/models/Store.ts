@@ -1,7 +1,7 @@
 import {
   IResource,
-  RegisterableItems,
   ITag,
+  RegisterableItems,
   TagDependencyAccessor,
 } from "../defs";
 import { findCircularDependencies } from "./utils/findCircularDependencies";

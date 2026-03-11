@@ -385,16 +385,25 @@ export const resourceForkGatewayUnsupportedError = error<
   )
   .build();
 
-export const runRootGatewayUnsupportedError = error<
-  { id: string } & DefaultErrorType
->(RunnerErrorId.RunRootGatewayUnsupported)
-  .format(
-    ({ id }) =>
-      `Resource "${id}" cannot be passed to run() because gateway resources are structural-only.`,
-  )
+export const resourceGatewayInvalidContentsError = error<
+  {
+    id: string;
+    invalidEntries: ReadonlyArray<{
+      kind: string;
+      id: string;
+    }>;
+  } & DefaultErrorType
+>(RunnerErrorId.ResourceGatewayInvalidContents)
+  .format(({ id, invalidEntries }) => {
+    const renderedEntries = invalidEntries
+      .map((entry) => `${entry.kind} "${entry.id}"`)
+      .join(", ");
+
+    return `Gateway resource "${id}" can only directly register resources. Invalid direct registrations: ${renderedEntries}.`;
+  })
   .remediation(
     ({ id }) =>
-      `Wrap gateway resource "${id}" in a distinct non-gateway root resource, then call run(root) instead.`,
+      `Wrap direct tasks, events, hooks, middleware, tags, errors, or async contexts inside a non-gateway child resource before registering gateway resource "${id}". Gateway resources may directly register only gateway or non-gateway resources.`,
   )
   .build();
 

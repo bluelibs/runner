@@ -27,7 +27,7 @@ import {
   remoteLaneAuthVerifierMissingError,
   resourceForkGatewayUnsupportedError,
   resourceForkNonLeafUnsupportedError,
-  runRootGatewayUnsupportedError,
+  resourceGatewayInvalidContentsError,
 } from "../../errors";
 
 describe("error helpers extra branches", () => {
@@ -296,17 +296,25 @@ describe("error helpers extra branches", () => {
       }
     });
 
-    it("includes root-wrapper remediation for gateway run failures", () => {
+    it("includes invalid-entry details for gateway registration failures", () => {
       expect.assertions(3);
       try {
-        runRootGatewayUnsupportedError.throw({ id: "http-gateway" });
+        resourceGatewayInvalidContentsError.throw({
+          id: "http-gateway",
+          invalidEntries: [
+            { kind: "Task", id: "ping" },
+            { kind: "Resource middleware", id: "middleware.http.guard" },
+          ],
+        });
         fail("Expected throw");
       } catch (e: any) {
         expect(e.message).toContain(
-          'Resource "http-gateway" cannot be passed to run()',
+          'Gateway resource "http-gateway" can only directly register resources',
         );
-        expect(e.message).toContain("structural-only");
-        expect(e.remediation).toContain("non-gateway root resource");
+        expect(e.message).toContain('Task "ping"');
+        expect(e.remediation).toContain(
+          "Wrap direct tasks, events, hooks, middleware, tags, errors, or async contexts inside a non-gateway child resource",
+        );
       }
     });
 

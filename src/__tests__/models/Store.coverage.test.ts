@@ -50,6 +50,51 @@ describe("Store coverage", () => {
     );
   });
 
+  it("keeps gateway public ids on their gateway-only ancestry channel", () => {
+    const { store } = createTestFixture();
+    const registry = (store as unknown as { registry: any }).registry;
+    const nestedGateway = {
+      id: "ignored-gateway",
+      [symbolRuntimeId]: "gateway-x.gateway-y",
+    };
+    const rootGateway = {
+      id: "ignored-root-gateway",
+      [symbolRuntimeId]: "runtime-framework-root.gateway-x",
+    };
+
+    jest.spyOn(store.resources, "get").mockImplementation((resourceId) => {
+      if (
+        resourceId === "gateway-x.gateway-y" ||
+        resourceId === "runtime-framework-root.gateway-x"
+      ) {
+        return {
+          resource: { gateway: true },
+        };
+      }
+
+      return Map.prototype.get.call(store.resources, resourceId);
+    });
+    registry.registerDefinitionAlias(
+      { id: "gateway-x.gateway-y" },
+      "gateway-x.gateway-y",
+    );
+    registry.registerDefinitionAlias(
+      { id: "gateway-x" },
+      "runtime-framework-root.gateway-x",
+    );
+
+    expect(store.getRuntimeMetadata(nestedGateway)).toEqual({
+      id: "gateway-x.gateway-y",
+      path: "gateway-x.gateway-y",
+      runtimeId: "gateway-x.gateway-y",
+    });
+    expect(store.getRuntimeMetadata(rootGateway)).toEqual({
+      id: "gateway-x",
+      path: "runtime-framework-root.gateway-x",
+      runtimeId: "runtime-framework-root.gateway-x",
+    });
+  });
+
   it("fails fast when the computed root resource entry is missing after bootstrap", () => {
     const fixture = createTestFixture();
     const { store } = fixture;

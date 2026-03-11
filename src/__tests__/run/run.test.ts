@@ -50,33 +50,213 @@ describe("run", () => {
     await run2.dispose();
   });
 
-  it("fails fast when a gateway resource is passed directly to run()", async () => {
+  it("allows running a gateway resource directly when it only registers resources", async () => {
+    const child = defineResource({
+      id: "test-run-root-gateway-child-resource",
+      init: async () => "ok",
+    });
     const gateway = defineResource({
       id: "test-run-root-gateway",
       gateway: true,
+      register: [child],
+      dependencies: { child },
+      init: async (_, { child }) => child,
     });
 
-    const error = await expectRunnerErrorId(
-      run(gateway),
-      RunnerErrorId.RunRootGatewayUnsupported,
-    );
+    const result = await run(gateway);
 
-    expect(error.message).toContain(gateway.id);
+    expect(result.value).toBe("ok");
+    await result.dispose();
   });
 
-  it("fails fast when a configured gateway resource is passed to run()", async () => {
+  it("allows running a configured gateway root that directly registers only resources", async () => {
+    const child = defineResource<{ enabled: boolean }>({
+      id: "test-run-root-gateway-configured-child-resource",
+      configSchema: { enabled: Boolean },
+      init: async ({ enabled }) => (enabled ? "enabled" : "disabled"),
+    });
     const gateway = defineResource<{ enabled: boolean }>({
       id: "test-run-root-gateway-configured",
       gateway: true,
       configSchema: { enabled: Boolean },
+      register: ({ enabled }) => [child.with({ enabled })],
+    });
+
+    const result = await run(gateway.with({ enabled: true }));
+
+    expect(result.getResourceValue(child)).toBe("enabled");
+    await result.dispose();
+  });
+
+  it("compiles canonical ids through nested gateways until the first non-gateway resource", async () => {
+    const task = defineTask({
+      id: "task-z",
+      run: async () => "ok",
+    });
+    const child = defineResource({
+      id: "resource-y",
+      register: [task],
+    });
+    const nestedGateway = defineResource({
+      id: "gateway-y",
+      gateway: true,
+      register: [child],
+    });
+    const gateway = defineResource({
+      id: "gateway-x",
+      gateway: true,
+      register: [nestedGateway],
+    });
+
+    const result = await run(gateway);
+
+    expect(result.store.getRuntimeMetadata(gateway).id).toBe("gateway-x");
+    expect(result.store.getRuntimeMetadata(gateway).path).toBe("gateway-x");
+    expect(result.store.getRuntimeMetadata(nestedGateway).id).toBe(
+      "gateway-x.gateway-y",
+    );
+    expect(result.store.getRuntimeMetadata(nestedGateway).path).toBe(
+      "gateway-x.gateway-y",
+    );
+    expect(result.store.getRuntimeMetadata(child).path).toBe("resource-y");
+    await expect(result.runTask("resource-y.tasks.task-z")).resolves.toBe("ok");
+    try {
+      result.runTask("gateway-y.resource-y.tasks.task-z");
+      fail("Expected gateway-prefixed task id to throw");
+    } catch (error) {
+      expect((error as { id?: string }).id).toBe(
+        "runner.errors.runtimeElementNotFound",
+      );
+    }
+
+    await result.dispose();
+  });
+
+  it("fails fast when a gateway directly registers a task", async () => {
+    const ping = defineTask({
+      id: "test-run-root-gateway-invalid-task",
+      run: async () => "ok",
+    });
+    const gateway = defineResource({
+      id: "test-run-root-gateway-invalid-task-root",
+      gateway: true,
+      register: [ping],
     });
 
     const error = await expectRunnerErrorId(
-      run(gateway.with({ enabled: true })),
-      RunnerErrorId.RunRootGatewayUnsupported,
+      run(gateway),
+      RunnerErrorId.ResourceGatewayInvalidContents,
     );
 
+    expect(error.message).toContain(
+      'Task "test-run-root-gateway-invalid-task"',
+    );
     expect(error.message).toContain(gateway.id);
+  });
+
+  it("allows a gateway to directly register another gateway resource", async () => {
+    const task = defineTask({
+      id: "test-run-root-gateway-direct-gateway-task",
+      run: async () => "ok",
+    });
+    const child = defineResource({
+      id: "test-run-root-gateway-direct-gateway-leaf",
+      register: [task],
+    });
+    const nestedGateway = defineResource({
+      id: "test-run-root-gateway-invalid-child",
+      gateway: true,
+      register: [child],
+    });
+    const gateway = defineResource({
+      id: "test-run-root-gateway-invalid-gateway-root",
+      gateway: true,
+      register: [nestedGateway],
+    });
+
+    const result = await run(gateway);
+
+    await expect(
+      result.runTask(
+        "test-run-root-gateway-direct-gateway-leaf.tasks.test-run-root-gateway-direct-gateway-task",
+      ),
+    ).resolves.toBe("ok");
+    await result.dispose();
+  });
+
+  it("fails fast when a gateway directly registers middleware", async () => {
+    const resourceMiddleware = defineResourceMiddleware({
+      id: "test-run-root-gateway-invalid-resource-middleware",
+      run: async ({ next }) => next(),
+    });
+    const gateway = defineResource({
+      id: "test-run-root-gateway-invalid-middleware-root",
+      gateway: true,
+      register: [resourceMiddleware],
+    });
+
+    const error = await expectRunnerErrorId(
+      run(gateway),
+      RunnerErrorId.ResourceGatewayInvalidContents,
+    );
+
+    expect(error.message).toContain(
+      'Resource middleware "test-run-root-gateway-invalid-resource-middleware"',
+    );
+  });
+
+  it("validates configured gateway register results instead of the builder shape", async () => {
+    const task = defineTask({
+      id: "test-run-root-gateway-config-invalid-task",
+      run: async () => "invalid",
+    });
+    const child = defineResource({
+      id: "test-run-root-gateway-config-valid-child",
+      init: async () => "valid",
+    });
+    const gateway = defineResource<{ invalid: boolean }>({
+      id: "test-run-root-gateway-config-sensitive-root",
+      gateway: true,
+      configSchema: { invalid: Boolean },
+      register: ({ invalid }) => (invalid ? [task] : [child]),
+    });
+
+    const error = await expectRunnerErrorId(
+      run(gateway.with({ invalid: true })),
+      RunnerErrorId.ResourceGatewayInvalidContents,
+    );
+
+    expect(error.message).toContain(
+      'Task "test-run-root-gateway-config-invalid-task"',
+    );
+  });
+
+  it("fails fast when a nested gateway directly registers a task", async () => {
+    const task = defineTask({
+      id: "test-run-nested-gateway-invalid-task",
+      run: async () => "ok",
+    });
+    const nestedGateway = defineResource({
+      id: "test-run-nested-gateway-invalid-child",
+      gateway: true,
+      register: [task],
+    });
+    const app = defineResource({
+      id: "test-run-nested-gateway-invalid-app",
+      register: [nestedGateway],
+    });
+
+    const error = await expectRunnerErrorId(
+      run(app),
+      RunnerErrorId.ResourceGatewayInvalidContents,
+    );
+
+    expect(error.message).toContain(
+      'Gateway resource "test-run-nested-gateway-invalid-child"',
+    );
+    expect(error.message).toContain(
+      'Task "test-run-nested-gateway-invalid-task"',
+    );
   });
 
   it("allows running a non-gateway root that registers a gateway child", async () => {
@@ -84,10 +264,14 @@ describe("run", () => {
       id: "test-run-root-gateway-child-ping",
       run: async () => "ok",
     });
+    const leaf = defineResource({
+      id: "test-run-root-gateway-child-leaf",
+      register: [ping],
+    });
     const gateway = defineResource({
       id: "test-run-root-gateway-child",
       gateway: true,
-      register: [ping],
+      register: [leaf],
     });
     const app = defineResource({
       id: "test-run-root-non-gateway",

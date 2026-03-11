@@ -18,24 +18,24 @@ import {
   TaskStoreElementType,
   SubtreeResourceMiddlewareEntry,
   SubtreeTaskMiddlewareEntry,
-  symbolEvent,
-  symbolHook,
-  symbolResource,
   symbolResourceIsolateDeclarations,
   symbolResourceSubtreeDeclarations,
-  symbolResourceMiddleware,
-  symbolResourceWithConfig,
-  symbolTag,
-  symbolTask,
-  symbolTaskMiddleware,
 } from "../../defs";
-import { unknownItemTypeError, validationError } from "../../errors";
+import {
+  resourceGatewayInvalidContentsError,
+  unknownItemTypeError,
+  validationError,
+} from "../../errors";
 import { IAsyncContext } from "../../types/asyncContext";
 import { IErrorHelper } from "../../types/error";
 import { HookDependencyState } from "../../types/storeTypes";
-import { symbolAsyncContext, symbolError } from "../../types/symbols";
 import { VisibilityTracker } from "../VisibilityTracker";
 import { StoreRegistryDefinitionPreparer } from "./StoreRegistryDefinitionPreparer";
+import {
+  describeRegisterableKind,
+  RegisterableKind,
+  resolveRegisterableKind,
+} from "./registerableKind";
 import { StoreRegistryTagIndex } from "./StoreRegistryTagIndex";
 import { IndexedTagCategory, normalizeTags, StoringMode } from "./types";
 import {
@@ -45,6 +45,7 @@ import {
 import { isReservedDefinitionLocalName } from "../../definers/assertDefinitionId";
 import { resolveResourceSubtreeDeclarations } from "../../definers/subtreePolicy";
 import { resolveIsolatePolicyDeclarations } from "../../definers/isolatePolicy";
+import { FRAMEWORK_ROOT_GATEWAY_ID } from "../createFrameworkRootGateway";
 
 type StoreRegistryCollections = {
   tasks: Map<string, TaskStoreElementType>;
@@ -67,71 +68,6 @@ type StoreRegistryAliasResolver = {
   registerDefinitionAlias: (reference: unknown, canonicalId: string) => void;
   resolveDefinitionId: (reference: unknown) => string | undefined;
 };
-
-enum RegisterableKind {
-  Task = "task",
-  Error = "error",
-  Hook = "hook",
-  Resource = "resource",
-  Event = "event",
-  AsyncContext = "asyncContext",
-  TaskMiddleware = "taskMiddleware",
-  ResourceMiddleware = "resourceMiddleware",
-  ResourceWithConfig = "resourceWithConfig",
-  Tag = "tag",
-}
-
-function hasSymbolBrand(
-  item: RegisterableItems,
-  symbolKey: symbol,
-): item is RegisterableItems {
-  if (item === null || item === undefined) {
-    return false;
-  }
-
-  const type = typeof item;
-  if (type !== "object" && type !== "function") {
-    return false;
-  }
-
-  return Boolean((item as unknown as Record<symbol, unknown>)[symbolKey]);
-}
-
-function resolveRegisterableKind(
-  item: RegisterableItems,
-): RegisterableKind | null {
-  if (hasSymbolBrand(item, symbolTask)) {
-    return RegisterableKind.Task;
-  }
-  if (hasSymbolBrand(item, symbolError)) {
-    return RegisterableKind.Error;
-  }
-  if (hasSymbolBrand(item, symbolHook)) {
-    return RegisterableKind.Hook;
-  }
-  if (hasSymbolBrand(item, symbolResource)) {
-    return RegisterableKind.Resource;
-  }
-  if (hasSymbolBrand(item, symbolEvent)) {
-    return RegisterableKind.Event;
-  }
-  if (hasSymbolBrand(item, symbolAsyncContext)) {
-    return RegisterableKind.AsyncContext;
-  }
-  if (hasSymbolBrand(item, symbolTaskMiddleware)) {
-    return RegisterableKind.TaskMiddleware;
-  }
-  if (hasSymbolBrand(item, symbolResourceMiddleware)) {
-    return RegisterableKind.ResourceMiddleware;
-  }
-  if (hasSymbolBrand(item, symbolResourceWithConfig)) {
-    return RegisterableKind.ResourceWithConfig;
-  }
-  if (hasSymbolBrand(item, symbolTag)) {
-    return RegisterableKind.Tag;
-  }
-  return null;
-}
 
 export class StoreRegistryWriter {
   constructor(
@@ -372,6 +308,7 @@ export class StoreRegistryWriter {
         : element.register;
     const items = registerEntries ?? [];
     this.assignNormalizedRegisterEntries(element, items);
+    this.validateGatewayDirectRegistrations(element, items);
 
     const scopedItems = items.map((item) =>
       this.compileOwnedItem(element.id, element.gateway === true, item),
@@ -389,6 +326,51 @@ export class StoreRegistryWriter {
         throw error;
       }
     }
+  }
+
+  /**
+   * Gateways are structural-only parents. They may register resources directly,
+   * but behavioral definitions must live under a non-gateway child resource so
+   * ownership and compiled ids stay predictable.
+   */
+  private validateGatewayDirectRegistrations<_C>(
+    owner: IResource<_C>,
+    items: RegisterableItems[],
+  ): void {
+    if (owner.gateway !== true) {
+      return;
+    }
+
+    const invalidEntries = items
+      .map((item) => this.getInvalidGatewayDirectRegistration(item))
+      .filter((entry) => entry !== null);
+
+    if (invalidEntries.length === 0) {
+      return;
+    }
+
+    resourceGatewayInvalidContentsError.throw({
+      id: owner.id,
+      invalidEntries,
+    });
+  }
+
+  private getInvalidGatewayDirectRegistration(
+    item: RegisterableItems,
+  ): { kind: string; id: string } | null {
+    const kind = resolveRegisterableKind(item);
+
+    if (
+      kind === RegisterableKind.Resource ||
+      kind === RegisterableKind.ResourceWithConfig
+    ) {
+      return null;
+    }
+
+    return {
+      kind: describeRegisterableKind(kind),
+      id: this.resolveRegisterableId(item) ?? "<unknown>",
+    };
   }
 
   private assignNormalizedRegisterEntries<_C>(
@@ -463,11 +445,15 @@ export class StoreRegistryWriter {
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
   ): RegisterableItems {
     const currentId = item.id;
+    const childIsGateway =
+      kind === RegisterableKind.Resource &&
+      (item as IResource<any, any, any>).gateway === true;
     const nextId = this.computeCanonicalId(
       ownerResourceId,
       ownerIsGateway,
       kind,
       currentId,
+      childIsGateway,
     );
     if (nextId === currentId) {
       return item;
@@ -525,6 +511,7 @@ export class StoreRegistryWriter {
     ownerIsGateway: boolean,
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
     currentId: string,
+    childIsGateway = false,
   ): string {
     this.assertLocalName(ownerResourceId, kind, currentId);
 
@@ -535,7 +522,11 @@ export class StoreRegistryWriter {
     if (ownerIsGateway) {
       switch (kind) {
         case RegisterableKind.Resource:
-          return currentId;
+          // Gateway resources need unique runtime identities for diagnostics
+          // and inspection, but gateways stay transparent for non-resource ids.
+          return childIsGateway && ownerResourceId !== FRAMEWORK_ROOT_GATEWAY_ID
+            ? `${ownerResourceId}.${currentId}`
+            : currentId;
         case RegisterableKind.Task:
           return `tasks.${currentId}`;
         case RegisterableKind.Event:
@@ -559,7 +550,7 @@ export class StoreRegistryWriter {
 
     switch (kind) {
       case RegisterableKind.Resource:
-        return `${ownerResourceId}.${currentId}`;
+        return childIsGateway ? currentId : `${ownerResourceId}.${currentId}`;
       case RegisterableKind.Task:
         return `${ownerResourceId}.tasks.${currentId}`;
       case RegisterableKind.Event:
@@ -609,7 +600,7 @@ export class StoreRegistryWriter {
       return undefined;
     }
 
-    if (hasSymbolBrand(item, symbolResourceWithConfig)) {
+    if (resolveRegisterableKind(item) === RegisterableKind.ResourceWithConfig) {
       return (item as IResourceWithConfig<any, any, any>).resource.id;
     }
 

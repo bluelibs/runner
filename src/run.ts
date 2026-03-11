@@ -19,7 +19,6 @@ import { createRuntimeServices } from "./tools/createRuntimeServices";
 import { extractResourceAndConfig } from "./tools/extractResourceAndConfig";
 import { resolveExecutionContextConfig } from "./tools/resolveExecutionContextConfig";
 import { detectRunnerMode } from "./tools/detectRunnerMode";
-import { runRootGatewayUnsupportedError } from "./errors";
 
 const activeRunResults = new Set<RunResult<any>>();
 
@@ -113,9 +112,6 @@ export async function run<C, V extends Promise<any>>(
   const { resource, config } = extractResourceAndConfig(
     resourceOrResourceWithConfig,
   );
-  if (resource.gateway === true) {
-    runRootGatewayUnsupportedError.throw({ id: resource.id });
-  }
 
   const services = createRuntimeServices({
     mode: normalizedOptions.mode,

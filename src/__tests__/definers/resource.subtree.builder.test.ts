@@ -100,8 +100,8 @@ describe("resource builder subtree()", () => {
     }
 
     expect(
-      built.subtree.tasks?.middleware?.map((entry) =>
-        getSubtreeTaskMiddlewareAttachment(entry).id,
+      built.subtree.tasks?.middleware?.map(
+        (entry) => getSubtreeTaskMiddlewareAttachment(entry).id,
       ),
     ).toEqual([firstTaskMiddleware.id, secondTaskMiddleware.id]);
     expect(built.subtree.validate).toEqual([firstValidator, secondValidator]);
@@ -112,7 +112,9 @@ describe("resource builder subtree()", () => {
     const secondValidator = jest.fn(() => []);
 
     const built = r
-      .resource<{ enabled: boolean }>("tests-resourceSubtreeBuilder-dynamic-array")
+      .resource<{ enabled: boolean }>(
+        "tests-resourceSubtreeBuilder-dynamic-array",
+      )
       .subtree((config) => [
         {
           validate: [firstValidator],
