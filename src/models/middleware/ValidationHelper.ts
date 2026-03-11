@@ -3,7 +3,7 @@ import {
   resultSchemaValidationError,
 } from "../../errors";
 import type { IValidationSchema } from "../../defs";
-import { normalizeError } from "../../globals/resources/tunnel/error-utils";
+import { normalizeError } from "../../tools/normalizeError";
 
 /**
  * Centralized validation logic for inputs and results across tasks and resources.

@@ -5,17 +5,30 @@
  * @internal
  */
 export const symbolTask: unique symbol = Symbol.for("runner.task");
-/** Marks a task as a phantom task (throws when unrouted; meant to be tunneled/routed). */
-export const symbolPhantomTask: unique symbol = Symbol.for(
-  "runner.task.phantom",
-);
 export const symbolResource: unique symbol = Symbol.for("runner.resource");
 /** @internal Generic fork provenance metadata for definitions that support `.fork()` */
 export const symbolForkedFrom: unique symbol = Symbol.for("runner.forkedFrom");
+/** @internal Tracks whether a resource definition explicitly declared `.register(...)`. */
+export const symbolResourceRegistersChildren: unique symbol = Symbol.for(
+  "runner.resourceRegistersChildren",
+);
 export const symbolResourceWithConfig: unique symbol = Symbol.for(
   "runner.resourceWithConfig",
 );
+/** @internal Marks override definitions produced via the override builder API. */
+export const symbolOverrideDefinition: unique symbol = Symbol.for(
+  "runner.overrideDefinition",
+);
+/**
+ * @internal Stores the original definition reference that an override targets.
+ * This allows runtime systems to resolve the canonical, run-scoped id.
+ */
+export const symbolOverrideTargetDefinition: unique symbol = Symbol.for(
+  "runner.overrideTargetDefinition",
+);
 export const symbolEvent: unique symbol = Symbol.for("runner.event");
+export const symbolEventLane: unique symbol = Symbol.for("runner.eventLane");
+export const symbolRpcLane: unique symbol = Symbol.for("runner.rpcLane");
 /** @internal Marks an error helper definition */
 export const symbolError: unique symbol = Symbol.for("runner.error");
 export const symbolMiddleware: unique symbol = Symbol.for("runner.middleware");
@@ -29,8 +42,18 @@ export const symbolResourceMiddleware: unique symbol = Symbol.for(
 export const symbolMiddlewareConfigured: unique symbol = Symbol.for(
   "runner.middlewareConfigured",
 );
-/** Records which tunnel resource owns the task patching (exclusivity). */
-export const symbolTunneledBy: unique symbol = Symbol.for("runner.tunneledBy");
+/** @internal Points a configured middleware instance to its source definition. */
+export const symbolMiddlewareConfiguredFrom: unique symbol = Symbol.for(
+  "runner.middlewareConfiguredFrom",
+);
+/** Records which rpc-lanes resource owns the task routing patch (exclusivity). */
+export const symbolRpcLaneRoutedBy: unique symbol = Symbol.for(
+  "runner.rpcLaneRoutedBy",
+);
+/** Stores the resolved rpc lane policy on routed task definitions. */
+export const symbolRpcLanePolicy: unique symbol = Symbol.for(
+  "runner.rpcLanePolicy",
+);
 /** @internal Marks hook definitions (event listeners without middleware) */
 export const symbolHook: unique symbol = Symbol.for("runner.hook");
 // export const symbolMiddlewareEverywhereTasks: unique symbol = Symbol.for(
@@ -41,8 +64,22 @@ export const symbolHook: unique symbol = Symbol.for("runner.hook");
 // );
 /** @internal Marks a tag definition */
 export const symbolTag: unique symbol = Symbol.for("runner.tag");
+/** @internal Stable lineage identity preserved across clones/public projections. */
+export const symbolDefinitionIdentity: unique symbol = Symbol.for(
+  "runner.definitionIdentity",
+);
+/** @internal Run-scoped canonical id stamped onto runtime-facing objects. */
+export const symbolRuntimeId: unique symbol = Symbol.for("runner.runtimeId");
 export const symbolTagConfigured: unique symbol = Symbol.for(
   "runner.tagConfigured",
+);
+/** @internal Points a configured tag instance to its source definition. */
+export const symbolTagConfiguredFrom: unique symbol = Symbol.for(
+  "runner.tagConfiguredFrom",
+);
+/** @internal Marks a tag before-init dependency wrapper */
+export const symbolTagBeforeInitDependency: unique symbol = Symbol.for(
+  "runner.tagBeforeInitDependency",
 );
 
 /** @internal Marks an optional dependency wrapper */
@@ -53,7 +90,26 @@ export const symbolOptionalDependency: unique symbol = Symbol.for(
 /** @internal Path to aid anonymous id generation and error messages */
 export const symbolFilePath: unique symbol = Symbol.for("runner.filePath");
 
+/** @internal Marks framework-owned definitions allowed to use reserved dotted namespaces. */
+export const symbolFrameworkDefinition: unique symbol = Symbol.for(
+  "runner.frameworkDefinition",
+);
+
 /** @internal Marks an async context definition */
 export const symbolAsyncContext: unique symbol = Symbol.for(
   "runner.asyncContext",
+);
+
+/** @internal Preserves the original resource reference captured by subtreeOf(). */
+export const symbolIsolationSubtreeResource: unique symbol = Symbol.for(
+  "runner.isolationSubtreeResource",
+);
+
+/** @internal Stores unresolved subtree declarations until resource config is known. */
+export const symbolResourceSubtreeDeclarations: unique symbol = Symbol.for(
+  "runner.resourceSubtreeDeclarations",
+);
+/** @internal Stores unresolved isolate declarations until resource config is known. */
+export const symbolResourceIsolateDeclarations: unique symbol = Symbol.for(
+  "runner.resourceIsolateDeclarations",
 );

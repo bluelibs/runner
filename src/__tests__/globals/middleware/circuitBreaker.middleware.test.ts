@@ -22,13 +22,13 @@ describe("Circuit Breaker Middleware", () => {
 
   it("should allow calls when in CLOSED state", async () => {
     const task = defineTask({
-      id: "task.closed",
+      id: "task-closed",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 2 })],
       run: async () => "ok",
     });
 
     const app = defineResource({
-      id: "app.closed",
+      id: "app-closed",
       register: [task],
       dependencies: { task },
       async init(_, { task }) {
@@ -43,7 +43,7 @@ describe("Circuit Breaker Middleware", () => {
   it("should trip to OPEN state after failure threshold is reached", async () => {
     const shouldFail = true;
     const task = defineTask({
-      id: "task.tripping",
+      id: "task-tripping",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 2 })],
       run: async () => {
         if (shouldFail) throw createMessageError("fail");
@@ -52,7 +52,7 @@ describe("Circuit Breaker Middleware", () => {
     });
 
     const app = defineResource({
-      id: "app.tripping",
+      id: "app-tripping",
       register: [task],
       dependencies: { task },
       async init(_, { task }) {
@@ -71,7 +71,7 @@ describe("Circuit Breaker Middleware", () => {
   it("should transition to HALF_OPEN after resetTimeout", async () => {
     let shouldFail = true;
     const task = defineTask({
-      id: "task.reset",
+      id: "task-reset",
       middleware: [
         circuitBreakerMiddleware.with({
           failureThreshold: 1,
@@ -85,7 +85,7 @@ describe("Circuit Breaker Middleware", () => {
     });
 
     const app = defineResource({
-      id: "app.reset",
+      id: "app-reset",
       register: [task],
       dependencies: { task },
       async init(_, { task }) {
@@ -113,7 +113,7 @@ describe("Circuit Breaker Middleware", () => {
   it("should go back to OPEN if call fails in HALF_OPEN", async () => {
     let shouldFail = true;
     const task = defineTask({
-      id: "task.halfOpenFail",
+      id: "task-halfOpenFail",
       middleware: [
         circuitBreakerMiddleware.with({
           failureThreshold: 1,
@@ -127,7 +127,7 @@ describe("Circuit Breaker Middleware", () => {
     });
 
     const app = defineResource({
-      id: "app.halfOpenFail",
+      id: "app-halfOpenFail",
       register: [task],
       dependencies: { task },
       async init(_, { task }) {
@@ -154,7 +154,7 @@ describe("Circuit Breaker Middleware", () => {
     let resolveProbe: (() => void) | undefined;
 
     const task = defineTask({
-      id: "task.halfOpenProbeGate",
+      id: "task-halfOpenProbeGate",
       middleware: [
         circuitBreakerMiddleware.with({
           failureThreshold: 1,
@@ -176,7 +176,7 @@ describe("Circuit Breaker Middleware", () => {
     });
 
     const app = defineResource({
-      id: "app.halfOpenProbeGate",
+      id: "app-halfOpenProbeGate",
       register: [task],
       dependencies: { task },
       async init(_, { task }) {
@@ -188,7 +188,7 @@ describe("Circuit Breaker Middleware", () => {
 
         const inFlightProbe = task();
         await expect(task()).rejects.toThrow(
-          'Circuit is HALF_OPEN for task "task.halfOpenProbeGate" (probe in progress)',
+          /Circuit is HALF_OPEN for task ".*task-halfOpenProbeGate" \(probe in progress\)/,
         );
 
         mode = "closed";
@@ -203,7 +203,7 @@ describe("Circuit Breaker Middleware", () => {
 
   it("should isolate states between different tasks", async () => {
     const task1 = defineTask({
-      id: "task.isolate1",
+      id: "task-isolate1",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 1 })],
       run: async () => {
         throw createMessageError("fail");
@@ -211,13 +211,13 @@ describe("Circuit Breaker Middleware", () => {
     });
 
     const task2 = defineTask({
-      id: "task.isolate2",
+      id: "task-isolate2",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 1 })],
       run: async () => "ok",
     });
 
     const app = defineResource({
-      id: "app.isolate",
+      id: "app-isolate",
       register: [task1, task2],
       dependencies: { task1, task2 },
       async init(_, { task1, task2 }) {
@@ -236,7 +236,7 @@ describe("Circuit Breaker Middleware", () => {
 
   it("should use default config values", async () => {
     const task = defineTask({
-      id: "task.defaults",
+      id: "task-defaults",
       middleware: [circuitBreakerMiddleware],
       run: async () => {
         throw createMessageError("fail");
@@ -244,7 +244,7 @@ describe("Circuit Breaker Middleware", () => {
     });
 
     const app = defineResource({
-      id: "app.defaults",
+      id: "app-defaults",
       register: [task],
       dependencies: { task },
       async init(_, { task }) {
@@ -261,7 +261,7 @@ describe("Circuit Breaker Middleware", () => {
 
   it("should clear status map on runtime dispose", async () => {
     const task = defineTask({
-      id: "task.dispose.status",
+      id: "task-dispose-status",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 2 })],
       run: async () => {
         throw createMessageError("boom");
@@ -270,7 +270,7 @@ describe("Circuit Breaker Middleware", () => {
 
     let statusMapRef: Map<string, unknown> | undefined;
     const app = defineResource({
-      id: "app.dispose.status",
+      id: "app-dispose-status",
       register: [task],
       dependencies: { task, state: circuitBreakerResource },
       async init(_, { task, state }) {
@@ -288,7 +288,7 @@ describe("Circuit Breaker Middleware", () => {
 
   it("should evict stale CLOSED entries when statusMap exceeds safety cap", async () => {
     const task = defineTask({
-      id: "task.eviction.target",
+      id: "task-eviction-target",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 5 })],
       run: async () => "ok",
     });
@@ -296,7 +296,7 @@ describe("Circuit Breaker Middleware", () => {
     let statusMapRef: Map<string, unknown> | undefined;
 
     const app = defineResource({
-      id: "app.eviction",
+      id: "app-eviction",
       register: [task],
       dependencies: { task, state: circuitBreakerResource },
       async init(_, { task, state }) {
@@ -314,9 +314,54 @@ describe("Circuit Breaker Middleware", () => {
 
         // Triggering the task should hit the eviction branch and clean up
         await task();
-        // All 10k stale entries should be evicted, only "task.eviction.target" remains
+        // All 10k stale entries should be evicted, only "task-eviction-target" remains
         expect(statusMapRef.size).toBe(1);
-        expect(statusMapRef.has("task.eviction.target")).toBe(true);
+        expect(
+          Array.from(statusMapRef.keys()).some(
+            (id) =>
+              id === "task-eviction-target" ||
+              String(id).endsWith("task-eviction-target"),
+          ),
+        ).toBe(true);
+      },
+    });
+
+    const runtime = await run(app);
+    await runtime.dispose();
+  });
+
+  it("does not evict non-stale entries during safety-cap cleanup and keeps circuit closed below threshold", async () => {
+    const task = defineTask({
+      id: "task-eviction-nonstale",
+      middleware: [circuitBreakerMiddleware.with({ failureThreshold: 2 })],
+      run: async () => {
+        throw createMessageError("boom");
+      },
+    });
+
+    let statusMapRef!: Map<string, any>;
+    const app = defineResource({
+      id: "app-eviction-nonstale",
+      register: [task],
+      dependencies: { task, state: circuitBreakerResource },
+      async init(_, { task, state }) {
+        statusMapRef = state.statusMap as Map<string, any>;
+        for (let i = 0; i < 10_000; i++) {
+          statusMapRef.set(`keep-${i}`, {
+            state: i % 2 === 0 ? "OPEN" : "CLOSED",
+            failures: i % 2 === 0 ? 1 : 2,
+            lastFailureTime: 0,
+            halfOpenProbeInFlight: false,
+          });
+        }
+
+        await expect(task()).rejects.toThrow("boom");
+        // Below threshold after first failure, so task should remain CLOSED and be callable again.
+        await expect(task()).rejects.toThrow("boom");
+        await expect(task()).rejects.toThrow(CircuitBreakerOpenError);
+
+        expect(statusMapRef.has("keep-0")).toBe(true);
+        expect(statusMapRef.has("keep-1")).toBe(true);
       },
     });
 

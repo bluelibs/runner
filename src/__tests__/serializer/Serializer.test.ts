@@ -6,6 +6,8 @@ import { describe, it, expect, beforeEach } from "@jest/globals";
 import { Serializer } from "../../serializer/index";
 import type { TypeDefinition } from "../../serializer/index";
 import { createMessageError } from "../../errors";
+import { Match, MatchError } from "../../tools/check";
+import type { MatchPattern } from "../../tools/check";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -486,6 +488,571 @@ describe("Serializer", () => {
       expect(() => {
         serializer.deserialize(serialized);
       }).toThrow("Unknown type: UnknownType");
+    });
+
+    it("should throw validation error when schema option is invalid", () => {
+      const payload = JSON.stringify({ id: "u1" });
+
+      expect(() =>
+        serializer.deserialize(payload, {
+          schema: { parse: 123 } as unknown as {
+            parse: (input: unknown) => unknown;
+          },
+        }),
+      ).toThrow("Invalid deserialize() schema option");
+    });
+  });
+
+  describe("Schema-aware deserialize", () => {
+    it("should remap incoming keys via Serializer.Field({ from }) before class schema validation", () => {
+      class UserDto {
+        public id!: string;
+      }
+
+      Serializer.Field({ from: "abc" })(UserDto.prototype, "id");
+
+      Match.Schema()(UserDto);
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+
+      const payload = serializer.serialize({ abc: "u1", extra: true });
+      const deserialized = serializer.deserialize(payload, {
+        schema: UserDto,
+      });
+
+      expect(deserialized).toEqual({ id: "u1", extra: true });
+    });
+
+    it("should remap arrays when using class shorthand schema", () => {
+      class UserDto {
+        public id!: string;
+      }
+
+      Serializer.Field({ from: "abc" })(UserDto.prototype, "id");
+
+      Match.Schema()(UserDto);
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+
+      const payload = serializer.serialize([{ abc: "u1" }, { abc: "u2" }]);
+      const deserialized = serializer.deserialize(payload, {
+        schema: [UserDto],
+      });
+
+      expect(deserialized).toEqual([{ id: "u1" }, { id: "u2" }]);
+    });
+
+    it("should apply Serializer.Field deserialize transforms", () => {
+      class UserDto {
+        public age!: number;
+      }
+
+      Serializer.Field({
+        from: "raw_age",
+        deserialize(value: unknown): number {
+          return Number(value);
+        },
+      })(UserDto.prototype, "age");
+
+      Match.Schema()(UserDto);
+      Match.Field(Match.Integer)(UserDto.prototype, "age");
+
+      const payload = serializer.serialize({ raw_age: "42" });
+      const deserialized = serializer.deserialize(payload, {
+        schema: UserDto,
+      });
+
+      expect(deserialized).toEqual({ age: 42 });
+    });
+
+    it("should throw when both source and target keys are present in payload", () => {
+      class UserDto {
+        public id!: string;
+      }
+
+      Serializer.Field({ from: "abc" })(UserDto.prototype, "id");
+
+      Match.Schema()(UserDto);
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+
+      const payload = serializer.serialize({ abc: "u1", id: "u2" });
+
+      expect(() =>
+        serializer.deserialize(payload, {
+          schema: UserDto,
+        }),
+      ).toThrow('both source key "abc" and target key "id" are present');
+    });
+
+    it("should throw for duplicate Serializer.Field source mappings", () => {
+      class BrokenDto {
+        public first!: string;
+
+        public second!: string;
+      }
+
+      Serializer.Field({ from: "x" })(BrokenDto.prototype, "first");
+      Serializer.Field({ from: "x" })(BrokenDto.prototype, "second");
+
+      Match.Schema()(BrokenDto);
+      Match.Field(Match.NonEmptyString)(BrokenDto.prototype, "first");
+      Match.Field(Match.NonEmptyString)(BrokenDto.prototype, "second");
+
+      const payload = serializer.serialize({ x: "value" });
+
+      expect(() =>
+        serializer.deserialize(payload, {
+          schema: BrokenDto,
+        }),
+      ).toThrow('duplicate source key "x"');
+    });
+
+    it("should validate Serializer.Field decorator option contracts", () => {
+      class Holder {
+        public value!: string;
+      }
+
+      expect(() =>
+        Serializer.Field()(Holder as unknown as Function, "meta"),
+      ).not.toThrow();
+
+      expect(() =>
+        Serializer.Field({ from: "" })(Holder.prototype, "value"),
+      ).toThrow('Invalid Serializer.Field() option "from"');
+
+      expect(() =>
+        Serializer.Field({ serialize: true as unknown as never })(
+          Holder.prototype,
+          "value",
+        ),
+      ).toThrow('Invalid Serializer.Field() option "serialize"');
+
+      expect(() =>
+        Serializer.Field({ deserialize: true as unknown as never })(
+          Holder.prototype,
+          "value",
+        ),
+      ).toThrow('Invalid Serializer.Field() option "deserialize"');
+
+      expect(() =>
+        Serializer.Field({})(Holder.prototype, Symbol("value")),
+      ).toThrow("only string property names are supported");
+
+      expect(() =>
+        Serializer.Field(null as unknown as never)(Holder.prototype, "value"),
+      ).toThrow("expected a plain object");
+
+      expect(() =>
+        Serializer.Field({})(Object.create(null) as never, "value"),
+      ).toThrow("decorator target must be a class field");
+    });
+
+    it("should preserve constructor semantics for undecorated classes", () => {
+      class UndecoratedUserDto {
+        public id!: string;
+      }
+
+      const payload = serializer.serialize({ id: "u1" });
+
+      expect(() =>
+        serializer.deserialize(payload, {
+          schema: UndecoratedUserDto,
+        }),
+      ).toThrow(MatchError);
+    });
+
+    it("should deserialize with decorated class constructor shorthand", () => {
+      class UserDto {
+        public id!: string;
+      }
+
+      Match.Schema()(UserDto);
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+
+      const payload = serializer.serialize({ id: "u1" });
+      const deserialized = serializer.deserialize(payload, {
+        schema: UserDto,
+      });
+
+      expect(deserialized).toEqual({ id: "u1" });
+    });
+
+    it("should deserialize arrays with decorated class constructor shorthand", () => {
+      class UserDto {
+        public id!: string;
+      }
+
+      Match.Schema()(UserDto);
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+
+      const payload = serializer.serialize([{ id: "u1" }, { id: "u2" }]);
+      const deserialized = serializer.deserialize(payload, {
+        schema: [UserDto],
+      });
+
+      expect(deserialized).toEqual([{ id: "u1" }, { id: "u2" }]);
+    });
+
+    it("should deserialize arrays with schema-like shorthand", () => {
+      const payload = serializer.serialize(["Ada", "Grace"]);
+
+      const deserialized = serializer.deserialize(payload, {
+        schema: [
+          {
+            parse(input: unknown): string {
+              if (typeof input !== "string") {
+                throw createMessageError("Expected string");
+              }
+
+              return input.toUpperCase();
+            },
+          },
+        ],
+      });
+
+      expect(deserialized).toEqual(["ADA", "GRACE"]);
+    });
+
+    it("should throw when array schema shorthand has more than one element", () => {
+      const payload = serializer.serialize([{ id: "u1" }]);
+
+      expect(() =>
+        serializer.deserialize(payload, {
+          schema: [
+            Match.ObjectIncluding({ id: Match.NonEmptyString }),
+            Match.ObjectIncluding({ id: Match.NonEmptyString }),
+          ],
+        }),
+      ).toThrow(
+        "Invalid deserialize() schema option: array schemas must contain exactly one element.",
+      );
+    });
+
+    it("should fail when array schema shorthand receives a non-array value", () => {
+      const payload = serializer.serialize({ id: "u1" });
+
+      expect(() =>
+        serializer.deserialize(payload, {
+          schema: [Match.ObjectIncluding({ id: Match.NonEmptyString })],
+        }),
+      ).toThrow(MatchError);
+    });
+
+    it("should fail for non-constructor function schemas in array shorthand", () => {
+      const payload = serializer.serialize(["Ada"]);
+
+      expect(() =>
+        serializer.deserialize(payload, {
+          schema: [() => true],
+        }),
+      ).toThrow();
+    });
+
+    it("should deserialize with Match.fromSchema entry schema", () => {
+      class UserDto {
+        public id!: string;
+        public name!: string;
+      }
+
+      Match.Schema()(UserDto);
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "name");
+
+      const payload = serializer.serialize({ id: "u1", name: "Ada" });
+      const deserialized = serializer.deserialize(payload, {
+        schema: Match.fromSchema(UserDto),
+      });
+
+      expect(deserialized).toEqual({ id: "u1", name: "Ada" });
+    });
+
+    it("should deserialize arrays using Match.ArrayOf(Match.fromSchema(...))", () => {
+      class UserDto {
+        public id!: string;
+      }
+
+      Match.Schema()(UserDto);
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+
+      const payload = serializer.serialize([{ id: "u1" }, { id: "u2" }]);
+      const deserialized = serializer.parse(payload, {
+        schema: Match.ArrayOf(Match.fromSchema(UserDto)),
+      });
+
+      expect(deserialized).toEqual([{ id: "u1" }, { id: "u2" }]);
+    });
+
+    it("should forward schema parse errors", () => {
+      class UserDto {
+        public id!: string;
+      }
+
+      Match.Schema()(UserDto);
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+
+      const payload = serializer.serialize([{ id: "u1" }, { id: "" }]);
+
+      expect(() =>
+        serializer.deserialize(payload, {
+          schema: Match.ArrayOf(Match.fromSchema(UserDto)),
+        }),
+      ).toThrow(MatchError);
+    });
+
+    it("should validate nested recursive Product > Categories schemas", () => {
+      class CategoryDto {
+        public id!: string;
+        public name!: string;
+        public children?: CategoryDto[];
+      }
+
+      Match.Schema()(CategoryDto);
+      Match.Field(Match.NonEmptyString)(CategoryDto.prototype, "id");
+      Match.Field(Match.NonEmptyString)(CategoryDto.prototype, "name");
+      Match.Field(
+        Match.Optional(
+          Match.ArrayOf(Match.Lazy(() => Match.fromSchema(CategoryDto))),
+        ),
+      )(CategoryDto.prototype, "children");
+
+      class ProductDto {
+        public id!: string;
+        public name!: string;
+        public categories!: CategoryDto[];
+      }
+
+      Match.Schema()(ProductDto);
+      Match.Field(Match.NonEmptyString)(ProductDto.prototype, "id");
+      Match.Field(Match.NonEmptyString)(ProductDto.prototype, "name");
+      Match.Field(Match.ArrayOf(Match.fromSchema(CategoryDto)))(
+        ProductDto.prototype,
+        "categories",
+      );
+
+      const payload = serializer.serialize({
+        id: "p_1",
+        name: "Laptop",
+        categories: [
+          {
+            id: "c_1",
+            name: "Electronics",
+            children: [
+              {
+                id: "c_2",
+                name: "Computers",
+                children: [{ id: "c_3", name: "Laptops" }],
+              },
+            ],
+          },
+        ],
+      });
+
+      const deserialized = serializer.deserialize(payload, {
+        schema: Match.fromSchema(ProductDto),
+      });
+
+      expect(deserialized).toEqual({
+        id: "p_1",
+        name: "Laptop",
+        categories: [
+          {
+            id: "c_1",
+            name: "Electronics",
+            children: [
+              {
+                id: "c_2",
+                name: "Computers",
+                children: [{ id: "c_3", name: "Laptops" }],
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    it("should fail for invalid nested recursive category payloads", () => {
+      class CategoryDto {
+        public id!: string;
+        public name!: string;
+        public children?: CategoryDto[];
+      }
+
+      Match.Schema()(CategoryDto);
+      Match.Field(Match.NonEmptyString)(CategoryDto.prototype, "id");
+      Match.Field(Match.NonEmptyString)(CategoryDto.prototype, "name");
+      Match.Field(
+        Match.Optional(
+          Match.ArrayOf(Match.Lazy(() => Match.fromSchema(CategoryDto))),
+        ),
+      )(CategoryDto.prototype, "children");
+
+      class ProductDto {
+        public id!: string;
+        public categories!: CategoryDto[];
+      }
+
+      Match.Schema()(ProductDto);
+      Match.Field(Match.NonEmptyString)(ProductDto.prototype, "id");
+      Match.Field(Match.ArrayOf(Match.fromSchema(CategoryDto)))(
+        ProductDto.prototype,
+        "categories",
+      );
+
+      const payload = serializer.serialize({
+        id: "p_1",
+        categories: [
+          {
+            id: "c_1",
+            name: "Root",
+            children: [{ id: "c_2", name: "" }],
+          },
+        ],
+      });
+
+      expect(() =>
+        serializer.deserialize(payload, {
+          schema: Match.fromSchema(ProductDto),
+        }),
+      ).toThrow(MatchError);
+    });
+
+    it("should validate nested lazy schemas without class decorators", () => {
+      const createTreeSchema = (): MatchPattern =>
+        Match.ObjectIncluding({
+          name: Match.NonEmptyString,
+          children: Match.Optional(
+            Match.ArrayOf(Match.Lazy(() => createTreeSchema())),
+          ),
+        });
+
+      const payload = serializer.serialize({
+        name: "root",
+        children: [{ name: "child", children: [{ name: "leaf" }] }],
+      });
+
+      const deserialized = serializer.deserialize(payload, {
+        schema: createTreeSchema(),
+      });
+
+      expect(deserialized).toEqual({
+        name: "root",
+        children: [{ name: "child", children: [{ name: "leaf" }] }],
+      });
+    });
+
+    it("should remap outgoing keys and apply serialize transforms for class instances", () => {
+      class UserView {
+        public id!: number;
+      }
+
+      Serializer.Field({
+        from: "abc",
+        serialize(value: unknown): string {
+          return String(value);
+        },
+      })(UserView.prototype, "id");
+
+      const value = new UserView();
+      value.id = 7;
+
+      const treePayload = serializer.stringify(value);
+      expect(JSON.parse(treePayload)).toEqual({ abc: "7" });
+
+      const graphPayload = serializer.serialize({ view: value });
+      expect(JSON.parse(graphPayload)).toEqual({
+        __graph: true,
+        version: 1,
+        root: { __ref: "obj_1" },
+        nodes: {
+          obj_1: {
+            kind: "object",
+            value: {
+              view: { __ref: "obj_2" },
+            },
+          },
+          obj_2: {
+            kind: "object",
+            value: {
+              abc: "7",
+            },
+          },
+        },
+      });
+    });
+
+    it("should throw when serialization remap produces duplicate output keys", () => {
+      class BrokenOut {
+        public id!: string;
+
+        public abc!: string;
+      }
+
+      Serializer.Field({ from: "abc" })(BrokenOut.prototype, "id");
+
+      const value = new BrokenOut();
+      value.id = "u1";
+      value.abc = "already";
+
+      expect(() => serializer.stringify(value)).toThrow(
+        'duplicate output key "abc"',
+      );
+    });
+
+    it("should keep serialization unchanged when only deserialize transform exists", () => {
+      class DeserializeOnly {
+        public id!: string;
+      }
+
+      Serializer.Field({
+        deserialize(value: unknown): unknown {
+          return value;
+        },
+      })(DeserializeOnly.prototype, "id");
+
+      const value = new DeserializeOnly();
+      value.id = "u1";
+
+      expect(JSON.parse(serializer.stringify(value))).toEqual({ id: "u1" });
+    });
+
+    it("should handle null-prototype objects in serialization remap path", () => {
+      const value = Object.create(null) as Record<string, unknown>;
+      value.id = "u1";
+
+      expect(JSON.parse(serializer.stringify(value))).toEqual({ id: "u1" });
+    });
+
+    it("should not recompute mapping metadata after first use", () => {
+      const deserializeCalls: unknown[] = [];
+
+      class CachedDto {
+        public id!: string;
+      }
+
+      Serializer.Field({
+        from: "x",
+        deserialize(value: unknown): unknown {
+          deserializeCalls.push(value);
+          return value;
+        },
+      })(CachedDto.prototype, "id");
+
+      Match.Schema()(CachedDto);
+      Match.Field(Match.NonEmptyString)(CachedDto.prototype, "id");
+
+      const payload = serializer.serialize({ x: "u1" });
+
+      expect(
+        serializer.deserialize(payload, {
+          schema: CachedDto,
+        }),
+      ).toEqual({ id: "u1" });
+
+      expect(
+        serializer.deserialize(payload, {
+          schema: CachedDto,
+        }),
+      ).toEqual({ id: "u1" });
+
+      expect(deserializeCalls).toEqual(["u1", "u1"]);
     });
   });
 

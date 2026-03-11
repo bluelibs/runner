@@ -7,18 +7,20 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "npm run build && node dist/local-runner.js",
-    "test": "npm run start",
+    "check": "npm run start",
+    "test": "node ../../node_modules/jest/bin/jest.js --config ./jest.config.js --runInBand",
     "dev": "serverless --config serverless.yml offline start",
     "dev:sam": "sam build && sam local start-api --port 3060"
   },
   "dependencies": {
-    "@bluelibs/runner": "^5.2.0",
-    "esbuild": "^0.25.9",
-    "zod": "^3.23.8"
+    "@bluelibs/runner": "file:../..",
+    "esbuild": "^0.25.9"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "serverless": "^4.18.2",
     "serverless-offline": "^14.4.0",
+    "ts-jest": "^29.4.1",
     "typescript": "^5.9.2"
   }
 }

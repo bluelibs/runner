@@ -1,8 +1,12 @@
-import { defineResource, defineTaskMiddleware } from "../../define";
+import { defineResource } from "../../definers/defineResource";
+import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
+import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
 import { middlewareRateLimitExceededError, RunnerErrorId } from "../../errors";
+import { Match } from "../../tools/check";
+import { symbolDefinitionIdentity } from "../../types/symbols";
 
 export interface RateLimitMiddlewareConfig {
   /**
@@ -15,41 +19,10 @@ export interface RateLimitMiddlewareConfig {
   max: number;
 }
 
-function assertRateLimitMiddlewareConfig(
-  config: unknown,
-): asserts config is RateLimitMiddlewareConfig {
-  if (!config || typeof config !== "object") {
-    throw new TypeError(
-      "rateLimitTaskMiddleware requires .with({ windowMs, max }) configuration.",
-    );
-  }
-
-  const maybe = config as Partial<RateLimitMiddlewareConfig>;
-  if (maybe.windowMs === undefined || maybe.max === undefined) {
-    throw new TypeError(
-      "rateLimitTaskMiddleware requires .with({ windowMs, max }) configuration.",
-    );
-  }
-
-  if (!Number.isFinite(maybe.windowMs) || (maybe.windowMs as number) <= 0) {
-    throw new TypeError(
-      "rateLimitTaskMiddleware requires a positive number for config.windowMs.",
-    );
-  }
-
-  if (!Number.isFinite(maybe.max) || (maybe.max as number) <= 0) {
-    throw new TypeError(
-      "rateLimitTaskMiddleware requires a positive number for config.max.",
-    );
-  }
-}
-
-const rateLimitConfigSchema = {
-  parse: (config: unknown) => {
-    assertRateLimitMiddlewareConfig(config);
-    return config;
-  },
-};
+const rateLimitConfigPattern = Match.ObjectIncluding({
+  windowMs: Match.PositiveInteger,
+  max: Match.PositiveInteger,
+});
 
 /**
  * Custom error class for rate limit errors.
@@ -61,6 +34,8 @@ export class RateLimitError extends RunnerError<{ message: string }> {
       message,
       { message },
       middlewareRateLimitExceededError.httpCode,
+      undefined,
+      middlewareRateLimitExceededError[symbolDefinitionIdentity],
     );
   }
 }
@@ -77,76 +52,78 @@ export interface RateLimitState {
 export const journalKeys = {
   /** Number of remaining requests in the current window */
   remaining: journalHelper.createKey<number>(
-    "globals.middleware.task.rateLimit.remaining",
+    "runner.middleware.task.rateLimit.remaining",
   ),
   /** Timestamp when the current window resets */
   resetTime: journalHelper.createKey<number>(
-    "globals.middleware.task.rateLimit.resetTime",
+    "runner.middleware.task.rateLimit.resetTime",
   ),
   /** Maximum requests allowed per window */
   limit: journalHelper.createKey<number>(
-    "globals.middleware.task.rateLimit.limit",
+    "runner.middleware.task.rateLimit.limit",
   ),
 } as const;
 
-export const rateLimitResource = defineResource({
-  id: "globals.resources.rateLimit",
-  tags: [globalTags.system],
-  init: async () => {
-    return {
-      states: new WeakMap<RateLimitMiddlewareConfig, RateLimitState>(),
-    };
-  },
-});
+export const rateLimitResource = defineResource(
+  markFrameworkDefinition({
+    id: "runner.rateLimit",
+    tags: [globalTags.system],
+    init: async () => {
+      return {
+        states: new WeakMap<RateLimitMiddlewareConfig, RateLimitState>(),
+      };
+    },
+  }),
+);
 
 /**
  * Rate limit middleware: limits the number of executions within a fixed time window.
  */
-export const rateLimitTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.task.rateLimit",
-  throws: [middlewareRateLimitExceededError],
-  configSchema: rateLimitConfigSchema,
-  dependencies: { state: rateLimitResource },
-  async run(
-    { task, next, journal },
-    { state },
-    config: RateLimitMiddlewareConfig,
-  ) {
-    assertRateLimitMiddlewareConfig(config);
+export const rateLimitTaskMiddleware = defineTaskMiddleware(
+  markFrameworkDefinition({
+    id: "runner.middleware.task.rateLimit",
+    throws: [middlewareRateLimitExceededError],
+    configSchema: rateLimitConfigPattern,
+    dependencies: { state: rateLimitResource },
+    async run(
+      { task, next, journal },
+      { state },
+      config: RateLimitMiddlewareConfig,
+    ) {
+      const { states } = state;
+      let limitState = states.get(config);
+      const now = Date.now();
 
-    const { states } = state;
-    let limitState = states.get(config);
-    const now = Date.now();
+      if (!limitState || now >= limitState.resetTime) {
+        limitState = {
+          count: 0,
+          resetTime: now + config.windowMs,
+        };
+        states.set(config, limitState);
+      }
 
-    if (!limitState || now >= limitState.resetTime) {
-      limitState = {
-        count: 0,
-        resetTime: now + config.windowMs,
-      };
-      states.set(config, limitState);
-    }
+      // Set journal values before checking limits
+      const remaining = Math.max(0, config.max - limitState.count);
+      journal.set(journalKeys.remaining, remaining, { override: true });
+      journal.set(journalKeys.resetTime, limitState.resetTime, {
+        override: true,
+      });
+      journal.set(journalKeys.limit, config.max, { override: true });
 
-    // Set journal values before checking limits
-    const remaining = Math.max(0, config.max - limitState.count);
-    journal.set(journalKeys.remaining, remaining, { override: true });
-    journal.set(journalKeys.resetTime, limitState.resetTime, {
-      override: true,
-    });
-    journal.set(journalKeys.limit, config.max, { override: true });
+      if (limitState.count >= config.max) {
+        throw new RateLimitError(
+          `Rate limit exceeded. Try again after ${new Date(
+            limitState.resetTime,
+          ).toISOString()}`,
+        );
+      }
 
-    if (limitState.count >= config.max) {
-      throw new RateLimitError(
-        `Rate limit exceeded. Try again after ${new Date(
-          limitState.resetTime,
-        ).toISOString()}`,
-      );
-    }
-
-    limitState.count++;
-    // Update remaining after incrementing count
-    journal.set(journalKeys.remaining, config.max - limitState.count, {
-      override: true,
-    });
-    return await next(task.input);
-  },
-});
+      limitState.count++;
+      // Update remaining after incrementing count
+      journal.set(journalKeys.remaining, config.max - limitState.count, {
+        override: true,
+      });
+      return await next(task.input);
+    },
+  }),
+);

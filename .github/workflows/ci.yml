@@ -24,10 +24,20 @@ jobs:
     services:
       redis:
         image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 30
         ports:
           - 6379:6379
       rabbitmq:
         image: rabbitmq:3-management-alpine
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
         ports:
           - 5672:5672
 
@@ -61,6 +71,9 @@ jobs:
           DURABLE_INTEGRATION: "1"
           DURABLE_TEST_REDIS_URL: "redis://127.0.0.1:6379"
           DURABLE_TEST_RABBIT_URL: "amqp://127.0.0.1:5672"
+          # Enables Event Lanes real RabbitMQ integration suite.
+          EVENT_LANES_INTEGRATION: "1"
+          EVENT_LANES_TEST_RABBIT_URL: "amqp://127.0.0.1:5672"
         run: npm run test:ci
 
       # Generate documentation (only on main branch)

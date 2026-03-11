@@ -15,25 +15,25 @@ describe("Configurable Tags", () => {
   describe("Tag Definition", () => {
     it("should create a tag with string id", () => {
       const performanceTag = defineTag<{ alertAboveMs: number }>({
-        id: "performance.track",
+        id: "performance-track",
       });
 
-      expect(performanceTag.id).toBe("performance.track");
+      expect(performanceTag.id).toBe("performance-track");
       expect(typeof performanceTag.with).toBe("function");
       expect(typeof performanceTag.extract).toBe("function");
     });
 
     it("should create a tag without configuration", () => {
-      const simpleTag = defineTag({ id: "simple.tag" });
+      const simpleTag = defineTag({ id: "simple-tag" });
 
-      expect(simpleTag.id).toBe("simple.tag");
+      expect(simpleTag.id).toBe("simple-tag");
       expect(typeof simpleTag.with).toBe("function");
       expect(typeof simpleTag.extract).toBe("function");
     });
 
     it("should work with validation schema", () => {
       const simpleTag = defineTag<{ value: string }>({
-        id: "simple.tag",
+        id: "simple-tag",
         configSchema: {
           parse: (_input) => {
             throw createMessageError("Validation Error");
@@ -50,17 +50,17 @@ describe("Configurable Tags", () => {
   describe("Tag Configuration with .with()", () => {
     it("should create a configured tag instance", () => {
       const performanceTag = defineTag<{ alertAboveMs: number }>({
-        id: "performance.track",
+        id: "performance-track",
       });
 
       const configuredTag = performanceTag.with({ alertAboveMs: 200 });
 
-      expect(configuredTag.id).toBe("performance.track");
+      expect(configuredTag.id).toBe("performance-track");
       expect(configuredTag.config).toEqual({ alertAboveMs: 200 });
     });
 
     it("should allow multiple configurations of the same tag", () => {
-      const cacheTag = defineTag<{ ttl: number }>({ id: "cache.config" });
+      const cacheTag = defineTag<{ ttl: number }>({ id: "cache-config" });
 
       const shortCache = cacheTag.with({ ttl: 300 });
       const longCache = cacheTag.with({ ttl: 3600 });
@@ -73,7 +73,7 @@ describe("Configurable Tags", () => {
   describe("Tag Extraction with .extract()", () => {
     it("should extract configured tag from tags array", () => {
       const performanceTag = defineTag<{ alertAboveMs: number }>({
-        id: "performance.track",
+        id: "performance-track",
       });
 
       const tags = [
@@ -87,7 +87,7 @@ describe("Configurable Tags", () => {
     });
 
     it("should extract unconfigured tag from tags array", () => {
-      const simpleTag = defineTag({ id: "simple.tag" });
+      const simpleTag = defineTag({ id: "simple-tag" });
 
       const tags = [simpleTag] satisfies TagType[];
 
@@ -99,7 +99,7 @@ describe("Configurable Tags", () => {
 
     it("should properly extend the tag data", () => {
       const simpleTag = defineTag<{ value: number; other?: string }>({
-        id: "simple.tag",
+        id: "simple-tag",
         config: { value: 2, other: "ss" },
       });
       const simpleTag2 = simpleTag.with({ value: 123 });
@@ -109,9 +109,9 @@ describe("Configurable Tags", () => {
 
     it("should extract config and check existense when tag is present", () => {
       const performanceTag = defineTag<{ alertAboveMs: number }>({
-        id: "performance.track",
+        id: "performance-track",
       });
-      const nonExistentTag = defineTag({ id: "non.existent.tag" });
+      const nonExistentTag = defineTag({ id: "non-existent-tag" });
 
       const tags = [
         performanceTag.with({ alertAboveMs: 100 }),
@@ -131,11 +131,11 @@ describe("Configurable Tags", () => {
 
     it("should extract configured tag from a taggable object (task.definition)", () => {
       const performanceTag = defineTag<{ alertAboveMs: number }>({
-        id: "performance.track",
+        id: "performance-track",
       });
 
       const task = defineTask({
-        id: "task.with.tags",
+        id: "task-with-tags",
         tags: [performanceTag.with({ alertAboveMs: 123 })],
         run: async () => "ok",
       });
@@ -147,7 +147,7 @@ describe("Configurable Tags", () => {
 
     it("should return null when taggable has no tags", () => {
       const t = defineTag({ id: "x" });
-      const task = defineTask({ id: "no.tags", run: async () => "ok" });
+      const task = defineTask({ id: "no-tags", run: async () => "ok" });
       expect(t.extract(task)).toBeUndefined();
     });
 
@@ -162,11 +162,11 @@ describe("Configurable Tags", () => {
   describe("Integration with Tasks", () => {
     it("should work with task tags", () => {
       const performanceTag = defineTag<{ alertAboveMs: number }>({
-        id: "performance.track",
+        id: "performance-track",
       });
 
       const testTask = defineTask({
-        id: "test.task",
+        id: "test-task",
         tags: [performanceTag.with({ alertAboveMs: 200 })],
         run: async () => {
           return "success";
@@ -182,14 +182,13 @@ describe("Configurable Tags", () => {
 
     it("should work with middleware checking tags", async () => {
       const performanceTag = defineTag<{ alertAboveMs: number }>({
-        id: "performance.track",
+        id: "performance-track",
       });
 
       const middlewareExecutions: Array<{ taskId: string; config: any }> = [];
 
       const performanceMiddleware = defineTaskMiddleware({
-        id: "performance.middleware",
-        everywhere: true,
+        id: "performance-middleware",
         run: async ({ task, next }) => {
           if (task?.definition.tags) {
             const extracted = performanceTag.extract(task.definition.tags);
@@ -205,19 +204,24 @@ describe("Configurable Tags", () => {
       });
 
       const fastTask = defineTask({
-        id: "fast.task",
+        id: "fast-task",
         tags: [performanceTag.with({ alertAboveMs: 100 })],
         run: async () => "fast",
       });
 
       const slowTask = defineTask({
-        id: "slow.task",
+        id: "slow-task",
         tags: [performanceTag.with({ alertAboveMs: 500 })],
         run: async () => "slow",
       });
 
       const app = defineResource({
-        id: "test.app",
+        id: "test-app",
+        subtree: {
+          tasks: {
+            middleware: [performanceMiddleware],
+          },
+        },
         register: [fastTask, slowTask, performanceMiddleware, performanceTag],
         dependencies: { fastTask, slowTask },
         init: async (_, { fastTask, slowTask }) => {
@@ -232,8 +236,14 @@ describe("Configurable Tags", () => {
 
       expect(middlewareExecutions).toHaveLength(2);
       expect(middlewareExecutions).toEqual([
-        { taskId: "fast.task", config: { alertAboveMs: 100 } },
-        { taskId: "slow.task", config: { alertAboveMs: 500 } },
+        {
+          taskId: expect.stringMatching(/(?:^|\.)fast-task$/),
+          config: { alertAboveMs: 100 },
+        },
+        {
+          taskId: expect.stringMatching(/(?:^|\.)slow-task$/),
+          config: { alertAboveMs: 500 },
+        },
       ]);
     });
   });
@@ -241,7 +251,7 @@ describe("Configurable Tags", () => {
   describe("Integration with Resources", () => {
     it("should work with resource metadata", () => {
       const dbTag = defineTag<{ connectionTimeout: number }>({
-        id: "db.config",
+        id: "db-config",
       });
 
       const database = defineResource({
@@ -259,11 +269,11 @@ describe("Configurable Tags", () => {
   describe("Integration with Events", () => {
     it("should work with event metadata", () => {
       const auditTag = defineTag<{ sensitive: boolean }>({
-        id: "audit.config",
+        id: "audit-config",
       });
 
       const userEvent = defineEvent<{ userId: string }>({
-        id: "user.created",
+        id: "user-created",
         tags: [auditTag.with({ sensitive: true })],
       });
 
@@ -280,7 +290,7 @@ describe("Configurable Tags", () => {
       });
 
       const rateLimitMiddleware = defineTaskMiddleware({
-        id: "rate.limit.middleware",
+        id: "rate-limit-middleware",
         tags: [rateLimitTag.with({ requestsPerMinute: 60 })],
         run: async ({ next, task }) => {
           return next(task?.input);
@@ -297,10 +307,10 @@ describe("Configurable Tags", () => {
 
   describe("Integration with Store", () => {
     it("should work with full run() integration and arrive in store", async () => {
-      const tag = defineTag({ id: "test.tag" });
-      const tag2 = defineTag({ id: "test.tag2" });
+      const tag = defineTag({ id: "test-tag" });
+      const tag2 = defineTag({ id: "test-tag2" });
       const resource = defineResource({
-        id: "test.resource",
+        id: "test-resource",
         register: [tag, tag2],
         tags: [tag, tag2],
       });
@@ -308,25 +318,33 @@ describe("Configurable Tags", () => {
       const result = await run(resource);
       const store = result.getResourceValue(globalResources.store);
       const tags = Array.from(store.tags.values());
-      expect(tags).toHaveLength(Object.values(globalTags).length + 2);
-      expect(tags).toContain(tag);
-      expect(tags).toContain(tag2);
+      const uniqueGlobalTagCount = new Set(
+        Object.values(globalTags).map((globalTag) => globalTag.id),
+      ).size;
+      expect(tags).toHaveLength(uniqueGlobalTagCount + 2);
+      const tagIds = tags.map((registeredTag) => registeredTag.id);
+      expect(tagIds.some((registeredId) => registeredId.endsWith(tag.id))).toBe(
+        true,
+      );
+      expect(
+        tagIds.some((registeredId) => registeredId.endsWith(tag2.id)),
+      ).toBe(true);
     });
   });
   it("should throw an exception if you are using an unregistered tag", async () => {
-    const tag = defineTag({ id: "test.tag" });
+    const tag = defineTag({ id: "test-tag" });
     const resource = defineResource({
-      id: "test.resource",
+      id: "test-resource",
       tags: [tag],
     });
     await expect(run(resource)).rejects.toThrow(
-      'Tag "test.tag" not registered',
+      'Tag "test-tag" not registered',
     );
   });
   describe("Edge Cases", () => {
     it("should handle null/undefined config", () => {
       const optionalTag = defineTag<{ value?: string }>({
-        id: "optional.config",
+        id: "optional-config",
       });
 
       const configuredTag = optionalTag.with({});
@@ -338,7 +356,7 @@ describe("Configurable Tags", () => {
 
     it("should allow null to override foundation config", () => {
       const nullableTag = defineTag<{ value: number } | null>({
-        id: "nullable.config",
+        id: "nullable-config",
         config: { value: 1 },
       });
 
@@ -348,7 +366,7 @@ describe("Configurable Tags", () => {
 
     it("should replace array configs instead of merging", () => {
       const arrayTag = defineTag<number[]>({
-        id: "array.config",
+        id: "array-config",
         config: [1, 2],
       });
 

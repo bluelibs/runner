@@ -1,5 +1,4 @@
-import z from "zod";
-import { r } from "@bluelibs/runner";
+import { Match, r } from "@bluelibs/runner";
 import { usersRepository } from "../resources/users-repository.resource";
 import { authMiddleware } from "../middleware/auth";
 import { httpRoute } from "../../http/tags/http.tag";
@@ -7,11 +6,16 @@ import { UserContext } from "../contexts/user.context";
 import { ApiResponse } from "../../http/types";
 import { User, UserSchema } from "../types";
 
+const usersResponseSchema = Match.compile({
+  success: Boolean,
+  data: Match.ArrayOf(UserSchema.pattern),
+});
+
 /**
  * Get all users (protected admin route)
  */
 export const getAllUsersTask = r
-  .task("app.tasks.users.getAll")
+  .task("getAll")
   .dependencies({ userService: usersRepository })
   .middleware([authMiddleware.with({ requiresAuth: true })])
   .tags([
@@ -20,10 +24,7 @@ export const getAllUsersTask = r
       description: "Get a list of all registered users (admin only)",
       tags: ["User", "Admin"],
       requiresAuth: true,
-      responseSchema: z.object({
-        success: z.boolean(),
-        data: z.array(UserSchema),
-      }),
+      responseSchema: usersResponseSchema,
     }),
   ])
   .run(async (_, { userService }): Promise<ApiResponse<User[]>> => {

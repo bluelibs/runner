@@ -1,9 +1,9 @@
 import type {
   DependencyMapType,
   ITaskMeta,
-  IValidationSchema,
-  TagType,
+  TaskTagType,
   TaskMiddlewareAttachmentType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -27,7 +27,7 @@ export type BuilderState<
   _TOutput,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
-  TTags extends TagType[],
+  TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
 > = Readonly<{
   id: string;
@@ -35,31 +35,9 @@ export type BuilderState<
   dependencies?: TDeps | (() => TDeps);
   middleware?: TMiddleware;
   meta?: TMeta;
-  inputSchema?: IValidationSchema<any>;
-  resultSchema?: IValidationSchema<any>;
+  inputSchema?: ValidationSchemaInput<any>;
+  resultSchema?: ValidationSchemaInput<any>;
   throws?: ThrowsList;
   run?: (input: unknown, dependencies: unknown) => unknown;
-  tags?: TTags;
-}>;
-
-/**
- * Internal state for the PhantomTaskFluentBuilder.
- */
-export type PhantomBuilderState<
-  _TInput,
-  _TResolved,
-  TDeps extends DependencyMapType,
-  TMeta extends ITaskMeta,
-  TTags extends TagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[],
-> = Readonly<{
-  id: string;
-  filePath: string;
-  dependencies?: TDeps | (() => TDeps);
-  middleware?: TMiddleware;
-  meta?: TMeta;
-  inputSchema?: IValidationSchema<any>;
-  resultSchema?: IValidationSchema<any>;
-  throws?: ThrowsList;
   tags?: TTags;
 }>;

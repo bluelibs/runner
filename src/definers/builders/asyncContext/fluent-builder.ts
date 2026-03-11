@@ -1,4 +1,5 @@
 import type { IAsyncContextDefinition, IAsyncContextMeta } from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineAsyncContext } from "../../defineAsyncContext";
 import type { AsyncContextFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
@@ -45,7 +46,7 @@ export function makeAsyncContextBuilder<T>(
         configSchema: state.configSchema,
         meta: state.meta,
       };
-      return defineAsyncContext<T>(def, state.filePath);
+      return deepFreeze(defineAsyncContext<T>(def, state.filePath));
     },
   };
 

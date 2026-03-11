@@ -1,4 +1,4 @@
-import { r, globals } from "@bluelibs/runner";
+import { r, resources } from "@bluelibs/runner";
 import express, { Express, Request, Response } from "express";
 import cors from "cors";
 import { httpTag } from "../tags/http.tag";
@@ -15,10 +15,10 @@ export interface ExpressServer {
 }
 
 export const expressServerResource = r
-  .resource("app.resources.expressServer")
+  .resource("expressServer")
   .dependencies({
     appConfig,
-    logger: globals.resources.logger,
+    logger: resources.logger,
   })
   .register([httpTag])
   .init(async (_, { appConfig, logger }): Promise<ExpressServer> => {
@@ -34,14 +34,15 @@ export const expressServerResource = r
     // Request context middleware
     app.use((req: Request, res: Response, next) => {
       const requestData: RequestData = {
-        requestId: generateId(),
+        id: generateId(),
         ip: req.ip || req.socket.remoteAddress || "unknown",
         userAgent: req.get("User-Agent") || "unknown",
         timestamp: new Date(),
       };
 
       // Store request data for use in tasks
-      (req as unknown as { requestData: RequestData }).requestData = requestData;
+      (req as unknown as { requestData: RequestData }).requestData =
+        requestData;
       next();
     });
 

@@ -2,21 +2,21 @@ import { defineTask, defineResource } from "../../define";
 import { run } from "../../run";
 import { r } from "../../public";
 
-describe("run.exports-visibility", () => {
+describe("run-exports-visibility", () => {
   describe("backward compatibility", () => {
     it("allows all dependencies when no exports are declared", async () => {
       const innerTask = defineTask({
-        id: "exports.compat.inner",
+        id: "exports-compat-inner",
         run: async () => "inner-value",
       });
 
       const child = defineResource({
-        id: "exports.compat.child",
+        id: "exports-compat-child",
         register: [innerTask],
       });
 
       const root = defineResource({
-        id: "exports.compat.root",
+        id: "exports-compat-root",
         register: [child],
         dependencies: { innerTask },
         async init(_, deps) {
@@ -33,22 +33,22 @@ describe("run.exports-visibility", () => {
   describe("basic isolation", () => {
     it("allows access to exported tasks", async () => {
       const publicTask = defineTask({
-        id: "exports.basic.public",
+        id: "exports-basic-public",
         run: async () => "public",
       });
       const privateTask = defineTask({
-        id: "exports.basic.private",
+        id: "exports-basic-private",
         run: async () => "private",
       });
 
       const child = defineResource({
-        id: "exports.basic.child",
+        id: "exports-basic-child",
         register: [publicTask, privateTask],
-        exports: [publicTask],
+        isolate: { exports: [publicTask] },
       });
 
       const root = defineResource({
-        id: "exports.basic.root",
+        id: "exports-basic-root",
         register: [child],
         dependencies: { publicTask },
         async init(_, deps) {
@@ -63,28 +63,28 @@ describe("run.exports-visibility", () => {
 
     it("blocks access to non-exported tasks", async () => {
       const publicTask = defineTask({
-        id: "exports.block.public",
+        id: "exports-block-public",
         run: async () => "public",
       });
       const privateTask = defineTask({
-        id: "exports.block.private",
+        id: "exports-block-private",
         run: async () => "private",
       });
 
       const child = defineResource({
-        id: "exports.block.child",
+        id: "exports-block-child",
         register: [publicTask, privateTask],
-        exports: [publicTask],
+        isolate: { exports: [publicTask] },
       });
 
       const root = defineResource({
-        id: "exports.block.root",
+        id: "exports-block-root",
         register: [child],
         dependencies: { privateTask },
       });
 
       await expect(run(root)).rejects.toThrow(
-        /exports\.block\.private.*internal.*exports\.block\.child/,
+        /exports-block-private.*internal.*exports-block-child/,
       );
     });
 
@@ -92,22 +92,22 @@ describe("run.exports-visibility", () => {
       expect.assertions(7);
 
       const publicTask = defineTask({
-        id: "exports.error.public",
+        id: "exports-error-public",
         run: async () => "public",
       });
       const privateTask = defineTask({
-        id: "exports.error.private",
+        id: "exports-error-private",
         run: async () => "private",
       });
 
       const child = defineResource({
-        id: "exports.error.child",
+        id: "exports-error-child",
         register: [publicTask, privateTask],
-        exports: [publicTask],
+        isolate: { exports: [publicTask] },
       });
 
       const root = defineResource({
-        id: "exports.error.root",
+        id: "exports-error-root",
         register: [child],
         dependencies: { privateTask },
       });
@@ -118,17 +118,17 @@ describe("run.exports-visibility", () => {
       } catch (e: any) {
         expect(e.id).toBe("runner.errors.visibilityViolation");
         expect(e.message).toContain(
-          'Item "exports.error.private" is internal to resource "exports.error.child"',
+          'Task "exports-error-private" is internal to resource "exports-error-child"',
         );
         expect(e.message).toContain(
-          'cannot be referenced by Resource "exports.error.root"',
+          'cannot be referenced by Resource "exports-error-root"',
         );
         expect(e.message).toContain("Remediation:");
         expect(e.remediation).toContain(
-          'Resource "exports.error.child" exports: [exports.error.public].',
+          'Resource "exports-error-child" exports: [exports-error-public].',
         );
         expect(e.remediation).toContain(
-          'Either add "exports.error.private" to exports.error.child\'s .exports([...])',
+          'Either add "exports-error-private" to exports-error-child\'s .isolate({ exports: [...] })',
         );
         expect(e.remediation).toContain(
           "or restructure to use an exported item instead.",
@@ -138,26 +138,64 @@ describe("run.exports-visibility", () => {
 
     it("blocks access to non-exported resources", async () => {
       const innerResource = defineResource({
-        id: "exports.block-res.inner",
+        id: "exports-block-res-inner",
         async init() {
           return "inner";
         },
       });
 
       const child = defineResource({
-        id: "exports.block-res.child",
+        id: "exports-block-res-child",
         register: [innerResource],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const root = defineResource({
-        id: "exports.block-res.root",
+        id: "exports-block-res-root",
         register: [child],
         dependencies: { innerResource },
       });
 
       await expect(run(root)).rejects.toThrow(
-        /exports\.block-res\.inner.*internal.*exports\.block-res\.child/,
+        /exports-block-res-inner.*internal.*exports-block-res-child/,
+      );
+    });
+
+    it("resolves isolate exports from resource config", async () => {
+      const publicTask = defineTask({
+        id: "exports-dynamic-public",
+        run: async () => "public",
+      });
+
+      const child = defineResource<{ visible: boolean }>({
+        id: "exports-dynamic-child",
+        register: [publicTask],
+        isolate: (config) => ({
+          exports: config.visible ? [publicTask] : "none",
+        }),
+      });
+
+      const root = defineResource({
+        id: "exports-dynamic-root",
+        register: [child.with({ visible: true })],
+        dependencies: { publicTask },
+        async init(_, deps) {
+          return await deps.publicTask();
+        },
+      });
+
+      const allowed = await run(root);
+      expect(allowed.value).toBe("public");
+      await allowed.dispose();
+
+      const blockedRoot = defineResource({
+        id: "exports-dynamic-root-blocked",
+        register: [child.with({ visible: false })],
+        dependencies: { publicTask },
+      });
+
+      await expect(run(blockedRoot)).rejects.toThrow(
+        /exports-dynamic-public.*internal.*exports-dynamic-child/,
       );
     });
   });
@@ -165,14 +203,14 @@ describe("run.exports-visibility", () => {
   describe("subtree and transitive behavior", () => {
     it("allows a resource to depend on its own non-exported registered task", async () => {
       const internalTask = defineTask({
-        id: "exports.owner-scope.internal-task",
+        id: "exports-owner-scope-internal-task",
         run: async () => "internal-value",
       });
 
       const child = defineResource({
-        id: "exports.owner-scope.child",
+        id: "exports-owner-scope-child",
         register: [internalTask],
-        exports: [],
+        isolate: { exports: "none" },
         dependencies: { internalTask },
         async init(_, deps) {
           return await deps.internalTask();
@@ -180,7 +218,7 @@ describe("run.exports-visibility", () => {
       });
 
       const root = defineResource({
-        id: "exports.owner-scope.root",
+        id: "exports-owner-scope-root",
         register: [child],
         dependencies: { child },
         async init(_, deps) {
@@ -195,23 +233,23 @@ describe("run.exports-visibility", () => {
 
     it("allows internal subtree access even when item is not exported", async () => {
       const sharedTask = defineTask({
-        id: "exports.subtree.shared",
+        id: "exports-subtree-shared",
         run: async () => "shared-value",
       });
       const internalConsumer = defineTask({
-        id: "exports.subtree.consumer",
+        id: "exports-subtree-consumer",
         dependencies: { sharedTask },
         run: async (_, deps) => deps.sharedTask(),
       });
 
       const child = defineResource({
-        id: "exports.subtree.child",
+        id: "exports-subtree-child",
         register: [sharedTask, internalConsumer],
-        exports: [internalConsumer],
+        isolate: { exports: [internalConsumer] },
       });
 
       const root = defineResource({
-        id: "exports.subtree.root",
+        id: "exports-subtree-root",
         register: [child],
         dependencies: { internalConsumer },
         async init(_, deps) {
@@ -226,24 +264,24 @@ describe("run.exports-visibility", () => {
 
     it("supports transitive visibility via exported resources", async () => {
       const deepTask = defineTask({
-        id: "exports.transitive-resource.deep",
+        id: "exports-transitive-resource-deep",
         run: async () => "deep-value",
       });
 
       const middle = defineResource({
-        id: "exports.transitive-resource.middle",
+        id: "exports-transitive-resource-middle",
         register: [deepTask],
-        exports: [deepTask],
+        isolate: { exports: [deepTask] },
       });
 
       const outer = defineResource({
-        id: "exports.transitive-resource.outer",
+        id: "exports-transitive-resource-outer",
         register: [middle],
-        exports: [middle],
+        isolate: { exports: [middle] },
       });
 
       const root = defineResource({
-        id: "exports.transitive-resource.root",
+        id: "exports-transitive-resource-root",
         register: [outer],
         dependencies: { deepTask },
         async init(_, deps) {
@@ -258,167 +296,171 @@ describe("run.exports-visibility", () => {
 
     it("blocks when parent does not re-export child resource", async () => {
       const deepTask = defineTask({
-        id: "exports.no-reexport.deep",
+        id: "exports-no-reexport-deep",
         run: async () => "deep",
       });
 
       const middle = defineResource({
-        id: "exports.no-reexport.middle",
+        id: "exports-no-reexport-middle",
         register: [deepTask],
-        exports: [deepTask],
+        isolate: { exports: [deepTask] },
       });
 
       const outer = defineResource({
-        id: "exports.no-reexport.outer",
+        id: "exports-no-reexport-outer",
         register: [middle],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const root = defineResource({
-        id: "exports.no-reexport.root",
+        id: "exports-no-reexport-root",
         register: [outer],
         dependencies: { deepTask },
       });
 
       await expect(run(root)).rejects.toThrow(
-        /exports\.no-reexport\.deep.*internal/,
+        /exports-no-reexport-deep.*internal/,
       );
     });
 
     it("blocks when exported child resource does not export the target", async () => {
       const deepTask = defineTask({
-        id: "exports.transitive-block.deep",
+        id: "exports-transitive-block-deep",
         run: async () => "deep",
       });
 
       const middle = defineResource({
-        id: "exports.transitive-block.middle",
+        id: "exports-transitive-block-middle",
         register: [deepTask],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const outer = defineResource({
-        id: "exports.transitive-block.outer",
+        id: "exports-transitive-block-outer",
         register: [middle],
-        exports: [middle],
+        isolate: { exports: [middle] },
       });
 
       const root = defineResource({
-        id: "exports.transitive-block.root",
+        id: "exports-transitive-block-root",
         register: [outer],
         dependencies: { deepTask },
       });
 
       await expect(run(root)).rejects.toThrow(
-        /exports\.transitive-block\.deep.*internal/,
+        /exports-transitive-block-deep.*internal/,
       );
     });
   });
 
   describe("builder and fork integration", () => {
-    it("supports fluent .exports()", async () => {
+    it("supports isolate exports in fluent builder", async () => {
       const publicTask = defineTask({
-        id: "exports.fluent.public",
+        id: "exports-fluent-public",
         run: async () => "fluent-public",
       });
       const privateTask = defineTask({
-        id: "exports.fluent.private",
+        id: "exports-fluent-private",
         run: async () => "fluent-private",
       });
 
       const child = r
-        .resource("exports.fluent.child")
+        .resource("exports-fluent-child")
         .register([publicTask, privateTask])
-        .exports([publicTask])
+        .isolate({ exports: [publicTask] })
         .build();
 
       const root = defineResource({
-        id: "exports.fluent.root",
+        id: "exports-fluent-root",
         register: [child],
         dependencies: { privateTask },
       });
 
       await expect(run(root)).rejects.toThrow(
-        /exports\.fluent\.private.*internal/,
+        /exports-fluent-private.*internal/,
       );
     });
 
-    it("supports fluent .exports() override mode", async () => {
+    it("supports isolate exports override mode in fluent builder", async () => {
       const task1 = defineTask({
-        id: "exports.fluent-override.t1",
+        id: "exports-fluent-override-t1",
         run: async () => "t1",
       });
       const task2 = defineTask({
-        id: "exports.fluent-override.t2",
+        id: "exports-fluent-override-t2",
         run: async () => "t2",
       });
 
       const child = r
-        .resource("exports.fluent-override.child")
+        .resource("exports-fluent-override-child")
         .register([task1, task2])
-        .exports([task1])
-        .exports([task2], { override: true })
+        .isolate({ exports: [task1] })
+        .isolate({ exports: [task2] }, { override: true })
         .build();
 
       const root = defineResource({
-        id: "exports.fluent-override.root",
+        id: "exports-fluent-override-root",
         register: [child],
         dependencies: { task1 },
       });
 
       await expect(run(root)).rejects.toThrow(
-        /exports\.fluent-override\.t1.*internal/,
+        /exports-fluent-override-t1.*internal/,
       );
     });
 
-    it("fork inherits exports", async () => {
+    it("composed variants preserve exports boundaries", async () => {
       const publicTask = defineTask({
-        id: "exports.fork.public",
+        id: "exports-fork-public",
         run: async () => "fork-public",
       });
       const privateTask = defineTask({
-        id: "exports.fork.private",
+        id: "exports-fork-private",
         run: async () => "fork-private",
       });
 
       const base = defineResource({
-        id: "exports.fork.base",
+        id: "exports-fork-base",
         register: [publicTask, privateTask],
-        exports: [publicTask],
+        isolate: { exports: [publicTask] },
       });
-      const forked = base.fork("exports.fork.forked");
+      const forked = defineResource({
+        id: "exports-fork-forked",
+        register: base.register,
+        isolate: base.isolate,
+      });
 
       const root = defineResource({
-        id: "exports.fork.root",
+        id: "exports-fork-root",
         register: [forked],
         dependencies: { privateTask },
       });
 
       await expect(run(root)).rejects.toThrow(
-        /exports\.fork\.private.*internal.*exports\.fork\.forked/,
+        /exports-fork-private.*internal.*exports-fork-forked/,
       );
     });
 
     it("empty exports means nothing public", async () => {
       const task = defineTask({
-        id: "exports.empty.task",
+        id: "exports-empty-task",
         run: async () => "value",
       });
 
       const child = defineResource({
-        id: "exports.empty.child",
+        id: "exports-empty-child",
         register: [task],
-        exports: [],
+        isolate: { exports: "none" },
       });
 
       const root = defineResource({
-        id: "exports.empty.root",
+        id: "exports-empty-root",
         register: [child],
         dependencies: { task },
       });
 
       await expect(run(root)).rejects.toThrow(
-        /exports\.empty\.task.*internal.*exports\.empty\.child/,
+        /exports-empty-task.*internal.*exports-empty-child/,
       );
     });
   });

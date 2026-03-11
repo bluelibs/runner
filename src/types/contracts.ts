@@ -1,6 +1,5 @@
 // Solution to enforce input,output contracts from 'tags' and 'middleware'
 
-import { TagType } from "./tag";
 import type { UnionToIntersection } from "./utilities";
 
 // A unique symbol key used both for typing and runtime branding
@@ -205,14 +204,3 @@ export type InferOutputOrViolationFromContracts<
           >
         : Simplify<O>
       : never;
-
-// Back-compat aliases with your original API
-/** @deprecated Use ExtractOutputTypeFromContracts instead */
-export type ExtractTagsWithNonVoidReturnTypeFromTags<TTags extends TagType[]> =
-  ExtractOutputTypeFromContracts<TTags>;
-
-/** @deprecated Use EnsureOutputSatisfiesContracts instead */
-export type EnsureResponseSatisfiesContracts<
-  TTags extends TagType[],
-  TResponse,
-> = EnsureOutputSatisfiesContracts<TTags, TResponse>;

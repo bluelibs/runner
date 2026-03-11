@@ -24,20 +24,22 @@
 
 <specifics>
 - This library has 100% code coverage.
-- Node specific code (Async Context, Durable Workflows, Tunnels, etc) goes under ./src/node/ folder. It is exported only for node.
+- Node specific code (Async Context, Durable Workflows, Remote Lanes, etc) goes under ./src/node/ folder. It is exported only for node.
 - This package is multi-platform (readmes/MULTIPLATFORM.md) be sure to take this into account when implementing changes
 - AI.md (readmes/AI.md) contains AI-token-friendly documentation about Runner. Read it if the task implies that you know Runner.
-- Always run `npm run qa` to ensure type safety and linting. (Expected to take around 30 seconds)
+- Always run `npm run qa` to ensure type safety and linting. (Expected to take around 30 seconds, if working only on docs, don't run it)
 - Never revert changes from other files that you did not modify.
 - Apply fail-fast principles. If something is not as expected, throw an error immediately.
-- This is a framework, it's documentation is compsoed dynamically, read guide-units/DOCS_STYLE_GUIDE.md for more info, useful when we make changes or new features.
+- This is a framework, it's documentation is composed dynamically into FULL_GUIDE.md (which should not be read/manipulated by AI), read guide-units/DOCS_STYLE_GUIDE.md for more info, useful when we make changes or new features.
+- Attention when coding defensively (especially when using 'unknown' and lots of typeof), we use typescript and we want to offer public and inner surface absolute type-safety. This means once the trust-boundary has passed (user-input ended), we can be sure of the types.
 </specifics>
 
 <new_feature>
 
+- Prefer to use type strings instead of enums
 - When building new features/enhancements/changes, must be implemented with care without affecting the system and not over-polute files.
 - Code retain 100% test coverage.
-- Ensure readmes/AI.md (minimal version of README)
+- Ensure readmes/AI.md (minimal version of README) and that the guide-units with the full guide are updated accordingly.
 - Document 'why' in comments, not 'what' or 'how', as the code should be self-descriptive enough to explain those.
 - Use runner errors instead of 'throw new Error()' for better error handling and consistency.
 - Read guide-units/DOCS_STYLE_GUIDE.md to understand how we compose the main documentation.

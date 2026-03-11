@@ -1,12 +1,16 @@
 import { getRunner, RequestCtx, createUser } from "../bootstrap";
-import { json, parseEvent, errorToResponse, APIGatewayProxyResult } from "../http";
-import { z } from "zod";
-
-const CreateUserSchema = z.object({ name: z.string().min(1) });
+import {
+  json,
+  parseEvent,
+  errorToResponse,
+  APIGatewayProxyResult,
+} from "../http";
+import { AnyApiGatewayEvent, LambdaContextLike } from "../types/aws";
+import { createUserSchema, getValidationIssues } from "../validation";
 
 export const handler = async (
-  event: unknown,
-  context: { awsRequestId?: string },
+  event: AnyApiGatewayEvent,
+  context: LambdaContextLike,
 ): Promise<APIGatewayProxyResult> => {
   const rr = await getRunner();
   const { method, path, headers, body } = parseEvent<{ name?: string }>(event);
@@ -20,17 +24,24 @@ export const handler = async (
     },
     async () => {
       try {
-        const parsed = CreateUserSchema.safeParse({ name: body?.name });
-        if (!parsed.success) {
+        const parsed = createUserSchema.parse({ name: body?.name });
+
+        const created = await rr.runTask(createUser, parsed);
+        return json(201, created);
+      } catch (error: unknown) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "failures" in error &&
+          Array.isArray((error as { failures?: unknown }).failures)
+        ) {
           return json(400, {
             message: "Invalid body",
-            issues: parsed.error.issues,
+            issues: getValidationIssues(error),
           });
         }
-        const created = await rr.runTask(createUser, parsed.data);
-        return json(201, created);
-      } catch (err: unknown) {
-        return errorToResponse(err);
+
+        return errorToResponse(error);
       }
     },
   );

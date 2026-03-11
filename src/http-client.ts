@@ -1,7 +1,7 @@
 import type { SerializerLike } from "./serializer";
-import type { ProtocolEnvelope } from "./globals/resources/tunnel/protocol";
-import { assertOkEnvelope } from "./globals/resources/tunnel/protocol";
-import { createExposureFetch } from "./http-fetch-tunnel.resource";
+import type { ProtocolEnvelope } from "./remote-lanes/http/protocol";
+import { assertOkEnvelope } from "./remote-lanes/http/protocol";
+import { createExposureFetch } from "./http-fetch-remote-lane.resource";
 import { buildUniversalManifest } from "./tools/buildUniversalManifest";
 import type { IAsyncContext } from "./types/asyncContext";
 import type { IErrorHelper } from "./types/error";
@@ -23,7 +23,7 @@ export interface HttpClientConfig {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
   serializer: SerializerLike;
-  onRequest?: (ctx: {
+  onRequest?: (requestContext: {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;
@@ -32,9 +32,21 @@ export interface HttpClientConfig {
 }
 
 export interface HttpClient {
-  task<I = unknown, O = unknown>(id: string, input?: I): Promise<O>;
-  event<P = unknown>(id: string, payload?: P): Promise<void>;
-  eventWithResult?<P = unknown>(id: string, payload?: P): Promise<P>;
+  task<I = unknown, O = unknown>(
+    id: string,
+    input?: I,
+    options?: { headers?: Record<string, string> },
+  ): Promise<O>;
+  event<P = unknown>(
+    id: string,
+    payload?: P,
+    options?: { headers?: Record<string, string> },
+  ): Promise<void>;
+  eventWithResult?<P = unknown>(
+    id: string,
+    payload?: P,
+    options?: { headers?: Record<string, string> },
+  ): Promise<P>;
 }
 
 function toHeaders(auth?: HttpClientAuth): Record<string, string> {
@@ -44,6 +56,19 @@ function toHeaders(auth?: HttpClientAuth): Record<string, string> {
   return headers;
 }
 
+function mergeHeaders(
+  base: Record<string, string>,
+  extra?: Record<string, string>,
+): Record<string, string> {
+  if (!extra) {
+    return base;
+  }
+  return {
+    ...base,
+    ...extra,
+  };
+}
+
 function buildContextHeaderOrThrow(
   serializer: SerializerLike,
   contexts?: Array<IAsyncContext<unknown>>,
@@ -51,15 +76,15 @@ function buildContextHeaderOrThrow(
   if (!contexts || contexts.length === 0) return undefined;
 
   const map: Record<string, string> = {};
-  for (const ctx of contexts) {
+  for (const asyncContext of contexts) {
     try {
-      const value = ctx.use();
-      map[ctx.id] = ctx.serialize(value);
+      const value = asyncContext.use();
+      map[asyncContext.id] = asyncContext.serialize(value);
     } catch (error) {
       const normalizedError =
         error instanceof Error ? error : new Error(String(error));
       httpContextSerializationError.throw({
-        contextId: ctx.id,
+        contextId: asyncContext.id,
         reason: normalizedError.message,
       });
     }
@@ -116,6 +141,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     url: string,
     manifestText: string,
     files: ReturnType<typeof buildUniversalManifest>["webFiles"],
+    headersOverride?: Record<string, string>,
   ) {
     const fd = new FormData();
     fd.append("__manifest", manifestText);
@@ -123,7 +149,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       const filename = f.meta?.name ?? "upload";
       fd.append(`file:${f.id}`, f.blob, filename);
     }
-    const headers = toHeaders(cfg.auth);
+    const headers = mergeHeaders(toHeaders(cfg.auth), headersOverride);
     const contextHeader = buildContextHeaderOrThrow(
       cfg.serializer,
       cfg.contexts,
@@ -135,7 +161,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       method: "POST",
       body: fd,
       headers,
-      // Security: prevent automatic redirects from forwarding tunnel auth headers.
+      // Security: prevent automatic redirects from forwarding auth headers.
       redirect: "error",
     });
     const text = await res.text();
@@ -144,7 +170,11 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
   }
 
   return {
-    async task<I, O>(id: string, input?: I): Promise<O> {
+    async task<I, O>(
+      id: string,
+      input?: I,
+      options?: { headers?: Record<string, string> },
+    ): Promise<O> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
 
       // Guard: raw Node Readable-like inputs are not supported in universal client
@@ -165,10 +195,11 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
           url,
           manifestText,
           manifest.webFiles,
+          options?.headers,
         );
         try {
           return assertOkEnvelope<O>(r as ProtocolEnvelope<O>, {
-            fallbackMessage: "Tunnel task error",
+            fallbackMessage: "Remote lane task error",
           });
         } catch (e) {
           rethrowWithRegistry(e, cfg.errorRegistry);
@@ -185,28 +216,36 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
 
       // JSON fallback
       try {
-        return await fetchClient.task<I, O>(id, input as I);
+        return await fetchClient.task<I, O>(id, input as I, options);
       } catch (e) {
         rethrowWithRegistry(e, cfg.errorRegistry);
       }
     },
 
-    async event<P>(id: string, payload?: P): Promise<void> {
+    async event<P>(
+      id: string,
+      payload?: P,
+      options?: { headers?: Record<string, string> },
+    ): Promise<void> {
       try {
-        return await fetchClient.event<P>(id, payload);
+        return await fetchClient.event<P>(id, payload, options);
       } catch (e) {
         rethrowWithRegistry(e, cfg.errorRegistry);
       }
     },
 
-    async eventWithResult<P>(id: string, payload?: P): Promise<P> {
+    async eventWithResult<P>(
+      id: string,
+      payload?: P,
+      options?: { headers?: Record<string, string> },
+    ): Promise<P> {
       try {
         if (!fetchClient.eventWithResult) {
           httpEventWithResultUnavailableError.throw({
             clientFactory: "createHttpClient",
           });
         }
-        return await fetchClient.eventWithResult!<P>(id, payload);
+        return await fetchClient.eventWithResult!<P>(id, payload, options);
       } catch (e) {
         rethrowWithRegistry(e, cfg.errorRegistry);
       }

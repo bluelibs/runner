@@ -17,10 +17,24 @@ import {
   lazyResourceSyncAccessError,
   runResultDisposeDuringBootstrapError,
   runResultDisposedError,
+  runtimeAdmissionControlDuringBootstrapError,
+  runtimeHealthDuringBootstrapError,
+  runtimeAccessViolationError,
   runtimeElementNotFoundError,
   runtimeRootNotAvailableError,
-  runtimeRootNotInitializedError,
 } from "../errors";
+import { runtimeSource } from "../types/runtimeSource";
+import { HealthReporter } from "./HealthReporter";
+import { RuntimeLifecyclePhase } from "./runtime/LifecycleAdmissionController";
+import {
+  IRuntimeRecoveryHandle,
+  IRuntimeRecoveryOptions,
+  ResolvedRunOptions,
+  RuntimeState,
+} from "../types/runner";
+import { globalResources } from "../globals/globalResources";
+import type { ITimers } from "../types/timers";
+import { RuntimeRecoveryController } from "./runtime/RuntimeRecoveryController";
 
 /**
  * Options for configuring lazy resource loading behavior.
@@ -54,7 +68,7 @@ type RunResultLazyOptions = {
  * - Task execution via `runTask()`
  * - Event emission via `emitEvent()`
  * - Resource access via `getResourceValue()` / `getLazyResourceValue()`
- * - Root access via `getRootValue()`, `getRootConfig()`, `getRootId()`
+ * - Root definition access via `root`
  * - Disposal via `dispose()`
  *
  * @example
@@ -98,6 +112,8 @@ export class RunResult<V> implements IRuntime<V> {
    * When enabled, unused resources are not initialized until accessed.
    */
   private lazyOptions: RunResultLazyOptions = {};
+  private readonly healthReporter: HealthReporter;
+  private readonly recoveryController: RuntimeRecoveryController;
 
   /**
    * Creates a new RunResult instance.
@@ -130,11 +146,38 @@ export class RunResult<V> implements IRuntime<V> {
      */
     private readonly taskRunner: TaskRunner,
     /**
+     * Normalized run() options captured for this runtime instance.
+     * This lets tooling inspect the effective runtime configuration directly.
+     */
+    public readonly runOptions: ResolvedRunOptions,
+    /**
      * Function to call during disposal.
      * Disposes all resources in reverse initialization order.
      */
     private readonly disposeFn: () => Promise<void>,
-  ) {}
+  ) {
+    this.healthReporter = new HealthReporter(this.store, {
+      ensureAvailable: () => {
+        this.ensureRuntimeIsActive();
+        if (this.#isBootstrapping) {
+          runtimeHealthDuringBootstrapError.throw();
+        }
+      },
+      assertResourceAccess: (resourceId) =>
+        this.assertRuntimeAccess(resourceId, "Resource"),
+      isResourceAccessible: (resourceId) =>
+        this.isRuntimeAccessible(resourceId),
+      isSleepingResource: (resourceId) =>
+        this.store.resources.get(resourceId)!.isInitialized !== true,
+    });
+    this.recoveryController = new RuntimeRecoveryController({
+      getRuntimeState: () => this.getRuntimeState(),
+      getTimers: () => this.getTimersResourceValue(),
+      isShuttingDown: () => this.#disposed || this.#disposing,
+      onResume: () => this.store.getLifecycleAdmissionController().resume(),
+      onUnhandledError: this.store.onUnhandledError,
+    });
+  }
 
   /**
    * Returns the root value initialized by the root resource.
@@ -142,6 +185,21 @@ export class RunResult<V> implements IRuntime<V> {
    */
   public get value(): V {
     return this.#value as V;
+  }
+
+  public get state(): RuntimeState {
+    this.ensureRuntimeIsActive();
+    return this.getRuntimeState();
+  }
+
+  public get root(): IResource<any, Promise<V>, any, any, any> {
+    return this.getRootOrThrow().resource as IResource<
+      any,
+      Promise<V>,
+      any,
+      any,
+      any
+    >;
   }
 
   /**
@@ -153,6 +211,67 @@ export class RunResult<V> implements IRuntime<V> {
     if (this.#disposed || this.#disposing) {
       runResultDisposedError.throw();
     }
+  }
+
+  /**
+   * Business admissions stay queryable through shutdown so lifecycle admission
+   * can decide whether a call is still allowed for the current phase.
+   */
+  private ensureRuntimeAvailableForBusinessCalls() {
+    if (this.#disposed) {
+      runResultDisposedError.throw();
+    }
+  }
+
+  /**
+   * Enforces the root resource's exported API surface for runtime callers.
+   *
+   * When the root resource declares `.isolate({ exports: [...] })`, only those items may be
+   * reached through the IRuntime API. This prevents external callers from
+   * bypassing encapsulation boundaries that were intentionally declared at
+   * the resource composition layer.
+   *
+   * When no isolate exports are declared on the root, everything remains open
+   * (backward compatible).
+   * @internal
+   */
+  private assertRuntimeAccess(
+    targetId: string,
+    targetType: "Task" | "Event" | "Resource",
+  ): void {
+    const rootId = this.store.root?.resource.id;
+    // Root not yet wired in unit-test mocks or rare early-bootstrap injection
+    // via system.runtime — skip the check; other guards apply.
+    /* istanbul ignore next */
+    if (!rootId) return;
+
+    const { accessible, exportedIds } = this.store.getRootAccessInfo(
+      targetId,
+      rootId,
+    );
+
+    if (!accessible) {
+      runtimeAccessViolationError.throw({
+        targetId,
+        targetType,
+        rootId,
+        exportedIds,
+      });
+    }
+  }
+
+  /**
+   * Returns whether a target is reachable through the root runtime API surface.
+   * @internal
+   */
+  private isRuntimeAccessible(targetId: string): boolean {
+    const rootId = this.store.root?.resource.id;
+    /* istanbul ignore next */
+    if (!rootId) {
+      return true;
+    }
+
+    return this.store.getRootAccessInfo(targetId, rootId).accessible;
   }
 
   /**
@@ -201,6 +320,7 @@ export class RunResult<V> implements IRuntime<V> {
    *
    * // Run with options for journal forwarding
    * const result = await runtime.runTask(greet, undefined, { journal });
+   * // Inside task.run(...), context.source is injected automatically
    */
   public runTask = <TTask extends ITask<any, Promise<any>, any> | string>(
     task: TTask,
@@ -210,25 +330,28 @@ export class RunResult<V> implements IRuntime<V> {
         : [input: I, options?: TaskCallOptions]
       : [input?: unknown, options?: TaskCallOptions]
   ): TTask extends ITask<any, infer O, any> ? O : Promise<any> => {
-    this.ensureRuntimeIsActive();
+    this.ensureRuntimeAvailableForBusinessCalls();
     const [input, options] = args as [unknown, TaskCallOptions | undefined];
-    let resolvedTask: ITask<any, Promise<any>, any>;
+    const taskId = this.resolveRuntimeElementId(task);
+    if (!this.store.tasks.has(taskId)) {
+      runtimeElementNotFoundError.throw({ type: "Task", elementId: taskId });
+    }
+    const resolvedTask = this.store.tasks.get(taskId)!.task;
 
-    if (typeof task === "string") {
-      const taskId = task;
-      if (!this.store.tasks.has(taskId)) {
-        runtimeElementNotFoundError.throw({ type: "Task", elementId: taskId });
-      }
-      resolvedTask = this.store.tasks.get(taskId)!.task;
-    } else {
-      resolvedTask = task;
+    // Violations return a rejected Promise rather than throwing synchronously
+    // so callers can always use .catch() / await idioms on the returned Promise.
+    try {
+      this.assertRuntimeAccess(resolvedTask.id, "Task");
+    } catch (e) {
+      return Promise.reject(e) as TTask extends ITask<any, infer O, any>
+        ? O
+        : Promise<any>;
     }
 
-    return this.taskRunner.run(
-      resolvedTask,
-      input,
-      options,
-    ) as TTask extends ITask<any, infer O, any> ? O : Promise<any>;
+    return this.taskRunner.run(resolvedTask, input, {
+      ...(options || {}),
+      source: runtimeSource.runtime("runtime.api"),
+    }) as TTask extends ITask<any, infer O, any> ? O : Promise<any>;
   };
 
   /**
@@ -257,19 +380,31 @@ export class RunResult<V> implements IRuntime<V> {
     payload?: P extends undefined | void ? undefined : P,
     options?: IEventEmitOptions,
   ) => {
-    this.ensureRuntimeIsActive();
+    this.ensureRuntimeAvailableForBusinessCalls();
 
-    if (typeof event === "string") {
-      const eventId = event;
-      if (!this.store.events.has(eventId)) {
-        runtimeElementNotFoundError.throw({
-          type: "Event",
-          elementId: eventId,
-        });
-      }
-      event = this.store.events.get(eventId)!.event;
+    const eventId = this.resolveRuntimeElementId(event);
+    if (!this.store.events.has(eventId)) {
+      runtimeElementNotFoundError.throw({
+        type: "Event",
+        elementId: eventId,
+      });
     }
-    return this.eventManager.emit(event, payload, "outside", options);
+    event = this.store.events.get(eventId)!.event;
+
+    // Violations return a rejected Promise rather than throwing synchronously
+    // so callers can always use .catch() / await idioms on the returned Promise.
+    try {
+      this.assertRuntimeAccess(event.id, "Event");
+    } catch (e) {
+      return Promise.reject(e);
+    }
+
+    return this.eventManager.emit(
+      event,
+      payload,
+      runtimeSource.runtime("runtime.api"),
+      options,
+    );
   }) as {
     <P>(
       event: IEvent<P> | string,
@@ -319,6 +454,9 @@ export class RunResult<V> implements IRuntime<V> {
         elementId: resourceId,
       });
     }
+
+    this.assertRuntimeAccess(resourceId, "Resource");
+
     if (
       this.lazyOptions.lazyMode &&
       this.lazyOptions.startupUnusedResourceIds?.has(resourceId)
@@ -366,6 +504,8 @@ export class RunResult<V> implements IRuntime<V> {
       });
     }
 
+    this.assertRuntimeAccess(resourceId, "Resource");
+
     if (!this.lazyOptions.lazyResourceLoader) {
       return this.store.resources.get(resourceId)!.value;
     }
@@ -399,7 +539,7 @@ export class RunResult<V> implements IRuntime<V> {
   ): Config => {
     this.ensureRuntimeIsActive();
 
-    const resourceId = typeof resource === "string" ? resource : resource.id;
+    const resourceId = this.getResourceId(resource);
     if (!this.store.resources.has(resourceId)) {
       runtimeElementNotFoundError.throw({
         type: "Resource",
@@ -407,47 +547,44 @@ export class RunResult<V> implements IRuntime<V> {
       });
     }
 
+    this.assertRuntimeAccess(resourceId, "Resource");
+
     return this.store.resources.get(resourceId)!.config;
   };
 
   /**
-   * Returns the ID of the root resource.
-   * @returns The root resource identifier
-   *
-   * @example
-   * const rootId = runtime.getRootId(); // "app"
+   * Evaluates async health checks for all health-enabled resources or a filtered subset.
    */
-  public getRootId = (): string => this.getRootOrThrow().resource.id;
+  public getHealth = async (
+    resourceDefs?: Array<string | IResource<any, any, any, any, any>>,
+  ) => this.healthReporter.getHealth(resourceDefs);
 
-  /**
-   * Returns the configuration passed to the root resource.
-   * @returns The root resource configuration
-   *
-   * @example
-   * const config = runtime.getRootConfig<AppConfig>();
-   */
-  public getRootConfig = <Config = unknown>(): Config =>
-    this.getRootOrThrow().config as Config;
+  public pause = (_reason?: string): void => {
+    this.ensureRuntimeIsActive();
+    this.ensureAdmissionControlIsAvailable();
 
-  /**
-   * Returns the initialized value of the root resource.
-   *
-   * This is the value returned by the root resource's `init` function.
-   * The root must have been fully initialized before calling this.
-   *
-   * @returns The root resource's initialized value
-   * @throws RuntimeError if root hasn't been initialized yet
-   *
-   * @example
-   * const app = runtime.getRootValue<App>();
-   */
-  public getRootValue = <Value = unknown>(): Value => {
-    const root = this.getRootOrThrow();
-    if (root.isInitialized !== true) {
-      runtimeRootNotInitializedError.throw({ rootId: root.resource.id });
+    const controller = this.store.getLifecycleAdmissionController();
+    if (controller.getPhase() !== RuntimeLifecyclePhase.Running) {
+      return;
     }
 
-    return root.value as Value;
+    this.recoveryController.beginPauseEpisode();
+    controller.beginPausing();
+  };
+
+  public resume = (): void => {
+    this.ensureRuntimeIsActive();
+    this.ensureAdmissionControlIsAvailable();
+
+    this.recoveryController.resumeCurrentEpisode();
+  };
+
+  public recoverWhen = (
+    options: IRuntimeRecoveryOptions,
+  ): IRuntimeRecoveryHandle => {
+    this.ensureRuntimeIsActive();
+    this.ensureAdmissionControlIsAvailable();
+    return this.recoveryController.recoverWhen(options);
   };
 
   /**
@@ -457,7 +594,40 @@ export class RunResult<V> implements IRuntime<V> {
   private getResourceId(
     resource: string | IResource<any, any, any, any, any>,
   ): string {
-    return typeof resource === "string" ? resource : resource.id;
+    return this.resolveRuntimeElementId(resource);
+  }
+
+  /**
+   * Resolves either a definition object or a string id to the store's
+   * canonical id, with graceful fallback to the original string/object id.
+   */
+  private resolveRuntimeElementId(reference: string | { id: string }): string {
+    const resolved = this.store.resolveDefinitionId(reference);
+    if (resolved) {
+      return resolved;
+    }
+    return typeof reference === "string" ? reference : reference.id;
+  }
+
+  private ensureAdmissionControlIsAvailable(): void {
+    if (this.#isBootstrapping) {
+      runtimeAdmissionControlDuringBootstrapError.throw();
+    }
+  }
+
+  private getRuntimeState(): RuntimeState {
+    const phase = this.store.getLifecycleAdmissionController().getPhase();
+    switch (phase) {
+      case RuntimeLifecyclePhase.Paused:
+        return "paused";
+      default:
+        return "running";
+    }
+  }
+
+  private getTimersResourceValue(): ITimers {
+    return this.store.resources.get(globalResources.timers.id)!
+      .value as ITimers;
   }
 
   /**
@@ -492,11 +662,15 @@ export class RunResult<V> implements IRuntime<V> {
     }
 
     this.#disposing = true;
+    this.recoveryController.dispose();
+    this.store.beginCoolingDown();
 
     this.#disposePromise = Promise.resolve()
       .then(() => this.disposeFn())
-      .finally(() => {
+      .then(() => {
         this.#disposed = true;
+      })
+      .finally(() => {
         this.#disposing = false;
         this.#disposePromise = undefined;
       });

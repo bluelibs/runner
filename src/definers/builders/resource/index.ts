@@ -1,7 +1,7 @@
 import type {
   IResourceMeta,
+  ResourceTagType,
   ResourceMiddlewareAttachmentType,
-  TagType,
 } from "../../../defs";
 import { getCallerFile } from "../../../tools/getCallerFile";
 import type { ResourceFluentBuilder } from "./fluent-builder.interface";
@@ -15,29 +15,38 @@ export * from "./types";
 /**
  * Creates a new resource builder with the given id.
  */
-export function resourceBuilder<TConfig = void>(
+export type ResourceBuilderOptions = {
+  gateway?: boolean;
+};
+
+type InternalResourceBuilderOptions = ResourceBuilderOptions & {
+  filePath: string;
+};
+
+function createResourceBuilder<TConfig = void>(
   id: string,
+  options: InternalResourceBuilderOptions,
 ): ResourceFluentBuilder<
   TConfig,
   Promise<any>,
   {},
   any,
   IResourceMeta,
-  TagType[],
+  ResourceTagType[],
   ResourceMiddlewareAttachmentType[]
 > {
-  const filePath = getCallerFile();
   const initial: BuilderState<
     TConfig,
     Promise<any>,
     {},
     any,
     IResourceMeta,
-    TagType[],
+    ResourceTagType[],
     ResourceMiddlewareAttachmentType[]
   > = Object.freeze({
     id,
-    filePath,
+    gateway: options?.gateway === true,
+    filePath: options.filePath,
     dependencies: undefined,
     register: undefined,
     middleware: [],
@@ -45,12 +54,34 @@ export function resourceBuilder<TConfig = void>(
     context: undefined,
     init: undefined,
     dispose: undefined,
+    ready: undefined,
+    cooldown: undefined,
     configSchema: undefined,
     resultSchema: undefined,
     meta: undefined,
     overrides: undefined,
+    isolateDeclarations: undefined,
+    subtreeDeclarations: undefined,
   });
   return makeResourceBuilder(initial);
+}
+
+export function resourceBuilder<TConfig = void>(
+  id: string,
+  options?: ResourceBuilderOptions,
+): ResourceFluentBuilder<
+  TConfig,
+  Promise<any>,
+  {},
+  any,
+  IResourceMeta,
+  ResourceTagType[],
+  ResourceMiddlewareAttachmentType[]
+> {
+  return createResourceBuilder(id, {
+    ...options,
+    filePath: getCallerFile(),
+  });
 }
 
 /**

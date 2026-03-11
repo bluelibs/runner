@@ -4,42 +4,41 @@ import { defineResource } from "../../../../define";
 import { defineTask } from "../../../../definers/defineTask";
 import { defineEvent } from "../../../../definers/defineEvent";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createMessageError } from "../../../../errors";
 
 export const TOKEN = "unit-secret";
 
 export const testTask = defineTask<{ v: number }, Promise<number>>({
-  id: "unit.exposure.task",
+  id: "unit-exposure-task",
   inputSchema: z.object({ v: z.number() }).strict(),
   resultSchema: z.number(),
   run: async ({ v }) => v,
 });
 
 export const testEvent = defineEvent<{ msg?: string }>({
-  id: "unit.exposure.event",
+  id: "unit-exposure-event",
 });
 
 export const noInputTask = defineTask<void, Promise<number>>({
-  id: "unit.exposure.noInputTask",
+  id: "unit-exposure-noInputTask",
   run: async () => 1,
 });
 
 export async function startExposureServer() {
-  const exposure = nodeExposure.with({
+  const exposure = rpcExposure.with({
     http: {
-      dangerouslyAllowOpenExposure: true,
       basePath: "/__runner",
       listen: { port: 0 },
-      auth: { token: TOKEN },
+      auth: { token: TOKEN, allowAnonymous: true },
     },
   });
   const app = defineResource({
-    id: "unit.exposure.app",
+    id: "unit-exposure-app",
     register: [testTask, noInputTask, testEvent, exposure],
   });
   const rr = await run(app);
-  const handlers = await rr.getResourceValue(exposure.resource as any);
+  const handlers = await rr.getResourceValue(exposure as any);
   const addr = handlers.server?.address();
   if (!addr || typeof addr === "string")
     throw createMessageError("No server address");

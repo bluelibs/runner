@@ -1,22 +1,22 @@
-import * as http from "http";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { defineTask } from "../../../../definers/defineTask";
 import {
-  nodeExposure,
-  useExposureContext,
-  hasExposureContext,
+  useRpcLaneRequestContext,
+  hasRpcLaneRequestContext,
 } from "../../../index";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { ExposureRequestContext } from "../../../exposure/requestContext";
 import { storage } from "../../../../definers/defineAsyncContext";
 import { createMessageError } from "../../../../errors";
 
 describe("nodeExposure request context (raw-body)", () => {
-  it("provides req/res via useExposureContext() and allows raw-body streaming when content-type is application/octet-stream", async () => {
+  it("provides req/res via useRpcLaneRequestContext() and allows raw-body streaming when content-type is application/octet-stream", async () => {
     const rawTask = defineTask<void, Promise<string>>({
-      id: "ctx.raw.task",
+      id: "ctx-raw-task",
       run: async () => {
-        const { req, basePath, url, method, headers } = useExposureContext();
+        const { req, basePath, url, method, headers } =
+          useRpcLaneRequestContext();
         // Basic sanity assertions on context
         if (!basePath || !url || !method || !headers)
           throw createMessageError("no ctx");
@@ -32,20 +32,18 @@ describe("nodeExposure request context (raw-body)", () => {
       },
     });
 
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "ctx.raw.app",
+      id: "ctx-raw-app",
       register: [rawTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     // Create raw-body request with content-type application/octet-stream
     const body = "streamme";
@@ -87,7 +85,7 @@ describe("nodeExposure request context (raw-body)", () => {
 
   describe("hasExposureContext", () => {
     it("returns false when no context is available", () => {
-      expect(hasExposureContext()).toBe(false);
+      expect(hasRpcLaneRequestContext()).toBe(false);
     });
 
     it("returns true when exposure context is provided", () => {
@@ -101,13 +99,13 @@ describe("nodeExposure request context (raw-body)", () => {
         method: "POST",
         signal: new AbortController().signal,
       };
-      const testFn = () => hasExposureContext();
+      const testFn = () => hasRpcLaneRequestContext();
       expect(provideFn(testValue, testFn)).toBe(true);
     });
 
     it("returns false when store exists but no exposure context key", () => {
       storage.run(new Map(), () => {
-        expect(hasExposureContext()).toBe(false);
+        expect(hasRpcLaneRequestContext()).toBe(false);
       });
     });
   }); // close hasExposureContext describe

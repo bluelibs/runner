@@ -25,6 +25,10 @@ export const dependencyStrategies: readonly DependencyStrategy[] = [
     getStoreMap: (store) => store.events as Map<string, unknown>,
   },
   {
+    matches: utils.isTag,
+    getStoreMap: (store) => store.tags as Map<string, unknown>,
+  },
+  {
     matches: utils.isError,
     getStoreMap: (store) => store.errors as Map<string, unknown>,
   },

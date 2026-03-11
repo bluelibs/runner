@@ -7,8 +7,18 @@ import {
   IEventEmitOptions,
   IEventEmitReport,
 } from "../defs";
-import { lockedError, validationError } from "../errors";
+import {
+  lockedError,
+  runtimeAdmissionsPausedError,
+  shutdownLockdownError,
+  validationError,
+} from "../errors";
 import { IHook } from "../types/hook";
+import {
+  RuntimeCallSource,
+  RuntimeCallSourceKind,
+  runtimeSource,
+} from "../types/runtimeSource";
 import {
   EventEmissionInterceptor,
   HandlerOptionsDefaults,
@@ -17,11 +27,34 @@ import {
 } from "./event/types";
 import { ListenerRegistry, createListener } from "./event/ListenerRegistry";
 import { composeInterceptors } from "./event/InterceptorPipeline";
+import { ExecutionContextStore } from "./ExecutionContextStore";
+import { type ExecutionFrame } from "../types/executionContext";
+import { EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS } from "../types/executionContext";
+import { EmissionContext, EventEmissionImpl } from "./event/EmissionContext";
 import {
-  executeInParallel,
-  executeSequentially,
+  createAggregateError,
+  createEmptyReport,
 } from "./event/EmissionExecutor";
-import { CycleContext } from "./event/CycleContext";
+import {
+  LifecycleAdmissionController,
+  RuntimeLifecyclePhase,
+} from "./runtime/LifecycleAdmissionController";
+import { getDefinitionIdentity } from "../tools/isSameDefinition";
+import type { Store } from "./Store";
+import { getRuntimeId } from "../tools/runtimeMetadata";
+
+type EventEmissionInternalOptions = IEventEmitOptions & {
+  allowLifecycleBypass?: boolean;
+};
+
+type EventManagerStoreBindings = Pick<
+  Store,
+  | "createRuntimeSource"
+  | "events"
+  | "getRuntimeMetadata"
+  | "resolveDefinitionId"
+  | "toRuntimeSource"
+>;
 
 /**
  * EventManager handles event emission, listener registration, and event processing.
@@ -29,288 +62,136 @@ import { CycleContext } from "./event/CycleContext";
  * Listeners are processed in order based on their priority.
  */
 export class EventManager {
-  // Interceptors storage (tests access these directly)
   private emissionInterceptors: EventEmissionInterceptor[] = [];
   private hookInterceptors: HookExecutionInterceptor[] = [];
 
   private readonly registry: ListenerRegistry;
-  private readonly cycleContext: CycleContext;
+  private readonly executionContextStore: ExecutionContextStore;
+  private readonly lifecycleAdmissionController: LifecycleAdmissionController;
+  private store?: EventManagerStoreBindings;
 
-  // Locking mechanism to prevent modifications after initialization
   #isLocked = false;
 
-  // Feature flags
-  private readonly runtimeEventCycleDetection: boolean;
-
-  constructor(options?: { runtimeEventCycleDetection?: boolean }) {
-    this.runtimeEventCycleDetection =
-      options?.runtimeEventCycleDetection ?? true;
+  constructor(options?: {
+    executionContextStore?: ExecutionContextStore;
+    lifecycleAdmissionController?: LifecycleAdmissionController;
+  }) {
+    this.executionContextStore =
+      options?.executionContextStore ??
+      new ExecutionContextStore({
+        createCorrelationId: () => "event-manager",
+        cycleDetection: EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
+      });
     this.registry = new ListenerRegistry();
-    this.cycleContext = new CycleContext(this.runtimeEventCycleDetection);
+    this.lifecycleAdmissionController =
+      options?.lifecycleAdmissionController ??
+      new LifecycleAdmissionController();
   }
 
   // ==================== PUBLIC API ====================
 
-  /**
-   * Gets the current lock status of the EventManager
-   */
   get isLocked() {
     return this.#isLocked;
   }
 
+  public enterShutdownLockdown() {
+    this.lifecycleAdmissionController.beginDisposing();
+  }
+
   /**
-   * Locks the EventManager, preventing any further modifications to listeners
+   * Locks the EventManager, preventing further modifications to listeners.
    */
   lock() {
     this.#isLocked = true;
   }
 
-  /**
-   * Emits an event to all registered listeners for that event type.
-   * Listeners are processed in order of priority and can stop event propagation.
-   *
-   * @param eventDefinition - The event definition to emit
-   * @param data - The event payload data
-   * @param source - The source identifier of the event emitter
-   */
+  public bindStore(store: EventManagerStoreBindings): void {
+    this.store = store;
+  }
+
+  // ---- Emission API ----
+
   async emit<TInput>(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: string,
+    source: RuntimeCallSource,
   ): Promise<void>;
   async emit<TInput>(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: string,
+    source: RuntimeCallSource,
     options: IEventEmitOptions & { report: true },
   ): Promise<IEventEmitReport>;
   async emit<TInput>(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: string,
+    source: RuntimeCallSource,
     options?: IEventEmitOptions,
   ): Promise<void | IEventEmitReport>;
   async emit<TInput>(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: string,
+    source: RuntimeCallSource,
     options?: IEventEmitOptions,
   ): Promise<void | IEventEmitReport> {
-    const result = await this.emitAndReturnEmission({
-      eventDefinition,
-      data,
-      source,
-      options,
-    });
-    if (options?.report) {
-      return result.report;
-    }
+    const result = await this.emitCore(eventDefinition, data, source, options);
+    if (options?.report) return result.report;
   }
 
   /**
-   * Emits an event and returns the final payload.
-   * The payload is taken from the deepest emission object that reached either:
-   * - the base listener executor, or
-   * - an interceptor that short-circuited the emission.
-   *
-   * This enables tunnel transports to return the final payload after local and/or remote delivery.
+   * Emits a lifecycle event that bypasses shutdown admission checks.
+   * Used internally during the dispose sequence.
+   */
+  async emitLifecycle<TInput>(
+    eventDefinition: IEvent<TInput>,
+    data: TInput,
+    source: RuntimeCallSource,
+    options?: IEventEmitOptions,
+  ): Promise<void | IEventEmitReport> {
+    const result = await this.emitCore(eventDefinition, data, source, {
+      ...options,
+      allowLifecycleBypass: true,
+    });
+    if (options?.report) return result.report;
+  }
+
+  /**
+   * Emits an event and returns the final payload from the deepest emission
+   * object that reached either the base executor or an interceptor short-circuit.
    */
   async emitWithResult<TInput>(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: string,
+    source: RuntimeCallSource,
   ): Promise<TInput> {
-    const result = await this.emitAndReturnEmission({
-      eventDefinition,
-      data,
-      source,
-    });
+    const result = await this.emitCore(eventDefinition, data, source);
     return result.emission.data as TInput;
   }
 
-  private async emitAndReturnEmission<TInput>(params: {
-    eventDefinition: IEvent<TInput>;
-    data: TInput;
-    source: string;
-    options?: IEventEmitOptions;
-  }): Promise<{ emission: IEventEmission<TInput>; report: IEventEmitReport }> {
-    const { eventDefinition, source } = params;
-    let { data } = params;
-    const configuredFailureMode =
-      params.options?.failureMode ?? EventEmissionFailureMode.FailFast;
-    const shouldThrow = params.options?.throwOnError ?? true;
-    const failureMode =
-      !shouldThrow &&
-      configuredFailureMode === EventEmissionFailureMode.FailFast
-        ? EventEmissionFailureMode.Aggregate
-        : configuredFailureMode;
+  // ---- Listener API ----
 
-    // Validate payload with schema if provided
-    if (eventDefinition.payloadSchema) {
-      try {
-        data = eventDefinition.payloadSchema.parse(data);
-      } catch (error) {
-        validationError.throw({
-          subject: "Event payload",
-          id: eventDefinition.id,
-          originalError:
-            error instanceof Error ? error : new Error(String(error)),
-        });
-      }
-    }
-
-    const frame = { id: eventDefinition.id, source };
-    const processEmission = async (): Promise<{
-      emission: IEventEmission<TInput>;
-      report: IEventEmitReport;
-    }> => {
-      const allListeners = this.registry.getListenersForEmit(eventDefinition);
-
-      let propagationStopped = false;
-
-      const event: IEventEmission<TInput> = {
-        id: eventDefinition.id,
-        data,
-        timestamp: new Date(),
-        source,
-        meta: { ...(eventDefinition.meta || {}) },
-        stopPropagation: () => {
-          propagationStopped = true;
-        },
-        isPropagationStopped: () => propagationStopped,
-        tags: [...eventDefinition.tags],
-      };
-
-      // Create the base emission function
-      const baseEmit = async (
-        eventToEmit: IEventEmission<any>,
-      ): Promise<IEventEmitReport> => {
-        if (allListeners.length === 0) {
-          return {
-            totalListeners: 0,
-            attemptedListeners: 0,
-            skippedListeners: 0,
-            succeededListeners: 0,
-            failedListeners: 0,
-            propagationStopped: eventToEmit.isPropagationStopped(),
-            errors: [],
-          };
-        }
-
-        if (eventDefinition.parallel) {
-          return executeInParallel({
-            listeners: allListeners,
-            event: eventToEmit,
-            failureMode,
-          });
-        } else {
-          return executeSequentially({
-            listeners: allListeners,
-            event: eventToEmit,
-            isPropagationStopped: () => propagationStopped,
-            failureMode,
-          });
-        }
-      };
-
-      // Interceptors can replace the event object and/or short-circuit emission.
-      // Track the deepest event object that was reached to extract the final payload.
-      let deepestEvent: IEventEmission<any> = event as IEventEmission<any>;
-
-      let executionReport: IEventEmitReport = {
-        totalListeners: allListeners.length,
-        attemptedListeners: 0,
-        skippedListeners: 0,
-        succeededListeners: 0,
-        failedListeners: 0,
-        propagationStopped: false,
-        errors: [],
-      };
-
-      const runInterceptor = async (
-        index: number,
-        eventToEmit: IEventEmission<any>,
-      ): Promise<void> => {
-        deepestEvent = eventToEmit;
-        const interceptor = this.emissionInterceptors[index];
-        if (!interceptor) {
-          executionReport = await baseEmit(eventToEmit);
-          return;
-        }
-        return interceptor((nextEvent) => {
-          this.assertPropagationMethodsUnchanged(
-            eventDefinition.id,
-            eventToEmit,
-            nextEvent,
-          );
-          return runInterceptor(index + 1, nextEvent);
-        }, eventToEmit);
-      };
-
-      await runInterceptor(0, event as IEventEmission<any>);
-      if (
-        shouldThrow &&
-        failureMode === EventEmissionFailureMode.Aggregate &&
-        executionReport.errors.length > 0
-      ) {
-        if (executionReport.errors.length === 1) {
-          throw executionReport.errors[0];
-        }
-        throw Object.assign(
-          new Error(`${executionReport.errors.length} listeners failed`),
-          {
-            name: "AggregateError",
-            errors: executionReport.errors,
-            cause: executionReport.errors[0],
-          },
-        );
-      }
-      return {
-        emission: deepestEvent as IEventEmission<TInput>,
-        report: executionReport,
-      };
-    };
-
-    return await this.cycleContext.runEmission(frame, source, processEmission);
-  }
-
-  /**
-   * Registers an event listener for specific event(s).
-   * Listeners are ordered by priority and executed in ascending order.
-   *
-   * @param event - The event definition(s) to listen for
-   * @param handler - The callback function to handle the event
-   * @param options - Configuration options for the listener
-   */
   addListener<T>(
     event: IEvent<T> | Array<IEvent<T>>,
     handler: EventHandlerType<T>,
     options: IEventHandlerOptions<T> = HandlerOptionsDefaults,
   ): void {
     this.checkLock();
+
+    if (Array.isArray(event)) {
+      for (const ev of event) this.addListener(ev, handler, options);
+      return;
+    }
+
     const newListener = createListener({
       handler,
       order: options.order,
       filter: options.filter,
       id: options.id,
-      isGlobal: false,
     });
-
-    if (Array.isArray(event)) {
-      event.forEach((id) => this.addListener(id, handler, options));
-    } else {
-      const eventId = event.id;
-      this.registry.addListener(eventId, newListener);
-    }
+    const eventId = this.resolveEventMetadata(event).runtimeId;
+    this.registry.addListener(eventId, newListener);
   }
 
-  /**
-   * Registers a global event listener that handles all events.
-   * Global listeners are mixed with specific listeners and ordered by priority.
-   *
-   * @param handler - The callback function to handle events
-   * @param options - Configuration options for the listener
-   */
   addGlobalListener(
     handler: EventHandlerType,
     options: IEventHandlerOptions = HandlerOptionsDefaults,
@@ -321,124 +202,321 @@ export class EventManager {
       order: options.order,
       filter: options.filter,
       id: options.id,
-      isGlobal: true,
     });
     this.registry.addGlobalListener(newListener);
   }
 
-  /**
-   * Removes listeners registered with the provided listener id.
-   */
   removeListenerById(id: string): void {
     this.checkLock();
     this.registry.removeListenerById(id);
   }
 
-  /**
-   * Checks if there are any listeners registered for the given event
-   *
-   * @param eventDefinition - The event definition to check
-   * @returns true if listeners exist, false otherwise
-   */
   hasListeners<T>(eventDefinition: IEvent<T>): boolean {
-    return this.registry.hasListeners(eventDefinition);
+    return this.registry.hasListeners(
+      this.resolveEventDefinition(eventDefinition),
+    );
   }
 
-  /**
-   * Adds an interceptor for all event emissions
-   * Interceptors are executed in the order they are added, with the ability to
-   * modify, log, or prevent event emissions
-   *
-   * @param interceptor - The interceptor function to add
-   */
+  // ---- Interceptor API ----
+
   intercept(interceptor: EventEmissionInterceptor): void {
     this.checkLock();
     this.emissionInterceptors.push(interceptor);
   }
 
-  /**
-   * Adds an interceptor for hook execution
-   * Interceptors are executed in the order they are added, with the ability to
-   * modify, log, or prevent hook execution
-   *
-   * @param interceptor - The interceptor function to add
-   */
   interceptHook(interceptor: HookExecutionInterceptor): void {
     this.checkLock();
     this.hookInterceptors.push(interceptor);
   }
 
   /**
-   * Executes a hook with all registered hook interceptors applied
-   * This method should be used by TaskRunner when executing hooks
-   *
-   * @param hook - The hook to execute
-   * @param event - The event that triggered the hook
-   * @param computedDependencies - The computed dependencies for the hook
-   * @returns Promise resolving to the hook execution result
+   * Executes a hook through the composed interceptor chain.
    */
   async executeHookWithInterceptors(
     hook: IHook<any, any>,
     event: IEventEmission<any>,
     computedDependencies: DependencyValuesType<any>,
   ): Promise<any> {
+    const hookId = hook.id;
+
     const baseExecute = async (
       hookToExecute: IHook<any, any>,
       eventForHook: IEventEmission<any>,
-    ): Promise<any> => {
-      return hookToExecute.run(eventForHook, computedDependencies);
+    ): Promise<any> => hookToExecute.run(eventForHook, computedDependencies);
+
+    // Skip composition overhead when no interceptors are registered.
+    const execute =
+      this.hookInterceptors.length > 0
+        ? composeInterceptors(this.hookInterceptors, baseExecute)
+        : baseExecute;
+
+    const hookSource: RuntimeCallSource =
+      this.store?.createRuntimeSource(RuntimeCallSourceKind.Hook, hook) ??
+      runtimeSource.hook(hookId);
+
+    const hookFrame: ExecutionFrame = {
+      kind: "hook",
+      id: hookSource.path ?? hookId,
+      source: hookSource,
+      timestamp: Date.now(),
     };
 
-    const executeWithInterceptors = composeInterceptors(
-      this.hookInterceptors,
-      baseExecute,
+    return this.lifecycleAdmissionController.trackHookExecution(
+      hookSource,
+      () =>
+        this.executionContextStore.runWithFrame(hookFrame, () =>
+          execute(hook, event),
+        ),
     );
-
-    // Execute the hook with interceptors within current hook context
-    return this.cycleContext.isEnabled
-      ? await this.cycleContext.runHook(hook.id, () =>
-          executeWithInterceptors(hook, event),
-        )
-      : await executeWithInterceptors(hook, event);
   }
 
-  // ==================== PRIVATE METHODS ====================
+  dispose(): void {
+    this.registry.clear();
+    this.emissionInterceptors.length = 0;
+    this.hookInterceptors.length = 0;
+  }
 
-  /**
-   * Throws an error if the EventManager is locked
-   */
+  // ==================== PRIVATE ====================
+
   private checkLock() {
     if (this.#isLocked) {
       lockedError.throw({ what: "EventManager" });
     }
   }
 
-  private assertPropagationMethodsUnchanged(
-    eventId: string,
-    currentEvent: IEventEmission<any>,
-    nextEvent: IEventEmission<any>,
-  ): void {
+  /**
+   * Core emission pipeline shared by emit(), emitLifecycle(), and emitWithResult().
+   */
+  private async emitCore<TInput>(
+    eventDef: IEvent<TInput>,
+    inputData: TInput,
+    rawSource: RuntimeCallSource,
+    options?: EventEmissionInternalOptions,
+  ): Promise<{
+    emission: IEventEmission<TInput>;
+    report: IEventEmitReport;
+    executionContext?: ReturnType<ExecutionContextStore["getSnapshot"]>;
+  }> {
     if (
-      nextEvent.stopPropagation !== currentEvent.stopPropagation ||
-      nextEvent.isPropagationStopped !== currentEvent.isPropagationStopped
+      !this.lifecycleAdmissionController.canAdmitEvent(rawSource, {
+        allowLifecycleBypass: options?.allowLifecycleBypass === true,
+      })
     ) {
-      validationError.throw({
-        subject: "Event interceptor",
+      if (
+        this.lifecycleAdmissionController.getPhase() ===
+        RuntimeLifecyclePhase.Paused
+      ) {
+        runtimeAdmissionsPausedError.throw();
+      }
+      shutdownLockdownError.throw();
+    }
+
+    const eventDefinition = this.resolveEventDefinition(eventDef);
+    const metadata = this.resolveEventMetadata(eventDefinition);
+    const source =
+      this.store?.toRuntimeSource(rawSource) ??
+      this.ensureSourcePath(rawSource);
+
+    let data = inputData;
+    if (eventDefinition.payloadSchema) {
+      data = this.validatePayload(eventDefinition, metadata.id, data);
+    }
+
+    // Snapshot interceptors so in-flight emissions stay deterministic even if
+    // dispose() clears interceptor registries mid-emission.
+    const interceptors =
+      this.emissionInterceptors.length > 0
+        ? this.emissionInterceptors.slice()
+        : [];
+
+    const emissionConfig = this.resolveEmissionConfig(eventDefinition, options);
+
+    const identity = getDefinitionIdentity(eventDefinition);
+
+    const processEmission = async (): Promise<{
+      emission: IEventEmission<TInput>;
+      report: IEventEmitReport;
+      executionContext?: ReturnType<ExecutionContextStore["getSnapshot"]>;
+    }> => {
+      const allListeners = this.registry.getListenersForEmit(eventDefinition);
+      const event = this.createEmission(
+        eventDefinition,
+        metadata,
+        data,
+        source,
+        identity,
+      );
+
+      // Fast path: no listeners and no interceptors — no executor needed.
+      if (allListeners.length === 0 && interceptors.length === 0) {
+        return {
+          emission: event as IEventEmission<TInput>,
+          report: createEmptyReport(0),
+          executionContext: this.executionContextStore.getSnapshot(),
+        };
+      }
+
+      const context = new EmissionContext<TInput>(
+        eventDefinition,
+        allListeners,
+        emissionConfig.failureMode,
+        interceptors,
+        event,
+      );
+
+      await context.runInterceptor(0, event);
+
+      this.throwOnAggregateErrors(
+        context.executionReport,
+        emissionConfig.shouldThrow,
+        emissionConfig.failureMode,
+      );
+
+      return {
+        emission: context.deepestEvent as IEventEmission<TInput>,
+        report: context.executionReport,
+        executionContext: this.executionContextStore.getSnapshot(),
+      };
+    };
+
+    const traceFrame: ExecutionFrame = {
+      kind: "event",
+      id: metadata.runtimeId,
+      source,
+      timestamp: Date.now(),
+    };
+
+    return this.lifecycleAdmissionController.trackEventEmission(
+      source,
+      async () => {
+        const result = await this.executionContextStore.runWithFrame(
+          traceFrame,
+          processEmission,
+        );
+        return {
+          emission: result.emission,
+          report: result.report,
+          executionContext: result.executionContext,
+        };
+      },
+    );
+  }
+
+  private createEmission<TInput>(
+    eventDefinition: IEvent<TInput>,
+    metadata: { id: string; path: string; runtimeId: string },
+    data: TInput,
+    source: RuntimeCallSource,
+    identity: object | undefined,
+  ): EventEmissionImpl<TInput> {
+    return new EventEmissionImpl<TInput>(
+      metadata.id,
+      metadata.path,
+      data,
+      new Date(),
+      source,
+      eventDefinition.meta ? { ...eventDefinition.meta } : {},
+      Boolean(eventDefinition.transactional),
+      eventDefinition.tags.length > 0 ? [...eventDefinition.tags] : [],
+      metadata.runtimeId,
+      identity,
+    );
+  }
+
+  /**
+   * Resolves the failure-mode and throw behavior for an emission.
+   * Transactional events always fail-fast and always throw.
+   */
+  private resolveEmissionConfig(
+    eventDefinition: IEvent<any>,
+    options?: EventEmissionInternalOptions,
+  ) {
+    const isTransactional = Boolean(eventDefinition.transactional);
+    const configuredFailureMode = isTransactional
+      ? EventEmissionFailureMode.FailFast
+      : (options?.failureMode ?? EventEmissionFailureMode.FailFast);
+    const shouldThrow = isTransactional
+      ? true
+      : (options?.throwOnError ?? true);
+    const failureMode =
+      !shouldThrow &&
+      configuredFailureMode === EventEmissionFailureMode.FailFast
+        ? EventEmissionFailureMode.Aggregate
+        : configuredFailureMode;
+
+    return { failureMode, shouldThrow };
+  }
+
+  private validatePayload<TInput>(
+    eventDefinition: IEvent<TInput>,
+    eventId: string,
+    data: TInput,
+  ): TInput {
+    try {
+      return eventDefinition.payloadSchema!.parse(data);
+    } catch (error) {
+      return validationError.throw({
+        subject: "Event payload",
         id: eventId,
-        originalError: new Error(
-          "Interceptors cannot override stopPropagation/isPropagationStopped",
-        ),
+        originalError:
+          error instanceof Error ? error : new Error(String(error)),
       });
     }
   }
 
   /**
-   * Disposes the EventManager, releasing all listeners and interceptors.
+   * Throws an aggregate error when the emission collected failures
+   * but the caller opted into aggregate mode with throwOnError.
    */
-  dispose(): void {
-    this.registry.clear();
-    this.emissionInterceptors.length = 0;
-    this.hookInterceptors.length = 0;
+  private throwOnAggregateErrors(
+    report: IEventEmitReport,
+    shouldThrow: boolean,
+    failureMode: EventEmissionFailureMode,
+  ): void {
+    if (
+      !shouldThrow ||
+      failureMode !== EventEmissionFailureMode.Aggregate ||
+      report.errors.length === 0
+    ) {
+      return;
+    }
+
+    if (report.errors.length === 1) {
+      throw report.errors[0];
+    }
+    throw createAggregateError(
+      report.errors,
+      `${report.errors.length} listeners failed`,
+    );
+  }
+
+  private resolveEventDefinition<T>(eventDefinition: IEvent<T>): IEvent<T> {
+    if (!this.store) return eventDefinition;
+
+    const resolvedId = this.store.resolveDefinitionId(eventDefinition);
+    if (!resolvedId) return eventDefinition;
+
+    const storeEvent = this.store.events.get(resolvedId);
+    return (storeEvent?.event ?? eventDefinition) as IEvent<T>;
+  }
+
+  private resolveEventMetadata<T>(eventDefinition: IEvent<T>) {
+    if (!this.store) {
+      return {
+        id: eventDefinition.id,
+        path: eventDefinition.path ?? eventDefinition.id,
+        runtimeId: getRuntimeId(eventDefinition) ?? eventDefinition.id,
+      };
+    }
+
+    return this.store.getRuntimeMetadata(eventDefinition);
+  }
+
+  private ensureSourcePath(source: RuntimeCallSource): RuntimeCallSource {
+    return {
+      ...source,
+      path: source.path ?? source.id,
+    };
   }
 }
 

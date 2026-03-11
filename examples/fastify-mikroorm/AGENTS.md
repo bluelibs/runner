@@ -47,7 +47,7 @@ Example (abbreviated):
 
 ```ts
 export const getUserById = task({
-  id: "app.users.tasks.getUserById",
+  id: "getUserById",
   meta: { title: "Get user", description: "Fetch user by id" },
   inputSchema: z.object({ id: z.string() }).strict(),
   resultSchema: z.object({

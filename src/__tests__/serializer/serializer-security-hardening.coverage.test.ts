@@ -156,6 +156,8 @@ describe("Serializer security hardening coverage", () => {
       expect(isRegExpPatternSafe("(?<!a|aa)+")).toBe(false);
       expect(isRegExpPatternSafe("(?<name>a|aa)+")).toBe(false);
       expect(isRegExpPatternSafe("(?<a|aa)+")).toBe(true);
+      expect(isRegExpPatternSafe("(?<name>a|b)+")).toBe(true);
+      expect(typeof isRegExpPatternSafe("((a|b))+)")).toBe("boolean");
       expect(isRegExpPatternSafe(")a")).toBe(true);
     });
 

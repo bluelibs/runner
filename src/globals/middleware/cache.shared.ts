@@ -1,0 +1,401 @@
+import { LRUCache } from "lru-cache";
+import { safeStringify } from "../../models/utils/safeStringify";
+
+export interface ICacheProvider {
+  set(key: string, value: unknown): unknown | Promise<unknown>;
+  get(key: string): unknown | Promise<unknown>;
+  clear(): void | Promise<void>;
+  has?(key: string): boolean | Promise<boolean>;
+}
+
+export type CacheStoredValue = NonNullable<unknown>;
+export type CacheFactoryOptions = Partial<
+  LRUCache.Options<string, CacheStoredValue, unknown>
+>;
+
+export type CacheProvider = (
+  options: CacheFactoryOptions,
+) => Promise<ICacheProvider>;
+
+export type CacheDisposeBehavior = "clear" | "keep";
+
+export type TaskScopedCacheProviderInput = {
+  taskId: string;
+  options: CacheFactoryOptions;
+  totalBudgetBytes?: number;
+  sharedBudget?: SharedCacheBudgetState;
+};
+
+type BuiltInCacheProvider = CacheProvider & {
+  [builtInCacheProviderSymbol]: true;
+};
+
+type TaskScopedCacheProvider = CacheProvider & {
+  [taskScopedCacheProviderSymbol]: (
+    input: TaskScopedCacheProviderInput,
+  ) => Promise<ICacheProvider>;
+};
+
+type CacheProviderWithDisposeBehavior = ICacheProvider & {
+  [cacheDisposeBehaviorSymbol]?: CacheDisposeBehavior;
+};
+
+type BudgetEntry = {
+  taskId: string;
+  key: string;
+  size: number;
+  order: number;
+};
+
+export type SharedCacheBudgetState = {
+  totalBudgetBytes: number;
+  totalBytesUsed: number;
+  touchOrder: number;
+  entries: Map<string, BudgetEntry>;
+  localCaches: Map<string, LRUCache<string, CacheStoredValue, unknown>>;
+};
+
+const builtInCacheProviderSymbol = Symbol("runner.builtInCacheProvider");
+const taskScopedCacheProviderSymbol = Symbol("runner.taskScopedCacheProvider");
+const cacheDisposeBehaviorSymbol = Symbol("runner.cacheDisposeBehavior");
+
+export function createDefaultCacheProvider(): CacheProvider {
+  const provider: CacheProvider = async (
+    options: CacheFactoryOptions,
+  ): Promise<ICacheProvider> =>
+    withCacheDisposeBehavior(
+      new LRUCache<string, CacheStoredValue, unknown>(
+        options as LRUCache.Options<string, CacheStoredValue, unknown>,
+      ),
+      "clear",
+    );
+
+  return Object.assign(
+    createTaskScopedCacheProvider(
+      provider,
+      async ({ options, sharedBudget, taskId }) => {
+        if (sharedBudget) {
+          return createBudgetedCacheInstance({
+            taskId,
+            options,
+            sharedBudget,
+          });
+        }
+
+        return provider(options);
+      },
+    ),
+    {
+      [builtInCacheProviderSymbol]: true as const,
+    },
+  ) as BuiltInCacheProvider;
+}
+
+export function createTaskScopedCacheProvider(
+  provider: CacheProvider,
+  createInstance: (
+    input: TaskScopedCacheProviderInput,
+  ) => Promise<ICacheProvider>,
+): CacheProvider {
+  return Object.assign(provider, {
+    [taskScopedCacheProviderSymbol]: createInstance,
+  }) as TaskScopedCacheProvider;
+}
+
+export function isBuiltInCacheProvider(
+  value: unknown,
+): value is BuiltInCacheProvider {
+  return (
+    typeof value === "function" &&
+    (value as Partial<BuiltInCacheProvider>)[builtInCacheProviderSymbol] ===
+      true
+  );
+}
+
+export function supportsTaskScopedCacheProvider(
+  value: unknown,
+): value is TaskScopedCacheProvider {
+  return (
+    typeof value === "function" &&
+    typeof (value as Partial<TaskScopedCacheProvider>)[
+      taskScopedCacheProviderSymbol
+    ] === "function"
+  );
+}
+
+export function createTaskScopedCacheInstance(
+  provider: CacheProvider,
+  input: TaskScopedCacheProviderInput,
+) {
+  if (!supportsTaskScopedCacheProvider(provider)) {
+    throw new TypeError(
+      "Cache provider does not support task-scoped cache instances.",
+    );
+  }
+
+  return provider[taskScopedCacheProviderSymbol](input);
+}
+
+export function withCacheDisposeBehavior<T extends ICacheProvider>(
+  provider: T,
+  behavior: CacheDisposeBehavior,
+): T {
+  return Object.assign(provider, {
+    [cacheDisposeBehaviorSymbol]: behavior,
+  }) as T;
+}
+
+export function shouldClearCacheOnDispose(provider: ICacheProvider) {
+  const behavior = (provider as CacheProviderWithDisposeBehavior)[
+    cacheDisposeBehaviorSymbol
+  ];
+
+  return behavior !== "keep";
+}
+
+export function createSharedCacheBudgetState(
+  totalBudgetBytes: number,
+): SharedCacheBudgetState {
+  return {
+    totalBudgetBytes,
+    totalBytesUsed: 0,
+    touchOrder: 0,
+    entries: new Map<string, BudgetEntry>(),
+    localCaches: new Map<string, LRUCache<string, CacheStoredValue, unknown>>(),
+  };
+}
+
+export function createBudgetedCacheInstance({
+  taskId,
+  options,
+  sharedBudget,
+}: {
+  taskId: string;
+  options: CacheFactoryOptions;
+  sharedBudget: SharedCacheBudgetState;
+}): ICacheProvider {
+  const localCache = createLocalCache(taskId, options, sharedBudget);
+  sharedBudget.localCaches.set(taskId, localCache);
+
+  return withCacheDisposeBehavior(
+    {
+      get(key: string) {
+        const value = localCache.get(key);
+
+        if (value !== undefined || localCache.has(key)) {
+          touchBudgetEntry(sharedBudget, taskId, key);
+        }
+
+        return value;
+      },
+      set(key: string, value: unknown) {
+        localCache.set(key, value as CacheStoredValue);
+
+        if (!localCache.has(key)) {
+          return;
+        }
+
+        upsertBudgetEntry(
+          sharedBudget,
+          taskId,
+          key,
+          computeEntrySize(options, key, value),
+        );
+        enforceTotalBudget(sharedBudget);
+      },
+      clear() {
+        localCache.clear();
+        removeBudgetEntriesForTask(sharedBudget, taskId);
+      },
+      has(key: string) {
+        const present = localCache.has(key);
+
+        if (present) {
+          touchBudgetEntry(sharedBudget, taskId, key);
+        }
+
+        return present;
+      },
+    },
+    "clear",
+  );
+}
+
+function createLocalCache(
+  taskId: string,
+  options: CacheFactoryOptions,
+  sharedBudget: SharedCacheBudgetState,
+) {
+  const { disposeAfter, sizeCalculation, ...rest } = options;
+  const localSizeCalculation =
+    rest.maxSize || rest.maxEntrySize ? sizeCalculation : undefined;
+
+  return new LRUCache<string, CacheStoredValue, unknown>({
+    ...(rest as LRUCache.Options<string, CacheStoredValue, unknown>),
+    sizeCalculation: localSizeCalculation,
+    disposeAfter: (value, key, reason) => {
+      removeBudgetEntry(sharedBudget, taskId, key);
+      disposeAfter?.(value, key, reason);
+    },
+  });
+}
+
+function enforceTotalBudget(sharedBudget: SharedCacheBudgetState) {
+  if (sharedBudget.totalBytesUsed <= sharedBudget.totalBudgetBytes) {
+    return;
+  }
+
+  for (const localCache of sharedBudget.localCaches.values()) {
+    localCache.purgeStale();
+  }
+
+  while (sharedBudget.totalBytesUsed > sharedBudget.totalBudgetBytes) {
+    const oldest = findOldestBudgetEntry(sharedBudget.entries);
+
+    if (!oldest) {
+      sharedBudget.totalBytesUsed = 0;
+      return;
+    }
+
+    const localCache = sharedBudget.localCaches.get(oldest.taskId);
+
+    if (!localCache) {
+      removeBudgetEntry(sharedBudget, oldest.taskId, oldest.key);
+      continue;
+    }
+
+    const deleted = localCache.delete(oldest.key);
+
+    if (!deleted) {
+      removeBudgetEntry(sharedBudget, oldest.taskId, oldest.key);
+    }
+  }
+}
+
+function findOldestBudgetEntry(entries: Map<string, BudgetEntry>) {
+  let oldest: BudgetEntry | undefined;
+
+  for (const entry of entries.values()) {
+    if (!oldest || entry.order < oldest.order) {
+      oldest = entry;
+    }
+  }
+
+  return oldest;
+}
+
+function upsertBudgetEntry(
+  sharedBudget: SharedCacheBudgetState,
+  taskId: string,
+  key: string,
+  size: number,
+) {
+  const entryId = getBudgetEntryId(taskId, key);
+  const current = sharedBudget.entries.get(entryId);
+
+  if (current) {
+    sharedBudget.totalBytesUsed -= current.size;
+  }
+
+  const entry: BudgetEntry = {
+    taskId,
+    key,
+    size,
+    order: nextTouchOrder(sharedBudget),
+  };
+
+  sharedBudget.entries.set(entryId, entry);
+  sharedBudget.totalBytesUsed += size;
+}
+
+function touchBudgetEntry(
+  sharedBudget: SharedCacheBudgetState,
+  taskId: string,
+  key: string,
+) {
+  const entry = sharedBudget.entries.get(getBudgetEntryId(taskId, key));
+
+  if (!entry) {
+    return;
+  }
+
+  entry.order = nextTouchOrder(sharedBudget);
+}
+
+function removeBudgetEntry(
+  sharedBudget: SharedCacheBudgetState,
+  taskId: string,
+  key: string,
+) {
+  const entryId = getBudgetEntryId(taskId, key);
+  const entry = sharedBudget.entries.get(entryId);
+
+  if (!entry) {
+    return;
+  }
+
+  sharedBudget.entries.delete(entryId);
+  sharedBudget.totalBytesUsed = Math.max(
+    0,
+    sharedBudget.totalBytesUsed - entry.size,
+  );
+}
+
+function removeBudgetEntriesForTask(
+  sharedBudget: SharedCacheBudgetState,
+  taskId: string,
+) {
+  for (const entry of [...sharedBudget.entries.values()]) {
+    if (entry.taskId === taskId) {
+      removeBudgetEntry(sharedBudget, taskId, entry.key);
+    }
+  }
+}
+
+function getBudgetEntryId(taskId: string, key: string) {
+  return `${taskId}\u0000${key}`;
+}
+
+function nextTouchOrder(sharedBudget: SharedCacheBudgetState) {
+  sharedBudget.touchOrder += 1;
+  return sharedBudget.touchOrder;
+}
+
+export function computeEntrySize(
+  options: CacheFactoryOptions,
+  key: string,
+  value: unknown,
+) {
+  const calculated = options.sizeCalculation
+    ? options.sizeCalculation(value as CacheStoredValue, key)
+    : getUtf8ByteLength(`${key}:${safeStringify(value)}`);
+
+  if (!Number.isFinite(calculated) || calculated < 0) {
+    throw new TypeError(
+      "Cache size calculation must return a finite non-negative number.",
+    );
+  }
+
+  return calculated;
+}
+
+function getUtf8ByteLength(value: string) {
+  if (typeof TextEncoder !== "undefined") {
+    return new TextEncoder().encode(value).length;
+  }
+
+  if (typeof Buffer !== "undefined") {
+    return Buffer.byteLength(value, "utf8");
+  }
+
+  return encodeURIComponent(value).replace(/%[A-F\d]{2}/gi, "x").length;
+}
+
+export const cacheSharedInternals = {
+  computeEntrySize,
+  enforceTotalBudget,
+  removeBudgetEntry,
+  removeBudgetEntriesForTask,
+  touchBudgetEntry,
+  upsertBudgetEntry,
+};

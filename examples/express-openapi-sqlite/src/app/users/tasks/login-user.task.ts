@@ -1,4 +1,4 @@
-import z from "zod";
+import { Match } from "@bluelibs/runner";
 import { usersRepository } from "../resources/users-repository.resource";
 import { httpRoute } from "../../http/tags/http.tag";
 import { r } from "@bluelibs/runner";
@@ -8,16 +8,24 @@ import { appConfig } from "../../app.config";
 import { UserSchema } from "../types";
 import { verifyPasswordTask } from "./verify-password.task";
 
-const loginSchema = z.object({
-  email: z.email(),
-  password: z.string().min(1),
+const loginSchema = Match.ObjectIncluding({
+  email: Match.Email,
+  password: Match.NonEmptyString,
+});
+
+const loginResponseSchema = Match.compile({
+  success: Boolean,
+  data: Match.ObjectStrict({
+    token: Match.NonEmptyString,
+    user: UserSchema.pattern,
+  }),
 });
 
 /**
  * User login task
  */
 export const loginUserTask = r
-  .task("app.tasks.auth.login")
+  .task("login")
   .dependencies({
     userService: usersRepository,
     config: appConfig,
@@ -30,15 +38,10 @@ export const loginUserTask = r
       tags: ["Authentication"],
       requiresAuth: false,
       requestBodySchema: loginSchema,
-      responseSchema: z.object({
-        success: z.boolean(),
-        data: z.object({
-          token: z.string(),
-          user: UserSchema,
-        }),
-      }),
+      responseSchema: loginResponseSchema,
     }),
   ])
+  .inputSchema(loginSchema)
   .run(
     async (
       loginData: LoginRequest,
@@ -59,7 +62,7 @@ export const loginUserTask = r
         }
 
         // Generate JWT token
-        const token = jwt.sign({ userId: user.id }, config.jwtSecret, {
+        const token = jwt.sign({ id: user.id }, config.jwtSecret, {
           expiresIn: "24h",
         });
 

@@ -1,19 +1,15 @@
 import type {
   ITaskMeta,
-  TagType,
+  TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import { getCallerFile } from "../../../tools/getCallerFile";
 import { makeTaskBuilder } from "./fluent-builder";
 import type { TaskFluentBuilder } from "./fluent-builder.interface";
-import { makePhantomTaskBuilder } from "./phantom-builder";
-import type { PhantomTaskFluentBuilder } from "./phantom-builder.interface";
-import type { BuilderState, PhantomBuilderState } from "./types";
+import type { BuilderState } from "./types";
 
 export * from "./fluent-builder.interface";
 export * from "./fluent-builder";
-export * from "./phantom-builder.interface";
-export * from "./phantom-builder";
 export * from "./types";
 
 /**
@@ -26,7 +22,7 @@ export function taskBuilder<TInput = undefined>(
   Promise<any>,
   {},
   ITaskMeta,
-  TagType[],
+  TaskTagType[],
   TaskMiddlewareAttachmentType[]
 > {
   const filePath = getCallerFile();
@@ -35,7 +31,7 @@ export function taskBuilder<TInput = undefined>(
     Promise<any>,
     {},
     ITaskMeta,
-    TagType[],
+    TaskTagType[],
     TaskMiddlewareAttachmentType[]
   > = Object.freeze({
     id,
@@ -43,59 +39,10 @@ export function taskBuilder<TInput = undefined>(
     dependencies: {} as {},
     middleware: [] as TaskMiddlewareAttachmentType[],
     meta: {} as ITaskMeta,
-    tags: [] as TagType[],
+    tags: [] as TaskTagType[],
   });
 
   return makeTaskBuilder(initial);
 }
 
-/**
- * Entry point for creating a phantom task builder.
- */
-export function phantomTaskBuilder<TInput = undefined, TResolved = any>(
-  id: string,
-): PhantomTaskFluentBuilder<
-  TInput,
-  TResolved,
-  {},
-  ITaskMeta,
-  TagType[],
-  TaskMiddlewareAttachmentType[]
-> {
-  const filePath = getCallerFile();
-  const initial: PhantomBuilderState<
-    TInput,
-    TResolved,
-    {},
-    ITaskMeta,
-    TagType[],
-    TaskMiddlewareAttachmentType[]
-  > = Object.freeze({
-    id,
-    filePath,
-    dependencies: {} as {},
-    middleware: [] as TaskMiddlewareAttachmentType[],
-    meta: {} as ITaskMeta,
-    tags: [] as TagType[],
-  });
-
-  return makePhantomTaskBuilder(initial);
-}
-
-export interface TaskBuilderWithPhantom {
-  <TInput = undefined>(
-    id: string,
-  ): TaskFluentBuilder<
-    TInput,
-    Promise<any>,
-    {},
-    ITaskMeta,
-    TagType[],
-    TaskMiddlewareAttachmentType[]
-  >;
-  phantom: typeof phantomTaskBuilder;
-}
-
-export const task: TaskBuilderWithPhantom = Object.assign(taskBuilder, {
-  phantom: phantomTaskBuilder,
-});
+export const task = taskBuilder;

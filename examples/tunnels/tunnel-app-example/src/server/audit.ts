@@ -1,6 +1,7 @@
-import { r } from "@bluelibs/runner/node";
+import { r, tags } from "@bluelibs/runner";
 
 import { ResourceId, TaskId } from "../ids.js";
+import { appRpcLane } from "../rpcLane.js";
 import type { AuditEntry, AuditInput } from "../types.js";
 
 type AuditStoreValue = {
@@ -36,6 +37,7 @@ export const auditStore = r
 
 export const logAudit = r
   .task(TaskId.LogAudit)
+  .tags([tags.rpcLane.with({ lane: appRpcLane })])
   .dependencies({ store: auditStore })
   .run(
     async (input: AuditInput, deps): Promise<AuditEntry> =>
@@ -45,6 +47,7 @@ export const logAudit = r
 
 export const listAudits = r
   .task(TaskId.ListAudits)
+  .tags([tags.rpcLane.with({ lane: appRpcLane })])
   .dependencies({ store: auditStore })
   .run(async (_input: void, deps): Promise<AuditEntry[]> => deps.store.list())
   .build();

@@ -1,6 +1,6 @@
 # BlueLibs Runner
 
-### Explicit TypeScript Dependency Injection Toolkit
+## Explicit TypeScript Dependency Injection Toolkit
 
 **Build apps from tasks and resources with explicit dependencies, predictable lifecycle, and first-class testing**
 
@@ -9,7 +9,7 @@ Runner is a TypeScript-first toolkit for building an `app` out of small, typed b
 - **Tasks**: async functions with explicit `dependencies`, middleware, and input/output validation
 - **Resources**: singletons with `init`/`dispose` lifecycle (databases, clients, servers, caches)
 - **Reliability Middleware**: built-in `retry`, `timeout`, `circuitBreaker`, `cache`, and `rateLimit`
-- **HTTP Tunnels**: cross-process execution (the "Distributed Monolith") with zero call-site changes
+- **Remote Lanes**: cross-process execution (the "Distributed Monolith") with zero call-site changes
 - **Durable Workflows**: persistent, crash-recoverable async logic for Node.js
 - **Events & hooks**: typed signals and subscribers for decoupling
 - **Runtime control**: run, observe, test, and dispose your `app` predictably
@@ -25,7 +25,7 @@ The goal is simple: keep dependencies explicit, keep lifecycle predictable, and 
 </p>
 
 ```typescript
-import { r, run, globals } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 import { z } from "zod";
 
 // resources are singletons with lifecycle management and async construction
@@ -50,7 +50,7 @@ const mailer = r
 const createUser = r
   .task("users.create")
   .dependencies({ db, mailer })
-  .middleware([globals.middleware.task.retry.with({ retries: 3 })])
+  .middleware([middleware.task.retry.with({ retries: 3 })])
   .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
   .run(async (input, { db, mailer }) => {
     const user = await db.users.insert(input);
@@ -96,7 +96,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 - **New to Runner**: Start with [Your First 5 Minutes](#your-first-5-minutes)
 - **Prefer an end-to-end example**: Jump to [Quick Start](#quick-start) or the [Real-World Example](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#real-world-example-the-complete-package)
 - **Need Node-only capabilities**: See [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
-- **Need remote execution**: See [HTTP Tunnels](./readmes/TUNNELS.md) (expose from Node.js, call from any `fetch` runtime)
+- **Need remote execution**: See [Remote Lanes](./readmes/REMOTE_LANES.md) (expose from Node.js, call from any `fetch` runtime)
 - **Care about portability**: Read [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md)
 - **Planning upgrades**: See [Support & Release Policy](./readmes/ENTERPRISE.md)
 - **Want the complete guide**: Read [FULL_GUIDE.md](./readmes/FULL_GUIDE.md)
@@ -109,8 +109,8 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
 | Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
 | Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                           |
-| Tunnels client (`createHttpClient`)                    | Full    | Full    | Full | Requires `fetch`                           |
-| Tunnels server (`@bluelibs/runner/node`)               | Full    | None    | None | Exposes tasks/events over HTTP             |
+| Remote Lanes client (`createHttpClient`)               | Full    | Full    | Full | Explicit universal client for `fetch` runtimes |
+| Remote Lanes server (`@bluelibs/runner/node`)          | Full    | None    | None | Exposes tasks/events over HTTP             |
 
 ---
 
@@ -123,21 +123,21 @@ Use these minimums before starting:
 | Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                                 |
 | TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository                   |
 | Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works                  |
-| `fetch` runtime | Built-in or polyfilled  | Required for tunnel clients (`createHttpClient`, universal HTTP client) |
+| `fetch` runtime | Built-in or polyfilled  | Required for explicit remote lane clients (`createHttpClient`) |
 
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
 ## Your First 5 Minutes
 
+This page is the shortest path from "what is Runner?" to "I ran it once and I trust the shape of it."
+
 **New to Runner?** Here's the absolute minimum you need to know:
 
 1. **Tasks** are your business logic functions (with dependencies and middleware)
 2. **Resources** are shared services (database, config, clients) with lifecycle (`init` / `dispose`)
 3. **You compose everything** under an `app` resource with `.register([...])`
-4. **You run it** with `run(app)` which gives you `runTask()` and `dispose()`
-
-That's it. Now let's get you to a first successful run.
+4. **You run it** with `run(app)` which gives you `runTask()` and `dispose()` first, plus more runtime helpers as you grow (`emitEvent()`, resource getters)
 
 ---
 
@@ -150,7 +150,7 @@ This is the fastest way to run the TypeScript example at the top of this README:
 1. Install dependencies:
 
 ```bash
-npm i @bluelibs/runner zod
+npm i @bluelibs/runner
 npm i -D typescript tsx
 ```
 
@@ -161,9 +161,11 @@ npm i -D typescript tsx
 npx tsx index.ts
 ```
 
-**That's it!** You now have a working `Runtime` and you can execute tasks with `runtime.runTask(...)`.
+**What you now have**: a working `Runtime` and the smallest useful Runner execution path.
 
 > **Tip:** If you prefer an end-to-end example with HTTP, OpenAPI, and persistence, jump to the examples below.
+> **Tip:** User-defined ids are local ids. Use `send-email` or `userStore`, not dotted ids like `app.tasks.sendEmail`.
+> **Boundary:** Advanced features such as Durable Workflows and server-side Remote Lanes are Node-only.
 
 ---
 
@@ -216,12 +218,12 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
 - **Token-friendly overview**: Read [AI.md](./readmes/AI.md)
 - **Node-only features**:
   - [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
-  - [HTTP Tunnels](./readmes/TUNNELS.md)
+  - [Remote Lanes](./readmes/REMOTE_LANES.md)
 - **Releases and upgrades**:
   - [GitHub Releases](https://github.com/bluelibs/runner/releases)
   - [Support & Release Policy](./readmes/ENTERPRISE.md)
 - **Operational baseline**:
-  - [Production Readiness Checklist](./readmes/FULL_GUIDE.md#production-readiness-checklist)
+  - [Production Readiness](./readmes/FULL_GUIDE.md#observability-strategy-logs-metrics-and-traces)
 - **Multi-platform architecture**: Read [MULTI_PLATFORM.md](./readmes/MULTI_PLATFORM.md)
 
 ---

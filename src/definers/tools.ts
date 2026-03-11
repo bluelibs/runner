@@ -8,9 +8,12 @@ import {
   ITaskMiddleware,
   IResourceMiddleware,
   IEvent,
+  IEventLane,
+  IRpcLane,
   symbolEvent,
+  symbolEventLane,
+  symbolRpcLane,
   symbolTask,
-  symbolPhantomTask,
   symbolHook,
   symbolResourceWithConfig,
   symbolResource,
@@ -20,9 +23,12 @@ import {
   IOptionalDependency,
   symbolOptionalDependency,
   symbolTag,
+  symbolTagBeforeInitDependency,
   ITag,
-  IPhantomTask,
+  ITagStartupDependency,
+  symbolOverrideDefinition,
 } from "../defs";
+import type { IsolationSubtreeFilter } from "../types/resource";
 import { IErrorHelper } from "../types/error";
 import { symbolAsyncContext, symbolError } from "../types/symbols";
 import type { IAsyncContext } from "../types/asyncContext";
@@ -44,13 +50,6 @@ function hasBrand(definition: unknown, symbol: symbol): boolean {
  */
 export function isTask(definition: unknown): definition is ITask {
   return hasBrand(definition, symbolTask);
-}
-
-/** Type guard: checks if a definition is a Phantom Task. */
-export function isPhantomTask(definition: unknown): definition is IPhantomTask {
-  return (
-    hasBrand(definition, symbolTask) && hasBrand(definition, symbolPhantomTask)
-  );
 }
 
 /**
@@ -80,6 +79,16 @@ export function isResourceWithConfig(
  */
 export function isEvent(definition: unknown): definition is IEvent {
   return hasBrand(definition, symbolEvent);
+}
+
+/** Type guard: checks if a definition is an Event Lane reference. */
+export function isEventLane(definition: unknown): definition is IEventLane {
+  return hasBrand(definition, symbolEventLane);
+}
+
+/** Type guard: checks if a definition is an RPC Lane reference. */
+export function isRpcLane(definition: unknown): definition is IRpcLane {
+  return hasBrand(definition, symbolRpcLane);
 }
 
 /** Type guard: checks if a definition is a Hook. */
@@ -113,6 +122,13 @@ export function isTag(definition: unknown): definition is ITag {
   return hasBrand(definition, symbolTag);
 }
 
+/** Type guard: checks if a dependency is a before-init tag wrapper. */
+export function isTagStartup(
+  definition: unknown,
+): definition is ITagStartupDependency<ITag<any, any, any, any>> {
+  return hasBrand(definition, symbolTagBeforeInitDependency);
+}
+
 /** Type guard: checks if a definition is an Optional Dependency wrapper. */
 export function isOptional(
   definition: unknown,
@@ -130,4 +146,39 @@ export function isAsyncContext(
   definition: unknown,
 ): definition is IAsyncContext<any> {
   return hasBrand(definition, symbolAsyncContext);
+}
+
+/** Type guard: checks if a definition is an override produced by override APIs. */
+export function isOverrideDefinition(definition: unknown): boolean {
+  return hasBrand(definition, symbolOverrideDefinition);
+}
+
+/**
+ * Type guard: checks if a value is an `IsolationSubtreeFilter` created by `subtreeOf()`.
+ * Used in the wiring validation path to distinguish structural resource references
+ * from flat id strings or tag definitions in deny/only policy entries.
+ */
+export function isSubtreeFilter(
+  definition: unknown,
+): definition is IsolationSubtreeFilter {
+  return (
+    typeof definition === "object" &&
+    definition !== null &&
+    (definition as IsolationSubtreeFilter)._subtreeFilter === true
+  );
+}
+
+/**
+ * Type guard: checks if a value is an `IsolationScope` created by `scope()`.
+ * Used in the wiring validation path to distinguish channel-scoped entries
+ * from bare definitions or subtree filters in deny/only policy entries.
+ */
+export function isIsolationScope(
+  definition: unknown,
+): definition is import("../tools/scope").IsolationScope {
+  return (
+    typeof definition === "object" &&
+    definition !== null &&
+    (definition as { _isolationScope?: boolean })._isolationScope === true
+  );
 }

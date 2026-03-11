@@ -1,24 +1,19 @@
 import { getRunner, RequestCtx, getUser } from "../bootstrap";
-import { json, parseEvent, errorToResponse, APIGatewayProxyResult } from "../http";
-import { z } from "zod";
-
-const GetUserSchema = z.object({ id: z.string().min(1) });
-
-interface LambdaEvent {
-  pathParameters?: { id?: string; userId?: string };
-  requestContext?: { http?: { method?: string } };
-  httpMethod?: string;
-  rawPath?: string;
-  path?: string;
-  headers?: Record<string, string>;
-}
+import {
+  json,
+  parseEvent,
+  errorToResponse,
+  APIGatewayProxyResult,
+} from "../http";
+import { AnyApiGatewayEvent, LambdaContextLike } from "../types/aws";
+import { getUserSchema, getValidationIssues } from "../validation";
 
 export const handler = async (
-  event: LambdaEvent,
-  context: { awsRequestId?: string },
+  event: AnyApiGatewayEvent,
+  context: LambdaContextLike,
 ): Promise<APIGatewayProxyResult> => {
   const rr = await getRunner();
-  const id = event?.pathParameters?.id || event?.pathParameters?.userId || "";
+  const id = event.pathParameters?.id || event.pathParameters?.userId || "";
   const { method, path, headers } = parseEvent(event);
 
   return RequestCtx.provide(
@@ -30,17 +25,24 @@ export const handler = async (
     },
     async () => {
       try {
-        const parsed = GetUserSchema.safeParse({ id });
-        if (!parsed.success) {
+        const parsed = getUserSchema.parse({ id });
+
+        const user = await rr.runTask(getUser, parsed);
+        return user ? json(200, user) : json(404, { message: "Not found" });
+      } catch (error: unknown) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "failures" in error &&
+          Array.isArray((error as { failures?: unknown }).failures)
+        ) {
           return json(400, {
             message: "Invalid id",
-            issues: parsed.error.issues,
+            issues: getValidationIssues(error),
           });
         }
-        const user = await rr.runTask(getUser, parsed.data);
-        return user ? json(200, user) : json(404, { message: "Not found" });
-      } catch (err: unknown) {
-        return errorToResponse(err);
+
+        return errorToResponse(error);
       }
     },
   );

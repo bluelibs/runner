@@ -9,7 +9,7 @@ export interface VerifyPasswordInput {
 }
 
 export const verifyPasswordTask = r
-  .task("app.tasks.users.verifyPassword")
+  .task("verifyPassword")
   .dependencies({ db })
   .run(async (input: VerifyPasswordInput, { db }) => {
     const user = await db.get<User & { password_hash: string }>(

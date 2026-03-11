@@ -13,7 +13,7 @@ const DEFAULTS: Partial<EnvValues> = {
 };
 
 export const env = r
-  .resource("app.env.resources.env")
+  .resource("env")
   .meta({
     title: "Environment Variables",
     description:

@@ -1,4 +1,5 @@
 import { EventManager } from "../../../models/EventManager";
+import { RuntimeCallSource, runtimeSource } from "../../../types/runtimeSource";
 import type { DurableAuditEntry } from "../../durable/core/audit";
 import { createDurableRunnerAuditEmitter } from "../../durable/emitters/runnerAuditEmitter";
 import { durableEvents } from "../../durable/events";
@@ -8,10 +9,13 @@ describe("durable: createDurableRunnerAuditEmitter", () => {
     const eventManager = new EventManager();
     const emitter = createDurableRunnerAuditEmitter({
       eventManager,
-      source: "durable.tests",
+      source: runtimeSource.resource("durable-tests"),
     });
 
-    const appended: Array<{ entry: DurableAuditEntry; source: string }> = [];
+    const appended: Array<{
+      entry: DurableAuditEntry;
+      source: RuntimeCallSource;
+    }> = [];
     const statusChanged: Array<
       Extract<DurableAuditEntry, { kind: "execution_status_changed" }>
     > = [];
@@ -133,7 +137,7 @@ describe("durable: createDurableRunnerAuditEmitter", () => {
       ...base,
       kind: "emit_published",
       stepId: "__emit:0",
-      eventId: "x.y",
+      eventId: "x-y",
     });
     await emitter.emit({
       ...base,
@@ -143,7 +147,11 @@ describe("durable: createDurableRunnerAuditEmitter", () => {
     });
 
     expect(appended).toHaveLength(9);
-    expect(appended.every((e) => e.source === "durable.tests")).toBe(true);
+    expect(
+      appended.every(
+        (e) => e.source.kind === "resource" && e.source.id === "durable-tests",
+      ),
+    ).toBe(true);
 
     expect(statusChanged).toHaveLength(1);
     expect(stepCompleted).toHaveLength(1);
@@ -154,5 +162,35 @@ describe("durable: createDurableRunnerAuditEmitter", () => {
     expect(signalTimedOut).toHaveLength(1);
     expect(emitPublished).toHaveLength(1);
     expect(noteCreated).toHaveLength(1);
+  });
+
+  it("uses default durable source when source is not provided", async () => {
+    const eventManager = new EventManager();
+    const emitter = createDurableRunnerAuditEmitter({
+      eventManager,
+    });
+
+    const appendedSources: RuntimeCallSource[] = [];
+    eventManager.addListener(durableEvents.audit.appended, (event) => {
+      appendedSources.push(event.source);
+    });
+
+    await emitter.emit({
+      id: "a-default",
+      executionId: "e-default",
+      at: new Date("2025-01-01T00:00:00.000Z"),
+      attempt: 1,
+      taskId: "t-default",
+      kind: "note",
+      message: "default-source",
+    });
+
+    expect(appendedSources).toEqual([
+      {
+        kind: "resource",
+        id: "durable.runtime",
+        path: "durable.runtime",
+      },
+    ]);
   });
 });

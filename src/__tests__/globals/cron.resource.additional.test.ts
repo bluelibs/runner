@@ -1,5 +1,6 @@
-import { globals, r } from "../../public";
+import { r, resources, tags } from "../../public";
 import { run } from "../../run";
+import type { RegisterableItems } from "../../defs";
 
 describe("global cron resource (additional)", () => {
   beforeEach(() => {
@@ -18,14 +19,32 @@ describe("global cron resource (additional)", () => {
     }
   };
 
+  const waitFor = async (
+    predicate: () => boolean,
+    attempts: number = 64,
+  ): Promise<void> => {
+    for (let i = 0; i < attempts; i += 1) {
+      if (predicate()) {
+        return;
+      }
+      await flushMicrotasks();
+    }
+  };
+
+  const createCronApp = (items: RegisterableItems[] = []) =>
+    r
+      .resource("app")
+      .register([resources.cron, ...items])
+      .build();
+
   it("fails fast when cron expression is invalid", async () => {
     const invalidTask = r
-      .task("app.tasks.invalid-cron")
-      .tags([globals.tags.cron.with({ expression: "invalid" })])
+      .task("app-tasks-invalid-cron")
+      .tags([tags.cron.with({ expression: "invalid" })])
       .run(async () => undefined)
       .build();
 
-    const app = r.resource("app").register([invalidTask]).build();
+    const app = createCronApp([invalidTask]);
 
     await expect(run(app)).rejects.toThrow(
       /invalid cron expression configuration/i,
@@ -36,9 +55,9 @@ describe("global cron resource (additional)", () => {
     let attempts = 0;
 
     const flakyTask = r
-      .task("app.tasks.non-error-failure")
+      .task("app-tasks-non-error-failure")
       .tags([
-        globals.tags.cron.with({
+        tags.cron.with({
           expression: "* * * * *",
         }),
       ])
@@ -48,7 +67,7 @@ describe("global cron resource (additional)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([flakyTask]).build();
+    const app = createCronApp([flakyTask]);
     const runtime = await run(app);
 
     jest.advanceTimersByTime(60_000);
@@ -56,9 +75,8 @@ describe("global cron resource (additional)", () => {
 
     expect(attempts).toBe(1);
     expect(
-      runtime
-        .getResourceValue(globals.resources.cron)
-        .schedules.get("app.tasks.non-error-failure")?.stopped,
+      runtime.getResourceValue(resources.cron).schedules.values().next().value
+        ?.stopped,
     ).toBe(false);
 
     await runtime.dispose();
@@ -66,28 +84,28 @@ describe("global cron resource (additional)", () => {
 
   it("fails when a task declares multiple cron tags", async () => {
     const duplicateCronTask = r
-      .task("app.tasks.duplicate-cron")
+      .task("app-tasks-duplicate-cron")
       .tags([
-        globals.tags.cron.with({ expression: "* * * * *" }),
-        globals.tags.cron.with({ expression: "*/5 * * * *" }),
+        tags.cron.with({ expression: "* * * * *" }),
+        tags.cron.with({ expression: "*/5 * * * *" }),
       ])
       .run(async () => undefined)
       .build();
 
-    const app = r.resource("app").register([duplicateCronTask]).build();
+    const app = createCronApp([duplicateCronTask]);
     await expect(run(app)).rejects.toThrow(
-      /duplicate tag "globals\.tags\.cron"/i,
+      /duplicate tag "runner\.tags\.cron"/i,
     );
   });
 
   it("fails when cron tag is present without configuration", async () => {
     const missingConfigTask = r
-      .task("app.tasks.missing-cron-config")
-      .tags([globals.tags.cron as never])
+      .task("app-tasks-missing-cron-config")
+      .tags([tags.cron as never])
       .run(async () => undefined)
       .build();
 
-    const app = r.resource("app").register([missingConfigTask]).build();
+    const app = createCronApp([missingConfigTask]);
     await expect(run(app)).rejects.toThrow(/missing configuration/i);
   });
 
@@ -98,16 +116,16 @@ describe("global cron resource (additional)", () => {
       .mockImplementation(() => undefined);
 
     const scheduledTask = r
-      .task("app.tasks.cleanup")
-      .tags([globals.tags.cron.with({ expression: "* * * * *" })])
+      .task("app-tasks-cleanup")
+      .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         attempts += 1;
       })
       .build();
 
-    const app = r.resource("app").register([scheduledTask]).build();
+    const app = createCronApp([scheduledTask]);
     const runtime = await run(app);
-    const cron = runtime.getResourceValue(globals.resources.cron);
+    const cron = runtime.getResourceValue(resources.cron);
 
     expect(cron.schedules.size).toBe(1);
     await runtime.dispose();
@@ -120,6 +138,78 @@ describe("global cron resource (additional)", () => {
     expect(attempts).toBe(0);
   });
 
+  it("stops a pending schedule without failure logs when runtime is disposing", async () => {
+    let cronRuns = 0;
+    let releaseBlocker!: () => void;
+    const blockerGate = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const clearTimeoutSpy = jest
+      .spyOn(globalThis, "clearTimeout")
+      .mockImplementation(() => undefined);
+
+    const blockerTask = r
+      .task("app-tasks-shutdown-blocker")
+      .run(async () => {
+        await blockerGate;
+      })
+      .build();
+
+    const shutdownAwareCronTask = r
+      .task("app-tasks-shutdown-cron")
+      .tags([tags.cron.with({ expression: "* * * * *" })])
+      .run(async () => {
+        cronRuns += 1;
+      })
+      .build();
+
+    const app = createCronApp([blockerTask, shutdownAwareCronTask]);
+    const runtime = await run(app, {
+      dispose: {
+        totalBudgetMs: 1_000_000,
+        drainingBudgetMs: 1_000_000,
+      },
+    });
+    const cron = runtime.getResourceValue(resources.cron);
+    const getShutdownSchedule = () =>
+      Array.from(cron.schedules.values()).find(
+        (schedule) =>
+          schedule.taskId === shutdownAwareCronTask.id ||
+          schedule.taskId.endsWith(shutdownAwareCronTask.id),
+      );
+
+    const blockerRun = runtime.runTask(blockerTask);
+    await flushMicrotasks();
+
+    const disposePromise = runtime.dispose();
+    await flushMicrotasks();
+    await waitFor(() => getShutdownSchedule()?.stopped === true);
+
+    expect(getShutdownSchedule()?.stopped).toBe(true);
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+
+    jest.advanceTimersByTime(60_000);
+    await flushMicrotasks();
+
+    expect(cronRuns).toBe(0);
+
+    const cronErrors = errorSpy.mock.calls.filter((args) =>
+      args.some(
+        (value) =>
+          typeof value === "string" &&
+          value.includes("app-tasks-shutdown-cron"),
+      ),
+    );
+    expect(cronErrors).toHaveLength(0);
+
+    releaseBlocker();
+    await blockerRun;
+    await disposePromise;
+    errorSpy.mockRestore();
+    clearTimeoutSpy.mockRestore();
+  });
+
   it("suppresses all log output when silent is true", async () => {
     const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -128,9 +218,9 @@ describe("global cron resource (additional)", () => {
     let attempts = 0;
 
     const silentTask = r
-      .task("app.tasks.silent")
+      .task("app-tasks-silent")
       .tags([
-        globals.tags.cron.with({
+        tags.cron.with({
           expression: "* * * * *",
           silent: true,
         }),
@@ -141,7 +231,7 @@ describe("global cron resource (additional)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([silentTask]).build();
+    const app = createCronApp([silentTask]);
     const runtime = await run(app);
 
     jest.advanceTimersByTime(60_000);
@@ -154,7 +244,7 @@ describe("global cron resource (additional)", () => {
       ...warnSpy.mock.calls,
       ...errorSpy.mock.calls,
     ].filter((args) =>
-      args.some((a) => typeof a === "string" && a.includes("app.tasks.silent")),
+      args.some((a) => typeof a === "string" && a.includes("app-tasks-silent")),
     );
     expect(cronLogs).toHaveLength(0);
 
@@ -168,9 +258,9 @@ describe("global cron resource (additional)", () => {
     const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
 
     const disabledSilentTask = r
-      .task("app.tasks.disabled-silent")
+      .task("app-tasks-disabled-silent")
       .tags([
-        globals.tags.cron.with({
+        tags.cron.with({
           expression: "* * * * *",
           enabled: false,
           silent: true,
@@ -179,12 +269,12 @@ describe("global cron resource (additional)", () => {
       .run(async () => undefined)
       .build();
 
-    const app = r.resource("app").register([disabledSilentTask]).build();
+    const app = createCronApp([disabledSilentTask]);
     const runtime = await run(app);
 
     const cronLogs = logSpy.mock.calls.filter((args) =>
       args.some(
-        (a) => typeof a === "string" && a.includes("app.tasks.disabled-silent"),
+        (a) => typeof a === "string" && a.includes("app-tasks-disabled-silent"),
       ),
     );
     expect(cronLogs).toHaveLength(0);
@@ -197,9 +287,9 @@ describe("global cron resource (additional)", () => {
     let runs = 0;
 
     const immediateTask = r
-      .task("app.tasks.immediate-single-stream")
+      .task("app-tasks-immediate-single-stream")
       .tags([
-        globals.tags.cron.with({
+        tags.cron.with({
           expression: "* * * * *",
           immediate: true,
         }),
@@ -209,7 +299,7 @@ describe("global cron resource (additional)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([immediateTask]).build();
+    const app = createCronApp([immediateTask]);
     const runtime = await run(app);
 
     await flushMicrotasks();
@@ -231,9 +321,9 @@ describe("global cron resource (additional)", () => {
     let regularRuns = 0;
 
     const immediateTask = r
-      .task("app.tasks.multi.immediate")
+      .task("app-tasks-multi-immediate")
       .tags([
-        globals.tags.cron.with({
+        tags.cron.with({
           expression: "* * * * *",
           immediate: true,
         }),
@@ -244,17 +334,14 @@ describe("global cron resource (additional)", () => {
       .build();
 
     const regularTask = r
-      .task("app.tasks.multi.regular")
-      .tags([globals.tags.cron.with({ expression: "* * * * *" })])
+      .task("app-tasks-multi-regular")
+      .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         regularRuns += 1;
       })
       .build();
 
-    const app = r
-      .resource("app")
-      .register([immediateTask, regularTask])
-      .build();
+    const app = createCronApp([immediateTask, regularTask]);
     const runtime = await run(app);
 
     await flushMicrotasks();

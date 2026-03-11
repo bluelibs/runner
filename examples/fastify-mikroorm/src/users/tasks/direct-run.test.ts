@@ -1,10 +1,10 @@
 import { buildTestRunner, testOrmConfig } from "#/general/test/utils";
 import { db } from "#/db/resources/db.resource";
 import { users } from "#/users";
-import { fastifyContext } from "#/http/fastify-context";
+import { fastifyContext } from "#/web/fastify-context";
 import { loginUser } from "./login.task";
 import { currentUser } from "./me.task";
-import { httpRoute } from "#/http/tags";
+import { httpRoute } from "#/web/tags";
 
 describe("direct task runs (without router)", () => {
   it("login sets cookie via fastifyContext reply", async () => {

@@ -6,7 +6,8 @@ import type {
   IHookDefinition,
   ITaskMiddlewareDefinition,
   IResourceMiddlewareDefinition,
-  TagType,
+  ResourceTagType,
+  TaskTagType,
   ResourceMiddlewareAttachmentType,
   TaskMiddlewareAttachmentType,
 } from "../../defs";
@@ -28,7 +29,7 @@ export interface ResourceBuilder<
   TDeps extends DependencyMapType = {},
   TContext = any,
   TMeta extends IResourceMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends ResourceTagType[] = ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[] =
     ResourceMiddlewareAttachmentType[],
 > {
@@ -53,7 +54,7 @@ export interface TaskBuilder<
   TOutput extends Promise<any> = any,
   TDeps extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends TaskTagType[] = TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[] =
     TaskMiddlewareAttachmentType[],
 > {

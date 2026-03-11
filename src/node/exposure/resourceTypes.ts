@@ -2,6 +2,7 @@ import type * as http from "http";
 import type { IncomingMessage, ServerResponse } from "http";
 
 import { globalResources } from "../../globals/globalResources";
+import type { globalTags } from "../../globals/globalTags";
 import type { ResourceDependencyValuesType } from "../../defs";
 import type { NodeExposureHttpAuthConfig } from "./authenticator";
 import type { MultipartLimits } from "./multipart";
@@ -12,6 +13,7 @@ export interface JsonLimits {
 
 export type NodeExposureDependencyMap = {
   store: typeof globalResources.store;
+  authValidators: typeof globalTags.authValidator;
   taskRunner: typeof globalResources.taskRunner;
   eventManager: typeof globalResources.eventManager;
   logger: typeof globalResources.logger;
@@ -23,7 +25,6 @@ export type NodeExposureDeps =
 
 export interface NodeExposureHttpConfig {
   basePath?: string;
-  server?: http.Server;
   listen?: { port: number; host?: string };
   auth?: NodeExposureHttpAuthConfig;
   cors?: NodeExposureHttpCorsConfig;
@@ -31,11 +32,6 @@ export interface NodeExposureHttpConfig {
     json?: JsonLimits;
     multipart?: MultipartLimits;
   };
-  /**
-   * Opt out of fail-closed exposure (not recommended).
-   * When true and no server-mode tunnel is registered, exposure is open.
-   */
-  dangerouslyAllowOpenExposure?: boolean;
   /**
    * Disable the discovery endpoint that enumerates registered task/event IDs.
    * When true, the /__runner/discovery endpoint returns 404.

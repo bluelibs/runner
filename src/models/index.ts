@@ -12,3 +12,5 @@ export * from "./Semaphore";
 export * from "./Queue";
 export * from "./UnhandledError";
 export * from "./RunResult";
+export * from "./runtime/LifecycleAdmissionController";
+export * from "./runtime/RuntimeTimers";

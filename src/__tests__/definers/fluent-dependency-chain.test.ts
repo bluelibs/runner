@@ -20,7 +20,7 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Chaining appends types
-    r.task("test.task")
+    r.task("test-task")
       .inputSchema<{ input: number }>({ parse: (v: any) => v })
       .resultSchema<number>({ parse: (v: any) => v })
       .dependencies({ a: depA })
@@ -35,7 +35,7 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Override replaces (TS errors on accessing a, so no need for @ts-expect-error)
-    r.task("test.task.override")
+    r.task("test-task-override")
       .inputSchema<{ input: number }>({ parse: (v: any) => v })
       .resultSchema<number>({ parse: (v: any) => v })
       .dependencies({ a: depA })
@@ -68,7 +68,7 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Chaining appends types
-    r.resource("test.resource")
+    r.resource("test-resource")
       .resultSchema<string>({ parse: (v: any) => v })
       .dependencies({ a: depA })
       .dependencies({ b: depB }) // appends
@@ -82,7 +82,7 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Override replaces (TS errors on accessing a)
-    r.resource("test.resource.override")
+    r.resource("test-resource-override")
       .resultSchema<string>({ parse: (v: any) => v })
       .dependencies({ a: depA })
       .dependencies({ b: depB }, { override: true })
@@ -123,7 +123,7 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Chaining appends
-    r.hook("test.hook")
+    r.hook("test-hook")
       .on([eventA, eventB])
       .dependencies({ a: depA })
       .dependencies({ b: depB })
@@ -136,7 +136,7 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Override (TS errors on accessing a)
-    r.hook("test.hook.override")
+    r.hook("test-hook-override")
       .on(eventA)
       .dependencies({ a: depA })
       .dependencies({ b: depB }, { override: true })
@@ -168,7 +168,7 @@ describe("fluent builders: dependency chaining", () => {
 
     // Task middleware chaining
     r.middleware
-      .task("test.taskMw")
+      .task("test-taskMw")
       .dependencies({ a: depA })
       .dependencies({ b: depB }) // appends
       .run(async ({ next, task }, deps) => {
@@ -182,7 +182,7 @@ describe("fluent builders: dependency chaining", () => {
 
     // Resource middleware chaining
     r.middleware
-      .resource("test.resourceMw")
+      .resource("test-resourceMw")
       .dependencies({ a: depA })
       .dependencies({ b: depB })
       .run(async ({ next }, _deps) => {
@@ -194,7 +194,7 @@ describe("fluent builders: dependency chaining", () => {
 
     // Override (TS errors on accessing a)
     r.middleware
-      .task("test.taskMw.override")
+      .task("test-taskMw-override")
       .dependencies({ a: depA })
       .dependencies({ b: depB }, { override: true })
       .run(async ({ next, task }, deps) => {

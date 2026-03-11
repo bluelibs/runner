@@ -1,7 +1,6 @@
-import * as http from "http";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 
 function createReqRes(init: {
   method?: string;
@@ -71,26 +70,24 @@ function createReqRes(init: {
 describe("exposure CORS", () => {
   it("default permissive: OPTIONS returns 204 with wildcard and echoes request headers", async () => {
     const t = defineTask<{ x?: number }, Promise<number>>({
-      id: "tests.cors.default",
+      id: "tests-cors-default",
       async run() {
         return 1;
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "tests.app.cors.default",
+      id: "tests-app-cors-default",
       register: [t, exposure],
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
 
       // Preflight
       const pre = createReqRes({
@@ -129,15 +126,13 @@ describe("exposure CORS", () => {
 
   it("respects configured origin array and credentials on preflight", async () => {
     const t = defineTask<void, Promise<string>>({
-      id: "tests.cors.allowed",
+      id: "tests-cors-allowed",
       async run() {
         return "ok";
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         cors: {
           origin: ["https://a.test", "https://b.test"],
@@ -149,12 +144,12 @@ describe("exposure CORS", () => {
       },
     });
     const app = defineResource({
-      id: "tests.app.cors.config",
+      id: "tests-app-cors-config",
       register: [t, exposure],
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
 
       const pre = createReqRes({
         method: "OPTIONS",
@@ -195,15 +190,13 @@ describe("exposure CORS", () => {
 
   it("actual response sets expose headers and credentials when configured", async () => {
     const t = defineTask<void, Promise<number>>({
-      id: "tests.cors.actual",
+      id: "tests-cors-actual",
       async run() {
         return 10;
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         cors: {
           origin: "https://site.test",
@@ -213,12 +206,12 @@ describe("exposure CORS", () => {
       },
     });
     const app = defineResource({
-      id: "tests.app.cors.actual",
+      id: "tests-app-cors-actual",
       register: [t, exposure],
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
       const tr = createReqRes({
         method: "POST",
         url: `/__runner/task/${encodeURIComponent(t.id)}`,

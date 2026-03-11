@@ -10,7 +10,7 @@ describe("run (dry-run)", () => {
     const init = jest.fn(async () => "value");
 
     const r = defineResource({
-      id: "dry.app",
+      id: "dry-app",
       register: [],
       init,
     });
@@ -33,12 +33,12 @@ describe("run (dry-run)", () => {
 
   it("b) should not catch exceptions from resources in dry run (synchronous registration-time throw)", async () => {
     const inner = defineResource({
-      id: "inner.bad",
+      id: "inner-bad",
       init: async () => "ok",
     });
 
     const bad = defineResource({
-      id: "dry.bad",
+      id: "dry-bad",
       // Throw during registration so error surfaces during run() (dry run still executes registration)
       register: () => {
         throw createMessageError("Registration failed");
@@ -54,17 +54,17 @@ describe("run (dry-run)", () => {
 
   it("c) dry run exposes store; resources and tasks are present in store maps", async () => {
     const task = defineTask({
-      id: "dry.task",
+      id: "dry-task",
       run: async () => "task-result",
     });
 
     const dep = defineResource({
-      id: "dry.dep",
+      id: "dry-dep",
       init: async () => "dep-value",
     });
 
     const app = defineResource({
-      id: "dry.app2",
+      id: "dry-app2",
       register: [task, dep],
       dependencies: { dep },
       async init(_, { dep }) {
@@ -75,9 +75,9 @@ describe("run (dry-run)", () => {
     const result = await run(app, { dryRun: true });
 
     // Store should contain our items
-    expect(result.store.resources.has("dry.dep")).toBe(true);
-    expect(result.store.resources.has("dry.app2")).toBe(true);
-    expect(result.store.tasks.has("dry.task")).toBe(true);
+    expect(result.store.resources.has("dry-dep")).toBe(true);
+    expect(result.store.resources.has("dry-app2")).toBe(true);
+    expect(result.store.tasks.has("dry-task")).toBe(true);
 
     // Global built-ins should also exist
     expect(result.store.resources.size).toBeGreaterThan(0);
@@ -88,18 +88,18 @@ describe("run (dry-run)", () => {
   it("d) circular dependencies still throw during dry run validation", async () => {
     // Circular resources
     const r1: any = defineResource({
-      id: "circular.r1",
+      id: "circular-r1",
       dependencies: (): any => ({ r2 }),
       init: async () => "r1",
     });
     const r2 = defineResource({
-      id: "circular.r2",
+      id: "circular-r2",
       dependencies: { r1 },
       init: async () => "r2",
     });
 
     const app = defineResource({
-      id: "circular.app",
+      id: "circular-app",
       register: [r1, r2],
     });
 
@@ -109,9 +109,9 @@ describe("run (dry-run)", () => {
   });
 
   it("e) depending on an unregistered item throws on run()", async () => {
-    const dep = defineResource({ id: "missing.dep", init: async () => "x" });
+    const dep = defineResource({ id: "missing-dep", init: async () => "x" });
     const app = defineResource({
-      id: "unregistered.dependency.app",
+      id: "unregistered-dependency-app",
       // Don't register dep on purpose, but depend on it
       dependencies: { dep },
       async init(_, { dep }) {
@@ -119,6 +119,6 @@ describe("run (dry-run)", () => {
       },
     });
 
-    await expect(run(app)).rejects.toThrow(/Dependency .*missing.dep/);
+    await expect(run(app)).rejects.toThrow(/Dependency .*missing-dep/);
   });
 });

@@ -4,12 +4,12 @@ import { globalResources } from "../../../globals/globalResources";
 import { debugResource } from "../../../globals/resources/debug/debug.resource";
 import { globalTags } from "../../../globals/globalTags";
 
-describe("globals.resources.debug.globalEvent.hook", () => {
+describe("runner.debug.globalEvent.hook", () => {
   it("logs non-system events and includes payload when configured (verbose)", async () => {
     const logs: Array<{ level: string; message: any; data?: any }> = [];
 
     const collector = defineResource({
-      id: "tests.collector.global-event.verbose",
+      id: "tests-collector-global-event-verbose",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -19,10 +19,10 @@ describe("globals.resources.debug.globalEvent.hook", () => {
       },
     });
 
-    const evt = defineEvent<{ foo: string }>({ id: "tests.global-event" });
+    const evt = defineEvent<{ foo: string }>({ id: "tests-global-event" });
 
     const emitter = defineTask({
-      id: "tests.global-event.emitter",
+      id: "tests-global-event-emitter",
       dependencies: { evt },
       async run(_input, { evt }) {
         await evt({ foo: "bar" });
@@ -31,7 +31,7 @@ describe("globals.resources.debug.globalEvent.hook", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.global-event.verbose",
+      id: "tests-app-global-event-verbose",
       register: [
         debugResource.with({
           logEventEmissionOnRun: true,
@@ -53,7 +53,7 @@ describe("globals.resources.debug.globalEvent.hook", () => {
 
     const infoLogs = logs.filter((l) => l.level === "info");
     const eventLog = infoLogs.find((l) =>
-      String(l.message).includes("Event tests.global-event emitted"),
+      /Event .*tests-global-event emitted/.test(String(l.message)),
     );
 
     expect(eventLog).toBeTruthy();
@@ -64,7 +64,7 @@ describe("globals.resources.debug.globalEvent.hook", () => {
     const logs: Array<{ level: string; message: any; data?: any }> = [];
 
     const collector = defineResource({
-      id: "tests.collector.global-event.flags",
+      id: "tests-collector-global-event-flags",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -75,11 +75,11 @@ describe("globals.resources.debug.globalEvent.hook", () => {
     });
 
     const evt = defineEvent<{ foo: string }>({
-      id: "tests.global-event.flags",
+      id: "tests-global-event-flags",
     });
 
     const emitter = defineTask({
-      id: "tests.global-event.flags.emitter",
+      id: "tests-global-event-flags-emitter",
       dependencies: { evt },
       async run(_input, { evt }) {
         await evt({ foo: "baz" });
@@ -88,7 +88,7 @@ describe("globals.resources.debug.globalEvent.hook", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.global-event.flags",
+      id: "tests-app-global-event-flags",
       register: [collector, evt, emitter],
       dependencies: { collector, emitter },
       async init() {
@@ -105,7 +105,7 @@ describe("globals.resources.debug.globalEvent.hook", () => {
 
     const infoLogs = logs.filter((l) => l.level === "info");
     const eventLog = infoLogs.find((l) =>
-      String(l.message).includes("Event tests.global-event.flags emitted"),
+      /Event .*tests-global-event-flags emitted/.test(String(l.message)),
     );
 
     expect(eventLog).toBeTruthy();
@@ -116,7 +116,7 @@ describe("globals.resources.debug.globalEvent.hook", () => {
     const logs: Array<{ level: string; message: any }> = [];
 
     const collector = defineResource({
-      id: "tests.collector.global-event.system",
+      id: "tests-collector-global-event-system",
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
@@ -127,12 +127,12 @@ describe("globals.resources.debug.globalEvent.hook", () => {
     });
 
     const systemEvt = defineEvent<{ sys: boolean }>({
-      id: "tests.global-event.system",
+      id: "tests-global-event-system",
       tags: [globalTags.system],
     });
 
     const emitter = defineTask({
-      id: "tests.global-event.system.emitter",
+      id: "tests-global-event-system-emitter",
       dependencies: { systemEvt },
       async run(_input, { systemEvt }) {
         await systemEvt({ sys: true });
@@ -141,7 +141,7 @@ describe("globals.resources.debug.globalEvent.hook", () => {
     });
 
     const app = defineResource({
-      id: "tests.app.global-event.system",
+      id: "tests-app-global-event-system",
       register: [debugResource.with("verbose"), collector, systemEvt, emitter],
       async init() {
         return "ready";
@@ -153,9 +153,7 @@ describe("globals.resources.debug.globalEvent.hook", () => {
 
     const messages = logs.map((l) => String(l.message));
     expect(
-      messages.some((m) =>
-        m.includes("Event tests.global-event.system emitted"),
-      ),
+      messages.some((m) => /Event .*tests-global-event-system emitted/.test(m)),
     ).toBe(false);
   });
 });

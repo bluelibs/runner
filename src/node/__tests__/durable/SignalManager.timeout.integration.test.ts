@@ -1,4 +1,4 @@
-import { event, r, run } from "../../..";
+import { defineEvent, r, resources, run } from "../../node";
 import { durableResource } from "../../durable/core/resource";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
@@ -18,13 +18,15 @@ async function waitUntil(
 }
 
 describe("durable: signal timeout integration", () => {
-  const Paid = event<{ paidAt: number }>({ id: "durable.tests.timeout.paid" });
+  const Paid = defineEvent<{ paidAt: number }>({
+    id: "durable-tests-timeout-paid",
+  });
 
   it("returns timeout when no signal arrives before deadline", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.tests.timeout.durable");
+    const durable = durableResource.fork("durable-tests-timeout-durable");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -32,7 +34,7 @@ describe("durable: signal timeout integration", () => {
     });
 
     const task = r
-      .task("durable.test.waitForSignalOrTimeout")
+      .task("durable-test-waitForSignalOrTimeout")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -40,7 +42,10 @@ describe("durable: signal timeout integration", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
@@ -68,7 +73,7 @@ describe("durable: signal timeout integration", () => {
     const bus = new MemoryEventBus();
 
     const durable = durableResource.fork(
-      "durable.tests.timeout.durable.signal",
+      "durable-tests-timeout-durable-signal",
     );
     const durableRegistration = durable.with({
       store,
@@ -77,7 +82,7 @@ describe("durable: signal timeout integration", () => {
     });
 
     const task = r
-      .task("durable.test.waitForSignalOrTimeout.signal")
+      .task("durable-test-waitForSignalOrTimeout-signal")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -85,7 +90,10 @@ describe("durable: signal timeout integration", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);

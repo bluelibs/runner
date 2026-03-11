@@ -30,14 +30,14 @@ import {
   };
 
   const middlewareWithConfig = defineTaskMiddleware({
-    id: "middleware.config",
+    id: "middleware-config",
     run: async (input, _deps, _config: MiddlewareConfig) => {
       return input;
     },
   });
 
   const middlewareWithOptionalConfig = defineTaskMiddleware({
-    id: "middleware.optional.config",
+    id: "middleware-optional-config",
     run: async (input, _deps, _config: MiddlewareOptionalConfig) => {
       return input;
     },
@@ -84,20 +84,20 @@ import {
   };
 
   const dummyResource = defineResource({
-    id: "dummy.resource",
+    id: "dummy-resource",
     init: async (_config: ResourceType) => "Resource Value",
   });
   const dummyResourceNoConfig = defineResource({
-    id: "dummy.resource",
+    id: "dummy-resource",
     init: async () => "Resource Value",
   });
   const dummyResourceOptionalConfig = defineResource({
-    id: "dummy.resource",
+    id: "dummy-resource",
     init: async (_config?: string) => "Resource Value",
   });
 
   defineResource({
-    id: "test.resource",
+    id: "test-resource",
     middleware: [],
     dependencies: { task, dummyResource, event, eventWithoutArguments },
     init: async (_, deps) => {

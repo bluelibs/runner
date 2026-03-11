@@ -6,7 +6,7 @@ import {
   defineTaskMiddleware,
 } from "../../define";
 import { run } from "../../run";
-import { ResourceInitMode } from "../../types/runner";
+import { ResourceLifecycleMode } from "../../types/runner";
 
 describe("run lazy init mode behavior", () => {
   const waitFor = async (
@@ -35,7 +35,7 @@ describe("run lazy init mode behavior", () => {
     const unusedInit = jest.fn(async () => "unused");
 
     const first = defineResource({
-      id: "init.mode.lazy.parallel.first",
+      id: "init-mode-lazy-parallel-first",
       async init() {
         firstStarted = true;
         await gate;
@@ -44,7 +44,7 @@ describe("run lazy init mode behavior", () => {
     });
 
     const second = defineResource({
-      id: "init.mode.lazy.parallel.second",
+      id: "init-mode-lazy-parallel-second",
       async init() {
         secondStarted = true;
         await gate;
@@ -53,12 +53,12 @@ describe("run lazy init mode behavior", () => {
     });
 
     const unused = defineResource({
-      id: "init.mode.lazy.parallel.unused",
+      id: "init-mode-lazy-parallel-unused",
       init: unusedInit,
     });
 
     const app = defineResource({
-      id: "init.mode.lazy.parallel.app",
+      id: "init-mode-lazy-parallel-app",
       register: [first, second, unused],
       dependencies: { first, second },
       async init() {
@@ -68,7 +68,7 @@ describe("run lazy init mode behavior", () => {
 
     const runtimePromise = run(app, {
       lazy: true,
-      initMode: ResourceInitMode.Parallel,
+      lifecycleMode: ResourceLifecycleMode.Parallel,
       shutdownHooks: false,
     });
 
@@ -89,33 +89,122 @@ describe("run lazy init mode behavior", () => {
     await runtime.dispose();
   });
 
-  it("keeps startup initialization sequential in lazy mode when initMode is sequential", async () => {
-    let releaseFirstInit!: () => void;
-    const firstInitGate = new Promise<void>((resolve) => {
-      releaseFirstInit = resolve;
+  it("runs resource.ready when a startup-unused resource is lazy-initialized", async () => {
+    const ready = jest.fn(async () => undefined);
+
+    const lazyResource = defineResource({
+      id: "init-mode-lazy-ready-resource",
+      async init() {
+        return "lazy-resource";
+      },
+      ready,
+    });
+
+    const app = defineResource({
+      id: "init-mode-lazy-ready-app",
+      register: [lazyResource],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app, {
+      lazy: true,
+      shutdownHooks: false,
+    });
+
+    expect(ready).toHaveBeenCalledTimes(0);
+
+    await expect(runtime.getLazyResourceValue(lazyResource)).resolves.toBe(
+      "lazy-resource",
+    );
+    expect(ready).toHaveBeenCalledTimes(1);
+
+    await expect(runtime.getLazyResourceValue(lazyResource)).resolves.toBe(
+      "lazy-resource",
+    );
+    expect(ready).toHaveBeenCalledTimes(1);
+
+    await runtime.dispose();
+  });
+
+  it("getHealth skips startup-unused lazy resources", async () => {
+    const lazyInit = jest.fn(async () => ({ ready: true }));
+    const health = jest.fn(async (value: { ready: boolean } | undefined) => {
+      const status: "healthy" | "degraded" = value?.ready
+        ? "healthy"
+        : "degraded";
+
+      return {
+        status,
+        message: value?.ready ? "initialized" : "not-initialized",
+      };
+    });
+
+    const lazyResource = defineResource({
+      id: "init-mode-lazy-health-resource",
+      init: lazyInit,
+      health,
+    });
+
+    const app = defineResource({
+      id: "init-mode-lazy-health-app",
+      register: [lazyResource],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app, {
+      lazy: true,
+      shutdownHooks: false,
+    });
+
+    expect(lazyInit).toHaveBeenCalledTimes(0);
+
+    const report = await runtime.getHealth([lazyResource]);
+
+    expect(lazyInit).toHaveBeenCalledTimes(0);
+    expect(health).toHaveBeenCalledTimes(0);
+    expect(report.totals).toEqual({
+      resources: 0,
+      healthy: 0,
+      degraded: 0,
+      unhealthy: 0,
+    });
+    expect(report.report).toEqual([]);
+
+    await runtime.dispose();
+  });
+
+  it("initializes startup-required resources eagerly in lazy mode when lifecycleMode is sequential", async () => {
+    let releaseInit!: () => void;
+    const initGate = new Promise<void>((resolve) => {
+      releaseInit = resolve;
     });
     let firstStarted = false;
     let secondStarted = false;
 
     const first = defineResource({
-      id: "init.mode.lazy.sequential.first",
+      id: "init-mode-lazy-sequential-first",
       async init() {
         firstStarted = true;
-        await firstInitGate;
+        await initGate;
         return "first";
       },
     });
 
     const second = defineResource({
-      id: "init.mode.lazy.sequential.second",
+      id: "init-mode-lazy-sequential-second",
       async init() {
         secondStarted = true;
+        await initGate;
         return "second";
       },
     });
 
     const app = defineResource({
-      id: "init.mode.lazy.sequential.app",
+      id: "init-mode-lazy-sequential-app",
       register: [first, second],
       dependencies: { first, second },
       async init() {
@@ -123,13 +212,21 @@ describe("run lazy init mode behavior", () => {
       },
     });
 
-    const runtimePromise = run(app, { lazy: true, shutdownHooks: false });
-    const firstHasStarted = await waitFor(() => firstStarted, 120);
+    const runtimePromise = run(app, {
+      lazy: true,
+      lifecycleMode: ResourceLifecycleMode.Sequential,
+      shutdownHooks: false,
+    });
+    const oneHasStarted = await waitFor(
+      () => firstStarted || secondStarted,
+      120,
+    );
+    const bothStartedBeforeRelease = firstStarted && secondStarted;
 
-    expect(firstHasStarted).toBe(true);
-    expect(secondStarted).toBe(false);
+    expect(oneHasStarted).toBe(true);
+    expect(bothStartedBeforeRelease).toBe(true);
 
-    releaseFirstInit();
+    releaseInit();
     const runtime = await runtimePromise;
     await runtime.dispose();
   });
@@ -138,7 +235,7 @@ describe("run lazy init mode behavior", () => {
     const initOrder: string[] = [];
 
     const lazyResourceB = defineResource({
-      id: "init.mode.lazy.chain.b",
+      id: "init-mode-lazy-chain-b",
       async init() {
         initOrder.push("b");
         return { id: "b" };
@@ -146,7 +243,7 @@ describe("run lazy init mode behavior", () => {
     });
 
     const lazyResourceA = defineResource({
-      id: "init.mode.lazy.chain.a",
+      id: "init-mode-lazy-chain-a",
       dependencies: { lazyResourceB },
       async init(_, { lazyResourceB }) {
         initOrder.push("a");
@@ -155,7 +252,7 @@ describe("run lazy init mode behavior", () => {
     });
 
     const app = defineResource({
-      id: "init.mode.lazy.chain.app",
+      id: "init-mode-lazy-chain-app",
       register: [lazyResourceA, lazyResourceB],
       async init() {
         return "ok";
@@ -182,12 +279,12 @@ describe("run lazy init mode behavior", () => {
   it("initializes task middleware resource dependencies during startup in lazy+parallel mode", async () => {
     const warmupInit = jest.fn(async () => ({ warmed: true }));
     const cacheWarmup = defineResource({
-      id: "init.mode.lazy.middleware.cacheWarmup",
+      id: "init-mode-lazy-middleware-cacheWarmup",
       init: warmupInit,
     });
 
     const auditMiddleware = defineTaskMiddleware({
-      id: "init.mode.lazy.middleware.audit",
+      id: "init-mode-lazy-middleware-audit",
       dependencies: { cacheWarmup },
       run: async ({ next }, { cacheWarmup }) => {
         expect(cacheWarmup.warmed).toBe(true);
@@ -196,13 +293,13 @@ describe("run lazy init mode behavior", () => {
     });
 
     const work = defineTask({
-      id: "init.mode.lazy.middleware.work",
+      id: "init-mode-lazy-middleware-work",
       middleware: [auditMiddleware],
       run: async () => "done",
     });
 
     const app = defineResource({
-      id: "init.mode.lazy.middleware.app",
+      id: "init-mode-lazy-middleware-app",
       register: [cacheWarmup, auditMiddleware, work],
       dependencies: { work },
       init: async (_, { work }) => {
@@ -214,7 +311,7 @@ describe("run lazy init mode behavior", () => {
 
     const runtime = await run(app, {
       lazy: true,
-      initMode: ResourceInitMode.Parallel,
+      lifecycleMode: ResourceLifecycleMode.Parallel,
       shutdownHooks: false,
     });
 
@@ -227,17 +324,17 @@ describe("run lazy init mode behavior", () => {
   it("initializes hook resource dependencies during startup in lazy+parallel mode", async () => {
     const hookResourceInit = jest.fn(async () => ({ ready: "hook-dep" }));
     const hookDep = defineResource({
-      id: "init.mode.lazy.hook.dependency",
+      id: "init-mode-lazy-hook-dependency",
       init: hookResourceInit,
     });
 
     const appEvent = defineEvent<{ ok: true }>({
-      id: "init.mode.lazy.hook.event",
+      id: "init-mode-lazy-hook-event",
     });
 
     const seen: string[] = [];
     const hook = defineHook({
-      id: "init.mode.lazy.hook.listener",
+      id: "init-mode-lazy-hook-listener",
       on: appEvent,
       dependencies: { hookDep },
       run: async (_event, { hookDep }) => {
@@ -246,7 +343,7 @@ describe("run lazy init mode behavior", () => {
     });
 
     const app = defineResource({
-      id: "init.mode.lazy.hook.app",
+      id: "init-mode-lazy-hook-app",
       register: [hookDep, appEvent, hook],
       dependencies: { appEvent },
       init: async (_, { appEvent }) => {
@@ -257,7 +354,7 @@ describe("run lazy init mode behavior", () => {
 
     const runtime = await run(app, {
       lazy: true,
-      initMode: ResourceInitMode.Parallel,
+      lifecycleMode: ResourceLifecycleMode.Parallel,
       shutdownHooks: false,
     });
 

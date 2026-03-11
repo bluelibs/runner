@@ -39,7 +39,7 @@ describe("ensureSchedule()", () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
     const task = r
-      .task("t.ensure.cron")
+      .task("t-ensure-cron")
       .run(async (_input: { a: number }) => "ok")
       .build();
 
@@ -63,7 +63,7 @@ describe("ensureSchedule()", () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
     const task = r
-      .task("t.ensure.update")
+      .task("t-ensure-update")
       .run(async (_input: { v: number }) => "ok")
       .build();
 
@@ -85,11 +85,11 @@ describe("ensureSchedule()", () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
     const a = r
-      .task("t.ensure.a")
+      .task("t-ensure-a")
       .run(async () => "ok")
       .build();
     const b = r
-      .task("t.ensure.b")
+      .task("t-ensure-b")
       .run(async () => "ok")
       .build();
 
@@ -103,7 +103,7 @@ describe("ensureSchedule()", () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
     const task = r
-      .task("t.ensure.invalid")
+      .task("t-ensure-invalid")
       .run(async () => "ok")
       .build();
 
@@ -120,7 +120,7 @@ describe("ensureSchedule()", () => {
     const store = createNoLockStore(base);
     const service = new DurableService({ store, tasks: [] });
     const task = r
-      .task("t.ensure.nolock")
+      .task("t-ensure-nolock")
       .run(async () => "ok")
       .build();
 
@@ -140,7 +140,7 @@ describe("ensureSchedule()", () => {
     const store = new LockedStore();
     const service = new DurableService({ store, tasks: [] });
     const task = r
-      .task("t.ensure.locked")
+      .task("t-ensure-locked")
       .run(async () => "ok")
       .build();
 
@@ -154,7 +154,7 @@ describe("ensureSchedule()", () => {
     const service = new DurableService({ store, tasks: [] });
     const durable = new DurableResource(service, new AsyncLocalStorage());
     const task = r
-      .task("t.ensure.resource")
+      .task("t-ensure-resource")
       .run(async () => "ok")
       .build();
 
@@ -162,5 +162,31 @@ describe("ensureSchedule()", () => {
       durable.ensureSchedule(task, undefined, { id: "s1", interval: 1000 }),
     ).resolves.toBe("s1");
     expect((await store.getSchedule("s1"))?.taskId).toBe(task.id);
+  });
+
+  it("does not re-arm when the updated schedule cannot be reloaded", async () => {
+    class FlakyStore extends MemoryStore {
+      private getCalls = 0;
+
+      override async getSchedule(id: string) {
+        this.getCalls += 1;
+        if (id === "s1" && this.getCalls >= 3) {
+          return null;
+        }
+        return await super.getSchedule(id);
+      }
+    }
+
+    const store = new FlakyStore();
+    const service = new DurableService({ store, tasks: [] });
+    const task = r
+      .task("t-ensure-flaky")
+      .run(async () => "ok")
+      .build();
+
+    await service.ensureSchedule(task, undefined, { id: "s1", interval: 1000 });
+    await expect(
+      service.ensureSchedule(task, undefined, { id: "s1", interval: 2000 }),
+    ).resolves.toBe("s1");
   });
 });

@@ -1,4 +1,4 @@
-import { r, run } from "../../..";
+import { r, resources, run } from "../../node";
 import { RabbitMQQueue } from "../../durable/queue/RabbitMQQueue";
 import { RedisEventBus } from "../../durable/bus/RedisEventBus";
 import { RedisStore } from "../../durable/store/RedisStore";
@@ -25,7 +25,7 @@ const shouldRun = process.env.DURABLE_INTEGRATION === "1";
       },
     });
 
-    const durable = durableResource.fork("durable.integration.durable");
+    const durable = durableResource.fork("durable-integration-durable");
     const durableRegistration = durable.with({
       store,
       queue,
@@ -35,7 +35,7 @@ const shouldRun = process.env.DURABLE_INTEGRATION === "1";
 
     let ran = 0;
     const task = r
-      .task("durable.integration.task")
+      .task("durable-integration-task")
       .dependencies({ durable })
       .run(async (_input: { v: number }, { durable }) => {
         const ctx = durable.use();
@@ -46,7 +46,10 @@ const shouldRun = process.env.DURABLE_INTEGRATION === "1";
       })
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);

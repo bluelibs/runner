@@ -99,4 +99,36 @@ describe("LockableMap", () => {
       'Cannot modify "LockableMap" — the map is locked.',
     );
   });
+
+  it("deletes through lookup aliases and returns false for unresolved or self-resolved keys", () => {
+    map.set("canonical", 1);
+    map.setLookupResolver((key) => {
+      if (key === "alias") {
+        return "canonical";
+      }
+      if (key === "self") {
+        return "self";
+      }
+      return undefined;
+    });
+
+    expect(map.delete("missing")).toBe(false);
+    expect(map.delete("self")).toBe(false);
+    expect(map.delete("alias")).toBe(true);
+    expect(map.has("canonical")).toBe(false);
+  });
+
+  it("supports deleteExact and still enforces locking", () => {
+    map.set("canonical", 1);
+    map.setLookupResolver(() => "canonical");
+
+    expect(map.deleteExact("alias")).toBe(false);
+    expect(map.deleteExact("canonical")).toBe(true);
+
+    map.set("canonical", 2);
+    map.lock();
+    expect(() => map.deleteExact("canonical")).toThrow(
+      'Cannot modify "testMap" — the map is locked.',
+    );
+  });
 });

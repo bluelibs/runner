@@ -1,16 +1,19 @@
-import { r, run, definitions, resource } from "../..";
+import { r, run, definitions, defineResource } from "../..";
 import { createMessageError } from "../../errors";
 
 describe("task/event/hook/middleware builders", () => {
   it("task builder infers input type from run signature", async () => {
     const task = r
-      .task("tests.builder.task.infer")
+      .task("tests-builder-task-infer")
       .run(async (input: { a: number; b: number }) =>
         Promise.resolve(input.a + input.b),
       )
       .build();
 
-    const app = resource({ id: "tests.app.task.infer", register: [task] });
+    const app = defineResource({
+      id: "tests-app-task-infer",
+      register: [task],
+    });
     const rr = await run(app);
     const out = await rr.runTask(task, { a: 1, b: 2 });
     expect(out).toBe(3);
@@ -18,14 +21,14 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("task builder produces branded task and run(input, deps) works", async () => {
-    const svc = resource({
-      id: "tests.svc",
+    const svc = defineResource({
+      id: "tests-svc",
       init: async () => ({
         add: (a: number, b: number) => a + b,
       }),
     });
     const task = r
-      .task("tests.builder.task")
+      .task("tests-builder-task")
       .dependencies({ svc })
       .inputSchema<{ a: number; b: number }>({
         parse: (x: unknown) => x as { a: number; b: number },
@@ -43,7 +46,7 @@ describe("task/event/hook/middleware builders", () => {
         definitions.symbolTask
       ],
     ).toBe(true);
-    const app = resource({ id: "tests.app.task", register: [svc, task] });
+    const app = defineResource({ id: "tests-app-task", register: [svc, task] });
     const rr = await run(app);
     const out = await rr.runTask(task, { a: 2, b: 3 });
     expect(out).toBe(5);
@@ -51,27 +54,33 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("event builder produces branded event and hook builder listens and runs", async () => {
-    const ev = r.event("tests.builder.event").build();
+    const ev = r.event("tests-builder-event").build();
     const calls: string[] = [];
     const listener = r
-      .hook("tests.builder.hook")
+      .hook("tests-builder-hook")
       .on(ev)
       .run(async (em) => {
         calls.push(em.id);
       })
       .build();
 
-    const app = resource({ id: "tests.app.ev", register: [ev, listener] });
+    const app = defineResource({
+      id: "tests-app-ev",
+      register: [ev, listener],
+    });
     const rr = await run(app);
     await rr.emitEvent(ev, undefined);
-    expect(calls).toEqual([ev.id]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual(
+      expect.stringMatching(/(?:^|\.)tests-builder-event$/),
+    );
     await rr.dispose();
   });
 
   it("event dependency supports explicit undefined payload with report mode for void payload events", async () => {
-    const ev = r.event("tests.builder.event.dep.report").build();
+    const ev = r.event("tests-builder-event-dep-report").build();
     const emitFromTask = r
-      .task("tests.builder.event.dep.report.emitter")
+      .task("tests-builder-event-dep-report-emitter")
       .dependencies({ ev })
       .run(async (_input, deps) => {
         const report = await deps.ev(undefined, {
@@ -87,7 +96,7 @@ describe("task/event/hook/middleware builders", () => {
       .build();
 
     const failingHookA = r
-      .hook("tests.builder.event.dep.report.hook.a")
+      .hook("tests-builder-event-dep-report-hook-a")
       .on(ev)
       .run(async () => {
         throw createMessageError("hook-a");
@@ -95,15 +104,15 @@ describe("task/event/hook/middleware builders", () => {
       .build();
 
     const failingHookB = r
-      .hook("tests.builder.event.dep.report.hook.b")
+      .hook("tests-builder-event-dep-report-hook-b")
       .on(ev)
       .run(async () => {
         throw createMessageError("hook-b");
       })
       .build();
 
-    const app = resource({
-      id: "tests.builder.event.dep.report.app",
+    const app = defineResource({
+      id: "tests-builder-event-dep-report-app",
       register: [ev, emitFromTask, failingHookA, failingHookB],
     });
 
@@ -121,11 +130,11 @@ describe("task/event/hook/middleware builders", () => {
 
   it("middleware builders produce branded middlewares and can be registered", async () => {
     const tmw = r.middleware
-      .task("tests.builder.tm")
+      .task("tests-builder-tm")
       .run(async ({ next, task }) => next(task.input))
       .build();
     const rmw = r.middleware
-      .resource("tests.builder.rm")
+      .resource("tests-builder-rm")
       .run(async ({ next, resource }) => next(resource.config))
       .build();
     expect(
@@ -141,12 +150,12 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("tags append and override on event, hook, and middlewares", () => {
-    const tagA = r.tag("tests.builder.tag.A").build();
-    const tagB = r.tag("tests.builder.tag.B").build();
+    const tagA = r.tag("tests-builder-tag-A").build();
+    const tagB = r.tag("tests-builder-tag-B").build();
 
     // Event tags append
     const evAppend = r
-      .event("tests.builder.event.tags.append")
+      .event("tests-builder-event-tags-append")
       .tags([tagA])
       .tags([tagB])
       .build();
@@ -154,7 +163,7 @@ describe("task/event/hook/middleware builders", () => {
 
     // Event tags override
     const evOverride = r
-      .event("tests.builder.event.tags.override")
+      .event("tests-builder-event-tags-override")
       .tags([tagA])
       .tags([tagB], { override: true })
       .build();
@@ -162,16 +171,16 @@ describe("task/event/hook/middleware builders", () => {
 
     // Event tags explicit false override
     const evFalse = r
-      .event("tests.builder.event.tags.false")
+      .event("tests-builder-event-tags-false")
       .tags([tagA], { override: false })
       .tags([tagB])
       .build();
     expect(evFalse.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
 
     // Hook tags append/override
-    const ev = r.event("tests.builder.event.forhook.tags").build();
+    const ev = r.event("tests-builder-event-forhook-tags").build();
     const hkAppend = r
-      .hook("tests.builder.hook.tags.append")
+      .hook("tests-builder-hook-tags-append")
       .on(ev)
       .tags([tagA])
       .tags([tagB])
@@ -180,7 +189,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(hkAppend.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
 
     const hkOverride = r
-      .hook("tests.builder.hook.tags.override")
+      .hook("tests-builder-hook-tags-override")
       .on(ev)
       .tags([tagA])
       .tags([tagB], { override: true })
@@ -189,7 +198,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(hkOverride.tags.map((t) => t.id)).toEqual([tagB.id]);
 
     const hkFalse = r
-      .hook("tests.builder.hook.tags.false")
+      .hook("tests-builder-hook-tags-false")
       .on(ev)
       .tags([tagA], { override: false })
       .tags([tagB])
@@ -199,7 +208,7 @@ describe("task/event/hook/middleware builders", () => {
 
     // Task middleware tags append/override
     const tmwAppend = r.middleware
-      .task("tests.builder.tm.tags.append")
+      .task("tests-builder-tm-tags-append")
       .tags([tagA])
       .tags([tagB])
       .run(async ({ next, task }) => next(task.input))
@@ -207,7 +216,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(tmwAppend.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
 
     const tmwOverride = r.middleware
-      .task("tests.builder.tm.tags.override")
+      .task("tests-builder-tm-tags-override")
       .tags([tagA])
       .tags([tagB], { override: true })
       .run(async ({ next, task }) => next(task.input))
@@ -215,7 +224,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(tmwOverride.tags.map((t) => t.id)).toEqual([tagB.id]);
 
     const tmwFalse = r.middleware
-      .task("tests.builder.tm.tags.false")
+      .task("tests-builder-tm-tags-false")
       .tags([tagA], { override: false })
       .tags([tagB])
       .run(async ({ next, task }) => next(task.input))
@@ -224,7 +233,7 @@ describe("task/event/hook/middleware builders", () => {
 
     // Resource middleware tags append/override
     const rmwAppend = r.middleware
-      .resource("tests.builder.rm.tags.append")
+      .resource("tests-builder-rm-tags-append")
       .tags([tagA])
       .tags([tagB])
       .run(async ({ next }) => next())
@@ -232,7 +241,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(rmwAppend.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
 
     const rmwOverride = r.middleware
-      .resource("tests.builder.rm.tags.override")
+      .resource("tests-builder-rm-tags-override")
       .tags([tagA])
       .tags([tagB], { override: true })
       .run(async ({ next }) => next())
@@ -240,7 +249,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(rmwOverride.tags.map((t) => t.id)).toEqual([tagB.id]);
 
     const rmwFalse = r.middleware
-      .resource("tests.builder.rm.tags.false")
+      .resource("tests-builder-rm-tags-false")
       .tags([tagA], { override: false })
       .tags([tagB])
       .run(async ({ next }) => next())
@@ -250,7 +259,7 @@ describe("task/event/hook/middleware builders", () => {
 
   it("event builder supports payloadSchema, tags and meta", () => {
     const ev = r
-      .event("tests.builder.event.meta")
+      .event("tests-builder-event-meta")
       .payloadSchema<{ foo: number }>({ parse: (x: any) => x })
       .tags([])
       .meta({ title: "E" } as unknown as any)
@@ -263,44 +272,47 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("hook builder supports order, dependencies, tags, meta", async () => {
-    const ev = r.event("tests.builder.event.forhook").build();
-    const svc = resource({
-      id: "tests.hook.svc",
+    const ev = r.event("tests-builder-event-forhook").build();
+    const svc = defineResource({
+      id: "tests-hook-svc",
       init: async () => ({ ok: true }),
     });
     const calls: string[] = [];
     const hk = r
-      .hook("tests.builder.hook.full")
+      .hook("tests-builder-hook-full")
       .on([ev])
       .order(5)
       .dependencies({ svc })
       .tags([])
-      .meta({ title: "H" } as unknown as any)
       .run(async (em) => {
         calls.push(em.id);
       })
+      .meta({ title: "H" } as unknown as any)
       .build();
-    const app = resource({
-      id: "tests.app.hook.full",
+    const app = defineResource({
+      id: "tests-app-hook-full",
       register: [svc, ev, hk],
     });
     const rr = await run(app);
     await rr.emitEvent(ev, undefined);
-    expect(calls).toEqual([ev.id]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual(
+      expect.stringMatching(/(?:^|\.)tests-builder-event-forhook$/),
+    );
     await rr.dispose();
   });
 
   it("task builder supports tags, middleware, resultSchema, meta and direct run", async () => {
     const task = r
-      .task("tests.builder.task.more")
+      .task("tests-builder-task-more")
       .inputSchema<number>({ parse: (x: any) => x })
       .tags([])
       .middleware([])
       .resultSchema<number>({ parse: (x: any) => x })
-      .meta({ title: "T" } as unknown as any)
       .run(async (input: number) => Promise.resolve(input + 1))
+      .meta({ title: "T" } as unknown as any)
       .build();
-    const app = resource({ id: "tests.app.task.more", register: [task] });
+    const app = defineResource({ id: "tests-app-task-more", register: [task] });
     const rr = await run(app);
     const out = await rr.runTask(task, 1);
     expect(out).toBe(2);
@@ -308,11 +320,11 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("task builder supports throws contracts without DI", () => {
-    const errA = r.error("tests.builder.task.throws.errA").build();
-    const errB = r.error("tests.builder.task.throws.errB").build();
+    const errA = r.error("tests-builder-task-throws-errA").build();
+    const errB = r.error("tests-builder-task-throws-errB").build();
 
     const t = r
-      .task("tests.builder.task.throws")
+      .task("tests-builder-task-throws")
       .throws([errA, errB.id, errA])
       .run(async () => Promise.resolve("ok"))
       .build();
@@ -323,7 +335,7 @@ describe("task/event/hook/middleware builders", () => {
   it("task builder throws on invalid throws entries", () => {
     expect(() =>
       r
-        .task("tests.builder.task.throws.invalid")
+        .task("tests-builder-task-throws-invalid")
         .throws([{} as unknown as string])
         .run(async () => Promise.resolve("ok"))
         .build(),
@@ -331,12 +343,12 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("hook builder supports throws contracts", () => {
-    const errA = r.error("tests.builder.hook.throws.errA").build();
-    const errB = r.error("tests.builder.hook.throws.errB").build();
-    const ev = r.event("tests.builder.hook.throws.ev").build();
+    const errA = r.error("tests-builder-hook-throws-errA").build();
+    const errB = r.error("tests-builder-hook-throws-errB").build();
+    const ev = r.event("tests-builder-hook-throws-ev").build();
 
     const h = r
-      .hook("tests.builder.hook.throws")
+      .hook("tests-builder-hook-throws")
       .on(ev)
       .throws([errA, errB.id, errA])
       .run(async () => {})
@@ -346,10 +358,10 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("hook builder throws on invalid throws entries", () => {
-    const ev = r.event("tests.builder.hook.throws.invalid.ev").build();
+    const ev = r.event("tests-builder-hook-throws-invalid-ev").build();
     expect(() =>
       r
-        .hook("tests.builder.hook.throws.invalid")
+        .hook("tests-builder-hook-throws-invalid")
         .on(ev)
         .throws([{} as unknown as string])
         .run(async () => {})
@@ -358,11 +370,11 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("task middleware builder supports throws contracts", () => {
-    const errA = r.error("tests.builder.tmw.throws.errA").build();
-    const errB = r.error("tests.builder.tmw.throws.errB").build();
+    const errA = r.error("tests-builder-tmw-throws-errA").build();
+    const errB = r.error("tests-builder-tmw-throws-errB").build();
 
     const mw = r.middleware
-      .task("tests.builder.tmw.throws")
+      .task("tests-builder-tmw-throws")
       .throws([errA, errB.id, errA])
       .run(async ({ next, task }) => next(task.input))
       .build();
@@ -373,7 +385,7 @@ describe("task/event/hook/middleware builders", () => {
   it("task middleware builder throws on invalid throws entries", () => {
     expect(() =>
       r.middleware
-        .task("tests.builder.tmw.throws.invalid")
+        .task("tests-builder-tmw-throws-invalid")
         .throws([{} as unknown as string])
         .run(async ({ next, task }) => next(task.input))
         .build(),
@@ -381,11 +393,11 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("resource middleware builder supports throws contracts", () => {
-    const errA = r.error("tests.builder.rmw.throws.errA").build();
-    const errB = r.error("tests.builder.rmw.throws.errB").build();
+    const errA = r.error("tests-builder-rmw-throws-errA").build();
+    const errB = r.error("tests-builder-rmw-throws-errB").build();
 
     const mw = r.middleware
-      .resource("tests.builder.rmw.throws")
+      .resource("tests-builder-rmw-throws")
       .throws([errA, errB.id, errA])
       .run(async ({ next }) => next())
       .build();
@@ -396,7 +408,7 @@ describe("task/event/hook/middleware builders", () => {
   it("resource middleware builder throws on invalid throws entries", () => {
     expect(() =>
       r.middleware
-        .resource("tests.builder.rmw.throws.invalid")
+        .resource("tests-builder-rmw-throws-invalid")
         .throws([{} as unknown as string])
         .run(async ({ next }) => next())
         .build(),
@@ -404,24 +416,24 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("task dependencies append by default and can override", async () => {
-    const a = resource({
-      id: "tests.builder.task.deps.a",
+    const a = defineResource({
+      id: "tests-builder-task-deps-a",
       init: async () => 2,
     });
-    const b = resource({
-      id: "tests.builder.task.deps.b",
+    const b = defineResource({
+      id: "tests-builder-task-deps-b",
       init: async () => 3,
     });
 
     const t1 = r
-      .task("tests.builder.task.deps.append")
+      .task("tests-builder-task-deps-append")
       .dependencies(() => ({ a }))
       .dependencies({ b })
       .run(async (_: void, deps: { a: number; b: number }) => deps.a + deps.b)
       .build();
 
-    const app1 = resource({
-      id: "tests.app.task.deps.append",
+    const app1 = defineResource({
+      id: "tests-app-task-deps-append",
       register: [a, b, t1],
     });
     const rr1 = await run(app1);
@@ -429,13 +441,13 @@ describe("task/event/hook/middleware builders", () => {
     await rr1.dispose();
 
     const t2 = r
-      .task("tests.builder.task.deps.override")
+      .task("tests-builder-task-deps-override")
       .dependencies({ a })
       .dependencies({ b }, { override: true })
       .run(async (_: void, deps: { b: number }) => deps.b)
       .build();
-    const app2 = resource({
-      id: "tests.app.task.deps.override",
+    const app2 = defineResource({
+      id: "tests-app-task-deps-override",
       register: [a, b, t2],
     });
     const rr2 = await run(app2);
@@ -444,41 +456,44 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("task dependencies function+function merge branch", async () => {
-    const a = resource({
-      id: "tests.builder.task.deps.ff.a",
+    const a = defineResource({
+      id: "tests-builder-task-deps-ff-a",
       init: async () => 4,
     });
-    const b = resource({
-      id: "tests.builder.task.deps.ff.b",
+    const b = defineResource({
+      id: "tests-builder-task-deps-ff-b",
       init: async () => 6,
     });
 
     const t = r
-      .task("tests.builder.task.deps.ff")
+      .task("tests-builder-task-deps-ff")
       .dependencies(() => ({ a }))
       .dependencies(() => ({ b }))
       .run(async (_: void, deps: { a: number; b: number }) => deps.a + deps.b)
       .build();
 
-    const app = resource({ id: "tests.app.task.deps.ff", register: [a, b, t] });
+    const app = defineResource({
+      id: "tests-app-task-deps-ff",
+      register: [a, b, t],
+    });
     const rr = await run(app);
     expect(await rr.runTask(t)).toBe(10);
     await rr.dispose();
   });
 
   it("hook dependencies function+function merge branch", async () => {
-    const ev = r.event("tests.builder.hook.deps.ff.ev").build();
-    const a = resource({
-      id: "tests.builder.hook.deps.ff.a",
+    const ev = r.event("tests-builder-hook-deps-ff-ev").build();
+    const a = defineResource({
+      id: "tests-builder-hook-deps-ff-a",
       init: async () => 1,
     });
-    const b = resource({
-      id: "tests.builder.hook.deps.ff.b",
+    const b = defineResource({
+      id: "tests-builder-hook-deps-ff-b",
       init: async () => 2,
     });
     const seen: number[] = [];
     const hk = r
-      .hook("tests.builder.hook.deps.ff")
+      .hook("tests-builder-hook-deps-ff")
       .on(ev)
       .dependencies(() => ({ a }))
       .dependencies(() => ({ b }))
@@ -486,8 +501,8 @@ describe("task/event/hook/middleware builders", () => {
         seen.push(deps.a + deps.b);
       })
       .build();
-    const app = resource({
-      id: "tests.app.hook.deps.ff",
+    const app = defineResource({
+      id: "tests-app-hook-deps-ff",
       register: [a, b, ev, hk],
     });
     const rr = await run(app);
@@ -497,16 +512,16 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("resource middleware dependencies object+function branch", () => {
-    const a = resource({
-      id: "tests.builder.rmw.deps.of.a",
+    const a = defineResource({
+      id: "tests-builder-rmw-deps-of-a",
       init: async () => 1,
     });
-    const b = resource({
-      id: "tests.builder.rmw.deps.of.b",
+    const b = defineResource({
+      id: "tests-builder-rmw-deps-of-b",
       init: async () => 2,
     });
     const rmw = r.middleware
-      .resource("tests.builder.rmw.deps.of")
+      .resource("tests-builder-rmw-deps-of")
       .dependencies({ a })
       .dependencies(() => ({ b }))
       .run(async ({ next }) => next())
@@ -519,16 +534,16 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("resource middleware dependencies function+object branch", () => {
-    const a = resource({
-      id: "tests.builder.rmw.deps.fo.a",
+    const a = defineResource({
+      id: "tests-builder-rmw-deps-fo-a",
       init: async () => 1,
     });
-    const b = resource({
-      id: "tests.builder.rmw.deps.fo.b",
+    const b = defineResource({
+      id: "tests-builder-rmw-deps-fo-b",
       init: async () => 2,
     });
     const rmw = r.middleware
-      .resource("tests.builder.rmw.deps.fo")
+      .resource("tests-builder-rmw-deps-fo")
       .dependencies(() => ({ a }))
       .dependencies({ b })
       .run(async ({ next }) => next())
@@ -542,18 +557,18 @@ describe("task/event/hook/middleware builders", () => {
 
   it("hook and middleware dependencies append by default", async () => {
     // Hook dependencies append
-    const ev = r.event("tests.builder.deps.event").build();
-    const a = resource({
-      id: "tests.builder.deps.hook.a",
+    const ev = r.event("tests-builder-deps-event").build();
+    const a = defineResource({
+      id: "tests-builder-deps-hook-a",
       init: async () => 1,
     });
-    const b = resource({
-      id: "tests.builder.deps.hook.b",
+    const b = defineResource({
+      id: "tests-builder-deps-hook-b",
       init: async () => 2,
     });
     const calls: number[] = [];
     const hk = r
-      .hook("tests.builder.deps.hook")
+      .hook("tests-builder-deps-hook")
       .on(ev)
       .dependencies(() => ({ a }))
       .dependencies({ b })
@@ -564,7 +579,7 @@ describe("task/event/hook/middleware builders", () => {
 
     // Task middleware dependencies append (no need to run, just verify merge outcome shape)
     const tmw = r.middleware
-      .task("tests.builder.deps.tmw")
+      .task("tests-builder-deps-tmw")
       .dependencies(() => ({ a }))
       .dependencies({ b })
       .run(async ({ next, task }, deps: { a: number; b: number }) => {
@@ -576,8 +591,8 @@ describe("task/event/hook/middleware builders", () => {
       })
       .build();
 
-    const app = resource({
-      id: "tests.builder.deps.app",
+    const app = defineResource({
+      id: "tests-builder-deps-app",
       register: [a, b, ev, hk, tmw],
     });
     const rr = await run(app);
@@ -587,18 +602,18 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("hook dependencies override branch", async () => {
-    const ev = r.event("tests.builder.deps.ev2").build();
-    const a = resource({
-      id: "tests.builder.deps.hook2.a",
+    const ev = r.event("tests-builder-deps-ev2").build();
+    const a = defineResource({
+      id: "tests-builder-deps-hook2-a",
       init: async () => 1,
     });
-    const b = resource({
-      id: "tests.builder.deps.hook2.b",
+    const b = defineResource({
+      id: "tests-builder-deps-hook2-b",
       init: async () => 2,
     });
     const seen: number[] = [];
     const hk = r
-      .hook("tests.builder.deps.hook2")
+      .hook("tests-builder-deps-hook2")
       .on(ev)
       .dependencies({ a })
       .dependencies({ b }, { override: true })
@@ -607,8 +622,8 @@ describe("task/event/hook/middleware builders", () => {
       })
       .build();
 
-    const app = resource({
-      id: "tests.builder.deps.app2",
+    const app = defineResource({
+      id: "tests-builder-deps-app2",
       register: [a, b, ev, hk],
     });
     const rr = await run(app);
@@ -618,10 +633,16 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("task middleware dependencies: function+function merge and override", () => {
-    const a = resource({ id: "tests.builder.tmw.deps.a", init: async () => 1 });
-    const b = resource({ id: "tests.builder.tmw.deps.b", init: async () => 2 });
+    const a = defineResource({
+      id: "tests-builder-tmw-deps-a",
+      init: async () => 1,
+    });
+    const b = defineResource({
+      id: "tests-builder-tmw-deps-b",
+      init: async () => 2,
+    });
     const tmw = r.middleware
-      .task("tests.builder.tmw.deps.merge")
+      .task("tests-builder-tmw-deps-merge")
       .dependencies(() => ({ a }))
       .dependencies(() => ({ b }))
       .run(async ({ next, task }) => next(task.input))
@@ -635,7 +656,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(Object.keys(depsObj)).toEqual(["a", "b"]);
 
     const tmw2 = r.middleware
-      .task("tests.builder.tmw.deps.override")
+      .task("tests-builder-tmw-deps-override")
       .dependencies({ a })
       .dependencies({ b }, { override: true })
       .run(async ({ next, task }) => next(task.input))
@@ -648,10 +669,16 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("resource middleware dependencies: function+function merge and override", () => {
-    const a = resource({ id: "tests.builder.rmw.deps.a", init: async () => 1 });
-    const b = resource({ id: "tests.builder.rmw.deps.b", init: async () => 2 });
+    const a = defineResource({
+      id: "tests-builder-rmw-deps-a",
+      init: async () => 1,
+    });
+    const b = defineResource({
+      id: "tests-builder-rmw-deps-b",
+      init: async () => 2,
+    });
     const rmw = r.middleware
-      .resource("tests.builder.rmw.deps.merge")
+      .resource("tests-builder-rmw-deps-merge")
       .dependencies(() => ({ a }))
       .dependencies(() => ({ b }))
       .run(async ({ next }) => next())
@@ -663,7 +690,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(Object.keys(depsObj)).toEqual(["a", "b"]);
 
     const rmw2 = r.middleware
-      .resource("tests.builder.rmw.deps.override")
+      .resource("tests-builder-rmw-deps-override")
       .dependencies({ a })
       .dependencies({ b }, { override: true })
       .run(async ({ next }) => next())
@@ -677,16 +704,16 @@ describe("task/event/hook/middleware builders", () => {
 
   it("task middleware appends by default and overrides when requested", async () => {
     const tmw1 = r.middleware
-      .task("tests.builder.tm.append.1")
+      .task("tests-builder-tm-append-1")
       .run(async ({ next, task }) => next(task.input))
       .build();
     const tmw2 = r.middleware
-      .task("tests.builder.tm.append.2")
+      .task("tests-builder-tm-append-2")
       .run(async ({ next, task }) => next(task.input))
       .build();
 
     const t1 = r
-      .task("tests.builder.task.mw.append")
+      .task("tests-builder-task-mw-append")
       .middleware([tmw1])
       .middleware([tmw2])
       .run(async () => Promise.resolve("ok"))
@@ -695,7 +722,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(t1.middleware.map((m) => m.id)).toEqual([tmw1.id, tmw2.id]);
 
     const t2 = r
-      .task("tests.builder.task.mw.override")
+      .task("tests-builder-task-mw-override")
       .middleware([tmw1])
       .middleware([tmw2], { override: true })
       .run(async () => Promise.resolve("ok"))
@@ -706,12 +733,15 @@ describe("task/event/hook/middleware builders", () => {
 
   it("task builder run handles single param without parentheses (regex miss)", async () => {
     const task = r
-      .task("tests.builder.task.noparens")
+      .task("tests-builder-task-noparens")
       .inputSchema<number>({ parse: (x: any) => x })
       // Non-async arrow with single param, no parentheses in toString
       .run((input: number) => Promise.resolve(input + 9))
       .build();
-    const app = resource({ id: "tests.app.task.noparens", register: [task] });
+    const app = defineResource({
+      id: "tests-app-task-noparens",
+      register: [task],
+    });
     const rr = await run(app);
     const out = await rr.runTask(task, 1);
     expect(out).toBe(10);
@@ -720,11 +750,14 @@ describe("task/event/hook/middleware builders", () => {
 
   it("task builder supports traditional 2-arg run signature", async () => {
     const task = r
-      .task("tests.builder.task.twoargs")
+      .task("tests-builder-task-twoargs")
       .inputSchema<number>({ parse: (x: any) => x })
       .run(async (input: number, _deps: any) => Promise.resolve(input + 2))
       .build();
-    const app = resource({ id: "tests.app.task.twoargs", register: [task] });
+    const app = defineResource({
+      id: "tests-app-task-twoargs",
+      register: [task],
+    });
     const rr = await run(app);
     const out = await rr.runTask(task, 5);
     expect(out).toBe(7);
@@ -733,11 +766,14 @@ describe("task/event/hook/middleware builders", () => {
 
   it("task builder runObj delegates to object style", async () => {
     const task = r
-      .task("tests.builder.task.runobj")
+      .task("tests-builder-task-runobj")
       .inputSchema<number>({ parse: (x: any) => x })
       .run(async (input) => Promise.resolve((input as number) + 3))
       .build();
-    const app = resource({ id: "tests.app.task.runobj", register: [task] });
+    const app = defineResource({
+      id: "tests-app-task-runobj",
+      register: [task],
+    });
     const rr = await run(app);
     const out = await rr.runTask(task, 4);
     expect(out).toBe(7);
@@ -745,14 +781,14 @@ describe("task/event/hook/middleware builders", () => {
   });
 
   it("task builder run auto-detects destructured single-arg and passes { input, deps }", async () => {
-    const svc = resource({
-      id: "tests.builder.svc.detect",
+    const svc = defineResource({
+      id: "tests-builder-svc-detect",
       init: async () => ({
         sum: (a: number, b: number) => a + b,
       }),
     });
     const task = r
-      .task("tests.builder.task.destructured")
+      .task("tests-builder-task-destructured")
       .dependencies({ svc })
       .inputSchema<{ a: number; b: number }>({ parse: (x: any) => x })
       // Use single-parameter destructuring to trigger the looksDestructured branch
@@ -761,8 +797,8 @@ describe("task/event/hook/middleware builders", () => {
       )
       .build();
 
-    const app = resource({
-      id: "tests.app.task.destructured",
+    const app = defineResource({
+      id: "tests-app-task-destructured",
       register: [svc, task],
     });
     const rr = await run(app);
@@ -771,77 +807,98 @@ describe("task/event/hook/middleware builders", () => {
     await rr.dispose();
   });
 
-  it("task middleware builder supports configSchema, tags, meta, everywhere", () => {
+  it("task middleware builder supports configSchema, tags, and meta", () => {
     const tmw = r.middleware
-      .task("tests.builder.tm.full")
+      .task("tests-builder-tm-full")
       .dependencies({})
       .configSchema<{ retry: number }>({ parse: (x: any) => x })
       .tags([])
-      .meta({ title: "TM" } as unknown as any)
-      .everywhere(() => true)
       .run(async ({ next, task }) => next(task.input))
+      .meta({ title: "TM" } as unknown as any)
       .build();
+
     expect(
       (tmw as unknown as { [definitions.symbolTaskMiddleware]: boolean })[
         definitions.symbolTaskMiddleware
       ],
     ).toBe(true);
+    expect("applyTo" in (tmw as unknown as Record<string, unknown>)).toBe(
+      false,
+    );
   });
 
-  it("resource middleware builder supports configSchema, tags, meta, everywhere", () => {
+  it("resource middleware builder supports configSchema, tags, and meta", () => {
     const rmw = r.middleware
-      .resource("tests.builder.rm.full")
+      .resource("tests-builder-rm-full")
       .dependencies({})
       .configSchema<{ timeout: number }>({ parse: (x: any) => x })
       .tags([])
-      .meta({ title: "RM" } as unknown as any)
-      .everywhere(() => true)
       .run(async ({ next, resource }) => next(resource.config))
+      .meta({ title: "RM" } as unknown as any)
       .build();
+
     expect(
       (rmw as unknown as { [definitions.symbolResourceMiddleware]: boolean })[
         definitions.symbolResourceMiddleware
       ],
     ).toBe(true);
+    expect("applyTo" in (rmw as unknown as Record<string, unknown>)).toBe(
+      false,
+    );
+  });
+
+  it("task and resource middleware do not expose registration wrappers", () => {
+    const tmw = r.middleware
+      .task("tests-builder-tm-applyTo-only")
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+    const rmw = r.middleware
+      .resource("tests-builder-rm-applyTo-only")
+      .run(async ({ next }) => next())
+      .build();
+
+    expect("applyTo" in (tmw as unknown as Record<string, unknown>)).toBe(
+      false,
+    );
+    expect("applyTo" in (rmw as unknown as Record<string, unknown>)).toBe(
+      false,
+    );
   });
 
   describe("hook builder validation", () => {
     it("throws when building hook without on()", () => {
       expect(() =>
-        r
-          .hook("tests.builder.hook.no-on")
-          .run(async () => {})
-          .build(),
+        (r.hook("tests-builder-hook-no-on") as any).run(async () => {}).build(),
       ).toThrow(/Missing required.*on/);
     });
 
     it("throws when building hook without run()", () => {
-      const ev = r.event("tests.builder.hook.no-run.ev").build();
-      expect(() => r.hook("tests.builder.hook.no-run").on(ev).build()).toThrow(
-        /Missing required.*run/,
-      );
+      const ev = r.event("tests-builder-hook-no-run-ev").build();
+      expect(() =>
+        (r.hook("tests-builder-hook-no-run").on(ev) as any).build(),
+      ).toThrow(/Missing required.*run/);
     });
 
     it("throws when building hook without both on() and run()", () => {
-      expect(() => r.hook("tests.builder.hook.no-both").build()).toThrow(
-        /Missing required.*on.*run/,
-      );
+      expect(() =>
+        (r.hook("tests-builder-hook-no-both") as any).build(),
+      ).toThrow(/Missing required.*on.*run/);
     });
 
     it("succeeds when both on() and run() are provided", () => {
-      const ev = r.event("tests.builder.hook.valid.ev").build();
+      const ev = r.event("tests-builder-hook-valid-ev").build();
       const hook = r
-        .hook("tests.builder.hook.valid")
+        .hook("tests-builder-hook-valid")
         .on(ev)
         .run(async () => {})
         .build();
-      expect(hook.id).toBe("tests.builder.hook.valid");
+      expect(hook.id).toBe("tests-builder-hook-valid");
       expect(hook.on).toBe(ev);
     });
 
     it("allows global listener with on('*')", () => {
       const hook = r
-        .hook("tests.builder.hook.global")
+        .hook("tests-builder-hook-global")
         .on("*")
         .run(async () => {})
         .build();
@@ -851,19 +908,19 @@ describe("task/event/hook/middleware builders", () => {
 
   describe("task builder validation", () => {
     it("covers explicit override=false branches for task tags and middleware", () => {
-      const tagA = r.tag("tests.builder.task.coverage.tagA").build();
-      const tagB = r.tag("tests.builder.task.coverage.tagB").build();
+      const tagA = r.tag("tests-builder-task-coverage-tagA").build();
+      const tagB = r.tag("tests-builder-task-coverage-tagB").build();
       const mwA = r.middleware
-        .task("tests.builder.task.coverage.mwA")
+        .task("tests-builder-task-coverage-mwA")
         .run(async ({ next, task }) => next(task.input))
         .build();
       const mwB = r.middleware
-        .task("tests.builder.task.coverage.mwB")
+        .task("tests-builder-task-coverage-mwB")
         .run(async ({ next, task }) => next(task.input))
         .build();
 
       const task = r
-        .task("tests.builder.task.coverage")
+        .task("tests-builder-task-coverage")
         .tags([tagA], { override: false })
         .tags([tagB])
         .middleware([mwA], { override: false })
@@ -876,39 +933,39 @@ describe("task/event/hook/middleware builders", () => {
     });
 
     it("throws when building task without run()", () => {
-      expect(() => r.task("tests.builder.task.no-run").build()).toThrow(
-        /Task.*Missing required.*run/,
-      );
+      expect(() =>
+        (r.task("tests-builder-task-no-run") as any).build(),
+      ).toThrow(/Task.*Missing required.*run/);
     });
   });
 
   describe("middleware builder validation", () => {
     it("throws when building task middleware without run()", () => {
       expect(() =>
-        r.middleware.task("tests.builder.tmw.no-run").build(),
+        (r.middleware.task("tests-builder-tmw-no-run") as any).build(),
       ).toThrow(/Task middleware.*Missing required.*run/);
     });
 
     it("throws when building resource middleware without run()", () => {
       expect(() =>
-        r.middleware.resource("tests.builder.rmw.no-run").build(),
+        (r.middleware.resource("tests-builder-rmw-no-run") as any).build(),
       ).toThrow(/Resource middleware.*Missing required.*run/);
     });
 
     it("succeeds when task middleware has run()", () => {
       const mw = r.middleware
-        .task("tests.builder.tmw.valid")
+        .task("tests-builder-tmw-valid")
         .run(async ({ next, task }) => next(task.input))
         .build();
-      expect(mw.id).toBe("tests.builder.tmw.valid");
+      expect(mw.id).toBe("tests-builder-tmw-valid");
     });
 
     it("succeeds when resource middleware has run()", () => {
       const mw = r.middleware
-        .resource("tests.builder.rmw.valid")
+        .resource("tests-builder-rmw-valid")
         .run(async ({ next }) => next())
         .build();
-      expect(mw.id).toBe("tests.builder.rmw.valid");
+      expect(mw.id).toBe("tests-builder-rmw-valid");
     });
   });
 });

@@ -123,7 +123,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
 
     const contexts = [
       {
-        id: "ctx.demo",
+        id: "ctx-demo",
         use: () => ({ k: 1 }),
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
@@ -143,7 +143,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
     const map = new Serializer().parse<Record<string, string>>(
       hdrs["x-runner-context"],
     );
-    expect(JSON.parse(map["ctx.demo"]).k).toBe(1);
+    expect(JSON.parse(map["ctx-demo"]).k).toBe(1);
   });
 
   it("fails fast when JSON context serialization fails", async () => {
@@ -156,7 +156,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
       serializer: new Serializer(),
       contexts: [
         {
-          id: "ctx.bad",
+          id: "ctx-bad",
           use: () => {
             throw "missing context";
           },
@@ -169,8 +169,46 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
     });
 
     await expect(client.task("t.json.bad", { a: 1 } as any)).rejects.toThrow(
-      /Failed to serialize async context "ctx.bad"/,
+      /Failed to serialize async context "ctx-bad"/,
     );
     expect(requestSpy).not.toHaveBeenCalled();
+  });
+
+  it("merges per-call headers on JSON path", async () => {
+    const captured: any[] = [];
+    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
+      captured.push(opts.headers);
+      const payload = new Serializer().stringify({ ok: true, result: 44 });
+      const res = new Readable({
+        read() {
+          this.push(payload);
+          this.push(null);
+        },
+      });
+      cb(asIncoming(res, { "content-type": "application/json" }));
+      const sink = new Writable({
+        write(_c, _e, n) {
+          n();
+        },
+        final(n) {
+          n();
+        },
+      }) as any;
+      sink.on = (_: any, __: any) => sink;
+      sink.setTimeout = () => sink;
+      sink.destroy = () => undefined;
+      return sink;
+    }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: new Serializer(),
+    });
+    await expect(
+      client.task("t.json.headers", { a: 1 } as any, {
+        headers: { "x-extra": "1" },
+      }),
+    ).resolves.toBe(44);
+    expect(captured[0]["x-extra"]).toBe("1");
   });
 });

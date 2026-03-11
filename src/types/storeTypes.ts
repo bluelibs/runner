@@ -16,7 +16,41 @@ export enum HookDependencyState {
   Pending = "pending",
   Computing = "computing",
   Ready = "ready",
+  Error = "error",
 }
+
+export type StoreDefinition<TDefinition extends { id: string }> =
+  TDefinition & {
+    id: string;
+  };
+
+export type StoreResourceDefinition<
+  C = any,
+  V extends Promise<any> = any,
+  D extends DependencyMapType = {},
+  TContext = any,
+> = StoreDefinition<IResource<C, V, D, TContext>>;
+
+export type StoreTaskDefinition<
+  Input = any,
+  Output extends Promise<any> = any,
+  D extends DependencyMapType = any,
+> = StoreDefinition<ITask<Input, Output, D>>;
+
+export type StoreHookDefinition<
+  D extends DependencyMapType = any,
+  TOn extends "*" | IEventDefinition = any,
+> = StoreDefinition<IHook<D, TOn>>;
+
+export type StoreTaskMiddlewareDefinition<
+  TDeps extends DependencyMapType = any,
+> = StoreDefinition<ITaskMiddleware<any, any, any, TDeps>>;
+
+export type StoreResourceMiddlewareDefinition<
+  TDeps extends DependencyMapType = any,
+> = StoreDefinition<IResourceMiddleware<any, any, any, TDeps>>;
+
+export type StoreEventDefinition = StoreDefinition<IEvent<any>>;
 
 export type ResourceStoreElementType<
   C = any,
@@ -24,7 +58,7 @@ export type ResourceStoreElementType<
   D extends DependencyMapType = {},
   TContext = any,
 > = {
-  resource: IResource<C, V, D, TContext>;
+  resource: StoreResourceDefinition<C, V, D, TContext>;
   computedDependencies?: ResourceDependencyValuesType<D>;
   config: C;
   value: V;
@@ -37,7 +71,7 @@ export type TaskStoreElementType<
   Output extends Promise<any> = any,
   D extends DependencyMapType = any,
 > = {
-  task: ITask<Input, Output, D>;
+  task: StoreTaskDefinition<Input, Output, D>;
   computedDependencies: DependencyValuesType<D>;
   isInitialized: boolean;
   interceptors?: Array<TaskLocalInterceptorRecord<any, any>>;
@@ -52,7 +86,7 @@ export type HookStoreElementType<
   D extends DependencyMapType = any,
   TOn extends "*" | IEventDefinition = any,
 > = {
-  hook: IHook<D, TOn>;
+  hook: StoreHookDefinition<D, TOn>;
   computedDependencies: DependencyValuesType<D>;
   dependencyState: HookDependencyState;
 };
@@ -60,7 +94,7 @@ export type HookStoreElementType<
 export type TaskMiddlewareStoreElementType<
   TDeps extends DependencyMapType = any,
 > = {
-  middleware: ITaskMiddleware<any, any, any, TDeps>;
+  middleware: StoreTaskMiddlewareDefinition<TDeps>;
   computedDependencies: DependencyValuesType<TDeps>;
   isInitialized: boolean;
 };
@@ -68,11 +102,21 @@ export type TaskMiddlewareStoreElementType<
 export type ResourceMiddlewareStoreElementType<
   TDeps extends DependencyMapType = any,
 > = {
-  middleware: IResourceMiddleware<any, any, any, TDeps>;
+  middleware: StoreResourceMiddlewareDefinition<TDeps>;
   computedDependencies: DependencyValuesType<TDeps>;
   isInitialized: boolean;
 };
 
 export type EventStoreElementType = {
-  event: IEvent<any>;
+  event: StoreEventDefinition;
+};
+
+export type InitWave = {
+  resourceIds: string[];
+  parallel: boolean;
+};
+
+export type DisposeWave = {
+  resources: ResourceStoreElementType[];
+  parallel: boolean;
 };

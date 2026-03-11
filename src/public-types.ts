@@ -6,11 +6,7 @@ export type {
   PlatformClearTimeout,
 } from "./platform";
 
-export type { TestFacade } from "./testing";
-
 export type {
-  TaskBuilderWithPhantom,
-  PhantomTaskFluentBuilder,
   TaskFluentBuilder,
   ResolveInput,
   ShouldReplaceInput,
@@ -19,6 +15,10 @@ export type {
 export type { AsyncContextFluentBuilder } from "./definers/builders/asyncContext";
 export type { ErrorFluentBuilder } from "./definers/builders/error";
 export type { EventFluentBuilder } from "./definers/builders/event";
+export type {
+  EventLaneBuilderWithTopology,
+  EventLaneFluentBuilder,
+} from "./definers/builders/eventLane";
 export type {
   HookFluentBuilder,
   ValidOnTarget,
@@ -37,10 +37,6 @@ export type {
 } from "./definers/builders/middleware";
 
 export type { TagFluentBuilder } from "./definers/builders/tag";
-export type {
-  HookOverrideBuilder,
-  HookOn,
-} from "./definers/builders/override/hook";
 
 export type {
   TypeDefinition,
@@ -53,6 +49,10 @@ export type {
   SerializedValue,
   SerializationContext,
   DeserializationContext,
+  SerializerSchemaLike,
+  SerializerDeserializeOptions,
+  SerializerFieldOptions,
+  SerializerFieldDecorator,
 } from "./serializer";
 
 export type {
@@ -60,3 +60,12 @@ export type {
   JournalKey,
   JournalSetOptions,
 } from "./types/executionJournal";
+
+export type {
+  RuntimeCallSource,
+  RuntimeCallSourceKind,
+} from "./types/runtimeSource";
+
+export type { ResourceCooldownAdmissionTargets } from "./types/resource";
+
+export type { ITimerHandle, ITimers } from "./types/timers";

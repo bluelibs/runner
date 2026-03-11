@@ -64,4 +64,21 @@ describe("multipart busboy interop branches", () => {
       "INVALID_MULTIPART",
     );
   });
+
+  it("fails gracefully when Busboy export is a primitive", async () => {
+    jest.resetModules();
+
+    jest.doMock("busboy", () => 123);
+
+    const { parseMultipartInput } = require("../../../exposure/multipart");
+
+    const req = createReq();
+    const out = await parseMultipartInput(req, undefined, new Serializer());
+
+    expect(out.ok).toBe(false);
+    if (out.ok) {
+      throw new Error("Expected multipart parsing to fail");
+    }
+    expect(out.response.status).toBe(400);
+  });
 });

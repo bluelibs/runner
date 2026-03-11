@@ -2,11 +2,13 @@ import type {
   DependencyMapType,
   IResourceDefinition,
   IResourceMeta,
-  IValidationSchema,
+  IsolationPolicyDeclaration,
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
-  TagType,
+  ResourceSubtreePolicyDeclaration,
+  ResourceTagType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
@@ -19,10 +21,11 @@ export type BuilderState<
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 > = Readonly<{
   id: string;
+  gateway: boolean;
   filePath: string;
   dependencies?: TDeps | ((config: TConfig) => TDeps);
   register?:
@@ -53,12 +56,54 @@ export type BuilderState<
       TMiddleware
     >["dispose"]
   >;
-  configSchema?: IValidationSchema<any>;
-  resultSchema?: IValidationSchema<any>;
+  ready?: NonNullable<
+    IResourceDefinition<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >["ready"]
+  >;
+  cooldown?: NonNullable<
+    IResourceDefinition<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >["cooldown"]
+  >;
+  health?: NonNullable<
+    IResourceDefinition<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >["health"]
+  >;
+  configSchema?: ValidationSchemaInput<any>;
+  resultSchema?: ValidationSchemaInput<any>;
   meta?: TMeta;
   overrides?: Array<any>;
   throws?: ThrowsList;
-  exports?: Array<RegisterableItems>;
+  isolateDeclarations?: ReadonlyArray<IsolationPolicyDeclaration<TConfig>>;
+  subtreeDeclarations?: ReadonlyArray<
+    ResourceSubtreePolicyDeclaration<TConfig>
+  >;
 }>;
 
 /**

@@ -2,11 +2,14 @@
 
 Runner gives you primitives for all three observability signals:
 
-- **Logs**: structured application/runtime events via `globals.resources.logger`
+- **Logs**: structured application/runtime events via `resources.logger`
 - **Metrics**: numeric health and performance indicators from your resources/tasks/middleware
-- **Traces**: distributed timing and call-path correlation via OpenTelemetry
+- **Traces**: distributed timing and call-path correlation using your tracing stack (for example OpenTelemetry)
 
 Use all three together. Logs explain what happened, metrics tell you when it is happening repeatedly, and traces show where latency accumulates.
+Runner provides the integration points (interceptors, context propagation, structured logs), while tracer backends are installed and configured by your application.
+
+For resource-level operational status, Runner also supports optional async `resource.health(...)` probes and aggregates them through `resources.health.getHealth(...)` and `runtime.getHealth(...)`. Only resources that explicitly opt in are counted, and sleeping lazy resources are skipped, which keeps the report aligned with the checks you actually trust.
 
 ### Naming conventions
 
@@ -55,12 +58,12 @@ Runner ships a structured logger with consistent fields, onLog hooks, and multip
 
 ### Basic Logging
 
-```ts
-import { r, globals } from "@bluelibs/runner";
+```typescript
+import { r } from "@bluelibs/runner";
 
 const app = r
   .resource("app")
-  .dependencies({ logger: globals.resources.logger })
+  .dependencies({ logger: resources.logger })
   .init(async (_config, { logger }) => {
     logger.info("Starting business process"); //  Visible by default
     logger.warn("This might take a while"); //  Visible by default
@@ -76,7 +79,7 @@ const app = r
     logger.trace("Very detailed trace"); //  Hidden by default
 
     logger.onLog(async (log) => {
-      // Sub-loggers instantiated .with() share the same log listeners.
+      // Sub-loggers instantiated .with() share the same log callbacks.
       // Catch logs
     });
   })
@@ -120,8 +123,8 @@ The logger accepts rich, structured data that makes debugging actually useful:
 
 ```typescript
 const userTask = r
-  .task("app.tasks.user.create")
-  .dependencies({ logger: globals.resources.logger })
+  .task("createUser")
+  .dependencies({ logger: resources.logger })
   .run(async (input, { logger }) => {
     // Basic message
     logger.info("Creating new user");
@@ -161,18 +164,56 @@ const userTask = r
   .build();
 ```
 
+### Add Structured Logging Early
+
+When production visibility is weak, structured task logging is usually the first policy worth adding.
+
+```typescript
+import { resources, r } from "@bluelibs/runner";
+
+const chargeCard = async (input: { orderId: string; amount: number }) => ({
+  id: `txn:${input.orderId}`,
+});
+
+const processPayment = r
+  .task("processPayment")
+  .dependencies({ logger: resources.logger })
+  .run(async (input: { orderId: string; amount: number }, { logger }) => {
+    await logger.info("Processing payment", {
+      data: { orderId: input.orderId, amount: input.amount },
+    });
+
+    try {
+      const result = await chargeCard(input);
+      await logger.info("Payment successful", {
+        data: { transactionId: result.id },
+      });
+      return result;
+    } catch (error) {
+      await logger.error("Payment failed", {
+        error,
+        data: { orderId: input.orderId, amount: input.amount },
+      });
+      throw error;
+    }
+  })
+  .build();
+```
+
+This keeps operational context close to the business action without inventing ad hoc logging conventions per task.
+
 ### Context-Aware Logging
 
 Create logger instances with bound context for consistent metadata across related operations:
 
 ```typescript
 const RequestContext = r
-  .asyncContext<{ requestId: string; userId: string }>("app.ctx.request")
+  .asyncContext<{ requestId: string; userId: string }>("request")
   .build();
 
 const requestHandler = r
-  .task("app.tasks.handleRequest")
-  .dependencies({ logger: globals.resources.logger })
+  .task("handleRequest")
+  .dependencies({ logger: resources.logger })
   .run(async (requestData, { logger }) => {
     const request = RequestContext.use();
 
@@ -210,7 +251,7 @@ Want to use Winston as your transport? No problem - integrate it seamlessly:
 
 ```typescript
 import winston from "winston";
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // Create Winston logger, put it in a resource if used from various places.
 const winstonLogger = winston.createLogger({
@@ -231,8 +272,8 @@ const winstonLogger = winston.createLogger({
 
 // Bridge BlueLibs logs to Winston using hooks
 const winstonBridgeResource = r
-  .resource("app.resources.winstonBridge")
-  .dependencies({ logger: globals.resources.logger })
+  .resource("winstonBridge")
+  .dependencies({ logger: resources.logger })
   .init(async (_config, { logger }) => {
     // Map log levels (BlueLibs -> Winston)
     const levelMapping = {
@@ -289,12 +330,18 @@ class JSONLogger extends Logger {
 
 // Custom logger resource
 const customLogger = r
-  .resource("app.logger.custom")
-  .dependencies({ eventManager: globals.resources.eventManager })
-  .init(async (_config, { eventManager }) => new JSONLogger(eventManager))
+  .resource("customLogger")
+  .init(
+    async () =>
+      new JSONLogger({
+        printThreshold: "info",
+        printStrategy: "json",
+        bufferLogs: false,
+      }),
+  )
   .build();
 
-// Or you could simply add it as "globals.resources.logger" and override the default logger
+// Or you could simply add it as "resources.logger" and override the default logger
 ```
 
 ### Log Structure
@@ -303,9 +350,9 @@ Every log event contains:
 
 ```typescript
 interface ILog {
-  level: string; // The log level (trace, debug, info, etc.)
+  level: LogLevels; // "trace" | "debug" | "info" | "warn" | "error" | "critical"
   source?: string; // Where the log came from
-  message: any; // The main log message (can be object or string)
+  message: unknown; // The main log message (can be object or string)
   timestamp: Date; // When the log was created
   error?: {
     // Structured error information
@@ -313,8 +360,8 @@ interface ILog {
     message: string;
     stack?: string;
   };
-  data?: Record<string, any>; // Additional structured data, it's about the log itself
-  context?: Record<string, any>; // Bound context from logger.with(), it's about the context in which the log was created
+  data?: Record<string, unknown>; // Additional structured data, it's about the log itself
+  context?: Record<string, unknown>; // Bound context from logger.with(), it's about the context in which the log was created
 }
 ```
 
@@ -349,12 +396,12 @@ run(app, { debug: "verbose" });
 **Custom Configuration**:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const app = r
   .resource("app")
   .register([
-    globals.resources.debug.with({
+    resources.debug.with({
       logTaskInput: true,
       logTaskOutput: false,
       logResourceConfig: true,
@@ -369,21 +416,21 @@ const app = r
 
 ### Accessing Debug Levels Programmatically
 
-The debug configuration levels can now be accessed through the globals namespace via `globals.debug.levels`:
+The debug configuration levels can be accessed via `debug.levels`:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // Use in custom configurations
 const customConfig = {
-  ...globals.debug.levels.normal, // or .debug
+  ...debug.levels.normal, // or .verbose
   logTaskInput: true, // Override specific settings
 };
 
 // Register with custom configuration
 const app = r
   .resource("app")
-  .register([globals.resources.debug.with(customConfig)])
+  .register([resources.debug.with(customConfig)])
   .build();
 ```
 
@@ -392,11 +439,11 @@ const app = r
 Use debug tags to configure debugging on individual components, when you're interested in just a few verbose ones.
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const criticalTask = r
-  .task("app.tasks.critical")
-  .tags([globals.tags.debug.with("verbose")])
+  .task("critical")
+  .tags([tags.debug.with("verbose")])
   .run(async (input) => {
     // This task will have verbose debug logging
     return await processPayment(input);

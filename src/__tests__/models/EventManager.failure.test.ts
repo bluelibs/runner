@@ -2,13 +2,14 @@ import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { IEvent } from "../../defs";
 import { createMessageError } from "../../errors";
+import { runtimeSource } from "../../types/runtimeSource";
 
 describe("EventManager Parallel Failure Behavior", () => {
   let eventManager: EventManager;
   let parallelEvent: IEvent<string>;
 
   beforeEach(() => {
-    eventManager = new EventManager({ runtimeEventCycleDetection: true });
+    eventManager = new EventManager();
     parallelEvent = defineEvent<string>({
       id: "parallelEvent",
       parallel: true,
@@ -17,8 +18,7 @@ describe("EventManager Parallel Failure Behavior", () => {
 
   it("should execute all listeners in a batch even if one fails, but stop before next batch", async () => {
     const results: string[] = [];
-    const delay = (ms: number) =>
-      new Promise((resolve) => setTimeout(resolve, ms));
+    const nextTick = async () => Promise.resolve();
 
     // Batch 0: Listener 1 (Throws immediately)
     eventManager.addListener(
@@ -33,7 +33,7 @@ describe("EventManager Parallel Failure Behavior", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        await delay(50);
+        await nextTick();
         results.push("batch0-slow-success");
       },
       { order: 0 },
@@ -50,11 +50,11 @@ describe("EventManager Parallel Failure Behavior", () => {
 
     // Expect the emit to throw
     await expect(
-      eventManager.emit(parallelEvent, "data", "test"),
+      eventManager.emit(parallelEvent, "data", runtimeSource.runtime("test")),
     ).rejects.toThrow("Fail immediately");
 
-    // Wait a bit to ensure the slow listener had time to finish (if it was running)
-    await delay(100);
+    // Let pending microtasks settle.
+    await nextTick();
 
     // Verify behavior
     // 1. "batch0-slow-success" SHOULD be in results (it started running)

@@ -31,6 +31,18 @@ export interface ILog {
 }
 
 export type PrintStrategy = PrinterStrategy;
+
+export function detectColorSupport(): boolean {
+  const noColor = typeof process !== "undefined" && !!process.env.NO_COLOR;
+  if (noColor) return false;
+
+  const isTty =
+    typeof process !== "undefined" &&
+    !!process.stdout &&
+    !!process.stdout.isTTY;
+  return isTty;
+}
+
 export class Logger {
   private printThreshold: null | LogLevels = "info";
   private printStrategy: PrintStrategy = "pretty";
@@ -72,7 +84,7 @@ export class Logger {
     this.useColors =
       typeof options.useColors === "boolean"
         ? options.useColors
-        : this.detectColorSupport();
+        : detectColorSupport();
 
     this.source = source;
 
@@ -82,19 +94,6 @@ export class Logger {
           strategy: this.printStrategy,
           useColors: this.useColors,
         });
-  }
-
-  private detectColorSupport(): boolean {
-    // Respect NO_COLOR convention
-
-    const noColor = typeof process !== "undefined" && !!process.env.NO_COLOR;
-    if (noColor) return false;
-
-    const isTty =
-      typeof process !== "undefined" &&
-      !!process.stdout &&
-      !!process.stdout.isTTY;
-    return isTty;
   }
 
   /**
@@ -131,6 +130,15 @@ export class Logger {
     message: unknown,
     logInfo: ILogInfo = {},
   ): Promise<void> {
+    const root = this.rootLogger ?? this;
+    const initialShouldPrint = root.canPrint(level);
+    const hasListeners = root.localListeners.length > 0;
+
+    // Avoid building log payloads when they would be dropped.
+    if (!root.bufferLogs && !initialShouldPrint && !hasListeners) {
+      return;
+    }
+
     const { source, error, data, ...context } = logInfo;
 
     const log: ILog = {
@@ -142,8 +150,6 @@ export class Logger {
       data: data || undefined,
       context: { ...this.boundContext, ...context },
     };
-
-    const root = this.rootLogger ?? this;
 
     if (root.bufferLogs) {
       root.buffer.push(log);

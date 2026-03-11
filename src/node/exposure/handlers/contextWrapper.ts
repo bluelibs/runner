@@ -12,6 +12,61 @@ export interface ExposureContextDeps {
 
 interface AsyncContextHydrationOptions {
   allowAsyncContext?: boolean;
+  allowedAsyncContextIds?: readonly string[];
+}
+
+function readContextHeader(req: IncomingMessage): string | undefined {
+  const rawHeader = req.headers["x-runner-context"];
+  if (Array.isArray(rawHeader)) return rawHeader[0];
+  if (typeof rawHeader === "string") return rawHeader;
+}
+
+function wrapWithUserContexts<T>(
+  req: IncomingMessage,
+  deps: Pick<ExposureContextDeps, "store" | "serializer">,
+  fn: () => Promise<T>,
+  options?: AsyncContextHydrationOptions,
+): () => Promise<T> {
+  const { store, serializer } = deps;
+  const allowAsyncContext = options?.allowAsyncContext !== false;
+  const allowedIds =
+    options?.allowedAsyncContextIds === undefined
+      ? undefined
+      : new Set(
+          options.allowedAsyncContextIds.map(
+            (id) => store.resolveDefinitionId(id) ?? id,
+          ),
+        );
+
+  const headerText = readContextHeader(req);
+  let userWrapped = fn;
+  if (!allowAsyncContext || !headerText) {
+    return userWrapped;
+  }
+
+  try {
+    const map = serializer.parse<Record<string, string>>(headerText);
+    for (const [id, ctx] of store.asyncContexts.entries()) {
+      if (allowedIds && !allowedIds.has(id)) {
+        continue;
+      }
+      const raw = map[id];
+      if (typeof raw !== "string") {
+        continue;
+      }
+      try {
+        const value = ctx.parse(raw);
+        const prev = userWrapped;
+        userWrapped = async () => await ctx.provide(value, prev);
+      } catch {
+        // ignore parse/provide errors for individual contexts
+      }
+    }
+  } catch {
+    // ignore bad context header
+  }
+
+  return userWrapped;
 }
 
 /**
@@ -27,35 +82,12 @@ export const withExposureContext = <T>(
 ): Promise<T> => {
   const { store, router, serializer } = deps;
   const url = requestUrl(req);
-  const allowAsyncContext = options?.allowAsyncContext !== false;
-
-  // Read context header if present
-  const rawHeader = req.headers["x-runner-context"];
-  let headerText: string | undefined;
-  if (Array.isArray(rawHeader)) headerText = rawHeader[0];
-  else if (typeof rawHeader === "string") headerText = rawHeader;
-
-  let userWrapped = fn;
-  if (allowAsyncContext && headerText) {
-    try {
-      const map = serializer.parse<Record<string, string>>(headerText);
-      // Compose provides for known contexts present in the map
-      for (const [id, ctx] of store.asyncContexts.entries()) {
-        const raw = map[id];
-        if (typeof raw === "string") {
-          try {
-            const value = ctx.parse(raw);
-            const prev = userWrapped;
-            userWrapped = async () => await ctx.provide(value, prev);
-          } catch {
-            // ignore parse error of specific context
-          }
-        }
-      }
-    } catch {
-      // ignore bad header
-    }
-  }
+  const userWrapped = wrapWithUserContexts(
+    req,
+    { store, serializer },
+    fn,
+    options,
+  );
 
   // Always wrap with exposure request context
   const run = () =>
@@ -84,33 +116,12 @@ export const withUserContexts = <T>(
   options?: AsyncContextHydrationOptions,
 ): Promise<T> => {
   const { store, serializer } = deps;
-  const allowAsyncContext = options?.allowAsyncContext !== false;
-
-  const rawHeader = req.headers["x-runner-context"];
-  let headerText: string | undefined;
-  if (Array.isArray(rawHeader)) headerText = rawHeader[0];
-  else if (typeof rawHeader === "string") headerText = rawHeader;
-
-  let userWrapped = fn;
-  if (allowAsyncContext && headerText) {
-    try {
-      const map = serializer.parse<Record<string, string>>(headerText);
-      for (const [id, ctx] of store.asyncContexts.entries()) {
-        const raw = map[id];
-        if (typeof raw === "string") {
-          try {
-            const value = ctx.parse(raw);
-            const prev = userWrapped;
-            userWrapped = async () => await ctx.provide(value, prev);
-          } catch {
-            // ignore individual context error
-          }
-        }
-      }
-    } catch {
-      // ignore bad header
-    }
-  }
+  const userWrapped = wrapWithUserContexts(
+    req,
+    { store, serializer },
+    fn,
+    options,
+  );
 
   return userWrapped();
 };

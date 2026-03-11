@@ -3,7 +3,7 @@ import type {
   IResourceMeta,
   RegisterableItems,
   ResourceMiddlewareAttachmentType,
-  TagType,
+  ResourceTagType,
 } from "../../../defs";
 import type { BuilderState, RegisterInput, RegisterState } from "./types";
 
@@ -16,14 +16,14 @@ export function clone<
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
-  TTags extends TagType[],
+  TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
   TNextConfig = TConfig,
   TNextValue extends Promise<any> = TValue,
   TNextDeps extends DependencyMapType = TDeps,
   TNextContext = TContext,
   TNextMeta extends IResourceMeta = TMeta,
-  TNextTags extends TagType[] = TTags,
+  TNextTags extends ResourceTagType[] = TTags,
   TNextMiddleware extends ResourceMiddlewareAttachmentType[] = TMiddleware,
 >(
   s: BuilderState<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>,
@@ -137,53 +137,4 @@ export function mergeRegister<TConfig>(
 }
 
 export { mergeArray } from "../shared/mergeUtils";
-
-/**
- * Merges dependencies handling all combinations of objects and functions.
- */
-export function mergeDependencies<
-  TConfig,
-  TExisting extends DependencyMapType,
-  TNew extends DependencyMapType,
->(
-  existing: TExisting | ((config: TConfig) => TExisting) | undefined,
-  addition: TNew | ((config: TConfig) => TNew),
-  override: boolean,
-): (TExisting & TNew) | ((config: TConfig) => TExisting & TNew) {
-  const isFnExisting = typeof existing === "function";
-  const isFnAddition = typeof addition === "function";
-
-  type Result = (TExisting & TNew) | ((config: TConfig) => TExisting & TNew);
-
-  if (override || !existing) {
-    return addition as Result;
-  }
-
-  if (isFnExisting && isFnAddition) {
-    const e = existing as (config: TConfig) => TExisting;
-    const a = addition as (config: TConfig) => TNew;
-    return ((config: TConfig) => ({
-      ...e(config),
-      ...a(config),
-    })) as Result;
-  }
-  if (isFnExisting && !isFnAddition) {
-    const e = existing as (config: TConfig) => TExisting;
-    const a = addition as TNew;
-    return ((config: TConfig) => ({
-      ...e(config),
-      ...a,
-    })) as Result;
-  }
-  if (!isFnExisting && isFnAddition) {
-    const e = existing as TExisting;
-    const a = addition as (config: TConfig) => TNew;
-    return ((config: TConfig) => ({
-      ...e,
-      ...a(config),
-    })) as Result;
-  }
-  const e = existing as TExisting;
-  const a = addition as TNew;
-  return { ...e, ...a } as Result;
-}
+export { mergeDepsWithConfig as mergeDependencies } from "../shared/mergeUtils";

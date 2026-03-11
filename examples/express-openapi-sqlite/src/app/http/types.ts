@@ -1,4 +1,4 @@
-import z from "zod";
+import type { ValidationSchemaInput } from "@bluelibs/runner/defs";
 
 export interface HttpRouteConfig {
   method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
@@ -7,13 +7,13 @@ export interface HttpRouteConfig {
   description?: string;
   tags?: string[];
   requiresAuth?: boolean;
-  paramsSchema?: z.ZodSchema;
-  querySchema?: z.ZodSchema;
-  requestBodySchema?: z.ZodSchema;
-  responseSchema?: z.ZodSchema;
+  paramsSchema?: ValidationSchemaInput;
+  querySchema?: ValidationSchemaInput;
+  requestBodySchema?: ValidationSchemaInput;
+  responseSchema?: ValidationSchemaInput;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;

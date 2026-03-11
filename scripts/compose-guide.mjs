@@ -71,9 +71,22 @@ function loadChapter(filename) {
  * Adjust relative paths for files inside readmes/ directory.
  * Converts paths like ./readmes/X.md to ./X.md when the output is inside readmes/
  */
-function adjustPathsForReadmesDir(content) {
+function adjustPathsForReadmesDir(content, includedChapters) {
   // Adjust markdown links: [text](./readmes/FILE.md) -> [text](./FILE.md)
   content = content.replace(/\]\(\.\/readmes\/([^)]+)\)/g, "](./$1)");
+
+  // Adjust markdown links: [text](../readmes/FILE.md) -> [text](./FILE.md)
+  content = content.replace(/\]\(\.\.\/readmes\/([^)]+)\)/g, "](./$1)");
+
+  // Rewrite intra-guide-unit cross-references to same-document anchors.
+  // When chapters are inlined, ./02-resources.md#resources becomes #resources.
+  if (includedChapters) {
+    for (const chapter of includedChapters) {
+      const escaped = chapter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const pattern = new RegExp(`\\]\\(\\.\\/` + escaped + `(#[^)]+)\\)`, "g");
+      content = content.replace(pattern, "]($1)");
+    }
+  }
 
   // Adjust paths to root-level files: [text](./FILE.md) -> [text](../FILE.md)
   // But only for specific known root files (README.md, LICENSE.md)
@@ -116,7 +129,7 @@ function composeOutput({ corePath, outputPath, label, adjustPaths }) {
   // Apply path adjustments if needed (for files inside readmes/)
   if (adjustPaths) {
     console.log(`[compose] Adjusting relative paths for ${label}...`);
-    output = adjustPathsForReadmesDir(output);
+    output = adjustPathsForReadmesDir(output, chapters);
   }
 
   fs.writeFileSync(outputPath, output, "utf-8");

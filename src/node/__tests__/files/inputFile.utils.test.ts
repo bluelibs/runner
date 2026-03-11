@@ -1,4 +1,5 @@
 import { Readable } from "stream";
+import { EventEmitter } from "events";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -37,6 +38,19 @@ describe("inputFile.utils", () => {
     const file = new NodeInputFile({ name: "mix.bin" } as any, src as any);
     const buf = await readInputFileToBuffer(file as any);
     expect(buf.toString("utf8")).toBe("AB123");
+  });
+
+  it("stringifies object-mode non-buffer chunks in readInputFileToBuffer", async () => {
+    const src = new Readable({
+      objectMode: true,
+      read() {
+        this.push({ value: 1 });
+        this.push(null);
+      },
+    });
+    const file = new NodeInputFile({ name: "obj.bin" } as any, src as any);
+    const buf = await readInputFileToBuffer(file as any);
+    expect(buf.toString("utf8")).toBe("[object Object]");
   });
 
   it("handles string and non-buffer chunks for writeInputFileToPath", async () => {
@@ -79,5 +93,23 @@ describe("inputFile.utils", () => {
     await expect(writeInputFileToPath(file as any, target)).rejects.toThrow(
       /boom-write/,
     );
+  });
+
+  it("ignores nullish data events and stringifies object chunks via manual emitter stream", async () => {
+    const stream = new EventEmitter() as any;
+    const file = {
+      resolve: async () => ({ stream }),
+    };
+
+    const promise = readInputFileToBuffer(file as any);
+    process.nextTick(() => {
+      stream.emit("data", undefined);
+      stream.emit("data", null);
+      stream.emit("data", { nested: true });
+      stream.emit("end");
+    });
+
+    const buf = await promise;
+    expect(buf.toString("utf8")).toBe("[object Object]");
   });
 });

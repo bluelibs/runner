@@ -9,7 +9,7 @@ import {
 
 function parseArgs(argv) {
   const idx = argv.indexOf("--");
-  if (idx === -1) return { extraJestArgs: [] };
+  if (idx === -1) return { extraJestArgs: argv.slice(2) };
   return { extraJestArgs: argv.slice(idx + 1) };
 }
 
@@ -74,13 +74,56 @@ function countCoverageBelowHundredFromFinal() {
   return count;
 }
 
-function run(cmd, args, env) {
+function run(cmd, args, env, { filterStderr = false } = {}) {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, {
-      stdio: "inherit",
+      stdio: filterStderr ? ["inherit", "inherit", "pipe"] : "inherit",
       env: { ...process.env, ...env },
       shell: false,
     });
+    if (filterStderr && child.stderr) {
+      // V8 prints multi-line "Exception in PromiseRejectCallback" blocks to
+      // stderr when deeply nested async rejection propagation overflows the
+      // stack (e.g. during cycle detection tests with coverage instrumentation).
+      // These are harmless — Jest catches the errors — but they pollute output.
+      // We suppress entire blocks: once a trigger line is seen, drop lines
+      // until a blank line follows the "RangeError" trailer.
+      let stderrBuf = "";
+      let suppressing = false;
+      let blankAfterRangeError = false;
+      child.stderr.setEncoding("utf-8");
+      child.stderr.on("data", (chunk) => {
+        stderrBuf += chunk;
+        const lines = stderrBuf.split("\n");
+        stderrBuf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (line.includes("Exception in PromiseRejectCallback")) {
+            suppressing = true;
+            blankAfterRangeError = false;
+            continue;
+          }
+          if (suppressing) {
+            if (line.includes("RangeError: Maximum call stack size exceeded")) {
+              blankAfterRangeError = true;
+              continue;
+            }
+            if (blankAfterRangeError && line.trim() === "") {
+              suppressing = false;
+              blankAfterRangeError = false;
+              continue;
+            }
+            // Still inside the V8 block (source snippet lines)
+            continue;
+          }
+          process.stderr.write(line + "\n");
+        }
+      });
+      child.stderr.on("end", () => {
+        if (stderrBuf && !suppressing) {
+          process.stderr.write(stderrBuf + "\n");
+        }
+      });
+    }
     child.on("close", (code) => resolve(code ?? 0));
   });
 }
@@ -115,7 +158,9 @@ async function main() {
     {
       AI_REPORTER_DISABLE_COVERAGE: "1",
       AI_REPORTER_SUMMARY_PATH: reporterSummaryPath,
+      NODE_NO_WARNINGS: "1",
     },
+    { filterStderr: true },
   );
 
   const coverageCode = await run("node", [

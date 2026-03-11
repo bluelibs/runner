@@ -1,5 +1,12 @@
-import type { DefaultErrorType, IErrorMeta, TagType } from "../../../defs";
+import type {
+  DefaultErrorType,
+  EnsureTagsForTarget,
+  ErrorTagType,
+  IErrorMeta,
+} from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineError } from "../../defineError";
+import { markFrameworkDefinition } from "../../markFrameworkDefinition";
 import type { ErrorFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
 import { clone, mergeArray } from "./utils";
@@ -19,6 +26,7 @@ const assertHttpCode = (value: number): void => {
  */
 export function makeErrorBuilder<TData extends DefaultErrorType>(
   state: BuilderState<TData>,
+  framework = false,
 ): ErrorFluentBuilder<TData> {
   const builder: ErrorFluentBuilder<TData> = {
     id: state.id,
@@ -26,68 +34,82 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
     httpCode(code: number) {
       assertHttpCode(code);
       const next = clone(state, { httpCode: code });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     serialize(fn) {
       const next = clone(state, { serialize: fn });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     parse(fn) {
       const next = clone(state, { parse: fn });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     dataSchema(schema) {
       const next = clone(state, { dataSchema: schema });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     schema(schema) {
       return builder.dataSchema(schema);
     },
 
-    tags<TNewTags extends TagType[]>(
-      t: TNewTags,
+    tags<TNewTags extends ErrorTagType[]>(
+      t: EnsureTagsForTarget<"errors", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
       const next = clone(state, {
         tags: mergeArray(state.tags ?? [], t, override),
       });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     format(fn: (data: TData) => string) {
       const next = clone(state, { format: fn });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     remediation(advice: string | ((data: TData) => string)) {
       const next = clone(state, { remediation: advice });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     meta<TNewMeta extends IErrorMeta>(m: TNewMeta) {
       const next = clone(state, { meta: m });
-      return makeErrorBuilder(next);
+      return makeErrorBuilder(next, framework);
     },
 
     build() {
-      return defineError<TData>(
-        {
-          id: state.id,
-          httpCode: state.httpCode,
-          serialize: state.serialize,
-          parse: state.parse,
-          dataSchema: state.dataSchema,
-          format: state.format,
-          remediation: state.remediation,
-          meta: state.meta,
-          tags: state.tags,
-        },
-        state.filePath,
+      return deepFreeze(
+        defineError<TData>(
+          framework
+            ? markFrameworkDefinition({
+                id: state.id,
+                httpCode: state.httpCode,
+                serialize: state.serialize,
+                parse: state.parse,
+                dataSchema: state.dataSchema,
+                format: state.format,
+                remediation: state.remediation,
+                meta: state.meta,
+                tags: state.tags,
+              })
+            : {
+                id: state.id,
+                httpCode: state.httpCode,
+                serialize: state.serialize,
+                parse: state.parse,
+                dataSchema: state.dataSchema,
+                format: state.format,
+                remediation: state.remediation,
+                meta: state.meta,
+                tags: state.tags,
+              },
+          state.filePath,
+        ),
       );
     },
   };

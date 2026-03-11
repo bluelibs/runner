@@ -46,7 +46,7 @@ describe("createHttpSmartClient - JSON empty body path", () => {
       serializer: new Serializer(),
     });
     await expect(client.task("x", { a: 1 } as any)).rejects.toThrow(
-      /Tunnel task error/,
+      /Remote lane task error/,
     );
   });
 });

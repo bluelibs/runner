@@ -92,7 +92,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
     ).rejects.toThrow("Timeout waiting for execution");
   });
 
-  it("propagates store failures while building the timeout error", async () => {
+  it("propagates store failures during timeout resolution", async () => {
     const store = new MemoryStore();
     const bus = new SilentEventBus();
     const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
@@ -113,7 +113,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
     let calls = 0;
     jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
       calls += 1;
-      if (calls === 4) {
+      if (calls >= 3) {
         throw createMessageError("getExecution-failed");
       }
       return await originalGet(id);
@@ -217,5 +217,49 @@ describe("durable: WaitManager (event bus fallback)", () => {
       setTimeoutSpy.mockRestore();
       nowSpy.mockRestore();
     }
+  });
+
+  it("falls back to polling without a timeout when subscribe() fails", async () => {
+    const store = new MemoryStore();
+    const bus = {
+      publish: async (_channel: string, _event: BusEvent) => undefined,
+      subscribe: async () => {
+        throw createMessageError("subscribe-failed");
+      },
+      unsubscribe: async () => undefined,
+    } satisfies IEventBus;
+    const manager = new WaitManager(store, bus, { defaultPollIntervalMs: 5 });
+
+    const executionId = "e-no-timeout-fallback";
+    await store.saveExecution({
+      id: executionId,
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Pending,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const originalGet = store.getExecution.bind(store);
+    let calls = 0;
+    jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
+      calls += 1;
+      if (calls >= 3) {
+        await store.updateExecution(executionId, {
+          status: ExecutionStatus.Completed,
+          result: "ok",
+          completedAt: new Date(),
+        });
+      }
+      return await originalGet(id);
+    });
+
+    const waiting = manager.waitForResult<string>(executionId, {
+      waitPollIntervalMs: 5,
+    });
+
+    await expect(waiting).resolves.toBe("ok");
   });
 });

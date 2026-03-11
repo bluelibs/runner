@@ -3,13 +3,22 @@ import { run } from "../../../run";
 import { throttleTaskMiddleware } from "../../../globals/middleware/temporal.middleware";
 import { createMessageError } from "../../../errors";
 
-const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+const createTemporalDeps = () => ({
+  state: {
+    isDisposed: false,
+    debounceStates: new WeakMap(),
+    throttleStates: new WeakMap(),
+    trackedDebounceStates: new Set(),
+    trackedThrottleStates: new Set(),
+  },
+});
 
 describe("Temporal Middleware: Throttle", () => {
   it("should throttle task executions", async () => {
+    jest.useFakeTimers();
     let callCount = 0;
     const task = defineTask({
-      id: "throttle.task",
+      id: "throttle-task",
       middleware: [throttleTaskMiddleware.with({ ms: 100 })],
       run: async (val: string) => {
         callCount++;
@@ -29,22 +38,28 @@ describe("Temporal Middleware: Throttle", () => {
         // Third one updates the scheduled input
         const p3 = task("c");
 
+        jest.advanceTimersByTime(100);
+        await Promise.resolve();
         return await Promise.all([p1, p2, p3]);
       },
     });
 
-    const results = (await run(app)).value;
-
-    expect(callCount).toBe(2);
-    expect(results[0]).toBe("a");
-    expect(results[1]).toBe("c");
-    expect(results[2]).toBe("c");
+    try {
+      const results = (await run(app)).value;
+      expect(callCount).toBe(2);
+      expect(results[0]).toBe("a");
+      expect(results[1]).toBe("c");
+      expect(results[2]).toBe("c");
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("should execute immediately if enough time has passed", async () => {
+    jest.useFakeTimers();
     let callCount = 0;
     const task = defineTask({
-      id: "throttle.immediate",
+      id: "throttle-immediate",
       middleware: [throttleTaskMiddleware.with({ ms: 50 })],
       run: async (val: string) => {
         callCount++;
@@ -58,19 +73,24 @@ describe("Temporal Middleware: Throttle", () => {
       dependencies: { task },
       async init(_, { task }) {
         await task("a");
-        await sleep(100);
+        jest.advanceTimersByTime(100);
+        await Promise.resolve();
         await task("b");
       },
     });
 
-    await run(app);
-    expect(callCount).toBe(2);
+    try {
+      await run(app);
+      expect(callCount).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("should handle errors in throttled task", async () => {
     let callCount = 0;
     const task = defineTask({
-      id: "throttle.error",
+      id: "throttle-error",
       middleware: [throttleTaskMiddleware.with({ ms: 50 })],
       run: async () => {
         callCount++;
@@ -97,7 +117,7 @@ describe("Temporal Middleware: Throttle", () => {
   it("should reject scheduled callers when the scheduled execution fails", async () => {
     expect.assertions(3);
     const config = { ms: 50 };
-    const deps = { state: { throttleStates: new WeakMap() } };
+    const deps = createTemporalDeps();
 
     const next = async (input?: string) => {
       if (input === "b") {
@@ -108,7 +128,7 @@ describe("Temporal Middleware: Throttle", () => {
 
     const inputFor = (input: string) => ({
       task: {
-        definition: { id: "throttle.unit.scheduled.fail" } as any,
+        definition: { id: "throttle-unit-scheduled-fail" } as any,
         input,
       },
       next,
@@ -152,14 +172,14 @@ describe("Temporal Middleware: Throttle", () => {
     };
     const inputFor = (input: string) => ({
       task: {
-        definition: { id: "throttle.unit" } as any,
+        definition: { id: "throttle-unit" } as any,
         input,
       },
       next,
     });
 
     try {
-      const deps = { state: { throttleStates: new WeakMap() } };
+      const deps = createTemporalDeps();
       await expect(
         throttleTaskMiddleware.run(inputFor("a") as any, deps as any, config),
       ).resolves.toBe("a");
@@ -197,13 +217,13 @@ describe("Temporal Middleware: Throttle", () => {
     };
     const inputFor = (input: string) => ({
       task: {
-        definition: { id: "throttle.unit.fail" } as any,
+        definition: { id: "throttle-unit-fail" } as any,
         input,
       },
       next,
     });
 
-    const deps = { state: { throttleStates: new WeakMap() } };
+    const deps = createTemporalDeps();
     await expect(
       throttleTaskMiddleware.run(inputFor("a") as any, deps as any, config),
     ).resolves.toBe("a");
@@ -252,7 +272,7 @@ describe("Temporal Middleware: Throttle", () => {
       ({
         task: {
           definition: {
-            id: "throttle.unit.latest-input",
+            id: "throttle-unit-latest-input",
           } as unknown as ThrottleRunInput["task"]["definition"],
           input,
         },

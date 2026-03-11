@@ -3,22 +3,22 @@ import { r } from "@bluelibs/runner/node";
 import { TaskId } from "../ids.js";
 import type { DemoResult } from "../types.js";
 import {
-  createNotePhantom,
-  listNotesPhantom,
-  listAuditsPhantom,
-  logAuditPhantom,
-} from "./phantoms.js";
+  createNoteRemoteTask,
+  listNotesRemoteTask,
+  listAuditsRemoteTask,
+  logAuditRemoteTask,
+} from "./remoteTasks.js";
 
 export const demoTask = r
   .task(TaskId.Demo)
   .dependencies({
-    createNote: createNotePhantom,
-    listNotes: listNotesPhantom,
-    logAudit: logAuditPhantom,
-    listAudits: listAuditsPhantom,
+    createNote: createNoteRemoteTask,
+    listNotes: listNotesRemoteTask,
+    logAudit: logAuditRemoteTask,
+    listAudits: listAuditsRemoteTask,
   })
   .run(async (_input: void, deps): Promise<DemoResult> => {
-    console.log("\n[client] Starting demo - calling services via tunnel\n");
+    console.log("\n[client] Starting demo - calling services via rpcLanes\n");
 
     const note1 = await deps.createNote({
       title: "Hello",

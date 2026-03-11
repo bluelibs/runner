@@ -17,7 +17,7 @@ export interface ExposureRequestContextValue {
 
 export const ExposureRequestContext =
   defineAsyncContext<ExposureRequestContextValue>({
-    id: "platform.node.ctx.exposureRequest",
+    id: "platform-node-asyncContexts-exposureRequest",
   });
 
 export function useExposureContext(): ExposureRequestContextValue {

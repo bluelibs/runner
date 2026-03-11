@@ -5,7 +5,7 @@ import type { IDurableContext } from "../../durable/core/interfaces/context";
 import type { IDurableService } from "../../durable/core/interfaces/service";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { event, r } from "../../..";
+import { defineEvent, r } from "../../..";
 import { durableWorkflowTag } from "../../durable/tags/durableWorkflow.tag";
 
 /**
@@ -85,7 +85,7 @@ describe("durable: DurableResource", () => {
     const durable = new DurableResource(service, storage);
 
     const task = r
-      .task("durable.tests.resource.describe.task")
+      .task("durable-tests-resource-describe-task")
       .run(async () => "ok")
       .build();
 
@@ -109,22 +109,24 @@ describe("durable: DurableResource", () => {
     const storage = new AsyncLocalStorage<IDurableContext>();
 
     const taggedTask = r
-      .task("durable.tests.resource.tagged")
+      .task("durable-tests-resource-tagged")
       .tags([durableWorkflowTag.with({ category: "orders" })])
       .run(async () => "ok")
       .build();
 
     const untaggedTask = r
-      .task("durable.tests.resource.untagged")
+      .task("durable-tests-resource-untagged")
       .run(async () => "ok")
       .build();
 
     const runnerStore = {
-      getTasksWithTag: jest
-        .fn()
-        .mockImplementation((tag) =>
-          tag.id === durableWorkflowTag.id ? [taggedTask] : [untaggedTask],
-        ),
+      getTagAccessor: jest.fn().mockImplementation((tag) => ({
+        tasks:
+          tag.id === durableWorkflowTag.id
+            ? [{ definition: taggedTask }]
+            : [{ definition: untaggedTask }],
+      })),
+      toPublicDefinition: jest.fn((definition) => definition),
     } as any;
 
     const durable = new DurableResource(
@@ -135,8 +137,17 @@ describe("durable: DurableResource", () => {
     );
 
     expect(durable.getWorkflows()).toEqual([taggedTask]);
-    expect(runnerStore.getTasksWithTag).toHaveBeenCalledWith(
-      durableWorkflowTag,
+    expect(runnerStore.getTagAccessor).toHaveBeenCalledWith(durableWorkflowTag);
+    expect(runnerStore.toPublicDefinition).toHaveBeenCalledWith(taggedTask);
+  });
+
+  it("fails fast when workflow discovery APIs are missing from the runner store", () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const durable = new DurableResource(service, storage, undefined, {} as any);
+
+    expect(() => durable.getWorkflows()).toThrow(
+      "Durable workflow discovery requires Store.getTagAccessor(tag).",
     );
   });
 
@@ -144,7 +155,7 @@ describe("durable: DurableResource", () => {
     const service = createMockService();
     const storage = new AsyncLocalStorage<IDurableContext>();
     const task = r
-      .task("durable.tests.resource.describe.task.missing-deps")
+      .task("durable-tests-resource-describe-task-missing-deps")
       .run(async () => "ok")
       .build();
 
@@ -159,7 +170,7 @@ describe("durable: DurableResource", () => {
     );
 
     await expect(durable.describe(task)).rejects.toThrow(
-      'Cannot describe task "durable.tests.resource.describe.task.missing-deps": task dependencies are not available in the runtime store.',
+      'Cannot describe task "durable-tests-resource-describe-task-missing-deps": task dependencies are not available in the runtime store.',
     );
   });
 
@@ -170,21 +181,17 @@ describe("durable: DurableResource", () => {
     const durable = new DurableResource(service, storage);
 
     const task = r
-      .task("durable.tests.resource.task")
+      .task("durable-tests-resource-task")
       .run(async (_input: { a: number }) => "ok")
       .build();
-    const signalDef = event<{ a: number }>({
-      id: "durable.tests.resource.signal",
+    const signalDef = defineEvent<{ a: number }>({
+      id: "durable-tests-resource-signal",
     });
 
     expect(await durable.start(task, { a: 1 })).toBe("e1");
     expect(service.start).toHaveBeenCalledWith(task, { a: 1 }, undefined);
     expect(await durable.start(task.id, { a: 2 })).toBe("e1");
     expect(service.start).toHaveBeenCalledWith(task.id, { a: 2 }, undefined);
-    expect(await durable.startExecution(task, { a: 3 })).toBe("e1");
-    expect(service.start).toHaveBeenCalledWith(task, { a: 3 }, undefined);
-    expect(await durable.startExecution(task.id, { a: 4 })).toBe("e1");
-    expect(service.start).toHaveBeenCalledWith(task.id, { a: 4 }, undefined);
 
     expect(await durable.wait<string>("e1")).toBe("ok");
     expect(service.wait).toHaveBeenCalledWith("e1", undefined);
@@ -205,36 +212,6 @@ describe("durable: DurableResource", () => {
     expect(service.startAndWait).toHaveBeenCalledWith(
       task.id,
       { a: 2 },
-      undefined,
-    );
-    expect(await durable.execute(task, { a: 5 })).toBe("ok");
-    expect(service.startAndWait).toHaveBeenCalledWith(
-      task,
-      { a: 5 },
-      undefined,
-    );
-    expect(await durable.execute(task.id, { a: 6 })).toBe("ok");
-    expect(service.startAndWait).toHaveBeenCalledWith(
-      task.id,
-      { a: 6 },
-      undefined,
-    );
-    expect(await durable.executeStrict(task, { a: 7 })).toEqual({
-      durable: { executionId: "e1" },
-      data: "ok",
-    });
-    expect(service.startAndWait).toHaveBeenCalledWith(
-      task,
-      { a: 7 },
-      undefined,
-    );
-    expect(await durable.executeStrict(task.id, { a: 8 })).toEqual({
-      durable: { executionId: "e1" },
-      data: "ok",
-    });
-    expect(service.startAndWait).toHaveBeenCalledWith(
-      task.id,
-      { a: 8 },
       undefined,
     );
 

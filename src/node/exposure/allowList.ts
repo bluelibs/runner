@@ -1,10 +1,4 @@
-import {
-  computeAllowList,
-  type TunnelAllowList,
-  type AllowListSelectorErrorInfo,
-} from "../tunnel/allowlist";
-import type { Store } from "../../models/Store";
-import type { Logger } from "../../models/Logger";
+import type { NodeExposurePolicySnapshot } from "./policy";
 
 import { jsonErrorResponse } from "./httpResponse";
 import type { AllowListGuard } from "./types";
@@ -18,38 +12,15 @@ enum AllowListErrorMessage {
 }
 
 export function createAllowListGuard(
-  store: Store,
+  policy: NodeExposurePolicySnapshot,
   allowOpen: boolean = false,
-  logger?: Logger,
 ): AllowListGuard {
-  const reportSelectorError = ({
-    selectorKind,
-    candidateId,
-    tunnelResourceId,
-    error,
-  }: AllowListSelectorErrorInfo) => {
-    try {
-      logger!.warn(
-        "[runner] Tunnel allow-list selector failed; item skipped.",
-        {
-          error,
-          data: { selectorKind, candidateId, tunnelResourceId },
-        },
-      );
-    } catch {
-      // Ignore logger failures and preserve allow-list behavior.
-    }
-  };
-
-  const allowList = (): TunnelAllowList =>
-    logger
-      ? computeAllowList(store, reportSelectorError)
-      : computeAllowList(store);
+  const taskIds = new Set(policy.taskIds);
+  const eventIds = new Set(policy.eventIds);
 
   return {
     ensureTask(id) {
-      const list = allowList();
-      if (!list.enabled) {
+      if (!policy.enabled) {
         if (allowOpen) return null;
         return jsonErrorResponse(
           403,
@@ -57,7 +28,7 @@ export function createAllowListGuard(
           AllowListErrorCode.Forbidden,
         );
       }
-      if (!list.taskIds.has(id)) {
+      if (!taskIds.has(id)) {
         return jsonErrorResponse(
           403,
           `Task ${id} not exposed`,
@@ -67,8 +38,7 @@ export function createAllowListGuard(
       return null;
     },
     ensureEvent(id) {
-      const list = allowList();
-      if (!list.enabled) {
+      if (!policy.enabled) {
         if (allowOpen) return null;
         return jsonErrorResponse(
           403,
@@ -76,7 +46,7 @@ export function createAllowListGuard(
           AllowListErrorCode.Forbidden,
         );
       }
-      if (!list.eventIds.has(id)) {
+      if (!eventIds.has(id)) {
         return jsonErrorResponse(
           403,
           `Event ${id} not exposed`,

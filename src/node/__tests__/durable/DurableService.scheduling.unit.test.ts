@@ -8,7 +8,7 @@ describe("durable: DurableService — scheduling (unit)", () => {
   it("supports one-off and cron schedules", async () => {
     const store = new MemoryStore();
     const task = r
-      .task("t.sched")
+      .task("t-sched")
       .run(async (_input: { a: number }) => "ok")
       .build();
 
@@ -73,7 +73,7 @@ describe("durable: DurableService — scheduling (unit)", () => {
   it("registers tasks provided via schedules config", async () => {
     const store = new MemoryStore();
     const task = r
-      .task("t.sched.task")
+      .task("t-sched-task")
       .run(async (_input: unknown) => "ok")
       .build();
 
@@ -89,7 +89,7 @@ describe("durable: DurableService — scheduling (unit)", () => {
   it("resolves schedules that reference a task by string id", async () => {
     const store = new MemoryStore();
     const task = r
-      .task("t.sched.task.by-id")
+      .task("t-sched-task-by-id")
       .run(async (_input: unknown) => "ok")
       .build();
 
@@ -112,17 +112,17 @@ describe("durable: DurableService — scheduling (unit)", () => {
           store,
           taskExecutor: createTaskExecutor({}),
           schedules: [
-            { id: "s1", task: "missing.task", interval: 1000, input: {} },
+            { id: "s1", task: "missing-task", interval: 1000, input: {} },
           ],
         }),
     ).toThrow(
-      'Cannot initialize durable schedule "s1": task "missing.task" is not registered.',
+      'Cannot initialize durable schedule "s1": task "missing-task" is not registered.',
     );
   });
 
   it("creates interval-based schedules and updates intervals", async () => {
     const store = new MemoryStore();
-    const task = okTask("t.interval");
+    const task = okTask("t-interval");
     const service = new DurableService({
       store,
       taskExecutor: createTaskExecutor({}),
@@ -142,7 +142,7 @@ describe("durable: DurableService — scheduling (unit)", () => {
 
   it("supports scheduling at a fixed date", async () => {
     const store = new MemoryStore();
-    const task = okTask("t.at");
+    const task = okTask("t-at");
     const service = new DurableService({
       store,
       taskExecutor: createTaskExecutor({}),

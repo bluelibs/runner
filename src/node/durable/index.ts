@@ -37,10 +37,6 @@ export type {
   FlowNoteNode,
 } from "./core/flowShape";
 
-// We don't export server.ts by default to avoid Express dependency if not used?
-// Actually user asked for everything in one package.
-export { createDashboardMiddleware } from "./dashboard/server";
-
 export { MemoryStore } from "./store/MemoryStore";
 export { RedisStore } from "./store/RedisStore";
 
@@ -57,6 +53,7 @@ export {
   durableWorkflowTag,
   type DurableWorkflowTagConfig,
 } from "./tags/durableWorkflow.tag";
+export { durableSupportResource } from "./resources/durable.resource";
 
 export { memoryDurableResource } from "./resources/memoryDurableResource";
 export type { MemoryDurableResourceConfig } from "./resources/memoryDurableResource";

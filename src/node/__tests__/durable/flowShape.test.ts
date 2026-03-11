@@ -1,4 +1,4 @@
-import { event } from "../../..";
+import { defineEvent } from "../../..";
 import { createDurableStepId } from "../../durable/core/ids";
 import { recordFlowShape } from "../../durable/core/flowShape";
 
@@ -51,7 +51,7 @@ describe("durable: flowShape recorder", () => {
   });
 
   it("records waitForSignal nodes", async () => {
-    const Approved = event<{ by: string }>({ id: "app.approved" });
+    const Approved = defineEvent<{ by: string }>({ id: "app-approved" });
 
     const shape = await recordFlowShape(async (ctx) => {
       await ctx.waitForSignal(Approved, {
@@ -64,13 +64,13 @@ describe("durable: flowShape recorder", () => {
     expect(shape.nodes).toEqual([
       {
         kind: "waitForSignal",
-        signalId: "app.approved",
+        signalId: "app-approved",
         timeoutMs: 5_000,
         stepId: "wait-approval",
       },
       {
         kind: "waitForSignal",
-        signalId: "app.approved",
+        signalId: "app-approved",
         timeoutMs: undefined,
         stepId: undefined,
       },
@@ -78,8 +78,8 @@ describe("durable: flowShape recorder", () => {
   });
 
   it("records emit nodes", async () => {
-    const OrderShipped = event<{ orderId: string }>({
-      id: "app.orderShipped",
+    const OrderShipped = defineEvent<{ orderId: string }>({
+      id: "app-orderShipped",
     });
 
     const shape = await recordFlowShape(async (ctx) => {
@@ -87,7 +87,7 @@ describe("durable: flowShape recorder", () => {
     });
 
     expect(shape.nodes).toEqual([
-      { kind: "emit", eventId: "app.orderShipped", stepId: "notify" },
+      { kind: "emit", eventId: "app-orderShipped", stepId: "notify" },
     ]);
   });
 

@@ -2,27 +2,43 @@ import {
   defineTask,
   defineResource,
   defineEvent,
+  defineEventLane,
+  defineRpcLane,
   defineTaskMiddleware,
   defineResourceMiddleware,
-  defineTag,
   defineOverride,
+  defineTag,
   defineHook,
+  isTask,
+  isResource,
+  isResourceWithConfig,
+  isEvent,
+  isEventLane,
+  isRpcLane,
+  isHook,
+  isTaskMiddleware,
+  isResourceMiddleware,
+  isTag,
+  isTagStartup,
+  isOptional,
+  isError,
+  isAsyncContext,
+  isOverrideDefinition,
+  isSubtreeFilter,
+  isIsolationScope,
 } from "./define";
-import {
-  defineAsyncContext,
-  createContext as oldCreateContext,
-} from "./definers/defineAsyncContext";
+import { defineAsyncContext } from "./definers/defineAsyncContext";
 import { globalEvents } from "./globals/globalEvents";
 import { globalResources } from "./globals/globalResources";
 import { globalMiddlewares } from "./globals/globalMiddleware";
 import { globalTags } from "./globals/globalTags";
-import { debug } from "./globals/debug";
+import { debug as globalDebug } from "./globals/debug";
 import { run } from "./run";
-import { tunnels } from "./globals/tunnels";
-import { createTestResource } from "./testing";
 import { resource as resourceFn } from "./definers/builders/resource";
 import { task as taskFn } from "./definers/builders/task";
 import { event as eventFn } from "./definers/builders/event";
+import { eventLane as eventLaneFn } from "./definers/builders/eventLane";
+import { rpcLane as rpcLaneFn } from "./definers/builders/rpcLane";
 import { hook as hookFn } from "./definers/builders/hook";
 import {
   taskMiddleware as taskMiddlewareFn,
@@ -32,35 +48,55 @@ import { tag as tagFn } from "./definers/builders/tag";
 import { error as errorFn } from "./definers/builders/error";
 import { asyncContext as asyncContextFn } from "./definers/builders/asyncContext";
 import { override as overrideBuilder } from "./definers/builders/override";
+import { onAnyOf, isOneOf } from "./types/event";
+import { subtreeOf as subtreeOfFn } from "./tools/subtreeOf";
+import { scope as scopeFn } from "./tools/scope";
+import { isSameDefinition } from "./tools/isSameDefinition";
+import { asyncContexts } from "./asyncContexts";
 
-const globals = {
-  events: globalEvents,
-  resources: globalResources,
-  middleware: globalMiddlewares,
-  middlewares: globalMiddlewares, // Some people prefer this forced plural, for consistency
-  tags: globalTags,
-  tunnels,
-  debug,
-};
+export const resources = Object.freeze({ ...globalResources });
+export const events = Object.freeze({ ...globalEvents });
+export const middleware = Object.freeze({ ...globalMiddlewares });
+export const tags = Object.freeze({ ...globalTags });
+export const debug = Object.freeze({ levels: globalDebug.levels });
 
-export { globals };
 export {
-  defineTask as task,
-  defineResource as resource,
-  defineEvent as event,
-  defineTaskMiddleware as taskMiddleware,
-  defineResourceMiddleware as resourceMiddleware,
-  defineAsyncContext as asyncContext,
-  defineTag as tag,
-  defineOverride as override,
-  defineHook as hook,
+  defineTask,
+  defineResource,
+  defineEvent,
+  defineEventLane,
+  defineRpcLane,
+  defineTaskMiddleware,
+  defineResourceMiddleware,
+  defineAsyncContext,
+  defineTag,
+  defineOverride,
+  defineHook,
+  isTask,
+  isResource,
+  isResourceWithConfig,
+  isEvent,
+  isEventLane,
+  isRpcLane,
+  isHook,
+  isTaskMiddleware,
+  isResourceMiddleware,
+  isTag,
+  isTagStartup,
+  isOptional,
+  isError,
+  isAsyncContext,
+  isOverrideDefinition,
+  isSubtreeFilter,
+  isIsolationScope,
   run,
-  createTestResource,
+  onAnyOf,
+  isOneOf,
+  isSameDefinition,
+  subtreeOfFn as subtreeOf,
+  scopeFn as scope,
+  asyncContexts,
 };
-
-// Legacy alias accepted in tests; with optional id support
-const createContext = oldCreateContext;
-export { createContext };
 
 /**
  * The unified fluent builder namespace for creating Runner components.
@@ -84,11 +120,16 @@ export const r = Object.freeze({
   resource: resourceFn,
   task: taskFn,
   event: eventFn,
+  eventLane: eventLaneFn,
+  rpcLane: rpcLaneFn,
   hook: hookFn,
   tag: tagFn,
   override: overrideBuilder,
   asyncContext: asyncContextFn,
   error: errorFn,
+  subtreeOf: subtreeOfFn,
+  scope: scopeFn,
+  isSameDefinition,
   middleware: Object.freeze({
     task: taskMiddlewareFn,
     resource: resourceMiddlewareFn,
@@ -106,8 +147,21 @@ export { cancellationError } from "./errors";
 export { PlatformAdapter, setPlatform } from "./platform";
 export { RunnerError } from "./definers/defineError";
 export { LockableMap } from "./tools/LockableMap";
+export { Match, check } from "./tools/check";
+export type {
+  CheckSchemaLike,
+  CheckedValue,
+  InferCheckSchema,
+  InferMatchPattern,
+  MatchCompiledSchema,
+  MatchJsonObject,
+  MatchJsonPrimitive,
+  MatchJsonSchema,
+  MatchJsonValue,
+  MatchPattern,
+} from "./tools/check";
 
-// HTTP and tunnel functionality
+// HTTP transport functionality
 export * from "./http-client";
 
 export {

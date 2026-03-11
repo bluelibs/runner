@@ -1,9 +1,10 @@
 import type {
   DefaultErrorType,
+  EnsureTagsForTarget,
   IErrorMeta,
-  IValidationSchema,
   IErrorHelper,
-  TagType,
+  ErrorTagType,
+  ValidationSchemaInput,
 } from "../../../defs";
 
 export interface ErrorFluentBuilder<
@@ -13,15 +14,15 @@ export interface ErrorFluentBuilder<
   httpCode(code: number): ErrorFluentBuilder<TData>;
   serialize(fn: (data: TData) => string): ErrorFluentBuilder<TData>;
   parse(fn: (raw: string) => TData): ErrorFluentBuilder<TData>;
-  dataSchema(schema: IValidationSchema<TData>): ErrorFluentBuilder<TData>;
+  dataSchema(schema: ValidationSchemaInput<TData>): ErrorFluentBuilder<TData>;
 
   /**
    * Alias for dataSchema. Use this to define the error data validation contract.
    */
-  schema(schema: IValidationSchema<TData>): ErrorFluentBuilder<TData>;
+  schema(schema: ValidationSchemaInput<TData>): ErrorFluentBuilder<TData>;
 
-  tags<TNewTags extends TagType[]>(
-    t: TNewTags,
+  tags<TNewTags extends ErrorTagType[]>(
+    t: EnsureTagsForTarget<"errors", TNewTags>,
     options?: { override?: boolean },
   ): ErrorFluentBuilder<TData>;
 

@@ -1,6 +1,6 @@
 # @runner-examples/jwt-auth
 
-JWT auth over Runner tunnels as a self-contained example package.
+JWT-protected remote execution using Runner `rpcLanes`.
 
 ## Install
 
@@ -15,15 +15,9 @@ npm install
 npm run start
 ```
 
-This will:
+This example:
 
-- Start a Runner app that exposes tasks over HTTP via `nodeExposure`.
-- Enforce JWT via a task middleware using `jsonwebtoken`.
-- Execute a client task that calls the protected task with a signed token.
-- Attempt an anonymous call to show the 401 JSON envelope.
-
-Notes:
-
-- The example depends on `@bluelibs/runner` from npm.
-  - Run `npm install` to fetch all dependencies.
-- Modify secrets or scopes in `examples/tunnels/jwt-auth.example.ts` as needed.
+- Starts a server runtime that serves lane-assigned tasks over HTTP via `rpcLanesResource`.
+- Uses a client runtime with matching lane JWT config to run a protected remote task.
+- Starts a second client with an invalid lane JWT secret to demonstrate fail-closed authorization.
+- Keeps exposure auth (`exposure.http.auth`) and lane auth (`binding.auth`) as separate layers.

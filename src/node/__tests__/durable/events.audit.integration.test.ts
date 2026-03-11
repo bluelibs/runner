@@ -1,4 +1,4 @@
-import { r, run } from "../../..";
+import { r, resources, run } from "../../node";
 import { durableResource } from "../../durable/core/resource";
 import { durableEvents } from "../../durable/events";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
@@ -23,7 +23,7 @@ describe("durable: audit runner events (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.tests.events.durable");
+    const durable = durableResource.fork("durable-tests-events-durable");
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -34,7 +34,7 @@ describe("durable: audit runner events (integration)", () => {
     const notes: string[] = [];
 
     const onAudit = r
-      .hook("durable.tests.hooks.audit.appended")
+      .hook("durable-tests-hooks-audit-appended")
       .on(durableEvents.audit.appended)
       .run(async (event) => {
         received.push({
@@ -45,7 +45,7 @@ describe("durable: audit runner events (integration)", () => {
       .build();
 
     const onNote = r
-      .hook("durable.tests.hooks.note.created")
+      .hook("durable-tests-hooks-note-created")
       .on(durableEvents.note.created)
       .run(async (event) => {
         notes.push(event.data.message);
@@ -53,7 +53,7 @@ describe("durable: audit runner events (integration)", () => {
       .build();
 
     const task = r
-      .task("durable.test.events.basic")
+      .task("durable-test-events-basic")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -66,7 +66,7 @@ describe("durable: audit runner events (integration)", () => {
 
     const app = r
       .resource("app")
-      .register([durableRegistration, task, onAudit, onNote])
+      .register([resources.durable, durableRegistration, task, onAudit, onNote])
       .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
@@ -104,7 +104,7 @@ describe("durable: audit runner events (integration)", () => {
     const bus = new MemoryEventBus();
 
     const durable = durableResource.fork(
-      "durable.tests.events.emitterFailure.durable",
+      "durable-tests-events-emitterFailure-durable",
     );
     const durableRegistration = durable.with({
       store,
@@ -121,7 +121,7 @@ describe("durable: audit runner events (integration)", () => {
     });
 
     const task = r
-      .task("durable.test.events.emitterFailure")
+      .task("durable-test-events-emitterFailure")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -130,7 +130,10 @@ describe("durable: audit runner events (integration)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durableRegistration, task]).build();
+    const app = r
+      .resource("app")
+      .register([resources.durable, durableRegistration, task])
+      .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);

@@ -1,6 +1,14 @@
-import { globals, r, run } from "@bluelibs/runner/node";
+import { r, run } from "@bluelibs/runner";
+import { rpcLanesResource } from "@bluelibs/runner/node";
 
-import { ResourceId, TaskId, TunnelMode } from "../ids.js";
+import {
+  AuthToken,
+  ResourceId,
+  RpcProfile,
+  RuntimeTaskId,
+  TaskId,
+} from "../ids.js";
+import { appRpcLane } from "../rpcLane.js";
 import type {
   AuditEntry,
   AuditInput,
@@ -11,11 +19,11 @@ import type {
 import { assertDefined } from "../assertDefined.js";
 import { demoTask } from "./demoTask.js";
 import {
-  createNotePhantom,
-  listAuditsPhantom,
-  listNotesPhantom,
-  logAuditPhantom,
-} from "./phantoms.js";
+  createNoteRemoteTask,
+  listAuditsRemoteTask,
+  listNotesRemoteTask,
+  logAuditRemoteTask,
+} from "./remoteTasks.js";
 
 enum IdPrefix {
   Note = "note-",
@@ -23,16 +31,10 @@ enum IdPrefix {
 }
 
 enum ErrorMessage {
-  UnsupportedTask = "Memory tunnel received an unsupported task id",
+  UnsupportedTask = "Memory RPC communicator received an unsupported task id",
   InvalidNoteInput = "Invalid NoteInput",
   InvalidAuditInput = "Invalid AuditInput",
 }
-
-type MemoryTunnelClientValue = {
-  mode: TunnelMode;
-  tasks: TaskId[];
-  run: (task: { id: string }, input: unknown) => Promise<unknown>;
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
@@ -94,44 +96,61 @@ function createMemoryServerState() {
 export function buildMemoryClientApp() {
   const state = createMemoryServerState();
 
-  const tunnelClient = r
-    .resource(ResourceId.TunnelClient)
-    .tags([globals.tags.tunnel])
-    .init(async (): Promise<MemoryTunnelClientValue> => ({
-      mode: TunnelMode.Client,
-      tasks: [
-        TaskId.CreateNote,
-        TaskId.ListNotes,
-        TaskId.LogAudit,
-        TaskId.ListAudits,
-      ],
-      run: async (task, input) => {
-        switch (task.id) {
+  const communicator = r
+    .resource<void>(ResourceId.MemoryCommunicator)
+    .init(async () => ({
+      task: async (taskId: string, input?: unknown): Promise<unknown> => {
+        switch (taskId) {
           case TaskId.CreateNote:
+          case RuntimeTaskId.CreateNote:
             assertNoteInput(input);
             return state.createNote(input);
           case TaskId.ListNotes:
+          case RuntimeTaskId.ListNotes:
             return state.listNotes();
           case TaskId.LogAudit:
+          case RuntimeTaskId.LogAudit:
             assertAuditInput(input);
             return state.logAudit(input);
           case TaskId.ListAudits:
+          case RuntimeTaskId.ListAudits:
             return state.listAudits();
           default:
-            throw new Error(`${ErrorMessage.UnsupportedTask}: ${task.id}`);
+            throw new Error(`${ErrorMessage.UnsupportedTask}: ${taskId}`);
         }
       },
     }))
     .build();
 
+  const topology = r.rpcLane.topology({
+    profiles: {
+      [RpcProfile.Client]: { serve: [] },
+      [RpcProfile.Server]: { serve: [appRpcLane] },
+    },
+    bindings: [
+      {
+        lane: appRpcLane,
+        communicator,
+        auth: { mode: "jwt_hmac", secret: AuthToken.Dev },
+      },
+    ],
+  });
+
+  const rpcLanes = rpcLanesResource.fork(ResourceId.ClientRpcLanes).with({
+    profile: RpcProfile.Client,
+    mode: "network",
+    topology,
+  });
+
   const app = r
     .resource(ResourceId.ClientApp)
     .register([
-      tunnelClient,
-      createNotePhantom,
-      listNotesPhantom,
-      logAuditPhantom,
-      listAuditsPhantom,
+      communicator,
+      rpcLanes,
+      createNoteRemoteTask,
+      listNotesRemoteTask,
+      logAuditRemoteTask,
+      listAuditsRemoteTask,
       demoTask,
     ])
     .build();

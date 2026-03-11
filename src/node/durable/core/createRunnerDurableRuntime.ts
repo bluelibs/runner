@@ -12,6 +12,7 @@ import type { Logger } from "../../../models/Logger";
 import type { ITask } from "../../../types/task";
 import { initDurableWorker } from "./DurableWorker";
 import { durableExecutionInvariantError } from "../../../errors";
+import { runtimeSource } from "../../../types/runtimeSource";
 
 export type RunnerDurableRuntimeConfig = Omit<
   DurableServiceConfig,
@@ -35,12 +36,14 @@ export async function createRunnerDurableRuntime(
   config: RunnerDurableRuntimeConfig,
   deps: RunnerDurableDeps,
 ): Promise<DurableResource> {
+  const durableCallSource = runtimeSource.resource("durable.runtime");
   const durableLogger = (config.logger ?? deps.logger).with({
     source: "durable.runtime",
   });
 
   const runnerEmitter = createDurableRunnerAuditEmitter({
     eventManager: deps.eventManager,
+    source: durableCallSource,
   });
 
   const userEmitter = config.audit?.emitter;
@@ -75,7 +78,9 @@ export async function createRunnerDurableRuntime(
         task: ITask<TInput, Promise<TResult>, any, any, any, any>,
         input?: TInput,
       ) => {
-        const output = await deps.taskRunner.run(task, input);
+        const output = await deps.taskRunner.run(task, input, {
+          source: durableCallSource,
+        });
         if (output === undefined) {
           durableExecutionInvariantError.throw({
             message: `Durable task '${task.id}' completed without a result promise.`,
@@ -88,7 +93,8 @@ export async function createRunnerDurableRuntime(
       const storeTask = deps.runnerStore.tasks.get(taskId);
       return storeTask?.task;
     },
-    contextProvider: (ctx, fn) => contextStorage.run(ctx, fn),
+    contextProvider: (durableContext, fn) =>
+      contextStorage.run(durableContext, fn),
   });
 
   if (config.worker === true && config.queue) {

@@ -1,6 +1,9 @@
-import { defineTaskMiddleware, defineResourceMiddleware } from "../../define";
+import { defineResourceMiddleware } from "../../definers/defineResourceMiddleware";
+import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
+import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { journalKeys as timeoutJournalKeys } from "./timeout.middleware";
+import { Match } from "../../tools/check";
 
 /**
  * Configuration options for the retry middleware
@@ -22,97 +25,111 @@ export interface RetryMiddlewareConfig {
   delayStrategy?: (attempt: number, error: Error) => number;
 }
 
+const retryConfigPattern = Match.ObjectIncluding({
+  retries: Match.Optional(Match.PositiveInteger),
+  stopRetryIf: Match.Optional(Function),
+  delayStrategy: Match.Optional(Function),
+});
+
 /**
  * Journal keys exposed by the retry middleware.
  * Use these to access shared state from downstream middleware or tasks.
  */
 export const journalKeys = {
   /** Current retry attempt number (0 = first attempt, 1 = first retry, etc.) */
-  attempt: journalHelper.createKey<number>("globals.middleware.retry.attempt"),
+  attempt: journalHelper.createKey<number>("runner.middleware.retry.attempt"),
   /** The last error that caused a retry */
   lastError: journalHelper.createKey<Error>(
-    "globals.middleware.retry.lastError",
+    "runner.middleware.retry.lastError",
   ),
 } as const;
 
-export const retryTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.retry.task",
-  async run({ task, next, journal }, _deps, config: RetryMiddlewareConfig) {
-    const input = task?.input;
-    let attempts = 0;
+export const retryTaskMiddleware = defineTaskMiddleware(
+  markFrameworkDefinition({
+    id: "runner.middleware.retry.task",
+    configSchema: retryConfigPattern,
+    async run({ task, next, journal }, _deps, config: RetryMiddlewareConfig) {
+      const input = task?.input;
+      let attempts = 0;
 
-    // Set defaults for required parameters
-    const maxRetries = config.retries ?? 3;
-    const shouldStop = config.stopRetryIf ?? (() => false);
+      // Set defaults for required parameters
+      const maxRetries = config.retries ?? 3;
+      const shouldStop = config.stopRetryIf ?? (() => false);
 
-    // Set initial attempt count
-    journal.set(journalKeys.attempt, attempts, { override: true });
+      // Set initial attempt count
+      journal.set(journalKeys.attempt, attempts, { override: true });
 
-    while (true) {
-      try {
-        return await next(input);
-      } catch (error) {
-        const err = error as Error;
+      while (true) {
+        try {
+          return await next(input);
+        } catch (error) {
+          const err = error as Error;
 
-        // Check if timeout middleware has set an abort controller (fetch dynamically)
-        const abortController = journal.get(timeoutJournalKeys.abortController);
-
-        // Don't retry if the operation was aborted (timeout triggered)
-        if (abortController?.signal.aborted) {
-          throw error;
-        }
-
-        if (shouldStop(err) || attempts >= maxRetries) {
-          throw error;
-        }
-
-        // Calculate delay using custom strategy or default exponential backoff
-        const delay = config.delayStrategy
-          ? config.delayStrategy(attempts, err)
-          : getDefaultRetryDelayMs(attempts);
-
-        if (delay > 0) {
-          const signal = journal.get(
+          // Check if timeout middleware has set an abort controller (fetch dynamically)
+          const abortController = journal.get(
             timeoutJournalKeys.abortController,
-          )?.signal;
-          await abortableDelay(delay, signal);
-        }
+          );
 
-        attempts++;
-        // Update journal with current attempt and last error
-        journal.set(journalKeys.attempt, attempts, { override: true });
-        journal.set(journalKeys.lastError, err, { override: true });
-      }
-    }
-  },
-});
+          // Don't retry if the operation was aborted (timeout triggered)
+          if (abortController?.signal.aborted) {
+            throw error;
+          }
 
-export const retryResourceMiddleware = defineResourceMiddleware({
-  id: "globals.middleware.retry.resource",
-  async run({ resource, next }, _deps, config: RetryMiddlewareConfig) {
-    const input = resource?.config;
-    let attempts = 0;
-    const maxRetries = config.retries ?? 3;
-    const shouldStop = config.stopRetryIf ?? (() => false);
-    while (true) {
-      try {
-        return await next(input);
-      } catch (error) {
-        const err = error as Error;
-        if (shouldStop(err) || attempts >= maxRetries) {
-          throw error;
+          if (shouldStop(err) || attempts >= maxRetries) {
+            throw error;
+          }
+
+          // Calculate delay using custom strategy or default exponential backoff
+          const delay = config.delayStrategy
+            ? config.delayStrategy(attempts, err)
+            : getDefaultRetryDelayMs(attempts);
+
+          if (delay > 0) {
+            const signal = journal.get(
+              timeoutJournalKeys.abortController,
+            )?.signal;
+            await abortableDelay(delay, signal);
+          }
+
+          attempts++;
+          // Update journal with current attempt and last error
+          journal.set(journalKeys.attempt, attempts, { override: true });
+          journal.set(journalKeys.lastError, err, { override: true });
         }
-        const delay = config.delayStrategy
-          ? config.delayStrategy(attempts, err)
-          : getDefaultRetryDelayMs(attempts);
-        if (delay > 0) {
-          await abortableDelay(delay);
-        }
-        attempts++;
       }
-    }
-  },
-});
+    },
+  }),
+);
+
+export const retryResourceMiddleware = defineResourceMiddleware(
+  markFrameworkDefinition({
+    id: "runner.middleware.retry.resource",
+    configSchema: retryConfigPattern,
+    async run({ resource, next }, _deps, config: RetryMiddlewareConfig) {
+      const input = resource?.config;
+      let attempts = 0;
+      const maxRetries = config.retries ?? 3;
+      const shouldStop = config.stopRetryIf ?? (() => false);
+      while (true) {
+        try {
+          return await next(input);
+        } catch (error) {
+          const err = error as Error;
+          if (shouldStop(err) || attempts >= maxRetries) {
+            throw error;
+          }
+          const delay = config.delayStrategy
+            ? config.delayStrategy(attempts, err)
+            : getDefaultRetryDelayMs(attempts);
+          if (delay > 0) {
+            await abortableDelay(delay);
+          }
+          attempts++;
+        }
+      }
+    },
+  }),
+);
 
 function getDefaultRetryDelayMs(attempt: number): number {
   const baseDelayMs = 100 * Math.pow(2, attempt);

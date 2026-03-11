@@ -1,20 +1,19 @@
-import { r, run } from "../../..";
-import { memoryDurableResource } from "../../durable/resources/memoryDurableResource";
+import { r, resources, run } from "../../node";
 import { createMessageError } from "../../../errors";
 
 describe("durable: describe()", () => {
   it("describes a task using real non-durable deps and shimmed durable.use()", async () => {
-    const durable = memoryDurableResource.fork(
-      "durable.tests.recorder.durable",
+    const durable = resources.memoryWorkflow.fork(
+      "durable-tests-recorder-durable",
     );
 
     const other = r
-      .resource("durable.tests.recorder.other")
+      .resource("durable-tests-recorder-other")
       .init(async () => ({ n: 2 }))
       .build();
 
     const task = r
-      .task("durable.tests.recorder.task")
+      .task("durable-tests-recorder-task")
       .dependencies({ durable, other })
       .run(async (_input: undefined, deps) => {
         // Access a non-"use" property to cover the proxy passthrough path.
@@ -34,8 +33,8 @@ describe("durable: describe()", () => {
       .build();
 
     const app = r
-      .resource("durable.tests.recorder.app")
-      .register([durable.with({}), other, task])
+      .resource("durable-tests-recorder-app")
+      .register([resources.durable, durable.with({}), other, task])
       .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
@@ -51,23 +50,23 @@ describe("durable: describe()", () => {
   });
 
   it("throws when describing an unregistered task id", async () => {
-    const durable = memoryDurableResource.fork(
-      "durable.tests.recorder.durable.unregistered",
+    const durable = resources.memoryWorkflow.fork(
+      "durable-tests-recorder-durable-unregistered",
     );
 
     const registeredTask = r
-      .task("durable.tests.recorder.task.registered")
+      .task("durable-tests-recorder-task-registered")
       .run(async () => "ok")
       .build();
 
     const unregisteredTask = r
-      .task("durable.tests.recorder.task.unregistered")
+      .task("durable-tests-recorder-task-unregistered")
       .run(async () => "nope")
       .build();
 
     const app = r
-      .resource("durable.tests.recorder.app.unregistered")
-      .register([durable.with({}), registeredTask])
+      .resource("durable-tests-recorder-app-unregistered")
+      .register([resources.durable, durable.with({}), registeredTask])
       .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });

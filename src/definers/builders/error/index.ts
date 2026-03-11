@@ -10,16 +10,18 @@ export * from "./fluent-builder";
 export * from "./types";
 export * from "./utils";
 
-/**
- * Entry point for creating an error builder.
- */
-export function errorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
+type InternalErrorBuilderOptions = {
+  framework?: boolean;
+  filePath: string;
+};
+
+function createErrorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
   id: string,
+  options: InternalErrorBuilderOptions,
 ): ErrorFluentBuilder<TData> {
-  const filePath = getCallerFile();
   const initial: BuilderState<TData> = Object.freeze({
     id,
-    filePath,
+    filePath: options.filePath,
     httpCode: undefined,
     serialize: undefined,
     parse: undefined,
@@ -27,7 +29,18 @@ export function errorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
     meta: {} as IErrorMeta,
   });
 
-  return makeErrorBuilder(initial);
+  return makeErrorBuilder(initial, options.framework === true);
+}
+
+/**
+ * Entry point for creating an error builder.
+ */
+export function errorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
+  id: string,
+): ErrorFluentBuilder<TData> {
+  return createErrorBuilder(id, {
+    filePath: getCallerFile(),
+  });
 }
 
 /**
@@ -58,3 +71,12 @@ function isRunnerError(
 export const error = Object.assign(errorBuilder, {
   is: isRunnerError,
 });
+
+export function frameworkError<
+  TData extends DefaultErrorType = DefaultErrorType,
+>(id: string): ErrorFluentBuilder<TData> {
+  return createErrorBuilder(id, {
+    filePath: getCallerFile(),
+    framework: true,
+  });
+}

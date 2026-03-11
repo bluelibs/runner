@@ -320,11 +320,11 @@ describe("Queue", () => {
         eventManager: { registry: { listeners: Map<string, unknown[]> } };
       }
     ).eventManager.registry.listeners;
-    expect(listeners.get("queue.events.finish")).toHaveLength(1);
+    expect(listeners.get("queue-events-finish")).toHaveLength(1);
 
     unsubscribe();
 
-    expect(listeners.get("queue.events.finish")).toBeUndefined();
+    expect(listeners.get("queue-events-finish")).toBeUndefined();
   });
 
   it("hard-removes once() listeners from EventManager storage after first fire", async () => {
@@ -336,12 +336,99 @@ describe("Queue", () => {
         eventManager: { registry: { listeners: Map<string, unknown[]> } };
       }
     ).eventManager.registry.listeners;
-    expect(listeners.get("queue.events.finish")).toHaveLength(1);
+    expect(listeners.get("queue-events-finish")).toHaveLength(1);
 
     await q.run(async () => "ok");
     await flushMicroTasks();
 
-    expect(listeners.get("queue.events.finish")).toBeUndefined();
+    expect(listeners.get("queue-events-finish")).toBeUndefined();
+  });
+
+  it("ignores stale listener callbacks after active listener id is removed", async () => {
+    const q = new Queue();
+    const seen: string[] = [];
+
+    q.on("finish", () => seen.push("finish"));
+
+    const internals = q as unknown as {
+      activeListeners: Set<string>;
+      eventManager: { registry: { listeners: Map<string, Array<any>> } };
+    };
+    const listeners = internals.eventManager.registry.listeners.get(
+      "queue-events-finish",
+    );
+    if (!listeners?.[0]) {
+      throw new Error("Expected queue finish listener to be registered");
+    }
+
+    const firstListener = listeners[0] as {
+      handler: (event: {
+        data: { type: string };
+        source: string | undefined;
+        isPropagationStopped: () => boolean;
+        stopPropagation: () => void;
+      }) => unknown;
+    };
+
+    const emission = {
+      data: { type: "finish" },
+      source: undefined,
+      isPropagationStopped: () => false,
+      stopPropagation: () => undefined,
+    };
+
+    const listenerRunner = firstListener.handler(emission);
+    if (listenerRunner instanceof Promise) {
+      await listenerRunner;
+    }
+    expect(seen).toEqual(["finish"]);
+
+    internals.activeListeners.clear();
+    const staleRunner = firstListener.handler(emission);
+    if (staleRunner instanceof Promise) {
+      await staleRunner;
+    }
+    expect(seen).toEqual(["finish"]);
+  });
+
+  it("ignores stale once-listener callbacks after listener was deactivated", async () => {
+    const q = new Queue();
+    const seen: string[] = [];
+
+    q.once("finish", () => seen.push("finish"));
+
+    const internals = q as unknown as {
+      activeListeners: Set<string>;
+      eventManager: { registry: { listeners: Map<string, Array<any>> } };
+    };
+    const listeners = internals.eventManager.registry.listeners.get(
+      "queue-events-finish",
+    );
+    if (!listeners?.[0]) {
+      throw new Error("Expected queue finish listener to be registered");
+    }
+
+    const listener = listeners[0] as {
+      handler: (event: {
+        data: { type: string };
+        source: string | undefined;
+        isPropagationStopped: () => boolean;
+        stopPropagation: () => void;
+      }) => unknown;
+    };
+
+    internals.activeListeners.clear();
+    const result = listener.handler({
+      data: { type: "finish" },
+      source: undefined,
+      isPropagationStopped: () => false,
+      stopPropagation: () => undefined,
+    });
+    if (result instanceof Promise) {
+      await result;
+    }
+
+    expect(seen).toEqual([]);
   });
 
   it("refreshes AbortController after dispose({ cancel: true })", async () => {
@@ -366,5 +453,15 @@ describe("Queue", () => {
       .abortController;
     expect(after).not.toBe(before);
     expect(after.signal.aborted).toBe(false);
+  });
+
+  it("fails fast when task id counter reaches Number.MAX_SAFE_INTEGER", async () => {
+    const q = new Queue();
+    (q as unknown as { nextTaskId: number }).nextTaskId =
+      Number.MAX_SAFE_INTEGER;
+
+    await expect(q.run(async () => "nope")).rejects.toThrow(
+      /task id counter reached its limit/i,
+    );
   });
 });

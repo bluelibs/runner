@@ -148,7 +148,7 @@ Each task should define zod schemas:
 
 ```ts
 export const myTask = task({
-  id: "app.feature.tasks.myTask",
+  id: "myTask",
   meta: { title: "Do Thing", description: "Explains what it does" },
   tags: [httpRoute.with({ method: "post", path: "/thing" })],
   inputSchema: z.object({ foo: z.string() }),
@@ -424,7 +424,7 @@ This refreshes:
   ```ts
   import { authorize } from "../../http/middlewares/authorize.middleware";
   export const myTask = task({
-    id: "app.feature.tasks.myTask",
+    id: "myTask",
     middleware: [authorize.with({ roles: ["admin"] })],
     // ...
   });

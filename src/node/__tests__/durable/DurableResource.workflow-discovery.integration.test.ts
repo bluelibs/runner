@@ -1,17 +1,15 @@
-import { r, run } from "../../..";
-import { memoryDurableResource } from "../../durable/resources/memoryDurableResource";
-import { durableWorkflowTag } from "../../durable/tags/durableWorkflow.tag";
+import { r, resources, run, tags } from "../../node";
 
 describe("durable: workflow discovery", () => {
   it("discovers tasks tagged with durable.workflow at runtime", async () => {
-    const durable = memoryDurableResource.fork(
-      "durable.tests.discovery.resource",
+    const durable = resources.memoryWorkflow.fork(
+      "durable-tests-discovery-resource",
     );
 
     const taggedWorkflow = r
-      .task("durable.tests.discovery.tagged")
+      .task("durable-tests-discovery-tagged")
       .dependencies({ durable })
-      .tags([durableWorkflowTag.with({ category: "orders" })])
+      .tags([tags.durableWorkflow.with({ category: "orders" })])
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
         await ctx.step("once", async () => "ok");
@@ -20,7 +18,7 @@ describe("durable: workflow discovery", () => {
       .build();
 
     const untaggedWorkflow = r
-      .task("durable.tests.discovery.untagged")
+      .task("durable-tests-discovery-untagged")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -30,8 +28,13 @@ describe("durable: workflow discovery", () => {
       .build();
 
     const app = r
-      .resource("durable.tests.discovery.app")
-      .register([durable.with({}), taggedWorkflow, untaggedWorkflow])
+      .resource("durable-tests-discovery-app")
+      .register([
+        resources.durable,
+        durable.with({}),
+        taggedWorkflow,
+        untaggedWorkflow,
+      ])
       .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });

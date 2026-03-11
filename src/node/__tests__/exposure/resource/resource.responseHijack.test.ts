@@ -1,16 +1,16 @@
-import * as http from "http";
 import { Readable } from "stream";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { defineTask } from "../../../../definers/defineTask";
-import { nodeExposure, useExposureContext } from "../../../index";
+import { useRpcLaneRequestContext } from "../../../index";
+import { rpcExposure } from "../testkit/rpcExposure";
 
 describe("nodeExposure response hijack (duplex)", () => {
   it("skips JSON envelope when task writes to res (raw-body)", async () => {
     const duplexTask = defineTask<void, Promise<string>>({
-      id: "ctx.raw.duplex",
+      id: "ctx-raw-duplex",
       run: async () => {
-        const { req, res } = useExposureContext();
+        const { req, res } = useRpcLaneRequestContext();
 
         // Prepare a streaming/plain response
         res.statusCode = 200;
@@ -39,20 +39,18 @@ describe("nodeExposure response hijack (duplex)", () => {
       },
     });
 
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "ctx.raw.duplex.app",
+      id: "ctx-raw-duplex-app",
       register: [duplexTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     // Fake raw-body request
     const body = "abc";

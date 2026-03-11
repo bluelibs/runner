@@ -5,7 +5,7 @@ describe("middleware .with(config)", () => {
   describe("defineTaskMiddleware", () => {
     it("preserves config identity when base config is empty", () => {
       const mw = defineTaskMiddleware<{ limit: number }>({
-        id: "tests.mw.task.identity",
+        id: "tests-mw-task-identity",
         run: async ({ next }) => next(),
       });
 
@@ -19,7 +19,7 @@ describe("middleware .with(config)", () => {
 
     it("merges config when calling .with() multiple times", () => {
       const mw = defineTaskMiddleware<{ a?: number; b?: number }>({
-        id: "tests.mw.task.merge",
+        id: "tests-mw-task-merge",
         run: async ({ next }) => next(),
       });
 
@@ -31,7 +31,7 @@ describe("middleware .with(config)", () => {
 
     it("returns non-object config values as-is", () => {
       const mw = defineTaskMiddleware<number>({
-        id: "tests.mw.task.primitive",
+        id: "tests-mw-task-primitive",
         run: async ({ next }) => next(),
       });
 
@@ -41,7 +41,7 @@ describe("middleware .with(config)", () => {
 
     it("falls back to the base middleware when with() is called with detached this", () => {
       const mw = defineTaskMiddleware<{ value: number }>({
-        id: "tests.mw.task.detached",
+        id: "tests-mw-task-detached",
         run: async ({ next }) => next(),
       });
 
@@ -54,7 +54,7 @@ describe("middleware .with(config)", () => {
   describe("defineResourceMiddleware", () => {
     it("preserves config identity when base config is empty", () => {
       const mw = defineResourceMiddleware<{ limit: number }>({
-        id: "tests.mw.resource.identity",
+        id: "tests-mw-resource-identity",
         run: async ({ next }) => next(),
       });
 
@@ -68,7 +68,7 @@ describe("middleware .with(config)", () => {
 
     it("merges config when calling .with() multiple times", () => {
       const mw = defineResourceMiddleware<{ a?: number; b?: number }>({
-        id: "tests.mw.resource.merge",
+        id: "tests-mw-resource-merge",
         run: async ({ next }) => next(),
       });
 
@@ -80,7 +80,7 @@ describe("middleware .with(config)", () => {
 
     it("returns non-object config values as-is", () => {
       const mw = defineResourceMiddleware<number>({
-        id: "tests.mw.resource.primitive",
+        id: "tests-mw-resource-primitive",
         run: async ({ next }) => next(),
       });
 
@@ -90,13 +90,43 @@ describe("middleware .with(config)", () => {
 
     it("falls back to the base resource middleware when with() is called with detached this", () => {
       const mw = defineResourceMiddleware<{ value: number }>({
-        id: "tests.mw.resource.detached",
+        id: "tests-mw-resource-detached",
         run: async ({ next }) => next(),
       });
 
       const detachedWith = mw.with;
       const configured = detachedWith.call(undefined, { value: 7 });
       expect(configured.config).toEqual({ value: 7 });
+    });
+
+    it("normalizes non-Error schema failures into validation errors", () => {
+      const mw = defineResourceMiddleware<{ value: number }>({
+        id: "tests-mw-resource-schema-non-error",
+        configSchema: {
+          parse() {
+            throw "schema exploded";
+          },
+        },
+        run: async ({ next }) => next(),
+      });
+
+      expect(() => mw.with({ value: 7 })).toThrow(
+        /Middleware config validation failed/,
+      );
+    });
+
+    it("supports Error-based schema failures in validation errors", () => {
+      const mw = defineResourceMiddleware<{ value: number }>({
+        id: "tests-mw-resource-schema-error",
+        configSchema: {
+          parse() {
+            throw new Error("schema failed");
+          },
+        },
+        run: async ({ next }) => next(),
+      });
+
+      expect(() => mw.with({ value: 9 })).toThrow(/schema failed/);
     });
   });
 });

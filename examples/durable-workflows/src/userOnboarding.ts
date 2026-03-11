@@ -8,8 +8,8 @@
  *   4. provisionResources    – sets up workspace, storage, etc.
  *   5. sendWelcomeEmail      – sends a welcome message
  *
- * Demonstrates: ctx.step(), ctx.waitForSignal() with timeout,
- *               ctx.switch() (replay-safe branching), ctx.note().
+ * Demonstrates: durableContext.step(), durableContext.waitForSignal() with timeout,
+ *               durableContext.switch() (replay-safe branching), durableContext.note().
  */
 import { r } from "@bluelibs/runner";
 import { durable, EmailVerified } from "./ids.js";
@@ -29,34 +29,34 @@ export interface OnboardingResult {
 }
 
 export const userOnboarding = r
-  .task("example.tasks.userOnboarding")
+  .task("userOnboarding")
   .dependencies({ durable })
   .run(
     async (input: OnboardingInput, { durable }): Promise<OnboardingResult> => {
-      const ctx = durable.use();
+      const durableContext = durable.use();
 
       // Step 1 — create account
-      const account = await ctx.step("createAccount", async () => {
+      const account = await durableContext.step("createAccount", async () => {
         const userId = `user_${Date.now()}`;
         return { userId, email: input.email, plan: input.plan };
       });
 
-      await ctx.note(`Account created for ${account.email}`);
+      await durableContext.note(`Account created for ${account.email}`);
 
       // Step 2 — send verification email
-      await ctx.step("sendVerificationEmail", async () => {
+      await durableContext.step("sendVerificationEmail", async () => {
         // Simulate sending an email
         return { sentTo: account.email, sentAt: Date.now() };
       });
 
       // Step 3 — wait for email verification (15 second timeout for demo)
-      const verification = await ctx.waitForSignal(EmailVerified, {
+      const verification = await durableContext.waitForSignal(EmailVerified, {
         stepId: "awaitEmailVerification",
         timeoutMs: 15_000,
       });
 
       // Step 4 — branch based on verification outcome
-      const workspace: string | null = await ctx.switch(
+      const workspace: string | null = await durableContext.switch(
         "provisionBranch",
         verification,
         [
@@ -65,7 +65,7 @@ export const userOnboarding = r
             match: (v: typeof verification) => v.kind === "signal",
             run: async () => {
               // Provision resources only if verified
-              const ws = await ctx.step("provisionResources", async () => {
+              const ws = await durableContext.step("provisionResources", async () => {
                 return `workspace_${account.userId}`;
               });
               return ws;
@@ -75,7 +75,7 @@ export const userOnboarding = r
             id: "timed-out",
             match: (v: typeof verification) => v.kind === "timeout",
             run: async () => {
-              await ctx.note(
+              await durableContext.note(
                 "Email verification timed out — skipping provisioning",
               );
               return null;
@@ -85,7 +85,7 @@ export const userOnboarding = r
       );
 
       // Step 5 — send welcome email
-      await ctx.step("sendWelcomeEmail", async () => {
+      await durableContext.step("sendWelcomeEmail", async () => {
         return {
           sentTo: account.email,
           verified: verification.kind === "signal",

@@ -1,15 +1,15 @@
 import type {
   DependencyMapType,
-  IResource,
+  EnsureTagsForTarget,
   IResourceMiddleware,
   IResourceMiddlewareDefinition,
-  IValidationSchema,
   IMiddlewareMeta,
-  TagType,
+  ResourceMiddlewareTagType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
 
-export interface ResourceMiddlewareFluentBuilder<
+export interface ResourceMiddlewareFluentBuilderBeforeRun<
   C = any,
   In = void,
   Out = void,
@@ -20,37 +20,62 @@ export interface ResourceMiddlewareFluentBuilder<
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | ((config: C) => TNewDeps),
     options?: { override?: false },
-  ): ResourceMiddlewareFluentBuilder<C, In, Out, D & TNewDeps>;
+  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D & TNewDeps>;
   // Override signature (replace)
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | ((config: C) => TNewDeps),
     options: { override: true },
-  ): ResourceMiddlewareFluentBuilder<C, In, Out, TNewDeps>;
+  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, TNewDeps>;
   configSchema<TNew>(
-    schema: IValidationSchema<TNew>,
-  ): ResourceMiddlewareFluentBuilder<TNew, In, Out, D>;
+    schema: ValidationSchemaInput<TNew>,
+  ): ResourceMiddlewareFluentBuilderBeforeRun<TNew, In, Out, D>;
 
   /**
    * Alias for configSchema. Use this to define the middleware configuration validation contract.
    */
   schema<TNew>(
-    schema: IValidationSchema<TNew>,
-  ): ResourceMiddlewareFluentBuilder<TNew, In, Out, D>;
+    schema: ValidationSchemaInput<TNew>,
+  ): ResourceMiddlewareFluentBuilderBeforeRun<TNew, In, Out, D>;
 
   run(
     fn: IResourceMiddlewareDefinition<C, In, Out, D>["run"],
-  ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
+  ): ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
+  tags<TNewTags extends ResourceMiddlewareTagType[]>(
+    t: EnsureTagsForTarget<"resourceMiddlewares", TNewTags>,
+    options?: { override?: boolean },
+  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
   meta<TNewMeta extends IMiddlewareMeta>(
     m: TNewMeta,
-  ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
-  tags<TNewTags extends TagType[]>(
-    t: TNewTags,
-    options?: { override?: boolean },
-  ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
+  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
   /** Declare which typed errors this middleware may throw (declarative only). */
-  throws(list: ThrowsList): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
-  everywhere(
-    flag: boolean | ((resource: IResource<any, any, any, any, any>) => boolean),
-  ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
+  throws(
+    list: ThrowsList,
+  ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
+}
+
+export interface ResourceMiddlewareFluentBuilderAfterRun<
+  C = any,
+  In = void,
+  Out = void,
+  D extends DependencyMapType = {},
+> {
+  id: string;
+  meta<TNewMeta extends IMiddlewareMeta>(
+    m: TNewMeta,
+  ): ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
+  /** Declare which typed errors this middleware may throw (declarative only). */
+  throws(
+    list: ThrowsList,
+  ): ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
   build(): IResourceMiddleware<C, In, Out, D>;
 }
+
+export type ResourceMiddlewareFluentBuilder<
+  C = any,
+  In = void,
+  Out = void,
+  D extends DependencyMapType = {},
+  THasRun extends boolean = false,
+> = THasRun extends true
+  ? ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D>
+  : ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;

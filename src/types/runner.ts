@@ -2,15 +2,48 @@ import { DebugFriendlyConfig } from "../globals/resources/debug";
 import { LogLevels, PrintStrategy } from "../models/Logger";
 import { OnUnhandledError } from "../models/UnhandledError";
 import { IEvent, IEventEmitOptions, IEventEmitReport } from "../defs";
-import { IResource } from "./resource";
+import { IResource, IResourceHealthReport } from "./resource";
 import { ITask } from "./task";
 import { TaskCallOptions } from "./utilities";
+import type {
+  ExecutionContextConfig,
+  ExecutionContextOptions,
+} from "./executionContext";
+
+export interface IHealthReporter {
+  /**
+   * Evaluates async health checks for all health-enabled resources or a filtered subset.
+   */
+  getHealth(
+    resourceDefs?: Array<string | IResource<any, any, any, any, any>>,
+  ): Promise<IResourceHealthReport>;
+}
+
+export type RuntimeState = "running" | "paused";
+
+export interface IRuntimeRecoveryHandle {
+  cancel(): void;
+  id: string;
+}
+
+export interface IRuntimeRecoveryOptions {
+  id?: string;
+  everyMs: number;
+  check: () => boolean | Promise<boolean>;
+}
 
 /**
  * Common interface for the Runner runtime instance.
  * Provides access to tasks, events, resources, and lifecycle management.
  */
-export interface IRuntime<V = unknown> {
+export interface IRuntime<V = unknown> extends IHealthReporter {
+  /** Current admission state for new work. */
+  readonly state: RuntimeState;
+  /** Normalized run() options captured for this runtime instance. */
+  readonly runOptions: ResolvedRunOptions;
+  /** Root resource definition for this runtime. */
+  readonly root: IResource<any, Promise<V>, any, any, any>;
+
   /**
    * Executes a registered task.
    */
@@ -53,16 +86,42 @@ export interface IRuntime<V = unknown> {
     resource: string | IResource<Config, any, any, any, any>,
   ): Config;
 
-  /** Returns the ID of the root resource. */
-  getRootId(): string;
-  /** Returns the configuration passed to the root resource. */
-  getRootConfig<Config = unknown>(): Config;
-  /** Returns the initialized value of the root resource. */
-  getRootValue<Value = V>(): Value;
+  /** Stops admitting new external work while allowing active work to continue. */
+  pause(reason?: string): void;
+
+  /** Re-opens admissions immediately and clears the active recovery episode. */
+  resume(): void;
+
+  /** Registers a recovery condition for the current pause episode. */
+  recoverWhen(options: IRuntimeRecoveryOptions): IRuntimeRecoveryHandle;
 
   /** Disposes the runtime and all resources. */
   dispose(): Promise<void>;
 }
+
+export type DisposeOptions = {
+  /**
+   * Total disposal budget (milliseconds) for the shutdown lifecycle.
+   * This budget covers `cooldown()`, the post-cooldown window, `disposing`
+   * hooks, drain wait, `drained` hooks, and resource disposal.
+   * Once exhausted, Runner stops waiting and returns.
+   */
+  totalBudgetMs?: number;
+  /**
+   * Drain budget (milliseconds) used while waiting for in-flight business work
+   * (tasks + event listeners) after entering `disposing`.
+   * Effective wait is capped by remaining `dispose.totalBudgetMs`.
+   * Set to `0` to skip drain waiting.
+   */
+  drainingBudgetMs?: number;
+  /**
+   * Short bounded post-cooldown window before `disposing` begins.
+   * Runner keeps the broader `coolingDown` admission policy open during this
+   * window before switching to the stricter `disposing` allowlist. Set to `0`
+   * to skip this wait.
+   */
+  cooldownWindowMs?: number;
+};
 
 export type RunOptions = {
   /**
@@ -93,9 +152,15 @@ export type RunOptions = {
    */
   errorBoundary?: boolean;
   /**
-   * When true (default), installs SIGINT/SIGTERM handlers that call dispose() on the root allowing for graceful shutdown.
+   * When true (default), installs SIGINT/SIGTERM handlers that trigger graceful shutdown.
+   * Signals received during bootstrap will cancel startup, rollback initialized resources,
+   * and exit cleanly once teardown completes.
    */
   shutdownHooks?: boolean;
+  /**
+   * Shutdown disposal configuration.
+   */
+  dispose?: DisposeOptions;
   /**
    * Custom handler for any unhandled error caught by Runner. Defaults to logging via the created logger.
    */
@@ -110,11 +175,15 @@ export type RunOptions = {
    */
   dryRun?: boolean;
   /**
-   * Defaults to true.
-   * When set, forces runtime cycle detection for event emissions. Disable if you're sure
-   * you don't have event deadlocks to improve event emission performance.
+   * Opt-in execution context. Exposes the current causal chain through
+   * `asyncContexts.execution`, automatically assigns a correlation id
+   * per top-level execution, and enables cycle detection by default.
+   *
+   * - `true` → enabled with default correlation ids and cycle detection
+   * - `false` or omitted → disabled (zero overhead)
+   * - `{ createCorrelationId?, cycleDetection? }` → enabled with custom behavior
    */
-  runtimeEventCycleDetection?: boolean;
+  executionContext?: boolean | ExecutionContextOptions;
   /**
    * Defaults to false.
    * When true, startup skips initializing resources that are not used during bootstrap.
@@ -123,14 +192,36 @@ export type RunOptions = {
   lazy?: boolean;
   /**
    * Defaults to `sequential`.
-   * Controls how resources are initialized during startup.
+   * Controls startup and disposal scheduling behavior.
    */
-  initMode?: ResourceInitMode | "sequential" | "parallel";
+  lifecycleMode?: ResourceLifecycleMode | "sequential" | "parallel";
   /**
    * Specify in which mode to run "dev", "prod" or "test".
    * If inside Node this is automatically detected from the NODE_ENV environment variable if not provided.
    */
   mode?: RunnerMode;
+};
+
+export type ResolvedRunOptions = {
+  debug?: DebugFriendlyConfig;
+  logs: {
+    printThreshold: null | LogLevels;
+    printStrategy: PrintStrategy;
+    bufferLogs: boolean;
+  };
+  errorBoundary: boolean;
+  shutdownHooks: boolean;
+  dispose: {
+    totalBudgetMs: number;
+    drainingBudgetMs: number;
+    cooldownWindowMs: number;
+  };
+  onUnhandledError: OnUnhandledError;
+  dryRun: boolean;
+  executionContext: ExecutionContextConfig | null;
+  lazy: boolean;
+  lifecycleMode: ResourceLifecycleMode;
+  mode: RunnerMode;
 };
 
 /**
@@ -143,9 +234,9 @@ export enum RunnerMode {
 }
 
 /**
- * Resource initialization strategy during run() bootstrap.
+ * Resource lifecycle strategy during run() bootstrap and dispose().
  */
-export enum ResourceInitMode {
+export enum ResourceLifecycleMode {
   Sequential = "sequential",
   Parallel = "parallel",
 }

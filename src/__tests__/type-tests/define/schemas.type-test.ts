@@ -1,9 +1,17 @@
 import z from "zod";
+import { Match } from "../../../";
 import {
   defineResource,
   defineTask,
   defineTaskMiddleware,
 } from "../../../define";
+
+class DecoratedSchema {
+  ttl!: number;
+}
+
+Match.Schema()(DecoratedSchema);
+Match.Field(Number)(DecoratedSchema.prototype, "ttl");
 
 // Type-only tests for schema-based inference in define API.
 
@@ -42,6 +50,28 @@ import {
       cfg.ttl;
       // @ts-expect-error
       cfg.ttl2;
+    },
+  });
+
+  defineTask({
+    id: "task-decorator",
+    inputSchema: DecoratedSchema,
+    run: async (input) => {
+      input.ttl;
+      // @ts-expect-error
+      input.missing;
+      return input.ttl;
+    },
+  });
+
+  defineTaskMiddleware({
+    id: "middleware-decorator",
+    configSchema: DecoratedSchema,
+    run: async ({ next }, _deps, config) => {
+      config.ttl;
+      // @ts-expect-error
+      config.other;
+      return next();
     },
   });
 }

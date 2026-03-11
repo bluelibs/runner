@@ -220,10 +220,10 @@ class FlowStepRecorder<T> implements IStepBuilder<T> {
  * Record a durable workflow flow-shape without executing it.
  *
  * This runs the descriptor against a recording `IDurableContext` that captures
- * `ctx.*` calls into a serializable shape.
+ * `durableContext.*` calls into a serializable shape.
  */
 export async function recordFlowShape(
-  descriptor: (ctx: IDurableContext) => Promise<void>,
+  descriptor: (durableContext: IDurableContext) => Promise<void>,
 ): Promise<DurableFlowShape> {
   const recorder = new FlowRecorder();
   await descriptor(recorder);

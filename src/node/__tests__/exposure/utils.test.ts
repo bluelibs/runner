@@ -47,7 +47,17 @@ describe("node exposure utils", () => {
 
     Object.assign(globalThis, { AbortController: ThrowingAbortController });
 
-    jest.spyOn(cancellationError, "throw").mockImplementation(() => {
+    const errorHelperPrototype = Object.getPrototypeOf(cancellationError) as {
+      throw: (...args: any[]) => never;
+    };
+    const originalThrow = errorHelperPrototype.throw;
+    jest.spyOn(errorHelperPrototype, "throw").mockImplementation(function (
+      this: unknown,
+      ...args: any[]
+    ) {
+      if (this !== cancellationError) {
+        return originalThrow.call(this, ...args);
+      }
       throw "cancel failed";
     });
     const req = new EventEmitter();
@@ -63,5 +73,88 @@ describe("node exposure utils", () => {
       "[runner] Failed to abort request controller.",
       expect.objectContaining({ error: expect.any(Error) }),
     );
+  });
+
+  it("does not abort on normal response finish followed by close", () => {
+    const abort = jest.fn();
+    class SpyAbortController {
+      signal = { aborted: false } as AbortSignal;
+      abort = abort;
+    }
+    Object.assign(globalThis, { AbortController: SpyAbortController });
+
+    const req = new EventEmitter();
+    const res = Object.assign(new EventEmitter(), {
+      writableEnded: true,
+      writableFinished: true,
+    });
+
+    createAbortControllerForRequest(req as any, res as any);
+    res.emit("finish");
+    res.emit("close");
+
+    expect(abort).not.toHaveBeenCalled();
+  });
+
+  it("ignores duplicate abort signals after the controller is already aborted", () => {
+    let aborted = false;
+    const abort = jest.fn(() => {
+      aborted = true;
+    });
+    class SpyAbortController {
+      signal = {
+        get aborted() {
+          return aborted;
+        },
+      } as AbortSignal;
+      abort = abort;
+    }
+    Object.assign(globalThis, { AbortController: SpyAbortController });
+
+    const req = new EventEmitter();
+    const res = new EventEmitter();
+
+    createAbortControllerForRequest(req as any, res as any);
+    req.emit("aborted");
+    req.emit("aborted");
+
+    expect(abort).toHaveBeenCalledTimes(1);
+  });
+
+  it("short-circuits repeated abort callbacks when a request exposes only `on`", () => {
+    let aborted = false;
+    const abort = jest.fn(() => {
+      aborted = true;
+    });
+    class SpyAbortController {
+      signal = {
+        get aborted() {
+          return aborted;
+        },
+      } as AbortSignal;
+      abort = abort;
+    }
+    Object.assign(globalThis, { AbortController: SpyAbortController });
+
+    const reqHandlers: Record<string, (...args: unknown[]) => void> = {};
+    const resHandlers: Record<string, (...args: unknown[]) => void> = {};
+    const req = {
+      on: (event: string, handler: (...args: unknown[]) => void) => {
+        reqHandlers[event] = handler;
+      },
+    };
+    const res = {
+      writableEnded: false,
+      writableFinished: false,
+      on: (event: string, handler: (...args: unknown[]) => void) => {
+        resHandlers[event] = handler;
+      },
+    };
+
+    createAbortControllerForRequest(req as any, res as any);
+    reqHandlers.aborted?.();
+    reqHandlers.aborted?.();
+
+    expect(abort).toHaveBeenCalledTimes(1);
   });
 });

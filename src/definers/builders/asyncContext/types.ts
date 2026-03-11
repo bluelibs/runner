@@ -1,4 +1,4 @@
-import type { IAsyncContextMeta, IValidationSchema } from "../../../defs";
+import type { IAsyncContextMeta, ValidationSchemaInput } from "../../../defs";
 
 /**
  * Internal state for the AsyncContextFluentBuilder.
@@ -9,6 +9,6 @@ export type BuilderState<T> = Readonly<{
   filePath: string;
   serialize?: (data: T) => string;
   parse?: (raw: string) => T;
-  configSchema?: IValidationSchema<T>;
+  configSchema?: ValidationSchemaInput<T>;
   meta?: IAsyncContextMeta;
 }>;

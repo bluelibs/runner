@@ -1,15 +1,27 @@
 import {
+  symbolDefinitionIdentity,
   ITag,
   ITagDefinition,
   ITaggable,
   TagType,
+  IOptionalDependency,
   ITagConfigured,
+  ITagStartupDependency,
+  TagTarget,
   symbolTag,
   symbolFilePath,
   symbolTagConfigured,
+  symbolTagConfiguredFrom,
+  symbolOptionalDependency,
+  symbolTagBeforeInitDependency,
 } from "../defs";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
+import { isSameDefinition } from "../tools/isSameDefinition";
+import { assertDefinitionId } from "./assertDefinitionId";
+import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
+import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 /**
  * Create a tag definition.
@@ -25,25 +37,50 @@ export function defineTag<
   TConfig = void,
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
+  TAllowedTargets extends TagTarget | void = void,
 >(
   definition: ITagDefinition<
     TConfig,
     TEnforceInputContract,
-    TEnforceOutputContract
+    TEnforceOutputContract,
+    TAllowedTargets
   >,
-): ITag<TConfig, TEnforceInputContract, TEnforceOutputContract> {
-  const id = definition.id;
+): ITag<
+  TConfig,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TAllowedTargets
+> {
   const filePath = getCallerFile();
+  const id = definition.id;
+  assertDefinitionId("Tag", id, {
+    allowReservedDottedNamespace: isFrameworkDefinitionMarked(definition),
+  });
+  const configSchema = normalizeOptionalValidationSchema(
+    definition.configSchema,
+    {
+      definitionId: id,
+      subject: "Tag config",
+    },
+  );
   const isPlainObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null && !Array.isArray(value);
+  const definitionIdentity = {};
   const foundation = {
     id,
     meta: definition.meta ?? {},
     config: definition.config,
-    configSchema: definition.configSchema,
-  } as ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>;
+    configSchema,
+    targets: definition.targets,
+    [symbolDefinitionIdentity]: definitionIdentity,
+  } as unknown as ITag<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TAllowedTargets
+  >;
 
-  return {
+  return deepFreeze({
     ...foundation,
     [symbolTag]: true,
     [symbolFilePath]: filePath,
@@ -53,9 +90,9 @@ export function defineTag<
      * @returns
      */
     with(tagConfig: TConfig) {
-      if (definition.configSchema) {
+      if (configSchema) {
         try {
-          tagConfig = definition.configSchema.parse(tagConfig);
+          tagConfig = configSchema.parse(tagConfig);
         } catch (error) {
           validationError.throw({
             subject: "Tag config",
@@ -77,15 +114,59 @@ export function defineTag<
       } else {
         config = tagConfig;
       }
-      return {
-        ...foundation,
+      const configuredFrom =
+        (this as unknown as Record<symbol, unknown>)[symbolTagConfiguredFrom] ??
+        this;
+      const configured = {
+        ...this,
         [symbolTagConfigured]: true,
         config,
       } as ITagConfigured<
         TConfig,
         TEnforceInputContract,
-        TEnforceOutputContract
+        TEnforceOutputContract,
+        TAllowedTargets
       >;
+      (configured as unknown as Record<symbol, unknown>)[
+        symbolTagConfiguredFrom
+      ] = configuredFrom;
+      return freezeIfLineageLocked(this, configured);
+    },
+    optional() {
+      const wrapper = {
+        inner: this,
+        [symbolOptionalDependency]: true,
+      } as IOptionalDependency<
+        ITag<
+          TConfig,
+          TEnforceInputContract,
+          TEnforceOutputContract,
+          TAllowedTargets
+        >
+      >;
+      return freezeIfLineageLocked(this, wrapper);
+    },
+    startup() {
+      const wrapper: ITagStartupDependency<
+        ITag<
+          TConfig,
+          TEnforceInputContract,
+          TEnforceOutputContract,
+          TAllowedTargets
+        >
+      > = {
+        tag: this,
+        [symbolTagBeforeInitDependency]: true,
+        optional() {
+          const optionalWrapper = {
+            inner: wrapper,
+            [symbolOptionalDependency]: true,
+          } as IOptionalDependency<typeof wrapper>;
+          return freezeIfLineageLocked(wrapper, optionalWrapper);
+        },
+      };
+
+      return freezeIfLineageLocked(this, wrapper);
     },
     /**
      * Checks if the tag exists in a taggable or a list of tags.
@@ -98,7 +179,7 @@ export function defineTag<
         : target.tags;
 
       for (const candidate of currentTags) {
-        if (candidate.id === id) {
+        if (isSameDefinition(candidate, this)) {
           return true;
         }
       }
@@ -116,12 +197,17 @@ export function defineTag<
         : target.tags || [];
 
       for (const candidate of currentTags) {
-        if (candidate.id === id) {
+        if (isSameDefinition(candidate, this)) {
           return candidate.config as TConfig;
         }
       }
 
       return;
     },
-  } satisfies ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>;
+  } satisfies ITag<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TAllowedTargets
+  >);
 }

@@ -1,19 +1,22 @@
-import { r } from "@bluelibs/runner";
-import { z } from "zod";
-import { httpRoute } from "#/http/tags";
+import { Match, r } from "@bluelibs/runner";
+import { httpRoute } from "#/web/tags";
 import { db } from "#/db/resources";
-import { HTTPError } from "#/http/http-error";
+import { HTTPError } from "#/web/http-error";
 
 export const getUserById = r
-  .task("app.users.tasks.get-user-by-id")
+  .task("getUserById")
   .meta({
     title: "Get User By ID",
     description: "Retrieve a single user by its unique identifier",
   })
   // We expect the id to come from path params
-  .inputSchema(z.object({ id: z.string() }).strict())
+  .inputSchema(Match.compile({ id: Match.NonEmptyString }))
   .resultSchema(
-    z.object({ id: z.string(), name: z.string(), email: z.string() }).strict(),
+    Match.compile({
+      id: Match.NonEmptyString,
+      name: Match.NonEmptyString,
+      email: Match.Email,
+    }),
   )
   .tags([
     httpRoute.with({

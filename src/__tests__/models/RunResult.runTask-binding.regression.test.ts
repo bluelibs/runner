@@ -4,12 +4,12 @@ import { run } from "../../run";
 describe("RunResult runTask binding regression", () => {
   it("keeps runtime context when runTask is destructured", async () => {
     const increment = defineTask({
-      id: "rr.binding.increment",
+      id: "rr-binding-increment",
       run: async (input: number) => input + 1,
     });
 
     const app = defineResource({
-      id: "rr.binding.app",
+      id: "rr-binding-app",
       register: [increment],
       init: async () => "ready",
     });

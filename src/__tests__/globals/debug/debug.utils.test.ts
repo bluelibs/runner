@@ -70,7 +70,7 @@ describe("debug utils and types", () => {
 
   it("debugConfig resource returns the resolved config", async () => {
     const app = defineResource({
-      id: "tests.debug.config.app",
+      id: "tests-debug-config-app",
       register: [debugConfig.with("verbose")],
       dependencies: { cfg: debugConfig },
       async init(_cfg, { cfg }) {

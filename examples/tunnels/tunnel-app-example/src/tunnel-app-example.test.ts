@@ -14,8 +14,8 @@ import {
 } from "./example.js";
 
 enum TestName {
-  InMemory = "tunnel example (memory): phantom tasks are routed",
-  OverHttp = "tunnel example (http): tasks execute on remote server",
+  InMemory = "rpc lanes example (memory): remote tasks are routed",
+  OverHttp = "rpc lanes example (http): tasks execute on remote server",
 }
 
 enum ExpectedCount {
@@ -47,14 +47,12 @@ test(TestName.InMemory, async () => {
 test(TestName.OverHttp, { skip: !shouldRunNetworkTests() }, async () => {
   const authToken = process.env[EnvVar.Token] ?? AuthToken.Dev;
 
-  const { app: serverApp, serverExposure } = buildServerApp({ authToken });
+  const { app: serverApp, rpcLanes } = buildServerApp({ authToken });
   const serverRuntime = await run(serverApp);
 
   try {
-    const exposureHandlers = serverRuntime.getResourceValue(
-      serverExposure.resource,
-    );
-    const baseUrl = getExposureBaseUrl(exposureHandlers);
+    const rpcLanesValue = serverRuntime.getResourceValue(rpcLanes.resource);
+    const baseUrl = getExposureBaseUrl(rpcLanesValue);
 
     const { app: clientApp, demoTask } = buildHttpClientApp({
       baseUrl,
@@ -73,7 +71,7 @@ test(TestName.OverHttp, { skip: !shouldRunNetworkTests() }, async () => {
       assert.ok(result.notes[0].id.startsWith(IdPrefix.Note));
       assert.ok(result.audits[0].id.startsWith(IdPrefix.Audit));
 
-      // Proves JSON tunnel serialization round-tripped Dates
+      // Proves RPC lanes serialization round-tripped Dates
       assert.ok(result.notes[0].createdAt instanceof Date);
       assert.ok(result.audits[0].timestamp instanceof Date);
     } finally {

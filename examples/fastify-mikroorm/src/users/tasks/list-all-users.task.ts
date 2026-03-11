@@ -3,11 +3,10 @@
  * - Namespace: users
  * - File: src/users/tasks/list-all-users.task.ts
  */
-import { r } from "@bluelibs/runner";
-import { z } from "zod";
-import { httpRoute } from "#/http/tags";
+import { Match, r } from "@bluelibs/runner";
+import { httpRoute } from "#/web/tags";
 import { db } from "#/db/resources";
-import { authorize } from "#/http/middleware/authorize.middleware";
+import { authorize } from "#/web/middleware/authorize.middleware";
 
 export interface ListAllUsersInput {
   // Define input fields
@@ -18,14 +17,17 @@ export interface ListAllUsersResult {
 }
 
 export const listAllUsers = r
-  .task("app.users.tasks.list-all-users")
+  .task("listAllUsers")
   .meta({
     title: "List All Users",
     description: "Retrieve all users from the database for admin purposes",
   })
-  .inputSchema(z.undefined())
   .resultSchema(
-    z.array(z.object({ id: z.string(), name: z.string(), email: z.string() })),
+    Match.ArrayOf({
+      id: Match.NonEmptyString,
+      name: Match.NonEmptyString,
+      email: Match.Email,
+    }),
   )
   .tags([
     httpRoute.with({

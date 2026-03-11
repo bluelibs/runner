@@ -2,7 +2,7 @@ import * as http from "http";
 import type { IncomingMessage, ServerResponse } from "http";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createBaseReq, MockRes } from "./resource.more-coverage.test.utils";
 
 describe("nodeExposure - more server coverage", () => {
@@ -43,23 +43,22 @@ describe("nodeExposure - more server coverage", () => {
     }) as typeof http.createServer;
 
     const t = defineTask<void, Promise<void>>({
-      id: "exposer.more.server",
+      id: "exposer-more-server",
       run: async () => {},
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
         listen: { port: 0 },
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "exposer.more.app4",
+      id: "exposer-more-app4",
       register: [t, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     expect(typeof capturedHandler).toBe("function");
     const req = createBaseReq();

@@ -33,11 +33,7 @@ export class MiddlewareManager {
   private readonly taskComposer: TaskMiddlewareComposer;
   private readonly resourceComposer: ResourceMiddlewareComposer;
 
-  constructor(
-    protected readonly store: Store,
-    _eventManager: unknown,
-    _logger: unknown,
-  ) {
+  constructor(protected readonly store: Store) {
     this.interceptorRegistry = new InterceptorRegistry();
     this.middlewareResolver = new MiddlewareResolver(store);
     this.taskComposer = new TaskMiddlewareComposer(
@@ -252,25 +248,5 @@ export class MiddlewareManager {
       dependencies,
       context,
     );
-  }
-
-  /**
-   * Gets all "everywhere" middlewares that apply to the given task
-   * @deprecated Internal method exposed for testing - may be removed in future versions
-   */
-  getEverywhereMiddlewareForTasks(
-    task: ITask<any, any, any>,
-  ): ITaskMiddleware[] {
-    return this.middlewareResolver.getEverywhereTaskMiddlewares(task);
-  }
-
-  /**
-   * Gets all "everywhere" middlewares that apply to the given resource
-   * @deprecated Internal method exposed for testing - may be removed in future versions
-   */
-  getEverywhereMiddlewareForResources(
-    resource: IResource<any, any, any, any>,
-  ): IResourceMiddleware[] {
-    return this.middlewareResolver.getEverywhereResourceMiddlewares(resource);
   }
 }

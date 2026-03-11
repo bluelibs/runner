@@ -1,8 +1,7 @@
-import * as http from "http";
 import type { ServerResponse } from "http";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import {
   makeReqRes,
   createBaseReq,
@@ -12,23 +11,22 @@ import {
 describe("nodeExposure - more multipart coverage", () => {
   it("multipart: unknown file field triggers stream.resume() path", async () => {
     const echo = defineTask<{ n: number }, Promise<number>>({
-      id: "exposer.more.echo",
+      id: "exposer-more-echo",
       run: async ({ n }) => n,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "exposer.more.app1",
+      id: "exposer-more-app1",
       register: [echo, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource);
+    const handlers = await rr.getResourceValue(exposure as any);
+    const echoCanonicalId = rr.store.resolveDefinitionId(echo)!;
 
     const boundary = "----moreBoundary1";
     const manifest = JSON.stringify({ input: { n: 7 } });
@@ -43,7 +41,7 @@ describe("nodeExposure - more multipart coverage", () => {
       "content-type": `multipart/form-data; boundary=${boundary}`,
       "content-length": String(Buffer.byteLength(body)),
     });
-    req.url = `/__runner/task/${encodeURIComponent(echo.id)}`;
+    req.url = `/__runner/task/${encodeURIComponent(echoCanonicalId)}`;
 
     await handlers.handleTask(req, res);
     expect(res.statusCode).toBe(200);
@@ -52,23 +50,22 @@ describe("nodeExposure - more multipart coverage", () => {
 
   it("multipart: file part with empty name is ignored (stream.resume path)", async () => {
     const echo = defineTask<{ n: number }, Promise<number>>({
-      id: "exposer.more.emptyname",
+      id: "exposer-more-emptyname",
       run: async ({ n }) => n,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "exposer.more.app1b",
+      id: "exposer-more-app1b",
       register: [echo, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource);
+    const handlers = await rr.getResourceValue(exposure as any);
+    const echoCanonicalId = rr.store.resolveDefinitionId(echo)!;
 
     const boundary = "----moreBoundary1b";
     const manifest = JSON.stringify({ input: { n: 9 } });
@@ -83,7 +80,7 @@ describe("nodeExposure - more multipart coverage", () => {
       "content-type": `multipart/form-data; boundary=${boundary}`,
       "content-length": String(Buffer.byteLength(body)),
     });
-    ref.req.url = `/__runner/task/${encodeURIComponent(echo.id)}`;
+    ref.req.url = `/__runner/task/${encodeURIComponent(echoCanonicalId)}`;
 
     await handlers.handleTask(ref.req, ref.res);
     expect(ref.res.statusCode).toBe(200);
@@ -92,33 +89,33 @@ describe("nodeExposure - more multipart coverage", () => {
 
   it("multipart: request stream error triggers 499 (busboy error path)", async () => {
     const fileTask = defineTask<{ name: string }, Promise<string>>({
-      id: "exposer.more.busboy.error",
+      id: "exposer-more-busboy-error",
       run: async ({ name }) => name,
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: "T" },
+        auth: { token: "T", allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "exposer.more.app6",
+      id: "exposer-more-app6",
       register: [fileTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource);
+    const handlers = await rr.getResourceValue(exposure as any);
+    const fileTaskCanonicalId = rr.store.resolveDefinitionId(fileTask)!;
 
     const boundary = "----moreBoundary5";
     const req = createBaseReq();
     req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(fileTask.id)}`;
+    req.url = `/__runner/task/${encodeURIComponent(fileTaskCanonicalId)}`;
     req.headers = {
       "x-runner-token": "T",
       "content-type": `multipart/form-data; boundary=${boundary}`,
       "content-length": "0",
     };
+    req.on("error", () => undefined);
 
     let status = 0;
     let payload: Buffer | null = null;

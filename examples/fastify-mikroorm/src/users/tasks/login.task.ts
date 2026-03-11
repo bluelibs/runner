@@ -1,33 +1,32 @@
-import { r } from "@bluelibs/runner";
-import { z } from "zod";
-import { httpRoute } from "#/http/tags";
+import { Match, r } from "@bluelibs/runner";
+import { httpRoute } from "#/web/tags";
 import { db } from "#/db/resources";
 import { auth as authResource } from "#/users/resources/auth.resource";
-import { fastifyContext } from "#/http/fastify-context";
-import { HTTPError } from "#/http/http-error";
+import { fastifyContext } from "#/web/fastify-context";
+import { HTTPError } from "#/web/http-error";
 
 export const loginUser = r
-  .task("app.users.tasks.login")
+  .task("login")
   .meta({
     title: "User Login",
     description:
       "Authenticate user with email and password, returning JWT token and user details",
   })
   .inputSchema(
-    z.object({
-      email: z.string().email(),
-      password: z.string().min(1),
+    Match.compile({
+      email: Match.Email,
+      password: Match.NonEmptyString,
     }),
   )
   .resultSchema(
-    z
-      .object({
-        token: z.string(),
-        user: z
-          .object({ id: z.string(), name: z.string(), email: z.string() })
-          .strict(),
-      })
-      .strict(),
+    Match.compile({
+      token: Match.NonEmptyString,
+      user: {
+        id: Match.NonEmptyString,
+        name: Match.NonEmptyString,
+        email: Match.Email,
+      },
+    }),
   )
   .tags([
     httpRoute.with({ method: "post", path: "/auth/login", auth: "public" }),

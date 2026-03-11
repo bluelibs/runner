@@ -1,15 +1,21 @@
 import type {
   DependencyMapType,
+  EnsureTagsForTarget,
   IResourceMiddlewareDefinition,
-  IValidationSchema,
   IMiddlewareMeta,
-  TagType,
+  ResourceMiddlewareTagType,
+  ValidationSchemaInput,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
 import { builderIncompleteError } from "../../../errors";
 import { defineResourceMiddleware } from "../../defineResourceMiddleware";
-import type { ResourceMiddlewareFluentBuilder } from "./resource.interface";
+import type {
+  ResourceMiddlewareFluentBuilder,
+  ResourceMiddlewareFluentBuilderAfterRun,
+  ResourceMiddlewareFluentBuilderBeforeRun,
+} from "./resource.interface";
 import type { ResMwState } from "./types";
 import { cloneRes, mergeArray, mergeDependencies } from "./utils";
 
@@ -21,10 +27,11 @@ export function makeResourceMiddlewareBuilder<
   In,
   Out,
   D extends DependencyMapType,
+  THasRun extends boolean = false,
 >(
   state: ResMwState<C, In, Out, D>,
-): ResourceMiddlewareFluentBuilder<C, In, Out, D> {
-  const builder: ResourceMiddlewareFluentBuilder<C, In, Out, D> = {
+): ResourceMiddlewareFluentBuilder<C, In, Out, D, THasRun> {
+  const builder = {
     id: state.id,
 
     dependencies<TNewDeps extends DependencyMapType>(
@@ -55,51 +62,54 @@ export function makeResourceMiddlewareBuilder<
         >(next, {
           dependencies: nextDependencies as TNewDeps,
         });
-        return makeResourceMiddlewareBuilder<C, In, Out, TNewDeps>(overridden);
+        return makeResourceMiddlewareBuilder<C, In, Out, TNewDeps, false>(
+          overridden,
+        );
       }
-      return makeResourceMiddlewareBuilder<C, In, Out, D & TNewDeps>(next);
+      return makeResourceMiddlewareBuilder<C, In, Out, D & TNewDeps, false>(
+        next,
+      );
     },
 
-    configSchema<TNew>(schema: IValidationSchema<TNew>) {
+    configSchema<TNew>(schema: ValidationSchemaInput<TNew>) {
       const next = cloneRes<C, In, Out, D, TNew, In, Out, D>(state, {
         configSchema: schema,
       });
-      return makeResourceMiddlewareBuilder<TNew, In, Out, D>(next);
+      return makeResourceMiddlewareBuilder<TNew, In, Out, D, false>(next);
     },
 
-    schema<TNew>(schema: IValidationSchema<TNew>) {
+    schema<TNew>(schema: ValidationSchemaInput<TNew>) {
       return builder.configSchema(schema);
     },
 
-    run(fn) {
+    run(fn: IResourceMiddlewareDefinition<C, In, Out, D>["run"]) {
       const next = cloneRes(state, { run: fn as typeof state.run });
-      return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
+      return makeResourceMiddlewareBuilder<C, In, Out, D, true>(next);
     },
 
     meta<TNewMeta extends IMiddlewareMeta>(m: TNewMeta) {
       const next = cloneRes(state, { meta: m as IMiddlewareMeta });
-      return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
+      return makeResourceMiddlewareBuilder<C, In, Out, D, THasRun>(next);
     },
 
-    tags<TNewTags extends TagType[]>(
-      t: TNewTags,
+    tags<TNewTags extends ResourceMiddlewareTagType[]>(
+      t: EnsureTagsForTarget<"resourceMiddlewares", TNewTags>,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
       const next = cloneRes(state, {
-        tags: mergeArray(state.tags, t, override) as TagType[],
+        tags: mergeArray(
+          state.tags,
+          t,
+          override,
+        ) as ResourceMiddlewareTagType[],
       });
-      return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
-    },
-
-    everywhere(flag) {
-      const next = cloneRes(state, { everywhere: flag });
-      return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
+      return makeResourceMiddlewareBuilder<C, In, Out, D, false>(next);
     },
 
     throws(list: ThrowsList) {
       const next = cloneRes(state, { throws: list });
-      return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
+      return makeResourceMiddlewareBuilder<C, In, Out, D, THasRun>(next);
     },
 
     build() {
@@ -116,11 +126,14 @@ export function makeResourceMiddlewareBuilder<
       const middleware = defineResourceMiddleware({
         ...(state as IResourceMiddlewareDefinition<C, In, Out, D>),
       });
-      (middleware as { [symbolFilePath]?: string })[symbolFilePath] =
-        state.filePath;
-      return middleware;
+      return deepFreeze({
+        ...middleware,
+        [symbolFilePath]: state.filePath,
+      });
     },
   };
 
-  return builder;
+  return builder as ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D> &
+    ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D> &
+    ResourceMiddlewareFluentBuilder<C, In, Out, D, THasRun>;
 }

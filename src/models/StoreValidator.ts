@@ -1,143 +1,112 @@
+import { duplicateRegistrationError } from "../errors";
+import type { StoreRegistry } from "./StoreRegistry";
 import {
-  duplicateTagIdOnDefinitionError,
-  duplicateRegistrationError,
-  middlewareNotRegisteredError,
-  tagNotFoundError,
-} from "../errors";
-import { ITaggable } from "../defs";
-import { StoreRegistry } from "./StoreRegistry";
+  ValidatorContext,
+  validateMiddlewareRegistrations,
+  validateEventConstraints,
+  validateSubtreePolicies,
+  validateTagConstraints,
+  validateIsolationPolicies,
+  normalizeIsolationEntries as normalizeIsolationEntriesImpl,
+  normalizeExportEntries as normalizeExportEntriesImpl,
+} from "./validators";
+import type { IsolationExportsTarget, IsolationTarget } from "../defs";
 
-type SanityCheckTaggable = ITaggable & {
-  id: string;
-  tags?: ITaggable["tags"];
-};
-
-type TaggableEntry = {
-  definitionType: string;
-  definition: SanityCheckTaggable;
-};
-
+/**
+ * Orchestrates all store validation checks.
+ * Delegates to specialized validators for each concern.
+ */
 export class StoreValidator {
-  constructor(private registry: StoreRegistry) {}
+  private readonly validatorContext: ValidatorContext;
 
-  checkIfIDExists(id: string): void | never {
-    if (this.registry.tasks.has(id)) {
-      duplicateRegistrationError.throw({ type: "Task", id });
-    }
-    if (this.registry.resources.has(id)) {
-      duplicateRegistrationError.throw({ type: "Resource", id });
-    }
-    if (this.registry.events.has(id)) {
-      duplicateRegistrationError.throw({ type: "Event", id });
-    }
-    if (this.registry.errors.has(id)) {
-      duplicateRegistrationError.throw({ type: "Error", id });
-    }
-    if (this.registry.asyncContexts.has(id)) {
-      duplicateRegistrationError.throw({ type: "AsyncContext", id });
-    }
-    if (this.registry.taskMiddlewares.has(id)) {
-      duplicateRegistrationError.throw({ type: "Middleware", id });
-    }
-    if (this.registry.resourceMiddlewares.has(id)) {
-      duplicateRegistrationError.throw({ type: "Middleware", id });
-    }
-    if (this.registry.tags.has(id)) {
-      duplicateRegistrationError.throw({ type: "Tag", id });
-    }
-    if (this.registry.hooks.has(id)) {
-      duplicateRegistrationError.throw({ type: "Hook", id });
-    }
+  /**
+   * Direct access to the registeredIds set for testing purposes.
+   * @internal
+   */
+  get registeredIds(): Set<string> {
+    return this.validatorContext.getRegisteredIdsMutable();
   }
 
-  runSanityChecks() {
-    for (const task of this.registry.tasks.values()) {
-      const middlewares = task.task.middleware;
-      middlewares.forEach((middlewareAttachment) => {
-        if (!this.registry.taskMiddlewares.has(middlewareAttachment.id)) {
-          middlewareNotRegisteredError.throw({
-            type: "task",
-            source: task.task.id,
-            middlewareId: middlewareAttachment.id,
-          });
-        }
-      });
+  constructor(private registry: StoreRegistry) {
+    this.validatorContext = new ValidatorContext(registry);
+  }
+
+  trackRegisteredId(id: string): void {
+    this.validatorContext.trackRegisteredId(id);
+  }
+
+  checkIfIDExists(id: string): void | never {
+    if (!this.validatorContext.hasRegisteredId(id)) {
+      return;
+    }
+    const publicId = this.validatorContext.toPublicId(id);
+
+    if (this.registry.tasks.has(id)) {
+      duplicateRegistrationError.throw({ type: "Task", id: publicId });
+    }
+    if (this.registry.resources.has(id)) {
+      duplicateRegistrationError.throw({ type: "Resource", id: publicId });
+    }
+    if (this.registry.events.has(id)) {
+      duplicateRegistrationError.throw({ type: "Event", id: publicId });
+    }
+    if (this.registry.errors.has(id)) {
+      duplicateRegistrationError.throw({ type: "Error", id: publicId });
+    }
+    if (this.registry.asyncContexts.has(id)) {
+      duplicateRegistrationError.throw({ type: "AsyncContext", id: publicId });
+    }
+    if (this.registry.taskMiddlewares.has(id)) {
+      duplicateRegistrationError.throw({ type: "Middleware", id: publicId });
+    }
+    if (this.registry.resourceMiddlewares.has(id)) {
+      duplicateRegistrationError.throw({ type: "Middleware", id: publicId });
+    }
+    if (this.registry.tags.has(id)) {
+      duplicateRegistrationError.throw({ type: "Tag", id: publicId });
+    }
+    if (this.registry.hooks.has(id)) {
+      duplicateRegistrationError.throw({ type: "Hook", id: publicId });
     }
 
-    for (const resource of this.registry.resources.values()) {
-      const middlewares = resource.resource.middleware;
-      middlewares.forEach((middlewareAttachment) => {
-        if (!this.registry.resourceMiddlewares.has(middlewareAttachment.id)) {
-          middlewareNotRegisteredError.throw({
-            type: "resource",
-            source: resource.resource.id,
-            middlewareId: middlewareAttachment.id,
-          });
-        }
-      });
-    }
+    duplicateRegistrationError.throw({ type: "Unknown", id: publicId });
+  }
 
-    this.ensureTagIdsAreUniquePerDefinition();
-    this.ensureAllTagsUsedAreRegistered();
+  runSanityChecks(): void {
+    validateMiddlewareRegistrations(this.validatorContext);
+    validateEventConstraints(this.validatorContext);
+    validateSubtreePolicies(this.validatorContext);
+    validateTagConstraints(this.validatorContext);
+    validateIsolationPolicies(this.validatorContext);
 
     // Validate module boundary visibility after all items are registered
     this.registry.visibilityTracker.validateVisibility(this.registry);
   }
 
-  private getTaggableEntries(): TaggableEntry[] {
-    return [
-      ...Array.from(this.registry.tasks.values()).map((x) => ({
-        definitionType: "Task",
-        definition: x.task,
-      })),
-      ...Array.from(this.registry.resources.values()).map((x) => ({
-        definitionType: "Resource",
-        definition: x.resource,
-      })),
-      ...Array.from(this.registry.events.values()).map((x) => ({
-        definitionType: "Event",
-        definition: x.event,
-      })),
-      ...Array.from(this.registry.taskMiddlewares.values()).map((x) => ({
-        definitionType: "Task middleware",
-        definition: x.middleware,
-      })),
-      ...Array.from(this.registry.resourceMiddlewares.values()).map((x) => ({
-        definitionType: "Resource middleware",
-        definition: x.middleware,
-      })),
-      ...Array.from(this.registry.hooks.values()).map((x) => ({
-        definitionType: "Hook",
-        definition: x.hook,
-      })),
-    ];
+  /**
+   * Normalizes isolation entries. Exposed for testing purposes.
+   * @internal
+   */
+  normalizeIsolationEntries(input: {
+    entries: ReadonlyArray<unknown>;
+    onInvalidEntry: (entry: unknown) => never;
+    onUnknownTarget: (targetId: string) => never;
+  }): Array<IsolationTarget> {
+    return normalizeIsolationEntriesImpl<IsolationTarget>(
+      this.validatorContext,
+      input,
+    );
   }
 
-  private ensureTagIdsAreUniquePerDefinition() {
-    for (const { definitionType, definition } of this.getTaggableEntries()) {
-      const tags = Array.isArray(definition.tags) ? definition.tags : [];
-      const seenTagIds = new Set<string>();
-      for (const tag of tags) {
-        if (seenTagIds.has(tag.id)) {
-          duplicateTagIdOnDefinitionError.throw({
-            definitionType,
-            definitionId: definition.id,
-            tagId: tag.id,
-          });
-        }
-        seenTagIds.add(tag.id);
-      }
-    }
-  }
-
-  ensureAllTagsUsedAreRegistered() {
-    for (const { definition } of this.getTaggableEntries()) {
-      const tags = Array.isArray(definition.tags) ? definition.tags : [];
-      for (const tag of tags) {
-        if (!this.registry.tags.has(tag.id)) {
-          tagNotFoundError.throw({ id: tag.id });
-        }
-      }
-    }
+  /**
+   * Normalizes export entries. Exposed for testing purposes.
+   * @internal
+   */
+  normalizeExportEntries(input: {
+    entries: ReadonlyArray<unknown>;
+    onInvalidEntry: (entry: unknown) => never;
+    onUnknownTarget: (targetId: string) => never;
+  }): Array<IsolationExportsTarget> {
+    return normalizeExportEntriesImpl(this.validatorContext, input);
   }
 }

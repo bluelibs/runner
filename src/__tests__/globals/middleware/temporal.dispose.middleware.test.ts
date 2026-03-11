@@ -22,7 +22,7 @@ describe("Temporal Middleware: Dispose", () => {
   it("rejects pending debounce callers when runtime is disposed", async () => {
     let callCount = 0;
     const task = defineTask({
-      id: "debounce.dispose.task",
+      id: "debounce-dispose-task",
       middleware: [debounceTaskMiddleware.with({ ms: 1000 })],
       run: async (input: string) => {
         callCount += 1;
@@ -31,11 +31,15 @@ describe("Temporal Middleware: Dispose", () => {
     });
 
     const app = defineResource({
-      id: "debounce.dispose.app",
+      id: "debounce-dispose-app",
       register: [task],
     });
 
-    const runtime = await run(app);
+    const runtime = await run(app, {
+      dispose: {
+        drainingBudgetMs: 0,
+      },
+    });
     const pending = runtime.runTask(task, "a");
 
     await runtime.dispose();
@@ -49,7 +53,7 @@ describe("Temporal Middleware: Dispose", () => {
   it("rejects pending throttle callers when runtime is disposed", async () => {
     let callCount = 0;
     const task = defineTask({
-      id: "throttle.dispose.task",
+      id: "throttle-dispose-task",
       middleware: [throttleTaskMiddleware.with({ ms: 1000 })],
       run: async (input: string) => {
         callCount += 1;
@@ -58,11 +62,15 @@ describe("Temporal Middleware: Dispose", () => {
     });
 
     const app = defineResource({
-      id: "throttle.dispose.app",
+      id: "throttle-dispose-app",
       register: [task],
     });
 
-    const runtime = await run(app);
+    const runtime = await run(app, {
+      dispose: {
+        drainingBudgetMs: 0,
+      },
+    });
     await expect(runtime.runTask(task, "a")).resolves.toBe("a");
     const pending = runtime.runTask(task, "b");
 
@@ -83,7 +91,7 @@ describe("Temporal Middleware: Dispose", () => {
       debounceTaskMiddleware.run(
         {
           task: {
-            definition: { id: "debounce.disposed" } as any,
+            definition: { id: "debounce-disposed" } as any,
             input: "x",
           },
           next: async () => "ok",
@@ -103,7 +111,7 @@ describe("Temporal Middleware: Dispose", () => {
       throttleTaskMiddleware.run(
         {
           task: {
-            definition: { id: "throttle.disposed" } as any,
+            definition: { id: "throttle-disposed" } as any,
             input: "x",
           },
           next: async () => "ok",
@@ -130,7 +138,7 @@ describe("Temporal Middleware: Dispose", () => {
       const pending = debounceTaskMiddleware.run(
         {
           task: {
-            definition: { id: "debounce.dispose.callback" } as any,
+            definition: { id: "debounce-dispose-callback" } as any,
             input: "x",
           },
           next: async () => "ok",
@@ -168,7 +176,7 @@ describe("Temporal Middleware: Dispose", () => {
         throttleTaskMiddleware.run(
           {
             task: {
-              definition: { id: "throttle.dispose.callback" } as any,
+              definition: { id: "throttle-dispose-callback" } as any,
               input: "a",
             },
             next: async (input?: string) => input,
@@ -181,7 +189,7 @@ describe("Temporal Middleware: Dispose", () => {
       const pending = throttleTaskMiddleware.run(
         {
           task: {
-            definition: { id: "throttle.dispose.callback" } as any,
+            definition: { id: "throttle-dispose-callback" } as any,
             input: "b",
           },
           next: async (input?: string) => input,
@@ -201,7 +209,7 @@ describe("Temporal Middleware: Dispose", () => {
     }
   });
 
-  it("handles temporal resource dispose when tracked sets are missing", async () => {
+  it("fails fast when tracked sets are missing during resource disposal", async () => {
     type TemporalDispose = NonNullable<typeof temporalResource.dispose>;
     type TemporalDisposeArgs = Parameters<TemporalDispose>;
 
@@ -230,41 +238,71 @@ describe("Temporal Middleware: Dispose", () => {
         {} as TemporalDisposeArgs[2],
         {} as TemporalDisposeArgs[3],
       ),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow(/forEach/);
   });
 
-  it("recreates tracked debounce state set when missing", async () => {
-    expect.assertions(2);
-    jest.useFakeTimers();
-    try {
-      const state = createTemporalState();
-      Object.defineProperty(state, "trackedDebounceStates", {
-        value: undefined,
-        configurable: true,
-        writable: true,
-      });
-      const deps = { state } as Parameters<
-        typeof debounceTaskMiddleware.run
-      >[1];
+  it("rejects tracked debounce/throttle states during resource disposal", async () => {
+    const debounceReject = jest.fn();
+    const throttleReject = jest.fn();
 
-      const pending = debounceTaskMiddleware.run(
+    const debounceState = {
+      resolveList: [],
+      rejectList: [debounceReject],
+      latestInput: "debounce-input",
+      timeoutId: setTimeout(() => undefined, 1_000),
+    };
+
+    const throttleState = {
+      lastExecution: 0,
+      resolveList: [],
+      rejectList: [throttleReject],
+      latestInput: "throttle-input",
+      timeoutId: setTimeout(() => undefined, 1_000),
+      currentPromise: Promise.resolve("pending"),
+    };
+
+    type TemporalDispose = NonNullable<typeof temporalResource.dispose>;
+    type TemporalDisposeArgs = Parameters<TemporalDispose>;
+
+    const state: TemporalDisposeArgs[0] = createTemporalState({
+      trackedDebounceStates: new Set([debounceState]),
+      trackedThrottleStates: new Set([throttleState]),
+    });
+
+    await expect(
+      temporalResource.dispose?.(
+        state,
+        undefined as TemporalDisposeArgs[1],
+        {} as TemporalDisposeArgs[2],
+        {} as TemporalDisposeArgs[3],
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(debounceReject).toHaveBeenCalledTimes(1);
+    expect(throttleReject).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails fast when tracked debounce state set is missing", async () => {
+    const state = createTemporalState();
+    Object.defineProperty(state, "trackedDebounceStates", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+    const deps = { state } as Parameters<typeof debounceTaskMiddleware.run>[1];
+
+    await expect(
+      debounceTaskMiddleware.run(
         {
           task: {
-            definition: { id: "debounce.recreate.tracked-set" } as any,
+            definition: { id: "debounce-recreate-tracked-set" } as any,
             input: "x",
           },
           next: async () => "ok",
         } as any,
         deps,
         { ms: 10 },
-      );
-
-      jest.advanceTimersByTime(10);
-      await Promise.resolve();
-      await expect(pending).resolves.toBe("ok");
-      expect(state.trackedDebounceStates).toBeInstanceOf(Set);
-    } finally {
-      jest.useRealTimers();
-    }
+      ),
+    ).rejects.toThrow(/add/);
   });
 });

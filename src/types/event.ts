@@ -1,7 +1,22 @@
-import { IOptionalDependency, IValidationSchema } from "./utilities";
-import { TagType } from "./tag";
+import {
+  IOptionalDependency,
+  IValidationSchema,
+  ValidationSchemaInput,
+} from "./utilities";
+import { EventTagType } from "./tag";
 import { IEventMeta } from "./meta";
-import { CommonPayload, symbolEvent, symbolFilePath } from "./utilities";
+import {
+  CommonPayload,
+  symbolDefinitionIdentity,
+  symbolEvent,
+  symbolFilePath,
+  symbolRuntimeId,
+} from "./utilities";
+import { RuntimeCallSource } from "./runtimeSource";
+import {
+  hasDefinitionIdentity,
+  isSameDefinition,
+} from "../tools/isSameDefinition";
 
 export type EventHandlerType<T = any> = (
   event: IEventEmission<T>,
@@ -63,7 +78,15 @@ export function isOneOf<TDefs extends readonly IEventDefinition<any>[]>(
   emission: IEventEmission<any>,
   defs: TDefs,
 ): emission is IEventEmission<CommonPayload<TDefs>> {
-  return defs.some((d) => d.id === emission.id);
+  if (defs.some((definition) => isSameDefinition(definition, emission))) {
+    return true;
+  }
+
+  if (hasDefinitionIdentity(emission)) {
+    return false;
+  }
+
+  return defs.some((definition) => definition.id === emission.id);
 }
 
 export interface IEventDefinition<TPayload = void> {
@@ -73,13 +96,17 @@ export interface IEventDefinition<TPayload = void> {
    * Optional validation schema for runtime payload validation.
    * When provided, event payload will be validated when emitted.
    */
-  payloadSchema?: IValidationSchema<TPayload>;
-  tags?: TagType[];
+  payloadSchema?: ValidationSchemaInput<TPayload>;
+  tags?: EventTagType[];
   /**
    * If true, listeners with the same priority run concurrently within a batch.
    * Batches (grouped by order) still execute sequentially in priority order.
    */
   parallel?: boolean;
+  /**
+   * If true, listeners run in transactional mode and must return an undo closure.
+   */
+  transactional?: boolean;
 }
 
 /**
@@ -88,14 +115,17 @@ export interface IEventDefinition<TPayload = void> {
  */
 export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
   id: string;
+  path?: string;
+  [symbolRuntimeId]?: string;
   /**
    * We use this event to discriminate between resources with just 'id' and 'events' as they collide. This is a workaround, should be redone using classes and instanceof.
    */
   [symbolEvent]: true;
   [symbolFilePath]: string;
+  payloadSchema?: IValidationSchema<TPayload>;
   /** Return an optional dependency wrapper for this event. */
   optional: () => IOptionalDependency<IEvent<TPayload>>;
-  tags: TagType[];
+  tags: EventTagType[];
 }
 
 /**
@@ -107,6 +137,7 @@ export interface IEventEmission<TPayload = any> {
    * This is useful for global event listeners.
    */
   id: string;
+  path?: string;
   /**
    * The data that the event carries. It can be anything.
    */
@@ -118,11 +149,15 @@ export interface IEventEmission<TPayload = any> {
   /**
    * The source of the event. This can be useful for debugging.
    */
-  source: string;
+  source: RuntimeCallSource;
   /**
    * Metadata associated with the event definition.
    */
   meta: IEventMeta;
+  /**
+   * Whether this emission runs in transactional listener mode.
+   */
+  transactional: boolean;
   /**
    * Stops propagation to remaining event listeners.
    */
@@ -134,5 +169,7 @@ export interface IEventEmission<TPayload = any> {
   /**
    * The tags that the event carries.
    */
-  tags: TagType[];
+  tags: EventTagType[];
+  [symbolDefinitionIdentity]?: object;
+  [symbolRuntimeId]?: string;
 }

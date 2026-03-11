@@ -1,33 +1,30 @@
-import * as http from "http";
 import { Readable } from "stream";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./streaming.test.utils";
 
 describe("requestHandlers - streaming", () => {
   it("handles content-type as array and returns 405 for wrong method", async () => {
     const t = defineTask<void, Promise<string>>({
-      id: "tests.streaming.405",
+      id: "tests-streaming-405",
       async run() {
         return "nope";
       },
     });
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "tests.app.streaming.405",
+      id: "tests-app-streaming-405",
       register: [t, exposure],
     });
     const rr = await run(app);
     try {
-      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const handlers = await rr.getResourceValue(exposure as any);
       const transport = createReqRes({
         method: "GET",
         url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -46,7 +43,7 @@ describe("requestHandlers - streaming", () => {
         void,
         Promise<{ stream: NodeJS.ReadableStream; contentType: string }>
       >({
-        id: "tests.streaming.wrapper.json",
+        id: "tests-streaming-wrapper-json",
         async run() {
           let i = 0;
           const stream = new Readable({
@@ -58,21 +55,19 @@ describe("requestHandlers - streaming", () => {
           return { stream, contentType: "text/plain; charset=utf-8" };
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
       });
       const app = defineResource({
-        id: "tests.app.streaming.json",
+        id: "tests-app-streaming-json",
         register: [t, exposure],
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -90,7 +85,7 @@ describe("requestHandlers - streaming", () => {
 
     it("streams plain Readable on octet-stream path", async () => {
       const t = defineTask<void, Promise<NodeJS.ReadableStream>>({
-        id: "tests.streaming.readable.octet",
+        id: "tests-streaming-readable-octet",
         async run() {
           let i = 0;
           return new Readable({
@@ -101,21 +96,19 @@ describe("requestHandlers - streaming", () => {
           });
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
       });
       const app = defineResource({
-        id: "tests.app.streaming.octet",
+        id: "tests-app-streaming-octet",
         register: [t, exposure],
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
           url: `/__runner/task/${encodeURIComponent(t.id)}`,
@@ -153,7 +146,7 @@ describe("requestHandlers - streaming", () => {
 
     it("streams plain Readable when task returns Readable", async () => {
       const t = defineTask<void, Promise<NodeJS.ReadableStream>>({
-        id: "tests.streaming.multipart.plain",
+        id: "tests-streaming-multipart-plain",
         async run() {
           let i = 0;
           return new Readable({
@@ -164,21 +157,19 @@ describe("requestHandlers - streaming", () => {
           });
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
       });
       const app = defineResource({
-        id: "tests.app.streaming.mp.plain",
+        id: "tests-app-streaming-mp-plain",
         register: [t, exposure],
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const req = getMultipartReq("boundary1", JSON.stringify({ input: {} }));
         req.url = `/__runner/task/${encodeURIComponent(t.id)}`;
         const transport = createReqRes({ method: "POST", url: req.url });
@@ -198,7 +189,7 @@ describe("requestHandlers - streaming", () => {
         void,
         Promise<{ stream: NodeJS.ReadableStream; contentType: string }>
       >({
-        id: "tests.streaming.multipart.wrapper",
+        id: "tests-streaming-multipart-wrapper",
         async run() {
           let i = 0;
           const stream = new Readable({
@@ -210,21 +201,19 @@ describe("requestHandlers - streaming", () => {
           return { stream, contentType: "text/plain; charset=utf-8" };
         },
       });
-      const exposure = nodeExposure.with({
+      const exposure = rpcExposure.with({
         http: {
-          dangerouslyAllowOpenExposure: true,
-          server: http.createServer(),
           basePath: "/__runner",
           auth: { allowAnonymous: true },
         },
       });
       const app = defineResource({
-        id: "tests.app.streaming.mp.wrapper",
+        id: "tests-app-streaming-mp-wrapper",
         register: [t, exposure],
       });
       const rr = await run(app);
       try {
-        const handlers = await rr.getResourceValue(exposure.resource as any);
+        const handlers = await rr.getResourceValue(exposure as any);
         const req = getMultipartReq("boundary2", JSON.stringify({ input: {} }));
         req.url = `/__runner/task/${encodeURIComponent(t.id)}`;
         const transport = createReqRes({ method: "POST", url: req.url });

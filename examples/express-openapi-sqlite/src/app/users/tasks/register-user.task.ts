@@ -1,5 +1,4 @@
-import z from "zod";
-import { r } from "@bluelibs/runner";
+import { Match, r } from "@bluelibs/runner";
 import { httpRoute } from "../../http/tags/http.tag";
 import {
   RegisterRequest,
@@ -12,17 +11,25 @@ import { appConfig } from "../../app.config";
 import { createUserTask } from "./create-user.task";
 
 // Validation schemas
-const registerSchema = z.object({
-  email: z.email().meta({ example: "test@example.com" }),
-  password: z.string().min(6),
-  name: z.string().min(2),
+const registerSchema = Match.ObjectIncluding({
+  email: Match.Email,
+  password: Match.RegExp(/^.{8,}$/),
+  name: Match.RegExp(/^.{2,}$/),
+});
+
+const registerResponseSchema = Match.compile({
+  success: Boolean,
+  data: Match.ObjectStrict({
+    token: Match.NonEmptyString,
+    user: UserSchema.pattern,
+  }),
 });
 
 /**
  * User registration task
  */
 export const registerUserTask = r
-  .task("app.tasks.auth.register")
+  .task("register")
   .dependencies({ appConfig, createUserTask })
   .tags([
     httpRoute.post("/api/auth/register", {
@@ -31,13 +38,7 @@ export const registerUserTask = r
       tags: ["Authentication"],
       requiresAuth: false,
       requestBodySchema: registerSchema,
-      responseSchema: z.object({
-        success: z.boolean(),
-        data: z.object({
-          token: z.string(),
-          user: UserSchema,
-        }),
-      }),
+      responseSchema: registerResponseSchema,
     }),
   ])
   .inputSchema(registerSchema)
@@ -48,10 +49,14 @@ export const registerUserTask = r
     ): Promise<ApiResponse<LoginResponse>> => {
       try {
         // Create user
-        const user = await createUserTask(userData);
+        const user = await createUserTask({
+          email: userData.email,
+          password: userData.password,
+          name: userData.name,
+        });
 
         // Generate JWT token
-        const token = jwt.sign({ userId: user.id }, appConfig.jwtSecret, {
+        const token = jwt.sign({ id: user.id }, appConfig.jwtSecret, {
           expiresIn: "24h",
         });
 

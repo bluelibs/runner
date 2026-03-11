@@ -6,14 +6,16 @@ import {
   errorToResponse,
   APIGatewayProxyResult,
 } from "./http";
-import { z } from "zod";
-
-const CreateUserSchema = z.object({ name: z.string().min(1) });
-const GetUserSchema = z.object({ id: z.string().min(1) });
+import { AnyApiGatewayEvent, LambdaContextLike } from "./types/aws";
+import {
+  createUserSchema,
+  getUserSchema,
+  getValidationIssues,
+} from "./validation";
 
 export const handler = async (
-  event: unknown,
-  context: { awsRequestId?: string },
+  event: AnyApiGatewayEvent,
+  context: LambdaContextLike,
 ): Promise<APIGatewayProxyResult> => {
   const { method, path, headers, body } = parseEvent<{ name?: string }>(event);
 
@@ -29,32 +31,36 @@ export const handler = async (
       try {
         if (method === "GET" && path.startsWith("/users/")) {
           const id = path.split("/").pop()!;
-          const parsed = GetUserSchema.safeParse({ id });
-          if (!parsed.success) {
-            return json(400, {
-              message: "Invalid id",
-              issues: parsed.error.issues,
-            });
-          }
-          const user = await rr.runTask(getUser, parsed.data);
+          const parsed = getUserSchema.parse({ id });
+
+          const user = await rr.runTask(getUser, parsed);
           return user ? json(200, user) : json(404, { message: "Not found" });
         }
 
         if (method === "POST" && path === "/users") {
-          const parsed = CreateUserSchema.safeParse({ name: body?.name });
-          if (!parsed.success) {
-            return json(400, {
-              message: "Invalid body",
-              issues: parsed.error.issues,
-            });
-          }
-          const created = await rr.runTask(createUser, parsed.data);
+          const parsed = createUserSchema.parse({ name: body?.name });
+
+          const created = await rr.runTask(createUser, parsed);
           return json(201, created);
         }
 
         return json(404, { message: "Route not found" });
-      } catch (err: unknown) {
-        return errorToResponse(err);
+      } catch (error: unknown) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "failures" in error &&
+          Array.isArray((error as { failures?: unknown }).failures)
+        ) {
+          const isGetRoute = method === "GET" && path.startsWith("/users/");
+
+          return json(400, {
+            message: isGetRoute ? "Invalid id" : "Invalid body",
+            issues: getValidationIssues(error),
+          });
+        }
+
+        return errorToResponse(error);
       }
     },
   );

@@ -1,13 +1,13 @@
 ## Your First 5 Minutes
 
+This page is the shortest path from "what is Runner?" to "I ran it once and I trust the shape of it."
+
 **New to Runner?** Here's the absolute minimum you need to know:
 
 1. **Tasks** are your business logic functions (with dependencies and middleware)
 2. **Resources** are shared services (database, config, clients) with lifecycle (`init` / `dispose`)
 3. **You compose everything** under an `app` resource with `.register([...])`
-4. **You run it** with `run(app)` which gives you `runTask()` and `dispose()`
-
-That's it. Now let's get you to a first successful run.
+4. **You run it** with `run(app)` which gives you `runTask()` and `dispose()` first, plus more runtime helpers as you grow (`emitEvent()`, resource getters)
 
 ---
 
@@ -20,7 +20,7 @@ This is the fastest way to run the TypeScript example at the top of this README:
 1. Install dependencies:
 
 ```bash
-npm i @bluelibs/runner zod
+npm i @bluelibs/runner
 npm i -D typescript tsx
 ```
 
@@ -31,9 +31,11 @@ npm i -D typescript tsx
 npx tsx index.ts
 ```
 
-**That's it!** You now have a working `Runtime` and you can execute tasks with `runtime.runTask(...)`.
+**What you now have**: a working `Runtime` and the smallest useful Runner execution path.
 
 > **Tip:** If you prefer an end-to-end example with HTTP, OpenAPI, and persistence, jump to the examples below.
+> **Tip:** User-defined ids are local ids. Use `send-email` or `userStore`, not dotted ids like `app.tasks.sendEmail`.
+> **Boundary:** Advanced features such as Durable Workflows and server-side Remote Lanes are Node-only.
 
 ---
 
@@ -86,12 +88,12 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
 - **Token-friendly overview**: Read [AI.md](./readmes/AI.md)
 - **Node-only features**:
   - [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
-  - [HTTP Tunnels](./readmes/TUNNELS.md)
+  - [Remote Lanes](./readmes/REMOTE_LANES.md)
 - **Releases and upgrades**:
   - [GitHub Releases](https://github.com/bluelibs/runner/releases)
   - [Support & Release Policy](./readmes/ENTERPRISE.md)
 - **Operational baseline**:
-  - [Production Readiness Checklist](./readmes/FULL_GUIDE.md#production-readiness-checklist)
+  - [Production Readiness](./readmes/FULL_GUIDE.md#observability-strategy-logs-metrics-and-traces)
 - **Multi-platform architecture**: Read [MULTI_PLATFORM.md](./readmes/MULTI_PLATFORM.md)
 
 ---

@@ -1,19 +1,13 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import {
   jsonErrorResponse,
-  jsonOkResponse,
   METHOD_NOT_ALLOWED_RESPONSE,
   respondJson,
-  respondStream,
 } from "../httpResponse";
 import { isMultipart, parseMultipartInput } from "../multipart";
 import { readJsonBody } from "../requestBody";
 import type { SerializerLike } from "../../../serializer";
-import type {
-  Authenticator,
-  AllowListGuard,
-  StreamingResponse,
-} from "../types";
+import type { Authenticator, AllowListGuard, JsonResponse } from "../types";
 import type {
   NodeExposureDeps,
   NodeExposureHttpCorsConfig,
@@ -29,6 +23,7 @@ import {
 import { withExposureContext } from "./contextWrapper";
 import { getRequestId } from "../requestIdentity";
 import type { MultipartLimits } from "../multipart";
+import { respondTaskResult } from "./taskResult";
 
 interface TaskHandlerDeps {
   store: NodeExposureDeps["store"];
@@ -44,6 +39,14 @@ interface TaskHandlerDeps {
     multipart?: MultipartLimits;
   };
   allowAsyncContext?: (taskId: string) => boolean;
+  resolveAsyncContextAllowList?: (
+    taskId: string,
+  ) => readonly string[] | undefined;
+  authorizeTask?: (
+    req: IncomingMessage,
+    taskId: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
+  sourceResourceId?: string;
 }
 
 export const createTaskHandler = (deps: TaskHandlerDeps) => {
@@ -58,23 +61,28 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     serializer,
     limits,
     allowAsyncContext = () => true,
+    resolveAsyncContextAllowList = () => undefined,
+    authorizeTask = () => null,
+    sourceResourceId = "platform-node-resources-rpcLanes",
   } = deps;
 
-  const isReadableStream = (value: unknown): value is NodeJS.ReadableStream =>
-    !!value && typeof (value as { pipe?: unknown }).pipe === "function";
-
-  const isStreamingResponse = (value: unknown): value is StreamingResponse =>
-    !!value &&
-    typeof value === "object" &&
-    "stream" in value &&
-    isReadableStream((value as { stream?: unknown }).stream);
+  const exposureSource = store.createRuntimeSource(
+    "resource",
+    sourceResourceId,
+  );
 
   return async (
     req: IncomingMessage,
     res: ServerResponse,
-    taskId: string,
+    taskIdInput: string,
   ): Promise<void> => {
-    const allowAsyncContextForTask = allowAsyncContext(taskId);
+    const taskId = store.resolveDefinitionId(taskIdInput) ?? taskIdInput;
+    const policyTaskId = store.tasks.has(taskId)
+      ? store.toPublicId(taskId)
+      : taskIdInput;
+    const allowAsyncContextForTask = allowAsyncContext(policyTaskId);
+    const asyncContextAllowListForTask =
+      resolveAsyncContextAllowList(policyTaskId);
 
     if (req.method !== "POST") {
       applyCorsActual(req, res, cors);
@@ -89,10 +97,17 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
       return;
     }
 
-    const allowError = allowList.ensureTask(taskId);
+    const allowError = allowList.ensureTask(policyTaskId);
     if (allowError) {
       applyCorsActual(req, res, cors);
       respondJson(res, allowError, serializer);
+      return;
+    }
+
+    const authzError = await authorizeTask(req, policyTaskId);
+    if (authzError) {
+      applyCorsActual(req, res, cors);
+      respondJson(res, authzError, serializer);
       return;
     }
 
@@ -120,7 +135,10 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
           controller,
           { store, router, serializer },
           fn,
-          { allowAsyncContext: allowAsyncContextForTask },
+          {
+            allowAsyncContext: allowAsyncContextForTask,
+            allowedAsyncContextIds: asyncContextAllowListForTask,
+          },
         );
 
       if (isMultipart(contentType)) {
@@ -144,7 +162,9 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
         let taskResult: unknown;
         try {
           taskResult = await runWithContext(() =>
-            taskRunner.run(storeTask.task, multipart.value),
+            taskRunner.run(storeTask.task, multipart.value, {
+              source: exposureSource,
+            }),
           );
         } catch (err) {
           taskError = err;
@@ -164,22 +184,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
         if (taskError) {
           throw taskError;
         }
-        // Streamed responses: if task returned a readable or a streaming wrapper
-        if (!res.writableEnded && isReadableStream(taskResult)) {
-          applyCorsActual(req, res, cors);
-          respondStream(res, taskResult);
-          return;
-        }
-        if (!res.writableEnded && isStreamingResponse(taskResult)) {
-          applyCorsActual(req, res, cors);
-          respondStream(res, taskResult);
-          return;
-        }
-        // If the task already handled the response (wrote headers/body),
-        // skip the default JSON envelope.
-        if (res.writableEnded || res.headersSent) return;
-        applyCorsActual(req, res, cors);
-        respondJson(res, jsonOkResponse({ result: taskResult }), serializer);
+        respondTaskResult(req, res, taskResult, cors, serializer);
         return;
       }
 
@@ -187,22 +192,11 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
       // we do not pre-consume the request body and allow task to read from context.req
       if (/^application\/octet-stream(?:;|$)/i.test(contentType)) {
         const result = await runWithContext(() =>
-          taskRunner.run(storeTask.task, undefined),
+          taskRunner.run(storeTask.task, undefined, {
+            source: exposureSource,
+          }),
         );
-        if (!res.writableEnded && isReadableStream(result)) {
-          applyCorsActual(req, res, cors);
-          respondStream(res, result);
-          return;
-        }
-        if (!res.writableEnded && isStreamingResponse(result)) {
-          applyCorsActual(req, res, cors);
-          respondStream(res, result);
-          return;
-        }
-        // If the task streamed a custom response, do not append JSON.
-        if (res.writableEnded || res.headersSent) return;
-        applyCorsActual(req, res, cors);
-        respondJson(res, jsonOkResponse({ result }), serializer);
+        respondTaskResult(req, res, result, cors, serializer);
         return;
       }
 
@@ -232,22 +226,11 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
         return body.value as unknown;
       })();
       const result = await runWithContext(() =>
-        taskRunner.run(storeTask.task, payload),
+        taskRunner.run(storeTask.task, payload, {
+          source: exposureSource,
+        }),
       );
-      if (!res.writableEnded && isReadableStream(result)) {
-        applyCorsActual(req, res, cors);
-        respondStream(res, result);
-        return;
-      }
-      if (!res.writableEnded && isStreamingResponse(result)) {
-        applyCorsActual(req, res, cors);
-        respondStream(res, result);
-        return;
-      }
-      // If the task already wrote a response, do nothing further.
-      if (res.writableEnded || res.headersSent) return;
-      applyCorsActual(req, res, cors);
-      respondJson(res, jsonOkResponse({ result }), serializer);
+      respondTaskResult(req, res, result, cors, serializer);
     } catch (error) {
       if (cancellationError.is(error)) {
         if (!res.writableEnded && !res.headersSent) {

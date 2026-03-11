@@ -1,6 +1,7 @@
-import { r, run } from "../../../";
+import { asyncContexts, r, run } from "../../../";
 import { EventEmissionFailureMode } from "../../../defs";
 import type { IEventEmitReport } from "../../../types/event";
+import type { ExecutionRecordResult } from "../../../types/executionContext";
 
 // Type-only tests for builder RunResult typing.
 
@@ -9,19 +10,19 @@ void (async () => {
   type Input = { x: number };
 
   const add = r
-    .task("types.add")
+    .task("types-add")
     .inputSchema<Input>({ parse: (x: any) => x })
     .run(async (input: Input) => input.x + 1)
     .build();
 
   const depTask = r
-    .task("types.dep")
+    .task("types-dep")
     .inputSchema<{ v: string }>({ parse: (x: any) => x })
     .run(async (input) => input.v.toUpperCase())
     .build();
 
   const main = r
-    .task("types.main")
+    .task("types-main")
     .dependencies({ depTask })
     .inputSchema<Input>({ parse: (x: any) => x })
     .run(async (input, deps) => {
@@ -30,8 +31,8 @@ void (async () => {
     })
     .build();
 
-  const app = r.resource("types.app").register([add, depTask, main]).build();
-  const harness = r.resource("types.harness").register([app]).build();
+  const app = r.resource("types-app").register([add, depTask, main]).build();
+  const harness = r.resource("types-harness").register([app]).build();
 
   const rr = await run(harness);
   const valid1: number | undefined = await rr.runTask(add, { x: 1 });
@@ -45,6 +46,13 @@ void (async () => {
   const valid2: number | undefined = await rr.runTask(main, { x: 2 });
   void valid2;
 
+  const withContext = await asyncContexts.execution.record(() =>
+    rr.runTask(add, { x: 3 }),
+  );
+  const withContextValue: ExecutionRecordResult<number | undefined> =
+    withContext;
+  withContextValue.recording?.correlationId;
+
   // @ts-expect-error wrong deps override type
   await rr.runTask(main, { x: 2 }, { depTask: async (input: number) => "x" });
 })();
@@ -52,11 +60,11 @@ void (async () => {
 // Scenario: emitEvent return type depends on literal report option.
 void (async () => {
   const evt = r
-    .event("types.emitEvent.builder")
+    .event("types-emitEvent-builder")
     .payloadSchema<{ id: string }>({ parse: (x: any) => x })
     .build();
 
-  const app = r.resource("types.emitEvent.builder.app").register([evt]).build();
+  const app = r.resource("types-emitEvent-builder-app").register([evt]).build();
   const rr = await run(app);
 
   const noReport = await rr.emitEvent(evt, { id: "1" });
@@ -83,4 +91,11 @@ void (async () => {
   const dynamicResult = await rr.emitEvent(evt, { id: "4" }, dynamicOptions);
   // @ts-expect-error dynamic report option yields a union return type
   const mustBeReport: IEventEmitReport = dynamicResult;
+
+  const withContext = await asyncContexts.execution.record(() =>
+    rr.emitEvent(evt, { id: "5" }, { report: true }),
+  );
+  const withContextReport: ExecutionRecordResult<IEventEmitReport> =
+    withContext;
+  withContextReport.result.errors;
 })();

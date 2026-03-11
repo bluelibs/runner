@@ -21,7 +21,7 @@ An onboarding flow with signal + timeout + replay-safe branching:
 1. **createAccount** — provisions the user record
 2. **sendVerificationEmail** — sends a verification email
 3. **waitForSignal** — waits for `EmailVerified` signal (with 15 s timeout)
-4. **ctx.switch()** — branches: provision workspace if verified, skip if timed out
+4. **durableContext.switch()** — branches: provision workspace if verified, skip if timed out
 5. **sendWelcomeEmail** — sends a welcome message
 
 ## Running
@@ -37,12 +37,12 @@ npm test            # builds + runs the test suite
 
 | Feature                                    | Where            |
 | ------------------------------------------ | ---------------- |
-| `ctx.step(id, fn)`                         | Both workflows   |
-| `ctx.sleep(ms)`                            | Order processing |
-| `ctx.waitForSignal(signal)`                | Both workflows   |
-| `ctx.waitForSignal(signal, { timeoutMs })` | User onboarding  |
-| `ctx.switch()` (replay-safe branching)     | User onboarding  |
-| `ctx.note()`                               | Both workflows   |
+| `durableContext.step(id, fn)`                         | Both workflows   |
+| `durableContext.sleep(ms)`                            | Order processing |
+| `durableContext.waitForSignal(signal)`                | Both workflows   |
+| `durableContext.waitForSignal(signal, { timeoutMs })` | User onboarding  |
+| `durableContext.switch()` (replay-safe branching)     | User onboarding  |
+| `durableContext.note()`                               | Both workflows   |
 | `service.start()`                          | index.ts         |
 | `service.signal()`                         | index.ts         |
 | `service.wait()`                           | index.ts         |

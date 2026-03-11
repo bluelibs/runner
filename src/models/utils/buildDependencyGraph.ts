@@ -1,23 +1,127 @@
 import type { StoreRegistry } from "../StoreRegistry";
 import type { IDependentNode } from "./findCircularDependencies";
 import type { IEvent } from "../../defs";
-import { isOptional, isEvent } from "../../define";
+import { isOptional, isEvent, isTag, isTagStartup } from "../../define";
+import {
+  resolveApplicableSubtreeResourceMiddlewares,
+  resolveApplicableSubtreeTaskMiddlewares,
+} from "../../tools/subtreeMiddleware";
 
-const readStringId = (value: unknown): string | undefined => {
-  if (!value || typeof value !== "object") {
+const getDependencyId = (
+  registry: StoreRegistry,
+  dependency: unknown,
+): string | undefined => {
+  const target = isOptional(dependency) ? dependency.inner : dependency;
+  return registry.resolveDefinitionId(target);
+};
+
+const getTagDependencyId = (
+  registry: StoreRegistry,
+  dependency: unknown,
+): string | undefined => {
+  const raw: unknown = isOptional(dependency) ? dependency.inner : dependency;
+  const tagValue: unknown = isTagStartup(raw) ? raw.tag : raw;
+
+  if (!isTag(tagValue)) {
     return undefined;
   }
 
-  const id = (value as { id?: unknown }).id;
-  return typeof id === "string" ? id : undefined;
+  return registry.resolveDefinitionId(tagValue);
 };
 
-const getDependencyId = (dependency: unknown): string | undefined =>
-  readStringId(
-    isOptional(dependency)
-      ? (dependency as { inner: unknown }).inner
-      : dependency,
-  );
+function resolveDefinitionId(
+  registry: StoreRegistry,
+  reference: unknown,
+): string | undefined {
+  return registry.resolveDefinitionId(reference);
+}
+
+function resolveTagDependencyNodes(
+  registry: StoreRegistry,
+  nodeMap: Map<string, IDependentNode>,
+  consumerId: string,
+  tagId: string,
+): IDependentNode[] {
+  const matches: IDependentNode[] = [];
+  const pushIfMatch = (definition: {
+    id: string;
+    tags?: Array<{ id: string }>;
+  }): void => {
+    if (definition.id === consumerId) {
+      return;
+    }
+
+    if (
+      !definition.tags?.some((tag) => {
+        const resolvedTagId = resolveDefinitionId(registry, tag);
+        return (resolvedTagId ?? tag.id) === tagId;
+      })
+    ) {
+      return;
+    }
+
+    if (!registry.visibilityTracker.isAccessible(definition.id, consumerId)) {
+      return;
+    }
+
+    const node = nodeMap.get(definition.id)!;
+    matches.push(node);
+  };
+
+  for (const task of registry.tasks.values()) {
+    pushIfMatch(task.task);
+  }
+
+  for (const resource of registry.resources.values()) {
+    pushIfMatch(resource.resource);
+  }
+
+  for (const hook of registry.hooks.values()) {
+    pushIfMatch(hook.hook);
+  }
+
+  for (const middleware of registry.taskMiddlewares.values()) {
+    pushIfMatch(middleware.middleware);
+  }
+
+  for (const middleware of registry.resourceMiddlewares.values()) {
+    pushIfMatch(middleware.middleware);
+  }
+
+  return matches;
+}
+
+function attachDependency(
+  node: IDependentNode,
+  key: string,
+  value: unknown,
+  registry: StoreRegistry,
+  nodeMap: Map<string, IDependentNode>,
+): void {
+  const tagId = getTagDependencyId(registry, value);
+  if (tagId) {
+    const tagNodes = resolveTagDependencyNodes(
+      registry,
+      nodeMap,
+      node.id,
+      tagId,
+    );
+    for (const tagNode of tagNodes) {
+      node.dependencies[`tag:${tagId}:${tagNode.id}`] = tagNode;
+    }
+    return;
+  }
+
+  const depId = getDependencyId(registry, value);
+  if (!depId) {
+    return;
+  }
+
+  const depNode = nodeMap.get(depId);
+  if (depNode) {
+    node.dependencies[key] = depNode;
+  }
+}
 
 /**
  * Creates blank dependency nodes for every registered task, middleware, resource,
@@ -82,39 +186,71 @@ function setupBlankNodes(
 export function buildDependencyGraph(
   registry: StoreRegistry,
 ): IDependentNode[] {
-  const depenedants: IDependentNode[] = [];
+  const dependents: IDependentNode[] = [];
 
   // First, create all nodes
   const nodeMap = new Map<string, IDependentNode>();
 
   // Create nodes for tasks
-  setupBlankNodes(registry, nodeMap, depenedants);
+  setupBlankNodes(registry, nodeMap, dependents);
 
   // Now, populate dependencies with references to actual nodes
+  const subtreeLookup = {
+    getOwnerResourceId: (itemId: string) =>
+      registry.visibilityTracker.getOwnerResourceId(itemId),
+    getResource: (resourceId: string) =>
+      registry.resources.get(resourceId)?.resource,
+  };
+
   for (const task of registry.tasks.values()) {
     const node = nodeMap.get(task.task.id)!;
 
     // Add task dependencies
     if (task.task.dependencies) {
       for (const [depKey, depItem] of Object.entries(task.task.dependencies)) {
-        const depId = getDependencyId(depItem);
-        if (!depId) {
-          continue;
-        }
-        const depNode = nodeMap.get(depId);
-        if (depNode) {
-          node.dependencies[depKey] = depNode;
-        }
+        attachDependency(node, depKey, depItem, registry, nodeMap);
       }
     }
 
     // Add local middleware dependencies for tasks (hooks have no middleware)
     const t = task.task;
     for (const middleware of t.middleware) {
-      const middlewareNode = nodeMap.get(middleware.id);
-      if (middlewareNode) {
-        node.dependencies[middleware.id] = middlewareNode;
+      const middlewareId = resolveDefinitionId(registry, middleware);
+      if (!middlewareId) {
+        continue;
       }
+      const middlewareNode = nodeMap.get(middlewareId);
+      if (!middlewareNode) {
+        continue;
+      }
+      node.dependencies[middlewareId] = middlewareNode;
+    }
+
+    const localMiddlewareIds = new Set(
+      t.middleware
+        .map((middleware) => resolveDefinitionId(registry, middleware))
+        .filter((middlewareId): middlewareId is string =>
+          Boolean(middlewareId),
+        ),
+    );
+    for (const middleware of resolveApplicableSubtreeTaskMiddlewares(
+      subtreeLookup,
+      t,
+    )) {
+      const middlewareId = resolveDefinitionId(registry, middleware);
+      if (!middlewareId) {
+        continue;
+      }
+      if (localMiddlewareIds.has(middlewareId)) {
+        continue;
+      }
+
+      const middlewareNode = nodeMap.get(middlewareId);
+      if (!middlewareNode) {
+        continue;
+      }
+      node.dependencies[`__subtree.middleware.${middlewareId}`] =
+        middlewareNode;
     }
   }
 
@@ -125,29 +261,7 @@ export function buildDependencyGraph(
 
     if (middleware.dependencies) {
       for (const [depKey, depItem] of Object.entries(middleware.dependencies)) {
-        const depId = getDependencyId(depItem);
-        if (!depId) {
-          continue;
-        }
-        const depNode = nodeMap.get(depId);
-        if (depNode) {
-          node.dependencies[depKey] = depNode;
-        }
-      }
-    }
-
-    if (middleware.everywhere) {
-      const filter =
-        typeof middleware.everywhere === "function"
-          ? middleware.everywhere
-          : () => true;
-
-      for (const task of registry.tasks.values()) {
-        if (filter(task.task)) {
-          const taskNode = nodeMap.get(task.task.id)!;
-          // node.dependencies[task.task.id] = taskNode;
-          taskNode.dependencies[`__middleware.${middleware.id}`] = node;
-        }
+        attachDependency(node, depKey, depItem, registry, nodeMap);
       }
     }
   }
@@ -158,29 +272,7 @@ export function buildDependencyGraph(
     const { middleware } = storeResourceMiddleware;
     if (middleware.dependencies) {
       for (const [depKey, depItem] of Object.entries(middleware.dependencies)) {
-        const depId = getDependencyId(depItem);
-        if (!depId) {
-          continue;
-        }
-        const depNode = nodeMap.get(depId);
-        if (depNode) {
-          node.dependencies[depKey] = depNode;
-        }
-      }
-    }
-
-    if (middleware.everywhere) {
-      const filter =
-        typeof middleware.everywhere === "function"
-          ? middleware.everywhere
-          : () => true;
-
-      for (const resource of registry.resources.values()) {
-        if (filter(resource.resource)) {
-          const resourceNode = nodeMap.get(resource.resource.id)!;
-          // node.dependencies[resource.resource.id] = resourceNode;
-          resourceNode.dependencies[`__middleware.${middleware.id}`] = node;
-        }
+        attachDependency(node, depKey, depItem, registry, nodeMap);
       }
     }
   }
@@ -194,23 +286,48 @@ export function buildDependencyGraph(
       for (const [depKey, depItem] of Object.entries(
         resource.resource.dependencies,
       )) {
-        const depId = getDependencyId(depItem);
-        if (!depId) {
-          continue;
-        }
-        const depNode = nodeMap.get(depId);
-        if (depNode) {
-          node.dependencies[depKey] = depNode;
-        }
+        attachDependency(node, depKey, depItem, registry, nodeMap);
       }
     }
 
     // Add local middleware dependencies
     for (const middleware of resource.resource.middleware) {
-      const middlewareNode = nodeMap.get(middleware.id);
-      if (middlewareNode) {
-        node.dependencies[middleware.id] = middlewareNode;
+      const middlewareId = resolveDefinitionId(registry, middleware);
+      if (!middlewareId) {
+        continue;
       }
+      const middlewareNode = nodeMap.get(middlewareId);
+      if (!middlewareNode) {
+        continue;
+      }
+      node.dependencies[middlewareId] = middlewareNode;
+    }
+
+    const localMiddlewareIds = new Set(
+      resource.resource.middleware
+        .map((middleware) => resolveDefinitionId(registry, middleware))
+        .filter((middlewareId): middlewareId is string =>
+          Boolean(middlewareId),
+        ),
+    );
+    for (const middleware of resolveApplicableSubtreeResourceMiddlewares(
+      subtreeLookup,
+      resource.resource,
+    )) {
+      const middlewareId = resolveDefinitionId(registry, middleware);
+      if (!middlewareId) {
+        continue;
+      }
+      if (localMiddlewareIds.has(middlewareId)) {
+        continue;
+      }
+
+      const middlewareNode = nodeMap.get(middlewareId);
+      if (!middlewareNode) {
+        continue;
+      }
+      node.dependencies[`__subtree.middleware.${middlewareId}`] =
+        middlewareNode;
     }
   }
 
@@ -218,20 +335,12 @@ export function buildDependencyGraph(
     const node = nodeMap.get(hook.hook.id)!;
     if (hook.hook.dependencies) {
       for (const [depKey, depItem] of Object.entries(hook.hook.dependencies)) {
-        const depId = getDependencyId(depItem);
-        if (!depId) {
-          continue;
-        }
-        const depNode = nodeMap.get(depId);
-
-        if (depNode) {
-          node.dependencies[depKey] = depNode;
-        }
+        attachDependency(node, depKey, depItem, registry, nodeMap);
       }
     }
   }
 
-  return depenedants;
+  return dependents;
 }
 
 /**
@@ -253,9 +362,16 @@ export function buildEventEmissionGraph(
     const listened: string[] = [];
     const on = h.hook.on;
     if (on === "*") continue; // avoid over-reporting for global hooks
-    if (Array.isArray(on))
-      listened.push(...(on as IEvent[]).map((e: IEvent) => e.id));
-    else listened.push((on as IEvent).id);
+    if (Array.isArray(on)) {
+      listened.push(
+        ...(on as IEvent[])
+          .map((event) => resolveDefinitionId(registry, event))
+          .filter((eventId): eventId is string => Boolean(eventId)),
+      );
+    } else {
+      const listenedEventId = resolveDefinitionId(registry, on as IEvent)!;
+      listened.push(listenedEventId);
+    }
 
     // Collect event dependencies from the hook
     const depEvents: string[] = [];
@@ -263,11 +379,10 @@ export function buildEventEmissionGraph(
     if (deps) {
       for (const value of Object.values(deps)) {
         // For optional wrappers, extract the inner value
-        const candidate: { id?: string } = isOptional(value)
-          ? (value as { inner: { id?: string } }).inner
-          : (value as { id?: string });
+        const candidate = isOptional(value) ? value.inner : value;
         if (candidate && isEvent(candidate)) {
-          depEvents.push(candidate.id);
+          const dependentEventId = resolveDefinitionId(registry, candidate)!;
+          depEvents.push(dependentEventId);
         }
       }
     }

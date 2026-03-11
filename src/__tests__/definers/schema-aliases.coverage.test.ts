@@ -7,7 +7,7 @@ describe("schema aliases coverage", () => {
 
     const taskMiddleware = r.middleware
       .task<{ enabled: boolean }, { value: number }>(
-        "tests.alias.schema.task-mw",
+        "tests-alias-schema-task-mw",
       )
       .schema<{ enabled: boolean }>({
         parse: (input: unknown) => input as { enabled: boolean },
@@ -16,7 +16,7 @@ describe("schema aliases coverage", () => {
       .build();
 
     const resourceMiddleware = r.middleware
-      .resource<{ enabled: boolean }>("tests.alias.schema.resource-mw")
+      .resource<{ enabled: boolean }>("tests-alias-schema-resource-mw")
       .schema<{ enabled: boolean }>({
         parse: (input: unknown) => input as { enabled: boolean },
       })
@@ -24,7 +24,7 @@ describe("schema aliases coverage", () => {
       .build();
 
     const calc = r
-      .task("tests.alias.schema.task")
+      .task("tests-alias-schema-task")
       .schema<{ value: number }>({
         parse: (input: unknown) => {
           taskParsed = true;
@@ -36,7 +36,7 @@ describe("schema aliases coverage", () => {
       .build();
 
     const service = r
-      .resource("tests.alias.schema.resource")
+      .resource("tests-alias-schema-resource")
       .schema<{ port: number }>({
         parse: (input: unknown) => {
           resourceParsed = true;
@@ -48,7 +48,7 @@ describe("schema aliases coverage", () => {
       .build();
 
     const app = r
-      .resource("tests.alias.schema.app")
+      .resource("tests-alias-schema-app")
       .register([
         calc,
         service.with({ port: 3000 }),
@@ -65,7 +65,7 @@ describe("schema aliases coverage", () => {
     const runtime = await run(app);
     expect(taskParsed).toBe(true);
     expect(resourceParsed).toBe(true);
-    expect(runtime.getRootValue<{ answer: number; port: number }>()).toEqual({
+    expect(runtime.getResourceValue(runtime.root)).toEqual({
       answer: 4,
       port: 3000,
     });
@@ -77,7 +77,7 @@ describe("schema aliases coverage", () => {
     let resultParsed = false;
 
     const task = r
-      .task("tests.alias.schema.task.result")
+      .task("tests-alias-schema-task-result")
       .schema<{ value: number }>({
         parse: (input: unknown) => {
           inputParsed = true;
@@ -94,7 +94,7 @@ describe("schema aliases coverage", () => {
       .build();
 
     const app = r
-      .resource("tests.alias.schema.task.result.app")
+      .resource("tests-alias-schema-task-result-app")
       .register([task])
       .build();
 
@@ -108,11 +108,11 @@ describe("schema aliases coverage", () => {
 
   it("supports event.schema(), event.throws(), and asyncContext.schema()", async () => {
     const AppError = r
-      .error<{ code: number }>("tests.alias.event.error")
+      .error<{ code: number }>("tests-alias-event-error")
       .build();
 
     const event = r
-      .event("tests.alias.event")
+      .event("tests-alias-event")
       .schema<{ name: string }>({
         parse: (input: unknown) => input as { name: string },
       })
@@ -120,7 +120,7 @@ describe("schema aliases coverage", () => {
       .build();
 
     const requestContext = r
-      .asyncContext<{ requestId: string }>("tests.alias.ctx")
+      .asyncContext<{ requestId: string }>("tests-alias-ctx")
       .schema({
         parse: (input: unknown) => input as { requestId: string },
       })
@@ -128,7 +128,7 @@ describe("schema aliases coverage", () => {
 
     const seen: string[] = [];
     const hook = r
-      .hook("tests.alias.event.hook")
+      .hook("tests-alias-event-hook")
       .on(event)
       .run(async (emission) => {
         seen.push(emission.data.name);
@@ -136,7 +136,7 @@ describe("schema aliases coverage", () => {
       .build();
 
     const task = r
-      .task("tests.alias.event.task")
+      .task("tests-alias-event-task")
       .dependencies({ event, requestContext })
       .run(async (_input, deps) =>
         deps.requestContext.provide({ requestId: "r-1" }, async () => {
@@ -148,7 +148,7 @@ describe("schema aliases coverage", () => {
       .build();
 
     const app = r
-      .resource("tests.alias.event.app")
+      .resource("tests-alias-event-app")
       .register([event, requestContext, hook, task])
       .build();
 
@@ -160,18 +160,18 @@ describe("schema aliases coverage", () => {
   });
 
   it("supports tag.schema() and error.schema()/error.tags()/error.meta()", () => {
-    const metaTag = r.tag("tests.alias.tags.meta").build();
+    const metaTag = r.tag("tests-alias-tags-meta").build();
 
     const featureTag = r
-      .tag<{ scope: string }>("tests.alias.tags.feature")
+      .tag<{ scope: string }>("tests-alias-tags-feature")
       .schema<{ scope: string }>({
         parse: (input: unknown) => input as { scope: string },
       })
       .build();
-    expect(featureTag.id).toBe("tests.alias.tags.feature");
+    expect(featureTag.id).toBe("tests-alias-tags-feature");
 
     const TypedError = r
-      .error<{ code: number }>("tests.alias.errors.typed")
+      .error<{ code: number }>("tests-alias-errors-typed")
       .schema({
         parse: (input: unknown) => input as { code: number },
       })
@@ -183,16 +183,16 @@ describe("schema aliases coverage", () => {
     expect(TypedError.tags).toEqual([metaTag]);
     expect(TypedError.meta).toEqual({ title: "Typed Error" });
 
-    const DefaultError = r.error("tests.alias.errors.default").build();
+    const DefaultError = r.error("tests-alias-errors-default").build();
     expect(DefaultError.tags).toEqual([]);
     expect(DefaultError.meta).toEqual({});
   });
 
   it("skips invalid middleware/hook dependency nodes during dependency-graph building", async () => {
-    const event = r.event("tests.alias.graph.event").build();
+    const event = r.event("tests-alias-graph-event").build();
 
     const taskMiddleware = r.middleware
-      .task("tests.alias.graph.task-mw")
+      .task("tests-alias-graph-task-mw")
       .dependencies({
         // @ts-expect-error coverage: intentionally invalid dependency value
         skipped: undefined,
@@ -201,7 +201,7 @@ describe("schema aliases coverage", () => {
       .build();
 
     const resourceMiddleware = r.middleware
-      .resource("tests.alias.graph.resource-mw")
+      .resource("tests-alias-graph-resource-mw")
       .dependencies({
         // @ts-expect-error coverage: intentionally invalid dependency value
         skipped: undefined,
@@ -210,7 +210,7 @@ describe("schema aliases coverage", () => {
       .build();
 
     const hook = r
-      .hook("tests.alias.graph.hook")
+      .hook("tests-alias-graph-hook")
       .on(event)
       .dependencies({
         // @ts-expect-error coverage: intentionally invalid dependency value
@@ -220,13 +220,13 @@ describe("schema aliases coverage", () => {
       .build();
 
     const task = r
-      .task("tests.alias.graph.task")
+      .task("tests-alias-graph-task")
       .middleware([taskMiddleware])
       .run(async () => "ok")
       .build();
 
     const app = r
-      .resource("tests.alias.graph.app")
+      .resource("tests-alias-graph-app")
       .register([event, hook, taskMiddleware, resourceMiddleware, task])
       .middleware([resourceMiddleware])
       .dependencies({ task, event })
@@ -238,7 +238,7 @@ describe("schema aliases coverage", () => {
       .build();
 
     const runtime = await run(app);
-    expect(runtime.getRootValue<string>()).toBe("ready");
+    expect(runtime.getResourceValue(runtime.root)).toBe("ready");
     await runtime.dispose();
   });
 });

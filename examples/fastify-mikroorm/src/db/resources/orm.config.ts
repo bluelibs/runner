@@ -6,7 +6,7 @@ import { Options } from "@mikro-orm/core";
 import { env } from "#/general";
 
 export const ormConfig = r
-  .resource("app.db.resources.orm.config")
+  .resource("ormConfig")
   .meta({
     title: "ORM Configuration",
     description:

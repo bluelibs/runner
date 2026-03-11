@@ -2,14 +2,30 @@ import { InterceptorRegistry } from "../../../models/middleware/InterceptorRegis
 import { MiddlewareResolver } from "../../../models/middleware/MiddlewareResolver";
 import { ResourceMiddlewareComposer } from "../../../models/middleware/ResourceMiddlewareComposer";
 import { TaskMiddlewareComposer } from "../../../models/middleware/TaskMiddlewareComposer";
+import { LifecycleAdmissionController } from "../../../models/runtime/LifecycleAdmissionController";
+import { defineResourceMiddleware } from "../../../define";
+import {
+  createMockRuntimeSource,
+  resolveMockDefinitionId,
+} from "../../test-utils/createMockRuntimeSource";
+
+const resolveDefinitionId = (reference: unknown): string | undefined => {
+  return resolveMockDefinitionId(reference);
+};
 
 describe("Middleware interceptor default next() argument branches", () => {
   it("resource global interceptor uses executionInput.next() default config", async () => {
     const store: any = {
       resourceMiddlewares: new Map(),
+      resources: new Map(),
       taskMiddlewares: new Map(),
       tasks: new Map(),
       onUnhandledError: jest.fn(),
+      resolveDefinitionId,
+      toPublicId: (id: string) => id,
+      createRuntimeSource: createMockRuntimeSource,
+      getOwnerResourceId: () => undefined,
+      getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
     const interceptorRegistry = new InterceptorRegistry();
     const middlewareResolver = new MiddlewareResolver(store);
@@ -24,7 +40,7 @@ describe("Middleware interceptor default next() argument branches", () => {
     });
 
     const resource: any = {
-      id: "tests.resource.default-next",
+      id: "tests-resource-default-next",
       init: async (config: string) => config,
       middleware: [],
       resultSchema: undefined,
@@ -37,9 +53,15 @@ describe("Middleware interceptor default next() argument branches", () => {
   it("resource global interceptor can override config via executionInput.next(config)", async () => {
     const store: any = {
       resourceMiddlewares: new Map(),
+      resources: new Map(),
       taskMiddlewares: new Map(),
       tasks: new Map(),
       onUnhandledError: jest.fn(),
+      resolveDefinitionId,
+      toPublicId: (id: string) => id,
+      createRuntimeSource: createMockRuntimeSource,
+      getOwnerResourceId: () => undefined,
+      getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
     const interceptorRegistry = new InterceptorRegistry();
     const middlewareResolver = new MiddlewareResolver(store);
@@ -54,7 +76,7 @@ describe("Middleware interceptor default next() argument branches", () => {
     });
 
     const resource: any = {
-      id: "tests.resource.override-next",
+      id: "tests-resource-override-next",
       init: async (config: string) => config,
       middleware: [],
       resultSchema: undefined,
@@ -66,7 +88,7 @@ describe("Middleware interceptor default next() argument branches", () => {
 
   it("task global interceptor uses executionInput.next() default input", async () => {
     const task: any = {
-      id: "tests.task.default-next",
+      id: "tests-task-default-next",
       run: async (input: string) => input,
       middleware: [],
       inputSchema: undefined,
@@ -85,6 +107,12 @@ describe("Middleware interceptor default next() argument branches", () => {
       ]),
       taskMiddlewares: new Map(),
       resourceMiddlewares: new Map(),
+      resources: new Map(),
+      resolveDefinitionId,
+      toPublicId: (id: string) => id,
+      createRuntimeSource: createMockRuntimeSource,
+      getOwnerResourceId: () => undefined,
+      getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
     };
     const interceptorRegistry = new InterceptorRegistry();
     const middlewareResolver = new MiddlewareResolver(store);
@@ -100,5 +128,105 @@ describe("Middleware interceptor default next() argument branches", () => {
 
     const runner = composer.compose(task);
     await expect(runner("abc")).resolves.toBe("abc");
+  });
+
+  it("resource per-middleware interceptor uses executionInput.next() pass-through config", async () => {
+    const middleware = defineResourceMiddleware({
+      id: "tests-resource-per-middleware-default-next",
+      run: async ({ next, resource }) => next(resource.config),
+    });
+
+    const store: any = {
+      resourceMiddlewares: new Map([
+        [
+          middleware.id,
+          {
+            middleware,
+            computedDependencies: {},
+            isInitialized: true,
+          },
+        ],
+      ]),
+      resources: new Map(),
+      taskMiddlewares: new Map(),
+      tasks: new Map(),
+      onUnhandledError: jest.fn(),
+      resolveDefinitionId,
+      toPublicId: (id: string) => id,
+      createRuntimeSource: createMockRuntimeSource,
+      getOwnerResourceId: () => undefined,
+      getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
+    };
+    const interceptorRegistry = new InterceptorRegistry();
+    interceptorRegistry.addResourceMiddlewareInterceptor(
+      middleware.id,
+      async (_next, input) => input.next(),
+    );
+
+    const composer = new ResourceMiddlewareComposer(
+      store,
+      interceptorRegistry,
+      new MiddlewareResolver(store),
+    );
+
+    const resource: any = {
+      id: "tests-resource-per-middleware-default-next-target",
+      middleware: [middleware],
+      init: async (config: string) => config,
+      resultSchema: undefined,
+    };
+
+    const out = await composer.runInit(resource, "cfg", {} as any, {} as any);
+    expect(out).toBe("cfg");
+  });
+
+  it("resource per-middleware interceptor preserves explicit undefined for executionInput.next(undefined)", async () => {
+    const middleware = defineResourceMiddleware({
+      id: "tests-resource-per-middleware-explicit-undefined",
+      run: async ({ next }) => next(undefined),
+    });
+
+    const store: any = {
+      resourceMiddlewares: new Map([
+        [
+          middleware.id,
+          {
+            middleware,
+            computedDependencies: {},
+            isInitialized: true,
+          },
+        ],
+      ]),
+      resources: new Map(),
+      taskMiddlewares: new Map(),
+      tasks: new Map(),
+      onUnhandledError: jest.fn(),
+      resolveDefinitionId,
+      toPublicId: (id: string) => id,
+      createRuntimeSource: createMockRuntimeSource,
+      getOwnerResourceId: () => undefined,
+      getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
+    };
+    const interceptorRegistry = new InterceptorRegistry();
+    interceptorRegistry.addResourceMiddlewareInterceptor(
+      middleware.id,
+      async (_next, input) => input.next(undefined),
+    );
+
+    const composer = new ResourceMiddlewareComposer(
+      store,
+      interceptorRegistry,
+      new MiddlewareResolver(store),
+    );
+
+    const resource: any = {
+      id: "tests-resource-per-middleware-explicit-undefined-target",
+      middleware: [middleware],
+      init: async (config: string | undefined) => config,
+      resultSchema: undefined,
+    };
+
+    const out = await composer.runInit(resource, "cfg", {} as any, {} as any);
+    expect(out).toBeUndefined();
   });
 });

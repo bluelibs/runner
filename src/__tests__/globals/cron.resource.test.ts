@@ -1,6 +1,7 @@
-import { globals, r } from "../../public";
+import { r, resources, tags } from "../../public";
 import { run } from "../../run";
 import { CronOnError } from "../../globals/types";
+import type { RegisterableItems } from "../../defs";
 
 describe("global cron resource", () => {
   beforeEach(() => {
@@ -18,11 +19,51 @@ describe("global cron resource", () => {
     }
   };
 
-  it("is globally registered and auto-initialized", async () => {
-    const app = r.resource("app").build();
+  const createCronApp = (items: RegisterableItems[] = []) =>
+    r
+      .resource("app")
+      .register([resources.cron, ...items])
+      .build();
+
+  const findSchedule = (
+    runtime: Awaited<ReturnType<typeof run>>,
+    taskId: string,
+  ) =>
+    Array.from(
+      runtime.getResourceValue(resources.cron).schedules.values(),
+    ).find(
+      (schedule) =>
+        schedule.taskId === taskId || schedule.taskId.endsWith(taskId),
+    );
+
+  it("does not auto-register cron scheduling when resource is not registered", async () => {
+    let runs = 0;
+
+    const scheduledTask = r
+      .task("app-tasks-unregistered-cron")
+      .tags([tags.cron.with({ expression: "* * * * *" })])
+      .run(async () => {
+        runs += 1;
+      })
+      .build();
+
+    const app = r.resource("app").register([scheduledTask]).build();
     const runtime = await run(app);
 
-    const cron = runtime.getResourceValue(globals.resources.cron);
+    jest.advanceTimersByTime(120_000);
+    await flushMicrotasks();
+
+    expect(runs).toBe(0);
+    expect(() => runtime.getResourceValue(resources.cron)).toThrow();
+
+    await runtime.dispose();
+  });
+
+  it("initializes when explicitly registered", async () => {
+    const app = createCronApp();
+    const runtime = await run(app);
+
+    const cron = runtime.getResourceValue(resources.cron);
     expect(cron).toBeDefined();
     expect(cron.schedules.size).toBe(0);
 
@@ -33,19 +74,19 @@ describe("global cron resource", () => {
     let runs = 0;
 
     const scheduledTask = r
-      .task("app.tasks.scheduled")
-      .tags([globals.tags.cron.with({ expression: "* * * * *" })])
+      .task("app-tasks-scheduled")
+      .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         runs += 1;
       })
       .build();
 
-    const app = r.resource("app").register([scheduledTask]).build();
+    const app = createCronApp([scheduledTask]);
     const runtime = await run(app);
 
-    const cron = runtime.getResourceValue(globals.resources.cron);
+    const cron = runtime.getResourceValue(resources.cron);
     expect(cron.schedules.size).toBe(1);
-    expect(cron.schedules.get("app.tasks.scheduled")?.stopped).toBe(false);
+    expect(findSchedule(runtime, scheduledTask.id)?.stopped).toBe(false);
 
     jest.advanceTimersByTime(60_000);
     await flushMicrotasks();
@@ -58,9 +99,9 @@ describe("global cron resource", () => {
     let runs = 0;
 
     const immediateTask = r
-      .task("app.tasks.immediate")
+      .task("app-tasks-immediate")
       .tags([
-        globals.tags.cron.with({
+        tags.cron.with({
           expression: "* * * * *",
           immediate: true,
         }),
@@ -70,7 +111,7 @@ describe("global cron resource", () => {
       })
       .build();
 
-    const app = r.resource("app").register([immediateTask]).build();
+    const app = createCronApp([immediateTask]);
     const runtime = await run(app);
 
     await Promise.resolve();
@@ -83,9 +124,9 @@ describe("global cron resource", () => {
     let runs = 0;
 
     const disabledTask = r
-      .task("app.tasks.disabled")
+      .task("app-tasks-disabled")
       .tags([
-        globals.tags.cron.with({
+        tags.cron.with({
           expression: "* * * * *",
           enabled: false,
         }),
@@ -95,10 +136,10 @@ describe("global cron resource", () => {
       })
       .build();
 
-    const app = r.resource("app").register([disabledTask]).build();
+    const app = createCronApp([disabledTask]);
     const runtime = await run(app);
 
-    const cron = runtime.getResourceValue(globals.resources.cron);
+    const cron = runtime.getResourceValue(resources.cron);
     expect(cron.schedules.size).toBe(0);
 
     for (let i = 0; i < 3; i += 1) {
@@ -114,9 +155,9 @@ describe("global cron resource", () => {
     let attempts = 0;
 
     const failingTask = r
-      .task("app.tasks.stop-on-error")
+      .task("app-tasks-stop-on-error")
       .tags([
-        globals.tags.cron.with({
+        tags.cron.with({
           expression: "* * * * *",
           onError: CronOnError.Stop,
         }),
@@ -127,15 +168,14 @@ describe("global cron resource", () => {
       })
       .build();
 
-    const app = r.resource("app").register([failingTask]).build();
+    const app = createCronApp([failingTask]);
     const runtime = await run(app);
 
     jest.advanceTimersByTime(180_000);
     await flushMicrotasks();
 
     expect(attempts).toBe(1);
-    const cron = runtime.getResourceValue(globals.resources.cron);
-    expect(cron.schedules.get("app.tasks.stop-on-error")?.stopped).toBe(true);
+    expect(findSchedule(runtime, failingTask.id)?.stopped).toBe(true);
 
     await runtime.dispose();
   });
@@ -144,9 +184,9 @@ describe("global cron resource", () => {
     let attempts = 0;
 
     const immediateStopTask = r
-      .task("app.tasks.immediate-stop")
+      .task("app-tasks-immediate-stop")
       .tags([
-        globals.tags.cron.with({
+        tags.cron.with({
           expression: "* * * * *",
           immediate: true,
           onError: CronOnError.Stop,
@@ -158,7 +198,7 @@ describe("global cron resource", () => {
       })
       .build();
 
-    const app = r.resource("app").register([immediateStopTask]).build();
+    const app = createCronApp([immediateStopTask]);
     const runtime = await run(app);
 
     await flushMicrotasks();
@@ -166,11 +206,7 @@ describe("global cron resource", () => {
     await flushMicrotasks();
 
     expect(attempts).toBe(1);
-    expect(
-      runtime
-        .getResourceValue(globals.resources.cron)
-        .schedules.get("app.tasks.immediate-stop")?.stopped,
-    ).toBe(true);
+    expect(findSchedule(runtime, immediateStopTask.id)?.stopped).toBe(true);
 
     await runtime.dispose();
   });
@@ -179,9 +215,9 @@ describe("global cron resource", () => {
     let attempts = 0;
 
     const flakyTask = r
-      .task("app.tasks.continue-on-error")
+      .task("app-tasks-continue-on-error")
       .tags([
-        globals.tags.cron.with({
+        tags.cron.with({
           expression: "* * * * *",
           onError: CronOnError.Continue,
         }),
@@ -192,17 +228,14 @@ describe("global cron resource", () => {
       })
       .build();
 
-    const app = r.resource("app").register([flakyTask]).build();
+    const app = createCronApp([flakyTask]);
     const runtime = await run(app);
 
     jest.advanceTimersByTime(180_000);
     await flushMicrotasks();
 
     expect(attempts).toBe(1);
-    const cron = runtime.getResourceValue(globals.resources.cron);
-    expect(cron.schedules.get("app.tasks.continue-on-error")?.stopped).toBe(
-      false,
-    );
+    expect(findSchedule(runtime, flakyTask.id)?.stopped).toBe(false);
 
     await runtime.dispose();
   });
@@ -216,16 +249,20 @@ describe("global cron resource", () => {
     };
 
     const selfDisposingTask = r
-      .task("app.tasks.self-dispose")
-      .tags([globals.tags.cron.with({ expression: "* * * * *" })])
+      .task("app-tasks-self-dispose")
+      .tags([tags.cron.with({ expression: "* * * * *" })])
       .run(async () => {
         attempts += 1;
         await runtimeRef.current?.dispose();
       })
       .build();
 
-    const app = r.resource("app").register([selfDisposingTask]).build();
-    runtimeRef.current = await run(app);
+    const app = createCronApp([selfDisposingTask]);
+    runtimeRef.current = await run(app, {
+      dispose: {
+        drainingBudgetMs: 0,
+      },
+    });
 
     jest.advanceTimersByTime(60_000);
     await flushMicrotasks();

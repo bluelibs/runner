@@ -1,12 +1,16 @@
-import { cacheResource } from "./middleware/cache.middleware";
+import {
+  cacheProviderResource,
+  cacheResource,
+} from "./middleware/cache.middleware";
 import { circuitBreakerResource } from "./middleware/circuitBreaker.middleware";
 import { concurrencyResource } from "./middleware/concurrency.middleware";
 import { rateLimitResource } from "./middleware/rateLimit.middleware";
 import { temporalResource } from "./middleware/temporal.middleware";
 import { cronResource as cron } from "./cron/cron.resource";
 import { queueResource } from "./resources/queue.resource";
+import { healthResource } from "./resources/health.resource";
+import { timersResource } from "./resources/timers.resource";
 import { runtimeResource } from "./resources/runtime.resource";
-import { httpClientFactory } from "./resources/httpClientFactory.resource";
 import { storeResource } from "./resources/store.resource";
 import { debugResource as debug } from "./resources/debug/debug.resource";
 import { serializerResource as serializer } from "./resources/serializer.resource";
@@ -15,25 +19,40 @@ import { middlewareManagerResource as middlewareManager } from "./resources/midd
 import { eventManagerResource as eventManager } from "./resources/eventManager.resource";
 import { taskRunnerResource as taskRunner } from "./resources/taskRunner.resource";
 
-export { storeResource as store, serializer };
+export {
+  healthResource as health,
+  storeResource as store,
+  serializer,
+  timersResource as timers,
+};
 
-export const globalResources = {
+export const systemResources = {
   store: storeResource,
   middlewareManager,
   eventManager,
   taskRunner,
+  runtime: runtimeResource,
+} as const;
+
+export const runnerResources = {
+  health: healthResource,
+  timers: timersResource,
   logger,
   debug,
   serializer,
+  cacheProvider: cacheProviderResource,
   cache: cacheResource,
   cron,
   queue: queueResource,
-  runtime: runtimeResource,
-  httpClientFactory: httpClientFactory,
 
   // Middleware State Resources
   rateLimit: rateLimitResource,
   circuitBreaker: circuitBreakerResource,
   temporal: temporalResource,
   concurrency: concurrencyResource,
+} as const;
+
+export const globalResources = {
+  ...systemResources,
+  ...runnerResources,
 } as const;

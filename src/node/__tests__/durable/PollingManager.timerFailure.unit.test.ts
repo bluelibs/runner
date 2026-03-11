@@ -71,7 +71,7 @@ describe("durable: PollingManager timer failure handling (unit)", () => {
     const service = new DurableService({ store, queue, tasks: [], logger });
 
     const timer: Timer = {
-      id: "t.retry",
+      id: "t-retry",
       executionId: "e1",
       type: TimerType.Retry,
       fireAt: new Date(0),

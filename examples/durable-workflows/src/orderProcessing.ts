@@ -8,7 +8,7 @@
  *   4. waitForSignal   – waits for external PaymentConfirmed signal
  *   5. shipOrder       – marks the order as shipped
  *
- * Demonstrates: ctx.step(), ctx.sleep(), ctx.waitForSignal(), signals.
+ * Demonstrates: durableContext.step(), durableContext.sleep(), durableContext.waitForSignal(), signals.
  */
 import { r } from "@bluelibs/runner";
 import { durable, PaymentConfirmed } from "./ids.js";
@@ -27,13 +27,13 @@ export interface OrderResult {
 }
 
 export const processOrder = r
-  .task("example.tasks.processOrder")
+  .task("processOrder")
   .dependencies({ durable })
   .run(async (input: OrderInput, { durable }): Promise<OrderResult> => {
-    const ctx = durable.use();
+    const durableContext = durable.use();
 
     // Step 1 — validate
-    const validated = await ctx.step("validateOrder", async () => {
+    const validated = await durableContext.step("validateOrder", async () => {
       if (!input.orderId || input.amount <= 0) {
         throw new Error("Invalid order");
       }
@@ -46,7 +46,7 @@ export const processOrder = r
     });
 
     // Step 2 — charge
-    const charge = await ctx.step("chargeCustomer", async () => {
+    const charge = await durableContext.step("chargeCustomer", async () => {
       // Simulate calling a payment gateway
       return {
         chargeId: `chg_${validated.orderId}_${Date.now()}`,
@@ -55,15 +55,15 @@ export const processOrder = r
     });
 
     // Step 3 — durable sleep (survives restarts)
-    await ctx.sleep(100);
+    await durableContext.sleep(100);
 
     // Step 4 — wait for external payment confirmation (signal)
-    const confirmation = await ctx.waitForSignal(PaymentConfirmed, {
+    const confirmation = await durableContext.waitForSignal(PaymentConfirmed, {
       stepId: "awaitPaymentConfirmation",
     });
 
     // Step 5 — ship
-    const shipment = await ctx.step("shipOrder", async () => {
+    const shipment = await durableContext.step("shipOrder", async () => {
       return {
         orderId: validated.orderId,
         transactionId: confirmation.transactionId,
@@ -72,7 +72,7 @@ export const processOrder = r
       };
     });
 
-    await ctx.note(
+    await durableContext.note(
       `Order ${validated.orderId} shipped via charge ${charge.chargeId}`,
     );
 

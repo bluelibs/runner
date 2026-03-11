@@ -1,28 +1,27 @@
-import * as http from "http";
 import { defineResource, defineTask, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
-import { nodeExposure } from "../../../exposure/resource";
+import { rpcExposure } from "../testkit/rpcExposure";
 
 describe("nodeExposure - misc routing branches", () => {
   const TOKEN = "unit-secret";
   const noInputTask = defineTask<void, Promise<number>>({
-    id: "unit.exposure.misc.noInputTask",
+    id: "unit-exposure-misc-noInputTask",
     run: async () => 123,
   });
   const dummyEvent = defineEvent<{ x?: number }>({
-    id: "unit.exposure.misc.event",
+    id: "unit-exposure-misc-event",
   });
 
   it("direct handlers: extractTarget returns null for non-base paths and url fallback with undefined", async () => {
-    const exposure = nodeExposure.with({
-      http: { server: http.createServer(), auth: { token: TOKEN } },
+    const exposure = rpcExposure.with({
+      http: { auth: { token: TOKEN, allowAnonymous: true } },
     });
     const app = defineResource({
-      id: "unit.exposure.misc.app5",
+      id: "unit-exposure-misc-app5",
       register: [noInputTask, dummyEvent, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
 
     const req1: any = {
@@ -68,15 +67,15 @@ describe("nodeExposure - misc routing branches", () => {
   });
 
   it("handleTask with undefined url falls back to '/' and returns 404", async () => {
-    const exposure = nodeExposure.with({
-      http: { server: http.createServer(), auth: { token: TOKEN } },
+    const exposure = rpcExposure.with({
+      http: { auth: { token: TOKEN, allowAnonymous: true } },
     });
     const app = defineResource({
-      id: "unit.exposure.misc.app7",
+      id: "unit-exposure-misc-app7",
       register: [noInputTask, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
     const req: any = {
       method: "POST",
@@ -101,20 +100,18 @@ describe("nodeExposure - misc routing branches", () => {
   });
 
   it("handleEvent success branch returns 200 (direct)", async () => {
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
-        auth: { token: TOKEN },
+        auth: { token: TOKEN, allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "unit.exposure.misc.app8",
+      id: "unit-exposure-misc-app8",
       register: [dummyEvent, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
     const req: any = {
       method: "POST",

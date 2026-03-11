@@ -1,17 +1,21 @@
-import { r } from "@bluelibs/runner";
+import { Match, r } from "@bluelibs/runner";
 import { httpRoute } from "../../http/tags/http.tag";
 import { authMiddleware } from "../middleware/auth";
 import { UserContext } from "../contexts/user.context";
 import { RequestContext } from "../../http/contexts/request.context";
 import { ApiResponse } from "../../http/types";
 import { User, UserSchema } from "../types";
-import z from "zod";
+
+const profileResponseSchema = Match.compile({
+  success: Boolean,
+  data: UserSchema.pattern,
+});
 
 /**
  * Get current user profile (protected route)
  */
 export const getUserProfileTask = r
-  .task("app.tasks.auth.profile")
+  .task("profile")
   .middleware([authMiddleware.with({ requiresAuth: true })])
   .tags([
     httpRoute.get("/api/auth/profile", {
@@ -19,10 +23,7 @@ export const getUserProfileTask = r
       description: "Get the authenticated user's profile information",
       tags: ["Authentication", "User"],
       requiresAuth: true,
-      responseSchema: z.object({
-        success: z.boolean(),
-        data: UserSchema,
-      }),
+      responseSchema: profileResponseSchema,
     }),
   ])
   .run(async (): Promise<ApiResponse<User>> => {
@@ -34,7 +35,7 @@ export const getUserProfileTask = r
       return {
         success: true,
         data: {
-          id: userSession.userId,
+          id: userSession.id,
           email: userSession.email,
           name: userSession.name,
           createdAt: new Date(), // In real app, would come from database

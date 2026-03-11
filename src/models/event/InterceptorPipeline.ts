@@ -1,6 +1,6 @@
 /**
  * Utility to compose an array of interceptors into a single function.
- * Last-added interceptor executes first (LIFO).
+ * Interceptors execute in registration order (FIFO).
  */
 export function composeInterceptors<TArgs extends any[], TResult>(
   interceptors: Array<

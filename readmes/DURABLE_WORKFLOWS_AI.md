@@ -12,16 +12,16 @@ They're designed for flows that span time (minutes → days): approvals, payment
 
 - A workflow does not "resume the instruction pointer".
 - On every wake-up (sleep/signal/retry/recover), it **re-runs from the top** and fast-forwards using stored results:
-  - `ctx.step("id", fn)` runs once, persists result, returns cached on replay.
-  - `ctx.sleep(...)` and `ctx.waitForSignal(...)` persist durable checkpoints.
+  - `durableContext.step("id", fn)` runs once, persists result, returns cached on replay.
+  - `durableContext.sleep(...)` and `durableContext.waitForSignal(...)` persist durable checkpoints.
 
-Rule: side effects belong inside `ctx.step(...)`.
+Rule: side effects belong inside `durableContext.step(...)`.
 
 ## The happy path
 
 1. **Register a durable resource** (store + queue + event bus).
 2. **Write a durable task**:
-   - stable `ctx.step("...")` ids
+   - stable `durableContext.step("...")` ids
    - explicit `{ stepId }` for `sleep/emit/waitForSignal` in production
 3. **Start the workflow**:
    - `executionId = await service.start(taskOrTaskId, input)`
@@ -49,26 +49,26 @@ Signals buffer if no waiter exists yet; the next `waitForSignal(...)` consumes t
 
 ## Tagging workflows (required for discovery)
 
-Durable workflows are regular Runner tasks, but **must be tagged with `durableWorkflowTag`** to make them discoverable at runtime. Always add this tag to your workflow tasks:
+Durable workflows are regular Runner tasks, but **must be tagged with `tags.durableWorkflow`** to make them discoverable at runtime. Always add this tag to your workflow tasks:
 
 ```ts
 import { r } from "@bluelibs/runner";
-import { memoryDurableResource, durableWorkflowTag } from "@bluelibs/runner/node";
+import { resources, tags } from "@bluelibs/runner/node";
 
-const durable = memoryDurableResource.fork("app.durable");
+const durable = resources.memoryWorkflow.fork("app-durable");
 
 const onboarding = r
   .task("app.workflows.onboarding")
   .dependencies({ durable })
   .tags([
-    durableWorkflowTag.with({
+    tags.durableWorkflow.with({
       category: "users",
       defaults: { invitedBy: "system" },
     }),
   ])
   .run(async (_input, { durable }) => {
-    const ctx = durable.use();
-    await ctx.step("create-user", async () => ({ ok: true }));
+    const durableContext = durable.use();
+    await durableContext.step("create-user", async () => ({ ok: true }));
     return { ok: true };
   })
   .build();
@@ -78,9 +78,9 @@ const onboarding = r
 // const workflows = durableRuntime.getWorkflows();
 ```
 
-The `durableWorkflowTag` is **required** — workflows without this tag will not be discoverable via `getWorkflows()`. The durable resources (`memoryDurableResource` / `redisDurableResource` / `durableResource`) auto-register this tag definition, so you can use it immediately without manual tag registration.
+`tags.durableWorkflow` is **required** — workflows without this tag will not be discoverable via `getWorkflows()`. Register `resources.durable` once in the app so the durable tag definition and durable events are available at runtime.
 
-`durableWorkflowTag` is discovery metadata, and can also carry optional `defaults` for `describe(...)`.
+`tags.durableWorkflow` is discovery metadata, and can also carry optional `defaults` for `describe(...)`.
 The unified response envelope is produced by `startAndWait(...)`: `{ durable: { executionId }, data }`.
 `defaults` are applied only by `describe(task)` when no explicit describe input is passed.
 
@@ -91,24 +91,24 @@ Tagged tasks are discovery metadata only. Start workflows explicitly via `durabl
 ```ts
 import express from "express";
 import { r, run } from "@bluelibs/runner";
-import { memoryDurableResource, durableWorkflowTag } from "@bluelibs/runner/node";
+import { resources, tags } from "@bluelibs/runner/node";
 
-const durable = memoryDurableResource.fork("app.durable");
+const durable = resources.memoryWorkflow.fork("app-durable");
 
 const approveOrder = r
   .task("app.workflows.approveOrder")
   .dependencies({ durable })
-  .tags([durableWorkflowTag.with({ category: "orders" })])
+  .tags([tags.durableWorkflow.with({ category: "orders" })])
   .run(async (input: { orderId: string }, { durable }) => {
-    const ctx = durable.use();
-    await ctx.step("approve", async () => ({ approved: true }));
+    const durableContext = durable.use();
+    await durableContext.step("approve", async () => ({ approved: true }));
     return { orderId: input.orderId, status: "approved" as const };
   })
   .build();
 
 const api = r
   .resource("app.api")
-  .register([durable.with({ worker: false }), approveOrder])
+  .register([resources.durable, durable.with({ worker: false }), approveOrder])
   .dependencies({ durable, approveOrder })
   .init(async (_cfg, { durable, approveOrder }) => {
     const app = express();
@@ -131,18 +131,15 @@ await run(api);
 Recommended wiring (config-only resources):
 
 ```ts
-import {
-  memoryDurableResource,
-  redisDurableResource,
-} from "@bluelibs/runner/node";
+import { resources } from "@bluelibs/runner/node";
 
 // dev/tests
-const durable = memoryDurableResource
-  .fork("app.durable")
-  .with({ worker: true });
+const durable = resources.memoryWorkflow.fork("app-durable").with({
+  worker: true,
+});
 
 // production (Redis + optional RabbitMQ queue)
-const durableProd = redisDurableResource.fork("app.durable").with({
+const durableProd = resources.redisWorkflow.fork("app-durable").with({
   redis: { url: process.env.REDIS_URL! },
   queue: { url: process.env.RABBITMQ_URL! },
   worker: true,
@@ -151,8 +148,8 @@ const durableProd = redisDurableResource.fork("app.durable").with({
 
 `waitForSignal()` return shapes:
 
-- `await ctx.waitForSignal(Signal)` → `payload` (throws on timeout)
-- `await ctx.waitForSignal(Signal, { timeoutMs })` → `{ kind: "signal", payload } | { kind: "timeout" }`
+- `await durableContext.waitForSignal(Signal)` → `payload` (throws on timeout)
+- `await durableContext.waitForSignal(Signal, { timeoutMs })` → `{ kind: "signal", payload } | { kind: "timeout" }`
 
 ## Scheduling
 
@@ -167,33 +164,32 @@ const durableProd = redisDurableResource.fork("app.durable").with({
 
 ## Inspecting an execution
 
+- `createDashboardMiddleware` is now part of `@bluelibs/runner-durable-dashboard` (not core).
 - `store.getExecution(executionId)` → status (running/sleeping/completed/failed/etc)
 - When supported:
   - `store.listStepResults(executionId)` → completed steps
   - `store.listAuditEntries(executionId)` → timeline (step_completed, signal_waiting, signal_delivered, sleeps, status changes)
 - `new DurableOperator(store).getExecutionDetail(executionId)` returns `{ execution, steps, audit }`.
 
-There's also a dashboard middleware: `createDashboardMiddleware(service, new DurableOperator(store), { operatorAuth })` (operator actions are denied unless `operatorAuth` is provided; opt out with `dangerouslyAllowUnauthenticatedOperator: true`).
-
 "Internal steps" are recorded steps created by durable primitives (`sleep/waitForSignal/emit` and some bookkeeping). They typically use reserved step id prefixes like `__...` or `rollback:...`.
 
-Audit can be enabled via `audit: { enabled: true }`; inside workflows you can add replay-safe notes via `ctx.note("msg", meta)`. In Runner integration, audit entries are also emitted via `durableEvents.*`.
+Audit can be enabled via `audit: { enabled: true }`; inside workflows you can add replay-safe notes via `durableContext.note("msg", meta)`. In Runner integration, audit entries are also emitted via `durableEvents.*`.
 
-Runner integration detail: durable events emission does not depend on `audit.enabled` (it controls store persistence); events are emitted as long as an audit emitter is configured (the `durableResource` wires one by default).
+Runner integration detail: durable events emission does not depend on `audit.enabled` (it controls store persistence); events are emitted as long as an audit emitter is configured (the built-in durable workflow resources wire one by default).
 
 Import and subscribe using event definitions (not strings): `import { durableEvents } from "@bluelibs/runner/node"` and `.on(durableEvents.audit.appended)` (or a specific durable event).
 
 ## Compensation / rollback
 
-- `ctx.step("id").up(...).down(...)` registers compensations.
-- `await ctx.rollback()` runs compensations in reverse order.
+- `durableContext.step("id").up(...).down(...)` registers compensations.
+- `await durableContext.rollback()` runs compensations in reverse order.
 
-## Branching with ctx.switch()
+## Branching with durableContext.switch()
 
-`ctx.switch()` is a replay-safe branching primitive. It evaluates matchers against a value, persists which branch was taken, and on replay skips the matchers entirely.
+`durableContext.switch()` is a replay-safe branching primitive. It evaluates matchers against a value, persists which branch was taken, and on replay skips the matchers entirely.
 
 ```ts
-const result = await ctx.switch(
+const result = await durableContext.switch(
   "route-order",
   order.status,
   [
@@ -214,7 +210,7 @@ const result = await ctx.switch(
 ); // optional default
 ```
 
-- First arg is the step id (must be unique, like `ctx.step`).
+- First arg is the step id (must be unique, like `durableContext.step`).
 - Matchers evaluate in order; first match wins.
 - The matched branch `id` + result are persisted; on replay the cached result is returned immediately.
 - Throws if no branch matches and no default is provided.
@@ -238,17 +234,17 @@ const shape2 = await durableRuntime.describe<{ orderId: string }>(myTask, {
 });
 ```
 
-The recorder shims `durable.use()` inside the task's `run` and records every `ctx.*` operation.
+The recorder shims `durable.use()` inside the task's `run` and records every `durableContext.*` operation.
 
-If the task uses `durableWorkflowTag.with({ defaults: {...} })`, `describe(task)` uses those defaults.
+If the task uses `tags.durableWorkflow.with({ defaults: {...} })`, `describe(task)` uses those defaults.
 `describe(task, input)` always overrides tag defaults.
 
 Notes:
 
-- The recorder captures each `ctx.*` call as a `FlowNode`; step bodies are never executed.
+- The recorder captures each `durableContext.*` call as a `FlowNode`; step bodies are never executed.
 - Supported node kinds: `step`, `sleep`, `waitForSignal`, `emit`, `switch`, `note`.
 - `DurableFlowShape` and all `FlowNode` types are exported for type-safe consumption.
-- Conditional logic should be modeled with `ctx.switch()` (not JS `if/else`) for the shape to capture it.
+- Conditional logic should be modeled with `durableContext.switch()` (not JS `if/else`) for the shape to capture it.
 
 ## Versioning (don't get burned)
 
@@ -258,5 +254,5 @@ Notes:
 
 ## Operational notes
 
-- `ctx.emit(...)` is best-effort (notifications), not guaranteed delivery.
+- `durableContext.emit(...)` is best-effort (notifications), not guaranteed delivery.
 - Queue mode is at-least-once; correctness comes from the store + step memoization.

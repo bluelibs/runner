@@ -7,7 +7,7 @@ import {
 } from "../httpResponse";
 import { readJsonBody } from "../requestBody";
 import type { SerializerLike } from "../../../serializer";
-import type { Authenticator, AllowListGuard } from "../types";
+import type { Authenticator, AllowListGuard, JsonResponse } from "../types";
 import type {
   NodeExposureDeps,
   NodeExposureHttpCorsConfig,
@@ -31,6 +31,14 @@ interface EventHandlerDeps {
     json?: { maxSize?: number };
   };
   allowAsyncContext?: (eventId: string) => boolean;
+  resolveAsyncContextAllowList?: (
+    eventId: string,
+  ) => readonly string[] | undefined;
+  authorizeEvent?: (
+    req: IncomingMessage,
+    eventId: string,
+  ) => Promise<JsonResponse | null> | JsonResponse | null;
+  sourceResourceId?: string;
 }
 
 export const createEventHandler = (deps: EventHandlerDeps) => {
@@ -44,14 +52,27 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     serializer,
     limits,
     allowAsyncContext = () => true,
+    resolveAsyncContextAllowList = () => undefined,
+    authorizeEvent = () => null,
+    sourceResourceId = "platform-node-resources-rpcLanes",
   } = deps;
+  const exposureSource = store.createRuntimeSource(
+    "resource",
+    sourceResourceId,
+  );
 
   return async (
     req: IncomingMessage,
     res: ServerResponse,
-    eventId: string,
+    eventIdInput: string,
   ): Promise<void> => {
-    const allowAsyncContextForEvent = allowAsyncContext(eventId);
+    const eventId = store.resolveDefinitionId(eventIdInput) ?? eventIdInput;
+    const policyEventId = store.events.has(eventId)
+      ? store.toPublicId(eventId)
+      : eventIdInput;
+    const allowAsyncContextForEvent = allowAsyncContext(policyEventId);
+    const asyncContextAllowListForEvent =
+      resolveAsyncContextAllowList(policyEventId);
 
     if (req.method !== "POST") {
       applyCorsActual(req, res, cors);
@@ -66,10 +87,17 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
       return;
     }
 
-    const allowError = allowList.ensureEvent(eventId);
+    const allowError = allowList.ensureEvent(policyEventId);
     if (allowError) {
       applyCorsActual(req, res, cors);
       respondJson(res, allowError, serializer);
+      return;
+    }
+
+    const authzError = await authorizeEvent(req, policyEventId);
+    if (authzError) {
+      applyCorsActual(req, res, cors);
+      respondJson(res, authzError, serializer);
       return;
     }
 
@@ -121,17 +149,20 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
               return await eventManager.emitWithResult(
                 storeEvent.event,
                 body.value?.payload,
-                "exposure:http",
+                exposureSource,
               );
             }
             await eventManager.emit(
               storeEvent.event,
               body.value?.payload,
-              "exposure:http",
+              exposureSource,
             );
             return undefined;
           },
-          { allowAsyncContext: allowAsyncContextForEvent },
+          {
+            allowAsyncContext: allowAsyncContextForEvent,
+            allowedAsyncContextIds: asyncContextAllowListForEvent,
+          },
         );
 
       const payload = await runEmit();

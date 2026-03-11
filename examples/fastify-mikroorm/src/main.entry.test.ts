@@ -1,4 +1,17 @@
 describe("main entry", () => {
+  const identity = <T>(value: T) => value;
+  const createRunnerMock = (runFn: () => Promise<unknown>) => ({
+    run: runFn,
+    resource: identity,
+    r: {
+      resource: (_id: string) => ({
+        register: () => ({ build: () => ({}) }),
+      }),
+      runner: { logger: {} },
+      system: {},
+    },
+  });
+
   const ORIG_ENV = { ...process.env };
   beforeEach(() => {
     jest.resetModules();
@@ -10,21 +23,14 @@ describe("main entry", () => {
 
   it("invokes run and resolves without crashing", async () => {
     jest.isolateModules(() => {
-      jest.doMock("@bluelibs/runner", () => ({
-        run: () => Promise.resolve({ logger: { info: jest.fn() } }),
-        resource: (x: any) => x,
-        r: {
-          resource: (id: string) => ({
-            register: () => ({ build: () => ({}) }),
-          }),
-        },
-        globals: { resources: { logger: {} } },
-      }));
+      jest.doMock("@bluelibs/runner", () =>
+        createRunnerMock(() => Promise.resolve({ logger: { info: jest.fn() } })),
+      );
       jest.doMock("@bluelibs/runner-dev", () => ({
-        dev: { with: (_: any) => ({}) },
+        dev: { with: identity },
       }));
       jest.doMock("./db/resources", () => ({ db: {}, fixtures: {} }));
-      jest.doMock("./http", () => ({ http: {} }));
+      jest.doMock("./web", () => ({ http: {} }));
       jest.doMock("./users", () => ({ users: {} }));
       jest.doMock("./general", () => ({ env: {} }));
       // Importing main should not throw
@@ -41,21 +47,14 @@ describe("main entry", () => {
 
     await new Promise<void>((resolve) => {
       jest.isolateModules(() => {
-        jest.doMock("@bluelibs/runner", () => ({
-          run: () => Promise.reject(error),
-          resource: (x: any) => x,
-          r: {
-            resource: (id: string) => ({
-              register: () => ({ build: () => ({}) }),
-            }),
-          },
-          globals: { resources: { logger: {} } },
-        }));
+        jest.doMock("@bluelibs/runner", () =>
+          createRunnerMock(() => Promise.reject(error)),
+        );
         jest.doMock("@bluelibs/runner-dev", () => ({
-          dev: { with: (_: any) => ({}) },
+          dev: { with: identity },
         }));
         jest.doMock("./db/resources", () => ({ db: {}, fixtures: {} }));
-        jest.doMock("./http", () => ({ http: {} }));
+        jest.doMock("./web", () => ({ http: {} }));
         jest.doMock("./users", () => ({ users: {} }));
         jest.doMock("./general", () => ({ env: {} }));
         require("./main");

@@ -7,12 +7,14 @@ import type {
 } from "./types";
 import type { ITask } from "../../defs";
 import type { TaskRunner } from "../../models/TaskRunner";
+import { runtimeSource } from "../../types/runtimeSource";
 
 export interface NodeExposureHttpAuthConfig {
   header?: string;
   token?: string | string[];
   /**
    * When true, allows unauthenticated access if no token or validators are configured.
+   * Also allows open exposure when no rpc allow-list source is active.
    * Defaults to false (secure by default - requires explicit auth configuration).
    *
    * WARNING: Setting this to true without proper network isolation exposes
@@ -39,8 +41,10 @@ export function createAuthenticator(
     Promise<AuthValidatorResult>,
     any
   >[],
+  sourceResourceId: string = "platform-node-resources-rpcLanes",
 ): Authenticator {
   const headerName = (authCfg?.header ?? "x-runner-token").toLowerCase();
+  const exposureSource = runtimeSource.resource(sourceResourceId);
 
   return async (req) => {
     const providedToken = headerValue(req.headers[headerName]);
@@ -68,7 +72,9 @@ export function createAuthenticator(
 
       for (const task of validatorTasks) {
         try {
-          const result = await taskRunner.run(task, input);
+          const result = await taskRunner.run(task, input, {
+            source: exposureSource,
+          });
           if (result?.ok) {
             return { ok: true };
           }

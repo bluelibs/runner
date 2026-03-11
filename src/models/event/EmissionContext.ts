@@ -1,0 +1,154 @@
+import {
+  EventEmissionFailureMode,
+  IEvent,
+  IEventEmission,
+  IEventEmitReport,
+  TagType,
+} from "../../defs";
+import {
+  transactionalParallelConflictError,
+  validationError,
+} from "../../errors";
+import { EventEmissionInterceptor } from "./types";
+import { symbolDefinitionIdentity, symbolRuntimeId } from "../../types/symbols";
+import {
+  createEmptyReport,
+  executeInParallel,
+  executeSequentially,
+  executeTransactionally,
+} from "./EmissionExecutor";
+import { RuntimeCallSource } from "../../types/runtimeSource";
+
+export class EventEmissionImpl<TInput> implements IEventEmission<TInput> {
+  private propagationStopped = false;
+  public readonly [symbolDefinitionIdentity]?: object;
+  public readonly [symbolRuntimeId]?: string;
+
+  constructor(
+    public readonly id: string,
+    public readonly path: string,
+    public readonly data: TInput,
+    public readonly timestamp: Date,
+    public readonly source: RuntimeCallSource,
+    public readonly meta: Record<string, any>,
+    public readonly transactional: boolean,
+    public readonly tags: TagType[],
+    runtimeId?: string,
+    definitionIdentity?: object,
+  ) {
+    this[symbolRuntimeId] = runtimeId;
+    this[symbolDefinitionIdentity] = definitionIdentity;
+  }
+
+  stopPropagation = () => {
+    this.propagationStopped = true;
+  };
+
+  isPropagationStopped = () => {
+    return this.propagationStopped;
+  };
+}
+
+// Guards the interceptor chain: propagation control lives in a closure on the
+// original EventEmissionImpl instance. If an interceptor swaps those methods
+// on its nextEvent, stop signals become invisible to executeSequentially.
+function assertPropagationMethodsUnchanged(
+  eventId: string,
+  currentEvent: IEventEmission<any>,
+  nextEvent: IEventEmission<any>,
+): void {
+  if (
+    nextEvent.stopPropagation !== currentEvent.stopPropagation ||
+    nextEvent.isPropagationStopped !== currentEvent.isPropagationStopped
+  ) {
+    validationError.throw({
+      subject: "Event interceptor",
+      id: eventId,
+      originalError: new Error(
+        "Interceptors cannot override stopPropagation/isPropagationStopped",
+      ),
+    });
+  }
+}
+
+export class EmissionContext<TInput> {
+  public deepestEvent: IEventEmission<any>;
+  public executionReport: IEventEmitReport;
+
+  constructor(
+    private readonly eventDefinition: IEvent<TInput>,
+    private readonly allListeners: any[],
+    private readonly failureMode: EventEmissionFailureMode,
+    private readonly emissionInterceptors: EventEmissionInterceptor[],
+    initialEvent: IEventEmission<TInput>,
+  ) {
+    this.deepestEvent = initialEvent;
+    this.executionReport = createEmptyReport(allListeners.length);
+  }
+
+  async baseEmit(eventToEmit: IEventEmission<any>): Promise<IEventEmitReport> {
+    if (this.allListeners.length === 0) {
+      this.executionReport.propagationStopped =
+        eventToEmit.isPropagationStopped();
+      return this.executionReport;
+    }
+
+    if (this.eventDefinition.transactional && this.eventDefinition.parallel) {
+      transactionalParallelConflictError.throw({
+        eventId: this.eventDefinition.id,
+      });
+    }
+
+    if (this.eventDefinition.transactional) {
+      return executeTransactionally({
+        listeners: this.allListeners,
+        event: eventToEmit,
+        isPropagationStopped: eventToEmit.isPropagationStopped,
+      });
+    }
+
+    if (this.eventDefinition.parallel) {
+      return executeInParallel({
+        listeners: this.allListeners,
+        event: eventToEmit,
+        failureMode: this.failureMode,
+      });
+    } else {
+      return executeSequentially({
+        listeners: this.allListeners,
+        event: eventToEmit,
+        isPropagationStopped: eventToEmit.isPropagationStopped,
+        failureMode: this.failureMode,
+      });
+    }
+  }
+
+  async runInterceptor(
+    index: number,
+    eventToEmit: IEventEmission<any>,
+  ): Promise<void> {
+    this.deepestEvent = eventToEmit;
+    const interceptor = this.emissionInterceptors[index];
+    if (!interceptor) {
+      this.executionReport = await this.baseEmit(eventToEmit);
+      return;
+    }
+    let didCallNext = false;
+    return interceptor((nextEvent) => {
+      if (didCallNext) {
+        validationError.throw({
+          subject: "Event interceptor",
+          id: this.eventDefinition.id,
+          originalError: "Interceptors can call next() only once per emission.",
+        });
+      }
+      didCallNext = true;
+      assertPropagationMethodsUnchanged(
+        this.eventDefinition.id,
+        eventToEmit,
+        nextEvent,
+      );
+      return this.runInterceptor(index + 1, nextEvent);
+    }, eventToEmit);
+  }
+}

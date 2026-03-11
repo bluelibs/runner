@@ -2,7 +2,7 @@ import { defineResource } from "../../define";
 import { cResource } from "./c.resource";
 
 export const bResource = defineResource({
-  id: "b.resource",
+  id: "b-resource",
   dependencies: {
     c: cResource,
   },
@@ -13,7 +13,7 @@ export const bResource = defineResource({
   },
 });
 export const b1Resource = defineResource({
-  id: "b.resource",
+  id: "b-resource",
   dependencies: {
     c: cResource,
   },
@@ -22,7 +22,7 @@ export const b1Resource = defineResource({
   },
 });
 export const b2Resource = defineResource({
-  id: "b.resource",
+  id: "b-resource",
   dependencies: {
     c: cResource,
   },

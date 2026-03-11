@@ -27,7 +27,7 @@ The code in `src/` is imported by the repository tests. In a standalone app you'
 
 ## Notes
 
-- Uses request-scoped context via `createContext`
+- Uses request-scoped async context via `r.asyncContext(...)`
 - Disables shutdown hooks for Lambda (`shutdownHooks: false`)
 - Keeps a cached runner between warm invocations
 - All handlers share HTTP utilities from `http.ts` to avoid duplication

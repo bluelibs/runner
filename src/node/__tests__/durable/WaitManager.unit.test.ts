@@ -8,7 +8,7 @@ import { MemoryStore } from "../../durable/store/MemoryStore";
 describe("WaitManager", () => {
   const baseExecution: Execution = {
     id: "exec-1",
-    taskId: "task.test",
+    taskId: "task-test",
     input: undefined,
     status: ExecutionStatus.Running,
     attempt: 1,

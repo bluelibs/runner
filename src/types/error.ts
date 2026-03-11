@@ -1,8 +1,12 @@
-import { symbolError, symbolFilePath } from "./symbols";
+import {
+  symbolDefinitionIdentity,
+  symbolError,
+  symbolFilePath,
+} from "./symbols";
 import type { IOptionalDependency } from "./utilities";
-import type { IValidationSchema } from "./utilities";
+import type { IValidationSchema, ValidationSchemaInput } from "./utilities";
 import type { IErrorMeta } from "./meta";
-import type { TagType } from "./tag";
+import type { ErrorTagType } from "./tag";
 
 export type ErrorReference = string | IErrorHelper<any>;
 export type ThrowsList = ReadonlyArray<ErrorReference>;
@@ -24,9 +28,9 @@ export interface IErrorDefinition<
   /**
    * Validate error data on throw(). If provided, data is parsed first.
    */
-  dataSchema?: IValidationSchema<TData>;
+  dataSchema?: ValidationSchemaInput<TData>;
   meta?: IErrorMeta;
-  tags?: TagType[];
+  tags?: ErrorTagType[];
 }
 
 export interface IErrorDefinitionFinal<
@@ -35,6 +39,7 @@ export interface IErrorDefinitionFinal<
   format: (data: TData) => string;
   httpCode?: number;
   remediation?: string | ((data: TData) => string);
+  dataSchema?: IValidationSchema<TData>;
 }
 
 export type DefaultErrorType = Record<string, unknown>;
@@ -55,6 +60,7 @@ export interface IRunnerError<
   httpCode?: number;
   data: TData;
   remediation?: string;
+  [symbolDefinitionIdentity]?: object;
 }
 
 /**
@@ -71,11 +77,9 @@ export interface IErrorHelper<
   /** Metadata attached to this error */
   meta: IErrorMeta;
   /** Tags attached to this error */
-  tags: TagType[];
+  tags: ErrorTagType[];
   /** Construct a typed error with the given data without throwing it */
   "new"(...args: ErrorThrowArgs<TData>): IRunnerError<TData>;
-  /** Alias for .new() */
-  create(...args: ErrorThrowArgs<TData>): IRunnerError<TData>;
   /** Throw a typed error with the given data */
   throw(...args: ErrorThrowArgs<TData>): never;
   /**
@@ -94,4 +98,6 @@ export interface IErrorHelper<
   optional(): IOptionalDependency<IErrorHelper<TData>>;
   /** File path where this error was defined */
   [symbolFilePath]: string;
+  /** Stable lineage identity shared with thrown errors created by this helper */
+  [symbolDefinitionIdentity]?: object;
 }

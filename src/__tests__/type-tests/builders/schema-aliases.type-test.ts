@@ -1,10 +1,17 @@
-import { r } from "../../../";
+import { Match, r } from "../../../";
+
+class DecoratedSchema {
+  scope!: string;
+}
+
+Match.Schema()(DecoratedSchema);
+Match.Field(String)(DecoratedSchema.prototype, "scope");
 
 // Type-only tests for fluent `.schema()` aliases.
 
 // Scenario: task entry generic should seed input typing.
 {
-  r.task<{ id: string }>("types.schema.task.entry-generic")
+  r.task<{ id: string }>("types-schema-task-entry-generic")
     .run(async (input) => {
       input.id;
       // @ts-expect-error property does not exist on entry-generic input
@@ -16,7 +23,7 @@ import { r } from "../../../";
 
 // Scenario: later schema typing should override earlier entry generic typing.
 {
-  r.task<{ seeded: number }>("types.schema.task.entry-precedence")
+  r.task<{ seeded: number }>("types-schema-task-entry-precedence")
     .schema<{ fromSchema: string }>({ parse: (x: any) => x })
     .run(async (input) => {
       input.fromSchema;
@@ -29,9 +36,9 @@ import { r } from "../../../";
 
 // Scenario: resource entry generic should type config usage even without init.
 {
-  const child = r.resource("types.schema.resource.entry-generic.child").build();
+  const child = r.resource("types-schema-resource-entry-generic-child").build();
 
-  r.resource<{ enabled: boolean }>("types.schema.resource.entry-generic")
+  r.resource<{ enabled: boolean }>("types-schema-resource-entry-generic")
     .register((config) => {
       config.enabled;
       // @ts-expect-error property does not exist on entry-generic config
@@ -41,13 +48,33 @@ import { r } from "../../../";
     .build();
 }
 
-// Scenario: task middleware single generic should seed input contract typing.
+// Scenario: task middleware single generic should seed config typing.
+{
+  const mw = r.middleware
+    .task<{ requiresAuth: boolean }>(
+      "types-schema-middleware-task-entry-generic",
+    )
+    .run(async ({ next, task }, _deps, config) => {
+      config.requiresAuth;
+      // @ts-expect-error property does not exist on middleware config
+      config.missing;
+      return next(task.input);
+    })
+    .build();
+
+  mw.with({ requiresAuth: true });
+  // @ts-expect-error config type must remain strict for .with()
+  mw.with({ requiresAuth: "yes" });
+}
+
+// Scenario: task middleware explicit second generic should seed input contract typing.
 {
   r.middleware
-    .task<{ user: { id: string } }>(
-      "types.schema.middleware.task.entry-generic",
+    .task<{ requiresAuth: boolean }, { user: { id: string } }>(
+      "types-schema-middleware-task-entry-generic-input-contract",
     )
-    .run(async ({ next, task }) => {
+    .run(async ({ next, task }, _deps, config) => {
+      config.requiresAuth;
       task.input.user.id;
       // @ts-expect-error property does not exist on middleware input contract
       task.input.user.missing;
@@ -60,7 +87,7 @@ import { r } from "../../../";
 {
   r.middleware
     .resource<{ retries: number }>(
-      "types.schema.middleware.resource.entry-generic",
+      "types-schema-middleware-resource-entry-generic",
     )
     .run(async ({ next }, _deps, config) => {
       config.retries;
@@ -73,7 +100,7 @@ import { r } from "../../../";
 
 // Scenario: task.schema should map to task input schema typing.
 {
-  r.task("types.schema.task")
+  r.task("types-schema-task")
     .schema<{ id: string }>({ parse: (x: any) => x })
     .resultSchema<{ ok: true }>({ parse: (x: any) => x })
     .run(async (input) => {
@@ -88,11 +115,11 @@ import { r } from "../../../";
 // Scenario: resource/event schema aliases should type config and payload.
 {
   const event = r
-    .event("types.schema.event")
+    .event("types-schema-event")
     .schema<{ name: string }>({ parse: (x: any) => x })
     .build();
 
-  r.resource("types.schema.resource")
+  r.resource("types-schema-resource")
     .schema<{ port: number }>({ parse: (x: any) => x })
     .dependencies({ event })
     .init(async (config, deps) => {
@@ -105,7 +132,7 @@ import { r } from "../../../";
     })
     .build();
 
-  r.hook("types.schema.hook")
+  r.hook("types-schema-hook")
     .on(event)
     .run(async (emission) => {
       emission.data.name;
@@ -118,7 +145,7 @@ import { r } from "../../../";
 // Scenario: middleware/schema aliases should type middleware config.
 {
   r.middleware
-    .task("types.schema.task.middleware")
+    .task("types-schema-task-middleware")
     .schema<{ ttl: number }>({ parse: (x: any) => x })
     .run(async ({ next, task }, _deps, config) => {
       config.ttl;
@@ -129,7 +156,7 @@ import { r } from "../../../";
     .build();
 
   r.middleware
-    .resource("types.schema.resource.middleware")
+    .resource("types-schema-resource-middleware")
     .schema<{ retries: number }>({ parse: (x: any) => x })
     .run(async ({ next }, _deps, config) => {
       config.retries;
@@ -143,7 +170,7 @@ import { r } from "../../../";
 // Scenario: asyncContext/error/tag schema aliases should remain valid and typed.
 {
   const requestContext = r
-    .asyncContext<{ requestId: string }>("types.schema.ctx")
+    .asyncContext<{ requestId: string }>("types-schema-ctx")
     .schema({ parse: (x: any) => x })
     .build();
 
@@ -155,7 +182,7 @@ import { r } from "../../../";
   });
 
   const AppError = r
-    .error<{ code: number }>("types.schema.error")
+    .error<{ code: number }>("types-schema-error")
     .schema({ parse: (x: any) => x })
     .build();
 
@@ -164,11 +191,33 @@ import { r } from "../../../";
   AppError.throw({ invalid: true });
 
   const featureTag = r
-    .tag<{ scope: string }>("types.schema.tag")
+    .tag<{ scope: string }>("types-schema-tag")
     .schema<{ scope: string }>({ parse: (x: any) => x })
     .build();
 
   featureTag.with({ scope: "core" });
   // @ts-expect-error schema enforces tag config shape
   featureTag.with({ scope: 1 });
+}
+
+// Scenario: decorator class shorthand should be accepted in fluent schema APIs.
+{
+  r.task("types-schema-decorator-task")
+    .schema(DecoratedSchema)
+    .run(async (input) => {
+      input.scope;
+      // @ts-expect-error decorator shorthand should infer decorated fields only
+      input.missing;
+      return input.scope;
+    })
+    .build();
+
+  const decoratedTag = r
+    .tag<{ scope: string }>("types-schema-decorator-tag")
+    .configSchema(DecoratedSchema)
+    .build();
+
+  decoratedTag.with({ scope: "x" });
+  // @ts-expect-error config should remain strict with class shorthand schema
+  decoratedTag.with({ scope: 5 });
 }

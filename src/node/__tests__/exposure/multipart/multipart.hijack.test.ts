@@ -1,16 +1,16 @@
-import * as http from "http";
 import { Readable } from "stream";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { defineTask } from "../../../../definers/defineTask";
-import { nodeExposure, useExposureContext } from "../../../index";
+import { useRpcLaneRequestContext } from "../../../index";
+import { rpcExposure } from "../testkit/rpcExposure";
 
 describe("nodeExposure multipart hijack", () => {
   it("skips JSON when multipart task writes to res directly", async () => {
     const t = defineTask<{ any?: string }, Promise<string>>({
-      id: "multipart.hijack",
+      id: "multipart-hijack",
       run: async () => {
-        const { res } = useExposureContext();
+        const { res } = useRpcLaneRequestContext();
         res.statusCode = 200;
         res.setHeader("content-type", "text/plain");
         res.write("X");
@@ -19,20 +19,18 @@ describe("nodeExposure multipart hijack", () => {
       },
     });
 
-    const exposure = nodeExposure.with({
+    const exposure = rpcExposure.with({
       http: {
-        dangerouslyAllowOpenExposure: true,
-        server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
       },
     });
     const app = defineResource({
-      id: "multipart.hijack.app",
+      id: "multipart-hijack-app",
       register: [t, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----jest-boundary";
     const manifest = JSON.stringify({ input: { any: "ok" } });

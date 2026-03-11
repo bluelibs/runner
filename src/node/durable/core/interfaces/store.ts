@@ -34,7 +34,7 @@ export interface IDurableStore {
     executionId: string;
   }): Promise<boolean>;
 
-  // Enhanced querying for dashboard
+  // Enhanced querying for operator tooling
   listExecutions?(options?: ListExecutionsOptions): Promise<Execution[]>;
   listStepResults?(executionId: string): Promise<StepResult[]>;
   appendAuditEntry?(entry: DurableAuditEntry): Promise<void>;
@@ -86,7 +86,7 @@ export interface IDurableStore {
   listSchedules(): Promise<Schedule[]>;
   listActiveSchedules(): Promise<Schedule[]>;
 
-  // Operator / dashboard helpers
+  // Operator helpers
   listStuckExecutions?(): Promise<Execution[]>;
 
   init?(): Promise<void>;

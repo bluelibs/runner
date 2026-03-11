@@ -2,11 +2,11 @@ import * as http from "http";
 import * as https from "https";
 import { Readable, pipeline } from "stream";
 import type { SerializerLike } from "../../serializer";
-import type { ProtocolEnvelope } from "../../globals/resources/tunnel/protocol";
+import type { ProtocolEnvelope } from "../../remote-lanes/http/protocol";
 import {
   assertOkEnvelope,
-  TunnelError,
-} from "../../globals/resources/tunnel/protocol";
+  RemoteLaneTransportError,
+} from "../../remote-lanes/http/protocol";
 import type { IAsyncContext } from "../../types/asyncContext";
 import type { IErrorHelper } from "../../types/error";
 // Avoid `.node` bare import which triggers tsup native addon resolver
@@ -26,7 +26,7 @@ export interface HttpSmartClientConfig {
   auth?: HttpSmartClientAuthConfig;
   timeoutMs?: number; // optional request timeout for JSON/multipart
   serializer: SerializerLike;
-  onRequest?: (ctx: {
+  onRequest?: (requestContext: {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;
@@ -35,50 +35,43 @@ export interface HttpSmartClientConfig {
 }
 
 export interface HttpSmartClient {
-  task<I = unknown, O = unknown>(id: string, input?: I): Promise<O | Readable>;
-  event<P = unknown>(id: string, payload?: P): Promise<void>;
-  eventWithResult?<P = unknown>(id: string, payload?: P): Promise<P>;
+  task<I = unknown, O = unknown>(
+    id: string,
+    input?: I,
+    options?: { headers?: Record<string, string> },
+  ): Promise<O | Readable>;
+  event<P = unknown>(
+    id: string,
+    payload?: P,
+    options?: { headers?: Record<string, string> },
+  ): Promise<void>;
+  eventWithResult?<P = unknown>(
+    id: string,
+    payload?: P,
+    options?: { headers?: Record<string, string> },
+  ): Promise<P>;
 }
 
-function isReadable(value: unknown): value is Readable {
-  return !!value && typeof (value as { pipe?: unknown }).pipe === "function";
-}
-
-function hasNodeFile(value: unknown): boolean {
-  const isNodeFileSentinel = (
-    v: unknown,
-  ): v is {
-    $runnerFile: "File";
-    id: string;
-    _node?: { stream?: unknown; buffer?: unknown };
-  } => {
-    if (!v || typeof v !== "object") return false;
-    const rec = v as Record<string, unknown>;
-    if (rec.$runnerFile !== "File") return false;
-    if (typeof rec.id !== "string") return false;
-    const node = rec._node;
-    if (!node || typeof node !== "object") return false;
-    const n = node as Record<string, unknown>;
-    return Boolean(n.stream || n.buffer);
-  };
-
-  const visit = (v: unknown): boolean => {
-    if (isNodeFileSentinel(v)) return true;
-    if (!v || typeof v !== "object") return false;
-    if (Array.isArray(v)) return v.some(visit);
-    for (const k of Object.keys(v as Record<string, unknown>)) {
-      if (visit((v as Record<string, unknown>)[k])) return true;
-    }
-    return false;
-  };
-  return visit(value);
-}
+import { isReadable, hasNodeFile } from "./nodeFileDetection";
 
 function toHeaders(auth?: HttpSmartClientAuthConfig): Record<string, string> {
   const headers: Record<string, string> = {};
   if (auth?.token)
     headers[(auth.header ?? "x-runner-token").toLowerCase()] = auth.token;
   return headers;
+}
+
+function mergeHeaders(
+  base: Record<string, string>,
+  extra?: Record<string, string>,
+): Record<string, string> {
+  if (!extra) {
+    return base;
+  }
+  return {
+    ...base,
+    ...extra,
+  };
 }
 
 function buildContextHeaderOrThrow(options: {
@@ -89,15 +82,15 @@ function buildContextHeaderOrThrow(options: {
   if (!contexts || contexts.length === 0) return undefined;
 
   const map: Record<string, string> = {};
-  for (const ctx of contexts) {
+  for (const asyncContext of contexts) {
     try {
-      const value = ctx.use();
-      map[ctx.id] = ctx.serialize(value);
+      const value = asyncContext.use();
+      map[asyncContext.id] = asyncContext.serialize(value);
     } catch (error) {
       const normalizedError =
         error instanceof Error ? error : new Error(String(error));
       httpContextSerializationError.throw({
-        contextId: ctx.id,
+        contextId: asyncContext.id,
         reason: normalizedError.message,
       });
     }
@@ -117,12 +110,12 @@ function toHttpStatusError(options: {
   statusMessage?: string;
   contentType?: string;
   bodyPreview?: string;
-}): TunnelError {
+}): RemoteLaneTransportError {
   const { statusCode, statusMessage, contentType, bodyPreview } = options;
   const message = statusMessage
-    ? `Tunnel HTTP ${statusCode} ${statusMessage}`
-    : `Tunnel HTTP ${statusCode}`;
-  return new TunnelError(
+    ? `Remote lane HTTP ${statusCode} ${statusMessage}`
+    : `Remote lane HTTP ${statusCode}`;
+  return new RemoteLaneTransportError(
     "HTTP_ERROR",
     message,
     {
@@ -135,14 +128,17 @@ function toHttpStatusError(options: {
   );
 }
 
-function toTimeoutError(url: string, timeoutMs?: number): TunnelError {
+function toTimeoutError(
+  url: string,
+  timeoutMs?: number,
+): RemoteLaneTransportError {
   const detail =
     typeof timeoutMs === "number" && timeoutMs > 0
       ? ` after ${timeoutMs}ms`
       : "";
-  return new TunnelError(
+  return new RemoteLaneTransportError(
     "REQUEST_TIMEOUT",
-    `Tunnel request timeout${detail}`,
+    `Remote lane request timeout${detail}`,
     { url, timeoutMs },
     { httpCode: 408 },
   );
@@ -152,13 +148,14 @@ async function postJson<T = any>(
   cfg: HttpSmartClientConfig,
   url: string,
   body: unknown,
+  headersOverride?: Record<string, string>,
 ): Promise<T> {
   const serializer = cfg.serializer;
   const parsed = new URL(url);
   const lib = requestLib(parsed);
   const headers = {
     "content-type": "application/json; charset=utf-8",
-    ...toHeaders(cfg.auth),
+    ...mergeHeaders(toHeaders(cfg.auth), headersOverride),
   } as Record<string, string>;
   const contextHeader = buildContextHeaderOrThrow({
     serializer: cfg.serializer,
@@ -309,6 +306,7 @@ async function postMultipart(
   url: string,
   manifestText: string,
   files: ReturnType<typeof buildNodeManifest>["files"],
+  headersOverride?: Record<string, string>,
 ): Promise<{ stream: Readable; res: http.IncomingMessage }> {
   const parsed = new URL(url);
   const lib = requestLib(parsed);
@@ -318,7 +316,7 @@ async function postMultipart(
   const body = encodeMultipart(manifestText, files, boundary);
   const headers: Record<string, string> = {
     "content-type": `multipart/form-data; boundary=${boundary}`,
-    ...toHeaders(cfg.auth),
+    ...mergeHeaders(toHeaders(cfg.auth), headersOverride),
   };
   const contextHeader = buildContextHeaderOrThrow({
     serializer: cfg.serializer,
@@ -369,12 +367,13 @@ async function postOctetStream(
   cfg: HttpSmartClientConfig,
   url: string,
   stream: Readable,
+  headersOverride?: Record<string, string>,
 ): Promise<{ stream: Readable; res: http.IncomingMessage }> {
   const parsed = new URL(url);
   const lib = requestLib(parsed);
   const headers: Record<string, string> = {
     "content-type": "application/octet-stream",
-    ...toHeaders(cfg.auth),
+    ...mergeHeaders(toHeaders(cfg.auth), headersOverride),
   };
   const contextHeader = buildContextHeaderOrThrow({
     serializer: cfg.serializer,
@@ -527,19 +526,28 @@ export function createHttpSmartClient(
   const serializer = cfg.serializer;
 
   return {
-    async task<I, O>(id: string, input?: I): Promise<O | Readable> {
+    async task<I, O>(
+      id: string,
+      input?: I,
+      options?: { headers?: Record<string, string> },
+    ): Promise<O | Readable> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
 
       // A) Duplex raw-body: input itself is a Node Readable
       if (isReadable(input)) {
-        const { res } = await postOctetStream(cfg, url, input);
+        const { res } = await postOctetStream(
+          cfg,
+          url,
+          input,
+          options?.headers,
+        );
         const maybe = await parseMaybeJsonResponse<ProtocolEnvelope<O>>(
           res,
           serializer,
         );
         if (isReadable(maybe)) return maybe;
         return assertOkEnvelope<O>(maybe as ProtocolEnvelope<O>, {
-          fallbackMessage: "Tunnel task error",
+          fallbackMessage: "Remote lane task error",
         }) as O;
       }
 
@@ -555,6 +563,7 @@ export function createHttpSmartClient(
             url,
             manifestText,
             manifest.files,
+            options?.headers,
           );
           const maybe = await parseMaybeJsonResponse<ProtocolEnvelope<O>>(
             res,
@@ -562,7 +571,7 @@ export function createHttpSmartClient(
           );
           if (isReadable(maybe)) return maybe; // server streamed back directly
           return assertOkEnvelope<O>(maybe as ProtocolEnvelope<O>, {
-            fallbackMessage: "Tunnel task error",
+            fallbackMessage: "Remote lane task error",
           }) as O;
         } catch (error) {
           rethrowTyped(cfg.errorRegistry, error);
@@ -571,40 +580,65 @@ export function createHttpSmartClient(
 
       // C) JSON fallback
       try {
-        const r = await postJson<ProtocolEnvelope<O>>(cfg, url, { input });
+        const r = await postJson<ProtocolEnvelope<O>>(
+          cfg,
+          url,
+          { input },
+          options?.headers,
+        );
         return assertOkEnvelope<O>(r, {
-          fallbackMessage: "Tunnel task error",
+          fallbackMessage: "Remote lane task error",
         });
       } catch (error) {
         rethrowTyped(cfg.errorRegistry, error);
       }
     },
 
-    async event<P>(id: string, payload?: P): Promise<void> {
+    async event<P>(
+      id: string,
+      payload?: P,
+      options?: { headers?: Record<string, string> },
+    ): Promise<void> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
       try {
-        const r = await postJson<ProtocolEnvelope<void>>(cfg, url, { payload });
-        assertOkEnvelope<void>(r, { fallbackMessage: "Tunnel event error" });
+        const r = await postJson<ProtocolEnvelope<void>>(
+          cfg,
+          url,
+          { payload },
+          options?.headers,
+        );
+        assertOkEnvelope<void>(r, {
+          fallbackMessage: "Remote lane event error",
+        });
       } catch (error) {
         rethrowTyped(cfg.errorRegistry, error);
       }
     },
 
-    async eventWithResult<P>(id: string, payload?: P): Promise<P> {
+    async eventWithResult<P>(
+      id: string,
+      payload?: P,
+      options?: { headers?: Record<string, string> },
+    ): Promise<P> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
       try {
-        const r = await postJson<ProtocolEnvelope<P>>(cfg, url, {
-          payload,
-          returnPayload: true,
-        });
+        const r = await postJson<ProtocolEnvelope<P>>(
+          cfg,
+          url,
+          {
+            payload,
+            returnPayload: true,
+          },
+          options?.headers,
+        );
         if (r && typeof r === "object" && r.ok && !("result" in r)) {
-          throw new TunnelError(
+          throw new RemoteLaneTransportError(
             "INVALID_RESPONSE",
-            "Tunnel event returnPayload requested but server did not include result. Upgrade the exposure server.",
+            "Remote lane event returnPayload requested but server did not include result. Upgrade the exposure server.",
           );
         }
         return assertOkEnvelope<P>(r, {
-          fallbackMessage: "Tunnel event error",
+          fallbackMessage: "Remote lane event error",
         });
       } catch (error) {
         rethrowTyped(cfg.errorRegistry, error);

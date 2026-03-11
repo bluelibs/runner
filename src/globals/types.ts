@@ -1,6 +1,6 @@
 export * from "./resources/debug/types";
-export * from "./resources/tunnel/types";
 export type {
+  CronResourceConfig,
   CronResourceValue,
   CronScheduledTask,
   CronTagConfig,
@@ -9,7 +9,7 @@ export { CronOnError } from "./cron/types";
 export * from "./debug";
 export type {
   CacheResourceConfig,
-  ICacheInstance,
+  ICacheProvider,
 } from "./middleware/cache.middleware";
 export type { CircuitBreakerOpenError } from "./middleware/circuitBreaker.middleware";
 export type {
@@ -36,14 +36,3 @@ export type {
 } from "./middleware/temporal.middleware";
 export type { TimeoutMiddlewareConfig } from "./middleware/timeout.middleware";
 export type { TimeoutError } from "./middleware/timeout.middleware";
-export type {
-  TunnelMiddlewareId,
-  TunnelTaskMiddlewareSidePolicy,
-  TunnelTaskMiddlewarePolicyConfig,
-  TunnelTaskMiddlewarePolicySideConfig,
-} from "./resources/tunnel/tunnel.policy.tag";
-export type {
-  HttpClientFactoryConfig,
-  HttpClientFactory,
-} from "./resources/httpClientFactory.resource";
-export type { HttpClientAuthConfig, HttpCreateClientConfig } from "./tunnels";

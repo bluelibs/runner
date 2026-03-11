@@ -48,7 +48,7 @@ export class DurableResource implements IDurableResource {
     if (!this.store) {
       durableExecutionInvariantError.throw({
         message:
-          "Durable operator API is not available: store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) or construct a DurableOperator(store) directly.",
+          "Durable operator API is not available: store was not provided to DurableResource. Use a Runner durable workflow resource (for example `resources.memoryWorkflow.fork(...)` or `resources.redisWorkflow.fork(...)`) or construct a DurableOperator(store) directly.",
       });
     }
     if (!this.operatorInstance) {
@@ -58,45 +58,39 @@ export class DurableResource implements IDurableResource {
   }
 
   use(): IDurableContext {
-    const ctx = this.contextStorage.getStore();
-    if (!ctx) {
-      durableExecutionInvariantError.throw({
+    const durableContext = this.contextStorage.getStore();
+    if (!durableContext) {
+      return durableExecutionInvariantError.throw({
         message:
           "Durable context is not available. Did you call durable.use() outside a durable task execution?",
       });
     }
-    return ctx!;
+    return durableContext;
   }
 
   async describe<TInput>(
     task: ITask<TInput, any, any, any, any, any>,
     input?: TInput,
   ): Promise<DurableFlowShape> {
-    if (!this.runnerStore) {
-      durableExecutionInvariantError.throw({
-        message:
-          "Durable describe API is not available: runner store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) instead of manually constructing DurableResource.",
-      });
-    }
+    const runnerStore = this.requireRunnerStoreForDescribe();
 
-    const storeTask = this.runnerStore!.tasks.get(task.id);
-    if (!storeTask) {
-      durableExecutionInvariantError.throw({
-        message: `Cannot describe task "${task.id}": task is not registered in the runtime store.`,
-      });
-    }
+    const storeTask = runnerStore.tasks.get(task.id);
+    this.assertStoreTaskRegistered(task.id, storeTask);
 
-    const effectiveTask = storeTask!.task as AnyTask;
-    if (!storeTask!.computedDependencies) {
+    const effectiveTask = storeTask.task as AnyTask;
+    if (!storeTask.computedDependencies) {
       durableExecutionInvariantError.throw({
         message: `Cannot describe task "${task.id}": task dependencies are not available in the runtime store.`,
       });
     }
-    const deps = storeTask!.computedDependencies as Record<string, unknown>;
+    const deps = storeTask.computedDependencies as Record<string, unknown>;
     const resolvedInput = this.resolveDescribeInput(effectiveTask, input);
 
-    return await recordFlowShape(async (ctx) => {
-      const depsWithRecorder = this.injectRecorderIntoDurableDeps(deps, ctx);
+    return await recordFlowShape(async (recordingContext) => {
+      const depsWithRecorder = this.injectRecorderIntoDurableDeps(
+        deps,
+        recordingContext,
+      );
       await effectiveTask.run(
         resolvedInput as TInput,
         depsWithRecorder as DependencyValuesType<DependencyMapType>,
@@ -105,19 +99,64 @@ export class DurableResource implements IDurableResource {
   }
 
   getWorkflows(): AnyTask[] {
-    if (!this.runnerStore) {
-      durableExecutionInvariantError.throw({
+    const runnerStore = this.requireRunnerStoreForWorkflowDiscovery();
+    if (typeof runnerStore.getTagAccessor !== "function") {
+      return durableExecutionInvariantError.throw({
         message:
-          "Durable workflow discovery is not available: runner store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) instead of manually constructing DurableResource.",
+          "Durable workflow discovery requires Store.getTagAccessor(tag).",
       });
     }
 
-    return this.runnerStore!.getTasksWithTag(durableWorkflowTag);
+    const tasks = runnerStore
+      .getTagAccessor(durableWorkflowTag)
+      .tasks.map((entry) => entry.definition);
+
+    return tasks.map((task) => runnerStore.toPublicDefinition(task));
+  }
+
+  private requireRunnerStoreForDescribe(): Store {
+    const runnerStore = this.runnerStore;
+    this.assertRunnerStore(
+      runnerStore,
+      "Durable describe API is not available: runner store was not provided to DurableResource. Use a Runner durable workflow resource (for example `resources.memoryWorkflow.fork(...)` or `resources.redisWorkflow.fork(...)`) instead of manually constructing DurableResource.",
+    );
+    return runnerStore;
+  }
+
+  private requireRunnerStoreForWorkflowDiscovery(): Store {
+    const runnerStore = this.runnerStore;
+    this.assertRunnerStore(
+      runnerStore,
+      "Durable workflow discovery is not available: runner store was not provided to DurableResource. Use a Runner durable workflow resource (for example `resources.memoryWorkflow.fork(...)` or `resources.redisWorkflow.fork(...)`) instead of manually constructing DurableResource.",
+    );
+    return runnerStore;
+  }
+
+  private assertRunnerStore(
+    runnerStore: Store | undefined,
+    message: string,
+  ): asserts runnerStore is Store {
+    if (!runnerStore) {
+      durableExecutionInvariantError.throw({
+        message,
+      });
+    }
+  }
+
+  private assertStoreTaskRegistered(
+    taskId: string,
+    storeTask: ReturnType<Store["tasks"]["get"]>,
+  ): asserts storeTask is NonNullable<ReturnType<Store["tasks"]["get"]>> {
+    if (!storeTask) {
+      durableExecutionInvariantError.throw({
+        message: `Cannot describe task "${taskId}": task is not registered in the runtime store.`,
+      });
+    }
   }
 
   private injectRecorderIntoDurableDeps(
     deps: Record<string, unknown>,
-    ctx: unknown,
+    recordingContext: unknown,
   ): Record<string, unknown> {
     const next: Record<string, unknown> = { ...deps };
 
@@ -129,7 +168,7 @@ export class DurableResource implements IDurableResource {
       next[key] = new Proxy(value, {
         get(target, prop, receiver) {
           if (prop === "use") {
-            return () => ctx;
+            return () => recordingContext;
           }
           return Reflect.get(target, prop, receiver);
         },
@@ -187,29 +226,6 @@ export class DurableResource implements IDurableResource {
     return this.service.start(task, input, options);
   }
 
-  /** @deprecated Use start(task, input, options). */
-  startExecution<TInput, TResult>(
-    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<string>;
-  /** @deprecated Use start(task, input, options). */
-  startExecution(
-    task: string,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<string>;
-  startExecution(
-    task: string | ITask<any, Promise<any>, any, any, any, any>,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<string> {
-    if (typeof task === "string") {
-      return this.start(task, input, options);
-    }
-    return this.start(task, input, options);
-  }
-
   cancelExecution(executionId: string, reason?: string): Promise<void> {
     return this.service.cancelExecution(executionId, reason);
   }
@@ -240,54 +256,6 @@ export class DurableResource implements IDurableResource {
       return this.service.startAndWait(task, input, options);
     }
     return this.service.startAndWait(task, input, options);
-  }
-
-  /** @deprecated Use startAndWait(task, input, options) and read `result.data`. */
-  execute<TInput, TResult>(
-    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<TResult>;
-  /** @deprecated Use startAndWait(task, input, options) and read `result.data`. */
-  execute<TResult = unknown>(
-    task: string,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<TResult>;
-  async execute(
-    task: string | ITask<any, Promise<any>, any, any, any, any>,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<unknown> {
-    const result =
-      typeof task === "string"
-        ? await this.startAndWait(task, input, options)
-        : await this.startAndWait(task, input, options);
-
-    return result.data;
-  }
-
-  /** @deprecated Use startAndWait(task, input, options). */
-  executeStrict<TInput, TResult>(
-    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<DurableStartAndWaitResult<TResult>>;
-  /** @deprecated Use startAndWait(task, input, options). */
-  executeStrict<TResult = unknown>(
-    task: string,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<DurableStartAndWaitResult<TResult>>;
-  executeStrict(
-    task: string | ITask<any, Promise<any>, any, any, any, any>,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<DurableStartAndWaitResult<unknown>> {
-    if (typeof task === "string") {
-      return this.startAndWait(task, input, options);
-    }
-    return this.startAndWait(task, input, options);
   }
 
   schedule<TInput, TResult>(

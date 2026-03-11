@@ -1,7 +1,7 @@
 import type {
   DependencyMapType,
   ITaskMeta,
-  TagType,
+  TaskTagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import type { BuilderState } from "./types";
@@ -14,13 +14,13 @@ export function clone<
   TOutput,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
-  TTags extends TagType[],
+  TTags extends TaskTagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
   TNextInput = TInput,
   TNextOutput = TOutput,
   TNextDeps extends DependencyMapType = TDeps,
   TNextMeta extends ITaskMeta = TMeta,
-  TNextTags extends TagType[] = TTags,
+  TNextTags extends TaskTagType[] = TTags,
   TNextMiddleware extends TaskMiddlewareAttachmentType[] = TMiddleware,
 >(
   s: BuilderState<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>,
@@ -57,52 +57,4 @@ export function clone<
 }
 
 export { mergeArray } from "../shared/mergeUtils";
-
-/**
- * Merges dependencies handling all combinations of objects and functions.
- */
-export function mergeDependencies<
-  TExisting extends DependencyMapType,
-  TNew extends DependencyMapType,
->(
-  existing: TExisting | (() => TExisting) | undefined,
-  addition: TNew | (() => TNew),
-  override: boolean,
-): (TExisting & TNew) | (() => TExisting & TNew) {
-  const isFnExisting = typeof existing === "function";
-  const isFnAddition = typeof addition === "function";
-
-  type Result = (TExisting & TNew) | (() => TExisting & TNew);
-
-  if (override || !existing) {
-    return addition as Result;
-  }
-
-  if (isFnExisting && isFnAddition) {
-    const e = existing as () => TExisting;
-    const a = addition as () => TNew;
-    return (() => ({
-      ...e(),
-      ...a(),
-    })) as Result;
-  }
-  if (isFnExisting && !isFnAddition) {
-    const e = existing as () => TExisting;
-    const a = addition as TNew;
-    return (() => ({
-      ...e(),
-      ...a,
-    })) as Result;
-  }
-  if (!isFnExisting && isFnAddition) {
-    const e = existing as TExisting;
-    const a = addition as () => TNew;
-    return (() => ({
-      ...e,
-      ...a(),
-    })) as Result;
-  }
-  const e = existing as TExisting;
-  const a = addition as TNew;
-  return { ...e, ...a } as Result;
-}
+export { mergeDepsNoConfig as mergeDependencies } from "../shared/mergeUtils";

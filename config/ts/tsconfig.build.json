@@ -13,7 +13,6 @@
     "../../examples/**",
     "../../src/__tests__/**",
     "../../src/**/__tests__/**",
-    "../../src/**/*.test.ts",
-    "../../src/node/durable/dashboard/**"
+    "../../src/**/*.test.ts"
   ]
 }

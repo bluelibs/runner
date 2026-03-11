@@ -1,4 +1,5 @@
 import { invalidPayloadError, unsupportedFeatureError } from "./errors";
+import { isObjectRecord } from "../tools/typeChecks";
 import type { TypeDefinition } from "./types";
 
 const hasOwn = Object.prototype.hasOwnProperty;
@@ -57,9 +58,6 @@ interface ParsedErrorPayload {
   customFields: Record<string, unknown>;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const isUnsafePropertyName = (propertyName: string): boolean =>
   propertyName === "__proto__" ||
   propertyName === "constructor" ||
@@ -88,7 +86,7 @@ const collectErrorCustomFields = (error: Error): Record<string, unknown> => {
 };
 
 const assertSerializedErrorPayload = (value: unknown): ParsedErrorPayload => {
-  if (!isRecord(value)) {
+  if (!isObjectRecord(value)) {
     throw invalidPayloadError("Invalid Error payload");
   }
 
@@ -99,7 +97,7 @@ const assertSerializedErrorPayload = (value: unknown): ParsedErrorPayload => {
   if (stack !== undefined && typeof stack !== "string") {
     throw invalidPayloadError("Invalid Error payload");
   }
-  if (customFields !== undefined && !isRecord(customFields)) {
+  if (customFields !== undefined && !isObjectRecord(customFields)) {
     throw invalidPayloadError("Invalid Error payload");
   }
 

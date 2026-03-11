@@ -1,14 +1,12 @@
-import { globals, r } from "../../../index";
+import { r, resources } from "../../../index";
 import { RedisEventBus } from "../bus/RedisEventBus";
 import { RabbitMQQueue } from "../queue/RabbitMQQueue";
 import { RedisStore } from "../store/RedisStore";
 import type { RunnerDurableRuntimeConfig } from "../core/createRunnerDurableRuntime";
 import { createRunnerDurableRuntime } from "../core/createRunnerDurableRuntime";
 import { disposeDurableService } from "../core/DurableService";
-import { durableEventsArray } from "../events";
 import type { DurableResource } from "../core/DurableResource";
 import { deriveDurableIsolation } from "./isolation";
-import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 import { Logger } from "../../../models/Logger";
 
 export type RedisDurableResourceConfig = Omit<
@@ -33,25 +31,24 @@ export type RedisDurableResourceConfig = Omit<
   };
 };
 
-interface RedisDurableResourceContext {
+export interface RedisDurableResourceContext {
   runtimeConfig: RunnerDurableRuntimeConfig | null;
 }
 
 export const redisDurableResource = r
-  .resource<RedisDurableResourceConfig>("base.durable.redis")
-  .register([durableWorkflowTag, ...durableEventsArray])
+  .resource<RedisDurableResourceConfig>("base-durable-redis")
   .dependencies({
-    taskRunner: globals.resources.taskRunner,
-    eventManager: globals.resources.eventManager,
-    runnerStore: globals.resources.store,
-    logger: globals.resources.logger,
+    taskRunner: resources.taskRunner,
+    eventManager: resources.eventManager,
+    runnerStore: resources.store,
+    logger: resources.logger,
   })
   .context<RedisDurableResourceContext>(() => ({ runtimeConfig: null }))
   .init(async function (
     this: { id: string },
     config,
     { taskRunner, eventManager, runnerStore, logger },
-    ctx,
+    resourceContext,
   ): Promise<DurableResource> {
     const namespace = config.namespace ?? this.id;
     const baseLogger =
@@ -103,7 +100,7 @@ export const redisDurableResource = r
       queue,
     };
 
-    ctx.runtimeConfig = runtimeConfig;
+    resourceContext.runtimeConfig = runtimeConfig;
 
     return await createRunnerDurableRuntime(runtimeConfig, {
       taskRunner,
@@ -112,8 +109,8 @@ export const redisDurableResource = r
       logger: durableLogger,
     });
   })
-  .dispose(async (durable, _config, _deps, ctx) => {
-    if (!ctx.runtimeConfig) return;
-    await disposeDurableService(durable.service, ctx.runtimeConfig);
+  .dispose(async (durable, _config, _deps, resourceContext) => {
+    if (!resourceContext.runtimeConfig) return;
+    await disposeDurableService(durable.service, resourceContext.runtimeConfig);
   })
   .build();

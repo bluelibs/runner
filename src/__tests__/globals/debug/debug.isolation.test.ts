@@ -16,7 +16,7 @@ describe("debug config isolation across runs", () => {
     const logs2: Array<{ level: string; message: any; data?: any }> = [];
 
     const collector1 = defineResource({
-      id: "tests.isolation.collector1",
+      id: "tests-isolation-collector1",
       dependencies: { logger: globalResources.logger },
       async init(_c, { logger }) {
         logger.onLog(async (l) => {
@@ -27,7 +27,7 @@ describe("debug config isolation across runs", () => {
     });
 
     const collector2 = defineResource({
-      id: "tests.isolation.collector2",
+      id: "tests-isolation-collector2",
       dependencies: { logger: globalResources.logger },
       async init(_c, { logger }) {
         logger.onLog(async (l) => {
@@ -38,7 +38,7 @@ describe("debug config isolation across runs", () => {
     });
 
     const task = defineTask<Input, Promise<string>>({
-      id: "tests.isolation.task",
+      id: "tests-isolation-task",
       async run(input) {
         return `ok:${input?.msg ?? "none"}`;
       },
@@ -46,7 +46,7 @@ describe("debug config isolation across runs", () => {
 
     // First run: verbose, should log task input
     const app1 = defineResource({
-      id: "tests.isolation.app1",
+      id: "tests-isolation-app1",
       register: [debugResource.with("verbose"), collector1, task],
       dependencies: { task, collector1 },
       async init(_c, { task }) {
@@ -60,7 +60,7 @@ describe("debug config isolation across runs", () => {
     });
 
     const start1 = logs1.find((l) =>
-      String(l.message).includes("Task tests.isolation.task is running"),
+      /Task .*tests-isolation-task is running/.test(String(l.message)),
     );
     expect(start1).toBeTruthy();
     expect(start1?.data?.input).toEqual({ msg: "first" });
@@ -72,7 +72,7 @@ describe("debug config isolation across runs", () => {
       logTaskOutput: false,
     } as const;
     const app2 = defineResource({
-      id: "tests.isolation.app2",
+      id: "tests-isolation-app2",
       register: [debugResource.with(configOff), collector2, task],
       dependencies: { task, collector2 },
       async init(_c, { task }) {
@@ -86,7 +86,7 @@ describe("debug config isolation across runs", () => {
     });
 
     const start2 = logs2.find((l) =>
-      String(l.message).includes("Task tests.isolation.task is running"),
+      /Task .*tests-isolation-task is running/.test(String(l.message)),
     );
     expect(start2).toBeTruthy();
     expect(start2?.data).toBeUndefined();

@@ -1,4 +1,4 @@
-import { r, run } from "../../..";
+import { r, resources, run } from "../../node";
 import { createDurableTestSetup, waitUntil } from "../../durable/test-utils";
 
 describe("durable test utils", () => {
@@ -6,7 +6,7 @@ describe("durable test utils", () => {
     const { durable, durableRegistration, store } = createDurableTestSetup();
 
     const task = r
-      .task("durable.tests.utils.step")
+      .task("durable-tests-utils-step")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -16,8 +16,8 @@ describe("durable test utils", () => {
       .build();
 
     const app = r
-      .resource("durable.tests.app")
-      .register([durableRegistration, task])
+      .resource("durable-tests-app")
+      .register([resources.durable, durableRegistration, task])
       .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
     const durableRuntime = runtime.getResourceValue(durable);
@@ -38,7 +38,7 @@ describe("durable test utils", () => {
     });
 
     const task = r
-      .task("durable.tests.utils.overrides")
+      .task("durable-tests-utils-overrides")
       .dependencies({ durable })
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
@@ -48,8 +48,8 @@ describe("durable test utils", () => {
       .build();
 
     const app = r
-      .resource("durable.tests.app.overrides")
-      .register([durableRegistration, task])
+      .resource("durable-tests-app-overrides")
+      .register([resources.durable, durableRegistration, task])
       .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
     const durableRuntime = runtime.getResourceValue(durable);

@@ -1,12 +1,11 @@
-import { globals, r } from "@bluelibs/runner";
+import { r, resources } from "@bluelibs/runner";
 
 export const appConfig = r
-  .resource("app.modules.config")
-  .dependencies({ logger: globals.resources.logger })
+  .resource("config")
+  .dependencies({ logger: resources.logger })
   .init(async (_, { logger }) => {
     const isTest = process.env.NODE_ENV === "test";
-    const listen =
-      process.env.DISABLE_HTTP_LISTEN === "true" ? false : !isTest;
+    const listen = process.env.DISABLE_HTTP_LISTEN === "true" ? false : !isTest;
 
     return {
       port: parseInt(process.env.PORT || "3000"),

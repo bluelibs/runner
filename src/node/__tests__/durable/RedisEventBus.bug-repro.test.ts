@@ -93,4 +93,57 @@ describe("durable: RedisEventBus Bug Repro", () => {
     expect(handler1).not.toHaveBeenCalled();
     expect(handler2).not.toHaveBeenCalled();
   });
+
+  it("retries subscribe when channel state changes while waiting for subscription handshake", async () => {
+    let resolveSubscribe!: (value?: unknown) => void;
+    let subscribeCalls = 0;
+
+    redisMock.subscribe.mockImplementation(() => {
+      subscribeCalls += 1;
+      if (subscribeCalls > 1) {
+        return Promise.resolve(1);
+      }
+      return new Promise((resolve) => {
+        resolveSubscribe = resolve;
+      });
+    });
+
+    const handler = jest.fn().mockResolvedValue(undefined);
+
+    const subscribePromise = bus.subscribe("state-race", handler);
+    await Promise.resolve();
+
+    const unsubscribePromise = bus.unsubscribe("state-race");
+    resolveSubscribe();
+
+    await Promise.all([subscribePromise, unsubscribePromise]);
+
+    expect(redisMock.subscribe).toHaveBeenCalledTimes(2);
+    expect(redisMock.unsubscribe).toHaveBeenCalledWith(
+      "durable:bus:state-race",
+    );
+  });
+
+  it("continues unsubscribe cleanup when pending subscribe rejects", async () => {
+    let rejectSubscribe!: (error: Error) => void;
+
+    redisMock.subscribe.mockImplementation(() => {
+      return new Promise((_resolve, reject) => {
+        rejectSubscribe = reject;
+      });
+    });
+
+    const handler = jest.fn().mockResolvedValue(undefined);
+    const subscribePromise = bus.subscribe("reject-race", handler);
+    await Promise.resolve();
+
+    const unsubscribePromise = bus.unsubscribe("reject-race");
+    rejectSubscribe(new Error("subscribe failed"));
+
+    await expect(subscribePromise).rejects.toThrow("subscribe failed");
+    await expect(unsubscribePromise).resolves.toBeUndefined();
+    expect(redisMock.unsubscribe).toHaveBeenCalledWith(
+      "durable:bus:reject-race",
+    );
+  });
 });

@@ -1,14 +1,46 @@
 ## Caching
 
-Avoid recomputing expensive work by caching task results with TTL-based eviction:
+Avoid recomputing expensive work by caching task results with TTL-based eviction.
+Cache is opt-in: you must register `resources.cache`.
+
+### Provider Contract
+
+When you provide a custom cache backend, this is the contract:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import type { ICacheProvider } from "@bluelibs/runner";
+
+interface CacheProviderOptions {
+  ttl?: number;
+  max?: number;
+  ttlAutopurge?: boolean;
+}
+
+type CacheProviderFactory = (
+  options: CacheProviderOptions,
+) => Promise<ICacheProvider>;
+```
+
+Notes:
+
+- `options` are merged from `resources.cache.with({ defaultOptions })` and middleware-level cache options.
+- `defaultOptions` remain inherited per-task provider options, not a shared global budget.
+- `resources.cache.with({ totalBudgetBytes })` adds a shared budget across cache entries for providers that support task-scoped budgeting.
+- The built-in in-memory provider supports `totalBudgetBytes` out of the box.
+- Node also ships with `resources.redisCacheProvider`, which supports `totalBudgetBytes` with Redis-backed storage.
+- Custom providers should enforce their own backend budget policy unless they explicitly support task-scoped budgets.
+- `keyBuilder` is middleware-only and is not passed to the provider.
+- `has()` is optional, but recommended when `undefined` can be a valid cached value.
+
+### Default Usage
+
+```typescript
+import { r } from "@bluelibs/runner";
 
 const expensiveTask = r
   .task("app.tasks.expensive")
   .middleware([
-    globals.middleware.task.cache.with({
+    middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
       keyBuilder: (taskId, input: { userId: string }) =>
@@ -21,35 +53,129 @@ const expensiveTask = r
   })
   .build();
 
-// Global cache configuration
+// Resource-level cache configuration
 const app = r
   .resource("app.cache")
   .register([
     // You have to register it, cache resource is not enabled by default.
-    globals.resources.cache.with({
+    resources.cache.with({
+      totalBudgetBytes: 50 * 1024 * 1024, // Shared 50MB budget across built-in task caches
       defaultOptions: {
-        max: 1000, // Maximum items in cache
-        ttl: 30 * 1000, // Default TTL
+        max: 1000, // Per-task maximum items in cache
+        ttl: 30 * 1000, // Per-task default TTL
       },
     }),
   ])
   .build();
 ```
 
-Want Redis instead of the default LRU cache? No problem, just override the cache factory task:
+`totalBudgetBytes` is distinct from `defaultOptions.maxSize`:
+
+- `totalBudgetBytes`: one shared budget across built-in in-memory task caches
+- `defaultOptions.maxSize`: the inherited `lru-cache` size limit for each task cache instance
+
+### Node Redis Cache Provider
+
+Node includes an official Redis-backed cache provider built on top of the optional `ioredis` dependency.
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { middleware, r, resources } from "@bluelibs/runner/node";
 
-const redisCacheFactory = r
-  .task("globals.tasks.cacheFactory") // Same ID as the default task
-  .run(async (input: unknown) => new RedisCache(input))
+const cachedTask = r
+  .task("app.tasks.cached")
+  .middleware([
+    middleware.task.cache.with({
+      ttl: 60 * 1000,
+    }),
+  ])
+  .run(async () => doExpensiveCalculation())
   .build();
 
 const app = r
   .resource("app")
-  .register([globals.resources.cache])
-  .overrides([redisCacheFactory]) // Override the default cache factory
+  .register([
+    resources.cache.with({
+      provider: resources.redisCacheProvider.with({
+        redis: process.env.REDIS_URL,
+        prefix: "app:cache",
+      }),
+      totalBudgetBytes: 50 * 1024 * 1024,
+      defaultOptions: {
+        ttl: 30 * 1000,
+      },
+    }),
+    cachedTask,
+  ])
+  .build();
+```
+
+Notes:
+
+- `redis` accepts either a Redis connection string or a compatible client instance.
+- `prefix` scopes the Redis keys used for entries, LRU ordering, and byte accounting.
+- When `prefix` is omitted, Runner generates an isolated per-container namespace.
+- Set an explicit `prefix` when you want multiple Node processes to share the same cache namespace and budget.
+- Redis-backed cache entries are not cleared by `runtime.dispose()`. Persistence is controlled by Redis TTLs, the chosen `prefix`, and your cache limits.
+
+### Custom Redis Provider Example
+
+```typescript
+import { r } from "@bluelibs/runner";
+import Redis from "ioredis";
+
+const redis = r
+  .resource<{ url: string }>("app.resources.redis")
+  .init(async ({ url }) => new Redis(url))
+  .dispose(async (client) => client.disconnect())
+  .build();
+
+class RedisCache {
+  constructor(
+    private client: Redis,
+    private ttlMs?: number,
+    private prefix: string = "cache:",
+  ) {}
+
+  async get(key: string): Promise<unknown | undefined> {
+    const value = await this.client.get(this.prefix + key);
+    return value ? JSON.parse(value) : undefined;
+  }
+
+  async set(key: string, value: unknown): Promise<void> {
+    const payload = JSON.stringify(value);
+    if (this.ttlMs && this.ttlMs > 0) {
+      await this.client.setex(
+        this.prefix + key,
+        Math.ceil(this.ttlMs / 1000),
+        payload,
+      );
+      return;
+    }
+    await this.client.set(this.prefix + key, payload);
+  }
+
+  async clear(): Promise<void> {
+    const keys = await this.client.keys(this.prefix + "*");
+    if (keys.length > 0) {
+      await this.client.del(...keys);
+    }
+  }
+}
+
+const redisCacheProvider = r
+  .resource("app.resources.cacheProvider.redis")
+  .dependencies({ redis })
+  .init(async (_config, { redis }) => {
+    return async (options) => new RedisCache(redis, options.ttl);
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([
+    redis.with({ url: process.env.REDIS_URL! }),
+    resources.cache.with({ provider: redisCacheProvider }),
+  ])
   .build();
 ```
 
@@ -58,9 +184,9 @@ const app = r
 **Journal Introspection**: On cache hits the task `run()` isn't executed, but you can still detect cache hits from a wrapping middleware:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
-const cacheJournalKeys = globals.middleware.task.cache.journalKeys;
+const cacheJournalKeys = middleware.task.cache.journalKeys;
 
 const cacheLogger = r.middleware
   .task("app.middleware.cacheLogger")
@@ -74,7 +200,7 @@ const cacheLogger = r.middleware
 
 const myTask = r
   .task("app.tasks.cached")
-  .middleware([cacheLogger, globals.middleware.task.cache.with({ ttl: 60000 })])
+  .middleware([cacheLogger, middleware.task.cache.with({ ttl: 60000 })])
   .run(async () => "result")
   .build();
 ```
@@ -88,14 +214,14 @@ const myTask = r
 Limit concurrent executions to protect databases and external APIs. The concurrency middleware keeps only a fixed number of task instances running at once.
 
 ```typescript
-import { r, globals, Semaphore } from "@bluelibs/runner";
+import { r, Semaphore } from "@bluelibs/runner";
 
 // Option 1: Simple limit (shared for all tasks using this middleware instance)
-const limitMiddleware = globals.middleware.task.concurrency.with({ limit: 5 });
+const limitMiddleware = middleware.task.concurrency.with({ limit: 5 });
 
 // Option 2: Explicit semaphore for fine-grained coordination
 const dbSemaphore = new Semaphore(10);
-const dbLimit = globals.middleware.task.concurrency.with({
+const dbLimit = middleware.task.concurrency.with({
   semaphore: dbSemaphore,
 });
 
@@ -123,12 +249,12 @@ const heavyTask = r
 Trip repeated failures early. When an external service starts failing, the circuit breaker opens so subsequent calls fail fast until a cool-down passes.
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const resilientTask = r
   .task("app.tasks.remoteCall")
   .middleware([
-    globals.middleware.task.circuitBreaker.with({
+    middleware.task.circuitBreaker.with({
       failureThreshold: 5, // Trip after 5 failures
       resetTimeout: 30000, // Stay open for 30 seconds
     }),
@@ -151,15 +277,14 @@ const resilientTask = r
 **Journal Introspection**: Access the circuit breaker's state and failure count within your task (when it runs):
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
-const circuitBreakerJournalKeys =
-  globals.middleware.task.circuitBreaker.journalKeys;
+const circuitBreakerJournalKeys = middleware.task.circuitBreaker.journalKeys;
 
 const myTask = r
   .task("app.tasks.monitored")
   .middleware([
-    globals.middleware.task.circuitBreaker.with({
+    middleware.task.circuitBreaker.with({
       failureThreshold: 5,
       resetTimeout: 30000,
     }),
@@ -182,12 +307,12 @@ const myTask = r
 Control the frequency of task execution over time. Perfect for event-driven tasks that might fire in bursts.
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // Debounce: Run only after 500ms of inactivity
 const saveTask = r
   .task("app.tasks.save")
-  .middleware([globals.middleware.task.debounce.with({ ms: 500 })])
+  .middleware([middleware.task.debounce.with({ ms: 500 })])
   .run(async (data) => {
     // Assuming db is available in the closure
     return await db.save(data);
@@ -197,7 +322,7 @@ const saveTask = r
 // Throttle: Run at most once every 1000ms
 const logTask = r
   .task("app.tasks.log")
-  .middleware([globals.middleware.task.throttle.with({ ms: 1000 })])
+  .middleware([middleware.task.throttle.with({ ms: 1000 })])
   .run(async (msg) => {
     console.log(msg);
   })
@@ -218,12 +343,12 @@ const logTask = r
 Define what happens when a task fails. Fallback middleware lets you return a default value or execute an alternative path gracefully.
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const getPrice = r
   .task("app.tasks.getPrice")
   .middleware([
-    globals.middleware.task.fallback.with({
+    middleware.task.fallback.with({
       // Can be a static value, a function, or another task
       fallback: async (input, error) => {
         console.warn(`Price fetch failed: ${error.message}. Using default.`);
@@ -242,9 +367,9 @@ const getPrice = r
 **Journal Introspection**: The original task that throws won't continue execution, but you can detect fallback activation from a wrapping middleware:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
-const fallbackJournalKeys = globals.middleware.task.fallback.journalKeys;
+const fallbackJournalKeys = middleware.task.fallback.journalKeys;
 
 const fallbackLogger = r.middleware
   .task("app.middleware.fallbackLogger")
@@ -261,7 +386,7 @@ const myTask = r
   .task("app.tasks.withFallback")
   .middleware([
     fallbackLogger,
-    globals.middleware.task.fallback.with({ fallback: "default" }),
+    middleware.task.fallback.with({ fallback: "default" }),
   ])
   .run(async () => {
     throw new Error("Primary failed");
@@ -278,12 +403,12 @@ const myTask = r
 Protect your system from abuse by limiting the number of requests in a specific window of time.
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const sensitiveTask = r
   .task("app.tasks.login")
   .middleware([
-    globals.middleware.task.rateLimit.with({
+    middleware.task.rateLimit.with({
       windowMs: 60 * 1000, // 1 minute window
       max: 5, // Max 5 attempts per window
     }),
@@ -306,15 +431,13 @@ const sensitiveTask = r
 **Journal Introspection**: When the task runs (request allowed), you can read the rate limit state from the execution journal:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
-const rateLimitJournalKeys = globals.middleware.task.rateLimit.journalKeys;
+const rateLimitJournalKeys = middleware.task.rateLimit.journalKeys;
 
 const myTask = r
   .task("app.tasks.rateLimited")
-  .middleware([
-    globals.middleware.task.rateLimit.with({ windowMs: 60000, max: 10 }),
-  ])
+  .middleware([middleware.task.rateLimit.with({ windowMs: 60000, max: 10 })])
   .run(async (_input, _deps, context) => {
     const remaining = context?.journal.get(rateLimitJournalKeys.remaining); // number
     const resetTime = context?.journal.get(rateLimitJournalKeys.resetTime); // timestamp (ms)
@@ -331,17 +454,72 @@ const myTask = r
 
 ---
 
+## Require Context (Async Context Guard)
+
+Fail fast when a task must run inside a specific async context. This middleware is useful for request-scoped metadata (request id, tenant id, auth claims) where continuing without context would produce incorrect behavior.
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const RequestContext = r
+  .asyncContext<{ requestId: string }>("app.asyncContexts.request")
+  .build();
+
+const getAuditTrail = r
+  .task("app.tasks.getAuditTrail")
+  // Shortcut: creates middleware.task.requireContext with this context
+  .middleware([RequestContext.require()])
+  .run(async () => {
+    const { requestId } = RequestContext.use();
+    return { requestId, entries: [] };
+  })
+  .build();
+```
+
+If you prefer the explicit middleware form (useful in documentation and composition helpers):
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const TenantContext = r
+  .asyncContext<{ tenantId: string }>("app.asyncContexts.tenant")
+  .build();
+
+const listProjects = r
+  .task("app.tasks.listProjects")
+  .middleware([middleware.task.requireContext.with({ context: TenantContext })])
+  .run(async () => {
+    const { tenantId } = TenantContext.use();
+    return await projectRepo.findByTenant(tenantId);
+  })
+  .build();
+```
+
+**What it protects you from:**
+
+- Running tenant-sensitive logic without tenant context.
+- Logging/auditing tasks that silently lose request correlation ids.
+- Hidden bugs where context is only present in some call paths.
+
+> **Platform Note:** Async context requires `AsyncLocalStorage`, which is **Node.js-only**. In browsers and edge runtimes, async context APIs are not available.
+
+**What you just learned**: `requireContext` turns missing async context into an immediate, explicit failure instead of a delayed business-logic bug.
+
+> **runtime:** "If your task needs request context and you forgot to bring it, we stop at the door. Better a loud crash now than a forensic investigation later."
+
+---
+
 ## Retrying Failed Operations
 
 For when things go wrong, but you know they'll probably work if you just try again. The built-in retry middleware makes your tasks and resources more resilient to transient failures.
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const flakyApiCall = r
   .task("app.tasks.flakyApiCall")
   .middleware([
-    globals.middleware.task.retry.with({
+    middleware.task.retry.with({
       retries: 5, // Try up to 5 times
       delayStrategy: (attempt) => 100 * Math.pow(2, attempt), // Exponential backoff
       stopRetryIf: (error) => error.message === "Invalid credentials", // Don't retry auth errors
@@ -362,18 +540,40 @@ The retry middleware can be configured with:
 - `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
 
+It also works on resources, which is especially useful for startup initialization:
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const database = r
+  .resource<{ connectionString: string }>("app.db")
+  .middleware([
+    middleware.resource.retry.with({
+      retries: 4,
+      delayStrategy: (attempt) => 250 * Math.pow(2, attempt),
+    }),
+  ])
+  .init(async ({ connectionString }) => {
+    return await connectToDatabase(connectionString);
+  })
+  .dispose(async (value) => {
+    await value.close();
+  })
+  .build();
+```
+
 **Why would you need this?** For logging—you want to log which attempt succeeded or what errors occurred during retries.
 
 **Journal Introspection**: Access the current retry attempt and the last error within your task:
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
-const retryJournalKeys = globals.middleware.task.retry.journalKeys;
+const retryJournalKeys = middleware.task.retry.journalKeys;
 
 const myTask = r
   .task("app.tasks.retryable")
-  .middleware([globals.middleware.task.retry.with({ retries: 5 })])
+  .middleware([middleware.task.retry.with({ retries: 5 })])
   .run(async (_input, _deps, context) => {
     const attempt = context?.journal.get(retryJournalKeys.attempt); // 0-indexed attempt number
     const lastError = context?.journal.get(retryJournalKeys.lastError); // Error from previous attempt, if any
@@ -394,13 +594,13 @@ The built-in timeout middleware prevents operations from hanging indefinitely by
 timeout. Works for resources and tasks.
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const apiTask = r
   .task("app.tasks.externalApi")
   .middleware([
-    // Works for tasks and resources via globals.middleware.resource.timeout
-    globals.middleware.task.timeout.with({ ttl: 5000 }), // 5 second timeout
+    // Works for tasks and resources via middleware.resource.timeout
+    middleware.task.timeout.with({ ttl: 5000 }), // 5 second timeout
   ])
   .run(async () => {
     // This operation will be aborted if it takes longer than 5 seconds
@@ -413,12 +613,12 @@ const resilientTask = r
   .task("app.tasks.resilient")
   .middleware([
     // Order matters here. Imagine a big onion.
-    // Works for resources as well via globals.middleware.resource.retry
-    globals.middleware.task.retry.with({
+    // Works for resources as well via middleware.resource.retry
+    middleware.task.retry.with({
       retries: 3,
       delayStrategy: (attempt) => 1000 * attempt, // 1s, 2s, 3s delays
     }),
-    globals.middleware.task.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
+    middleware.task.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
   ])
   .run(async () => {
     // Each retry attempt gets its own 10-second timeout
@@ -442,7 +642,132 @@ Best practices:
 - Use longer timeouts for resource initialization than task execution
 - Consider network conditions when setting API call timeouts
 
+Resource timeouts help prevent startup hangs when a dependency never becomes ready:
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const messageBroker = r
+  .resource("app.broker")
+  .middleware([
+    middleware.resource.timeout.with({ ttl: 15000 }),
+    middleware.resource.retry.with({ retries: 2 }),
+  ])
+  .init(async () => {
+    return await connectBroker();
+  })
+  .dispose(async (value) => {
+    await value.close();
+  })
+  .build();
+```
+
 > **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It's not me, it's your molasses‑flavored endpoint. I just blow the whistle."
+
+---
+
+## HTTP Server Shutdown Pattern (`cooldown` + `dispose`)
+
+For HTTP servers, split shutdown work into two phases:
+
+- `cooldown()`: stop new intake immediately.
+- `dispose()`: finish teardown after Runner (task/event) drain and lifecycle hooks complete.
+
+```typescript
+import express from "express";
+import type { Server } from "node:http";
+import { r } from "@bluelibs/runner";
+
+type ServerContext = {
+  app: express.Express;
+  listener: Server | null;
+  readiness: "up" | "down";
+};
+
+const httpServer = r
+  .resource<{ port: number }>("app.http.server")
+  .context<ServerContext>(() => ({
+    app: express(),
+    listener: null,
+    readiness: "up",
+  }))
+  .init(async ({ port }, _deps, context) => {
+    context.app.get("/health", (_req, res) => {
+      const status = context.readiness === "up" ? 200 : 503;
+      res.status(status).json({ status: context.readiness });
+    });
+
+    context.listener = context.app.listen(port);
+    return context.listener;
+  })
+  .cooldown(async (listener, _config, _deps, context) => {
+    // Intake-stop phase: fast and non-blocking in intent.
+    context.readiness = "down";
+    listener.close();
+  })
+  .dispose(async (_listener, _config, _deps, context) => {
+    // Final teardown phase: force-close leftovers if needed.
+    context.listener.closeAllConnections();
+    context.listener.closeIdleConnections();
+    context.listener = null;
+  })
+  .build();
+```
+
+Why this pattern works:
+
+- `cooldown()` runs before `events.disposing` and before drain wait, so it prevents new HTTP requests from entering.
+- In-flight requests/tasks/events still get the normal drain window (`dispose.drainingBudgetMs`).
+- `dispose()` runs after drain, so cleanup can focus on leftovers only.
+- This is the intended `cooldown()` shape: ingress resources that route to tasks/events.
+- Infrastructure dependencies (database connections, cache clients, brokers) should usually skip `cooldown()` and only clean up in `dispose()`, so in-flight work can still finish during drain.
+
+`cooldown()` can be async, but keep it short. Trigger intake stop and return quickly; let Runner's drain phase do the waiting.
+
+When you also want an operator-facing summary, pair ingress readiness with resource-level health probes:
+
+```typescript
+const report = await health.getHealth();
+// {
+//   totals: { resources: 3, healthy: 2, degraded: 1, unhealthy: 0 },
+//   report: [...]
+// }
+
+const dbStatus = report.find(db).status;
+```
+
+Only resources that explicitly define `health()` participate. This keeps health reporting intentional instead of synthesizing fake status for every resource in the graph. Lazy resources that are still sleeping are skipped. Prefer `resources.health` inside resources; keep `runtime.getHealth()` for operator-facing runtime access.
+
+Tasks can also declare a fail-fast policy around critical resources:
+
+```typescript
+const writeOrder = r
+  .task("app.tasks.writeOrder")
+  .tags([tags.failWhenUnhealthy.with([db])])
+  .run(async (input) => persistOrder(input))
+  .build();
+```
+
+When `db.health()` reports `unhealthy`, Runner blocks the task before its logic runs. `degraded` still executes, bootstrap-time task calls are not gated, and sleeping lazy resources remain skipped until they wake up.
+
+For lightweight lifecycle-owned polling or recovery loops, use `resources.timers`:
+
+```typescript
+const app = r
+  .resource("app")
+  .dependencies({ timers: resources.timers, health: resources.health })
+  .ready(async (_value, _config, { timers, health }) => {
+    const interval = timers.setInterval(async () => {
+      const report = await health.getHealth([db]);
+      if (report.report[0]?.status === "healthy") {
+        interval.cancel();
+      }
+    }, 1000);
+  })
+  .build();
+```
+
+`resources.timers` is available during `init()` as well. Once the timers resource enters `cooldown()`, it stops accepting new timers, and its `dispose()` clears anything still pending.
 
 ---
 
@@ -450,15 +775,15 @@ Best practices:
 
 Need recurring task execution without bringing in a separate scheduler process? Runner ships with a built-in global cron scheduler.
 
-You mark tasks with `globals.tags.cron.with({...})`, and `globals.resources.cron` discovers and schedules them at startup. The cron resource is registered by default, so there is no extra bootstrap wiring needed.
+You mark tasks with `tags.cron.with({...})` (alias: `resources.cron.tag.with({...})`), and `resources.cron` discovers and schedules them at startup. The cron resource is opt-in, so you must register it explicitly.
 
 ```typescript
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 const sendDigest = r
   .task("app.tasks.sendDigest")
   .tags([
-    globals.tags.cron.with({
+    tags.cron.with({
       expression: "0 9 * * *",
       timezone: "UTC",
       immediate: false,
@@ -470,7 +795,16 @@ const sendDigest = r
   })
   .build();
 
-const app = r.resource("app").register([sendDigest]).build();
+const app = r
+  .resource("app")
+  .register([
+    resources.cron.with({
+      // Optional: restrict scheduling to selected task ids/definitions.
+      only: [sendDigest],
+    }),
+    sendDigest,
+  ])
+  .build();
 ```
 
 Cron options:
@@ -483,11 +817,28 @@ Cron options:
 - `onError`: `"continue"` (default) or `"stop"` for that schedule.
 - `silent`: suppress all cron log output for this task when `true` (default `false`).
 
+`resources.cron.with({...})` options:
+
+- `only`: optional array of task ids or task definitions; when set, only those cron-tagged tasks are scheduled.
+
 Operational notes:
 
 - One cron tag per task is supported. If you need multiple schedules, fork the task and tag each fork.
+- If `resources.cron` is not registered, cron tags are treated as metadata and no schedules are started.
 - Scheduler uses `setTimeout` chaining, which keeps it portable across supported runtimes.
-- Startup and execution lifecycle messages are emitted via `globals.resources.logger`.
+- Startup and execution lifecycle messages are emitted via `resources.logger`.
+- On `events.disposing`, cron stops all pending schedules immediately (no new timer-driven runs), while already in-flight cron executions drain under the normal shutdown budgets.
+
+Best practices:
+
+- Keep cron task logic idempotent (retries, restarts, and manual reruns happen).
+- Use `timezone` explicitly for business schedules to avoid DST surprises.
+- Use `onError: "stop"` only when repeated failure should disable the schedule.
+- Keep cron tasks thin; delegate heavy logic to regular tasks for reuse/testing.
+
+> **runtime:** "Cron: because 'I'll remember to run it every morning' is how scripts become folklore. I set the timer, you make the task idempotent, and we both sleep better."
+
+---
 
 ## Concurrency Utilities
 
@@ -512,7 +863,7 @@ Imagine this: Your API has a rate limit of 100 requests/second, but 1,000 users 
 
 **The better solution**: Use a Semaphore, a concurrency primitive that automatically manages permits.
 
-### When to use Semaphore
+### When to Use Semaphore
 
 | Use case                   | Why Semaphore helps                        |
 | -------------------------- | ------------------------------------------ |
@@ -535,7 +886,7 @@ const users = await dbSemaphore.withPermit(async () => {
 }); // Permit released automatically, even if query throws
 ```
 
-**Pro Tip**: You don't always need to use `Semaphore` manually. The `concurrency` middleware (available via `globals.middleware.task.concurrency`) provides a declarative way to apply these limits to your tasks.
+**Pro Tip**: You don't always need to use `Semaphore` manually. The `concurrency` middleware (available via `middleware.task.concurrency`) provides a declarative way to apply these limits to your tasks.
 
 ### Manual acquire/release
 
@@ -618,15 +969,15 @@ dbSemaphore.dispose();
 // Error: "Semaphore has been disposed"
 ```
 
-### From Utilities to Middlewares
+### From Utilities to Middleware
 
-While `Semaphore` and `Queue` provide powerful manual control, Runner often wraps these into declarative middlewares for common patterns:
+While `Semaphore` and `Queue` provide powerful manual control, Runner often wraps these into declarative middleware for common patterns:
 
 - **concurrency**: Uses `Semaphore` internally to limit task parallelization.
 - **temporal**: Uses timers and promise-tracking to implement `debounce` and `throttle`.
 - **rateLimit**: Uses fixed-window counting to protect resources from bursts.
 
-**What you just learned**: Utilities are the building blocks; Middlewares are the blueprints for common resilience patterns.
+**What you just learned**: Utilities are the building blocks; Middleware is the blueprint for common resilience patterns.
 
 > **runtime:** "I provide the bricks and the mortar. You decide if you're building a fortress or just a very complicated way to trip over your own feet. Use the middleware for common paths; use the utilities when you want to play architect."
 
@@ -642,7 +993,7 @@ Picture this: Two users register at the same time, and your code writes their da
 
 **The better solution**: Use a Queue, which serializes operations automatically, ensuring they run one-by-one in order.
 
-### When to use Queue
+### When to Use Queue
 
 | Use case             | Why Queue helps                                 |
 | -------------------- | ----------------------------------------------- |
@@ -768,7 +1119,7 @@ const processFiles = queue.run(async (signal) => {
 - `tail`: The promise chain that maintains FIFO execution order
 - `disposed`: Boolean flag indicating whether the queue accepts new tasks
 - `abortController`: Centralized cancellation controller that provides `AbortSignal` to all tasks
-- `executionContext`: AsyncLocalStorage-based deadlock detection mechanism
+- `executionContext`: AsyncLocalStorage-based execution bookkeeping for correlation ids and causal-chain tracking
 
 #### Implement Cooperative Cancellation
 
@@ -825,3 +1176,121 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 ```
 
 > **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
+
+---
+
+## Remote Lanes (Node)
+
+Remote Lanes let you split a Runner application across processes or machines without changing your business logic. Two lane systems cover the common distributed patterns:
+
+| Need                             | Lane System                   | Semantics                        |
+| -------------------------------- | ----------------------------- | -------------------------------- |
+| Fire-and-forget async delivery   | **Event Lanes** (`eventLane`) | Queue-backed produce/consume     |
+| Request/response across services | **RPC Lanes** (`rpcLane`)     | Sync remote task/event execution |
+
+Lane behavior is attached at runtime by `eventLanesResource` / `rpcLanesResource`. Definitions that are **not** assigned to a lane keep normal local Runner behavior — lanes are additive, never invasive.
+
+### Event Lane Quick Start
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+import {
+  eventLanesResource,
+  MemoryEventLaneQueue,
+} from "@bluelibs/runner/node";
+
+// 1. Define a lane — a logical routing channel
+const emailLane = r.eventLane("app.lanes.email").build();
+
+// 2. Tag the event for lane routing
+const userRegistered = r
+  .event<{ userId: string }>("app.events.userRegistered")
+  .tags([tags.eventLane.with({ lane: emailLane })])
+  .build();
+
+// 3. Hook runs on the consumer side after relay
+const sendWelcome = r
+  .hook("app.hooks.sendWelcome")
+  .on(userRegistered)
+  .run(async (event) => {
+    console.log("Sending welcome email to", event.data.userId);
+  })
+  .build();
+
+// 4. Wire topology: who consumes what, and which queue backs each lane
+const topology = r.eventLane.topology({
+  profiles: {
+    api: { consume: [] },
+    worker: { consume: [emailLane] },
+  },
+  bindings: [{ lane: emailLane, queue: new MemoryEventLaneQueue() }],
+});
+
+// 5. Register and run
+const app = r
+  .resource("app")
+  .register([
+    userRegistered,
+    sendWelcome,
+    eventLanesResource.with({ profile: "worker", topology, mode: "network" }),
+  ])
+  .build();
+```
+
+### RPC Lane Quick Start
+
+Use `client: "fetch"` for universal `fetch` runtimes. Use `client: "mixed"` or `client: "smart"` only from `@bluelibs/runner/node` when you need Node streaming or multipart behavior.
+
+```typescript
+import { r } from "@bluelibs/runner";
+import { rpcLanesResource } from "@bluelibs/runner/node";
+
+// 1. Define a lane
+const billingLane = r.rpcLane("app.rpc.billing").build();
+
+// 2. Tag the task for lane routing
+const chargeCard = r
+  .task("billing.tasks.chargeCard")
+  .tags([tags.rpcLane.with({ lane: billingLane })])
+  .run(async (input: { amount: number }) => ({
+    ok: true,
+    amount: input.amount,
+  }))
+  .build();
+
+// 3. Create a communicator for the remote side
+const billingComm = r
+  .resource("app.resources.billingComm")
+  .init(
+    r.rpcLane.httpClient({
+      client: "mixed",
+      baseUrl: "http://billing:7070/__runner",
+    }),
+  )
+  .build();
+
+// 4. Wire topology and register
+const topology = r.rpcLane.topology({
+  profiles: {
+    api: { serve: [] },
+    billing: { serve: [billingLane] },
+  },
+  bindings: [{ lane: billingLane, communicator: billingComm }],
+});
+```
+
+### Local Development Modes
+
+You don't need external infrastructure to develop and test lanes:
+
+- `mode: "transparent"` — bypass transport completely; hooks run locally as if no lane existed. Use for fast unit-test feedback.
+- `mode: "local-simulated"` — events cross the serializer boundary (`stringify -> parse`) before local re-emit. Catches non-JSON-safe payload issues.
+- Two runtimes in one process + `MemoryEventLaneQueue` — emulate full profile split without external infra.
+
+### Operational Knobs
+
+In `mode: "network"`, Event Lane bindings support `prefetch`, `maxAttempts`, and `retryDelayMs`. RabbitMQ dead-letter ownership is broker/queue-policy based; Runner settles final failures with `nack(false)` and does not manually publish to DLQ.
+
+For complete examples, common patterns, testing strategies, debugging, migration notes, and RabbitMQ configuration, see [REMOTE_LANES.md](../readmes/REMOTE_LANES.md).
+
+> **runtime:** "Serve it or ship it. There is no 'maybe call the other service.'"

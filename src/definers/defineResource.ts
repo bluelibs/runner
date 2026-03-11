@@ -3,23 +3,41 @@ import type {
   IResourceDefinition,
   DependencyMapType,
   IResourceMeta,
-  TagType,
+  ResourceTagType,
   IOptionalDependency,
   ResourceMiddlewareAttachmentType,
   IResourceWithConfig,
-  ResourceForkOptions,
 } from "../types/resource";
 import {
   symbolForkedFrom,
   symbolResource,
   symbolFilePath,
   symbolOptionalDependency,
+  symbolResourceIsolateDeclarations,
+  symbolResourceRegistersChildren,
+  symbolResourceSubtreeDeclarations,
   symbolResourceWithConfig,
 } from "../types/symbols";
-import { validationError } from "../errors";
+import {
+  resourceForkNonLeafUnsupportedError,
+  resourceForkGatewayUnsupportedError,
+  validationError,
+} from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
-import { resolveForkedRegisterAndDependencies } from "./resourceFork";
+import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
+import { assertDefinitionId } from "./assertDefinitionId";
+import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
+import {
+  createDisplaySubtreePolicy,
+  createSubtreePolicyDeclaration,
+} from "./subtreePolicy";
+import {
+  createDisplayIsolatePolicy,
+  createIsolatePolicyDeclaration,
+} from "./isolatePolicy";
+import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 export function defineResource<
   TConfig = void,
@@ -27,7 +45,7 @@ export function defineResource<
   TDeps extends DependencyMapType = {},
   TPrivate = any,
   TMeta extends IResourceMeta = any,
-  TTags extends TagType[] = TagType[],
+  TTags extends ResourceTagType[] = ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[] =
     ResourceMiddlewareAttachmentType[],
 >(
@@ -61,24 +79,65 @@ export function defineResource<
    */
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
   const id = constConfig.id;
+  assertDefinitionId("Resource", id, {
+    allowReservedDottedNamespace: isFrameworkDefinitionMarked(constConfig),
+  });
+  const configSchema = normalizeOptionalValidationSchema(
+    constConfig.configSchema,
+    {
+      definitionId: id,
+      subject: "Resource config",
+    },
+  );
+  const resultSchema = normalizeOptionalValidationSchema(
+    constConfig.resultSchema,
+    {
+      definitionId: id,
+      subject: "Resource result",
+    },
+  );
+  assertTagTargetsApplicableTo("resources", "Resource", id, constConfig.tags);
+
+  const isolateDeclarations =
+    constConfig[symbolResourceIsolateDeclarations] ??
+    (constConfig.isolate
+      ? Object.freeze([createIsolatePolicyDeclaration(constConfig.isolate)])
+      : undefined);
+  const isolate = createDisplayIsolatePolicy(isolateDeclarations, id);
+
+  const subtreeDeclarations =
+    constConfig[symbolResourceSubtreeDeclarations] ??
+    (constConfig.subtree
+      ? Object.freeze([createSubtreePolicyDeclaration(constConfig.subtree)])
+      : undefined);
+  const subtree = createDisplaySubtreePolicy(subtreeDeclarations);
 
   const base = {
     [symbolResource]: true,
+    [symbolResourceRegistersChildren]:
+      constConfig.register !== undefined ? true : undefined,
     [symbolFilePath]: filePath,
     id,
+    gateway: constConfig.gateway === true,
     dependencies: constConfig.dependencies,
     dispose: constConfig.dispose,
+    ready: constConfig.ready,
+    cooldown: constConfig.cooldown,
+    health: constConfig.health,
     register: constConfig.register || [],
     overrides: constConfig.overrides || [],
     init: constConfig.init,
     context: constConfig.context,
-    configSchema: constConfig.configSchema,
-    resultSchema: constConfig.resultSchema,
+    configSchema,
+    resultSchema,
     tags: constConfig.tags ?? [],
     throws: normalizeThrows({ kind: "resource", id }, constConfig.throws),
     meta: (constConfig.meta || {}) as TMeta,
     middleware: constConfig.middleware ?? [],
-    exports: constConfig.exports,
+    isolate,
+    subtree,
+    [symbolResourceIsolateDeclarations]: isolateDeclarations,
+    [symbolResourceSubtreeDeclarations]: subtreeDeclarations,
   } as IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>;
 
   const resolveCurrent = (
@@ -135,8 +194,17 @@ export function defineResource<
     throws: current.throws,
     middleware: current.middleware,
     dispose: current.dispose,
+    ready: current.ready,
+    cooldown: current.cooldown,
+    health: current.health,
     meta: current.meta,
-    exports: current.exports,
+    isolate: current.isolate,
+    subtree: current.subtree,
+    [symbolResourceIsolateDeclarations]:
+      current[symbolResourceIsolateDeclarations],
+    [symbolResourceSubtreeDeclarations]:
+      current[symbolResourceSubtreeDeclarations],
+    gateway: current.gateway,
   });
 
   base.with = function (config: TConfig) {
@@ -157,7 +225,7 @@ export function defineResource<
       }
     }
 
-    return {
+    const configured = {
       [symbolResourceWithConfig]: true,
       id: currentId,
       resource: current,
@@ -171,39 +239,44 @@ export function defineResource<
       TTags,
       TMiddleware
     >;
+    return freezeIfLineageLocked(current, configured);
   };
 
   base.optional = function () {
     const current = resolveCurrent(this);
-    return {
+    const wrapper = {
       inner: current,
       [symbolOptionalDependency]: true,
     } as IOptionalDependency<
       IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>
     >;
+    return freezeIfLineageLocked(current, wrapper);
   };
 
-  base.fork = function (newId: string, options?: ResourceForkOptions) {
+  base.fork = function (newId: string) {
     const current = resolveCurrent(this);
+    if (current[symbolResourceRegistersChildren] === true) {
+      resourceForkNonLeafUnsupportedError.throw({ id: current.id });
+    }
+    if (current.gateway === true) {
+      resourceForkGatewayUnsupportedError.throw({ id: current.id });
+    }
     const forkCallerFilePath = getCallerFile();
-    const forkedParts = resolveForkedRegisterAndDependencies({
-      register: current.register,
-      dependencies: current.dependencies,
-      forkId: newId,
-      options,
-    });
     const forked = defineResource({
       ...buildDefinition(current),
       id: newId,
-      register: forkedParts.register,
-      dependencies: forkedParts.dependencies,
+      register: current.register,
+      dependencies: current.dependencies,
       [symbolFilePath]: forkCallerFilePath,
     });
-    forked[symbolForkedFrom] = {
-      fromId: current.id,
+    const forkedWithMeta = {
+      ...forked,
+      [symbolForkedFrom]: {
+        fromId: current.id,
+      },
     };
-    return forked;
+    return freezeIfLineageLocked(current, forkedWithMeta);
   };
 
-  return base;
+  return deepFreeze(base);
 }

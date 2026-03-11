@@ -3,12 +3,14 @@ import { run } from "../../run";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { createTestFixture } from "../test-utils";
 import { createMessageError } from "../../errors";
-import { ResourceInitMode } from "../../types/runner";
+import { ResourceLifecycleMode } from "../../types/runner";
+import { runtimeSource } from "../../types/runtimeSource";
+import type { RuntimeCallSource } from "../../types/runtimeSource";
 
 enum ResourceId {
-  Broken = "broken.resource",
-  BrokenWithMeta = "broken.resource.meta",
-  BrokenViaDependency = "broken.resource.dependency",
+  Broken = "broken-resource",
+  BrokenWithMeta = "broken-resource-meta",
+  BrokenViaDependency = "broken-resource-dependency",
   Root = "root",
   Task = "task",
   Resource = "res",
@@ -17,14 +19,14 @@ enum ResourceId {
   Hook = "hook",
   Emitter = "emitter",
   Consumer = "consumer",
-  DependencyTask = "task.dependency",
-  TaskConsumer = "resource.taskConsumer",
-  TaskInitConsumer = "resource.taskInitConsumer",
+  DependencyTask = "task-dependency",
+  TaskConsumer = "resource-taskConsumer",
+  TaskInitConsumer = "resource-taskInitConsumer",
 }
 
 enum ErrorMessage {
   Boom = "boom",
-  WithResource = "broken.resource.meta boom",
+  WithResource = "broken-resource-meta boom",
 }
 
 describe("DependencyProcessor Consistency", () => {
@@ -43,7 +45,7 @@ describe("DependencyProcessor Consistency", () => {
       .build();
 
     await expect(run(root)).rejects.toThrow(
-      /Resource "broken\.resource" initialization failed: boom/,
+      /Resource "broken-resource" initialization failed: boom/,
     );
   });
 
@@ -148,7 +150,9 @@ describe("DependencyProcessor Consistency", () => {
       .build();
 
     const runtime = await run(root);
-    const resEntry = runtime.store.resources.get(resource.id);
+    const resourceId = runtime.store.resolveDefinitionId(resource);
+    expect(resourceId).toBeDefined();
+    const resEntry = runtime.store.resources.get(resourceId!);
 
     const injectedTask = resEntry?.value.task;
     const storedTask = (resEntry?.computedDependencies as any)?.task;
@@ -210,10 +214,10 @@ describe("DependencyProcessor Consistency", () => {
   it("should deliver events emitted while hook dependencies are still computing", async () => {
     const seen: string[] = [];
 
-    const event = r.event<{ ok: true }>("hook.buffer.event").build();
+    const event = r.event<{ ok: true }>("hook-buffer-event").build();
 
     const earlyEmitter = r
-      .resource("hook.buffer.emitter")
+      .resource("hook-buffer-emitter")
       .dependencies({ event })
       .init(async (_config, { event }) => {
         await event({ ok: true });
@@ -223,12 +227,12 @@ describe("DependencyProcessor Consistency", () => {
       .build();
 
     const secondaryDep = r
-      .resource("hook.buffer.dep")
+      .resource("hook-buffer-dep")
       .init(async () => ({ value: "dep" }))
       .build();
 
     const hookA = r
-      .hook("hook.buffer.hookA")
+      .hook("hook-buffer-hookA")
       .on(event)
       .dependencies({ earlyEmitter })
       .run(async () => {
@@ -237,7 +241,7 @@ describe("DependencyProcessor Consistency", () => {
       .build();
 
     const hookB = r
-      .hook("hook.buffer.hookB")
+      .hook("hook-buffer-hookB")
       .on(event)
       .dependencies({ secondaryDep })
       .run(async (_input, { secondaryDep }) => {
@@ -246,7 +250,7 @@ describe("DependencyProcessor Consistency", () => {
       .build();
 
     const root = r
-      .resource("hook.buffer.root")
+      .resource("hook-buffer-root")
       .register([hookA, hookB, earlyEmitter, secondaryDep, event])
       .init(async () => "root")
       .build();
@@ -349,15 +353,15 @@ describe("DependencyProcessor Consistency", () => {
     store.setTaskRunner(taskRunner);
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
-    const event = r.event<{ ok: true }>("hook.pending.event").build();
+    const event = r.event<{ ok: true }>("hook-pending-event").build();
     const runHook = jest.fn(async () => undefined);
     const hook = r
-      .hook("hook.pending.hook")
+      .hook("hook-pending-hook")
       .on(event)
       .run(async () => runHook())
       .build();
     const root = r
-      .resource("hook.pending.root")
+      .resource("hook-pending-root")
       .register([event, hook])
       .build();
 
@@ -371,8 +375,47 @@ describe("DependencyProcessor Consistency", () => {
     );
     processor.attachListeners();
 
-    await eventManager.emit(event, { ok: true }, "test");
+    await eventManager.emit(event, { ok: true }, runtimeSource.runtime("test"));
     expect(runHook).not.toHaveBeenCalled();
+  });
+
+  it("falls back to runtime source for unknown dependency owners", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const event = r
+      .event<{ ok: boolean }>("tests-dependency-source-fallback")
+      .build();
+    store.storeGenericItem(event);
+
+    const processor = new DependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+    );
+
+    const seenSources: RuntimeCallSource[] = [];
+    eventManager.addListener(event, (received) => {
+      seenSources.push(received.source);
+    });
+
+    const emitFromUnknownOwner = processor.extractEventDependency(
+      event,
+      "unknown-owner-id",
+    );
+
+    await emitFromUnknownOwner({ ok: true });
+
+    expect(seenSources).toEqual([
+      {
+        kind: "runtime",
+        id: "unknown-owner-id",
+        path: "unknown-owner-id",
+      },
+    ]);
   });
 
   it("covers buffered hook flush guards and self-source filtering", async () => {
@@ -387,7 +430,7 @@ describe("DependencyProcessor Consistency", () => {
       taskRunner,
       logger,
     );
-    type HookEvent = { source: string; data: unknown };
+    type HookEvent = { source: RuntimeCallSource; data: unknown };
     type HookStoreElementShape = {
       hook: { id: string; run: () => Promise<void> };
       computedDependencies: Record<string, never>;
@@ -403,7 +446,7 @@ describe("DependencyProcessor Consistency", () => {
     const internals = processor as unknown as DependencyProcessorInternals;
 
     const hook = {
-      id: "test.hook.flush",
+      id: "test-hook-flush",
       run: jest.fn(async () => undefined),
     };
     const hookStoreElement = {
@@ -417,7 +460,9 @@ describe("DependencyProcessor Consistency", () => {
     ).resolves.toBeUndefined();
 
     hookStoreElement.dependencyState = "ready";
-    internals.pendingHookEvents.set(hook.id, [{ source: "outside", data: {} }]);
+    internals.pendingHookEvents.set(hook.id, [
+      { source: runtimeSource.runtime("outside"), data: {} },
+    ]);
     internals.drainingHookIds.add(hook.id);
 
     await expect(
@@ -427,8 +472,8 @@ describe("DependencyProcessor Consistency", () => {
 
     internals.drainingHookIds.delete(hook.id);
     internals.pendingHookEvents.set(hook.id, [
-      { source: hook.id, data: { skip: true } },
-      { source: "outside", data: { run: true } },
+      { source: runtimeSource.hook(hook.id), data: { skip: true } },
+      { source: runtimeSource.runtime("outside"), data: { run: true } },
     ]);
 
     const executeSpy = jest
@@ -440,7 +485,9 @@ describe("DependencyProcessor Consistency", () => {
     expect(executeSpy).toHaveBeenCalledTimes(1);
     expect(executeSpy).toHaveBeenCalledWith(
       hook,
-      expect.objectContaining({ source: "outside" }),
+      expect.objectContaining({
+        source: expect.objectContaining({ id: "outside" }),
+      }),
       {},
     );
   });
@@ -456,11 +503,11 @@ describe("DependencyProcessor Consistency", () => {
       eventManager,
       taskRunner,
       logger,
-      ResourceInitMode.Sequential,
+      ResourceLifecycleMode.Sequential,
       false,
       false,
     );
-    type HookEvent = { source: string; data: unknown };
+    type HookEvent = { source: RuntimeCallSource; data: unknown };
     type HookStoreElementShape = {
       hook: { id: string; run: () => Promise<void> };
       computedDependencies: Record<string, never>;
@@ -476,7 +523,7 @@ describe("DependencyProcessor Consistency", () => {
     const internals = processor as unknown as DependencyProcessorInternals;
 
     const hook = {
-      id: "test.hook.loop",
+      id: "test-hook-loop",
       run: jest.fn(async () => undefined),
     };
     const hookStoreElement = {
@@ -485,25 +532,25 @@ describe("DependencyProcessor Consistency", () => {
       dependencyState: "ready",
     };
 
-    internals.pendingHookEvents.set(hook.id, [{ source: "outside", data: {} }]);
+    internals.pendingHookEvents.set(hook.id, [
+      { source: runtimeSource.runtime("outside"), data: {} },
+    ]);
 
     const executeSpy = jest
       .spyOn(eventManager, "executeHookWithInterceptors")
       .mockImplementation(async () => {
         internals.pendingHookEvents.set(hook.id, [
-          { source: "outside", data: {} },
+          { source: runtimeSource.runtime("outside"), data: {} },
         ]);
       });
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
 
     await expect(
       internals.flushBufferedHookEvents(hookStoreElement),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow(
+      `Buffered hook event flush for "${hook.id}" exceeded 128 passes while runtime event cycle detection is disabled.`,
+    );
 
     expect(executeSpy).toHaveBeenCalled();
-    expect(consoleErrorSpy).toHaveBeenCalled();
     expect(internals.drainingHookIds.has(hook.id)).toBe(false);
   });
 });
