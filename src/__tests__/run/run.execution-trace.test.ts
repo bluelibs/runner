@@ -7,6 +7,56 @@ import {
 import { run } from "../../run";
 import { resources } from "../../index";
 
+function createTaskEventHookTaskLoopFixture() {
+  const calls: string[] = [];
+  const event = defineEvent<{ count: number }>({ id: "trace-loop-event" });
+
+  const taskA = defineTask({
+    id: "trace-loop-task-a",
+    dependencies: { eventManager: resources.eventManager },
+    run: async (input: { count: number }, { eventManager }) => {
+      calls.push(`taskA:${input.count}`);
+
+      if (input.count < 2) {
+        await eventManager.emit(event, input, {
+          kind: "task",
+          id: "trace-loop-task-a",
+          path: "trace-loop-task-a",
+        });
+      }
+
+      return input.count;
+    },
+  });
+
+  const taskB = defineTask({
+    id: "trace-loop-task-b",
+    dependencies: { taskA },
+    run: async (input: { count: number }, { taskA: runTaskA }) => {
+      calls.push(`taskB:${input.count}`);
+      return runTaskA(input);
+    },
+  });
+
+  const hook = defineHook({
+    id: "trace-loop-hook",
+    dependencies: { taskB },
+    on: event,
+    run: async (emission, { taskB: runTaskB }) => {
+      calls.push(`hook:${emission.data.count}`);
+      await runTaskB({ count: emission.data.count + 1 });
+    },
+  });
+
+  const app = defineResource({
+    id: "trace-loop-app",
+    register: [event, hook, taskA, taskB],
+    init: async () => "ok",
+  });
+
+  return { app, calls, taskA };
+}
+
 describe("Execution Trace (integration)", () => {
   describe("event cycle detection", () => {
     it("detects A -> B -> A event cycle with executionContext enabled", async () => {
@@ -112,6 +162,33 @@ describe("Execution Trace (integration)", () => {
       const rr = await run(app, { executionContext: true });
       const result = await rr.runTask(task, "hello");
       expect(result).toBe("processed: hello");
+      await rr.dispose();
+    });
+
+    it("allows a bounded task -> event -> hook -> task loop when executionContext is disabled", async () => {
+      const { app, calls, taskA } = createTaskEventHookTaskLoopFixture();
+
+      const rr = await run(app);
+      await expect(rr.runTask(taskA, { count: 0 })).resolves.toBe(0);
+      expect(calls).toEqual([
+        "taskA:0",
+        "hook:0",
+        "taskB:1",
+        "taskA:1",
+        "hook:1",
+        "taskB:2",
+        "taskA:2",
+      ]);
+      await rr.dispose();
+    });
+
+    it("detects a task -> event -> hook -> task loop when executionContext is enabled", async () => {
+      const { app, taskA } = createTaskEventHookTaskLoopFixture();
+
+      const rr = await run(app, { executionContext: true });
+      await expect(rr.runTask(taskA, { count: 0 })).rejects.toThrow(
+        /cycle detected/i,
+      );
       await rr.dispose();
     });
   });
