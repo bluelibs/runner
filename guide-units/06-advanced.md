@@ -944,7 +944,12 @@ The function pattern essentially gives you "just-in-time" dependency resolution 
 
 ## Handling Circular Dependencies
 
-Sometimes you'll run into circular type dependencies because of your file structure not necessarily because of a real circular dependency. TypeScript struggles with these, but there's a way to handle it gracefully.
+Separate two different problems:
+
+- **Declared dependency cycles** in Runner's graph are rejected during bootstrap. If `resourceA -> taskA -> taskB -> resourceA` is expressed through `.dependencies(...)` + `.middleware(...)`, `run(app)` fails fast before startup completes.
+- **Execution cycles** created dynamically at runtime are different. For example `taskA -> emit(eventA) -> hookA -> taskB -> taskA` is not a declared dependency cycle, so bootstrap can succeed. To guard those dynamic event/task re-entry loops, enable `executionContext` cycle detection. This protection is Node-only because it depends on `AsyncLocalStorage`.
+
+Sometimes you'll run into circular type dependencies because of your file structure, not because of a real Runner dependency cycle. TypeScript struggles with these, but there's a way to handle it gracefully.
 
 ### The Problem
 
@@ -979,7 +984,7 @@ export const cResource = r
   .build();
 ```
 
-A depends on B, B depends on C, and C depends on A's task. Runtime can still boot, but TypeScript inference can get stuck in this cycle.
+A depends on B, B depends on C, and C depends on A's task. That shape is a real Runner dependency cycle, so bootstrap should fail. The narrower point here is that circular type inference across files is a TypeScript problem, and explicit types are the right fix for that problem.
 
 ### The Solution
 
@@ -998,7 +1003,7 @@ export const cResource = r
 
 #### Why This Works
 
-- **Runtime**: The circular dependency still works at runtime because the framework resolves dependencies dynamically
+- **Runtime**: This technique helps only when the runtime graph is already valid and acyclic. It does not bypass Runner's bootstrap-time dependency cycle detection.
 - **TypeScript**: The explicit type annotation prevents TypeScript from trying to infer the return type based on the circular chain
 - **Type Safety**: You still get full type safety by explicitly declaring the return type (`string` in this example)
 
@@ -1034,3 +1039,17 @@ export const problematicResource = r
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
 > **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
+
+## Dependency Cycles vs Execution Cycles
+
+Runner has more than one kind of cycle protection, and they trigger at different times:
+
+- **Dependency graph validation** happens during `run(app)`. Declared `.dependencies(...)` (middleware-aware too) cycles across resources, tasks, hooks, and middleware fail fast before the runtime starts.
+- **Event emission graph validation** also happens during `run(app)`. It catches declared event-to-event bounce graphs that hooks create through their listened events and event dependencies.
+- **Execution context cycle detection** happens while work is running. Use `run(app, { executionContext: true })` when you want protection against dynamic loops such as `task -> event -> hook -> task` or repeated event re-entry that is not visible as a declared dependency edge.
+
+```typescript
+const runtime = await run(app, {
+  executionContext: true,
+});
+```

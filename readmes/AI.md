@@ -662,6 +662,14 @@ Use `provide()` when you want to seed or override the correlation id from an ext
 
 Use `record()` when you want the execution tree back for assertions, tracing, or debugging.
 
+Cycle protection comes in layers:
+
+- declared `.dependencies(...)` cycles fail during bootstrap graph validation (it is middleware-aware too)
+- declared hook-driven event bounce graphs fail during bootstrap event-emission validation
+- dynamic runtime loops such as `task -> event -> hook -> task` need `executionContext.cycleDetection` enabled to be stopped at execution time
+
+`executionContext` is Node-only in practice because it requires `AsyncLocalStorage`.
+
 ## Async Context
 
 Defines serializable request-local state scoped to an async execution tree (requires `AsyncLocalStorage`; Node-only in practice).
