@@ -316,6 +316,42 @@ check(
 );
 ```
 
+### Extending Schemas
+
+Extend plain object patterns by composition:
+
+```typescript
+import { Match } from "@bluelibs/runner";
+
+const baseUser = {
+  id: Match.NonEmptyString,
+  email: Match.Email,
+};
+
+const adminUser = Match.compile({
+  ...baseUser,
+  role: Match.OneOf("admin", "owner"),
+});
+```
+
+Compiled schemas do not expose `.extend()`. When the compiled schema was created from an object-shaped pattern, extend it by composing `compiled.pattern` into a new pattern and compiling again:
+
+```typescript
+import { Match } from "@bluelibs/runner";
+
+const baseUser = Match.compile({
+  id: Match.NonEmptyString,
+  email: Match.Email,
+});
+
+const adminUser = Match.compile({
+  ...baseUser.pattern,
+  role: Match.OneOf("admin", "owner"),
+});
+```
+
+For decorated class schemas, use `Match.Schema({ base })` to compose one schema class from another, with `base` accepting either a class or a lazy `() => Class` resolver.
+
 ### Match Reference
 
 | Pattern / Helper                                             | What It Does                                                   |

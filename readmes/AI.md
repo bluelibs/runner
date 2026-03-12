@@ -452,6 +452,7 @@ import { check, Match } from "@bluelibs/runner";
 
 - `check(value, pattern)` is the low-level runtime validator.
 - `Match.compile(pattern)` creates reusable schemas with `.parse()`, `.test()`, and JSON-Schema export.
+- Compiled schemas do not expose `.extend()`; for object-shaped schemas, compose `compiled.pattern` into a new pattern and call `Match.compile(...)` again.
 - Constructors act as matchers: `String`, `Number`, `Boolean`.
 - Common `Match.*` helpers include `NonEmptyString`, `Email`, `Integer`, `UUID`, `URL`, `Optional()`, `OneOf()`, `ObjectIncluding()`, `MapOf()`, `ArrayOf()`, `Lazy()`, `Where((value, parent?) => boolean)`, and `WithMessage(pattern, messageOrFormatter)`.
 - Plain objects are strict by default, so `check(value, { name: String })` rejects unknown keys.
