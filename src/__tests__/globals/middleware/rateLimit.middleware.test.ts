@@ -226,6 +226,12 @@ describe("Rate Limit Middleware", () => {
     });
   });
 
+  it("should throw when windowMs is zero", () => {
+    expectValidationError(() => {
+      rateLimitTaskMiddleware.with({ windowMs: 0, max: 1 });
+    });
+  });
+
   it("should throw when max is not finite", () => {
     expectValidationError(() => {
       rateLimitTaskMiddleware.with({ windowMs: 1000, max: Infinity });
@@ -235,6 +241,12 @@ describe("Rate Limit Middleware", () => {
   it("should throw when max is negative", () => {
     expectValidationError(() => {
       rateLimitTaskMiddleware.with({ windowMs: 1000, max: -1 });
+    });
+  });
+
+  it("should throw when max is zero", () => {
+    expectValidationError(() => {
+      rateLimitTaskMiddleware.with({ windowMs: 1000, max: 0 });
     });
   });
 

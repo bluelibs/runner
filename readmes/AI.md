@@ -429,7 +429,7 @@ r.task("ratelimit-ip").middleware([middleware.task.rateLimit.with({windowMs:1_00
 
 **Order:** fallback (outermost) → timeout (inside retry if per-attempt budgets needed) → others.
 **Use:** rate-limit for quotas like "50/s", concurrency for in-flight, circuit-breaker for fail-fast, cache for idempotent reads, debounce/throttle for burst shaping.
-**Partitioning:** `rateLimit`, `debounce`, and `throttle` default to `taskId`; pass `keyBuilder(taskId, input)` to partition by async-context values, user ids, tenants, or similar keys. When `tenantScope` is active, Runner prefixes the final internal key as `tenantId:<baseKey>`.
+**Partitioning:** `rateLimit`, `debounce`, and `throttle` default to `taskId`; pass `keyBuilder(taskId, input)` to partition by async-context values, user ids, tenants, or similar keys. When `tenantScope` is active, Runner prefixes the final internal key as `<tenantId>:<baseKey>`.
 
 Built-in journal keys exist for middleware introspection:
 

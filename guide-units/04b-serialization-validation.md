@@ -115,7 +115,7 @@ serializer.addType({
 });
 ```
 
-### Class Ergonomics (Great DX, Optional)
+### Class Ergonomics for Serialization (Great DX, Optional)
 
 When DTO classes are your preferred style, combine `@Match.Schema()` with `@Serializer.Field(...)`.
 This is purely ergonomic on top of the same runtime contracts.
@@ -465,7 +465,7 @@ const timeout = r.middleware
 
 Any schema library is valid if it implements `parse(input)`. Zod works directly and remains a great fit for richer refinement/transforms.
 
-### Class Ergonomics (Great DX, Optional)
+### Class Ergonomics for Validation (Great DX, Optional)
 
 Class-backed contracts can be very readable in larger domains:
 

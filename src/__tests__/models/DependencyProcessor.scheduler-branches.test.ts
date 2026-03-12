@@ -291,6 +291,12 @@ describe("DependencyProcessor scheduler branches", () => {
       ResourceLifecycleMode.Parallel,
     );
 
-    expect(() => processor.attachListeners()).not.toThrow();
+    const addListenerSpy = jest.spyOn(eventManager, "addListener");
+    const addGlobalListenerSpy = jest.spyOn(eventManager, "addGlobalListener");
+
+    processor.attachListeners();
+
+    expect(addListenerSpy).not.toHaveBeenCalled();
+    expect(addGlobalListenerSpy).not.toHaveBeenCalled();
   });
 });

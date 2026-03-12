@@ -33,9 +33,14 @@ export interface RateLimitMiddlewareConfig extends TenantScopedMiddlewareConfig 
   keyBuilder?: MiddlewareKeyBuilder;
 }
 
+const positiveNonZeroIntegerPattern = Match.Where(
+  (value: unknown): value is number =>
+    typeof value === "number" && Number.isInteger(value) && value > 0,
+);
+
 const rateLimitConfigPattern = Match.ObjectIncluding({
-  windowMs: Match.PositiveInteger,
-  max: Match.PositiveInteger,
+  windowMs: positiveNonZeroIntegerPattern,
+  max: positiveNonZeroIntegerPattern,
   keyBuilder: Match.Optional(Function),
   tenantScope: tenantScopePattern,
 });

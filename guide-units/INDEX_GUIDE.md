@@ -2,7 +2,7 @@
 !include: 00-overview.md
 !include: 02-resources.md
 !include: 02b-tasks.md
-!include: 02c-events-hooks.md
+!include: 02c-events-and-hooks.md
 !include: 02d-middleware.md
 !include: 02e-tags.md
 !include: 02f-errors.md
@@ -11,5 +11,5 @@
 !include: 04c-multi-tenant.md
 !include: 04b-serialization-validation.md
 !include: 05-observability.md
-!include: 06-advanced.md
+!include: 06-meta-and-internals.md
 !include: 08-testing.md

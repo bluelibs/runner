@@ -1,4 +1,5 @@
 import { asyncContexts, r, run } from "../..";
+import { storage } from "../../definers/defineAsyncContext";
 import { PlatformAdapter, resetPlatform, setPlatform } from "../../platform";
 import {
   tenantContextRequiredError,
@@ -129,5 +130,18 @@ describe("asyncContexts.tenant", () => {
       inner: "inner",
       restored: "outer",
     });
+  });
+
+  it("has remains a pure probe even when the stored tenant value is invalid", () => {
+    const invalidStore = new Map<string, unknown>([
+      ["runner.contexts.tenant", { tenantId: "" }],
+    ]);
+
+    const result = storage.run(invalidStore, () => asyncContexts.tenant.has());
+
+    expect(result).toBe(true);
+    expect(() =>
+      storage.run(invalidStore, () => asyncContexts.tenant.tryUse()),
+    ).toThrow();
   });
 });

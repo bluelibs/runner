@@ -90,7 +90,7 @@ export const tenantAsyncContext: TenantAsyncContextAccessor = Object.freeze({
   use,
   tryUse,
   has() {
-    return tryUse() !== undefined;
+    return getTenantAsyncContext()?.has() ?? false;
   },
   provide<R>(
     value: TenantContextValue,

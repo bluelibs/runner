@@ -2,7 +2,7 @@
 
 The `run()` function is your application's entry point. It initializes all resources, wires up dependencies, and returns handles for interacting with your system.
 
-### Basic usage
+### Basic Usage
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
@@ -23,7 +23,7 @@ console.log(result.value); // "ready"
 await result.dispose();
 ```
 
-### What `run()` returns
+### What `run()` Returns
 
 An object with the following properties and methods:
 
@@ -58,7 +58,7 @@ For lifecycle-owned polling and delayed work inside resources, depend on `resour
 
 `runtime.pause()` is not a shutdown. It is a synchronous idempotent admission switch: new runtime/resource-origin task runs and event emissions are rejected immediately, while already-running tasks, hooks, and middleware can continue and finish. `runtime.resume()` reopens admissions immediately. When you want automatic recovery, register one or more `runtime.recoverWhen({ everyMs, check })` conditions while paused; Runner resumes only after every active condition for that pause episode is satisfied.
 
-### Ready-phase startup orchestration
+### Ready-Phase Startup Orchestration
 
 Use `events.ready` for components that should start only after bootstrap is fully complete.
 
@@ -292,7 +292,7 @@ sequenceDiagram
     R1-->>Runner: connection closed
 ```
 
-### Basic shutdown handling
+### Basic Shutdown Handling
 
 > **Platform Note:** This example uses Express and Node.js process signals, so it runs on Node.js.
 
@@ -368,7 +368,7 @@ const { dispose } = await run(app, {
 await dispose();
 ```
 
-### Automatic signal handling
+### Automatic Signal Handling
 
 By default, Runner installs handlers for `SIGTERM` and `SIGINT`.
 Signal-based shutdown follows the standard disposal lifecycle sequence described in [Disposal Lifecycle Events](#disposal-lifecycle-events) below.
@@ -400,7 +400,7 @@ process.on("SIGTERM", async () => {
 });
 ```
 
-### Disposal lifecycle events
+### Disposal Lifecycle Events
 
 Manual `runtime.dispose()` and signal-based shutdown both follow:
 

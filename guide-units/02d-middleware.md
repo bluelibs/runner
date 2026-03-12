@@ -19,6 +19,10 @@ const adminTask = r
   .middleware([authMiddleware.with({ requiredRole: "admin" })])
   .run(async () => "Secret admin data")
   .build();
+
+// Tasks (and resources) must be registered in a resource before the runtime can use them.
+// Inline middleware definitions do not need to be registered separately.
+const app = r.resource("app").register([adminTask]).build();
 ```
 
 **What you just learned**: Middleware wraps tasks or resources with reusable, configurable behavior. Attach it with `.middleware([...])` and configure with `.with()`.
@@ -112,7 +116,11 @@ Rules:
 
 ### Middleware Type Contracts
 
-Middleware can enforce input and output contracts on the tasks that use it.
+Middleware can enforce input and output contracts on the tasks that use it. This is useful for:
+
+- **Authentication**: ensure all tasks using auth-middleware have `userId` in input
+- **API standardization**: enforce consistent response shapes across task groups
+- **Validation**: guarantee tasks return required fields
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -147,17 +155,17 @@ If you use multiple contract middleware, their contracts combine.
 
 Runner ships with built-in middleware for common reliability concerns:
 
-| Middleware     | Config                                    | Notes                                                                     |
-| -------------- | ----------------------------------------- | ------------------------------------------------------------------------- |
-| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; customize with `resources.cache.with(...)`   |
-| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                               |
-| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                     |
-| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key   |
-| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends       |
-| fallback       | `{ fallback }`                            | static value, function, or task fallback                                  |
-| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, for cases like "50 per second"      |
-| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                |
-| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal`  |
+| Middleware     | Config                                    | Notes                                                                    |
+| -------------- | ----------------------------------------- | ------------------------------------------------------------------------ |
+| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; customize with `resources.cache.with(...)`  |
+| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                              |
+| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                    |
+| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key  |
+| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends      |
+| fallback       | `{ fallback }`                            | static value, function, or task fallback                                 |
+| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, for cases like "50 per second"     |
+| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                               |
+| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal` |
 
 Resource equivalents:
 
@@ -215,18 +223,101 @@ const getUser = r
 
 > **Note:** `rateLimit`, `debounce`, and `throttle` all default to partitioning by `taskId`. Provide `keyBuilder(taskId, input)` when you want per-user, per-tenant, or per-IP behavior. If that key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
 
-> **Note:** When tenant-aware middleware runs with `tenantScope`, Runner prefixes the final internal key as `tenantId:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada` when the active tenant is `acme`. The default behavior is `"auto"`: use the tenant prefix when tenant context exists, otherwise keep the shared key. Use `"required"` when tenant context must exist, and `"off"` only for intentional cross-tenant sharing.
+> **Note:** When tenant-aware middleware runs with `tenantScope`, Runner prefixes the final internal key as `<tenantId>:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada` when the active tenant value is `acme`. The default behavior is `"auto"`: use the tenant prefix when tenant context exists, otherwise keep the shared key. Use `"required"` when tenant context must exist, and `"off"` only for intentional cross-tenant sharing.
 
-### Global Interception
+### Resilience Orchestration
 
-For true catch-all behavior, use interception APIs during resource init rather than trying to fake it with subtree middleware.
+In production, one resilience strategy is rarely enough. Runner allows you to compose multiple middleware layers into a "resilience onion" that protects your business logic from multiple failure modes.
 
-- `taskRunner.intercept(...)` wraps all task executions outermost
-- `middlewareManager.intercept("task" | "resource", ...)` wraps middleware composition layers
-- `eventManager.intercept(...)` wraps event emission
+A task that calls a remote API might fail due to network blips (needs **Retry**), hang indefinitely (needs **Timeout**), slam the API during traffic spikes (needs **Rate Limit**), or keep failing if the API is down (needs **Circuit Breaker**).
+
+Combine them in the correct order. Like an onion, the outer layers handle broader concerns, while inner layers handle specific execution details.
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const resilientTask = r
+  .task("app.tasks.ultimateResilience")
+  .middleware([
+    // Outer layer: Fallback (the absolute Plan B if everything below fails)
+    middleware.task.fallback.with({
+      fallback: { status: "offline-mode", data: [] },
+    }),
+
+    // Next: Rate Limit (check this before wasting resources or retry budget)
+    middleware.task.rateLimit.with({ windowMs: 60000, max: 100 }),
+
+    // Next: Circuit Breaker (stop immediately if the service is known to be down)
+    middleware.task.circuitBreaker.with({ failureThreshold: 5 }),
+
+    // Next: Retry (wrap the attempt in a retry loop)
+    middleware.task.retry.with({ retries: 3 }),
+
+    // Inner layer: Timeout (enforce limit on EACH individual attempt)
+    middleware.task.timeout.with({ ttl: 5000 }),
+  ])
+  .run(async () => {
+    return await fetchDataFromUnreliableSource();
+  })
+  .build();
+```
+
+Best practices for orchestration:
+
+1. **Rate Limit first**: Don't even try to execute or retry if you've exceeded your quota.
+2. **Circuit Breaker second**: Don't retry against a service that is known to be failing.
+3. **Retry wraps Timeout**: Ensure the timeout applies to the _individual_ attempt, so the retry logic can kick in when one attempt hangs.
+4. **Fallback last**: The fallback should be the very last thing that happens if the entire resilience stack fails.
+
+> **runtime:** "Resilience Orchestration: layering defense-in-depth like a paranoid onion. I'm counting your turns, checking the circuit, spinning the retry wheel, and holding a stopwatch—all so you can sleep through a minor server fire."
+
+### Middleware Interception
+
+Use interception when behavior must wrap the middleware composition layer globally or target a single middleware across all its uses.
+
+Available APIs:
+
+- Task middleware layer: `middlewareManager.intercept("task", (next, input) => Promise<any>)`
+- Resource middleware layer: `middlewareManager.intercept("resource", (next, input) => Promise<any>)`
+- Per-middleware: `middlewareManager.interceptMiddleware(middleware, interceptor)`
+
+Register interceptors during resource `init` before the runtime locks.
+
+`middlewareManager.intercept(...)` wraps every middleware execution on the targeted channel:
+
+```typescript
+import { r, resources } from "@bluelibs/runner";
+
+const observabilityInstaller = r
+  .resource("app.observability")
+  .dependencies({
+    middlewareManager: resources.middlewareManager,
+    logger: resources.logger,
+  })
+  .init(async (_config, { middlewareManager, logger }) => {
+    middlewareManager.intercept("task", async (next, input) => {
+      await logger.info(
+        `Middleware entering: ${String(input.task.definition.id)}`,
+      );
+      const result = await next(input);
+      await logger.info(
+        `Middleware exiting: ${String(input.task.definition.id)}`,
+      );
+      return result;
+    });
+  })
+  .build();
+```
+
+`interceptMiddleware` targets a single middleware wherever it is applied:
+
+```typescript
+middlewareManager.interceptMiddleware(authMiddleware, async (next, input) => {
+  // runs every time authMiddleware executes, regardless of which task uses it
+  return next(input);
+});
+```
 
 For context enforcement, use `middleware.task.requireContext.with({ context })` to assert that a specific `IAsyncContext` is present before a task runs. If the context is missing, the task fails immediately with `middlewareContextRequiredError`.
-
-See [Advanced Patterns](./06-advanced.md#advanced-patterns) for interception ordering and runtime-wide interception details.
 
 > **runtime:** "Middleware: the onion pattern, except every layer has opinions and a config object. I peel them in order, cry a little, and hand you the result."

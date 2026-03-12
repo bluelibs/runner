@@ -872,7 +872,7 @@ Imagine this: Your API has a rate limit of 100 requests/second, but 1,000 users 
 | Heavy CPU tasks            | Prevents memory/CPU exhaustion             |
 | Third-party service limits | Respects external service quotas           |
 
-### Basic usage
+### Basic Semaphore Usage
 
 ```typescript
 import { Semaphore } from "@bluelibs/runner";
@@ -888,7 +888,7 @@ const users = await dbSemaphore.withPermit(async () => {
 
 **Pro Tip**: You don't always need to use `Semaphore` manually. The `concurrency` middleware (available via `middleware.task.concurrency`) provides a declarative way to apply these limits to your tasks.
 
-### Manual acquire/release
+### Manual Acquire/Release
 
 When you need more control:
 
@@ -1002,7 +1002,7 @@ Picture this: Two users register at the same time, and your code writes their da
 | Database migrations  | Ensures schema changes apply in order           |
 | Audit logs           | Guarantees chronological ordering               |
 
-### Basic usage
+### Basic Queue Usage
 
 ```typescript
 import { Queue } from "@bluelibs/runner";
@@ -1017,7 +1017,7 @@ const [result1, result2] = await Promise.all([
 // File contains "second" - no corruption from concurrent writes
 ```
 
-### Cancellation support
+### Cancellation Support
 
 Each task receives an `AbortSignal` for cooperative cancellation:
 
@@ -1162,7 +1162,7 @@ try {
 }
 ```
 
-### Lifecycle events (isolated EventManager)
+### Lifecycle Events (Isolated EventManager)
 
 `Queue` also publishes local lifecycle events for lightweight telemetry. Each Queue instance has its own **isolated EventManager**—these events are local to the Queue and are completely separate from the global EventManager used for business-level application events.
 

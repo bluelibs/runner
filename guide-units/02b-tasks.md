@@ -214,6 +214,93 @@ const orchestratorTask = r
   .build();
 ```
 
+### Execution Interception APIs
+
+Use interception when behavior must wrap execution globally or at runtime wiring boundaries.
+
+Available APIs:
+
+- Task catch-all: `taskRunner.intercept((next, input) => Promise<any>, { when? })`
+- Local task interception: `deps.someTask.intercept((next, input) => Promise<any>)`
+
+`taskRunner.intercept(...)` is the replacement for old middleware catch-all behavior:
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const telemetryInstaller = r
+  .resource("app.telemetry")
+  .dependencies({
+    taskRunner: resources.taskRunner,
+    logger: resources.logger,
+  })
+  .init(async (_config, { taskRunner, logger }) => {
+    taskRunner.intercept(
+      async (next, input) => {
+        const startedAt = Date.now();
+        try {
+          return await next(input);
+        } finally {
+          await logger.info(
+            `Task ${input.task.definition.id} took ${Date.now() - startedAt}ms`,
+          );
+        }
+      },
+      {
+        when: (taskDefinition) => !taskDefinition.id.startsWith("internal."),
+      },
+    );
+  })
+  .build();
+```
+
+Key rules:
+
+- Register interceptors during resource `init` before the runtime locks.
+- `taskRunner.intercept(...)` runs outermost around the task middleware pipeline.
+- `deps.someTask.intercept(...)` runs inside task middleware and only for that task.
+- When `when(...)` must target one concrete definition, prefer `isSameDefinition(taskDefinition, someTask)` over comparing public ids directly.
+
+### Task Interceptors
+
+Task interceptors (`task.intercept()`) allow resources to dynamically modify task behavior during initialization without tight coupling.
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+
+const calculatorTask = r
+  .task("app.tasks.calculator")
+  .run(async (input: { value: number }) => {
+    return { result: input.value + 1 };
+  })
+  .build();
+
+const interceptorResource = r
+  .resource("app.interceptor")
+  .dependencies({ calculatorTask })
+  .init(async (_config, { calculatorTask }) => {
+    calculatorTask.intercept(async (next, input) => {
+      const result = await next(input);
+      return { ...result, intercepted: true };
+    });
+  })
+  .build();
+```
+
+You can inspect which resources installed local interceptors through an injected task dependency:
+
+```typescript
+const inspector = r
+  .resource("app.inspector")
+  .dependencies({ calculatorTask })
+  .init(async (_config, { calculatorTask }) => {
+    const owners = calculatorTask.getInterceptingResourceIds();
+    // eg: ["app.interceptor"]
+    return { owners };
+  })
+  .build();
+```
+
 For lifecycle-owned timers inside tasks or resources, depend on `resources.timers`.
 `timers.setTimeout()` and `timers.setInterval()` stop accepting new timers once `cooldown()` starts and are cleared during `dispose()`.
 

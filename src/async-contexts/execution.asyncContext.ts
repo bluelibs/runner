@@ -20,6 +20,13 @@ function provide<T>(
     return provideExecutionContext(undefined, first);
   }
 
+  if (typeof second !== "function") {
+    contextError.throw({
+      details:
+        "Execution context callback is required when calling asyncContexts.execution.provide(options, fn).",
+    });
+  }
+
   return provideExecutionContext(first, second!);
 }
 
@@ -34,6 +41,13 @@ function record<T>(
 ): Promise<ExecutionRecordResult<Awaited<T>>> {
   if (typeof first === "function") {
     return recordExecutionContext(undefined, first);
+  }
+
+  if (typeof second !== "function") {
+    contextError.throw({
+      details:
+        "Execution context callback is required when calling asyncContexts.execution.record(options, fn).",
+    });
   }
 
   return recordExecutionContext(first, second!);

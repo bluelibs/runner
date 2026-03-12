@@ -28,6 +28,12 @@ const sendWelcomeEmail = r
     console.log(`Welcome email sent to ${event.data.email}`);
   })
   .build();
+
+// Events, tasks, and hooks must all be registered in a resource to be active.
+const app = r
+  .resource("app")
+  .register([userService, userRegistered, registerUser, sendWelcomeEmail])
+  .build();
 ```
 
 **What you just learned**: Events are typed signals, hooks subscribe to them, and tasks emit events through dependency injection. Producers stay decoupled from listeners.
@@ -221,6 +227,47 @@ const emergencyHook = r
     if (event.data.severity === "critical") {
       event.stopPropagation();
     }
+  })
+  .build();
+```
+
+### Event Interception APIs
+
+Use `eventManager` to intercept event operations globally during resource initialization:
+
+- Event emission: `eventManager.intercept((next, event) => Promise<void>)` — wraps the entire emit batch.
+- Hook execution: `eventManager.interceptHook((next, hook, event) => Promise<any>)` — wraps a single hook's callback.
+
+Always await the `next` function and pass the correct arguments.
+
+```typescript
+import { r, resources } from "@bluelibs/runner";
+
+const eventTelemetry = r
+  .resource("app.eventTelemetry")
+  .dependencies({
+    eventManager: resources.eventManager,
+    logger: resources.logger,
+  })
+  .init(async (_config, { eventManager, logger }) => {
+    // Intercept individual hook executions (e.g. for benchmarking)
+    eventManager.interceptHook(async (next, hook, event) => {
+      const start = Date.now();
+      try {
+        return await next(hook, event);
+      } finally {
+        await logger.debug(
+          `Hook ${String(hook.id)} handled ${String(event.id)} in ${Date.now() - start}ms`,
+        );
+      }
+    });
+
+    // Intercept the entire event emission cycle
+    eventManager.intercept(async (next, event) => {
+      await logger.info(`Event emitted: ${String(event.id)}`);
+      // Warning: you must pass the exact 'event' object reference to next()
+      return await next(event);
+    });
   })
   .build();
 ```

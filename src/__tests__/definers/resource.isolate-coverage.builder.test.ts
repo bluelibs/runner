@@ -5,6 +5,7 @@ import {
   isolateInvalidEntryError,
   isolateUnknownTargetError,
   isolateInvalidExportsError,
+  visibilityViolationError,
 } from "../../errors";
 
 const POLICY_INVALID_ENTRY_ID = isolateInvalidEntryError.id;
@@ -128,8 +129,9 @@ describe("isolation entry normalization coverage", () => {
         register: [task],
       });
 
-      const result = await run(resource);
-      expect(result).toBeDefined();
+      const runtime = await run(resource);
+      await expect(runtime.runTask(task)).resolves.toBe(42);
+      await runtime.dispose();
     });
   });
 
@@ -153,20 +155,18 @@ describe("isolation entry normalization coverage", () => {
         register: [tag, taggedTask, consumerTask],
       });
 
-      // Tag in deny should block access to tagged items
-      let thrownErr: unknown;
-      try {
-        const result = await run(resource);
-        await result.runTask(consumerTask);
-      } catch (err) {
-        thrownErr = err;
-      }
-
-      // Should throw an isolation violation
-      expect(thrownErr).toBeDefined();
+      let runtime: Awaited<ReturnType<typeof run>> | undefined;
+      await expectRunnerErrorId(
+        (async () => {
+          runtime = await run(resource);
+          return runtime.runTask(consumerTask);
+        })(),
+        "runner.errors.isolationViolation",
+      );
+      await runtime?.dispose();
     });
 
-    it("allows tags in exports", async () => {
+    it("accepts tags in exports without making tagged tasks public", async () => {
       const tag = defineTag({ id: "coverage-isolate-tag-export-tag" });
       const taggedTask = defineTask({
         id: "coverage-isolate-tag-export-tagged-task",
@@ -174,14 +174,22 @@ describe("isolation entry normalization coverage", () => {
         tags: [tag],
       });
 
-      const resource = defineResource({
-        id: "coverage-isolate-tag-export-resource",
+      const child = defineResource({
+        id: "coverage-isolate-tag-export-child",
         isolate: { exports: [tag] },
         register: [tag, taggedTask],
       });
 
-      const result = await run(resource);
-      expect(result).toBeDefined();
+      const root = defineResource({
+        id: "coverage-isolate-tag-export-root",
+        register: [child],
+        dependencies: { taggedTask },
+        async init(_config, deps) {
+          return deps.taggedTask();
+        },
+      });
+
+      await expectRunnerErrorId(run(root), visibilityViolationError.id);
     });
   });
 
@@ -208,16 +216,15 @@ describe("isolation entry normalization coverage", () => {
         register: [deniedTask, allowedTask, consumerTask],
       });
 
-      // deniedTask should be blocked
-      let thrownErr: unknown;
-      try {
-        const result = await run(resource);
-        await result.runTask(consumerTask);
-      } catch (err) {
-        thrownErr = err;
-      }
-
-      expect(thrownErr).toBeDefined();
+      let runtime: Awaited<ReturnType<typeof run>> | undefined;
+      await expectRunnerErrorId(
+        (async () => {
+          runtime = await run(resource);
+          return runtime.runTask(consumerTask);
+        })(),
+        "runner.errors.isolationViolation",
+      );
+      await runtime?.dispose();
     });
 
     it("scope([taskDef, eventDef]) covers multiple non-tag definitions", async () => {
@@ -237,9 +244,10 @@ describe("isolation entry normalization coverage", () => {
         register: [deniedTask, allowedTask],
       });
 
-      // Should not throw - both tasks are in the only list
-      const result = await run(resource);
-      expect(result).toBeDefined();
+      const runtime = await run(resource);
+      await expect(runtime.runTask(deniedTask)).resolves.toBe(42);
+      await expect(runtime.runTask(allowedTask)).resolves.toBe(100);
+      await runtime.dispose();
     });
   });
 });

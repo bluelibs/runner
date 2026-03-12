@@ -1,5 +1,6 @@
-import { PlatformAdapter, resetPlatform, setPlatform } from "../../platform";
 import { asyncContexts } from "../../asyncContexts";
+import { contextError } from "../../errors";
+import { PlatformAdapter, resetPlatform, setPlatform } from "../../platform";
 
 describe("asyncContexts.execution", () => {
   afterEach(() => {
@@ -55,6 +56,50 @@ describe("asyncContexts.execution", () => {
       result: "captured",
       recording: undefined,
     });
+  });
+
+  it("fails fast when the provide callback is missing", () => {
+    expect(() =>
+      (
+        asyncContexts.execution.provide as unknown as (
+          options: { correlationId: string },
+          fn?: () => string,
+        ) => string
+      )({ correlationId: "req-missing" }),
+    ).toThrow(/callback is required/i);
+
+    try {
+      (
+        asyncContexts.execution.provide as unknown as (
+          options: { correlationId: string },
+          fn?: () => string,
+        ) => string
+      )({ correlationId: "req-missing" });
+    } catch (error) {
+      expect(contextError.is(error)).toBe(true);
+    }
+  });
+
+  it("fails fast when the record callback is missing", () => {
+    expect(() =>
+      (
+        asyncContexts.execution.record as unknown as (
+          options: { correlationId: string },
+          fn?: () => Promise<string>,
+        ) => Promise<unknown>
+      )({ correlationId: "req-record-missing" }),
+    ).toThrow(/callback is required/i);
+
+    try {
+      (
+        asyncContexts.execution.record as unknown as (
+          options: { correlationId: string },
+          fn?: () => Promise<string>,
+        ) => Promise<unknown>
+      )({ correlationId: "req-record-missing" });
+    } catch (error) {
+      expect(contextError.is(error)).toBe(true);
+    }
   });
 
   it("provide and record still return callback results without async local storage", async () => {
