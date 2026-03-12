@@ -310,7 +310,7 @@ export const rpcLanesExposureOwnerInvalidError = error<
 >(RunnerErrorId.RpcLaneExposureOwnerInvalid)
   .format(
     ({ ownerResourceId }) =>
-      `RPC HTTP exposure can only be owned by "platform-node-resources-rpcLanes". Received owner "${ownerResourceId}".`,
+      `RPC HTTP exposure can only be owned by "runner.node.rpcLanes". Received owner "${ownerResourceId}".`,
   )
   .remediation(
     "Start RPC HTTP exposure only through rpcLanesResource.with({ exposure: { http: ... } }) in network mode.",
@@ -369,32 +369,6 @@ export const resourceForkNonLeafUnsupportedError = error<
   .remediation(
     ({ id }) =>
       `Do not call .fork() on non-leaf resource "${id}". Compose a distinct parent resource and register distinct children explicitly. Use a dedicated factory API when the template owns a registered subtree.`,
-  )
-  .build();
-
-export const resourceForkGatewayUnsupportedError = error<
-  { id: string } & DefaultErrorType
->(RunnerErrorId.ResourceForkGatewayUnsupported)
-  .format(
-    ({ id }) =>
-      `Resource "${id}" cannot be forked because gateway resources suppress their own namespace segment.`,
-  )
-  .remediation(
-    ({ id }) =>
-      `Do not call .fork() on gateway resource "${id}". Register a distinct non-gateway resource, or compose separate gateway resources with unique registered children instead.`,
-  )
-  .build();
-
-export const runRootGatewayUnsupportedError = error<
-  { id: string } & DefaultErrorType
->(RunnerErrorId.RunRootGatewayUnsupported)
-  .format(
-    ({ id }) =>
-      `Resource "${id}" cannot be passed to run() because gateway resources are structural-only.`,
-  )
-  .remediation(
-    ({ id }) =>
-      `Wrap gateway resource "${id}" in a distinct non-gateway root resource, then call run(root) instead.`,
   )
   .build();
 

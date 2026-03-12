@@ -92,6 +92,64 @@ describe("Rate Limit Middleware", () => {
     }
   });
 
+  it("limits independently per computed key", async () => {
+    const task = defineTask({
+      id: "rateLimit-keyed",
+      middleware: [
+        rateLimitTaskMiddleware.with({
+          windowMs: 1000,
+          max: 1,
+          keyBuilder: (_taskId, input) => input as string,
+        }),
+      ],
+      run: async (input: string) => input,
+    });
+
+    const app = defineResource({
+      id: "app-keyed",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await expect(task("a")).resolves.toBe("a");
+        await expect(task("b")).resolves.toBe("b");
+        await expect(task("a")).rejects.toThrow(/Rate limit exceeded/i);
+      },
+    });
+
+    await run(app);
+  });
+
+  it("isolates rate-limit state by task when reusing one configured middleware instance", async () => {
+    const sharedRateLimit = rateLimitTaskMiddleware.with({
+      windowMs: 1000,
+      max: 1,
+    });
+
+    const taskA = defineTask({
+      id: "rateLimit-shared-a",
+      middleware: [sharedRateLimit],
+      run: async () => "a",
+    });
+
+    const taskB = defineTask({
+      id: "rateLimit-shared-b",
+      middleware: [sharedRateLimit],
+      run: async () => "b",
+    });
+
+    const app = defineResource({
+      id: "app-shared",
+      register: [taskA, taskB],
+      dependencies: { taskA, taskB },
+      async init(_, { taskA, taskB }) {
+        await expect(taskA()).resolves.toBe("a");
+        await expect(taskB()).resolves.toBe("b");
+      },
+    });
+
+    await run(app);
+  });
+
   it("should reset exactly at window boundary", async () => {
     expect.assertions(1);
     jest.useFakeTimers();
@@ -130,11 +188,13 @@ describe("Rate Limit Middleware", () => {
     const configured = rateLimitTaskMiddleware.with({
       windowMs: 1000,
       max: 1,
+      keyBuilder: (taskId) => taskId,
     });
 
     expect(configured.config).toEqual({
       windowMs: 1000,
       max: 1,
+      keyBuilder: expect.any(Function),
     });
   });
 
@@ -181,5 +241,76 @@ describe("Rate Limit Middleware", () => {
     expectValidationError(() => {
       rateLimitTaskMiddleware.with({ windowMs: 1000, max: 0 });
     });
+  });
+
+  it("propagates keyBuilder errors", async () => {
+    const task = defineTask({
+      id: "rateLimit-keyBuilder-error",
+      middleware: [
+        rateLimitTaskMiddleware.with({
+          windowMs: 1000,
+          max: 1,
+          keyBuilder: () => {
+            throw new Error("bad-key");
+          },
+        }),
+      ],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "app-keyBuilder-error",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await expect(task()).rejects.toThrow("bad-key");
+      },
+    });
+
+    await run(app);
+  });
+
+  it("prunes expired keyed windows lazily once the keyed state map grows large", async () => {
+    const config = { windowMs: 1000, max: 1 };
+    const keyedStates = new Map<string, { count: number; resetTime: number }>();
+
+    for (let index = 0; index < 1_000; index += 1) {
+      keyedStates.set(`expired-${index}`, {
+        count: 1,
+        resetTime: Date.now() - 1,
+      });
+    }
+
+    keyedStates.set("keep", {
+      count: 0,
+      resetTime: Date.now() + 10_000,
+    });
+
+    const deps = {
+      state: {
+        states: new WeakMap([[config, keyedStates]]),
+      },
+    } as Parameters<typeof rateLimitTaskMiddleware.run>[1];
+
+    await expect(
+      rateLimitTaskMiddleware.run(
+        {
+          task: {
+            definition: { id: "rateLimit-prune" } as any,
+            input: "fresh",
+          },
+          journal: {
+            set: jest.fn(),
+          } as any,
+          next: async (input?: string) => input,
+        },
+        deps,
+        config,
+      ),
+    ).resolves.toBe("fresh");
+
+    expect(keyedStates.size).toBe(2);
+    expect(keyedStates.has("keep")).toBe(true);
+    expect(keyedStates.has("rateLimit-prune")).toBe(true);
   });
 });

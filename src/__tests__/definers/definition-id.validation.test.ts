@@ -144,6 +144,15 @@ describe("definition id validation", () => {
   );
 
   it.each(definitionFactories)(
+    "rejects reserved internal ids for $label",
+    ({ create }) => {
+      expect(() => create("runtime-framework-root")).toThrow(
+        /reserved for internal Runner resources/i,
+      );
+    },
+  );
+
+  it.each(definitionFactories)(
     "rejects reserved framework dotted namespaces for non-framework definitions for $label",
     ({ create }) => {
       expect(() => create("runner.tags.userDefined")).toThrow(
@@ -173,6 +182,14 @@ describe("definition id validation", () => {
         allowReservedDottedNamespace: true,
       }),
     ).toThrow(/cannot contain "\."/i);
+  });
+
+  it("allows reserved internal ids only when explicitly authorized", () => {
+    expect(() =>
+      assertDefinitionId("Resource", "runtime-framework-root", {
+        allowReservedInternalId: true,
+      }),
+    ).not.toThrow();
   });
 
   it("allows framework helpers to define reserved runner/system ids", () => {

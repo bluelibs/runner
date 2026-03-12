@@ -25,9 +25,7 @@ import {
   overrideOutOfScopeError,
   remoteLaneAuthSignerMissingError,
   remoteLaneAuthVerifierMissingError,
-  resourceForkGatewayUnsupportedError,
   resourceForkNonLeafUnsupportedError,
-  runRootGatewayUnsupportedError,
 } from "../../errors";
 
 describe("error helpers extra branches", () => {
@@ -270,18 +268,6 @@ describe("error helpers extra branches", () => {
       }
     });
 
-    it("includes fork remediation for gateway-resource fork failures", () => {
-      expect.assertions(3);
-      try {
-        resourceForkGatewayUnsupportedError.throw({ id: "http-gateway" });
-        fail("Expected throw");
-      } catch (e: any) {
-        expect(e.message).toContain('Resource "http-gateway" cannot be forked');
-        expect(e.message).toContain("namespace segment");
-        expect(e.remediation).toContain("Do not call .fork()");
-      }
-    });
-
     it("includes composition remediation for non-leaf fork failures", () => {
       expect.assertions(3);
       try {
@@ -293,20 +279,6 @@ describe("error helpers extra branches", () => {
         );
         expect(e.remediation).toContain("non-leaf resource");
         expect(e.remediation).toContain("dedicated factory API");
-      }
-    });
-
-    it("includes root-wrapper remediation for gateway run failures", () => {
-      expect.assertions(3);
-      try {
-        runRootGatewayUnsupportedError.throw({ id: "http-gateway" });
-        fail("Expected throw");
-      } catch (e: any) {
-        expect(e.message).toContain(
-          'Resource "http-gateway" cannot be passed to run()',
-        );
-        expect(e.message).toContain("structural-only");
-        expect(e.remediation).toContain("non-gateway root resource");
       }
     });
 

@@ -194,12 +194,4 @@ describe("IResource.fork() (basic)", () => {
       /cannot be forked because it registers children/i,
     );
   });
-
-  it("rejects forking gateway resources", () => {
-    const gateway = r.resource("test-gateway", { gateway: true }).build();
-
-    expect(() => gateway.fork("test-gateway-fork")).toThrow(
-      /cannot be forked because gateway resources suppress their own namespace segment/i,
-    );
-  });
 });

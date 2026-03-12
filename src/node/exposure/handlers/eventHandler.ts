@@ -18,6 +18,7 @@ import { createAbortControllerForRequest } from "../utils";
 import { withUserContexts } from "./contextWrapper";
 import { ExposureErrorLogKey, handleRequestError } from "./errorHandlers";
 import { getRequestId } from "../requestIdentity";
+import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
 
 interface EventHandlerDeps {
   store: NodeExposureDeps["store"];
@@ -54,7 +55,7 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     allowAsyncContext = () => true,
     resolveAsyncContextAllowList = () => undefined,
     authorizeEvent = () => null,
-    sourceResourceId = "platform-node-resources-rpcLanes",
+    sourceResourceId = RPC_LANES_RESOURCE_ID,
   } = deps;
   const exposureSource = store.createRuntimeSource(
     "resource",

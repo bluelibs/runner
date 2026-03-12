@@ -221,11 +221,13 @@ They are Runner's main composition and ownership unit: a resource can register c
 - `health(value, config, deps, context)` is an optional async probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.
   Return `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
 - Config-only resources can omit `.init()` — their resolved value is `undefined`; they are used purely for configuration access and registration.
-- `r.resource(id, { gateway: true })` prevents the resource from adding its own namespace segment.
-- Gateway resources cannot be passed directly to `run(...)`; wrap them in a non-gateway root resource first.
+- User resources contribute their own ownership segment to canonical ids.
+- The app resource passed to `run(...)` is a normal resource, so direct registrations compile as `app.tasks.x`, `app.events.x`, `app.middleware.task.x`, and so on.
+- Child resources continue that chain, so nested registrations compile as `app.billing.tasks.x`.
+- Only the internal synthetic framework root is transparent, and it does not appear in user-facing ids.
+- `runtime-framework-root` is reserved for that internal framework root and cannot be used as a user resource id.
 - If you register something, you are a non-leaf resource.
 - Non-leaf resources cannot be forked.
-- Gateway resources cannot be forked with `.fork()` because multiple gateway instances would compile the same child canonical ids.
 - `.context(() => initialContext)` can hold mutable resource-local state used across lifecycle phases.
 
 Use the lifecycle intentionally:
@@ -401,17 +403,17 @@ const installer = r
 
 Runner ships with these resilience-focused built-ins.
 
-| Middleware     | Config                                    | Notes                                                         |
-| -------------- | ----------------------------------------- | ------------------------------------------------------------- |
-| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | requires `resources.cache`; Node exposes `redisCacheProvider` |
-| concurrency    | `{ limit, key?, semaphore? }`             | limits executions; share concurrency logic via `semaphore`    |
-| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, fails fast until recovery               |
-| debounce       | `{ ms }`                                  | runs only after inactivity                                    |
-| throttle       | `{ ms }`                                  | max once per `ms`                                             |
-| fallback       | `{ fallback }`                            | static value, function, or task fallback                      |
-| rateLimit      | `{ windowMs, max }`                       | fixed-window limit per instance                               |
-| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                    |
-| timeout        | `{ ttl }`                                 | aborts long-running executions via AbortController            |
+| Middleware     | Config                                    | Notes                                                                    |
+| -------------- | ----------------------------------------- | ------------------------------------------------------------------------ |
+| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; customize with `resources.cache.with(...)`  |
+| concurrency    | `{ limit, key?, semaphore? }`             | limits executions; share concurrency logic via `semaphore`               |
+| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, fails fast until recovery                          |
+| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key  |
+| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends      |
+| fallback       | `{ fallback }`                            | static value, function, or task fallback                                 |
+| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, eg "50 per second"                 |
+| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                               |
+| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal` |
 
 Resource: `middleware.resource.retry`, `middleware.resource.timeout` (same semantics).
 Non-resilience: `middleware.task.requireContext.with({ context })` — enforces async context.
@@ -421,10 +423,12 @@ Non-resilience: `middleware.task.requireContext.with({ context })` — enforces 
 r.task("cached").middleware([middleware.task.cache.with({ ttl: 60_000 })]).run(...).build();
 r.task("fallback-retry").middleware([middleware.task.fallback.with({fallback:"default"}), middleware.task.retry.with({retries:3})]).run(...).build();
 r.task("ratelimit-concurrency").middleware([middleware.task.rateLimit.with({windowMs:60_000,max:10}), middleware.task.concurrency.with({limit:5})]).run(...).build();
+r.task("ratelimit-ip").middleware([middleware.task.rateLimit.with({windowMs:1_000,max:50,keyBuilder:() => RequestContext.use().ip})]).run(...).build();
 ```
 
 **Order:** fallback (outermost) → timeout (inside retry if per-attempt budgets needed) → others.
-**Use:** rate-limit for admission, concurrency for in-flight, circuit-breaker for fail-fast, cache for idempotent reads, debounce/throttle for bursty calls.
+**Use:** rate-limit for quotas like "50/s", concurrency for in-flight, circuit-breaker for fail-fast, cache for idempotent reads, debounce/throttle for burst shaping.
+**Partitioning:** `rateLimit`, `debounce`, and `throttle` default to `taskId`; pass `keyBuilder(taskId, input)` to partition by async-context values, user ids, tenants, or similar keys.
 
 Built-in journal keys exist for middleware introspection:
 
@@ -548,12 +552,12 @@ Examples:
 
 ### Subtrees
 
-- `.subtree(policy)` and `.subtree((config) => policy)` can auto-attach middleware to nested tasks/resources.
+- `.subtree(policy)`, `.subtree([policyA, policyB])`, and `.subtree((config) => policy | policy[])` can auto-attach middleware to nested tasks/resources.
 - Subtrees can validate contained definitions.
 - `subtree.validate` is generic for compiled subtree definitions and can be one function or an array.
 - Typed validation is also available on `tasks`, `resources`, `hooks`, `events`, `tags`, `taskMiddleware`, and `resourceMiddleware`.
 - Generic and typed validators both run when they match the same compiled definition.
-- Validators receive only the compiled definition. Use `subtree((config) => ({ ... }))` when the policy depends on resource config.
+- Validators receive only the compiled definition. Use `subtree((config) => ({ ... }))` or `subtree((config) => [{ ... }, { ... }])` when the policy depends on resource config.
 - Use exported guards such as `isTask(...)` and `isResource(...)` inside `subtree.validate(...)` for cross-type checks.
 - Validators are return-based:
   - return `SubtreeViolation[]` for normal policy failures
@@ -565,7 +569,6 @@ Examples:
 - Forks clone identity, not structure.
 - If a resource declares `.register(...)`, it is non-leaf and `.fork()` is invalid.
 - Use `.fork(...)` when you need another instance of a leaf resource.
-- `.fork()` is not supported for gateway resources.
 - `.fork()` returns a built resource. You do not call `.build()` again.
 - Compose a distinct parent resource when you need a structural variant of a non-leaf resource.
 - Durable support is registered via `resources.durable`, while concrete durable backends use normal forks such as `resources.memoryWorkflow.fork("app-durable")`.

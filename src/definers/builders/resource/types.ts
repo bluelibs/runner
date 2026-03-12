@@ -25,7 +25,6 @@ export type BuilderState<
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 > = Readonly<{
   id: string;
-  gateway: boolean;
   filePath: string;
   dependencies?: TDeps | ((config: TConfig) => TDeps);
   register?:

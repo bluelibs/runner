@@ -8,6 +8,7 @@ import type {
 import type { ITask } from "../../defs";
 import type { TaskRunner } from "../../models/TaskRunner";
 import { runtimeSource } from "../../types/runtimeSource";
+import { RPC_LANES_RESOURCE_ID } from "../rpc-lanes/rpcLanes.resource";
 
 export interface NodeExposureHttpAuthConfig {
   header?: string;
@@ -41,7 +42,7 @@ export function createAuthenticator(
     Promise<AuthValidatorResult>,
     any
   >[],
-  sourceResourceId: string = "platform-node-resources-rpcLanes",
+  sourceResourceId: string = RPC_LANES_RESOURCE_ID,
 ): Authenticator {
   const headerName = (authCfg?.header ?? "x-runner-token").toLowerCase();
   const exposureSource = runtimeSource.resource(sourceResourceId);

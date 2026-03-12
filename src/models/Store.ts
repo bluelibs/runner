@@ -1,7 +1,7 @@
 import {
   IResource,
-  RegisterableItems,
   ITag,
+  RegisterableItems,
   TagDependencyAccessor,
 } from "../defs";
 import { findCircularDependencies } from "./utils/findCircularDependencies";
@@ -44,7 +44,7 @@ import {
   LifecycleAdmissionController,
   RuntimeLifecyclePhase,
 } from "./runtime/LifecycleAdmissionController";
-import { createFrameworkRootGateway } from "./createFrameworkRootGateway";
+import { createFrameworkRootResource } from "./createFrameworkRootGateway";
 import type { DebugFriendlyConfig } from "../globals/resources/debug";
 import { symbolRuntimeId } from "../types/symbols";
 import { getRuntimeId } from "../tools/runtimeMetadata";
@@ -421,7 +421,7 @@ export class Store {
       storeAlreadyInitializedError.throw();
     }
 
-    const frameworkRoot = createFrameworkRootGateway({
+    const frameworkRoot = createFrameworkRootResource({
       rootItem: root.with(config as any),
       debug: options?.debug,
     });

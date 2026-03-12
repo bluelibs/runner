@@ -1,5 +1,14 @@
-import { r, run } from "../../..";
+import { defineResource, r, run } from "../../..";
+import { markFrameworkDefinition } from "../../../definers/markFrameworkDefinition";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
+import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
+
+const fakeRpcLanesState = defineResource<any, Promise<null>>(
+  markFrameworkDefinition({
+    id: RPC_LANES_RESOURCE_ID,
+    init: async () => null,
+  }),
+);
 
 describe("eventLanes applyTo cross-source topology checks", () => {
   it("detects rpc lane assignment from string applyTo ids in topology state", async () => {
@@ -10,11 +19,6 @@ describe("eventLanes applyTo cross-source topology checks", () => {
       .eventLane("tests-event-lanes-apply-to-rpc-string-event-lane")
       .applyTo([event])
       .build();
-    const fakeRpcLanesState = r
-      .resource<any>("platform-node-resources-rpcLanes")
-      .init(async () => null)
-      .build();
-
     const app = r
       .resource("tests-event-lanes-apply-to-rpc-string-app")
       .register([
@@ -56,11 +60,6 @@ describe("eventLanes applyTo cross-source topology checks", () => {
       .eventLane("tests-event-lanes-apply-to-rpc-invalid-event-lane")
       .applyTo([event])
       .build();
-    const fakeRpcLanesState = r
-      .resource<any>("platform-node-resources-rpcLanes")
-      .init(async () => null)
-      .build();
-
     const app = r
       .resource("tests-event-lanes-apply-to-rpc-invalid-app")
       .register([

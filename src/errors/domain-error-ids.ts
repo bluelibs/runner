@@ -18,8 +18,6 @@ export enum RunnerErrorId {
   RpcLaneOwnershipConflict = "runner.errors.rpcLane.ownershipConflict",
   RpcLaneExposureOwnerInvalid = "runner.errors.rpcLane.exposureOwnerInvalid",
   ResourceForkNonLeafUnsupported = "runner.errors.resourceFork.nonLeafUnsupported",
-  ResourceForkGatewayUnsupported = "runner.errors.resourceFork.gatewayUnsupported",
-  RunRootGatewayUnsupported = "runner.errors.run.rootGatewayUnsupported",
   BuilderInvalidHttpCode = "runner.errors.builder.invalidHttpCode",
   OverrideUnsupportedBase = "runner.errors.override.unsupportedBase",
   OverrideDefinitionRequired = "runner.errors.overrideDefinitionRequired",

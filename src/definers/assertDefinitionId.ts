@@ -10,6 +10,10 @@ export const RESERVED_DEFINITION_LOCAL_NAMES = Object.freeze([
   "asyncContexts",
 ] as const);
 
+const RESERVED_INTERNAL_DEFINITION_IDS = Object.freeze([
+  "runtime-framework-root",
+] as const);
+
 const FRAMEWORK_DOTTED_ID_PREFIXES = Object.freeze([
   "runner.",
   "system.",
@@ -18,9 +22,16 @@ const FRAMEWORK_DOTTED_ID_PREFIXES = Object.freeze([
 const reservedDefinitionLocalNameSet = new Set<string>(
   RESERVED_DEFINITION_LOCAL_NAMES,
 );
+const reservedInternalDefinitionIdSet = new Set<string>(
+  RESERVED_INTERNAL_DEFINITION_IDS,
+);
 
 export function isReservedDefinitionLocalName(name: string): boolean {
   return reservedDefinitionLocalNameSet.has(name);
+}
+
+function isReservedInternalDefinitionId(id: string): boolean {
+  return reservedInternalDefinitionIdSet.has(id);
 }
 
 function canUseFrameworkDottedId(
@@ -34,6 +45,12 @@ function canUseFrameworkDottedId(
   return FRAMEWORK_DOTTED_ID_PREFIXES.some((prefix) =>
     definitionId.startsWith(prefix),
   );
+}
+
+function canUseReservedInternalDefinitionId(
+  allowReservedInternalId: boolean | undefined,
+): boolean {
+  return allowReservedInternalId === true;
 }
 
 function toDisplayId(value: unknown): string {
@@ -59,7 +76,10 @@ function requireStringId(definitionType: string, id: unknown): string {
 export function assertDefinitionId(
   definitionType: string,
   id: unknown,
-  options?: { allowReservedDottedNamespace?: boolean },
+  options?: {
+    allowReservedDottedNamespace?: boolean;
+    allowReservedInternalId?: boolean;
+  },
 ): asserts id is string {
   const definitionId = requireStringId(definitionType, id);
 
@@ -90,6 +110,17 @@ export function assertDefinitionId(
       subject: `${definitionType} id`,
       id: definitionId,
       originalError: `${definitionType} id "${definitionId}" is reserved by Runner and cannot be used as a standalone id.`,
+    });
+  }
+
+  if (
+    isReservedInternalDefinitionId(definitionId) &&
+    !canUseReservedInternalDefinitionId(options?.allowReservedInternalId)
+  ) {
+    validationError.throw({
+      subject: `${definitionType} id`,
+      id: definitionId,
+      originalError: `${definitionType} id "${definitionId}" is reserved for internal Runner resources.`,
     });
   }
 }

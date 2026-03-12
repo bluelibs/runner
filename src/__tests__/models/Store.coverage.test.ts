@@ -1,5 +1,6 @@
 import { defineResource } from "../../define";
 import { validationError } from "../../errors";
+import { createFrameworkRootResource } from "../../models/createFrameworkRootGateway";
 import { symbolRuntimeId } from "../../types/symbols";
 import { runtimeSource } from "../../types/runtimeSource";
 import { createTestFixture } from "../test-utils";
@@ -48,6 +49,56 @@ describe("Store coverage", () => {
     expect(() => store.toPublicId({ invalid: true } as any)).toThrow(
       /Unable to resolve a definition id/,
     );
+  });
+
+  it("strips the internal framework root prefix from public ids", () => {
+    const { store } = createTestFixture();
+    const registry = (store as unknown as { registry: any }).registry;
+    const frameworkChild = {
+      id: "ignored-framework-child",
+      [symbolRuntimeId]: "runtime-framework-root.framework-child-x",
+    };
+
+    registry.registerDefinitionAlias(
+      { id: "framework-child-x" },
+      "runtime-framework-root.framework-child-x",
+    );
+
+    expect(store.getRuntimeMetadata(frameworkChild)).toEqual({
+      id: "framework-child-x",
+      path: "runtime-framework-root.framework-child-x",
+      runtimeId: "runtime-framework-root.framework-child-x",
+    });
+  });
+
+  it("keeps non-framework ids unchanged when stripping the internal framework prefix", () => {
+    const { store } = createTestFixture();
+    const registry = (
+      store as unknown as {
+        registry: { stripFrameworkRootPrefix: (id: string) => string };
+      }
+    ).registry;
+
+    expect(registry.stripFrameworkRootPrefix("plain.resource")).toBe(
+      "plain.resource",
+    );
+  });
+
+  it("preserves the original root resource during framework composition", () => {
+    const root = defineResource({
+      id: "store-coverage-root-resource",
+    });
+
+    const frameworkRoot = createFrameworkRootResource({
+      rootItem: root,
+      debug: undefined,
+    });
+
+    const registerEntries = frameworkRoot.register as unknown as Array<{
+      id: string;
+      [key: symbol]: unknown;
+    }>;
+    expect(registerEntries[2]?.id).toBe(root.id);
   });
 
   it("fails fast when the computed root resource entry is missing after bootstrap", () => {

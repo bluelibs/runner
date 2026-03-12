@@ -166,12 +166,18 @@ export type SubtreePolicyOptions = {
   override?: boolean;
 };
 
+export type ResourceSubtreePolicyValue = ResourceSubtreePolicy;
+
+export type ResourceSubtreePolicyList =
+  | ResourceSubtreePolicyValue
+  | ResourceSubtreePolicyValue[];
+
 export type ResourceSubtreePolicyResolver<TConfig = unknown> = (
   config: TConfig,
-) => ResourceSubtreePolicy;
+) => ResourceSubtreePolicyList;
 
 export type ResourceSubtreePolicyInput<TConfig = unknown> =
-  | ResourceSubtreePolicy
+  | ResourceSubtreePolicyList
   | ResourceSubtreePolicyResolver<TConfig>;
 
 export type ResourceSubtreePolicyDeclaration<TConfig = unknown> = {

@@ -34,6 +34,7 @@ import { StoreRegistryWriter } from "./store-registry/StoreRegistryWriter";
 import { StoringMode, TagIndexBucket } from "./store-registry/types";
 import { validationError } from "../errors";
 import { getDefinitionIdentity } from "../tools/isSameDefinition";
+import { FRAMEWORK_ROOT_RESOURCE_ID } from "./createFrameworkRootGateway";
 
 /**
  * Any object reference used as a definition identity key.
@@ -110,6 +111,7 @@ export class StoreRegistry {
   >();
   private readonly definitionAliasesBySourceId = new Map<string, Set<string>>();
   private readonly sourceIdsByCanonicalId = new Map<string, Set<string>>();
+  private readonly displayIdsByCanonicalId = new Map<string, string>();
 
   // Kept on the registry for backward compatibility in tests/tools.
   public readonly tagIndex: Map<string, TagIndexBucket>;
@@ -195,6 +197,7 @@ export class StoreRegistry {
     this.recordDefinitionIdentityAlias(reference, canonicalId);
     this.recordSourceIdAlias(reference, canonicalId);
     this.recordCanonicalSourceId(reference, canonicalId);
+    this.computeAndStoreDisplayId(canonicalId);
   }
 
   resolveDefinitionId(reference: unknown): string | undefined {
@@ -310,18 +313,43 @@ export class StoreRegistry {
   }
 
   getDisplayId(id: string): string {
-    const sourceIds = this.sourceIdsByCanonicalId.get(id);
+    return this.displayIdsByCanonicalId.get(id) ?? id;
+  }
+
+  private stripFrameworkRootPrefix(id: string): string {
+    const prefix = `${FRAMEWORK_ROOT_RESOURCE_ID}.`;
+    return id.startsWith(prefix) ? id.slice(prefix.length) : id;
+  }
+
+  private computeAndStoreDisplayId(canonicalId: string): void {
+    if (
+      canonicalId === FRAMEWORK_ROOT_RESOURCE_ID ||
+      canonicalId.startsWith(`${FRAMEWORK_ROOT_RESOURCE_ID}.`)
+    ) {
+      this.displayIdsByCanonicalId.set(
+        canonicalId,
+        this.stripFrameworkRootPrefix(canonicalId),
+      );
+      return;
+    }
+
+    const sourceIds = this.sourceIdsByCanonicalId.get(canonicalId);
     if (!sourceIds || sourceIds.size === 0) {
-      return id;
+      this.displayIdsByCanonicalId.set(canonicalId, canonicalId);
+      return;
     }
 
     for (const sourceId of sourceIds) {
-      if (sourceId !== id) {
-        return sourceId;
+      if (sourceId !== canonicalId) {
+        this.displayIdsByCanonicalId.set(canonicalId, sourceId);
+        return;
       }
     }
 
-    return sourceIds.values().next().value as string;
+    this.displayIdsByCanonicalId.set(
+      canonicalId,
+      sourceIds.values().next().value as string,
+    );
   }
 
   /** Lock every map in the registry, preventing further mutations. */

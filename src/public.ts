@@ -54,11 +54,20 @@ import { scope as scopeFn } from "./tools/scope";
 import { isSameDefinition } from "./tools/isSameDefinition";
 import { asyncContexts } from "./asyncContexts";
 
-export const resources = Object.freeze({ ...globalResources });
-export const events = Object.freeze({ ...globalEvents });
-export const middleware = Object.freeze({ ...globalMiddlewares });
-export const tags = Object.freeze({ ...globalTags });
-export const debug = Object.freeze({ levels: globalDebug.levels });
+export const resources: Readonly<typeof globalResources> = Object.freeze({
+  ...globalResources,
+});
+export const events: Readonly<typeof globalEvents> = Object.freeze({
+  ...globalEvents,
+});
+export const middleware: Readonly<typeof globalMiddlewares> = Object.freeze({
+  ...globalMiddlewares,
+});
+export const tags: Readonly<typeof globalTags> = Object.freeze({
+  ...globalTags,
+});
+export const debug: Readonly<{ levels: typeof globalDebug.levels }> =
+  Object.freeze({ levels: globalDebug.levels });
 
 export {
   defineTask,

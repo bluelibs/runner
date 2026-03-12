@@ -2,42 +2,30 @@ import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import { globalTags } from "../globalTags";
-import { middlewareTemporalDisposedError } from "../../errors";
+import { middlewareTemporalDisposedError, validationError } from "../../errors";
 import { Match } from "../../tools/check";
+import {
+  defaultTaskKeyBuilder,
+  type MiddlewareKeyBuilder,
+} from "./keyBuilder.shared";
+import {
+  type DebounceState,
+  pruneIdleThrottleStates,
+  rejectDebounceState,
+  rejectThrottleState,
+  type TemporalResourceState,
+  type ThrottleState,
+} from "./temporal.shared";
 
 export interface TemporalMiddlewareConfig {
   ms: number;
+  keyBuilder?: MiddlewareKeyBuilder;
 }
 
 const temporalConfigPattern = Match.ObjectIncluding({
   ms: Match.PositiveInteger,
+  keyBuilder: Match.Optional(Function),
 });
-
-type TimeoutHandle = ReturnType<typeof setTimeout>;
-
-export interface DebounceState {
-  timeoutId?: TimeoutHandle;
-  latestInput?: unknown;
-  resolveList: ((value: unknown) => void)[];
-  rejectList: ((error: unknown) => void)[];
-}
-
-export interface ThrottleState {
-  lastExecution: number;
-  timeoutId?: TimeoutHandle;
-  latestInput?: unknown;
-  resolveList: ((value: unknown) => void)[];
-  rejectList: ((error: unknown) => void)[];
-  currentPromise?: Promise<unknown>;
-}
-
-export interface TemporalResourceState {
-  debounceStates: WeakMap<TemporalMiddlewareConfig, DebounceState>;
-  throttleStates: WeakMap<TemporalMiddlewareConfig, ThrottleState>;
-  trackedDebounceStates: Set<DebounceState>;
-  trackedThrottleStates: Set<ThrottleState>;
-  isDisposed: boolean;
-}
 
 const TEMPORAL_DISPOSED_ERROR_MESSAGE =
   "Temporal middleware resource has been disposed.";
@@ -48,51 +36,70 @@ function createTemporalDisposedError() {
   });
 }
 
-function rejectDebounceState(state: DebounceState, error: Error) {
-  if (state.timeoutId) {
-    clearTimeout(state.timeoutId);
-    state.timeoutId = undefined;
+function buildTemporalMiddlewareKey(
+  config: TemporalMiddlewareConfig,
+  taskId: string,
+  input: unknown,
+): string {
+  const key = (config.keyBuilder ?? defaultTaskKeyBuilder)(taskId, input);
+
+  if (typeof key !== "string") {
+    validationError.throw({
+      subject: "Middleware config",
+      id: taskId,
+      originalError: `Temporal middleware keyBuilder must return a string. Received ${typeof key}.`,
+    });
   }
 
-  const { rejectList } = state;
-  state.resolveList = [];
-  state.rejectList = [];
-  state.latestInput = undefined;
-  rejectList.forEach((reject) => {
-    reject(error);
-  });
+  return key;
 }
 
-function rejectThrottleState(state: ThrottleState, error: Error) {
-  if (state.timeoutId) {
-    clearTimeout(state.timeoutId);
-    state.timeoutId = undefined;
+function getDebounceStatesForConfig(
+  state: TemporalResourceState<TemporalMiddlewareConfig>,
+  config: TemporalMiddlewareConfig,
+) {
+  let keyedStates = state.debounceStates.get(config);
+  if (!keyedStates) {
+    keyedStates = new Map<string, DebounceState>();
+    state.debounceStates.set(config, keyedStates);
   }
+  return keyedStates;
+}
 
-  const { rejectList } = state;
-  state.resolveList = [];
-  state.rejectList = [];
-  state.latestInput = undefined;
-  state.currentPromise = undefined;
-  rejectList.forEach((reject) => {
-    reject(error);
-  });
+function getThrottleStatesForConfig(
+  state: TemporalResourceState<TemporalMiddlewareConfig>,
+  config: TemporalMiddlewareConfig,
+) {
+  let keyedStates = state.throttleStates.get(config);
+  if (!keyedStates) {
+    keyedStates = new Map<string, ThrottleState>();
+    state.throttleStates.set(config, keyedStates);
+  }
+  return keyedStates;
 }
 
 export const temporalResource = defineResource(
   markFrameworkDefinition({
     id: "runner.temporal",
     tags: [globalTags.system],
-    init: async (): Promise<TemporalResourceState> => {
+    init: async (): Promise<
+      TemporalResourceState<TemporalMiddlewareConfig>
+    > => {
       return {
-        debounceStates: new WeakMap<TemporalMiddlewareConfig, DebounceState>(),
-        throttleStates: new WeakMap<TemporalMiddlewareConfig, ThrottleState>(),
+        debounceStates: new WeakMap<
+          TemporalMiddlewareConfig,
+          Map<string, DebounceState>
+        >(),
+        throttleStates: new WeakMap<
+          TemporalMiddlewareConfig,
+          Map<string, ThrottleState>
+        >(),
         trackedDebounceStates: new Set<DebounceState>(),
         trackedThrottleStates: new Set<ThrottleState>(),
         isDisposed: false,
       };
     },
-    dispose: async (state: TemporalResourceState) => {
+    dispose: async (state: TemporalResourceState<TemporalMiddlewareConfig>) => {
       state.isDisposed = true;
       const disposeError = createTemporalDisposedError();
       const trackedDebounceStates = state.trackedDebounceStates;
@@ -112,6 +119,12 @@ export const temporalResource = defineResource(
   }),
 );
 
+export type {
+  DebounceState,
+  ThrottleState,
+  TemporalResourceState,
+} from "./temporal.shared";
+
 /**
  * Debounce middleware: delays execution until `ms` has passed since the last call.
  * If multiple calls occur within the window, only the last one is executed,
@@ -128,15 +141,18 @@ export const debounceTaskMiddleware = defineTaskMiddleware(
         throw createTemporalDisposedError();
       }
 
-      const debounceStates = state.debounceStates;
+      const taskId = task.definition.id;
+      const key = buildTemporalMiddlewareKey(config, taskId, task.input);
+      const debounceStates = getDebounceStatesForConfig(state, config);
       const trackedDebounceStates = state.trackedDebounceStates;
-      let debounceState = debounceStates.get(config);
+      let debounceState = debounceStates.get(key);
       if (!debounceState) {
         debounceState = {
+          key,
           resolveList: [],
           rejectList: [],
         };
-        debounceStates.set(config, debounceState);
+        debounceStates.set(key, debounceState);
         trackedDebounceStates.add(debounceState);
       }
 
@@ -157,6 +173,8 @@ export const debounceTaskMiddleware = defineTaskMiddleware(
         debounceState!.resolveList = [];
         debounceState!.rejectList = [];
         debounceState!.latestInput = undefined;
+        debounceStates.delete(debounceState!.key);
+        trackedDebounceStates.delete(debounceState!);
 
         if (state.isDisposed === true) {
           const disposeError = createTemporalDisposedError();
@@ -198,16 +216,25 @@ export const throttleTaskMiddleware = defineTaskMiddleware(
         throw createTemporalDisposedError();
       }
 
-      const throttleStates = state.throttleStates;
+      const taskId = task.definition.id;
+      const key = buildTemporalMiddlewareKey(config, taskId, task.input);
+      const throttleStates = getThrottleStatesForConfig(state, config);
       const trackedThrottleStates = state.trackedThrottleStates;
-      let throttleState = throttleStates.get(config);
+      pruneIdleThrottleStates(
+        throttleStates,
+        trackedThrottleStates,
+        Date.now(),
+        config.ms,
+      );
+      let throttleState = throttleStates.get(key);
       if (!throttleState) {
         throttleState = {
+          key,
           lastExecution: 0,
           resolveList: [],
           rejectList: [],
         };
-        throttleStates.set(config, throttleState);
+        throttleStates.set(key, throttleState);
         trackedThrottleStates.add(throttleState);
       }
 

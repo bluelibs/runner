@@ -6,6 +6,7 @@ import {
   AuthValidatorInput,
   AuthValidatorResult,
 } from "../../../exposure/types";
+import { RPC_LANES_RESOURCE_ID } from "../../../rpc-lanes/rpcLanes.resource";
 
 const mockTaskRunner = {
   run: jest.fn(),
@@ -123,8 +124,8 @@ describe("node exposure - authenticator", () => {
         expect.objectContaining({
           source: {
             kind: "resource",
-            id: "platform-node-resources-rpcLanes",
-            path: "platform-node-resources-rpcLanes",
+            id: RPC_LANES_RESOURCE_ID,
+            path: RPC_LANES_RESOURCE_ID,
           },
         }),
       );

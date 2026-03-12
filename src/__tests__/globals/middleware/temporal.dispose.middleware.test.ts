@@ -1,9 +1,11 @@
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import {
+  type DebounceState,
   debounceTaskMiddleware,
   temporalResource,
   throttleTaskMiddleware,
+  type ThrottleState,
   type TemporalResourceState,
 } from "../../../globals/middleware/temporal.middleware";
 
@@ -11,8 +13,14 @@ const createTemporalState = (
   overrides: Partial<TemporalResourceState> = {},
 ): TemporalResourceState => ({
   isDisposed: false,
-  debounceStates: new WeakMap(),
-  throttleStates: new WeakMap(),
+  debounceStates: new WeakMap<
+    Parameters<typeof debounceTaskMiddleware.run>[2],
+    Map<string, DebounceState>
+  >(),
+  throttleStates: new WeakMap<
+    Parameters<typeof throttleTaskMiddleware.run>[2],
+    Map<string, ThrottleState>
+  >(),
   trackedDebounceStates: new Set(),
   trackedThrottleStates: new Set(),
   ...overrides,
@@ -246,6 +254,7 @@ describe("Temporal Middleware: Dispose", () => {
     const throttleReject = jest.fn();
 
     const debounceState = {
+      key: "debounce-dispose-key",
       resolveList: [],
       rejectList: [debounceReject],
       latestInput: "debounce-input",
@@ -253,6 +262,7 @@ describe("Temporal Middleware: Dispose", () => {
     };
 
     const throttleState = {
+      key: "throttle-dispose-key",
       lastExecution: 0,
       resolveList: [],
       rejectList: [throttleReject],
@@ -280,6 +290,34 @@ describe("Temporal Middleware: Dispose", () => {
 
     expect(debounceReject).toHaveBeenCalledTimes(1);
     expect(throttleReject).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects tracked debounce states during disposal even without an active timer", async () => {
+    const debounceReject = jest.fn();
+    type TemporalDispose = NonNullable<typeof temporalResource.dispose>;
+    type TemporalDisposeArgs = Parameters<TemporalDispose>;
+
+    const state: TemporalDisposeArgs[0] = createTemporalState({
+      trackedDebounceStates: new Set([
+        {
+          key: "debounce-no-timer",
+          resolveList: [],
+          rejectList: [debounceReject],
+          latestInput: "debounce-input",
+        },
+      ]),
+    });
+
+    await expect(
+      temporalResource.dispose?.(
+        state,
+        undefined as TemporalDisposeArgs[1],
+        {} as TemporalDisposeArgs[2],
+        {} as TemporalDisposeArgs[3],
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(debounceReject).toHaveBeenCalledTimes(1);
   });
 
   it("fails fast when tracked debounce state set is missing", async () => {

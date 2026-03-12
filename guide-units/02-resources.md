@@ -197,14 +197,15 @@ Resources move through a deliberate sequence of phases. Understanding which phas
   When `dispose.cooldownWindowMs` is greater than `0`, Runner keeps the broader `coolingDown` admission policy open for that bounded post-cooldown window before it enters `disposing`. At the default `0`, Runner skips that wait. Once `disposing` begins, admissions narrow to in-flight continuations plus resource-origin calls from the cooling resource itself and any additional resource definitions returned from `cooldown()`.
 - `dispose(value, config, deps, context)` performs final teardown after task/event drain.
 - Config-only resources can omit `.init()` and resolve to `undefined`
-- `r.resource(id, { gateway: true })` suppresses the resource's own namespace segment
-- gateway resources cannot be passed directly to `run(...)`; wrap them in a non-gateway root
+- user resources contribute their own ownership segment to canonical ids
+- the app resource passed to `run(...)` is a normal resource, so direct registrations compile as `app.tasks.x`, `app.events.x`, `app.middleware.task.x`, and so on
+- child resources continue that chain, so nested registrations compile as `app.billing.tasks.x`
+- only the internal synthetic framework root is transparent, and it does not appear in user-facing ids
+- `runtime-framework-root` is reserved for that internal framework root and cannot be used as a user resource id
 - If a resource declares `.register(...)`, it is non-leaf and cannot be forked
 - `.context(() => initialContext)` provides private and mutable resource-local state shared across lifecycle methods
 
 Do not use `cooldown()` as a general teardown phase for support resources such as databases. Cooldown is designed for ingress points that need to stop accepting new work quickly while letting in-flight work finish.
-
-Gateway resources are structural parents. A gateway resource still owns registration and lifecycle, but it does not add its own id segment when child ids are compiled. Use `r.resource(id, { gateway: true })` when you want a module boundary without another namespace layer in the final ids, then mount that gateway under a separate non-gateway app root when calling `run(...)`.
 
 ### Resource Configuration
 
@@ -296,7 +297,6 @@ Fork rules:
 - tags, middleware, and type parameters are inherited
 - each fork gets independent runtime state
 - non-leaf resources must be composed explicitly
-- gateway resources cannot be forked
 
 ### Resource Exports and Isolation Boundaries
 
@@ -412,13 +412,14 @@ Behavior rules:
 
 ### Subtree Policies
 
-Resources also support `.subtree(policy)` and `.subtree((config) => policy)` for subtree-wide middleware and validation.
+Resources also support `.subtree(policy)`, `.subtree([policyA, policyB])`, and `.subtree((config) => policy | policy[])` for subtree-wide middleware and validation.
 
 Keep the two APIs distinct:
 
 - `subtreeOf(resource, { types })` is an isolation selector used inside `.isolate(...)`
 - `.subtree({ validate })` is a generic resource policy hook that inspects compiled definitions in that resource subtree
-- `.subtree((config) => ({ ... }))` lets subtree policy depend on the owning resource config
+- `.subtree([policyA, policyB])` applies multiple subtree policies in declaration order
+- `.subtree((config) => ({ ... }))` and `.subtree((config) => [{ ... }, { ... }])` let subtree policy depend on the owning resource config
 - `subtree.validate` can be one function or an array of functions
 - typed validator branches are also available on `tasks`, `resources`, `hooks`, `events`, `tags`, `taskMiddleware`, and `resourceMiddleware`
 

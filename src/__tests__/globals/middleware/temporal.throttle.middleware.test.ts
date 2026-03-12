@@ -1,13 +1,24 @@
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
-import { throttleTaskMiddleware } from "../../../globals/middleware/temporal.middleware";
+import {
+  type DebounceState,
+  type ThrottleState,
+  temporalResource,
+  throttleTaskMiddleware,
+} from "../../../globals/middleware/temporal.middleware";
 import { createMessageError } from "../../../errors";
 
 const createTemporalDeps = () => ({
   state: {
     isDisposed: false,
-    debounceStates: new WeakMap(),
-    throttleStates: new WeakMap(),
+    debounceStates: new WeakMap<
+      Parameters<typeof throttleTaskMiddleware.run>[2],
+      Map<string, DebounceState>
+    >(),
+    throttleStates: new WeakMap<
+      Parameters<typeof throttleTaskMiddleware.run>[2],
+      Map<string, ThrottleState>
+    >(),
     trackedDebounceStates: new Set(),
     trackedThrottleStates: new Set(),
   },
@@ -85,6 +96,238 @@ describe("Temporal Middleware: Throttle", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it("throttles independently per computed key", async () => {
+    jest.useFakeTimers();
+    let callCount = 0;
+    const task = defineTask({
+      id: "throttle-keyed",
+      middleware: [
+        throttleTaskMiddleware.with({
+          ms: 100,
+          keyBuilder: (_taskId, input) => input as string,
+        }),
+      ],
+      run: async (val: string) => {
+        callCount++;
+        return val;
+      },
+    });
+
+    const app = defineResource({
+      id: "app-keyed",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        const p1 = task("a");
+        const p2 = task("a");
+        const p3 = task("b");
+        const p4 = task("b");
+
+        jest.advanceTimersByTime(100);
+        await Promise.resolve();
+        return await Promise.all([p1, p2, p3, p4]);
+      },
+    });
+
+    try {
+      const results = (await run(app)).value;
+      expect(callCount).toBe(4);
+      expect(results).toEqual(["a", "a", "b", "b"]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("isolates throttle state by task when reusing one configured middleware instance", async () => {
+    jest.useFakeTimers();
+    const sharedThrottle = throttleTaskMiddleware.with({ ms: 100 });
+    const executions: string[] = [];
+
+    const taskA = defineTask({
+      id: "throttle-shared-a",
+      middleware: [sharedThrottle],
+      run: async (value: string) => {
+        executions.push(`a:${value}`);
+        return `a:${value}`;
+      },
+    });
+
+    const taskB = defineTask({
+      id: "throttle-shared-b",
+      middleware: [sharedThrottle],
+      run: async (value: string) => {
+        executions.push(`b:${value}`);
+        return `b:${value}`;
+      },
+    });
+
+    const app = defineResource({
+      id: "app-shared-throttle",
+      register: [taskA, taskB],
+      dependencies: { taskA, taskB },
+      async init(_, { taskA, taskB }) {
+        return await Promise.all([taskA("1"), taskB("2")]);
+      },
+    });
+
+    try {
+      const results = (await run(app)).value;
+      expect(results).toEqual(["a:1", "b:2"]);
+      expect(executions).toEqual(["a:1", "b:2"]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("prunes idle throttle state lazily after the window elapses", async () => {
+    jest.useFakeTimers();
+    const middleware = throttleTaskMiddleware.with({ ms: 50 });
+    const task = defineTask({
+      id: "throttle-prune-idle",
+      middleware: [middleware],
+      run: async (value: string) => value,
+    });
+
+    const app = defineResource({
+      id: "app-prune-idle",
+      register: [task],
+      dependencies: { task, temporal: temporalResource },
+      async init(_, { task, temporal }) {
+        await task("a");
+        const keyedStates = temporal.throttleStates.get(middleware.config);
+
+        expect(keyedStates?.size).toBe(1);
+
+        for (let index = 0; index < 999; index += 1) {
+          keyedStates?.set(`stale-key-${index}`, {
+            key: `stale-key-${index}`,
+            lastExecution: 0,
+            resolveList: [],
+            rejectList: [],
+          });
+        }
+
+        expect(keyedStates?.size).toBe(1_000);
+
+        jest.advanceTimersByTime(100);
+        await Promise.resolve();
+        await task("b");
+
+        expect(keyedStates?.size).toBe(1);
+        expect(keyedStates?.has("stale-key-0")).toBe(false);
+        expect(keyedStates?.has("throttle-prune-idle")).toBe(true);
+      },
+    });
+
+    try {
+      await run(app);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("propagates keyBuilder errors before throttle admission", async () => {
+    const task = defineTask({
+      id: "throttle-keyBuilder-error",
+      middleware: [
+        throttleTaskMiddleware.with({
+          ms: 50,
+          keyBuilder: () => {
+            throw new Error("bad-key");
+          },
+        }),
+      ],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "app-throttle-keyBuilder-error",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await expect(task()).rejects.toThrow("bad-key");
+      },
+    });
+
+    await run(app);
+  });
+
+  it("fails fast when throttle keyBuilder returns a non-string", async () => {
+    const task = defineTask({
+      id: "throttle-keyBuilder-invalid-return",
+      middleware: [
+        throttleTaskMiddleware.with({
+          ms: 50,
+          keyBuilder: () => Promise.resolve("invalid") as unknown as string,
+        }),
+      ],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "app-throttle-keyBuilder-invalid-return",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await expect(task()).rejects.toThrow(
+          "Middleware config validation failed for throttle-keyBuilder-invalid-return: Temporal middleware keyBuilder must return a string. Received object.",
+        );
+      },
+    });
+
+    await run(app);
+  });
+
+  it("prunes idle keyed throttle state lazily once the keyed state map grows large", async () => {
+    const config = { ms: 50 };
+    const idleStates = new Map<string, ThrottleState>();
+
+    for (let index = 0; index < 1_000; index += 1) {
+      idleStates.set(`idle-${index}`, {
+        key: `idle-${index}`,
+        lastExecution: 0,
+        resolveList: [],
+        rejectList: [],
+      });
+    }
+
+    idleStates.set("keep", {
+      key: "keep",
+      lastExecution: Date.now(),
+      resolveList: [],
+      rejectList: [],
+      currentPromise: Promise.resolve("busy"),
+    });
+
+    const deps = {
+      state: {
+        isDisposed: false,
+        debounceStates: new WeakMap(),
+        throttleStates: new WeakMap([[config, idleStates]]),
+        trackedDebounceStates: new Set(),
+        trackedThrottleStates: new Set(idleStates.values()),
+      },
+    } satisfies Parameters<typeof throttleTaskMiddleware.run>[1];
+
+    await expect(
+      throttleTaskMiddleware.run(
+        {
+          task: {
+            definition: { id: "throttle-prune" } as any,
+            input: "fresh",
+          },
+          next: async (input?: string) => input,
+        } as any,
+        deps,
+        config,
+      ),
+    ).resolves.toBe("fresh");
+
+    expect(idleStates.size).toBe(2);
+    expect(idleStates.has("keep")).toBe(true);
+    expect(idleStates.has("throttle-prune")).toBe(true);
   });
 
   it("should handle errors in throttled task", async () => {
@@ -313,9 +556,11 @@ describe("Temporal Middleware: Throttle", () => {
       const throttleState = (
         deps.state.throttleStates as unknown as WeakMap<
           ThrottleRunConfig,
-          { latestInput?: unknown }
+          Map<string, { latestInput?: unknown }>
         >
-      ).get(config);
+      )
+        .get(config)
+        ?.get("throttle-unit-latest-input");
       expect(throttleState?.latestInput).toBeUndefined();
     } finally {
       setTimeoutSpy.mockRestore();

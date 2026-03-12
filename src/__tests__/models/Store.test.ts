@@ -101,6 +101,27 @@ describe("Store", () => {
     expect(store.resources.has("root")).toBe(true);
   });
 
+  it("should allow resource roots whose configured registrations resolve to resources", () => {
+    const child = defineResource({
+      id: "store-root-valid-child",
+      init: async () => "child",
+    });
+    const nestedChild = defineResource({
+      id: "store-root-valid-nested",
+      register: [child],
+    });
+    const rootResource = defineResource<{ enabled: boolean }>({
+      id: "store-root-valid-root",
+      configSchema: { enabled: Boolean },
+      register: ({ enabled }) => (enabled ? [nestedChild] : []),
+    });
+
+    expect(() =>
+      store.initializeStore(rootResource, { enabled: true }, runtimeResult),
+    ).not.toThrow();
+    expect(store.root.resource.id).toBe(rootResource.id);
+  });
+
   it("should lock the store and prevent modifications", () => {
     store.lock();
     expect(store.isLocked).toBe(true);

@@ -15,9 +15,7 @@ export * from "./types";
 /**
  * Creates a new resource builder with the given id.
  */
-export type ResourceBuilderOptions = {
-  gateway?: boolean;
-};
+export type ResourceBuilderOptions = {};
 
 type InternalResourceBuilderOptions = ResourceBuilderOptions & {
   filePath: string;
@@ -45,7 +43,6 @@ function createResourceBuilder<TConfig = void>(
     ResourceMiddlewareAttachmentType[]
   > = Object.freeze({
     id,
-    gateway: options?.gateway === true,
     filePath: options.filePath,
     dependencies: undefined,
     register: undefined,

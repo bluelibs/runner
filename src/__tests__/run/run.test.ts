@@ -6,25 +6,11 @@ import {
   defineTaskMiddleware,
   defineResourceMiddleware,
 } from "../../define";
-import { RunnerErrorId, createMessageError } from "../../errors";
+import { createMessageError } from "../../errors";
 import { globalEvents } from "../../globals/globalEvents";
 import { run } from "../../run";
 
 describe("run", () => {
-  async function expectRunnerErrorId(
-    promise: Promise<unknown>,
-    errorId: string,
-  ): Promise<any> {
-    try {
-      await promise;
-      throw new Error(`Expected error id "${errorId}"`);
-    } catch (error) {
-      const candidate = error as { id?: string };
-      expect(candidate.id).toBe(errorId);
-      return error;
-    }
-  }
-
   // Initial run
   it("should be able to instantiate with or without config", async () => {
     const testResource = defineResource({
@@ -50,48 +36,198 @@ describe("run", () => {
     await run2.dispose();
   });
 
-  it("fails fast when a gateway resource is passed directly to run()", async () => {
-    const gateway = defineResource({
-      id: "test-run-root-gateway",
-      gateway: true,
+  it("allows running a resource root that directly registers resources", async () => {
+    const child = defineResource({
+      id: "test-run-root-child-resource",
+      init: async () => "ok",
+    });
+    const app = defineResource({
+      id: "test-run-root",
+      register: [child],
+      dependencies: { child },
+      init: async (_, { child }) => child,
     });
 
-    const error = await expectRunnerErrorId(
-      run(gateway),
-      RunnerErrorId.RunRootGatewayUnsupported,
-    );
+    const result = await run(app);
 
-    expect(error.message).toContain(gateway.id);
+    expect(result.value).toBe("ok");
+    await result.dispose();
   });
 
-  it("fails fast when a configured gateway resource is passed to run()", async () => {
-    const gateway = defineResource<{ enabled: boolean }>({
-      id: "test-run-root-gateway-configured",
-      gateway: true,
+  it("allows running a configured resource root that directly registers resources", async () => {
+    const child = defineResource<{ enabled: boolean }>({
+      id: "test-run-root-configured-child-resource",
       configSchema: { enabled: Boolean },
+      init: async ({ enabled }) => (enabled ? "enabled" : "disabled"),
+    });
+    const app = defineResource<{ enabled: boolean }>({
+      id: "test-run-root-configured",
+      configSchema: { enabled: Boolean },
+      register: ({ enabled }) => [child.with({ enabled })],
     });
 
-    const error = await expectRunnerErrorId(
-      run(gateway.with({ enabled: true })),
-      RunnerErrorId.RunRootGatewayUnsupported,
-    );
+    const result = await run(app.with({ enabled: true }));
 
-    expect(error.message).toContain(gateway.id);
+    expect(result.getResourceValue(child)).toBe("enabled");
+    await result.dispose();
   });
 
-  it("allows running a non-gateway root that registers a gateway child", async () => {
-    const ping = defineTask({
-      id: "test-run-root-gateway-child-ping",
+  it("compiles canonical ids through nested resources", async () => {
+    const task = defineTask({
+      id: "task-z",
       run: async () => "ok",
     });
-    const gateway = defineResource({
-      id: "test-run-root-gateway-child",
-      gateway: true,
+    const child = defineResource({
+      id: "resource-y",
+      register: [task],
+    });
+    const parent = defineResource({
+      id: "resource-x",
+      register: [child],
+    });
+    const app = defineResource({
+      id: "app",
+      register: [parent],
+    });
+
+    const result = await run(app);
+
+    expect(result.store.getRuntimeMetadata(app).id).toBe("app");
+    expect(result.store.getRuntimeMetadata(app).path).toBe("app");
+    expect(result.store.getRuntimeMetadata(parent).id).toBe("resource-x");
+    expect(result.store.getRuntimeMetadata(parent).path).toBe("app.resource-x");
+    expect(result.store.getRuntimeMetadata(child).path).toBe(
+      "app.resource-x.resource-y",
+    );
+    await expect(
+      result.runTask("app.resource-x.resource-y.tasks.task-z"),
+    ).resolves.toBe("ok");
+    await expect(
+      Promise.resolve().then(() => result.runTask("resource-y.tasks.task-z")),
+    ).rejects.toMatchObject({
+      id: "runner.errors.runtimeElementNotFound",
+    });
+
+    await result.dispose();
+  });
+
+  it("allows a resource root to directly register a task", async () => {
+    const ping = defineTask({
+      id: "test-run-root-task",
+      run: async () => "ok",
+    });
+    const app = defineResource({
+      id: "test-run-root-task-root",
+      register: [ping],
+    });
+
+    const result = await run(app);
+    await expect(
+      result.runTask("test-run-root-task-root.tasks.test-run-root-task"),
+    ).resolves.toBe("ok");
+    await result.dispose();
+  });
+
+  it("allows a root resource to directly register a child resource", async () => {
+    const task = defineTask({
+      id: "test-run-root-direct-child-task",
+      run: async () => "ok",
+    });
+    const child = defineResource({
+      id: "test-run-root-direct-child-leaf",
+      register: [task],
+    });
+    const app = defineResource({
+      id: "test-run-root-direct-child-app",
+      register: [child],
+    });
+
+    const result = await run(app);
+
+    await expect(
+      result.runTask(
+        "test-run-root-direct-child-app.test-run-root-direct-child-leaf.tasks.test-run-root-direct-child-task",
+      ),
+    ).resolves.toBe("ok");
+    await result.dispose();
+  });
+
+  it("allows a resource root to directly register middleware", async () => {
+    const resourceMiddleware = defineResourceMiddleware({
+      id: "test-run-root-resource-middleware",
+      run: async ({ next }) => next(),
+    });
+    const app = defineResource({
+      id: "test-run-root-middleware-root",
+      register: [resourceMiddleware],
+    });
+
+    const result = await run(app);
+    expect(result.store.toPublicId(resourceMiddleware)).toBe(
+      "test-run-root-resource-middleware",
+    );
+    await result.dispose();
+  });
+
+  it("registers configured resource results at runtime", async () => {
+    const task = defineTask({
+      id: "test-run-root-config-task",
+      run: async () => "configured-task",
+    });
+    const child = defineResource({
+      id: "test-run-root-config-child",
+      init: async () => "valid",
+    });
+    const app = defineResource<{ useTask: boolean }>({
+      id: "test-run-root-config-sensitive-root",
+      configSchema: { useTask: Boolean },
+      register: ({ useTask }) => (useTask ? [task] : [child]),
+    });
+
+    const result = await run(app.with({ useTask: true }));
+    await expect(
+      result.runTask(
+        "test-run-root-config-sensitive-root.tasks.test-run-root-config-task",
+      ),
+    ).resolves.toBe("configured-task");
+    await result.dispose();
+  });
+
+  it("registers tasks under nested resources", async () => {
+    const task = defineTask({
+      id: "test-run-nested-resource-task",
+      run: async () => "ok",
+    });
+    const child = defineResource({
+      id: "test-run-nested-resource-child",
+      register: [task],
+    });
+    const app = defineResource({
+      id: "test-run-nested-resource-app",
+      register: [child],
+    });
+
+    const result = await run(app);
+    await expect(
+      result.runTask(
+        "test-run-nested-resource-app.test-run-nested-resource-child.tasks.test-run-nested-resource-task",
+      ),
+    ).resolves.toBe("ok");
+    await result.dispose();
+  });
+
+  it("allows running a root resource that registers a child resource", async () => {
+    const ping = defineTask({
+      id: "test-run-root-child-ping",
+      run: async () => "ok",
+    });
+    const leaf = defineResource({
+      id: "test-run-root-child-leaf",
       register: [ping],
     });
     const app = defineResource({
-      id: "test-run-root-non-gateway",
-      register: [gateway],
+      id: "test-run-root-child-app",
+      register: [leaf],
       dependencies: { ping },
       init: async (_, { ping }) => ping(),
     });

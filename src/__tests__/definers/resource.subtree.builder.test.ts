@@ -19,7 +19,11 @@ describe("resource builder subtree()", () => {
       .build();
 
     expect(built.subtree).toBeDefined();
-    if (!built.subtree || typeof built.subtree === "function") {
+    if (
+      !built.subtree ||
+      typeof built.subtree === "function" ||
+      Array.isArray(built.subtree)
+    ) {
       throw new Error("Expected a static subtree policy.");
     }
 
@@ -53,6 +57,96 @@ describe("resource builder subtree()", () => {
     });
     expect(built.subtree({ enabled: false })).toEqual({
       validate: [],
+    });
+  });
+
+  it("supports multiple subtree policies in a single static call", () => {
+    const firstTaskMiddleware = r.middleware
+      .task("tests-resourceSubtreeBuilder-array-taskMiddleware-a")
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+    const secondTaskMiddleware = r.middleware
+      .task("tests-resourceSubtreeBuilder-array-taskMiddleware-b")
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+    const firstValidator = jest.fn(() => []);
+    const secondValidator = jest.fn(() => []);
+
+    const built = r
+      .resource("tests-resourceSubtreeBuilder-static-array")
+      .subtree([
+        {
+          tasks: {
+            middleware: [firstTaskMiddleware],
+          },
+          validate: [firstValidator],
+        },
+        {
+          tasks: {
+            middleware: [secondTaskMiddleware],
+          },
+          validate: [secondValidator],
+        },
+      ])
+      .init(async () => "ok")
+      .build();
+
+    if (
+      !built.subtree ||
+      typeof built.subtree === "function" ||
+      Array.isArray(built.subtree)
+    ) {
+      throw new Error("Expected a static subtree policy.");
+    }
+
+    expect(
+      built.subtree.tasks?.middleware?.map(
+        (entry) => getSubtreeTaskMiddlewareAttachment(entry).id,
+      ),
+    ).toEqual([firstTaskMiddleware.id, secondTaskMiddleware.id]);
+    expect(built.subtree.validate).toEqual([firstValidator, secondValidator]);
+  });
+
+  it("supports config-driven subtree policy arrays", () => {
+    const firstValidator = jest.fn(() => []);
+    const secondValidator = jest.fn(() => []);
+
+    const built = r
+      .resource<{ enabled: boolean }>(
+        "tests-resourceSubtreeBuilder-dynamic-array",
+      )
+      .subtree((config) => [
+        {
+          validate: [firstValidator],
+        },
+        {
+          tasks: {
+            middleware: [],
+            validate: config.enabled ? [secondValidator] : [],
+          },
+        },
+      ])
+      .init(async () => "ok")
+      .build();
+
+    expect(typeof built.subtree).toBe("function");
+    if (typeof built.subtree !== "function") {
+      return;
+    }
+
+    expect(built.subtree({ enabled: true })).toEqual({
+      tasks: {
+        middleware: [],
+        validate: [secondValidator],
+      },
+      validate: [firstValidator],
+    });
+    expect(built.subtree({ enabled: false })).toEqual({
+      tasks: {
+        middleware: [],
+        validate: [],
+      },
+      validate: [firstValidator],
     });
   });
 });

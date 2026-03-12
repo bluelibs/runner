@@ -18,31 +18,24 @@ import {
   TaskStoreElementType,
   SubtreeResourceMiddlewareEntry,
   SubtreeTaskMiddlewareEntry,
-  symbolEvent,
-  symbolHook,
-  symbolResource,
   symbolResourceIsolateDeclarations,
   symbolResourceSubtreeDeclarations,
-  symbolResourceMiddleware,
-  symbolResourceWithConfig,
-  symbolTag,
-  symbolTask,
-  symbolTaskMiddleware,
 } from "../../defs";
-import { unknownItemTypeError, validationError } from "../../errors";
+import { unknownItemTypeError } from "../../errors";
 import { IAsyncContext } from "../../types/asyncContext";
 import { IErrorHelper } from "../../types/error";
 import { HookDependencyState } from "../../types/storeTypes";
-import { symbolAsyncContext, symbolError } from "../../types/symbols";
 import { VisibilityTracker } from "../VisibilityTracker";
 import { StoreRegistryDefinitionPreparer } from "./StoreRegistryDefinitionPreparer";
+import { RegisterableKind, resolveRegisterableKind } from "./registerableKind";
 import { StoreRegistryTagIndex } from "./StoreRegistryTagIndex";
 import { IndexedTagCategory, normalizeTags, StoringMode } from "./types";
+import { CanonicalIdCompiler } from "./CanonicalIdCompiler";
+import { createOwnerScope, type OwnerScope } from "./OwnerScope";
 import {
   getSubtreeResourceMiddlewareAttachment,
   getSubtreeTaskMiddlewareAttachment,
 } from "../../tools/subtreeMiddleware";
-import { isReservedDefinitionLocalName } from "../../definers/assertDefinitionId";
 import { resolveResourceSubtreeDeclarations } from "../../definers/subtreePolicy";
 import { resolveIsolatePolicyDeclarations } from "../../definers/isolatePolicy";
 
@@ -68,72 +61,9 @@ type StoreRegistryAliasResolver = {
   resolveDefinitionId: (reference: unknown) => string | undefined;
 };
 
-enum RegisterableKind {
-  Task = "task",
-  Error = "error",
-  Hook = "hook",
-  Resource = "resource",
-  Event = "event",
-  AsyncContext = "asyncContext",
-  TaskMiddleware = "taskMiddleware",
-  ResourceMiddleware = "resourceMiddleware",
-  ResourceWithConfig = "resourceWithConfig",
-  Tag = "tag",
-}
-
-function hasSymbolBrand(
-  item: RegisterableItems,
-  symbolKey: symbol,
-): item is RegisterableItems {
-  if (item === null || item === undefined) {
-    return false;
-  }
-
-  const type = typeof item;
-  if (type !== "object" && type !== "function") {
-    return false;
-  }
-
-  return Boolean((item as unknown as Record<symbol, unknown>)[symbolKey]);
-}
-
-function resolveRegisterableKind(
-  item: RegisterableItems,
-): RegisterableKind | null {
-  if (hasSymbolBrand(item, symbolTask)) {
-    return RegisterableKind.Task;
-  }
-  if (hasSymbolBrand(item, symbolError)) {
-    return RegisterableKind.Error;
-  }
-  if (hasSymbolBrand(item, symbolHook)) {
-    return RegisterableKind.Hook;
-  }
-  if (hasSymbolBrand(item, symbolResource)) {
-    return RegisterableKind.Resource;
-  }
-  if (hasSymbolBrand(item, symbolEvent)) {
-    return RegisterableKind.Event;
-  }
-  if (hasSymbolBrand(item, symbolAsyncContext)) {
-    return RegisterableKind.AsyncContext;
-  }
-  if (hasSymbolBrand(item, symbolTaskMiddleware)) {
-    return RegisterableKind.TaskMiddleware;
-  }
-  if (hasSymbolBrand(item, symbolResourceMiddleware)) {
-    return RegisterableKind.ResourceMiddleware;
-  }
-  if (hasSymbolBrand(item, symbolResourceWithConfig)) {
-    return RegisterableKind.ResourceWithConfig;
-  }
-  if (hasSymbolBrand(item, symbolTag)) {
-    return RegisterableKind.Tag;
-  }
-  return null;
-}
-
 export class StoreRegistryWriter {
+  private readonly canonicalIdCompiler = new CanonicalIdCompiler();
+
   constructor(
     private readonly collections: StoreRegistryCollections,
     private readonly validator: StoreRegistryValidation,
@@ -373,8 +303,9 @@ export class StoreRegistryWriter {
     const items = registerEntries ?? [];
     this.assignNormalizedRegisterEntries(element, items);
 
+    const ownerScope = createOwnerScope(element.id);
     const scopedItems = items.map((item) =>
-      this.compileOwnedItem(element.id, element.gateway === true, item),
+      this.compileOwnedItem(ownerScope, item),
     );
 
     for (const item of scopedItems) {
@@ -405,8 +336,7 @@ export class StoreRegistryWriter {
   }
 
   private compileOwnedItem(
-    ownerResourceId: string,
-    ownerIsGateway: boolean,
+    ownerScope: OwnerScope,
     item: RegisterableItems,
   ): RegisterableItems {
     const kind = resolveRegisterableKind(item);
@@ -416,9 +346,8 @@ export class StoreRegistryWriter {
 
     if (kind === RegisterableKind.ResourceWithConfig) {
       const withConfig = item as IResourceWithConfig<any, any, any>;
-      const compiledResource = this.compileOwnedDefinition(
-        ownerResourceId,
-        ownerIsGateway,
+      const compiledResource = this.compileOwnedDefinitionWithScope(
+        ownerScope,
         withConfig.resource as RegisterableItems,
         RegisterableKind.Resource,
       ) as IResource<any, any, any>;
@@ -444,9 +373,8 @@ export class StoreRegistryWriter {
       return compiledWithConfig;
     }
 
-    const compiled = this.compileOwnedDefinition(
-      ownerResourceId,
-      ownerIsGateway,
+    const compiled = this.compileOwnedDefinitionWithScope(
+      ownerScope,
       item,
       kind,
     );
@@ -456,16 +384,14 @@ export class StoreRegistryWriter {
     return compiled;
   }
 
-  private compileOwnedDefinition(
-    ownerResourceId: string,
-    ownerIsGateway: boolean,
+  private compileOwnedDefinitionWithScope(
+    ownerScope: OwnerScope,
     item: RegisterableItems,
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
   ): RegisterableItems {
     const currentId = item.id;
-    const nextId = this.computeCanonicalId(
-      ownerResourceId,
-      ownerIsGateway,
+    const nextId = this.canonicalIdCompiler.compute(
+      ownerScope,
       kind,
       currentId,
     );
@@ -476,6 +402,38 @@ export class StoreRegistryWriter {
     return this.cloneDefinitionWithId(
       item as RegisterableItems & { id: string },
       nextId,
+    );
+  }
+
+  public computeCanonicalId(
+    ownerResourceId: string,
+    ownerUsesFrameworkRootIds: boolean,
+    kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
+    currentId: string,
+  ): string {
+    return this.canonicalIdCompiler.compute(
+      {
+        resourceId: ownerResourceId,
+        usesFrameworkRootIds: ownerUsesFrameworkRootIds,
+      },
+      kind,
+      currentId,
+    );
+  }
+
+  public compileOwnedDefinition(
+    ownerResourceId: string,
+    ownerUsesFrameworkRootIds: boolean,
+    item: RegisterableItems,
+    kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
+  ): RegisterableItems {
+    return this.compileOwnedDefinitionWithScope(
+      {
+        resourceId: ownerResourceId,
+        usesFrameworkRootIds: ownerUsesFrameworkRootIds,
+      },
+      item,
+      kind,
     );
   }
 
@@ -520,96 +478,12 @@ export class StoreRegistryWriter {
     });
   }
 
-  private computeCanonicalId(
-    ownerResourceId: string,
-    ownerIsGateway: boolean,
-    kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
-    currentId: string,
-  ): string {
-    this.assertLocalName(ownerResourceId, kind, currentId);
-
-    if (currentId.startsWith(`${ownerResourceId}.`)) {
-      return currentId;
-    }
-
-    if (ownerIsGateway) {
-      switch (kind) {
-        case RegisterableKind.Resource:
-          return currentId;
-        case RegisterableKind.Task:
-          return `tasks.${currentId}`;
-        case RegisterableKind.Event:
-          return `events.${currentId}`;
-        case RegisterableKind.Hook:
-          return `hooks.${currentId}`;
-        case RegisterableKind.TaskMiddleware:
-          return `middleware.task.${currentId}`;
-        case RegisterableKind.ResourceMiddleware:
-          return `middleware.resource.${currentId}`;
-        case RegisterableKind.Tag:
-          return `tags.${currentId}`;
-        case RegisterableKind.Error:
-          return `errors.${currentId}`;
-        case RegisterableKind.AsyncContext:
-          return `asyncContexts.${currentId}`;
-        default:
-          return currentId;
-      }
-    }
-
-    switch (kind) {
-      case RegisterableKind.Resource:
-        return `${ownerResourceId}.${currentId}`;
-      case RegisterableKind.Task:
-        return `${ownerResourceId}.tasks.${currentId}`;
-      case RegisterableKind.Event:
-        return `${ownerResourceId}.events.${currentId}`;
-      case RegisterableKind.Hook:
-        return `${ownerResourceId}.hooks.${currentId}`;
-      case RegisterableKind.TaskMiddleware:
-        return `${ownerResourceId}.middleware.task.${currentId}`;
-      case RegisterableKind.ResourceMiddleware:
-        return `${ownerResourceId}.middleware.resource.${currentId}`;
-      case RegisterableKind.Tag:
-        return `${ownerResourceId}.tags.${currentId}`;
-      case RegisterableKind.Error:
-        return `${ownerResourceId}.errors.${currentId}`;
-      case RegisterableKind.AsyncContext:
-        return `${ownerResourceId}.asyncContexts.${currentId}`;
-      default:
-        return `${ownerResourceId}.${currentId}`;
-    }
-  }
-
-  private assertLocalName(
-    ownerResourceId: string,
-    kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
-    currentId: string,
-  ) {
-    if (currentId.trim().length === 0) {
-      validationError.throw({
-        subject: "Definition local name",
-        id: `${ownerResourceId}.${kind}`,
-        originalError:
-          "Definition local names must be non-empty strings when using scoped registration.",
-      });
-    }
-
-    if (isReservedDefinitionLocalName(currentId)) {
-      validationError.throw({
-        subject: "Definition local name",
-        id: `${ownerResourceId}.${kind}.${currentId}`,
-        originalError: `Local name "${currentId}" is reserved by Runner and cannot be used.`,
-      });
-    }
-  }
-
   private resolveRegisterableId(item: RegisterableItems): string | undefined {
     if (item === null || item === undefined) {
       return undefined;
     }
 
-    if (hasSymbolBrand(item, symbolResourceWithConfig)) {
+    if (resolveRegisterableKind(item) === RegisterableKind.ResourceWithConfig) {
       return (item as IResourceWithConfig<any, any, any>).resource.id;
     }
 
@@ -710,8 +584,9 @@ export class StoreRegistryWriter {
   private normalizeTaskMiddlewareAttachments(
     task: ITask<any, any, {}>,
   ): ITask<any, any, {}>["middleware"] {
+    const ownerResourceId = this.resolveOwnerResourceIdFromTaskId(task.id);
     return this.normalizeMiddlewareAttachments(
-      this.resolveOwnerResourceIdFromTaskId(task.id),
+      ownerResourceId ? createOwnerScope(ownerResourceId) : null,
       RegisterableKind.TaskMiddleware,
       task.middleware,
     );
@@ -721,7 +596,7 @@ export class StoreRegistryWriter {
     resource: IResource<any, any, any>,
   ): IResource<any, any, any>["middleware"] {
     return this.normalizeMiddlewareAttachments(
-      resource.id,
+      createOwnerScope(resource.id),
       RegisterableKind.ResourceMiddleware,
       resource.middleware,
     );
@@ -745,7 +620,10 @@ export class StoreRegistryWriter {
 
     if (subtree.tasks?.middleware?.length) {
       const middleware = subtree.tasks.middleware.map((entry) =>
-        this.normalizeSubtreeTaskMiddlewareEntry(resource.id, entry),
+        this.normalizeSubtreeTaskMiddlewareEntry(
+          createOwnerScope(resource.id),
+          entry,
+        ),
       );
       if (this.didArrayChange(subtree.tasks.middleware, middleware)) {
         normalizedTaskPolicy = {
@@ -758,7 +636,10 @@ export class StoreRegistryWriter {
 
     if (subtree.resources?.middleware?.length) {
       const middleware = subtree.resources.middleware.map((entry) =>
-        this.normalizeSubtreeResourceMiddlewareEntry(resource.id, entry),
+        this.normalizeSubtreeResourceMiddlewareEntry(
+          createOwnerScope(resource.id),
+          entry,
+        ),
       );
       if (this.didArrayChange(subtree.resources.middleware, middleware)) {
         normalizedResourcePolicy = {
@@ -783,11 +664,18 @@ export class StoreRegistryWriter {
   }
 
   private normalizeSubtreeTaskMiddlewareEntry(
-    ownerResourceId: string,
-    entry: SubtreeTaskMiddlewareEntry,
+    ownerScopeOrResourceId: OwnerScope | string,
+    entryOrUsesFrameworkRootIds: SubtreeTaskMiddlewareEntry | boolean,
+    maybeEntry?: SubtreeTaskMiddlewareEntry,
   ) {
+    const ownerScope = this.normalizeOwnerScopeArg(
+      ownerScopeOrResourceId,
+      entryOrUsesFrameworkRootIds,
+    );
+    const entry =
+      maybeEntry ?? (entryOrUsesFrameworkRootIds as SubtreeTaskMiddlewareEntry);
     return this.normalizeSubtreeMiddlewareEntry(
-      ownerResourceId,
+      ownerScope,
       RegisterableKind.TaskMiddleware,
       entry,
       getSubtreeTaskMiddlewareAttachment,
@@ -795,11 +683,19 @@ export class StoreRegistryWriter {
   }
 
   private normalizeSubtreeResourceMiddlewareEntry(
-    ownerResourceId: string,
-    entry: SubtreeResourceMiddlewareEntry,
+    ownerScopeOrResourceId: OwnerScope | string,
+    entryOrUsesFrameworkRootIds: SubtreeResourceMiddlewareEntry | boolean,
+    maybeEntry?: SubtreeResourceMiddlewareEntry,
   ) {
+    const ownerScope = this.normalizeOwnerScopeArg(
+      ownerScopeOrResourceId,
+      entryOrUsesFrameworkRootIds,
+    );
+    const entry =
+      maybeEntry ??
+      (entryOrUsesFrameworkRootIds as SubtreeResourceMiddlewareEntry);
     return this.normalizeSubtreeMiddlewareEntry(
-      ownerResourceId,
+      ownerScope,
       RegisterableKind.ResourceMiddleware,
       entry,
       getSubtreeResourceMiddlewareAttachment,
@@ -807,7 +703,7 @@ export class StoreRegistryWriter {
   }
 
   private normalizeMiddlewareAttachments<TAttachment extends { id: string }>(
-    ownerResourceId: string | null,
+    ownerScope: OwnerScope | null,
     kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
     attachments: TAttachment[],
   ): TAttachment[] {
@@ -815,12 +711,12 @@ export class StoreRegistryWriter {
       return attachments;
     }
 
-    if (!ownerResourceId) {
+    if (!ownerScope) {
       return attachments;
     }
 
     return attachments.map((attachment) =>
-      this.normalizeMiddlewareAttachment(ownerResourceId, kind, attachment),
+      this.normalizeMiddlewareAttachment(ownerScope, kind, attachment),
     );
   }
 
@@ -828,14 +724,14 @@ export class StoreRegistryWriter {
     TAttachment extends { id: string },
     TEntry extends TAttachment | ({ use: TAttachment } & object),
   >(
-    ownerResourceId: string,
+    ownerScope: OwnerScope,
     kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
     entry: TEntry,
     getAttachment: (entry: TEntry) => TAttachment,
   ): TEntry {
     const attachment = getAttachment(entry);
     const normalizedAttachment = this.normalizeMiddlewareAttachment(
-      ownerResourceId,
+      ownerScope,
       kind,
       attachment,
     );
@@ -855,13 +751,10 @@ export class StoreRegistryWriter {
   }
 
   private normalizeMiddlewareAttachment<TAttachment extends { id: string }>(
-    ownerResourceId: string,
+    ownerScope: OwnerScope,
     kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
     attachment: TAttachment,
   ): TAttachment {
-    const ownerIsGateway =
-      this.collections.resources.get(ownerResourceId)?.resource.gateway ===
-      true;
     const isRegisteredMiddlewareId = (candidateId: string): boolean =>
       kind === RegisterableKind.TaskMiddleware
         ? this.collections.taskMiddlewares.has(candidateId)
@@ -875,12 +768,7 @@ export class StoreRegistryWriter {
         : undefined;
     const resolvedId =
       resolvedByAlias ??
-      this.computeCanonicalId(
-        ownerResourceId,
-        ownerIsGateway,
-        kind,
-        attachment.id,
-      );
+      this.canonicalIdCompiler.compute(ownerScope, kind, attachment.id);
 
     if (resolvedId === attachment.id) {
       return attachment;
@@ -919,6 +807,23 @@ export class StoreRegistryWriter {
     }
 
     return false;
+  }
+
+  private normalizeOwnerScopeArg<TEntry>(
+    ownerScopeOrResourceId: OwnerScope | string,
+    entryOrUsesFrameworkRootIds: TEntry | boolean,
+  ): OwnerScope {
+    if (typeof ownerScopeOrResourceId !== "string") {
+      return ownerScopeOrResourceId;
+    }
+
+    return {
+      resourceId: ownerScopeOrResourceId,
+      usesFrameworkRootIds:
+        typeof entryOrUsesFrameworkRootIds === "boolean"
+          ? entryOrUsesFrameworkRootIds
+          : false,
+    };
   }
 
   private normalizeDefinitionTags(

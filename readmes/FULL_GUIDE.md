@@ -429,14 +429,15 @@ Resources move through a deliberate sequence of phases. Understanding which phas
   When `dispose.cooldownWindowMs` is greater than `0`, Runner keeps the broader `coolingDown` admission policy open for that bounded post-cooldown window before it enters `disposing`. At the default `0`, Runner skips that wait. Once `disposing` begins, admissions narrow to in-flight continuations plus resource-origin calls from the cooling resource itself and any additional resource definitions returned from `cooldown()`.
 - `dispose(value, config, deps, context)` performs final teardown after task/event drain.
 - Config-only resources can omit `.init()` and resolve to `undefined`
-- `r.resource(id, { gateway: true })` suppresses the resource's own namespace segment
-- gateway resources cannot be passed directly to `run(...)`; wrap them in a non-gateway root
+- user resources contribute their own ownership segment to canonical ids
+- the app resource passed to `run(...)` is a normal resource, so direct registrations compile as `app.tasks.x`, `app.events.x`, `app.middleware.task.x`, and so on
+- child resources continue that chain, so nested registrations compile as `app.billing.tasks.x`
+- only the internal synthetic framework root is transparent, and it does not appear in user-facing ids
+- `runtime-framework-root` is reserved for that internal framework root and cannot be used as a user resource id
 - If a resource declares `.register(...)`, it is non-leaf and cannot be forked
 - `.context(() => initialContext)` provides private and mutable resource-local state shared across lifecycle methods
 
 Do not use `cooldown()` as a general teardown phase for support resources such as databases. Cooldown is designed for ingress points that need to stop accepting new work quickly while letting in-flight work finish.
-
-Gateway resources are structural parents. A gateway resource still owns registration and lifecycle, but it does not add its own id segment when child ids are compiled. Use `r.resource(id, { gateway: true })` when you want a module boundary without another namespace layer in the final ids, then mount that gateway under a separate non-gateway app root when calling `run(...)`.
 
 ### Resource Configuration
 
@@ -528,7 +529,6 @@ Fork rules:
 - tags, middleware, and type parameters are inherited
 - each fork gets independent runtime state
 - non-leaf resources must be composed explicitly
-- gateway resources cannot be forked
 
 ### Resource Exports and Isolation Boundaries
 
@@ -644,13 +644,14 @@ Behavior rules:
 
 ### Subtree Policies
 
-Resources also support `.subtree(policy)` and `.subtree((config) => policy)` for subtree-wide middleware and validation.
+Resources also support `.subtree(policy)`, `.subtree([policyA, policyB])`, and `.subtree((config) => policy | policy[])` for subtree-wide middleware and validation.
 
 Keep the two APIs distinct:
 
 - `subtreeOf(resource, { types })` is an isolation selector used inside `.isolate(...)`
 - `.subtree({ validate })` is a generic resource policy hook that inspects compiled definitions in that resource subtree
-- `.subtree((config) => ({ ... }))` lets subtree policy depend on the owning resource config
+- `.subtree([policyA, policyB])` applies multiple subtree policies in declaration order
+- `.subtree((config) => ({ ... }))` and `.subtree((config) => [{ ... }, { ... }])` let subtree policy depend on the owning resource config
 - `subtree.validate` can be one function or an array of functions
 - typed validator branches are also available on `tasks`, `resources`, `hooks`, `events`, `tags`, `taskMiddleware`, and `resourceMiddleware`
 
@@ -1396,17 +1397,17 @@ If you use multiple contract middleware, their contracts combine.
 
 Runner ships with built-in middleware for common reliability concerns:
 
-| Middleware     | Config                                    | Notes                                                         |
-| -------------- | ----------------------------------------- | ------------------------------------------------------------- |
-| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | requires `resources.cache`; Node exposes `redisCacheProvider` |
-| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                   |
-| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                         |
-| debounce       | `{ ms }`                                  | runs only after inactivity                                    |
-| throttle       | `{ ms }`                                  | runs at most once per window                                  |
-| fallback       | `{ fallback }`                            | static value, function, or task fallback                      |
-| rateLimit      | `{ windowMs, max }`                       | fixed-window admission limit per instance                     |
-| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                    |
-| timeout        | `{ ttl }`                                 | aborts long-running executions via AbortController            |
+| Middleware     | Config                                    | Notes                                                                     |
+| -------------- | ----------------------------------------- | ------------------------------------------------------------------------- |
+| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; customize with `resources.cache.with(...)`   |
+| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                               |
+| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                     |
+| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key   |
+| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends       |
+| fallback       | `{ fallback }`                            | static value, function, or task fallback                                  |
+| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, for cases like "50 per second"      |
+| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                |
+| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal`  |
 
 Resource equivalents:
 
@@ -1417,7 +1418,7 @@ Recommended ordering:
 
 - fallback outermost
 - timeout inside retry when you want per-attempt budgets
-- rate-limit for admission
+- rate-limit for admission control such as "max 50 calls per second"
 - concurrency for in-flight control
 - cache for idempotent reads
 
@@ -1459,6 +1460,10 @@ const getUser = r
   })
   .build();
 ```
+
+> **Note:** `throttle` and `debounce` shape bursty traffic, but they do not express quotas like "50 calls per second". Use `rateLimit` for that kind of policy.
+
+> **Note:** `rateLimit`, `debounce`, and `throttle` all default to partitioning by `taskId`. Provide `keyBuilder(taskId, input)` when you want per-user, per-tenant, or per-IP behavior. If that key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
 
 ### Global Interception
 
@@ -5370,7 +5375,7 @@ Important behavior:
 - Inside `run(...)`, middleware, hooks, lane policies, and validators, `definition.id` is always the canonical runtime ID.
 - Original definition objects are not mutated; per-run compiled definitions are stored internally (run isolation safe).
 - Canonical ids are composed structurally from owner resources; prefer local definition ids and reference-based wiring.
-- Use `defineResource({ id, gateway: true })` for namespace gateways when a resource should not add its own segment to compiled canonical ids.
+- Only the internal synthetic framework root is transparent; user resources always contribute their own ownership segment to canonical ids.
 - Local names fail fast if they use reserved segments: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `asyncContexts`.
 - All definition ids fail fast when they start/end with `.`, contain empty segments (`..`), or equal a reserved standalone local name.
 
