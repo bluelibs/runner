@@ -2,6 +2,7 @@ import { Serializer } from "../../../serializer";
 import { runtimeSource } from "../../../types/runtimeSource";
 import { applyLocalSimulatedModeRouting } from "../../rpc-lanes/rpcLanes.local-simulated";
 import { applyNetworkModeRouting } from "../../rpc-lanes/rpcLanes.network";
+import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
 
 describe("rpc-lanes interceptor fallback branches", () => {
   it("routes local-simulated events by raw emission ids when store lookup misses", async () => {
@@ -26,7 +27,7 @@ describe("rpc-lanes interceptor fallback branches", () => {
         eventManager: { intercept },
         serializer,
       },
-      resourceId: "platform-node-resources-rpcLanes",
+      resourceId: RPC_LANES_RESOURCE_ID,
     };
 
     applyLocalSimulatedModeRouting(context as any);
@@ -77,7 +78,7 @@ describe("rpc-lanes interceptor fallback branches", () => {
         eventManager: { intercept },
         serializer: new Serializer(),
       },
-      resourceId: "platform-node-resources-rpcLanes",
+      resourceId: RPC_LANES_RESOURCE_ID,
     };
 
     applyNetworkModeRouting(context as any);

@@ -12,8 +12,7 @@ import {
 } from "../../errors";
 import { toRpcLanesExposurePolicy } from "./RpcLanesInternals";
 import type { RpcLanesRuntimeContext } from "./rpcLanes.runtime.utils";
-
-const RPC_LANES_RESOURCE_ID = "platform-node-resources-rpcLanes";
+import { RPC_LANES_RESOURCE_ID } from "./rpcLanes.resource";
 
 function assertRpcLanesOwner(resourceId: string): void {
   if (resourceId === RPC_LANES_RESOURCE_ID) {

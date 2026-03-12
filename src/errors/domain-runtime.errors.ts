@@ -310,7 +310,7 @@ export const rpcLanesExposureOwnerInvalidError = error<
 >(RunnerErrorId.RpcLaneExposureOwnerInvalid)
   .format(
     ({ ownerResourceId }) =>
-      `RPC HTTP exposure can only be owned by "platform-node-resources-rpcLanes". Received owner "${ownerResourceId}".`,
+      `RPC HTTP exposure can only be owned by "runner.node.rpcLanes". Received owner "${ownerResourceId}".`,
   )
   .remediation(
     "Start RPC HTTP exposure only through rpcLanesResource.with({ exposure: { http: ... } }) in network mode.",

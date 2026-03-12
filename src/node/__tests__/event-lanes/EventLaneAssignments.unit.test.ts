@@ -2,6 +2,7 @@ import type { IEventLaneDefinition, IRpcLaneDefinition } from "../../../defs";
 import { globalTags } from "../../../globals/globalTags";
 import type { Store } from "../../../models/Store";
 import { resolveEventLaneAssignments } from "../../event-lanes/EventLaneAssignments";
+import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
 
 type EventShape = {
   id: string;
@@ -20,7 +21,7 @@ function createStore(options: {
 }): Store {
   const resources = new Map<string, { config?: unknown }>();
   if (options.rpcTopology) {
-    resources.set("platform-node-resources-rpcLanes", {
+    resources.set(RPC_LANES_RESOURCE_ID, {
       config: { topology: options.rpcTopology },
     });
   }

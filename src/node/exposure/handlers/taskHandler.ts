@@ -24,6 +24,7 @@ import { withExposureContext } from "./contextWrapper";
 import { getRequestId } from "../requestIdentity";
 import type { MultipartLimits } from "../multipart";
 import { respondTaskResult } from "./taskResult";
+import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
 
 interface TaskHandlerDeps {
   store: NodeExposureDeps["store"];
@@ -63,7 +64,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     allowAsyncContext = () => true,
     resolveAsyncContextAllowList = () => undefined,
     authorizeTask = () => null,
-    sourceResourceId = "platform-node-resources-rpcLanes",
+    sourceResourceId = RPC_LANES_RESOURCE_ID,
   } = deps;
 
   const exposureSource = store.createRuntimeSource(
