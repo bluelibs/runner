@@ -66,8 +66,8 @@ describe("runner.health", () => {
   });
 
   it("is intentionally not system-tagged", () => {
-    expect(globalResources.health.tags?.includes(globalTags.system)).not.toBe(
-      true,
+    expect(globalResources.health.tags?.includes(globalTags.system)).toBe(
+      false,
     );
   });
 

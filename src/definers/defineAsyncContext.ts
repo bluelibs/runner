@@ -63,6 +63,15 @@ export function defineAsyncContext<T>(
     return s.get(ctxId) as T;
   };
 
+  const tryUse = (): T | undefined => {
+    const store = getCurrentStore();
+    if (!store || !store.has(ctxId)) {
+      return undefined;
+    }
+
+    return store.get(ctxId) as T;
+  };
+
   const provide = <R>(value: T, fn: () => Promise<R> | R): Promise<R> | R => {
     const currentStore = getCurrentStore();
     const map = currentStore
@@ -83,6 +92,10 @@ export function defineAsyncContext<T>(
     [symbolFilePath]: resolvedFilePath,
     configSchema,
     use,
+    tryUse,
+    has() {
+      return tryUse() !== undefined;
+    },
     /* istanbul ignore next */
     provide(value: T, fn: () => Promise<any> | any) {
       // Validate provided context if schema exists

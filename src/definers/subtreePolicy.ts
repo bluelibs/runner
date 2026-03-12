@@ -15,6 +15,7 @@ import type {
   SubtreeTaskMiddlewareEntry,
   SubtreeTaskValidator,
 } from "../types/subtree";
+import { isResourceMiddleware, isTaskMiddleware } from "./tools";
 
 function toArray<T>(value: T | T[] | undefined): T[] {
   if (value === undefined) {
@@ -30,6 +31,10 @@ function cloneValidatorArray<T>(value: T[] | undefined): T[] {
 function hasConditionalSubtreeMiddlewareEntry<TEntry extends object>(
   entry: TEntry,
 ): entry is Extract<TEntry, { use: object }> {
+  if (isTaskMiddleware(entry) || isResourceMiddleware(entry)) {
+    return false;
+  }
+
   return "use" in entry;
 }
 

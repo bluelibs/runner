@@ -11,8 +11,13 @@ import {
   defaultTaskKeyBuilder,
   type MiddlewareKeyBuilder,
 } from "./keyBuilder.shared";
+import {
+  applyTenantScopeToKey,
+  tenantScopePattern,
+  type TenantScopedMiddlewareConfig,
+} from "./tenantScope.shared";
 
-export interface RateLimitMiddlewareConfig {
+export interface RateLimitMiddlewareConfig extends TenantScopedMiddlewareConfig {
   /**
    * Time window in milliseconds
    */
@@ -32,6 +37,7 @@ const rateLimitConfigPattern = Match.ObjectIncluding({
   windowMs: Match.PositiveInteger,
   max: Match.PositiveInteger,
   keyBuilder: Match.Optional(Function),
+  tenantScope: tenantScopePattern,
 });
 
 /**
@@ -122,7 +128,10 @@ export const rateLimitTaskMiddleware = defineTaskMiddleware(
     ) {
       const taskId = task.definition.id;
       const keyBuilder = config.keyBuilder ?? defaultTaskKeyBuilder;
-      const key = keyBuilder(taskId, task.input);
+      const key = applyTenantScopeToKey(
+        keyBuilder(taskId, task.input),
+        config.tenantScope,
+      );
       const { states } = state;
       const now = Date.now();
       let keyedStates = states.get(config);

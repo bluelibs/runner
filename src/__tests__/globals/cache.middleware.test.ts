@@ -848,10 +848,14 @@ describe("Caching System", () => {
     });
 
     it("should handle array inputs with different orders", async () => {
+      let callCount = 0;
       const testTask = defineTask({
         id: "array-order-task",
         middleware: [cacheMiddleware],
-        run: async (input: number[]) => input.reduce((a, b) => a + b, 0),
+        run: async (input: number[]) => {
+          callCount += 1;
+          return input.reduce((a, b) => a + b, 0);
+        },
       });
 
       const app = defineResource({
@@ -866,8 +870,7 @@ describe("Caching System", () => {
           expect(result1).toBe(result2);
           expect(result1).toBe(6);
           expect(result3).toBe(6);
-          // Arrays with different order create different cache keys due to JSON.stringify
-          // So result1 and result3 are from different cache entries (both computed)
+          expect(callCount).toBe(2);
         },
       });
 
@@ -895,9 +898,8 @@ describe("Caching System", () => {
           const cacheInstance = getCacheEntryByTaskId(
             cache.map,
             "max-size-task",
-          );
-          expect(cacheInstance).toBeDefined();
-          // LRU should maintain size limit
+          ) as { size?: number } | undefined;
+          expect(cacheInstance?.size).toBe(2);
         },
       });
 

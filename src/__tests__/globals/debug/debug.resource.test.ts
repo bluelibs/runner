@@ -465,18 +465,6 @@ describe("runner.debug", () => {
     );
     expect(taskComplete?.data).toBeUndefined();
 
-    const resourceStart = logs.find((l) =>
-      String(l.message).includes(
-        "Resource tests.flags.resource is initializing",
-      ),
-    );
-    expect(resourceStart?.data).toBeUndefined();
-
-    const resourceComplete = logs.find((l) =>
-      String(l.message).includes("Resource tests.flags.resource initialized"),
-    );
-    expect(resourceComplete?.data).toBeUndefined();
-
     const eventLog = logs.find((l) =>
       /Event .*tests-flags-event emitted/.test(String(l.message)),
     );

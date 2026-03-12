@@ -28,6 +28,10 @@ export interface IAsyncContext<T> {
   [symbolAsyncContext]: true;
   /** Retrieve the current context value or throw */
   use(): T;
+  /** Retrieve the current context value when available */
+  tryUse(): T | undefined;
+  /** Check whether the current context value is available */
+  has(): boolean;
   /**
    * Provide a value for this context during the lifetime of `fn()`
    */

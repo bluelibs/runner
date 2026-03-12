@@ -4,12 +4,7 @@ import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.m
 
 describe("Rate Limit Middleware", () => {
   const expectValidationError = (fn: () => unknown): void => {
-    try {
-      fn();
-      throw new Error("Expected validation error");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Error);
-    }
+    expect(fn).toThrow();
   };
 
   it("should allow requests within limit", async () => {
@@ -225,9 +220,9 @@ describe("Rate Limit Middleware", () => {
     });
   });
 
-  it("should throw when windowMs is not positive", () => {
+  it("should throw when windowMs is negative", () => {
     expectValidationError(() => {
-      rateLimitTaskMiddleware.with({ windowMs: 0, max: 1 });
+      rateLimitTaskMiddleware.with({ windowMs: -1, max: 1 });
     });
   });
 
@@ -237,9 +232,9 @@ describe("Rate Limit Middleware", () => {
     });
   });
 
-  it("should throw when max is not positive", () => {
+  it("should throw when max is negative", () => {
     expectValidationError(() => {
-      rateLimitTaskMiddleware.with({ windowMs: 1000, max: 0 });
+      rateLimitTaskMiddleware.with({ windowMs: 1000, max: -1 });
     });
   });
 

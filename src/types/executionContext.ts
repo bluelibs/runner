@@ -67,6 +67,7 @@ export interface ExecutionContextAccessor {
   readonly id: "asyncContexts.execution";
   use(): ExecutionContextSnapshot;
   tryUse(): ExecutionContextSnapshot | undefined;
+  has(): boolean;
   provide<T>(fn: () => T): T;
   provide<T>(options: ExecutionContextProvideOptions, fn: () => T): T;
   record<T>(fn: () => T): Promise<ExecutionRecordResult<Awaited<T>>>;

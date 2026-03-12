@@ -128,13 +128,7 @@ describe("MiddlewareManager", () => {
     ]);
   });
 
-  it("dedupes global vs local task middleware by id and emits observability events (non-global)", async () => {
-    const calls: string[] = [];
-
-    // Global listener should not be called for observability events (excluded by tag)
-    eventManager.addGlobalListener(async () => {
-      calls.push("globalListener");
-    });
+  it("fails fast when global and local task middleware resolve to the same id", async () => {
     const mLocal = defineTaskMiddleware({
       id: "shared",
       run: async ({ next, task }) => {
@@ -177,19 +171,14 @@ describe("MiddlewareManager", () => {
       isInitialized: true,
     });
 
-    // Stub global middleware provider to return one with same id as local; manager should dedupe it
+    // Stub global middleware provider to return one with same id as local.
     const spy = jest
       .spyOn(getMiddlewareResolver(), "getEverywhereTaskMiddlewares")
       .mockReturnValue([mGlobalSameId]);
 
-    const runner = manager.composeTaskRunner(task);
-    const result = await runner(2);
-    // Dedup ensures global "shared" is ignored; local "shared" runs once.
-    expect(result).toBe(7);
-
-    // Ensure event-specific listeners called twice (two middlewares), global listener not called
-    const globalCalls = calls.filter((c) => c === "globalListener").length;
-    expect(globalCalls).toBe(0);
+    expect(() => manager.composeTaskRunner(task)).toThrow(
+      /conflicts with a task-local middleware using the same id/i,
+    );
 
     spy.mockRestore();
   });

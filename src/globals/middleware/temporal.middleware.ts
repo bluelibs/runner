@@ -9,6 +9,11 @@ import {
   type MiddlewareKeyBuilder,
 } from "./keyBuilder.shared";
 import {
+  applyTenantScopeToKey,
+  tenantScopePattern,
+  type TenantScopedMiddlewareConfig,
+} from "./tenantScope.shared";
+import {
   type DebounceState,
   pruneIdleThrottleStates,
   rejectDebounceState,
@@ -17,7 +22,7 @@ import {
   type ThrottleState,
 } from "./temporal.shared";
 
-export interface TemporalMiddlewareConfig {
+export interface TemporalMiddlewareConfig extends TenantScopedMiddlewareConfig {
   ms: number;
   keyBuilder?: MiddlewareKeyBuilder;
 }
@@ -25,6 +30,7 @@ export interface TemporalMiddlewareConfig {
 const temporalConfigPattern = Match.ObjectIncluding({
   ms: Match.PositiveInteger,
   keyBuilder: Match.Optional(Function),
+  tenantScope: tenantScopePattern,
 });
 
 const TEMPORAL_DISPOSED_ERROR_MESSAGE =
@@ -51,7 +57,7 @@ function buildTemporalMiddlewareKey(
     });
   }
 
-  return key;
+  return applyTenantScopeToKey(key, config.tenantScope);
 }
 
 function getDebounceStatesForConfig(

@@ -15,7 +15,7 @@ export const globalEventListener = defineHook(
       debugConfig,
     },
     run: async (event, { logger, debugConfig }) => {
-      if (hasSystemTag(event)) {
+      if (hasSystemTag(event) || event!.id.startsWith("system.")) {
         return;
       }
 

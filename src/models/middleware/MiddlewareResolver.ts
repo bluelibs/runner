@@ -8,8 +8,12 @@ import {
   type RpcLaneMiddlewareId,
 } from "../../defs";
 import { Store } from "../Store";
-import { taskNotRegisteredError } from "../../errors";
 import {
+  subtreeMiddlewareConflictError,
+  taskNotRegisteredError,
+} from "../../errors";
+import {
+  getSubtreeMiddlewareDuplicateKey,
   resolveApplicableSubtreeResourceMiddlewares,
   resolveApplicableSubtreeTaskMiddlewares,
 } from "../../tools/subtreeMiddleware";
@@ -32,7 +36,8 @@ export class MiddlewareResolver {
   constructor(private readonly store: Store) {}
 
   /**
-   * Gets all applicable middlewares for a task (global + local, deduplicated)
+   * Gets all applicable middlewares for a task.
+   * Fails fast when subtree and local middleware resolve to the same id.
    */
   getApplicableTaskMiddlewares(task: ITask<any, any, any>): ITaskMiddleware[] {
     const taskId = this.store.resolveDefinitionId(task)!;
@@ -46,9 +51,26 @@ export class MiddlewareResolver {
 
     const local = effectiveTask.middleware;
     const globalMiddlewares = this.getEverywhereTaskMiddlewares(effectiveTask);
-    const localIds = new Set(local.map((middleware) => middleware.id));
+    const localIds = new Set(
+      local.map((middleware) =>
+        getSubtreeMiddlewareDuplicateKey(middleware.id),
+      ),
+    );
+    const conflictingGlobal = globalMiddlewares.find((middleware) =>
+      localIds.has(getSubtreeMiddlewareDuplicateKey(middleware.id)),
+    );
 
-    const globalFiltered = globalMiddlewares.filter((m) => !localIds.has(m.id));
+    if (conflictingGlobal) {
+      subtreeMiddlewareConflictError.throw({
+        middlewareId: getSubtreeMiddlewareDuplicateKey(conflictingGlobal.id),
+        targetKind: "task",
+      });
+    }
+
+    const globalFiltered = globalMiddlewares.filter(
+      (middleware) =>
+        !localIds.has(getSubtreeMiddlewareDuplicateKey(middleware.id)),
+    );
 
     // Global middlewares run FIRST, then local ones.
     // This allows cross-cutting policies (like logging, tracing) to wrap
@@ -63,7 +85,8 @@ export class MiddlewareResolver {
   }
 
   /**
-   * Gets all applicable middlewares for a resource (global + local, deduplicated)
+   * Gets all applicable middlewares for a resource.
+   * Fails fast when subtree and local middleware resolve to the same id.
    */
   getApplicableResourceMiddlewares(
     resource: IResource<any, any, any, any>,
@@ -81,9 +104,26 @@ export class MiddlewareResolver {
     const local = effectiveResource.middleware;
     const globalMiddlewares =
       this.getEverywhereResourceMiddlewares(effectiveResource);
-    const localIds = new Set(local.map((middleware) => middleware.id));
+    const localIds = new Set(
+      local.map((middleware) =>
+        getSubtreeMiddlewareDuplicateKey(middleware.id),
+      ),
+    );
+    const conflictingGlobal = globalMiddlewares.find((middleware) =>
+      localIds.has(getSubtreeMiddlewareDuplicateKey(middleware.id)),
+    );
 
-    const globalFiltered = globalMiddlewares.filter((m) => !localIds.has(m.id));
+    if (conflictingGlobal) {
+      subtreeMiddlewareConflictError.throw({
+        middlewareId: getSubtreeMiddlewareDuplicateKey(conflictingGlobal.id),
+        targetKind: "resource",
+      });
+    }
+
+    const globalFiltered = globalMiddlewares.filter(
+      (middleware) =>
+        !localIds.has(getSubtreeMiddlewareDuplicateKey(middleware.id)),
+    );
 
     const result = [...globalFiltered, ...local];
 

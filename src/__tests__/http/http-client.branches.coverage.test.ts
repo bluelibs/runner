@@ -19,7 +19,9 @@ describe("http-client branches coverage", () => {
       fetchImpl: fetchMock as any,
       serializer: new Serializer(),
     });
-    await expect(client.task("t.empty", { file } as any)).rejects.toBeTruthy();
+    await expect(client.task("t.empty", { file } as any)).rejects.toThrow(
+      /Remote lane task error/i,
+    );
   });
 
   it("postMultipartBrowser: non-json content-type still parsed by text path", async () => {

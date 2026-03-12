@@ -8,6 +8,7 @@ describe("asyncContexts.execution", () => {
 
   it("tryUse returns undefined outside an active execution", () => {
     expect(asyncContexts.execution.tryUse()).toBeUndefined();
+    expect(asyncContexts.execution.has()).toBe(false);
   });
 
   it("use throws outside an active execution", () => {
@@ -24,7 +25,10 @@ describe("asyncContexts.execution", () => {
   it("provide returns the callback result even when no frames are entered", () => {
     const result = asyncContexts.execution.provide(
       { correlationId: "req-seeded" },
-      () => "ok",
+      () => {
+        expect(asyncContexts.execution.has()).toBe(false);
+        return "ok";
+      },
     );
 
     expect(result).toBe("ok");

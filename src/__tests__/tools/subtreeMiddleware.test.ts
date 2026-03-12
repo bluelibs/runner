@@ -410,6 +410,30 @@ describe("subtreeMiddleware tools", () => {
     ).toBe(resourceMiddleware);
   });
 
+  it("treats branded middleware with a user-defined use field as direct middleware", () => {
+    const taskMiddleware = {
+      ...defineTaskMiddleware({
+        id: "tests-tools-subtree-direct-task-use-field",
+        run: async ({ next, task }) => next(task.input),
+      }),
+      use: "custom-field",
+    } as any;
+    const resourceMiddleware = {
+      ...defineResourceMiddleware({
+        id: "tests-tools-subtree-direct-resource-use-field",
+        run: async ({ next }) => next(),
+      }),
+      use: "custom-field",
+    } as any;
+
+    expect(getSubtreeTaskMiddlewareAttachment(taskMiddleware)).toBe(
+      taskMiddleware,
+    );
+    expect(getSubtreeResourceMiddlewareAttachment(resourceMiddleware)).toBe(
+      resourceMiddleware,
+    );
+  });
+
   it("throws for invalid subtree attachment entries", () => {
     expect(() =>
       getSubtreeTaskMiddlewareAttachment({ nope: true } as any),

@@ -76,13 +76,15 @@ Subtree validation is return-based. You can import `SubtreeViolation` from Runne
 
 - subtree middleware entries can be conditional with `{ use, when }`
 - subtree middleware resolves before local `.middleware([...])`
-  import { isTask, r, run } from "@bluelibs/runner";
-  import type { SubtreeViolation } from "@bluelibs/runner";
+- if subtree and local middleware resolve to the same middleware id, Runner fails fast instead of letting the local middleware override the subtree one
 
 ```typescript
-import { r, run } from "@bluelibs/runner";
+import { isTask, r, run } from "@bluelibs/runner";
+import type { SubtreeViolation } from "@bluelibs/runner";
 
-type SubtreeViolation = {
+const app = r
+  .resource("app")
+  .subtree({
     validate: (definition): SubtreeViolation[] => {
       if (!isTask(definition) || definition.meta?.title) {
         return [];
@@ -95,22 +97,15 @@ type SubtreeViolation = {
         },
       ];
     },
-          {
-            code: "missing-meta-title",
-            message: `Task "${taskDefinition.id}" must define meta.title`,
-          },
-        ];
-      },
-    },
   })
   .build();
-- use exported type guards inside `subtree.validate(...)` when the policy only targets tasks, resources, events, hooks, tags, or middleware
 
 await run(app);
 ```
 
 Rules:
 
+- use exported type guards inside `subtree.validate(...)` when the policy only targets tasks, resources, events, hooks, tags, or middleware
 - return `SubtreeViolation[]` for expected policy failures
 - do not throw for normal validation failures
 - invalid validator returns are aggregated into one subtree validation error
@@ -219,6 +214,8 @@ const getUser = r
 > **Note:** `throttle` and `debounce` shape bursty traffic, but they do not express quotas like "50 calls per second". Use `rateLimit` for that kind of policy.
 
 > **Note:** `rateLimit`, `debounce`, and `throttle` all default to partitioning by `taskId`. Provide `keyBuilder(taskId, input)` when you want per-user, per-tenant, or per-IP behavior. If that key lives in an async context, call `YourContext.use()` directly inside `keyBuilder`.
+
+> **Note:** When tenant-aware middleware runs with `tenantScope`, Runner prefixes the final internal key as `tenantId:<baseKey>`. For example, a `keyBuilder` result of `search:ada` becomes `acme:search:ada` when the active tenant is `acme`. The default behavior is `"auto"`: use the tenant prefix when tenant context exists, otherwise keep the shared key. Use `"required"` when tenant context must exist, and `"off"` only for intentional cross-tenant sharing.
 
 ### Global Interception
 

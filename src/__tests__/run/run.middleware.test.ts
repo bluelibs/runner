@@ -79,7 +79,7 @@ describe("Middleware", () => {
     await run(app);
   });
 
-  it("should work with global middleware but local one should have priority", async () => {
+  it("should work with global middleware alongside unrelated local middleware", async () => {
     const createMiddleware = (id: string) =>
       defineTaskMiddleware({
         id: "middleware",
@@ -458,6 +458,37 @@ describe("Configurable Middleware (.with)", () => {
     expect(calls).toContain("global:user");
   });
 
+  it("fails fast when subtree and local task middleware share the same id", async () => {
+    const validate = defineTaskMiddleware<{ schema: string }>({
+      id: "validate-global-task-conflict",
+      run: async ({ next }) => next(),
+    });
+
+    const task = defineTask({
+      id: "task-global-conflict",
+      middleware: [validate.with({ schema: "local" })],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "app-global-task-conflict",
+      subtree: {
+        tasks: {
+          middleware: [validate.with({ schema: "subtree" })],
+        },
+      },
+      register: [validate, task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await task();
+      },
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      /conflicts with a task-local middleware using the same id/i,
+    );
+  });
+
   it("should allow configured middleware to be global for resources", async () => {
     const calls: string[] = [];
     const m = defineResourceMiddleware<{ flag: string }>({
@@ -495,6 +526,35 @@ describe("Configurable Middleware (.with)", () => {
     expect(String(result.value)).toBe("Sub");
     expect(calls).toContain("res-app:X");
     expect(calls).toContain("res-sub:X");
+  });
+
+  it("fails fast when subtree and local resource middleware share the same id", async () => {
+    const middleware = defineResourceMiddleware<{ flag: string }>({
+      id: "validate-global-resource-conflict",
+      run: async ({ next }) => next(),
+    });
+
+    const child = defineResource({
+      id: "res-conflict-child",
+      middleware: [middleware.with({ flag: "local" })],
+      async init() {
+        return "Sub";
+      },
+    });
+
+    const app = defineResource({
+      id: "res-conflict-app",
+      subtree: {
+        resources: {
+          middleware: [middleware.with({ flag: "subtree" })],
+        },
+      },
+      register: [middleware, child],
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      /conflicts with a resource-local middleware using the same id/i,
+    );
   });
 });
 

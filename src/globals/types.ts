@@ -34,5 +34,9 @@ export type {
   TemporalMiddlewareConfig,
   ThrottleState,
 } from "./middleware/temporal.middleware";
+export type {
+  TenantScopeConfig,
+  TenantScopeMode,
+} from "./middleware/tenantScope.shared";
 export type { TimeoutMiddlewareConfig } from "./middleware/timeout.middleware";
 export type { TimeoutError } from "./middleware/timeout.middleware";

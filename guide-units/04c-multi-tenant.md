@@ -1,0 +1,88 @@
+## Multi-Tenant Systems
+
+Multi-tenant work in Runner usually means one `run(app)` serving many tenants without mixing their logical state.
+The built-in same-runtime pattern uses `asyncContexts.tenant`: provide tenant identity at ingress, require it where correctness depends on it, and let tenant-aware middleware partition its internal state when tenant context exists.
+
+```typescript
+import { asyncContexts, middleware, r, run } from "@bluelibs/runner";
+
+const { tenant } = asyncContexts;
+
+const projectRepo = r
+  .resource("projectRepo")
+  .init(async () => {
+    const storage = new Map<string, string[]>();
+
+    return {
+      async list() {
+        const { tenantId } = tenant.use();
+        return storage.get(tenantId) ?? [];
+      },
+      async add(name: string) {
+        const { tenantId } = tenant.use();
+        const current = storage.get(tenantId) ?? [];
+        current.push(name);
+        storage.set(tenantId, current);
+      },
+    };
+  })
+  .build();
+
+const listProjects = r
+  .task("listProjects")
+  .middleware([tenant.require(), middleware.task.cache.with({ ttl: 30_000 })])
+  .dependencies({ projectRepo })
+  .run(async (_input, { projectRepo }) => projectRepo.list())
+  .build();
+
+const app = r.resource("app").register([projectRepo, listProjects]).build();
+const runtime = await run(app);
+
+// Starting a task with our custom tenant provider.
+const projects = await tenant.provide({ tenantId: "acme" }, async () =>
+  runtime.runTask(listProjects),
+);
+```
+
+This pattern keeps tenant identity in async context instead of global mutable state.
+The flow is: ingress provides the tenant, tenant-sensitive tasks require it, downstream code reads it, and middleware such as `cache` uses it to partition internal keys.
+
+Use the built-in tenant accessor in two modes:
+
+- strict: `tenant.use()` when tenant context must exist, throws if not.
+- safe: `tenant.tryUse()` or `tenant.has()` in shared or frontend-safe helpers
+
+```typescript
+import { asyncContexts } from "@bluelibs/runner";
+
+const { tenant } = asyncContexts;
+
+export function getTelemetryTenantId(): string | undefined {
+  return tenant.tryUse()?.tenantId;
+}
+```
+
+Tenant-sensitive middleware defaults to `tenantScope: "auto"`.
+That means `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` prefix their internal keys with `tenantId` when tenant context exists, and fall back to the shared non-tenant keyspace when it does not.
+
+- Use `tenant.provide({ tenantId }, fn)` at HTTP, RPC, queue, or job ingress.
+- Use `tenant.require()` or `tenant.use()` when running without a tenant would be a correctness bug.
+- Omit `tenantScope` for the default `"auto"` behavior.
+- Use `tenantScope: "auto"` when you want to make that default explicit in config.
+- Use `tenantScope: "required"` when middleware correctness depends on tenant context being present.
+- Use `tenantScope: "off"` only for intentional cross-tenant sharing.
+
+```typescript
+import { middleware } from "@bluelibs/runner";
+
+middleware.task.rateLimit.with({
+  windowMs: 60_000,
+  max: 10,
+  tenantScope: "required",
+});
+```
+
+Runner still reads tenant identity from `asyncContexts.tenant`. Destructure it as `const { tenant } = asyncContexts` to keep call sites concise.
+If a specific provider or middleware family needs extra metadata, keep that on that provider's own config instead of overloading `tenantScope`.
+
+> **Platform Note:** Async context propagation requires `AsyncLocalStorage`, so this same-runtime tenant pattern is Node-only in practice. On platforms without async local storage, `provide()` still runs the callback but does not propagate tenant state, so shared or frontend-compatible code should treat tenant presence as optional and use `tenant.tryUse()` or `tenant.has()` when probing.

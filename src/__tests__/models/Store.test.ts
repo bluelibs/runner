@@ -78,6 +78,17 @@ describe("Store", () => {
     store.recordResourceInitialized("dup");
     store.recordResourceInitialized("other");
     store.recordResourceInitialized("dup");
+
+    const initWaves = (
+      store as unknown as {
+        initWaves: Array<{ resourceIds: string[]; parallel: boolean }>;
+      }
+    ).initWaves;
+
+    expect(initWaves).toEqual([
+      { resourceIds: ["dup"], parallel: false },
+      { resourceIds: ["other"], parallel: false },
+    ]);
   });
 
   it("should ignore init waves when all resource ids were already tracked", () => {

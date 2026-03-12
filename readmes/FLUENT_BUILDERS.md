@@ -285,6 +285,8 @@ const appWithConditional = r
   .build();
 ```
 
+If subtree middleware and local middleware resolve to the same middleware id on one target, Runner fails fast instead of letting the local middleware override it.
+
 Use `taskRunner.intercept(interceptor, { when })` for cross-cutting catch-all task interception.
 
 Note on `.init()`:

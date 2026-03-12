@@ -184,8 +184,8 @@ describe("error builder", () => {
     expect(() => TypedError.throw(bad)).toThrow("invalid");
   });
 
-  it("accepts format in builder chain (smoke)", () => {
-    expect.assertions(1);
+  it("accepts format in builder chain", () => {
+    expect.assertions(2);
     const E = r
       .error<{ message: string }>("tests-errors-display")
       .format((d) => d.message)
@@ -194,11 +194,12 @@ describe("error builder", () => {
       E.throw({ message: "hi" });
     } catch (err) {
       expect(E.is(err)).toBe(true);
+      expect((err as Error).message).toBe("hi");
     }
   });
 
-  it("accepts meta in builder chain (smoke)", () => {
-    expect.assertions(1);
+  it("accepts meta in builder chain", () => {
+    expect.assertions(2);
     const E = r
       .error<{ message: string }>("tests-errors-meta")
       .meta({ title: "Test Error", description: "A test error" })
@@ -207,6 +208,10 @@ describe("error builder", () => {
       E.throw({ message: "test" });
     } catch (err) {
       expect(E.is(err)).toBe(true);
+      expect(E.meta).toEqual({
+        title: "Test Error",
+        description: "A test error",
+      });
     }
   });
 

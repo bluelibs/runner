@@ -8,8 +8,13 @@ import {
   validationError,
 } from "../../errors";
 import { Match } from "../../tools/check";
+import {
+  getTenantNamespace,
+  tenantScopePattern,
+  type TenantScopedMiddlewareConfig,
+} from "./tenantScope.shared";
 
-export interface ConcurrencyMiddlewareConfig {
+export interface ConcurrencyMiddlewareConfig extends TenantScopedMiddlewareConfig {
   /**
    * Maximum number of concurrent executions.
    * If provided, a Semaphore will be created and shared for this config object.
@@ -29,7 +34,10 @@ export interface ConcurrencyMiddlewareConfig {
 }
 
 export interface ConcurrencyState {
-  semaphoresByConfig: WeakMap<ConcurrencyMiddlewareConfig, Semaphore>;
+  semaphoresByConfig: WeakMap<
+    ConcurrencyMiddlewareConfig,
+    Map<string, Semaphore>
+  >;
   semaphoresByKey: Map<string, { semaphore: Semaphore; limit: number }>;
   semaphores: Set<Semaphore>;
 }
@@ -38,6 +46,7 @@ const concurrencyConfigPattern = Match.ObjectIncluding({
   limit: Match.Optional(Match.PositiveInteger),
   key: Match.Optional(Match.NonEmptyString),
   semaphore: Match.Optional(Semaphore),
+  tenantScope: tenantScopePattern,
 });
 
 function assertConcurrencyConfig(config: ConcurrencyMiddlewareConfig): void {
@@ -77,7 +86,10 @@ export const concurrencyResource = defineResource(
     id: "runner.concurrency",
     tags: [globalTags.system],
     init: async () => ({
-      semaphoresByConfig: new WeakMap<ConcurrencyMiddlewareConfig, Semaphore>(),
+      semaphoresByConfig: new WeakMap<
+        ConcurrencyMiddlewareConfig,
+        Map<string, Semaphore>
+      >(),
       semaphoresByKey: new Map<
         string,
         { semaphore: Semaphore; limit: number }
@@ -107,14 +119,16 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware(
       assertConcurrencyConfig(config);
 
       let semaphore = config.semaphore;
+      const tenantNamespace = getTenantNamespace(config.tenantScope);
 
       if (!semaphore && config.limit !== undefined) {
         if (config.key !== undefined) {
-          const existing = state.semaphoresByKey.get(config.key);
+          const scopedKey = `${tenantNamespace}:${config.key}`;
+          const existing = state.semaphoresByKey.get(scopedKey);
           if (existing) {
             if (existing.limit !== config.limit) {
               middlewareConcurrencyConflictError.throw({
-                key: config.key,
+                key: scopedKey,
                 existingLimit: existing.limit,
                 attemptedLimit: config.limit,
               });
@@ -123,17 +137,23 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware(
           } else {
             semaphore = new Semaphore(config.limit);
             state.semaphores.add(semaphore);
-            state.semaphoresByKey.set(config.key, {
+            state.semaphoresByKey.set(scopedKey, {
               semaphore,
               limit: config.limit,
             });
           }
         } else {
-          semaphore = state.semaphoresByConfig.get(config);
+          let semaphoresByTenant = state.semaphoresByConfig.get(config);
+          if (!semaphoresByTenant) {
+            semaphoresByTenant = new Map<string, Semaphore>();
+            state.semaphoresByConfig.set(config, semaphoresByTenant);
+          }
+
+          semaphore = semaphoresByTenant.get(tenantNamespace);
           if (!semaphore) {
             semaphore = new Semaphore(config.limit);
             state.semaphores.add(semaphore);
-            state.semaphoresByConfig.set(config, semaphore);
+            semaphoresByTenant.set(tenantNamespace, semaphore);
           }
         }
       }

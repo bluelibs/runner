@@ -429,7 +429,7 @@ r.task("ratelimit-ip").middleware([middleware.task.rateLimit.with({windowMs:1_00
 
 **Order:** fallback (outermost) → timeout (inside retry if per-attempt budgets needed) → others.
 **Use:** rate-limit for quotas like "50/s", concurrency for in-flight, circuit-breaker for fail-fast, cache for idempotent reads, debounce/throttle for burst shaping.
-**Partitioning:** `rateLimit`, `debounce`, and `throttle` default to `taskId`; pass `keyBuilder(taskId, input)` to partition by async-context values, user ids, tenants, or similar keys.
+**Partitioning:** `rateLimit`, `debounce`, and `throttle` default to `taskId`; pass `keyBuilder(taskId, input)` to partition by async-context values, user ids, tenants, or similar keys. When `tenantScope` is active, Runner prefixes the final internal key as `tenantId:<baseKey>`.
 
 Built-in journal keys exist for middleware introspection:
 
@@ -458,11 +458,27 @@ import { check, Match } from "@bluelibs/runner";
 
 ### Errors
 
-- `r.error(...)` defines typed Runner errors.
-- Helpers expose `new`, `create`, `throw`, and `is`.
-- `.is(err, partialData?)` checks error lineage and an optional data subset.
-- `.httpCode()` and `.remediation()` enrich errors for transport and operator feedback.
-- `r.error.is(err)` checks whether a value is any Runner error.
+Typed errors are declared once, injected via DI, and consumed with a strongly-typed helper.
+
+```ts
+const userNotFound = r
+  .error<{ userId: string }>("userNotFound")
+  // optional:
+  .httpCode(404)
+  .format((d) => `User '${d.userId}' not found`)
+  .remediation((d) => `Verify user '${d.userId}' exists first.`)
+  .build();
+
+// in a task: .dependencies({ userNotFound }).throws([userNotFound])
+userNotFound.throw({ userId: "u1" }); // never — throws IRunnerError
+userNotFound.new({ userId: "u1" }); // constructs without throwing
+userNotFound.is(err); // type guard
+userNotFound.is(err, { severity: "high" }); // lineage + shallow data match
+r.error.is(err); // any Runner error check
+```
+
+Thrown `IRunnerError` has: `.id`, `.data`, `.message` (from `.format()`, defaults to `JSON.stringify`), `.httpCode`, `.remediation`.
+`.dataSchema(...)` validates data at throw-time. `.throws([...])` on task/resource/hook/middleware is declarative metadata only.
 
 ### Serialization
 
@@ -554,6 +570,7 @@ Examples:
 ### Subtrees
 
 - `.subtree(policy)`, `.subtree([policyA, policyB])`, and `.subtree((config) => policy | policy[])` can auto-attach middleware to nested tasks/resources.
+- If subtree middleware and local middleware resolve to the same middleware id on one target, Runner fails fast.
 - Subtrees can validate contained definitions.
 - `subtree.validate` is generic for compiled subtree definitions and can be one function or an array.
 - Typed validation is also available on `tasks`, `resources`, `hooks`, `events`, `tags`, `taskMiddleware`, and `resourceMiddleware`.
@@ -698,6 +715,24 @@ const myTask = r
 ```
 
 Contexts can be injected as dependencies or enforced by middleware via `middleware.task.requireContext.with({ context: tenantCtx })`. Custom `serialize` / `parse` support propagation over RPC lanes.
+
+## Multi-Tenant Systems
+
+Runner's official same-runtime multi-tenant pattern uses `asyncContexts` (from runner package). Destructure it for brevity: `const { tenant } = asyncContexts`.
+
+- `tenant.use()` returns `{ tenantId: string }` and throws when tenant context is required but missing.
+- `tenant.tryUse()` returns `{ tenantId: string } | undefined`, and `tenant.has()` is a safe boolean check for shared or frontend-compatible code.
+- Provide tenant identity at ingress with `tenant.provide({ tenantId }, fn)`.
+- Tenant-sensitive middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` default to `tenantScope: "auto"`, which prefixes internal keys with `tenantId` when tenant context exists and otherwise falls back to the shared non-tenant keyspace.
+- `tenantScope` modes:
+  - `"auto"`: tenant-partition when tenant context exists; otherwise fall back to the normal non-tenant key
+  - `"required"`: require tenant context and fail fast when it is missing
+  - `"off"`: disable tenant partitioning entirely and use the shared non-tenant keyspace even if tenant context exists
+- Middleware config types document these values directly on the `tenantScope` property for IDE hover help.
+- Omit `tenantScope` for the default `"auto"` behavior, or set it explicitly when that helps readability.
+- Use `"off"` only for intentional cross-tenant sharing such as a truly global cache, limit bucket, or semaphore namespace.
+- Use `tenant.require()` when a task must never run outside tenant context.
+- Async context propagation is Node-only in practice. On platforms without `AsyncLocalStorage`, `provide()` still runs the callback but does not propagate tenant state, so safe accessors matter in multi-platform code.
 
 ## Queue
 

@@ -191,6 +191,22 @@ export const runtimeElementNotFoundError = error<
   )
   .build();
 
+export const subtreeMiddlewareConflictError = error<
+  {
+    middlewareId: string;
+    targetKind: "task" | "resource";
+  } & DefaultErrorType
+>("runner.errors.subtreeMiddlewareConflict")
+  .format(({ middlewareId, targetKind }) => {
+    const targetLabel = targetKind === "task" ? "task-local" : "resource-local";
+    return `Subtree middleware "${middlewareId}" conflicts with a ${targetLabel} middleware using the same id.`;
+  })
+  .remediation(({ middlewareId, targetKind }) => {
+    const targetLabel = targetKind === "task" ? "task-local" : "resource-local";
+    return `Remove either the subtree middleware or the ${targetLabel} middleware for "${middlewareId}". Runner no longer allows local middleware to override subtree middleware with the same id.`;
+  })
+  .build();
+
 export const healthReportEntryNotFoundError = error<
   { resourceId: string } & DefaultErrorType
 >("runner.errors.healthReportEntryNotFound")
@@ -276,5 +292,30 @@ export const taskBlockedByResourceHealthError = error<
   .remediation(
     ({ resourceIds }) =>
       `Restore resource health before retrying the task, or remove them from tags.failWhenUnhealthy.with([...]): [${resourceIds.join(", ")}].`,
+  )
+  .build();
+
+export const tenantContextRequiredError = error<DefaultErrorType>(
+  "runner.errors.tenantContextRequired",
+)
+  .format(
+    () =>
+      "Tenant context is required but not available. Provide it via asyncContexts.tenant.provide({ tenantId }, fn).",
+  )
+  .remediation(
+    "Wrap tenant-sensitive work in asyncContexts.tenant.provide(...), or set tenantScope: 'off' only when cross-tenant sharing is intentional.",
+  )
+  .build();
+
+export const tenantInvalidContextError = error<
+  { reason?: string } & DefaultErrorType
+>("runner.errors.tenantInvalidContext")
+  .format(
+    ({ reason }) =>
+      reason ??
+      'Tenant context must be an object containing a non-empty string "tenantId".',
+  )
+  .remediation(
+    'Pass asyncContexts.tenant.provide({ tenantId: "your-tenant" }, fn) with a valid non-empty tenant id.',
   )
   .build();

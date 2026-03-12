@@ -104,7 +104,9 @@ describe("http-fetch-remote-lane.resource - HTTP status handling", () => {
       serializer: new Serializer(),
     });
 
-    await expect(client.task("t.id", { a: 1 })).rejects.toThrow();
+    await expect(client.task("t.id", { a: 1 })).rejects.toThrow(
+      "Invalid JSON payload.",
+    );
   });
 
   it("keeps typed-envelope behavior for non-2xx JSON responses", async () => {

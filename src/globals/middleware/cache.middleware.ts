@@ -24,6 +24,11 @@ import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { safeStringify } from "../../models/utils/safeStringify";
 import { Match } from "../../tools/check";
 import { validationError } from "../../errors";
+import {
+  applyTenantScopeToKey,
+  tenantScopePattern,
+  type TenantScopedMiddlewareConfig,
+} from "./tenantScope.shared";
 
 export type {
   CacheFactoryOptions,
@@ -58,9 +63,10 @@ export interface CacheResourceConfig {
   totalBudgetBytes?: number;
 }
 
-type CacheMiddlewareConfig = CacheFactoryOptions & {
-  keyBuilder?: (taskId: string, input: unknown) => string;
-};
+type CacheMiddlewareConfig = CacheFactoryOptions &
+  TenantScopedMiddlewareConfig & {
+    keyBuilder?: (taskId: string, input: unknown) => string;
+  };
 
 type CacheResourceValue = {
   map: Map<string, ICacheProvider>;
@@ -106,6 +112,7 @@ const cacheResourceConfigPattern = Match.ObjectIncluding({
 
 const cacheMiddlewareConfigPattern = Match.ObjectIncluding({
   keyBuilder: Match.Optional(Function),
+  tenantScope: tenantScopePattern,
   ttl: Match.Optional(Match.PositiveInteger),
   max: Match.Optional(Match.PositiveInteger),
   ttlAutopurge: Match.Optional(Boolean),
@@ -319,7 +326,10 @@ export const cacheMiddleware = defineTaskMiddleware(
         }
       }
 
-      const key = config.keyBuilder!(taskId, task!.input);
+      const key = applyTenantScopeToKey(
+        config.keyBuilder!(taskId, task!.input),
+        config.tenantScope,
+      );
 
       const cachedValue = await cacheHolderForTask.get(key);
       const hasCachedEntry =

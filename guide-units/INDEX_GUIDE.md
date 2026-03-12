@@ -8,6 +8,7 @@
 !include: 02f-errors.md
 !include: 03-runtime-lifecycle.md
 !include: 04-features.md
+!include: 04c-multi-tenant.md
 !include: 04b-serialization-validation.md
 !include: 05-observability.md
 !include: 06-advanced.md
