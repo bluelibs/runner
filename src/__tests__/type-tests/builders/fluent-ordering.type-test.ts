@@ -8,6 +8,46 @@ import { r, resources } from "../../../";
 
   taskAfterRun.meta({ title: "Task" }).throws([]).build();
 
+  r.task("types-order-task-run-after-deps")
+    .dependencies({ logger: resources.logger })
+    .run(async (_input, deps) => {
+      deps.logger.info("task");
+      // @ts-expect-error logger contract remains injected
+      deps.logger.xx();
+      return "ok";
+    })
+    .build();
+
+  r.task("types-order-task-run-after-schema")
+    .schema<{ id: string }>({ parse: (x: any) => x })
+    .run(async (input) => input.id)
+    .build();
+
+  r.task("types-order-task-run-after-result-schema")
+    .resultSchema<{ ok: true }>({ parse: (x: any) => x })
+    .run(async () => ({ ok: true as const }))
+    .build();
+
+  r.task("types-order-task-run-after-tags")
+    .tags([])
+    .run(async () => "ok")
+    .build();
+
+  r.task("types-order-task-run-after-middleware")
+    .middleware([])
+    .run(async () => "ok")
+    .build();
+
+  r.task("types-order-task-run-after-meta")
+    .meta({ title: "Task" })
+    .run(async () => "ok")
+    .build();
+
+  r.task("types-order-task-run-after-throws")
+    .throws([])
+    .run(async () => "ok")
+    .build();
+
   // @ts-expect-error dependencies are locked after run()
   taskAfterRun.dependencies({});
   // @ts-expect-error schema is locked after run()
@@ -48,6 +88,40 @@ import { r, resources } from "../../../";
 
   hookAfterRun.build();
 
+  r.hook("types-order-hook-run-after-order")
+    .on(event)
+    .order(1)
+    .run(async () => {})
+    .build();
+
+  r.hook("types-order-hook-run-after-deps")
+    .on(event)
+    .dependencies({ logger: resources.logger })
+    .run(async (_emission, deps) => {
+      deps.logger.info("hook");
+      // @ts-expect-error logger contract remains injected
+      deps.logger.xx();
+    })
+    .build();
+
+  r.hook("types-order-hook-run-after-tags")
+    .on(event)
+    .tags([])
+    .run(async () => {})
+    .build();
+
+  r.hook("types-order-hook-run-after-meta")
+    .on(event)
+    .meta({ title: "Hook" })
+    .run(async () => {})
+    .build();
+
+  r.hook("types-order-hook-run-after-throws")
+    .on(event)
+    .throws([])
+    .run(async () => {})
+    .build();
+
   // @ts-expect-error run() cannot be called before on()
   r.hook("types-order-hook-run-before-on").run(async () => {});
   const hookMetaBeforeRun = r
@@ -83,6 +157,46 @@ import { r, resources } from "../../../";
 
   taskMwAfterRun.build();
 
+  r.middleware
+    .task("types-order-task-mw-run-after-deps")
+    .dependencies({ logger: resources.logger })
+    .run(async ({ next }, deps) => {
+      deps.logger.info("task-mw");
+      // @ts-expect-error logger contract remains injected
+      deps.logger.xx();
+      return next(undefined as never);
+    })
+    .build();
+
+  r.middleware
+    .task("types-order-task-mw-run-after-schema")
+    .schema<{ enabled: boolean }>({ parse: (x: any) => x })
+    .run(async ({ next }, _deps, config) => {
+      const enabled: boolean = config.enabled;
+      // @ts-expect-error config contract remains injected
+      config.missing;
+      return enabled ? next(undefined as never) : next(undefined as never);
+    })
+    .build();
+
+  r.middleware
+    .task("types-order-task-mw-run-after-tags")
+    .tags([])
+    .run(async ({ next }) => next(undefined as never))
+    .build();
+
+  r.middleware
+    .task("types-order-task-mw-run-after-meta")
+    .meta({ title: "TMW" })
+    .run(async ({ next }) => next(undefined as never))
+    .build();
+
+  r.middleware
+    .task("types-order-task-mw-run-after-throws")
+    .throws([])
+    .run(async ({ next }) => next(undefined as never))
+    .build();
+
   // @ts-expect-error dependencies are locked after run()
   taskMwAfterRun.dependencies({});
   // @ts-expect-error config schema is locked after run()
@@ -105,6 +219,44 @@ import { r, resources } from "../../../";
     .throws([]);
 
   resourceMwAfterRun.build();
+
+  r.middleware
+    .resource("types-order-resource-mw-run-after-deps")
+    .dependencies({ logger: resources.logger })
+    .run(async ({ next }, deps) => {
+      deps.logger.info("resource-mw");
+      // @ts-expect-error logger contract remains injected
+      deps.logger.xx();
+      return next();
+    })
+    .build();
+
+  r.middleware
+    .resource("types-order-resource-mw-run-after-schema")
+    .schema<{ enabled: boolean }>({ parse: (x: any) => x })
+    .run(async ({ next }, _deps, config) => {
+      const enabled: boolean = config.enabled;
+      return enabled ? next() : next();
+    })
+    .build();
+
+  r.middleware
+    .resource("types-order-resource-mw-run-after-tags")
+    .tags([])
+    .run(async ({ next }) => next())
+    .build();
+
+  r.middleware
+    .resource("types-order-resource-mw-run-after-meta")
+    .meta({ title: "RMW" })
+    .run(async ({ next }) => next())
+    .build();
+
+  r.middleware
+    .resource("types-order-resource-mw-run-after-throws")
+    .throws([])
+    .run(async ({ next }) => next())
+    .build();
 
   // @ts-expect-error dependencies are locked after run()
   resourceMwAfterRun.dependencies({});
@@ -176,7 +328,9 @@ import { r, resources } from "../../../";
   r.resource<{ strict: boolean }>("types-order-resource-dynamic-isolate")
     .isolate((config) => ({
       exports: config.strict ? "none" : [],
+      // failTest: config.fail,
     }))
+    .init(async () => "ok")
     .build();
 
   const resourceDepsLocked = r
@@ -224,9 +378,26 @@ import { r, resources } from "../../../";
     .init(async (_config, deps) => deps.dep)
     .build();
 
+  r.resource<{ mode: "dev" | "prod" }>(
+    "types-order-resource-init-generic-config",
+  )
+    .init(async (config) => {
+      const mode: "dev" | "prod" = config.mode;
+      void mode;
+      // @ts-expect-error generic config should be preserved
+      config.missing;
+      return "ok";
+    })
+    .build();
+
   r.resource("types-order-resource-init-after-schema")
     .schema<{ enabled: boolean }>({ parse: (x: any) => x })
-    .init(async (config) => config.enabled)
+    .init(async (config) => {
+      const enabled: boolean = config.enabled;
+      // @ts-expect-error schema-inferred config should be preserved
+      config.missing;
+      return enabled;
+    })
     .build();
 
   r.resource("types-order-resource-init-after-result-schema")
@@ -244,6 +415,17 @@ import { r, resources } from "../../../";
     .init(async (_config, _deps, ctx) => ctx.started)
     .build();
 
+  r.resource("types-order-resource-init-after-meta-and-schema")
+    .meta({ title: "Resource" })
+    .schema<{ retries: number }>({ parse: (x: any) => x })
+    .init(async (config) => {
+      const retries: number = config.retries;
+      // @ts-expect-error config inference should survive pre-init metadata
+      config.enabled;
+      return retries;
+    })
+    .build();
+
   r.resource("types-order-resource-init-after-meta")
     .meta({ title: "Resource" })
     .init(async () => "ok")
@@ -257,6 +439,20 @@ import { r, resources } from "../../../";
   r.resource("types-order-resource-init-after-register")
     .register([child])
     .init(async () => "ok")
+    .build();
+
+  r.resource("types-order-resource-init-after-deps-and-schema")
+    .dependencies({ logger: resources.logger })
+    .schema<{ level: "info" | "warn" }>({ parse: (x: any) => x })
+    .init(async (config, deps) => {
+      const level: "info" | "warn" = config.level;
+      deps.logger.info(level);
+      // @ts-expect-error config inference should survive dependency wiring
+      config.missing;
+      // @ts-expect-error dependency injection should still be typed
+      deps.logger.xx();
+      return { level };
+    })
     .build();
 
   r.resource("types-order-resource-init-after-isolate")
@@ -278,7 +474,7 @@ import { r, resources } from "../../../";
     .dependencies({
       logger: resources.logger,
     })
-    .health(async (value, _cfg, deps) => {
+    .health(async (_value, _cfg, deps) => {
       const logger = deps.logger;
       logger.info("Health check");
       // @ts-expect-error should ensure logger works expected.
