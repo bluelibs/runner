@@ -569,7 +569,6 @@ export function makeResourceBuilder<
         TMiddleware
       > = {
         id: state.id,
-        gateway: state.gateway,
         dependencies: state.dependencies,
         register: state.register,
         middleware: state.middleware,

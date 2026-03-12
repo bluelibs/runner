@@ -372,41 +372,6 @@ export const resourceForkNonLeafUnsupportedError = error<
   )
   .build();
 
-export const resourceForkGatewayUnsupportedError = error<
-  { id: string } & DefaultErrorType
->(RunnerErrorId.ResourceForkGatewayUnsupported)
-  .format(
-    ({ id }) =>
-      `Resource "${id}" cannot be forked because gateway resources suppress their own namespace segment.`,
-  )
-  .remediation(
-    ({ id }) =>
-      `Do not call .fork() on gateway resource "${id}". Register a distinct non-gateway resource, or compose separate gateway resources with unique registered children instead.`,
-  )
-  .build();
-
-export const resourceGatewayInvalidContentsError = error<
-  {
-    id: string;
-    invalidEntries: ReadonlyArray<{
-      kind: string;
-      id: string;
-    }>;
-  } & DefaultErrorType
->(RunnerErrorId.ResourceGatewayInvalidContents)
-  .format(({ id, invalidEntries }) => {
-    const renderedEntries = invalidEntries
-      .map((entry) => `${entry.kind} "${entry.id}"`)
-      .join(", ");
-
-    return `Gateway resource "${id}" can only directly register resources. Invalid direct registrations: ${renderedEntries}.`;
-  })
-  .remediation(
-    ({ id }) =>
-      `Wrap direct tasks, events, hooks, middleware, tags, errors, or async contexts inside a non-gateway child resource before registering gateway resource "${id}". Gateway resources may directly register only gateway or non-gateway resources.`,
-  )
-  .build();
-
 export const builderInvalidHttpCodeError = error<
   { value: number } & DefaultErrorType
 >(RunnerErrorId.BuilderInvalidHttpCode)

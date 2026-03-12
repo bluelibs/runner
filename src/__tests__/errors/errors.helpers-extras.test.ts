@@ -25,9 +25,7 @@ import {
   overrideOutOfScopeError,
   remoteLaneAuthSignerMissingError,
   remoteLaneAuthVerifierMissingError,
-  resourceForkGatewayUnsupportedError,
   resourceForkNonLeafUnsupportedError,
-  resourceGatewayInvalidContentsError,
 } from "../../errors";
 
 describe("error helpers extra branches", () => {
@@ -270,18 +268,6 @@ describe("error helpers extra branches", () => {
       }
     });
 
-    it("includes fork remediation for gateway-resource fork failures", () => {
-      expect.assertions(3);
-      try {
-        resourceForkGatewayUnsupportedError.throw({ id: "http-gateway" });
-        fail("Expected throw");
-      } catch (e: any) {
-        expect(e.message).toContain('Resource "http-gateway" cannot be forked');
-        expect(e.message).toContain("namespace segment");
-        expect(e.remediation).toContain("Do not call .fork()");
-      }
-    });
-
     it("includes composition remediation for non-leaf fork failures", () => {
       expect.assertions(3);
       try {
@@ -293,28 +279,6 @@ describe("error helpers extra branches", () => {
         );
         expect(e.remediation).toContain("non-leaf resource");
         expect(e.remediation).toContain("dedicated factory API");
-      }
-    });
-
-    it("includes invalid-entry details for gateway registration failures", () => {
-      expect.assertions(3);
-      try {
-        resourceGatewayInvalidContentsError.throw({
-          id: "http-gateway",
-          invalidEntries: [
-            { kind: "Task", id: "ping" },
-            { kind: "Resource middleware", id: "middleware.http.guard" },
-          ],
-        });
-        fail("Expected throw");
-      } catch (e: any) {
-        expect(e.message).toContain(
-          'Gateway resource "http-gateway" can only directly register resources',
-        );
-        expect(e.message).toContain('Task "ping"');
-        expect(e.remediation).toContain(
-          "Wrap direct tasks, events, hooks, middleware, tags, errors, or async contexts inside a non-gateway child resource",
-        );
       }
     });
 

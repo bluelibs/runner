@@ -390,11 +390,6 @@ export interface IResourceDefinition<
   [symbolResourceIsolateDeclarations]?: ReadonlyArray<
     IsolationPolicyDeclaration<TConfig>
   >;
-  /**
-   * When true, this resource acts as a namespace gateway and does not add its
-   * own id prefix when compiling ids for items in its register tree.
-   */
-  gateway?: boolean;
   tags?: TTags;
 }
 
@@ -497,10 +492,6 @@ export interface IResource<
   [symbolResourceIsolateDeclarations]?: ReadonlyArray<
     IsolationPolicyDeclaration<TConfig>
   >;
-  /**
-   * Namespace gateway flag copied from the definition.
-   */
-  gateway?: boolean;
   /** Return an optional dependency wrapper for this resource. */
   optional: () => IOptionalDependency<
     IResource<

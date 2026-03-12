@@ -101,27 +101,25 @@ describe("Store", () => {
     expect(store.resources.has("root")).toBe(true);
   });
 
-  it("should allow gateway roots when direct registrations resolve only to resources", () => {
+  it("should allow resource roots whose configured registrations resolve to resources", () => {
     const child = defineResource({
-      id: "store-root-gateway-valid-child",
+      id: "store-root-valid-child",
       init: async () => "child",
     });
-    const nestedGateway = defineResource({
-      id: "store-root-gateway-valid-nested",
-      gateway: true,
+    const nestedChild = defineResource({
+      id: "store-root-valid-nested",
       register: [child],
     });
-    const rootGateway = defineResource<{ enabled: boolean }>({
-      id: "store-root-gateway-valid-root",
-      gateway: true,
+    const rootResource = defineResource<{ enabled: boolean }>({
+      id: "store-root-valid-root",
       configSchema: { enabled: Boolean },
-      register: ({ enabled }) => (enabled ? [nestedGateway] : []),
+      register: ({ enabled }) => (enabled ? [nestedChild] : []),
     });
 
     expect(() =>
-      store.initializeStore(rootGateway, { enabled: true }, runtimeResult),
+      store.initializeStore(rootResource, { enabled: true }, runtimeResult),
     ).not.toThrow();
-    expect(store.root.resource.id).toBe(rootGateway.id);
+    expect(store.root.resource.id).toBe(rootResource.id);
   });
 
   it("should lock the store and prevent modifications", () => {
