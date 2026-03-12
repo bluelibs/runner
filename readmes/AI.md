@@ -603,6 +603,9 @@ Examples:
 - Compose a distinct parent resource when you need a structural variant of a non-leaf resource.
 - Durable support is registered via `resources.durable`, while concrete durable backends use normal forks such as `resources.memoryWorkflow.fork("app-durable")`.
 - Use `r.override(base, fn)` when you need to replace behavior while preserving the original id.
+- For resources only, `r.override(resource, { context, init, ready, cooldown, dispose })` is also supported.
+- Resource object-form overrides inherit unspecified lifecycle hooks from the base resource and may add lifecycle stages the base resource did not define.
+- Overriding resource `context` changes the private lifecycle-state contract shared across `init()` / `ready()` / `cooldown()` / `dispose()`.
 - `.overrides([...])` applies override definitions during bootstrap.
 - Override direction is downstream-only: declare overrides from the resource that owns the target subtree or from one of its ancestors. Child resources cannot replace parent-owned or sibling-owned definitions.
 - Override targets must already exist in the graph.

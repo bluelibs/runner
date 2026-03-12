@@ -931,6 +931,14 @@ const overriddenResource = r.override(
   async () => "mock-conn",
 );
 
+const overriddenLifecycleResource = r.override(originalResource, {
+  context: () => ({ closed: false }),
+  init: async () => "mock-conn",
+  dispose: async (_value, _config, _deps, context) => {
+    context.closed = true;
+  },
+});
+
 // Middleware
 const overriddenMiddleware = r.override(
   originalMiddleware,
@@ -941,12 +949,17 @@ const overriddenMiddleware = r.override(
 );
 ```
 
-`r.override(base, fn)` is behavior-only:
+`r.override(base, fn)` is behavior-only for tasks, hooks, and middleware:
 
 - task/hook/task-middleware/resource-middleware: callback replaces `run`
-- resource: callback replaces `init`
+- resource function shorthand: callback replaces `init`
+- resource object form may override any subset of `context`, `init`, `ready`, `cooldown`, `dispose`
+- resource object-form overrides inherit unspecified lifecycle hooks from the base resource
+- resource object-form overrides may add `ready`, `cooldown`, or `dispose` even if the base resource did not define them
 - hook overrides keep the same `.on` target
 - override APIs do not change structural boundaries (dependencies, register tree, subtree policies)
+
+Use the resource object form intentionally: overriding `context` changes the private lifecycle-state contract that `init()`, `ready()`, `cooldown()`, and `dispose()` share.
 
 **`r.override(...)` vs `.overrides([...])` — critical distinction**:
 
