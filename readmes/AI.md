@@ -169,7 +169,7 @@ userInput.toJSONSchema(); // machine-readable contract for tooling
   - `dispose`
 - Lifecycle-shaping run options:
   - `dryRun: true`: validate the graph without running `init()` / `ready()` or starting ingress.
-  - `lazy: true`: keep startup-unused resources asleep until `getLazyResourceValue(...)` wakes them; their `ready()` runs when they initialize.
+  - `lazy: true`: keep startup-unused resources asleep until `getLazyResourceValue(...)` wakes them; their `ready()` runs when they initialize, and lazy wakeups are rejected once shutdown starts.
   - `lifecycleMode: "parallel"`: keep dependency ordering, but allow same-wave `init`, `ready`, `cooldown`, and `dispose` to run in parallel.
   - `shutdownHooks: true`: install `SIGINT` / `SIGTERM` graceful shutdown hooks; signals during bootstrap cancel startup and roll back initialized resources.
   - `dispose: { totalBudgetMs, drainingBudgetMs, cooldownWindowMs }`: control shutdown budget, drain wait, and the short post-`cooldown()` admissions window.
@@ -216,6 +216,7 @@ They are Runner's main composition and ownership unit: a resource can register c
 
 - `init(config, deps, context)` creates the value.
 - `ready(value, config, deps, context)` starts ingress after startup lock and runs after dependencies are all initialized.
+- `getLazyResourceValue(...)` is only valid before shutdown starts; once the runtime enters `coolingDown` or later, startup-unused resources stay asleep and wakeup attempts fail fast.
 - `cooldown(value, config, deps, context)` stops ingress quickly at shutdown start and runs during `coolingDown`, before `disposing` begins. Task runs and event emissions stay open during `coolingDown`, and if `dispose.cooldownWindowMs` is greater than `0` Runner keeps that broader admission policy open for the extra bounded window after cooldown completes. At the default `0`, Runner skips that wait. Once `disposing` begins, fresh admissions narrow to the cooling resource itself, any additional resource definitions returned from `cooldown()`, and in-flight continuations.
 - `dispose(value, config, deps, context)` performs final teardown after drain and runs in reverse dependency order.
 - `health(value, config, deps, context)` is an optional async probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.

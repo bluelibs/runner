@@ -8,6 +8,7 @@ import { findCircularDependencies } from "./utils/findCircularDependencies";
 import {
   circularDependencyError,
   resourceCooldownAdmissionTargetInvalidError,
+  lazyResourceShutdownAccessError,
   storeAlreadyInitializedError,
   eventEmissionCycleError,
   lockedError,
@@ -521,6 +522,8 @@ export class Store {
       return;
     }
 
+    this.assertLazyResourceWakeupAllowed(resourceId);
+
     await this.runReadyResource(resource);
   }
 
@@ -658,6 +661,16 @@ export class Store {
       resource.context,
     );
     this.readyResourceIds.add(resourceId);
+  }
+
+  public assertLazyResourceWakeupAllowed(resourceId: string): void {
+    if (!this.isDisposalStarted()) {
+      return;
+    }
+
+    lazyResourceShutdownAccessError.throw({
+      id: this.toPublicId(resourceId),
+    });
   }
 
   private async disposeResource(

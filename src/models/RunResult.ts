@@ -14,6 +14,7 @@ import type { Store } from "./Store";
 import type { TaskRunner } from "./TaskRunner";
 import {
   lazyResourceAccessDisabledError,
+  lazyResourceShutdownAccessError,
   lazyResourceSyncAccessError,
   runResultDisposeDuringBootstrapError,
   runResultDisposedError,
@@ -505,6 +506,7 @@ export class RunResult<V> implements IRuntime<V> {
     }
 
     this.assertRuntimeAccess(resourceId, "Resource");
+    this.assertLazyResourceWakeupAllowed(resourceId);
 
     if (!this.lazyOptions.lazyResourceLoader) {
       return this.store.resources.get(resourceId)!.value;
@@ -514,6 +516,20 @@ export class RunResult<V> implements IRuntime<V> {
       Output extends Promise<infer U> ? U : Output
     >(resourceId);
   };
+
+  private assertLazyResourceWakeupAllowed(resourceId: string): void {
+    const phase = this.store.getLifecycleAdmissionController().getPhase();
+    if (
+      phase === RuntimeLifecyclePhase.CoolingDown ||
+      phase === RuntimeLifecyclePhase.Disposing ||
+      phase === RuntimeLifecyclePhase.Drained ||
+      phase === RuntimeLifecyclePhase.Disposed
+    ) {
+      lazyResourceShutdownAccessError.throw({
+        id: this.store.toPublicId(resourceId),
+      });
+    }
+  }
 
   /**
    * Retrieves the configuration that was passed to a resource.

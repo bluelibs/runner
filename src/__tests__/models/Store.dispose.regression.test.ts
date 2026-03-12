@@ -234,4 +234,26 @@ describe("Store disposal regressions", () => {
       undefined,
     );
   });
+
+  it("rejects ready execution for known resources after shutdown has started", async () => {
+    const fixture = createTestFixture();
+    const { store } = fixture;
+    store.setTaskRunner(fixture.createTaskRunner());
+
+    const resource = defineResource({
+      id: "store-ready-shutdown-resource",
+      async ready() {
+        return;
+      },
+    });
+
+    store.storeGenericItem(resource);
+    store.resources.get(resource.id)!.isInitialized = true;
+    store.recordResourceInitialized(resource.id);
+    store.beginCoolingDown();
+
+    await expect(store.readyResource(resource.id)).rejects.toThrow(
+      /cannot be lazy-initialized because shutdown has already started/i,
+    );
+  });
 });

@@ -27,6 +27,19 @@ export const lazyResourceAccessDisabledError = error<DefaultErrorType>(
   )
   .build();
 
+export const lazyResourceShutdownAccessError = error<
+  { id: string } & DefaultErrorType
+>("runner.errors.lazyResourceShutdownAccess")
+  .format(
+    ({ id }) =>
+      `Resource "${id.toString()}" cannot be lazy-initialized because shutdown has already started.`,
+  )
+  .remediation(
+    ({ id }) =>
+      `Request "${id.toString()}" via getLazyResourceValue() before runtime.dispose() begins, or create a fresh runtime after shutdown completes.`,
+  )
+  .build();
+
 // Locked
 export const lockedError = error<{ what: string } & DefaultErrorType>(
   "runner.errors.locked",

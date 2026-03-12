@@ -594,6 +594,25 @@ describe("RunResult", () => {
     await runtime.dispose();
   });
 
+  it("rejects lazy resource wakeups once shutdown has started", async () => {
+    const fixture = createTestFixture();
+    const taskRunner: TaskRunner = fixture.createTaskRunner();
+    fixture.store.setTaskRunner(taskRunner);
+    const runtime = fixture.createRuntimeResult(taskRunner);
+
+    const resource = defineResource({
+      id: "rr-lazy-shutdown-only",
+    });
+    fixture.store.storeGenericItem(resource);
+    runtime.setLazyOptions({ lazyMode: true });
+    runtime.setValue("ready");
+    fixture.store.beginCoolingDown();
+
+    await expect(runtime.getLazyResourceValue(resource)).rejects.toThrow(
+      /cannot be lazy-initialized because shutdown has already started/i,
+    );
+  });
+
   it("fails fast when getLazyResourceValue is called outside lazy mode", async () => {
     const only = defineResource({
       id: "rr-lazy-dryrun-only",

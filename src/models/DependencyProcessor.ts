@@ -215,6 +215,7 @@ export class DependencyProcessor {
     }
 
     const resourceId = resource.resource.id;
+    this.store.assertLazyResourceWakeupAllowed(resourceId);
     const existingInitialization =
       this.inFlightResourceInitializations.get(resourceId);
     if (existingInitialization) {
@@ -238,6 +239,7 @@ export class DependencyProcessor {
           this.store.recordResourceInitialized(resourceId);
         }
         if (this.store.isLocked) {
+          this.store.assertLazyResourceWakeupAllowed(resourceId);
           await this.store.readyResource(resourceId);
         }
       } catch (error: unknown) {
