@@ -343,7 +343,7 @@ describe("tools/check schema support", () => {
       parse: (value: unknown): number => Number(value),
     };
 
-    expect(check("41", schema, { throwAllErrors: true })).toBe(41);
+    expect(check("41", schema, { errorPolicy: "all" })).toBe(41);
   });
 
   it("accepts plain schema objects with parse() and toJSONSchema()", () => {
@@ -398,6 +398,25 @@ describe("tools/check schema support", () => {
           minimum: -2147483648,
           maximum: 2147483647,
         },
+      },
+      required: ["id"],
+      additionalProperties: false,
+    });
+  });
+
+  it("keeps Match.WithErrorPolicy wrappers transparent for toJSONSchema()", () => {
+    const pattern = Match.WithErrorPolicy(
+      {
+        id: Match.NonEmptyString,
+      },
+      "all",
+    );
+
+    expect(Match.toJSONSchema(pattern)).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      properties: {
+        id: { type: "string", minLength: 1 },
       },
       required: ["id"],
       additionalProperties: false,

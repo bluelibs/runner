@@ -1,6 +1,7 @@
 export { collectMatchFailures, collectMatchResult } from "./matcher/core";
 export {
   ClassPattern,
+  WithErrorPolicyPattern,
   LazyPattern,
   MapOfPattern,
   MaybePattern,

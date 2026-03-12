@@ -70,6 +70,18 @@ export class WithMessagePattern<TPattern = unknown> extends MatchPatternBase<
   }
 }
 
+export class WithErrorPolicyPattern<
+  TPattern = unknown,
+> extends MatchPatternBase<TParseResult.WithErrorPolicy<TPattern>> {
+  public readonly kind = "Match.WithErrorPolicyPattern";
+  constructor(
+    public readonly pattern: TPattern,
+    public readonly errorPolicy: "first" | "all",
+  ) {
+    super();
+  }
+}
+
 export class LazyPattern<TPattern = unknown> extends MatchPatternBase<
   TParseResult.Lazy<TPattern>
 > {
@@ -122,7 +134,12 @@ export class ClassPattern<
 
   constructor(
     public readonly ctor: TCtor,
-    public readonly options?: { exact?: boolean; schemaId?: string },
+    public readonly options?: {
+      exact?: boolean;
+      schemaId?: string;
+      errorPolicy?: "first" | "all";
+      throwAllErrors?: boolean;
+    },
   ) {
     super();
   }
@@ -192,6 +209,7 @@ namespace TParseResult {
     T[number]
   >;
   export type WithMessage<T> = InferMatchPattern<T>;
+  export type WithErrorPolicy<T> = InferMatchPattern<T>;
   export type Lazy<T> = InferMatchPattern<T>;
   export type ObjectIncluding<T extends Record<string, unknown>> =
     InferMatchPattern<T> & Record<string, unknown>;

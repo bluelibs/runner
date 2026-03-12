@@ -2,6 +2,7 @@ import { MatchError, MatchPatternError } from "../errors";
 import { getClassSchemaDefinition } from "../classSchema";
 import {
   ClassPattern,
+  WithErrorPolicyPattern,
   LazyPattern,
   MapOfPattern,
   MaybePattern,
@@ -183,6 +184,9 @@ export function matchesPattern(
         );
       }
       return matched;
+    }
+    if (pattern instanceof WithErrorPolicyPattern) {
+      return matchesPattern(value, pattern.pattern, context, path, parent);
     }
     if (pattern instanceof MapOfPattern) {
       if (!isPlainObject(value)) {

@@ -311,6 +311,21 @@ import {
 }
 
 {
+  const aggregatedPattern = Match.WithErrorPolicy(
+    {
+      id: Match.NonEmptyString,
+    },
+    "all",
+  );
+
+  const parsed = check({ id: "u1" }, aggregatedPattern, {
+    errorPolicy: "first",
+  });
+  const id: string = parsed.id;
+  void id;
+}
+
+{
   class User {
     public name!: string;
     public items!: Item[];

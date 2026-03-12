@@ -344,27 +344,31 @@ check(
 | `Match.Where((value, parent?) => boolean)`                   | Custom predicate / type guard                                  |
 | `Match.WithMessage(pattern, { error })`                      | Wraps a pattern with a custom top-level validation message     |
 | `Match.Lazy(() => pattern)`                                  | Lazy/recursive pattern                                         |
-| `Match.Schema(options?)`                                     | Class schema decorator (`exact`, `schemaId`; see also `base`)  |
+| `Match.Schema(options?)`                                     | Class schema decorator (`exact`, `schemaId`, `errorPolicy`; see also `base`) |
 | `Match.Schema({ base: BaseClass \| () => BaseClass })`       | Composes schema classes without requiring TypeScript `extends` |
 | `Match.Field(pattern)`                                       | Decorated field validator                                      |
 | `Match.fromSchema(Class, options?)`                          | Schema-like matcher from class metadata                        |
+| `Match.WithErrorPolicy(pattern, "first" \| "all")`           | Sets a default validation aggregation policy on a pattern      |
 | `Match.compile(pattern)`                                     | Compiles pattern into `{ parse, test, toJSONSchema }`          |
 | `Match.test(value, pattern)`                                 | Boolean helper for validation check                            |
 | `Match.Error`                                                | Error class thrown on match failure                            |
 
 ### Additional `check()` Details
 
-- `check(value, pattern, { throwAllErrors: true })` aggregates all validation issues instead of fail-fast at first mismatch.
+- `check(value, pattern, { errorPolicy: "all" })` aggregates all validation issues instead of fail-fast at first mismatch.
+- `Match.WithErrorPolicy(pattern, "all")` stores the same aggregate behavior as the default for that Match-native pattern.
+- `throwAllErrors` still works as a deprecated alias for `errorPolicy`.
 - Recursive and forward patterns are supported via `Match.Lazy(...)`.
 - Class-backed recursive graphs are supported with `Match.Schema()` + `Match.fromSchema(...)`.
   Use `Match.fromSchema(() => User)` inside decorated fields when a class needs to reference itself or a class declared later.
 - In Runner builders (`inputSchema`, `payloadSchema`, `configSchema`, etc.), explicit `parse(input)` schemas have precedence; otherwise Runner falls back to pattern validation via `check(...)`.
 - Decorator class shorthand in builder APIs (for example `.inputSchema(UserDto)` / `.configSchema(UserConfig)`) requires class metadata from `@Match.Schema()`.
-- `Match.Schema({ exact, schemaId })` controls class-level strictness and schema identity; `Match.Schema({ base })` composes schema classes without TypeScript `extends`.
+- `Match.Schema({ exact, schemaId, errorPolicy })` controls class-level strictness, schema identity, and default validation aggregation; `Match.Schema({ base })` composes schema classes without TypeScript `extends`.
+- `@Match.Schema({ errorPolicy: "all" })` gives `Match.fromSchema(MyClass)` the same aggregate-default behavior as `Match.WithErrorPolicy(...)`.
 - `Match.WithMessage(pattern, { error })` overrides the thrown `MatchError.message` headline while preserving the normal `MatchError` structure (`id`, `path`, `failures`). It does not rewrite individual `failures[]` entries.
 - Final `MatchError.failures` is always a flat array of leaf failures. Nested validation does not produce a tree of failures or a synthetic parent failure like `$.address` unless an actual matcher failed at that path.
 - `MatchError.path` always comes from the first recorded failure. If a nested field fails first, a parent custom headline may still be used, but `error.path` remains the nested leaf path such as `$.address.city`.
-- With `check(value, pattern, { throwAllErrors: true })`, the default headline is `"Match failed with N errors:\n- msg1\n- msg2"`.
+- With `check(value, pattern, { errorPolicy: "all" })`, the default headline is `"Match failed with N errors:\n- msg1\n- msg2"`.
 - Leaf wrappers such as `Match.WithMessage(String, ...)` do not replace that aggregate headline; their underlying failures still appear in `error.failures`.
 - Subtree wrappers such as plain objects, arrays, `Match.ObjectIncluding(...)`, `Match.MapOf(...)`, `Match.NonEmptyArray(...)`, `Match.Lazy(...)`, or `Match.fromSchema(...)` can replace the aggregate headline while still preserving the nested failures in `error.failures`.
 - Decorator-backed schemas are not special here: `Match.WithMessage(Match.fromSchema(AddressSchema), ...)` behaves like any other subtree wrapper.
@@ -540,7 +544,7 @@ Notes:
 - `path` uses `$` for the root value, `$.email` for a root object field, and `$.users[2].email` for nested array/object paths.
 - `value` is intentionally `unknown` because the callback runs only on the failure path.
 - `parent` is only present when the value is being validated as part of an object, map, or array element.
-- When `throwAllErrors: true` collects multiple failures, `MatchError.message` is `"Match failed with N errors:\n- msg1\n- msg2"` by default; leaf field `Match.WithMessage(...)` wrappers do not replace that summary, while subtree/schema wrappers still can.
+- When `errorPolicy: "all"` collects multiple failures, `MatchError.message` is `"Match failed with N errors:\n- msg1\n- msg2"` by default; leaf field `Match.WithMessage(...)` wrappers do not replace that summary, while subtree/schema wrappers still can.
 - `Match.WithMessage(...)` is runtime-only and does not affect JSON Schema export beyond the wrapped inner pattern.
 - `parent` is not attached to the thrown `MatchError`; it is runtime-only callback context.
 

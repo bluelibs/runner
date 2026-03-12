@@ -12,6 +12,9 @@ export interface MatchSchemaOptions {
   exact?: boolean;
   schemaId?: string;
   base?: MatchSchemaBase;
+  errorPolicy?: "first" | "all";
+  /** @deprecated Use errorPolicy instead. */
+  throwAllErrors?: boolean;
 }
 
 export type MatchClassOptions = MatchSchemaOptions;
@@ -25,6 +28,7 @@ export interface ClassSchemaDefinition {
   pattern: Record<string, unknown>;
   exact: boolean;
   schemaId: string;
+  errorPolicy: "first" | "all";
 }
 
 interface CachedClassSchemaDefinition {
@@ -117,6 +121,7 @@ function buildClassSchemaDefinition(
   const fields: Record<string, unknown> = {};
   let exact = false;
   let schemaId = target.name || "Anonymous";
+  let errorPolicy: "first" | "all" = "first";
 
   try {
     for (const ctor of getClassChain(fn)) {
@@ -133,6 +138,7 @@ function buildClassSchemaDefinition(
         Object.assign(fields, baseDefinition.pattern);
         exact = baseDefinition.exact;
         schemaId = baseDefinition.schemaId;
+        errorPolicy = baseDefinition.errorPolicy;
       }
 
       for (const [key, pattern] of metadata.fields.entries()) {
@@ -146,12 +152,19 @@ function buildClassSchemaDefinition(
       if (metadata.options.schemaId && metadata.options.schemaId.length > 0) {
         schemaId = metadata.options.schemaId;
       }
+
+      if (metadata.options.errorPolicy !== undefined) {
+        errorPolicy = metadata.options.errorPolicy;
+      } else if (metadata.options.throwAllErrors !== undefined) {
+        errorPolicy = metadata.options.throwAllErrors ? "all" : "first";
+      }
     }
 
     return Object.freeze({
       pattern: Object.freeze({ ...fields }),
       exact,
       schemaId,
+      errorPolicy,
     });
   } finally {
     activeTargets.delete(fn);

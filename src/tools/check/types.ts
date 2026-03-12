@@ -1,5 +1,6 @@
 import {
   ClassPattern,
+  WithErrorPolicyPattern,
   LazyPattern,
   MapOfPattern,
   MaybePattern,
@@ -194,6 +195,7 @@ export type MatchPattern =
   | MaybePattern<unknown>
   | OneOfPattern<readonly unknown[]>
   | WithMessagePattern<unknown>
+  | WithErrorPolicyPattern<unknown>
   | WherePattern<unknown>
   | MapOfPattern<unknown>
   | RegExpPattern<RegExp>

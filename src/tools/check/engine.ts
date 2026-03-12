@@ -1,5 +1,6 @@
 import { CheckOptionsError, MatchError, MatchPatternError } from "./errors";
 import {
+  getClassSchemaDefinition,
   setClassFieldPattern,
   setClassSchemaOptions,
   type MatchSchemaOptions,
@@ -27,6 +28,7 @@ import {
   OneOfPattern,
   OptionalPattern,
   RegExpPattern,
+  WithErrorPolicyPattern,
   WithMessagePattern,
   WherePattern,
 } from "./matcher";
@@ -47,6 +49,8 @@ import type {
 } from "./types";
 
 export interface CheckOptions {
+  errorPolicy?: "first" | "all";
+  /** @deprecated Use errorPolicy instead. */
   throwAllErrors?: boolean;
 }
 
@@ -58,10 +62,28 @@ function assertPattern(condition: boolean, message: string): void {
   if (!condition) throw new MatchPatternError(message);
 }
 
-function readOptions(options?: CheckOptions): { throwAllErrors: boolean } {
-  if (options === undefined) return { throwAllErrors: false };
+type ResolvedCheckOptions = {
+  errorPolicy?: "first" | "all";
+  hasExplicitPolicy: boolean;
+};
+
+function readOptions(options?: CheckOptions): ResolvedCheckOptions {
+  if (options === undefined) {
+    return { errorPolicy: undefined, hasExplicitPolicy: false };
+  }
   if (!isPlainObject(options)) {
     throw new CheckOptionsError("check() options must be a plain object.");
+  }
+
+  const errorPolicy = (options as { errorPolicy?: unknown }).errorPolicy;
+  if (
+    errorPolicy !== undefined &&
+    errorPolicy !== "first" &&
+    errorPolicy !== "all"
+  ) {
+    throw new CheckOptionsError(
+      'check() option "errorPolicy" must be "first" or "all" when provided.',
+    );
   }
 
   const throwAllErrors = (options as { throwAllErrors?: unknown })
@@ -71,7 +93,19 @@ function readOptions(options?: CheckOptions): { throwAllErrors: boolean } {
       'check() option "throwAllErrors" must be a boolean when provided.',
     );
   }
-  return { throwAllErrors: throwAllErrors === true };
+
+  if (errorPolicy !== undefined) {
+    return { errorPolicy, hasExplicitPolicy: true };
+  }
+
+  if (throwAllErrors !== undefined) {
+    return {
+      errorPolicy: throwAllErrors ? "all" : "first",
+      hasExplicitPolicy: true,
+    };
+  }
+
+  return { errorPolicy: undefined, hasExplicitPolicy: false };
 }
 
 function isCheckSchemaLike(value: unknown): value is CheckSchemaLike<unknown> {
@@ -112,10 +146,11 @@ class CompiledMatchPatternSchema<
   constructor(public readonly pattern: TPattern) {}
 
   parse(input: unknown): InferMatchPattern<TPattern> {
+    const collectAll = resolveDefaultCollectAll(this.pattern);
     const { failures, messageOverride } = collectMatchResult(
       input,
       this.pattern,
-      false,
+      collectAll,
     );
     if (failures.length === 0) return input as InferMatchPattern<TPattern>;
     throw new MatchError(failures, messageOverride);
@@ -136,6 +171,34 @@ function compileMatchPattern<TPattern extends MatchPattern>(
   return Object.freeze(new CompiledMatchPatternSchema(pattern));
 }
 
+function resolvePatternDefaultErrorPolicy(
+  pattern: unknown,
+): "first" | "all" | undefined {
+  if (pattern instanceof WithErrorPolicyPattern) {
+    return pattern.errorPolicy;
+  }
+
+  if (pattern instanceof LazyPattern) {
+    return resolvePatternDefaultErrorPolicy(pattern.resolve());
+  }
+
+  if (pattern instanceof ClassPattern) {
+    if (pattern.options?.errorPolicy !== undefined) {
+      return pattern.options.errorPolicy;
+    }
+    if (pattern.options?.throwAllErrors !== undefined) {
+      return pattern.options.throwAllErrors ? "all" : "first";
+    }
+    return getClassSchemaDefinition(pattern.ctor).errorPolicy;
+  }
+
+  return undefined;
+}
+
+function resolveDefaultCollectAll(pattern: unknown): boolean {
+  return resolvePatternDefaultErrorPolicy(pattern) === "all";
+}
+
 export function check<TSchema extends CheckSchemaLike<unknown>>(
   value: unknown,
   schema: TSchema,
@@ -152,16 +215,20 @@ export function check(
   pattern: unknown,
   options?: CheckOptions,
 ): unknown {
-  const { throwAllErrors } = readOptions(options);
+  const { errorPolicy, hasExplicitPolicy } = readOptions(options);
 
   if (isCheckSchemaLike(pattern)) {
     return pattern.parse(value);
   }
 
+  const collectAll = hasExplicitPolicy
+    ? errorPolicy === "all"
+    : resolveDefaultCollectAll(pattern);
+
   const { failures, messageOverride } = collectMatchResult(
     value,
     pattern,
-    throwAllErrors,
+    collectAll,
   );
   if (failures.length === 0) return value;
   throw new MatchError(failures, messageOverride);
@@ -201,6 +268,18 @@ function withMessage<TPattern extends MatchPattern>(
     'Bad pattern: Match.WithMessage option "error" must be a string or function.',
   );
   return new WithMessagePattern(pattern, options as MatchMessageOptions);
+}
+
+function withErrorPolicyPattern<TPattern extends MatchPattern>(
+  pattern: TPattern,
+  errorPolicy: "first" | "all",
+): WithErrorPolicyPattern<TPattern> {
+  assertPattern(
+    errorPolicy === "first" || errorPolicy === "all",
+    'Bad pattern: Match.WithErrorPolicy requires "first" or "all".',
+  );
+
+  return new WithErrorPolicyPattern(pattern, errorPolicy);
 }
 
 function nonEmptyArray(): NonEmptyArrayPattern<undefined>;
@@ -385,6 +464,7 @@ export const Match = Object.freeze({
   },
   Where: where,
   WithMessage: withMessage,
+  WithErrorPolicy: withErrorPolicyPattern,
   ObjectIncluding: <const TObjectPattern extends Record<string, unknown>>(
     pattern: TObjectPattern,
   ): ObjectIncludingPattern<TObjectPattern> => {

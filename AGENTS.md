@@ -45,4 +45,5 @@
 - Document 'why' in comments, not 'what' or 'how', as the code should be self-descriptive enough to explain those.
 - Use runner errors instead of 'throw new Error()' for better error handling and consistency.
 - Read guide-units/DOCS_STYLE_GUIDE.md to understand how we compose the main documentation.
+- Do not include deprecated values/information in AI.md.
   </new_feature>

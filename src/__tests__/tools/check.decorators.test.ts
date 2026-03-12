@@ -419,6 +419,152 @@ describe("tools/check decorators", () => {
     }
   });
 
+  it("reads errorPolicy defaults from Match.Schema metadata", () => {
+    class AggregateChildSchema {
+      public first!: string;
+      public second!: string;
+    }
+
+    Match.Schema({ errorPolicy: "all" })(AggregateChildSchema);
+    Match.Field(String)(AggregateChildSchema.prototype, "first");
+    Match.Field(String)(AggregateChildSchema.prototype, "second");
+
+    try {
+      check(
+        { first: 1, second: 2 } as any,
+        Match.fromSchema(AggregateChildSchema),
+      );
+      throw new Error("Expected MatchError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MatchError);
+      const matchError = error as MatchError;
+      expect(matchError.failures).toHaveLength(2);
+      expect(matchError.failures[0].path).toBe("$.first");
+      expect(matchError.failures[1].path).toBe("$.second");
+    }
+  });
+
+  it("keeps deprecated Match.Schema({ throwAllErrors }) support", () => {
+    class LegacyAggregateSchema {
+      public first!: string;
+      public second!: string;
+    }
+
+    Match.Schema({ throwAllErrors: true })(LegacyAggregateSchema);
+    Match.Field(String)(LegacyAggregateSchema.prototype, "first");
+    Match.Field(String)(LegacyAggregateSchema.prototype, "second");
+
+    try {
+      check(
+        { first: 1, second: 2 } as any,
+        Match.fromSchema(LegacyAggregateSchema),
+      );
+      throw new Error("Expected MatchError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MatchError);
+      const matchError = error as MatchError;
+      expect(matchError.failures).toHaveLength(2);
+    }
+  });
+
+  it("supports Match.fromSchema(..., { errorPolicy }) defaults", () => {
+    class SchemaWithPerCallPolicy {
+      public first!: string;
+      public second!: string;
+    }
+
+    Match.Schema()(SchemaWithPerCallPolicy);
+    Match.Field(String)(SchemaWithPerCallPolicy.prototype, "first");
+    Match.Field(String)(SchemaWithPerCallPolicy.prototype, "second");
+
+    try {
+      check(
+        { first: 1, second: 2 } as any,
+        Match.fromSchema(SchemaWithPerCallPolicy, { errorPolicy: "all" }),
+      );
+      throw new Error("Expected MatchError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MatchError);
+      const matchError = error as MatchError;
+      expect(matchError.failures).toHaveLength(2);
+    }
+  });
+
+  it("supports Match.fromSchema(..., { throwAllErrors: false }) alias defaults", () => {
+    class SchemaWithLegacyPerCallPolicy {
+      public first!: string;
+      public second!: string;
+    }
+
+    Match.Schema({ throwAllErrors: true })(SchemaWithLegacyPerCallPolicy);
+    Match.Field(String)(SchemaWithLegacyPerCallPolicy.prototype, "first");
+    Match.Field(String)(SchemaWithLegacyPerCallPolicy.prototype, "second");
+
+    try {
+      check(
+        { first: 1, second: 2 } as any,
+        Match.fromSchema(SchemaWithLegacyPerCallPolicy, {
+          throwAllErrors: false,
+        }),
+      );
+      throw new Error("Expected MatchError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MatchError);
+      const matchError = error as MatchError;
+      expect(matchError.failures).toHaveLength(1);
+      expect(matchError.path).toBe("$.first");
+    }
+  });
+
+  it("supports Match.fromSchema(..., { throwAllErrors: true }) alias defaults", () => {
+    class SchemaWithLegacyAggregatePolicy {
+      public first!: string;
+      public second!: string;
+    }
+
+    Match.Schema()(SchemaWithLegacyAggregatePolicy);
+    Match.Field(String)(SchemaWithLegacyAggregatePolicy.prototype, "first");
+    Match.Field(String)(SchemaWithLegacyAggregatePolicy.prototype, "second");
+
+    try {
+      check(
+        { first: 1, second: 2 } as any,
+        Match.fromSchema(SchemaWithLegacyAggregatePolicy, {
+          throwAllErrors: true,
+        }),
+      );
+      throw new Error("Expected MatchError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MatchError);
+      const matchError = error as MatchError;
+      expect(matchError.failures).toHaveLength(2);
+    }
+  });
+
+  it("maps deprecated Match.Schema({ throwAllErrors: false }) to fail-fast", () => {
+    class LegacyFirstErrorSchema {
+      public first!: string;
+      public second!: string;
+    }
+
+    Match.Schema({ throwAllErrors: false })(LegacyFirstErrorSchema);
+    Match.Field(String)(LegacyFirstErrorSchema.prototype, "first");
+    Match.Field(String)(LegacyFirstErrorSchema.prototype, "second");
+
+    try {
+      check(
+        { first: 1, second: 2 } as any,
+        Match.fromSchema(LegacyFirstErrorSchema),
+      );
+      throw new Error("Expected MatchError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MatchError);
+      const matchError = error as MatchError;
+      expect(matchError.failures).toHaveLength(1);
+      expect(matchError.path).toBe("$.first");
+    }
+  });
+
   it("does not leak Match.WithMessage state across repeated parses", () => {
     const emailPattern = Match.WithMessage(Match.Email, {
       error: ({ value, path }) => `invalid email ${String(value)} at ${path}`,

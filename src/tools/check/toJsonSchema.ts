@@ -33,6 +33,7 @@ const MATCH_KIND = {
   OneOfPattern: "Match.OneOfPattern",
   WherePattern: "Match.WherePattern",
   WithMessagePattern: "Match.WithMessagePattern",
+  WithErrorPolicyPattern: "Match.WithErrorPolicyPattern",
   LazyPattern: "Match.LazyPattern",
   RegExpPattern: "Match.RegExpPattern",
   ClassPattern: "Match.ClassPattern",
@@ -74,7 +75,12 @@ function readRegExpExpressionField(pattern: unknown): RegExp | undefined {
 function readClassField(pattern: unknown):
   | {
       ctor: abstract new (...args: never[]) => unknown;
-      options?: { exact?: boolean; schemaId?: string };
+      options?: {
+        exact?: boolean;
+        schemaId?: string;
+        errorPolicy?: "first" | "all";
+        throwAllErrors?: boolean;
+      };
     }
   | undefined {
   const candidate = pattern as {
@@ -90,7 +96,12 @@ function readClassField(pattern: unknown):
   return {
     ctor: candidate.ctor as abstract new (...args: never[]) => unknown,
     options: candidate.options as
-      | { exact?: boolean; schemaId?: string }
+      | {
+          exact?: boolean;
+          schemaId?: string;
+          errorPolicy?: "first" | "all";
+          throwAllErrors?: boolean;
+        }
       | undefined,
   };
 }
@@ -249,6 +260,11 @@ function compilePattern(
     });
   }
   if (isKindPattern(pattern, MATCH_KIND.WithMessagePattern)) {
+    return withCycleGuard(pattern, context, path, () =>
+      compilePattern(readPatternField(pattern), context, path, mode),
+    );
+  }
+  if (isKindPattern(pattern, MATCH_KIND.WithErrorPolicyPattern)) {
     return withCycleGuard(pattern, context, path, () =>
       compilePattern(readPatternField(pattern), context, path, mode),
     );
