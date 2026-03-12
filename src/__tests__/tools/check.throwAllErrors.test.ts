@@ -1,10 +1,13 @@
 import {
-  CHECK_ERROR_ID,
+  MATCH_ERROR_ID,
   CHECK_INVALID_OPTIONS_ERROR_ID,
   Match,
-  MatchError,
   check,
 } from "../../tools/check";
+import {
+  checkInvalidOptionsError,
+  matchError,
+} from "../../errors/foundation/match.errors";
 
 const checkRuntime = check as (
   value: unknown,
@@ -12,9 +15,21 @@ const checkRuntime = check as (
   options?: { errorPolicy?: "first" | "all"; throwAllErrors?: boolean },
 ) => unknown;
 
+function expectMatchFailure(
+  run: () => unknown,
+): ReturnType<typeof matchError.new> {
+  try {
+    run();
+    throw new Error("Expected match error");
+  } catch (error) {
+    expect(matchError.is(error)).toBe(true);
+    return error as ReturnType<typeof matchError.new>;
+  }
+}
+
 describe("tools/check errorPolicy", () => {
   it('collects all failures when errorPolicy is "all"', () => {
-    try {
+    const error = expectMatchFailure(() =>
       checkRuntime(
         {
           user: {
@@ -32,47 +47,38 @@ describe("tools/check errorPolicy", () => {
           tags: [String],
         },
         { errorPolicy: "all" },
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.id).toBe(CHECK_ERROR_ID);
-      expect(matchError.failures.length).toBe(5);
-      expect(matchError.failures.map((f) => f.path)).toEqual(
-        expect.arrayContaining([
-          "$.extra",
-          "$.user.name",
-          "$.user.age",
-          "$.tags[0]",
-          "$.tags[2]",
-        ]),
-      );
-    }
+      ),
+    );
+
+    expect(error.id).toBe(MATCH_ERROR_ID);
+    expect(error.data.failures.length).toBe(5);
+    expect(error.data.failures.map((f) => f.path)).toEqual(
+      expect.arrayContaining([
+        "$.extra",
+        "$.user.name",
+        "$.user.age",
+        "$.tags[0]",
+        "$.tags[2]",
+      ]),
+    );
   });
 
   it("keeps fail-fast behavior when throwAllErrors is not enabled", () => {
-    try {
-      checkRuntime({ a: 1, b: 2 }, { a: String, b: String });
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures).toHaveLength(1);
-      expect(matchError.path).toBe("$.a");
-    }
+    const error = expectMatchFailure(() =>
+      checkRuntime({ a: 1, b: 2 }, { a: String, b: String }),
+    );
+
+    expect(error.data.failures).toHaveLength(1);
+    expect(error.data.path).toBe("$.a");
   });
 
   it("treats an empty options object like the default fail-fast policy", () => {
-    try {
-      checkRuntime({ a: 1, b: 2 }, { a: String, b: String }, {});
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures).toHaveLength(1);
-      expect(matchError.path).toBe("$.a");
-    }
+    const error = expectMatchFailure(() =>
+      checkRuntime({ a: 1, b: 2 }, { a: String, b: String }, {}),
+    );
+
+    expect(error.data.failures).toHaveLength(1);
+    expect(error.data.path).toBe("$.a");
   });
 
   it("throws option errors for invalid options objects", () => {
@@ -107,56 +113,57 @@ describe("tools/check errorPolicy", () => {
         id: CHECK_INVALID_OPTIONS_ERROR_ID,
       }),
     );
+
+    try {
+      checkRuntime(
+        "x",
+        String,
+        null as unknown as { throwAllErrors?: boolean },
+      );
+    } catch (error) {
+      expect(checkInvalidOptionsError.is(error)).toBe(true);
+    }
   });
 
   it("keeps the deprecated throwAllErrors alias working", () => {
-    try {
+    const error = expectMatchFailure(() =>
       checkRuntime(
         { a: 1, b: 2 },
         { a: String, b: String },
         {
           throwAllErrors: true,
         },
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures).toHaveLength(2);
-    }
+      ),
+    );
+
+    expect(error.data.failures).toHaveLength(2);
   });
 
   it("maps throwAllErrors: false to the first-error policy", () => {
-    try {
+    const error = expectMatchFailure(() =>
       checkRuntime(
         { a: 1, b: 2 },
         { a: String, b: String },
         {
           throwAllErrors: false,
         },
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures).toHaveLength(1);
-    }
+      ),
+    );
+
+    expect(error.data.failures).toHaveLength(1);
   });
 
   it("lets errorPolicy override the deprecated throwAllErrors alias", () => {
-    try {
+    const error = expectMatchFailure(() =>
       checkRuntime(
         { a: 1, b: 2 },
         { a: String, b: String },
         { errorPolicy: "first", throwAllErrors: true },
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures).toHaveLength(1);
-      expect(matchError.path).toBe("$.a");
-    }
+      ),
+    );
+
+    expect(error.data.failures).toHaveLength(1);
+    expect(error.data.path).toBe("$.a");
   });
 
   it("handles aggregate policy with OneOf and Maybe", () => {
@@ -164,15 +171,15 @@ describe("tools/check errorPolicy", () => {
       checkRuntime("x", Match.OneOf(String, Number), { errorPolicy: "all" }),
     ).not.toThrow();
 
-    expect(() =>
+    expectMatchFailure(() =>
       checkRuntime(true, Match.OneOf(Match.Maybe(String), Number), {
         errorPolicy: "all",
       }),
-    ).toThrow(MatchError);
+    );
   });
 
   it("aggregates nested failures for Match.ObjectStrict and Match.MapOf", () => {
-    try {
+    const error = expectMatchFailure(() =>
       checkRuntime(
         {
           lanes: {
@@ -187,48 +194,39 @@ describe("tools/check errorPolicy", () => {
           }),
         }),
         { errorPolicy: "all" },
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures.map((failure) => failure.path)).toEqual(
-        expect.arrayContaining([
-          "$.extra",
-          "$.lanes.worker.id",
-          "$.lanes.api.id",
-        ]),
-      );
-    }
+      ),
+    );
+
+    expect(error.data.failures.map((failure) => failure.path)).toEqual(
+      expect.arrayContaining([
+        "$.extra",
+        "$.lanes.worker.id",
+        "$.lanes.api.id",
+      ]),
+    );
   });
 
   it("supports Match.WithErrorPolicy wrappers as schema defaults", () => {
-    try {
+    const error = expectMatchFailure(() =>
       checkRuntime(
         { a: 1, b: 2 },
         Match.WithErrorPolicy({ a: String, b: String }, "all"),
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures).toHaveLength(2);
-    }
+      ),
+    );
+
+    expect(error.data.failures).toHaveLength(2);
   });
 
   it("lets explicit check options override Match.WithErrorPolicy defaults", () => {
-    try {
+    const error = expectMatchFailure(() =>
       checkRuntime(
         { a: 1, b: 2 },
         Match.WithErrorPolicy({ a: String, b: String }, "all"),
         { errorPolicy: "first" },
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures).toHaveLength(1);
-    }
+      ),
+    );
+
+    expect(error.data.failures).toHaveLength(1);
   });
 
   it("preserves Match.WithErrorPolicy defaults through Match.compile().parse()", () => {

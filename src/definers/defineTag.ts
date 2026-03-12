@@ -15,7 +15,12 @@ import {
   symbolOptionalDependency,
   symbolTagBeforeInitDependency,
 } from "../defs";
+import type {
+  InferValidationSchemaInput,
+  ValidationSchemaInput,
+} from "../types/utilities";
 import { validationError } from "../errors";
+import { isMatchError } from "../tools/check/errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { isSameDefinition } from "../tools/isSameDefinition";
@@ -33,6 +38,47 @@ import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
  * @param definition - The tag definition (id).
  * @returns A tag object with helpers to configure and extract.
  */
+export function defineTag<
+  TSchema extends ValidationSchemaInput<any>,
+  TEnforceInputContract = void,
+  TEnforceOutputContract = void,
+  TAllowedTargets extends TagTarget | void = void,
+>(
+  definition: Omit<
+    ITagDefinition<
+      InferValidationSchemaInput<TSchema>,
+      TEnforceInputContract,
+      TEnforceOutputContract,
+      TAllowedTargets
+    >,
+    "configSchema"
+  > & {
+    configSchema: TSchema;
+  },
+): ITag<
+  InferValidationSchemaInput<TSchema>,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TAllowedTargets
+>;
+export function defineTag<
+  TConfig = void,
+  TEnforceInputContract = void,
+  TEnforceOutputContract = void,
+  TAllowedTargets extends TagTarget | void = void,
+>(
+  definition: ITagDefinition<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TAllowedTargets
+  >,
+): ITag<
+  TConfig,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TAllowedTargets
+>;
 export function defineTag<
   TConfig = void,
   TEnforceInputContract = void,
@@ -94,6 +140,9 @@ export function defineTag<
         try {
           tagConfig = configSchema.parse(tagConfig);
         } catch (error) {
+          if (isMatchError(error)) {
+            throw error;
+          }
           validationError.throw({
             subject: "Tag config",
             id: this.id,

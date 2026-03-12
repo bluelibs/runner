@@ -1,5 +1,14 @@
-import { MatchError } from "../../../tools/check";
+import { matchError } from "../../../errors/foundation/match.errors";
 import { eventLanesResourceConfigSchema } from "../../event-lanes/configSchema";
+
+function expectMatchFailure(run: () => unknown): void {
+  try {
+    run();
+    throw new Error("Expected runner.errors.matchError");
+  } catch (error) {
+    expect(matchError.is(error)).toBe(true);
+  }
+}
 
 describe("eventLanes resource config schema", () => {
   it("accepts valid event-lanes config shape", () => {
@@ -32,7 +41,7 @@ describe("eventLanes resource config schema", () => {
   it("rejects non-object profiles shape", () => {
     const lane = { id: "lane-invalid-profiles" };
 
-    expect(() =>
+    expectMatchFailure(() =>
       eventLanesResourceConfigSchema.parse({
         profile: "worker",
         topology: {
@@ -50,13 +59,13 @@ describe("eventLanes resource config schema", () => {
           ],
         },
       } as never),
-    ).toThrow(MatchError);
+    );
   });
 
   it("rejects profiles entries without consume lane array", () => {
     const lane = { id: "lane-invalid-consume" };
 
-    expect(() =>
+    expectMatchFailure(() =>
       eventLanesResourceConfigSchema.parse({
         profile: "worker",
         topology: {
@@ -76,6 +85,6 @@ describe("eventLanes resource config schema", () => {
           ],
         },
       } as never),
-    ).toThrow(MatchError);
+    );
   });
 });

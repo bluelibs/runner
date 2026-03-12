@@ -8,6 +8,10 @@ import type {
   ResourceMiddlewareAttachmentType,
   IResourceWithConfig,
 } from "../types/resource";
+import type {
+  InferValidationSchemaInput,
+  ValidationSchemaInput,
+} from "../types/utilities";
 import {
   symbolForkedFrom,
   symbolResource,
@@ -22,6 +26,7 @@ import {
   resourceForkNonLeafUnsupportedError,
   validationError,
 } from "../errors";
+import { isMatchError } from "../tools/check/errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
@@ -38,6 +43,134 @@ import {
 } from "./isolatePolicy";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
+export function defineResource<
+  TConfigSchema extends ValidationSchemaInput<any>,
+  TResultSchema extends ValidationSchemaInput<any>,
+  TDeps extends DependencyMapType = {},
+  TPrivate = any,
+  TMeta extends IResourceMeta = any,
+  TTags extends ResourceTagType[] = ResourceTagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
+>(
+  constConfig: Omit<
+    IResourceDefinition<
+      InferValidationSchemaInput<TConfigSchema>,
+      Promise<InferValidationSchemaInput<TResultSchema>>,
+      TDeps,
+      TPrivate,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >,
+    "configSchema" | "resultSchema"
+  > & {
+    configSchema: TConfigSchema;
+    resultSchema: TResultSchema;
+  },
+): IResource<
+  InferValidationSchemaInput<TConfigSchema>,
+  Promise<InferValidationSchemaInput<TResultSchema>>,
+  TDeps,
+  TPrivate,
+  TMeta,
+  TTags,
+  TMiddleware
+>;
+export function defineResource<
+  TConfigSchema extends ValidationSchemaInput<any>,
+  TValue extends Promise<any> = Promise<any>,
+  TDeps extends DependencyMapType = {},
+  TPrivate = any,
+  TMeta extends IResourceMeta = any,
+  TTags extends ResourceTagType[] = ResourceTagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
+>(
+  constConfig: Omit<
+    IResourceDefinition<
+      InferValidationSchemaInput<TConfigSchema>,
+      TValue,
+      TDeps,
+      TPrivate,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >,
+    "configSchema"
+  > & {
+    configSchema: TConfigSchema;
+  },
+): IResource<
+  InferValidationSchemaInput<TConfigSchema>,
+  TValue,
+  TDeps,
+  TPrivate,
+  TMeta,
+  TTags,
+  TMiddleware
+>;
+export function defineResource<
+  TResultSchema extends ValidationSchemaInput<any>,
+  TConfig = void,
+  TDeps extends DependencyMapType = {},
+  TPrivate = any,
+  TMeta extends IResourceMeta = any,
+  TTags extends ResourceTagType[] = ResourceTagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
+>(
+  constConfig: Omit<
+    IResourceDefinition<
+      TConfig,
+      Promise<InferValidationSchemaInput<TResultSchema>>,
+      TDeps,
+      TPrivate,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >,
+    "resultSchema"
+  > & {
+    resultSchema: TResultSchema;
+  },
+): IResource<
+  TConfig,
+  Promise<InferValidationSchemaInput<TResultSchema>>,
+  TDeps,
+  TPrivate,
+  TMeta,
+  TTags,
+  TMiddleware
+>;
+export function defineResource<
+  TConfig = void,
+  TValue extends Promise<any> = Promise<any>,
+  TDeps extends DependencyMapType = {},
+  TPrivate = any,
+  TMeta extends IResourceMeta = any,
+  TTags extends ResourceTagType[] = ResourceTagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
+>(
+  constConfig: IResourceDefinition<
+    TConfig,
+    TValue,
+    TDeps,
+    TPrivate,
+    any,
+    any,
+    TMeta,
+    TTags,
+    TMiddleware
+  >,
+): IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>;
 export function defineResource<
   TConfig = void,
   TValue extends Promise<any> = Promise<any>,
@@ -214,6 +347,9 @@ export function defineResource<
       try {
         config = current.configSchema.parse(config);
       } catch (error) {
+        if (isMatchError(error)) {
+          throw error;
+        }
         validationError.throw({
           subject: "Resource config",
           id: currentId,

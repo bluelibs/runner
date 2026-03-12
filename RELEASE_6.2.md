@@ -171,10 +171,10 @@ Both are also available on `asyncContexts.execution` and the new
 
 ---
 
-### Validation Ergonomics: `Match.WithMessage`, Parent-Aware `Match.Where`, Recursive `Match.fromSchema`, and `Match.Error`
+### Validation Ergonomics: `Match.WithMessage`, Parent-Aware `Match.Where`, Recursive `Match.fromSchema`, and `errors.matchError`
 
 Runner's validation layer now supports more expressive domain errors without
-changing the core `MatchError` contract.
+changing the core match-validation error contract.
 
 #### Validation `errorPolicy` and `Match.WithErrorPolicy(...)`
 
@@ -182,7 +182,7 @@ Validation aggregation is now framed as an explicit policy:
 
 - `errorPolicy: "first"` keeps fail-fast behaviour
 - `errorPolicy: "all"` collects all failures, then throws one aggregate
-  `Match.Error`
+  `errors.matchError`
 
 Preferred APIs:
 
@@ -204,7 +204,7 @@ Compatibility notes:
 
 #### `Match.WithMessage(pattern, { error })`
 
-Wrap any pattern and override only the top-level `MatchError.message` while
+Wrap any pattern and override only the top-level match-validation error message while
 preserving `id`, `path`, and `failures`.
 
 ```ts
@@ -225,7 +225,7 @@ Key details:
 - Callback context is `{ value, error, path, pattern, parent? }`.
 - In aggregate validation mode (`errorPolicy: "all"` / deprecated
   `throwAllErrors: true`), the first failing `Match.WithMessage(...)` still
-  controls the top-level `MatchError.message`.
+  controls the top-level error message.
 - JSON Schema export stays unchanged; `Match.WithMessage(...)` compiles to the
   wrapped inner pattern.
 
@@ -243,7 +243,7 @@ const matchesUserEmail = Match.Where(
 ```
 
 This makes cross-field sync validation practical without polluting the thrown
-`MatchError` shape with parent payload data.
+match-validation error shape with parent payload data.
 
 #### Recursive class schemas via `Match.fromSchema(() => Class)`
 
@@ -275,23 +275,28 @@ Key details:
   references.
 - JSON Schema export preserves recursive graphs via `$defs` / `$ref`.
 
-#### Manual second-pass validation with `Match.Error`
+#### Manual second-pass validation with `errors.matchError`
 
 After a structural `check(...)` pass, you can raise a targeted validation
-failure on an exact field path by throwing `new Match.Error(...)` yourself.
+failure on an exact field path by throwing `errors.matchError.new(...)`.
 
 ```ts
+import { errors, Match, check } from "@bluelibs/runner";
+
 const input = check({ email: "ada@example.com" }, { email: Match.Email });
 
 if (!isEmailUnique(input.email)) {
-  throw new Match.Error([
-    {
-      path: "$.email",
-      expected: "unique email",
-      actualType: "string",
-      message: "Email already exists.",
-    },
-  ]);
+  throw errors.matchError.new({
+    path: "$.email",
+    failures: [
+      {
+        path: "$.email",
+        expected: "unique email",
+        actualType: "string",
+        message: "Email already exists.",
+      },
+    ],
+  });
 }
 ```
 
@@ -411,7 +416,7 @@ The guide has been substantially restructured in this release:
 - `readmes/AI.md` updated to reflect the new tenant context and async context
   additions.
 - Validation docs now cover `Match.WithMessage(...)`, parent-aware
-  `Match.Where(...)`, manual `Match.Error` follow-up validation, and the path
+  `Match.Where(...)`, manual `errors.matchError` follow-up validation, and the path
   contract for root/object/array failures.
 
 ---

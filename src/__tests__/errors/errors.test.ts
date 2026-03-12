@@ -56,7 +56,7 @@ describe("Errors", () => {
       register: [task],
       dependencies: { task },
       async init(_, { task }) {
-        await task();
+        await task(undefined);
       },
     });
 

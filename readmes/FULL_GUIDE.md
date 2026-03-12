@@ -4363,7 +4363,7 @@ check(
 | `Match.WithErrorPolicy(pattern, "first" \| "all")`           | Sets a default validation aggregation policy on a pattern      |
 | `Match.compile(pattern)`                                     | Compiles pattern into `{ parse, test, toJSONSchema }`          |
 | `Match.test(value, pattern)`                                 | Boolean helper for validation check                            |
-| `Match.Error`                                                | Error class thrown on match failure                            |
+| `errors.matchError`                                          | Built-in Runner error helper for match failure                 |
 
 ### Additional `check()` Details
 
@@ -4377,9 +4377,9 @@ check(
 - Decorator class shorthand in builder APIs (for example `.inputSchema(UserDto)` / `.configSchema(UserConfig)`) requires class metadata from `@Match.Schema()`.
 - `Match.Schema({ exact, schemaId, errorPolicy })` controls class-level strictness, schema identity, and default validation aggregation; `Match.Schema({ base })` composes schema classes without TypeScript `extends`.
 - `@Match.Schema({ errorPolicy: "all" })` gives `Match.fromSchema(MyClass)` the same aggregate-default behavior as `Match.WithErrorPolicy(...)`.
-- `Match.WithMessage(pattern, { error })` overrides the thrown `MatchError.message` headline while preserving the normal `MatchError` structure (`id`, `path`, `failures`). It does not rewrite individual `failures[]` entries.
-- Final `MatchError.failures` is always a flat array of leaf failures. Nested validation does not produce a tree of failures or a synthetic parent failure like `$.address` unless an actual matcher failed at that path.
-- `MatchError.path` always comes from the first recorded failure. If a nested field fails first, a parent custom headline may still be used, but `error.path` remains the nested leaf path such as `$.address.city`.
+- `Match.WithMessage(pattern, { error })` overrides the thrown match-error message headline while preserving the normal error structure (`id`, `path`, `failures`). It does not rewrite individual `failures[]` entries.
+- Final match-error `failures` is always a flat array of leaf failures. Nested validation does not produce a tree of failures or a synthetic parent failure like `$.address` unless an actual matcher failed at that path.
+- Match-error `path` always comes from the first recorded failure. If a nested field fails first, a parent custom headline may still be used, but `error.path` remains the nested leaf path such as `$.address.city`.
 - With `check(value, pattern, { errorPolicy: "all" })`, the default headline is `"Match failed with N errors:\n- msg1\n- msg2"`.
 - Leaf wrappers such as `Match.WithMessage(String, ...)` do not replace that aggregate headline; their underlying failures still appear in `error.failures`.
 - Subtree wrappers such as plain objects, arrays, `Match.ObjectIncluding(...)`, `Match.MapOf(...)`, `Match.NonEmptyArray(...)`, `Match.Lazy(...)`, or `Match.fromSchema(...)` can replace the aggregate headline while still preserving the nested failures in `error.failures`.
@@ -4446,7 +4446,7 @@ Rule of thumb:
 
 ### Custom Match Messages
 
-Use `Match.WithMessage(pattern, { error })` when a validation rule needs a more domain-specific message while keeping the normal `MatchError` structure (`id`, `path`, `failures`).
+Use `Match.WithMessage(pattern, { error })` when a validation rule needs a more domain-specific message while keeping the normal error structure (`id`, `path`, `failures`).
 
 ```typescript
 import { Match, check } from "@bluelibs/runner";
@@ -4505,7 +4505,11 @@ try {
     Match.fromSchema(BillingDetailsDto),
   );
 } catch (error) {
-  const matchError = error as Match.Error;
+  const matchError = error as {
+    message: string;
+    path: string;
+    failures: Array<{ path: string; message: string }>;
+  };
   // matchError.message ===
   // "Address is invalid. First nested issue: Expected string, got number at $.address.city."
   //
@@ -4521,7 +4525,7 @@ try {
 }
 ```
 
-> **Note:** The outer formatter sees the raw nested failure summary, not the inner `"City must be a string"` headline. Inner `Match.WithMessage(...)` wrappers affect the thrown headline at their own level, but outer formatter callbacks receive a fresh `MatchError` rebuilt from nested raw failures.
+> **Note:** The outer formatter sees the raw nested failure summary, not the inner `"City must be a string"` headline. Inner `Match.WithMessage(...)` wrappers affect the thrown headline at their own level, but outer formatter callbacks receive a fresh nested match error rebuilt from raw failures.
 
 Custom `Match.Where(...)` patterns work the same way and solve the standalone-message case:
 
@@ -4556,16 +4560,16 @@ Notes:
 - `path` uses `$` for the root value, `$.email` for a root object field, and `$.users[2].email` for nested array/object paths.
 - `value` is intentionally `unknown` because the callback runs only on the failure path.
 - `parent` is only present when the value is being validated as part of an object, map, or array element.
-- When `errorPolicy: "all"` collects multiple failures, `MatchError.message` is `"Match failed with N errors:\n- msg1\n- msg2"` by default; leaf field `Match.WithMessage(...)` wrappers do not replace that summary, while subtree/schema wrappers still can.
+- When `errorPolicy: "all"` collects multiple failures, the aggregate error message is `"Match failed with N errors:\n- msg1\n- msg2"` by default; leaf field `Match.WithMessage(...)` wrappers do not replace that summary, while subtree/schema wrappers still can.
 - `Match.WithMessage(...)` is runtime-only and does not affect JSON Schema export beyond the wrapped inner pattern.
-- `parent` is not attached to the thrown `MatchError`; it is runtime-only callback context.
+- `parent` is not attached to the thrown `errors.matchError`; it is runtime-only callback context.
 
-### Second-Pass Validation with `Match.Error`
+### Second-Pass Validation with `errors.matchError`
 
 Sometimes you want a first structural pass with `check(...)`, then a second domain-specific pass that raises a targeted validation error on an existing field path.
 
 ```typescript
-import { Match, check } from "@bluelibs/runner";
+import { errors, Match, check } from "@bluelibs/runner";
 
 const input = check(
   { email: "ada@example.com" },
@@ -4575,14 +4579,17 @@ const input = check(
 );
 
 if (!isEmailUnique(input.email)) {
-  throw new Match.Error([
-    {
-      path: "$.email",
-      expected: "unique email",
-      actualType: "string",
-      message: "Email already exists.",
-    },
-  ]);
+  throw errors.matchError.new({
+    path: "$.email",
+    failures: [
+      {
+        path: "$.email",
+        expected: "unique email",
+        actualType: "string",
+        message: "Email already exists.",
+      },
+    ],
+  });
 }
 ```
 
@@ -4590,11 +4597,11 @@ This is useful when:
 
 - the first pass validates structure and sync shape rules
 - the second pass applies business rules that need custom wording
-- you still want the result to look like a normal `MatchError`
+- you still want the result to look like a normal match-validation error
 
 Notes:
 
-- `Match.Error` is the same class exported as `MatchError`.
+- `errors.matchError.new(...)` is the preferred manual construction path.
 - Array paths use bracket notation such as `$.users[2].email`.
 - If your follow-up rule is asynchronous (for example, checking uniqueness in a database), perform that second pass in task/resource logic rather than inside `Match.Where(...)`.
 

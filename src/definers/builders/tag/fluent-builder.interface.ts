@@ -1,4 +1,5 @@
 import type {
+  ResolveValidationSchemaInput,
   ITag,
   ITagMeta,
   TagTarget,
@@ -16,16 +17,36 @@ export interface TagFluentBuilder<
     m: TNewMeta,
   ): TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut, TAllowedTargets>;
 
-  configSchema<TNewConfig>(
-    schema: ValidationSchemaInput<TNewConfig>,
-  ): TagFluentBuilder<TNewConfig, TEnforceIn, TEnforceOut, TAllowedTargets>;
+  configSchema<
+    TNewConfig = never,
+    TSchema extends ValidationSchemaInput<
+      [TNewConfig] extends [never] ? any : TNewConfig
+    > = ValidationSchemaInput<[TNewConfig] extends [never] ? any : TNewConfig>,
+  >(
+    schema: TSchema,
+  ): TagFluentBuilder<
+    ResolveValidationSchemaInput<TNewConfig, TSchema>,
+    TEnforceIn,
+    TEnforceOut,
+    TAllowedTargets
+  >;
 
   /**
    * Alias for configSchema. Use this to define the tag configuration validation contract.
    */
-  schema<TNewConfig>(
-    schema: ValidationSchemaInput<TNewConfig>,
-  ): TagFluentBuilder<TNewConfig, TEnforceIn, TEnforceOut, TAllowedTargets>;
+  schema<
+    TNewConfig = never,
+    TSchema extends ValidationSchemaInput<
+      [TNewConfig] extends [never] ? any : TNewConfig
+    > = ValidationSchemaInput<[TNewConfig] extends [never] ? any : TNewConfig>,
+  >(
+    schema: TSchema,
+  ): TagFluentBuilder<
+    ResolveValidationSchemaInput<TNewConfig, TSchema>,
+    TEnforceIn,
+    TEnforceOut,
+    TAllowedTargets
+  >;
 
   config<TNewConfig>(
     config: TNewConfig,

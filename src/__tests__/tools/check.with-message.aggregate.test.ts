@@ -1,8 +1,21 @@
-import { Match, MatchError, check } from "../../tools/check";
+import { matchError } from "../../errors/foundation/match.errors";
+import { Match, check } from "../../tools/check";
+
+function expectMatchFailure(
+  run: () => unknown,
+): ReturnType<typeof matchError.new> {
+  try {
+    run();
+    throw new Error("Expected match error");
+  } catch (error) {
+    expect(matchError.is(error)).toBe(true);
+    return error as ReturnType<typeof matchError.new>;
+  }
+}
 
 describe("tools/check Match.WithMessage aggregate behavior", () => {
   it("keeps the aggregate summary for sibling field wrappers", () => {
-    try {
+    const error = expectMatchFailure(() =>
       check(
         {
           first: 1,
@@ -17,16 +30,13 @@ describe("tools/check Match.WithMessage aggregate behavior", () => {
           }),
         },
         { throwAllErrors: true },
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.message).toBe(
-        "Match failed with 2 errors:\n- Expected string, got number at $.first.\n- Expected string, got number at $.second.",
-      );
-      expect(matchError.failures).toHaveLength(2);
-    }
+      ),
+    );
+
+    expect(error.message).toContain(
+      "Match failed with 2 errors:\n- Expected string, got number at $.first.\n- Expected string, got number at $.second.",
+    );
+    expect(error.data.failures).toHaveLength(2);
   });
 
   it.each([
@@ -131,7 +141,7 @@ describe("tools/check Match.WithMessage aggregate behavior", () => {
   ])(
     "keeps subtree wrappers as aggregate headlines for $label",
     ({ pattern, value, path, message }) => {
-      try {
+      const error = expectMatchFailure(() =>
         check(
           {
             child: value,
@@ -142,16 +152,13 @@ describe("tools/check Match.WithMessage aggregate behavior", () => {
             title: String,
           },
           { throwAllErrors: true },
-        );
-        throw new Error("Expected MatchError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(MatchError);
-        const matchError = error as MatchError;
-        expect(matchError.message).toBe(message);
-        expect(matchError.failures).toHaveLength(2);
-        expect(matchError.failures[0].path).toBe(path);
-        expect(matchError.failures[1].path).toBe("$.title");
-      }
+        ),
+      );
+
+      expect(error.message).toBe(message);
+      expect(error.data.failures).toHaveLength(2);
+      expect(error.data.failures[0].path).toBe(path);
+      expect(error.data.failures[1].path).toBe("$.title");
     },
   );
 });

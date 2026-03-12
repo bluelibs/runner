@@ -2,6 +2,7 @@
  * Built-in type definitions for common JavaScript objects
  */
 
+import { createMessageError } from "../errors";
 import {
   invalidPayloadError,
   validationError,
@@ -211,7 +212,7 @@ export const SymbolType: TypeDefinition<symbol, SerializedSymbolPayload> = {
     if (wellKnownKey) {
       return { kind: SymbolPayloadKind.WellKnown, key: wellKnownKey };
     }
-    throw new TypeError(
+    return createMessageError(
       "Cannot serialize unique symbols; use Symbol.for(key) or a well-known symbol like Symbol.iterator",
     );
   },

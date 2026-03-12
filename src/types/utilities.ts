@@ -20,7 +20,7 @@ import { IErrorHelper } from "./error";
 import type { IAsyncContext } from "./asyncContext";
 import type { ExecutionJournal } from "./executionJournal";
 import type { RuntimeCallSource } from "./runtimeSource";
-import type { MatchPattern } from "../tools/check";
+import type { InferMatchPattern, MatchPattern } from "../tools/check";
 
 export * from "./symbols";
 
@@ -49,6 +49,23 @@ export type ValidationSchemaInput<T = unknown> =
   | IValidationSchema<T>
   | MatchPattern
   | ValidationSchemaClassConstructor<T>;
+
+export type InferValidationSchemaInput<TSchema> = TSchema extends {
+  parse(input: unknown): infer TParsed;
+}
+  ? TParsed
+  : TSchema extends ValidationSchemaClassConstructor<infer TClass>
+    ? TClass
+    : TSchema extends MatchPattern
+      ? InferMatchPattern<TSchema>
+      : never;
+
+export type ResolveValidationSchemaInput<
+  TOverride,
+  TSchema extends ValidationSchemaInput<any>,
+> = [TOverride] extends [never]
+  ? InferValidationSchemaInput<TSchema>
+  : TOverride;
 
 /**
  * Core public TypeScript types for BlueLibs Runner.

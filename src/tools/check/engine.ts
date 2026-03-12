@@ -1,4 +1,8 @@
-import { CheckOptionsError, MatchError, MatchPatternError } from "./errors";
+import {
+  createCheckOptionsError,
+  createMatchError,
+  createMatchPatternError,
+} from "./errors";
 import {
   getClassSchemaDefinition,
   setClassFieldPattern,
@@ -59,7 +63,7 @@ type WhereTypeGuard<TGuarded> = (value: unknown) => value is TGuarded;
 type NoInfer<T> = [T][T extends any ? 0 : never];
 
 function assertPattern(condition: boolean, message: string): void {
-  if (!condition) throw new MatchPatternError(message);
+  if (!condition) throw createMatchPatternError(message);
 }
 
 type ResolvedCheckOptions = {
@@ -72,7 +76,7 @@ function readOptions(options?: CheckOptions): ResolvedCheckOptions {
     return { errorPolicy: undefined, hasExplicitPolicy: false };
   }
   if (!isPlainObject(options)) {
-    throw new CheckOptionsError("check() options must be a plain object.");
+    throw createCheckOptionsError("check() options must be a plain object.");
   }
 
   const errorPolicy = (options as { errorPolicy?: unknown }).errorPolicy;
@@ -81,7 +85,7 @@ function readOptions(options?: CheckOptions): ResolvedCheckOptions {
     errorPolicy !== "first" &&
     errorPolicy !== "all"
   ) {
-    throw new CheckOptionsError(
+    throw createCheckOptionsError(
       'check() option "errorPolicy" must be "first" or "all" when provided.',
     );
   }
@@ -89,7 +93,7 @@ function readOptions(options?: CheckOptions): ResolvedCheckOptions {
   const throwAllErrors = (options as { throwAllErrors?: unknown })
     .throwAllErrors;
   if (throwAllErrors !== undefined && typeof throwAllErrors !== "boolean") {
-    throw new CheckOptionsError(
+    throw createCheckOptionsError(
       'check() option "throwAllErrors" must be a boolean when provided.',
     );
   }
@@ -153,7 +157,7 @@ class CompiledMatchPatternSchema<
       collectAll,
     );
     if (failures.length === 0) return input as InferMatchPattern<TPattern>;
-    throw new MatchError(failures, messageOverride);
+    throw createMatchError(failures, messageOverride);
   }
 
   test(input: unknown): input is InferMatchPattern<TPattern> {
@@ -231,7 +235,7 @@ export function check(
     collectAll,
   );
   if (failures.length === 0) return value;
-  throw new MatchError(failures, messageOverride);
+  throw createMatchError(failures, messageOverride);
 }
 
 function matchTest<TPattern extends MatchPattern>(
@@ -301,7 +305,7 @@ function regexpPattern(expression: RegExp | string): RegExpPattern<RegExp> {
     try {
       return new RegExpPattern(new RegExp(expression));
     } catch {
-      throw new MatchPatternError(
+      throw createMatchPatternError(
         "Bad pattern: Match.RegExp requires a valid regular expression source string.",
       );
     }
@@ -311,7 +315,7 @@ function regexpPattern(expression: RegExp | string): RegExpPattern<RegExp> {
     return new RegExpPattern(expression);
   }
 
-  throw new MatchPatternError(
+  throw createMatchPatternError(
     "Bad pattern: Match.RegExp requires a RegExp instance or source string.",
   );
 }
@@ -394,7 +398,7 @@ function fieldDecorator<TPattern extends MatchPattern>(
 ): MatchPropertyDecorator {
   return (target, key) => {
     if (typeof key !== "string") {
-      throw new MatchPatternError(
+      throw createMatchPatternError(
         "Bad pattern: Match.Field supports string property names only.",
       );
     }
@@ -486,5 +490,4 @@ export const Match = Object.freeze({
     pattern: TPattern,
     options?: MatchToJsonSchemaOptions,
   ): MatchJsonSchema => matchToJsonSchema(pattern, options),
-  Error: MatchError,
 });

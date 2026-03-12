@@ -189,7 +189,7 @@ const resolveAppErrorExtra = (
       if (isMatchedTypedError) {
         if (!errorRecord) {
           return {
-            id: undefined,
+            id: helperId,
             data: undefined,
             httpCode: isValidHttpCode(helper.httpCode)
               ? helper.httpCode
@@ -197,8 +197,6 @@ const resolveAppErrorExtra = (
           };
         }
 
-        const name = errorRecord[ExposureErrorField.Name];
-        const id = typeof name === "string" ? name : undefined;
         const data = errorRecord[ExposureErrorField.Data];
         const runtimeHttpCode = errorRecord[ExposureErrorField.HttpCode];
         const httpCode = isValidHttpCode(runtimeHttpCode)
@@ -206,7 +204,7 @@ const resolveAppErrorExtra = (
           : isValidHttpCode(helper.httpCode)
             ? helper.httpCode
             : undefined;
-        return { id, data, httpCode };
+        return { id: helperId, data, httpCode };
       }
     }
   } catch {

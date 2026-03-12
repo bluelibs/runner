@@ -17,6 +17,7 @@ import type {
   SerializerFieldOptions,
 } from "./types";
 import { SymbolPolicy } from "./types";
+import { createMessageError } from "../errors";
 import { validationError } from "./errors";
 import { check, Match } from "../tools/check";
 import { hasClassSchemaMetadata } from "../tools/check/classSchema";
@@ -53,7 +54,7 @@ function parseJsonPayload(payload: string): unknown {
   try {
     return JSON.parse(payload);
   } catch {
-    throw new SyntaxError("Invalid JSON payload.");
+    createMessageError("Invalid JSON payload.");
   }
 }
 
@@ -324,7 +325,7 @@ export class Serializer {
   private jsonStringify(value: unknown): string {
     const type = typeof value;
     if (type === "bigint" || type === "symbol" || type === "function") {
-      throw new TypeError(`Cannot stringify value of type "${type}"`);
+      createMessageError(`Cannot stringify value of type "${type}"`);
     }
     return JSON.stringify(value ?? null, null, this.indent);
   }

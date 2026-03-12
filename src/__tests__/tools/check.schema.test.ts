@@ -1,10 +1,34 @@
 import {
-  CheckJsonSchemaPatternError,
-  Match,
-  MatchError,
-  type MatchJsonSchema,
-  check,
-} from "../../tools/check";
+  checkJsonSchemaUnsupportedPatternError,
+  matchError,
+} from "../../errors";
+import { Match, type MatchJsonSchema, check } from "../../tools/check";
+
+function expectMatchFailure(
+  run: () => unknown,
+): ReturnType<typeof matchError.new> {
+  try {
+    run();
+    throw new Error("Expected matchError");
+  } catch (error) {
+    expect(matchError.is(error)).toBe(true);
+    return error as ReturnType<typeof matchError.new>;
+  }
+}
+
+function expectSchemaError(
+  run: () => unknown,
+): ReturnType<typeof checkJsonSchemaUnsupportedPatternError.new> {
+  try {
+    run();
+    throw new Error("Expected checkJsonSchemaUnsupportedPatternError");
+  } catch (error) {
+    expect(checkJsonSchemaUnsupportedPatternError.is(error)).toBe(true);
+    return error as ReturnType<
+      typeof checkJsonSchemaUnsupportedPatternError.new
+    >;
+  }
+}
 
 describe("tools/check schema support", () => {
   it("allows Match tokens to behave as schemas via parse()", () => {
@@ -21,14 +45,14 @@ describe("tools/check schema support", () => {
     expect(Match.IsoDateString.parse("2026-01-01T10:20:30Z")).toBe(
       "2026-01-01T10:20:30Z",
     );
-    expect(() => Match.Integer.parse(1.1)).toThrow(MatchError);
-    expect(() => Match.PositiveInteger.parse(-1)).toThrow(MatchError);
-    expect(() => Match.PositiveInteger.parse(1.1)).toThrow(MatchError);
-    expect(() => Match.NonEmptyString.parse("")).toThrow(MatchError);
-    expect(() => Match.Email.parse("not-an-email")).toThrow(MatchError);
-    expect(() => Match.UUID.parse("not-a-uuid")).toThrow(MatchError);
-    expect(() => Match.URL.parse("not a url")).toThrow(MatchError);
-    expect(() => Match.IsoDateString.parse("2026-01-01")).toThrow(MatchError);
+    expectMatchFailure(() => Match.Integer.parse(1.1));
+    expectMatchFailure(() => Match.PositiveInteger.parse(-1));
+    expectMatchFailure(() => Match.PositiveInteger.parse(1.1));
+    expectMatchFailure(() => Match.NonEmptyString.parse(""));
+    expectMatchFailure(() => Match.Email.parse("not-an-email"));
+    expectMatchFailure(() => Match.UUID.parse("not-a-uuid"));
+    expectMatchFailure(() => Match.URL.parse("not a url"));
+    expectMatchFailure(() => Match.IsoDateString.parse("2026-01-01"));
   });
 
   it("allows Match patterns to behave as schemas via parse()", () => {
@@ -41,7 +65,7 @@ describe("tools/check schema support", () => {
       id: "u1",
       retries: 1,
     });
-    expect(() => schema.parse({ id: "", retries: 1 })).toThrow(MatchError);
+    expectMatchFailure(() => schema.parse({ id: "", retries: 1 }));
   });
 
   it("supports parse() on Optional/Maybe/OneOf/Where patterns", () => {
@@ -54,24 +78,22 @@ describe("tools/check schema support", () => {
 
     expect(Match.OneOf(String, Number).parse("ok")).toBe("ok");
     expect(Match.OneOf(String, Number).parse(10)).toBe(10);
-    expect(() => Match.OneOf(String, Number).parse(false)).toThrow(MatchError);
+    expectMatchFailure(() => Match.OneOf(String, Number).parse(false));
 
     const positiveNumber = Match.Where(
       (value: unknown): value is number =>
         typeof value === "number" && value > 0,
     );
     expect(positiveNumber.parse(1)).toBe(1);
-    expect(() => positiveNumber.parse(0)).toThrow(MatchError);
+    expectMatchFailure(() => positiveNumber.parse(0));
 
     expect(Match.NonEmptyArray().parse([1])).toEqual([1]);
     expect(Match.NonEmptyArray(String).parse(["a"])).toEqual(["a"]);
-    expect(() => Match.NonEmptyArray().parse([])).toThrow(MatchError);
-    expect(() => Match.NonEmptyArray(String).parse([1])).toThrow(MatchError);
+    expectMatchFailure(() => Match.NonEmptyArray().parse([]));
+    expectMatchFailure(() => Match.NonEmptyArray(String).parse([1]));
 
     expect(check([1, 2], Match.ArrayOf(Number))).toEqual([1, 2]);
-    expect(() => check(["1"] as never, Match.ArrayOf(Number))).toThrow(
-      MatchError,
-    );
+    expectMatchFailure(() => check(["1"] as never, Match.ArrayOf(Number)));
 
     const map = check(
       {
@@ -93,12 +115,12 @@ describe("tools/check schema support", () => {
         worker: { id: "lane-worker" },
       }).worker.id,
     ).toBe("lane-worker");
-    expect(() =>
+    expectMatchFailure(() =>
       check({ worker: { id: 123 } }, Match.MapOf({ id: String })),
-    ).toThrow(MatchError);
+    );
 
     expect(Match.RegExp(/^ok$/).parse("ok")).toBe("ok");
-    expect(() => Match.RegExp(/^ok$/).parse("nope")).toThrow(MatchError);
+    expectMatchFailure(() => Match.RegExp(/^ok$/).parse("nope"));
   });
 
   it("supports toJSONSchema() on Match schema-like tokens and wrappers", () => {
@@ -257,21 +279,17 @@ describe("tools/check schema support", () => {
         },
       },
     });
-    expect(() => Match.Optional(String).toJSONSchema()).toThrow(
-      CheckJsonSchemaPatternError,
-    );
-    expect(() => Match.Maybe(String).toJSONSchema()).toThrow(
-      CheckJsonSchemaPatternError,
-    );
+    expectSchemaError(() => Match.Optional(String).toJSONSchema());
+    expectSchemaError(() => Match.Maybe(String).toJSONSchema());
     expect(Match.Where(() => true).toJSONSchema()).toEqual({
       $schema: "https://json-schema.org/draft/2020-12/schema",
       description:
         "Custom runtime predicate from Match.Where; not representable in strict JSON Schema.",
       "x-runner-match-kind": "Match.Where",
     });
-    expect(() =>
+    expectSchemaError(() =>
       Match.Where(() => true).toJSONSchema({ strict: true }),
-    ).toThrow(CheckJsonSchemaPatternError);
+    );
   });
 
   it("returns schema.parse output and supports transforms", () => {
@@ -330,12 +348,12 @@ describe("tools/check schema support", () => {
       enabled: 123,
     };
 
-    expect(() =>
+    expectMatchFailure(() =>
       check(candidate, {
         parse: Function,
         enabled: Boolean,
       }),
-    ).toThrow(MatchError);
+    );
   });
 
   it("accepts options alongside schema-based checks", () => {
@@ -368,7 +386,7 @@ describe("tools/check schema support", () => {
       toJSONSchema: 123,
     };
 
-    expect(() => check("x", candidate as never)).toThrow(MatchError);
+    expectMatchFailure(() => check("x", candidate as never));
   });
 
   it("supports a unified compiled schema shape from Match.compile()", () => {
@@ -385,7 +403,7 @@ describe("tools/check schema support", () => {
       id: "u1",
       retries: 1,
     });
-    expect(() => compiled.parse({ id: "", retries: 1 })).toThrow(MatchError);
+    expectMatchFailure(() => compiled.parse({ id: "", retries: 1 }));
     expect(() => compiled.test("x")).not.toThrow();
     expect(check({ id: "u1" }, compiled)).toEqual({ id: "u1" });
     expect(compiled.toJSONSchema()).toEqual({
@@ -423,14 +441,13 @@ describe("tools/check schema support", () => {
     });
   });
 
-  it("rethrows non-match errors from compiled.test()", () => {
-    const plannedError = new Error("boom");
+  it("returns false when Match.Where throws inside compiled.test()", () => {
     const compiled = Match.compile(
       Match.Where(() => {
-        throw plannedError;
+        throw new Error("boom");
       }),
     );
 
-    expect(() => compiled.test("x")).toThrow(plannedError);
+    expect(compiled.test("x")).toBe(false);
   });
 });

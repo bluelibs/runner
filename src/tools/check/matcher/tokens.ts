@@ -1,4 +1,4 @@
-import { MatchError } from "../errors";
+import { createMatchError } from "../errors";
 import { matchToJsonSchema } from "../toJsonSchema";
 import type { MatchJsonSchema, MatchToJsonSchemaOptions } from "../types";
 import { collectMatchResult } from "./core";
@@ -17,7 +17,7 @@ function createMatchToken<TKind extends string, TReturn = unknown>(
         false,
       );
       if (failures.length === 0) return value as TReturn;
-      throw new MatchError(failures, messageOverride);
+      throw createMatchError(failures, messageOverride);
     },
     toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
       return matchToJsonSchema(this, options);

@@ -1,12 +1,18 @@
 import { RunnerError } from "../../definers/defineError";
+import {
+  checkInvalidOptionsError,
+  checkInvalidPatternError,
+  checkJsonSchemaUnsupportedPatternError,
+  matchError,
+} from "../../errors/foundation/match.errors";
+import type { IErrorHelper } from "../../types/error";
+import { symbolDefinitionIdentity } from "../../types/symbols";
 
-export const CHECK_ERROR_ID = "runner.errors.check.failed";
-export const CHECK_INVALID_PATTERN_ERROR_ID =
-  "runner.errors.check.invalidPattern";
-export const CHECK_INVALID_OPTIONS_ERROR_ID =
-  "runner.errors.check.invalidOptions";
+export const MATCH_ERROR_ID = matchError.id;
+export const CHECK_INVALID_PATTERN_ERROR_ID = checkInvalidPatternError.id;
+export const CHECK_INVALID_OPTIONS_ERROR_ID = checkInvalidOptionsError.id;
 export const CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID =
-  "runner.errors.check.jsonSchemaUnsupportedPattern";
+  checkJsonSchemaUnsupportedPatternError.id;
 
 export interface MatchFailure {
   path: string;
@@ -20,70 +26,111 @@ export interface MatchMessageOverride {
   appliesToAggregate: boolean;
 }
 
-export class MatchError extends RunnerError<{
+export type ErrorType<TErrorHelper extends IErrorHelper<any>> = ReturnType<
+  TErrorHelper["new"]
+>;
+
+export type MatchRuntimeError = ErrorType<typeof matchError> & {
   path: string;
   failures: readonly MatchFailure[];
-}> {
-  public readonly path: string;
-  public readonly failures: readonly MatchFailure[];
+};
 
-  constructor(
-    failures: readonly MatchFailure[],
-    messageOverride?: MatchMessageOverride,
-  ) {
-    const safeFailures = failures.length === 0 ? [rootFailure()] : failures;
-    const [firstFailure] = safeFailures;
-    const summary =
-      (messageOverride?.appliesToAggregate || safeFailures.length === 1
-        ? messageOverride?.message
-        : undefined) ??
-      (safeFailures.length === 1
-        ? firstFailure.message
-        : `Match failed with ${safeFailures.length} errors:\n${safeFailures.map((f) => `- ${f.message}`).join("\n")}`);
+export type MatchPatternRuntimeError = ErrorType<
+  typeof checkInvalidPatternError
+> & {
+  message: string;
+};
 
-    super(CHECK_ERROR_ID, summary, {
-      path: firstFailure.path,
-      failures: safeFailures,
-    });
-    this.path = firstFailure.path;
-    this.failures = safeFailures;
-  }
-}
+export type CheckOptionsRuntimeError = ErrorType<
+  typeof checkInvalidOptionsError
+> & {
+  message: string;
+};
 
-export class MatchPatternError extends RunnerError<{ message: string }> {
-  constructor(message: string) {
-    super(CHECK_INVALID_PATTERN_ERROR_ID, message, { message });
-  }
-}
-
-export class CheckOptionsError extends RunnerError<{ message: string }> {
-  constructor(message: string) {
-    super(CHECK_INVALID_OPTIONS_ERROR_ID, message, { message });
-  }
-}
-
-export class CheckJsonSchemaPatternError extends RunnerError<{
+export type CheckJsonSchemaPatternRuntimeError = ErrorType<
+  typeof checkJsonSchemaUnsupportedPatternError
+> & {
   path: string;
   reason: string;
   patternKind: string;
-}> {
-  public readonly path: string;
-  public readonly reason: string;
-  public readonly patternKind: string;
+};
 
-  constructor(path: string, reason: string, patternKind: string) {
-    super(
-      CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID,
-      `Cannot convert Match pattern at ${path}: ${reason}.`,
-      { path, reason, patternKind },
-    );
-    this.path = path;
-    this.reason = reason;
-    this.patternKind = patternKind;
+export function createMatchError(
+  failures: readonly MatchFailure[],
+  messageOverride?: MatchMessageOverride,
+): MatchRuntimeError {
+  const safeFailures = failures.length === 0 ? [rootFailure()] : failures;
+  const [firstFailure] = safeFailures;
+  const data = {
+    path: firstFailure.path,
+    failures: safeFailures,
+  };
+
+  if (!messageOverride) {
+    return Object.assign(matchError.new(data), data);
   }
+
+  return Object.assign(
+    new RunnerError(
+      MATCH_ERROR_ID,
+      getMatchErrorMessage(safeFailures, messageOverride),
+      data,
+      matchError.httpCode,
+      undefined,
+      matchError[symbolDefinitionIdentity],
+    ),
+    data,
+  );
 }
 
-function rootFailure(): MatchFailure {
+export function isMatchError(error: unknown): error is MatchRuntimeError {
+  return matchError.is(error);
+}
+
+export function createMatchPatternError(
+  message: string,
+): MatchPatternRuntimeError {
+  return checkInvalidPatternError.new({ message });
+}
+
+export function createCheckOptionsError(
+  message: string,
+): CheckOptionsRuntimeError {
+  return checkInvalidOptionsError.new({ message });
+}
+
+export function createCheckJsonSchemaPatternError(
+  path: string,
+  reason: string,
+  patternKind: string,
+): CheckJsonSchemaPatternRuntimeError {
+  return Object.assign(
+    checkJsonSchemaUnsupportedPatternError.new({ path, reason, patternKind }),
+    {
+      path,
+      reason,
+      patternKind,
+    },
+  );
+}
+
+export function getMatchErrorMessage(
+  failures: readonly MatchFailure[],
+  messageOverride?: MatchMessageOverride,
+): string {
+  const [firstFailure] = failures;
+
+  return (
+    (messageOverride?.appliesToAggregate || failures.length === 1
+      ? messageOverride?.message
+      : undefined) ??
+    (failures.length === 1
+      ? firstFailure.message
+      : `Match failed with ${failures.length} errors:\n${failures.map((failure) => `- ${failure.message}`).join("\n")}`)
+  );
+}
+
+export function rootFailure(): MatchFailure {
   return {
     path: "$",
     expected: "valid pattern",

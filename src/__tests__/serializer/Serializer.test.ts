@@ -6,7 +6,8 @@ import { describe, it, expect, beforeEach } from "@jest/globals";
 import { Serializer } from "../../serializer/index";
 import type { TypeDefinition } from "../../serializer/index";
 import { createMessageError } from "../../errors";
-import { Match, MatchError } from "../../tools/check";
+import { matchError } from "../../errors/foundation/match.errors";
+import { Match } from "../../tools/check";
 import type { MatchPattern } from "../../tools/check";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -65,6 +66,15 @@ interface NullableExample {
   defined: string;
   undefined?: undefined;
   null: null;
+}
+
+function expectMatchFailure(run: () => unknown): void {
+  try {
+    run();
+    throw new Error("Expected runner.errors.matchError");
+  } catch (error) {
+    expect(matchError.is(error)).toBe(true);
+  }
 }
 
 const createUserType = (): TypeDefinition<
@@ -657,11 +667,11 @@ describe("Serializer", () => {
 
       const payload = serializer.serialize({ id: "u1" });
 
-      expect(() =>
+      expectMatchFailure(() =>
         serializer.deserialize(payload, {
           schema: UndecoratedUserDto,
         }),
-      ).toThrow(MatchError);
+      );
     });
 
     it("should deserialize with decorated class constructor shorthand", () => {
@@ -734,11 +744,11 @@ describe("Serializer", () => {
     it("should fail when array schema shorthand receives a non-array value", () => {
       const payload = serializer.serialize({ id: "u1" });
 
-      expect(() =>
+      expectMatchFailure(() =>
         serializer.deserialize(payload, {
           schema: [Match.ObjectIncluding({ id: Match.NonEmptyString })],
         }),
-      ).toThrow(MatchError);
+      );
     });
 
     it("should fail for non-constructor function schemas in array shorthand", () => {
@@ -795,11 +805,11 @@ describe("Serializer", () => {
 
       const payload = serializer.serialize([{ id: "u1" }, { id: "" }]);
 
-      expect(() =>
+      expectMatchFailure(() =>
         serializer.deserialize(payload, {
           schema: Match.ArrayOf(Match.fromSchema(UserDto)),
         }),
-      ).toThrow(MatchError);
+      );
     });
 
     it("should preserve decorator field custom messages for Match.fromSchema", () => {
@@ -934,11 +944,11 @@ describe("Serializer", () => {
         ],
       });
 
-      expect(() =>
+      expectMatchFailure(() =>
         serializer.deserialize(payload, {
           schema: Match.fromSchema(ProductDto),
         }),
-      ).toThrow(MatchError);
+      );
     });
 
     it("should validate nested lazy schemas without class decorators", () => {

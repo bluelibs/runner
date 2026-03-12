@@ -11,6 +11,7 @@ import type {
   ResourceSubtreePolicyInput,
   ResourceTagType,
   TagType,
+  ResolveValidationSchemaInput,
   ValidationSchemaInput,
 } from "../../../defs";
 import {
@@ -233,7 +234,14 @@ export function makeResourceBuilder<
         false
       >(next);
     },
-    configSchema<TNewConfig>(schema: ValidationSchemaInput<TNewConfig>) {
+    configSchema<
+      TNewConfig = never,
+      TSchema extends ValidationSchemaInput<
+        [TNewConfig] extends [never] ? any : TNewConfig
+      > = ValidationSchemaInput<
+        [TNewConfig] extends [never] ? any : TNewConfig
+      >,
+    >(schema: TSchema) {
       const next = clone<
         TConfig,
         TValue,
@@ -242,7 +250,7 @@ export function makeResourceBuilder<
         TMeta,
         TTags,
         TMiddleware,
-        TNewConfig,
+        ResolveValidationSchemaInput<TNewConfig, TSchema>,
         TValue,
         TDeps,
         TContext,
@@ -251,7 +259,7 @@ export function makeResourceBuilder<
         TMiddleware
       >(state, { configSchema: schema });
       return makeResourceBuilder<
-        TNewConfig,
+        ResolveValidationSchemaInput<TNewConfig, TSchema>,
         TValue,
         TDeps,
         TContext,
@@ -261,10 +269,22 @@ export function makeResourceBuilder<
         false
       >(next);
     },
-    schema<TNewConfig>(schema: ValidationSchemaInput<TNewConfig>) {
+    schema<
+      TNewConfig = never,
+      TSchema extends ValidationSchemaInput<
+        [TNewConfig] extends [never] ? any : TNewConfig
+      > = ValidationSchemaInput<
+        [TNewConfig] extends [never] ? any : TNewConfig
+      >,
+    >(schema: TSchema) {
       return builder.configSchema(schema);
     },
-    resultSchema<TResolved>(schema: ValidationSchemaInput<TResolved>) {
+    resultSchema<
+      TResolved = never,
+      TSchema extends ValidationSchemaInput<
+        [TResolved] extends [never] ? any : TResolved
+      > = ValidationSchemaInput<[TResolved] extends [never] ? any : TResolved>,
+    >(schema: TSchema) {
       const next = clone<
         TConfig,
         TValue,
@@ -274,7 +294,7 @@ export function makeResourceBuilder<
         TTags,
         TMiddleware,
         TConfig,
-        Promise<TResolved>,
+        Promise<ResolveValidationSchemaInput<TResolved, TSchema>>,
         TDeps,
         TContext,
         TMeta,
@@ -283,7 +303,7 @@ export function makeResourceBuilder<
       >(state, { resultSchema: schema });
       return makeResourceBuilder<
         TConfig,
-        Promise<TResolved>,
+        Promise<ResolveValidationSchemaInput<TResolved, TSchema>>,
         TDeps,
         TContext,
         TMeta,

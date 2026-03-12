@@ -4,6 +4,10 @@ import { ITaskMiddlewareConfigured } from "../defs";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
 import { contextError, platformUnsupportedFunctionError } from "../errors";
 import { IAsyncContext, IAsyncContextDefinition } from "../types/asyncContext";
+import type {
+  InferValidationSchemaInput,
+  ValidationSchemaInput,
+} from "../types/utilities";
 import { Serializer } from "../serializer";
 import {
   symbolAsyncContext,
@@ -31,6 +35,19 @@ export function getCurrentStore(): Map<string, unknown> | undefined {
  * Create a new typed Context. The result contains helpers similar to React's
  * Context API but adapted for async usage in Runner.
  */
+export function defineAsyncContext<TSchema extends ValidationSchemaInput<any>>(
+  def: Omit<
+    IAsyncContextDefinition<InferValidationSchemaInput<TSchema>>,
+    "configSchema"
+  > & {
+    configSchema: TSchema;
+  },
+  filePath?: string,
+): IAsyncContext<InferValidationSchemaInput<TSchema>>;
+export function defineAsyncContext<T>(
+  def: IAsyncContextDefinition<T>,
+  filePath?: string,
+): IAsyncContext<T>;
 export function defineAsyncContext<T>(
   def: IAsyncContextDefinition<T>,
   filePath?: string,
@@ -105,7 +122,7 @@ export function defineAsyncContext<T>(
     require(): ITaskMiddlewareConfigured {
       return requireContextTaskMiddleware.with({
         context: api as IAsyncContext<T>,
-      });
+      } as any);
     },
     /* istanbul ignore next */
     serialize: def.serialize || ((data: T) => serializer.stringify(data)),
@@ -120,7 +137,7 @@ export function defineAsyncContext<T>(
     },
   };
 
-  return deepFreeze(api);
+  return deepFreeze(api) as IAsyncContext<T>;
 }
 
 export type { IAsyncContext } from "../types/asyncContext";

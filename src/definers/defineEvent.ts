@@ -7,6 +7,10 @@ import {
   symbolOptionalDependency,
   IOptionalDependency,
 } from "../defs";
+import type {
+  InferValidationSchemaInput,
+  ValidationSchemaInput,
+} from "../types/utilities";
 import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
@@ -14,6 +18,23 @@ import { assertDefinitionId } from "./assertDefinitionId";
 import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
+export function defineEvent<
+  TSchema extends ValidationSchemaInput<any>,
+  TTransactional extends boolean | undefined = boolean | undefined,
+  TParallel extends boolean | undefined = boolean | undefined,
+>(
+  config: Omit<
+    IEventDefinition<InferValidationSchemaInput<TSchema>>,
+    "payloadSchema"
+  > & {
+    payloadSchema: TSchema;
+    transactional?: TTransactional;
+    parallel?: TParallel;
+  },
+): IEvent<InferValidationSchemaInput<TSchema>> & {
+  parallel?: TParallel;
+  transactional?: TTransactional;
+};
 export function defineEvent<
   TPayload = void,
   TTransactional extends boolean | undefined = boolean | undefined,

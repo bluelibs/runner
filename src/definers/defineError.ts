@@ -24,6 +24,7 @@ import {
   isObjectRecord,
 } from "../tools/typeChecks";
 import type {
+  InferValidationSchemaInput,
   IValidationSchema,
   ValidationSchemaInput,
 } from "../types/utilities";
@@ -94,11 +95,7 @@ const normalizeErrorDataSchema = <TData extends DefaultErrorType>(
     return checkModule.Match.fromSchema(schema) as IValidationSchema<TData>;
   }
 
-  return {
-    parse(input: unknown): TData {
-      return checkModule.check(input, schema as never) as TData;
-    },
-  };
+  return checkModule.Match.compile(schema as never) as IValidationSchema<TData>;
 };
 
 export class RunnerError<
@@ -208,6 +205,20 @@ export class ErrorHelper<
  * @param definition
  * @returns
  */
+export function defineError<
+  TSchema extends ValidationSchemaInput<any>,
+  TData extends DefaultErrorType = InferValidationSchemaInput<TSchema> &
+    DefaultErrorType,
+>(
+  definition: Omit<IErrorDefinition<TData>, "dataSchema"> & {
+    dataSchema: TSchema;
+  },
+  filePath?: string,
+): IErrorHelper<TData>;
+export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
+  definition: IErrorDefinition<TData>,
+  filePath?: string,
+): IErrorHelper<TData>;
 export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
   definition: IErrorDefinition<TData>,
   filePath?: string,

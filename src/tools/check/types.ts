@@ -22,7 +22,7 @@ import {
   WherePattern,
 } from "./matcher";
 import type { MatchClassOptions, MatchSchemaOptions } from "./classSchema";
-import type { MatchError } from "./errors";
+import type { MatchRuntimeError } from "./errors";
 
 export interface CheckSchemaLike<TParsed = unknown> {
   parse(input: unknown): TParsed;
@@ -303,7 +303,7 @@ export interface MatchMessageContext<
 > {
   value: unknown;
   parent?: unknown;
-  error: MatchError;
+  error: MatchRuntimeError;
   path: string;
   pattern: TPattern;
 }

@@ -1,4 +1,4 @@
-import { MatchPatternError } from "../errors";
+import { createMatchPatternError } from "../errors";
 import { matchToJsonSchema } from "../toJsonSchema";
 import type {
   MatchJsonSchema,
@@ -98,7 +98,7 @@ export class LazyPattern<TPattern = unknown> extends MatchPatternBase<
   resolve(): TPattern {
     if (this.hasResolved) return this.resolvedPattern as TPattern;
     if (this.isResolving) {
-      throw new MatchPatternError(
+      throw createMatchPatternError(
         "Bad pattern: Match.Lazy resolver produced a circular unresolved reference.",
       );
     }
@@ -107,13 +107,13 @@ export class LazyPattern<TPattern = unknown> extends MatchPatternBase<
     try {
       const resolved = this.resolver();
       if (resolved === undefined) {
-        throw new MatchPatternError(
+        throw createMatchPatternError(
           "Bad pattern: Match.Lazy resolver must return a pattern.",
         );
       }
       // Resolving to itself would otherwise loop forever at match time.
       if ((resolved as unknown) === (this as unknown)) {
-        throw new MatchPatternError(
+        throw createMatchPatternError(
           "Bad pattern: Match.Lazy resolver cannot resolve to itself.",
         );
       }

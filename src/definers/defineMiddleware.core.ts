@@ -1,4 +1,9 @@
-import type { TagTarget, TagType, ValidationSchemaInput } from "../defs";
+import type {
+  InferValidationSchemaInput,
+  TagTarget,
+  TagType,
+  ValidationSchemaInput,
+} from "../defs";
 import type { DependencyMapType } from "../types/utilities";
 import type { ThrowsList } from "../types/error";
 import {
@@ -7,6 +12,7 @@ import {
   symbolMiddlewareConfiguredFrom,
 } from "../types/symbols";
 import { validationError } from "../errors";
+import { isMatchError } from "../tools/check/errors";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
@@ -39,6 +45,16 @@ interface MiddlewareDefCore<TConfig, TDeps extends DependencyMapType> {
   dependencies?: TDeps | ((config: TConfig) => TDeps);
   throws?: ThrowsList;
 }
+
+export type MiddlewareDefWithInferredSchema<
+  TSchema extends ValidationSchemaInput<any>,
+  TDeps extends DependencyMapType,
+> = Omit<
+  MiddlewareDefCore<InferValidationSchemaInput<TSchema>, TDeps>,
+  "configSchema"
+> & {
+  configSchema: TSchema;
+};
 
 /**
  * Shared core logic for defining both task and resource middleware.
@@ -106,6 +122,9 @@ export function defineMiddlewareCore<TConfig, TDeps extends DependencyMapType>(
               current.configSchema as { parse: (v: unknown) => TConfig }
             ).parse(config);
           } catch (error) {
+            if (isMatchError(error)) {
+              throw error;
+            }
             validationError.throw({
               subject: "Middleware config",
               id: current.id as string,

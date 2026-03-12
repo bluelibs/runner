@@ -1,18 +1,21 @@
 import {
   CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID,
-  CheckJsonSchemaPatternError,
   Match,
 } from "../../tools/check";
+import { checkJsonSchemaUnsupportedPatternError } from "../../errors";
+import type { CheckJsonSchemaPatternRuntimeError } from "../../tools/check/errors";
 
 const DRAFT_2020_12_SCHEMA = "https://json-schema.org/draft/2020-12/schema";
 
-function expectSchemaError(run: () => unknown): CheckJsonSchemaPatternError {
+function expectSchemaError(
+  run: () => unknown,
+): CheckJsonSchemaPatternRuntimeError {
   try {
     run();
-    throw new Error("Expected CheckJsonSchemaPatternError");
+    throw new Error("Expected checkJsonSchemaUnsupportedPatternError");
   } catch (error) {
-    expect(error).toBeInstanceOf(CheckJsonSchemaPatternError);
-    return error as CheckJsonSchemaPatternError;
+    expect(checkJsonSchemaUnsupportedPatternError.is(error)).toBe(true);
+    return error as CheckJsonSchemaPatternRuntimeError;
   }
 }
 

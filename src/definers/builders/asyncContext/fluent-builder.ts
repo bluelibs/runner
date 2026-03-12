@@ -1,4 +1,9 @@
-import type { IAsyncContextDefinition, IAsyncContextMeta } from "../../../defs";
+import type {
+  IAsyncContextDefinition,
+  IAsyncContextMeta,
+  ResolveValidationSchemaInput,
+  ValidationSchemaInput,
+} from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineAsyncContext } from "../../defineAsyncContext";
 import type { AsyncContextFluentBuilder } from "./fluent-builder.interface";
@@ -11,25 +16,39 @@ import { clone } from "./utils";
 export function makeAsyncContextBuilder<T>(
   state: BuilderState<T>,
 ): AsyncContextFluentBuilder<T> {
-  const builder: AsyncContextFluentBuilder<T> = {
+  const builder = {
     id: state.id,
 
-    serialize(fn) {
+    serialize(fn: (data: T) => string) {
       const next = clone(state, { serialize: fn });
       return makeAsyncContextBuilder(next);
     },
 
-    parse(fn) {
+    parse(fn: (raw: string) => T) {
       const next = clone(state, { parse: fn });
       return makeAsyncContextBuilder(next);
     },
 
-    configSchema(schema) {
-      const next = clone(state, { configSchema: schema });
-      return makeAsyncContextBuilder(next);
+    configSchema<
+      TNew = never,
+      TSchema extends ValidationSchemaInput<
+        [TNew] extends [never] ? any : TNew
+      > = ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+    >(schema: TSchema) {
+      const next = clone(state as BuilderState<any>, {
+        configSchema: schema,
+      }) as BuilderState<ResolveValidationSchemaInput<TNew, TSchema>>;
+      return makeAsyncContextBuilder<
+        ResolveValidationSchemaInput<TNew, TSchema>
+      >(next);
     },
 
-    schema(schema) {
+    schema<
+      TNew = never,
+      TSchema extends ValidationSchemaInput<
+        [TNew] extends [never] ? any : TNew
+      > = ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+    >(schema: TSchema) {
       return builder.configSchema(schema);
     },
 
@@ -50,5 +69,5 @@ export function makeAsyncContextBuilder<T>(
     },
   };
 
-  return builder;
+  return builder as AsyncContextFluentBuilder<T>;
 }

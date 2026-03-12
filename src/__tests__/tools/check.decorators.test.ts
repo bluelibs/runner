@@ -1,12 +1,31 @@
-import {
-  Match,
-  MatchError,
-  MatchPatternError,
-  check,
-  type MatchPattern,
-} from "../../tools/check";
+import { checkInvalidPatternError, matchError } from "../../errors";
 import { RunnerError } from "../../definers/defineError";
+import { Match, check, type MatchPattern } from "../../tools/check";
 import { getClassSchemaDefinition } from "../../tools/check/classSchema";
+
+function expectMatchFailure(
+  run: () => unknown,
+): ReturnType<typeof matchError.new> {
+  try {
+    run();
+    throw new Error("Expected matchError");
+  } catch (error) {
+    expect(matchError.is(error)).toBe(true);
+    return error as ReturnType<typeof matchError.new>;
+  }
+}
+
+function expectInvalidPatternFailure(
+  run: () => unknown,
+): ReturnType<typeof checkInvalidPatternError.new> {
+  try {
+    run();
+    throw new Error("Expected checkInvalidPatternError");
+  } catch (error) {
+    expect(checkInvalidPatternError.is(error)).toBe(true);
+    return error as ReturnType<typeof checkInvalidPatternError.new>;
+  }
+}
 
 describe("tools/check decorators", () => {
   it("keeps Class/fromClass aliases mapped to Schema/fromSchema", () => {
@@ -104,9 +123,9 @@ describe("tools/check decorators", () => {
     expect(() =>
       check({ name: "Ada" }, Match.fromSchema(ExactUser)),
     ).not.toThrow();
-    expect(() =>
+    expectMatchFailure(() =>
       check({ name: "Ada", extra: true }, Match.fromSchema(ExactUser)),
-    ).toThrow(MatchError);
+    );
 
     expect(() =>
       check(
@@ -115,12 +134,12 @@ describe("tools/check decorators", () => {
       ),
     ).not.toThrow();
 
-    expect(() =>
+    expectMatchFailure(() =>
       check(
         { name: "Ada", extra: true },
         Match.fromSchema(ExactUser, { exact: true }),
       ),
-    ).toThrow(MatchError);
+    );
 
     const staticField = Match.Field(Match.Any);
     expect(() =>
@@ -149,21 +168,17 @@ describe("tools/check decorators", () => {
       "retries",
     );
 
-    try {
-      Match.fromSchema(RetriesSchema).parse({ retries: 0 });
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.message).toBe(
-        "retries is invalid. Received 0 at $.retries.",
-      );
-      expect(matchError.path).toBe("$.retries");
-      expect(matchError.failures).toHaveLength(1);
-      expect(matchError.failures[0].message).toBe(
-        "Failed Match.Where validation at $.retries.",
-      );
-    }
+    const retriesError = expectMatchFailure(() =>
+      Match.fromSchema(RetriesSchema).parse({ retries: 0 }),
+    );
+    expect(retriesError.message).toBe(
+      "retries is invalid. Received 0 at $.retries.",
+    );
+    expect(retriesError.data.path).toBe("$.retries");
+    expect(retriesError.data.failures).toHaveLength(1);
+    expect(retriesError.data.failures[0].message).toBe(
+      "Failed Match.Where validation at $.retries.",
+    );
 
     expect(formatter).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -195,18 +210,14 @@ describe("tools/check decorators", () => {
       }),
     )(ParentSchema.prototype, "child");
 
-    try {
-      check({ child: { name: 42 } }, Match.fromSchema(ParentSchema));
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.message).toBe("child payload is invalid");
-      expect(matchError.path).toBe("$.child.name");
-      expect(matchError.failures[0].message).toBe(
-        "Expected string, got number at $.child.name.",
-      );
-    }
+    const childError = expectMatchFailure(() =>
+      check({ child: { name: 42 } }, Match.fromSchema(ParentSchema)),
+    );
+    expect(childError.message).toBe("child payload is invalid");
+    expect(childError.data.path).toBe("$.child.name");
+    expect(childError.data.failures[0].message).toBe(
+      "Expected string, got number at $.child.name.",
+    );
   });
 
   it("supports Match.Lazy for recursive non-class patterns", () => {
@@ -272,23 +283,23 @@ describe("tools/check decorators", () => {
       RunnerError,
     );
 
-    expect(() =>
+    expectInvalidPatternFailure(() =>
       Match.WithMessage(String, {
         error: () => {
           throw new Error("boom");
         },
       }).parse(1),
-    ).toThrow(MatchPatternError);
+    );
 
-    expect(() =>
+    expectInvalidPatternFailure(() =>
       Match.WithMessage(String, {
         error: () => 42 as never,
       }).parse(1),
-    ).toThrow(MatchPatternError);
+    );
   });
 
   it("supports Match.WithMessage in plain check()", () => {
-    try {
+    const emailError = expectMatchFailure(() =>
       check(
         { email: "nope" },
         {
@@ -297,17 +308,13 @@ describe("tools/check decorators", () => {
               `invalid email ${String(value)} at ${path}`,
           }),
         },
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.message).toBe("invalid email nope at $.email");
-      expect(matchError.path).toBe("$.email");
-      expect(matchError.failures[0].message).toBe(
-        "Expected email, got string at $.email.",
-      );
-    }
+      ),
+    );
+    expect(emailError.message).toBe("invalid email nope at $.email");
+    expect(emailError.data.path).toBe("$.email");
+    expect(emailError.data.failures[0].message).toBe(
+      "Expected email, got string at $.email.",
+    );
 
     expect(() =>
       check(
@@ -323,7 +330,7 @@ describe("tools/check decorators", () => {
   });
 
   it("does not let later WithMessage siblings replace the first aggregated failure", () => {
-    try {
+    const siblingError = expectMatchFailure(() =>
       check(
         {
           first: 1,
@@ -336,20 +343,16 @@ describe("tools/check decorators", () => {
           }),
         },
         { throwAllErrors: true },
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.message).toBe(
-        "Match failed with 2 errors:\n- Expected string, got number at $.first.\n- Expected string, got number at $.second.",
-      );
-      expect(matchError.failures).toHaveLength(2);
-    }
+      ),
+    );
+    expect(siblingError.message).toContain(
+      "Match failed with 2 errors:\n- Expected string, got number at $.first.\n- Expected string, got number at $.second.",
+    );
+    expect(siblingError.data.failures).toHaveLength(2);
   });
 
   it("keeps the aggregate summary for sibling field WithMessage failures", () => {
-    try {
+    const aggregateError = expectMatchFailure(() =>
       check(
         {
           first: 1,
@@ -364,18 +367,14 @@ describe("tools/check decorators", () => {
           }),
         },
         { throwAllErrors: true },
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.message).toBe(
-        "Match failed with 2 errors:\n- Expected string, got number at $.first.\n- Expected string, got number at $.second.",
-      );
-      expect(matchError.failures).toHaveLength(2);
-      expect(matchError.failures[0].path).toBe("$.first");
-      expect(matchError.failures[1].path).toBe("$.second");
-    }
+      ),
+    );
+    expect(aggregateError.message).toContain(
+      "Match failed with 2 errors:\n- Expected string, got number at $.first.\n- Expected string, got number at $.second.",
+    );
+    expect(aggregateError.data.failures).toHaveLength(2);
+    expect(aggregateError.data.failures[0].path).toBe("$.first");
+    expect(aggregateError.data.failures[1].path).toBe("$.second");
   });
 
   it("keeps subtree Match.WithMessage overrides as aggregate headlines", () => {
@@ -399,7 +398,7 @@ describe("tools/check decorators", () => {
     )(ParentSchema.prototype, "child");
     Match.Field(String)(ParentSchema.prototype, "title");
 
-    try {
+    const parentError = expectMatchFailure(() =>
       check(
         {
           child: { name: 42 },
@@ -407,16 +406,12 @@ describe("tools/check decorators", () => {
         } as any,
         Match.fromSchema(ParentSchema),
         { throwAllErrors: true },
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.message).toBe("child payload is invalid");
-      expect(matchError.failures).toHaveLength(2);
-      expect(matchError.failures[0].path).toBe("$.child.name");
-      expect(matchError.failures[1].path).toBe("$.title");
-    }
+      ),
+    );
+    expect(parentError.message).toBe("child payload is invalid");
+    expect(parentError.data.failures).toHaveLength(2);
+    expect(parentError.data.failures[0].path).toBe("$.child.name");
+    expect(parentError.data.failures[1].path).toBe("$.title");
   });
 
   it("reads errorPolicy defaults from Match.Schema metadata", () => {
@@ -429,19 +424,15 @@ describe("tools/check decorators", () => {
     Match.Field(String)(AggregateChildSchema.prototype, "first");
     Match.Field(String)(AggregateChildSchema.prototype, "second");
 
-    try {
+    const aggregateChildError = expectMatchFailure(() =>
       check(
         { first: 1, second: 2 } as any,
         Match.fromSchema(AggregateChildSchema),
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures).toHaveLength(2);
-      expect(matchError.failures[0].path).toBe("$.first");
-      expect(matchError.failures[1].path).toBe("$.second");
-    }
+      ),
+    );
+    expect(aggregateChildError.data.failures).toHaveLength(2);
+    expect(aggregateChildError.data.failures[0].path).toBe("$.first");
+    expect(aggregateChildError.data.failures[1].path).toBe("$.second");
   });
 
   it("keeps deprecated Match.Schema({ throwAllErrors }) support", () => {
@@ -454,17 +445,13 @@ describe("tools/check decorators", () => {
     Match.Field(String)(LegacyAggregateSchema.prototype, "first");
     Match.Field(String)(LegacyAggregateSchema.prototype, "second");
 
-    try {
+    const legacyAggregateError = expectMatchFailure(() =>
       check(
         { first: 1, second: 2 } as any,
         Match.fromSchema(LegacyAggregateSchema),
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures).toHaveLength(2);
-    }
+      ),
+    );
+    expect(legacyAggregateError.data.failures).toHaveLength(2);
   });
 
   it("supports Match.fromSchema(..., { errorPolicy }) defaults", () => {
@@ -477,17 +464,13 @@ describe("tools/check decorators", () => {
     Match.Field(String)(SchemaWithPerCallPolicy.prototype, "first");
     Match.Field(String)(SchemaWithPerCallPolicy.prototype, "second");
 
-    try {
+    const perCallError = expectMatchFailure(() =>
       check(
         { first: 1, second: 2 } as any,
         Match.fromSchema(SchemaWithPerCallPolicy, { errorPolicy: "all" }),
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures).toHaveLength(2);
-    }
+      ),
+    );
+    expect(perCallError.data.failures).toHaveLength(2);
   });
 
   it("supports Match.fromSchema(..., { throwAllErrors: false }) alias defaults", () => {
@@ -500,20 +483,16 @@ describe("tools/check decorators", () => {
     Match.Field(String)(SchemaWithLegacyPerCallPolicy.prototype, "first");
     Match.Field(String)(SchemaWithLegacyPerCallPolicy.prototype, "second");
 
-    try {
+    const legacyPerCallError = expectMatchFailure(() =>
       check(
         { first: 1, second: 2 } as any,
         Match.fromSchema(SchemaWithLegacyPerCallPolicy, {
           throwAllErrors: false,
         }),
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures).toHaveLength(1);
-      expect(matchError.path).toBe("$.first");
-    }
+      ),
+    );
+    expect(legacyPerCallError.data.failures).toHaveLength(1);
+    expect(legacyPerCallError.data.path).toBe("$.first");
   });
 
   it("supports Match.fromSchema(..., { throwAllErrors: true }) alias defaults", () => {
@@ -526,19 +505,15 @@ describe("tools/check decorators", () => {
     Match.Field(String)(SchemaWithLegacyAggregatePolicy.prototype, "first");
     Match.Field(String)(SchemaWithLegacyAggregatePolicy.prototype, "second");
 
-    try {
+    const legacyAggregatePolicyError = expectMatchFailure(() =>
       check(
         { first: 1, second: 2 } as any,
         Match.fromSchema(SchemaWithLegacyAggregatePolicy, {
           throwAllErrors: true,
         }),
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures).toHaveLength(2);
-    }
+      ),
+    );
+    expect(legacyAggregatePolicyError.data.failures).toHaveLength(2);
   });
 
   it("maps deprecated Match.Schema({ throwAllErrors: false }) to fail-fast", () => {
@@ -551,18 +526,14 @@ describe("tools/check decorators", () => {
     Match.Field(String)(LegacyFirstErrorSchema.prototype, "first");
     Match.Field(String)(LegacyFirstErrorSchema.prototype, "second");
 
-    try {
+    const legacyFirstError = expectMatchFailure(() =>
       check(
         { first: 1, second: 2 } as any,
         Match.fromSchema(LegacyFirstErrorSchema),
-      );
-      throw new Error("Expected MatchError");
-    } catch (error) {
-      expect(error).toBeInstanceOf(MatchError);
-      const matchError = error as MatchError;
-      expect(matchError.failures).toHaveLength(1);
-      expect(matchError.path).toBe("$.first");
-    }
+      ),
+    );
+    expect(legacyFirstError.data.failures).toHaveLength(1);
+    expect(legacyFirstError.data.path).toBe("$.first");
   });
 
   it("does not leak Match.WithMessage state across repeated parses", () => {
@@ -571,16 +542,12 @@ describe("tools/check decorators", () => {
     });
 
     for (const candidate of ["nope", "still-nope"]) {
-      try {
-        emailPattern.parse(candidate);
-        throw new Error("Expected MatchError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(MatchError);
-        const matchError = error as MatchError;
-        expect(matchError.message).toBe(`invalid email ${candidate} at $`);
-        expect(matchError.path).toBe("$");
-        expect(matchError.failures).toHaveLength(1);
-      }
+      const repeatedError = expectMatchFailure(() =>
+        emailPattern.parse(candidate),
+      );
+      expect(repeatedError.message).toBe(`invalid email ${candidate} at $`);
+      expect(repeatedError.data.path).toBe("$");
+      expect(repeatedError.data.failures).toHaveLength(1);
     }
   });
 

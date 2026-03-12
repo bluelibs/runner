@@ -1,4 +1,4 @@
-import { MatchError, MatchPatternError } from "../errors";
+import { createMatchError, createMatchPatternError } from "../errors";
 import { getClassSchemaDefinition } from "../classSchema";
 import {
   ClassPattern,
@@ -219,7 +219,13 @@ export function matchesPattern(
       try {
         if (pattern.condition(value, parent)) return true;
       } catch (error) {
-        if (!(error instanceof MatchError)) throw error;
+        return fail(
+          context,
+          path,
+          "Match.Where condition",
+          value,
+          `Failed Match.Where validation at ${formatPath(path)}: ${String(error)}.`,
+        );
       }
       return fail(
         context,
@@ -331,7 +337,7 @@ export function matchesPattern(
     }
     if (Array.isArray(pattern)) {
       if (pattern.length !== 1) {
-        throw new MatchPatternError(
+        throw createMatchPatternError(
           "Bad pattern: arrays must have exactly one type element.",
         );
       }
@@ -360,12 +366,12 @@ export function matchesPattern(
               value,
             );
       } catch {
-        throw new MatchPatternError(
+        throw createMatchPatternError(
           `Bad pattern: constructor pattern "${pattern.name || "<anonymous>"}" is not valid.`,
         );
       }
     }
-    throw new MatchPatternError(
+    throw createMatchPatternError(
       `Bad pattern: unsupported pattern type "${describeType(pattern)}".`,
     );
   } finally {
@@ -399,12 +405,12 @@ function maybeApplyPatternMessageOverride(
   }
 
   const nestedFailures = context.failures.slice(failuresBefore);
-  const nestedError = new MatchError(nestedFailures);
+  const nestedError = createMatchError(nestedFailures);
   const errorContext: MatchMessageContext = {
     value,
     parent,
     error: nestedError,
-    path: nestedError.path,
+    path: nestedError.data.path,
     pattern: pattern.pattern,
   };
 
@@ -412,13 +418,13 @@ function maybeApplyPatternMessageOverride(
   try {
     resolvedMessage = errorOption(errorContext);
   } catch (error) {
-    throw new MatchPatternError(
+    throw createMatchPatternError(
       `Bad pattern: Match.WithMessage error formatter threw: ${String(error)}`,
     );
   }
 
   if (typeof resolvedMessage !== "string") {
-    throw new MatchPatternError(
+    throw createMatchPatternError(
       "Bad pattern: Match.WithMessage error formatter must return a string.",
     );
   }

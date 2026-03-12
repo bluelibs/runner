@@ -7,6 +7,7 @@ import type {
   TagType,
   TaskTagType,
   TaskMiddlewareAttachmentType,
+  ResolveValidationSchemaInput,
   ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
@@ -69,22 +70,51 @@ export interface TaskFluentBuilder<
     options: { override: true },
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TNewTags, TMiddleware>;
 
-  inputSchema<TNewInput>(
-    schema: ValidationSchemaInput<TNewInput>,
-  ): TaskFluentBuilder<TNewInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
+  inputSchema<
+    TNewInput = never,
+    TSchema extends ValidationSchemaInput<
+      [TNewInput] extends [never] ? any : TNewInput
+    > = ValidationSchemaInput<[TNewInput] extends [never] ? any : TNewInput>,
+  >(
+    schema: TSchema,
+  ): TaskFluentBuilder<
+    ResolveValidationSchemaInput<TNewInput, TSchema>,
+    TOutput,
+    TDeps,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
 
   /**
    * Alias for inputSchema. Use this to define the task input validation contract.
    */
-  schema<TNewInput>(
-    schema: ValidationSchemaInput<TNewInput>,
-  ): TaskFluentBuilder<TNewInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
+  schema<
+    TNewInput = never,
+    TSchema extends ValidationSchemaInput<
+      [TNewInput] extends [never] ? any : TNewInput
+    > = ValidationSchemaInput<[TNewInput] extends [never] ? any : TNewInput>,
+  >(
+    schema: TSchema,
+  ): TaskFluentBuilder<
+    ResolveValidationSchemaInput<TNewInput, TSchema>,
+    TOutput,
+    TDeps,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
 
-  resultSchema<TResolved>(
-    schema: ValidationSchemaInput<TResolved>,
+  resultSchema<
+    TResolved = never,
+    TSchema extends ValidationSchemaInput<
+      [TResolved] extends [never] ? any : TResolved
+    > = ValidationSchemaInput<[TResolved] extends [never] ? any : TResolved>,
+  >(
+    schema: TSchema,
   ): TaskFluentBuilder<
     TInput,
-    Promise<TResolved>,
+    Promise<ResolveValidationSchemaInput<TResolved, TSchema>>,
     TDeps,
     TMeta,
     TTags,

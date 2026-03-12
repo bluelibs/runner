@@ -210,7 +210,7 @@ describe("requestHandlers - event handling", () => {
         ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
         : undefined;
       expect(res._status).toBe(500);
-      expect(json?.error?.id).toBeUndefined();
+      expect(json?.error?.id).toBe("tests-errors-non-string-name-ev");
       expect(json?.error?.data).toEqual({ reason: "ev" });
     });
 

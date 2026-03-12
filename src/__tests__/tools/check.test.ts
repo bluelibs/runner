@@ -1,9 +1,15 @@
 import { RunnerError } from "../../definers/defineError";
 import {
+  checkInvalidPatternError,
+  matchError,
+} from "../../errors/foundation/match.errors";
+import {
   CHECK_INVALID_PATTERN_ERROR_ID,
+  MATCH_ERROR_ID,
   Match,
-  MatchError,
+  createMatchError,
   check,
+  isMatchError,
 } from "../../tools/check";
 
 const checkRuntime = check as (
@@ -14,6 +20,18 @@ const checkRuntime = check as (
 
 class User {
   constructor(public readonly id: string) {}
+}
+
+function expectMatchFailure(
+  run: () => unknown,
+): ReturnType<typeof matchError.new> {
+  try {
+    run();
+    throw new Error("Expected runner.errors.matchError");
+  } catch (error) {
+    expect(isMatchError(error)).toBe(true);
+    return error as ReturnType<typeof matchError.new>;
+  }
 }
 
 describe("tools/check", () => {
@@ -30,10 +48,10 @@ describe("tools/check", () => {
     expect(() => checkRuntime({}, Object)).not.toThrow();
     expect(() => checkRuntime(() => undefined, Function)).not.toThrow();
 
-    expect(() => checkRuntime("x", Boolean)).toThrow(Match.Error);
-    expect(() => checkRuntime("x", Function)).toThrow(Match.Error);
-    expect(() => checkRuntime([], Object)).toThrow(Match.Error);
-    expect(() => checkRuntime("x", Array)).toThrow(Match.Error);
+    expectMatchFailure(() => checkRuntime("x", Boolean));
+    expectMatchFailure(() => checkRuntime("x", Function));
+    expectMatchFailure(() => checkRuntime([], Object));
+    expectMatchFailure(() => checkRuntime("x", Array));
   });
 
   it("supports literal patterns", () => {
@@ -45,12 +63,12 @@ describe("tools/check", () => {
 
     const symbol = Symbol("check");
     expect(() => checkRuntime(symbol, symbol)).not.toThrow();
-    expect(() => checkRuntime("b", "a")).toThrow(Match.Error);
+    expectMatchFailure(() => checkRuntime("b", "a"));
   });
 
   it("supports custom constructor patterns", () => {
     expect(() => checkRuntime(new User("u1"), User)).not.toThrow();
-    expect(() => checkRuntime({ id: "u1" }, User)).toThrow(Match.Error);
+    expectMatchFailure(() => checkRuntime({ id: "u1" }, User));
   });
 
   it("matches Match.Any, Match.Integer and Match.NonEmptyString", () => {
@@ -58,9 +76,9 @@ describe("tools/check", () => {
     expect(() => checkRuntime(12, Match.Integer)).not.toThrow();
     expect(() => checkRuntime("name", Match.NonEmptyString)).not.toThrow();
 
-    expect(() => checkRuntime(1.2, Match.Integer)).toThrow(Match.Error);
-    expect(() => checkRuntime(2147483648, Match.Integer)).toThrow(Match.Error);
-    expect(() => checkRuntime("", Match.NonEmptyString)).toThrow(Match.Error);
+    expectMatchFailure(() => checkRuntime(1.2, Match.Integer));
+    expectMatchFailure(() => checkRuntime(2147483648, Match.Integer));
+    expectMatchFailure(() => checkRuntime("", Match.NonEmptyString));
   });
 
   it("handles Maybe and Optional wrappers", () => {
@@ -70,20 +88,18 @@ describe("tools/check", () => {
     expect(() => checkRuntime(null, Match.Maybe(String))).not.toThrow();
     expect(() => checkRuntime("ok", Match.Maybe(String))).not.toThrow();
 
-    expect(() => checkRuntime(null, Match.Optional(String))).toThrow(
-      Match.Error,
-    );
-    expect(() => checkRuntime(7, Match.Maybe(String))).toThrow(Match.Error);
+    expectMatchFailure(() => checkRuntime(null, Match.Optional(String)));
+    expectMatchFailure(() => checkRuntime(7, Match.Maybe(String)));
   });
 
   it("validates arrays using one-element array patterns", () => {
     expect(() => checkRuntime(["a", "b"], [String])).not.toThrow();
-    expect(() => checkRuntime([1, "b"], [String])).toThrow(Match.Error);
-    expect(() => checkRuntime("not-array", [String])).toThrow(Match.Error);
+    expectMatchFailure(() => checkRuntime([1, "b"], [String]));
+    expectMatchFailure(() => checkRuntime("not-array", [String]));
   });
 
   it("validates strict object patterns and produces paths", () => {
-    try {
+    const error = expectMatchFailure(() =>
       checkRuntime(
         { profile: { name: 10 } },
         {
@@ -91,18 +107,15 @@ describe("tools/check", () => {
             name: String,
           },
         },
-      );
-      throw new Error("Expected Match.Error");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Match.Error);
-      const matchError = error as InstanceType<typeof Match.Error>;
-      expect(matchError.path).toBe("$.profile.name");
-      expect(matchError.failures[0].path).toBe("$.profile.name");
-    }
+      ),
+    );
+    expect(error.id).toBe(MATCH_ERROR_ID);
+    expect(error.data.path).toBe("$.profile.name");
+    expect(error.data.failures[0].path).toBe("$.profile.name");
   });
 
   it("formats non-identifier keys using bracket notation in failure paths", () => {
-    try {
+    const error = expectMatchFailure(() =>
       checkRuntime(
         {
           "full-name": 10,
@@ -110,28 +123,24 @@ describe("tools/check", () => {
         {
           "full-name": String,
         },
-      );
-      throw new Error("Expected Match.Error");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Match.Error);
-      const matchError = error as InstanceType<typeof Match.Error>;
-      expect(matchError.path).toBe('$["full-name"]');
-    }
+      ),
+    );
+    expect(error.data.path).toBe('$["full-name"]');
   });
 
   it("requires plain objects for plain-object patterns", () => {
-    expect(() => checkRuntime([], { id: String })).toThrow(Match.Error);
+    expectMatchFailure(() => checkRuntime([], { id: String }));
   });
 
   it("rejects unknown object keys by default and allows them with ObjectIncluding", () => {
-    expect(() =>
+    expectMatchFailure(() =>
       checkRuntime(
         { id: "1", extra: true },
         {
           id: String,
         },
       ),
-    ).toThrow(Match.Error);
+    );
 
     expect(() =>
       checkRuntime(
@@ -153,14 +162,14 @@ describe("tools/check", () => {
       ),
     ).not.toThrow();
 
-    expect(() =>
+    expectMatchFailure(() =>
       checkRuntime(
         { id: "1", extra: true },
         Match.ObjectStrict({
           id: String,
         }),
       ),
-    ).toThrow(Match.Error);
+    );
   });
 
   it("supports Match.MapOf for dynamic-key object values", () => {
@@ -176,7 +185,7 @@ describe("tools/check", () => {
       ),
     ).not.toThrow();
 
-    expect(() =>
+    expectMatchFailure(() =>
       checkRuntime(
         {
           a: { id: 1 },
@@ -185,18 +194,18 @@ describe("tools/check", () => {
           id: String,
         }),
       ),
-    ).toThrow(Match.Error);
+    );
   });
 
   it("requires required object keys even when the pattern is Match.Any", () => {
-    expect(() =>
+    expectMatchFailure(() =>
       checkRuntime(
         {},
         Match.ObjectIncluding({
           value: Match.Any,
         }),
       ),
-    ).toThrow(Match.Error);
+    );
 
     expect(() =>
       checkRuntime(
@@ -249,7 +258,7 @@ describe("tools/check", () => {
       ),
     ).not.toThrow();
 
-    try {
+    const error = expectMatchFailure(() =>
       checkRuntime(
         {
           topology: {
@@ -262,13 +271,9 @@ describe("tools/check", () => {
           },
         },
         pattern,
-      );
-      throw new Error("Expected Match.Error");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Match.Error);
-      const matchError = error as InstanceType<typeof Match.Error>;
-      expect(matchError.path).toBe("$.topology.bindings[0].lane.id");
-    }
+      ),
+    );
+    expect(error.data.path).toBe("$.topology.bindings[0].lane.id");
   });
 
   it("supports OneOf and Where", () => {
@@ -276,9 +281,7 @@ describe("tools/check", () => {
       checkRuntime("abc", Match.OneOf(String, Number)),
     ).not.toThrow();
     expect(() => checkRuntime(123, Match.OneOf(String, Number))).not.toThrow();
-    expect(() => checkRuntime(true, Match.OneOf(String, Number))).toThrow(
-      Match.Error,
-    );
+    expectMatchFailure(() => checkRuntime(true, Match.OneOf(String, Number)));
 
     expect(() =>
       checkRuntime(
@@ -286,12 +289,12 @@ describe("tools/check", () => {
         Match.Where((v: unknown) => v === "ABC"),
       ),
     ).not.toThrow();
-    expect(() =>
+    expectMatchFailure(() =>
       checkRuntime(
         "abc",
         Match.Where((v: unknown) => v === "ABC"),
       ),
-    ).toThrow(Match.Error);
+    );
   });
 
   it("passes parent to Match.Where and Match.WithMessage where applicable", () => {
@@ -357,12 +360,10 @@ describe("tools/check", () => {
       checkRuntime("abc-123", Match.RegExp("^[a-z]+-\\d+$")),
     ).not.toThrow();
 
-    expect(() => checkRuntime("ABC-123", Match.RegExp(/^[a-z]+-\d+$/))).toThrow(
-      Match.Error,
+    expectMatchFailure(() =>
+      checkRuntime("ABC-123", Match.RegExp(/^[a-z]+-\d+$/)),
     );
-    expect(() => checkRuntime(123, Match.RegExp(/^[a-z]+-\d+$/))).toThrow(
-      Match.Error,
-    );
+    expectMatchFailure(() => checkRuntime(123, Match.RegExp(/^[a-z]+-\d+$/)));
   });
 
   it("keeps Match.RegExp deterministic for stateful g/y regex flags", () => {
@@ -380,31 +381,25 @@ describe("tools/check", () => {
     expect(() => Match.RegExp(123 as unknown as RegExp)).toThrow(RunnerError);
   });
 
-  it("treats Match.Error thrown from Match.Where as validation failure", () => {
+  it("turns thrown Error values from Match.Where into Match failures", () => {
     const where = Match.Where(() => {
-      throw new Match.Error([
-        {
-          path: "$",
-          expected: "custom",
-          actualType: "unknown",
-          message: "custom failure",
-        },
-      ]);
+      throw new Error("where crashed");
     });
 
-    expect(() => checkRuntime("value", where)).toThrow(Match.Error);
+    expect(() => checkRuntime("value", where)).toThrow(
+      "Failed Match.Where validation at $: Error: where crashed.",
+    );
   });
 
-  it("rethrows non-match errors thrown from Match.Where", () => {
-    const plannedError = new Error("where crashed");
+  it("turns thrown non-Error values from Match.Where into Match failures", () => {
     expect(() =>
       checkRuntime(
         "x",
         Match.Where(() => {
-          throw plannedError;
+          throw "boom";
         }),
       ),
-    ).toThrow("where crashed");
+    ).toThrow("Failed Match.Where validation at $: boom.");
   });
 
   it("throws invalid-pattern runner errors for unsupported patterns", () => {
@@ -433,6 +428,7 @@ describe("tools/check", () => {
       expect(error).toBeInstanceOf(RunnerError);
       const runnerError = error as RunnerError<{ message: string }>;
       expect(runnerError.id).toBe(CHECK_INVALID_PATTERN_ERROR_ID);
+      expect(checkInvalidPatternError.is(error)).toBe(true);
     }
   });
 
@@ -441,7 +437,7 @@ describe("tools/check", () => {
       return "x";
     };
     Object.defineProperty(anonymousConstructor, "name", { value: "" });
-    expect(() => checkRuntime("x", anonymousConstructor)).toThrow(Match.Error);
+    expectMatchFailure(() => checkRuntime("x", anonymousConstructor));
 
     const invalidNamedConstructor = function NamedPattern() {
       return "x";
@@ -470,35 +466,35 @@ describe("tools/check", () => {
   });
 
   it("reports Date as actual type when mismatching", () => {
-    try {
-      checkRuntime(new Date(), String);
-      throw new Error("Expected Match.Error");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Match.Error);
-      const matchError = error as InstanceType<typeof Match.Error>;
-      expect(matchError.failures[0].actualType).toBe("Date");
-    }
+    const error = expectMatchFailure(() => checkRuntime(new Date(), String));
+    expect(error.data.failures[0].actualType).toBe("Date");
   });
 
   it("falls back to generic object type when constructor name is unavailable", () => {
     const nullPrototypeObject = Object.create(null) as Record<string, unknown>;
     nullPrototypeObject.id = 10;
 
-    try {
-      checkRuntime(nullPrototypeObject, String);
-      throw new Error("Expected Match.Error");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Match.Error);
-      const matchError = error as InstanceType<typeof Match.Error>;
-      expect(matchError.failures[0].actualType).toBe("object");
-    }
+    const error = expectMatchFailure(() =>
+      checkRuntime(nullPrototypeObject, String),
+    );
+    expect(error.data.failures[0].actualType).toBe("object");
   });
 
-  it("builds a stable root failure when MatchError is constructed without failures", () => {
-    const err = new MatchError([]);
-    expect(err.path).toBe("$");
-    expect(err.failures).toHaveLength(1);
-    expect(err.failures[0].message).toBe("Match failed at $.");
+  it("builds a stable root failure when a match error is created without failures", () => {
+    const err = createMatchError([]);
+    expect(err.data.path).toBe("$");
+    expect(err.data.failures).toHaveLength(1);
+    expect(err.data.failures[0].message).toBe("Match failed at $.");
+  });
+
+  it("lets the built-in match error helper format empty failures safely", () => {
+    const err = matchError.new({
+      path: "$",
+      failures: [],
+    });
+
+    expect(err.message).toContain("Match failed at $.");
+    expect(err.httpCode).toBe(400);
   });
 
   it("Match.test returns true on success and false on mismatch", () => {
@@ -519,15 +515,14 @@ describe("tools/check", () => {
     expect(candidate.getTime()).toBeGreaterThan(0);
   });
 
-  it("Match.test rethrows non-match errors", () => {
-    const plannedError = new Error("boom");
-    expect(() =>
+  it("Match.test returns false when Match.Where throws", () => {
+    expect(
       Match.test(
         "x",
         Match.Where(() => {
-          throw plannedError;
+          throw new Error("boom");
         }),
       ),
-    ).toThrow("boom");
+    ).toBe(false);
   });
 });

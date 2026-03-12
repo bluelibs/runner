@@ -296,6 +296,68 @@ describe("errorHandlers", () => {
     expect(responseError?.httpCode).toBe(409);
   });
 
+  it("serializes the canonical helper id instead of the raw local error name", () => {
+    const serializer = new Serializer();
+    const store = {
+      errors: new Map([
+        [
+          "app-owner.errors.http",
+          {
+            id: "app-owner.errors.http",
+            httpCode: 409,
+            is: () => false,
+          },
+        ],
+      ]),
+      resolveDefinitionId: (reference: unknown) => {
+        if (reference === "http") {
+          return "app-owner.errors.http";
+        }
+
+        return typeof reference === "string"
+          ? reference
+          : (reference as { id?: string })?.id;
+      },
+    } as unknown as Store;
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "plain",
+      bufferLogs: true,
+    });
+    const req = { headers: {}, method: "POST", url: "/x" } as IncomingMessage;
+    let payload: Buffer | undefined;
+    const res = {
+      writableEnded: false,
+      statusCode: 0,
+      setHeader() {},
+      end(buf?: unknown) {
+        if (buf != null) {
+          payload = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
+        }
+      },
+    } as unknown as ServerResponse;
+    const error = new Error("Boom");
+    (error as unknown as { name: string }).name = "http";
+    (error as unknown as { data: unknown }).data = { reason: "x" };
+
+    handleRequestError({
+      error,
+      req,
+      res,
+      store,
+      logger,
+      serializer,
+      logKey: ExposureErrorLogKey.TaskError,
+    });
+
+    const json = payload
+      ? (serializer.parse(payload.toString("utf8")) as Record<string, unknown>)
+      : undefined;
+    const responseError = getErrorRecord(json);
+    expect(responseError?.id).toBe("app-owner.errors.http");
+    expect(responseError?.data).toEqual({ reason: "x" });
+  });
+
   it("falls back to helper httpCode when runtime httpCode is missing", () => {
     const serializer = new Serializer();
     const store = {

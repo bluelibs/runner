@@ -7,7 +7,8 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { IValidationSchema } from "../../defs";
-import { createMessageError } from "../../errors";
+import { createMessageError, matchError } from "../../errors";
+import { Match } from "../../tools/check";
 
 // Simple mock validation schemas for testing the interface
 class MockValidationSchema<T> implements IValidationSchema<T> {
@@ -95,6 +96,93 @@ const mockSchema = {
 };
 
 describe("Generic Validation Interface", () => {
+  describe("Native Match boundary propagation", () => {
+    it("surfaces MatchError for task input schemas", async () => {
+      const task = defineTask({
+        id: "task-match-input",
+        inputSchema: Match.compile({ age: Match.Integer }),
+        run: async () => "ok",
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [task],
+        dependencies: { task },
+        init: async (_, { task }) => {
+          await task({ age: "bad" } as any);
+        },
+      });
+
+      await expect(run(app)).rejects.toMatchObject({ id: matchError.id });
+    });
+
+    it("surfaces MatchError for task result schemas", async () => {
+      const task = defineTask({
+        id: "task-match-result",
+        resultSchema: Match.compile({ ok: Boolean }) as any,
+        run: async () => ({ nope: true }) as any,
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [task],
+        dependencies: { task },
+        init: async (_, { task }) => {
+          await task(undefined);
+        },
+      });
+
+      await expect(run(app)).rejects.toMatchObject({ id: matchError.id });
+    });
+
+    it("surfaces MatchError for resource config validation", () => {
+      const resource = defineResource({
+        id: "resource-match-config",
+        configSchema: Match.compile({ port: Match.Integer }),
+        init: async () => "ok",
+      });
+
+      expect(() => resource.with({ port: "bad" } as any)).toThrow(
+        expect.objectContaining({ id: matchError.id }),
+      );
+    });
+
+    it("surfaces MatchError for event payload validation", async () => {
+      const event = defineEvent({
+        id: "event-match-payload",
+        payloadSchema: Match.compile({ message: String }),
+      });
+      const hook = defineHook({
+        id: "event-match-payload-hook",
+        on: event,
+        run: async () => undefined,
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [event, hook],
+        dependencies: { event },
+        init: async (_, { event }) => {
+          await event({ message: 42 } as any);
+        },
+      });
+
+      await expect(run(app)).rejects.toMatchObject({ id: matchError.id });
+    });
+
+    it("surfaces MatchError for middleware config validation", () => {
+      const middleware = defineTaskMiddleware({
+        id: "middleware-match-config",
+        configSchema: Match.compile({ timeout: Match.Integer }),
+        run: async ({ next }) => next(),
+      });
+
+      expect(() => middleware.with({ timeout: "bad" } as any)).toThrow(
+        expect.objectContaining({ id: matchError.id }),
+      );
+    });
+  });
+
   describe("Task Input Validation", () => {
     it("should validate task input successfully with valid data", async () => {
       const userSchema = mockSchema.object<{

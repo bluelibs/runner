@@ -1,4 +1,4 @@
-import { Match, RunnerError } from "../..";
+import { Match, RunnerError, type MatchCompiledSchema } from "../..";
 import { defineError } from "../../definers/defineError";
 import {
   normalizeOptionalValidationSchema,
@@ -59,10 +59,20 @@ describe("schema normalization helpers", () => {
         definitionId: "tests-normalize-object",
         subject: "Task input",
       },
-    );
+    ) as MatchCompiledSchema<{ value: StringConstructor }>;
 
     expect(objectSchema.parse({ value: "ok" })).toEqual({ value: "ok" });
     expect(() => objectSchema.parse({ value: 1 } as any)).toThrow();
+    expect(objectSchema.test({ value: "ok" })).toBe(true);
+    expect(objectSchema.toJSONSchema()).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      properties: {
+        value: { type: "string" },
+      },
+      required: ["value"],
+      additionalProperties: false,
+    });
 
     const functionSchema = normalizeValidationSchema(
       ((value: unknown) => typeof value === "string") as any,
@@ -107,6 +117,17 @@ describe("schema normalization helpers", () => {
         },
       ),
     ).toThrow("Anonymous");
+  });
+
+  it("reuses existing compiled Match schemas without recompiling", () => {
+    const compiled = Match.compile({ value: String });
+
+    const normalized = normalizeValidationSchema(compiled, {
+      definitionId: "tests-normalize-compiled",
+      subject: "Task input",
+    });
+
+    expect(normalized).toBe(compiled);
   });
 });
 

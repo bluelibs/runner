@@ -1,4 +1,4 @@
-import { MatchError } from "../errors";
+import { createMatchError } from "../errors";
 import type { InferMatchPattern } from "../types";
 import { collectMatchResult } from "./core";
 
@@ -12,5 +12,5 @@ export function parsePatternValue<TPattern>(
     false,
   );
   if (failures.length === 0) return value as InferMatchPattern<TPattern>;
-  throw new MatchError(failures, messageOverride);
+  throw createMatchError(failures, messageOverride);
 }

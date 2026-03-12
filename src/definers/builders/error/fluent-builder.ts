@@ -2,7 +2,9 @@ import type {
   DefaultErrorType,
   EnsureTagsForTarget,
   ErrorTagType,
+  ResolveValidationSchemaInput,
   IErrorMeta,
+  ValidationSchemaInput,
 } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineError } from "../../defineError";
@@ -28,7 +30,7 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
   state: BuilderState<TData>,
   framework = false,
 ): ErrorFluentBuilder<TData> {
-  const builder: ErrorFluentBuilder<TData> = {
+  const builder = {
     id: state.id,
 
     httpCode(code: number) {
@@ -37,22 +39,38 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
       return makeErrorBuilder(next, framework);
     },
 
-    serialize(fn) {
+    serialize(fn: (data: TData) => string) {
       const next = clone(state, { serialize: fn });
       return makeErrorBuilder(next, framework);
     },
 
-    parse(fn) {
+    parse(fn: (raw: string) => TData) {
       const next = clone(state, { parse: fn });
       return makeErrorBuilder(next, framework);
     },
 
-    dataSchema(schema) {
-      const next = clone(state, { dataSchema: schema });
-      return makeErrorBuilder(next, framework);
+    dataSchema<
+      TNewData extends DefaultErrorType = never,
+      TSchema extends ValidationSchemaInput<
+        [TNewData] extends [never] ? any : TNewData
+      > = ValidationSchemaInput<[TNewData] extends [never] ? any : TNewData>,
+    >(schema: TSchema) {
+      const next = clone(state as BuilderState<any>, {
+        dataSchema: schema,
+      }) as BuilderState<
+        ResolveValidationSchemaInput<TNewData, TSchema> & DefaultErrorType
+      >;
+      return makeErrorBuilder<
+        ResolveValidationSchemaInput<TNewData, TSchema> & DefaultErrorType
+      >(next, framework);
     },
 
-    schema(schema) {
+    schema<
+      TNewData extends DefaultErrorType = never,
+      TSchema extends ValidationSchemaInput<
+        [TNewData] extends [never] ? any : TNewData
+      > = ValidationSchemaInput<[TNewData] extends [never] ? any : TNewData>,
+    >(schema: TSchema) {
       return builder.dataSchema(schema);
     },
 
@@ -114,5 +132,5 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
     },
   };
 
-  return builder;
+  return builder as ErrorFluentBuilder<TData>;
 }

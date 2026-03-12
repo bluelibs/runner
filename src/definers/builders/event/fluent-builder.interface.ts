@@ -1,6 +1,7 @@
 import type {
   EnsureTagsForTarget,
   EventTagType,
+  ResolveValidationSchemaInput,
   IEvent,
   IEventMeta,
   ValidationSchemaInput,
@@ -12,16 +13,30 @@ export interface EventFluentBuilder<
   TTransactional extends boolean | undefined = undefined,
 > {
   id: string;
-  payloadSchema<TNew>(
-    schema: ValidationSchemaInput<TNew>,
-  ): EventFluentBuilder<TNew, TTransactional>;
+  payloadSchema<
+    TNew = never,
+    TSchema extends ValidationSchemaInput<[TNew] extends [never] ? any : TNew> =
+      ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+  >(
+    schema: TSchema,
+  ): EventFluentBuilder<
+    ResolveValidationSchemaInput<TNew, TSchema>,
+    TTransactional
+  >;
 
   /**
    * Alias for payloadSchema. Use this to define the event payload validation contract.
    */
-  schema<TNew>(
-    schema: ValidationSchemaInput<TNew>,
-  ): EventFluentBuilder<TNew, TTransactional>;
+  schema<
+    TNew = never,
+    TSchema extends ValidationSchemaInput<[TNew] extends [never] ? any : TNew> =
+      ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+  >(
+    schema: TSchema,
+  ): EventFluentBuilder<
+    ResolveValidationSchemaInput<TNew, TSchema>,
+    TTransactional
+  >;
 
   tags<TNewTags extends EventTagType[]>(
     t: EnsureTagsForTarget<"events", TNewTags>,

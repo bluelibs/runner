@@ -1,6 +1,7 @@
 import type {
   DependencyMapType,
   EnsureTagsForTarget,
+  ResolveValidationSchemaInput,
   IResourceMiddleware,
   IResourceMiddlewareDefinition,
   IMiddlewareMeta,
@@ -26,16 +27,34 @@ export interface ResourceMiddlewareFluentBuilderBeforeRun<
     deps: TNewDeps | ((config: C) => TNewDeps),
     options: { override: true },
   ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, TNewDeps>;
-  configSchema<TNew>(
-    schema: ValidationSchemaInput<TNew>,
-  ): ResourceMiddlewareFluentBuilderBeforeRun<TNew, In, Out, D>;
+  configSchema<
+    TNew = never,
+    TSchema extends ValidationSchemaInput<[TNew] extends [never] ? any : TNew> =
+      ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+  >(
+    schema: TSchema,
+  ): ResourceMiddlewareFluentBuilderBeforeRun<
+    ResolveValidationSchemaInput<TNew, TSchema>,
+    In,
+    Out,
+    D
+  >;
 
   /**
    * Alias for configSchema. Use this to define the middleware configuration validation contract.
    */
-  schema<TNew>(
-    schema: ValidationSchemaInput<TNew>,
-  ): ResourceMiddlewareFluentBuilderBeforeRun<TNew, In, Out, D>;
+  schema<
+    TNew = never,
+    TSchema extends ValidationSchemaInput<[TNew] extends [never] ? any : TNew> =
+      ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
+  >(
+    schema: TSchema,
+  ): ResourceMiddlewareFluentBuilderBeforeRun<
+    ResolveValidationSchemaInput<TNew, TSchema>,
+    In,
+    Out,
+    D
+  >;
 
   run(
     fn: IResourceMiddlewareDefinition<C, In, Out, D>["run"],

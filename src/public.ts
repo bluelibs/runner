@@ -151,17 +151,13 @@ export * as definitions from "./defs";
 // ResourceInitializer) are excluded from the barrel.
 export * from "./models";
 export * from "./globals/types";
+export * as errors from "./errors";
 export * as Errors from "./errors";
 export { cancellationError } from "./errors";
 export { PlatformAdapter, setPlatform } from "./platform";
 export { RunnerError } from "./definers/defineError";
 export { LockableMap } from "./tools/LockableMap";
 export { Match, check } from "./tools/check";
-export {
-  MatchError,
-  MatchPatternError,
-  CheckOptionsError,
-} from "./tools/check";
 export type {
   CheckSchemaLike,
   CheckedValue,
@@ -176,6 +172,7 @@ export type {
   MatchJsonValue,
   MatchPattern,
 } from "./tools/check";
+export type { InferValidationSchemaInput } from "./types/utilities";
 
 // HTTP transport functionality
 export * from "./http-client";

@@ -13,6 +13,7 @@ import type {
   ResourceTagType,
   SubtreePolicyOptions,
   TagType,
+  ResolveValidationSchemaInput,
   ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
@@ -114,10 +115,15 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
-  configSchema<TNewConfig>(
-    schema: ValidationSchemaInput<TNewConfig>,
+  configSchema<
+    TNewConfig = never,
+    TSchema extends ValidationSchemaInput<
+      [TNewConfig] extends [never] ? any : TNewConfig
+    > = ValidationSchemaInput<[TNewConfig] extends [never] ? any : TNewConfig>,
+  >(
+    schema: TSchema,
   ): ResourceFluentBuilderBeforeInit<
-    TNewConfig,
+    ResolveValidationSchemaInput<TNewConfig, TSchema>,
     TValue,
     TDeps,
     TContext,
@@ -129,10 +135,15 @@ export interface ResourceFluentBuilderBeforeInit<
   /**
    * Alias for configSchema. Use this to define the resource configuration validation contract.
    */
-  schema<TNewConfig>(
-    schema: ValidationSchemaInput<TNewConfig>,
+  schema<
+    TNewConfig = never,
+    TSchema extends ValidationSchemaInput<
+      [TNewConfig] extends [never] ? any : TNewConfig
+    > = ValidationSchemaInput<[TNewConfig] extends [never] ? any : TNewConfig>,
+  >(
+    schema: TSchema,
   ): ResourceFluentBuilderBeforeInit<
-    TNewConfig,
+    ResolveValidationSchemaInput<TNewConfig, TSchema>,
     TValue,
     TDeps,
     TContext,
@@ -141,11 +152,16 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
-  resultSchema<TResolved>(
-    schema: ValidationSchemaInput<TResolved>,
+  resultSchema<
+    TResolved = never,
+    TSchema extends ValidationSchemaInput<
+      [TResolved] extends [never] ? any : TResolved
+    > = ValidationSchemaInput<[TResolved] extends [never] ? any : TResolved>,
+  >(
+    schema: TSchema,
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
-    Promise<TResolved>,
+    Promise<ResolveValidationSchemaInput<TResolved, TSchema>>,
     TDeps,
     TContext,
     TMeta,

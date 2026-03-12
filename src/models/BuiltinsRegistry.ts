@@ -30,7 +30,11 @@ import {
 } from "../globals/middleware/circuitBreaker.middleware";
 import { globalTags } from "../globals/globalTags";
 import {
+  checkInvalidOptionsError,
+  checkInvalidPatternError,
+  checkJsonSchemaUnsupportedPatternError,
   durableExecutionError,
+  matchError,
   middlewareCircuitBreakerOpenError,
   middlewareRateLimitExceededError,
   middlewareTimeoutError,
@@ -85,6 +89,10 @@ export const RUNNER_FRAMEWORK_ITEMS: readonly RegisterableItems[] =
     circuitBreakerResource,
     temporalResource,
     concurrencyResource,
+    matchError,
+    checkInvalidPatternError,
+    checkInvalidOptionsError,
+    checkJsonSchemaUnsupportedPatternError,
     middlewareTimeoutError,
     middlewareCircuitBreakerOpenError,
     middlewareRateLimitExceededError,

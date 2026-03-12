@@ -1,4 +1,4 @@
-import { MatchPatternError } from "./errors";
+import { createMatchPatternError } from "./errors";
 import { isClassConstructor, getClassChain } from "../typeChecks";
 import type { MatchPattern } from "./types";
 
@@ -69,7 +69,7 @@ function resolveSchemaBase(
 
   const resolved = baseOption();
   if (!isClassConstructor(resolved)) {
-    throw new MatchPatternError(
+    throw createMatchPatternError(
       `Bad pattern: Match.Schema({ base }) for ${owner.name || "Anonymous"} must resolve to a class constructor.`,
     );
   }
@@ -111,7 +111,7 @@ function buildClassSchemaDefinition(
 ): ClassSchemaDefinition {
   const fn = ctorAsFunction(target);
   if (activeTargets.has(fn)) {
-    throw new MatchPatternError(
+    throw createMatchPatternError(
       `Bad pattern: Match.Schema({ base }) contains a circular base chain at ${target.name || "Anonymous"}.`,
     );
   }

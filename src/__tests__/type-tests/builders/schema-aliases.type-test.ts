@@ -112,6 +112,29 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
     .build();
 }
 
+// Scenario: raw Match patterns should infer directly in fluent schema APIs.
+{
+  r.task("types-schema-task-match-pattern")
+    .inputSchema({
+      id: String,
+      retries: Match.Optional(Match.Integer),
+    })
+    .resultSchema({
+      ok: Boolean,
+    })
+    .run(async (input) => {
+      input.id.toUpperCase();
+      if (input.retries !== undefined) {
+        input.retries.toFixed();
+      }
+      // @ts-expect-error raw Match pattern should stay strict
+      input.extra;
+
+      return { ok: true };
+    })
+    .build();
+}
+
 // Scenario: resource/event schema aliases should type config and payload.
 {
   const event = r
@@ -171,7 +194,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
 {
   const requestContext = r
     .asyncContext<{ requestId: string }>("types-schema-ctx")
-    .schema({ parse: (x: any) => x })
+    .schema({ parse: (x: any): { requestId: string } => x })
     .build();
 
   void requestContext.provide({ requestId: "r-1" }, async () => {
@@ -183,7 +206,7 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
 
   const AppError = r
     .error<{ code: number }>("types-schema-error")
-    .schema({ parse: (x: any) => x })
+    .schema({ parse: (x: any): { code: number } => x })
     .build();
 
   AppError.throw({ code: 1 });
@@ -198,6 +221,107 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
   featureTag.with({ scope: "core" });
   // @ts-expect-error schema enforces tag config shape
   featureTag.with({ scope: 1 });
+}
+
+// Scenario: raw Match patterns should infer for event/tag/asyncContext aliases.
+{
+  const event = r
+    .event("types-schema-event-match-pattern")
+    .schema({ name: String })
+    .build();
+
+  r.hook("types-schema-hook-match-pattern")
+    .on(event)
+    .run(async (emission) => {
+      emission.data.name.toUpperCase();
+      // @ts-expect-error raw Match payload should stay strict
+      emission.data.other;
+    })
+    .build();
+
+  const requestContext = r
+    .asyncContext("types-schema-ctx-match-pattern")
+    .schema({ requestId: String })
+    .build();
+
+  void requestContext.provide({ requestId: "r-2" }, async () => {
+    requestContext.use().requestId.toUpperCase();
+  });
+
+  const AppError = r
+    .error("types-schema-error-match-pattern")
+    .schema({ code: Number })
+    .build();
+
+  AppError.throw({ code: 1 });
+  // @ts-expect-error raw Match error schema should stay strict
+  AppError.throw({ code: "1" });
+
+  const featureTag = r
+    .tag("types-schema-tag-match-pattern")
+    .schema({ scope: String })
+    .build();
+
+  featureTag.with({ scope: "core" });
+  // @ts-expect-error raw Match tag schema should stay strict
+  featureTag.with({ scope: 1 });
+}
+
+// Scenario: compiled Match schemas should preserve their inferred payloads in fluent APIs.
+{
+  const compiledTaskInput = Match.compile({
+    id: String,
+    enabled: Boolean,
+  });
+  const compiledTaskResult = Match.compile({
+    ok: Boolean,
+  });
+
+  r.task("types-schema-task-compiled-match")
+    .inputSchema(compiledTaskInput)
+    .resultSchema(compiledTaskResult)
+    .run(async (input) => {
+      input.id.toUpperCase();
+      const enabled: boolean = input.enabled;
+      void enabled;
+      // @ts-expect-error compiled Match input should stay strict
+      input.missing;
+      return { ok: true };
+    })
+    .build();
+
+  const compiledMiddlewareSchema = Match.compile({
+    ttl: Number,
+  });
+
+  r.middleware
+    .task("types-schema-task-middleware-compiled-match")
+    .configSchema(compiledMiddlewareSchema)
+    .run(async ({ next, task }, _deps, config) => {
+      config.ttl.toFixed();
+      // @ts-expect-error compiled Match middleware config should stay strict
+      config.missing;
+      return next(task.input);
+    })
+    .build();
+
+  const compiledEventSchema = Match.compile({
+    name: String,
+  });
+
+  const event = r
+    .event("types-schema-event-compiled-match")
+    .payloadSchema(compiledEventSchema)
+    .build();
+
+  r.hook("types-schema-hook-compiled-match")
+    .on(event)
+    .run(async (emission) => {
+      emission.data.name.toUpperCase();
+      // @ts-expect-error compiled Match event payload should stay strict
+      emission.data.invalid;
+    })
+    .build();
 }
 
 // Scenario: decorator class shorthand should be accepted in fluent schema APIs.

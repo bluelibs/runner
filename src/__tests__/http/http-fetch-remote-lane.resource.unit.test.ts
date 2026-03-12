@@ -1,7 +1,7 @@
 import { createExposureFetch } from "../../http-fetch-remote-lane.resource";
 import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
-import { createMessageError } from "../../errors";
+import { createMessageError, matchError } from "../../errors";
 
 describe("http-fetch-remote-lane.resource (unit)", () => {
   it("createExposureFetch: throws when baseUrl is empty or '/'", () => {
@@ -172,6 +172,43 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
 
     await expect(c.eventWithResult!("e-id", { x: 1 })).rejects.toThrow(
       /typed-evr:12/,
+    );
+  });
+
+  it("createExposureFetch: remaps built-in matchError via errorRegistry", async () => {
+    const serializer = new Serializer();
+    const fetchImpl: typeof fetch = (async () => ({
+      text: async () =>
+        serializer.stringify({
+          ok: false,
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "match failed",
+            id: matchError.id,
+            data: {
+              path: "$.email",
+              failures: [
+                {
+                  path: "$.email",
+                  expected: "string",
+                  actualType: "number",
+                  message: "Expected string, got number at $.email.",
+                },
+              ],
+            },
+          },
+        }),
+    })) as unknown as typeof fetch;
+
+    const c = createExposureFetch({
+      baseUrl: "http://api",
+      fetchImpl,
+      serializer,
+      errorRegistry: new Map([[matchError.id, matchError]]),
+    });
+
+    await expect(c.eventWithResult!("e-id", { x: 1 })).rejects.toThrow(
+      "Expected string, got number at $.email.",
     );
   });
 

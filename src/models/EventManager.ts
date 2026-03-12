@@ -13,6 +13,7 @@ import {
   shutdownLockdownError,
   validationError,
 } from "../errors";
+import { isMatchError } from "../tools/check/errors";
 import { IHook } from "../types/hook";
 import {
   RuntimeCallSource,
@@ -455,6 +456,9 @@ export class EventManager {
     try {
       return eventDefinition.payloadSchema!.parse(data);
     } catch (error) {
+      if (isMatchError(error)) {
+        throw error;
+      }
       return validationError.throw({
         subject: "Event payload",
         id: eventId,
