@@ -197,21 +197,15 @@ Resources move through a deliberate sequence of phases. Understanding which phas
   When `dispose.cooldownWindowMs` is greater than `0`, Runner keeps the broader `coolingDown` admission policy open for that bounded post-cooldown window before it enters `disposing`. At the default `0`, Runner skips that wait. Once `disposing` begins, admissions narrow to in-flight continuations plus resource-origin calls from the cooling resource itself and any additional resource definitions returned from `cooldown()`.
 - `dispose(value, config, deps, context)` performs final teardown after task/event drain.
 - Config-only resources can omit `.init()` and resolve to `undefined`
-- `r.resource(id, { gateway: true })` suppresses the resource's own namespace segment for descendant ids
-- gateway resources may directly register only resources
-- gateway resources may be passed directly to `run(...)` when their direct registrations are resources only
-- nested gateway resources are allowed
-- direct gateway registration of tasks, events, hooks, middleware, tags, errors, or async contexts fails fast
+- user resources contribute their own ownership segment to canonical ids
+- the app resource passed to `run(...)` is a normal resource, so direct registrations compile as `app.tasks.x`, `app.events.x`, `app.middleware.task.x`, and so on
+- child resources continue that chain, so nested registrations compile as `app.billing.tasks.x`
+- only the internal synthetic framework root is transparent, and it does not appear in user-facing ids
+- `runtime-framework-root` is reserved for that internal framework root and cannot be used as a user resource id
 - If a resource declares `.register(...)`, it is non-leaf and cannot be forked
 - `.context(() => initialContext)` provides private and mutable resource-local state shared across lifecycle methods
 
 Do not use `cooldown()` as a general teardown phase for support resources such as databases. Cooldown is designed for ingress points that need to stop accepting new work quickly while letting in-flight work finish.
-
-Gateway resources are structural parents. They still exist as real resources for lifecycle, health, diagnostics, and investigation, but they stay transparent when Runner compiles descendant ids. That gives them two roles at once: they are real runtime nodes, and they are also namespace-shaping edges.
-
-The practical rule is simple: a gateway may directly register only resources. Those direct children may be either gateway or non-gateway resources. If you need tasks, events, hooks, middleware, tags, errors, or async contexts, place them under a non-gateway child resource instead. That keeps the first non-gateway resource as the ownership boundary for executable and metadata definitions.
-
-Nested gateways are allowed. When gateways are nested, Runner keeps a separate gateway-only ancestry chain for the gateway resources themselves. So `gateway-a -> gateway-b` gives the second gateway its own resource id `gateway-a.gateway-b`, but descendant non-resource ids still do not pick up those gateway segments. For example, `gateway-a -> gateway-b -> resource-z -> task-a` still compiles the task as `resource-z.tasks.task-a`.
 
 ### Resource Configuration
 
@@ -303,7 +297,6 @@ Fork rules:
 - tags, middleware, and type parameters are inherited
 - each fork gets independent runtime state
 - non-leaf resources must be composed explicitly
-- gateway resources cannot be forked
 
 ### Resource Exports and Isolation Boundaries
 

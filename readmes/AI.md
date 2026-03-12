@@ -221,13 +221,13 @@ They are Runner's main composition and ownership unit: a resource can register c
 - `health(value, config, deps, context)` is an optional async probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.
   Return `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
 - Config-only resources can omit `.init()` — their resolved value is `undefined`; they are used purely for configuration access and registration.
-- `r.resource(id, { gateway: true })` makes the resource structurally transparent for descendant ids.
-- Gateways may directly register only resources, including nested gateways, and may be passed to `run(...)` only when that rule is satisfied.
-- Nested gateways keep a gateway-only ancestry for their own resource ids, such as `gateway-a.gateway-b`, but descendant task/event/middleware/error/tag ids still skip gateway segments.
-- Direct gateway registration of tasks, events, hooks, middleware, tags, errors, or async contexts fails fast.
+- User resources contribute their own ownership segment to canonical ids.
+- The app resource passed to `run(...)` is a normal resource, so direct registrations compile as `app.tasks.x`, `app.events.x`, `app.middleware.task.x`, and so on.
+- Child resources continue that chain, so nested registrations compile as `app.billing.tasks.x`.
+- Only the internal synthetic framework root is transparent, and it does not appear in user-facing ids.
+- `runtime-framework-root` is reserved for that internal framework root and cannot be used as a user resource id.
 - If you register something, you are a non-leaf resource.
 - Non-leaf resources cannot be forked.
-- Gateway resources cannot be forked with `.fork()` because multiple gateway instances would compile the same child canonical ids.
 - `.context(() => initialContext)` can hold mutable resource-local state used across lifecycle phases.
 
 Use the lifecycle intentionally:
@@ -569,7 +569,6 @@ Examples:
 - Forks clone identity, not structure.
 - If a resource declares `.register(...)`, it is non-leaf and `.fork()` is invalid.
 - Use `.fork(...)` when you need another instance of a leaf resource.
-- `.fork()` is not supported for gateway resources.
 - `.fork()` returns a built resource. You do not call `.build()` again.
 - Compose a distinct parent resource when you need a structural variant of a non-leaf resource.
 - Durable support is registered via `resources.durable`, while concrete durable backends use normal forks such as `resources.memoryWorkflow.fork("app-durable")`.

@@ -1,4 +1,4 @@
-import { r } from "../../../";
+import { r, resources } from "../../../";
 
 // Type-only tests for strict fluent builder ordering.
 
@@ -20,6 +20,16 @@ import { r } from "../../../";
   taskAfterRun.middleware([]);
   r.task("types-order-task-meta-before-run").meta({ title: "Task" });
 
+  r.task("x")
+    .dependencies({
+      logger: resources.logger,
+    })
+    .run(async (_cfg, deps) => {
+      const logger = deps.logger;
+      logger.info("Initialized");
+      // @ts-expect-error should ensure logger works expected.
+      logger.xx();
+    });
   // @ts-expect-error build requires run()
   r.task("types-order-task-missing-run").build();
 }
@@ -204,6 +214,86 @@ import { r } from "../../../";
     .init(async () => "ok");
   // @ts-expect-error context is locked after init()
   resourceContextLocked.context(() => ({}));
+
+  r.resource("types-order-resource-init-bare")
+    .init(async () => "ok")
+    .build();
+
+  r.resource("types-order-resource-init-after-deps")
+    .dependencies({ dep })
+    .init(async (_config, deps) => deps.dep)
+    .build();
+
+  r.resource("types-order-resource-init-after-schema")
+    .schema<{ enabled: boolean }>({ parse: (x: any) => x })
+    .init(async (config) => config.enabled)
+    .build();
+
+  r.resource("types-order-resource-init-after-result-schema")
+    .resultSchema<{ ready: true }>({ parse: (x: any) => x })
+    .init(async () => ({ ready: true as const }))
+    .build();
+
+  r.resource("types-order-resource-init-after-middleware")
+    .middleware([])
+    .init(async () => "ok")
+    .build();
+
+  r.resource("types-order-resource-init-after-context")
+    .context(() => ({ started: true }))
+    .init(async (_config, _deps, ctx) => ctx.started)
+    .build();
+
+  r.resource("types-order-resource-init-after-meta")
+    .meta({ title: "Resource" })
+    .init(async () => "ok")
+    .build();
+
+  r.resource("types-order-resource-init-after-throws")
+    .throws([])
+    .init(async () => "ok")
+    .build();
+
+  r.resource("types-order-resource-init-after-register")
+    .register([child])
+    .init(async () => "ok")
+    .build();
+
+  r.resource("types-order-resource-init-after-isolate")
+    .isolate({})
+    .init(async () => "ok")
+    .build();
+
+  r.resource("types-order-resource-init-after-subtree")
+    .subtree({})
+    .init(async () => "ok")
+    .build();
+
+  r.resource("types-order-resource-init-after-overrides")
+    .overrides([])
+    .init(async () => "ok")
+    .build();
+
+  r.resource("x")
+    .dependencies({
+      logger: resources.logger,
+    })
+    .health(async (value, _cfg, deps) => {
+      const logger = deps.logger;
+      logger.info("Health check");
+      // @ts-expect-error should ensure logger works expected.
+      logger.xx();
+      return { status: "healthy" as const };
+    })
+    .init(async (_cfg, deps) => {
+      const logger = deps.logger;
+      logger.info("Initialized");
+      // @ts-expect-error should ensure logger works expected.
+      logger.xx();
+
+      return {};
+    });
+
   r.resource("types-order-resource-meta-before-init").meta({
     title: "Resource",
   });

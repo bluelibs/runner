@@ -34,7 +34,7 @@ import { StoreRegistryWriter } from "./store-registry/StoreRegistryWriter";
 import { StoringMode, TagIndexBucket } from "./store-registry/types";
 import { validationError } from "../errors";
 import { getDefinitionIdentity } from "../tools/isSameDefinition";
-import { FRAMEWORK_ROOT_GATEWAY_ID } from "./createFrameworkRootGateway";
+import { FRAMEWORK_ROOT_RESOURCE_ID } from "./createFrameworkRootGateway";
 
 /**
  * Any object reference used as a definition identity key.
@@ -317,13 +317,15 @@ export class StoreRegistry {
   }
 
   private stripFrameworkRootPrefix(id: string): string {
-    const prefix = `${FRAMEWORK_ROOT_GATEWAY_ID}.`;
+    const prefix = `${FRAMEWORK_ROOT_RESOURCE_ID}.`;
     return id.startsWith(prefix) ? id.slice(prefix.length) : id;
   }
 
   private computeAndStoreDisplayId(canonicalId: string): void {
-    const resourceEntry = this.resources.get(canonicalId);
-    if (resourceEntry?.resource.gateway === true) {
+    if (
+      canonicalId === FRAMEWORK_ROOT_RESOURCE_ID ||
+      canonicalId.startsWith(`${FRAMEWORK_ROOT_RESOURCE_ID}.`)
+    ) {
       this.displayIdsByCanonicalId.set(
         canonicalId,
         this.stripFrameworkRootPrefix(canonicalId),

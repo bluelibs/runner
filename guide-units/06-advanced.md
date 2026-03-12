@@ -697,7 +697,7 @@ Important behavior:
 - Inside `run(...)`, middleware, hooks, lane policies, and validators, `definition.id` is always the canonical runtime ID.
 - Original definition objects are not mutated; per-run compiled definitions are stored internally (run isolation safe).
 - Canonical ids are composed structurally from owner resources; prefer local definition ids and reference-based wiring.
-- Use `defineResource({ id, gateway: true })` for namespace gateways when a resource should not add its own segment to compiled canonical ids.
+- Only the internal synthetic framework root is transparent; user resources always contribute their own ownership segment to canonical ids.
 - Local names fail fast if they use reserved segments: `tasks`, `resources`, `events`, `hooks`, `tags`, `errors`, `asyncContexts`.
 - All definition ids fail fast when they start/end with `.`, contain empty segments (`..`), or equal a reserved standalone local name.
 
