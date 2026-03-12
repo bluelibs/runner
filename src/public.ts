@@ -165,6 +165,7 @@ export type {
   InferMatchPattern,
   MatchCompiledSchema,
   MatchMessageContext,
+  MatchMessageDescriptor,
   MatchMessageOptions,
   MatchJsonObject,
   MatchJsonPrimitive,

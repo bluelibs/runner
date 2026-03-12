@@ -163,7 +163,7 @@ describe("tools/check decorators", () => {
     }
 
     Match.Schema()(RetriesSchema);
-    Match.Field(Match.WithMessage(positiveInteger, { error: formatter }))(
+    Match.Field(Match.WithMessage(positiveInteger, formatter))(
       RetriesSchema.prototype,
       "retries",
     );
@@ -199,15 +199,17 @@ describe("tools/check decorators", () => {
     }
 
     Match.Schema()(ChildSchema);
-    Match.Field(
-      Match.WithMessage(String, { error: "child name must be a string" }),
-    )(ChildSchema.prototype, "name");
+    Match.Field(Match.WithMessage(String, "child name must be a string"))(
+      ChildSchema.prototype,
+      "name",
+    );
 
     Match.Schema()(ParentSchema);
     Match.Field(
-      Match.WithMessage(Match.fromSchema(ChildSchema), {
-        error: "child payload is invalid",
-      }),
+      Match.WithMessage(
+        Match.fromSchema(ChildSchema),
+        "child payload is invalid",
+      ),
     )(ParentSchema.prototype, "child");
 
     const childError = expectMatchFailure(() =>
@@ -279,22 +281,48 @@ describe("tools/check decorators", () => {
     expect(() => Match.WithMessage(Match.Any, null as never)).toThrow(
       RunnerError,
     );
-    expect(() => Match.WithMessage(Match.Any, { error: 42 as never })).toThrow(
+    expect(() => Match.WithMessage(Match.Any, 42 as never)).toThrow(
       RunnerError,
     );
+    expect(() =>
+      Match.WithMessage(Match.Any, { message: 42 as never }),
+    ).toThrow(RunnerError);
+    expect(() =>
+      Match.WithMessage(Match.Any, {
+        message: "invalid",
+        code: 42 as never,
+      }),
+    ).toThrow(RunnerError);
+    expect(() =>
+      Match.WithMessage(Match.Any, {
+        message: "invalid",
+        params: 42 as never,
+      }),
+    ).toThrow(RunnerError);
 
     expectInvalidPatternFailure(() =>
-      Match.WithMessage(String, {
-        error: () => {
-          throw new Error("boom");
-        },
+      Match.WithMessage(String, () => {
+        throw new Error("boom");
       }).parse(1),
     );
 
     expectInvalidPatternFailure(() =>
-      Match.WithMessage(String, {
-        error: () => 42 as never,
-      }).parse(1),
+      Match.WithMessage(String, () => 42 as never).parse(1),
+    );
+    expectInvalidPatternFailure(() =>
+      Match.WithMessage(String, () => ({ message: 42 as never })).parse(1),
+    );
+    expectInvalidPatternFailure(() =>
+      Match.WithMessage(String, () => ({
+        message: "invalid",
+        code: 42 as never,
+      })).parse(1),
+    );
+    expectInvalidPatternFailure(() =>
+      Match.WithMessage(String, () => ({
+        message: "invalid",
+        params: 42 as never,
+      })).parse(1),
     );
   });
 
@@ -303,10 +331,10 @@ describe("tools/check decorators", () => {
       check(
         { email: "nope" },
         {
-          email: Match.WithMessage(Match.Email, {
-            error: ({ value, path }) =>
-              `invalid email ${String(value)} at ${path}`,
-          }),
+          email: Match.WithMessage(
+            Match.Email,
+            ({ value, path }) => `invalid email ${String(value)} at ${path}`,
+          ),
         },
       ),
     );
@@ -315,18 +343,59 @@ describe("tools/check decorators", () => {
     expect(emailError.data.failures[0].message).toBe(
       "Expected email, got string at $.email.",
     );
+    expect(emailError.data.failures[0].code).toBeUndefined();
 
     expect(() =>
       check(
         "abc",
         Match.WithMessage(
           Match.Where((value: unknown) => value === "ABC"),
-          {
-            error: "value must equal ABC",
-          },
+          "value must equal ABC",
         ),
       ),
     ).toThrow("value must equal ABC");
+
+    const localizedError = expectMatchFailure(() =>
+      check(
+        { email: "still-nope" },
+        {
+          email: Match.WithMessage(Match.Email, ({ path }) => ({
+            message: `Email is invalid at ${path}.`,
+            code: "validation.email.invalid",
+            params: { path },
+          })),
+        },
+      ),
+    );
+
+    expect(localizedError.message).toBe("Email is invalid at $.email.");
+    expect(localizedError.data.failures[0]).toMatchObject({
+      path: "$.email",
+      message: "Expected email, got string at $.email.",
+      code: "validation.email.invalid",
+      params: { path: "$.email" },
+    });
+
+    const directLocalizedError = expectMatchFailure(() =>
+      check(
+        { email: "nope-again" },
+        {
+          email: Match.WithMessage(Match.Email, {
+            message: "Email is invalid.",
+            code: "validation.email.invalid",
+            params: { field: "email" },
+          }),
+        },
+      ),
+    );
+
+    expect(directLocalizedError.message).toBe("Email is invalid.");
+    expect(directLocalizedError.data.failures[0]).toMatchObject({
+      path: "$.email",
+      message: "Expected email, got string at $.email.",
+      code: "validation.email.invalid",
+      params: { field: "email" },
+    });
   });
 
   it("does not let later WithMessage siblings replace the first aggregated failure", () => {
@@ -338,9 +407,7 @@ describe("tools/check decorators", () => {
         } as any,
         {
           first: String,
-          second: Match.WithMessage(String, {
-            error: "second must be a string",
-          }),
+          second: Match.WithMessage(String, "second must be a string"),
         },
         { throwAllErrors: true },
       ),
@@ -359,12 +426,8 @@ describe("tools/check decorators", () => {
           second: 2,
         } as any,
         {
-          first: Match.WithMessage(String, {
-            error: "first must be a string",
-          }),
-          second: Match.WithMessage(String, {
-            error: "second must be a string",
-          }),
+          first: Match.WithMessage(String, "first must be a string"),
+          second: Match.WithMessage(String, "second must be a string"),
         },
         { throwAllErrors: true },
       ),
@@ -392,9 +455,10 @@ describe("tools/check decorators", () => {
 
     Match.Schema()(ParentSchema);
     Match.Field(
-      Match.WithMessage(Match.fromSchema(ChildSchema), {
-        error: "child payload is invalid",
-      }),
+      Match.WithMessage(
+        Match.fromSchema(ChildSchema),
+        "child payload is invalid",
+      ),
     )(ParentSchema.prototype, "child");
     Match.Field(String)(ParentSchema.prototype, "title");
 
@@ -537,9 +601,10 @@ describe("tools/check decorators", () => {
   });
 
   it("does not leak Match.WithMessage state across repeated parses", () => {
-    const emailPattern = Match.WithMessage(Match.Email, {
-      error: ({ value, path }) => `invalid email ${String(value)} at ${path}`,
-    });
+    const emailPattern = Match.WithMessage(
+      Match.Email,
+      ({ value, path }) => `invalid email ${String(value)} at ${path}`,
+    );
 
     for (const candidate of ["nope", "still-nope"]) {
       const repeatedError = expectMatchFailure(() =>

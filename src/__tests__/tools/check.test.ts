@@ -3,11 +3,11 @@ import {
   checkInvalidPatternError,
   matchError,
 } from "../../errors/foundation/match.errors";
+import { createMatchError } from "../../tools/check/errors";
 import {
   CHECK_INVALID_PATTERN_ERROR_ID,
   MATCH_ERROR_ID,
   Match,
-  createMatchError,
   check,
   isMatchError,
 } from "../../tools/check";
@@ -305,10 +305,8 @@ describe("tools/check", () => {
         seenParents.push(parent);
         return value === "ada@example.com";
       }),
-      {
-        error: ({ value, path, parent }) =>
-          `Invalid email ${String(value)} at ${path} for ${(parent as { id?: string })?.id ?? "unknown"}`,
-      },
+      ({ value, path, parent }) =>
+        `Invalid email ${String(value)} at ${path} for ${(parent as { id?: string })?.id ?? "unknown"}`,
     );
 
     expect(() =>

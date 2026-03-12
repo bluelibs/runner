@@ -3,10 +3,11 @@ import {
   matchError,
 } from "../../errors/foundation/match.errors";
 import {
+  createMatchError,
   createCheckJsonSchemaPatternError,
   getMatchErrorMessage,
   rootFailure,
-} from "../../tools/check";
+} from "../../tools/check/errors";
 
 describe("tools/check error helpers coverage", () => {
   it("exposes barrel helpers and preserves convenience fields", () => {
@@ -74,5 +75,19 @@ describe("tools/check error helpers coverage", () => {
 
     expect(error.httpCode).toBe(400);
     expect(error.remediation).toContain("JSON Schema");
+  });
+
+  it("projects convenience fields on compatibility error instances", () => {
+    const error = createMatchError([
+      {
+        path: "$.retries",
+        expected: "number",
+        actualType: "string",
+        message: "Expected number, got string at $.retries.",
+      },
+    ]);
+
+    expect(error.path).toBe("$.retries");
+    expect(error.failures).toHaveLength(1);
   });
 });

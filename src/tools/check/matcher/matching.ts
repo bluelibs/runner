@@ -1,4 +1,8 @@
-import { createMatchError, createMatchPatternError } from "../errors";
+import {
+  createMatchError,
+  createMatchPatternError,
+  type MatchFailure,
+} from "../errors";
 import { getClassSchemaDefinition } from "../classSchema";
 import {
   ClassPattern,
@@ -15,7 +19,11 @@ import {
   WithMessagePattern,
   WherePattern,
 } from "./patterns";
-import type { MatchMessageContext, MatchPattern } from "../types";
+import type {
+  MatchMessageContext,
+  MatchMessageDescriptor,
+  MatchPattern,
+} from "../types";
 import {
   EMAIL_PATTERN,
   ISO_DATE_STRING_PATTERN,
@@ -392,15 +400,18 @@ function maybeApplyPatternMessageOverride(
     return;
   }
 
-  const errorOption = pattern.options.error;
+  const messageOption = pattern.message;
   const appliesToAggregate = shouldApplyMessageOverrideToAggregate(
     pattern.pattern,
   );
-  if (typeof errorOption === "string") {
-    context.messageOverride = {
-      message: errorOption,
+  if (typeof messageOption !== "function") {
+    const resolvedMessage = normalizeMatchMessageValue(messageOption);
+    applyMatchMessageOverride(
+      context,
+      context.failures.slice(failuresBefore),
+      resolvedMessage,
       appliesToAggregate,
-    };
+    );
     return;
   }
 
@@ -416,23 +427,89 @@ function maybeApplyPatternMessageOverride(
 
   let resolvedMessage: unknown;
   try {
-    resolvedMessage = errorOption(errorContext);
+    resolvedMessage = messageOption(errorContext);
   } catch (error) {
     throw createMatchPatternError(
-      `Bad pattern: Match.WithMessage error formatter threw: ${String(error)}`,
+      `Bad pattern: Match.WithMessage formatter threw: ${String(error)}`,
     );
   }
 
-  if (typeof resolvedMessage !== "string") {
+  if (
+    typeof resolvedMessage !== "string" &&
+    !isMatchMessageDescriptor(resolvedMessage)
+  ) {
     throw createMatchPatternError(
-      "Bad pattern: Match.WithMessage error formatter must return a string.",
+      "Bad pattern: Match.WithMessage formatter must return a string or plain object.",
     );
   }
 
+  applyMatchMessageOverride(
+    context,
+    nestedFailures,
+    normalizeMatchMessageValue(resolvedMessage),
+    appliesToAggregate,
+  );
+}
+
+function applyMatchMessageOverride(
+  context: MatchContext,
+  nestedFailures: MatchFailure[],
+  resolvedMessage: MatchMessageDescriptor,
+  appliesToAggregate: boolean,
+): void {
   context.messageOverride = {
-    message: resolvedMessage,
+    message: resolvedMessage.message,
     appliesToAggregate,
   };
+
+  for (const failure of nestedFailures) {
+    if (failure.code === undefined && resolvedMessage.code !== undefined) {
+      failure.code = resolvedMessage.code;
+    }
+
+    if (failure.params === undefined && resolvedMessage.params !== undefined) {
+      failure.params = resolvedMessage.params;
+    }
+  }
+}
+
+function normalizeMatchMessageValue(
+  value: string | MatchMessageDescriptor,
+): MatchMessageDescriptor {
+  return typeof value === "string" ? { message: value } : value;
+}
+
+function isMatchMessageDescriptor(
+  value: unknown,
+): value is MatchMessageDescriptor {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const typedValue = value as {
+    message?: unknown;
+    code?: unknown;
+    params?: unknown;
+  };
+
+  if (typeof typedValue.message !== "string") {
+    return false;
+  }
+
+  if (typedValue.code !== undefined && typeof typedValue.code !== "string") {
+    return false;
+  }
+
+  if (
+    typedValue.params !== undefined &&
+    (!typedValue.params ||
+      typeof typedValue.params !== "object" ||
+      Array.isArray(typedValue.params))
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 function shouldApplyMessageOverrideToAggregate(pattern: unknown): boolean {

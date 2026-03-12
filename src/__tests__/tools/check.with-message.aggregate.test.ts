@@ -22,12 +22,8 @@ describe("tools/check Match.WithMessage aggregate behavior", () => {
           second: 2,
         } as any,
         {
-          first: Match.WithMessage(String, {
-            error: "first must be a string",
-          }),
-          second: Match.WithMessage(String, {
-            error: "second must be a string",
-          }),
+          first: Match.WithMessage(String, "first must be a string"),
+          second: Match.WithMessage(String, "second must be a string"),
         },
         { throwAllErrors: true },
       ),
@@ -44,7 +40,7 @@ describe("tools/check Match.WithMessage aggregate behavior", () => {
       label: "optional subtree",
       pattern: Match.WithMessage(
         Match.Optional(Match.ObjectIncluding({ name: String })),
-        { error: "optional child is invalid" },
+        "optional child is invalid",
       ),
       value: { name: 42 },
       path: "$.child.name",
@@ -54,9 +50,7 @@ describe("tools/check Match.WithMessage aggregate behavior", () => {
       label: "maybe subtree",
       pattern: Match.WithMessage(
         Match.Maybe(Match.ObjectStrict({ name: String })),
-        {
-          error: "maybe child is invalid",
-        },
+        "maybe child is invalid",
       ),
       value: { name: 42 },
       path: "$.child.name",
@@ -66,7 +60,7 @@ describe("tools/check Match.WithMessage aggregate behavior", () => {
       label: "lazy subtree",
       pattern: Match.WithMessage(
         Match.Lazy(() => Match.ObjectIncluding({ name: String })),
-        { error: "lazy child is invalid" },
+        "lazy child is invalid",
       ),
       value: { name: 42 },
       path: "$.child.name",
@@ -82,9 +76,10 @@ describe("tools/check Match.WithMessage aggregate behavior", () => {
         Match.Schema()(ChildSchema);
         Match.Field(String)(ChildSchema.prototype, "name");
 
-        return Match.WithMessage(Match.fromSchema(ChildSchema), {
-          error: "class child is invalid",
-        });
+        return Match.WithMessage(
+          Match.fromSchema(ChildSchema),
+          "class child is invalid",
+        );
       })(),
       value: { name: 42 },
       path: "$.child.name",
@@ -92,48 +87,38 @@ describe("tools/check Match.WithMessage aggregate behavior", () => {
     },
     {
       label: "map subtree",
-      pattern: Match.WithMessage(Match.MapOf(String), {
-        error: "map is invalid",
-      }),
+      pattern: Match.WithMessage(Match.MapOf(String), "map is invalid"),
       value: { one: 1 },
       path: "$.child.one",
       message: "map is invalid",
     },
     {
       label: "non-empty array subtree",
-      pattern: Match.WithMessage(Match.NonEmptyArray(String), {
-        error: "list is invalid",
-      }),
+      pattern: Match.WithMessage(
+        Match.NonEmptyArray(String),
+        "list is invalid",
+      ),
       value: [1],
       path: "$.child[0]",
       message: "list is invalid",
     },
     {
       label: "object constructor subtree",
-      pattern: Match.WithMessage(Object, {
-        error: "object is invalid",
-      }),
+      pattern: Match.WithMessage(Object, "object is invalid"),
       value: 1,
       path: "$.child",
       message: "object is invalid",
     },
     {
       label: "array literal subtree",
-      pattern: Match.WithMessage([String], {
-        error: "array is invalid",
-      }),
+      pattern: Match.WithMessage([String], "array is invalid"),
       value: [1],
       path: "$.child[0]",
       message: "array is invalid",
     },
     {
       label: "plain object subtree",
-      pattern: Match.WithMessage(
-        { name: String },
-        {
-          error: "plain object is invalid",
-        },
-      ),
+      pattern: Match.WithMessage({ name: String }, "plain object is invalid"),
       value: { name: 42 },
       path: "$.child.name",
       message: "plain object is invalid",

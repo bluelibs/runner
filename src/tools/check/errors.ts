@@ -5,6 +5,11 @@ import {
   checkJsonSchemaUnsupportedPatternError,
   matchError,
 } from "../../errors/foundation/match.errors";
+import {
+  createRootFailure,
+  formatMatchErrorMessage,
+  normalizeMatchFailures,
+} from "./errorFormatting";
 import type { IErrorHelper } from "../../types/error";
 import { symbolDefinitionIdentity } from "../../types/symbols";
 
@@ -19,6 +24,8 @@ export interface MatchFailure {
   expected: string;
   actualType: string;
   message: string;
+  code?: string;
+  params?: Record<string, unknown>;
 }
 
 export interface MatchMessageOverride {
@@ -59,7 +66,7 @@ export function createMatchError(
   failures: readonly MatchFailure[],
   messageOverride?: MatchMessageOverride,
 ): MatchRuntimeError {
-  const safeFailures = failures.length === 0 ? [rootFailure()] : failures;
+  const safeFailures = normalizeMatchFailures(failures);
   const [firstFailure] = safeFailures;
   const data = {
     path: firstFailure.path,
@@ -67,13 +74,13 @@ export function createMatchError(
   };
 
   if (!messageOverride) {
-    return Object.assign(matchError.new(data), data);
+    return withProjectedFields(matchError.new(data), data);
   }
 
-  return Object.assign(
+  return withProjectedFields(
     new RunnerError(
       MATCH_ERROR_ID,
-      getMatchErrorMessage(safeFailures, messageOverride),
+      formatMatchErrorMessage(safeFailures, messageOverride),
       data,
       matchError.httpCode,
       undefined,
@@ -104,7 +111,7 @@ export function createCheckJsonSchemaPatternError(
   reason: string,
   patternKind: string,
 ): CheckJsonSchemaPatternRuntimeError {
-  return Object.assign(
+  return withProjectedFields(
     checkJsonSchemaUnsupportedPatternError.new({ path, reason, patternKind }),
     {
       path,
@@ -118,23 +125,16 @@ export function getMatchErrorMessage(
   failures: readonly MatchFailure[],
   messageOverride?: MatchMessageOverride,
 ): string {
-  const [firstFailure] = failures;
-
-  return (
-    (messageOverride?.appliesToAggregate || failures.length === 1
-      ? messageOverride?.message
-      : undefined) ??
-    (failures.length === 1
-      ? firstFailure.message
-      : `Match failed with ${failures.length} errors:\n${failures.map((failure) => `- ${failure.message}`).join("\n")}`)
-  );
+  return formatMatchErrorMessage(failures, messageOverride);
 }
 
 export function rootFailure(): MatchFailure {
-  return {
-    path: "$",
-    expected: "valid pattern",
-    actualType: "unknown",
-    message: "Match failed at $.",
-  };
+  return createRootFailure();
+}
+
+function withProjectedFields<
+  TError extends Error,
+  TFields extends Record<string, unknown>,
+>(error: TError, fields: TFields): TError & TFields {
+  return Object.assign(error, fields);
 }

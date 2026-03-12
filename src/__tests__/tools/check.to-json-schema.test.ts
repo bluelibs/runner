@@ -316,9 +316,7 @@ describe("tools/check toJSONSchema", () => {
   it("exports Match.WithMessage using the wrapped inner pattern", () => {
     expect(
       Match.toJSONSchema({
-        email: Match.WithMessage(Match.Email, {
-          error: "Invalid email",
-        }),
+        email: Match.WithMessage(Match.Email, "Invalid email"),
       }),
     ).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,

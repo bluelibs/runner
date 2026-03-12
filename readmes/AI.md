@@ -453,7 +453,7 @@ import { check, Match } from "@bluelibs/runner";
 - `check(value, pattern)` is the low-level runtime validator.
 - `Match.compile(pattern)` creates reusable schemas with `.parse()`, `.test()`, and JSON-Schema export.
 - Constructors act as matchers: `String`, `Number`, `Boolean`.
-- Common `Match.*` helpers include `NonEmptyString`, `Email`, `Integer`, `UUID`, `URL`, `Optional()`, `OneOf()`, `ObjectIncluding()`, `MapOf()`, `ArrayOf()`, `Lazy()`, `Where((value, parent?) => boolean)`, and `WithMessage(pattern, { error })`.
+- Common `Match.*` helpers include `NonEmptyString`, `Email`, `Integer`, `UUID`, `URL`, `Optional()`, `OneOf()`, `ObjectIncluding()`, `MapOf()`, `ArrayOf()`, `Lazy()`, `Where((value, parent?) => boolean)`, and `WithMessage(pattern, messageOrFormatter)`.
 - Plain objects are strict by default, so `check(value, { name: String })` rejects unknown keys.
 - `@Match.Schema({ base: BaseClass })` allows subclassing without TypeScript `extends`.
 - `@Match.Schema({ exact, schemaId, errorPolicy })` controls class strictness, schema identity, and the default validation aggregation policy.
@@ -462,7 +462,10 @@ import { check, Match } from "@bluelibs/runner";
 - Validation failures throw the built-in `errors.matchError` Runner error.
 - The thrown error data exposes `.path` as the first recorded leaf-failure path, and `.failures` keeps the raw nested failures even when the top-level message comes from an outer schema/subtree wrapper.
 - `Match.Where((value, parent?) => boolean)` receives the immediate parent when matching compound values.
-- `Match.WithMessage(pattern, { error })` overrides the thrown match-error message; callback context is `{ value, error, path, pattern, parent? }`.
+- `Match.WithMessage(pattern, messageOrFormatter)` overrides the thrown match-error message.
+- `messageOrFormatter` accepts a string, `{ message, code?, params? }`, or a callback `(ctx) => string | { message, code?, params? }`.
+- When using the callback form, `ctx` is `{ value, error, path, pattern, parent? }`.
+- When `{ code, params }` is provided, Runner copies that metadata onto the owned `failures[]` entries while keeping each leaf failure's raw `message` intact.
 - In formatter callbacks, `error` is rebuilt from the wrapped pattern's nested raw failures. It exposes the nested `path` and flat `failures`, but it does not preserve lower-level custom `Match.WithMessage(...)` headlines.
 - Final match-error `failures` is always a flat array of leaf failures such as `$.address.city`; Runner does not add synthetic parent failures such as `$.address`.
 - Use `check(value, pattern, { errorPolicy: "all" })` or `Match.WithErrorPolicy(pattern, "all")` when you want one aggregate match validation error containing every collected failure.

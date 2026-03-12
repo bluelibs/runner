@@ -64,7 +64,7 @@ export class WithMessagePattern<TPattern = unknown> extends MatchPatternBase<
   public readonly kind = "Match.WithMessagePattern";
   constructor(
     public readonly pattern: TPattern,
-    public readonly options: MatchMessageOptions,
+    public readonly message: MatchMessageOptions,
   ) {
     super();
   }

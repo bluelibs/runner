@@ -308,8 +308,15 @@ export interface MatchMessageContext<
   pattern: TPattern;
 }
 
-export interface MatchMessageOptions<
-  TPattern extends MatchPattern = MatchPattern,
-> {
-  error: string | ((context: MatchMessageContext<TPattern>) => string);
+export interface MatchMessageDescriptor {
+  message: string;
+  code?: string;
+  params?: Record<string, unknown>;
 }
+
+export type MatchMessageOptions<TPattern extends MatchPattern = MatchPattern> =
+  | string
+  | MatchMessageDescriptor
+  | ((
+      context: MatchMessageContext<TPattern>,
+    ) => string | MatchMessageDescriptor);

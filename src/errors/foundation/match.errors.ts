@@ -1,6 +1,7 @@
 import { frameworkError as error } from "../../definers/builders/error";
 import type { DefaultErrorType } from "../../types/error";
 import type { MatchFailure } from "../../tools/check/errors";
+import { formatMatchErrorMessage } from "../../tools/check/errorFormatting";
 
 export const matchError = error<
   {
@@ -9,24 +10,7 @@ export const matchError = error<
   } & DefaultErrorType
 >("runner.errors.matchError")
   .httpCode(400)
-  .format(({ failures }) => {
-    const safeFailures =
-      failures.length === 0
-        ? [
-            {
-              path: "$",
-              expected: "valid pattern",
-              actualType: "unknown",
-              message: "Match failed at $.",
-            },
-          ]
-        : failures;
-    const [firstFailure] = safeFailures;
-
-    return safeFailures.length === 1
-      ? firstFailure.message
-      : `Match failed with ${safeFailures.length} errors:\n${safeFailures.map((failure) => `- ${failure.message}`).join("\n")}`;
-  })
+  .format(({ failures }) => formatMatchErrorMessage(failures))
   .build();
 
 export const checkInvalidPatternError = error<

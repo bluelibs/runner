@@ -305,10 +305,11 @@ describe("tools/check schema support", () => {
   });
 
   it("supports Match.WithMessage as a schema wrapper", () => {
-    const schema = Match.WithMessage(Match.NonEmptyString, {
-      error: ({ value, path }) =>
+    const schema = Match.WithMessage(
+      Match.NonEmptyString,
+      ({ value, path }) =>
         `Expected non-empty string for ${path}, got ${String(value)}`,
-    });
+    );
 
     expect(schema.parse("ok")).toBe("ok");
     expect(() => schema.parse("")).toThrow(

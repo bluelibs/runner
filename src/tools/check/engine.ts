@@ -44,6 +44,7 @@ import type {
   InferCheckSchema,
   InferMatchPattern,
   MatchCompiledSchema,
+  MatchMessageDescriptor,
   MatchMessageOptions,
   MatchJsonSchema,
   MatchPattern,
@@ -260,18 +261,43 @@ const where: MatchWhere = (condition: unknown): WherePattern<unknown> => {
 
 function withMessage<TPattern extends MatchPattern>(
   pattern: TPattern,
-  options: MatchMessageOptions<TPattern>,
+  message: MatchMessageOptions<TPattern>,
 ): WithMessagePattern<TPattern> {
   assertPattern(
-    isPlainObject(options),
-    "Bad pattern: Match.WithMessage options must be a plain object.",
+    isValidMatchMessageValue(message),
+    "Bad pattern: Match.WithMessage value must be a string, plain object, or function.",
   );
-  const error = options.error;
-  assertPattern(
-    typeof error === "string" || typeof error === "function",
-    'Bad pattern: Match.WithMessage option "error" must be a string or function.',
-  );
-  return new WithMessagePattern(pattern, options as MatchMessageOptions);
+  return new WithMessagePattern(pattern, message as MatchMessageOptions);
+}
+
+function isValidMatchMessageValue(value: unknown): boolean {
+  if (typeof value === "string" || typeof value === "function") {
+    return true;
+  }
+
+  return isMatchMessageDescriptor(value);
+}
+
+function isMatchMessageDescriptor(
+  value: unknown,
+): value is MatchMessageDescriptor {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+
+  if (typeof value.message !== "string") {
+    return false;
+  }
+
+  if (value.code !== undefined && typeof value.code !== "string") {
+    return false;
+  }
+
+  if (value.params !== undefined && !isPlainObject(value.params)) {
+    return false;
+  }
+
+  return true;
 }
 
 function withErrorPolicyPattern<TPattern extends MatchPattern>(

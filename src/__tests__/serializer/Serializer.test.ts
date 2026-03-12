@@ -523,10 +523,10 @@ describe("Serializer", () => {
 
       Match.Schema()(UserDto);
       Match.Field(
-        Match.WithMessage(Match.NonEmptyString, {
-          error: ({ value }) =>
-            `id must be non-empty, received ${String(value)}`,
-        }),
+        Match.WithMessage(
+          Match.NonEmptyString,
+          ({ value }) => `id must be non-empty, received ${String(value)}`,
+        ),
       )(UserDto.prototype, "id");
 
       const payload = serializer.serialize({ abc: "u1", extra: true });
@@ -819,10 +819,10 @@ describe("Serializer", () => {
 
       Match.Schema()(UserDto);
       Match.Field(
-        Match.WithMessage(Match.NonEmptyString, {
-          error: ({ value }) =>
-            `id must be non-empty, received ${String(value)}`,
-        }),
+        Match.WithMessage(
+          Match.NonEmptyString,
+          ({ value }) => `id must be non-empty, received ${String(value)}`,
+        ),
       )(UserDto.prototype, "id");
 
       const payload = serializer.serialize({ id: "" });

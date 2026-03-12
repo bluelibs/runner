@@ -404,16 +404,14 @@ import {
 
   Match.Schema()(JobConfig);
   Match.Field(
-    Match.WithMessage(positiveInteger, {
-      error: ({ value, error, path, pattern }) => {
-        const rawValue: unknown = value;
-        void rawValue;
-        error.path.toUpperCase();
-        path.toUpperCase();
-        const samePattern = pattern;
-        void samePattern;
-        return "invalid retries";
-      },
+    Match.WithMessage(positiveInteger, ({ value, error, path, pattern }) => {
+      const rawValue: unknown = value;
+      void rawValue;
+      error.path.toUpperCase();
+      path.toUpperCase();
+      const samePattern = pattern;
+      void samePattern;
+      return "invalid retries";
     }),
   )(JobConfig.prototype, "retries");
 
@@ -423,8 +421,9 @@ import {
 }
 
 {
-  const emailPattern = Match.WithMessage(Match.Email, {
-    error: ({ value, error, path, pattern }) => {
+  const emailPattern = Match.WithMessage(
+    Match.Email,
+    ({ value, error, path, pattern }) => {
       const rawValue: unknown = value;
       void rawValue;
       error.path.toUpperCase();
@@ -433,7 +432,7 @@ import {
       void samePattern;
       return "invalid email";
     },
-  });
+  );
 
   const parsed = check("dev@example.com", emailPattern);
   const email: string = parsed;

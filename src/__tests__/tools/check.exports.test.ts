@@ -1,34 +1,39 @@
 import * as checkExports from "../../tools/check";
+import {
+  createCheckJsonSchemaPatternError,
+  getMatchErrorMessage,
+  rootFailure,
+} from "../../tools/check/errors";
 
 describe("tools/check exports", () => {
-  it("exports helper-based check error utilities instead of legacy classes", () => {
+  it("exposes the stable public check surface without legacy classes", () => {
     const checkExportsRecord = checkExports as Record<string, unknown>;
 
-    expect(typeof checkExports.createMatchError).toBe("function");
-    expect(typeof checkExports.createMatchPatternError).toBe("function");
-    expect(typeof checkExports.createCheckOptionsError).toBe("function");
-    expect(typeof checkExports.createCheckJsonSchemaPatternError).toBe(
-      "function",
-    );
     expect(typeof checkExports.isMatchError).toBe("function");
+    expect(checkExportsRecord.createMatchError).toBeUndefined();
+    expect(checkExportsRecord.createMatchPatternError).toBeUndefined();
+    expect(checkExportsRecord.createCheckOptionsError).toBeUndefined();
+    expect(
+      checkExportsRecord.createCheckJsonSchemaPatternError,
+    ).toBeUndefined();
+    expect(checkExportsRecord.getMatchErrorMessage).toBeUndefined();
+    expect(checkExportsRecord.rootFailure).toBeUndefined();
     expect(checkExportsRecord.MatchError).toBeUndefined();
     expect(checkExportsRecord.MatchPatternError).toBeUndefined();
     expect(checkExportsRecord.CheckOptionsError).toBeUndefined();
   });
 
-  it("keeps the helper utility exports callable from the barrel", () => {
-    expect(checkExports.rootFailure()).toEqual({
+  it("keeps internal helper utilities callable from the local module", () => {
+    expect(rootFailure()).toEqual({
       path: "$",
       expected: "valid pattern",
       actualType: "unknown",
       message: "Match failed at $.",
     });
 
-    expect(checkExports.getMatchErrorMessage([])).toBe(
-      "Match failed with 0 errors:\n",
-    );
+    expect(getMatchErrorMessage([])).toBe("Match failed at $.");
     expect(
-      checkExports.getMatchErrorMessage([
+      getMatchErrorMessage([
         {
           path: "$.id",
           expected: "string",
@@ -38,7 +43,7 @@ describe("tools/check exports", () => {
       ]),
     ).toBe("Expected string, got number at $.id.");
 
-    const schemaError = checkExports.createCheckJsonSchemaPatternError(
+    const schemaError = createCheckJsonSchemaPatternError(
       "$.field",
       "unsupported",
       "Match.Where",

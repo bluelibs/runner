@@ -210,10 +210,10 @@ describe("decorator schema shorthand", () => {
 
     Match.Schema()(CustomMessageSchema);
     Match.Field(
-      Match.WithMessage(String, {
-        error: ({ value }) =>
-          `value must be a string, received ${String(value)}`,
-      }),
+      Match.WithMessage(
+        String,
+        ({ value }) => `value must be a string, received ${String(value)}`,
+      ),
     )(CustomMessageSchema.prototype, "value");
 
     const task = defineTask({

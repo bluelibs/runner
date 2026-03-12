@@ -342,7 +342,7 @@ check(
 | `Match.Maybe(pattern)`                                       | `undefined`, `null`, or pattern                                |
 | `Match.OneOf(...patterns)`                                   | Any one of given patterns                                      |
 | `Match.Where((value, parent?) => boolean)`                   | Custom predicate / type guard                                  |
-| `Match.WithMessage(pattern, { error })`                      | Wraps a pattern with a custom top-level validation message     |
+| `Match.WithMessage(pattern, messageOrFormatter)`            | Wraps a pattern with a custom top-level validation message     |
 | `Match.Lazy(() => pattern)`                                  | Lazy/recursive pattern                                         |
 | `Match.Schema(options?)`                                     | Class schema decorator (`exact`, `schemaId`, `errorPolicy`; see also `base`) |
 | `Match.Schema({ base: BaseClass \| () => BaseClass })`       | Composes schema classes without requiring TypeScript `extends` |
@@ -365,14 +365,16 @@ check(
 - Decorator class shorthand in builder APIs (for example `.inputSchema(UserDto)` / `.configSchema(UserConfig)`) requires class metadata from `@Match.Schema()`.
 - `Match.Schema({ exact, schemaId, errorPolicy })` controls class-level strictness, schema identity, and default validation aggregation; `Match.Schema({ base })` composes schema classes without TypeScript `extends`.
 - `@Match.Schema({ errorPolicy: "all" })` gives `Match.fromSchema(MyClass)` the same aggregate-default behavior as `Match.WithErrorPolicy(...)`.
-- `Match.WithMessage(pattern, { error })` overrides the thrown match-error message headline while preserving the normal error structure (`id`, `path`, `failures`). It does not rewrite individual `failures[]` entries.
+- `Match.WithMessage(pattern, messageOrFormatter)` overrides the thrown match-error message headline while preserving the normal error structure (`id`, `path`, `failures`).
+- `messageOrFormatter` accepts a string, `{ message, code?, params? }`, or a callback `(ctx) => string | { message, code?, params? }`.
+- When `code` / `params` are provided, Runner copies that metadata onto the owned `failures[]` entries without rewriting the raw leaf `message` text.
 - Final match-error `failures` is always a flat array of leaf failures. Nested validation does not produce a tree of failures or a synthetic parent failure like `$.address` unless an actual matcher failed at that path.
 - Match-error `path` always comes from the first recorded failure. If a nested field fails first, a parent custom headline may still be used, but `error.path` remains the nested leaf path such as `$.address.city`.
 - With `check(value, pattern, { errorPolicy: "all" })`, the default headline is `"Match failed with N errors:\n- msg1\n- msg2"`.
 - Leaf wrappers such as `Match.WithMessage(String, ...)` do not replace that aggregate headline; their underlying failures still appear in `error.failures`.
 - Subtree wrappers such as plain objects, arrays, `Match.ObjectIncluding(...)`, `Match.MapOf(...)`, `Match.NonEmptyArray(...)`, `Match.Lazy(...)`, or `Match.fromSchema(...)` can replace the aggregate headline while still preserving the nested failures in `error.failures`.
 - Decorator-backed schemas are not special here: `Match.WithMessage(Match.fromSchema(AddressSchema), ...)` behaves like any other subtree wrapper.
-- In `Match.WithMessage(pattern, { error: fn })`, the callback receives `ctx.error` built from the nested failures collected inside the wrapped pattern. That nested error exposes `path` and `failures`, but its `message` is rebuilt from the raw nested failures and does not preserve any inner `Match.WithMessage(...)` headline from deeper wrappers.
+- In `Match.WithMessage(pattern, fn)`, the callback receives `ctx.error` built from the nested failures collected inside the wrapped pattern. That nested error exposes `path` and `failures`, but its `message` is rebuilt from the raw nested failures and does not preserve any inner `Match.WithMessage(...)` headline from deeper wrappers.
 - `Match.Where((value, parent?) => boolean)` receives the immediate parent object/array when validation happens inside a compound value.
 
 #### Recursive Patterns: Which Helper to Use
@@ -434,7 +436,7 @@ Rule of thumb:
 
 ### Custom Match Messages
 
-Use `Match.WithMessage(pattern, { error })` when a validation rule needs a more domain-specific message while keeping the normal error structure (`id`, `path`, `failures`).
+Use `Match.WithMessage(pattern, messageOrFormatter)` when a validation rule needs a more domain-specific message while keeping the normal error structure (`id`, `path`, `failures`).
 
 ```typescript
 import { Match, check } from "@bluelibs/runner";
@@ -442,10 +444,11 @@ import { Match, check } from "@bluelibs/runner";
 @Match.Schema()
 class UserDto {
   @Match.Field(
-    Match.WithMessage(String, {
-      error: ({ value, path, parent }) =>
+    Match.WithMessage(
+      String,
+      ({ value, path, parent }) =>
         `Name must be a string. Received ${String(value)} at ${path} for user ${(parent as { id?: string })?.id ?? "unknown"}.`,
-    }),
+    ),
   )
   name!: string;
 }
@@ -458,7 +461,7 @@ The same wrapper works in plain `check(...)`:
 ```typescript
 import { Match, check } from "@bluelibs/runner";
 
-check("nope", Match.WithMessage(Match.Email, { error: "Invalid email" }));
+check("nope", Match.WithMessage(Match.Email, "Invalid email"));
 ```
 
 Nested schema wrappers follow the same rules. The outer wrapper can replace the final headline, while the recorded failures still point to the nested leaf paths:
@@ -469,9 +472,7 @@ import { Match, check } from "@bluelibs/runner";
 @Match.Schema()
 class AddressDto {
   @Match.Field(
-    Match.WithMessage(String, {
-      error: "City must be a string",
-    }),
+    Match.WithMessage(String, "City must be a string"),
   )
   city!: string;
 }
@@ -479,10 +480,10 @@ class AddressDto {
 @Match.Schema()
 class BillingDetailsDto {
   @Match.Field(
-    Match.WithMessage(Match.fromSchema(AddressDto), {
-      error: ({ error }) =>
-        `Address is invalid. First nested issue: ${error.message}`,
-    }),
+    Match.WithMessage(
+      Match.fromSchema(AddressDto),
+      ({ error }) => `Address is invalid. Nested validation failed: ${error.message}`,
+    ),
   )
   address!: AddressDto;
 }
@@ -499,7 +500,7 @@ try {
     failures: Array<{ path: string; message: string }>;
   };
   // matchError.message ===
-  // "Address is invalid. First nested issue: Expected string, got number at $.address.city."
+  // "Address is invalid. Nested validation failed: Expected string, got number at $.address.city."
   //
   // matchError.path === "$.address.city"
   //
@@ -530,10 +531,11 @@ const AppMatch = {
 @Match.Schema()
 class JobConfig {
   @Match.Field(
-    Match.WithMessage(AppMatch.NonZeroPositiveInteger, {
-      error: ({ value, path }) =>
+    Match.WithMessage(
+      AppMatch.NonZeroPositiveInteger,
+      ({ value, path }) =>
         `Retries must be a non-zero positive integer. Received ${String(value)} at ${path}.`,
-    }),
+    ),
   )
   retries!: number;
 }
@@ -543,7 +545,7 @@ check({ retries: 0 }, Match.fromSchema(JobConfig));
 
 Notes:
 
-- `error` accepts either a static string or a callback.
+- `messageOrFormatter` accepts a static string, `{ message, code?, params? }`, or a callback.
 - Callback context is `{ value, error, path, pattern, parent }`.
 - `path` uses `$` for the root value, `$.email` for a root object field, and `$.users[2].email` for nested array/object paths.
 - `value` is intentionally `unknown` because the callback runs only on the failure path.

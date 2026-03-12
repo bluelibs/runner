@@ -202,18 +202,19 @@ Compatibility notes:
 - explicit `check(..., { errorPolicy })` takes precedence over deprecated
   alias usage
 
-#### `Match.WithMessage(pattern, { error })`
+#### `Match.WithMessage(pattern, messageOrFormatter)`
 
 Wrap any pattern and override only the top-level match-validation error message while
-preserving `id`, `path`, and `failures`.
+preserving `id`, `path`, and `failures`. The wrapper now takes the message input directly.
 
 ```ts
 check(
   { email: "nope" },
   {
-    email: Match.WithMessage(Match.Email, {
-      error: ({ value, path }) => `Invalid email ${String(value)} at ${path}`,
-    }),
+    email: Match.WithMessage(
+      Match.Email,
+      ({ value, path }) => `Invalid email ${String(value)} at ${path}`,
+    ),
   },
 );
 ```
@@ -221,8 +222,14 @@ check(
 Key details:
 
 - Works in plain `check(...)` and inside decorator-backed schemas.
-- `error` accepts either a static string or a callback.
+- `messageOrFormatter` accepts:
+  - a static string
+  - `{ message, code?, params? }`
+  - a callback `(ctx) => string | { message, code?, params? }`
 - Callback context is `{ value, error, path, pattern, parent? }`.
+- When `code` / `params` are provided, Runner copies that metadata onto the
+  owned `failures[]` entries without rewriting each leaf failure's raw
+  `message`.
 - In aggregate validation mode (`errorPolicy: "all"` / deprecated
   `throwAllErrors: true`), the first failing `Match.WithMessage(...)` still
   controls the top-level error message.
