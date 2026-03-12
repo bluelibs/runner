@@ -477,7 +477,7 @@ import { check, Match } from "@bluelibs/runner";
 
 ### Errors
 
-Typed errors are declared once, injected via DI, and consumed with a strongly-typed helper.
+Typed errors are declared once and are usually registered + injected via DI, but the built helper also works locally outside `run(...)`.
 
 ```ts
 const userNotFound = r
@@ -498,6 +498,8 @@ r.error.is(err); // any Runner error check
 
 Thrown `IRunnerError` has: `.id`, `.data`, `.message` (from `.format()`, defaults to `JSON.stringify`), `.httpCode`, `.remediation`.
 `.dataSchema(...)` validates data at throw-time. `.throws([...])` on task/resource/hook/middleware is declarative metadata only.
+- `.new()` / `.throw()` / `.is()` work directly on the helper even if it is used outside the Runner graph.
+- Register the error when you want DI, store/discovery visibility, or app definitions to depend on it.
 
 ### Serialization
 
