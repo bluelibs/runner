@@ -44,7 +44,7 @@ import {
   LifecycleAdmissionController,
   RuntimeLifecyclePhase,
 } from "./runtime/LifecycleAdmissionController";
-import { createFrameworkRootResource } from "./createFrameworkRootGateway";
+import { createSyntheticFrameworkRoot } from "./createSyntheticFrameworkRoot";
 import type { DebugFriendlyConfig } from "../globals/resources/debug";
 import { symbolRuntimeId } from "../types/symbols";
 import { getRuntimeId } from "../tools/runtimeMetadata";
@@ -421,7 +421,7 @@ export class Store {
       storeAlreadyInitializedError.throw();
     }
 
-    const frameworkRoot = createFrameworkRootResource({
+    const frameworkRoot = createSyntheticFrameworkRoot({
       rootItem: root.with(config as any),
       debug: options?.debug,
     });

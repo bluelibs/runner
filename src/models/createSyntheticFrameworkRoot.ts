@@ -14,7 +14,7 @@ import {
 
 export const FRAMEWORK_RUNNER_RESOURCE_ID = "runner";
 export const FRAMEWORK_SYSTEM_RESOURCE_ID = "system";
-export const FRAMEWORK_ROOT_RESOURCE_ID = "runtime-framework-root";
+export const SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID = "runtime-framework-root";
 
 type FrameworkRootInput = {
   rootItem: IResource<any, any, any, any, any> | IResourceWithConfig<any, any>;
@@ -33,7 +33,7 @@ function createFrameworkNamespaceResource(
   );
 }
 
-export function createFrameworkRootResource({
+export function createSyntheticFrameworkRoot({
   rootItem,
   debug,
 }: FrameworkRootInput): IResource<void, Promise<void>> {
@@ -52,10 +52,10 @@ export function createFrameworkRootResource({
 
   return defineResource(
     markFrameworkDefinition({
-      id: FRAMEWORK_ROOT_RESOURCE_ID,
+      id: SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID,
       register: [systemResource, runnerResource, rootItem],
     }),
   );
 }
 
-export const createFrameworkRootGateway = createFrameworkRootResource;
+export const createFrameworkRootGateway = createSyntheticFrameworkRoot;

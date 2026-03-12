@@ -1,6 +1,6 @@
 import { defineResource } from "../../define";
 import { validationError } from "../../errors";
-import { createFrameworkRootResource } from "../../models/createFrameworkRootGateway";
+import { createSyntheticFrameworkRoot } from "../../models/createSyntheticFrameworkRoot";
 import { symbolRuntimeId } from "../../types/symbols";
 import { runtimeSource } from "../../types/runtimeSource";
 import { createTestFixture } from "../test-utils";
@@ -89,7 +89,7 @@ describe("Store coverage", () => {
       id: "store-coverage-root-resource",
     });
 
-    const frameworkRoot = createFrameworkRootResource({
+    const frameworkRoot = createSyntheticFrameworkRoot({
       rootItem: root,
       debug: undefined,
     });

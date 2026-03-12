@@ -1,4 +1,4 @@
-import { FRAMEWORK_ROOT_RESOURCE_ID } from "../createFrameworkRootGateway";
+import { SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID } from "../createSyntheticFrameworkRoot";
 
 export type OwnerScope = Readonly<{
   resourceId: string;
@@ -8,6 +8,6 @@ export type OwnerScope = Readonly<{
 export function createOwnerScope(resourceId: string): OwnerScope {
   return {
     resourceId,
-    usesFrameworkRootIds: resourceId === FRAMEWORK_ROOT_RESOURCE_ID,
+    usesFrameworkRootIds: resourceId === SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID,
   };
 }
