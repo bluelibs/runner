@@ -196,11 +196,28 @@ describe("Temporal Middleware: Throttle", () => {
       dependencies: { task, temporal: temporalResource },
       async init(_, { task, temporal }) {
         await task("a");
+        const keyedStates = temporal.throttleStates.get(middleware.config);
+
+        expect(keyedStates?.size).toBe(1);
+
+        for (let index = 0; index < 999; index += 1) {
+          keyedStates?.set(`stale-key-${index}`, {
+            key: `stale-key-${index}`,
+            lastExecution: 0,
+            resolveList: [],
+            rejectList: [],
+          });
+        }
+
+        expect(keyedStates?.size).toBe(1_000);
+
         jest.advanceTimersByTime(100);
         await Promise.resolve();
         await task("b");
-        const keyedStates = temporal.throttleStates.get(middleware.config);
+
         expect(keyedStates?.size).toBe(1);
+        expect(keyedStates?.has("stale-key-0")).toBe(false);
+        expect(keyedStates?.has("throttle-prune-idle")).toBe(true);
       },
     });
 
