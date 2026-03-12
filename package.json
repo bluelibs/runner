@@ -1,6 +1,6 @@
 {
   "name": "@bluelibs/runner",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "description": "BlueLibs Runner",
   "sideEffects": false,
   "main": "dist/universal/index.cjs",
@@ -89,7 +89,7 @@
     "verbose:coverage": "jest --config config/jest/jest.config.js --verbose --coverage --verbose=false --silent --noStackTrace --bail=1",
     "test:clean": "jest --config config/jest/jest.config.js --clearCache",
     "testonly": "npm test",
-    "test:ci": "node ./scripts/run-jest-watchdog.mjs -- --config config/jest/jest.config.js --verbose --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
+    "test:ci": "node ./scripts/run-jest-watchdog.mjs -- --config config/jest/jest.config.js --verbose --coverage --ci --maxWorkers=8 --reporters=default --reporters=jest-junit",
     "test:security": "jest --config config/jest/jest.config.js --verbose --runInBand --testPathPattern=src/__tests__/security",
     "typecheck": "tsc -p config/ts/tsconfig.json --noEmit",
     "lint": "eslint --config config/eslint/eslint.config.mjs ./src",
