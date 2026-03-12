@@ -4,6 +4,7 @@ import type {
   RegisterableItems,
 } from "../defs";
 import { defineResource } from "../define";
+import { markFrameworkDefinition } from "../definers/markFrameworkDefinition";
 import { debugResource } from "../globals/resources/debug";
 import type { DebugFriendlyConfig } from "../globals/resources/debug";
 import {
@@ -13,7 +14,7 @@ import {
 
 export const FRAMEWORK_RUNNER_RESOURCE_ID = "runner";
 export const FRAMEWORK_SYSTEM_RESOURCE_ID = "system";
-export const FRAMEWORK_ROOT_GATEWAY_ID = "runtime-framework-root";
+export const FRAMEWORK_ROOT_RESOURCE_ID = "runtime-framework-root";
 
 type FrameworkRootInput = {
   rootItem: IResource<any, any, any, any, any> | IResourceWithConfig<any, any>;
@@ -24,13 +25,15 @@ function createFrameworkNamespaceResource(
   resourceId: string,
   register: readonly RegisterableItems[],
 ): IResource<void, Promise<void>> {
-  return defineResource({
-    id: resourceId,
-    register: [...register],
-  });
+  return defineResource(
+    markFrameworkDefinition({
+      id: resourceId,
+      register: [...register],
+    }),
+  );
 }
 
-export function createFrameworkRootGateway({
+export function createFrameworkRootResource({
   rootItem,
   debug,
 }: FrameworkRootInput): IResource<void, Promise<void>> {
@@ -47,9 +50,12 @@ export function createFrameworkRootGateway({
     runnerRegister,
   );
 
-  return defineResource({
-    id: FRAMEWORK_ROOT_GATEWAY_ID,
-    gateway: true,
-    register: [systemResource, runnerResource, rootItem],
-  });
+  return defineResource(
+    markFrameworkDefinition({
+      id: FRAMEWORK_ROOT_RESOURCE_ID,
+      register: [systemResource, runnerResource, rootItem],
+    }),
+  );
 }
+
+export const createFrameworkRootGateway = createFrameworkRootResource;

@@ -20,7 +20,6 @@ import {
 } from "../types/symbols";
 import {
   resourceForkNonLeafUnsupportedError,
-  resourceForkGatewayUnsupportedError,
   validationError,
 } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
@@ -81,6 +80,7 @@ export function defineResource<
   const id = constConfig.id;
   assertDefinitionId("Resource", id, {
     allowReservedDottedNamespace: isFrameworkDefinitionMarked(constConfig),
+    allowReservedInternalId: isFrameworkDefinitionMarked(constConfig),
   });
   const configSchema = normalizeOptionalValidationSchema(
     constConfig.configSchema,
@@ -118,7 +118,6 @@ export function defineResource<
       constConfig.register !== undefined ? true : undefined,
     [symbolFilePath]: filePath,
     id,
-    gateway: constConfig.gateway === true,
     dependencies: constConfig.dependencies,
     dispose: constConfig.dispose,
     ready: constConfig.ready,
@@ -204,7 +203,6 @@ export function defineResource<
       current[symbolResourceIsolateDeclarations],
     [symbolResourceSubtreeDeclarations]:
       current[symbolResourceSubtreeDeclarations],
-    gateway: current.gateway,
   });
 
   base.with = function (config: TConfig) {
@@ -257,9 +255,6 @@ export function defineResource<
     const current = resolveCurrent(this);
     if (current[symbolResourceRegistersChildren] === true) {
       resourceForkNonLeafUnsupportedError.throw({ id: current.id });
-    }
-    if (current.gateway === true) {
-      resourceForkGatewayUnsupportedError.throw({ id: current.id });
     }
     const forkCallerFilePath = getCallerFile();
     const forked = defineResource({

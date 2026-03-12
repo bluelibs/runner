@@ -1,5 +1,6 @@
 import { defineResource } from "../../define";
 import { validationError } from "../../errors";
+import { createFrameworkRootResource } from "../../models/createFrameworkRootGateway";
 import { symbolRuntimeId } from "../../types/symbols";
 import { runtimeSource } from "../../types/runtimeSource";
 import { createTestFixture } from "../test-utils";
@@ -50,49 +51,54 @@ describe("Store coverage", () => {
     );
   });
 
-  it("keeps gateway public ids on their gateway-only ancestry channel", () => {
+  it("strips the internal framework root prefix from public ids", () => {
     const { store } = createTestFixture();
     const registry = (store as unknown as { registry: any }).registry;
-    const nestedGateway = {
-      id: "ignored-gateway",
-      [symbolRuntimeId]: "gateway-x.gateway-y",
-    };
-    const rootGateway = {
-      id: "ignored-root-gateway",
-      [symbolRuntimeId]: "runtime-framework-root.gateway-x",
+    const frameworkChild = {
+      id: "ignored-framework-child",
+      [symbolRuntimeId]: "runtime-framework-root.framework-child-x",
     };
 
-    jest.spyOn(store.resources, "get").mockImplementation((resourceId) => {
-      if (
-        resourceId === "gateway-x.gateway-y" ||
-        resourceId === "runtime-framework-root.gateway-x"
-      ) {
-        return {
-          resource: { gateway: true },
-        };
+    registry.registerDefinitionAlias(
+      { id: "framework-child-x" },
+      "runtime-framework-root.framework-child-x",
+    );
+
+    expect(store.getRuntimeMetadata(frameworkChild)).toEqual({
+      id: "framework-child-x",
+      path: "runtime-framework-root.framework-child-x",
+      runtimeId: "runtime-framework-root.framework-child-x",
+    });
+  });
+
+  it("keeps non-framework ids unchanged when stripping the internal framework prefix", () => {
+    const { store } = createTestFixture();
+    const registry = (
+      store as unknown as {
+        registry: { stripFrameworkRootPrefix: (id: string) => string };
       }
+    ).registry;
 
-      return Map.prototype.get.call(store.resources, resourceId);
-    });
-    registry.registerDefinitionAlias(
-      { id: "gateway-x.gateway-y" },
-      "gateway-x.gateway-y",
+    expect(registry.stripFrameworkRootPrefix("plain.resource")).toBe(
+      "plain.resource",
     );
-    registry.registerDefinitionAlias(
-      { id: "gateway-x" },
-      "runtime-framework-root.gateway-x",
-    );
+  });
 
-    expect(store.getRuntimeMetadata(nestedGateway)).toEqual({
-      id: "gateway-x.gateway-y",
-      path: "gateway-x.gateway-y",
-      runtimeId: "gateway-x.gateway-y",
+  it("preserves the original root resource during framework composition", () => {
+    const root = defineResource({
+      id: "store-coverage-root-resource",
     });
-    expect(store.getRuntimeMetadata(rootGateway)).toEqual({
-      id: "gateway-x",
-      path: "runtime-framework-root.gateway-x",
-      runtimeId: "runtime-framework-root.gateway-x",
+
+    const frameworkRoot = createFrameworkRootResource({
+      rootItem: root,
+      debug: undefined,
     });
+
+    const registerEntries = frameworkRoot.register as unknown as Array<{
+      id: string;
+      [key: symbol]: unknown;
+    }>;
+    expect(registerEntries[2]?.id).toBe(root.id);
   });
 
   it("fails fast when the computed root resource entry is missing after bootstrap", () => {

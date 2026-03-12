@@ -7,7 +7,7 @@ import {
 } from "../../../define";
 import type { IResource } from "../../../defs";
 import { defineError } from "../../../definers/defineError";
-import { RunnerErrorId } from "../../../errors";
+import { markFrameworkDefinition } from "../../../definers/markFrameworkDefinition";
 import { createTestFixture } from "../../test-utils";
 
 describe("StoreRegistryWriter branches", () => {
@@ -21,25 +21,26 @@ describe("StoreRegistryWriter branches", () => {
     return registry.writer as {
       compileOwnedDefinition: (
         ownerResourceId: string,
-        ownerIsGateway: boolean,
+        ownerIsFrameworkRoot: boolean,
         item: unknown,
         kind: string,
       ) => unknown;
       computeCanonicalId: (
         ownerResourceId: string,
-        ownerIsGateway: boolean,
+        ownerIsFrameworkRoot: boolean,
         kind: string,
         currentId: string,
-        childIsGateway?: boolean,
       ) => string;
       normalizeTaskMiddlewareAttachments: (task: any) => unknown;
       normalizeSubtreeTaskMiddlewareEntry: (
         ownerResourceId: string,
-        entry: unknown,
+        ownerIsTransparentOrEntry: boolean | unknown,
+        entry?: unknown,
       ) => unknown;
       normalizeSubtreeResourceMiddlewareEntry: (
         ownerResourceId: string,
-        entry: unknown,
+        ownerIsTransparentOrEntry: boolean | unknown,
+        entry?: unknown,
       ) => unknown;
       normalizeResourceSubtreeMiddlewareAttachments: (
         resource: any,
@@ -72,137 +73,141 @@ describe("StoreRegistryWriter branches", () => {
     ).toBe("app.item");
   });
 
-  it("keeps first-level gateways local and accumulates gateway-only ancestry for nested gateways", () => {
+  it("keeps the framework root transparent and normal resources scoped", () => {
     const writer = getWriter();
-    const gatewayResource = defineResource({
+    const childResource = defineResource({
       id: "child",
-      gateway: true,
     });
-    const nonGatewayResource = defineResource({
+    const leafResource = defineResource({
       id: "leaf",
     });
 
     expect(
-      writer.compileOwnedDefinition("app", false, gatewayResource, "resource"),
-    ).toBe(gatewayResource);
+      writer.compileOwnedDefinition("app", false, childResource, "resource"),
+    ).toEqual(expect.objectContaining({ id: "app.child" }));
     expect(
       writer.compileOwnedDefinition(
-        "gateway",
+        "runtime-framework-root",
         true,
-        gatewayResource,
+        childResource,
         "resource",
       ),
-    ).toEqual(expect.objectContaining({ id: "gateway.child" }));
+    ).toBe(childResource);
     expect(
-      writer.compileOwnedDefinition(
-        "gateway",
-        true,
-        nonGatewayResource,
-        "resource",
-      ),
-    ).toBe(nonGatewayResource);
+      writer.compileOwnedDefinition("app", false, leafResource, "resource"),
+    ).toEqual(expect.objectContaining({ id: "app.leaf" }));
 
+    expect(writer.computeCanonicalId("app", false, "resource", "child")).toBe(
+      "app.child",
+    );
     expect(
-      writer.computeCanonicalId("app", false, "resource", "child", true),
+      writer.computeCanonicalId(
+        "runtime-framework-root",
+        true,
+        "resource",
+        "child",
+      ),
     ).toBe("child");
     expect(
-      writer.computeCanonicalId("gateway", true, "resource", "child", true),
-    ).toBe("gateway.child");
+      writer.computeCanonicalId(
+        "runtime-framework-root",
+        true,
+        "task",
+        "child",
+      ),
+    ).toBe("tasks.child");
     expect(
-      writer.computeCanonicalId("gateway", true, "resource", "leaf", false),
-    ).toBe("leaf");
-    expect(writer.computeCanonicalId("gateway", true, "task", "child")).toBe(
-      "tasks.child",
-    );
-    expect(writer.computeCanonicalId("gateway", true, "event", "child")).toBe(
-      "events.child",
-    );
-    expect(writer.computeCanonicalId("gateway", true, "hook", "child")).toBe(
-      "hooks.child",
-    );
+      writer.computeCanonicalId(
+        "runtime-framework-root",
+        true,
+        "event",
+        "child",
+      ),
+    ).toBe("events.child");
     expect(
-      writer.computeCanonicalId("gateway", true, "taskMiddleware", "child"),
+      writer.computeCanonicalId(
+        "runtime-framework-root",
+        true,
+        "hook",
+        "child",
+      ),
+    ).toBe("hooks.child");
+    expect(
+      writer.computeCanonicalId(
+        "runtime-framework-root",
+        true,
+        "taskMiddleware",
+        "child",
+      ),
     ).toBe("middleware.task.child");
     expect(
-      writer.computeCanonicalId("gateway", true, "resourceMiddleware", "child"),
+      writer.computeCanonicalId(
+        "runtime-framework-root",
+        true,
+        "resourceMiddleware",
+        "child",
+      ),
     ).toBe("middleware.resource.child");
-    expect(writer.computeCanonicalId("gateway", true, "tag", "child")).toBe(
-      "tags.child",
-    );
-    expect(writer.computeCanonicalId("gateway", true, "error", "child")).toBe(
-      "errors.child",
-    );
     expect(
-      writer.computeCanonicalId("gateway", true, "asyncContext", "child"),
+      writer.computeCanonicalId("runtime-framework-root", true, "tag", "child"),
+    ).toBe("tags.child");
+    expect(
+      writer.computeCanonicalId(
+        "runtime-framework-root",
+        true,
+        "error",
+        "child",
+      ),
+    ).toBe("errors.child");
+    expect(
+      writer.computeCanonicalId(
+        "runtime-framework-root",
+        true,
+        "asyncContext",
+        "child",
+      ),
     ).toBe("asyncContexts.child");
-    expect(writer.computeCanonicalId("gateway", true, "unknown", "child")).toBe(
-      "child",
-    );
+    expect(
+      writer.computeCanonicalId(
+        "runtime-framework-root",
+        true,
+        "unknown",
+        "child",
+      ),
+    ).toBe("child");
   });
 
-  it("allows gateway resources to directly register both gateway and non-gateway resources", () => {
+  it("allows resources to directly register both resources and tasks", () => {
     const writer = getWriter();
     const leaf = defineResource({
-      id: "gateway-leaf",
+      id: "child-leaf",
     });
-    const nestedGateway = defineResource({
-      id: "gateway-nested",
-      gateway: true,
-      register: [leaf],
-    });
-    const rootGateway = defineResource({
-      id: "gateway-root",
-      gateway: true,
-      register: [nestedGateway],
-    });
-
-    expect(() => writer.computeRegistrationDeeply(rootGateway)).not.toThrow();
-  });
-
-  it("fails fast when a gateway directly registers a task", () => {
-    const writer = getWriter();
     const task = defineTask({
-      id: "gateway-invalid-task",
+      id: "child-task",
       run: async () => "ok",
     });
-    const gateway = defineResource({
-      id: "gateway-invalid-root",
-      gateway: true,
-      register: [task],
+    const root = defineResource({
+      id: "root",
+      register: [leaf, task],
     });
 
-    try {
-      writer.computeRegistrationDeeply(gateway);
-      fail("Expected gateway validation to throw");
-    } catch (error) {
-      expect((error as { id?: string }).id).toBe(
-        RunnerErrorId.ResourceGatewayInvalidContents,
-      );
-      expect((error as { message?: string }).message).toContain(
-        'Task "gateway-invalid-task"',
-      );
-    }
+    expect(() => writer.computeRegistrationDeeply(root)).not.toThrow();
   });
 
-  it("renders unknown gateway direct registrations with a safe fallback id", () => {
+  it("stores framework-root tasks under top-level ids", () => {
     const writer = getWriter();
-    const gateway = defineResource({
-      id: "gateway-invalid-unknown-root",
-      gateway: true,
-      register: [{ nope: true } as never],
+    const task = defineTask({
+      id: "root-task",
+      run: async () => "ok",
     });
+    const root = defineResource(
+      markFrameworkDefinition({
+        id: "runtime-framework-root",
+        register: [task],
+      }),
+    );
 
-    try {
-      writer.computeRegistrationDeeply(gateway);
-      fail("Expected gateway validation to throw");
-    } catch (error) {
-      expect((error as { id?: string }).id).toBe(
-        RunnerErrorId.ResourceGatewayInvalidContents,
-      );
-      expect((error as { message?: string }).message).toContain(
-        'Unknown registration "<unknown>"',
-      );
-    }
+    expect(() => writer.computeRegistrationDeeply(root)).not.toThrow();
   });
 
   it("fails fast on empty and reserved local names", () => {
@@ -229,6 +234,7 @@ describe("StoreRegistryWriter branches", () => {
 
     const normalizedTaskEntry = writer.normalizeSubtreeTaskMiddlewareEntry(
       "app-owner",
+      false,
       { use: taskMiddleware },
     ) as { use: { id: string } };
     expect(normalizedTaskEntry.use.id).toBe(
@@ -236,7 +242,7 @@ describe("StoreRegistryWriter branches", () => {
     );
 
     const normalizedResourceEntry =
-      writer.normalizeSubtreeResourceMiddlewareEntry("app-owner", {
+      writer.normalizeSubtreeResourceMiddlewareEntry("app-owner", false, {
         use: resourceMiddleware,
       }) as { use: { id: string } };
     expect(normalizedResourceEntry.use.id).toBe(
@@ -246,10 +252,44 @@ describe("StoreRegistryWriter branches", () => {
     const normalizedDirectResource =
       writer.normalizeSubtreeResourceMiddlewareEntry(
         "app-owner",
+        false,
         resourceMiddleware,
       ) as { id: string };
     expect(normalizedDirectResource.id).toBe(
       "app-owner.middleware.resource.localResourceMw",
+    );
+  });
+
+  it("supports the legacy subtree normalization signature for framework-root owners", () => {
+    const writer = getWriter();
+    const taskMiddleware = defineTaskMiddleware({
+      id: "legacyTaskMw",
+      run: async ({ next, task }) => next(task.input),
+    });
+
+    const normalizedTaskEntry = writer.normalizeSubtreeTaskMiddlewareEntry(
+      "runtime-framework-root",
+      true,
+      { use: taskMiddleware },
+    ) as { use: { id: string } };
+
+    expect(normalizedTaskEntry.use.id).toBe("middleware.task.legacyTaskMw");
+  });
+
+  it("defaults legacy subtree normalization signatures to non-framework owners", () => {
+    const writer = getWriter();
+    const taskMiddleware = defineTaskMiddleware({
+      id: "legacyDefaultTaskMw",
+      run: async ({ next, task }) => next(task.input),
+    });
+
+    const normalizedTaskEntry = writer.normalizeSubtreeTaskMiddlewareEntry(
+      "app-owner",
+      { use: taskMiddleware },
+    ) as { use: { id: string } };
+
+    expect(normalizedTaskEntry.use.id).toBe(
+      "app-owner.middleware.task.legacyDefaultTaskMw",
     );
   });
 
@@ -486,10 +526,12 @@ describe("StoreRegistryWriter branches", () => {
       ) => unknown;
       normalizeSubtreeTaskMiddlewareEntry: (
         ownerResourceId: string,
+        ownerIsTransparent: boolean,
         entry: unknown,
       ) => unknown;
       normalizeSubtreeResourceMiddlewareEntry: (
         ownerResourceId: string,
+        ownerIsTransparent: boolean,
         entry: unknown,
       ) => unknown;
     };
@@ -520,11 +562,12 @@ describe("StoreRegistryWriter branches", () => {
     });
 
     expect(
-      writer.normalizeSubtreeTaskMiddlewareEntry("app-owner", taskEntry),
+      writer.normalizeSubtreeTaskMiddlewareEntry("app-owner", false, taskEntry),
     ).toBe(taskEntry);
     expect(
       writer.normalizeSubtreeResourceMiddlewareEntry(
         "app-owner",
+        false,
         resourceEntry,
       ),
     ).toBe(resourceEntry);
