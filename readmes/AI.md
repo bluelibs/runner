@@ -451,9 +451,21 @@ import { check, Match } from "@bluelibs/runner";
 - `check(value, pattern)` is the low-level runtime validator.
 - `Match.compile(pattern)` creates reusable schemas with `.parse()`, `.test()`, and JSON-Schema export.
 - Constructors act as matchers: `String`, `Number`, `Boolean`.
-- Common `Match.*` helpers include `NonEmptyString`, `Email`, `Integer`, `UUID`, `URL`, `Optional()`, `OneOf()`, `ObjectIncluding()`, `MapOf()`, `ArrayOf()`, `Lazy()`, and `Where()`.
+- Common `Match.*` helpers include `NonEmptyString`, `Email`, `Integer`, `UUID`, `URL`, `Optional()`, `OneOf()`, `ObjectIncluding()`, `MapOf()`, `ArrayOf()`, `Lazy()`, `Where((value, parent?) => boolean)`, and `WithMessage(pattern, { error })`.
 - Plain objects are strict by default, so `check(value, { name: String })` rejects unknown keys.
 - `@Match.Schema({ base: BaseClass })` allows subclassing without TypeScript `extends`.
+- `@Match.Schema({ exact, schemaId })` controls class strictness and schema identity.
+- Use `Match.fromSchema(() => User)` for self-referencing or forward class-schema links.
+- Use `Match.Lazy(() => pattern)` for recursive plain Match patterns; use `Match.fromSchema(() => User)` when the recursive thing is a decorated class schema.
+- Validation failures throw `Match.Error`, which is the same class exported as `MatchError`.
+- `MatchError.path` is the first recorded leaf-failure path, and `MatchError.failures` keeps the raw nested failures even when the top-level message comes from an outer schema/subtree wrapper.
+- `Match.Where((value, parent?) => boolean)` receives the immediate parent when matching compound values.
+- `Match.WithMessage(pattern, { error })` overrides the thrown `MatchError.message`; callback context is `{ value, error, path, pattern, parent? }`.
+- In formatter callbacks, `error` is rebuilt from the wrapped pattern's nested raw failures. It exposes the nested `path` and flat `failures`, but it does not preserve lower-level custom `Match.WithMessage(...)` headlines.
+- Final `MatchError.failures` is always a flat array of leaf failures such as `$.address.city`; Runner does not add synthetic parent failures such as `$.address`.
+- Without `Match.WithMessage`, the aggregate `MatchError.message` is `"Match failed with N errors:\n- msg1\n- msg2"`.
+- In aggregate mode, leaf wrappers do not replace that summary, while subtree wrappers such as plain objects, arrays, maps, `Match.Lazy(...)`, and `Match.fromSchema(...)` can replace the top-level headline if they own the first collected failure.
+- Decorator-backed class schemas follow the same rules as plain Match patterns: a field-level `Match.WithMessage(...)` changes the headline only for that failure, while a wrapper around `Match.fromSchema(ChildSchema)` can overtake the final headline for the whole child subtree.
 - Builder slots accept the same schema sources everywhere: task input/output, config, payload, tag config, and error data.
 
 ### Errors

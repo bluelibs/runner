@@ -214,6 +214,49 @@ describe("tools/check schema support", () => {
         },
       },
     });
+
+    class RecursiveUserSchema {
+      public name!: string;
+      public self!: RecursiveUserSchema;
+      public children!: RecursiveUserSchema[];
+    }
+    Match.Schema()(RecursiveUserSchema);
+    Match.Field(Match.NonEmptyString)(RecursiveUserSchema.prototype, "name");
+    Match.Field(Match.fromSchema(() => RecursiveUserSchema))(
+      RecursiveUserSchema.prototype,
+      "self",
+    );
+    Match.Field(Match.ArrayOf(Match.fromSchema(() => RecursiveUserSchema)))(
+      RecursiveUserSchema.prototype,
+      "children",
+    );
+
+    expect(Match.fromSchema(RecursiveUserSchema).toJSONSchema()).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $ref: "#/$defs/RecursiveUserSchema",
+      $defs: {
+        RecursiveUserSchema: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              minLength: 1,
+            },
+            self: {
+              $ref: "#/$defs/RecursiveUserSchema",
+            },
+            children: {
+              type: "array",
+              items: {
+                $ref: "#/$defs/RecursiveUserSchema",
+              },
+            },
+          },
+          required: ["name", "self", "children"],
+          additionalProperties: true,
+        },
+      },
+    });
     expect(() => Match.Optional(String).toJSONSchema()).toThrow(
       CheckJsonSchemaPatternError,
     );
@@ -241,6 +284,23 @@ describe("tools/check schema support", () => {
 
     const parsed = check({ id: "  user-1  " }, schema);
     expect(parsed).toEqual({ id: "user-1" });
+  });
+
+  it("supports Match.WithMessage as a schema wrapper", () => {
+    const schema = Match.WithMessage(Match.NonEmptyString, {
+      error: ({ value, path }) =>
+        `Expected non-empty string for ${path}, got ${String(value)}`,
+    });
+
+    expect(schema.parse("ok")).toBe("ok");
+    expect(() => schema.parse("")).toThrow(
+      "Expected non-empty string for $, got ",
+    );
+    expect(schema.toJSONSchema()).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "string",
+      minLength: 1,
+    });
   });
 
   it("rethrows errors thrown by schema.parse", () => {

@@ -32,6 +32,7 @@ const MATCH_KIND = {
   MaybePattern: "Match.MaybePattern",
   OneOfPattern: "Match.OneOfPattern",
   WherePattern: "Match.WherePattern",
+  WithMessagePattern: "Match.WithMessagePattern",
   LazyPattern: "Match.LazyPattern",
   RegExpPattern: "Match.RegExpPattern",
   ClassPattern: "Match.ClassPattern",
@@ -246,6 +247,11 @@ function compilePattern(
       }
       return { anyOf };
     });
+  }
+  if (isKindPattern(pattern, MATCH_KIND.WithMessagePattern)) {
+    return withCycleGuard(pattern, context, path, () =>
+      compilePattern(readPatternField(pattern), context, path, mode),
+    );
   }
   if (isKindPattern(pattern, MATCH_KIND.WherePattern)) {
     if (!context.strict) {

@@ -348,6 +348,84 @@ import {
 }
 
 {
+  class RecursiveUser {
+    public name!: string;
+    public self!: RecursiveUser;
+    public children!: RecursiveUser[];
+  }
+
+  Match.Schema()(RecursiveUser);
+  Match.Field(Match.NonEmptyString)(RecursiveUser.prototype, "name");
+  Match.Field(Match.fromSchema(() => RecursiveUser))(
+    RecursiveUser.prototype,
+    "self",
+  );
+  Match.Field(Match.ArrayOf(Match.fromSchema(() => RecursiveUser)))(
+    RecursiveUser.prototype,
+    "children",
+  );
+
+  const candidateRecursiveUser = null as unknown as RecursiveUser;
+  const checkedRecursiveUser = check(
+    candidateRecursiveUser,
+    Match.fromSchema(RecursiveUser),
+  );
+
+  const recursiveName: string = checkedRecursiveUser.self.name;
+  void recursiveName;
+  const recursiveChild: RecursiveUser[] = checkedRecursiveUser.children;
+  void recursiveChild;
+}
+
+{
+  const positiveInteger = Match.Where(
+    (value: unknown): value is number =>
+      typeof value === "number" && Number.isInteger(value) && value > 0,
+  );
+
+  class JobConfig {
+    public retries!: number;
+  }
+
+  Match.Schema()(JobConfig);
+  Match.Field(
+    Match.WithMessage(positiveInteger, {
+      error: ({ value, error, path, pattern }) => {
+        const rawValue: unknown = value;
+        void rawValue;
+        error.path.toUpperCase();
+        path.toUpperCase();
+        const samePattern = pattern;
+        void samePattern;
+        return "invalid retries";
+      },
+    }),
+  )(JobConfig.prototype, "retries");
+
+  const parsed = check({ retries: 1 }, Match.fromSchema(JobConfig));
+  const retries: number = parsed.retries;
+  void retries;
+}
+
+{
+  const emailPattern = Match.WithMessage(Match.Email, {
+    error: ({ value, error, path, pattern }) => {
+      const rawValue: unknown = value;
+      void rawValue;
+      error.path.toUpperCase();
+      path.toUpperCase();
+      const samePattern = pattern;
+      void samePattern;
+      return "invalid email";
+    },
+  });
+
+  const parsed = check("dev@example.com", emailPattern);
+  const email: string = parsed;
+  void email;
+}
+
+{
   const getTreePattern = (): MatchPattern =>
     Match.ObjectIncluding({
       id: Match.NonEmptyString,

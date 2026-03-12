@@ -1,4 +1,10 @@
-import { Match, MatchError, check, type MatchPattern } from "../../tools/check";
+import {
+  Match,
+  MatchError,
+  MatchPatternError,
+  check,
+  type MatchPattern,
+} from "../../tools/check";
 import { RunnerError } from "../../definers/defineError";
 import { getClassSchemaDefinition } from "../../tools/check/classSchema";
 
@@ -52,6 +58,41 @@ describe("tools/check decorators", () => {
     expect(() => check(cyclicUser, Match.fromSchema(User))).not.toThrow();
   });
 
+  it("supports Match.fromSchema(() => Class) for self-referencing class schemas", () => {
+    class User {
+      public name!: string;
+      public age!: number;
+      public self!: User;
+      public children!: User[];
+    }
+
+    Match.Schema()(User);
+    Match.Field(Match.NonEmptyString)(User.prototype, "name");
+    Match.Field(Match.Integer)(User.prototype, "age");
+    Match.Field(Match.fromSchema(() => User))(User.prototype, "self");
+    Match.Field(Match.ArrayOf(Match.fromSchema(() => User)))(
+      User.prototype,
+      "children",
+    );
+
+    const user: Record<string, unknown> = {
+      name: "Ada",
+      age: 37,
+      children: [
+        {
+          name: "Grace",
+          age: 12,
+          children: [],
+        },
+      ],
+    };
+    user.self = user;
+    const children = user.children as Array<Record<string, unknown>>;
+    children[0].self = children[0];
+
+    expect(() => check(user, Match.fromSchema(User))).not.toThrow();
+  });
+
   it("supports exact mode for class schemas", () => {
     class ExactUser {
       public name!: string;
@@ -85,6 +126,87 @@ describe("tools/check decorators", () => {
     expect(() =>
       staticField(ExactUser as unknown as object, "staticValue"),
     ).not.toThrow();
+  });
+
+  it("supports Match.WithMessage inside decorator schemas", () => {
+    const formatter = jest.fn(
+      ({ value, path }: { value: unknown; path: string }) =>
+        `retries is invalid. Received ${String(value)} at ${path}.`,
+    );
+
+    const positiveInteger = Match.Where(
+      (value: unknown): value is number =>
+        typeof value === "number" && Number.isInteger(value) && value > 0,
+    );
+
+    class RetriesSchema {
+      public retries!: number;
+    }
+
+    Match.Schema()(RetriesSchema);
+    Match.Field(Match.WithMessage(positiveInteger, { error: formatter }))(
+      RetriesSchema.prototype,
+      "retries",
+    );
+
+    try {
+      Match.fromSchema(RetriesSchema).parse({ retries: 0 });
+      throw new Error("Expected MatchError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MatchError);
+      const matchError = error as MatchError;
+      expect(matchError.message).toBe(
+        "retries is invalid. Received 0 at $.retries.",
+      );
+      expect(matchError.path).toBe("$.retries");
+      expect(matchError.failures).toHaveLength(1);
+      expect(matchError.failures[0].message).toBe(
+        "Failed Match.Where validation at $.retries.",
+      );
+    }
+
+    expect(formatter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: 0,
+        path: "$.retries",
+        pattern: positiveInteger,
+      }),
+    );
+  });
+
+  it("supports nested Match.WithMessage overrides in decorator schemas", () => {
+    class ChildSchema {
+      public name!: string;
+    }
+
+    class ParentSchema {
+      public child!: ChildSchema;
+    }
+
+    Match.Schema()(ChildSchema);
+    Match.Field(
+      Match.WithMessage(String, { error: "child name must be a string" }),
+    )(ChildSchema.prototype, "name");
+
+    Match.Schema()(ParentSchema);
+    Match.Field(
+      Match.WithMessage(Match.fromSchema(ChildSchema), {
+        error: "child payload is invalid",
+      }),
+    )(ParentSchema.prototype, "child");
+
+    try {
+      check({ child: { name: 42 } }, Match.fromSchema(ParentSchema));
+      throw new Error("Expected MatchError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MatchError);
+      const matchError = error as MatchError;
+      expect(matchError.message).toBe("child payload is invalid");
+      expect(matchError.path).toBe("$.child.name");
+      expect(matchError.failures[0].message).toBe(
+        "Expected string, got number at $.child.name.",
+      );
+    }
   });
 
   it("supports Match.Lazy for recursive non-class patterns", () => {
@@ -133,10 +255,187 @@ describe("tools/check decorators", () => {
       (unresolvedCycle as { resolve: () => MatchPattern }).resolve(),
     );
     expect(() => check("x", unresolvedCycle)).toThrow(RunnerError);
+    expect(() =>
+      check(
+        {},
+        Match.fromSchema(() => ({ nope: true }) as never),
+      ),
+    ).toThrow(RunnerError);
 
     const field = Match.Field(Match.Any);
     expect(() => field({}, Symbol("x"))).toThrow(RunnerError);
     expect(() => field(Object.create(null) as never, "x")).toThrow(RunnerError);
+    expect(() => Match.WithMessage(Match.Any, null as never)).toThrow(
+      RunnerError,
+    );
+    expect(() => Match.WithMessage(Match.Any, { error: 42 as never })).toThrow(
+      RunnerError,
+    );
+
+    expect(() =>
+      Match.WithMessage(String, {
+        error: () => {
+          throw new Error("boom");
+        },
+      }).parse(1),
+    ).toThrow(MatchPatternError);
+
+    expect(() =>
+      Match.WithMessage(String, {
+        error: () => 42 as never,
+      }).parse(1),
+    ).toThrow(MatchPatternError);
+  });
+
+  it("supports Match.WithMessage in plain check()", () => {
+    try {
+      check(
+        { email: "nope" },
+        {
+          email: Match.WithMessage(Match.Email, {
+            error: ({ value, path }) =>
+              `invalid email ${String(value)} at ${path}`,
+          }),
+        },
+      );
+      throw new Error("Expected MatchError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MatchError);
+      const matchError = error as MatchError;
+      expect(matchError.message).toBe("invalid email nope at $.email");
+      expect(matchError.path).toBe("$.email");
+      expect(matchError.failures[0].message).toBe(
+        "Expected email, got string at $.email.",
+      );
+    }
+
+    expect(() =>
+      check(
+        "abc",
+        Match.WithMessage(
+          Match.Where((value: unknown) => value === "ABC"),
+          {
+            error: "value must equal ABC",
+          },
+        ),
+      ),
+    ).toThrow("value must equal ABC");
+  });
+
+  it("does not let later WithMessage siblings replace the first aggregated failure", () => {
+    try {
+      check(
+        {
+          first: 1,
+          second: 2,
+        } as any,
+        {
+          first: String,
+          second: Match.WithMessage(String, {
+            error: "second must be a string",
+          }),
+        },
+        { throwAllErrors: true },
+      );
+      throw new Error("Expected MatchError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MatchError);
+      const matchError = error as MatchError;
+      expect(matchError.message).toBe(
+        "Match failed with 2 errors:\n- Expected string, got number at $.first.\n- Expected string, got number at $.second.",
+      );
+      expect(matchError.failures).toHaveLength(2);
+    }
+  });
+
+  it("keeps the aggregate summary for sibling field WithMessage failures", () => {
+    try {
+      check(
+        {
+          first: 1,
+          second: 2,
+        } as any,
+        {
+          first: Match.WithMessage(String, {
+            error: "first must be a string",
+          }),
+          second: Match.WithMessage(String, {
+            error: "second must be a string",
+          }),
+        },
+        { throwAllErrors: true },
+      );
+      throw new Error("Expected MatchError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MatchError);
+      const matchError = error as MatchError;
+      expect(matchError.message).toBe(
+        "Match failed with 2 errors:\n- Expected string, got number at $.first.\n- Expected string, got number at $.second.",
+      );
+      expect(matchError.failures).toHaveLength(2);
+      expect(matchError.failures[0].path).toBe("$.first");
+      expect(matchError.failures[1].path).toBe("$.second");
+    }
+  });
+
+  it("keeps subtree Match.WithMessage overrides as aggregate headlines", () => {
+    class ChildSchema {
+      public name!: string;
+    }
+
+    class ParentSchema {
+      public child!: ChildSchema;
+      public title!: string;
+    }
+
+    Match.Schema()(ChildSchema);
+    Match.Field(String)(ChildSchema.prototype, "name");
+
+    Match.Schema()(ParentSchema);
+    Match.Field(
+      Match.WithMessage(Match.fromSchema(ChildSchema), {
+        error: "child payload is invalid",
+      }),
+    )(ParentSchema.prototype, "child");
+    Match.Field(String)(ParentSchema.prototype, "title");
+
+    try {
+      check(
+        {
+          child: { name: 42 },
+          title: 1,
+        } as any,
+        Match.fromSchema(ParentSchema),
+        { throwAllErrors: true },
+      );
+      throw new Error("Expected MatchError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MatchError);
+      const matchError = error as MatchError;
+      expect(matchError.message).toBe("child payload is invalid");
+      expect(matchError.failures).toHaveLength(2);
+      expect(matchError.failures[0].path).toBe("$.child.name");
+      expect(matchError.failures[1].path).toBe("$.title");
+    }
+  });
+
+  it("does not leak Match.WithMessage state across repeated parses", () => {
+    const emailPattern = Match.WithMessage(Match.Email, {
+      error: ({ value, path }) => `invalid email ${String(value)} at ${path}`,
+    });
+
+    for (const candidate of ["nope", "still-nope"]) {
+      try {
+        emailPattern.parse(candidate);
+        throw new Error("Expected MatchError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(MatchError);
+        const matchError = error as MatchError;
+        expect(matchError.message).toBe(`invalid email ${candidate} at $`);
+        expect(matchError.path).toBe("$");
+        expect(matchError.failures).toHaveLength(1);
+      }
+    }
   });
 
   it("supports schema id metadata and class chain safety branches", () => {

@@ -199,13 +199,13 @@ Start with functional schemas and explicit parsers. Use classes when they improv
 
 ### Choosing a Style
 
-| Situation | Prefer Functional (`Match.*` / plain schemas) | Prefer Class (`@Match.Schema`, `@Match.Field`) |
-| --------- | ---------------------------------------------- | ------------------------------------------------ |
-| Request/response boundaries | Best for explicit, local contracts | Good when boundary DTOs are shared widely |
-| Dynamic shapes (maps, conditional payloads) | Best fit (`Match.MapOf`, composable patterns) | Usually more verbose |
-| Large domain models reused across features | Possible but can become repetitive | Best readability and reuse |
-| Wire-field remapping/transforms | Works, but manual | Best DX with `@Serializer.Field(...)` |
-| Team preference | Functional programming style | OOP/DTO-centric style |
+| Situation                                   | Prefer Functional (`Match.*` / plain schemas) | Prefer Class (`@Match.Schema`, `@Match.Field`) |
+| ------------------------------------------- | --------------------------------------------- | ---------------------------------------------- |
+| Request/response boundaries                 | Best for explicit, local contracts            | Good when boundary DTOs are shared widely      |
+| Dynamic shapes (maps, conditional payloads) | Best fit (`Match.MapOf`, composable patterns) | Usually more verbose                           |
+| Large domain models reused across features  | Possible but can become repetitive            | Best readability and reuse                     |
+| Wire-field remapping/transforms             | Works, but manual                             | Best DX with `@Serializer.Field(...)`          |
+| Team preference                             | Functional programming style                  | OOP/DTO-centric style                          |
 
 Rule of thumb:
 
@@ -235,7 +235,10 @@ const userInputSchema = Match.compile({
   age: Match.Integer,
 });
 
-const parsed = check({ id: "u1", email: "ada@example.com", age: 42 }, userInputSchema);
+const parsed = check(
+  { id: "u1", email: "ada@example.com", age: 42 },
+  userInputSchema,
+);
 parsed.age; // number
 ```
 
@@ -315,46 +318,269 @@ check(
 
 ### Match Reference
 
-| Pattern / Helper | What It Does |
-| ---------------- | ------------ |
-| `String`, `Number`, `Boolean`, `Function`, `Object`, `Array` | Constructor-based validation |
-| Class constructor (for example `Date`, `MyClass`) | Validates via constructor semantics |
-| Literal values (`"x"`, `42`, `true`, `null`, `undefined`) | Exact literal match |
-| `[pattern]` | Array where every element matches `pattern` |
-| Plain object (`{ a: String }`) | Strict object validation (same as `Match.ObjectStrict`) |
-| `Match.ObjectStrict({ ... })` | Strict object shape (`additionalProperties: false` semantics) |
-| `Match.ObjectIncluding({ ... })` | Partial object shape (unknown keys allowed) |
-| `Match.MapOf(valuePattern)` | Dynamic-key object with uniform value pattern |
-| `Match.Any` | Accepts any value |
-| `Match.Integer` | Signed 32-bit integer |
-| `Match.NonEmptyString` | Non-empty string |
-| `Match.Email` | Email-shaped string |
-| `Match.UUID` | Canonical UUID string |
-| `Match.URL` | Absolute URL string |
-| `Match.IsoDateString` | ISO datetime string with timezone |
-| `Match.RegExp(re)` | String matching given regexp |
-| `Match.ArrayOf(pattern)` | Array of elements matching pattern |
-| `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)` | Non-empty array, optional element validation |
-| `Match.Optional(pattern)` | `undefined` or pattern |
-| `Match.Maybe(pattern)` | `undefined`, `null`, or pattern |
-| `Match.OneOf(...patterns)` | Any one of given patterns |
-| `Match.Where(predicate)` | Custom predicate / type guard |
-| `Match.Lazy(() => pattern)` | Lazy/recursive pattern |
-| `Match.Schema(options?)` | Class schema decorator |
-| `Match.Schema({ base: BaseClass \| () => BaseClass })` | Composes schema classes without requiring TypeScript `extends` |
-| `Match.Field(pattern)` | Decorated field validator |
-| `Match.fromSchema(Class, options?)` | Schema-like matcher from class metadata |
-| `Match.compile(pattern)` | Compiles pattern into `{ parse, test, toJSONSchema }` |
-| `Match.test(value, pattern)` | Boolean helper for validation check |
-| `Match.Error` | Error class thrown on match failure |
+| Pattern / Helper                                             | What It Does                                                   |
+| ------------------------------------------------------------ | -------------------------------------------------------------- |
+| `String`, `Number`, `Boolean`, `Function`, `Object`, `Array` | Constructor-based validation                                   |
+| Class constructor (for example `Date`, `MyClass`)            | Validates via constructor semantics                            |
+| Literal values (`"x"`, `42`, `true`, `null`, `undefined`)    | Exact literal match                                            |
+| `[pattern]`                                                  | Array where every element matches `pattern`                    |
+| Plain object (`{ a: String }`)                               | Strict object validation (same as `Match.ObjectStrict`)        |
+| `Match.ObjectStrict({ ... })`                                | Strict object shape (`additionalProperties: false` semantics)  |
+| `Match.ObjectIncluding({ ... })`                             | Partial object shape (unknown keys allowed)                    |
+| `Match.MapOf(valuePattern)`                                  | Dynamic-key object with uniform value pattern                  |
+| `Match.Any`                                                  | Accepts any value                                              |
+| `Match.Integer`                                              | Signed 32-bit integer                                          |
+| `Match.NonEmptyString`                                       | Non-empty string                                               |
+| `Match.Email`                                                | Email-shaped string                                            |
+| `Match.UUID`                                                 | Canonical UUID string                                          |
+| `Match.URL`                                                  | Absolute URL string                                            |
+| `Match.IsoDateString`                                        | ISO datetime string with timezone                              |
+| `Match.RegExp(re)`                                           | String matching given regexp                                   |
+| `Match.ArrayOf(pattern)`                                     | Array of elements matching pattern                             |
+| `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`     | Non-empty array, optional element validation                   |
+| `Match.Optional(pattern)`                                    | `undefined` or pattern                                         |
+| `Match.Maybe(pattern)`                                       | `undefined`, `null`, or pattern                                |
+| `Match.OneOf(...patterns)`                                   | Any one of given patterns                                      |
+| `Match.Where((value, parent?) => boolean)`                   | Custom predicate / type guard                                  |
+| `Match.WithMessage(pattern, { error })`                      | Wraps a pattern with a custom top-level validation message     |
+| `Match.Lazy(() => pattern)`                                  | Lazy/recursive pattern                                         |
+| `Match.Schema(options?)`                                     | Class schema decorator (`exact`, `schemaId`; see also `base`)  |
+| `Match.Schema({ base: BaseClass \| () => BaseClass })`       | Composes schema classes without requiring TypeScript `extends` |
+| `Match.Field(pattern)`                                       | Decorated field validator                                      |
+| `Match.fromSchema(Class, options?)`                          | Schema-like matcher from class metadata                        |
+| `Match.compile(pattern)`                                     | Compiles pattern into `{ parse, test, toJSONSchema }`          |
+| `Match.test(value, pattern)`                                 | Boolean helper for validation check                            |
+| `Match.Error`                                                | Error class thrown on match failure                            |
 
 ### Additional `check()` Details
 
 - `check(value, pattern, { throwAllErrors: true })` aggregates all validation issues instead of fail-fast at first mismatch.
 - Recursive and forward patterns are supported via `Match.Lazy(...)`.
 - Class-backed recursive graphs are supported with `Match.Schema()` + `Match.fromSchema(...)`.
+  Use `Match.fromSchema(() => User)` inside decorated fields when a class needs to reference itself or a class declared later.
 - In Runner builders (`inputSchema`, `payloadSchema`, `configSchema`, etc.), explicit `parse(input)` schemas have precedence; otherwise Runner falls back to pattern validation via `check(...)`.
 - Decorator class shorthand in builder APIs (for example `.inputSchema(UserDto)` / `.configSchema(UserConfig)`) requires class metadata from `@Match.Schema()`.
+- `Match.Schema({ exact, schemaId })` controls class-level strictness and schema identity; `Match.Schema({ base })` composes schema classes without TypeScript `extends`.
+- `Match.WithMessage(pattern, { error })` overrides the thrown `MatchError.message` headline while preserving the normal `MatchError` structure (`id`, `path`, `failures`). It does not rewrite individual `failures[]` entries.
+- Final `MatchError.failures` is always a flat array of leaf failures. Nested validation does not produce a tree of failures or a synthetic parent failure like `$.address` unless an actual matcher failed at that path.
+- `MatchError.path` always comes from the first recorded failure. If a nested field fails first, a parent custom headline may still be used, but `error.path` remains the nested leaf path such as `$.address.city`.
+- With `check(value, pattern, { throwAllErrors: true })`, the default headline is `"Match failed with N errors:\n- msg1\n- msg2"`.
+- Leaf wrappers such as `Match.WithMessage(String, ...)` do not replace that aggregate headline; their underlying failures still appear in `error.failures`.
+- Subtree wrappers such as plain objects, arrays, `Match.ObjectIncluding(...)`, `Match.MapOf(...)`, `Match.NonEmptyArray(...)`, `Match.Lazy(...)`, or `Match.fromSchema(...)` can replace the aggregate headline while still preserving the nested failures in `error.failures`.
+- Decorator-backed schemas are not special here: `Match.WithMessage(Match.fromSchema(AddressSchema), ...)` behaves like any other subtree wrapper.
+- In `Match.WithMessage(pattern, { error: fn })`, the callback receives `ctx.error` built from the nested failures collected inside the wrapped pattern. That nested error exposes `path` and `failures`, but its `message` is rebuilt from the raw nested failures and does not preserve any inner `Match.WithMessage(...)` headline from deeper wrappers.
+- `Match.Where((value, parent?) => boolean)` receives the immediate parent object/array when validation happens inside a compound value.
+
+#### Recursive Patterns: Which Helper to Use
+
+Use `Match.Lazy(...)` when the recursive thing is a plain Match pattern.
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+const createTreePattern = () =>
+  Match.ObjectIncluding({
+    id: Match.NonEmptyString,
+    children: Match.Optional(Match.ArrayOf(Match.Lazy(() => createTreePattern()))),
+  });
+
+check(
+  {
+    id: "root",
+    children: [{ id: "child", children: [] }],
+  },
+  createTreePattern(),
+);
+```
+
+Use `Match.fromSchema(() => User)` when the recursive thing is a decorated class schema.
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+@Match.Schema()
+class User {
+  @Match.Field(Match.NonEmptyString)
+  name!: string;
+
+  @Match.Field(Match.fromSchema(() => User))
+  self!: User;
+
+  @Match.Field(Match.ArrayOf(Match.fromSchema(() => User)))
+  children!: User[];
+}
+
+check(
+  (() => {
+    const user: Record<string, unknown> = {
+      name: "Ada",
+      children: [],
+    };
+    user.self = user;
+    return user;
+  })(),
+  Match.fromSchema(User),
+);
+```
+
+Rule of thumb:
+
+- `Match.Lazy(...)` is the general recursion tool for plain objects, arrays, unions, and custom Match composition.
+- `Match.fromSchema(() => Class)` is the class-schema version when you already use `@Match.Schema()` / `@Match.Field(...)`.
+
+### Custom Match Messages
+
+Use `Match.WithMessage(pattern, { error })` when a validation rule needs a more domain-specific message while keeping the normal `MatchError` structure (`id`, `path`, `failures`).
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+@Match.Schema()
+class UserDto {
+  @Match.Field(
+    Match.WithMessage(String, {
+      error: ({ value, path, parent }) =>
+        `Name must be a string. Received ${String(value)} at ${path} for user ${(parent as { id?: string })?.id ?? "unknown"}.`,
+    }),
+  )
+  name!: string;
+}
+
+check({ name: 42 }, Match.fromSchema(UserDto));
+```
+
+The same wrapper works in plain `check(...)`:
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+check("nope", Match.WithMessage(Match.Email, { error: "Invalid email" }));
+```
+
+Nested schema wrappers follow the same rules. The outer wrapper can replace the final headline, while the recorded failures still point to the nested leaf paths:
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+@Match.Schema()
+class AddressDto {
+  @Match.Field(
+    Match.WithMessage(String, {
+      error: "City must be a string",
+    }),
+  )
+  city!: string;
+}
+
+@Match.Schema()
+class BillingDetailsDto {
+  @Match.Field(
+    Match.WithMessage(Match.fromSchema(AddressDto), {
+      error: ({ error }) =>
+        `Address is invalid. First nested issue: ${error.message}`,
+    }),
+  )
+  address!: AddressDto;
+}
+
+try {
+  check(
+    { address: { city: 42 } },
+    Match.fromSchema(BillingDetailsDto),
+  );
+} catch (error) {
+  const matchError = error as Match.Error;
+  // matchError.message ===
+  // "Address is invalid. First nested issue: Expected string, got number at $.address.city."
+  //
+  // matchError.path === "$.address.city"
+  //
+  // matchError.failures === [
+  //   {
+  //     path: "$.address.city",
+  //     message: "Expected string, got number at $.address.city.",
+  //     ...
+  //   }
+  // ]
+}
+```
+
+> **Note:** The outer formatter sees the raw nested failure summary, not the inner `"City must be a string"` headline. Inner `Match.WithMessage(...)` wrappers affect the thrown headline at their own level, but outer formatter callbacks receive a fresh `MatchError` rebuilt from nested raw failures.
+
+Custom `Match.Where(...)` patterns work the same way and solve the standalone-message case:
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+const AppMatch = {
+  NonZeroPositiveInteger: Match.Where(
+    (value: unknown): value is number =>
+      typeof value === "number" && Number.isInteger(value) && value > 0,
+  ),
+} as const;
+
+@Match.Schema()
+class JobConfig {
+  @Match.Field(
+    Match.WithMessage(AppMatch.NonZeroPositiveInteger, {
+      error: ({ value, path }) =>
+        `Retries must be a non-zero positive integer. Received ${String(value)} at ${path}.`,
+    }),
+  )
+  retries!: number;
+}
+
+check({ retries: 0 }, Match.fromSchema(JobConfig));
+```
+
+Notes:
+
+- `error` accepts either a static string or a callback.
+- Callback context is `{ value, error, path, pattern, parent }`.
+- `path` uses `$` for the root value, `$.email` for a root object field, and `$.users[2].email` for nested array/object paths.
+- `value` is intentionally `unknown` because the callback runs only on the failure path.
+- `parent` is only present when the value is being validated as part of an object, map, or array element.
+- When `throwAllErrors: true` collects multiple failures, `MatchError.message` is `"Match failed with N errors:\n- msg1\n- msg2"` by default; leaf field `Match.WithMessage(...)` wrappers do not replace that summary, while subtree/schema wrappers still can.
+- `Match.WithMessage(...)` is runtime-only and does not affect JSON Schema export beyond the wrapped inner pattern.
+- `parent` is not attached to the thrown `MatchError`; it is runtime-only callback context.
+
+### Second-Pass Validation with `Match.Error`
+
+Sometimes you want a first structural pass with `check(...)`, then a second domain-specific pass that raises a targeted validation error on an existing field path.
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+const input = check(
+  { email: "ada@example.com" },
+  {
+    email: Match.Email,
+  },
+);
+
+if (!isEmailUnique(input.email)) {
+  throw new Match.Error([
+    {
+      path: "$.email",
+      expected: "unique email",
+      actualType: "string",
+      message: "Email already exists.",
+    },
+  ]);
+}
+```
+
+This is useful when:
+
+- the first pass validates structure and sync shape rules
+- the second pass applies business rules that need custom wording
+- you still want the result to look like a normal `MatchError`
+
+Notes:
+
+- `Match.Error` is the same class exported as `MatchError`.
+- Array paths use bracket notation such as `$.users[2].email`.
+- If your follow-up rule is asynchronous (for example, checking uniqueness in a database), perform that second pass in task/resource logic rather than inside `Match.Where(...)`.
 
 ### Extending Schemas
 
@@ -548,4 +774,3 @@ Unsupported in strict mode (fail-fast):
 - Custom class constructor patterns
 - Literal `undefined`, `bigint`, `symbol`
 - `Match.Optional(...)` / `Match.Maybe(...)` outside object-property context
-

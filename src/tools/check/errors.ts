@@ -15,6 +15,11 @@ export interface MatchFailure {
   message: string;
 }
 
+export interface MatchMessageOverride {
+  message: string;
+  appliesToAggregate: boolean;
+}
+
 export class MatchError extends RunnerError<{
   path: string;
   failures: readonly MatchFailure[];
@@ -22,19 +27,24 @@ export class MatchError extends RunnerError<{
   public readonly path: string;
   public readonly failures: readonly MatchFailure[];
 
-  constructor(failures: readonly MatchFailure[]) {
+  constructor(
+    failures: readonly MatchFailure[],
+    messageOverride?: MatchMessageOverride,
+  ) {
     const safeFailures = failures.length === 0 ? [rootFailure()] : failures;
     const [firstFailure] = safeFailures;
     const summary =
-      safeFailures.length === 1
+      (messageOverride?.appliesToAggregate || safeFailures.length === 1
+        ? messageOverride?.message
+        : undefined) ??
+      (safeFailures.length === 1
         ? firstFailure.message
-        : `Match failed with ${safeFailures.length} errors. First error: ${firstFailure.message}`;
+        : `Match failed with ${safeFailures.length} errors:\n${safeFailures.map((f) => `- ${f.message}`).join("\n")}`);
 
     super(CHECK_ERROR_ID, summary, {
       path: firstFailure.path,
       failures: safeFailures,
     });
-
     this.path = firstFailure.path;
     this.failures = safeFailures;
   }

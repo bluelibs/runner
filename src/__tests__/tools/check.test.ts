@@ -294,6 +294,61 @@ describe("tools/check", () => {
     ).toThrow(Match.Error);
   });
 
+  it("passes parent to Match.Where and Match.WithMessage where applicable", () => {
+    const seenParents: unknown[] = [];
+
+    const emailPattern = Match.WithMessage(
+      Match.Where((value: unknown, parent?: unknown) => {
+        seenParents.push(parent);
+        return value === "ada@example.com";
+      }),
+      {
+        error: ({ value, path, parent }) =>
+          `Invalid email ${String(value)} at ${path} for ${(parent as { id?: string })?.id ?? "unknown"}`,
+      },
+    );
+
+    expect(() =>
+      checkRuntime(
+        {
+          id: "user-1",
+          email: "ada@example.com",
+          tags: ["ok"],
+        },
+        {
+          id: String,
+          email: emailPattern,
+          tags: [
+            Match.Where((value: unknown, parent?: unknown) => {
+              seenParents.push(parent);
+              return value === "ok";
+            }),
+          ],
+        },
+      ),
+    ).not.toThrow();
+
+    expect(seenParents[0]).toEqual({
+      id: "user-1",
+      email: "ada@example.com",
+      tags: ["ok"],
+    });
+    expect(seenParents[1]).toEqual(["ok"]);
+
+    expect(() =>
+      checkRuntime(
+        {
+          id: "user-2",
+          email: "bad@example.com",
+        },
+        {
+          id: String,
+          email: emailPattern,
+        },
+      ),
+    ).toThrow("Invalid email bad@example.com at $.email for user-2");
+  });
+
   it("supports Match.RegExp with RegExp and source string inputs", () => {
     expect(() =>
       checkRuntime("abc-123", Match.RegExp(/^[a-z]+-\d+$/)),

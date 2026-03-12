@@ -1,6 +1,10 @@
 import { MatchPatternError } from "../errors";
 import { matchToJsonSchema } from "../toJsonSchema";
-import type { MatchJsonSchema, MatchToJsonSchemaOptions } from "../types";
+import type {
+  MatchJsonSchema,
+  MatchMessageOptions,
+  MatchToJsonSchemaOptions,
+} from "../types";
 import type { NonEmptyArrayElement, WhereCondition } from "./shared";
 import { parsePatternValue } from "./parse";
 
@@ -50,6 +54,18 @@ export class WherePattern<
 > extends MatchPatternBase<TGuarded> {
   public readonly kind = "Match.WherePattern";
   constructor(public readonly condition: WhereCondition<TGuarded>) {
+    super();
+  }
+}
+
+export class WithMessagePattern<TPattern = unknown> extends MatchPatternBase<
+  TParseResult.WithMessage<TPattern>
+> {
+  public readonly kind = "Match.WithMessagePattern";
+  constructor(
+    public readonly pattern: TPattern,
+    public readonly options: MatchMessageOptions,
+  ) {
     super();
   }
 }
@@ -175,6 +191,7 @@ namespace TParseResult {
   export type OneOf<T extends readonly unknown[]> = InferMatchPattern<
     T[number]
   >;
+  export type WithMessage<T> = InferMatchPattern<T>;
   export type Lazy<T> = InferMatchPattern<T>;
   export type ObjectIncluding<T extends Record<string, unknown>> =
     InferMatchPattern<T> & Record<string, unknown>;

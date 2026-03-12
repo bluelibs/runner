@@ -157,12 +157,19 @@ export { PlatformAdapter, setPlatform } from "./platform";
 export { RunnerError } from "./definers/defineError";
 export { LockableMap } from "./tools/LockableMap";
 export { Match, check } from "./tools/check";
+export {
+  MatchError,
+  MatchPatternError,
+  CheckOptionsError,
+} from "./tools/check";
 export type {
   CheckSchemaLike,
   CheckedValue,
   InferCheckSchema,
   InferMatchPattern,
   MatchCompiledSchema,
+  MatchMessageContext,
+  MatchMessageOptions,
   MatchJsonObject,
   MatchJsonPrimitive,
   MatchJsonSchema,

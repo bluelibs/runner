@@ -310,6 +310,27 @@ describe("tools/check toJSONSchema", () => {
     });
   });
 
+  it("exports Match.WithMessage using the wrapped inner pattern", () => {
+    expect(
+      Match.toJSONSchema({
+        email: Match.WithMessage(Match.Email, {
+          error: "Invalid email",
+        }),
+      }),
+    ).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "object",
+      properties: {
+        email: {
+          type: "string",
+          format: "email",
+        },
+      },
+      required: ["email"],
+      additionalProperties: false,
+    });
+  });
+
   it("fails fast for unsupported patterns with path metadata in strict mode", () => {
     const whereError = expectSchemaError(() =>
       Match.toJSONSchema(

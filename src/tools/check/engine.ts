@@ -4,9 +4,11 @@ import {
   setClassSchemaOptions,
   type MatchSchemaOptions,
 } from "./classSchema";
+import { isClassConstructor } from "../typeChecks";
 import {
   ClassPattern,
   collectMatchFailures,
+  collectMatchResult,
   isPlainObject,
   LazyPattern,
   matchAnyToken,
@@ -25,6 +27,7 @@ import {
   OneOfPattern,
   OptionalPattern,
   RegExpPattern,
+  WithMessagePattern,
   WherePattern,
 } from "./matcher";
 import { matchToJsonSchema } from "./toJsonSchema";
@@ -35,6 +38,7 @@ import type {
   InferCheckSchema,
   InferMatchPattern,
   MatchCompiledSchema,
+  MatchMessageOptions,
   MatchJsonSchema,
   MatchPattern,
   MatchPropertyDecorator,
@@ -108,9 +112,13 @@ class CompiledMatchPatternSchema<
   constructor(public readonly pattern: TPattern) {}
 
   parse(input: unknown): InferMatchPattern<TPattern> {
-    const failures = collectMatchFailures(input, this.pattern, false);
+    const { failures, messageOverride } = collectMatchResult(
+      input,
+      this.pattern,
+      false,
+    );
     if (failures.length === 0) return input as InferMatchPattern<TPattern>;
-    throw new MatchError(failures);
+    throw new MatchError(failures, messageOverride);
   }
 
   test(input: unknown): input is InferMatchPattern<TPattern> {
@@ -150,9 +158,13 @@ export function check(
     return pattern.parse(value);
   }
 
-  const failures = collectMatchFailures(value, pattern, throwAllErrors);
+  const { failures, messageOverride } = collectMatchResult(
+    value,
+    pattern,
+    throwAllErrors,
+  );
   if (failures.length === 0) return value;
-  throw new MatchError(failures);
+  throw new MatchError(failures, messageOverride);
 }
 
 function matchTest<TPattern extends MatchPattern>(
@@ -174,6 +186,22 @@ const where: MatchWhere = (condition: unknown): WherePattern<unknown> => {
   );
   return new WherePattern(condition as WherePredicate);
 };
+
+function withMessage<TPattern extends MatchPattern>(
+  pattern: TPattern,
+  options: MatchMessageOptions<TPattern>,
+): WithMessagePattern<TPattern> {
+  assertPattern(
+    isPlainObject(options),
+    "Bad pattern: Match.WithMessage options must be a plain object.",
+  );
+  const error = options.error;
+  assertPattern(
+    typeof error === "string" || typeof error === "function",
+    'Bad pattern: Match.WithMessage option "error" must be a string or function.',
+  );
+  return new WithMessagePattern(pattern, options as MatchMessageOptions);
+}
 
 function nonEmptyArray(): NonEmptyArrayPattern<undefined>;
 function nonEmptyArray<TPattern extends MatchPattern>(
@@ -219,15 +247,61 @@ function lazyPattern<TPattern extends MatchPattern>(
   return new LazyPattern(resolver);
 }
 
-function fromSchema<TClass extends abstract new (...args: never[]) => unknown>(
-  target: TClass,
+type MatchSchemaClass = abstract new (...args: never[]) => unknown;
+type MatchSchemaResolver<TClass extends MatchSchemaClass = MatchSchemaClass> =
+  () => TClass;
+
+function resolveSchemaTarget<TClass extends MatchSchemaClass>(
+  target: TClass | MatchSchemaResolver<TClass>,
+): TClass {
+  if (isClassConstructor(target)) {
+    return target;
+  }
+
+  const resolved = target();
+  assertPattern(
+    isClassConstructor(resolved),
+    "Bad pattern: Match.fromSchema resolver must return a class constructor.",
+  );
+
+  return resolved;
+}
+
+function isSchemaTargetResolver<TClass extends MatchSchemaClass>(
+  target: TClass | MatchSchemaResolver<TClass>,
+): target is MatchSchemaResolver<TClass> {
+  return typeof target === "function" && !isClassConstructor(target);
+}
+
+function createSchemaPattern<TClass extends MatchSchemaClass>(
+  target: TClass | MatchSchemaResolver<TClass>,
   options?: MatchSchemaOptions,
 ): ClassPattern<TClass> {
+  return new ClassPattern(resolveSchemaTarget(target), options);
+}
+
+function fromSchema<TClass extends MatchSchemaClass>(
+  target: TClass,
+  options?: MatchSchemaOptions,
+): ClassPattern<TClass>;
+function fromSchema<TClass extends MatchSchemaClass>(
+  target: MatchSchemaResolver<TClass>,
+  options?: MatchSchemaOptions,
+): LazyPattern<ClassPattern<TClass>>;
+function fromSchema<TClass extends abstract new (...args: never[]) => unknown>(
+  target: TClass | MatchSchemaResolver<TClass>,
+  options?: MatchSchemaOptions,
+): ClassPattern<TClass> | LazyPattern<ClassPattern<TClass>> {
   assertPattern(
     typeof target === "function",
-    "Bad pattern: Match.fromSchema requires a class constructor.",
+    "Bad pattern: Match.fromSchema requires a class constructor or resolver.",
   );
-  return new ClassPattern(target, options);
+
+  if (isSchemaTargetResolver(target)) {
+    return lazyPattern(() => createSchemaPattern(target, options));
+  }
+
+  return createSchemaPattern(target, options);
 }
 
 function schemaDecorator(options?: MatchSchemaOptions): MatchSchemaDecorator {
@@ -310,6 +384,7 @@ export const Match = Object.freeze({
     return new OneOfPattern(patterns);
   },
   Where: where,
+  WithMessage: withMessage,
   ObjectIncluding: <const TObjectPattern extends Record<string, unknown>>(
     pattern: TObjectPattern,
   ): ObjectIncludingPattern<TObjectPattern> => {

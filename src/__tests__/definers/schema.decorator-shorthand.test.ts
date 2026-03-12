@@ -202,4 +202,38 @@ describe("decorator schema shorthand", () => {
 
     await runtime.dispose();
   });
+
+  it("surfaces field-level custom messages through class shorthand schemas", async () => {
+    class CustomMessageSchema {
+      value!: string;
+    }
+
+    Match.Schema()(CustomMessageSchema);
+    Match.Field(
+      Match.WithMessage(String, {
+        error: ({ value }) =>
+          `value must be a string, received ${String(value)}`,
+      }),
+    )(CustomMessageSchema.prototype, "value");
+
+    const task = defineTask({
+      id: "tests-decorator-custom-message-task",
+      inputSchema: CustomMessageSchema,
+      run: async (input: { value: string }) => input.value,
+    });
+
+    const app = defineResource({
+      id: "tests-decorator-custom-message-app",
+      register: [task],
+    });
+    const runtime = await run(app);
+
+    try {
+      await expect(runtime.runTask(task, { value: 10 } as any)).rejects.toThrow(
+        "value must be a string, received 10",
+      );
+    } finally {
+      await runtime.dispose();
+    }
+  });
 });

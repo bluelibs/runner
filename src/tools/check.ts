@@ -6,6 +6,8 @@ export type {
   InferCheckSchema,
   InferMatchPattern,
   MatchCompiledSchema,
+  MatchMessageContext,
+  MatchMessageOptions,
   MatchJsonObject,
   MatchJsonPrimitive,
   MatchJsonSchema,
@@ -21,7 +23,9 @@ export type {
 export {
   CheckJsonSchemaPatternError,
   CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID,
+  CheckOptionsError,
   MatchError,
+  MatchPatternError,
   type MatchFailure,
   CHECK_ERROR_ID,
   CHECK_INVALID_OPTIONS_ERROR_ID,

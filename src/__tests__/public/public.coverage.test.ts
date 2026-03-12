@@ -1,4 +1,7 @@
 import {
+  CheckOptionsError,
+  MatchError,
+  MatchPatternError,
   defineAsyncContext,
   defineEvent,
   defineEventLane,
@@ -97,6 +100,9 @@ describe("public barrel coverage", () => {
     expect(isSubtreeFilter(filter)).toBe(true);
     expect(isIsolationScope(scoped)).toBe(true);
     expect(asyncContexts.execution.id).toBe("asyncContexts.execution");
+    expect(typeof MatchError).toBe("function");
+    expect(typeof MatchPatternError).toBe("function");
+    expect(typeof CheckOptionsError).toBe("function");
     expect(isTask({ id: "plain-object" })).toBe(false);
   });
 });

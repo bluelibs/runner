@@ -1,5 +1,6 @@
 import { MatchPatternError } from "./errors";
 import { isClassConstructor, getClassChain } from "../typeChecks";
+import type { MatchPattern } from "./types";
 
 type ClassConstructor = abstract new (...args: never[]) => unknown;
 
@@ -16,11 +17,11 @@ export interface MatchSchemaOptions {
 export type MatchClassOptions = MatchSchemaOptions;
 
 interface ClassSchemaMetadata {
-  fields: Map<string, unknown>;
+  fields: Map<string, MatchPattern>;
   options: MatchSchemaOptions;
 }
 
-interface ClassSchemaDefinition {
+export interface ClassSchemaDefinition {
   pattern: Record<string, unknown>;
   exact: boolean;
   schemaId: string;
@@ -43,7 +44,7 @@ function ensureMetadata(target: Function): ClassSchemaMetadata {
   if (existing) return existing;
 
   const created: ClassSchemaMetadata = {
-    fields: new Map<string, unknown>(),
+    fields: new Map<string, MatchPattern>(),
     options: {},
   };
   CLASS_SCHEMA_METADATA.set(target, created);
@@ -93,7 +94,7 @@ export function setClassSchemaOptions(
 export function setClassFieldPattern(
   target: ClassConstructor,
   propertyKey: string,
-  pattern: unknown,
+  pattern: MatchPattern,
 ): void {
   const metadata = ensureMetadata(ctorAsFunction(target));
   metadata.fields.set(propertyKey, pattern);

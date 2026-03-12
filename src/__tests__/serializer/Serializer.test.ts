@@ -512,7 +512,12 @@ describe("Serializer", () => {
       Serializer.Field({ from: "abc" })(UserDto.prototype, "id");
 
       Match.Schema()(UserDto);
-      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+      Match.Field(
+        Match.WithMessage(Match.NonEmptyString, {
+          error: ({ value }) =>
+            `id must be non-empty, received ${String(value)}`,
+        }),
+      )(UserDto.prototype, "id");
 
       const payload = serializer.serialize({ abc: "u1", extra: true });
       const deserialized = serializer.deserialize(payload, {
@@ -795,6 +800,28 @@ describe("Serializer", () => {
           schema: Match.ArrayOf(Match.fromSchema(UserDto)),
         }),
       ).toThrow(MatchError);
+    });
+
+    it("should preserve decorator field custom messages for Match.fromSchema", () => {
+      class UserDto {
+        public id!: string;
+      }
+
+      Match.Schema()(UserDto);
+      Match.Field(
+        Match.WithMessage(Match.NonEmptyString, {
+          error: ({ value }) =>
+            `id must be non-empty, received ${String(value)}`,
+        }),
+      )(UserDto.prototype, "id");
+
+      const payload = serializer.serialize({ id: "" });
+
+      expect(() =>
+        serializer.deserialize(payload, {
+          schema: Match.fromSchema(UserDto),
+        }),
+      ).toThrow("id must be non-empty, received ");
     });
 
     it("should validate nested recursive Product > Categories schemas", () => {

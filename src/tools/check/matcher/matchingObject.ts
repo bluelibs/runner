@@ -13,6 +13,7 @@ export function matchesObjectPattern(
     childPattern: unknown,
     childContext: MatchContext,
     childPath: readonly PathSegment[],
+    parent?: unknown,
   ) => boolean,
 ): boolean {
   if (!isPlainObject(value)) return fail(context, path, "plain object", value);
@@ -50,6 +51,7 @@ export function matchesObjectPattern(
       childPattern,
       context,
       appendPath(path, key),
+      value,
     );
     if (!matched && !context.collectAll) return false;
   }

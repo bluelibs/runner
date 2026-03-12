@@ -1,7 +1,7 @@
 import { MatchError } from "../errors";
 import { matchToJsonSchema } from "../toJsonSchema";
 import type { MatchJsonSchema, MatchToJsonSchemaOptions } from "../types";
-import { collectMatchFailures } from "./core";
+import { collectMatchResult } from "./core";
 
 // ── Factory: eliminates repeated parse/toJSONSchema boilerplate on tokens ────
 
@@ -11,9 +11,13 @@ function createMatchToken<TKind extends string, TReturn = unknown>(
   return Object.freeze({
     kind,
     parse(value: unknown): TReturn {
-      const failures = collectMatchFailures(value, this, false);
+      const { failures, messageOverride } = collectMatchResult(
+        value,
+        this,
+        false,
+      );
       if (failures.length === 0) return value as TReturn;
-      throw new MatchError(failures);
+      throw new MatchError(failures, messageOverride);
     },
     toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
       return matchToJsonSchema(this, options);

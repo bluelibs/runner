@@ -1,12 +1,17 @@
-import type { MatchFailure } from "../errors";
+import type { MatchFailure, MatchMessageOverride } from "../errors";
 import { matchesPattern } from "./matching";
 import type { MatchContext } from "./shared";
 
-export function collectMatchFailures(
+export interface MatchResult {
+  failures: MatchFailure[];
+  messageOverride?: MatchMessageOverride;
+}
+
+export function collectMatchResult(
   value: unknown,
   pattern: unknown,
   collectAll: boolean,
-): MatchFailure[] {
+): MatchResult {
   const context: MatchContext = {
     failures: [],
     collectAll,
@@ -14,6 +19,18 @@ export function collectMatchFailures(
   };
 
   const matches = matchesPattern(value, pattern, context, []);
-  if (matches) return [];
-  return collectAll ? context.failures : [context.failures[0]];
+  if (matches) return { failures: [] };
+
+  return {
+    failures: collectAll ? context.failures : [context.failures[0]],
+    messageOverride: context.messageOverride,
+  };
+}
+
+export function collectMatchFailures(
+  value: unknown,
+  pattern: unknown,
+  collectAll: boolean,
+): MatchFailure[] {
+  return collectMatchResult(value, pattern, collectAll).failures;
 }

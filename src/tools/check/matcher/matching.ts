@@ -11,8 +11,10 @@ import {
   OneOfPattern,
   OptionalPattern,
   RegExpPattern,
+  WithMessagePattern,
   WherePattern,
 } from "./patterns";
+import type { MatchMessageContext, MatchPattern } from "../types";
 import {
   EMAIL_PATTERN,
   ISO_DATE_STRING_PATTERN,
@@ -55,6 +57,7 @@ function matchArrayElements(
         elementPattern,
         context,
         appendPath(path, index),
+        value,
       ) &&
       !context.collectAll
     ) {
@@ -69,6 +72,7 @@ export function matchesPattern(
   pattern: unknown,
   context: MatchContext,
   path: readonly PathSegment[],
+  parent?: unknown,
 ): boolean {
   const releaseActiveComparison = trackActiveComparison(
     context,
@@ -126,12 +130,12 @@ export function matchesPattern(
     if (pattern instanceof OptionalPattern) {
       return value === undefined
         ? true
-        : matchesPattern(value, pattern.pattern, context, path);
+        : matchesPattern(value, pattern.pattern, context, path, parent);
     }
     if (pattern instanceof MaybePattern) {
       return value === undefined || value === null
         ? true
-        : matchesPattern(value, pattern.pattern, context, path);
+        : matchesPattern(value, pattern.pattern, context, path, parent);
     }
     if (pattern instanceof OneOfPattern) {
       for (const candidatePattern of pattern.patterns) {
@@ -140,7 +144,15 @@ export function matchesPattern(
           collectAll: true,
           activeComparisons: new WeakMap<object, WeakSet<object>>(),
         };
-        if (matchesPattern(value, candidatePattern, candidateContext, path)) {
+        if (
+          matchesPattern(
+            value,
+            candidatePattern,
+            candidateContext,
+            path,
+            parent,
+          )
+        ) {
           return true;
         }
       }
@@ -151,6 +163,26 @@ export function matchesPattern(
         value,
         `Failed Match.OneOf validation at ${formatPath(path)}.`,
       );
+    }
+    if (pattern instanceof WithMessagePattern) {
+      const failuresBefore = context.failures.length;
+      const matched = matchesPattern(
+        value,
+        pattern.pattern,
+        context,
+        path,
+        parent,
+      );
+      if (!matched && context.failures.length > failuresBefore) {
+        maybeApplyPatternMessageOverride(
+          pattern,
+          value,
+          parent,
+          context,
+          failuresBefore,
+        );
+      }
+      return matched;
     }
     if (pattern instanceof MapOfPattern) {
       if (!isPlainObject(value)) {
@@ -170,6 +202,7 @@ export function matchesPattern(
             pattern.pattern,
             context,
             appendPath(path, key),
+            value,
           )
         ) {
           allMatch = false;
@@ -180,7 +213,7 @@ export function matchesPattern(
     }
     if (pattern instanceof WherePattern) {
       try {
-        if (pattern.condition(value)) return true;
+        if (pattern.condition(value, parent)) return true;
       } catch (error) {
         if (!(error instanceof MatchError)) throw error;
       }
@@ -193,7 +226,7 @@ export function matchesPattern(
       );
     }
     if (pattern instanceof LazyPattern) {
-      return matchesPattern(value, pattern.resolve(), context, path);
+      return matchesPattern(value, pattern.resolve(), context, path, parent);
     }
     if (pattern instanceof ClassPattern) {
       const classSchema = getClassSchemaDefinition(pattern.ctor);
@@ -334,4 +367,83 @@ export function matchesPattern(
   } finally {
     releaseActiveComparison();
   }
+}
+
+function maybeApplyPatternMessageOverride(
+  pattern: WithMessagePattern<MatchPattern>,
+  value: unknown,
+  parent: unknown,
+  context: MatchContext,
+  failuresBefore: number,
+): void {
+  const firstNewFailure = context.failures[failuresBefore];
+  const firstFailure = context.failures[0];
+  if (failuresBefore > 0 && firstNewFailure !== firstFailure) {
+    return;
+  }
+
+  const errorOption = pattern.options.error;
+  const appliesToAggregate = shouldApplyMessageOverrideToAggregate(
+    pattern.pattern,
+  );
+  if (typeof errorOption === "string") {
+    context.messageOverride = {
+      message: errorOption,
+      appliesToAggregate,
+    };
+    return;
+  }
+
+  const nestedFailures = context.failures.slice(failuresBefore);
+  const nestedError = new MatchError(nestedFailures);
+  const errorContext: MatchMessageContext = {
+    value,
+    parent,
+    error: nestedError,
+    path: nestedError.path,
+    pattern: pattern.pattern,
+  };
+
+  let resolvedMessage: unknown;
+  try {
+    resolvedMessage = errorOption(errorContext);
+  } catch (error) {
+    throw new MatchPatternError(
+      `Bad pattern: Match.WithMessage error formatter threw: ${String(error)}`,
+    );
+  }
+
+  if (typeof resolvedMessage !== "string") {
+    throw new MatchPatternError(
+      "Bad pattern: Match.WithMessage error formatter must return a string.",
+    );
+  }
+
+  context.messageOverride = {
+    message: resolvedMessage,
+    appliesToAggregate,
+  };
+}
+
+function shouldApplyMessageOverrideToAggregate(pattern: unknown): boolean {
+  if (
+    pattern instanceof OptionalPattern ||
+    pattern instanceof MaybePattern ||
+    pattern instanceof WithMessagePattern
+  ) {
+    return shouldApplyMessageOverrideToAggregate(pattern.pattern);
+  }
+
+  if (pattern instanceof LazyPattern) return true;
+  if (pattern instanceof ClassPattern) return true;
+  if (pattern instanceof MapOfPattern) return true;
+  if (pattern instanceof ObjectIncludingPattern) return true;
+  if (pattern instanceof ObjectStrictPattern) return true;
+  if (pattern instanceof NonEmptyArrayPattern) return true;
+
+  if (pattern === Object || pattern === Array) return true;
+  if (Array.isArray(pattern)) return true;
+  if (isPlainObject(pattern)) return true;
+
+  return false;
 }

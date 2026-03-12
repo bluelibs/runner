@@ -1725,21 +1725,22 @@ const authMiddleware = r.middleware
 
 If you use multiple contract middleware, their contracts combine.
 
-### Built-In Resilience Middleware
+### Built-In Middleware
 
-Runner ships with built-in middleware for common reliability concerns:
+Runner ships with built-in middleware for common reliability, admission-control, caching, and context-enforcement concerns:
 
-| Middleware     | Config                                    | Notes                                                                    |
-| -------------- | ----------------------------------------- | ------------------------------------------------------------------------ |
-| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; customize with `resources.cache.with(...)`  |
-| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                              |
-| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                    |
-| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key  |
-| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends      |
-| fallback       | `{ fallback }`                            | static value, function, or task fallback                                 |
-| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, for cases like "50 per second"     |
-| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                               |
-| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal` |
+| Middleware     | Config                                    | Notes                                                                      |
+| -------------- | ----------------------------------------- | -------------------------------------------------------------------------- |
+| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; customize with `resources.cache.with(...)`    |
+| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                                |
+| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                      |
+| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key    |
+| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends        |
+| fallback       | `{ fallback }`                            | static value, function, or task fallback                                   |
+| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, for cases like "50 per second"       |
+| requireContext | `{ context }`                             | fails fast when a specific async context must exist before task execution  |
+| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                 |
+| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal`   |
 
 Resource equivalents:
 
@@ -1753,6 +1754,637 @@ Recommended ordering:
 - rate-limit for admission control such as "max 50 calls per second"
 - concurrency for in-flight control
 - cache for idempotent reads
+
+### Caching
+
+Avoid recomputing expensive work by caching task results with TTL-based eviction.
+Cache is opt-in: you must register `resources.cache`.
+
+#### Provider Contract
+
+When you provide a custom cache backend, this is the contract:
+
+```typescript
+import type { ICacheProvider } from "@bluelibs/runner";
+
+interface CacheProviderOptions {
+  ttl?: number;
+  max?: number;
+  ttlAutopurge?: boolean;
+}
+
+type CacheProviderFactory = (
+  options: CacheProviderOptions,
+) => Promise<ICacheProvider>;
+```
+
+Notes:
+
+- `options` are merged from `resources.cache.with({ defaultOptions })` and middleware-level cache options.
+- `defaultOptions` remain inherited per-task provider options, not a shared global budget.
+- `resources.cache.with({ totalBudgetBytes })` adds a shared budget across cache entries for providers that support task-scoped budgeting.
+- The built-in in-memory provider supports `totalBudgetBytes` out of the box.
+- Node also ships with `resources.redisCacheProvider`, which supports `totalBudgetBytes` with Redis-backed storage.
+- Custom providers should enforce their own backend budget policy unless they explicitly support task-scoped budgets.
+- `keyBuilder` is middleware-only and is not passed to the provider.
+- `has()` is optional, but recommended when `undefined` can be a valid cached value.
+
+#### Default Usage
+
+```typescript
+import { middleware, r, resources } from "@bluelibs/runner";
+
+const expensiveTask = r
+  .task("app.tasks.expensive")
+  .middleware([
+    middleware.task.cache.with({
+      // lru-cache options by default
+      ttl: 60 * 1000, // Cache for 1 minute
+      keyBuilder: (taskId, input: { userId: string }) =>
+        `${taskId}-${input.userId}`, // optional key builder
+    }),
+  ])
+  .run(async (input: { userId: string }) => {
+    // This expensive operation will be cached
+    return await doExpensiveCalculation(input.userId);
+  })
+  .build();
+
+// Resource-level cache configuration
+const app = r
+  .resource("app.cache")
+  .register([
+    // You have to register it, cache resource is not enabled by default.
+    resources.cache.with({
+      totalBudgetBytes: 50 * 1024 * 1024, // Shared 50MB budget across built-in task caches
+      defaultOptions: {
+        max: 1000, // Per-task maximum items in cache
+        ttl: 30 * 1000, // Per-task default TTL
+      },
+    }),
+  ])
+  .build();
+```
+
+`totalBudgetBytes` is distinct from `defaultOptions.maxSize`:
+
+- `totalBudgetBytes`: one shared budget across built-in in-memory task caches
+- `defaultOptions.maxSize`: the inherited `lru-cache` size limit for each task cache instance
+
+#### Node Redis Cache Provider
+
+Node includes an official Redis-backed cache provider built on top of the optional `ioredis` dependency.
+
+```typescript
+import { middleware, r, resources } from "@bluelibs/runner/node";
+
+const cachedTask = r
+  .task("app.tasks.cached")
+  .middleware([
+    middleware.task.cache.with({
+      ttl: 60 * 1000,
+    }),
+  ])
+  .run(async () => doExpensiveCalculation())
+  .build();
+
+const app = r
+  .resource("app")
+  .register([
+    resources.cache.with({
+      provider: resources.redisCacheProvider.with({
+        redis: process.env.REDIS_URL,
+        prefix: "app:cache",
+      }),
+      totalBudgetBytes: 50 * 1024 * 1024,
+      defaultOptions: {
+        ttl: 30 * 1000,
+      },
+    }),
+    cachedTask,
+  ])
+  .build();
+```
+
+Notes:
+
+- `redis` accepts either a Redis connection string or a compatible client instance.
+- `prefix` scopes the Redis keys used for entries, LRU ordering, and byte accounting.
+- When `prefix` is omitted, Runner generates an isolated per-container namespace.
+- Set an explicit `prefix` when you want multiple Node processes to share the same cache namespace and budget.
+- Redis-backed cache entries are not cleared by `runtime.dispose()`. Persistence is controlled by Redis TTLs, the chosen `prefix`, and your cache limits.
+
+#### Custom Redis Provider Example
+
+```typescript
+import { r, resources } from "@bluelibs/runner";
+import Redis from "ioredis";
+
+const redis = r
+  .resource<{ url: string }>("app.resources.redis")
+  .init(async ({ url }) => new Redis(url))
+  .dispose(async (client) => client.disconnect())
+  .build();
+
+class RedisCache {
+  constructor(
+    private client: Redis,
+    private ttlMs?: number,
+    private prefix: string = "cache:",
+  ) {}
+
+  async get(key: string): Promise<unknown | undefined> {
+    const value = await this.client.get(this.prefix + key);
+    return value ? JSON.parse(value) : undefined;
+  }
+
+  async set(key: string, value: unknown): Promise<void> {
+    const payload = JSON.stringify(value);
+    if (this.ttlMs && this.ttlMs > 0) {
+      await this.client.setex(
+        this.prefix + key,
+        Math.ceil(this.ttlMs / 1000),
+        payload,
+      );
+      return;
+    }
+    await this.client.set(this.prefix + key, payload);
+  }
+
+  async clear(): Promise<void> {
+    const keys = await this.client.keys(this.prefix + "*");
+    if (keys.length > 0) {
+      await this.client.del(...keys);
+    }
+  }
+}
+
+const redisCacheProvider = r
+  .resource("app.resources.cacheProvider.redis")
+  .dependencies({ redis })
+  .init(async (_config, { redis }) => {
+    return async (options) => new RedisCache(redis, options.ttl);
+  })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([
+    redis.with({ url: process.env.REDIS_URL! }),
+    resources.cache.with({ provider: redisCacheProvider }),
+  ])
+  .build();
+```
+
+**Why would you need this?** For monitoring and metrics, you want to know cache hit rates to optimize your application.
+
+**Journal Introspection**: On cache hits the task `run()` is not executed, but you can still detect cache hits from a wrapping middleware:
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const cacheJournalKeys = middleware.task.cache.journalKeys;
+
+const cacheLogger = r.middleware
+  .task("app.middleware.cacheLogger")
+  .run(async ({ task, next, journal }) => {
+    const result = await next(task.input);
+    const wasHit = journal.get(cacheJournalKeys.hit);
+    if (wasHit) console.log("Served from cache");
+    return result;
+  })
+  .build();
+
+const myTask = r
+  .task("app.tasks.cached")
+  .middleware([cacheLogger, middleware.task.cache.with({ ttl: 60000 })])
+  .run(async () => "result")
+  .build();
+```
+
+### Concurrency Control
+
+Limit concurrent executions to protect databases and external APIs. The concurrency middleware keeps only a fixed number of task instances running at once.
+
+```typescript
+import { Semaphore, middleware, r } from "@bluelibs/runner";
+
+// Option 1: Simple limit (shared for all tasks using this middleware instance)
+const limitMiddleware = middleware.task.concurrency.with({ limit: 5 });
+
+// Option 2: Explicit semaphore for fine-grained coordination
+const dbSemaphore = new Semaphore(10);
+const dbLimit = middleware.task.concurrency.with({
+  semaphore: dbSemaphore,
+});
+
+const heavyTask = r
+  .task("app.tasks.heavy")
+  .middleware([limitMiddleware])
+  .run(async () => {
+    // Max 5 of these will run in parallel
+  })
+  .build();
+```
+
+**Key benefits:**
+
+- **Resource protection**: Prevent connection pool exhaustion.
+- **Queueing**: Automatically queues excess requests instead of failing.
+- **Timeouts**: Supports waiting timeouts and cancellation via `AbortSignal`.
+
+### Circuit Breaker
+
+Trip repeated failures early. When an external service starts failing, the circuit breaker opens so subsequent calls fail fast until a cool-down passes.
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const resilientTask = r
+  .task("app.tasks.remoteCall")
+  .middleware([
+    middleware.task.circuitBreaker.with({
+      failureThreshold: 5, // Trip after 5 failures
+      resetTimeout: 30000, // Stay open for 30 seconds
+    }),
+  ])
+  .run(async () => {
+    return await callExternalService();
+  })
+  .build();
+```
+
+**How it works:**
+
+1. **CLOSED**: Everything is normal. Requests flow through.
+2. **OPEN**: Threshold reached. All requests throw `CircuitBreakerOpenError` immediately.
+3. **HALF_OPEN**: After `resetTimeout`, one trial request is allowed.
+4. **RECOVERY**: If the trial succeeds, it goes back to **CLOSED**. Otherwise, it returns to **OPEN**.
+
+**Why would you need this?** For alerting, you want to know when the circuit opens to alert on-call engineers.
+
+**Journal Introspection**: Access the circuit breaker's state and failure count within your task when it runs:
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const circuitBreakerJournalKeys = middleware.task.circuitBreaker.journalKeys;
+
+const myTask = r
+  .task("app.tasks.monitored")
+  .middleware([
+    middleware.task.circuitBreaker.with({
+      failureThreshold: 5,
+      resetTimeout: 30000,
+    }),
+  ])
+  .run(async (_input, _deps, context) => {
+    const state = context?.journal.get(circuitBreakerJournalKeys.state);
+    const failures = context?.journal.get(circuitBreakerJournalKeys.failures); // number
+    console.log(`Circuit state: ${state}, failures: ${failures}`);
+    return "result";
+  })
+  .build();
+```
+
+### Temporal Control: Debounce & Throttle
+
+Control the frequency of task execution over time. This is useful for event-driven tasks that might fire in bursts.
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+// Debounce: Run only after 500ms of inactivity
+const saveTask = r
+  .task("app.tasks.save")
+  .middleware([middleware.task.debounce.with({ ms: 500 })])
+  .run(async (data) => {
+    // Assuming db is available in the closure
+    return await db.save(data);
+  })
+  .build();
+
+// Throttle: Run at most once every 1000ms
+const logTask = r
+  .task("app.tasks.log")
+  .middleware([middleware.task.throttle.with({ ms: 1000 })])
+  .run(async (msg) => {
+    console.log(msg);
+  })
+  .build();
+```
+
+**When to use:**
+
+- **Debounce**: Search-as-you-type, autosave, window resize events.
+- **Throttle**: Scroll listeners, telemetry pings, high-frequency webhooks.
+
+### Fallback: The Plan B
+
+Define what happens when a task fails. Fallback middleware lets you return a default value or execute an alternative path gracefully.
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const getPrice = r
+  .task("app.tasks.getPrice")
+  .middleware([
+    middleware.task.fallback.with({
+      // Can be a static value, a function, or another task
+      fallback: async (input, error) => {
+        console.warn(`Price fetch failed: ${error.message}. Using default.`);
+        return 9.99;
+      },
+    }),
+  ])
+  .run(async () => {
+    return await fetchPriceFromAPI();
+  })
+  .build();
+```
+
+**Why would you need this?** For audit trails, you want to know when fallback values were used instead of real data.
+
+**Journal Introspection**: The original task that throws does not continue execution, but you can detect fallback activation from a wrapping middleware:
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const fallbackJournalKeys = middleware.task.fallback.journalKeys;
+
+const fallbackLogger = r.middleware
+  .task("app.middleware.fallbackLogger")
+  .run(async ({ task, next, journal }) => {
+    const result = await next(task.input);
+    const wasActivated = journal.get(fallbackJournalKeys.active);
+    const err = journal.get(fallbackJournalKeys.error);
+    if (wasActivated) console.log(`Fallback used after: ${err?.message}`);
+    return result;
+  })
+  .build();
+
+const myTask = r
+  .task("app.tasks.withFallback")
+  .middleware([
+    fallbackLogger,
+    middleware.task.fallback.with({ fallback: "default" }),
+  ])
+  .run(async () => {
+    throw new Error("Primary failed");
+  })
+  .build();
+```
+
+### Rate Limiting
+
+Protect your system from abuse by limiting the number of requests in a specific window of time.
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const sensitiveTask = r
+  .task("app.tasks.login")
+  .middleware([
+    middleware.task.rateLimit.with({
+      windowMs: 60 * 1000, // 1 minute window
+      max: 5, // Max 5 attempts per window
+    }),
+  ])
+  .run(async (credentials) => {
+    // Assuming auth service is available
+    return await auth.validate(credentials);
+  })
+  .build();
+```
+
+**Key features:**
+
+- **Fixed-window strategy**: Simple, predictable request counting.
+- **Isolation**: Limits are tracked per task definition.
+- **Error handling**: Throws `RateLimitError` when the limit is exceeded.
+
+**Why would you need this?** For monitoring, you want to see remaining quota to implement client-side throttling.
+
+**Journal Introspection**: When the task runs and the request is allowed, you can read the rate-limit state from the execution journal:
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const rateLimitJournalKeys = middleware.task.rateLimit.journalKeys;
+
+const myTask = r
+  .task("app.tasks.rateLimited")
+  .middleware([middleware.task.rateLimit.with({ windowMs: 60000, max: 10 })])
+  .run(async (_input, _deps, context) => {
+    const remaining = context?.journal.get(rateLimitJournalKeys.remaining); // number
+    const resetTime = context?.journal.get(rateLimitJournalKeys.resetTime); // timestamp (ms)
+    const limit = context?.journal.get(rateLimitJournalKeys.limit); // number
+    console.log(
+      `${remaining}/${limit} requests remaining, resets at ${new Date(resetTime)}`,
+    );
+    return "result";
+  })
+  .build();
+```
+
+### Require Context (Async Context Guard)
+
+Fail fast when a task must run inside a specific async context. This middleware is useful for request-scoped metadata such as request ids, tenant ids, and auth claims where continuing without context would produce incorrect behavior.
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const RequestContext = r
+  .asyncContext<{ requestId: string }>("app.asyncContexts.request")
+  .build();
+
+const getAuditTrail = r
+  .task("app.tasks.getAuditTrail")
+  // Shortcut: creates middleware.task.requireContext with this context
+  .middleware([RequestContext.require()])
+  .run(async () => {
+    const { requestId } = RequestContext.use();
+    return { requestId, entries: [] };
+  })
+  .build();
+```
+
+If you prefer the explicit middleware form, which is useful in documentation and composition helpers:
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const TenantContext = r
+  .asyncContext<{ tenantId: string }>("app.asyncContexts.tenant")
+  .build();
+
+const listProjects = r
+  .task("app.tasks.listProjects")
+  .middleware([middleware.task.requireContext.with({ context: TenantContext })])
+  .run(async () => {
+    const { tenantId } = TenantContext.use();
+    return await projectRepo.findByTenant(tenantId);
+  })
+  .build();
+```
+
+**What it protects you from:**
+
+- Running tenant-sensitive logic without tenant context.
+- Logging and auditing tasks that silently lose request correlation ids.
+- Hidden bugs where context is only present in some call paths.
+
+> **Platform Note:** Async context requires `AsyncLocalStorage`, which is Node-only. In browsers and edge runtimes, async context APIs are not available.
+
+**What you just learned**: `requireContext` turns missing async context into an immediate, explicit failure instead of a delayed business-logic bug.
+
+### Retrying Failed Operations
+
+When things go wrong but are likely to work on a subsequent attempt, the built-in retry middleware makes tasks and resources more resilient to transient failures.
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const flakyApiCall = r
+  .task("app.tasks.flakyApiCall")
+  .middleware([
+    middleware.task.retry.with({
+      retries: 5, // Try up to 5 times
+      delayStrategy: (attempt) => 100 * Math.pow(2, attempt), // Exponential backoff
+      stopRetryIf: (error) => error.message === "Invalid credentials", // Do not retry auth errors
+    }),
+  ])
+  .run(async () => {
+    // This might fail due to network issues, rate limiting, etc.
+    return await fetchFromUnreliableService();
+  })
+  .build();
+
+const app = r.resource("app").register([flakyApiCall]).build();
+```
+
+The retry middleware can be configured with:
+
+- `retries`: The maximum number of retry attempts (default: 3).
+- `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
+- `stopRetryIf`: A function to prevent retries for certain types of errors.
+
+It also works on resources, which is especially useful for startup initialization:
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const database = r
+  .resource<{ connectionString: string }>("app.db")
+  .middleware([
+    middleware.resource.retry.with({
+      retries: 4,
+      delayStrategy: (attempt) => 250 * Math.pow(2, attempt),
+    }),
+  ])
+  .init(async ({ connectionString }) => {
+    return await connectToDatabase(connectionString);
+  })
+  .dispose(async (value) => {
+    await value.close();
+  })
+  .build();
+```
+
+**Why would you need this?** For logging, you want to log which attempt succeeded or what errors occurred during retries.
+
+**Journal Introspection**: Access the current retry attempt and the last error within your task:
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const retryJournalKeys = middleware.task.retry.journalKeys;
+
+const myTask = r
+  .task("app.tasks.retryable")
+  .middleware([middleware.task.retry.with({ retries: 5 })])
+  .run(async (_input, _deps, context) => {
+    const attempt = context?.journal.get(retryJournalKeys.attempt); // 0-indexed attempt number
+    const lastError = context?.journal.get(retryJournalKeys.lastError); // Error from previous attempt, if any
+    if ((attempt ?? 0) > 0)
+      console.log(`Retry attempt ${attempt} after: ${lastError?.message}`);
+    return "result";
+  })
+  .build();
+```
+
+### Timeouts
+
+The built-in timeout middleware prevents operations from hanging indefinitely by racing them against a configurable timeout. It works for both tasks and resources.
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const apiTask = r
+  .task("app.tasks.externalApi")
+  .middleware([
+    // Works for tasks and resources via middleware.resource.timeout
+    middleware.task.timeout.with({ ttl: 5000 }), // 5 second timeout
+  ])
+  .run(async () => {
+    // This operation will be aborted if it takes longer than 5 seconds
+    return await fetch("https://slow-api.example.com/data");
+  })
+  .build();
+
+// Combine with retry for robust error handling
+const resilientTask = r
+  .task("app.tasks.resilient")
+  .middleware([
+    // Order matters here. Imagine a big onion.
+    // Works for resources as well via middleware.resource.retry
+    middleware.task.retry.with({
+      retries: 3,
+      delayStrategy: (attempt) => 1000 * attempt, // 1s, 2s, 3s delays
+    }),
+    middleware.task.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
+  ])
+  .run(async () => {
+    // Each retry attempt gets its own 10-second timeout
+    return await unreliableOperation();
+  })
+  .build();
+```
+
+How it works:
+
+- Uses `AbortController` and `Promise.race()` for clean cancellation.
+- Throws `TimeoutError` when the timeout is reached.
+- Works with any async operation in tasks and resources.
+- Integrates seamlessly with retry middleware for layered resilience.
+- Zero timeout (`ttl: 0`) throws immediately for testing edge cases.
+
+Best practices:
+
+- Set timeouts based on expected operation duration plus buffer.
+- Combine with retry middleware for transient failures.
+- Use longer timeouts for resource initialization than task execution.
+- Consider network conditions when setting API call timeouts.
+
+Resource timeouts help prevent startup hangs when a dependency never becomes ready:
+
+```typescript
+import { middleware, r } from "@bluelibs/runner";
+
+const messageBroker = r
+  .resource("app.broker")
+  .middleware([
+    middleware.resource.timeout.with({ ttl: 15000 }),
+    middleware.resource.retry.with({ retries: 2 }),
+  ])
+  .init(async () => {
+    return await connectBroker();
+  })
+  .dispose(async (value) => {
+    await value.close();
+  })
+  .build();
+```
 
 ### Policy Examples Worth Keeping
 
@@ -2767,674 +3399,6 @@ await run(app, {
 - Stop accepting new work before cleaning up
 
 > **runtime:** "An error boundary: a trampoline under your tightrope. I'm the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
-## Caching
-
-Avoid recomputing expensive work by caching task results with TTL-based eviction.
-Cache is opt-in: you must register `resources.cache`.
-
-### Provider Contract
-
-When you provide a custom cache backend, this is the contract:
-
-```typescript
-import type { ICacheProvider } from "@bluelibs/runner";
-
-interface CacheProviderOptions {
-  ttl?: number;
-  max?: number;
-  ttlAutopurge?: boolean;
-}
-
-type CacheProviderFactory = (
-  options: CacheProviderOptions,
-) => Promise<ICacheProvider>;
-```
-
-Notes:
-
-- `options` are merged from `resources.cache.with({ defaultOptions })` and middleware-level cache options.
-- `defaultOptions` remain inherited per-task provider options, not a shared global budget.
-- `resources.cache.with({ totalBudgetBytes })` adds a shared budget across cache entries for providers that support task-scoped budgeting.
-- The built-in in-memory provider supports `totalBudgetBytes` out of the box.
-- Node also ships with `resources.redisCacheProvider`, which supports `totalBudgetBytes` with Redis-backed storage.
-- Custom providers should enforce their own backend budget policy unless they explicitly support task-scoped budgets.
-- `keyBuilder` is middleware-only and is not passed to the provider.
-- `has()` is optional, but recommended when `undefined` can be a valid cached value.
-
-### Default Usage
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const expensiveTask = r
-  .task("app.tasks.expensive")
-  .middleware([
-    middleware.task.cache.with({
-      // lru-cache options by default
-      ttl: 60 * 1000, // Cache for 1 minute
-      keyBuilder: (taskId, input: { userId: string }) =>
-        `${taskId}-${input.userId}`, // optional key builder
-    }),
-  ])
-  .run(async (input: { userId: string }) => {
-    // This expensive operation will be cached
-    return await doExpensiveCalculation(input.userId);
-  })
-  .build();
-
-// Resource-level cache configuration
-const app = r
-  .resource("app.cache")
-  .register([
-    // You have to register it, cache resource is not enabled by default.
-    resources.cache.with({
-      totalBudgetBytes: 50 * 1024 * 1024, // Shared 50MB budget across built-in task caches
-      defaultOptions: {
-        max: 1000, // Per-task maximum items in cache
-        ttl: 30 * 1000, // Per-task default TTL
-      },
-    }),
-  ])
-  .build();
-```
-
-`totalBudgetBytes` is distinct from `defaultOptions.maxSize`:
-
-- `totalBudgetBytes`: one shared budget across built-in in-memory task caches
-- `defaultOptions.maxSize`: the inherited `lru-cache` size limit for each task cache instance
-
-### Node Redis Cache Provider
-
-Node includes an official Redis-backed cache provider built on top of the optional `ioredis` dependency.
-
-```typescript
-import { middleware, r, resources } from "@bluelibs/runner/node";
-
-const cachedTask = r
-  .task("app.tasks.cached")
-  .middleware([
-    middleware.task.cache.with({
-      ttl: 60 * 1000,
-    }),
-  ])
-  .run(async () => doExpensiveCalculation())
-  .build();
-
-const app = r
-  .resource("app")
-  .register([
-    resources.cache.with({
-      provider: resources.redisCacheProvider.with({
-        redis: process.env.REDIS_URL,
-        prefix: "app:cache",
-      }),
-      totalBudgetBytes: 50 * 1024 * 1024,
-      defaultOptions: {
-        ttl: 30 * 1000,
-      },
-    }),
-    cachedTask,
-  ])
-  .build();
-```
-
-Notes:
-
-- `redis` accepts either a Redis connection string or a compatible client instance.
-- `prefix` scopes the Redis keys used for entries, LRU ordering, and byte accounting.
-- When `prefix` is omitted, Runner generates an isolated per-container namespace.
-- Set an explicit `prefix` when you want multiple Node processes to share the same cache namespace and budget.
-- Redis-backed cache entries are not cleared by `runtime.dispose()`. Persistence is controlled by Redis TTLs, the chosen `prefix`, and your cache limits.
-
-### Custom Redis Provider Example
-
-```typescript
-import { r } from "@bluelibs/runner";
-import Redis from "ioredis";
-
-const redis = r
-  .resource<{ url: string }>("app.resources.redis")
-  .init(async ({ url }) => new Redis(url))
-  .dispose(async (client) => client.disconnect())
-  .build();
-
-class RedisCache {
-  constructor(
-    private client: Redis,
-    private ttlMs?: number,
-    private prefix: string = "cache:",
-  ) {}
-
-  async get(key: string): Promise<unknown | undefined> {
-    const value = await this.client.get(this.prefix + key);
-    return value ? JSON.parse(value) : undefined;
-  }
-
-  async set(key: string, value: unknown): Promise<void> {
-    const payload = JSON.stringify(value);
-    if (this.ttlMs && this.ttlMs > 0) {
-      await this.client.setex(
-        this.prefix + key,
-        Math.ceil(this.ttlMs / 1000),
-        payload,
-      );
-      return;
-    }
-    await this.client.set(this.prefix + key, payload);
-  }
-
-  async clear(): Promise<void> {
-    const keys = await this.client.keys(this.prefix + "*");
-    if (keys.length > 0) {
-      await this.client.del(...keys);
-    }
-  }
-}
-
-const redisCacheProvider = r
-  .resource("app.resources.cacheProvider.redis")
-  .dependencies({ redis })
-  .init(async (_config, { redis }) => {
-    return async (options) => new RedisCache(redis, options.ttl);
-  })
-  .build();
-
-const app = r
-  .resource("app")
-  .register([
-    redis.with({ url: process.env.REDIS_URL! }),
-    resources.cache.with({ provider: redisCacheProvider }),
-  ])
-  .build();
-```
-
-**Why would you need this?** For monitoring and metrics—you want to know cache hit rates to optimize your application.
-
-**Journal Introspection**: On cache hits the task `run()` isn't executed, but you can still detect cache hits from a wrapping middleware:
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const cacheJournalKeys = middleware.task.cache.journalKeys;
-
-const cacheLogger = r.middleware
-  .task("app.middleware.cacheLogger")
-  .run(async ({ task, next, journal }) => {
-    const result = await next(task.input);
-    const wasHit = journal.get(cacheJournalKeys.hit);
-    if (wasHit) console.log("Served from cache");
-    return result;
-  })
-  .build();
-
-const myTask = r
-  .task("app.tasks.cached")
-  .middleware([cacheLogger, middleware.task.cache.with({ ttl: 60000 })])
-  .run(async () => "result")
-  .build();
-```
-
-> **runtime:** "Because nobody likes waiting. Correct. You keep asking the same question like a parrot with Wi‑Fi, so I built a memory palace. Now you get instant answers until you change one variable and whisper 'cache invalidation' like a curse."
-
----
-
-## Concurrency Control
-
-Limit concurrent executions to protect databases and external APIs. The concurrency middleware keeps only a fixed number of task instances running at once.
-
-```typescript
-import { r, Semaphore } from "@bluelibs/runner";
-
-// Option 1: Simple limit (shared for all tasks using this middleware instance)
-const limitMiddleware = middleware.task.concurrency.with({ limit: 5 });
-
-// Option 2: Explicit semaphore for fine-grained coordination
-const dbSemaphore = new Semaphore(10);
-const dbLimit = middleware.task.concurrency.with({
-  semaphore: dbSemaphore,
-});
-
-const heavyTask = r
-  .task("app.tasks.heavy")
-  .middleware([limitMiddleware])
-  .run(async () => {
-    // Max 5 of these will run in parallel
-  })
-  .build();
-```
-
-**Key benefits:**
-
-- **Resource protection**: Prevent connection pool exhaustion.
-- **Queueing**: Automatically queues excess requests instead of failing.
-- **Timeouts**: Supports waiting timeouts and cancellation via `AbortSignal`.
-
-> **runtime:** "Concurrency control: the bouncer of the event loop. I don't care how important your query is; if the room is full, you wait behind the velvet rope. No cutting, no exceptions."
-
----
-
-## Circuit Breaker
-
-Trip repeated failures early. When an external service starts failing, the circuit breaker opens so subsequent calls fail fast until a cool-down passes.
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const resilientTask = r
-  .task("app.tasks.remoteCall")
-  .middleware([
-    middleware.task.circuitBreaker.with({
-      failureThreshold: 5, // Trip after 5 failures
-      resetTimeout: 30000, // Stay open for 30 seconds
-    }),
-  ])
-  .run(async () => {
-    return await callExternalService();
-  })
-  .build();
-```
-
-**How it works:**
-
-1. **CLOSED**: Everything is normal. Requests flow through.
-2. **OPEN**: Threshold reached. All requests throw `CircuitBreakerOpenError` immediately.
-3. **HALF_OPEN**: After `resetTimeout`, one trial request is allowed.
-4. **RECOVERY**: If the trial succeeds, it goes back to **CLOSED**. Otherwise, it returns to **OPEN**.
-
-**Why would you need this?** For alerting—you want to know when the circuit opens to alert on-call engineers.
-
-**Journal Introspection**: Access the circuit breaker's state and failure count within your task (when it runs):
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const circuitBreakerJournalKeys = middleware.task.circuitBreaker.journalKeys;
-
-const myTask = r
-  .task("app.tasks.monitored")
-  .middleware([
-    middleware.task.circuitBreaker.with({
-      failureThreshold: 5,
-      resetTimeout: 30000,
-    }),
-  ])
-  .run(async (_input, _deps, context) => {
-    const state = context?.journal.get(circuitBreakerJournalKeys.state);
-    const failures = context?.journal.get(circuitBreakerJournalKeys.failures); // number
-    console.log(`Circuit state: ${state}, failures: ${failures}`);
-    return "result";
-  })
-  .build();
-```
-
-> **runtime:** "Circuit Breaker: because 'hope' is not a resilience strategy. If the database is on fire, I stop sending you there to pour gasoline on it. I'll check back in thirty seconds to see if the smoke has cleared."
-
----
-
-## Temporal Control: Debounce & Throttle
-
-Control the frequency of task execution over time. Perfect for event-driven tasks that might fire in bursts.
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-// Debounce: Run only after 500ms of inactivity
-const saveTask = r
-  .task("app.tasks.save")
-  .middleware([middleware.task.debounce.with({ ms: 500 })])
-  .run(async (data) => {
-    // Assuming db is available in the closure
-    return await db.save(data);
-  })
-  .build();
-
-// Throttle: Run at most once every 1000ms
-const logTask = r
-  .task("app.tasks.log")
-  .middleware([middleware.task.throttle.with({ ms: 1000 })])
-  .run(async (msg) => {
-    console.log(msg);
-  })
-  .build();
-```
-
-**When to use:**
-
-- **Debounce**: Search-as-you-type, autosave, window resize events.
-- **Throttle**: Scroll listeners, telemetry pings, high-frequency webhooks.
-
-> **runtime:** "Temporal control: the mute button for your enthusiastic event emitters. You might be shouting a hundred times a second, but I'm only listening once per heartbeat."
-
----
-
-## Fallback: The Plan B
-
-Define what happens when a task fails. Fallback middleware lets you return a default value or execute an alternative path gracefully.
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const getPrice = r
-  .task("app.tasks.getPrice")
-  .middleware([
-    middleware.task.fallback.with({
-      // Can be a static value, a function, or another task
-      fallback: async (input, error) => {
-        console.warn(`Price fetch failed: ${error.message}. Using default.`);
-        return 9.99;
-      },
-    }),
-  ])
-  .run(async () => {
-    return await fetchPriceFromAPI();
-  })
-  .build();
-```
-
-**Why would you need this?** For audit trails—you want to know when fallback values were used instead of real data.
-
-**Journal Introspection**: The original task that throws won't continue execution, but you can detect fallback activation from a wrapping middleware:
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const fallbackJournalKeys = middleware.task.fallback.journalKeys;
-
-const fallbackLogger = r.middleware
-  .task("app.middleware.fallbackLogger")
-  .run(async ({ task, next, journal }) => {
-    const result = await next(task.input);
-    const wasActivated = journal.get(fallbackJournalKeys.active);
-    const err = journal.get(fallbackJournalKeys.error);
-    if (wasActivated) console.log(`Fallback used after: ${err?.message}`);
-    return result;
-  })
-  .build();
-
-const myTask = r
-  .task("app.tasks.withFallback")
-  .middleware([
-    fallbackLogger,
-    middleware.task.fallback.with({ fallback: "default" }),
-  ])
-  .run(async () => {
-    throw new Error("Primary failed");
-  })
-  .build();
-```
-
-> **runtime:** "Fallback: the 'parachute' pattern. If your primary logic decides to take a nap mid-flight, I'll make sure we land on a soft pile of default values instead of a stack trace."
-
----
-
-## Rate Limiting
-
-Protect your system from abuse by limiting the number of requests in a specific window of time.
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const sensitiveTask = r
-  .task("app.tasks.login")
-  .middleware([
-    middleware.task.rateLimit.with({
-      windowMs: 60 * 1000, // 1 minute window
-      max: 5, // Max 5 attempts per window
-    }),
-  ])
-  .run(async (credentials) => {
-    // Assuming auth service is available
-    return await auth.validate(credentials);
-  })
-  .build();
-```
-
-**Key features:**
-
-- **Fixed-window strategy**: Simple, predictable request counting.
-- **Isolation**: Limits are tracked per task definition.
-- **Error handling**: Throws `RateLimitError` when the limit is exceeded.
-
-**Why would you need this?** For monitoring—you want to see remaining quota to implement client-side throttling.
-
-**Journal Introspection**: When the task runs (request allowed), you can read the rate limit state from the execution journal:
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const rateLimitJournalKeys = middleware.task.rateLimit.journalKeys;
-
-const myTask = r
-  .task("app.tasks.rateLimited")
-  .middleware([middleware.task.rateLimit.with({ windowMs: 60000, max: 10 })])
-  .run(async (_input, _deps, context) => {
-    const remaining = context?.journal.get(rateLimitJournalKeys.remaining); // number
-    const resetTime = context?.journal.get(rateLimitJournalKeys.resetTime); // timestamp (ms)
-    const limit = context?.journal.get(rateLimitJournalKeys.limit); // number
-    console.log(
-      `${remaining}/${limit} requests remaining, resets at ${new Date(resetTime)}`,
-    );
-    return "result";
-  })
-  .build();
-```
-
-> **runtime:** "Rate limiting: counting beans so you don't have to. You've had five turns this minute; come back when the clock says so."
-
----
-
-## Require Context (Async Context Guard)
-
-Fail fast when a task must run inside a specific async context. This middleware is useful for request-scoped metadata (request id, tenant id, auth claims) where continuing without context would produce incorrect behavior.
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const RequestContext = r
-  .asyncContext<{ requestId: string }>("app.asyncContexts.request")
-  .build();
-
-const getAuditTrail = r
-  .task("app.tasks.getAuditTrail")
-  // Shortcut: creates middleware.task.requireContext with this context
-  .middleware([RequestContext.require()])
-  .run(async () => {
-    const { requestId } = RequestContext.use();
-    return { requestId, entries: [] };
-  })
-  .build();
-```
-
-If you prefer the explicit middleware form (useful in documentation and composition helpers):
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const TenantContext = r
-  .asyncContext<{ tenantId: string }>("app.asyncContexts.tenant")
-  .build();
-
-const listProjects = r
-  .task("app.tasks.listProjects")
-  .middleware([middleware.task.requireContext.with({ context: TenantContext })])
-  .run(async () => {
-    const { tenantId } = TenantContext.use();
-    return await projectRepo.findByTenant(tenantId);
-  })
-  .build();
-```
-
-**What it protects you from:**
-
-- Running tenant-sensitive logic without tenant context.
-- Logging/auditing tasks that silently lose request correlation ids.
-- Hidden bugs where context is only present in some call paths.
-
-> **Platform Note:** Async context requires `AsyncLocalStorage`, which is **Node.js-only**. In browsers and edge runtimes, async context APIs are not available.
-
-**What you just learned**: `requireContext` turns missing async context into an immediate, explicit failure instead of a delayed business-logic bug.
-
-> **runtime:** "If your task needs request context and you forgot to bring it, we stop at the door. Better a loud crash now than a forensic investigation later."
-
----
-
-## Retrying Failed Operations
-
-For when things go wrong, but you know they'll probably work if you just try again. The built-in retry middleware makes your tasks and resources more resilient to transient failures.
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const flakyApiCall = r
-  .task("app.tasks.flakyApiCall")
-  .middleware([
-    middleware.task.retry.with({
-      retries: 5, // Try up to 5 times
-      delayStrategy: (attempt) => 100 * Math.pow(2, attempt), // Exponential backoff
-      stopRetryIf: (error) => error.message === "Invalid credentials", // Don't retry auth errors
-    }),
-  ])
-  .run(async () => {
-    // This might fail due to network issues, rate limiting, etc.
-    return await fetchFromUnreliableService();
-  })
-  .build();
-
-const app = r.resource("app").register([flakyApiCall]).build();
-```
-
-The retry middleware can be configured with:
-
-- `retries`: The maximum number of retry attempts (default: 3).
-- `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
-- `stopRetryIf`: A function to prevent retries for certain types of errors.
-
-It also works on resources, which is especially useful for startup initialization:
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const database = r
-  .resource<{ connectionString: string }>("app.db")
-  .middleware([
-    middleware.resource.retry.with({
-      retries: 4,
-      delayStrategy: (attempt) => 250 * Math.pow(2, attempt),
-    }),
-  ])
-  .init(async ({ connectionString }) => {
-    return await connectToDatabase(connectionString);
-  })
-  .dispose(async (value) => {
-    await value.close();
-  })
-  .build();
-```
-
-**Why would you need this?** For logging—you want to log which attempt succeeded or what errors occurred during retries.
-
-**Journal Introspection**: Access the current retry attempt and the last error within your task:
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const retryJournalKeys = middleware.task.retry.journalKeys;
-
-const myTask = r
-  .task("app.tasks.retryable")
-  .middleware([middleware.task.retry.with({ retries: 5 })])
-  .run(async (_input, _deps, context) => {
-    const attempt = context?.journal.get(retryJournalKeys.attempt); // 0-indexed attempt number
-    const lastError = context?.journal.get(retryJournalKeys.lastError); // Error from previous attempt, if any
-    if ((attempt ?? 0) > 0)
-      console.log(`Retry attempt ${attempt} after: ${lastError?.message}`);
-    return "result";
-  })
-  .build();
-```
-
-> **runtime:** "Retry: the art of politely head‑butting reality. 'Surely it'll work the fourth time,' you declare, inventing exponential backoff and calling it strategy. I'll keep the attempts ledger while your API cosplays a coin toss."
-
----
-
-## Timeouts
-
-The built-in timeout middleware prevents operations from hanging indefinitely by racing them against a configurable
-timeout. Works for resources and tasks.
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const apiTask = r
-  .task("app.tasks.externalApi")
-  .middleware([
-    // Works for tasks and resources via middleware.resource.timeout
-    middleware.task.timeout.with({ ttl: 5000 }), // 5 second timeout
-  ])
-  .run(async () => {
-    // This operation will be aborted if it takes longer than 5 seconds
-    return await fetch("https://slow-api.example.com/data");
-  })
-  .build();
-
-// Combine with retry for robust error handling
-const resilientTask = r
-  .task("app.tasks.resilient")
-  .middleware([
-    // Order matters here. Imagine a big onion.
-    // Works for resources as well via middleware.resource.retry
-    middleware.task.retry.with({
-      retries: 3,
-      delayStrategy: (attempt) => 1000 * attempt, // 1s, 2s, 3s delays
-    }),
-    middleware.task.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
-  ])
-  .run(async () => {
-    // Each retry attempt gets its own 10-second timeout
-    return await unreliableOperation();
-  })
-  .build();
-```
-
-How it works:
-
-- Uses AbortController and Promise.race() for clean cancellation
-- Throws TimeoutError when the timeout is reached
-- Works with any async operation in tasks and resources
-- Integrates seamlessly with retry middleware for layered resilience
-- Zero timeout (ttl: 0) throws immediately for testing edge cases
-
-Best practices:
-
-- Set timeouts based on expected operation duration plus buffer
-- Combine with retry middleware for transient failures
-- Use longer timeouts for resource initialization than task execution
-- Consider network conditions when setting API call timeouts
-
-Resource timeouts help prevent startup hangs when a dependency never becomes ready:
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const messageBroker = r
-  .resource("app.broker")
-  .middleware([
-    middleware.resource.timeout.with({ ttl: 15000 }),
-    middleware.resource.retry.with({ retries: 2 }),
-  ])
-  .init(async () => {
-    return await connectBroker();
-  })
-  .dispose(async (value) => {
-    await value.close();
-  })
-  .build();
-```
-
-> **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It's not me, it's your molasses‑flavored endpoint. I just blow the whistle."
-
----
-
 ## HTTP Server Shutdown Pattern (`cooldown` + `dispose`)
 
 For HTTP servers, split shutdown work into two phases:
@@ -3945,124 +3909,6 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 ```
 
 > **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
-
----
-
-## Remote Lanes (Node)
-
-Remote Lanes let you split a Runner application across processes or machines without changing your business logic. Two lane systems cover the common distributed patterns:
-
-| Need                             | Lane System                   | Semantics                        |
-| -------------------------------- | ----------------------------- | -------------------------------- |
-| Fire-and-forget async delivery   | **Event Lanes** (`eventLane`) | Queue-backed produce/consume     |
-| Request/response across services | **RPC Lanes** (`rpcLane`)     | Sync remote task/event execution |
-
-Lane behavior is attached at runtime by `eventLanesResource` / `rpcLanesResource`. Definitions that are **not** assigned to a lane keep normal local Runner behavior — lanes are additive, never invasive.
-
-### Event Lane Quick Start
-
-```typescript
-import { r, run } from "@bluelibs/runner";
-import {
-  eventLanesResource,
-  MemoryEventLaneQueue,
-} from "@bluelibs/runner/node";
-
-// 1. Define a lane — a logical routing channel
-const emailLane = r.eventLane("app.lanes.email").build();
-
-// 2. Tag the event for lane routing
-const userRegistered = r
-  .event<{ userId: string }>("app.events.userRegistered")
-  .tags([tags.eventLane.with({ lane: emailLane })])
-  .build();
-
-// 3. Hook runs on the consumer side after relay
-const sendWelcome = r
-  .hook("app.hooks.sendWelcome")
-  .on(userRegistered)
-  .run(async (event) => {
-    console.log("Sending welcome email to", event.data.userId);
-  })
-  .build();
-
-// 4. Wire topology: who consumes what, and which queue backs each lane
-const topology = r.eventLane.topology({
-  profiles: {
-    api: { consume: [] },
-    worker: { consume: [emailLane] },
-  },
-  bindings: [{ lane: emailLane, queue: new MemoryEventLaneQueue() }],
-});
-
-// 5. Register and run
-const app = r
-  .resource("app")
-  .register([
-    userRegistered,
-    sendWelcome,
-    eventLanesResource.with({ profile: "worker", topology, mode: "network" }),
-  ])
-  .build();
-```
-
-### RPC Lane Quick Start
-
-Use `client: "fetch"` for universal `fetch` runtimes. Use `client: "mixed"` or `client: "smart"` only from `@bluelibs/runner/node` when you need Node streaming or multipart behavior.
-
-```typescript
-import { r } from "@bluelibs/runner";
-import { rpcLanesResource } from "@bluelibs/runner/node";
-
-// 1. Define a lane
-const billingLane = r.rpcLane("app.rpc.billing").build();
-
-// 2. Tag the task for lane routing
-const chargeCard = r
-  .task("billing.tasks.chargeCard")
-  .tags([tags.rpcLane.with({ lane: billingLane })])
-  .run(async (input: { amount: number }) => ({
-    ok: true,
-    amount: input.amount,
-  }))
-  .build();
-
-// 3. Create a communicator for the remote side
-const billingComm = r
-  .resource("app.resources.billingComm")
-  .init(
-    r.rpcLane.httpClient({
-      client: "mixed",
-      baseUrl: "http://billing:7070/__runner",
-    }),
-  )
-  .build();
-
-// 4. Wire topology and register
-const topology = r.rpcLane.topology({
-  profiles: {
-    api: { serve: [] },
-    billing: { serve: [billingLane] },
-  },
-  bindings: [{ lane: billingLane, communicator: billingComm }],
-});
-```
-
-### Local Development Modes
-
-You don't need external infrastructure to develop and test lanes:
-
-- `mode: "transparent"` — bypass transport completely; hooks run locally as if no lane existed. Use for fast unit-test feedback.
-- `mode: "local-simulated"` — events cross the serializer boundary (`stringify -> parse`) before local re-emit. Catches non-JSON-safe payload issues.
-- Two runtimes in one process + `MemoryEventLaneQueue` — emulate full profile split without external infra.
-
-### Operational Knobs
-
-In `mode: "network"`, Event Lane bindings support `prefetch`, `maxAttempts`, and `retryDelayMs`. RabbitMQ dead-letter ownership is broker/queue-policy based; Runner settles final failures with `nack(false)` and does not manually publish to DLQ.
-
-For complete examples, common patterns, testing strategies, debugging, migration notes, and RabbitMQ configuration, see [REMOTE_LANES.md](./REMOTE_LANES.md).
-
-> **runtime:** "Serve it or ship it. There is no 'maybe call the other service.'"
 ## Multi-Tenant Systems
 
 Multi-tenant work in Runner usually means one `run(app)` serving many tenants without mixing their logical state.
@@ -4352,13 +4198,13 @@ Start with functional schemas and explicit parsers. Use classes when they improv
 
 ### Choosing a Style
 
-| Situation | Prefer Functional (`Match.*` / plain schemas) | Prefer Class (`@Match.Schema`, `@Match.Field`) |
-| --------- | ---------------------------------------------- | ------------------------------------------------ |
-| Request/response boundaries | Best for explicit, local contracts | Good when boundary DTOs are shared widely |
-| Dynamic shapes (maps, conditional payloads) | Best fit (`Match.MapOf`, composable patterns) | Usually more verbose |
-| Large domain models reused across features | Possible but can become repetitive | Best readability and reuse |
-| Wire-field remapping/transforms | Works, but manual | Best DX with `@Serializer.Field(...)` |
-| Team preference | Functional programming style | OOP/DTO-centric style |
+| Situation                                   | Prefer Functional (`Match.*` / plain schemas) | Prefer Class (`@Match.Schema`, `@Match.Field`) |
+| ------------------------------------------- | --------------------------------------------- | ---------------------------------------------- |
+| Request/response boundaries                 | Best for explicit, local contracts            | Good when boundary DTOs are shared widely      |
+| Dynamic shapes (maps, conditional payloads) | Best fit (`Match.MapOf`, composable patterns) | Usually more verbose                           |
+| Large domain models reused across features  | Possible but can become repetitive            | Best readability and reuse                     |
+| Wire-field remapping/transforms             | Works, but manual                             | Best DX with `@Serializer.Field(...)`          |
+| Team preference                             | Functional programming style                  | OOP/DTO-centric style                          |
 
 Rule of thumb:
 
@@ -4388,7 +4234,10 @@ const userInputSchema = Match.compile({
   age: Match.Integer,
 });
 
-const parsed = check({ id: "u1", email: "ada@example.com", age: 42 }, userInputSchema);
+const parsed = check(
+  { id: "u1", email: "ada@example.com", age: 42 },
+  userInputSchema,
+);
 parsed.age; // number
 ```
 
@@ -4468,46 +4317,269 @@ check(
 
 ### Match Reference
 
-| Pattern / Helper | What It Does |
-| ---------------- | ------------ |
-| `String`, `Number`, `Boolean`, `Function`, `Object`, `Array` | Constructor-based validation |
-| Class constructor (for example `Date`, `MyClass`) | Validates via constructor semantics |
-| Literal values (`"x"`, `42`, `true`, `null`, `undefined`) | Exact literal match |
-| `[pattern]` | Array where every element matches `pattern` |
-| Plain object (`{ a: String }`) | Strict object validation (same as `Match.ObjectStrict`) |
-| `Match.ObjectStrict({ ... })` | Strict object shape (`additionalProperties: false` semantics) |
-| `Match.ObjectIncluding({ ... })` | Partial object shape (unknown keys allowed) |
-| `Match.MapOf(valuePattern)` | Dynamic-key object with uniform value pattern |
-| `Match.Any` | Accepts any value |
-| `Match.Integer` | Signed 32-bit integer |
-| `Match.NonEmptyString` | Non-empty string |
-| `Match.Email` | Email-shaped string |
-| `Match.UUID` | Canonical UUID string |
-| `Match.URL` | Absolute URL string |
-| `Match.IsoDateString` | ISO datetime string with timezone |
-| `Match.RegExp(re)` | String matching given regexp |
-| `Match.ArrayOf(pattern)` | Array of elements matching pattern |
-| `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)` | Non-empty array, optional element validation |
-| `Match.Optional(pattern)` | `undefined` or pattern |
-| `Match.Maybe(pattern)` | `undefined`, `null`, or pattern |
-| `Match.OneOf(...patterns)` | Any one of given patterns |
-| `Match.Where(predicate)` | Custom predicate / type guard |
-| `Match.Lazy(() => pattern)` | Lazy/recursive pattern |
-| `Match.Schema(options?)` | Class schema decorator |
-| `Match.Schema({ base: BaseClass \| () => BaseClass })` | Composes schema classes without requiring TypeScript `extends` |
-| `Match.Field(pattern)` | Decorated field validator |
-| `Match.fromSchema(Class, options?)` | Schema-like matcher from class metadata |
-| `Match.compile(pattern)` | Compiles pattern into `{ parse, test, toJSONSchema }` |
-| `Match.test(value, pattern)` | Boolean helper for validation check |
-| `Match.Error` | Error class thrown on match failure |
+| Pattern / Helper                                             | What It Does                                                   |
+| ------------------------------------------------------------ | -------------------------------------------------------------- |
+| `String`, `Number`, `Boolean`, `Function`, `Object`, `Array` | Constructor-based validation                                   |
+| Class constructor (for example `Date`, `MyClass`)            | Validates via constructor semantics                            |
+| Literal values (`"x"`, `42`, `true`, `null`, `undefined`)    | Exact literal match                                            |
+| `[pattern]`                                                  | Array where every element matches `pattern`                    |
+| Plain object (`{ a: String }`)                               | Strict object validation (same as `Match.ObjectStrict`)        |
+| `Match.ObjectStrict({ ... })`                                | Strict object shape (`additionalProperties: false` semantics)  |
+| `Match.ObjectIncluding({ ... })`                             | Partial object shape (unknown keys allowed)                    |
+| `Match.MapOf(valuePattern)`                                  | Dynamic-key object with uniform value pattern                  |
+| `Match.Any`                                                  | Accepts any value                                              |
+| `Match.Integer`                                              | Signed 32-bit integer                                          |
+| `Match.NonEmptyString`                                       | Non-empty string                                               |
+| `Match.Email`                                                | Email-shaped string                                            |
+| `Match.UUID`                                                 | Canonical UUID string                                          |
+| `Match.URL`                                                  | Absolute URL string                                            |
+| `Match.IsoDateString`                                        | ISO datetime string with timezone                              |
+| `Match.RegExp(re)`                                           | String matching given regexp                                   |
+| `Match.ArrayOf(pattern)`                                     | Array of elements matching pattern                             |
+| `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`     | Non-empty array, optional element validation                   |
+| `Match.Optional(pattern)`                                    | `undefined` or pattern                                         |
+| `Match.Maybe(pattern)`                                       | `undefined`, `null`, or pattern                                |
+| `Match.OneOf(...patterns)`                                   | Any one of given patterns                                      |
+| `Match.Where((value, parent?) => boolean)`                   | Custom predicate / type guard                                  |
+| `Match.WithMessage(pattern, { error })`                      | Wraps a pattern with a custom top-level validation message     |
+| `Match.Lazy(() => pattern)`                                  | Lazy/recursive pattern                                         |
+| `Match.Schema(options?)`                                     | Class schema decorator (`exact`, `schemaId`; see also `base`)  |
+| `Match.Schema({ base: BaseClass \| () => BaseClass })`       | Composes schema classes without requiring TypeScript `extends` |
+| `Match.Field(pattern)`                                       | Decorated field validator                                      |
+| `Match.fromSchema(Class, options?)`                          | Schema-like matcher from class metadata                        |
+| `Match.compile(pattern)`                                     | Compiles pattern into `{ parse, test, toJSONSchema }`          |
+| `Match.test(value, pattern)`                                 | Boolean helper for validation check                            |
+| `Match.Error`                                                | Error class thrown on match failure                            |
 
 ### Additional `check()` Details
 
 - `check(value, pattern, { throwAllErrors: true })` aggregates all validation issues instead of fail-fast at first mismatch.
 - Recursive and forward patterns are supported via `Match.Lazy(...)`.
 - Class-backed recursive graphs are supported with `Match.Schema()` + `Match.fromSchema(...)`.
+  Use `Match.fromSchema(() => User)` inside decorated fields when a class needs to reference itself or a class declared later.
 - In Runner builders (`inputSchema`, `payloadSchema`, `configSchema`, etc.), explicit `parse(input)` schemas have precedence; otherwise Runner falls back to pattern validation via `check(...)`.
 - Decorator class shorthand in builder APIs (for example `.inputSchema(UserDto)` / `.configSchema(UserConfig)`) requires class metadata from `@Match.Schema()`.
+- `Match.Schema({ exact, schemaId })` controls class-level strictness and schema identity; `Match.Schema({ base })` composes schema classes without TypeScript `extends`.
+- `Match.WithMessage(pattern, { error })` overrides the thrown `MatchError.message` headline while preserving the normal `MatchError` structure (`id`, `path`, `failures`). It does not rewrite individual `failures[]` entries.
+- Final `MatchError.failures` is always a flat array of leaf failures. Nested validation does not produce a tree of failures or a synthetic parent failure like `$.address` unless an actual matcher failed at that path.
+- `MatchError.path` always comes from the first recorded failure. If a nested field fails first, a parent custom headline may still be used, but `error.path` remains the nested leaf path such as `$.address.city`.
+- With `check(value, pattern, { throwAllErrors: true })`, the default headline is `"Match failed with N errors:\n- msg1\n- msg2"`.
+- Leaf wrappers such as `Match.WithMessage(String, ...)` do not replace that aggregate headline; their underlying failures still appear in `error.failures`.
+- Subtree wrappers such as plain objects, arrays, `Match.ObjectIncluding(...)`, `Match.MapOf(...)`, `Match.NonEmptyArray(...)`, `Match.Lazy(...)`, or `Match.fromSchema(...)` can replace the aggregate headline while still preserving the nested failures in `error.failures`.
+- Decorator-backed schemas are not special here: `Match.WithMessage(Match.fromSchema(AddressSchema), ...)` behaves like any other subtree wrapper.
+- In `Match.WithMessage(pattern, { error: fn })`, the callback receives `ctx.error` built from the nested failures collected inside the wrapped pattern. That nested error exposes `path` and `failures`, but its `message` is rebuilt from the raw nested failures and does not preserve any inner `Match.WithMessage(...)` headline from deeper wrappers.
+- `Match.Where((value, parent?) => boolean)` receives the immediate parent object/array when validation happens inside a compound value.
+
+#### Recursive Patterns: Which Helper to Use
+
+Use `Match.Lazy(...)` when the recursive thing is a plain Match pattern.
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+const createTreePattern = () =>
+  Match.ObjectIncluding({
+    id: Match.NonEmptyString,
+    children: Match.Optional(Match.ArrayOf(Match.Lazy(() => createTreePattern()))),
+  });
+
+check(
+  {
+    id: "root",
+    children: [{ id: "child", children: [] }],
+  },
+  createTreePattern(),
+);
+```
+
+Use `Match.fromSchema(() => User)` when the recursive thing is a decorated class schema.
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+@Match.Schema()
+class User {
+  @Match.Field(Match.NonEmptyString)
+  name!: string;
+
+  @Match.Field(Match.fromSchema(() => User))
+  self!: User;
+
+  @Match.Field(Match.ArrayOf(Match.fromSchema(() => User)))
+  children!: User[];
+}
+
+check(
+  (() => {
+    const user: Record<string, unknown> = {
+      name: "Ada",
+      children: [],
+    };
+    user.self = user;
+    return user;
+  })(),
+  Match.fromSchema(User),
+);
+```
+
+Rule of thumb:
+
+- `Match.Lazy(...)` is the general recursion tool for plain objects, arrays, unions, and custom Match composition.
+- `Match.fromSchema(() => Class)` is the class-schema version when you already use `@Match.Schema()` / `@Match.Field(...)`.
+
+### Custom Match Messages
+
+Use `Match.WithMessage(pattern, { error })` when a validation rule needs a more domain-specific message while keeping the normal `MatchError` structure (`id`, `path`, `failures`).
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+@Match.Schema()
+class UserDto {
+  @Match.Field(
+    Match.WithMessage(String, {
+      error: ({ value, path, parent }) =>
+        `Name must be a string. Received ${String(value)} at ${path} for user ${(parent as { id?: string })?.id ?? "unknown"}.`,
+    }),
+  )
+  name!: string;
+}
+
+check({ name: 42 }, Match.fromSchema(UserDto));
+```
+
+The same wrapper works in plain `check(...)`:
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+check("nope", Match.WithMessage(Match.Email, { error: "Invalid email" }));
+```
+
+Nested schema wrappers follow the same rules. The outer wrapper can replace the final headline, while the recorded failures still point to the nested leaf paths:
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+@Match.Schema()
+class AddressDto {
+  @Match.Field(
+    Match.WithMessage(String, {
+      error: "City must be a string",
+    }),
+  )
+  city!: string;
+}
+
+@Match.Schema()
+class BillingDetailsDto {
+  @Match.Field(
+    Match.WithMessage(Match.fromSchema(AddressDto), {
+      error: ({ error }) =>
+        `Address is invalid. First nested issue: ${error.message}`,
+    }),
+  )
+  address!: AddressDto;
+}
+
+try {
+  check(
+    { address: { city: 42 } },
+    Match.fromSchema(BillingDetailsDto),
+  );
+} catch (error) {
+  const matchError = error as Match.Error;
+  // matchError.message ===
+  // "Address is invalid. First nested issue: Expected string, got number at $.address.city."
+  //
+  // matchError.path === "$.address.city"
+  //
+  // matchError.failures === [
+  //   {
+  //     path: "$.address.city",
+  //     message: "Expected string, got number at $.address.city.",
+  //     ...
+  //   }
+  // ]
+}
+```
+
+> **Note:** The outer formatter sees the raw nested failure summary, not the inner `"City must be a string"` headline. Inner `Match.WithMessage(...)` wrappers affect the thrown headline at their own level, but outer formatter callbacks receive a fresh `MatchError` rebuilt from nested raw failures.
+
+Custom `Match.Where(...)` patterns work the same way and solve the standalone-message case:
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+const AppMatch = {
+  NonZeroPositiveInteger: Match.Where(
+    (value: unknown): value is number =>
+      typeof value === "number" && Number.isInteger(value) && value > 0,
+  ),
+} as const;
+
+@Match.Schema()
+class JobConfig {
+  @Match.Field(
+    Match.WithMessage(AppMatch.NonZeroPositiveInteger, {
+      error: ({ value, path }) =>
+        `Retries must be a non-zero positive integer. Received ${String(value)} at ${path}.`,
+    }),
+  )
+  retries!: number;
+}
+
+check({ retries: 0 }, Match.fromSchema(JobConfig));
+```
+
+Notes:
+
+- `error` accepts either a static string or a callback.
+- Callback context is `{ value, error, path, pattern, parent }`.
+- `path` uses `$` for the root value, `$.email` for a root object field, and `$.users[2].email` for nested array/object paths.
+- `value` is intentionally `unknown` because the callback runs only on the failure path.
+- `parent` is only present when the value is being validated as part of an object, map, or array element.
+- When `throwAllErrors: true` collects multiple failures, `MatchError.message` is `"Match failed with N errors:\n- msg1\n- msg2"` by default; leaf field `Match.WithMessage(...)` wrappers do not replace that summary, while subtree/schema wrappers still can.
+- `Match.WithMessage(...)` is runtime-only and does not affect JSON Schema export beyond the wrapped inner pattern.
+- `parent` is not attached to the thrown `MatchError`; it is runtime-only callback context.
+
+### Second-Pass Validation with `Match.Error`
+
+Sometimes you want a first structural pass with `check(...)`, then a second domain-specific pass that raises a targeted validation error on an existing field path.
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+const input = check(
+  { email: "ada@example.com" },
+  {
+    email: Match.Email,
+  },
+);
+
+if (!isEmailUnique(input.email)) {
+  throw new Match.Error([
+    {
+      path: "$.email",
+      expected: "unique email",
+      actualType: "string",
+      message: "Email already exists.",
+    },
+  ]);
+}
+```
+
+This is useful when:
+
+- the first pass validates structure and sync shape rules
+- the second pass applies business rules that need custom wording
+- you still want the result to look like a normal `MatchError`
+
+Notes:
+
+- `Match.Error` is the same class exported as `MatchError`.
+- Array paths use bracket notation such as `$.users[2].email`.
+- If your follow-up rule is asynchronous (for example, checking uniqueness in a database), perform that second pass in task/resource logic rather than inside `Match.Where(...)`.
 
 ### Extending Schemas
 
@@ -4701,7 +4773,6 @@ Unsupported in strict mode (fail-fast):
 - Custom class constructor patterns
 - Literal `undefined`, `bigint`, `symbol`
 - `Match.Optional(...)` / `Match.Maybe(...)` outside object-property context
-
 ## Observability Strategy (Logs, Metrics, and Traces)
 
 Runner gives you primitives for all three observability signals:
