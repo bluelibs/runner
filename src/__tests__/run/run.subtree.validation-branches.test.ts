@@ -245,7 +245,7 @@ describe("run subtree validation branches", () => {
 
     await expect(run(app.with({ enabled: false }))).resolves.toBeDefined();
     await expect(run(app.with({ enabled: true }))).rejects.toMatchObject({
-      id: "runner.errors.subtreeValidationFailed",
+      id: "subtreeValidationFailed",
     });
   });
 });

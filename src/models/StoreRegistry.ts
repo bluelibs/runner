@@ -15,6 +15,7 @@ import {
   ResourceStoreElementType,
   EventStoreElementType,
   HookStoreElementType,
+  symbolMiddlewareConfiguredFrom,
   symbolTagConfiguredFrom,
 } from "../defs";
 import { isResourceWithConfig } from "../define";
@@ -49,6 +50,7 @@ type DefinitionReferenceWithOptionalId = {
 
 type DefinitionReferenceWithConfiguredFrom = {
   [symbolTagConfiguredFrom]?: unknown;
+  [symbolMiddlewareConfiguredFrom]?: unknown;
 };
 
 function isObjectReference(value: unknown): value is DefinitionReference {
@@ -73,9 +75,11 @@ function getReferenceSourceId(
 function getConfiguredFromReference(
   reference: DefinitionReference,
 ): DefinitionReference | undefined {
-  const configuredFrom = (reference as DefinitionReferenceWithConfiguredFrom)[
-    symbolTagConfiguredFrom
-  ];
+  const configuredReference =
+    reference as DefinitionReferenceWithConfiguredFrom;
+  const configuredFrom =
+    configuredReference[symbolMiddlewareConfiguredFrom] ??
+    configuredReference[symbolTagConfiguredFrom];
 
   return isObjectReference(configuredFrom) ? configuredFrom : undefined;
 }

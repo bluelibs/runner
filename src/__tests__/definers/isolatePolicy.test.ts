@@ -62,9 +62,7 @@ describe("isolatePolicy helpers", () => {
 
     expect(() =>
       mergeIsolationPolicy({ deny: [denied] }, { only: [allowed] }),
-    ).toThrow(
-      expect.objectContaining({ id: "runner.errors.isolationConflict" }),
-    );
+    ).toThrow(expect.objectContaining({ id: "isolationConflict" }));
   });
 
   it("asserts conflicts for static builder-style composition", () => {
@@ -83,9 +81,7 @@ describe("isolatePolicy helpers", () => {
         { deny: [denied] },
         { only: [allowed] },
       ),
-    ).toThrow(
-      expect.objectContaining({ id: "runner.errors.isolationConflict" }),
-    );
+    ).toThrow(expect.objectContaining({ id: "isolationConflict" }));
 
     expect(() =>
       assertIsolationConflict(
@@ -93,9 +89,7 @@ describe("isolatePolicy helpers", () => {
         { deny: [] },
         { only: [allowed] },
       ),
-    ).toThrow(
-      expect.objectContaining({ id: "runner.errors.isolationConflict" }),
-    );
+    ).toThrow(expect.objectContaining({ id: "isolationConflict" }));
   });
 
   it("creates a dynamic display policy when declarations include config-driven entries", () => {
@@ -182,7 +176,7 @@ describe("isolatePolicy helpers", () => {
       ),
     ).toThrow(
       expect.objectContaining({
-        id: "runner.errors.isolationConflict",
+        id: "isolationConflict",
         message: expect.stringContaining(
           '"tests-isolatePolicy-conflict-id-resource"',
         ),

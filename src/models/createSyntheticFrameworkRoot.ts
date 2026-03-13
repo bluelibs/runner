@@ -1,6 +1,5 @@
 import type { IResource, IResourceWithConfig, RegisterableItem } from "../defs";
 import { defineResource } from "../define";
-import { markFrameworkDefinition } from "../definers/markFrameworkDefinition";
 import { debugResource } from "../globals/resources/debug";
 import type { DebugFriendlyConfig } from "../globals/resources/debug";
 import {
@@ -21,12 +20,10 @@ function createFrameworkNamespaceResource(
   resourceId: string,
   register: readonly RegisterableItem[],
 ): IResource<void, Promise<void>> {
-  return defineResource(
-    markFrameworkDefinition({
-      id: resourceId,
-      register: [...register],
-    }),
-  );
+  return defineResource({
+    id: resourceId,
+    register: [...register],
+  });
 }
 
 export function createSyntheticFrameworkRoot({
@@ -46,12 +43,10 @@ export function createSyntheticFrameworkRoot({
     runnerRegister,
   );
 
-  return defineResource(
-    markFrameworkDefinition({
-      id: SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID,
-      register: [systemResource, runnerResource, rootItem],
-    }),
-  );
+  return defineResource({
+    id: SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID,
+    register: [systemResource, runnerResource, rootItem],
+  });
 }
 
 export const createFrameworkRootGateway = createSyntheticFrameworkRoot;

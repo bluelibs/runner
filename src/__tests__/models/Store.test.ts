@@ -344,7 +344,7 @@ describe("Store", () => {
 
     expect(() => store.storeGenericItem(weirdDepsResource)).toThrow(
       expect.objectContaining({
-        id: "runner.errors.validation",
+        id: "validation",
       }),
     );
   });

@@ -8,14 +8,14 @@ export const matchError = error<
     path: string;
     failures: readonly MatchFailure[];
   } & DefaultErrorType
->("runner.errors.matchError")
+>("matchError")
   .httpCode(400)
   .format(({ failures }) => formatMatchErrorMessage(failures))
   .build();
 
 export const checkInvalidPatternError = error<
   { message: string } & DefaultErrorType
->("runner.errors.check.invalidPattern")
+>("check-invalidPattern")
   .httpCode(400)
   .format(({ message }) => message)
   .remediation("Fix the invalid Match pattern definition before using it.")
@@ -23,7 +23,7 @@ export const checkInvalidPatternError = error<
 
 export const checkInvalidOptionsError = error<
   { message: string } & DefaultErrorType
->("runner.errors.check.invalidOptions")
+>("check-invalidOptions")
   .httpCode(400)
   .format(({ message }) => message)
   .remediation("Pass a plain object with supported check() options.")
@@ -35,7 +35,7 @@ export const checkJsonSchemaUnsupportedPatternError = error<
     reason: string;
     patternKind: string;
   } & DefaultErrorType
->("runner.errors.check.jsonSchemaUnsupportedPattern")
+>("check-jsonSchemaUnsupportedPattern")
   .httpCode(400)
   .format(
     ({ path, reason }) => `Cannot convert Match pattern at ${path}: ${reason}.`,

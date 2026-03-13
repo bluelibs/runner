@@ -116,7 +116,7 @@ describe("run-exports-visibility", () => {
         await run(root);
         fail("Expected run() to fail with visibility violation");
       } catch (e: any) {
-        expect(e.id).toBe("runner.errors.visibilityViolation");
+        expect(e.id).toBe("visibilityViolation");
         expect(e.message).toContain(
           'Task "exports-error-private" is internal to resource "exports-error-child"',
         );

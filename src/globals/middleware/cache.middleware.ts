@@ -1,5 +1,4 @@
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
-import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { safeStringify } from "../../models/utils/safeStringify";
 import { Match } from "../../tools/check";
@@ -78,88 +77,86 @@ export const journalKeys = {
 const defaultKeyBuilder = (taskId: string, input: unknown) =>
   `${taskId}-${safeStringify(input)}`;
 
-export const cacheMiddleware = defineTaskMiddleware(
-  markFrameworkDefinition({
-    id: "runner.middleware.task.cache",
-    configSchema: cacheMiddlewareConfigPattern,
-    dependencies: () => ({
-      cache: cacheResource,
-      logger: loggerResource.optional(),
-    }),
-    async run({ task, next, journal }, deps, config: CacheMiddlewareConfig) {
-      const { cache, logger } = deps;
-
-      config = {
-        keyBuilder: defaultKeyBuilder,
-        ttl: 10 * 1000,
-        max: 100,
-        ttlAutopurge: true,
-        ...config,
-      };
-
-      const taskId = task!.definition.id;
-      let cacheHolderForTask = cache.map.get(taskId)!;
-      if (!cacheHolderForTask) {
-        const { keyBuilder, ...lruOptions } = config;
-        const cacheOptions = {
-          ...cache.defaultOptions,
-          ...lruOptions,
-        };
-        const pendingCreate = cache.pendingCreates.get(taskId);
-
-        if (pendingCreate) {
-          cacheHolderForTask = await pendingCreate;
-        } else {
-          const createPromise = createCacheInstance({
-            cache,
-            cacheOptions,
-            taskId,
-          })
-            .then((instance) => {
-              cache.map.set(taskId, instance);
-              return instance;
-            })
-            .finally(() => {
-              cache.pendingCreates.delete(taskId);
-            });
-          cache.pendingCreates.set(taskId, createPromise);
-          cacheHolderForTask = await createPromise;
-        }
-      }
-
-      const key = applyTenantScopeToKey(
-        config.keyBuilder!(taskId, task!.input),
-        config.tenantScope,
-      );
-
-      const cachedValue = await cacheHolderForTask.get(key);
-      const hasCachedEntry =
-        typeof cacheHolderForTask.has === "function"
-          ? await cacheHolderForTask.has(key)
-          : cachedValue !== undefined;
-
-      if (hasCachedEntry) {
-        journal.set(journalKeys.hit, true, { override: true });
-        return cachedValue;
-      }
-
-      journal.set(journalKeys.hit, false, { override: true });
-      const result = await next(task!.input);
-
-      try {
-        await cacheHolderForTask.set(key, result);
-      } catch (error) {
-        await logger?.error(
-          "Cache middleware write failed; returning fresh result.",
-          {
-            taskId,
-            data: { key },
-            error: error instanceof Error ? error : new Error(String(error)),
-          },
-        );
-      }
-
-      return result;
-    },
+export const cacheMiddleware = defineTaskMiddleware({
+  id: "cache",
+  configSchema: cacheMiddlewareConfigPattern,
+  dependencies: () => ({
+    cache: cacheResource,
+    logger: loggerResource.optional(),
   }),
-);
+  async run({ task, next, journal }, deps, config: CacheMiddlewareConfig) {
+    const { cache, logger } = deps;
+
+    config = {
+      keyBuilder: defaultKeyBuilder,
+      ttl: 10 * 1000,
+      max: 100,
+      ttlAutopurge: true,
+      ...config,
+    };
+
+    const taskId = task!.definition.id;
+    let cacheHolderForTask = cache.map.get(taskId)!;
+    if (!cacheHolderForTask) {
+      const { keyBuilder, ...lruOptions } = config;
+      const cacheOptions = {
+        ...cache.defaultOptions,
+        ...lruOptions,
+      };
+      const pendingCreate = cache.pendingCreates.get(taskId);
+
+      if (pendingCreate) {
+        cacheHolderForTask = await pendingCreate;
+      } else {
+        const createPromise = createCacheInstance({
+          cache,
+          cacheOptions,
+          taskId,
+        })
+          .then((instance) => {
+            cache.map.set(taskId, instance);
+            return instance;
+          })
+          .finally(() => {
+            cache.pendingCreates.delete(taskId);
+          });
+        cache.pendingCreates.set(taskId, createPromise);
+        cacheHolderForTask = await createPromise;
+      }
+    }
+
+    const key = applyTenantScopeToKey(
+      config.keyBuilder!(taskId, task!.input),
+      config.tenantScope,
+    );
+
+    const cachedValue = await cacheHolderForTask.get(key);
+    const hasCachedEntry =
+      typeof cacheHolderForTask.has === "function"
+        ? await cacheHolderForTask.has(key)
+        : cachedValue !== undefined;
+
+    if (hasCachedEntry) {
+      journal.set(journalKeys.hit, true, { override: true });
+      return cachedValue;
+    }
+
+    journal.set(journalKeys.hit, false, { override: true });
+    const result = await next(task!.input);
+
+    try {
+      await cacheHolderForTask.set(key, result);
+    } catch (error) {
+      await logger?.error(
+        "Cache middleware write failed; returning fresh result.",
+        {
+          taskId,
+          data: { key },
+          error: error instanceof Error ? error : new Error(String(error)),
+        },
+      );
+    }
+
+    return result;
+  },
+});

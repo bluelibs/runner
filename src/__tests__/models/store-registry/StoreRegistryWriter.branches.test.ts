@@ -7,7 +7,6 @@ import {
 } from "../../../define";
 import type { IResource } from "../../../defs";
 import { defineError } from "../../../definers/defineError";
-import { markFrameworkDefinition } from "../../../definers/markFrameworkDefinition";
 import { createTestFixture } from "../../test-utils";
 
 describe("StoreRegistryWriter branches", () => {
@@ -200,12 +199,10 @@ describe("StoreRegistryWriter branches", () => {
       id: "root-task",
       run: async () => "ok",
     });
-    const root = defineResource(
-      markFrameworkDefinition({
-        id: "runtime-framework-root",
-        register: [task],
-      }),
-    );
+    const root = defineResource({
+      id: "runtime-framework-root",
+      register: [task],
+    });
 
     expect(() => writer.computeRegistrationDeeply(root)).not.toThrow();
   });

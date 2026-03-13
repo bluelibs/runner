@@ -4,7 +4,7 @@ import type { DefaultErrorType } from "../../types/error";
 // Duplicate registration
 export const duplicateRegistrationError = error<
   { type: string; id: string } & DefaultErrorType
->("runner.errors.duplicateRegistration")
+>("duplicateRegistration")
   .format(
     ({ type, id }) =>
       `${type} "${id.toString()}" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.`,
@@ -18,7 +18,7 @@ export const duplicateRegistrationError = error<
 // Dependency not found
 export const dependencyNotFoundError = error<
   { key: string } & DefaultErrorType
->("runner.errors.dependencyNotFound")
+>("dependencyNotFound")
   .format(
     ({ key }) =>
       `Dependency ${key.toString()} not found. Did you forget to register it through a resource?`,
@@ -41,7 +41,7 @@ export const overrideTargetNotRegisteredError = error<
       | "Hook";
     sources?: string[];
   } & DefaultErrorType
->("runner.errors.overrideTargetNotRegistered")
+>("overrideTargetNotRegistered")
   .format(({ targetId, targetType, sources }) => {
     const sourceDetails =
       sources && sources.length > 0
@@ -67,7 +67,7 @@ export const overrideDuplicateTargetError = error<
     targetId: string;
     sources: string[];
   } & DefaultErrorType
->("runner.errors.overrideDuplicateTarget")
+>("overrideDuplicateTarget")
   .format(
     ({ targetId, sources }) =>
       `Override target "${targetId}" is declared more than once. Conflicting override sources: ${sources.join(", ")}.`,
@@ -90,7 +90,7 @@ export const overrideOutOfScopeError = error<
       | "Hook";
     ownerResourceId?: string;
   } & DefaultErrorType
->("runner.errors.overrideOutOfScope")
+>("overrideOutOfScope")
   .format(({ sourceId, targetId, targetType, ownerResourceId }) => {
     const ownerDetails = ownerResourceId
       ? ` It belongs to resource "${ownerResourceId}".`
@@ -109,7 +109,7 @@ export const overrideDefinitionRequiredError = error<
     sourceId: string;
     receivedId?: string;
   } & DefaultErrorType
->("runner.errors.overrideDefinitionRequired")
+>("overrideDefinitionRequired")
   .format(
     ({ sourceId, receivedId }) =>
       `Resource "${sourceId}" declares an invalid override${
@@ -126,7 +126,7 @@ export const overrideDefinitionRequiredError = error<
 
 // Unknown item type
 export const unknownItemTypeError = error<{ item: unknown } & DefaultErrorType>(
-  "runner.errors.unknownItemType",
+  "unknownItemType",
 )
   .format(
     ({ item }) =>
@@ -141,7 +141,7 @@ export const unknownItemTypeError = error<{ item: unknown } & DefaultErrorType>(
 
 // Event not found
 export const eventNotFoundError = error<{ id: string } & DefaultErrorType>(
-  "runner.errors.eventNotFound",
+  "eventNotFound",
 )
   .format(
     ({ id }) =>
@@ -155,7 +155,7 @@ export const eventNotFoundError = error<{ id: string } & DefaultErrorType>(
 
 // Resource not found
 export const resourceNotFoundError = error<{ id: string } & DefaultErrorType>(
-  "runner.errors.resourceNotFound",
+  "resourceNotFound",
 )
   .format(
     ({ id }) =>
@@ -174,7 +174,7 @@ export const middlewareNotRegisteredError = error<
     source: string;
     middlewareId: string;
   } & DefaultErrorType
->("runner.errors.middlewareNotRegistered")
+>("middlewareNotRegistered")
   .format(
     ({ type, source, middlewareId }) =>
       `Middleware inside ${type} "${source}" depends on "${middlewareId}" but it's not registered. Did you forget to register it?`,
@@ -187,7 +187,7 @@ export const middlewareNotRegisteredError = error<
 
 // Tag not found
 export const tagNotFoundError = error<{ id: string } & DefaultErrorType>(
-  "runner.errors.tagNotFound",
+  "tagNotFound",
 )
   .format(
     ({ id }) =>
@@ -205,7 +205,7 @@ export const duplicateTagIdOnDefinitionError = error<
     definitionId: string;
     tagId: string;
   } & DefaultErrorType
->("runner.errors.duplicateTagIdOnDefinition")
+>("duplicateTagIdOnDefinition")
   .format(
     ({ definitionType, definitionId, tagId }) =>
       `${definitionType} "${definitionId}" declares duplicate tag "${tagId}". A definition can only include a tag id once.`,
@@ -222,7 +222,7 @@ export const tagSelfDependencyError = error<
     definitionId: string;
     tagId: string;
   } & DefaultErrorType
->("runner.errors.tagSelfDependency")
+>("tagSelfDependency")
   .format(
     ({ definitionType, definitionId, tagId }) =>
       `${definitionType} "${definitionId}" cannot depend on tag "${tagId}" because it already carries the same tag.`,
@@ -241,7 +241,7 @@ export const tagTargetNotAllowedError = error<
     attemptedTarget: string;
     allowedTargets: string[];
   } & DefaultErrorType
->("runner.errors.tagTargetNotAllowed")
+>("tagTargetNotAllowed")
   .format(
     ({
       definitionType,

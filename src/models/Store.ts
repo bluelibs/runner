@@ -365,7 +365,7 @@ export class Store {
 
       entry.value = value;
       entry.isInitialized = true;
-      this.recordResourceInitialized(resource.id);
+      this.recordResourceInitialized(entry.resource.id);
     }
   }
 

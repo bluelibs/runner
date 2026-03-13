@@ -105,7 +105,7 @@ describe("run transactional hooks", () => {
     await expect(
       runtime.emitEvent(transactionalEvent, undefined),
     ).rejects.toMatchObject({
-      id: "runner.errors.transactionalMissingUndoClosure",
+      id: "transactionalMissingUndoClosure",
       listenerId: expect.stringContaining("run-tx-runtime-wildcard"),
     });
 

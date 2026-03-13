@@ -30,6 +30,7 @@ import {
   rateLimitTaskMiddleware,
   journalKeys as rateLimitJournalKeys,
 } from "./middleware/rateLimit.middleware";
+import { symbolMiddlewareConfiguredFrom } from "../types/symbols";
 
 type MiddlewareWithJournalKeys<TMiddleware, TJournalKeys> = TMiddleware & {
   journalKeys: TJournalKeys;
@@ -38,11 +39,18 @@ type MiddlewareWithJournalKeys<TMiddleware, TJournalKeys> = TMiddleware & {
 const withJournalKeys = <TMiddleware extends object, TJournalKeys>(
   middleware: TMiddleware,
   journalKeys: TJournalKeys,
-): MiddlewareWithJournalKeys<TMiddleware, TJournalKeys> =>
-  Object.freeze({
+): MiddlewareWithJournalKeys<TMiddleware, TJournalKeys> => {
+  const wrapped = {
     ...middleware,
     journalKeys,
-  }) as MiddlewareWithJournalKeys<TMiddleware, TJournalKeys>;
+  } as MiddlewareWithJournalKeys<TMiddleware, TJournalKeys> & {
+    [symbolMiddlewareConfiguredFrom]?: unknown;
+  };
+
+  wrapped[symbolMiddlewareConfiguredFrom] = middleware;
+
+  return Object.freeze(wrapped);
+};
 
 type GlobalMiddlewares = {
   requireContext: typeof requireContextTaskMiddleware;

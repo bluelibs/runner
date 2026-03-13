@@ -4,7 +4,7 @@ import { eventLanesResourceConfigSchema } from "../../event-lanes/configSchema";
 function expectMatchFailure(run: () => unknown): void {
   try {
     run();
-    throw new Error("Expected runner.errors.matchError");
+    throw new Error("Expected matchError");
   } catch (error) {
     expect(matchError.is(error)).toBe(true);
   }

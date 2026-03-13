@@ -2,7 +2,8 @@ import { defineResource } from "../../define";
 import { aTask } from "./a.resource";
 import { b1Resource, b2Resource } from "./b.resource";
 
-const value = Math.random() > 0.5 ? b1Resource : b2Resource;
+const _value = Math.random() > 0.5 ? b1Resource : b2Resource;
+void _value;
 
 export const cResource = defineResource({
   id: "c-resource",

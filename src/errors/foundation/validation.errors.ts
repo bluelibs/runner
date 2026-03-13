@@ -8,7 +8,7 @@ export const validationError = error<
     id: string;
     originalError: string | Error;
   } & DefaultErrorType
->("runner.errors.validation")
+>("validation")
   .format(({ subject, id, originalError }) => {
     const errorMessage =
       originalError instanceof Error
@@ -48,7 +48,7 @@ export const builderIncompleteError = error<
     builderId: string;
     missingFields: string[];
   } & DefaultErrorType
->("runner.errors.builderIncomplete")
+>("builderIncomplete")
   .format(({ type, builderId, missingFields }) => {
     const typeLabel =
       type === "task"

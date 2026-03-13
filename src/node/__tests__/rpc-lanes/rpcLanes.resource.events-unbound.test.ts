@@ -44,7 +44,7 @@ describe("rpcLanesResource event routing edge cases", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.rpcLane.bindingNotFound",
+      name: "rpcLane-bindingNotFound",
     });
   });
 

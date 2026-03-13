@@ -4,7 +4,7 @@ import type { DefaultErrorType } from "../../types/error";
 // Lazy resource sync access blocked
 export const lazyResourceSyncAccessError = error<
   { id: string } & DefaultErrorType
->("runner.errors.lazyResourceSyncAccess")
+>("lazyResourceSyncAccess")
   .format(
     ({ id }) =>
       `Resource "${id.toString()}" was not used during startup and cannot be read via getResourceValue() in lazy mode.`,
@@ -16,7 +16,7 @@ export const lazyResourceSyncAccessError = error<
   .build();
 
 export const lazyResourceAccessDisabledError = error<DefaultErrorType>(
-  "runner.errors.lazyResourceAccessDisabled",
+  "lazyResourceAccessDisabled",
 )
   .format(
     () =>
@@ -29,7 +29,7 @@ export const lazyResourceAccessDisabledError = error<DefaultErrorType>(
 
 export const lazyResourceShutdownAccessError = error<
   { id: string } & DefaultErrorType
->("runner.errors.lazyResourceShutdownAccess")
+>("lazyResourceShutdownAccess")
   .format(
     ({ id }) =>
       `Resource "${id.toString()}" cannot be lazy-initialized because shutdown has already started.`,
@@ -41,9 +41,7 @@ export const lazyResourceShutdownAccessError = error<
   .build();
 
 // Locked
-export const lockedError = error<{ what: string } & DefaultErrorType>(
-  "runner.errors.locked",
-)
+export const lockedError = error<{ what: string } & DefaultErrorType>("locked")
   .format(
     ({ what }) => `Cannot modify the ${what.toString()} when it is locked.`,
   )
@@ -55,7 +53,7 @@ export const lockedError = error<{ what: string } & DefaultErrorType>(
 
 // Store already initialized
 export const storeAlreadyInitializedError = error<DefaultErrorType>(
-  "runner.errors.storeAlreadyInitialized",
+  "storeAlreadyInitialized",
 )
   .format(() => "Store already initialized. Cannot reinitialize.")
   .remediation(
@@ -65,7 +63,7 @@ export const storeAlreadyInitializedError = error<DefaultErrorType>(
 
 // Cancellation error (maps to HTTP 499 in exposure)
 export const cancellationError = error<{ reason?: string } & DefaultErrorType>(
-  "runner.errors.cancellation",
+  "cancellation",
 )
   .format(({ reason }) => reason || "Operation cancelled")
   .remediation(
@@ -75,7 +73,7 @@ export const cancellationError = error<{ reason?: string } & DefaultErrorType>(
 
 // RunResult/runtime surface errors (kept message-compatible with existing API expectations)
 export const runResultDisposedError = error<DefaultErrorType>(
-  "runner.errors.runResultDisposed",
+  "runResultDisposed",
 )
   .format(() => "RunResult has been disposed.")
   .remediation(
@@ -85,7 +83,7 @@ export const runResultDisposedError = error<DefaultErrorType>(
 
 export const interceptAfterLockError = error<
   { taskId?: string; source?: string } & DefaultErrorType
->("runner.errors.interceptAfterLock")
+>("interceptAfterLock")
   .format(({ taskId, source }) => {
     const target = taskId ? ` on task "${taskId}"` : "";
     const caller = source ? ` from "${source}"` : "";
@@ -96,9 +94,7 @@ export const interceptAfterLockError = error<
   )
   .build();
 
-export const shutdownLockdownError = error<DefaultErrorType>(
-  "runner.errors.shutdownLockdown",
-)
+export const shutdownLockdownError = error<DefaultErrorType>("shutdownLockdown")
   .format(
     () =>
       "Runtime is shutting down and no new task runs or event emissions are accepted.",
@@ -109,7 +105,7 @@ export const shutdownLockdownError = error<DefaultErrorType>(
   .build();
 
 export const runtimeAdmissionsPausedError = error<DefaultErrorType>(
-  "runner.errors.runtimeAdmissionsPaused",
+  "runtimeAdmissionsPaused",
 )
   .format(
     () =>
@@ -121,7 +117,7 @@ export const runtimeAdmissionsPausedError = error<DefaultErrorType>(
   .build();
 
 export const runtimeRootNotAvailableError = error<DefaultErrorType>(
-  "runner.errors.runtimeRootNotAvailable",
+  "runtimeRootNotAvailable",
 )
   .format(() => "Root resource is not available.")
   .remediation(
@@ -130,7 +126,7 @@ export const runtimeRootNotAvailableError = error<DefaultErrorType>(
   .build();
 
 export const runResultDisposeDuringBootstrapError = error<DefaultErrorType>(
-  "runner.errors.runResultDisposeDuringBootstrap",
+  "runResultDisposeDuringBootstrap",
 )
   .format(
     () =>
@@ -142,7 +138,7 @@ export const runResultDisposeDuringBootstrapError = error<DefaultErrorType>(
   .build();
 
 export const runtimeHealthDuringBootstrapError = error<DefaultErrorType>(
-  "runner.errors.runtimeHealthDuringBootstrap",
+  "runtimeHealthDuringBootstrap",
 )
   .format(
     () =>
@@ -154,9 +150,7 @@ export const runtimeHealthDuringBootstrapError = error<DefaultErrorType>(
   .build();
 
 export const runtimeAdmissionControlDuringBootstrapError =
-  error<DefaultErrorType>(
-    "runner.errors.runtimeAdmissionControlDuringBootstrap",
-  )
+  error<DefaultErrorType>("runtimeAdmissionControlDuringBootstrap")
     .format(
       () =>
         "Runtime pause/resume controls are not available during bootstrap. Wait for run() to finish initialization.",
@@ -167,7 +161,7 @@ export const runtimeAdmissionControlDuringBootstrapError =
     .build();
 
 export const runtimeTimersNotAcceptingError = error<DefaultErrorType>(
-  "runner.errors.runtimeTimersNotAccepting",
+  "runtimeTimersNotAccepting",
 )
   .format(
     () =>
@@ -180,7 +174,7 @@ export const runtimeTimersNotAcceptingError = error<DefaultErrorType>(
 
 export const runtimeElementNotFoundError = error<
   { type: string; elementId: string } & DefaultErrorType
->("runner.errors.runtimeElementNotFound")
+>("runtimeElementNotFound")
   .format(
     ({ type, elementId }) =>
       `${type.toString()} "${elementId.toString()}" not found.`,
@@ -196,7 +190,7 @@ export const subtreeMiddlewareConflictError = error<
     middlewareId: string;
     targetKind: "task" | "resource";
   } & DefaultErrorType
->("runner.errors.subtreeMiddlewareConflict")
+>("subtreeMiddlewareConflict")
   .format(({ middlewareId, targetKind }) => {
     const targetLabel = targetKind === "task" ? "task-local" : "resource-local";
     return `Subtree middleware "${middlewareId}" conflicts with a ${targetLabel} middleware using the same id.`;
@@ -209,7 +203,7 @@ export const subtreeMiddlewareConflictError = error<
 
 export const healthReportEntryNotFoundError = error<
   { resourceId: string } & DefaultErrorType
->("runner.errors.healthReportEntryNotFound")
+>("healthReportEntryNotFound")
   .format(
     ({ resourceId }) =>
       `Health report entry for resource "${resourceId}" was not found.`,
@@ -221,7 +215,7 @@ export const healthReportEntryNotFoundError = error<
   .build();
 
 export const runtimeRecoverWhenRequiresPausedStateError =
-  error<DefaultErrorType>("runner.errors.runtimeRecoverWhenRequiresPausedState")
+  error<DefaultErrorType>("runtimeRecoverWhenRequiresPausedState")
     .format(() => "runtime.recoverWhen() requires the runtime to be paused.")
     .remediation(
       "Call runtime.pause() first, then register recovery conditions with runtime.recoverWhen(...).",
@@ -230,7 +224,7 @@ export const runtimeRecoverWhenRequiresPausedStateError =
 
 export const resourceCooldownAdmissionTargetInvalidError = error<
   { resourceId: string; targetId: string } & DefaultErrorType
->("runner.errors.resourceCooldownAdmissionTargetInvalid")
+>("resourceCooldownAdmissionTargetInvalid")
   .format(
     ({ resourceId, targetId }) =>
       `Resource "${resourceId}" returned invalid cooldown admission target "${targetId}".`,
@@ -249,7 +243,7 @@ export const runtimeAccessViolationError = error<
     rootId: string;
     exportedIds: string[];
   } & DefaultErrorType
->("runner.errors.runtimeAccessViolation")
+>("runtimeAccessViolation")
   .format(
     ({ targetId, rootId }) =>
       `"${targetId}" is not exported by root resource "${rootId}" and cannot be accessed via the runtime API.`,
@@ -268,7 +262,7 @@ export const taskHealthResourceNotReportableError = error<
     taskId: string;
     resourceIds: string[];
   } & DefaultErrorType
->("runner.errors.taskHealthResourceNotReportable")
+>("taskHealthResourceNotReportable")
   .format(
     ({ taskId, resourceIds }) =>
       `Task "${taskId}" uses failWhenUnhealthy for resources without health(): [${resourceIds.join(", ")}].`,
@@ -284,7 +278,7 @@ export const taskBlockedByResourceHealthError = error<
     taskId: string;
     resourceIds: string[];
   } & DefaultErrorType
->("runner.errors.taskBlockedByResourceHealth")
+>("taskBlockedByResourceHealth")
   .format(
     ({ taskId, resourceIds }) =>
       `Task "${taskId}" was blocked because these resources are unhealthy: [${resourceIds.join(", ")}].`,
@@ -296,7 +290,7 @@ export const taskBlockedByResourceHealthError = error<
   .build();
 
 export const tenantContextRequiredError = error<DefaultErrorType>(
-  "runner.errors.tenantContextRequired",
+  "tenantContextRequired",
 )
   .format(
     () =>
@@ -309,7 +303,7 @@ export const tenantContextRequiredError = error<DefaultErrorType>(
 
 export const tenantInvalidContextError = error<
   { reason?: string } & DefaultErrorType
->("runner.errors.tenantInvalidContext")
+>("tenantInvalidContext")
   .format(
     ({ reason }) =>
       reason ??

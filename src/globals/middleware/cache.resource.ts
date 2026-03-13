@@ -8,7 +8,6 @@ import {
   type SharedCacheBudgetState,
 } from "./cache.shared";
 import { defineResource } from "../../definers/defineResource";
-import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import {
   type IResource,
   type IResourceWithConfig,
@@ -78,73 +77,69 @@ const cacheResourceConfigPattern = Match.ObjectIncluding({
 });
 
 export const cacheProviderResource: CacheProviderResourceDefinition =
-  defineResource<void, Promise<CacheProvider>>(
-    markFrameworkDefinition({
-      id: "runner.cacheProvider",
-      init: async () => createDefaultCacheProvider(),
-    }),
-  );
+  defineResource<void, Promise<CacheProvider>>({
+    id: "cacheProvider",
+    init: async () => createDefaultCacheProvider(),
+  });
 
 export const cacheResource = defineResource<
   CacheResourceConfig,
   Promise<CacheResourceValue>,
   { cacheProvider: typeof cacheProviderResource }
->(
-  markFrameworkDefinition({
-    id: "runner.cache",
-    configSchema: cacheResourceConfigPattern,
-    // we cast it to :RegisterableItems[] because cacheMiddleware uses cacheResource
-    register: (config): RegisterableItem[] => {
-      return [config.provider ?? cacheProviderResource, cacheMiddleware];
-    },
-    dependencies: (config: CacheResourceConfig) => {
-      if (config.provider) {
-        const { resource } = extractResourceAndConfig(config.provider);
-        return { cacheProvider: resource };
-      } else {
-        return {
-          cacheProvider: cacheProviderResource,
-        };
-      }
-    },
-    init: async (config: CacheResourceConfig, { cacheProvider }) => {
-      if (typeof cacheProvider !== "function") {
-        validationError.throw({
-          subject: "Cache provider",
-          id: "runner.cache",
-          originalError:
-            "Cache provider resource must initialize to a function: ({ taskId, options }) => provider instance.",
-        });
-      }
+>({
+  id: "cache",
+  configSchema: cacheResourceConfigPattern,
+  // we cast it to :RegisterableItems[] because cacheMiddleware uses cacheResource
+  register: (config): RegisterableItem[] => {
+    return [config.provider ?? cacheProviderResource, cacheMiddleware];
+  },
+  dependencies: (config: CacheResourceConfig) => {
+    if (config.provider) {
+      const { resource } = extractResourceAndConfig(config.provider);
+      return { cacheProvider: resource };
+    }
 
-      const sharedBudget = config?.totalBudgetBytes
-        ? createSharedCacheBudgetState(config.totalBudgetBytes)
-        : undefined;
+    return {
+      cacheProvider: cacheProviderResource,
+    };
+  },
+  init: async (config: CacheResourceConfig, { cacheProvider }) => {
+    if (typeof cacheProvider !== "function") {
+      validationError.throw({
+        subject: "Cache provider",
+        id: "cache",
+        originalError:
+          "Cache provider resource must initialize to a function: ({ taskId, options }) => provider instance.",
+      });
+    }
 
-      return {
-        map: new Map<string, ICacheProvider>(),
-        pendingCreates: new Map<string, Promise<ICacheProvider>>(),
-        cacheProvider,
-        totalBudgetBytes: config?.totalBudgetBytes,
-        sharedBudget,
-        defaultOptions: {
-          ttl: 10 * 1000,
-          max: 100,
-          ttlAutopurge: true,
-          ...(config?.defaultOptions ?? {}),
-        },
-      };
-    },
-    dispose: async (cache) => {
-      cache.pendingCreates?.clear();
-      cache.sharedBudget?.entries.clear();
-      cache.sharedBudget?.localCaches.clear();
-      if (cache.sharedBudget) {
-        cache.sharedBudget.totalBytesUsed = 0;
-      }
-    },
-  }),
-);
+    const sharedBudget = config?.totalBudgetBytes
+      ? createSharedCacheBudgetState(config.totalBudgetBytes)
+      : undefined;
+
+    return {
+      map: new Map<string, ICacheProvider>(),
+      pendingCreates: new Map<string, Promise<ICacheProvider>>(),
+      cacheProvider,
+      totalBudgetBytes: config?.totalBudgetBytes,
+      sharedBudget,
+      defaultOptions: {
+        ttl: 10 * 1000,
+        max: 100,
+        ttlAutopurge: true,
+        ...(config?.defaultOptions ?? {}),
+      },
+    };
+  },
+  dispose: async (cache) => {
+    cache.pendingCreates?.clear();
+    cache.sharedBudget?.entries.clear();
+    cache.sharedBudget?.localCaches.clear();
+    if (cache.sharedBudget) {
+      cache.sharedBudget.totalBytesUsed = 0;
+    }
+  },
+});
 
 export function createCacheInstance({
   cache,

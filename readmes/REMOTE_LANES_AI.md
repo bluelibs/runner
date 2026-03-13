@@ -38,8 +38,8 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
   - `applyTo` string ids are validated against container definitions and type (event only).
   - Event cannot be on two different `eventLane`s.
   - Event cannot be on both `eventLane` and `rpcLane` (via tags and/or `applyTo`).
-  - Missing signer material fails fast (`runner.errors.remoteLanes.auth.signerMissing`) for producer roles.
-  - Missing verifier material fails fast (`runner.errors.remoteLanes.auth.verifierMissing`) for consumer roles.
+  - Missing signer material fails fast (`remoteLanes-auth-signerMissing`) for producer roles.
+  - Missing verifier material fails fast (`remoteLanes-auth-verifierMissing`) for consumer roles.
 - In `transparent` and `local-simulated`, profile `consume` is ignored for routing decisions.
 - Relay re-emits bypass lane interception to prevent loops.
 - Hooks run based on event subscriptions after relay re-emit.
@@ -133,8 +133,8 @@ RPC Lanes route lane-assigned tasks/events across runners using profile/topology
 - Runtime guard rails:
   - `applyTo` string ids are validated against container definitions and type (task/event).
   - Task/event cannot be on two different `rpcLane`s.
-  - Missing signer material fails fast (`runner.errors.remoteLanes.auth.signerMissing`).
-  - Missing verifier material fails fast (`runner.errors.remoteLanes.auth.verifierMissing`).
+  - Missing signer material fails fast (`remoteLanes-auth-signerMissing`).
+  - Missing verifier material fails fast (`remoteLanes-auth-verifierMissing`).
 
 ## HTTP RPC Transport
 

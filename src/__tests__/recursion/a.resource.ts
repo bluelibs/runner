@@ -15,7 +15,7 @@ export const aResource = defineResource({
 
 export const aTask = defineTask({
   id: "a-task",
-  async run(_, { a }) {
+  async run(_, { a: _a }) {
     return `Task A executed`;
   },
 });

@@ -10,10 +10,10 @@ import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
 import { scope, subtreeOf } from "../../public";
 
-const POLICY_VIOLATION_ID = "runner.errors.isolationViolation";
-const POLICY_UNKNOWN_TARGET_ID = "runner.errors.isolationUnknownTarget";
-const POLICY_INVALID_ENTRY_ID = "runner.errors.isolationInvalidEntry";
-const POLICY_CONFLICT_ID = "runner.errors.isolationConflict";
+const POLICY_VIOLATION_ID = "isolationViolation";
+const POLICY_UNKNOWN_TARGET_ID = "isolationUnknownTarget";
+const POLICY_INVALID_ENTRY_ID = "isolationInvalidEntry";
+const POLICY_CONFLICT_ID = "isolationConflict";
 
 async function expectRunnerErrorId(
   promise: Promise<unknown>,

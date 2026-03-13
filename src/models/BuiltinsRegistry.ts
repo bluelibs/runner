@@ -40,16 +40,20 @@ import {
   middlewareTimeoutError,
 } from "../errors";
 
-function collectUniqueTags(): RegisterableItem[] {
-  const uniqueTags: RegisterableItem[] = [];
+function collectUniqueTags(): Array<
+  [keyof typeof globalTags, RegisterableItem]
+> {
+  const uniqueTags: Array<[keyof typeof globalTags, RegisterableItem]> = [];
   const seenIds = new Set<string>();
 
-  for (const tag of Object.values(globalTags)) {
+  for (const [key, tag] of Object.entries(globalTags) as Array<
+    [keyof typeof globalTags, RegisterableItem]
+  >) {
     if (seenIds.has(tag.id)) {
       continue;
     }
     seenIds.add(tag.id);
-    uniqueTags.push(tag);
+    uniqueTags.push([key, tag]);
   }
 
   return uniqueTags;
@@ -62,7 +66,9 @@ export const SYSTEM_FRAMEWORK_ITEMS: readonly RegisterableItem[] =
     globalResources.taskRunner,
     globalResources.middlewareManager,
     globalResources.runtime,
-    ...collectUniqueTags().filter((tag) => tag.id.startsWith("system.")),
+    ...collectUniqueTags()
+      .filter(([key]) => key === "system")
+      .map(([, tag]) => tag),
     ...globalEventsArray,
   ]);
 
@@ -74,7 +80,9 @@ export const RUNNER_FRAMEWORK_ITEMS: readonly RegisterableItem[] =
     globalResources.logger,
     globalResources.serializer,
     globalResources.queue,
-    ...collectUniqueTags().filter((tag) => tag.id.startsWith("runner.")),
+    ...collectUniqueTags()
+      .filter(([key]) => key !== "system")
+      .map(([, tag]) => tag),
     requireContextTaskMiddleware,
     retryTaskMiddleware,
     timeoutTaskMiddleware,

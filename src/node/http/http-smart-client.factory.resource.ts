@@ -1,5 +1,4 @@
 import { defineResource } from "../../definers/defineResource";
-import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import type { HttpSmartClient } from "./http-smart-client.model";
 
 export interface HttpSmartClientFactoryConfig {
@@ -19,15 +18,13 @@ export type HttpSmartClientFactory = (
 export const httpSmartClientFactory = defineResource<
   void,
   Promise<HttpSmartClientFactory>
->(
-  markFrameworkDefinition({
-    id: "runner.node.httpSmartClientFactory",
-    meta: {
-      title: "HTTP Smart Client Factory (Node)",
-      description:
-        "Factory placeholder for Node Smart HTTP clients. Value is supplied at runtime by the Node run() wrapper to auto-inject serializer, error registry, and async contexts.",
-    },
-  }),
-);
+>({
+  id: "httpSmartClientFactory",
+  meta: {
+    title: "HTTP Smart Client Factory (Node)",
+    description:
+      "Factory placeholder for Node Smart HTTP clients. Value is supplied at runtime by the Node run() wrapper to auto-inject serializer, error registry, and async contexts.",
+  },
+});
 
 export type { HttpSmartClient };

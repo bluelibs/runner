@@ -263,7 +263,7 @@ describe("system.runtime", () => {
       dependencies: { runtime: globalResources.runtime },
       async init(_config, { runtime }) {
         await expect(runtime.getHealth([monitored])).rejects.toMatchObject({
-          id: "runner.errors.runtimeHealthDuringBootstrap",
+          id: "runtimeHealthDuringBootstrap",
         });
         return "ok";
       },

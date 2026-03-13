@@ -184,7 +184,7 @@ describe("rpcLanesResource modes", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.rpcLane.ownershipConflict",
+      name: "rpcLane-ownershipConflict",
     });
   });
 });

@@ -795,12 +795,12 @@ Fail-fast proof snippets (recommended in integration tests):
 ```typescript
 // 1) Producer with only public key -> signer missing (cannot mint lane token)
 await expect(run(producerAppWithPublicKeyOnly)).rejects.toMatchObject({
-  name: "runner.errors.remoteLanes.auth.signerMissing",
+  name: "remoteLanes-auth-signerMissing",
 });
 
 // 2) Consumer with only private key -> verifier missing (cannot verify lane token)
 await expect(run(consumerAppWithPrivateKeyOnly)).rejects.toMatchObject({
-  name: "runner.errors.remoteLanes.auth.verifierMissing",
+  name: "remoteLanes-auth-verifierMissing",
 });
 ```
 

@@ -166,7 +166,7 @@ describe("rpcLanesResource", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.rpcLane.bindingNotFound",
+      name: "rpcLane-bindingNotFound",
     });
   });
 
@@ -405,7 +405,7 @@ describe("rpcLanesResource", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.rpcLane.bindingNotFound",
+      name: "rpcLane-bindingNotFound",
     });
   });
 
@@ -429,7 +429,7 @@ describe("rpcLanesResource", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.rpcLane.bindingNotFound",
+      name: "rpcLane-bindingNotFound",
     });
   });
 
@@ -460,7 +460,7 @@ describe("rpcLanesResource", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.rpcLane.communicatorResourceInvalid",
+      name: "rpcLane-communicatorResourceInvalid",
     });
   });
 
@@ -494,7 +494,7 @@ describe("rpcLanesResource", () => {
 
     const rr = await run(app);
     await expect(rr.runTask(task as any)).rejects.toMatchObject({
-      name: "runner.errors.rpcLane.communicatorContract",
+      name: "rpcLane-communicatorContract",
     });
     await rr.dispose();
   });
@@ -542,7 +542,7 @@ describe("rpcLanesResource", () => {
 
     const rr = await run(app);
     await expect(rr.runTask(emitTask as any)).rejects.toMatchObject({
-      name: "runner.errors.rpcLane.communicatorContract",
+      name: "rpcLane-communicatorContract",
     });
     await rr.dispose();
   });
@@ -576,7 +576,7 @@ describe("rpcLanesResource", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.rpcLane.profileNotFound",
+      name: "rpcLane-profileNotFound",
     });
   });
 
@@ -850,7 +850,7 @@ describe("rpcLanesResource", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.rpcLane.ownershipConflict",
+      name: "rpcLane-ownershipConflict",
     });
   });
 });

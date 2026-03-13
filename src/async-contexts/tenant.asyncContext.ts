@@ -3,7 +3,6 @@ import {
   tenantInvalidContextError,
 } from "../errors";
 import { defineAsyncContext } from "../definers/defineAsyncContext";
-import { markFrameworkDefinition } from "../definers/markFrameworkDefinition";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
 import { getPlatform } from "../platform";
 import { Match, check } from "../tools/check";
@@ -13,8 +12,7 @@ export type TenantContextValue = {
   tenantId: string;
 };
 
-export const TENANT_ASYNC_CONTEXT_ID = "asyncContexts.tenant";
-const TENANT_ASYNC_CONTEXT_DEFINITION_ID = "runner.contexts.tenant";
+export const TENANT_ASYNC_CONTEXT_ID = "tenant";
 
 export const tenantContextValuePattern = Match.ObjectIncluding({
   tenantId: Match.NonEmptyString,
@@ -43,11 +41,9 @@ function getTenantAsyncContext(): IAsyncContext<TenantContextValue> | null {
   if (sharedTenantAsyncContextPlatform !== platform) {
     sharedTenantAsyncContextPlatform = platform;
     sharedTenantAsyncContext = platform.hasAsyncLocalStorage()
-      ? defineAsyncContext<TenantContextValue>(
-          markFrameworkDefinition({
-            id: TENANT_ASYNC_CONTEXT_DEFINITION_ID,
-          }),
-        )
+      ? defineAsyncContext<TenantContextValue>({
+          id: TENANT_ASYNC_CONTEXT_ID,
+        })
       : null;
   }
 

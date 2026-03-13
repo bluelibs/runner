@@ -88,7 +88,13 @@ export function collectCrossLaneApplyToEventIds(
   collectTopologyLanes: (topology: unknown) => readonly { applyTo?: unknown }[],
 ): Set<string> {
   const eventIds = new Set<string>();
-  const entry = store.resources.get(resourceId);
+  const entry =
+    store.resources.get(resourceId) ??
+    Array.from(store.resources.values()).find(
+      (candidate) =>
+        store.toPublicId(candidate.resource.id) === resourceId ||
+        candidate.resource.id.endsWith(`.${resourceId}`),
+    );
   const config = entry?.config as Record<string, unknown> | undefined;
   const topology = config?.topology;
   if (!topology) {

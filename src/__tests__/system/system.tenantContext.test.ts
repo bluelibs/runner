@@ -134,7 +134,7 @@ describe("asyncContexts.tenant", () => {
 
   it("has remains a pure probe even when the stored tenant value is invalid", () => {
     const invalidStore = new Map<string, unknown>([
-      ["runner.contexts.tenant", { tenantId: "" }],
+      ["tenant", { tenantId: "" }],
     ]);
 
     const result = storage.run(invalidStore, () => asyncContexts.tenant.has());

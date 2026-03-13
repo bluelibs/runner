@@ -185,7 +185,7 @@ describe("VisibilityTracker validation", () => {
       });
 
       expect(() => tracker.validateVisibility(registry as any)).toThrow(
-        expect.objectContaining({ id: "runner.errors.isolationViolation" }),
+        expect.objectContaining({ id: "isolationViolation" }),
       );
     });
 
@@ -282,7 +282,7 @@ describe("VisibilityTracker validation", () => {
     });
 
     expect(() => tracker.validateVisibility(registry as any)).toThrow(
-      expect.objectContaining({ id: "runner.errors.validation" }),
+      expect.objectContaining({ id: "validation" }),
     );
   });
 });

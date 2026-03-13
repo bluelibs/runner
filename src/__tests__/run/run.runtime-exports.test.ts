@@ -118,7 +118,7 @@ describe("run-runtime-exports", () => {
       const runtime = await run(root, { shutdownHooks: false });
       await expect(runtime.runTask(exported)).resolves.toBe("selector-result");
       await expect(runtime.runTask(hidden)).rejects.toMatchObject({
-        id: "runner.errors.runtimeAccessViolation",
+        id: "runtimeAccessViolation",
       });
       await runtime.dispose();
     });
@@ -136,7 +136,7 @@ describe("run-runtime-exports", () => {
 
       const runtime = await run(root, { shutdownHooks: false });
       await expect(runtime.runTask(internal)).rejects.toMatchObject({
-        id: "runner.errors.runtimeAccessViolation",
+        id: "runtimeAccessViolation",
       });
       await runtime.dispose();
     });
@@ -156,7 +156,7 @@ describe("run-runtime-exports", () => {
       const internalId = runtime.store.resolveDefinitionId(internal)!;
       await expect(
         Promise.resolve().then(() => runtime.runTask(internalId)),
-      ).rejects.toMatchObject({ id: "runner.errors.runtimeAccessViolation" });
+      ).rejects.toMatchObject({ id: "runtimeAccessViolation" });
       await runtime.dispose();
     });
 
@@ -181,7 +181,7 @@ describe("run-runtime-exports", () => {
       try {
         await runtime.runTask(taskB);
       } catch (e: any) {
-        expect(e.id).toBe("runner.errors.runtimeAccessViolation");
+        expect(e.id).toBe("runtimeAccessViolation");
         expect(String(e.data.targetId)).toMatch(
           /runtime-exports-runTask-err-b$/,
         );
@@ -239,7 +239,7 @@ describe("run-runtime-exports", () => {
       ).resolves.toBeUndefined();
       await expect(
         runtime.emitEvent(privateEvt, undefined),
-      ).rejects.toMatchObject({ id: "runner.errors.runtimeAccessViolation" });
+      ).rejects.toMatchObject({ id: "runtimeAccessViolation" });
       await runtime.dispose();
     });
 
@@ -256,7 +256,7 @@ describe("run-runtime-exports", () => {
       const runtime = await run(root, { shutdownHooks: false });
       await expect(
         runtime.emitEvent(privateEvt, undefined),
-      ).rejects.toMatchObject({ id: "runner.errors.runtimeAccessViolation" });
+      ).rejects.toMatchObject({ id: "runtimeAccessViolation" });
       await runtime.dispose();
     });
 
@@ -276,7 +276,7 @@ describe("run-runtime-exports", () => {
         Promise.resolve().then(() =>
           runtime.emitEvent(privateEventId, undefined),
         ),
-      ).rejects.toMatchObject({ id: "runner.errors.runtimeAccessViolation" });
+      ).rejects.toMatchObject({ id: "runtimeAccessViolation" });
       await runtime.dispose();
     });
   });
@@ -324,7 +324,7 @@ describe("run-runtime-exports", () => {
       const runtime = await run(root, { shutdownHooks: false });
       expect(runtime.getResourceValue(exported)).toBe("public");
       expect(() => runtime.getResourceValue(hidden)).toThrow(
-        expect.objectContaining({ id: "runner.errors.runtimeAccessViolation" }),
+        expect.objectContaining({ id: "runtimeAccessViolation" }),
       );
       await runtime.dispose();
     });
@@ -344,7 +344,7 @@ describe("run-runtime-exports", () => {
 
       const runtime = await run(root, { shutdownHooks: false });
       expect(() => runtime.getResourceValue(inner)).toThrow(
-        expect.objectContaining({ id: "runner.errors.runtimeAccessViolation" }),
+        expect.objectContaining({ id: "runtimeAccessViolation" }),
       );
       await runtime.dispose();
     });
@@ -365,7 +365,7 @@ describe("run-runtime-exports", () => {
       const runtime = await run(root, { shutdownHooks: false });
       const privateResourceId = runtime.store.resolveDefinitionId(inner)!;
       expect(() => runtime.getResourceValue(privateResourceId)).toThrow(
-        expect.objectContaining({ id: "runner.errors.runtimeAccessViolation" }),
+        expect.objectContaining({ id: "runtimeAccessViolation" }),
       );
       await runtime.dispose();
     });
@@ -401,7 +401,7 @@ describe("run-runtime-exports", () => {
 
       const runtime = await run(root, { shutdownHooks: false });
       expect(() => runtime.getResourceConfig(inner)).toThrow(
-        expect.objectContaining({ id: "runner.errors.runtimeAccessViolation" }),
+        expect.objectContaining({ id: "runtimeAccessViolation" }),
       );
       await runtime.dispose();
     });
@@ -454,7 +454,7 @@ describe("run-runtime-exports", () => {
         "public",
       );
       await expect(runtime.getLazyResourceValue(hidden)).rejects.toMatchObject({
-        id: "runner.errors.runtimeAccessViolation",
+        id: "runtimeAccessViolation",
       });
       await runtime.dispose();
     });
@@ -474,7 +474,7 @@ describe("run-runtime-exports", () => {
 
       const runtime = await run(root, { lazy: true, shutdownHooks: false });
       await expect(runtime.getLazyResourceValue(inner)).rejects.toMatchObject({
-        id: "runner.errors.runtimeAccessViolation",
+        id: "runtimeAccessViolation",
       });
       await runtime.dispose();
     });
@@ -547,7 +547,7 @@ describe("run-runtime-exports", () => {
 
       const runtime = await run(root, { shutdownHooks: false });
       await expect(runtime.getHealth([hidden])).rejects.toMatchObject({
-        id: "runner.errors.runtimeAccessViolation",
+        id: "runtimeAccessViolation",
       });
       await runtime.dispose();
     });
@@ -580,16 +580,16 @@ describe("run-runtime-exports", () => {
       const runtime = await run(root, { lazy: true, shutdownHooks: false });
 
       await expect(runtime.runTask(task)).rejects.toMatchObject({
-        id: "runner.errors.runtimeAccessViolation",
+        id: "runtimeAccessViolation",
       });
       await expect(runtime.emitEvent(evt, undefined)).rejects.toMatchObject({
-        id: "runner.errors.runtimeAccessViolation",
+        id: "runtimeAccessViolation",
       });
       expect(() => runtime.getResourceValue(res)).toThrow(
-        expect.objectContaining({ id: "runner.errors.runtimeAccessViolation" }),
+        expect.objectContaining({ id: "runtimeAccessViolation" }),
       );
       await expect(runtime.getLazyResourceValue(res)).rejects.toMatchObject({
-        id: "runner.errors.runtimeAccessViolation",
+        id: "runtimeAccessViolation",
       });
 
       await runtime.dispose();

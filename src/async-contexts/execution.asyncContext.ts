@@ -54,7 +54,7 @@ function record<T>(
 }
 
 export const executionAsyncContext: ExecutionContextAccessor = Object.freeze({
-  id: "asyncContexts.execution",
+  id: "executionContext",
   use() {
     const current = getCurrentExecutionContext();
     if (!current) {

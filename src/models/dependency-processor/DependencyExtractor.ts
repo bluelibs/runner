@@ -41,8 +41,9 @@ import type {
   TaskMiddlewareInterceptor,
 } from "../middleware/types";
 import { RuntimeCallSource, runtimeSource } from "../../types/runtimeSource";
+import { globalResources } from "../../globals/globalResources";
 
-const MIDDLEWARE_MANAGER_RESOURCE_ID = "system.middlewareManager";
+const MIDDLEWARE_MANAGER_RESOURCE_ID = globalResources.middlewareManager.id;
 
 export class DependencyExtractor {
   private readonly inFlightTaskInitializations = new Map<

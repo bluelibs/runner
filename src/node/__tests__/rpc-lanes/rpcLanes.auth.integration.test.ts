@@ -104,7 +104,7 @@ describe("rpcLanes auth", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.remoteLanes.auth.signerMissing",
+      name: "remoteLanes-auth-signerMissing",
     });
   });
 

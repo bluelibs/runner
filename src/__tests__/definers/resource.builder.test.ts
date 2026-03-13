@@ -534,18 +534,14 @@ describe("resource builder", () => {
         only: [onlyTask],
         deny: [denyTask],
       });
-    }).toThrow(
-      expect.objectContaining({ id: "runner.errors.isolationConflict" }),
-    );
+    }).toThrow(expect.objectContaining({ id: "isolationConflict" }));
 
     // deny+only via separate chained calls
     expect(() => {
       r.resource("tests-builder-policy-conflict-chained-resource")
         .isolate({ only: [onlyTask] })
         .isolate({ deny: [denyTask] });
-    }).toThrow(
-      expect.objectContaining({ id: "runner.errors.isolationConflict" }),
-    );
+    }).toThrow(expect.objectContaining({ id: "isolationConflict" }));
   });
 
   it("throws on invalid throws entries", () => {

@@ -90,11 +90,6 @@ export const symbolOptionalDependency: unique symbol = Symbol.for(
 /** @internal Path to aid anonymous id generation and error messages */
 export const symbolFilePath: unique symbol = Symbol.for("runner.filePath");
 
-/** @internal Marks framework-owned definitions allowed to use reserved dotted namespaces. */
-export const symbolFrameworkDefinition: unique symbol = Symbol.for(
-  "runner.frameworkDefinition",
-);
-
 /** @internal Marks an async context definition */
 export const symbolAsyncContext: unique symbol = Symbol.for(
   "runner.asyncContext",

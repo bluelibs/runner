@@ -1,14 +1,14 @@
 import { defineResource, r, run } from "../../..";
-import { markFrameworkDefinition } from "../../../definers/markFrameworkDefinition";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
 
-const fakeRpcLanesState = defineResource<any, Promise<null>>(
-  markFrameworkDefinition({
-    id: RPC_LANES_RESOURCE_ID,
-    init: async () => null,
-  }),
-);
+const fakeRpcLanesState = defineResource({
+  id: RPC_LANES_RESOURCE_ID,
+  configSchema: {
+    parse: (value: unknown) => value,
+  },
+  init: async () => null,
+});
 
 describe("eventLanes applyTo cross-source topology checks", () => {
   it("detects rpc lane assignment from string applyTo ids in topology state", async () => {

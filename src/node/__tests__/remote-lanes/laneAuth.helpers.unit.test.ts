@@ -163,7 +163,7 @@ describe("laneAuth helpers", () => {
     ).not.toThrow();
     expectRunnerErrorId(
       () => assertRemoteLaneSignerConfigured("lane", {}),
-      "runner.errors.remoteLanes.auth.signerMissing",
+      "remoteLanes-auth-signerMissing",
     );
     expect(() =>
       assertRemoteLaneSignerConfigured("lane", {
@@ -174,7 +174,7 @@ describe("laneAuth helpers", () => {
     expectRunnerErrorId(
       () =>
         assertRemoteLaneSignerConfigured("lane", { mode: "jwt_asymmetric" }),
-      "runner.errors.remoteLanes.auth.signerMissing",
+      "remoteLanes-auth-signerMissing",
     );
 
     expect(() =>
@@ -182,7 +182,7 @@ describe("laneAuth helpers", () => {
     ).not.toThrow();
     expectRunnerErrorId(
       () => assertRemoteLaneVerifierConfigured("lane", { produceSecret: "sp" }),
-      "runner.errors.remoteLanes.auth.verifierMissing",
+      "remoteLanes-auth-verifierMissing",
     );
     expect(() =>
       assertRemoteLaneVerifierConfigured("lane", {
@@ -196,7 +196,7 @@ describe("laneAuth helpers", () => {
           mode: "jwt_asymmetric",
           privateKey: "pk",
         }),
-      "runner.errors.remoteLanes.auth.verifierMissing",
+      "remoteLanes-auth-verifierMissing",
     );
   });
 
@@ -274,7 +274,7 @@ describe("laneAuth helpers", () => {
 
     expectRunnerErrorId(
       () => parseLaneJwt("a.b", "l"),
-      "runner.errors.remoteLanes.auth.unauthorized",
+      "remoteLanes-auth-unauthorized",
     );
     const invalidPayload = signLaneJwtWithHmac(
       { alg: "HS256", typ: "JWT" },
@@ -283,11 +283,11 @@ describe("laneAuth helpers", () => {
     );
     expectRunnerErrorId(
       () => parseLaneJwt(invalidPayload, "l"),
-      "runner.errors.remoteLanes.auth.unauthorized",
+      "remoteLanes-auth-unauthorized",
     );
     expectRunnerErrorId(
       () => parseLaneJwt("abc.def.ghi", "l"),
-      "runner.errors.remoteLanes.auth.unauthorized",
+      "remoteLanes-auth-unauthorized",
     );
 
     expect(readHeaderValue(undefined)).toBe("");

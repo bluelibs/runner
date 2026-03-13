@@ -161,7 +161,7 @@ describe("isolation entry normalization coverage", () => {
           runtime = await run(resource);
           return runtime.runTask(consumerTask);
         })(),
-        "runner.errors.isolationViolation",
+        "isolationViolation",
       );
       await runtime?.dispose();
     });
@@ -222,7 +222,7 @@ describe("isolation entry normalization coverage", () => {
           runtime = await run(resource);
           return runtime.runTask(consumerTask);
         })(),
-        "runner.errors.isolationViolation",
+        "isolationViolation",
       );
       await runtime?.dispose();
     });

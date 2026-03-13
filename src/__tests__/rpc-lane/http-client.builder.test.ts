@@ -204,7 +204,7 @@ describe("r.rpcLane.httpClient helper", () => {
     });
 
     await expect(helper({}, {})).rejects.toMatchObject({
-      name: "runner.errors.rpcLane.httpClientPresetNotFound",
+      name: "rpcLane-httpClientPresetNotFound",
     });
   });
 
@@ -219,7 +219,7 @@ describe("r.rpcLane.httpClient helper", () => {
     });
 
     await expect(helper({}, {})).rejects.toMatchObject({
-      name: "runner.errors.rpcLane.communicatorContract",
+      name: "rpcLane-communicatorContract",
     });
   });
 });

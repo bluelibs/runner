@@ -105,7 +105,7 @@ describe("run", () => {
     await expect(
       Promise.resolve().then(() => result.runTask("resource-y.tasks.task-z")),
     ).rejects.toMatchObject({
-      id: "runner.errors.runtimeElementNotFound",
+      id: "runtimeElementNotFound",
     });
 
     await result.dispose();

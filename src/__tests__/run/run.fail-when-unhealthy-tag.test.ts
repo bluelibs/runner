@@ -33,7 +33,7 @@ describe("tags.failWhenUnhealthy", () => {
     const runtime = await run(app, { shutdownHooks: false });
 
     await expect(runtime.runTask(task)).rejects.toMatchObject({
-      id: "runner.errors.taskBlockedByResourceHealth",
+      id: "taskBlockedByResourceHealth",
     });
 
     await runtime.dispose();
@@ -154,7 +154,7 @@ describe("tags.failWhenUnhealthy", () => {
     const runtime = await run(app, { shutdownHooks: false });
 
     await expect(runtime.runTask(task)).rejects.toMatchObject({
-      id: "runner.errors.taskHealthResourceNotReportable",
+      id: "taskHealthResourceNotReportable",
     });
 
     await runtime.dispose();
@@ -190,7 +190,7 @@ describe("tags.failWhenUnhealthy", () => {
     const runtime = await run(app, { shutdownHooks: false });
 
     await expect(runtime.runTask(task)).rejects.toMatchObject({
-      id: "runner.errors.taskHealthResourceNotReportable",
+      id: "taskHealthResourceNotReportable",
     });
 
     await runtime.dispose();

@@ -83,7 +83,6 @@ await runtime.dispose();
 - Configurable built definitions expose `.with(config)`.
 - `r.task<Input>(id)` and `r.resource<Config>(id)` seed typing before explicit schemas.
 - User-specified definition ids are local ids and cannot contain `.`. Use `send-email`, not `app.tasks.sendEmail`.
-- Dotted `runner.*` and `system.*` ids are reserved for framework-owned internals.
 - `.schema()` is the unified alias:
   - task -> input schema
   - resource -> config schema

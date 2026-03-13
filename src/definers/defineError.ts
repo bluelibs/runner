@@ -17,7 +17,6 @@ import { getCallerFile } from "../tools/getCallerFile";
 import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
-import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import {
   isClassConstructor,
   hasParseFunction,
@@ -37,7 +36,7 @@ const isValidHttpCode = (value: number): boolean =>
 const assertHttpCode = (value: number): void => {
   if (!isValidHttpCode(value)) {
     throw new RunnerError(
-      "runner.errors.error.invalidHttpCode",
+      "error-invalidHttpCode",
       `Error httpCode must be an integer between 100 and 599. Received: ${value}`,
       { value },
     );
@@ -84,7 +83,7 @@ const normalizeErrorDataSchema = <TData extends DefaultErrorType>(
           const { Match, hasClassSchemaMetadata } = getRegisteredCheckRuntime();
           if (!hasClassSchemaMetadata(schema)) {
             throw new RunnerError(
-              "runner.errors.validation",
+              "validation",
               `Error data validation failed for ${errorId}: Class schema shorthand requires @Match.Schema() metadata for ${schema.name || "Anonymous"}.`,
               {
                 subject: "Error data",
@@ -244,9 +243,7 @@ export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
   filePath?: string,
 ) {
   const resolvedFilePath = filePath ?? getCallerFile();
-  assertDefinitionId("Error", definition.id, {
-    allowReservedDottedNamespace: isFrameworkDefinitionMarked(definition),
-  });
+  assertDefinitionId("Error", definition.id);
 
   if (definition.httpCode !== undefined) {
     assertHttpCode(definition.httpCode);

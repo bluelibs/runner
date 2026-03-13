@@ -4,7 +4,7 @@ import type { DefaultErrorType } from "../../types/error";
 // Circular dependencies
 export const circularDependencyError = error<
   { cycles: string[] } & DefaultErrorType
->("runner.errors.circularDependencies")
+>("circularDependencies")
   .format(({ cycles }) => {
     const cycleDetails = cycles.map((cycle) => `  - ${cycle}`).join("\n");
     const hasMiddleware = cycles.some((cycle) => cycle.includes("middleware"));
@@ -46,7 +46,7 @@ export const executionCycleError = error<
       source: { kind: string; id: string; path?: string };
     }[];
   } & DefaultErrorType
->("runner.errors.executionCycle")
+>("executionCycle")
   .format(({ frame, repetitions, maxRepetitions, trace }) => {
     const matching = trace
       .filter((f) => f.kind === frame.kind && f.id === frame.id)
@@ -69,7 +69,7 @@ export const executionDepthExceededError = error<
     currentDepth: number;
     maxDepth: number;
   } & DefaultErrorType
->("runner.errors.executionDepthExceeded")
+>("executionDepthExceeded")
   .format(
     ({ frame, currentDepth, maxDepth }) =>
       `Execution trace exceeded ${maxDepth} frames while processing ${frame.kind} "${frame.id}" (current depth: ${currentDepth}).`,
@@ -82,7 +82,7 @@ export const executionDepthExceededError = error<
 // Event emission cycles (compile-time/dry-run)
 export const eventEmissionCycleError = error<
   { cycles: string[] } & DefaultErrorType
->("runner.errors.eventEmissionCycle")
+>("eventEmissionCycle")
   .format(({ cycles }) => {
     const list = cycles.map((c) => `  - ${c}`).join("\n");
     return `Event emission cycles detected between hooks and events:\n${list}\n\nThis was detected at compile time (dry-run). Break the cycle by avoiding mutual emits between hooks or scoping hooks using tags.`;
@@ -94,7 +94,7 @@ export const eventEmissionCycleError = error<
 
 export const transactionalParallelConflictError = error<
   { eventId: string } & DefaultErrorType
->("runner.errors.transactionalParallelConflict")
+>("transactionalParallelConflict")
   .format(
     ({ eventId }) =>
       `Event "${eventId}" cannot be both transactional and parallel.`,
@@ -107,7 +107,7 @@ export const transactionalParallelConflictError = error<
 
 export const transactionalEventLaneConflictError = error<
   { eventId: string; tagId: string } & DefaultErrorType
->("runner.errors.transactionalEventLaneConflict")
+>("transactionalEventLaneConflict")
   .format(
     ({ eventId, tagId }) =>
       `Event "${eventId}" cannot be transactional while using lane tag "${tagId}".`,
@@ -124,7 +124,7 @@ export const eventLaneRpcLaneConflictError = error<
     eventLaneTagId: string;
     rpcLaneTagId: string;
   } & DefaultErrorType
->("runner.errors.eventLaneRpcLaneConflict")
+>("eventLaneRpcLaneConflict")
   .format(
     ({ eventId, eventLaneTagId, rpcLaneTagId }) =>
       `Event "${eventId}" cannot define both lane tags "${eventLaneTagId}" and "${rpcLaneTagId}".`,
@@ -141,7 +141,7 @@ export const transactionalMissingUndoClosureError = error<
     listenerId?: string;
     listenerOrder?: number;
   } & DefaultErrorType
->("runner.errors.transactionalMissingUndoClosure")
+>("transactionalMissingUndoClosure")
   .format(
     ({ eventId, listenerId, listenerOrder }) =>
       `Transactional listener for event "${eventId}" did not return an undo closure (listenerId=${listenerId ?? "unknown"}, order=${listenerOrder ?? "unknown"}).`,
@@ -164,7 +164,7 @@ export const transactionalRollbackFailureError = error<
       listenerOrder?: number;
     }>;
   } & DefaultErrorType
->("runner.errors.transactionalRollbackFailure")
+>("transactionalRollbackFailure")
   .format(
     ({
       eventId,

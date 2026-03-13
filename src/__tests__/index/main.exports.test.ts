@@ -82,7 +82,7 @@ describe("main exports", () => {
     expect((mainExports as any).system).toBeUndefined();
     expect((mainExports as any).asyncContexts).toBeDefined();
     expect((mainExports as any).asyncContexts.execution.id).toBe(
-      "asyncContexts.execution",
+      "executionContext",
     );
     expect((mainExports as any).globals).toBeUndefined();
   });

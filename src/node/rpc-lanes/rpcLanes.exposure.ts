@@ -6,22 +6,9 @@ import type {
   NodeExposureDeps,
   NodeExposureHandlers,
 } from "../exposure/resourceTypes";
-import {
-  rpcLanesExposureModeError,
-  rpcLanesExposureOwnerInvalidError,
-} from "../../errors";
+import { rpcLanesExposureModeError } from "../../errors";
 import { toRpcLanesExposurePolicy } from "./RpcLanesInternals";
 import type { RpcLanesRuntimeContext } from "./rpcLanes.runtime.utils";
-import { RPC_LANES_RESOURCE_ID } from "./rpcLanes.resource";
-
-function assertRpcLanesOwner(resourceId: string): void {
-  if (resourceId === RPC_LANES_RESOURCE_ID) {
-    return;
-  }
-  rpcLanesExposureOwnerInvalidError.throw({
-    ownerResourceId: resourceId,
-  });
-}
 
 export async function startRpcLanesExposure(
   context: RpcLanesRuntimeContext,
@@ -37,8 +24,6 @@ export async function startRpcLanesExposure(
   if (resolved.mode !== "network") {
     rpcLanesExposureModeError.throw({ mode: resolved.mode });
   }
-
-  assertRpcLanesOwner(resourceId);
 
   const policy = toRpcLanesExposurePolicy(resolved, (id) =>
     dependencies.store.toPublicId(id),

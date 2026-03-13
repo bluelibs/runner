@@ -34,7 +34,6 @@ import { deepFreeze, freezeIfLineageLocked } from "../tools/deepFreeze";
 import { normalizeThrows } from "../tools/throws";
 import { assertTagTargetsApplicableTo } from "./assertTagTargetsApplicable";
 import { assertDefinitionId } from "./assertDefinitionId";
-import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import {
   createDisplaySubtreePolicy,
   createSubtreePolicyDeclaration,
@@ -233,10 +232,7 @@ export function defineResource<
    */
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
   const id = constConfig.id;
-  assertDefinitionId("Resource", id, {
-    allowReservedDottedNamespace: isFrameworkDefinitionMarked(constConfig),
-    allowReservedInternalId: isFrameworkDefinitionMarked(constConfig),
-  });
+  assertDefinitionId("Resource", id);
   const configSchema = normalizeOptionalValidationSchema(
     constConfig.configSchema,
     {

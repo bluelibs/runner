@@ -137,7 +137,7 @@ export interface ExecutionContextConfig {
  */
 export interface ExecutionContextAccessor {
   /** Stable id of the built-in execution async context. */
-  readonly id: "asyncContexts.execution";
+  readonly id: "executionContext";
   /** Returns the current execution snapshot or throws when unavailable. */
   use(): ExecutionContextSnapshot;
   /** Returns the current execution snapshot when available. */

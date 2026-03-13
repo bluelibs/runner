@@ -11,7 +11,7 @@ describe("Store framework bootstrap defensive guard", () => {
     const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
     jest.spyOn(store.resources, "get").mockImplementation((resourceId) => {
-      if (resourceId === "system.store") {
+      if (resourceId === "store") {
         return undefined;
       }
 
@@ -21,7 +21,7 @@ describe("Store framework bootstrap defensive guard", () => {
     const root = defineResource({ id: "store-guard-root" });
     store.initializeStore(root, {}, runtimeResult);
 
-    expect(store.resources.has("system.store")).toBe(true);
+    expect(store.resources.has("store")).toBe(true);
   });
 
   it("registers framework resources under the system and runner namespaces", () => {

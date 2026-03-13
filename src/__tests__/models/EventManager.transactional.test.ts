@@ -66,7 +66,7 @@ describe("EventManager transactional execution", () => {
     await expect(
       eventManager.emit(invalidEvent, undefined, runtimeSource.runtime("src")),
     ).rejects.toMatchObject({
-      id: "runner.errors.transactionalParallelConflict",
+      id: "transactionalParallelConflict",
     });
   });
 
@@ -157,7 +157,7 @@ describe("EventManager transactional execution", () => {
     await expect(
       eventManager.emit(event, undefined, runtimeSource.runtime("source")),
     ).rejects.toMatchObject({
-      id: "runner.errors.transactionalMissingUndoClosure",
+      id: "transactionalMissingUndoClosure",
       listenerId: "l2",
       listenerOrder: 1,
     });
@@ -214,7 +214,7 @@ describe("EventManager transactional execution", () => {
     } catch (error: unknown) {
       expect(transactionalRollbackFailureError.is(error)).toBe(true);
       expect(error).toMatchObject({
-        id: "runner.errors.transactionalRollbackFailure",
+        id: "transactionalRollbackFailure",
       });
 
       const rollbackError = error as {

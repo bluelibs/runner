@@ -69,7 +69,7 @@ describe("laneAuth token flow", () => {
           token,
           requiredCapability: "produce",
         }),
-      "runner.errors.remoteLanes.auth.unauthorized",
+      "remoteLanes-auth-unauthorized",
     );
 
     expectRunnerErrorId(
@@ -80,7 +80,7 @@ describe("laneAuth token flow", () => {
           token,
           requiredCapability: "consume",
         }),
-      "runner.errors.remoteLanes.auth.unauthorized",
+      "remoteLanes-auth-unauthorized",
     );
 
     expectRunnerErrorId(
@@ -92,7 +92,7 @@ describe("laneAuth token flow", () => {
           requiredCapability: "produce",
           nowMs: 100_000,
         }),
-      "runner.errors.remoteLanes.auth.unauthorized",
+      "remoteLanes-auth-unauthorized",
     );
 
     expectRunnerErrorId(
@@ -104,7 +104,7 @@ describe("laneAuth token flow", () => {
           requiredCapability: "produce",
           nowMs: -31_000,
         }),
-      "runner.errors.remoteLanes.auth.unauthorized",
+      "remoteLanes-auth-unauthorized",
     );
   });
 
@@ -138,7 +138,7 @@ describe("laneAuth token flow", () => {
           token: hmacToken,
           requiredCapability: "produce",
         }),
-      "runner.errors.remoteLanes.auth.verifierMissing",
+      "remoteLanes-auth-verifierMissing",
     );
 
     expectRunnerErrorId(
@@ -149,7 +149,7 @@ describe("laneAuth token flow", () => {
           token: asymToken,
           requiredCapability: "produce",
         }),
-      "runner.errors.remoteLanes.auth.verifierMissing",
+      "remoteLanes-auth-verifierMissing",
     );
     expect(() =>
       verifyRemoteLaneToken({
@@ -172,7 +172,7 @@ describe("laneAuth token flow", () => {
           token: asymToken,
           requiredCapability: "produce",
         }),
-      "runner.errors.remoteLanes.auth.unauthorized",
+      "remoteLanes-auth-unauthorized",
     );
 
     expectRunnerErrorId(
@@ -183,7 +183,7 @@ describe("laneAuth token flow", () => {
           token: hmacToken,
           requiredCapability: "produce",
         }),
-      "runner.errors.remoteLanes.auth.unauthorized",
+      "remoteLanes-auth-unauthorized",
     );
 
     const otherPublicPem = generateKeyPairSync("ed25519")
@@ -201,7 +201,7 @@ describe("laneAuth token flow", () => {
           token: asymToken,
           requiredCapability: "produce",
         }),
-      "runner.errors.remoteLanes.auth.unauthorized",
+      "remoteLanes-auth-unauthorized",
     );
 
     expectRunnerErrorId(
@@ -216,7 +216,7 @@ describe("laneAuth token flow", () => {
           token: hmacToken,
           requiredCapability: "produce",
         }),
-      "runner.errors.remoteLanes.auth.unauthorized",
+      "remoteLanes-auth-unauthorized",
     );
 
     expectRunnerErrorId(
@@ -231,7 +231,7 @@ describe("laneAuth token flow", () => {
           token: asymToken,
           requiredCapability: "produce",
         }),
-      "runner.errors.remoteLanes.auth.unauthorized",
+      "remoteLanes-auth-unauthorized",
     );
 
     expectRunnerErrorId(
@@ -241,7 +241,7 @@ describe("laneAuth token flow", () => {
           bindingAuth: {},
           capability: "produce",
         }),
-      "runner.errors.remoteLanes.auth.signerMissing",
+      "remoteLanes-auth-signerMissing",
     );
 
     expectRunnerErrorId(
@@ -251,7 +251,7 @@ describe("laneAuth token flow", () => {
           bindingAuth: { mode: "jwt_asymmetric" },
           capability: "produce",
         }),
-      "runner.errors.remoteLanes.auth.signerMissing",
+      "remoteLanes-auth-signerMissing",
     );
   });
 });

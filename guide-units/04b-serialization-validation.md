@@ -817,11 +817,25 @@ Use `Match.toJSONSchema(pattern, { strict? })` when you need machine-readable co
 
 - Output target is JSON Schema Draft 2020-12.
 - Default (`strict: false`): runtime-only constructs export permissive annotated nodes (`x-runner-match-kind` metadata).
-- Strict (`strict: true`): runtime-only patterns (currently `Match.Where` and `Function`) fail fast with `runner.errors.check.jsonSchemaUnsupportedPattern`.
+- Strict (`strict: true`): runtime-only patterns (currently `Match.Where` and `Function`) throw `check-jsonSchemaUnsupportedPattern`.
 - `Match.RegExp(re)` exports `type: "string"` + `pattern: re.source` (flags exported as metadata).
 - `Match.fromSchema(...)` exports recursive class graphs using `$defs/$ref`.
 - `Match.ObjectStrict(...)` exports strict object schemas (`additionalProperties: false`).
 - `Match.MapOf(...)` exports dictionary schemas (`additionalProperties: <value schema>`).
+
+You can catch strict-export failures via the public `errors` namespace:
+
+```ts
+import { Match, errors } from "@bluelibs/runner";
+
+try {
+  Match.toJSONSchema(Match.Where(() => true), { strict: true });
+} catch (error) {
+  if (errors.checkJsonSchemaUnsupportedPatternError.is(error)) {
+    console.error(error.id, error.message);
+  }
+}
+```
 
 Unsupported in strict mode (fail-fast):
 

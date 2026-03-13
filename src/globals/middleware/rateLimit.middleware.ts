@@ -1,6 +1,5 @@
 import { defineResource } from "../../definers/defineResource";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
-import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
 import { RunnerError } from "../../definers/defineError";
@@ -87,20 +86,18 @@ export const journalKeys = {
   ),
 } as const;
 
-export const rateLimitResource = defineResource(
-  markFrameworkDefinition({
-    id: "runner.rateLimit",
-    tags: [globalTags.system],
-    init: async () => {
-      return {
-        states: new WeakMap<
-          RateLimitMiddlewareConfig,
-          Map<string, RateLimitState>
-        >(),
-      };
-    },
-  }),
-);
+export const rateLimitResource = defineResource({
+  id: "rateLimit",
+  tags: [globalTags.system],
+  init: async () => {
+    return {
+      states: new WeakMap<
+        RateLimitMiddlewareConfig,
+        Map<string, RateLimitState>
+      >(),
+    };
+  },
+});
 
 function pruneExpiredRateLimitStates(
   keyedStates: Map<string, RateLimitState>,
@@ -120,66 +117,64 @@ function pruneExpiredRateLimitStates(
 /**
  * Rate limit middleware: limits the number of executions within a fixed time window.
  */
-export const rateLimitTaskMiddleware = defineTaskMiddleware(
-  markFrameworkDefinition({
-    id: "runner.middleware.task.rateLimit",
-    throws: [middlewareRateLimitExceededError],
-    configSchema: rateLimitConfigPattern,
-    dependencies: { state: rateLimitResource },
-    async run(
-      { task, next, journal },
-      { state },
-      config: RateLimitMiddlewareConfig,
-    ) {
-      const taskId = task.definition.id;
-      const keyBuilder = config.keyBuilder ?? defaultTaskKeyBuilder;
-      const key = applyTenantScopeToKey(
-        keyBuilder(taskId, task.input),
-        config.tenantScope,
+export const rateLimitTaskMiddleware = defineTaskMiddleware({
+  id: "rateLimit",
+  throws: [middlewareRateLimitExceededError],
+  configSchema: rateLimitConfigPattern,
+  dependencies: { state: rateLimitResource },
+  async run(
+    { task, next, journal },
+    { state },
+    config: RateLimitMiddlewareConfig,
+  ) {
+    const taskId = task.definition.id;
+    const keyBuilder = config.keyBuilder ?? defaultTaskKeyBuilder;
+    const key = applyTenantScopeToKey(
+      keyBuilder(taskId, task.input),
+      config.tenantScope,
+    );
+    const { states } = state;
+    const now = Date.now();
+    let keyedStates = states.get(config);
+
+    if (!keyedStates) {
+      keyedStates = new Map<string, RateLimitState>();
+      states.set(config, keyedStates);
+    }
+
+    pruneExpiredRateLimitStates(keyedStates, now);
+
+    let limitState = keyedStates.get(key);
+
+    if (!limitState || now >= limitState.resetTime) {
+      limitState = {
+        count: 0,
+        resetTime: now + config.windowMs,
+      };
+      keyedStates.set(key, limitState);
+    }
+
+    // Set journal values before checking limits
+    const remaining = Math.max(0, config.max - limitState.count);
+    journal.set(journalKeys.remaining, remaining, { override: true });
+    journal.set(journalKeys.resetTime, limitState.resetTime, {
+      override: true,
+    });
+    journal.set(journalKeys.limit, config.max, { override: true });
+
+    if (limitState.count >= config.max) {
+      throw new RateLimitError(
+        `Rate limit exceeded. Try again after ${new Date(
+          limitState.resetTime,
+        ).toISOString()}`,
       );
-      const { states } = state;
-      const now = Date.now();
-      let keyedStates = states.get(config);
+    }
 
-      if (!keyedStates) {
-        keyedStates = new Map<string, RateLimitState>();
-        states.set(config, keyedStates);
-      }
-
-      pruneExpiredRateLimitStates(keyedStates, now);
-
-      let limitState = keyedStates.get(key);
-
-      if (!limitState || now >= limitState.resetTime) {
-        limitState = {
-          count: 0,
-          resetTime: now + config.windowMs,
-        };
-        keyedStates.set(key, limitState);
-      }
-
-      // Set journal values before checking limits
-      const remaining = Math.max(0, config.max - limitState.count);
-      journal.set(journalKeys.remaining, remaining, { override: true });
-      journal.set(journalKeys.resetTime, limitState.resetTime, {
-        override: true,
-      });
-      journal.set(journalKeys.limit, config.max, { override: true });
-
-      if (limitState.count >= config.max) {
-        throw new RateLimitError(
-          `Rate limit exceeded. Try again after ${new Date(
-            limitState.resetTime,
-          ).toISOString()}`,
-        );
-      }
-
-      limitState.count++;
-      // Update remaining after incrementing count
-      journal.set(journalKeys.remaining, config.max - limitState.count, {
-        override: true,
-      });
-      return await next(task.input);
-    },
-  }),
-);
+    limitState.count++;
+    // Update remaining after incrementing count
+    journal.set(journalKeys.remaining, config.max - limitState.count, {
+      override: true,
+    });
+    return await next(task.input);
+  },
+});

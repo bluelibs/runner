@@ -27,7 +27,7 @@ function expectMatchFailure(
 ): ReturnType<typeof matchError.new> {
   try {
     run();
-    throw new Error("Expected runner.errors.matchError");
+    throw new Error("Expected matchError");
   } catch (error) {
     expect(isMatchError(error)).toBe(true);
     return error as ReturnType<typeof matchError.new>;

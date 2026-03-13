@@ -228,7 +228,7 @@ describe("Optional dependencies", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      id: "runner.errors.unknownItemType",
+      id: "unknownItemType",
     });
   });
 

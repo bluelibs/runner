@@ -11,7 +11,6 @@ export * from "./types";
 export * from "./utils";
 
 type InternalErrorBuilderOptions = {
-  framework?: boolean;
   filePath: string;
 };
 
@@ -29,7 +28,7 @@ function createErrorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
     meta: {} as IErrorMeta,
   });
 
-  return makeErrorBuilder(initial, options.framework === true);
+  return makeErrorBuilder(initial);
 }
 
 /**
@@ -75,14 +74,10 @@ export const error = Object.assign(errorBuilder, {
   is: isRunnerError,
 });
 
-/**
- * Creates a framework-owned error builder that can use reserved internal ids.
- */
 export function frameworkError<
   TData extends DefaultErrorType = DefaultErrorType,
 >(id: string): ErrorFluentBuilder<TData> {
   return createErrorBuilder(id, {
     filePath: getCallerFile(),
-    framework: true,
   });
 }

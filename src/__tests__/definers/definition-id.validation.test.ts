@@ -12,7 +12,6 @@ import {
 import { defineAsyncContext } from "../../definers/defineAsyncContext";
 import { assertDefinitionId } from "../../definers/assertDefinitionId";
 import { defineError } from "../../definers/defineError";
-import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 
 type DefinitionFactory = {
   label: string;
@@ -144,16 +143,7 @@ describe("definition id validation", () => {
   );
 
   it.each(definitionFactories)(
-    "rejects reserved internal ids for $label",
-    ({ create }) => {
-      expect(() => create("runtime-framework-root")).toThrow(
-        /reserved for internal Runner resources/i,
-      );
-    },
-  );
-
-  it.each(definitionFactories)(
-    "rejects reserved framework dotted namespaces for non-framework definitions for $label",
+    "rejects dotted ids for $label even when they look framework-scoped",
     ({ create }) => {
       expect(() => create("runner.tags.userDefined")).toThrow(
         /cannot contain "\."/i,
@@ -164,65 +154,12 @@ describe("definition id validation", () => {
     },
   );
 
-  it("allows reserved runner/system dotted ids only when explicitly authorized", () => {
-    expect(() =>
-      assertDefinitionId("Tag", "runner.tags.internal", {
-        allowReservedDottedNamespace: true,
-      }),
-    ).not.toThrow();
-
-    expect(() =>
-      assertDefinitionId("Event", "system.events.ready", {
-        allowReservedDottedNamespace: true,
-      }),
-    ).not.toThrow();
-
-    expect(() =>
-      assertDefinitionId("Tag", "app.tags.custom", {
-        allowReservedDottedNamespace: true,
-      }),
-    ).toThrow(/cannot contain "\."/i);
-  });
-
-  it("allows reserved internal ids only when explicitly authorized", () => {
-    expect(() =>
-      assertDefinitionId("Resource", "runtime-framework-root", {
-        allowReservedInternalId: true,
-      }),
-    ).not.toThrow();
-  });
-
-  it("allows framework helpers to define reserved runner/system ids", () => {
-    expect(() =>
-      defineTag(
-        markFrameworkDefinition({
-          id: "runner.tags.internal",
-        }),
-      ),
-    ).not.toThrow();
-
-    expect(() =>
-      defineEvent(
-        markFrameworkDefinition({
-          id: "system.events.ready",
-        }),
-      ),
-    ).not.toThrow();
-
-    expect(() =>
-      defineResource(
-        markFrameworkDefinition({
-          id: "runner.cache",
-        }),
-      ),
-    ).not.toThrow();
-
-    expect(() =>
-      defineError(
-        markFrameworkDefinition({
-          id: "runner.errors.validation",
-        }),
-      ),
-    ).not.toThrow();
+  it("rejects dotted ids directly in assertDefinitionId", () => {
+    expect(() => assertDefinitionId("Tag", "runner.tags.internal")).toThrow(
+      /cannot contain "\."/i,
+    );
+    expect(() => assertDefinitionId("Event", "system.events.ready")).toThrow(
+      /cannot contain "\."/i,
+    );
   });
 });
