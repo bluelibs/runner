@@ -4,6 +4,7 @@ import { users } from "#/users";
 import { fastifyContext } from "#/web/fastify-context";
 import { loginUser } from "./login.task";
 import { currentUser } from "./me.task";
+import { registerUser } from "./register.task";
 import { httpRoute } from "#/web/tags";
 
 describe("direct task runs (without router)", () => {
@@ -20,7 +21,6 @@ describe("direct task runs (without router)", () => {
       const password = "p@ssw0rd";
 
       // Create user via HTTP task to ensure proper hashing
-      const { registerUser } = require("./register.task");
       const reply = { header: jest.fn() } as any;
       await fastifyContext.provide(
         {

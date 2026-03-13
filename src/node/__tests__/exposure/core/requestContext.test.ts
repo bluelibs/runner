@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { defineTask } from "../../../../definers/defineTask";
@@ -47,7 +48,7 @@ describe("nodeExposure request context (raw-body)", () => {
 
     // Create raw-body request with content-type application/octet-stream
     const body = "streamme";
-    const req: any = new (require("stream").Readable)({ read() {} });
+    const req: any = new Readable({ read() {} });
     req.method = "POST";
     req.url = `/__runner/task/${encodeURIComponent(rawTask.id)}`;
     req.headers = {

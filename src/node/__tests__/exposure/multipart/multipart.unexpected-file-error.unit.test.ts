@@ -1,4 +1,5 @@
 import type { IncomingHttpHeaders } from "http";
+import { PassThrough } from "node:stream";
 
 import { Serializer } from "../../../../serializer";
 import { createMessageError } from "../../../../errors";
@@ -84,7 +85,6 @@ describe("parseMultipartInput - unexpected file handler errors", () => {
       return { NodeInputFile };
     });
 
-    const { PassThrough } = require("node:stream");
     const { parseMultipartInput } = require("../../../exposure/multipart");
 
     const boundary = "----unit-busboy-default-boundary-unexpected";

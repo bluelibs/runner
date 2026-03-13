@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import * as vm from "node:vm";
 import * as ts from "typescript";
+import * as legacyDecorators from "../../decorators/legacy";
 
 describe("legacy decorator transpile", () => {
   it("compiles and executes legacy decorator syntax with experimentalDecorators", () => {
@@ -36,7 +37,7 @@ describe("legacy decorator transpile", () => {
       exports: module.exports,
       require: (specifier: string): unknown => {
         if (specifier === "@bluelibs/runner/decorators/legacy") {
-          return require("../../decorators/legacy");
+          return legacyDecorators;
         }
 
         throw new Error(`Unexpected require: ${specifier}`);
@@ -106,7 +107,7 @@ describe("legacy decorator transpile", () => {
       exports: module.exports,
       require: (specifier: string): unknown => {
         if (specifier === "@bluelibs/runner/decorators/legacy") {
-          return require("../../decorators/legacy");
+          return legacyDecorators;
         }
 
         throw new Error(`Unexpected require: ${specifier}`);

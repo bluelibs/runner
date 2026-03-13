@@ -32,6 +32,7 @@ jest.mock("@fastify/swagger-ui", () => ({
   default: jest.fn(async () => void 0),
 }));
 
+import fastifyPkg from "fastify";
 import { onReady } from "./onReady.hook";
 import { fastify } from "#/web/resources/fastify.resource";
 
@@ -39,8 +40,7 @@ describe("onReady hook", () => {
   it("runs without real network listen", async () => {
     const rr = await buildTestRunner({ register: [fastify, onReady] });
     try {
-      const fastifyModule: any = require("fastify");
-      const inst = fastifyModule.default.__instance;
+      const inst = (fastifyPkg as any).__instance;
       expect(inst.listen).toHaveBeenCalled();
     } finally {
       await rr.dispose();
