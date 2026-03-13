@@ -4,7 +4,7 @@ import type {
   IResourceMeta,
   IsolationPolicyDeclaration,
   OverridableElements,
-  RegisterableItems,
+  RegisterableItem,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   ResourceSubtreePolicyDeclaration,
@@ -30,8 +30,8 @@ export type BuilderState<
   filePath: string;
   dependencies?: TDeps | ((config: TConfig, mode: RunnerMode) => TDeps);
   register?:
-    | Array<RegisterableItems>
-    | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItems>);
+    | Array<RegisterableItem>
+    | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItem>);
   middleware?: TMiddleware;
   tags?: TTags;
   context?: () => TContext;
@@ -128,19 +128,19 @@ export type ResolveConfig<TExisting, TProposed> =
  * Input types accepted by the register() method.
  */
 export type RegisterInput<TConfig> =
-  | RegisterableItems
-  | Array<RegisterableItems>
+  | RegisterableItem
+  | Array<RegisterableItem>
   | ((
       config: TConfig,
       mode: RunnerMode,
-    ) => RegisterableItems | Array<RegisterableItems>);
+    ) => RegisterableItem | Array<RegisterableItem>);
 
 /**
  * Internal state representation for register.
  */
 export type RegisterState<TConfig> =
-  | Array<RegisterableItems>
-  | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItems>)
+  | Array<RegisterableItem>
+  | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItem>)
   | undefined;
 
 export type OverridesInput<TConfig> =

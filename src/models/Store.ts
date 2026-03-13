@@ -1,7 +1,7 @@
 import {
   IResource,
   ITag,
-  RegisterableItems,
+  RegisterableItem,
   TagDependencyAccessor,
 } from "../defs";
 import { findCircularDependencies } from "./utils/findCircularDependencies";
@@ -765,7 +765,7 @@ export class Store {
    * @param item
    * @returns
    */
-  public storeGenericItem<C>(item: RegisterableItems) {
+  public storeGenericItem<C>(item: RegisterableItem) {
     return this.registry.storeGenericItem<C>(item);
   }
 

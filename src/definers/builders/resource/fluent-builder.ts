@@ -5,7 +5,7 @@ import type {
   IResourceMeta,
   IsolationPolicyInput,
   OverridableElements,
-  RegisterableItems,
+  RegisterableItem,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   ResourceSubtreePolicyInput,
@@ -125,12 +125,12 @@ export function makeResourceBuilder<
     },
     register(
       items:
-        | RegisterableItems
-        | Array<RegisterableItems>
+        | RegisterableItem
+        | Array<RegisterableItem>
         | ((
             config: TConfig,
             mode: RunnerMode,
-          ) => RegisterableItems | Array<RegisterableItems>),
+          ) => RegisterableItem | Array<RegisterableItem>),
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;

@@ -6,7 +6,7 @@ import type {
   IResourceMeta,
   IsolationPolicyInput,
   OverridableElements,
-  RegisterableItems,
+  RegisterableItem,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   ResourceSubtreePolicyInput,
@@ -211,12 +211,12 @@ export interface ResourceFluentBuilderBeforeInit<
   /** Registers child definitions owned by this resource. */
   register(
     items:
-      | RegisterableItems
-      | Array<RegisterableItems>
+      | RegisterableItem
+      | Array<RegisterableItem>
       | ((
           config: TConfig,
           mode: RunnerMode,
-        ) => RegisterableItems | Array<RegisterableItems>),
+        ) => RegisterableItem | Array<RegisterableItem>),
     options?: { override?: boolean },
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
@@ -428,12 +428,12 @@ export interface ResourceFluentBuilderAfterInit<
   id: string;
   register(
     items:
-      | RegisterableItems
-      | Array<RegisterableItems>
+      | RegisterableItem
+      | Array<RegisterableItem>
       | ((
           config: TConfig,
           mode: RunnerMode,
-        ) => RegisterableItems | Array<RegisterableItems>),
+        ) => RegisterableItem | Array<RegisterableItem>),
     options?: { override?: boolean },
   ): ResourceFluentBuilderAfterInit<
     TConfig,

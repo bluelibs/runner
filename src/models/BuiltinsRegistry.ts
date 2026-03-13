@@ -1,4 +1,4 @@
-import type { RegisterableItems } from "../defs";
+import type { RegisterableItem } from "../defs";
 import { globalEventsArray } from "../globals/globalEvents";
 import { globalResources } from "../globals/globalResources";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
@@ -40,8 +40,8 @@ import {
   middlewareTimeoutError,
 } from "../errors";
 
-function collectUniqueTags(): RegisterableItems[] {
-  const uniqueTags: RegisterableItems[] = [];
+function collectUniqueTags(): RegisterableItem[] {
+  const uniqueTags: RegisterableItem[] = [];
   const seenIds = new Set<string>();
 
   for (const tag of Object.values(globalTags)) {
@@ -55,7 +55,7 @@ function collectUniqueTags(): RegisterableItems[] {
   return uniqueTags;
 }
 
-export const SYSTEM_FRAMEWORK_ITEMS: readonly RegisterableItems[] =
+export const SYSTEM_FRAMEWORK_ITEMS: readonly RegisterableItem[] =
   Object.freeze([
     globalResources.store,
     globalResources.eventManager,
@@ -66,7 +66,7 @@ export const SYSTEM_FRAMEWORK_ITEMS: readonly RegisterableItems[] =
     ...globalEventsArray,
   ]);
 
-export const RUNNER_FRAMEWORK_ITEMS: readonly RegisterableItems[] =
+export const RUNNER_FRAMEWORK_ITEMS: readonly RegisterableItem[] =
   Object.freeze([
     globalResources.mode,
     globalResources.health,

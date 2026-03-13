@@ -303,41 +303,24 @@ This speeds up boot times when multiple resources (like DBs or queues) don't dep
 
 ### Circular Type Dependencies (TypeScript)
 
-In the very rare scenarion, when your file structure creates mutual imports (e.g., `a.ts` imports `b.ts`, `b.ts` imports `c.ts`, and `c.ts` imports a task from `a.ts`), TypeScript may fail to infer return types across the cycle even when the Runner graph itself is acyclic.
+In the rare scenarion, when your file structure creates mutual imports for example:
 
-Fix it with an explicit type annotation on the resource that completes the importing circle:
+- resources 'A' registers task 'T'
+- task 'T' depends on resource 'A'
+- both 'A' and 'T' are defined in separate files
 
-```typescript
-// a.ts - imports { bResource } from "./b.js"
-// b.ts - imports { cResource } from "./c.js"
-
-// c.ts - completes the import cycle
-import { aTask } from "./a.js";
-import type { IResource } from "@bluelibs/runner";
-
-// Break the TypeScript inference chain without affecting runtime behavior.
-export const cResource = r
-  .resource("c.resource")
-  .dependencies({ aTask })
-  .init(async (_config, { aTask }) => `value: ${await aTask(undefined)}`)
-  .build() as IResource<void, Promise<string>>;
-```
-
-This does **not** bypass Runner's bootstrap-time cycle detection — it only fixes TypeScript inference.
-
-Another scenario where circular types can happen is when a resource registers an element that depends on the resource it registers:
+The solution is to cast register() from resource 'A' to return `RegisterableItem[]` instead of the inferred tuple type. This breaks the circular type dependency while preserving autocompletion.
 
 ```typescript
-const resource = r
-  .resource("app")
-  .register([taskA]) // from another file
-  .build();
+import { r } from "@bluelibs/runner";
+import type { RegisterableItem } from "@bluelibs/runner";
 
-// in that other file:
-const taskA = r.task("job").dependencies({ resourceA }).build();
+const t = r.resource("A").register((): RegisterableItem[] => {
+  return [taskT];
+});
 ```
 
-The scenario above will break.
+If you encounter other, more complex circular type dependencies, consider casting the entire resource to `IResource`.
 
 ### Resource Forking
 

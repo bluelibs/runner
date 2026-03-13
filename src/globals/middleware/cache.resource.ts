@@ -13,7 +13,7 @@ import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition"
 import {
   type IResource,
   type IResourceWithConfig,
-  type RegisterableItems,
+  type RegisterableItem,
 } from "../../defs";
 import { extractResourceAndConfig } from "../../tools/extractResourceAndConfig";
 import { Match } from "../../tools/check";
@@ -95,7 +95,7 @@ export const cacheResource = defineResource<
     id: "runner.cache",
     configSchema: cacheResourceConfigPattern,
     // we cast it to :RegisterableItems[] because cacheMiddleware uses cacheResource
-    register: (config): RegisterableItems[] => {
+    register: (config): RegisterableItem[] => {
       return [config.provider ?? cacheProviderResource, cacheMiddleware];
     },
     dependencies: (config: CacheResourceConfig) => {

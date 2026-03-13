@@ -7,7 +7,7 @@ import {
   ITag,
   ITask,
   ITaskMiddleware,
-  RegisterableItems,
+  RegisterableItem,
   TagDependencyAccessor,
   TaskMiddlewareStoreElementType,
   TaskStoreElementType,
@@ -366,7 +366,7 @@ export class StoreRegistry {
     this.errors.lock();
   }
 
-  storeGenericItem<_C>(item: RegisterableItems) {
+  storeGenericItem<_C>(item: RegisterableItem) {
     return this.writer.storeGenericItem<_C>(item);
   }
 

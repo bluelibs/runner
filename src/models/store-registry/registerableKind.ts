@@ -1,5 +1,5 @@
 import {
-  RegisterableItems,
+  RegisterableItem,
   symbolEvent,
   symbolHook,
   symbolResource,
@@ -25,9 +25,9 @@ export enum RegisterableKind {
 }
 
 function hasSymbolBrand(
-  item: RegisterableItems,
+  item: RegisterableItem,
   symbolKey: symbol,
-): item is RegisterableItems {
+): item is RegisterableItem {
   if (item === null || item === undefined) {
     return false;
   }
@@ -45,7 +45,7 @@ function hasSymbolBrand(
  * paths so new definition kinds cannot drift between those code paths.
  */
 export function resolveRegisterableKind(
-  item: RegisterableItems,
+  item: RegisterableItem,
 ): RegisterableKind | null {
   if (hasSymbolBrand(item, symbolTask)) {
     return RegisterableKind.Task;

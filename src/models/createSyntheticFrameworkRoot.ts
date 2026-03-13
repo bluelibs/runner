@@ -1,8 +1,4 @@
-import type {
-  IResource,
-  IResourceWithConfig,
-  RegisterableItems,
-} from "../defs";
+import type { IResource, IResourceWithConfig, RegisterableItem } from "../defs";
 import { defineResource } from "../define";
 import { markFrameworkDefinition } from "../definers/markFrameworkDefinition";
 import { debugResource } from "../globals/resources/debug";
@@ -23,7 +19,7 @@ type FrameworkRootInput = {
 
 function createFrameworkNamespaceResource(
   resourceId: string,
-  register: readonly RegisterableItems[],
+  register: readonly RegisterableItem[],
 ): IResource<void, Promise<void>> {
   return defineResource(
     markFrameworkDefinition({

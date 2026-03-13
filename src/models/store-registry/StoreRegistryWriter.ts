@@ -9,7 +9,7 @@ import {
   TagType,
   ITask,
   ITaskMiddleware,
-  RegisterableItems,
+  RegisterableItem,
   EventStoreElementType,
   HookStoreElementType,
   ResourceMiddlewareStoreElementType,
@@ -75,7 +75,7 @@ export class StoreRegistryWriter {
     private readonly getRuntimeMode: () => RunnerMode,
   ) {}
 
-  storeGenericItem<_C>(item: RegisterableItems) {
+  storeGenericItem<_C>(item: RegisterableItem) {
     const kind = resolveRegisterableKind(item);
 
     switch (kind) {
@@ -340,7 +340,7 @@ export class StoreRegistryWriter {
 
   private assignNormalizedRegisterEntries<_C>(
     element: IResource<_C>,
-    items: RegisterableItems[],
+    items: RegisterableItem[],
   ): void {
     const descriptor = Object.getOwnPropertyDescriptor(element, "register");
 
@@ -353,8 +353,8 @@ export class StoreRegistryWriter {
 
   private compileOwnedItem(
     ownerScope: OwnerScope,
-    item: RegisterableItems,
-  ): RegisterableItems {
+    item: RegisterableItem,
+  ): RegisterableItem {
     const kind = resolveRegisterableKind(item);
     if (!kind) {
       return item;
@@ -364,7 +364,7 @@ export class StoreRegistryWriter {
       const withConfig = item as IResourceWithConfig<any, any, any>;
       const compiledResource = this.compileOwnedDefinitionWithScope(
         ownerScope,
-        withConfig.resource as RegisterableItems,
+        withConfig.resource as RegisterableItem,
         RegisterableKind.Resource,
       ) as IResource<any, any, any>;
       const compiledWithConfig = this.cloneDefinitionWithId(
@@ -402,9 +402,9 @@ export class StoreRegistryWriter {
 
   private compileOwnedDefinitionWithScope(
     ownerScope: OwnerScope,
-    item: RegisterableItems,
+    item: RegisterableItem,
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
-  ): RegisterableItems {
+  ): RegisterableItem {
     const currentId = item.id;
     const nextId = this.canonicalIdCompiler.compute(
       ownerScope,
@@ -416,7 +416,7 @@ export class StoreRegistryWriter {
     }
 
     return this.cloneDefinitionWithId(
-      item as RegisterableItems & { id: string },
+      item as RegisterableItem & { id: string },
       nextId,
     );
   }
@@ -440,9 +440,9 @@ export class StoreRegistryWriter {
   public compileOwnedDefinition(
     ownerResourceId: string,
     ownerUsesFrameworkRootIds: boolean,
-    item: RegisterableItems,
+    item: RegisterableItem,
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
-  ): RegisterableItems {
+  ): RegisterableItem {
     return this.compileOwnedDefinitionWithScope(
       {
         resourceId: ownerResourceId,
@@ -494,7 +494,7 @@ export class StoreRegistryWriter {
     });
   }
 
-  private resolveRegisterableId(item: RegisterableItems): string | undefined {
+  private resolveRegisterableId(item: RegisterableItem): string | undefined {
     if (item === null || item === undefined) {
       return undefined;
     }

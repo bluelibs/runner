@@ -4,7 +4,7 @@ import {
   IValidationSchema,
   ValidationSchemaInput,
   OverridableElements,
-  RegisterableItems,
+  RegisterableItem,
   ResourceDependencyValuesType,
 } from "./utilities";
 import {
@@ -50,7 +50,7 @@ export type {
   IValidationSchema,
   ValidationSchemaInput,
   OverridableElements,
-  RegisterableItems,
+  RegisterableItem as RegisterableItems,
   ResourceDependencyValuesType,
 } from "./utilities";
 export type { ResourceMiddlewareAttachmentType } from "./resourceMiddleware";
@@ -122,11 +122,11 @@ export interface IsolationSubtreeFilter {
  * Raw strings are **not** valid here.
  */
 export type IsolationTarget =
-  | RegisterableItems
+  | RegisterableItem
   | IsolationSubtreeFilter
   | IsolationScope;
 export type IsolationExportsTarget =
-  | RegisterableItems
+  | RegisterableItem
   | IResource<any, any, any, any, any, any, any>;
 
 export type IsolationExportsConfig =
@@ -279,8 +279,8 @@ export interface IResourceDefinition<
    * static array or a function of `config` to support dynamic wiring.
    */
   register?:
-    | Array<RegisterableItems>
-    | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItems>);
+    | Array<RegisterableItem>
+    | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItem>);
   /**
    * Initialize and return the resource value. Called once during boot.
    */
@@ -505,8 +505,8 @@ export interface IResource<
     TMiddleware
   >;
   register:
-    | Array<RegisterableItems>
-    | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItems>);
+    | Array<RegisterableItem>
+    | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItem>);
   /** Safe override declarations applied to this resource. */
   overrides:
     | Array<OverridableElements>

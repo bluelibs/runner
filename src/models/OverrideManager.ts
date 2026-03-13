@@ -4,7 +4,7 @@ import {
   IResourceMiddleware,
   ITask,
   ITaskMiddleware,
-  RegisterableItems,
+  RegisterableItem,
   symbolOverrideTargetDefinition,
 } from "../defs";
 import * as utils from "../define";
@@ -36,12 +36,12 @@ export class OverrideManager {
 
   public overrideRequests: Array<{
     source: string;
-    override: RegisterableItems;
+    override: RegisterableItem;
   }> = [];
 
   constructor(private readonly registry: StoreRegistry) {}
 
-  private toSupportedOverride(override: RegisterableItems): SupportedOverride {
+  private toSupportedOverride(override: RegisterableItem): SupportedOverride {
     if (
       utils.isTask(override) ||
       utils.isResource(override) ||
@@ -148,11 +148,11 @@ export class OverrideManager {
     });
   }
 
-  private isOverrideBranded(override: RegisterableItems): boolean {
+  private isOverrideBranded(override: RegisterableItem): boolean {
     return utils.isOverrideDefinition(override);
   }
 
-  private getMaybeOverrideId(override: RegisterableItems): string | undefined {
+  private getMaybeOverrideId(override: RegisterableItem): string | undefined {
     if (override && typeof override === "object" && "id" in override) {
       return (override as { id: string }).id;
     }
@@ -169,7 +169,7 @@ export class OverrideManager {
 
     visited.add(element.id);
 
-    const overrides = element.overrides as Array<RegisterableItems>;
+    const overrides = element.overrides as Array<RegisterableItem>;
     overrides.forEach((override) => {
       if (!override) {
         return;

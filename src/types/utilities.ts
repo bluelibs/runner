@@ -323,7 +323,7 @@ export type ResourceDependencyValuesType<T extends DependencyMapType> = {
  * - Middleware
  * - Events
  */
-export type RegisterableItems =
+export type RegisterableItem =
   | IResourceWithConfig<any, any, any, any, any, any, any>
   | IResource<void, any, any, any, any, any, any> // For void configs
   | IResource<{ [K in any]?: any }, any, any, any, any, any, any> // For optional config
