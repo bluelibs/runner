@@ -397,7 +397,7 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const app = defineResource({
       id: "benchmark-cache-app",
-      register: [expensiveTask, middleware.task.cache, resources.cache],
+      register: [expensiveTask, resources.cache],
       dependencies: { expensiveTask },
       async init(_, { expensiveTask }) {
         // Benchmark without cache (first calls)

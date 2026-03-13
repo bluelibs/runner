@@ -151,7 +151,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
 
       const app = defineResource({
         id: "test-journal-cache-retry-app",
-        register: [resources.cache, middleware.task.cache, task],
+        register: [resources.cache, task],
       });
       const runtime = await run(app);
 

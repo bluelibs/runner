@@ -125,7 +125,6 @@ describe("node exposure - authenticator", () => {
           source: {
             kind: "resource",
             id: RPC_LANES_RESOURCE_ID,
-            path: RPC_LANES_RESOURCE_ID,
           },
         }),
       );

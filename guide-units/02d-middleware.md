@@ -155,18 +155,18 @@ If you use multiple contract middleware, their contracts combine.
 
 Runner ships with built-in middleware for common reliability, admission-control, caching, and context-enforcement concerns:
 
-| Middleware     | Config                                    | Notes                                                                      |
-| -------------- | ----------------------------------------- | -------------------------------------------------------------------------- |
-| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; customize with `resources.cache.with(...)`    |
-| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                                |
-| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                      |
-| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key    |
-| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends        |
-| fallback       | `{ fallback }`                            | static value, function, or task fallback                                   |
-| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, for cases like "50 per second"       |
-| requireContext | `{ context }`                             | fails fast when a specific async context must exist before task execution  |
-| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                 |
-| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal`   |
+| Middleware     | Config                                    | Notes                                                                     |
+| -------------- | ----------------------------------------- | ------------------------------------------------------------------------- |
+| cache          | `{ ttl, max, ttlAutopurge, keyBuilder }`  | backed by `resources.cache`; customize with `resources.cache.with(...)`   |
+| concurrency    | `{ limit, key?, semaphore? }`             | limits in-flight executions                                               |
+| circuitBreaker | `{ failureThreshold, resetTimeout }`      | opens after failures, then fails fast                                     |
+| debounce       | `{ ms, keyBuilder? }`                     | waits for inactivity, then runs once with the latest input for that key   |
+| throttle       | `{ ms, keyBuilder? }`                     | runs immediately, then suppresses burst calls until the window ends       |
+| fallback       | `{ fallback }`                            | static value, function, or task fallback                                  |
+| rateLimit      | `{ windowMs, max, keyBuilder? }`          | fixed-window admission limit per key, for cases like "50 per second"      |
+| requireContext | `{ context }`                             | fails fast when a specific async context must exist before task execution |
+| retry          | `{ retries, stopRetryIf, delayStrategy }` | transient failures with configurable logic                                |
+| timeout        | `{ ttl }`                                 | rejects after the deadline and aborts cooperative work via `AbortSignal`  |
 
 Resource equivalents:
 
@@ -184,7 +184,7 @@ Recommended ordering:
 ### Caching
 
 Avoid recomputing expensive work by caching task results with TTL-based eviction.
-Cache is opt-in: you must register `resources.cache`.
+Cache is opt-in: register `resources.cache` so Runner wires the backing store and auto-registers `middleware.task.cache` for cached tasks.
 
 #### Provider Contract
 
@@ -193,25 +193,30 @@ When you provide a custom cache backend, this is the contract:
 ```typescript
 import type { ICacheProvider } from "@bluelibs/runner";
 
-interface CacheProviderOptions {
-  ttl?: number;
-  max?: number;
-  ttlAutopurge?: boolean;
+interface CacheProviderInput {
+  taskId: string;
+  options: {
+    ttl?: number;
+    max?: number;
+    ttlAutopurge?: boolean;
+  };
+  totalBudgetBytes?: number;
 }
 
 type CacheProviderFactory = (
-  options: CacheProviderOptions,
+  input: CacheProviderInput,
 ) => Promise<ICacheProvider>;
 ```
 
 Notes:
 
-- `options` are merged from `resources.cache.with({ defaultOptions })` and middleware-level cache options.
+- `input.options` are merged from `resources.cache.with({ defaultOptions })` and middleware-level cache options.
+- `input.taskId` identifies the task-specific cache instance being created.
 - `defaultOptions` remain inherited per-task provider options, not a shared global budget.
-- `resources.cache.with({ totalBudgetBytes })` adds a shared budget across cache entries for providers that support task-scoped budgeting.
+- `resources.cache.with({ totalBudgetBytes })` is passed to providers as `input.totalBudgetBytes`.
 - The built-in in-memory provider supports `totalBudgetBytes` out of the box.
 - Node also ships with `resources.redisCacheProvider`, which supports `totalBudgetBytes` with Redis-backed storage.
-- Custom providers should enforce their own backend budget policy unless they explicitly support task-scoped budgets.
+- Custom providers should enforce their own backend budget policy when `input.totalBudgetBytes` is provided.
 - `keyBuilder` is middleware-only and is not passed to the provider.
 - `has()` is optional, but recommended when `undefined` can be a valid cached value.
 
@@ -240,7 +245,6 @@ const expensiveTask = r
 const app = r
   .resource("app.cache")
   .register([
-    // You have to register it, cache resource is not enabled by default.
     resources.cache.with({
       totalBudgetBytes: 50 * 1024 * 1024, // Shared 50MB budget across built-in task caches
       defaultOptions: {
@@ -349,7 +353,7 @@ const redisCacheProvider = r
   .resource("app.resources.cacheProvider.redis")
   .dependencies({ redis })
   .init(async (_config, { redis }) => {
-    return async (options) => new RedisCache(redis, options.ttl);
+    return async ({ options }) => new RedisCache(redis, options.ttl);
   })
   .build();
 

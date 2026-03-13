@@ -464,6 +464,8 @@ r.task("ratelimit-concurrency").middleware([middleware.task.rateLimit.with({wind
 r.task("ratelimit-ip").middleware([middleware.task.rateLimit.with({windowMs:1_000,max:50,keyBuilder:() => RequestContext.use().ip})]).run(...).build();
 ```
 
+When using task caching, register `resources.cache` in a parent resource. It auto-registers `middleware.task.cache` so cached tasks can attach `middleware.task.cache.with(...)`.
+
 **Order:** fallback (outermost) → timeout (inside retry if per-attempt budgets needed) → others.
 **Use:** rate-limit for quotas like "50/s", concurrency for in-flight, circuit-breaker for fail-fast, cache for idempotent reads, debounce/throttle for burst shaping.
 **Partitioning:** `rateLimit`, `debounce`, and `throttle` default to `taskId`; pass `keyBuilder(taskId, input)` to partition by async-context values, user ids, tenants, or similar keys. When `tenantScope` is active, Runner prefixes the final internal key as `<tenantId>:<baseKey>`.
@@ -510,7 +512,7 @@ import { check, Match } from "@bluelibs/runner";
 - Final match-error `failures` is always a flat array of leaf failures such as `$.address.city`; Runner does not add synthetic parent failures such as `$.address`.
 - Use `check(value, pattern, { errorPolicy: "all" })` or `Match.WithErrorPolicy(pattern, "all")` when you want one aggregate match validation error containing every collected failure.
 - Decorated class schemas can carry the same default via `@Match.Schema({ errorPolicy: "all" })`.
-- Without `Match.WithMessage`, the aggregate error message is `"Match failed with N errors:\n- msg1\n- msg2"`.
+- Without `Match.WithMessage`, aggregate mode uses a summary headline for the collected failures. The exact formatting is not part of the public contract.
 - In aggregate mode, leaf wrappers do not replace that summary, while subtree wrappers such as plain objects, arrays, maps, `Match.Lazy(...)`, and `Match.fromSchema(...)` can replace the top-level headline if they own the first collected failure.
 - Decorator-backed class schemas follow the same rules as plain Match patterns: a field-level `Match.WithMessage(...)` changes the headline only for that failure, while a wrapper around `Match.fromSchema(ChildSchema)` can overtake the final headline for the whole child subtree.
 - Builder slots accept the same schema sources everywhere: task input/output, config, payload, tag config, and error data.

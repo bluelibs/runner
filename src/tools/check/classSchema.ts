@@ -136,6 +136,7 @@ export function setEsClassSchemaOptions(
     ...metadata.options,
     ...options,
   };
+  bumpSchemaMetadataVersion();
 }
 
 export function setEsClassFieldPattern(
@@ -145,6 +146,7 @@ export function setEsClassFieldPattern(
 ): void {
   const metadata = ensureEsMetadata(metadataRecord);
   metadata.fields.set(propertyKey, pattern);
+  bumpSchemaMetadataVersion();
 }
 
 export function setLegacyClassFieldPattern(

@@ -62,7 +62,7 @@ export class HookEventBuffer {
         this.pendingHookEvents.delete(hook.id);
 
         for (const queuedEvent of queue) {
-          if (queuedEvent.source.path === hook.id) {
+          if ((queuedEvent.source.path ?? queuedEvent.source.id) === hook.id) {
             continue;
           }
           await this.eventManager.executeHookWithInterceptors(

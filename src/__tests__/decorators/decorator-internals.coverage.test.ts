@@ -347,4 +347,38 @@ describe("decorator internals coverage", () => {
       },
     });
   });
+
+  it("invalidates cached class schemas after ES metadata updates", () => {
+    const metadataRecord: Record<PropertyKey, unknown> = {};
+
+    class CachedEsMetadata {}
+
+    withMetadataSymbol(() => {
+      Object.defineProperty(CachedEsMetadata, symbolWithMetadata.metadata!, {
+        value: metadataRecord,
+        configurable: true,
+      });
+    });
+
+    setEsClassSchemaOptions(metadataRecord, { exact: true });
+    setEsClassFieldPattern(metadataRecord, "name", Match.NonEmptyString);
+
+    const firstDefinition = getClassSchemaDefinition(CachedEsMetadata);
+    const secondDefinition = getClassSchemaDefinition(CachedEsMetadata);
+
+    expect(secondDefinition).toBe(firstDefinition);
+    expect(firstDefinition.pattern).toEqual({
+      name: Match.NonEmptyString,
+    });
+
+    setEsClassFieldPattern(metadataRecord, "title", Match.NonEmptyString);
+
+    const updatedDefinition = getClassSchemaDefinition(CachedEsMetadata);
+
+    expect(updatedDefinition).not.toBe(firstDefinition);
+    expect(updatedDefinition.pattern).toEqual({
+      name: Match.NonEmptyString,
+      title: Match.NonEmptyString,
+    });
+  });
 });

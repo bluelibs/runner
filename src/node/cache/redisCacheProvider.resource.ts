@@ -1,9 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { validationError } from "../../errors";
 import {
-  createTaskScopedCacheProvider,
   type CacheProvider,
-  type CacheFactoryOptions,
   withCacheDisposeBehavior,
 } from "../../globals/middleware/cache.shared";
 import { Match } from "../../tools/check";
@@ -63,31 +61,18 @@ export const redisCacheProviderResource = r
     resourceContext.ownsRedisClient =
       config.redis === undefined || typeof config.redis === "string";
 
-    const provider: CacheProvider = async (options: CacheFactoryOptions) =>
+    return async ({ options, taskId, totalBudgetBytes }) =>
       withCacheDisposeBehavior(
         new RedisCache({
           options,
           prefix,
           redis,
           serializer,
-          taskId: `cache:${randomUUID()}`,
+          taskId,
+          totalBudgetBytes,
         }),
         "keep",
       );
-
-    return createTaskScopedCacheProvider(provider, async (input) =>
-      withCacheDisposeBehavior(
-        new RedisCache({
-          options: input.options,
-          prefix,
-          redis,
-          serializer,
-          taskId: input.taskId,
-          totalBudgetBytes: input.totalBudgetBytes,
-        }),
-        "keep",
-      ),
-    );
   })
   .dispose(async (_provider, _config, _deps, resourceContext) => {
     if (!resourceContext.ownsRedisClient || !resourceContext.redis?.quit) {

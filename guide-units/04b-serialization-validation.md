@@ -154,7 +154,7 @@ const user = serializer.deserialize('{"abc":"u1","raw_age":"42"}', {
 Notes:
 
 - Decorated class shorthand works for `schema: UserDto` and `schema: [UserDto]`.
-- Decorated class schemas hydrate on parse, so `serializer.deserialize(..., { schema: UserDto })` returns a `UserDto` instance and nested `Match.fromSchema(...)` nodes hydrate recursively as well. (supports cycles too)
+- Decorated class schemas hydrate on deserialize, so `serializer.deserialize(..., { schema: UserDto })` returns a `UserDto` instance and nested `Match.fromSchema(...)` nodes hydrate recursively as well. (supports cycles too)
 - Hydration reattaches the class prototype onto validated data; it does not call the class constructor.
 - If a class is not decorated with `@Match.Schema()`, constructor shorthand uses constructor semantics (`instanceof`) and usually fails for plain deserialized objects.
 - Functional schema style is always available: `schema: Match.fromSchema(UserDto)` and `schema: Match.ArrayOf(Match.fromSchema(UserDto))`.
@@ -415,7 +415,7 @@ For decorated class schemas, use `Match.Schema({ base })` to compose one schema 
 - When `code` / `params` are provided, Runner copies that metadata onto the owned `failures[]` entries without rewriting the raw leaf `message` text.
 - Final match-error `failures` is always a flat array of leaf failures. Nested validation does not produce a tree of failures or a synthetic parent failure like `$.address` unless an actual matcher failed at that path.
 - Match-error `path` always comes from the first recorded failure. If a nested field fails first, a parent custom headline may still be used, but `error.path` remains the nested leaf path such as `$.address.city`.
-- With `check(value, pattern, { errorPolicy: "all" })`, the default headline is `"Match failed with N errors:\n- msg1\n- msg2"`.
+- With `check(value, pattern, { errorPolicy: "all" })`, the default headline is an aggregate summary of the collected failures. The exact formatting may change over time.
 - Leaf wrappers such as `Match.WithMessage(String, ...)` do not replace that aggregate headline; their underlying failures still appear in `error.failures`.
 - Subtree wrappers such as plain objects, arrays, `Match.ObjectIncluding(...)`, `Match.MapOf(...)`, `Match.NonEmptyArray(...)`, `Match.Lazy(...)`, or `Match.fromSchema(...)` can replace the aggregate headline while still preserving the nested failures in `error.failures`.
 - Decorator-backed schemas are not special here: `Match.WithMessage(Match.fromSchema(AddressSchema), ...)` behaves like any other subtree wrapper.
@@ -593,7 +593,7 @@ Notes:
 - `path` uses `$` for the root value, `$.email` for a root object field, and `$.users[2].email` for nested array/object paths.
 - `value` is intentionally `unknown` because the callback runs only on the failure path.
 - `parent` is only present when the value is being validated as part of an object, map, or array element.
-- When `errorPolicy: "all"` collects multiple failures, the aggregate error message is `"Match failed with N errors:\n- msg1\n- msg2"` by default; leaf field `Match.WithMessage(...)` wrappers do not replace that summary, while subtree/schema wrappers still can.
+- When `errorPolicy: "all"` collects multiple failures, Runner emits an aggregate summary by default; leaf field `Match.WithMessage(...)` wrappers do not replace that summary, while subtree/schema wrappers still can.
 - `Match.WithMessage(...)` is runtime-only and does not affect JSON Schema export beyond the wrapped inner pattern.
 - `parent` is not attached to the thrown `errors.matchError`; it is runtime-only callback context.
 

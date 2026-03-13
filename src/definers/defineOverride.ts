@@ -4,6 +4,7 @@ import {
   IResource,
   IResourceMeta,
   IResourceMiddleware,
+  ResourceDependencyValuesType,
   ITask,
   ITaskMeta,
   ITaskMiddleware,
@@ -105,26 +106,36 @@ export function defineOverride<
   OverrideDefinitionBrand;
 export function defineOverride<
   TConfig,
-  TValue extends Promise<any>,
+  TResolved,
   TDeps extends DependencyMapType,
   TContext,
   TMeta extends IResourceMeta,
   TTags extends ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 >(
-  base: IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>,
-  init: NonNullable<
-    IResource<
-      TConfig,
-      TValue,
-      TDeps,
-      TContext,
-      TMeta,
-      TTags,
-      TMiddleware
-    >["init"]
+  base: IResource<
+    TConfig,
+    Promise<TResolved>,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
   >,
-): IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware> &
+  init: (
+    config: TConfig,
+    dependencies: ResourceDependencyValuesType<TDeps>,
+    context: TContext,
+  ) => Promise<TResolved>,
+): IResource<
+  TConfig,
+  Promise<TResolved>,
+  TDeps,
+  TContext,
+  TMeta,
+  TTags,
+  TMiddleware
+> &
   OverrideDefinitionBrand;
 export function defineOverride<
   TConfig,

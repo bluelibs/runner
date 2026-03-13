@@ -41,6 +41,21 @@ describe("platform env reader", () => {
     expect(readEnvironmentVariable("TEST_KEY")).toBe("bun-value");
   });
 
+  it("calls Deno.env.get with Deno.env as the receiver", () => {
+    testGlobal.__ENV__ = null;
+
+    const denoEnv = {
+      prefix: "from-deno",
+      get(this: { prefix: string }, key: string) {
+        return `${this.prefix}:${key}`;
+      },
+    };
+
+    testGlobal.Deno = { env: denoEnv };
+
+    expect(readEnvironmentVariable("TEST_KEY")).toBe("from-deno:TEST_KEY");
+  });
+
   it("returns undefined when every known env source is missing", () => {
     testGlobal.__ENV__ = null;
     testGlobal.Deno = { env: {} };

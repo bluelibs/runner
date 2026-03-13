@@ -24,7 +24,7 @@ describe("tenantScope middleware support", () => {
       middleware: [
         cacheMiddleware.with({
           ttl: 60_000,
-          keyBuilder: (_taskId, input) => String(input),
+          keyBuilder: (_taskId: string, input: unknown) => String(input),
         }),
       ],
       run: async (input: string) => `${input}-${++callCount}`,
@@ -32,7 +32,7 @@ describe("tenantScope middleware support", () => {
 
     const app = defineResource({
       id: "tenant-cache-app",
-      register: [cacheResource, cacheMiddleware, task],
+      register: [cacheResource, task],
       dependencies: { task },
       init: async () => "ok",
     });

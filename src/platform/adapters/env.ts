@@ -29,9 +29,9 @@ export function readEnvironmentVariable(key: string): string | undefined {
     return injectedEnv;
   }
 
-  const denoEnvGetter = globalScope.Deno?.env?.get;
-  if (typeof denoEnvGetter === "function") {
-    const denoValue = denoEnvGetter(key);
+  const denoEnv = globalScope.Deno?.env;
+  if (denoEnv && typeof denoEnv.get === "function") {
+    const denoValue = denoEnv.get(key);
     if (denoValue !== undefined) {
       return denoValue;
     }

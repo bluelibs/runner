@@ -325,6 +325,20 @@ export const cResource = r
 
 This does **not** bypass Runner's bootstrap-time cycle detection — it only fixes TypeScript inference.
 
+Another scenario where circular types can happen is when a resource registers an element that depends on the resource it registers:
+
+```typescript
+const resource = r
+  .resource("app")
+  .register([taskA]) // from another file
+  .build();
+
+// in that other file:
+const taskA = r.task("job").dependencies({ resourceA }).build();
+```
+
+The scenario above will break.
+
 ### Resource Forking
 
 Fork a leaf resource when you need the same resource behavior under a new identity.

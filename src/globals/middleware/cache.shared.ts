@@ -13,27 +13,32 @@ export type CacheFactoryOptions = Partial<
   LRUCache.Options<string, CacheStoredValue, unknown>
 >;
 
+/**
+ * Context passed to each cache provider instance factory.
+ * Providers always create a cache instance for one task at a time.
+ */
+export type CacheProviderInput = {
+  /** Canonical task id for the cache instance being created. */
+  taskId: string;
+  /** Effective cache options after resource and middleware defaults are merged. */
+  options: CacheFactoryOptions;
+  /** Shared budget passed through when the runtime enables cache-wide byte limits. */
+  totalBudgetBytes?: number;
+  /** Shared in-memory budget state used by the built-in provider. */
+  sharedBudget?: SharedCacheBudgetState;
+};
+
+/**
+ * Creates the cache instance used by one task.
+ */
 export type CacheProvider = (
-  options: CacheFactoryOptions,
+  input: CacheProviderInput,
 ) => Promise<ICacheProvider>;
 
 export type CacheDisposeBehavior = "clear" | "keep";
 
-export type TaskScopedCacheProviderInput = {
-  taskId: string;
-  options: CacheFactoryOptions;
-  totalBudgetBytes?: number;
-  sharedBudget?: SharedCacheBudgetState;
-};
-
 type BuiltInCacheProvider = CacheProvider & {
   [builtInCacheProviderSymbol]: true;
-};
-
-type TaskScopedCacheProvider = CacheProvider & {
-  [taskScopedCacheProviderSymbol]: (
-    input: TaskScopedCacheProviderInput,
-  ) => Promise<ICacheProvider>;
 };
 
 type CacheProviderWithDisposeBehavior = ICacheProvider & {
@@ -56,50 +61,34 @@ export type SharedCacheBudgetState = {
 };
 
 const builtInCacheProviderSymbol = Symbol("runner.builtInCacheProvider");
-const taskScopedCacheProviderSymbol = Symbol("runner.taskScopedCacheProvider");
 const cacheDisposeBehaviorSymbol = Symbol("runner.cacheDisposeBehavior");
 
 export function createDefaultCacheProvider(): CacheProvider {
-  const provider: CacheProvider = async (
-    options: CacheFactoryOptions,
-  ): Promise<ICacheProvider> =>
-    withCacheDisposeBehavior(
-      new LRUCache<string, CacheStoredValue, unknown>(
-        options as LRUCache.Options<string, CacheStoredValue, unknown>,
-      ),
-      "clear",
-    );
-
   return Object.assign(
-    createTaskScopedCacheProvider(
-      provider,
-      async ({ options, sharedBudget, taskId }) => {
-        if (sharedBudget) {
-          return createBudgetedCacheInstance({
-            taskId,
-            options,
-            sharedBudget,
-          });
-        }
+    async ({
+      options,
+      sharedBudget,
+      taskId,
+    }: CacheProviderInput): Promise<ICacheProvider> => {
+      if (sharedBudget) {
+        return createBudgetedCacheInstance({
+          taskId,
+          options,
+          sharedBudget,
+        });
+      }
 
-        return provider(options);
-      },
-    ),
+      return withCacheDisposeBehavior(
+        new LRUCache<string, CacheStoredValue, unknown>(
+          options as LRUCache.Options<string, CacheStoredValue, unknown>,
+        ),
+        "clear",
+      );
+    },
     {
       [builtInCacheProviderSymbol]: true as const,
     },
   ) as BuiltInCacheProvider;
-}
-
-export function createTaskScopedCacheProvider(
-  provider: CacheProvider,
-  createInstance: (
-    input: TaskScopedCacheProviderInput,
-  ) => Promise<ICacheProvider>,
-): CacheProvider {
-  return Object.assign(provider, {
-    [taskScopedCacheProviderSymbol]: createInstance,
-  }) as TaskScopedCacheProvider;
 }
 
 export function isBuiltInCacheProvider(
@@ -110,30 +99,6 @@ export function isBuiltInCacheProvider(
     (value as Partial<BuiltInCacheProvider>)[builtInCacheProviderSymbol] ===
       true
   );
-}
-
-export function supportsTaskScopedCacheProvider(
-  value: unknown,
-): value is TaskScopedCacheProvider {
-  return (
-    typeof value === "function" &&
-    typeof (value as Partial<TaskScopedCacheProvider>)[
-      taskScopedCacheProviderSymbol
-    ] === "function"
-  );
-}
-
-export function createTaskScopedCacheInstance(
-  provider: CacheProvider,
-  input: TaskScopedCacheProviderInput,
-) {
-  if (!supportsTaskScopedCacheProvider(provider)) {
-    throw new TypeError(
-      "Cache provider does not support task-scoped cache instances.",
-    );
-  }
-
-  return provider[taskScopedCacheProviderSymbol](input);
 }
 
 export function withCacheDisposeBehavior<T extends ICacheProvider>(

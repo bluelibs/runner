@@ -51,11 +51,11 @@ export const runtimeSource = {
    * @param id Stable display/public id of the source.
    * @param path Canonical runtime path when it differs from the display id.
    */
-  runtime(id: string, path: string = id): RuntimeCallSource {
+  runtime(id: string, path?: string): RuntimeCallSource {
     return {
       kind: RuntimeCallSourceKind.Runtime,
       id,
-      path,
+      ...(path !== undefined ? { path } : {}),
     };
   },
   /**
@@ -64,11 +64,11 @@ export const runtimeSource = {
    * @param id Stable display/public id of the source.
    * @param path Canonical runtime path when it differs from the display id.
    */
-  resource(id: string, path: string = id): RuntimeCallSource {
+  resource(id: string, path?: string): RuntimeCallSource {
     return {
       kind: RuntimeCallSourceKind.Resource,
       id,
-      path,
+      ...(path !== undefined ? { path } : {}),
     };
   },
   /**
@@ -77,11 +77,11 @@ export const runtimeSource = {
    * @param id Stable display/public id of the source.
    * @param path Canonical runtime path when it differs from the display id.
    */
-  task(id: string, path: string = id): RuntimeCallSource {
+  task(id: string, path?: string): RuntimeCallSource {
     return {
       kind: RuntimeCallSourceKind.Task,
       id,
-      path,
+      ...(path !== undefined ? { path } : {}),
     };
   },
   /**
@@ -90,11 +90,11 @@ export const runtimeSource = {
    * @param id Stable display/public id of the source.
    * @param path Canonical runtime path when it differs from the display id.
    */
-  hook(id: string, path: string = id): RuntimeCallSource {
+  hook(id: string, path?: string): RuntimeCallSource {
     return {
       kind: RuntimeCallSourceKind.Hook,
       id,
-      path,
+      ...(path !== undefined ? { path } : {}),
     };
   },
   /**
@@ -103,11 +103,11 @@ export const runtimeSource = {
    * @param id Stable display/public id of the source.
    * @param path Canonical runtime path when it differs from the display id.
    */
-  middleware(id: string, path: string = id): RuntimeCallSource {
+  middleware(id: string, path?: string): RuntimeCallSource {
     return {
       kind: RuntimeCallSourceKind.Middleware,
       id,
-      path,
+      ...(path !== undefined ? { path } : {}),
     };
   },
 } as const;

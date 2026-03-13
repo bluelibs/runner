@@ -188,6 +188,10 @@ function resolvePatternDefaultErrorPolicy(
     return pattern.errorPolicy;
   }
 
+  if (pattern instanceof WithMessagePattern) {
+    return resolvePatternDefaultErrorPolicy(pattern.pattern);
+  }
+
   if (pattern instanceof LazyPattern) {
     return resolvePatternDefaultErrorPolicy(pattern.resolve());
   }

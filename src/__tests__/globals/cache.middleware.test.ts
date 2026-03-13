@@ -5,6 +5,7 @@ import {
   cacheResource,
   cacheProviderResource,
   cacheMiddleware,
+  createCacheInstance,
   ICacheProvider,
   journalKeys as cacheJournalKeys,
 } from "../../globals/middleware/cache.middleware";
@@ -60,10 +61,14 @@ describe("Caching System", () => {
       );
     });
 
+    it("re-exports cache helpers through the compatibility barrel", async () => {
+      expect(typeof createCacheInstance).toBe("function");
+    });
+
     it("should initialize with default cache provider", async () => {
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware],
+        register: [cacheResource],
         dependencies: { cache: cacheResource },
         async init(_, { cache }) {
           expect(cache.cacheProvider).toBeDefined();
@@ -72,6 +77,29 @@ describe("Caching System", () => {
             max: 100,
             ttlAutopurge: true,
           });
+        },
+      });
+
+      await run(app);
+    });
+
+    it("auto-registers cache middleware when only cache resource is registered", async () => {
+      const testTask = defineTask({
+        id: "cache-resource-autowire-task",
+        middleware: [cacheMiddleware.with({ ttl: 1_000 })],
+        run: async () => Date.now(),
+      });
+
+      const app = defineResource({
+        id: "cache-resource-autowire-app",
+        register: [cacheResource, testTask],
+        dependencies: { testTask, cache: cacheResource },
+        async init(_, { testTask, cache }) {
+          const firstRun = await testTask();
+          const secondRun = await testTask();
+
+          expect(firstRun).toBe(secondRun);
+          expect(cache.map.size).toBe(1);
         },
       });
 
@@ -96,13 +124,29 @@ describe("Caching System", () => {
     });
 
     it("fails fast when totalBudgetBytes is used with a custom cache provider", async () => {
+      const seenInputs: Array<{
+        taskId: string;
+        totalBudgetBytes?: number;
+      }> = [];
       const customProvider = defineResource({
         id: "custom-budget-provider",
-        init: async (): Promise<CacheProvider> => async () => ({
-          get: async (_key: string) => undefined,
-          set: async (_key: string, _value: unknown) => undefined,
-          clear: async () => undefined,
-        }),
+        init:
+          async (): Promise<CacheProvider> =>
+          async ({ taskId, totalBudgetBytes }) => {
+            seenInputs.push({ taskId, totalBudgetBytes });
+
+            return {
+              get: async (_key: string) => undefined,
+              set: async (_key: string, _value: unknown) => undefined,
+              clear: async () => undefined,
+            };
+          },
+      });
+
+      const task = defineTask({
+        id: "custom-budget-task",
+        middleware: [cacheMiddleware],
+        run: async () => "ok",
       });
 
       const app = defineResource({
@@ -112,14 +156,22 @@ describe("Caching System", () => {
             provider: customProvider,
             totalBudgetBytes: 1_024,
           }),
+          task,
         ],
-        dependencies: { cache: cacheResource },
-        init: async () => "ok",
+        dependencies: { task },
+        init: async (_config, { task }) => {
+          await task();
+        },
       });
 
-      await expect(run(app)).rejects.toThrow(
-        /global cache budgets require a provider with task-scoped cache support/i,
-      );
+      await run(app);
+
+      expect(seenInputs).toEqual([
+        {
+          taskId: "custom-budget-task",
+          totalBudgetBytes: 1_024,
+        },
+      ]);
     });
 
     it("should create separate cache instances per task", async () => {
@@ -131,7 +183,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         dependencies: { testTask, cache: cacheResource },
         async init(_, { testTask, cache }) {
           const firstRun = await testTask();
@@ -168,7 +220,7 @@ describe("Caching System", () => {
 
       const customCacheProvider = r.override(
         cacheProviderResource,
-        async () => async (_options: any) => new CustomCache(),
+        async () => async (_input: any) => new CustomCache(),
       );
 
       const testTask = defineTask({
@@ -179,7 +231,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         overrides: [customCacheProvider],
         dependencies: { testTask, cache: cacheResource },
         async init(_, { testTask, cache }) {
@@ -233,7 +285,7 @@ describe("Caching System", () => {
 
       const redisCacheProvider = r.override(
         cacheProviderResource,
-        async () => async (_options: any) => new RedisLikeCache(),
+        async () => async (_input: any) => new RedisLikeCache(),
       );
 
       let callCount = 0;
@@ -248,7 +300,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         overrides: [redisCacheProvider],
         dependencies: { testTask },
         async init(_, { testTask }) {
@@ -286,7 +338,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         dependencies: { testTask },
         async init(_, { testTask }) {
           const result1 = await testTask(2);
@@ -321,7 +373,7 @@ describe("Caching System", () => {
 
       const cacheProviderOverride = r.override(
         cacheProviderResource,
-        async () => async () => new NoHasCache(),
+        async () => async (_input: any) => new NoHasCache(),
       );
 
       let callCount = 0;
@@ -336,7 +388,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: CacheNoHasId.App,
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         overrides: [cacheProviderOverride],
         dependencies: { testTask },
         async init(_, { testTask }) {
@@ -375,7 +427,7 @@ describe("Caching System", () => {
 
       const cacheProviderOverride = r.override(
         cacheProviderResource,
-        async () => async () => new AsyncHasCache(),
+        async () => async (_input: any) => new AsyncHasCache(),
       );
 
       let callCount = 0;
@@ -390,7 +442,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "cache-async-has-app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         overrides: [cacheProviderOverride],
         dependencies: { testTask },
         async init(_, { testTask }) {
@@ -420,7 +472,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         dependencies: { testTask },
         async init(_, { testTask }) {
           const firstRun = await testTask();
@@ -455,7 +507,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         dependencies: { testTask },
         async init(_, { testTask }) {
           const input1 = { id: "1", data: "test" };
@@ -494,7 +546,7 @@ describe("Caching System", () => {
 
       const cacheProviderOverride = r.override(
         cacheProviderResource,
-        async () => async () => new ErrorThrowingCache(),
+        async () => async (_input: any) => new ErrorThrowingCache(),
       );
 
       let callCount = 0;
@@ -509,7 +561,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "cache-set-fail-open-error-app",
-        register: [cacheResource, cacheMiddleware, task],
+        register: [cacheResource, task],
         overrides: [cacheProviderOverride],
         dependencies: { task },
         async init(_, { task }) {
@@ -549,12 +601,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [
-          cacheResource,
-          cacheMiddleware,
-          hitCaptureMiddleware,
-          testTask,
-        ],
+        register: [cacheResource, hitCaptureMiddleware, testTask],
         dependencies: { testTask },
         async init(_, { testTask }) {
           const zeroFirst = await testTask(0);
@@ -587,7 +634,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, errorTask],
+        register: [cacheResource, errorTask],
         dependencies: { errorTask },
         async init(_, { errorTask }) {
           await expect(errorTask()).rejects.toThrow("Failed");
@@ -617,7 +664,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, errorTask],
+        register: [cacheResource, errorTask],
         dependencies: { errorTask },
         async init(_, { errorTask }) {
           await expect(errorTask()).rejects.toThrow("Cached error");
@@ -652,7 +699,7 @@ describe("Caching System", () => {
 
       const cacheProviderOverride = r.override(
         cacheProviderResource,
-        async () => async () => new SetFailingCache(),
+        async () => async (_input: any) => new SetFailingCache(),
       );
 
       let callCount = 0;
@@ -667,7 +714,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "cache-set-fail-open-app",
-        register: [cacheResource, cacheMiddleware, task],
+        register: [cacheResource, task],
         overrides: [cacheProviderOverride],
         dependencies: { task },
         async init(_, { task }) {
@@ -699,7 +746,7 @@ describe("Caching System", () => {
       const result = await run(
         defineResource({
           id: "app",
-          register: [cacheResource, cacheMiddleware, testTask],
+          register: [cacheResource, testTask],
           dependencies: { testTask, cache: cacheResource },
           async init(_: void, { testTask, cache }) {
             const firstRun = await testTask();
@@ -738,7 +785,7 @@ describe("Caching System", () => {
 
     const asyncCacheProvider = r.override(
       cacheProviderResource,
-      async () => async (_options: any) => new AsyncMockCache(),
+      async () => async (_input: any) => new AsyncMockCache(),
     );
 
     it("should handle async cache operations", async () => {
@@ -750,7 +797,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         overrides: [asyncCacheProvider],
         dependencies: { testTask },
         async init(_, { testTask }) {
@@ -776,7 +823,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         dependencies: { testTask },
         async init(_, { testTask }) {
           const complexInput = { nested: { data: "test" }, array: [1, 2, 3] };
@@ -803,7 +850,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         dependencies: { testTask },
         async init(_, { testTask }) {
           const input = { id: 1n } as CircularBigIntInput;
@@ -830,7 +877,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         dependencies: { testTask },
         async init(_, { testTask }) {
           const nullResult1 = await testTask(null);
@@ -860,7 +907,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         dependencies: { testTask },
         async init(_, { testTask }) {
           const result1 = await testTask([1, 2, 3]);
@@ -888,7 +935,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         dependencies: { testTask, cache: cacheResource },
         async init(_, { testTask, cache }) {
           await testTask(1);
@@ -938,10 +985,9 @@ describe("Caching System", () => {
           cacheResource.with({
             totalBudgetBytes: 9,
             defaultOptions: {
-              sizeCalculation: (value) => String(value).length,
+              sizeCalculation: (value: unknown) => String(value).length,
             },
           }),
-          cacheMiddleware,
           taskA,
           taskB,
         ],
@@ -979,13 +1025,16 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         dependencies: { testTask, cache: cacheResource },
         async init(_, { testTask, cache }) {
           const firstResult = await testTask(5);
 
           // Clear cache manually
-          getCacheEntryByTaskId(cache.map, "clear-during-exec-task")?.clear();
+          getCacheEntryByTaskId<ICacheProvider>(
+            cache.map,
+            "clear-during-exec-task",
+          )?.clear();
 
           const secondResult = await testTask(5);
 
@@ -1015,7 +1064,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, slowTask],
+        register: [cacheResource, slowTask],
         dependencies: { slowTask },
         async init(_, { slowTask }) {
           // Test basic caching behavior instead of race conditions
@@ -1064,7 +1113,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, task],
+        register: [cacheResource, task],
         overrides: [slowCacheProvider],
         dependencies: { task, cache: cacheResource },
         async init(_, { task, cache }) {
@@ -1098,10 +1147,9 @@ describe("Caching System", () => {
           cacheResource.with({
             totalBudgetBytes: 20,
             defaultOptions: {
-              sizeCalculation: (value) => String(value).length,
+              sizeCalculation: (value: unknown) => String(value).length,
             },
           }),
-          cacheMiddleware,
           task,
         ],
         dependencies: { task, cache: cacheResource },
@@ -1144,7 +1192,7 @@ describe("Caching System", () => {
 
       const disposableCacheProvider = r.override(
         cacheProviderResource,
-        async () => async (_options: any) => new AsyncDisposableCache(),
+        async () => async (_input: any) => new AsyncDisposableCache(),
       );
 
       const testTask = defineTask({
@@ -1155,7 +1203,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         overrides: [disposableCacheProvider],
         dependencies: { testTask, cache: cacheResource },
         async init(_, { testTask, cache }) {
@@ -1194,7 +1242,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         dependencies: { testTask },
         async init(_, { testTask }) {
           const result1 = await testTask("test");
@@ -1216,7 +1264,7 @@ describe("Caching System", () => {
 
       const invalidCacheProvider = r.override(
         cacheProviderResource,
-        async () => async (_options: any) => new InvalidCache() as any,
+        async () => async (_input: any) => new InvalidCache() as any,
       );
 
       const testTask = defineTask({
@@ -1227,7 +1275,7 @@ describe("Caching System", () => {
 
       const app = defineResource({
         id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
+        register: [cacheResource, testTask],
         overrides: [invalidCacheProvider],
         dependencies: { testTask },
         async init(_, { testTask }) {

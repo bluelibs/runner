@@ -538,6 +538,32 @@ describe("tools/check decorators", () => {
     expect(perCallError.data.failures).toHaveLength(2);
   });
 
+  it("keeps Match.WithMessage transparent to inner aggregate defaults", () => {
+    class MessageWrappedAggregateSchema {
+      public first!: string;
+      public second!: string;
+    }
+
+    Match.Schema({ errorPolicy: "all" })(MessageWrappedAggregateSchema);
+    Match.Field(String)(MessageWrappedAggregateSchema.prototype, "first");
+    Match.Field(String)(MessageWrappedAggregateSchema.prototype, "second");
+
+    const wrappedAggregateError = expectMatchFailure(() =>
+      check(
+        { first: 1, second: 2 } as any,
+        Match.WithMessage(
+          Match.fromSchema(MessageWrappedAggregateSchema),
+          "schema payload is invalid",
+        ),
+      ),
+    );
+
+    expect(wrappedAggregateError.message).toBe("schema payload is invalid");
+    expect(wrappedAggregateError.data.failures).toHaveLength(2);
+    expect(wrappedAggregateError.data.failures[0].path).toBe("$.first");
+    expect(wrappedAggregateError.data.failures[1].path).toBe("$.second");
+  });
+
   it("supports Match.fromSchema(..., { throwAllErrors: false }) alias defaults", () => {
     class SchemaWithLegacyPerCallPolicy {
       public first!: string;
