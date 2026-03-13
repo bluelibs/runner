@@ -3,7 +3,8 @@ import path from "path";
 import express, { type Request, type Response } from "express";
 import { r, resources } from "@bluelibs/runner";
 
-import { askRunnerTask, streamAskRunnerTask } from "../ai/ask-runner.task";
+import { askRunnerTask } from "../ai/ask-runner.task";
+import { streamAskRunnerTask } from "../ai/stream-ask-runner.task";
 import { appConfig } from "../config/app-config.resource";
 import { missingConfigError } from "../errors";
 import { prepareQueryRequest } from "./query-request";

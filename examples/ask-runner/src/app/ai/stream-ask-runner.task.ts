@@ -2,34 +2,35 @@ import { r } from "@bluelibs/runner";
 
 import { aiDocsPrompt } from "./ai-docs.resource";
 import {
-  type AskRunnerInput,
-  type AskRunnerOutput,
-  askRunnerInputSchema,
+  type AskRunnerStreamResult,
+  type StreamAskRunnerInput,
+  streamAskRunnerInputSchema,
 } from "./ask-runner.contract";
 import { createAskRunnerMiddleware } from "./ask-runner.resilience";
-import { createOpenAiResponse } from "./ask-runner.openai";
+import { createOpenAiResponseStream } from "./ask-runner.openai";
+import { consumeMarkdownResponseStream } from "./openai-stream";
 import { openAiClient } from "./openai.resource";
 import { openAiSemaphore } from "./openai-semaphore.resource";
 import { appConfig } from "../config/app-config.resource";
 import { invalidQueryError } from "../errors";
 
-export const askRunnerTask = r
-  .task<AskRunnerInput>("askRunner")
-  .inputSchema(askRunnerInputSchema)
+export const streamAskRunnerTask = r
+  .task<StreamAskRunnerInput>("streamAskRunner")
+  .inputSchema(streamAskRunnerInputSchema)
   .dependencies({
     appConfig,
     aiDocsPrompt,
     openAiClient,
     openAiSemaphore,
   })
-  .middleware(createAskRunnerMiddleware({ retry: true }))
+  .middleware(createAskRunnerMiddleware({ retry: false }))
   .throws([invalidQueryError])
   .run(
     async (
-      { query },
+      { query, writer },
       { appConfig, aiDocsPrompt, openAiClient, openAiSemaphore },
-    ): Promise<AskRunnerOutput> => {
-      const response = await createOpenAiResponse(
+    ): Promise<AskRunnerStreamResult> => {
+      const stream = await createOpenAiResponseStream(
         {
           appConfig,
           aiDocsPrompt,
@@ -38,17 +39,11 @@ export const askRunnerTask = r
         { openAiClient, openAiSemaphore },
       );
 
-      const markdown = response.output_text?.trim();
-      if (!markdown) {
-        invalidQueryError.throw({
-          message: "OpenAI returned an empty answer.",
-        });
-      }
+      const result = await consumeMarkdownResponseStream(stream, writer);
 
       return {
-        markdown,
-        model: response.model,
-        usage: response.usage ?? null,
+        model: result.model,
+        usage: result.usage,
         aiDocsVersion: aiDocsPrompt.version,
       };
     },
