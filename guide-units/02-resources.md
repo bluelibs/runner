@@ -303,11 +303,13 @@ This speeds up boot times when multiple resources (like DBs or queues) don't dep
 
 ### Circular Type Dependencies (TypeScript)
 
-In the rare scenarion, when your file structure creates mutual imports for example:
+In the rare scenarios, when your file structure creates mutual imports for example:
 
 - resources 'A' registers task 'T'
 - task 'T' depends on resource 'A'
 - both 'A' and 'T' are defined in separate files
+
+This is allowed in runtime, but TypeScript's static analysis will complain about circular type dependencies. And it defaults it to `any` and transforming register() and dependencies() to functions does not help because the circular dependency is still there.
 
 The solution is to cast register() from resource 'A' to return `RegisterableItem[]` instead of the inferred tuple type. This breaks the circular type dependency while preserving autocompletion.
 
