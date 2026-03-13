@@ -84,6 +84,13 @@ function applyOverridePatch<TBase extends OverrideBuilderBase>(
 
   return brandOverride(base, overridden);
 }
+
+/**
+ * Overrides a task, resource, hook, or middleware definition without mutating the original.
+ *
+ * Use this to adapt shared definitions in a local composition tree while preserving
+ * identity and ancestry information for Runner internals.
+ */
 export function defineOverride<
   TInput,
   TOutput extends Promise<any>,

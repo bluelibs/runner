@@ -13,7 +13,9 @@ export * from "./fluent-builder";
 export * from "./types";
 
 /**
- * Entry point for creating a task builder.
+ * Creates a fluent task builder.
+ *
+ * Use this when you want the chained builder surface instead of defining a task object directly.
  */
 export function taskBuilder<TInput = undefined>(
   id: string,
@@ -45,4 +47,7 @@ export function taskBuilder<TInput = undefined>(
   return makeTaskBuilder(initial);
 }
 
+/**
+ * Shorthand for {@link taskBuilder}.
+ */
 export const task = taskBuilder;

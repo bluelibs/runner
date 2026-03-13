@@ -19,8 +19,14 @@ declare const __TARGET__: string | undefined;
 let platformInstance: IPlatformAdapter | null = null;
 let detectedEnvironment: PlatformId | null = null;
 
+/**
+ * Detects the current runtime environment without instantiating the active adapter.
+ */
 export { detectEnvironment };
 
+/**
+ * Returns the active platform adapter, creating it lazily on first access.
+ */
 export function getPlatform(): IPlatformAdapter {
   if (!platformInstance) {
     platformInstance = createPlatformAdapter();
@@ -29,16 +35,27 @@ export function getPlatform(): IPlatformAdapter {
   return platformInstance;
 }
 
+/**
+ * Overrides the active platform adapter.
+ *
+ * This is mainly useful for tests or advanced hosts that need custom runtime hooks.
+ */
 export function setPlatform(adapter: IPlatformAdapter): void {
   platformInstance = adapter;
   detectedEnvironment = adapter.id;
 }
 
+/**
+ * Clears the cached platform adapter so environment detection can run again.
+ */
 export function resetPlatform(): void {
   platformInstance = null;
   detectedEnvironment = null;
 }
 
+/**
+ * Returns the detected environment id, preferring the build target when one is baked in.
+ */
 export function getDetectedEnvironment(): PlatformId {
   if (detectedEnvironment) return detectedEnvironment;
   // Prefer build-time target when available (node/browser/edge bundles)
@@ -51,6 +68,9 @@ export function getDetectedEnvironment(): PlatformId {
   return detectedEnvironment;
 }
 
+/**
+ * Reports whether the current runtime should behave like the Node build.
+ */
 export function isNode(): boolean {
   if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
     return __TARGET__ === "node";
@@ -59,6 +79,9 @@ export function isNode(): boolean {
   return detectEnvironment() === "node";
 }
 
+/**
+ * Reports whether the current runtime should behave like the browser build.
+ */
 export function isBrowser(): boolean {
   if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
     return __TARGET__ === "browser";
@@ -67,6 +90,9 @@ export function isBrowser(): boolean {
   return detectEnvironment() === "browser";
 }
 
+/**
+ * Reports whether the current runtime is using the universal fallback behavior.
+ */
 export function isUniversal(): boolean {
   if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
     return __TARGET__ === "universal";
@@ -75,6 +101,9 @@ export function isUniversal(): boolean {
   return detectEnvironment() === "universal";
 }
 
+/**
+ * Reports whether the current runtime should behave like the edge build.
+ */
 export function isEdge(): boolean {
   if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
     return __TARGET__ === "edge";
@@ -91,6 +120,12 @@ export type {
 } from "./types";
 
 // Backwards-compat adapter preserving old constructor(env) signature used in tests
+/**
+ * Compatibility wrapper around the current platform adapter implementations.
+ *
+ * Prefer {@link getPlatform} for normal runtime access. This class exists so older
+ * integrations and tests can keep using the legacy constructor-based API.
+ */
 export class PlatformAdapter implements IPlatformAdapter {
   private inner: IPlatformAdapter;
   readonly env: PlatformId;

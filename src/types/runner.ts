@@ -10,6 +10,9 @@ import type {
   ExecutionContextOptions,
 } from "./executionContext";
 
+/**
+ * Minimal runtime health-reporting contract.
+ */
 export interface IHealthReporter {
   /**
    * Evaluates async health checks for all health-enabled resources or a filtered subset.
@@ -21,14 +24,25 @@ export interface IHealthReporter {
 
 export type RuntimeState = "running" | "paused";
 
+/**
+ * Handle returned by `runtime.recoverWhen(...)`.
+ */
 export interface IRuntimeRecoveryHandle {
+  /** Stops polling this recovery rule. */
   cancel(): void;
+  /** Stable identifier for this recovery rule. */
   id: string;
 }
 
+/**
+ * Polling rule that can resume the runtime after a pause episode.
+ */
 export interface IRuntimeRecoveryOptions {
+  /** Optional stable id for replacing or tracking the rule. */
   id?: string;
+  /** Polling interval in milliseconds. */
   everyMs: number;
+  /** Recovery predicate that must pass before Runner auto-resumes. */
   check: () => boolean | Promise<boolean>;
 }
 
@@ -99,6 +113,9 @@ export interface IRuntime<V = unknown> extends IHealthReporter {
   dispose(): Promise<void>;
 }
 
+/**
+ * Shutdown timing controls for `run(..., { dispose })`.
+ */
 export type DisposeOptions = {
   /**
    * Total disposal budget (milliseconds) for the shutdown lifecycle.
@@ -123,6 +140,9 @@ export type DisposeOptions = {
   cooldownWindowMs?: number;
 };
 
+/**
+ * Public runtime options accepted by `run(app, options)`.
+ */
 export type RunOptions = {
   /**
    * Defaults to undefined. If true, we introduce logging to the console.
@@ -202,30 +222,48 @@ export type RunOptions = {
   mode?: RunnerMode;
 };
 
+/**
+ * Fully normalized runtime options stored on the active runtime instance.
+ */
 export type ResolvedRunOptions = {
+  /** Normalized debug configuration. */
   debug?: DebugFriendlyConfig;
   logs: {
+    /** Minimum log level printed to the configured sink. */
     printThreshold: null | LogLevels;
+    /** Print style used for structured logs. */
     printStrategy: PrintStrategy;
+    /** Whether logs are buffered until startup is ready. */
     bufferLogs: boolean;
   };
+  /** Whether process-level unhandled error capture is enabled. */
   errorBoundary: boolean;
+  /** Whether signal-based graceful shutdown hooks are installed. */
   shutdownHooks: boolean;
   dispose: {
+    /** Total shutdown budget in milliseconds. */
     totalBudgetMs: number;
+    /** Drain waiting budget in milliseconds. */
     drainingBudgetMs: number;
+    /** Post-cooldown admission window in milliseconds. */
     cooldownWindowMs: number;
   };
+  /** Normalized unhandled-error callback. */
   onUnhandledError: OnUnhandledError;
+  /** Whether dry-run mode is active. */
   dryRun: boolean;
+  /** Normalized execution-context config, or `null` when disabled. */
   executionContext: ExecutionContextConfig | null;
+  /** Whether lazy resource startup is active. */
   lazy: boolean;
+  /** Normalized lifecycle scheduling mode. */
   lifecycleMode: ResourceLifecycleMode;
+  /** Effective runtime mode. */
   mode: RunnerMode;
 };
 
 /**
- * The mode in which the runner is operating
+ * Runtime mode used for environment-sensitive behavior.
  */
 export enum RunnerMode {
   TEST = "test",
@@ -234,7 +272,7 @@ export enum RunnerMode {
 }
 
 /**
- * Resource lifecycle strategy during run() bootstrap and dispose().
+ * Scheduling strategy for resource lifecycle waves during startup and shutdown.
  */
 export enum ResourceLifecycleMode {
   Sequential = "sequential",

@@ -4,6 +4,9 @@ import type { IAsyncContext } from "./asyncContext";
 import type { RemoteLaneBindingAuth } from "./remoteLaneAuth";
 import { symbolEventLane, symbolFilePath } from "./utilities";
 
+/**
+ * Definition contract for an event lane.
+ */
 export interface IEventLaneDefinition {
   id: string;
   meta?: IEventLaneMeta;
@@ -14,6 +17,9 @@ export interface IEventLaneDefinition {
   [symbolFilePath]?: string;
 }
 
+/**
+ * Frozen event-lane definition returned by `defineEventLane(...)`.
+ */
 export interface IEventLane extends IEventLaneDefinition {
   id: string;
   meta: IEventLaneMeta;
@@ -21,17 +27,26 @@ export interface IEventLane extends IEventLaneDefinition {
   [symbolFilePath]: string;
 }
 
+/**
+ * One externally consumable event-lane binding in a topology.
+ */
 export interface IEventLaneTopologyBinding {
   lane: IEventLaneDefinition;
   auth?: RemoteLaneBindingAuth;
 }
 
+/**
+ * Named event-lane profile listing the lanes a consumer should subscribe to.
+ */
 export interface IEventLaneTopologyProfile<
   TLane extends IEventLaneDefinition = IEventLaneDefinition,
 > {
   consume: readonly TLane[];
 }
 
+/**
+ * Event-lane topology declaration used by remote/event-lane integrations.
+ */
 export interface IEventLaneTopology<
   TBindings extends readonly IEventLaneTopologyBinding[] =
     readonly IEventLaneTopologyBinding[],

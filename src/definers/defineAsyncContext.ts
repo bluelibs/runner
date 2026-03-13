@@ -32,8 +32,10 @@ export function getCurrentStore(): Map<string, unknown> | undefined {
   return storage.getStore();
 }
 /**
- * Create a new typed Context. The result contains helpers similar to React's
- * Context API but adapted for async usage in Runner.
+ * Defines a typed async context.
+ *
+ * Async contexts propagate per-execution values across async boundaries and can
+ * also be required by middleware when a task must run inside an active context.
  */
 export function defineAsyncContext<TSchema extends ValidationSchemaInput<any>>(
   def: Omit<

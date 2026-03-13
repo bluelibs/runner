@@ -147,6 +147,16 @@ describe("IResource.fork() (basic)", () => {
     expect(forked.middleware).toHaveLength(1);
   });
 
+  it("preserves throws contracts through fork cloning", () => {
+    const errA = r.error("fork-throws-a").build();
+    const errB = r.error("fork-throws-b").build();
+    const base = r.resource("base-with-throws").throws([errA, errB]).build();
+
+    const forked = base.fork("forked-with-throws");
+
+    expect(forked.throws).toEqual([errA.id, errB.id]);
+  });
+
   it("preserves cooldown hook through fork cloning", async () => {
     const cooldownCalls: string[] = [];
     const base = r

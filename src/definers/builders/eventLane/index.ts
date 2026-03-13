@@ -15,6 +15,9 @@ export * from "./fluent-builder";
 export * from "./types";
 export * from "./utils";
 
+/**
+ * Creates a fluent event-lane builder.
+ */
 export function eventLaneBuilder(id: string): EventLaneFluentBuilder {
   const filePath = getCallerFile();
   const initial: BuilderState<IEventLaneMeta> = Object.freeze({
@@ -28,6 +31,9 @@ export function eventLaneBuilder(id: string): EventLaneFluentBuilder {
   return makeEventLaneBuilder(initial);
 }
 
+/**
+ * Freezes an event-lane topology declaration so profile and binding references stay stable.
+ */
 export function eventLaneTopologyBuilder<
   const TBindings extends readonly IEventLaneTopologyBinding[],
   const TProfiles extends Record<
@@ -45,6 +51,9 @@ export interface EventLaneBuilderWithTopology {
   topology: typeof eventLaneTopologyBuilder;
 }
 
+/**
+ * Event-lane builder namespace with topology helpers attached.
+ */
 export const eventLane: EventLaneBuilderWithTopology = Object.assign(
   eventLaneBuilder,
   {

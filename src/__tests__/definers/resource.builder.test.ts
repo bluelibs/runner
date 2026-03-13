@@ -6,6 +6,7 @@ import {
   defineTag,
   IResourceMeta,
 } from "../..";
+import type { AnyError } from "../../types/error";
 
 describe("resource builder", () => {
   it("build() returns branded resource with id", () => {
@@ -271,12 +272,13 @@ describe("resource builder", () => {
 
   it("supports throws contracts without DI", () => {
     const err = r.error("tests-builder-resource-throws-err").build();
+    const otherErr = r.error("tests-builder-resource-throws-other").build();
     const res = r
       .resource("tests-builder-resource-throws")
-      .throws([err, "tests-builder-resource-throws-other", err])
+      .throws([err, otherErr, err])
       .init(async () => Promise.resolve("OK"))
       .build();
-    expect(res.throws).toEqual([err.id, "tests-builder-resource-throws-other"]);
+    expect(res.throws).toEqual([err.id, otherErr.id]);
   });
 
   it("isolate is additive across repeated calls", () => {
@@ -418,7 +420,7 @@ describe("resource builder", () => {
     expect(() =>
       r
         .resource("tests-builder-resource-throws-invalid")
-        .throws([{} as unknown as string])
+        .throws([{} as AnyError])
         .init(async () => Promise.resolve("OK"))
         .build(),
     ).toThrow(/Invalid throws entry/);

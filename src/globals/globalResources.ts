@@ -26,6 +26,9 @@ export {
   timersResource as timers,
 };
 
+/**
+ * Core infrastructure resources that power runtime wiring and execution.
+ */
 export const systemResources = {
   store: storeResource,
   middlewareManager,
@@ -34,6 +37,9 @@ export const systemResources = {
   runtime: runtimeResource,
 } as const;
 
+/**
+ * Framework-level utility resources that apps commonly depend on directly.
+ */
 export const runnerResources = {
   health: healthResource,
   timers: timersResource,
@@ -52,6 +58,9 @@ export const runnerResources = {
   concurrency: concurrencyResource,
 } as const;
 
+/**
+ * Complete built-in resource registry exposed through `resources`.
+ */
 export const globalResources = {
   ...systemResources,
   ...runnerResources,

@@ -8,16 +8,34 @@ import type { IValidationSchema, ValidationSchemaInput } from "./utilities";
 import type { IErrorMeta } from "./meta";
 import type { ErrorTagType } from "./tag";
 
-export type ErrorReference = string | IErrorHelper<any>;
-export type ThrowsList = ReadonlyArray<ErrorReference>;
+/**
+ * Canonical type for any Runner error helper definition.
+ */
+export type AnyError = IErrorHelper<any>;
+/**
+ * Declarative list of typed errors associated with a definition.
+ */
+export type ThrowsList = ReadonlyArray<AnyError>;
+/**
+ * Normalized list of error ids emitted by built Runner definitions.
+ */
+export type NormalizedThrowsList = readonly string[];
 
+/**
+ * Declarative error-definition contract.
+ */
 export interface IErrorDefinition<
   TData extends DefaultErrorType = DefaultErrorType,
 > {
+  /** Stable error identifier. */
   id: string;
+  /** Optional HTTP status associated with this error. */
   httpCode?: number;
+  /** Custom serializer for transport or persistence scenarios. */
   serialize?: (data: TData) => string;
+  /** Custom parser paired with {@link serialize}. */
   parse?: (data: string) => TData;
+  /** Formats the human-readable error message from typed data. */
   format?: (data: TData) => string;
   /**
    * Optional advice on how to fix the error. Appears in the stringified
@@ -29,10 +47,15 @@ export interface IErrorDefinition<
    * Validate error data on throw(). If provided, data is parsed first.
    */
   dataSchema?: ValidationSchemaInput<TData>;
+  /** Optional metadata used by docs and tooling. */
   meta?: IErrorMeta;
+  /** Tags attached to the error helper. */
   tags?: ErrorTagType[];
 }
 
+/**
+ * Normalized runtime error-definition shape used internally by the helper implementation.
+ */
 export interface IErrorDefinitionFinal<
   TData extends DefaultErrorType,
 > extends IErrorDefinition<TData> {
@@ -42,6 +65,9 @@ export interface IErrorDefinitionFinal<
   dataSchema?: IValidationSchema<TData>;
 }
 
+/**
+ * Default structural shape for Runner error payloads.
+ */
 export type DefaultErrorType = Record<string, unknown>;
 type RequiredKeys<T extends object> = {
   [K in keyof T]-?: {} extends Pick<T, K> ? never : K;

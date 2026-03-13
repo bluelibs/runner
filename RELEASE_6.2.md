@@ -434,8 +434,7 @@ The guide has been substantially restructured in this release:
 
 The internal `createFrameworkRootGateway` function and its associated constant
 `FRAMEWORK_ROOT_RESOURCE_ID` have been renamed to `createSyntheticFrameworkRoot`
-and `SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID`. The old name is still exported as
-an alias for backwards compatibility.
+and `SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID`.
 
 The refactor also introduces two named namespace resource ids that make the
 internal tree easier to inspect:
@@ -524,3 +523,11 @@ const value = await runtime.getLazyResourceValue(heavyResource);
 
 **Fix:** call `getLazyResourceValue()` before `runtime.dispose()` starts, or
 handle the new error.
+
+---
+
+## Documentation Follow-Ups
+
+- [ ] Run a dedicated subagent review that checks public-surface JSDoc against
+  `readmes/AI.md`, composed guides, and Typedoc output so API comments stay
+  aligned with the documented contracts.

@@ -34,7 +34,7 @@ export interface ResourceFluentBuilderBeforeInit<
 > {
   id: string;
 
-  // Append signature (default)
+  /** Adds resource dependencies, merging by default unless `override: true` is used. */
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | ((config: TConfig) => TNewDeps),
     options?: { override?: false },
@@ -48,7 +48,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
-  // Override signature (replace)
+  /** Replaces previously declared resource dependencies. */
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | ((config: TConfig) => TNewDeps),
     options: { override: true },
@@ -62,6 +62,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /** Attaches resource middleware. */
   middleware<TNewMw extends ResourceMiddlewareAttachmentType[]>(
     mw: TNewMw,
     options?: { override?: boolean },
@@ -75,7 +76,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TNewMw
   >;
 
-  // Append signature (default)
+  /** Adds resource tags, merging by default unless `override: true` is used. */
   tags<const TNewTags extends TagType[]>(
     tags: EnsureTagsForTarget<"resources", TNewTags>,
     options?: { override?: false },
@@ -89,7 +90,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
-  // Override signature (replace)
+  /** Replaces previously declared resource tags. */
   tags<const TNewTags extends TagType[]>(
     tags: EnsureTagsForTarget<"resources", TNewTags>,
     options: { override: true },
@@ -103,6 +104,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /** Creates private mutable context shared across the resource lifecycle hooks. */
   context<TNewCtx>(
     factory: () => TNewCtx,
   ): ResourceFluentBuilderBeforeInit<
@@ -115,6 +117,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /** Declares the resource configuration schema. */
   configSchema<
     TNewConfig = never,
     TSchema extends ValidationSchemaInput<
@@ -152,6 +155,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /** Declares the resolved resource value schema. */
   resultSchema<
     TResolved = never,
     TSchema extends ValidationSchemaInput<
@@ -169,6 +173,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends IResourceMeta>(
     m: TNewMeta,
   ): ResourceFluentBuilderBeforeInit<
@@ -181,6 +186,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /** Sets the resource initializer and advances the builder into its post-init phase. */
   init<TNewConfig = TConfig, TNewValue extends Promise<any> = TValue>(
     fn: ResourceInitFn<
       ResolveConfig<TConfig, TNewConfig>,
@@ -201,7 +207,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
-  // Kept available pre-init for compatibility and ergonomic ordering.
+  /** Registers child definitions owned by this resource. */
   register(
     items:
       | RegisterableItems
@@ -218,6 +224,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /** Declares the resource dispose hook. */
   dispose(
     fn: NonNullable<
       IResourceDefinition<
@@ -242,6 +249,12 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /**
+   * Declares the resource `ready()` hook.
+   *
+   * Use this when the resource should begin admitting external work only after
+   * startup wiring is complete. The impact is startup ordering, not value creation.
+   */
   ready(
     fn: NonNullable<
       IResourceDefinition<
@@ -266,6 +279,12 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /**
+   * Declares the resource `cooldown()` hook.
+   *
+   * Use this to stop new intake quickly during shutdown. The impact is on admission
+   * control during `coolingDown`, not on final teardown.
+   */
   cooldown(
     fn: NonNullable<
       IResourceDefinition<
@@ -290,6 +309,12 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /**
+   * Declares the resource `health()` probe.
+   *
+   * Resources without this hook are omitted from runtime health reports, so adding
+   * it changes operator visibility rather than lifecycle behavior.
+   */
   health(
     fn: NonNullable<
       IResourceDefinition<

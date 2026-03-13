@@ -30,11 +30,17 @@ export const EventEmissionFailureMode = {
 export type EventEmissionFailureMode =
   (typeof EventEmissionFailureMode)[keyof typeof EventEmissionFailureMode];
 
+/**
+ * Listener error enriched with hook metadata when available.
+ */
 export interface IEventListenerError extends Error {
   listenerId?: string;
   listenerOrder?: number;
 }
 
+/**
+ * Summary report returned when event emission runs in reporting mode.
+ */
 export interface IEventEmitReport {
   totalListeners: number;
   attemptedListeners: number;
@@ -45,6 +51,9 @@ export interface IEventEmitReport {
   errors: IEventListenerError[];
 }
 
+/**
+ * Runtime options for a single event emission.
+ */
 export interface IEventEmitOptions {
   /**
    * Controls error behavior during listener execution.
@@ -64,6 +73,9 @@ export interface IEventEmitOptions {
 }
 
 // Helper to keep tuple inference intact for multi-event hooks
+/**
+ * Preserves tuple inference for hook subscriptions spanning multiple events.
+ */
 export function onAnyOf<T extends readonly IEventDefinition<any>[]>(
   ...defs: T
 ): T {
@@ -89,14 +101,20 @@ export function isOneOf<TDefs extends readonly IEventDefinition<any>[]>(
   return defs.some((definition) => definition.id === emission.id);
 }
 
+/**
+ * Declarative event definition contract.
+ */
 export interface IEventDefinition<TPayload = void> {
+  /** Stable event identifier within its owner subtree. */
   id: string;
+  /** Optional metadata used by docs and tooling. */
   meta?: IEventMeta;
   /**
    * Optional validation schema for runtime payload validation.
    * When provided, event payload will be validated when emitted.
    */
   payloadSchema?: ValidationSchemaInput<TPayload>;
+  /** Tags attached to the event for routing or policy decisions. */
   tags?: EventTagType[];
   /**
    * If true, listeners with the same priority run concurrently within a batch.
@@ -110,8 +128,9 @@ export interface IEventDefinition<TPayload = void> {
 }
 
 /**
- * The definioten of the event.
- * This is different from the event emission.
+ * Normalized runtime event definition.
+ *
+ * This describes the event itself, not a concrete emission instance.
  */
 export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
   id: string;
@@ -122,14 +141,16 @@ export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
    */
   [symbolEvent]: true;
   [symbolFilePath]: string;
+  /** Normalized payload validation schema. */
   payloadSchema?: IValidationSchema<TPayload>;
   /** Return an optional dependency wrapper for this event. */
   optional: () => IOptionalDependency<IEvent<TPayload>>;
+  /** Normalized tags attached to the event. */
   tags: EventTagType[];
 }
 
 /**
- * This represents the object that is passed to event handlers
+ * Concrete event emission passed to hooks and wildcard listeners.
  */
 export interface IEventEmission<TPayload = any> {
   /**

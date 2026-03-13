@@ -83,7 +83,10 @@ type GlobalMiddlewares = {
 };
 
 /**
- * Global middlewares
+ * Built-in middleware factories exposed through the public `middleware` namespace.
+ *
+ * Task middleware is grouped under `task`, resource middleware under `resource`,
+ * and shared shorthands remain available where that improves ergonomics.
  */
 export const globalMiddlewares: GlobalMiddlewares = {
   requireContext: requireContextTaskMiddleware,

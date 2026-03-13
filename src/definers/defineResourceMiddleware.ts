@@ -22,6 +22,9 @@ const resourceVariant: MiddlewareVariant = {
   tagTarget: "resourceMiddlewares",
 };
 
+/**
+ * Defines resource middleware directly from a configuration object.
+ */
 export function defineResourceMiddleware<
   TSchema extends ValidationSchemaInput<any>,
   TEnforceInputContract = void,

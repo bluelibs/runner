@@ -48,6 +48,9 @@ export const globalEvents = {
   ),
 } as const;
 
+/**
+ * Ordered list form of {@link globalEvents}, used when framework internals need iteration.
+ */
 export const globalEventsArray: IEvent<any>[] = [
   globalEvents.ready,
   globalEvents.disposing,

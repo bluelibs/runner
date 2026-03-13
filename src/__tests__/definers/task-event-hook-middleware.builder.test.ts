@@ -1,5 +1,6 @@
 import { r, run, definitions, defineResource } from "../..";
 import { createMessageError } from "../../errors";
+import type { AnyError } from "../../types/error";
 
 describe("task/event/hook/middleware builders", () => {
   it("task builder infers input type from run signature", async () => {
@@ -325,7 +326,7 @@ describe("task/event/hook/middleware builders", () => {
 
     const t = r
       .task("tests-builder-task-throws")
-      .throws([errA, errB.id, errA])
+      .throws([errA, errB, errA])
       .run(async () => Promise.resolve("ok"))
       .build();
 
@@ -336,7 +337,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(() =>
       r
         .task("tests-builder-task-throws-invalid")
-        .throws([{} as unknown as string])
+        .throws([{} as AnyError])
         .run(async () => Promise.resolve("ok"))
         .build(),
     ).toThrow(/Invalid throws entry/);
@@ -350,7 +351,7 @@ describe("task/event/hook/middleware builders", () => {
     const h = r
       .hook("tests-builder-hook-throws")
       .on(ev)
-      .throws([errA, errB.id, errA])
+      .throws([errA, errB, errA])
       .run(async () => {})
       .build();
 
@@ -363,7 +364,7 @@ describe("task/event/hook/middleware builders", () => {
       r
         .hook("tests-builder-hook-throws-invalid")
         .on(ev)
-        .throws([{} as unknown as string])
+        .throws([{} as AnyError])
         .run(async () => {})
         .build(),
     ).toThrow(/Invalid throws entry/);
@@ -375,7 +376,7 @@ describe("task/event/hook/middleware builders", () => {
 
     const mw = r.middleware
       .task("tests-builder-tmw-throws")
-      .throws([errA, errB.id, errA])
+      .throws([errA, errB, errA])
       .run(async ({ next, task }) => next(task.input))
       .build();
 
@@ -386,7 +387,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(() =>
       r.middleware
         .task("tests-builder-tmw-throws-invalid")
-        .throws([{} as unknown as string])
+        .throws([{} as AnyError])
         .run(async ({ next, task }) => next(task.input))
         .build(),
     ).toThrow(/Invalid throws entry/);
@@ -398,7 +399,7 @@ describe("task/event/hook/middleware builders", () => {
 
     const mw = r.middleware
       .resource("tests-builder-rmw-throws")
-      .throws([errA, errB.id, errA])
+      .throws([errA, errB, errA])
       .run(async ({ next }) => next())
       .build();
 
@@ -409,7 +410,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(() =>
       r.middleware
         .resource("tests-builder-rmw-throws-invalid")
-        .throws([{} as unknown as string])
+        .throws([{} as AnyError])
         .run(async ({ next }) => next())
         .build(),
     ).toThrow(/Invalid throws entry/);

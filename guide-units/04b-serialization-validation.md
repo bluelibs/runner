@@ -120,6 +120,12 @@ serializer.addType({
 When DTO classes are your preferred style, combine `@Match.Schema()` with `@Serializer.Field(...)`.
 This is purely ergonomic on top of the same runtime contracts.
 
+Decorator compatibility note:
+
+- Runner's current decorators use legacy TypeScript decorator semantics (`experimentalDecorators` style).
+- They do not rely on `emitDecoratorMetadata` or `reflect-metadata`; Runner stores its own schema and serializer field metadata explicitly.
+- If your project uses standard ES decorators, prefer functional schemas for now. Runner's decorator APIs are not yet documented as ES-decorator-compatible.
+
 ```typescript
 import { Match, Serializer } from "@bluelibs/runner";
 

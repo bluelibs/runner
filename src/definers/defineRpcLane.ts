@@ -10,6 +10,11 @@ import { deepFreeze } from "../tools/deepFreeze";
 import { assertDefinitionId } from "./assertDefinitionId";
 import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 
+/**
+ * Defines an RPC lane.
+ *
+ * RPC lanes describe how tagged tasks and events resolve to remote transport profiles.
+ */
 export function defineRpcLane(config: IRpcLaneDefinition): IRpcLane {
   if (typeof config.id !== "string" || config.id.trim().length === 0) {
     rpcLaneInvalidIdError.throw({ id: String(config.id) });

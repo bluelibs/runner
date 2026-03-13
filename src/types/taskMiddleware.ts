@@ -15,18 +15,22 @@ import {
   symbolTaskMiddleware,
 } from "./symbols";
 import { IContractable } from "./contracts";
-import type { ThrowsList } from "./error";
+import type { NormalizedThrowsList, ThrowsList } from "./error";
 
 export type { DependencyMapType, DependencyValuesType } from "./utilities";
 export type { TagType, TaskMiddlewareTagType } from "./tag";
 export type { IMiddlewareMeta } from "./meta";
 
+/**
+ * Declarative task-middleware definition contract.
+ */
 export interface ITaskMiddlewareDefinition<
   TConfig = any,
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
 > {
+  /** Stable middleware identifier. */
   id: string;
   /** Static or lazy dependency map. */
   dependencies?: TDependencies | ((config: TConfig) => TDependencies);
@@ -46,7 +50,9 @@ export interface ITaskMiddlewareDefinition<
     dependencies: DependencyValuesType<TDependencies>,
     config: TConfig,
   ) => Promise<any>;
+  /** Optional metadata used by docs and tooling. */
   meta?: IMiddlewareMeta;
+  /** Tags applied to the middleware definition. */
   tags?: TaskMiddlewareTagType[];
   /**
    * Declares which typed errors are part of this middleware's contract.
@@ -55,6 +61,9 @@ export interface ITaskMiddlewareDefinition<
   throws?: ThrowsList;
 }
 
+/**
+ * Normalized runtime task-middleware definition.
+ */
 export interface ITaskMiddleware<
   TConfig = any,
   TEnforceInputContract = void,
@@ -62,11 +71,14 @@ export interface ITaskMiddleware<
   TDependencies extends DependencyMapType = any,
 >
   extends
-    ITaskMiddlewareDefinition<
-      TConfig,
-      TEnforceInputContract,
-      TEnforceOutputContract,
-      TDependencies
+    Omit<
+      ITaskMiddlewareDefinition<
+        TConfig,
+        TEnforceInputContract,
+        TEnforceOutputContract,
+        TDependencies
+      >,
+      "throws"
     >,
     IContractable<TConfig, TEnforceInputContract, TEnforceOutputContract> {
   [symbolTaskMiddleware]: true;
@@ -74,11 +86,13 @@ export interface ITaskMiddleware<
   id: string;
   path?: string;
   [symbolRuntimeId]?: string;
+  /** Normalized dependency declaration. */
   dependencies: TDependencies | ((config: TConfig) => TDependencies);
   /** Normalized list of error ids declared via `throws`. */
-  throws?: readonly string[];
+  throws?: NormalizedThrowsList;
   /** Current configuration object (empty by default). */
   config: TConfig;
+  /** Normalized validation schema for middleware config. */
   configSchema?: IValidationSchema<TConfig>;
   /** Configure the middleware and return a marked, configured instance. */
   with: (
@@ -89,9 +103,13 @@ export interface ITaskMiddleware<
     TEnforceOutputContract,
     TDependencies
   >;
+  /** Normalized tags attached to the middleware. */
   tags: TaskMiddlewareTagType[];
 }
 
+/**
+ * Configured task-middleware instance returned by `.with(...)`.
+ */
 export interface ITaskMiddlewareConfigured<
   TConfig = any,
   TEnforceInputContract = void,
@@ -107,20 +125,27 @@ export interface ITaskMiddlewareConfigured<
   config: TConfig;
 }
 
+/**
+ * Input object passed to task middleware `run(...)`.
+ */
 export interface ITaskMiddlewareExecutionInput<
   TTaskInput = any,
   TTaskOutput = any,
 > {
-  /** Task hook */
+  /** Current task definition and input being processed. */
   task: {
     definition: ITask<TTaskInput, any, any, any>;
     input: TTaskInput;
   };
+  /** Continues execution, optionally overriding the task input. */
   next: (taskInput?: TTaskInput) => Promise<TTaskOutput>;
   /** Per-execution registry for sharing state between middleware and task */
   journal: ExecutionJournal;
 }
 
+/**
+ * Any task-middleware value that may appear in a task middleware attachment list.
+ */
 export type TaskMiddlewareAttachmentType =
   | ITaskMiddleware<void, any, any, any>
   | ITaskMiddleware<{ [K in any]?: any }, any, any, any>

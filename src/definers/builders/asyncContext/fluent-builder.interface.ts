@@ -7,8 +7,11 @@ import type {
 
 export interface AsyncContextFluentBuilder<T = unknown> {
   id: string;
+  /** Provides a custom serializer for transport scenarios. */
   serialize(fn: (data: T) => string): AsyncContextFluentBuilder<T>;
+  /** Provides a custom parser paired with {@link serialize}. */
   parse(fn: (raw: string) => T): AsyncContextFluentBuilder<T>;
+  /** Declares the context value schema. */
   configSchema<
     TNew = never,
     TSchema extends ValidationSchemaInput<[TNew] extends [never] ? any : TNew> =
@@ -28,8 +31,10 @@ export interface AsyncContextFluentBuilder<T = unknown> {
     schema: TSchema,
   ): AsyncContextFluentBuilder<ResolveValidationSchemaInput<TNew, TSchema>>;
 
+  /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends IAsyncContextMeta>(
     m: TNewMeta,
   ): AsyncContextFluentBuilder<T>;
+  /** Materializes the final async-context accessor for registration or reuse. */
   build(): IAsyncContext<T>;
 }

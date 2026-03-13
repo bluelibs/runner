@@ -17,16 +17,17 @@ export interface ResourceMiddlewareFluentBuilderBeforeRun<
   D extends DependencyMapType = {},
 > {
   id: string;
-  // Append signature (default)
+  /** Adds middleware dependencies, merging by default unless `override: true` is used. */
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | ((config: C) => TNewDeps),
     options?: { override?: false },
   ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D & TNewDeps>;
-  // Override signature (replace)
+  /** Replaces previously declared middleware dependencies. */
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | ((config: C) => TNewDeps),
     options: { override: true },
   ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, TNewDeps>;
+  /** Declares the middleware configuration schema. */
   configSchema<
     TNew = never,
     TSchema extends ValidationSchemaInput<[TNew] extends [never] ? any : TNew> =
@@ -56,13 +57,16 @@ export interface ResourceMiddlewareFluentBuilderBeforeRun<
     D
   >;
 
+  /** Sets the middleware implementation and advances the builder into its post-run phase. */
   run(
     fn: IResourceMiddlewareDefinition<C, In, Out, D>["run"],
   ): ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
+  /** Adds or replaces middleware tags. */
   tags<TNewTags extends ResourceMiddlewareTagType[]>(
     t: EnsureTagsForTarget<"resourceMiddlewares", TNewTags>,
     options?: { override?: boolean },
   ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
+  /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends IMiddlewareMeta>(
     m: TNewMeta,
   ): ResourceMiddlewareFluentBuilderBeforeRun<C, In, Out, D>;
@@ -79,6 +83,7 @@ export interface ResourceMiddlewareFluentBuilderAfterRun<
   D extends DependencyMapType = {},
 > {
   id: string;
+  /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends IMiddlewareMeta>(
     m: TNewMeta,
   ): ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
@@ -86,6 +91,7 @@ export interface ResourceMiddlewareFluentBuilderAfterRun<
   throws(
     list: ThrowsList,
   ): ResourceMiddlewareFluentBuilderAfterRun<C, In, Out, D>;
+  /** Materializes the final middleware definition for registration or reuse. */
   build(): IResourceMiddleware<C, In, Out, D>;
 }
 

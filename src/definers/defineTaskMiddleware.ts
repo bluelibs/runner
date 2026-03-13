@@ -22,6 +22,9 @@ const taskVariant: MiddlewareVariant = {
   tagTarget: "taskMiddlewares",
 };
 
+/**
+ * Defines task middleware directly from a configuration object.
+ */
 export function defineTaskMiddleware<
   TSchema extends ValidationSchemaInput<any>,
   TEnforceInputContract = void,

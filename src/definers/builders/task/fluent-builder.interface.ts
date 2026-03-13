@@ -27,7 +27,7 @@ export interface TaskFluentBuilder<
 > {
   id: string;
 
-  // Append signature (default)
+  /** Adds task dependencies, merging by default unless `override: true` is used. */
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | (() => TNewDeps),
     options?: { override?: false },
@@ -40,18 +40,19 @@ export interface TaskFluentBuilder<
     TMiddleware
   >;
 
-  // Override signature (replace)
+  /** Replaces previously declared task dependencies. */
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | (() => TNewDeps),
     options: { override: true },
   ): TaskFluentBuilder<TInput, TOutput, TNewDeps, TMeta, TTags, TMiddleware>;
 
+  /** Attaches task middleware. */
   middleware<TNewMw extends TaskMiddlewareAttachmentType[]>(
     mw: TNewMw,
     options?: { override?: boolean },
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TTags, TNewMw>;
 
-  // Append signature (default)
+  /** Adds task tags, merging by default unless `override: true` is used. */
   tags<const TNewTags extends TagType[]>(
     t: EnsureTagsForTarget<"tasks", TNewTags>,
     options?: { override?: false },
@@ -64,12 +65,13 @@ export interface TaskFluentBuilder<
     TMiddleware
   >;
 
-  // Override signature (replace)
+  /** Replaces previously declared task tags. */
   tags<const TNewTags extends TagType[]>(
     t: EnsureTagsForTarget<"tasks", TNewTags>,
     options: { override: true },
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TNewTags, TMiddleware>;
 
+  /** Declares the task input schema. */
   inputSchema<
     TNewInput = never,
     TSchema extends ValidationSchemaInput<
@@ -105,6 +107,7 @@ export interface TaskFluentBuilder<
     TMiddleware
   >;
 
+  /** Declares the task result schema. */
   resultSchema<
     TResolved = never,
     TSchema extends ValidationSchemaInput<
@@ -121,10 +124,12 @@ export interface TaskFluentBuilder<
     TMiddleware
   >;
 
+  /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends ITaskMeta>(
     m: TNewMeta,
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TNewMeta, TTags, TMiddleware>;
 
+  /** Sets the task implementation and advances the builder into its post-run phase. */
   run<TNewInput = TInput, TNewOutput extends Promise<any> = TOutput>(
     fn: NonNullable<
       ITaskDefinition<
@@ -145,6 +150,7 @@ export interface TaskFluentBuilder<
     TMiddleware
   >;
 
+  /** Declares typed errors associated with the task. */
   throws(
     list: ThrowsList,
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
@@ -164,6 +170,7 @@ export interface TaskFluentBuilderAfterRun<
     TaskMiddlewareAttachmentType[],
 > {
   id: string;
+  /** Declares typed errors associated with the task. */
   throws(
     list: ThrowsList,
   ): TaskFluentBuilderAfterRun<
@@ -174,6 +181,7 @@ export interface TaskFluentBuilderAfterRun<
     TTags,
     TMiddleware
   >;
+  /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends ITaskMeta>(
     m: TNewMeta,
   ): TaskFluentBuilderAfterRun<
@@ -184,6 +192,7 @@ export interface TaskFluentBuilderAfterRun<
     TTags,
     TMiddleware
   >;
+  /** Materializes the final task definition for registration or reuse. */
   build(): ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
 }
 

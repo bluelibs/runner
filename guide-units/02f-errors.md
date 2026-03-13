@@ -116,14 +116,14 @@ const userNotFound = r.error<{ userId: string }>("userNotFound").build();
 
 const getUser = r
   .task("getUser")
-  .throws([unauthorized, userNotFound, "unauthorized"])
+  .throws([unauthorized, userNotFound])
   .run(async () => ({ ok: true }))
   .build();
 
 console.log(getUser.throws);
 ```
 
-The `throws` list is normalized and deduplicated at definition time.
+The `throws` list accepts Runner error helpers only, and is normalized and deduplicated at definition time.
 
 Recommended practice:
 

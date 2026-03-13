@@ -100,4 +100,7 @@ const globalTagsBase = {
     }),
   ),
 };
+/**
+ * Built-in tags used by framework features such as remote lanes, scheduling, and observability.
+ */
 export const globalTags = globalTagsBase;

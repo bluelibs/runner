@@ -12,11 +12,13 @@ import type {
   InferValidationSchemaInput,
   ValidationSchemaInput,
 } from "../types/utilities";
+import type { AnyError, ThrowsList } from "../types/error";
 import {
   symbolForkedFrom,
   symbolResource,
   symbolFilePath,
   symbolOptionalDependency,
+  symbolError,
   symbolResourceIsolateDeclarations,
   symbolResourceRegistersChildren,
   symbolResourceSubtreeDeclarations,
@@ -43,6 +45,26 @@ import {
 } from "./isolatePolicy";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
+function cloneThrowsList(throwsList: readonly string[] | undefined) {
+  if (throwsList === undefined) return undefined;
+
+  return throwsList.map(
+    (id) =>
+      ({
+        id,
+        // Forked resources already hold normalized ids; rebuild the minimal
+        // branded helper shape accepted by normalizeThrows().
+        [symbolError]: true as const,
+      }) as AnyError,
+  ) satisfies ThrowsList;
+}
+
+/**
+ * Defines a resource.
+ *
+ * Resources model long-lived services and state. Use this low-level API when you want
+ * to construct the full definition object directly instead of using the fluent builder.
+ */
 export function defineResource<
   TConfigSchema extends ValidationSchemaInput<any>,
   TResultSchema extends ValidationSchemaInput<any>,
@@ -323,7 +345,7 @@ export function defineResource<
     configSchema: current.configSchema,
     resultSchema: current.resultSchema,
     tags: current.tags,
-    throws: current.throws,
+    throws: cloneThrowsList(current.throws),
     middleware: current.middleware,
     dispose: current.dispose,
     ready: current.ready,

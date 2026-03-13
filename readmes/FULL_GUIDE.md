@@ -2921,14 +2921,14 @@ const userNotFound = r.error<{ userId: string }>("userNotFound").build();
 
 const getUser = r
   .task("getUser")
-  .throws([unauthorized, userNotFound, "unauthorized"])
+  .throws([unauthorized, userNotFound])
   .run(async () => ({ ok: true }))
   .build();
 
 console.log(getUser.throws);
 ```
 
-The `throws` list is normalized and deduplicated at definition time.
+The `throws` list accepts Runner error helpers only, and is normalized and deduplicated at definition time.
 
 Recommended practice:
 
@@ -4145,6 +4145,12 @@ serializer.addType({
 When DTO classes are your preferred style, combine `@Match.Schema()` with `@Serializer.Field(...)`.
 This is purely ergonomic on top of the same runtime contracts.
 
+Decorator compatibility note:
+
+- Runner's current decorators use legacy TypeScript decorator semantics (`experimentalDecorators` style).
+- They do not rely on `emitDecoratorMetadata` or `reflect-metadata`; Runner stores its own schema and serializer field metadata explicitly.
+- If your project uses standard ES decorators, prefer functional schemas for now. Runner's decorator APIs are not yet documented as ES-decorator-compatible.
+
 ```typescript
 import { Match, Serializer } from "@bluelibs/runner";
 
@@ -4340,6 +4346,42 @@ check(
   ),
 );
 ```
+
+### Extending Schemas
+
+Extend plain object patterns by composition:
+
+```typescript
+import { Match } from "@bluelibs/runner";
+
+const baseUser = {
+  id: Match.NonEmptyString,
+  email: Match.Email,
+};
+
+const adminUser = Match.compile({
+  ...baseUser,
+  role: Match.OneOf("admin", "owner"),
+});
+```
+
+Compiled schemas do not expose `.extend()`. When the compiled schema was created from an object-shaped pattern, extend it by composing `compiled.pattern` into a new pattern and compiling again:
+
+```typescript
+import { Match } from "@bluelibs/runner";
+
+const baseUser = Match.compile({
+  id: Match.NonEmptyString,
+  email: Match.Email,
+});
+
+const adminUser = Match.compile({
+  ...baseUser.pattern,
+  role: Match.OneOf("admin", "owner"),
+});
+```
+
+For decorated class schemas, use `Match.Schema({ base })` to compose one schema class from another, with `base` accepting either a class or a lazy `() => Class` resolver.
 
 ### Match Reference
 

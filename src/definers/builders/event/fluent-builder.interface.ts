@@ -13,6 +13,7 @@ export interface EventFluentBuilder<
   TTransactional extends boolean | undefined = undefined,
 > {
   id: string;
+  /** Declares the event payload schema. */
   payloadSchema<
     TNew = never,
     TSchema extends ValidationSchemaInput<[TNew] extends [never] ? any : TNew> =
@@ -38,6 +39,7 @@ export interface EventFluentBuilder<
     TTransactional
   >;
 
+  /** Adds or replaces event tags. */
   tags<TNewTags extends EventTagType[]>(
     t: EnsureTagsForTarget<"events", TNewTags>,
     options?: { override?: boolean },
@@ -49,6 +51,7 @@ export interface EventFluentBuilder<
    */
   throws(list: ThrowsList): EventFluentBuilder<TPayload, TTransactional>;
 
+  /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends IEventMeta>(
     m: TNewMeta,
   ): EventFluentBuilder<TPayload, TTransactional>;
@@ -69,5 +72,6 @@ export interface EventFluentBuilder<
   transactional<TEnabled extends boolean = true>(
     enabled?: TEnabled,
   ): EventFluentBuilder<TPayload, TEnabled>;
+  /** Materializes the final event definition for registration or reuse. */
   build(): IEvent<TPayload> & { transactional?: TTransactional };
 }

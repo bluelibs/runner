@@ -19,7 +19,7 @@ export * from "./types";
 export * from "./utils";
 
 /**
- * Entry point for creating a task middleware builder.
+ * Creates a fluent task-middleware builder.
  */
 export function taskMiddlewareBuilder<C = void>(
   id: string,
@@ -54,7 +54,7 @@ export function taskMiddlewareBuilder<
 }
 
 /**
- * Entry point for creating a resource middleware builder.
+ * Creates a fluent resource-middleware builder.
  */
 export function resourceMiddlewareBuilder<C = void>(
   id: string,
@@ -88,5 +88,11 @@ export function resourceMiddlewareBuilder<
   return makeResourceMiddlewareBuilder(initial);
 }
 
+/**
+ * Shorthand for {@link taskMiddlewareBuilder}.
+ */
 export const taskMiddleware = taskMiddlewareBuilder;
+/**
+ * Shorthand for {@link resourceMiddlewareBuilder}.
+ */
 export const resourceMiddleware = resourceMiddlewareBuilder;

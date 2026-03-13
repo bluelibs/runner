@@ -498,7 +498,7 @@ r.error.is(err); // any Runner error check
 ```
 
 Thrown `IRunnerError` has: `.id`, `.data`, `.message` (from `.format()`, defaults to `JSON.stringify`), `.httpCode`, `.remediation`.
-`.dataSchema(...)` validates data at throw-time. `.throws([...])` on task/resource/hook/middleware is declarative metadata only.
+`.dataSchema(...)` validates data at throw-time. `.throws([...])` on task/resource/hook/middleware accepts Runner error helpers only and remains declarative metadata only.
 - `.new()` / `.throw()` / `.is()` work directly on the helper even if it is used outside the Runner graph.
 - Register the error when you want DI, store/discovery visibility, or app definitions to depend on it.
 

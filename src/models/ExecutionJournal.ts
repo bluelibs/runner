@@ -46,6 +46,9 @@ function createKey<T>(id: string): JournalKey<T> {
   return { id } as JournalKey<T>;
 }
 
+/**
+ * Factory helpers for creating execution journals and typed journal keys.
+ */
 export const journal = {
   createKey,
   /**

@@ -18,6 +18,12 @@ import { assertDefinitionId } from "./assertDefinitionId";
 import { isFrameworkDefinitionMarked } from "./markFrameworkDefinition";
 import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
+/**
+ * Defines an event.
+ *
+ * Events are typed signals, not executable work. Use this low-level API when you want
+ * to declare payload schema and delivery flags directly as an object.
+ */
 export function defineEvent<
   TSchema extends ValidationSchemaInput<any>,
   TTransactional extends boolean | undefined = boolean | undefined,

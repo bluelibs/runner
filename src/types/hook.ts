@@ -6,7 +6,7 @@ import {
 import { IEventDefinition, IEventEmission } from "./event";
 import { HookTagType } from "./tag";
 import { ITaskMeta } from "./meta";
-import type { ThrowsList } from "./error";
+import type { NormalizedThrowsList, ThrowsList } from "./error";
 import {
   CommonPayload,
   symbolFilePath,
@@ -79,7 +79,7 @@ export interface IHook<
   TDependencies extends DependencyMapType = {},
   TOn extends OnType = any,
   TMeta extends ITaskMeta = any,
-> extends IHookDefinition<TDependencies, TOn, TMeta> {
+> extends Omit<IHookDefinition<TDependencies, TOn, TMeta>, "throws"> {
   id: string;
   path?: string;
   [symbolRuntimeId]?: string;
@@ -87,6 +87,6 @@ export interface IHook<
   [symbolFilePath]: string;
   [symbolHook]: true;
   /** Normalized list of error ids declared via `throws`. */
-  throws?: readonly string[];
+  throws?: NormalizedThrowsList;
   tags: HookTagType[];
 }

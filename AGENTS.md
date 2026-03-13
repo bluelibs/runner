@@ -34,6 +34,7 @@
 - Attention when coding defensively (especially when using 'unknown' and lots of typeof), we use typescript and we want to offer public and inner surface absolute type-safety. This means once the trust-boundary has passed (user-input ended), we can be sure of the types.
 - Use check/Match when you have to validate values at runtime, much cleaner.
 - Be careful when polluting your context with FULL_GUIDE.md, it's generated so don't worry about it.
+- All public surfaces direct or indirect through types must have propper JSDoc comments.
 </specifics>
 
 <new_feature>

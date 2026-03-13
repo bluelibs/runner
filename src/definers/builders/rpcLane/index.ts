@@ -20,6 +20,9 @@ export * from "./types";
 export * from "./utils";
 export * from "./http-client";
 
+/**
+ * Creates a fluent RPC-lane builder.
+ */
 export function rpcLaneBuilder(id: string): RpcLaneFluentBuilder {
   const filePath = getCallerFile();
   const initial: BuilderState<IRpcLaneMeta> = Object.freeze({
@@ -34,6 +37,9 @@ export function rpcLaneBuilder(id: string): RpcLaneFluentBuilder {
   return makeRpcLaneBuilder(initial);
 }
 
+/**
+ * Freezes an RPC-lane topology declaration so profile and binding references stay stable.
+ */
 export function rpcLanesTopologyBuilder<
   const TBindings extends readonly IRpcLaneTopologyBinding[],
   const TProfiles extends Record<
@@ -52,6 +58,9 @@ export interface RpcLaneBuilderWithTopology {
   httpClient: typeof rpcLaneHttpClient;
 }
 
+/**
+ * RPC-lane builder namespace with topology and HTTP-client helpers attached.
+ */
 export const rpcLane: RpcLaneBuilderWithTopology = Object.assign(
   rpcLaneBuilder,
   {
@@ -60,4 +69,7 @@ export const rpcLane: RpcLaneBuilderWithTopology = Object.assign(
   },
 );
 
+/**
+ * Registers named RPC HTTP client presets for later lookup by topology profiles.
+ */
 export { registerRpcLaneHttpClientPreset };

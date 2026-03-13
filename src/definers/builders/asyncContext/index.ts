@@ -10,7 +10,9 @@ export * from "./types";
 export * from "./utils";
 
 /**
- * Entry point for creating an async context builder.
+ * Creates a fluent async-context builder.
+ *
+ * Async contexts are for per-execution state propagation, not general dependency injection.
  */
 export function asyncContextBuilder<T = unknown>(
   id: string,
@@ -28,4 +30,7 @@ export function asyncContextBuilder<T = unknown>(
   return makeAsyncContextBuilder(initial);
 }
 
+/**
+ * Shorthand for {@link asyncContextBuilder}.
+ */
 export const asyncContext = asyncContextBuilder;
