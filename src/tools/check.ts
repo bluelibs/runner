@@ -1,3 +1,12 @@
+import { Match } from "./check/engine";
+import { hasClassSchemaMetadata } from "./check/classSchema";
+import { registerCheckRuntime } from "./check/runtime";
+
+registerCheckRuntime({
+  Match,
+  hasClassSchemaMetadata,
+});
+
 export { check, Match } from "./check/engine";
 export type { CheckOptions } from "./check/engine";
 export type {

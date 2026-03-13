@@ -172,6 +172,7 @@ export class StoreRegistry {
           this.registerDefinitionAlias(reference, canonicalId),
         resolveDefinitionId: (reference) => this.resolveDefinitionId(reference),
       },
+      () => this.store.mode,
     );
   }
 
@@ -411,7 +412,11 @@ export class StoreRegistry {
   }
 
   computeRegistrationDeeply<_C>(element: IResource<_C>, config?: _C) {
-    return this.writer.computeRegistrationDeeply(element, config);
+    return this.writer.computeRegistrationDeeply(
+      element,
+      config,
+      this.store.mode,
+    );
   }
 
   storeResource<_C>(

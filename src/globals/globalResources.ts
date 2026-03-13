@@ -9,6 +9,7 @@ import { temporalResource } from "./middleware/temporal.middleware";
 import { cronResource as cron } from "./cron/cron.resource";
 import { queueResource } from "./resources/queue.resource";
 import { healthResource } from "./resources/health.resource";
+import { modeResource } from "./resources/mode.resource";
 import { timersResource } from "./resources/timers.resource";
 import { runtimeResource } from "./resources/runtime.resource";
 import { storeResource } from "./resources/store.resource";
@@ -41,6 +42,7 @@ export const systemResources = {
  * Framework-level utility resources that apps commonly depend on directly.
  */
 export const runnerResources = {
+  mode: modeResource,
   health: healthResource,
   timers: timersResource,
   logger,

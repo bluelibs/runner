@@ -501,6 +501,44 @@ describe("run-isolate", () => {
     await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
   });
 
+  it("allows runner.mode when system dependencies are denied", async () => {
+    const modeReader = defineTask({
+      id: "policy-runner-mode-reader",
+      dependencies: { mode: globalResources.mode },
+      run: async (_input, deps) => deps.mode,
+    });
+
+    const app = defineResource({
+      id: "policy-runner-mode-app",
+      register: [modeReader],
+      isolate: {
+        deny: [scope("system.*", { dependencies: true })],
+      },
+    });
+
+    const runtime = await run(app);
+    await expect(runtime.runTask(modeReader)).resolves.toBe(runtime.mode);
+    await runtime.dispose();
+  });
+
+  it("allows denying runner.mode explicitly without reopening system.runtime", async () => {
+    const modeReader = defineTask({
+      id: "policy-runner-mode-explicit-reader",
+      dependencies: { mode: globalResources.mode },
+      run: async (_input, deps) => deps.mode,
+    });
+
+    const app = defineResource({
+      id: "policy-runner-mode-explicit-app",
+      register: [modeReader],
+      isolate: {
+        deny: [globalResources.mode],
+      },
+    });
+
+    await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
+  });
+
   it("supports denying container internals via definition references", async () => {
     const consumer = defineTask({
       id: "policy-container-internals-consumer",

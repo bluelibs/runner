@@ -14,6 +14,7 @@ import {
 import { ResourceTagType } from "./tag";
 import { IResourceMeta } from "./meta";
 import type { NormalizedThrowsList, ThrowsList } from "./error";
+import type { RunnerMode } from "./runner";
 import type { IsolationChannels, IsolationScope } from "../tools/scope";
 export type {
   IsolationScope,
@@ -181,6 +182,7 @@ export interface IsolationWhitelistEntry {
 
 export type IsolationPolicyResolver<TConfig = unknown> = (
   config: TConfig,
+  mode: RunnerMode,
 ) => IsolationPolicy;
 
 export type IsolationPolicyInput<TConfig = unknown> =
@@ -269,14 +271,16 @@ export interface IResourceDefinition<
   /** Stable identifier. */
   id: string;
   /** Static or lazy dependency map. Receives `config` when provided. */
-  dependencies?: TDependencies | ((config: TConfig) => TDependencies);
+  dependencies?:
+    | TDependencies
+    | ((config: TConfig, mode: RunnerMode) => TDependencies);
   /**
    * Register other registerables (resources/tasks/middleware/events). Accepts a
    * static array or a function of `config` to support dynamic wiring.
    */
   register?:
     | Array<RegisterableItems>
-    | ((config: TConfig) => Array<RegisterableItems>);
+    | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItems>);
   /**
    * Initialize and return the resource value. Called once during boot.
    */
@@ -377,7 +381,9 @@ export interface IResourceDefinition<
    * Safe overrides to swap behavior while preserving identities. See
    * README: Overrides.
    */
-  overrides?: Array<OverridableElements>;
+  overrides?:
+    | Array<OverridableElements>
+    | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>);
 
   /**
    * Middleware applied around resource creation.
@@ -500,9 +506,11 @@ export interface IResource<
   >;
   register:
     | Array<RegisterableItems>
-    | ((config: TConfig) => Array<RegisterableItems>);
+    | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItems>);
   /** Safe override declarations applied to this resource. */
-  overrides: Array<OverridableElements>;
+  overrides:
+    | Array<OverridableElements>
+    | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>);
   /** Normalized middleware attachments applied to the resource lifecycle. */
   middleware: TMiddleware;
   [symbolFilePath]: string;

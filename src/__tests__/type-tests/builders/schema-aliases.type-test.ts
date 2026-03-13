@@ -1,5 +1,6 @@
-import { r } from "../../../";
+import { r, resources } from "../../../";
 import { Match } from "../../../decorators/legacy";
+import { RunnerMode } from "../../../types/runner";
 
 class DecoratedSchema {
   scope!: string;
@@ -40,11 +41,28 @@ Match.Field(String)(DecoratedSchema.prototype, "scope");
   const child = r.resource("types-schema-resource-entry-generic-child").build();
 
   r.resource<{ enabled: boolean }>("types-schema-resource-entry-generic")
-    .register((config) => {
+    .register((config, mode) => {
       config.enabled;
+      const runtimeMode: RunnerMode | undefined = mode;
       // @ts-expect-error property does not exist on entry-generic config
       config.unknown;
+      // @ts-expect-error mode stays a strict runner mode union
+      const invalidMode: "staging" = mode;
+      void runtimeMode;
       return config.enabled ? [child] : [];
+    })
+    .build();
+}
+
+// Scenario: resources.mode injects the resolved runner mode as a narrow DI value.
+{
+  r.resource("types-mode-dependency")
+    .dependencies({ mode: resources.mode })
+    .init(async (_config, deps) => {
+      const mode: RunnerMode = deps.mode;
+      // @ts-expect-error mode is not an object wrapper
+      deps.mode.mode;
+      return mode;
     })
     .build();
 }

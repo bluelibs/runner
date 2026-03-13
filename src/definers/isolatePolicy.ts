@@ -1,4 +1,5 @@
 import { isolateConflictError } from "../errors";
+import type { RunnerMode } from "../types/runner";
 import type {
   IsolationPolicy,
   IsolationPolicyDeclaration,
@@ -135,6 +136,7 @@ export function mergeIsolatePolicyDeclarations<TConfig>(
 export function resolveIsolatePolicyDeclarations<TConfig>(
   declarations: ReadonlyArray<IsolationPolicyDeclaration<TConfig>> | undefined,
   config: TConfig,
+  mode: RunnerMode,
   policyResourceId?: string,
 ): IsolationPolicy | undefined {
   if (!declarations || declarations.length === 0) {
@@ -144,7 +146,7 @@ export function resolveIsolatePolicyDeclarations<TConfig>(
   if (declarations.length === 1) {
     const declaration = declarations[0];
     return typeof declaration.policy === "function"
-      ? declaration.policy(config)
+      ? declaration.policy(config, mode)
       : declaration.policy;
   }
 
@@ -153,7 +155,7 @@ export function resolveIsolatePolicyDeclarations<TConfig>(
   for (const declaration of declarations) {
     const policy =
       typeof declaration.policy === "function"
-        ? declaration.policy(config)
+        ? declaration.policy(config, mode)
         : declaration.policy;
     merged = mergeIsolationPolicy(
       merged,
@@ -197,10 +199,11 @@ export function createDisplayIsolatePolicy<TConfig>(
     return merged;
   }
 
-  return (config: TConfig) =>
+  return (config: TConfig, mode: RunnerMode) =>
     resolveIsolatePolicyDeclarations(
       declarations,
       config,
+      mode,
       policyResourceId,
     ) as IsolationPolicy;
 }

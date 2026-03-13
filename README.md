@@ -120,7 +120,7 @@ Use these minimums before starting:
 
 | Requirement     | Minimum                 | Notes                                                                   |
 | --------------- | ----------------------- | ----------------------------------------------------------------------- |
-| Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                                 |
+| Node.js         | `22.x+`                 | Enforced by `package.json#engines.node`                                 |
 | TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository                   |
 | Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works                  |
 | `fetch` runtime | Built-in or polyfilled  | Required for explicit remote lane clients (`createHttpClient`) |

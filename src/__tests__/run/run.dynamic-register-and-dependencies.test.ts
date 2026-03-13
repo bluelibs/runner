@@ -2,9 +2,35 @@ import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
 import { globalResources } from "../../globals/globalResources";
 import { run } from "../../run";
 import { createMessageError } from "../../errors";
+import { RunnerMode } from "../../types/runner";
 
 describe("Dynamic Register and Dependencies", () => {
   describe("Dynamic Dependencies", () => {
+    it("should expose the resolved mode through resources.mode", async () => {
+      const modeProbe = defineResource({
+        id: "mode-probe",
+        dependencies: { mode: globalResources.mode },
+        init: async (_config, { mode }) => mode,
+      });
+
+      const app = defineResource({
+        id: "mode-probe-app",
+        register: [modeProbe],
+        dependencies: { modeProbe },
+        init: async (_config, { modeProbe }) => {
+          expect(modeProbe).toBe(RunnerMode.TEST);
+        },
+      });
+
+      const runtime = await run(app, { mode: RunnerMode.TEST });
+
+      expect(runtime.getResourceValue(globalResources.mode)).toBe(
+        RunnerMode.TEST,
+      );
+
+      await runtime.dispose();
+    });
+
     it("should support function-based dependencies", async () => {
       const serviceA = defineResource({
         id: "service-a",
@@ -39,7 +65,7 @@ describe("Dynamic Register and Dependencies", () => {
       await run(app);
     });
 
-    it("should support conditional dependencies based on environment", async () => {
+    it("should support conditional dependencies based on resolved mode", async () => {
       const prodService = defineResource({
         id: "service-prod",
         init: async () => "Production Service",
@@ -50,14 +76,10 @@ describe("Dynamic Register and Dependencies", () => {
         init: async () => "Development Service",
       });
 
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = "production";
-
       const conditionalService = defineResource({
         id: "service-conditional",
-        dependencies: () => ({
-          service:
-            process.env.NODE_ENV === "production" ? prodService : devService,
+        dependencies: (_config, mode) => ({
+          service: mode === RunnerMode.PROD ? prodService : devService,
         }),
         init: async (_, { service }) => `Using ${service}`,
       });
@@ -71,16 +93,12 @@ describe("Dynamic Register and Dependencies", () => {
         },
       });
 
-      await run(app);
-
-      // Test dev environment
-      process.env.NODE_ENV = "development";
+      await run(app, { mode: RunnerMode.PROD });
 
       const conditionalServiceDev = defineResource({
         id: "service-conditional-dev",
-        dependencies: () => ({
-          service:
-            process.env.NODE_ENV === "production" ? prodService : devService,
+        dependencies: (_config, mode) => ({
+          service: mode === RunnerMode.PROD ? prodService : devService,
         }),
         init: async (_, { service }) => `Using ${service}`,
       });
@@ -94,10 +112,7 @@ describe("Dynamic Register and Dependencies", () => {
         },
       });
 
-      await run(appDev);
-
-      // Restore original environment
-      process.env.NODE_ENV = originalEnv;
+      await run(appDev, { mode: RunnerMode.DEV });
     });
 
     it("should support forward references in function dependencies", async () => {
@@ -156,6 +171,41 @@ describe("Dynamic Register and Dependencies", () => {
   });
 
   describe("Dynamic Register", () => {
+    it("should pass mode to isolate and subtree resolvers", async () => {
+      const guardedTask = defineTask({
+        id: "mode-aware-guarded-task",
+        run: async () => "ok",
+      });
+
+      const app = defineResource({
+        id: "mode-aware-policy-app",
+        register: [guardedTask],
+        isolate: (_config, mode) => ({
+          exports: mode === RunnerMode.TEST ? [guardedTask] : "none",
+        }),
+        subtree: (_config, mode) => ({
+          validate:
+            mode === RunnerMode.TEST
+              ? []
+              : [
+                  (element) =>
+                    element.id === guardedTask.id
+                      ? [
+                          {
+                            code: "unexpected-mode",
+                            message: "task should not be public outside test",
+                          },
+                        ]
+                      : [],
+                ],
+        }),
+      });
+
+      const runtime = await run(app, { mode: RunnerMode.TEST });
+      await expect(runtime.runTask(guardedTask)).resolves.toBe("ok");
+      await runtime.dispose();
+    });
+
     it("should support function-based register", async () => {
       const serviceA = defineResource({
         id: "service-a",
@@ -196,7 +246,7 @@ describe("Dynamic Register and Dependencies", () => {
       );
     });
 
-    it("should support conditional registration based on environment", async () => {
+    it("should support conditional registration based on resolved mode", async () => {
       const prodService = defineResource({
         id: "service-prod",
         init: async () => "Production Service",
@@ -207,46 +257,35 @@ describe("Dynamic Register and Dependencies", () => {
         init: async () => "Development Service",
       });
 
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = "production";
-
       const conditionalApp = defineResource({
         id: "app-conditional",
-        register: () => [
-          process.env.NODE_ENV === "production" ? prodService : devService,
+        register: (_config, mode) => [
+          mode === RunnerMode.PROD ? prodService : devService,
         ],
-        dependencies: () => ({
-          service:
-            process.env.NODE_ENV === "production" ? prodService : devService,
+        dependencies: (_config, mode) => ({
+          service: mode === RunnerMode.PROD ? prodService : devService,
         }),
         init: async (_, { service }) => {
           expect(service).toBe("Production Service");
         },
       });
 
-      await run(conditionalApp);
-
-      // Test with development environment
-      process.env.NODE_ENV = "development";
+      await run(conditionalApp, { mode: RunnerMode.PROD });
 
       const conditionalAppDev = defineResource({
         id: "app-conditional-dev",
-        register: () => [
-          process.env.NODE_ENV === "production" ? prodService : devService,
+        register: (_config, mode) => [
+          mode === RunnerMode.PROD ? prodService : devService,
         ],
-        dependencies: () => ({
-          service:
-            process.env.NODE_ENV === "production" ? prodService : devService,
+        dependencies: (_config, mode) => ({
+          service: mode === RunnerMode.PROD ? prodService : devService,
         }),
         init: async (_, { service }) => {
           expect(service).toBe("Development Service");
         },
       });
 
-      await run(conditionalAppDev);
-
-      // Restore original environment
-      process.env.NODE_ENV = originalEnv;
+      await run(conditionalAppDev, { mode: RunnerMode.DEV });
     });
 
     it("should support dynamic registration with configurations", async () => {

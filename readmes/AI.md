@@ -177,7 +177,7 @@ userInput.toJSONSchema(); // machine-readable contract for tooling
   - `dispose: { totalBudgetMs, drainingBudgetMs, cooldownWindowMs }`: control shutdown budget, drain wait, and the short post-`cooldown()` admissions window.
   - `errorBoundary: true`: install process-level unhandled error capture and route it through `onUnhandledError`.
   - `executionContext: true | { ... }`: enable correlation ids, causal-chain tracking, and cycle detection for task/event execution.
-  - `mode: "dev" | "prod" | "test"`: override environment-based mode detection.
+  - `mode: "dev" | "prod" | "test"`: override environment-based mode detection. The effective resolved mode is always available at runtime as `runtime.mode`, and inside resources as `resources.mode`, even when you did not pass `mode` explicitly.
 - `debug` and `logs` tune observability; they do not change lifecycle semantics.
 - For the full option table, see the `run() and RunOptions` section in [FULL_GUIDE.md](./FULL_GUIDE.md).
 - Use `run(app, { debug: "verbose" })` for structured debug output.
@@ -189,6 +189,41 @@ userInput.toJSONSchema(); // machine-readable contract for tooling
 - `runtime.recoverWhen({ everyMs, check })` registers paused-state recovery conditions; Runner auto-resumes only after all active conditions for the current pause episode pass.
 - `executionContext: true | { createCorrelationId?, cycleDetection? }` enables correlation tracking and execution tree recording (Node-only; requires `AsyncLocalStorage`). See "Execution Context and Request Tracing" below.
 - `asyncContexts.execution.use()` returns the current branch snapshot: `{ correlationId, startedAt, depth, currentFrame, frames }`.
+
+Runtime mode access:
+
+```ts
+const runtime = await run(app);
+
+runtime.mode; // "dev" | "prod" | "test"
+```
+
+Inside resources, prefer the narrow DI value:
+
+```ts
+const app = r
+  .resource("app")
+  .dependencies({ mode: resources.mode })
+  .init(async (_config, { mode }) => {
+    if (mode === "test") {
+      // install test-only behavior
+    }
+
+    return "ready";
+  })
+  .build();
+```
+
+Dynamic resource callbacks also receive the resolved mode:
+
+```ts
+const app = r
+  .resource<{ enableDevTools: boolean }>("app")
+  .register((config, mode) => [
+    ...(config.enableDevTools && mode === "dev" ? [devToolsResource] : []),
+  ])
+  .build();
+```
 
 Lifecycle:
 
@@ -501,6 +536,7 @@ r.error.is(err); // any Runner error check
 
 Thrown `IRunnerError` has: `.id`, `.data`, `.message` (from `.format()`, defaults to `JSON.stringify`), `.httpCode`, `.remediation`.
 `.dataSchema(...)` validates data at throw-time. `.throws([...])` on task/resource/hook/middleware accepts Runner error helpers only and remains declarative metadata only.
+
 - `.new()` / `.throw()` / `.is()` work directly on the helper even if it is used outside the Runner graph.
 - Register the error when you want DI, store/discovery visibility, or app definitions to depend on it.
 

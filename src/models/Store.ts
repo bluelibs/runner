@@ -347,6 +347,7 @@ export class Store {
     >();
     builtInResourcesMap.set(globalResources.store, this);
     builtInResourcesMap.set(globalResources.eventManager, this.eventManager);
+    builtInResourcesMap.set(globalResources.mode, this.mode);
     builtInResourcesMap.set(globalResources.logger, this.logger);
     builtInResourcesMap.set(globalResources.taskRunner, this.taskRunner);
     builtInResourcesMap.set(globalResources.serializer, new Serializer());

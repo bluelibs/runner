@@ -1,6 +1,9 @@
 import type { IAsyncLocalStorage, IPlatformAdapter } from "../types";
 // no platformUnsupportedFunctionError used here; node has platform support
-import { loadAsyncLocalStorageClass } from "./node-als";
+import {
+  getBuiltinAsyncLocalStorageClass,
+  loadAsyncLocalStorageClass,
+} from "./node-als";
 
 export class NodePlatformAdapter implements IPlatformAdapter {
   readonly id = "node" as const;
@@ -56,8 +59,7 @@ export class NodePlatformAdapter implements IPlatformAdapter {
           !!process.env?.RUNNER_FORCE_NOOP_ALS;
         if (!forceNoop) {
           try {
-            const mod = require("async_hooks");
-            als = mod?.AsyncLocalStorage;
+            als = getBuiltinAsyncLocalStorageClass();
           } catch (_) {
             als = undefined;
           }

@@ -7,6 +7,7 @@ import {
   IResourceMeta,
 } from "../..";
 import type { AnyError } from "../../types/error";
+import { RunnerMode } from "../../types/runner";
 
 describe("resource builder", () => {
   it("build() returns branded resource with id", () => {
@@ -81,7 +82,9 @@ describe("resource builder", () => {
 
     expect(typeof composed.register).toBe("function");
     if (typeof composed.register === "function") {
-      const result = composed.register().map((rSrc) => rSrc.id);
+      const result = composed
+        .register(undefined as void, RunnerMode.TEST)
+        .map((rSrc) => rSrc.id);
       expect(result).toEqual([alpha.id, beta.id]);
     }
   });
@@ -100,9 +103,13 @@ describe("resource builder", () => {
     expect(typeof configOnly.register).toBe("function");
     if (typeof configOnly.register === "function") {
       expect(
-        configOnly.register({ enabled: true }).map((item) => item.id),
+        configOnly
+          .register({ enabled: true }, RunnerMode.TEST)
+          .map((item) => item.id),
       ).toEqual([enabled.id]);
-      expect(configOnly.register({ enabled: false })).toEqual([]);
+      expect(configOnly.register({ enabled: false }, RunnerMode.TEST)).toEqual(
+        [],
+      );
     }
   });
 
@@ -124,7 +131,9 @@ describe("resource builder", () => {
 
     expect(typeof composed.register).toBe("function");
     if (typeof composed.register === "function") {
-      const ids = composed.register().map((rSrc: { id: string }) => rSrc.id);
+      const ids = composed
+        .register(undefined as void, RunnerMode.TEST)
+        .map((rSrc: { id: string }) => rSrc.id);
       expect(ids).toEqual([alpha.id, beta.id]);
     }
   });
@@ -212,7 +221,10 @@ describe("resource builder", () => {
       .init(async () => Promise.resolve("OK"))
       .build();
 
-    expect(appended.overrides.map((x) => x?.id)).toEqual([a.id, b.id]);
+    expect(Array.isArray(appended.overrides)).toBe(true);
+    if (Array.isArray(appended.overrides)) {
+      expect(appended.overrides.map((x) => x?.id)).toEqual([a.id, b.id]);
+    }
 
     const overridden = r
       .resource("tests-builder-overrides-override")
@@ -221,7 +233,127 @@ describe("resource builder", () => {
       .init(async () => Promise.resolve("OK"))
       .build();
 
-    expect(overridden.overrides.map((x) => x?.id)).toEqual([b.id]);
+    expect(Array.isArray(overridden.overrides)).toBe(true);
+    if (Array.isArray(overridden.overrides)) {
+      expect(overridden.overrides.map((x) => x?.id)).toEqual([b.id]);
+    }
+  });
+
+  it("resource overrides support dynamic callbacks with config and mode", () => {
+    const baseA = defineResource({
+      id: "tests-builder-override-dynamic-a",
+      init: async () => 1,
+    });
+    const baseB = defineResource({
+      id: "tests-builder-override-dynamic-b",
+      init: async () => 2,
+    });
+    const a = r.override(baseA, async () => 11);
+    const b = r.override(baseB, async () => 22);
+
+    const built = r
+      .resource<{ enabled: boolean }>("tests-builder-overrides-dynamic")
+      .overrides((config, mode) =>
+        mode === RunnerMode.TEST && config.enabled ? [a] : [b],
+      )
+      .init(async () => Promise.resolve("OK"))
+      .build();
+
+    expect(typeof built.overrides).toBe("function");
+    if (typeof built.overrides !== "function") {
+      return;
+    }
+
+    expect(
+      built.overrides({ enabled: true }, RunnerMode.TEST).map((x) => x?.id),
+    ).toEqual([a.id]);
+    expect(
+      built.overrides({ enabled: false }, RunnerMode.TEST).map((x) => x?.id),
+    ).toEqual([b.id]);
+  });
+
+  it("resource overrides merge dynamic and static inputs across all combinations", () => {
+    const baseA = defineResource({
+      id: "tests-builder-override-merge-a",
+      init: async () => 1,
+    });
+    const baseB = defineResource({
+      id: "tests-builder-override-merge-b",
+      init: async () => 2,
+    });
+    const a = r.override(baseA, async () => 11);
+    const b = r.override(baseB, async () => 22);
+
+    const functionThenFunction = r
+      .resource<{ enabled: boolean }>("tests-builder-overrides-merge-fn-fn")
+      .overrides((config, mode) =>
+        config.enabled && mode === RunnerMode.TEST ? [a] : [],
+      )
+      .overrides((config, mode) =>
+        !config.enabled && mode === RunnerMode.TEST ? [b] : [],
+      )
+      .init(async () => Promise.resolve("OK"))
+      .build();
+
+    expect(typeof functionThenFunction.overrides).toBe("function");
+    if (typeof functionThenFunction.overrides === "function") {
+      expect(
+        functionThenFunction
+          .overrides({ enabled: true }, RunnerMode.TEST)
+          .map((x) => x.id),
+      ).toEqual([a.id]);
+      expect(
+        functionThenFunction
+          .overrides({ enabled: false }, RunnerMode.TEST)
+          .map((x) => x.id),
+      ).toEqual([b.id]);
+    }
+
+    const functionThenArray = r
+      .resource<{ enabled: boolean }>("tests-builder-overrides-merge-fn-array")
+      .overrides((config, mode) =>
+        config.enabled && mode === RunnerMode.TEST ? [a] : [],
+      )
+      .overrides([b])
+      .init(async () => Promise.resolve("OK"))
+      .build();
+
+    expect(typeof functionThenArray.overrides).toBe("function");
+    if (typeof functionThenArray.overrides === "function") {
+      expect(
+        functionThenArray
+          .overrides({ enabled: true }, RunnerMode.TEST)
+          .map((x) => x.id),
+      ).toEqual([a.id, b.id]);
+      expect(
+        functionThenArray
+          .overrides({ enabled: false }, RunnerMode.TEST)
+          .map((x) => x.id),
+      ).toEqual([b.id]);
+    }
+
+    const arrayThenFunction = r
+      .resource<{ enabled: boolean }>("tests-builder-overrides-merge-array-fn")
+      .overrides([a])
+      .overrides((config, mode) =>
+        config.enabled && mode === RunnerMode.TEST ? [b] : [],
+      )
+      .init(async () => Promise.resolve("OK"))
+      .build();
+
+    expect(typeof arrayThenFunction.overrides).toBe("function");
+    if (typeof arrayThenFunction.overrides === "function") {
+      expect(
+        arrayThenFunction
+          .overrides({ enabled: true }, RunnerMode.TEST)
+          .map((x) => x.id),
+      ).toEqual([a.id, b.id]);
+      expect(
+        arrayThenFunction
+          .overrides({ enabled: false }, RunnerMode.TEST)
+          .map((x) => x.id),
+      ).toEqual([a.id]);
+    }
   });
 
   it("init propagates dependencies and context through the classic signature", async () => {
@@ -378,10 +510,10 @@ describe("resource builder", () => {
       return;
     }
 
-    expect(built.isolate({ visible: true })).toEqual({
+    expect(built.isolate({ visible: true }, RunnerMode.TEST)).toEqual({
       exports: [publicTask],
     });
-    expect(built.isolate({ visible: false })).toEqual({
+    expect(built.isolate({ visible: false }, RunnerMode.TEST)).toEqual({
       exports: "none",
     });
   });
@@ -522,7 +654,9 @@ describe("resource builder", () => {
 
     expect(typeof merged.register).toBe("function");
     if (typeof merged.register === "function") {
-      const ids = merged.register().map((rSrc) => rSrc.id);
+      const ids = merged
+        .register(undefined as void, RunnerMode.TEST)
+        .map((rSrc) => rSrc.id);
       expect(ids).toEqual([gamma.id, delta.id]);
     }
 
@@ -534,7 +668,9 @@ describe("resource builder", () => {
 
     expect(typeof overridden.register).toBe("function");
     if (typeof overridden.register === "function") {
-      const ids = overridden.register().map((rSrc) => rSrc.id);
+      const ids = overridden
+        .register(undefined as void, RunnerMode.TEST)
+        .map((rSrc) => rSrc.id);
       expect(ids).toEqual([delta.id]);
     }
   });

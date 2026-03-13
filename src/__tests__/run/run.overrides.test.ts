@@ -7,6 +7,7 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { r } from "../..";
+import { RunnerMode } from "../../types/runner";
 
 describe("run-overrides", () => {
   it("should work with a simple override", async () => {
@@ -82,6 +83,34 @@ describe("run-overrides", () => {
     });
 
     const result = await run(root);
+    expect(result.value).toBe("Task overridden");
+  });
+
+  it("should resolve dynamic overrides from config and runtime mode", async () => {
+    const task = defineTask({
+      id: "task-dynamic-mode-override",
+      run: async () => "Task executed",
+    });
+
+    const overrideTask = r.override(task, async () => "Task overridden");
+
+    const middle = defineResource<{ enabled: boolean }>({
+      id: "app-dynamic-mode-override",
+      register: [task],
+      overrides: (config, mode) =>
+        config.enabled && mode === RunnerMode.TEST ? [overrideTask] : [],
+    });
+
+    const root = defineResource({
+      id: "root-dynamic-mode-override",
+      register: [middle.with({ enabled: true })],
+      dependencies: { task },
+      async init(_, deps) {
+        return await deps.task();
+      },
+    });
+
+    const result = await run(root, { mode: RunnerMode.TEST });
     expect(result.value).toBe("Task overridden");
   });
 

@@ -762,6 +762,7 @@ describe("RunResult", () => {
       lifecycleMode: ResourceLifecycleMode.Parallel,
       mode: RunnerMode.PROD,
     });
+    expect(runtime.mode).toBe(RunnerMode.PROD);
     expect(runtime.store.mode).toBe(RunnerMode.PROD);
 
     await runtime.dispose();

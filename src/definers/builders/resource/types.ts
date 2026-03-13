@@ -3,6 +3,7 @@ import type {
   IResourceDefinition,
   IResourceMeta,
   IsolationPolicyDeclaration,
+  OverridableElements,
   RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
@@ -11,6 +12,7 @@ import type {
   ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
+import type { RunnerMode } from "../../../types/runner";
 
 /**
  * Internal builder state - immutable snapshot of all builder configuration.
@@ -26,10 +28,10 @@ export type BuilderState<
 > = Readonly<{
   id: string;
   filePath: string;
-  dependencies?: TDeps | ((config: TConfig) => TDeps);
+  dependencies?: TDeps | ((config: TConfig, mode: RunnerMode) => TDeps);
   register?:
     | Array<RegisterableItems>
-    | ((config: TConfig) => Array<RegisterableItems>);
+    | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItems>);
   middleware?: TMiddleware;
   tags?: TTags;
   context?: () => TContext;
@@ -97,7 +99,9 @@ export type BuilderState<
   configSchema?: ValidationSchemaInput<any>;
   resultSchema?: ValidationSchemaInput<any>;
   meta?: TMeta;
-  overrides?: Array<any>;
+  overrides?:
+    | Array<OverridableElements>
+    | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>);
   throws?: ThrowsList;
   isolateDeclarations?: ReadonlyArray<IsolationPolicyDeclaration<TConfig>>;
   subtreeDeclarations?: ReadonlyArray<
@@ -126,12 +130,24 @@ export type ResolveConfig<TExisting, TProposed> =
 export type RegisterInput<TConfig> =
   | RegisterableItems
   | Array<RegisterableItems>
-  | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>);
+  | ((
+      config: TConfig,
+      mode: RunnerMode,
+    ) => RegisterableItems | Array<RegisterableItems>);
 
 /**
  * Internal state representation for register.
  */
 export type RegisterState<TConfig> =
   | Array<RegisterableItems>
-  | ((config: TConfig) => Array<RegisterableItems>)
+  | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItems>)
+  | undefined;
+
+export type OverridesInput<TConfig> =
+  | Array<OverridableElements>
+  | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>);
+
+export type OverridesState<TConfig> =
+  | Array<OverridableElements>
+  | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>)
   | undefined;

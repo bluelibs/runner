@@ -38,6 +38,7 @@ describe("Store framework bootstrap defensive guard", () => {
 
     expect(store.getOwnerResourceId(globalResources.store.id)).toBe("system");
     expect(store.getOwnerResourceId(globalResources.runtime.id)).toBe("system");
+    expect(store.getOwnerResourceId(globalResources.mode.id)).toBe("runner");
     expect(store.getOwnerResourceId(globalResources.health.id)).toBe("runner");
     expect(store.getOwnerResourceId(globalResources.logger.id)).toBe("runner");
     expect(store.getOwnerResourceId(globalResources.queue.id)).toBe("runner");

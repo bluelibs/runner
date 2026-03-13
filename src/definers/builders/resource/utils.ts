@@ -1,11 +1,19 @@
 import type {
   DependencyMapType,
   IResourceMeta,
+  OverridableElements,
   RegisterableItems,
   ResourceMiddlewareAttachmentType,
   ResourceTagType,
 } from "../../../defs";
-import type { BuilderState, RegisterInput, RegisterState } from "./types";
+import type { RunnerMode } from "../../../types/runner";
+import type {
+  BuilderState,
+  OverridesInput,
+  OverridesState,
+  RegisterInput,
+  RegisterState,
+} from "./types";
 
 /**
  * Clones and patches the builder state immutably.
@@ -83,9 +91,13 @@ export function toRegisterArray(
  * Wraps a register function to always return an array.
  */
 export function normalizeRegisterFunction<TConfig>(
-  fn: (config: TConfig) => RegisterableItems | Array<RegisterableItems>,
+  fn: (
+    config: TConfig,
+    mode: RunnerMode,
+  ) => RegisterableItems | Array<RegisterableItems>,
 ) {
-  return (config: TConfig) => toRegisterArray(fn(config));
+  return (config: TConfig, mode: RunnerMode) =>
+    toRegisterArray(fn(config, mode));
 }
 
 /**
@@ -101,13 +113,17 @@ export function mergeRegister<TConfig>(
     ? normalizeRegisterFunction(
         addition as (
           config: TConfig,
+          mode: RunnerMode,
         ) => RegisterableItems | Array<RegisterableItems>,
       )
     : toRegisterArray(addition as RegisterableItems | Array<RegisterableItems>);
 
   if (override || !existing) {
     return isFunctionAddition
-      ? (normalizedAddition as (config: TConfig) => Array<RegisterableItems>)
+      ? (normalizedAddition as (
+          config: TConfig,
+          mode: RunnerMode,
+        ) => Array<RegisterableItems>)
       : (normalizedAddition as Array<RegisterableItems>);
   }
 
@@ -115,24 +131,101 @@ export function mergeRegister<TConfig>(
     if (isFunctionAddition) {
       const additionFn = normalizedAddition as (
         config: TConfig,
+        mode: RunnerMode,
       ) => Array<RegisterableItems>;
-      return (config: TConfig) => [...existing(config), ...additionFn(config)];
+      return (config: TConfig, mode: RunnerMode) => [
+        ...existing(config, mode),
+        ...additionFn(config, mode),
+      ];
     }
     const additionArray = normalizedAddition as Array<RegisterableItems>;
-    return (config: TConfig) => [...existing(config), ...additionArray];
+    return (config: TConfig, mode: RunnerMode) => [
+      ...existing(config, mode),
+      ...additionArray,
+    ];
   }
 
   const existingArray = existing as Array<RegisterableItems>;
   if (isFunctionAddition) {
     const additionFn = normalizedAddition as (
       config: TConfig,
+      mode: RunnerMode,
     ) => Array<RegisterableItems>;
-    return (config: TConfig) => [...existingArray, ...additionFn(config)];
+    return (config: TConfig, mode: RunnerMode) => [
+      ...existingArray,
+      ...additionFn(config, mode),
+    ];
   }
 
   return [
     ...existingArray,
     ...(normalizedAddition as Array<RegisterableItems>),
+  ];
+}
+
+function normalizeOverridesFunction<TConfig>(
+  fn: (config: TConfig, mode: RunnerMode) => Array<OverridableElements>,
+) {
+  return (config: TConfig, mode: RunnerMode) => [...fn(config, mode)];
+}
+
+export function mergeOverrides<TConfig>(
+  existing: OverridesState<TConfig>,
+  addition: OverridesInput<TConfig>,
+  override: boolean,
+): OverridesState<TConfig> {
+  const isFunctionAddition = typeof addition === "function";
+  const normalizedAddition = isFunctionAddition
+    ? normalizeOverridesFunction(
+        addition as (
+          config: TConfig,
+          mode: RunnerMode,
+        ) => Array<OverridableElements>,
+      )
+    : [...addition];
+
+  if (override || !existing) {
+    return isFunctionAddition
+      ? (normalizedAddition as (
+          config: TConfig,
+          mode: RunnerMode,
+        ) => Array<OverridableElements>)
+      : (normalizedAddition as Array<OverridableElements>);
+  }
+
+  if (typeof existing === "function") {
+    if (isFunctionAddition) {
+      const additionFn = normalizedAddition as (
+        config: TConfig,
+        mode: RunnerMode,
+      ) => Array<OverridableElements>;
+      return (config: TConfig, mode: RunnerMode) => [
+        ...existing(config, mode),
+        ...additionFn(config, mode),
+      ];
+    }
+    const additionArray = normalizedAddition as Array<OverridableElements>;
+    return (config: TConfig, mode: RunnerMode) => [
+      ...existing(config, mode),
+      ...additionArray,
+    ];
+  }
+
+  const existingArray = existing as Array<OverridableElements>;
+  if (isFunctionAddition) {
+    const additionFn = normalizedAddition as (
+      config: TConfig,
+      mode: RunnerMode,
+    ) => Array<OverridableElements>;
+    return (config: TConfig, mode: RunnerMode) => [
+      ...existingArray,
+      ...additionFn(config, mode),
+    ];
+  }
+
+  return [
+    ...existingArray,
+    ...(normalizedAddition as Array<OverridableElements>),
   ];
 }
 

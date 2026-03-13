@@ -50,6 +50,11 @@ Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes av
 
 This object is your main interface to interact with the running application. It can also be declared as a dependency via `resources.runtime`.
 
+Mode access:
+
+- `runtime.mode` is the resolved effective mode for this container.
+- Inside resources, prefer `resources.mode` when you only need the mode and not the full runtime capability surface.
+
 Important bootstrap note: when `runtime` is declared as a dependency inside a resource `init()`, startup may still be in progress. You are guaranteed your current resource dependencies are ready, but not that all registered resources in the app are already initialized.
 
 `runtime.getHealth(...)` and `resources.health.getHealth(...)` are available only after `run(...)` finishes bootstrapping and before disposal starts. They only evaluate resources that define `health()`. Resources without `health()` are skipped, and startup-unused lazy resources stay asleep instead of being probed.

@@ -15,6 +15,7 @@ import type {
   SubtreeTaskMiddlewareEntry,
   SubtreeTaskValidator,
 } from "../types/subtree";
+import type { RunnerMode } from "../types/runner";
 import { isResourceMiddleware, isTaskMiddleware } from "./tools";
 
 function toArray<T>(value: T | T[] | undefined): T[] {
@@ -415,13 +416,14 @@ export function resolveResourceSubtreeDeclarations<TConfig>(
     | ReadonlyArray<ResourceSubtreePolicyDeclaration<TConfig>>
     | undefined,
   config: TConfig,
+  mode?: RunnerMode,
 ): NormalizedResourceSubtreePolicy | undefined {
   let merged: NormalizedResourceSubtreePolicy | undefined;
 
   for (const declaration of declarations ?? []) {
     const policyList =
       typeof declaration.policy === "function"
-        ? declaration.policy(config)
+        ? declaration.policy(config, mode)
         : declaration.policy;
     merged = mergeSubtreePolicyList(merged, policyList, declaration.options);
   }
@@ -456,10 +458,11 @@ export function createDisplaySubtreePolicy<TConfig>(
     return merged;
   }
 
-  return (config: TConfig) =>
+  return (config: TConfig, mode?: RunnerMode) =>
     resolveResourceSubtreeDeclarations(
       declarations,
       config,
+      mode,
     ) as NormalizedResourceSubtreePolicy;
 }
 

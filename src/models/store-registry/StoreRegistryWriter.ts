@@ -24,6 +24,7 @@ import {
 import { unknownItemTypeError } from "../../errors";
 import { IAsyncContext } from "../../types/asyncContext";
 import { IErrorHelper } from "../../types/error";
+import type { RunnerMode } from "../../types/runner";
 import { HookDependencyState } from "../../types/storeTypes";
 import { VisibilityTracker } from "../VisibilityTracker";
 import { StoreRegistryDefinitionPreparer } from "./StoreRegistryDefinitionPreparer";
@@ -71,6 +72,7 @@ export class StoreRegistryWriter {
     private readonly tagIndex: StoreRegistryTagIndex,
     private readonly definitionPreparer: StoreRegistryDefinitionPreparer,
     private readonly aliasResolver: StoreRegistryAliasResolver,
+    private readonly getRuntimeMode: () => RunnerMode,
   ) {}
 
   storeGenericItem<_C>(item: RegisterableItems) {
@@ -150,6 +152,7 @@ export class StoreRegistryWriter {
       collection: this.collections.hooks,
       key: "hook",
       mode: overrideMode,
+      runtimeMode: this.getRuntimeMode(),
       overrideTargetType: "Hook",
     });
 
@@ -181,6 +184,7 @@ export class StoreRegistryWriter {
       collection: this.collections.taskMiddlewares,
       key: "middleware",
       mode: storingMode,
+      runtimeMode: this.getRuntimeMode(),
       overrideTargetType: "Task middleware",
     });
 
@@ -211,6 +215,7 @@ export class StoreRegistryWriter {
       collection: this.collections.resourceMiddlewares,
       key: "middleware",
       mode: storingMode,
+      runtimeMode: this.getRuntimeMode(),
       overrideTargetType: "Resource middleware",
     });
 
@@ -258,16 +263,19 @@ export class StoreRegistryWriter {
       key: "resource",
       mode: storingMode,
       config: item.config,
+      runtimeMode: this.getRuntimeMode(),
       overrideTargetType: "Resource",
     });
     prepared.isolate = resolveIsolatePolicyDeclarations(
       prepared[symbolResourceIsolateDeclarations],
       item.config,
+      this.getRuntimeMode(),
       prepared.id,
     );
     prepared.subtree = this.normalizeResourceSubtreeMiddlewareAttachments(
       prepared,
       item.config,
+      this.getRuntimeMode(),
     );
 
     this.collections.resources.set(prepared.id, {
@@ -291,14 +299,22 @@ export class StoreRegistryWriter {
     );
     this.visibilityTracker.recordDefinitionTags(prepared.id, tags);
 
-    this.computeRegistrationDeeply(prepared, item.config);
+    this.computeRegistrationDeeply(
+      prepared,
+      item.config,
+      this.getRuntimeMode(),
+    );
     return prepared;
   }
 
-  computeRegistrationDeeply<_C>(element: IResource<_C>, config?: _C) {
+  computeRegistrationDeeply<_C>(
+    element: IResource<_C>,
+    config: _C | undefined,
+    runtimeMode: RunnerMode,
+  ) {
     const registerEntries =
       typeof element.register === "function"
-        ? element.register(config as _C)
+        ? element.register(config as _C, runtimeMode)
         : element.register;
     const items = registerEntries ?? [];
     this.assignNormalizedRegisterEntries(element, items);
@@ -512,17 +528,20 @@ export class StoreRegistryWriter {
       key: "resource",
       mode: overrideMode,
       config: configForResource,
+      runtimeMode: this.getRuntimeMode(),
       overrideTargetType: "Resource",
     });
     prepared.isolate = resolveIsolatePolicyDeclarations(
       prepared[symbolResourceIsolateDeclarations],
       configForResource,
+      this.getRuntimeMode(),
       prepared.id,
     );
     prepared.middleware = this.normalizeResourceMiddlewareAttachments(prepared);
     prepared.subtree = this.normalizeResourceSubtreeMiddlewareAttachments(
       prepared,
       configForResource as _C,
+      this.getRuntimeMode(),
     );
 
     this.collections.resources.set(prepared.id, {
@@ -545,7 +564,11 @@ export class StoreRegistryWriter {
     );
     this.visibilityTracker.recordDefinitionTags(prepared.id, tags);
 
-    this.computeRegistrationDeeply(prepared, configForResource as _C);
+    this.computeRegistrationDeeply(
+      prepared,
+      configForResource as _C,
+      this.getRuntimeMode(),
+    );
     return prepared as AnyResource;
   }
 
@@ -560,6 +583,7 @@ export class StoreRegistryWriter {
       collection: this.collections.tasks,
       key: "task",
       mode: storingMode,
+      runtimeMode: this.getRuntimeMode(),
       overrideTargetType: "Task",
     });
     task.middleware = this.normalizeTaskMiddlewareAttachments(task);
@@ -605,10 +629,12 @@ export class StoreRegistryWriter {
   private normalizeResourceSubtreeMiddlewareAttachments(
     resource: IResource<any, any, any>,
     config: unknown,
+    runtimeMode: RunnerMode,
   ): IResource<any, any, any>["subtree"] {
     const subtree = resolveResourceSubtreeDeclarations(
       resource[symbolResourceSubtreeDeclarations],
       config,
+      runtimeMode,
     );
     if (!subtree) {
       return subtree;

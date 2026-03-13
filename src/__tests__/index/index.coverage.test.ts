@@ -38,6 +38,7 @@ describe("package root exports coverage", () => {
     expect((root.r as any).system).toBeUndefined();
     expect((root.r as any).runner).toBeUndefined();
     expect((root.r as any).debug).toBeUndefined();
+    expect(typeof root.resources.mode).toBe("object");
     expect(typeof root.resources.runtime).toBe("object");
     expect(typeof root.events.ready).toBe("object");
     expect(typeof root.middleware.task.retry).toBe("object");

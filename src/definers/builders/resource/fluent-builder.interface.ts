@@ -17,6 +17,7 @@ import type {
   ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
+import type { RunnerMode } from "../../../types/runner";
 import type { ResolveConfig } from "./types";
 
 /**
@@ -36,7 +37,7 @@ export interface ResourceFluentBuilderBeforeInit<
 
   /** Adds resource dependencies, merging by default unless `override: true` is used. */
   dependencies<TNewDeps extends DependencyMapType>(
-    deps: TNewDeps | ((config: TConfig) => TNewDeps),
+    deps: TNewDeps | ((config: TConfig, mode: RunnerMode) => TNewDeps),
     options?: { override?: false },
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
@@ -50,7 +51,7 @@ export interface ResourceFluentBuilderBeforeInit<
 
   /** Replaces previously declared resource dependencies. */
   dependencies<TNewDeps extends DependencyMapType>(
-    deps: TNewDeps | ((config: TConfig) => TNewDeps),
+    deps: TNewDeps | ((config: TConfig, mode: RunnerMode) => TNewDeps),
     options: { override: true },
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
@@ -212,7 +213,10 @@ export interface ResourceFluentBuilderBeforeInit<
     items:
       | RegisterableItems
       | Array<RegisterableItems>
-      | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>),
+      | ((
+          config: TConfig,
+          mode: RunnerMode,
+        ) => RegisterableItems | Array<RegisterableItems>),
     options?: { override?: boolean },
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
@@ -382,7 +386,9 @@ export interface ResourceFluentBuilderBeforeInit<
   >;
 
   overrides(
-    o: Array<OverridableElements>,
+    o:
+      | Array<OverridableElements>
+      | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>),
     options?: { override?: boolean },
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
@@ -424,7 +430,10 @@ export interface ResourceFluentBuilderAfterInit<
     items:
       | RegisterableItems
       | Array<RegisterableItems>
-      | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>),
+      | ((
+          config: TConfig,
+          mode: RunnerMode,
+        ) => RegisterableItems | Array<RegisterableItems>),
     options?: { override?: boolean },
   ): ResourceFluentBuilderAfterInit<
     TConfig,
@@ -574,7 +583,9 @@ export interface ResourceFluentBuilderAfterInit<
     TMiddleware
   >;
   overrides(
-    o: Array<OverridableElements>,
+    o:
+      | Array<OverridableElements>
+      | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>),
     options?: { override?: boolean },
   ): ResourceFluentBuilderAfterInit<
     TConfig,

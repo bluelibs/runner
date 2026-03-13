@@ -1,4 +1,5 @@
 import type { DependencyMapType } from "../../../defs";
+import type { RunnerMode } from "../../../types/runner";
 
 /**
  * Shared builder utility: merges arrays with override support.
@@ -66,33 +67,47 @@ export function mergeDepsWithConfig<
   TExisting extends DependencyMapType,
   TNew extends DependencyMapType,
 >(
-  existing: TExisting | ((config: C) => TExisting) | undefined,
-  addition: TNew | ((config: C) => TNew),
+  existing:
+    | TExisting
+    | ((config: C, mode: RunnerMode) => TExisting)
+    | undefined,
+  addition: TNew | ((config: C, mode: RunnerMode) => TNew),
   override: boolean,
-): (TExisting & TNew) | ((config: C) => TExisting & TNew) {
+): (TExisting & TNew) | ((config: C, mode: RunnerMode) => TExisting & TNew) {
   const isFnExisting = typeof existing === "function";
   const isFnAddition = typeof addition === "function";
 
-  type Result = (TExisting & TNew) | ((config: C) => TExisting & TNew);
+  type Result =
+    | (TExisting & TNew)
+    | ((config: C, mode: RunnerMode) => TExisting & TNew);
 
   if (override || !existing) {
     return addition as Result;
   }
 
   if (isFnExisting && isFnAddition) {
-    const e = existing as (config: C) => TExisting;
-    const a = addition as (config: C) => TNew;
-    return ((config: C) => ({ ...e(config), ...a(config) })) as Result;
+    const e = existing as (config: C, mode: RunnerMode) => TExisting;
+    const a = addition as (config: C, mode: RunnerMode) => TNew;
+    return ((config: C, mode: RunnerMode) => ({
+      ...e(config, mode),
+      ...a(config, mode),
+    })) as Result;
   }
   if (isFnExisting && !isFnAddition) {
-    const e = existing as (config: C) => TExisting;
+    const e = existing as (config: C, mode: RunnerMode) => TExisting;
     const a = addition as TNew;
-    return ((config: C) => ({ ...e(config), ...a })) as Result;
+    return ((config: C, mode: RunnerMode) => ({
+      ...e(config, mode),
+      ...a,
+    })) as Result;
   }
   if (!isFnExisting && isFnAddition) {
     const e = existing as TExisting;
-    const a = addition as (config: C) => TNew;
-    return ((config: C) => ({ ...e, ...a(config) })) as Result;
+    const a = addition as (config: C, mode: RunnerMode) => TNew;
+    return ((config: C, mode: RunnerMode) => ({
+      ...e,
+      ...a(config, mode),
+    })) as Result;
   }
   const e = existing as TExisting;
   const a = addition as TNew;

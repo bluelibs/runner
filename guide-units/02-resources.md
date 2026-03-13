@@ -266,12 +266,10 @@ const feature = r
 ```typescript
 const advancedService = r
   .resource("app.services.advanced")
-  .dependencies((_config) => ({
+  .dependencies((_config, mode) => ({
     database,
     logger,
-    // Config is what you receive when you register this resource with .with()
-    conditionalService:
-      process.env.NODE_ENV === "production" ? serviceA : serviceB,
+    conditionalService: mode === "prod" ? serviceA : serviceB,
   }))
   .init(async (_config, { database, logger, conditionalService }) => {
     // Same interface as static dependencies

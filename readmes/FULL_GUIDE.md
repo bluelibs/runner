@@ -120,7 +120,7 @@ Use these minimums before starting:
 
 | Requirement     | Minimum                 | Notes                                                                   |
 | --------------- | ----------------------- | ----------------------------------------------------------------------- |
-| Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                                 |
+| Node.js         | `22.x+`                 | Enforced by `package.json#engines.node`                                 |
 | TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository                   |
 | Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works                  |
 | `fetch` runtime | Built-in or polyfilled  | Required for explicit remote lane clients (`createHttpClient`) |
@@ -498,12 +498,10 @@ const feature = r
 ```typescript
 const advancedService = r
   .resource("app.services.advanced")
-  .dependencies((_config) => ({
+  .dependencies((_config, mode) => ({
     database,
     logger,
-    // Config is what you receive when you register this resource with .with()
-    conditionalService:
-      process.env.NODE_ENV === "production" ? serviceA : serviceB,
+    conditionalService: mode === "prod" ? serviceA : serviceB,
   }))
   .init(async (_config, { database, logger, conditionalService }) => {
     // Same interface as static dependencies
@@ -2991,6 +2989,11 @@ Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes av
 
 This object is your main interface to interact with the running application. It can also be declared as a dependency via `resources.runtime`.
 
+Mode access:
+
+- `runtime.mode` is the resolved effective mode for this container.
+- Inside resources, prefer `resources.mode` when you only need the mode and not the full runtime capability surface.
+
 Important bootstrap note: when `runtime` is declared as a dependency inside a resource `init()`, startup may still be in progress. You are guaranteed your current resource dependencies are ready, but not that all registered resources in the app are already initialized.
 
 `runtime.getHealth(...)` and `resources.health.getHealth(...)` are available only after `run(...)` finishes bootstrapping and before disposal starts. They only evaluate resources that define `health()`. Resources without `health()` are skipped, and startup-unused lazy resources stay asleep instead of being probed.
@@ -4147,10 +4150,10 @@ This is purely ergonomic on top of the same runtime contracts.
 
 Decorator compatibility note:
 
-- Runner's default decorators target standard ES decorators.
+- `@bluelibs/runner` uses standard ES decorators by default.
 - They do not rely on `emitDecoratorMetadata` or `reflect-metadata`; Runner stores its own schema and serializer field metadata explicitly.
-- ES decorators require `Symbol.metadata` support at runtime. On runtimes that do not provide it yet, install a `Symbol.metadata` polyfill before decorated classes are evaluated.
-- For legacy TypeScript decorators (`experimentalDecorators`), import from `@bluelibs/runner/decorators/legacy`.
+- The ES-decorator path requires `Symbol.metadata` support at runtime. On runtimes that do not provide it yet, install a `Symbol.metadata` polyfill before decorated classes are evaluated.
+- For legacy TypeScript decorators (`experimentalDecorators`), import `Match` and `Serializer` from `@bluelibs/runner/decorators/legacy`. That compatibility entrypoint still includes the full `Match` helper surface (`ObjectIncluding`, `ArrayOf`, `fromSchema`, and `check(...)`), not only decorator helpers.
 
 ```typescript
 import { Match, Serializer } from "@bluelibs/runner";
@@ -5582,6 +5585,7 @@ Runner registers a set of built-in system resources during bootstrap. These are 
 
 | Resource                      | What it gives you                                                                                                                                                                                                                 |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `resources.mode`              | The resolved runtime mode as a narrow read-only value (`"dev" \| "prod" \| "test"`). Prefer this over `resources.runtime` when you only need mode-aware branching.                                                               |
 | `resources.runtime`           | The same handle returned by `run(app)`, scoped to this app. Use inside resources to call `runTask`, `emitEvent`, `getResourceValue`, or inspect `runtime.root` without passing the outer handle manually.                         |
 | `resources.taskRunner`        | The `TaskRunner` that executes tasks. Install global interceptors here during `init()` — before the runtime locks.                                                                                                                |
 | `resources.eventManager`      | The `EventManager` powering event emission and hook dispatch. Register global event or hook interceptors here.                                                                                                                    |

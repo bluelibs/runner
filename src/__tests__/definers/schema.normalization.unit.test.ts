@@ -164,23 +164,25 @@ describe("defineError schema normalization", () => {
     expect(decoratedError.new({ value: "ok" }).data).toEqual({ value: "ok" });
     expect(() => decoratedError.new({ value: 1 } as any)).toThrow();
 
-    expect(() =>
-      defineError<{ value: string }>({
-        id: "tests-error-schema-undecorated",
-        dataSchema: UndecoratedSchema as any,
-        format: (data) => data.value,
-      }),
-    ).toThrow("@Match.Schema()");
+    const undecoratedError = defineError<{ value: string }>({
+      id: "tests-error-schema-undecorated",
+      dataSchema: UndecoratedSchema as any,
+      format: (data) => data.value,
+    });
+
+    expect(() => undecoratedError.new({ value: "nope" })).toThrow(
+      "@Match.Schema()",
+    );
 
     const trulyAnonymousClass = (0, eval)("(class { value; })");
 
-    expect(() =>
-      defineError<{ value: string }>({
-        id: "tests-error-schema-undecorated-anonymous",
-        dataSchema: trulyAnonymousClass as any,
-        format: (data) => data.value,
-      }),
-    ).toThrow("Anonymous");
+    const anonymousError = defineError<{ value: string }>({
+      id: "tests-error-schema-undecorated-anonymous",
+      dataSchema: trulyAnonymousClass as any,
+      format: (data) => data.value,
+    });
+
+    expect(() => anonymousError.new({ value: "nope" })).toThrow("Anonymous");
   });
 
   it("handles null and parse-key pattern fallbacks", () => {

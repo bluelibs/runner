@@ -169,7 +169,8 @@ export class OverrideManager {
 
     visited.add(element.id);
 
-    element.overrides.forEach((override) => {
+    const overrides = element.overrides as Array<RegisterableItems>;
+    overrides.forEach((override) => {
       if (!override) {
         return;
       }

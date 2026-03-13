@@ -181,6 +181,13 @@ export class RunResult<V> implements IRuntime<V> {
   }
 
   /**
+   * Returns the runtime mode (e.g., "test", "dev", "prod") as specified in run options.
+   */
+  public get mode() {
+    return this.runOptions.mode;
+  }
+
+  /**
    * Returns the root value initialized by the root resource.
    * Only available after the root resource has been initialized.
    */
@@ -193,6 +200,9 @@ export class RunResult<V> implements IRuntime<V> {
     return this.getRuntimeState();
   }
 
+  /**
+   * Returns the root definition that started the runtime.
+   */
   public get root(): IResource<any, Promise<V>, any, any, any> {
     return this.getRootOrThrow().resource as IResource<
       any,

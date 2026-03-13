@@ -21,6 +21,7 @@ import {
 } from "../../../defs";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import type { ThrowsList } from "../../../types/error";
+import type { RunnerMode } from "../../../types/runner";
 import { defineResource } from "../../defineResource";
 import type {
   ResourceFluentBuilder,
@@ -28,7 +29,13 @@ import type {
   ResourceFluentBuilderBeforeInit,
 } from "./fluent-builder.interface";
 import type { BuilderState, ResolveConfig } from "./types";
-import { clone, mergeArray, mergeDependencies, mergeRegister } from "./utils";
+import {
+  clone,
+  mergeArray,
+  mergeDependencies,
+  mergeOverrides,
+  mergeRegister,
+} from "./utils";
 import {
   createDisplaySubtreePolicy,
   mergeResourceSubtreeDeclarations,
@@ -78,7 +85,7 @@ export function makeResourceBuilder<
       TNewDeps extends DependencyMapType,
       TIsOverride extends boolean = false,
     >(
-      deps: TNewDeps | ((config: TConfig) => TNewDeps),
+      deps: TNewDeps | ((config: TConfig, mode: RunnerMode) => TNewDeps),
       options?: { override?: TIsOverride },
     ) {
       const override = options?.override ?? false;
@@ -120,7 +127,10 @@ export function makeResourceBuilder<
       items:
         | RegisterableItems
         | Array<RegisterableItems>
-        | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>),
+        | ((
+            config: TConfig,
+            mode: RunnerMode,
+          ) => RegisterableItems | Array<RegisterableItems>),
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
@@ -486,10 +496,15 @@ export function makeResourceBuilder<
         THasInit
       >(next);
     },
-    overrides(o: Array<OverridableElements>, options?: { override?: boolean }) {
+    overrides(
+      o:
+        | Array<OverridableElements>
+        | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>),
+      options?: { override?: boolean },
+    ) {
       const override = options?.override ?? false;
       const next = clone(state, {
-        overrides: mergeArray(state.overrides, o, override),
+        overrides: mergeOverrides(state.overrides, o, override),
       });
       return makeResourceBuilder<
         TConfig,

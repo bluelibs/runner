@@ -68,6 +68,7 @@ export const SYSTEM_FRAMEWORK_ITEMS: readonly RegisterableItems[] =
 
 export const RUNNER_FRAMEWORK_ITEMS: readonly RegisterableItems[] =
   Object.freeze([
+    globalResources.mode,
     globalResources.health,
     globalResources.timers,
     globalResources.logger,

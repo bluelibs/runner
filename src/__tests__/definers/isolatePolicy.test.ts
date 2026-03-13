@@ -5,6 +5,7 @@ import {
   resolveIsolatePolicyDeclarations,
 } from "../../definers/isolatePolicy";
 import { r } from "../..";
+import { RunnerMode } from "../../types/runner";
 
 describe("isolatePolicy helpers", () => {
   it("preserves existing deny entries and throws on merged deny/only conflicts", () => {
@@ -120,18 +121,20 @@ describe("isolatePolicy helpers", () => {
       return;
     }
 
-    expect(display({ strict: true })).toEqual({
+    expect(display({ strict: true }, RunnerMode.TEST)).toEqual({
       deny: [denied],
       exports: [allowed],
     });
-    expect(display({ strict: false })).toEqual({
+    expect(display({ strict: false }, RunnerMode.TEST)).toEqual({
       deny: [denied],
       exports: "none",
     });
   });
 
   it("resolves undefined when isolate declarations are missing", () => {
-    expect(resolveIsolatePolicyDeclarations(undefined, {})).toBeUndefined();
+    expect(
+      resolveIsolatePolicyDeclarations(undefined, {}, RunnerMode.TEST),
+    ).toBeUndefined();
     expect(createDisplayIsolatePolicy(undefined)).toBeUndefined();
   });
 
@@ -149,6 +152,7 @@ describe("isolatePolicy helpers", () => {
       resolveIsolatePolicyDeclarations(
         [{ policy: { deny: { bad: true } as any } }, { policy: {} }],
         {},
+        RunnerMode.TEST,
         "tests-isolatePolicy-invalid-resolve",
       ),
     ).toEqual({
@@ -173,6 +177,7 @@ describe("isolatePolicy helpers", () => {
           { policy: () => ({ only: [allowed] }) },
         ],
         {},
+        RunnerMode.TEST,
         "tests-isolatePolicy-conflict-id-resource",
       ),
     ).toThrow(

@@ -1,6 +1,11 @@
 import type { IAsyncLocalStorage, IPlatformAdapter } from "../types";
 import { platformUnsupportedFunctionError } from "../../errors";
 import { normalizeError } from "../../tools/normalizeError";
+import {
+  getBuiltinAsyncLocalStorageClass,
+  loadAsyncLocalStorageClass,
+} from "./node-als";
+import { readEnvironmentVariable } from "./env";
 
 interface GenericEventTarget extends Record<string, unknown> {
   addEventListener?: (type: string, listener: (event: unknown) => void) => void;
@@ -18,9 +23,11 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
     null;
   private alsProbed = false;
 
-  async init() {}
+  async init() {
+    await this.probeAsyncLocalStorage();
+  }
 
-  private probeAsyncLocalStorage(): void {
+  private async probeAsyncLocalStorage(): Promise<void> {
     if (this.alsProbed) return;
     this.alsProbed = true;
 
@@ -36,10 +43,11 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
 
     try {
       // Prefer node:async_hooks compat when available in Deno.
-      const mod = require("node:async_hooks") as {
-        AsyncLocalStorage?: new <T>() => IAsyncLocalStorage<T>;
-      };
-      this.alsClass = mod.AsyncLocalStorage;
+      this.alsClass =
+        getBuiltinAsyncLocalStorageClass() ??
+        ((await loadAsyncLocalStorageClass()) as new <
+          T,
+        >() => IAsyncLocalStorage<T>);
     } catch {
       // Unsupported in this runtime; fallback remains unsupported.
     }
@@ -118,28 +126,37 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   }
 
   getEnv(key: string): string | undefined {
-    const g = globalThis as GenericEventTarget;
-    if (g.__ENV__ && typeof g.__ENV__ === "object") {
-      return (g.__ENV__ as Record<string, string | undefined>)[key];
-    }
-    if (
-      typeof process !== "undefined" &&
-      (process as { env: Record<string, string> }).env
-    )
-      return (process as { env: Record<string, string> }).env[key];
-    if (g.env && typeof g.env === "object") {
-      return (g.env as Record<string, string | undefined>)[key];
-    }
-    return undefined;
+    return readEnvironmentVariable(key);
   }
 
   hasAsyncLocalStorage(): boolean {
-    this.probeAsyncLocalStorage();
+    if (!this.alsProbed) {
+      const g = globalThis as GenericEventTarget;
+      if (typeof g.Deno === "undefined") {
+        this.alsProbed = true;
+        return false;
+      }
+
+      if (typeof g.AsyncLocalStorage === "function") {
+        this.alsClass = g.AsyncLocalStorage as new <
+          T,
+        >() => IAsyncLocalStorage<T>;
+        this.alsProbed = true;
+      } else {
+        try {
+          this.alsClass = getBuiltinAsyncLocalStorageClass() ?? null;
+        } catch {
+          this.alsClass = null;
+        }
+        this.alsProbed = true;
+      }
+    }
+
     return typeof this.alsClass === "function";
   }
 
   createAsyncLocalStorage<T>(): IAsyncLocalStorage<T> {
-    this.probeAsyncLocalStorage();
+    this.hasAsyncLocalStorage();
     if (this.alsClass) {
       return new this.alsClass<T>();
     }

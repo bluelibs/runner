@@ -23,6 +23,7 @@ import {
   hasParseFunction,
   isObjectRecord,
 } from "../tools/typeChecks";
+import { getRegisteredCheckRuntime } from "../tools/check/runtime";
 import type {
   InferValidationSchemaInput,
   IValidationSchema,
@@ -74,28 +75,47 @@ const normalizeErrorDataSchema = <TData extends DefaultErrorType>(
     return schema;
   }
 
-  const checkModule =
-    require("../tools/check") as typeof import("../tools/check");
-
   if (isClassConstructor(schema)) {
-    const classSchemaModule =
-      require("../tools/check/classSchema") as typeof import("../tools/check/classSchema");
-    if (!classSchemaModule.hasClassSchemaMetadata(schema)) {
-      throw new RunnerError(
-        "runner.errors.validation",
-        `Error data validation failed for ${errorId}: Class schema shorthand requires @Match.Schema() metadata for ${schema.name || "Anonymous"}.`,
-        {
-          subject: "Error data",
-          id: errorId,
-          originalError: "Missing @Match.Schema() metadata",
-        },
-      );
-    }
+    let compiledSchema: IValidationSchema<TData> | undefined;
 
-    return checkModule.Match.fromSchema(schema) as IValidationSchema<TData>;
+    return {
+      parse(data: TData): TData {
+        if (!compiledSchema) {
+          const { Match, hasClassSchemaMetadata } = getRegisteredCheckRuntime();
+          if (!hasClassSchemaMetadata(schema)) {
+            throw new RunnerError(
+              "runner.errors.validation",
+              `Error data validation failed for ${errorId}: Class schema shorthand requires @Match.Schema() metadata for ${schema.name || "Anonymous"}.`,
+              {
+                subject: "Error data",
+                id: errorId,
+                originalError: "Missing @Match.Schema() metadata",
+              },
+            );
+          }
+
+          compiledSchema = Match.fromSchema(schema) as IValidationSchema<TData>;
+        }
+
+        return compiledSchema.parse(data);
+      },
+    } satisfies IValidationSchema<TData>;
   }
 
-  return checkModule.Match.compile(schema as never) as IValidationSchema<TData>;
+  let compiledSchema: IValidationSchema<TData> | undefined;
+
+  return {
+    parse(data: TData): TData {
+      if (!compiledSchema) {
+        const { Match } = getRegisteredCheckRuntime();
+        compiledSchema = Match.compile(
+          schema as never,
+        ) as IValidationSchema<TData>;
+      }
+
+      return compiledSchema.parse(data);
+    },
+  } satisfies IValidationSchema<TData>;
 };
 
 export class RunnerError<

@@ -6,6 +6,7 @@ import {
   resolveResourceSubtreeDeclarations,
 } from "../../definers/subtreePolicy";
 import { r } from "../..";
+import { RunnerMode } from "../../types/runner";
 
 describe("mergeResourceSubtreePolicy", () => {
   it("appends resources subtree entries when override is disabled", () => {
@@ -238,9 +239,13 @@ describe("mergeResourceSubtreePolicy", () => {
     );
 
     expect(
-      resolveResourceSubtreeDeclarations(mergedDeclarations, {
-        enabled: true,
-      }),
+      resolveResourceSubtreeDeclarations(
+        mergedDeclarations,
+        {
+          enabled: true,
+        },
+        RunnerMode.TEST,
+      ),
     ).toEqual({
       tasks: {
         middleware: [],
@@ -249,9 +254,13 @@ describe("mergeResourceSubtreePolicy", () => {
       validate: [firstValidator],
     });
     expect(
-      resolveResourceSubtreeDeclarations(mergedDeclarations, {
-        enabled: false,
-      }),
+      resolveResourceSubtreeDeclarations(
+        mergedDeclarations,
+        {
+          enabled: false,
+        },
+        RunnerMode.TEST,
+      ),
     ).toEqual({
       tasks: {
         middleware: [],
@@ -344,10 +353,10 @@ describe("mergeResourceSubtreePolicy", () => {
       return;
     }
 
-    expect(dynamicDisplay({ enabled: true })).toEqual({
+    expect(dynamicDisplay({ enabled: true }, RunnerMode.TEST)).toEqual({
       validate: [expect.any(Function)],
     });
-    expect(dynamicDisplay({ enabled: false })).toEqual({
+    expect(dynamicDisplay({ enabled: false }, RunnerMode.TEST)).toEqual({
       validate: [],
     });
   });
@@ -615,7 +624,7 @@ describe("mergeResourceSubtreePolicy", () => {
       return;
     }
 
-    expect(dynamicDisplay({})).toEqual({});
+    expect(dynamicDisplay({}, RunnerMode.TEST)).toEqual({});
   });
 
   it("keeps empty typed-only branches empty when both sides omit validate", () => {
@@ -657,7 +666,7 @@ describe("mergeResourceSubtreePolicy", () => {
       return;
     }
 
-    expect(dynamicDisplay({ enabled: true })).toEqual({
+    expect(dynamicDisplay({ enabled: true }, RunnerMode.TEST)).toEqual({
       hooks: {
         validate: [expect.any(Function)],
       },
@@ -679,7 +688,9 @@ describe("mergeResourceSubtreePolicy", () => {
       },
     ]);
 
-    expect(resolveResourceSubtreeDeclarations(declarations, {})).toEqual({
+    expect(
+      resolveResourceSubtreeDeclarations(declarations, {}, RunnerMode.TEST),
+    ).toEqual({
       hooks: {
         validate: [secondValidator],
       },
@@ -712,7 +723,9 @@ describe("mergeResourceSubtreePolicy", () => {
       { override: true },
     );
 
-    expect(resolveResourceSubtreeDeclarations(declarations, {})).toEqual({
+    expect(
+      resolveResourceSubtreeDeclarations(declarations, {}, RunnerMode.TEST),
+    ).toEqual({
       hooks: {},
       validate: [secondValidator],
     });
@@ -738,7 +751,11 @@ describe("mergeResourceSubtreePolicy", () => {
     );
 
     expect(
-      resolveResourceSubtreeDeclarations(declarations, { enabled: true }),
+      resolveResourceSubtreeDeclarations(
+        declarations,
+        { enabled: true },
+        RunnerMode.TEST,
+      ),
     ).toEqual({
       tasks: {
         middleware: [],
@@ -753,7 +770,7 @@ describe("mergeResourceSubtreePolicy", () => {
       return;
     }
 
-    expect(display({ enabled: false })).toEqual({
+    expect(display({ enabled: false }, RunnerMode.TEST)).toEqual({
       tasks: {
         middleware: [],
         validate: [],
@@ -765,7 +782,9 @@ describe("mergeResourceSubtreePolicy", () => {
   it("accepts empty subtree policy arrays without throwing", () => {
     const declarations = mergeResourceSubtreeDeclarations(undefined, []);
 
-    expect(resolveResourceSubtreeDeclarations(declarations, {})).toEqual({});
+    expect(
+      resolveResourceSubtreeDeclarations(declarations, {}, RunnerMode.TEST),
+    ).toEqual({});
     expect(createDisplaySubtreePolicy(declarations)).toEqual({});
   });
 });
