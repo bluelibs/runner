@@ -1,5 +1,7 @@
 import { validationError } from "./errors";
+import { getDecoratorMetadataRecord } from "../decorators/metadata";
 import type { SerializerFieldOptions } from "./types";
+import { getClassChain } from "../tools/typeChecks";
 
 export type SerializerClassConstructor = abstract new (
   ...args: never[]
@@ -27,7 +29,11 @@ const SERIALIZER_FIELD_METADATA = new WeakMap<
   Function,
   Map<string, NormalizedSerializerFieldOptions>
 >();
-import { getClassChain } from "../tools/typeChecks";
+// Shared across entrypoints so ES decorator writes are visible to the same
+// serializer metadata reader regardless of which public path was imported.
+const SERIALIZER_FIELD_ES_METADATA = Symbol.for(
+  "@bluelibs/runner/serializer/field-metadata",
+);
 
 const SERIALIZER_FIELD_PLAN_CACHE = new WeakMap<
   Function,
@@ -90,7 +96,20 @@ function readOrCreateMetadata(
   return created;
 }
 
-export function setSerializerFieldOptions(
+function readOrCreateEsMetadata(
+  metadataRecord: Record<PropertyKey, unknown>,
+): Map<string, NormalizedSerializerFieldOptions> {
+  const existing = metadataRecord[SERIALIZER_FIELD_ES_METADATA];
+  if (existing !== undefined) {
+    return existing as Map<string, NormalizedSerializerFieldOptions>;
+  }
+
+  const created = new Map<string, NormalizedSerializerFieldOptions>();
+  metadataRecord[SERIALIZER_FIELD_ES_METADATA] = created;
+  return created;
+}
+
+export function setLegacySerializerFieldOptions(
   target: SerializerClassConstructor,
   propertyKey: string,
   options: SerializerFieldOptions,
@@ -100,13 +119,49 @@ export function setSerializerFieldOptions(
   serializerFieldMetadataVersion += 1;
 }
 
+export const setSerializerFieldOptions = setLegacySerializerFieldOptions;
+
+export function setEsSerializerFieldOptions(
+  metadataRecord: Record<PropertyKey, unknown>,
+  propertyKey: string,
+  options: SerializerFieldOptions,
+): void {
+  const metadata = readOrCreateEsMetadata(metadataRecord);
+  metadata.set(propertyKey, readFieldOptions(options));
+}
+
+function getCombinedSerializerFieldMetadata(
+  target: Function,
+): Map<string, NormalizedSerializerFieldOptions> | undefined {
+  const legacyMetadata = SERIALIZER_FIELD_METADATA.get(target);
+  const metadataRecord = getDecoratorMetadataRecord(target);
+  const esMetadata = metadataRecord?.[SERIALIZER_FIELD_ES_METADATA] as
+    | Map<string, NormalizedSerializerFieldOptions>
+    | undefined;
+
+  if (!legacyMetadata) {
+    return esMetadata;
+  }
+
+  if (!esMetadata) {
+    return legacyMetadata;
+  }
+
+  // Preserve one remap pipeline even when inheritance mixes legacy and ES
+  // decorator metadata.
+  return new Map<string, NormalizedSerializerFieldOptions>([
+    ...legacyMetadata.entries(),
+    ...esMetadata.entries(),
+  ]);
+}
+
 function compileSerializerFieldPlan(
   target: SerializerClassConstructor,
 ): SerializerFieldPlan {
   const byTargetKey = new Map<string, NormalizedSerializerFieldOptions>();
 
   for (const ctor of getClassChain(target as unknown as Function)) {
-    const metadata = SERIALIZER_FIELD_METADATA.get(ctor);
+    const metadata = getCombinedSerializerFieldMetadata(ctor);
     if (!metadata) continue;
 
     for (const [targetKey, options] of metadata.entries()) {

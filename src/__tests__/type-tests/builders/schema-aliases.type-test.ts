@@ -1,4 +1,5 @@
-import { Match, r } from "../../../";
+import { r } from "../../../";
+import { Match } from "../../../decorators/legacy";
 
 class DecoratedSchema {
   scope!: string;

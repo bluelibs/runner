@@ -1,9 +1,7 @@
-import {
-  CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID,
-  Match,
-} from "../../tools/check";
+import { CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID } from "../../tools/check";
 import { checkJsonSchemaUnsupportedPatternError } from "../../errors";
 import type { CheckJsonSchemaPatternRuntimeError } from "../../tools/check/errors";
+import { Match } from "../../decorators/legacy";
 
 const DRAFT_2020_12_SCHEMA = "https://json-schema.org/draft/2020-12/schema";
 

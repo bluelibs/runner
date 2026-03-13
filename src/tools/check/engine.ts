@@ -5,10 +5,9 @@ import {
 } from "./errors";
 import {
   getClassSchemaDefinition,
-  setClassFieldPattern,
-  setClassSchemaOptions,
   type MatchSchemaOptions,
 } from "./classSchema";
+import { createEsFieldDecorator, createEsSchemaDecorator } from "./decorators";
 import { isClassConstructor } from "../typeChecks";
 import {
   ClassPattern,
@@ -414,32 +413,13 @@ function fromSchema<TClass extends abstract new (...args: never[]) => unknown>(
 }
 
 function schemaDecorator(options?: MatchSchemaOptions): MatchSchemaDecorator {
-  return (target) => {
-    setClassSchemaOptions(target, options ?? {});
-  };
+  return createEsSchemaDecorator(options);
 }
 
 function fieldDecorator<TPattern extends MatchPattern>(
   pattern: TPattern,
 ): MatchPropertyDecorator {
-  return (target, key) => {
-    if (typeof key !== "string") {
-      throw createMatchPatternError(
-        "Bad pattern: Match.Field supports string property names only.",
-      );
-    }
-
-    const ctor = (
-      typeof target === "function" ? target : target.constructor
-    ) as abstract new (...args: never[]) => unknown;
-
-    assertPattern(
-      typeof ctor === "function",
-      "Bad pattern: Match.Field can only be used on class members.",
-    );
-
-    setClassFieldPattern(ctor, key, pattern);
-  };
+  return createEsFieldDecorator(pattern);
 }
 
 function mapOf<TPattern extends MatchPattern>(

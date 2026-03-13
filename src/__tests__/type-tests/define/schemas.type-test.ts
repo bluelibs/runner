@@ -1,5 +1,5 @@
 import z from "zod";
-import { Match, defineAsyncContext } from "../../../";
+import { defineAsyncContext } from "../../../";
 import {
   defineEvent,
   defineResource,
@@ -9,6 +9,7 @@ import {
   defineTaskMiddleware,
 } from "../../../define";
 import { defineError } from "../../../definers/defineError";
+import { Match } from "../../../decorators/legacy";
 
 class DecoratedSchema {
   ttl!: number;

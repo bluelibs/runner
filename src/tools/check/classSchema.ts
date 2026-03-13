@@ -1,4 +1,5 @@
 import { createMatchPatternError } from "./errors";
+import { getDecoratorMetadataRecord } from "../../decorators/metadata";
 import { isClassConstructor, getClassChain } from "../typeChecks";
 import type { MatchPattern } from "./types";
 
@@ -37,6 +38,11 @@ interface CachedClassSchemaDefinition {
 }
 
 const CLASS_SCHEMA_METADATA = new WeakMap<Function, ClassSchemaMetadata>();
+// Use the global registry so decorator writers/readers keep the same key even
+// when consumers mix top-level and subpath entrypoints in one process.
+const CLASS_SCHEMA_ES_METADATA = Symbol.for(
+  "@bluelibs/runner/check/class-schema-metadata",
+);
 const CLASS_SCHEMA_DEFINITION_CACHE = new WeakMap<
   Function,
   CachedClassSchemaDefinition
@@ -52,6 +58,22 @@ function ensureMetadata(target: Function): ClassSchemaMetadata {
     options: {},
   };
   CLASS_SCHEMA_METADATA.set(target, created);
+  return created;
+}
+
+function ensureEsMetadata(
+  metadata: Record<PropertyKey, unknown>,
+): ClassSchemaMetadata {
+  const existing = metadata[CLASS_SCHEMA_ES_METADATA];
+  if (existing !== undefined) {
+    return existing as ClassSchemaMetadata;
+  }
+
+  const created: ClassSchemaMetadata = {
+    fields: new Map<string, MatchPattern>(),
+    options: {},
+  };
+  metadata[CLASS_SCHEMA_ES_METADATA] = created;
   return created;
 }
 
@@ -83,7 +105,7 @@ function ctorAsFunction(target: ClassConstructor): Function {
   return target as unknown as Function;
 }
 
-export function setClassSchemaOptions(
+export function setLegacyClassSchemaOptions(
   target: ClassConstructor,
   options: MatchSchemaOptions,
 ): void {
@@ -103,6 +125,67 @@ export function setClassFieldPattern(
   const metadata = ensureMetadata(ctorAsFunction(target));
   metadata.fields.set(propertyKey, pattern);
   bumpSchemaMetadataVersion();
+}
+
+export function setEsClassSchemaOptions(
+  metadataRecord: Record<PropertyKey, unknown>,
+  options: MatchSchemaOptions,
+): void {
+  const metadata = ensureEsMetadata(metadataRecord);
+  metadata.options = {
+    ...metadata.options,
+    ...options,
+  };
+}
+
+export function setEsClassFieldPattern(
+  metadataRecord: Record<PropertyKey, unknown>,
+  propertyKey: string,
+  pattern: MatchPattern,
+): void {
+  const metadata = ensureEsMetadata(metadataRecord);
+  metadata.fields.set(propertyKey, pattern);
+}
+
+export function setLegacyClassFieldPattern(
+  target: ClassConstructor,
+  propertyKey: string,
+  pattern: MatchPattern,
+): void {
+  const metadata = ensureMetadata(ctorAsFunction(target));
+  metadata.fields.set(propertyKey, pattern);
+  bumpSchemaMetadataVersion();
+}
+
+function getCombinedClassSchemaMetadata(
+  target: Function,
+): ClassSchemaMetadata | undefined {
+  const legacyMetadata = CLASS_SCHEMA_METADATA.get(target);
+  const metadataRecord = getDecoratorMetadataRecord(target);
+  const esMetadata = metadataRecord?.[CLASS_SCHEMA_ES_METADATA] as
+    | ClassSchemaMetadata
+    | undefined;
+
+  if (!legacyMetadata) {
+    return esMetadata;
+  }
+
+  if (!esMetadata) {
+    return legacyMetadata;
+  }
+
+  // Merge both stores so a class chain can mix legacy- and ES-decorated types
+  // without forcing the rest of the validation pipeline to care.
+  return {
+    fields: new Map<string, MatchPattern>([
+      ...legacyMetadata.fields.entries(),
+      ...esMetadata.fields.entries(),
+    ]),
+    options: {
+      ...legacyMetadata.options,
+      ...esMetadata.options,
+    },
+  };
 }
 
 function buildClassSchemaDefinition(
@@ -125,7 +208,7 @@ function buildClassSchemaDefinition(
 
   try {
     for (const ctor of getClassChain(fn)) {
-      const metadata = CLASS_SCHEMA_METADATA.get(ctor);
+      const metadata = getCombinedClassSchemaMetadata(ctor);
       if (!metadata) continue;
 
       if (metadata.options.base) {
@@ -191,7 +274,7 @@ export function getClassSchemaDefinition(
 
 export function hasClassSchemaMetadata(target: ClassConstructor): boolean {
   for (const ctor of getClassChain(ctorAsFunction(target))) {
-    if (CLASS_SCHEMA_METADATA.has(ctor)) {
+    if (getCombinedClassSchemaMetadata(ctor)) {
       return true;
     }
   }

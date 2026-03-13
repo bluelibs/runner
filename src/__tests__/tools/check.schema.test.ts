@@ -2,7 +2,8 @@ import {
   checkJsonSchemaUnsupportedPatternError,
   matchError,
 } from "../../errors";
-import { Match, type MatchJsonSchema, check } from "../../tools/check";
+import { type MatchJsonSchema, check } from "../../tools/check";
+import { Match } from "../../decorators/legacy";
 
 function expectMatchFailure(
   run: () => unknown,

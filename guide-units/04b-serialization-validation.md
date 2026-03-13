@@ -122,9 +122,10 @@ This is purely ergonomic on top of the same runtime contracts.
 
 Decorator compatibility note:
 
-- Runner's current decorators use legacy TypeScript decorator semantics (`experimentalDecorators` style).
+- `@bluelibs/runner` uses standard ES decorators by default.
 - They do not rely on `emitDecoratorMetadata` or `reflect-metadata`; Runner stores its own schema and serializer field metadata explicitly.
-- If your project uses standard ES decorators, prefer functional schemas for now. Runner's decorator APIs are not yet documented as ES-decorator-compatible.
+- The ES-decorator path requires `Symbol.metadata` support at runtime. On runtimes that do not provide it yet, install a `Symbol.metadata` polyfill before decorated classes are evaluated.
+- For legacy TypeScript decorators (`experimentalDecorators`), import `Match` and `Serializer` from `@bluelibs/runner/decorators/legacy`. That compatibility entrypoint still includes the full `Match` helper surface (`ObjectIncluding`, `ArrayOf`, `fromSchema`, and `check(...)`), not only decorator helpers.
 
 ```typescript
 import { Match, Serializer } from "@bluelibs/runner";

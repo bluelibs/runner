@@ -41,10 +41,10 @@ import {
 import {
   remapObjectForSerialization,
   remapValueForSchemaDeserialize,
-  setSerializerFieldOptions,
   type SerializerClassConstructor,
 } from "./field-metadata";
 import { isClassConstructor } from "../tools/typeChecks";
+import { createEsSerializerFieldDecorator } from "./decorators";
 
 const GRAPH_VERSION = 1;
 const DEFAULT_MAX_DEPTH = 1000;
@@ -130,27 +130,7 @@ export class Serializer {
   public static Field(
     options: SerializerFieldOptions = {},
   ): SerializerFieldDecorator {
-    return (target, propertyKey) => {
-      if (typeof propertyKey !== "string") {
-        validationError(
-          "Invalid Serializer.Field() usage: only string property names are supported.",
-        );
-      }
-
-      const propertyName = propertyKey as string;
-
-      const ctor = (
-        typeof target === "function" ? target : target.constructor
-      ) as SerializerClassConstructor;
-
-      if (typeof ctor !== "function") {
-        validationError(
-          "Invalid Serializer.Field() usage: decorator target must be a class field.",
-        );
-      }
-
-      setSerializerFieldOptions(ctor, propertyName, options);
-    };
+    return createEsSerializerFieldDecorator(options);
   }
 
   /** Type registry for managing custom types */

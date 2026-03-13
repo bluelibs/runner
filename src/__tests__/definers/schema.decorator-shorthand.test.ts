@@ -1,5 +1,4 @@
 import {
-  Match,
   defineAsyncContext,
   defineEvent,
   defineResource,
@@ -11,6 +10,7 @@ import {
   defineTaskMiddleware,
 } from "../..";
 import { defineError } from "../../definers/defineError";
+import { Match } from "../../decorators/legacy";
 
 class DecoratedSchema {
   value!: string;

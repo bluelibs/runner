@@ -29,6 +29,18 @@
       "require": "./dist/node/node.cjs",
       "default": "./dist/node/node.mjs"
     },
+    "./decorators/es": {
+      "types": "./dist/types/decorators/es.d.ts",
+      "import": "./dist/universal/decorators/es.mjs",
+      "require": "./dist/universal/decorators/es.cjs",
+      "default": "./dist/universal/decorators/es.mjs"
+    },
+    "./decorators/legacy": {
+      "types": "./dist/types/decorators/legacy.d.ts",
+      "import": "./dist/universal/decorators/legacy.mjs",
+      "require": "./dist/universal/decorators/legacy.cjs",
+      "default": "./dist/universal/decorators/legacy.mjs"
+    },
     "./edge": {
       "import": "./dist/edge/index.mjs",
       "default": "./dist/edge/index.mjs"
@@ -42,6 +54,12 @@
       ],
       "node/*": [
         "dist/types/node/*"
+      ],
+      "decorators/es": [
+        "dist/types/decorators/es.d.ts"
+      ],
+      "decorators/legacy": [
+        "dist/types/decorators/legacy.d.ts"
       ],
       "*": [
         "dist/types/index.d.ts"

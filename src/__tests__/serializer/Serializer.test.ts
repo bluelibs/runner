@@ -3,11 +3,10 @@
  */
 
 import { describe, it, expect, beforeEach } from "@jest/globals";
-import { Serializer } from "../../serializer/index";
 import type { TypeDefinition } from "../../serializer/index";
 import { createMessageError } from "../../errors";
 import { matchError } from "../../errors/foundation/match.errors";
-import { Match } from "../../tools/check";
+import { Match, Serializer } from "../../decorators/legacy";
 import type { MatchPattern } from "../../tools/check";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -123,7 +122,7 @@ class User {
 }
 
 describe("Serializer", () => {
-  let serializer: Serializer;
+  let serializer: InstanceType<typeof Serializer>;
 
   beforeEach(() => {
     serializer = new Serializer();

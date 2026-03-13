@@ -1,6 +1,5 @@
 import {
   type CheckSchemaLike,
-  Match,
   check,
   type InferCheckSchema,
   type InferMatchPattern,
@@ -8,6 +7,7 @@ import {
   type MatchJsonSchema,
   type MatchPattern,
 } from "../../../";
+import { Match } from "../../../decorators/legacy";
 
 // Type-only tests for check() pattern inference and overlap safety.
 

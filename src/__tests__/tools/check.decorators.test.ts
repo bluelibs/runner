@@ -1,7 +1,8 @@
 import { checkInvalidPatternError, matchError } from "../../errors";
 import { RunnerError } from "../../definers/defineError";
-import { Match, check, type MatchPattern } from "../../tools/check";
+import { check, type MatchPattern } from "../../tools/check";
 import { getClassSchemaDefinition } from "../../tools/check/classSchema";
+import { Match } from "../../decorators/legacy";
 
 function expectMatchFailure(
   run: () => unknown,

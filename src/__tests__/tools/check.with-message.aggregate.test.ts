@@ -1,5 +1,6 @@
 import { matchError } from "../../errors/foundation/match.errors";
-import { Match, check } from "../../tools/check";
+import { check } from "../../tools/check";
+import { Match } from "../../decorators/legacy";
 
 function expectMatchFailure(
   run: () => unknown,

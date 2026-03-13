@@ -1,4 +1,5 @@
-import { Match, RunnerError, type MatchCompiledSchema } from "../..";
+import { RunnerError, type MatchCompiledSchema } from "../..";
+import { Match } from "../../decorators/legacy";
 import { defineError } from "../../definers/defineError";
 import {
   normalizeOptionalValidationSchema,

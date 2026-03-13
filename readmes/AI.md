@@ -458,6 +458,8 @@ import { check, Match } from "@bluelibs/runner";
 - Plain objects are strict by default, so `check(value, { name: String })` rejects unknown keys.
 - `@Match.Schema({ base: BaseClass })` allows subclassing without TypeScript `extends`.
 - `@Match.Schema({ exact, schemaId, errorPolicy })` controls class strictness, schema identity, and the default validation aggregation policy.
+- Default decorator exports target standard ES decorators. For legacy `experimentalDecorators` projects, import `Match` and `Serializer` from `@bluelibs/runner/decorators/legacy`.
+- Runner decorators do not require `emitDecoratorMetadata` or `reflect-metadata`, but ES decorators do require `Symbol.metadata` support at runtime.
 - Use `Match.fromSchema(() => User)` for self-referencing or forward class-schema links.
 - Use `Match.Lazy(() => pattern)` for recursive plain Match patterns; use `Match.fromSchema(() => User)` when the recursive thing is a decorated class schema.
 - Validation failures throw the built-in `errors.matchError` Runner error.
@@ -508,6 +510,7 @@ Thrown `IRunnerError` has: `.id`, `.data`, `.message` (from `.format()`, default
 - Register custom types through `resources.serializer`.
 - Use `serializer.parse(payload, { schema })` when you want deserialization and validation in one step.
 - `@Serializer.Field({ from, deserialize, serialize })` composes with `@Match.Field(...)` on `@Match.Schema()` classes for explicit DTOs.
+- For legacy decorator mode, import `Serializer` from `@bluelibs/runner/decorators/legacy`.
 
 ## Testing
 

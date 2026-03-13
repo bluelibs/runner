@@ -84,13 +84,14 @@ type MatchDecoratorClassConstructor<T = unknown> = abstract new (
 
 export type MatchSchemaDecorator = <T extends MatchDecoratorClassConstructor>(
   target: T,
+  context: ClassDecoratorContext<T>,
 ) => void;
 
 export type MatchClassDecorator = MatchSchemaDecorator;
 
 export type MatchPropertyDecorator = (
-  target: object | Function,
-  propertyKey: string | symbol,
+  value: undefined,
+  context: ClassFieldDecoratorContext<object, unknown>,
 ) => void;
 
 export type { MatchSchemaOptions, MatchClassOptions };
