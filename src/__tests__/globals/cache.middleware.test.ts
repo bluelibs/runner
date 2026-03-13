@@ -1169,7 +1169,7 @@ describe("Caching System", () => {
       expect(result.value.sharedBudget?.totalBytesUsed).toBe(0);
     });
 
-    it("should properly dispose async cache handlers", async () => {
+    it("leaves custom cache instances intact during runtime disposal", async () => {
       class AsyncDisposableCache implements ICacheProvider {
         store = new Map<string, any>();
         disposed = false;
@@ -1214,15 +1214,14 @@ describe("Caching System", () => {
 
       const result = await run(app);
 
-      // Manually dispose to trigger cleanup
       await result.dispose();
 
-      // Verify cache was disposed
       const cacheInstance = getCacheEntryByTaskId(
         result.value.map,
         "disposal-test-task",
       ) as any;
-      expect(cacheInstance?.disposed).toBe(true);
+      expect(cacheInstance?.disposed).toBe(false);
+      await expect(cacheInstance?.get("no-entry")).resolves.toBeUndefined();
     });
   });
 

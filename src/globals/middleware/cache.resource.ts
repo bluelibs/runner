@@ -5,7 +5,6 @@ import {
   type CacheProvider,
   type CacheProviderInput,
   type ICacheProvider,
-  shouldClearCacheOnDispose,
   type SharedCacheBudgetState,
 } from "./cache.shared";
 import { defineResource } from "../../definers/defineResource";
@@ -138,11 +137,6 @@ export const cacheResource = defineResource<
     },
     dispose: async (cache) => {
       cache.pendingCreates?.clear();
-      for (const cacheInstance of cache.map.values()) {
-        if (shouldClearCacheOnDispose(cacheInstance)) {
-          await cacheInstance.clear();
-        }
-      }
       cache.sharedBudget?.entries.clear();
       cache.sharedBudget?.localCaches.clear();
       if (cache.sharedBudget) {
@@ -171,7 +165,5 @@ export function createCacheInstance({
     sharedBudget: cache.sharedBudget,
   };
 
-  return cache.cacheProvider(input).then((instance: ICacheProvider) => {
-    return instance;
-  });
+  return cache.cacheProvider(input);
 }

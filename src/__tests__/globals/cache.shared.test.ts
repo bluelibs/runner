@@ -5,8 +5,6 @@ import {
   createDefaultCacheProvider,
   createSharedCacheBudgetState,
   isBuiltInCacheProvider,
-  shouldClearCacheOnDispose,
-  withCacheDisposeBehavior,
 } from "../../globals/middleware/cache.shared";
 
 describe("cache.shared", () => {
@@ -28,26 +26,6 @@ describe("cache.shared", () => {
     });
 
     expect(defaultCache).toBeInstanceOf(LRUCache);
-    expect(shouldClearCacheOnDispose(defaultCache)).toBe(true);
-  });
-
-  it("defaults cache disposal to clear and supports persistent overrides", () => {
-    const ephemeralCache = {
-      get: () => undefined,
-      set: () => undefined,
-      clear: () => undefined,
-    };
-    const persistentCache = withCacheDisposeBehavior(
-      {
-        get: () => undefined,
-        set: () => undefined,
-        clear: () => undefined,
-      },
-      "keep",
-    );
-
-    expect(shouldClearCacheOnDispose(ephemeralCache)).toBe(true);
-    expect(shouldClearCacheOnDispose(persistentCache)).toBe(false);
   });
 
   it("does not track entries rejected by local cache size rules", () => {

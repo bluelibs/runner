@@ -35,14 +35,8 @@ export type CacheProvider = (
   input: CacheProviderInput,
 ) => Promise<ICacheProvider>;
 
-export type CacheDisposeBehavior = "clear" | "keep";
-
 type BuiltInCacheProvider = CacheProvider & {
   [builtInCacheProviderSymbol]: true;
-};
-
-type CacheProviderWithDisposeBehavior = ICacheProvider & {
-  [cacheDisposeBehaviorSymbol]?: CacheDisposeBehavior;
 };
 
 type BudgetEntry = {
@@ -61,7 +55,6 @@ export type SharedCacheBudgetState = {
 };
 
 const builtInCacheProviderSymbol = Symbol("runner.builtInCacheProvider");
-const cacheDisposeBehaviorSymbol = Symbol("runner.cacheDisposeBehavior");
 
 export function createDefaultCacheProvider(): CacheProvider {
   return Object.assign(
@@ -78,11 +71,8 @@ export function createDefaultCacheProvider(): CacheProvider {
         });
       }
 
-      return withCacheDisposeBehavior(
-        new LRUCache<string, CacheStoredValue, unknown>(
-          options as LRUCache.Options<string, CacheStoredValue, unknown>,
-        ),
-        "clear",
+      return new LRUCache<string, CacheStoredValue, unknown>(
+        options as LRUCache.Options<string, CacheStoredValue, unknown>,
       );
     },
     {
@@ -99,23 +89,6 @@ export function isBuiltInCacheProvider(
     (value as Partial<BuiltInCacheProvider>)[builtInCacheProviderSymbol] ===
       true
   );
-}
-
-export function withCacheDisposeBehavior<T extends ICacheProvider>(
-  provider: T,
-  behavior: CacheDisposeBehavior,
-): T {
-  return Object.assign(provider, {
-    [cacheDisposeBehaviorSymbol]: behavior,
-  }) as T;
-}
-
-export function shouldClearCacheOnDispose(provider: ICacheProvider) {
-  const behavior = (provider as CacheProviderWithDisposeBehavior)[
-    cacheDisposeBehaviorSymbol
-  ];
-
-  return behavior !== "keep";
 }
 
 export function createSharedCacheBudgetState(
@@ -142,48 +115,45 @@ export function createBudgetedCacheInstance({
   const localCache = createLocalCache(taskId, options, sharedBudget);
   sharedBudget.localCaches.set(taskId, localCache);
 
-  return withCacheDisposeBehavior(
-    {
-      get(key: string) {
-        const value = localCache.get(key);
+  return {
+    get(key: string) {
+      const value = localCache.get(key);
 
-        if (value !== undefined || localCache.has(key)) {
-          touchBudgetEntry(sharedBudget, taskId, key);
-        }
+      if (value !== undefined || localCache.has(key)) {
+        touchBudgetEntry(sharedBudget, taskId, key);
+      }
 
-        return value;
-      },
-      set(key: string, value: unknown) {
-        localCache.set(key, value as CacheStoredValue);
-
-        if (!localCache.has(key)) {
-          return;
-        }
-
-        upsertBudgetEntry(
-          sharedBudget,
-          taskId,
-          key,
-          computeEntrySize(options, key, value),
-        );
-        enforceTotalBudget(sharedBudget);
-      },
-      clear() {
-        localCache.clear();
-        removeBudgetEntriesForTask(sharedBudget, taskId);
-      },
-      has(key: string) {
-        const present = localCache.has(key);
-
-        if (present) {
-          touchBudgetEntry(sharedBudget, taskId, key);
-        }
-
-        return present;
-      },
+      return value;
     },
-    "clear",
-  );
+    set(key: string, value: unknown) {
+      localCache.set(key, value as CacheStoredValue);
+
+      if (!localCache.has(key)) {
+        return;
+      }
+
+      upsertBudgetEntry(
+        sharedBudget,
+        taskId,
+        key,
+        computeEntrySize(options, key, value),
+      );
+      enforceTotalBudget(sharedBudget);
+    },
+    clear() {
+      localCache.clear();
+      removeBudgetEntriesForTask(sharedBudget, taskId);
+    },
+    has(key: string) {
+      const present = localCache.has(key);
+
+      if (present) {
+        touchBudgetEntry(sharedBudget, taskId, key);
+      }
+
+      return present;
+    },
+  };
 }
 
 function createLocalCache(
