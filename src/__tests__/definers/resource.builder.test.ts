@@ -300,12 +300,12 @@ describe("resource builder", () => {
       expect(
         functionThenFunction
           .overrides({ enabled: true }, RunnerMode.TEST)
-          .map((x) => x.id),
+          .map((x) => x?.id),
       ).toEqual([a.id]);
       expect(
         functionThenFunction
           .overrides({ enabled: false }, RunnerMode.TEST)
-          .map((x) => x.id),
+          .map((x) => x?.id),
       ).toEqual([b.id]);
     }
 
@@ -323,12 +323,12 @@ describe("resource builder", () => {
       expect(
         functionThenArray
           .overrides({ enabled: true }, RunnerMode.TEST)
-          .map((x) => x.id),
+          .map((x) => x?.id),
       ).toEqual([a.id, b.id]);
       expect(
         functionThenArray
           .overrides({ enabled: false }, RunnerMode.TEST)
-          .map((x) => x.id),
+          .map((x) => x?.id),
       ).toEqual([b.id]);
     }
 
@@ -346,12 +346,12 @@ describe("resource builder", () => {
       expect(
         arrayThenFunction
           .overrides({ enabled: true }, RunnerMode.TEST)
-          .map((x) => x.id),
+          .map((x) => x?.id),
       ).toEqual([a.id, b.id]);
       expect(
         arrayThenFunction
           .overrides({ enabled: false }, RunnerMode.TEST)
-          .map((x) => x.id),
+          .map((x) => x?.id),
       ).toEqual([a.id]);
     }
   });

@@ -487,6 +487,8 @@ import { check, Match } from "@bluelibs/runner";
 
 - `check(value, pattern)` is the low-level runtime validator.
 - `Match.compile(pattern)` creates reusable schemas with `.parse()`, `.test()`, and JSON-Schema export.
+- Class-backed schemas hydrate on `.parse()`: `Match.fromSchema(UserDto).parse(...)` returns a `UserDto` instance, and any raw Match pattern that contains class-schema nodes hydrates those nested nodes during parse.
+- Hydration uses prototype assignment and does not call class constructors during parse.
 - Compiled schemas do not expose `.extend()`; for object-shaped schemas, compose `compiled.pattern` into a new pattern and call `Match.compile(...)` again.
 - Constructors act as matchers: `String`, `Number`, `Boolean`.
 - Common `Match.*` helpers include `NonEmptyString`, `Email`, `Integer`, `UUID`, `URL`, `Optional()`, `OneOf()`, `ObjectIncluding()`, `MapOf()`, `ArrayOf()`, `Lazy()`, `Where((value, parent?) => boolean)`, and `WithMessage(pattern, messageOrFormatter)`.
@@ -512,6 +514,7 @@ import { check, Match } from "@bluelibs/runner";
 - In aggregate mode, leaf wrappers do not replace that summary, while subtree wrappers such as plain objects, arrays, maps, `Match.Lazy(...)`, and `Match.fromSchema(...)` can replace the top-level headline if they own the first collected failure.
 - Decorator-backed class schemas follow the same rules as plain Match patterns: a field-level `Match.WithMessage(...)` changes the headline only for that failure, while a wrapper around `Match.fromSchema(ChildSchema)` can overtake the final headline for the whole child subtree.
 - Builder slots accept the same schema sources everywhere: task input/output, config, payload, tag config, and error data.
+- Runner schema slots consume schema parse results, so `.inputSchema(UserDto)` / `.configSchema(UserDto)` / `.payloadSchema(UserDto)` hand you hydrated `UserDto` instances by default.
 
 ### Errors
 

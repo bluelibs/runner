@@ -63,13 +63,8 @@ function parseWithSchema<TParsed>(
   schema?: unknown,
 ): TParsed | unknown {
   if (schema === undefined) return value;
-
-  if (typeof schema === "object" && schema !== null && "parse" in schema) {
-    const parseFn = (schema as SerializerSchemaLike<TParsed>).parse;
-    return parseFn.call(schema, value);
-  }
-
-  return check(value, schema as never) as TParsed;
+  const parseFn = (schema as SerializerSchemaLike<TParsed>).parse;
+  return parseFn.call(schema, value);
 }
 
 function normalizeSchemaOption(schema: unknown): unknown {
@@ -121,9 +116,11 @@ function normalizeSchemaOption(schema: unknown): unknown {
         "Invalid deserialize() schema option: expected an object with a parse(input) function.",
       );
     }
+
+    return schema;
   }
 
-  return schema;
+  return Match.compile(schema as never);
 }
 
 export class Serializer {

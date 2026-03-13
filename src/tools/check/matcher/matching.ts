@@ -259,6 +259,9 @@ export function matchesPattern(
         path,
         allowUnknownKeys,
         matchesPattern,
+        // Class-schema parse is idempotent once a value is already hydrated.
+        (candidate): candidate is Record<string, unknown> =>
+          isPlainObject(candidate) || candidate instanceof pattern.ctor,
       );
     }
     if (pattern instanceof RegExpPattern) {

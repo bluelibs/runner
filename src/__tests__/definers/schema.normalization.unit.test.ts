@@ -51,7 +51,10 @@ describe("schema normalization helpers", () => {
       subject: "Task input",
     });
 
-    expect(classSchema.parse({ value: "ok" })).toEqual({ value: "ok" });
+    const parsedClass = classSchema.parse({ value: "ok" });
+
+    expect(parsedClass).toBeInstanceOf(DecoratedSchema);
+    expect(parsedClass).toEqual({ value: "ok" });
     expect(() => classSchema.parse({ value: 1 } as any)).toThrow();
 
     const objectSchema = normalizeValidationSchema(

@@ -18,9 +18,10 @@ describe("default ES decorators", () => {
       id!: string;
     }
 
-    expect(Match.fromSchema(UserDto).parse({ id: "u1" })).toEqual({
-      id: "u1",
-    });
+    const parsed = Match.fromSchema(UserDto).parse({ id: "u1" });
+
+    expect(parsed).toBeInstanceOf(UserDto);
+    expect(parsed).toEqual({ id: "u1" });
   });
 
   it("supports serializer field remapping from the top-level package", () => {
@@ -36,10 +37,11 @@ describe("default ES decorators", () => {
     outbound.id = "u1";
 
     expect(serializer.stringify(outbound)).toBe('{"user_id":"u1"}');
-    expect(
-      serializer.deserialize('{"user_id":"u1"}', { schema: UserDto }),
-    ).toEqual({
-      id: "u1",
+    const deserialized = serializer.deserialize('{"user_id":"u1"}', {
+      schema: UserDto,
     });
+
+    expect(deserialized).toBeInstanceOf(UserDto);
+    expect(deserialized).toEqual({ id: "u1" });
   });
 });

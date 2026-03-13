@@ -216,9 +216,10 @@ describe("tools/check schema support", () => {
     Match.Schema()(UserSchema);
     Match.Field(Match.NonEmptyString)(UserSchema.prototype, "name");
 
-    expect(Match.fromSchema(UserSchema).parse({ name: "Ada" })).toEqual({
-      name: "Ada",
-    });
+    const parsed = Match.fromSchema(UserSchema).parse({ name: "Ada" });
+
+    expect(parsed).toBeInstanceOf(UserSchema);
+    expect(parsed).toEqual({ name: "Ada" });
 
     expect(Match.fromSchema(UserSchema).toJSONSchema()).toEqual({
       $schema: "https://json-schema.org/draft/2020-12/schema",

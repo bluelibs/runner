@@ -154,6 +154,8 @@ const user = serializer.deserialize('{"abc":"u1","raw_age":"42"}', {
 Notes:
 
 - Decorated class shorthand works for `schema: UserDto` and `schema: [UserDto]`.
+- Decorated class schemas hydrate on parse, so `serializer.deserialize(..., { schema: UserDto })` returns a `UserDto` instance and nested `Match.fromSchema(...)` nodes hydrate recursively as well. (supports cycles too)
+- Hydration reattaches the class prototype onto validated data; it does not call the class constructor.
 - If a class is not decorated with `@Match.Schema()`, constructor shorthand uses constructor semantics (`instanceof`) and usually fails for plain deserialized objects.
 - Functional schema style is always available: `schema: Match.fromSchema(UserDto)` and `schema: Match.ArrayOf(Match.fromSchema(UserDto))`.
 - `@Serializer.Field(...)` itself does not require `@Match.Schema()` to register metadata.
@@ -191,7 +193,7 @@ class ValidatedInboundUser {
   id!: string;
 }
 
-serializer.deserialize(payload, { schema: ValidatedInboundUser }); // { id: "u1" }
+serializer.deserialize(payload, { schema: ValidatedInboundUser }); // ValidatedInboundUser { id: "u1" }
 ```
 
 > **Note:** File uploads are handled by Remote Lanes HTTP multipart support, not by the serializer.
@@ -361,40 +363,40 @@ For decorated class schemas, use `Match.Schema({ base })` to compose one schema 
 
 ### Match Reference
 
-| Pattern / Helper                                             | What It Does                                                   |
-| ------------------------------------------------------------ | -------------------------------------------------------------- |
-| `String`, `Number`, `Boolean`, `Function`, `Object`, `Array` | Constructor-based validation                                   |
-| Class constructor (for example `Date`, `MyClass`)            | Validates via constructor semantics                            |
-| Literal values (`"x"`, `42`, `true`, `null`, `undefined`)    | Exact literal match                                            |
-| `[pattern]`                                                  | Array where every element matches `pattern`                    |
-| Plain object (`{ a: String }`)                               | Strict object validation (same as `Match.ObjectStrict`)        |
-| `Match.ObjectStrict({ ... })`                                | Strict object shape (`additionalProperties: false` semantics)  |
-| `Match.ObjectIncluding({ ... })`                             | Partial object shape (unknown keys allowed)                    |
-| `Match.MapOf(valuePattern)`                                  | Dynamic-key object with uniform value pattern                  |
-| `Match.Any`                                                  | Accepts any value                                              |
-| `Match.Integer`                                              | Signed 32-bit integer                                          |
-| `Match.NonEmptyString`                                       | Non-empty string                                               |
-| `Match.Email`                                                | Email-shaped string                                            |
-| `Match.UUID`                                                 | Canonical UUID string                                          |
-| `Match.URL`                                                  | Absolute URL string                                            |
-| `Match.IsoDateString`                                        | ISO datetime string with timezone                              |
-| `Match.RegExp(re)`                                           | String matching given regexp                                   |
-| `Match.ArrayOf(pattern)`                                     | Array of elements matching pattern                             |
-| `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`     | Non-empty array, optional element validation                   |
-| `Match.Optional(pattern)`                                    | `undefined` or pattern                                         |
-| `Match.Maybe(pattern)`                                       | `undefined`, `null`, or pattern                                |
-| `Match.OneOf(...patterns)`                                   | Any one of given patterns                                      |
-| `Match.Where((value, parent?) => boolean)`                   | Custom predicate / type guard                                  |
-| `Match.WithMessage(pattern, messageOrFormatter)`            | Wraps a pattern with a custom top-level validation message     |
-| `Match.Lazy(() => pattern)`                                  | Lazy/recursive pattern                                         |
+| Pattern / Helper                                             | What It Does                                                                 |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `String`, `Number`, `Boolean`, `Function`, `Object`, `Array` | Constructor-based validation                                                 |
+| Class constructor (for example `Date`, `MyClass`)            | Validates via constructor semantics                                          |
+| Literal values (`"x"`, `42`, `true`, `null`, `undefined`)    | Exact literal match                                                          |
+| `[pattern]`                                                  | Array where every element matches `pattern`                                  |
+| Plain object (`{ a: String }`)                               | Strict object validation (same as `Match.ObjectStrict`)                      |
+| `Match.ObjectStrict({ ... })`                                | Strict object shape (`additionalProperties: false` semantics)                |
+| `Match.ObjectIncluding({ ... })`                             | Partial object shape (unknown keys allowed)                                  |
+| `Match.MapOf(valuePattern)`                                  | Dynamic-key object with uniform value pattern                                |
+| `Match.Any`                                                  | Accepts any value                                                            |
+| `Match.Integer`                                              | Signed 32-bit integer                                                        |
+| `Match.NonEmptyString`                                       | Non-empty string                                                             |
+| `Match.Email`                                                | Email-shaped string                                                          |
+| `Match.UUID`                                                 | Canonical UUID string                                                        |
+| `Match.URL`                                                  | Absolute URL string                                                          |
+| `Match.IsoDateString`                                        | ISO datetime string with timezone                                            |
+| `Match.RegExp(re)`                                           | String matching given regexp                                                 |
+| `Match.ArrayOf(pattern)`                                     | Array of elements matching pattern                                           |
+| `Match.NonEmptyArray()` / `Match.NonEmptyArray(pattern)`     | Non-empty array, optional element validation                                 |
+| `Match.Optional(pattern)`                                    | `undefined` or pattern                                                       |
+| `Match.Maybe(pattern)`                                       | `undefined`, `null`, or pattern                                              |
+| `Match.OneOf(...patterns)`                                   | Any one of given patterns                                                    |
+| `Match.Where((value, parent?) => boolean)`                   | Custom predicate / type guard                                                |
+| `Match.WithMessage(pattern, messageOrFormatter)`             | Wraps a pattern with a custom top-level validation message                   |
+| `Match.Lazy(() => pattern)`                                  | Lazy/recursive pattern                                                       |
 | `Match.Schema(options?)`                                     | Class schema decorator (`exact`, `schemaId`, `errorPolicy`; see also `base`) |
-| `Match.Schema({ base: BaseClass \| () => BaseClass })`       | Composes schema classes without requiring TypeScript `extends` |
-| `Match.Field(pattern)`                                       | Decorated field validator                                      |
-| `Match.fromSchema(Class, options?)`                          | Schema-like matcher from class metadata                        |
-| `Match.WithErrorPolicy(pattern, "first" \| "all")`           | Sets a default validation aggregation policy on a pattern      |
-| `Match.compile(pattern)`                                     | Compiles pattern into `{ parse, test, toJSONSchema }`          |
-| `Match.test(value, pattern)`                                 | Boolean helper for validation check                            |
-| `errors.matchError`                                          | Built-in Runner error helper for match failure                 |
+| `Match.Schema({ base: BaseClass \| () => BaseClass })`       | Composes schema classes without requiring TypeScript `extends`               |
+| `Match.Field(pattern)`                                       | Decorated field validator                                                    |
+| `Match.fromSchema(Class, options?)`                          | Schema-like matcher from class metadata                                      |
+| `Match.WithErrorPolicy(pattern, "first" \| "all")`           | Sets a default validation aggregation policy on a pattern                    |
+| `Match.compile(pattern)`                                     | Compiles pattern into `{ parse, test, toJSONSchema }`                        |
+| `Match.test(value, pattern)`                                 | Boolean helper for validation check                                          |
+| `errors.matchError`                                          | Built-in Runner error helper for match failure                               |
 
 ### Additional `check()` Details
 
@@ -430,7 +432,9 @@ import { Match, check } from "@bluelibs/runner";
 const createTreePattern = () =>
   Match.ObjectIncluding({
     id: Match.NonEmptyString,
-    children: Match.Optional(Match.ArrayOf(Match.Lazy(() => createTreePattern()))),
+    children: Match.Optional(
+      Match.ArrayOf(Match.Lazy(() => createTreePattern())),
+    ),
   });
 
 check(
@@ -514,9 +518,7 @@ import { Match, check } from "@bluelibs/runner";
 
 @Match.Schema()
 class AddressDto {
-  @Match.Field(
-    Match.WithMessage(String, "City must be a string"),
-  )
+  @Match.Field(Match.WithMessage(String, "City must be a string"))
   city!: string;
 }
 
@@ -525,17 +527,15 @@ class BillingDetailsDto {
   @Match.Field(
     Match.WithMessage(
       Match.fromSchema(AddressDto),
-      ({ error }) => `Address is invalid. Nested validation failed: ${error.message}`,
+      ({ error }) =>
+        `Address is invalid. Nested validation failed: ${error.message}`,
     ),
   )
   address!: AddressDto;
 }
 
 try {
-  check(
-    { address: { city: 42 } },
-    Match.fromSchema(BillingDetailsDto),
-  );
+  check({ address: { city: 42 } }, Match.fromSchema(BillingDetailsDto));
 } catch (error) {
   const matchError = error as {
     message: string;

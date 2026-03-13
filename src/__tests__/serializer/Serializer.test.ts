@@ -533,6 +533,7 @@ describe("Serializer", () => {
         schema: UserDto,
       });
 
+      expect(deserialized).toBeInstanceOf(UserDto);
       expect(deserialized).toEqual({ id: "u1", extra: true });
     });
 
@@ -547,10 +548,12 @@ describe("Serializer", () => {
       Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
 
       const payload = serializer.serialize([{ abc: "u1" }, { abc: "u2" }]);
-      const deserialized = serializer.deserialize(payload, {
+      const deserialized = serializer.deserialize<UserDto[]>(payload, {
         schema: [UserDto],
       });
 
+      expect(deserialized[0]).toBeInstanceOf(UserDto);
+      expect(deserialized[1]).toBeInstanceOf(UserDto);
       expect(deserialized).toEqual([{ id: "u1" }, { id: "u2" }]);
     });
 
@@ -574,6 +577,7 @@ describe("Serializer", () => {
         schema: UserDto,
       });
 
+      expect(deserialized).toBeInstanceOf(UserDto);
       expect(deserialized).toEqual({ age: 42 });
     });
 
@@ -686,6 +690,7 @@ describe("Serializer", () => {
         schema: UserDto,
       });
 
+      expect(deserialized).toBeInstanceOf(UserDto);
       expect(deserialized).toEqual({ id: "u1" });
     });
 
@@ -698,10 +703,12 @@ describe("Serializer", () => {
       Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
 
       const payload = serializer.serialize([{ id: "u1" }, { id: "u2" }]);
-      const deserialized = serializer.deserialize(payload, {
+      const deserialized = serializer.deserialize<UserDto[]>(payload, {
         schema: [UserDto],
       });
 
+      expect(deserialized[0]).toBeInstanceOf(UserDto);
+      expect(deserialized[1]).toBeInstanceOf(UserDto);
       expect(deserialized).toEqual([{ id: "u1" }, { id: "u2" }]);
     });
 
@@ -775,6 +782,7 @@ describe("Serializer", () => {
         schema: Match.fromSchema(UserDto),
       });
 
+      expect(deserialized).toBeInstanceOf(UserDto);
       expect(deserialized).toEqual({ id: "u1", name: "Ada" });
     });
 
@@ -787,10 +795,12 @@ describe("Serializer", () => {
       Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
 
       const payload = serializer.serialize([{ id: "u1" }, { id: "u2" }]);
-      const deserialized = serializer.parse(payload, {
+      const deserialized = serializer.parse<UserDto[]>(payload, {
         schema: Match.ArrayOf(Match.fromSchema(UserDto)),
       });
 
+      expect(deserialized[0]).toBeInstanceOf(UserDto);
+      expect(deserialized[1]).toBeInstanceOf(UserDto);
       expect(deserialized).toEqual([{ id: "u1" }, { id: "u2" }]);
     });
 
@@ -831,6 +841,84 @@ describe("Serializer", () => {
           schema: Match.fromSchema(UserDto),
         }),
       ).toThrow("id must be non-empty, received ");
+    });
+
+    it("hydrates recursive class schemas after graph deserialization", () => {
+      class UserDto {
+        public id!: string;
+        public self!: UserDto;
+      }
+
+      Match.Schema()(UserDto);
+      Match.Field(Match.NonEmptyString)(UserDto.prototype, "id");
+      Match.Field(Match.fromSchema(() => UserDto))(UserDto.prototype, "self");
+
+      const payloadSource: Record<string, unknown> = { id: "u1" };
+      payloadSource.self = payloadSource;
+
+      const payload = serializer.serialize(payloadSource);
+      const deserialized = serializer.deserialize(payload, {
+        schema: Match.fromSchema(UserDto),
+      });
+
+      expect(deserialized).toBeInstanceOf(UserDto);
+      expect(deserialized.self).toBe(deserialized);
+      expect(deserialized.id).toBe("u1");
+    });
+
+    it("preserves shared and circular references for decorated class graphs", () => {
+      class NodeDto {
+        public id!: string;
+        public parent?: NodeDto;
+        public sibling?: NodeDto;
+        public children!: NodeDto[];
+      }
+
+      Match.Schema()(NodeDto);
+      Match.Field(Match.NonEmptyString)(NodeDto.prototype, "id");
+      Match.Field(Match.Optional(Match.fromSchema(() => NodeDto)))(
+        NodeDto.prototype,
+        "parent",
+      );
+      Match.Field(Match.Optional(Match.fromSchema(() => NodeDto)))(
+        NodeDto.prototype,
+        "sibling",
+      );
+      Match.Field(Match.ArrayOf(Match.fromSchema(() => NodeDto)))(
+        NodeDto.prototype,
+        "children",
+      );
+
+      const left: Record<string, unknown> = {
+        id: "left",
+        children: [],
+      };
+      const right: Record<string, unknown> = {
+        id: "right",
+        children: [],
+      };
+      const root: Record<string, unknown> = {
+        id: "root",
+        children: [left, right],
+      };
+
+      left.parent = root;
+      right.parent = root;
+      left.sibling = right;
+      right.sibling = left;
+
+      const payload = serializer.serialize(root);
+      const deserialized = serializer.deserialize<NodeDto>(payload, {
+        schema: Match.fromSchema(NodeDto),
+      });
+
+      expect(deserialized).toBeInstanceOf(NodeDto);
+      expect(deserialized.children[0]).toBeInstanceOf(NodeDto);
+      expect(deserialized.children[1]).toBeInstanceOf(NodeDto);
+      expect(deserialized.children[0].parent).toBe(deserialized);
+      expect(deserialized.children[1].parent).toBe(deserialized);
+      expect(deserialized.children[0].sibling).toBe(deserialized.children[1]);
+      expect(deserialized.children[1].sibling).toBe(deserialized.children[0]);
     });
 
     it("should validate nested recursive Product > Categories schemas", () => {
@@ -885,6 +973,11 @@ describe("Serializer", () => {
         schema: Match.fromSchema(ProductDto),
       });
 
+      expect(deserialized).toBeInstanceOf(ProductDto);
+      expect(deserialized.categories[0]).toBeInstanceOf(CategoryDto);
+      expect(deserialized.categories[0].children?.[0]).toBeInstanceOf(
+        CategoryDto,
+      );
       expect(deserialized).toEqual({
         id: "p_1",
         name: "Laptop",

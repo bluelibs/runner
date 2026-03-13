@@ -14,6 +14,14 @@
         "require": "./dist/browser/index.cjs",
         "default": "./dist/browser/index.mjs"
       },
+      "bun": {
+        "import": "./dist/universal/index.mjs",
+        "default": "./dist/universal/index.mjs"
+      },
+      "deno": {
+        "import": "./dist/universal/index.mjs",
+        "default": "./dist/universal/index.mjs"
+      },
       "node": {
         "types": "./dist/types/node/index.d.ts",
         "import": "./dist/node/node.mjs",
@@ -25,6 +33,14 @@
     },
     "./node": {
       "types": "./dist/types/node/index.d.ts",
+      "bun": {
+        "import": "./dist/node/node.mjs",
+        "default": "./dist/node/node.mjs"
+      },
+      "deno": {
+        "import": "./dist/node/node.mjs",
+        "default": "./dist/node/node.mjs"
+      },
       "import": "./dist/node/node.mjs",
       "require": "./dist/node/node.cjs",
       "default": "./dist/node/node.mjs"

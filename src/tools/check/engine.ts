@@ -8,6 +8,7 @@ import {
   type MatchSchemaOptions,
 } from "./classSchema";
 import { createEsFieldDecorator, createEsSchemaDecorator } from "./decorators";
+import { hydrateMatchedValue } from "./hydration";
 import { isClassConstructor } from "../typeChecks";
 import {
   ClassPattern,
@@ -156,7 +157,12 @@ class CompiledMatchPatternSchema<
       this.pattern,
       collectAll,
     );
-    if (failures.length === 0) return input as InferMatchPattern<TPattern>;
+    if (failures.length === 0) {
+      return hydrateMatchedValue(
+        input,
+        this.pattern,
+      ) as InferMatchPattern<TPattern>;
+    }
     throw createMatchError(failures, messageOverride);
   }
 
