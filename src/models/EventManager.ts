@@ -257,7 +257,7 @@ export class EventManager {
 
     const hookFrame: ExecutionFrame = {
       kind: "hook",
-      id: hookSource.path ?? hookId,
+      id: hookSource.id,
       source: hookSource,
       timestamp: Date.now(),
     };
@@ -314,9 +314,7 @@ export class EventManager {
 
     const eventDefinition = this.resolveEventDefinition(eventDef);
     const metadata = this.resolveEventMetadata(eventDefinition);
-    const source =
-      this.store?.toRuntimeSource(rawSource) ??
-      this.ensureSourcePath(rawSource);
+    const source = this.store?.toRuntimeSource(rawSource) ?? rawSource;
 
     let data = inputData;
     if (eventDefinition.payloadSchema) {
@@ -514,13 +512,6 @@ export class EventManager {
     }
 
     return this.store.getRuntimeMetadata(eventDefinition);
-  }
-
-  private ensureSourcePath(source: RuntimeCallSource): RuntimeCallSource {
-    return {
-      ...source,
-      path: source.path ?? source.id,
-    };
   }
 }
 

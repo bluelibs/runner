@@ -220,10 +220,9 @@ describe("EventManager regressions", () => {
       }),
     });
 
-    let currentHookPath = "root/first/shared-hook";
+    let currentHookPath = "root.first.shared-hook";
     eventManager.bindStore({
-      createRuntimeSource: () =>
-        runtimeSource.hook("shared-hook", currentHookPath),
+      createRuntimeSource: () => runtimeSource.hook(currentHookPath),
       events: new Map() as any,
       getRuntimeMetadata: () => {
         throw createMessageError("getRuntimeMetadata should not be called");
@@ -235,8 +234,8 @@ describe("EventManager regressions", () => {
     const hook = {
       id: "shared-hook",
       run: jest.fn(async () => {
-        if (currentHookPath === "root/first/shared-hook") {
-          currentHookPath = "root/second/shared-hook";
+        if (currentHookPath === "root.first.shared-hook") {
+          currentHookPath = "root.second.shared-hook";
           await eventManager.executeHookWithInterceptors(
             hook as any,
             {} as any,

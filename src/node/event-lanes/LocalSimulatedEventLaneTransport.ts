@@ -45,8 +45,7 @@ export class LocalSimulatedEventLaneTransport {
         return next(emission);
       }
 
-      const resolvedEmissionEventId =
-        getRuntimeId(emission) ?? emission.path ?? emission.id;
+      const resolvedEmissionEventId = getRuntimeId(emission) ?? emission.id;
       const eventRoute = this.context.eventRouteByEventId.get(
         resolvedEmissionEventId,
       );
@@ -83,7 +82,7 @@ export class LocalSimulatedEventLaneTransport {
         profile: this.context.profile,
         mode: "local-simulated",
         sourceKind: emission.source.kind,
-        sourceId: emission.source.path ?? emission.source.id,
+        sourceId: emission.source.id,
       });
 
       this.scheduleRelay(message);

@@ -30,7 +30,7 @@ describe("Store coverage", () => {
     });
     expect(store.toPublicPath(stamped)).toBe("tasks.store-coverage-runtime");
     expect(store.createRuntimeSource("runtime", "runtime.literal")).toEqual(
-      runtimeSource.runtime("runtime.literal", "runtime.literal"),
+      runtimeSource.runtime("runtime.literal"),
     );
   });
 

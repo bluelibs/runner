@@ -308,7 +308,7 @@ Tasks are your main business actions.
   - `deps`: the resolved dependency map
   - `context`: auto-injected execution context (always the third arg — never part of `deps`)
     - `context.journal`: per-task typed state shared with middleware
-    - `context.source`: `{ kind, id }` — canonical id of the running task
+    - `context.source`: `{ kind, id }` — canonical runtime source of the running task
 
 Example showing all three parameters:
 

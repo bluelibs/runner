@@ -87,7 +87,6 @@ describe("Execution Context (integration)", () => {
         await eventManager.emit(event, "hello", {
           kind: "task",
           id: "execution-context-emitter-task",
-          path: "execution-context-emitter-task",
         });
       },
     });

@@ -413,7 +413,6 @@ describe("DependencyProcessor Consistency", () => {
       {
         kind: "runtime",
         id: "unknown-owner-id",
-        path: "unknown-owner-id",
       },
     ]);
   });

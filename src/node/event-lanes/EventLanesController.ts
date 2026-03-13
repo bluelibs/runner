@@ -158,8 +158,7 @@ export class EventLanesController {
         return next(emission);
       }
 
-      const resolvedEmissionId =
-        getRuntimeId(emission) ?? emission.path ?? emission.id;
+      const resolvedEmissionId = getRuntimeId(emission) ?? emission.id;
       const eventRoute =
         this.context.eventRouteByEventId.get(resolvedEmissionId);
       if (!eventRoute) {
@@ -198,7 +197,7 @@ export class EventLanesController {
         profile: this.context.profile,
         mode: resolveRemoteLanesMode(this.config.mode),
         sourceKind: emission.source.kind,
-        sourceId: emission.source.path ?? emission.source.id,
+        sourceId: emission.source.id,
       });
     });
   }

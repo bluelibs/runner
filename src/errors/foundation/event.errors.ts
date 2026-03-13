@@ -36,24 +36,21 @@ export const executionCycleError = error<
     frame: {
       kind: string;
       id: string;
-      source: { kind: string; id: string; path?: string };
+      source: { kind: string; id: string };
     };
     repetitions: number;
     maxRepetitions: number;
     trace: readonly {
       kind: string;
       id: string;
-      source: { kind: string; id: string; path?: string };
+      source: { kind: string; id: string };
     }[];
   } & DefaultErrorType
 >("executionCycle")
   .format(({ frame, repetitions, maxRepetitions, trace }) => {
     const matching = trace
       .filter((f) => f.kind === frame.kind && f.id === frame.id)
-      .map(
-        (f) =>
-          `${f.kind}:${f.id}<-${f.source.kind}:${f.source.path ?? f.source.id}`,
-      )
+      .map((f) => `${f.kind}:${f.id}<-${f.source.kind}:${f.source.id}`)
       .join(" → ");
     return `Execution cycle detected: ${frame.kind} "${frame.id}" appeared ${repetitions} times (max: ${maxRepetitions}).\n  ${matching}`;
   })

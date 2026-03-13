@@ -103,7 +103,7 @@ Task `.run(input, deps, context)` receives:
 Task context includes:
 
 - `context.journal`: typed state shared with middleware
-- `context.source`: `{ kind, id }` of the current task invocation
+- `context.source`: `{ kind, id }` of the current task invocation, where `id` is the canonical runtime source id
 
 ```typescript
 import { journal, resources, r } from "@bluelibs/runner";

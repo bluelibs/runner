@@ -198,7 +198,7 @@ The recording is a tree of `ExecutionRecordNode` values. The runtime does not st
 interface ExecutionFrame {
   kind: "task" | "event" | "hook";
   id: string;
-  source: RuntimeCallSource;
+  source: RuntimeCallSource; // canonical `{ kind, id }`
   timestamp: number;
 }
 

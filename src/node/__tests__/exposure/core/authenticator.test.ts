@@ -1,5 +1,6 @@
 import { createAuthenticator } from "../../../exposure/authenticator";
 import { TaskRunner } from "../../../../models/TaskRunner";
+import { Store } from "../../../../models/Store";
 import { ITask } from "../../../../defs";
 import { IncomingMessage } from "http";
 import {
@@ -11,6 +12,13 @@ import { RPC_LANES_RESOURCE_ID } from "../../../rpc-lanes/rpcLanes.resource";
 const mockTaskRunner = {
   run: jest.fn(),
 } as unknown as jest.Mocked<TaskRunner>;
+const mockStore = {
+  createRuntimeSource: jest.fn((kind: "resource", reference: unknown) => ({
+    kind,
+    id: String(reference),
+  })),
+} as unknown as jest.Mocked<Pick<Store, "createRuntimeSource">>;
+const authenticatorStore = mockStore as unknown as Store;
 type AuthValidatorTask = ITask<
   AuthValidatorInput,
   Promise<AuthValidatorResult>,
@@ -24,7 +32,12 @@ describe("node exposure - authenticator", () => {
 
   describe("createAuthenticator", () => {
     it("returns AUTH_NOT_CONFIGURED when token is not set and no validators (fail-closed)", async () => {
-      const auth = createAuthenticator(undefined, mockTaskRunner, []);
+      const auth = createAuthenticator(
+        undefined,
+        authenticatorStore,
+        mockTaskRunner,
+        [],
+      );
       const result = await auth({ headers: {} } as unknown as IncomingMessage);
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -39,6 +52,7 @@ describe("node exposure - authenticator", () => {
     it("returns passthrough when allowAnonymous is explicitly true", async () => {
       const auth = createAuthenticator(
         { allowAnonymous: true },
+        authenticatorStore,
         mockTaskRunner,
         [],
       );
@@ -49,6 +63,7 @@ describe("node exposure - authenticator", () => {
     it("accepts provided token using custom header and array values", async () => {
       const auth = createAuthenticator(
         { header: "X-Custom", token: "secret" },
+        authenticatorStore,
         mockTaskRunner,
         [],
       );
@@ -61,6 +76,7 @@ describe("node exposure - authenticator", () => {
     it("accepts provided token from default header string", async () => {
       const auth = createAuthenticator(
         { token: "expected" },
+        authenticatorStore,
         mockTaskRunner,
         [],
       );
@@ -73,6 +89,7 @@ describe("node exposure - authenticator", () => {
     it("rejects when token mismatches", async () => {
       const auth = createAuthenticator(
         { token: "expected" },
+        authenticatorStore,
         mockTaskRunner,
         [],
       );
@@ -84,6 +101,7 @@ describe("node exposure - authenticator", () => {
     it("falls back to empty string when header array has no first value", async () => {
       const auth = createAuthenticator(
         { token: "expected" },
+        authenticatorStore,
         mockTaskRunner,
         [],
       );
@@ -96,6 +114,7 @@ describe("node exposure - authenticator", () => {
     it("supports array of tokens", async () => {
       const auth = createAuthenticator(
         { token: ["token1", "token2"] },
+        authenticatorStore,
         mockTaskRunner,
         [],
       );
@@ -116,7 +135,12 @@ describe("node exposure - authenticator", () => {
     it("runs validator tasks when token check fails", async () => {
       const task = { id: "v1" } as unknown as AuthValidatorTask;
       mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: true }));
-      const auth = createAuthenticator(undefined, mockTaskRunner, [task]);
+      const auth = createAuthenticator(
+        undefined,
+        authenticatorStore,
+        mockTaskRunner,
+        [task],
+      );
       const result = await auth({ headers: {} } as unknown as IncomingMessage);
       expect(mockTaskRunner.run).toHaveBeenCalledWith(
         task,
@@ -136,7 +160,12 @@ describe("node exposure - authenticator", () => {
       const t2 = { id: "v2" } as unknown as AuthValidatorTask;
       mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: false }));
       mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: true }));
-      const auth = createAuthenticator(undefined, mockTaskRunner, [t1, t2]);
+      const auth = createAuthenticator(
+        undefined,
+        authenticatorStore,
+        mockTaskRunner,
+        [t1, t2],
+      );
       const result = await auth({ headers: {} } as unknown as IncomingMessage);
       expect(result).toEqual({ ok: true });
       expect(mockTaskRunner.run).toHaveBeenCalledTimes(2);
@@ -147,7 +176,12 @@ describe("node exposure - authenticator", () => {
       const t2 = { id: "v2" } as unknown as AuthValidatorTask;
       mockTaskRunner.run.mockRejectedValueOnce(new Error("oops"));
       mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: true }));
-      const auth = createAuthenticator(undefined, mockTaskRunner, [t1, t2]);
+      const auth = createAuthenticator(
+        undefined,
+        authenticatorStore,
+        mockTaskRunner,
+        [t1, t2],
+      );
       const result = await auth({ headers: {} } as unknown as IncomingMessage);
       expect(result).toEqual({ ok: true });
     });
@@ -155,7 +189,12 @@ describe("node exposure - authenticator", () => {
     it("fails if all validators fail", async () => {
       const t1 = { id: "v1" } as unknown as AuthValidatorTask;
       mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: false }));
-      const auth = createAuthenticator(undefined, mockTaskRunner, [t1]);
+      const auth = createAuthenticator(
+        undefined,
+        authenticatorStore,
+        mockTaskRunner,
+        [t1],
+      );
       const result = await auth({ headers: {} } as unknown as IncomingMessage);
       expect(result.ok).toBe(false);
     });

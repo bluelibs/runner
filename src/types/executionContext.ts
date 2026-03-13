@@ -15,9 +15,6 @@ export interface ExecutionFrame {
   readonly id: string;
   /**
    * Admission source that led to this frame being entered.
-   *
-   * `source.id` is the user-facing display id. `source.path`, when present,
-   * preserves the exact canonical runtime path that admitted this frame.
    */
   readonly source: RuntimeCallSource;
   /** Epoch timestamp captured when the frame started. */

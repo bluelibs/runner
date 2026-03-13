@@ -1105,7 +1105,7 @@ Task `.run(input, deps, context)` receives:
 Task context includes:
 
 - `context.journal`: typed state shared with middleware
-- `context.source`: `{ kind, id }` of the current task invocation
+- `context.source`: `{ kind, id }` of the current task invocation, where `id` is the canonical runtime source id
 
 ```typescript
 import { journal, resources, r } from "@bluelibs/runner";
@@ -5849,7 +5849,7 @@ The recording is a tree of `ExecutionRecordNode` values. The runtime does not st
 interface ExecutionFrame {
   kind: "task" | "event" | "hook";
   id: string;
-  source: RuntimeCallSource;
+  source: RuntimeCallSource; // canonical `{ kind, id }`
   timestamp: number;
 }
 

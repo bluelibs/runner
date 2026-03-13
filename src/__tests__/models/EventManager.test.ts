@@ -304,7 +304,7 @@ describe("EventManager", () => {
     expect(resolveEventDefinition(eventDefinition)).toBe(eventDefinition);
   });
 
-  it("stamps a path on raw sources when emitting without a bound store", async () => {
+  it("preserves raw sources when emitting without a bound store", async () => {
     const handler = jest.fn();
     eventManager.addListener(eventDefinition, handler);
 
@@ -318,7 +318,6 @@ describe("EventManager", () => {
         source: {
           kind: "runtime",
           id: "raw-source",
-          path: "raw-source",
         },
       }),
     );

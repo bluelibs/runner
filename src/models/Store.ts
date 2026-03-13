@@ -183,24 +183,18 @@ export class Store {
 
   public getRuntimeMetadata(reference: unknown): {
     id: string;
-    path: string;
     runtimeId: string;
   } {
     const runtimeId = this.getRuntimeDefinitionId(reference);
     return {
       id: this.registry.getDisplayId(runtimeId),
-      path: runtimeId,
       runtimeId,
     };
   }
 
   public toRuntimeSource(source: RuntimeCallSource): RuntimeCallSource {
     const runtimeId = this.getRuntimeDefinitionId(source);
-    return {
-      ...source,
-      id: this.registry.getDisplayId(runtimeId),
-      path: runtimeId,
-    };
+    return { kind: source.kind, id: runtimeId };
   }
 
   public createRuntimeSource(
@@ -210,15 +204,15 @@ export class Store {
     const metadata = this.getRuntimeMetadata(reference);
     switch (kind) {
       case "task":
-        return runtimeSource.task(metadata.id, metadata.path);
+        return runtimeSource.task(metadata.runtimeId);
       case "hook":
-        return runtimeSource.hook(metadata.id, metadata.path);
+        return runtimeSource.hook(metadata.runtimeId);
       case "resource":
-        return runtimeSource.resource(metadata.id, metadata.path);
+        return runtimeSource.resource(metadata.runtimeId);
       case "middleware":
-        return runtimeSource.middleware(metadata.id, metadata.path);
+        return runtimeSource.middleware(metadata.runtimeId);
       default:
-        return runtimeSource.runtime(metadata.id, metadata.path);
+        return runtimeSource.runtime(metadata.runtimeId);
     }
   }
 

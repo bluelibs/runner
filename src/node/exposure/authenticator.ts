@@ -7,7 +7,7 @@ import type {
 } from "./types";
 import type { ITask } from "../../defs";
 import type { TaskRunner } from "../../models/TaskRunner";
-import { runtimeSource } from "../../types/runtimeSource";
+import type { Store } from "../../models/Store";
 import { RPC_LANES_RESOURCE_ID } from "../rpc-lanes/rpcLanes.resource";
 
 export interface NodeExposureHttpAuthConfig {
@@ -36,6 +36,7 @@ function safeCompare(a: string, b: string): boolean {
 
 export function createAuthenticator(
   authCfg: NodeExposureHttpAuthConfig | undefined,
+  store: Store,
   taskRunner: TaskRunner,
   validatorTasks: ITask<
     AuthValidatorInput,
@@ -45,7 +46,10 @@ export function createAuthenticator(
   sourceResourceId: string = RPC_LANES_RESOURCE_ID,
 ): Authenticator {
   const headerName = (authCfg?.header ?? "x-runner-token").toLowerCase();
-  const exposureSource = runtimeSource.resource(sourceResourceId);
+  const exposureSource = store.createRuntimeSource(
+    "resource",
+    sourceResourceId,
+  );
 
   return async (req) => {
     const providedToken = headerValue(req.headers[headerName]);

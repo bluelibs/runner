@@ -276,7 +276,7 @@ export function shouldExecuteListener(
   listener: IListenerStorage,
   event: IEventEmission<any>,
 ): boolean {
-  if (listener.id && listener.id === event.source.path) {
+  if (listener.id && listener.id === event.source.id) {
     return false;
   }
   return !listener.filter || listener.filter(event);

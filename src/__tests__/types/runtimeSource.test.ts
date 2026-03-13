@@ -4,7 +4,7 @@ import {
 } from "../../types/runtimeSource";
 
 describe("runtimeSource", () => {
-  it("keeps path undefined unless a canonical path is provided", () => {
+  it("creates canonical-only runtime sources", () => {
     expect(runtimeSource.runtime("runtime.api")).toEqual({
       kind: RuntimeCallSourceKind.Runtime,
       id: "runtime.api",
@@ -24,14 +24,6 @@ describe("runtimeSource", () => {
     expect(runtimeSource.middleware("middleware-a")).toEqual({
       kind: RuntimeCallSourceKind.Middleware,
       id: "middleware-a",
-    });
-  });
-
-  it("preserves explicit canonical paths when callers provide them", () => {
-    expect(runtimeSource.resource("resource-a", "app.resource-a")).toEqual({
-      kind: RuntimeCallSourceKind.Resource,
-      id: "resource-a",
-      path: "app.resource-a",
     });
   });
 });
