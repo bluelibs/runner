@@ -1,15 +1,5 @@
 import { Match, Serializer } from "../..";
 
-type SymbolWithMetadata = {
-  metadata?: symbol;
-};
-
-const symbolWithMetadata = Symbol as unknown as SymbolWithMetadata;
-
-if (symbolWithMetadata.metadata === undefined) {
-  symbolWithMetadata.metadata = Symbol("Symbol.metadata");
-}
-
 describe("default ES decorators", () => {
   it("supports class schema decorators from the top-level package", () => {
     @Match.Schema()

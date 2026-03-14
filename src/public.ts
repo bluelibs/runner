@@ -1,3 +1,4 @@
+import { ensureSymbolMetadata } from "./runtime/ensureSymbolMetadata";
 import {
   defineTask,
   defineResource,
@@ -53,6 +54,8 @@ import { subtreeOf as subtreeOfFn } from "./tools/subtreeOf";
 import { scope as scopeFn } from "./tools/scope";
 import { isSameDefinition } from "./tools/isSameDefinition";
 import { asyncContexts } from "./asyncContexts";
+
+ensureSymbolMetadata();
 
 /**
  * Built-in framework resources that Runner registers and exposes for dependency lookup.

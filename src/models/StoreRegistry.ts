@@ -35,6 +35,7 @@ import { StoreRegistryWriter } from "./store-registry/StoreRegistryWriter";
 import { StoringMode, TagIndexBucket } from "./store-registry/types";
 import { validationError } from "../errors";
 import { getDefinitionIdentity } from "../tools/isSameDefinition";
+import type { RunnerMode } from "../types/runner";
 
 /**
  * Any object reference used as a definition identity key.
@@ -180,6 +181,10 @@ export class StoreRegistry {
 
   getValidator(): StoreValidator {
     return this.validator;
+  }
+
+  public getStoreMode(): RunnerMode {
+    return this.store.mode;
   }
 
   registerDefinitionAlias(reference: unknown, canonicalId: string): void {

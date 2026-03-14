@@ -217,7 +217,7 @@ describe("run-overrides", () => {
       },
     });
 
-    await expect(run(app)).rejects.toThrow(
+    await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
       'Override target Task "task2" is not registered, so it cannot be overridden.',
     );
   });
@@ -514,7 +514,7 @@ describe("run-overrides", () => {
     );
   });
 
-  it("should choose precedence when two overrides target the same id", async () => {
+  it("uses the outermost override when test mode has duplicate targets", async () => {
     const baseTask = defineTask({
       id: "task-same",
       run: async () => "Original",
@@ -539,12 +539,103 @@ describe("run-overrides", () => {
       },
     });
 
-    await expect(run(app)).rejects.toThrow(
-      'Override target "task-same" is declared more than once.',
+    const result = await run(app, { mode: RunnerMode.TEST });
+    expect(result.value).toBe("Root");
+    await result.dispose();
+  });
+
+  it("uses the outermost override across three test-mode levels", async () => {
+    const baseTask = defineTask({
+      id: "task-three-level-same",
+      run: async () => "Original",
+    });
+
+    const childOverride = r.override(baseTask, async () => "Child");
+    const middleOverride = r.override(baseTask, async () => "Middle");
+    const rootOverride = r.override(baseTask, async () => "Root");
+
+    const child = defineResource({
+      id: "child-three-level-same",
+      register: [baseTask],
+      overrides: [childOverride],
+    });
+
+    const middle = defineResource({
+      id: "middle-three-level-same",
+      register: [child],
+      overrides: [middleOverride],
+    });
+
+    const app = defineResource({
+      id: "app-three-level-same",
+      register: [middle],
+      dependencies: { task: baseTask },
+      overrides: [rootOverride],
+      async init(_, deps) {
+        return deps.task();
+      },
+    });
+
+    const result = await run(app, { mode: RunnerMode.TEST });
+    expect(result.value).toBe("Root");
+    await result.dispose();
+  });
+
+  it("uses the last duplicate override declared by the same resource in test mode", async () => {
+    const baseTask = defineTask({
+      id: "task-same-resource-duplicates",
+      run: async () => "Original",
+    });
+
+    const firstOverride = r.override(baseTask, async () => "First");
+    const secondOverride = r.override(baseTask, async () => "Second");
+
+    const app = defineResource({
+      id: "app-same-resource-duplicates",
+      register: [baseTask],
+      dependencies: { task: baseTask },
+      overrides: [firstOverride, secondOverride],
+      async init(_, deps) {
+        return deps.task();
+      },
+    });
+
+    const result = await run(app, { mode: RunnerMode.TEST });
+    expect(result.value).toBe("Second");
+    await result.dispose();
+  });
+
+  it("still rejects duplicate targets outside test mode", async () => {
+    const baseTask = defineTask({
+      id: "task-same-non-test",
+      run: async () => "Original",
+    });
+
+    const middleOverride = r.override(baseTask, async () => "Middle");
+    const rootOverride = r.override(baseTask, async () => "Root");
+
+    const middle = defineResource({
+      id: "middle-non-test",
+      register: [baseTask],
+      overrides: [middleOverride],
+    });
+
+    const app = defineResource({
+      id: "app-non-test",
+      register: [middle],
+      dependencies: { t: baseTask },
+      overrides: [rootOverride],
+      async init(_, deps) {
+        return await deps.t();
+      },
+    });
+
+    await expect(run(app, { mode: RunnerMode.DEV })).rejects.toThrow(
+      'Override target "task-same-non-test" is declared more than once.',
     );
   });
 
-  it("blocks overrides that try to replace a parent's registration", async () => {
+  it("blocks overrides that try to replace a parent's registration in test mode", async () => {
     const baseTask = defineTask({
       id: "override-parent-owned-task",
       run: async () => "base",
@@ -562,7 +653,7 @@ describe("run-overrides", () => {
       register: [baseTask, child],
     });
 
-    await expect(run(app)).rejects.toThrow(
+    await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
       /cannot override Task "override-parent-owned-task" because it is outside that resource's registration subtree/,
     );
   });

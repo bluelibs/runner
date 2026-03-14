@@ -107,6 +107,34 @@ describe("Notifications module", () => {
 
 The important rule is ownership: an override only works if the target definition is actually registered in the harness graph, and the harness declares the override from the same resource that owns that subtree or from one of its ancestors. If a dependency is contributed by another resource, register that owning resource in the test harness, then override the specific definition you want to swap.
 
+When multiple overrides target the same id in `test` mode, Runner resolves them by ancestry: the outermost declaring resource wins. That lets a top-level harness replace a mock contributed by a deeper shared fixture without rewriting the fixture itself.
+
+```typescript
+const nestedMockMailer = r.override(realMailer, async () => ({
+  send: jest.fn().mockResolvedValue("nested"),
+}));
+
+const sharedFixture = r
+  .resource("shared-fixture")
+  .register([realMailer])
+  .overrides([nestedMockMailer])
+  .build();
+
+const harnessMockMailer = r.override(realMailer, async () => ({
+  send: jest.fn().mockResolvedValue("harness"),
+}));
+
+const testHarness = r
+  .resource("test-harness")
+  .register([sharedFixture])
+  .overrides([harnessMockMailer])
+  .build();
+
+const runtime = await run(testHarness, { mode: "test" });
+const mailer = runtime.getResourceValue(realMailer);
+expect(await mailer.send()).toBe("harness");
+```
+
 ### Full Integration Testing (Full Pipeline)
 
 Use `run()` to start the full app with middleware, events, and lifecycle. Swap infrastructure with `override()`.
@@ -115,6 +143,8 @@ Important:
 
 - `r.override(base, fn)` creates a replacement definition.
 - `.overrides([...])` only accepts override-produced definitions.
+- Duplicate override targets still fail fast outside `test` mode.
+- In `test` mode, duplicate override targets are allowed and the outermost declaring resource wins.
 - If you place both base and replacement in `.register([...])`, you'll get duplicate-id registration errors.
 
 ```typescript

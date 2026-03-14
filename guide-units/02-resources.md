@@ -723,6 +723,7 @@ const overriddenMiddleware = r.override(
 - resource object-form overrides may add `ready`, `cooldown`, or `dispose` even if the base resource did not define them
 - hook overrides keep the same `.on` target
 - override APIs do not change structural boundaries (dependencies, register tree, subtree policies)
+- duplicate override targets fail fast outside `test`; in `test`, the outermost declaring resource wins, and same-resource duplicates use the last declaration
 
 Use the resource object form intentionally: overriding `context` changes the private lifecycle-state contract that `init()`, `ready()`, `cooldown()`, and `dispose()` share.
 
@@ -763,7 +764,7 @@ r.resource("test")
   .build();
 ```
 
-If multiple overrides target the same id, Runner rejects the graph with a duplicate-target override error. Overriding something not registered also throws, with a remediation hint.
+If multiple overrides target the same id, Runner rejects the graph with a duplicate-target override error outside `test` mode. In `test` mode, duplicates are allowed so a wrapper harness can replace a deeper mock, and the outermost declaring resource wins. Overriding something not registered still throws, with a remediation hint.
 
 > **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
 

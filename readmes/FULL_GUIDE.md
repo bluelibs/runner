@@ -956,6 +956,7 @@ const overriddenMiddleware = r.override(
 - resource object-form overrides may add `ready`, `cooldown`, or `dispose` even if the base resource did not define them
 - hook overrides keep the same `.on` target
 - override APIs do not change structural boundaries (dependencies, register tree, subtree policies)
+- duplicate override targets fail fast outside `test`; in `test`, the outermost declaring resource wins, and same-resource duplicates use the last declaration
 
 Use the resource object form intentionally: overriding `context` changes the private lifecycle-state contract that `init()`, `ready()`, `cooldown()`, and `dispose()` share.
 
@@ -996,7 +997,7 @@ r.resource("test")
   .build();
 ```
 
-If multiple overrides target the same id, Runner rejects the graph with a duplicate-target override error. Overriding something not registered also throws, with a remediation hint.
+If multiple overrides target the same id, Runner rejects the graph with a duplicate-target override error outside `test` mode. In `test` mode, duplicates are allowed so a wrapper harness can replace a deeper mock, and the outermost declaring resource wins. Overriding something not registered still throws, with a remediation hint.
 
 > **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
 
@@ -4193,7 +4194,8 @@ Decorator compatibility note:
 
 - `@bluelibs/runner` uses standard ES decorators by default.
 - They do not rely on `emitDecoratorMetadata` or `reflect-metadata`; Runner stores its own schema and serializer field metadata explicitly.
-- The ES-decorator path requires `Symbol.metadata` support at runtime. On runtimes that do not provide it yet, install a `Symbol.metadata` polyfill before decorated classes are evaluated.
+- The default `@bluelibs/runner` package now ensures `Symbol.metadata` exists when the runtime does not provide it yet, so ES decorators work out of the box from the main import path.
+- Native/runtime-provided `Symbol.metadata` values are preserved; Runner only initializes the symbol when it is absent.
 - For legacy TypeScript decorators (`experimentalDecorators`), import `Match` and `Serializer` from `@bluelibs/runner/decorators/legacy`. That compatibility entrypoint still includes the full `Match` helper surface (`ObjectIncluding`, `ArrayOf`, `fromSchema`, and `check(...)`), not only decorator helpers.
 
 ```typescript
@@ -5796,6 +5798,34 @@ describe("Notifications module", () => {
 
 The important rule is ownership: an override only works if the target definition is actually registered in the harness graph, and the harness declares the override from the same resource that owns that subtree or from one of its ancestors. If a dependency is contributed by another resource, register that owning resource in the test harness, then override the specific definition you want to swap.
 
+When multiple overrides target the same id in `test` mode, Runner resolves them by ancestry: the outermost declaring resource wins. That lets a top-level harness replace a mock contributed by a deeper shared fixture without rewriting the fixture itself.
+
+```typescript
+const nestedMockMailer = r.override(realMailer, async () => ({
+  send: jest.fn().mockResolvedValue("nested"),
+}));
+
+const sharedFixture = r
+  .resource("shared-fixture")
+  .register([realMailer])
+  .overrides([nestedMockMailer])
+  .build();
+
+const harnessMockMailer = r.override(realMailer, async () => ({
+  send: jest.fn().mockResolvedValue("harness"),
+}));
+
+const testHarness = r
+  .resource("test-harness")
+  .register([sharedFixture])
+  .overrides([harnessMockMailer])
+  .build();
+
+const runtime = await run(testHarness, { mode: "test" });
+const mailer = runtime.getResourceValue(realMailer);
+expect(await mailer.send()).toBe("harness");
+```
+
 ### Full Integration Testing (Full Pipeline)
 
 Use `run()` to start the full app with middleware, events, and lifecycle. Swap infrastructure with `override()`.
@@ -5804,6 +5834,8 @@ Important:
 
 - `r.override(base, fn)` creates a replacement definition.
 - `.overrides([...])` only accepts override-produced definitions.
+- Duplicate override targets still fail fast outside `test` mode.
+- In `test` mode, duplicate override targets are allowed and the outermost declaring resource wins.
 - If you place both base and replacement in `.register([...])`, you'll get duplicate-id registration errors.
 
 ```typescript

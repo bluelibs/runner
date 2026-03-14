@@ -7,6 +7,7 @@ import {
   defineResourceMiddleware,
   defineTaskMiddleware,
 } from "../../define";
+import { RunnerMode } from "../../types/runner";
 
 describe("override() helper", () => {
   it("should preserve id and override run for tasks", async () => {
@@ -159,7 +160,7 @@ describe("override() helper", () => {
       .overrides([viaAlias, viaNamespace])
       .build();
 
-    await expect(run(app)).rejects.toThrow(
+    await expect(run(app, { mode: RunnerMode.DEV })).rejects.toThrow(
       'Override target "test-alias-task" is declared more than once.',
     );
   });

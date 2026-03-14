@@ -506,7 +506,9 @@ import { check, Match } from "@bluelibs/runner";
 - `@Match.Schema({ base: BaseClass })` allows subclassing without TypeScript `extends`.
 - `@Match.Schema({ exact, schemaId, errorPolicy })` controls class strictness, schema identity, and the default validation aggregation policy.
 - Default decorator exports target standard ES decorators. For legacy `experimentalDecorators` projects, import `Match` and `Serializer` from `@bluelibs/runner/decorators/legacy`.
-- Runner decorators do not require `emitDecoratorMetadata` or `reflect-metadata`, but ES decorators do require `Symbol.metadata` support at runtime.
+- Runner decorators do not require `emitDecoratorMetadata` or `reflect-metadata`.
+- The default `@bluelibs/runner` package initializes `Symbol.metadata` when it is missing, so ES decorators work without a manual polyfill on runtimes that do not expose it yet.
+- Existing/native `Symbol.metadata` implementations are preserved.
 - Use `Match.fromSchema(() => User)` for self-referencing or forward class-schema links.
 - Use `Match.Lazy(() => pattern)` for recursive plain Match patterns; use `Match.fromSchema(() => User)` when the recursive thing is a decorated class schema.
 - Validation failures throw the built-in `errors.matchError` Runner error.
@@ -567,6 +569,7 @@ Thrown `IRunnerError` has: `.id`, `.data`, `.message` (from `.format()`, default
 - Run it with `await run(app)`.
 - Assert through `runTask`, `emitEvent`, `getResourceValue`, or `getResourceConfig`.
 - `r.override(base, fn)` is the standard way to swap behavior in tests while preserving ids.
+- Duplicate override targets are allowed only in resolved `test` mode; the outermost declaring resource wins, and same-resource duplicates use the last declaration.
 
 ## Composition Boundaries
 
@@ -670,6 +673,7 @@ Examples:
 - Overriding resource `context` changes the private lifecycle-state contract shared across `init()` / `ready()` / `cooldown()` / `dispose()`.
 - `.overrides([...])` applies override definitions during bootstrap.
 - Override direction is downstream-only: declare overrides from the resource that owns the target subtree or from one of its ancestors. Child resources cannot replace parent-owned or sibling-owned definitions.
+- Duplicate override targets fail fast outside `test` mode. In `test`, the outermost declaring resource wins; same-resource duplicates use the last declaration.
 - Override targets must already exist in the graph.
 
 Fork quick guide:
