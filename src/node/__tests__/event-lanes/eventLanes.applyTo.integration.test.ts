@@ -132,16 +132,13 @@ describe("eventLanes applyTo", () => {
 
   it("fails fast when eventLane applyTo target resolves to task id", async () => {
     const task = r
-      .task("tests-event-lanes-apply-to-invalid-task")
+      .task("invalid-task")
       .run(async () => "ok")
       .build();
-    const lane = r
-      .eventLane("tests-event-lanes-apply-to-invalid-lane")
-      .applyTo([task.id])
-      .build();
+    const lane = r.eventLane("invalid-lane").applyTo([task.id]).build();
 
     const app = r
-      .resource("tests-event-lanes-apply-to-invalid-app")
+      .resource("invalid-app")
       .register([
         task,
         eventLanesResource.with({
@@ -161,13 +158,10 @@ describe("eventLanes applyTo", () => {
   });
 
   it("fails fast when eventLane applyTo string target does not exist", async () => {
-    const lane = r
-      .eventLane("tests-event-lanes-apply-to-missing-target-lane")
-      .applyTo(["tests.event-lanes.apply-to.missing-target.event"])
-      .build();
+    const lane = r.eventLane("missing-lane").applyTo(["missing-event"]).build();
 
     const app = r
-      .resource("tests-event-lanes-apply-to-missing-target-app")
+      .resource("missing-app")
       .register([
         eventLanesResource.with({
           profile: "worker",
@@ -181,18 +175,18 @@ describe("eventLanes applyTo", () => {
       .build();
 
     await expect(run(app)).rejects.toThrow(
-      `eventLane "${lane.id}" applyTo target "tests.event-lanes.apply-to.missing-target.event" was not found in this container.`,
+      `eventLane "${lane.id}" applyTo target "missing-event" was not found in this container.`,
     );
   });
 
   it("fails fast when eventLane applyTo receives an invalid target value", async () => {
     const lane = r
-      .eventLane("tests-event-lanes-apply-to-invalid-shape-lane")
+      .eventLane("invalid-shape-lane")
       .applyTo([{} as any])
       .build();
 
     const app = r
-      .resource("tests-event-lanes-apply-to-invalid-shape-app")
+      .resource("invalid-shape-app")
       .register([
         eventLanesResource.with({
           profile: "worker",
@@ -243,26 +237,18 @@ describe("eventLanes applyTo", () => {
   });
 
   it("fails when eventLane applyTo collides with rpcLane applyTo on the same event", async () => {
-    const event = r
-      .event("tests-event-lanes-apply-to-cross-lane-event")
-      .build();
-    const lane = r
-      .eventLane("tests-event-lanes-apply-to-cross-lane-event-lane")
-      .applyTo([event])
-      .build();
-    const rpc = r
-      .rpcLane("tests-event-lanes-apply-to-cross-lane-rpc-lane")
-      .applyTo([event])
-      .build();
+    const event = r.event("cross-event").build();
+    const lane = r.eventLane("cross-lane").applyTo([event]).build();
+    const rpc = r.rpcLane("cross-rpc").applyTo([event]).build();
     const communicator = r
-      .resource("tests-event-lanes-apply-to-cross-lane-communicator")
+      .resource("cross-comm")
       .init(async () => ({
         event: async () => undefined,
       }))
       .build();
 
     const app = r
-      .resource("tests-event-lanes-apply-to-cross-lane-app")
+      .resource("cross-app")
       .register([
         event,
         communicator,

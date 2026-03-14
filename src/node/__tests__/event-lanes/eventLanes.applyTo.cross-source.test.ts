@@ -12,15 +12,10 @@ const fakeRpcLanesState = defineResource({
 
 describe("eventLanes applyTo cross-source topology checks", () => {
   it("detects rpc lane assignment from string applyTo ids in topology state", async () => {
-    const event = r
-      .event("tests-event-lanes-apply-to-rpc-string-event")
-      .build();
-    const lane = r
-      .eventLane("tests-event-lanes-apply-to-rpc-string-event-lane")
-      .applyTo([event])
-      .build();
+    const event = r.event("cross-event").build();
+    const lane = r.eventLane("cross-lane").applyTo([event]).build();
     const app = r
-      .resource("tests-event-lanes-apply-to-rpc-string-app")
+      .resource("cross-app")
       .register([
         event,
         fakeRpcLanesState.with({
@@ -28,10 +23,7 @@ describe("eventLanes applyTo cross-source topology checks", () => {
             profiles: { client: { serve: [] } },
             bindings: [
               {
-                lane: r
-                  .rpcLane("tests-event-lanes-apply-to-rpc-string-rpc")
-                  .applyTo([event.id])
-                  .build(),
+                lane: r.rpcLane("cross-rpc").applyTo([event.id]).build(),
               },
             ],
           },
@@ -48,7 +40,7 @@ describe("eventLanes applyTo cross-source topology checks", () => {
       .build();
 
     await expect(run(app)).rejects.toThrow(
-      /Event ".*tests-event-lanes-apply-to-rpc-string-event" cannot be assigned to eventLane "tests-event-lanes-apply-to-rpc-string-event-lane" because it is already assigned to an rpcLane\./,
+      /Event ".*cross-event" cannot be assigned to eventLane "cross-lane" because it is already assigned to an rpcLane\./,
     );
   });
 

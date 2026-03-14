@@ -229,7 +229,8 @@ describe("OverrideManager override graph recursion", () => {
 
     jest
       .spyOn(registry.visibilityTracker, "isWithinResourceSubtree")
-      .mockImplementation((sourceId: string, itemId: string) => {
+      .mockImplementation((...args: unknown[]) => {
+        const [sourceId, itemId] = args;
         return sourceId === "root" && itemId === "child";
       });
 

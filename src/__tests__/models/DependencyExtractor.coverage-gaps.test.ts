@@ -10,7 +10,7 @@ import {
 import { globalResources } from "../../globals/globalResources";
 import { Logger } from "../../models/Logger";
 import { DependencyExtractor } from "../../models/dependency-processor/DependencyExtractor";
-import { createTestFixture } from "../test-utils";
+import type { TaskLocalInterceptor } from "../../types/utilities";
 
 type ExtractorStore = {
   events: Map<string, any>;
@@ -55,7 +55,6 @@ function createExtractorStore(): ExtractorStore {
 
 describe("DependencyExtractor coverage gaps", () => {
   it("covers undefined dependency entries, optional/tag-startup extraction, and missing task/resource errors", async () => {
-    const fixture = createTestFixture();
     const logger = new Logger({
       printThreshold: null,
       printStrategy: "pretty",
@@ -258,14 +257,18 @@ describe("DependencyExtractor coverage gaps", () => {
     await tasksFirstRead[0].run({ payload: true });
     expect(taskRunner.run).toHaveBeenCalledTimes(2);
 
-    tasksFirstRead[0].intercept(async ({ next, task }) => next(task.input));
+    const passThroughIntercept: TaskLocalInterceptor<
+      unknown,
+      Promise<unknown>
+    > = async (next, input) => next(input);
+    tasksFirstRead[0].intercept(passThroughIntercept);
     expect(tasksFirstRead[0].getInterceptingResourceIds()).toEqual([
       ownerResource.id,
     ]);
 
     store.isLocked = true;
     expect(() =>
-      tasksFirstRead[0].intercept(async ({ next, task }) => next(task.input)),
+      tasksFirstRead[0].intercept(passThroughIntercept),
     ).toThrow(/after the runtime has been locked/i);
     store.isLocked = false;
 
