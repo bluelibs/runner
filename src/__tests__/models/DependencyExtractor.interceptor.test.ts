@@ -2,6 +2,8 @@ import { defineEvent, defineTask, defineResource } from "../../define";
 import { Store } from "../../models/Store";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { MiddlewareManager } from "../../models/MiddlewareManager";
+import { DependencyExtractor } from "../../models/dependency-processor/DependencyExtractor";
+import * as storeLookup from "../../models/StoreLookup";
 import { run } from "../../run";
 import { ResourceLifecycleMode } from "../../types/runner";
 import { resources } from "../../index";
@@ -248,10 +250,10 @@ describe("DependencyExtractor interceptor branches", () => {
     };
 
     const unresolvedEvent = defineEvent({ id: "extractor-event-unresolved" });
-    const resolveDefinitionIdSpy = jest.spyOn(store, "resolveDefinitionId");
-    resolveDefinitionIdSpy.mockImplementation((reference: unknown) => {
+    const findIdByDefinitionSpy = jest.spyOn(store, "findIdByDefinition");
+    findIdByDefinitionSpy.mockImplementation((reference: unknown) => {
       if (reference === unresolvedEvent) {
-        return undefined;
+        return unresolvedEvent.id;
       }
       if (
         reference &&
@@ -261,7 +263,7 @@ describe("DependencyExtractor interceptor branches", () => {
       ) {
         return (reference as { id: string }).id;
       }
-      return undefined;
+      return String(reference);
     });
 
     await expect(
@@ -269,6 +271,117 @@ describe("DependencyExtractor interceptor branches", () => {
         unresolvedEvent,
         "source",
       ),
-    ).rejects.toThrow(/Dependency Event extractor-event-unresolved not found/i);
+    ).rejects.toThrow(/Event "extractor-event-unresolved" not found/i);
+  });
+
+  it("uses source-id fallbacks for unregistered definitions", () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const extractor = new DependencyExtractor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+      async () => undefined,
+    ) as unknown as {
+      resolveDefinitionId(value: unknown): string;
+    };
+
+    const resource = defineResource({
+      configSchema: {
+        parse: (value: unknown) => value as { enabled: boolean },
+      },
+      id: "extractor-fallback-resource",
+    });
+    const functionWithId = Object.assign(() => undefined, {
+      id: "extractor-function-id",
+    });
+    const functionWithoutId = () => undefined;
+
+    expect(
+      extractor.resolveDefinitionId(resource.with({ enabled: true })),
+    ).toBe(resource.id);
+    expect(extractor.resolveDefinitionId(functionWithId)).toBe(
+      "extractor-function-id",
+    );
+    expect(extractor.resolveDefinitionId(functionWithoutId)).toBe(
+      String(functionWithoutId),
+    );
+    expect(extractor.resolveDefinitionId(null)).toBe("null");
+    expect(extractor.resolveDefinitionId(123)).toBe("123");
+    expect(extractor.resolveDefinitionId({ bad: true })).toBe(
+      "[object Object]",
+    );
+  });
+
+  it("covers source-id fallback branches when lookup helpers return null", () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const extractor = new DependencyExtractor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+      async () => undefined,
+    ) as unknown as {
+      resolveDefinitionId(value: unknown): string;
+    };
+    const functionWithoutId = () => undefined;
+
+    const resolveCanonicalSpy = jest
+      .spyOn(storeLookup, "resolveCanonicalIdFromStore")
+      .mockReturnValue(null);
+    const extractRequestedSpy = jest
+      .spyOn(storeLookup, "extractRequestedId")
+      .mockReturnValue(null);
+
+    try {
+      expect(
+        extractor.resolveDefinitionId("extractor-source-id-fallback"),
+      ).toBe("extractor-source-id-fallback");
+      expect(extractor.resolveDefinitionId(functionWithoutId)).toBe(
+        String(functionWithoutId),
+      );
+      expect(extractor.resolveDefinitionId({ id: "" })).toBe("[object Object]");
+    } finally {
+      resolveCanonicalSpy.mockRestore();
+      extractRequestedSpy.mockRestore();
+    }
+  });
+
+  it("fails fast when event dependency resolution returns an empty id", () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const extractor = new DependencyExtractor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+      async () => undefined,
+    ) as unknown as {
+      extractEventDependency(
+        event: ReturnType<typeof defineEvent>,
+        source: string,
+      ): unknown;
+      resolveDefinitionId(value: unknown): string;
+    };
+    const event = defineEvent({
+      id: "extractor-empty-event-id",
+    });
+
+    jest.spyOn(extractor, "resolveDefinitionId").mockReturnValue("");
+
+    expect(() => extractor.extractEventDependency(event, "source")).toThrow(
+      /Dependency Event extractor-empty-event-id not found/i,
+    );
   });
 });

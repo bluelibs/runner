@@ -55,12 +55,46 @@ export function resolveLaneAsyncContextPolicy(options: {
   };
 }
 
+export function resolveRegistryAsyncContextIds(
+  registry: ReadonlyMap<string, IAsyncContext<unknown>>,
+  allowList: readonly string[] | undefined,
+): readonly string[] | undefined {
+  if (allowList === undefined) {
+    return undefined;
+  }
+
+  const resolvedIds = new Set<string>();
+
+  for (const requestedId of allowList) {
+    if (registry.has(requestedId)) {
+      resolvedIds.add(requestedId);
+      continue;
+    }
+
+    const suffixMatches = Array.from(registry.keys()).filter(
+      (registeredId) =>
+        registeredId === requestedId ||
+        registeredId.endsWith(`.${requestedId}`),
+    );
+
+    if (suffixMatches.length === 1) {
+      resolvedIds.add(suffixMatches[0]!);
+      continue;
+    }
+
+    resolvedIds.add(requestedId);
+  }
+
+  return Array.from(resolvedIds);
+}
+
 export function buildAsyncContextHeader(options: {
   allowList: readonly string[] | undefined;
   registry: ReadonlyMap<string, IAsyncContext<unknown>>;
   serializer: SerializerLike;
 }): string | undefined {
-  const { allowList, registry, serializer } = options;
+  const { registry, serializer } = options;
+  const allowList = resolveRegistryAsyncContextIds(registry, options.allowList);
   const map: Record<string, string> = {};
 
   const collect = (id: string) => {

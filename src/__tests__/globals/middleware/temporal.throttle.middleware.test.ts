@@ -217,7 +217,9 @@ describe("Temporal Middleware: Throttle", () => {
 
         expect(keyedStates?.size).toBe(1);
         expect(keyedStates?.has("stale-key-0")).toBe(false);
-        expect(keyedStates?.has("throttle-prune-idle")).toBe(true);
+        expect(
+          keyedStates?.has("app-prune-idle.tasks.throttle-prune-idle"),
+        ).toBe(true);
       },
     });
 
@@ -272,7 +274,7 @@ describe("Temporal Middleware: Throttle", () => {
       dependencies: { task },
       async init(_, { task }) {
         await expect(task()).rejects.toThrow(
-          "Middleware config validation failed for throttle-keyBuilder-invalid-return: Temporal middleware keyBuilder must return a string. Received object.",
+          "Middleware config validation failed for app-throttle-keyBuilder-invalid-return.tasks.throttle-keyBuilder-invalid-return: Temporal middleware keyBuilder must return a string. Received object.",
         );
       },
     });

@@ -228,7 +228,7 @@ describe("system.runtime", () => {
     const runtimeResult = await run(app, { shutdownHooks: false });
     const runtime = runtimeResult.getResourceValue(globalResources.runtime);
     const report = await runtime.getHealth([monitored]);
-    const monitoredId = runtimeResult.store.getRuntimeMetadata(monitored).path;
+    const monitoredId = runtimeResult.store.findIdByDefinition(monitored);
 
     expect(report.totals).toEqual({
       resources: 1,

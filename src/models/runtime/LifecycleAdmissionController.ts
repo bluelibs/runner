@@ -23,7 +23,8 @@ type DrainWaiter = {
 const internalSourceKinds = new Set<RuntimeCallSourceKind>([
   RuntimeCallSourceKind.Task,
   RuntimeCallSourceKind.Hook,
-  RuntimeCallSourceKind.Middleware,
+  RuntimeCallSourceKind.TaskMiddleware,
+  RuntimeCallSourceKind.ResourceMiddleware,
 ]);
 
 export class LifecycleAdmissionController {

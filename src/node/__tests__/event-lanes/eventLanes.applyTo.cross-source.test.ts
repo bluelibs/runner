@@ -48,7 +48,7 @@ describe("eventLanes applyTo cross-source topology checks", () => {
       .build();
 
     await expect(run(app)).rejects.toThrow(
-      `Event "${event.id}" cannot be assigned to eventLane "${lane.id}" because it is already assigned to an rpcLane.`,
+      /Event ".*tests-event-lanes-apply-to-rpc-string-event" cannot be assigned to eventLane "tests-event-lanes-apply-to-rpc-string-event-lane" because it is already assigned to an rpcLane\./,
     );
   });
 

@@ -153,7 +153,7 @@ describe("run-runtime-exports", () => {
       });
 
       const runtime = await run(root, { shutdownHooks: false });
-      const internalId = runtime.store.resolveDefinitionId(internal)!;
+      const internalId = runtime.store.findIdByDefinition(internal);
       await expect(
         Promise.resolve().then(() => runtime.runTask(internalId)),
       ).rejects.toMatchObject({ id: "runtimeAccessViolation" });
@@ -271,7 +271,7 @@ describe("run-runtime-exports", () => {
       });
 
       const runtime = await run(root, { shutdownHooks: false });
-      const privateEventId = runtime.store.resolveDefinitionId(privateEvt)!;
+      const privateEventId = runtime.store.findIdByDefinition(privateEvt);
       await expect(
         Promise.resolve().then(() =>
           runtime.emitEvent(privateEventId, undefined),
@@ -363,7 +363,7 @@ describe("run-runtime-exports", () => {
       });
 
       const runtime = await run(root, { shutdownHooks: false });
-      const privateResourceId = runtime.store.resolveDefinitionId(inner)!;
+      const privateResourceId = runtime.store.findIdByDefinition(inner);
       expect(() => runtime.getResourceValue(privateResourceId)).toThrow(
         expect.objectContaining({ id: "runtimeAccessViolation" }),
       );

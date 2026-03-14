@@ -158,6 +158,7 @@ export interface HandleRequestErrorOptions {
   serializer: SerializerLike;
   logKey: ExposureErrorLogKey;
   requestId?: string;
+  appErrorId?: string;
 }
 
 interface AppErrorExtra extends Record<string, unknown> {
@@ -169,30 +170,54 @@ interface AppErrorExtra extends Record<string, unknown> {
 const resolveAppErrorExtra = (
   store: Store,
   error: unknown,
+  appErrorId?: string,
 ): AppErrorExtra | undefined => {
   const errorRecord = isRecord(error) ? error : undefined;
-  const rawErrorName =
-    typeof errorRecord?.[ExposureErrorField.Name] === "string"
-      ? (errorRecord[ExposureErrorField.Name] as string)
-      : undefined;
-  const resolvedErrorId = rawErrorName
-    ? (store.resolveDefinitionId(rawErrorName) ?? rawErrorName)
-    : undefined;
+  const resolvedErrorId =
+    appErrorId ??
+    (typeof errorRecord?.[ExposureErrorField.Id] === "string"
+      ? (errorRecord[ExposureErrorField.Id] as string)
+      : undefined);
 
   try {
-    for (const helper of store.errors.values()) {
-      const helperId = store.resolveDefinitionId(helper) ?? helper.id;
+    const helperEntries: Array<{
+      helperId: string;
+      helper: Record<string, unknown>;
+    }> =
+      typeof store.errors.entries === "function"
+        ? Array.from(store.errors.entries()).map(([helperId, helper]) => ({
+            helperId,
+            helper: helper as unknown as Record<string, unknown>,
+          }))
+        : Array.from(store.errors.values()).map((helper) => ({
+            helperId:
+              typeof (helper as { id?: unknown })?.id === "string"
+                ? ((helper as { id: string }).id as string)
+                : "unknown",
+            helper: helper as unknown as Record<string, unknown>,
+          }));
+
+    for (const { helperId, helper } of helperEntries) {
+      const helperIs =
+        typeof helper.is === "function"
+          ? (helper.is as (error: unknown) => boolean)
+          : undefined;
+      const helperCanonicalId =
+        typeof helper.id === "string" ? helper.id : helperId;
+      const helperHttpCode = helper.httpCode;
       const isMatchedTypedError =
-        helper.is(error) ||
-        (resolvedErrorId !== undefined && resolvedErrorId === helperId);
+        helperIs?.(error) === true ||
+        (resolvedErrorId !== undefined &&
+          (resolvedErrorId === helperId ||
+            resolvedErrorId === helperCanonicalId));
 
       if (isMatchedTypedError) {
         if (!errorRecord) {
           return {
-            id: helperId,
+            id: helperCanonicalId,
             data: undefined,
-            httpCode: isValidHttpCode(helper.httpCode)
-              ? helper.httpCode
+            httpCode: isValidHttpCode(helperHttpCode)
+              ? helperHttpCode
               : undefined,
           };
         }
@@ -201,10 +226,10 @@ const resolveAppErrorExtra = (
         const runtimeHttpCode = errorRecord[ExposureErrorField.HttpCode];
         const httpCode = isValidHttpCode(runtimeHttpCode)
           ? runtimeHttpCode
-          : isValidHttpCode(helper.httpCode)
-            ? helper.httpCode
+          : isValidHttpCode(helperHttpCode)
+            ? helperHttpCode
             : undefined;
-        return { id: helperId, data, httpCode };
+        return { id: helperCanonicalId, data, httpCode };
       }
     }
   } catch {
@@ -226,8 +251,9 @@ export const handleRequestError = (
     serializer,
     logKey,
     requestId,
+    appErrorId,
   } = options;
-  const appErrorExtra = resolveAppErrorExtra(store, error);
+  const appErrorExtra = resolveAppErrorExtra(store, error, appErrorId);
   const responseStatus = appErrorExtra?.httpCode ?? 500;
   const displayMessage =
     appErrorExtra && error instanceof Error && error.message

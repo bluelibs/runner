@@ -259,30 +259,44 @@ export async function recordExecutionContext<T>(
  * - Provides the full execution context for debugging and observability
  */
 export class ExecutionContextStore {
-  readonly isEnabled: boolean;
-  readonly isCycleDetectionEnabled: boolean;
-  private readonly createCorrelationId: () => string;
-  private readonly cycleDetection: CycleDetectionConfig | null;
+  private isEnabledValue = false;
+  private isCycleDetectionEnabledValue = false;
+  private createCorrelationIdValue: () => string = createFallbackCorrelationId;
+  private cycleDetectionValue: CycleDetectionConfig | null = null;
 
   constructor(config: ExecutionContextConfig | CycleDetectionConfig | null) {
+    this.configure(config);
+  }
+
+  get isEnabled(): boolean {
+    return this.isEnabledValue;
+  }
+
+  get isCycleDetectionEnabled(): boolean {
+    return this.isCycleDetectionEnabledValue;
+  }
+
+  configure(
+    config: ExecutionContextConfig | CycleDetectionConfig | null,
+  ): void {
     if (config && getSharedExecutionContextStore()) {
       if ("createCorrelationId" in config) {
-        this.createCorrelationId = config.createCorrelationId;
-        this.cycleDetection = config.cycleDetection;
+        this.createCorrelationIdValue = config.createCorrelationId;
+        this.cycleDetectionValue = config.cycleDetection;
       } else {
-        this.createCorrelationId = createFallbackCorrelationId;
-        this.cycleDetection = {
+        this.createCorrelationIdValue = createFallbackCorrelationId;
+        this.cycleDetectionValue = {
           maxDepth: config.maxDepth,
           maxRepetitions: config.maxRepetitions,
         };
       }
-      this.isEnabled = true;
-      this.isCycleDetectionEnabled = this.cycleDetection !== null;
+      this.isEnabledValue = true;
+      this.isCycleDetectionEnabledValue = this.cycleDetectionValue !== null;
     } else {
-      this.createCorrelationId = createFallbackCorrelationId;
-      this.cycleDetection = null;
-      this.isEnabled = false;
-      this.isCycleDetectionEnabled = false;
+      this.createCorrelationIdValue = createFallbackCorrelationId;
+      this.cycleDetectionValue = null;
+      this.isEnabledValue = false;
+      this.isCycleDetectionEnabledValue = false;
     }
   }
 
@@ -301,7 +315,7 @@ export class ExecutionContextStore {
     const currentRepetitions =
       currentContext?.frameCounts.get(getFrameKey(frame)) ?? 0;
 
-    if (this.cycleDetection) {
+    if (this.cycleDetectionValue) {
       this.assertDepthLimit(currentDepth, frame);
       this.assertNoExcessiveRepetition(
         currentRepetitions,
@@ -340,7 +354,7 @@ export class ExecutionContextStore {
           recording: currentRecording,
         }
       : {
-          correlationId: this.createCorrelationId(),
+          correlationId: this.createCorrelationIdValue(),
           startedAt: frame.timestamp,
           frameNode: {
             frame,
@@ -408,11 +422,14 @@ export class ExecutionContextStore {
   }
 
   private assertDepthLimit(currentDepth: number, frame: ExecutionFrame): void {
-    if (this.cycleDetection && currentDepth >= this.cycleDetection.maxDepth) {
+    if (
+      this.cycleDetectionValue &&
+      currentDepth >= this.cycleDetectionValue.maxDepth
+    ) {
       executionDepthExceededError.throw({
         frame,
         currentDepth,
-        maxDepth: this.cycleDetection.maxDepth,
+        maxDepth: this.cycleDetectionValue.maxDepth,
       });
     }
   }
@@ -424,13 +441,13 @@ export class ExecutionContextStore {
   ): void {
     const nextRepetitions = currentRepetitions + 1;
     if (
-      this.cycleDetection &&
-      nextRepetitions >= this.cycleDetection.maxRepetitions
+      this.cycleDetectionValue &&
+      nextRepetitions >= this.cycleDetectionValue.maxRepetitions
     ) {
       executionCycleError.throw({
         frame,
         repetitions: nextRepetitions,
-        maxRepetitions: this.cycleDetection.maxRepetitions,
+        maxRepetitions: this.cycleDetectionValue.maxRepetitions,
         trace: toSnapshot(currentContext)!.frames,
       });
     }

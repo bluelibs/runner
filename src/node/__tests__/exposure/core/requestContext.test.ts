@@ -44,13 +44,14 @@ describe("nodeExposure request context (raw-body)", () => {
       register: [rawTask, exposure],
     });
     const rr = await run(app);
+    const taskId = rr.store.findIdByDefinition(rawTask);
     const handlers = await rr.getResourceValue(exposure as any);
 
     // Create raw-body request with content-type application/octet-stream
     const body = "streamme";
     const req: any = new Readable({ read() {} });
     req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(rawTask.id)}`;
+    req.url = `/__runner/task/${encodeURIComponent(taskId)}`;
     req.headers = {
       "content-type": "application/octet-stream",
     };

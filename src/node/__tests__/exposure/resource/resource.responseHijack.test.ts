@@ -50,13 +50,14 @@ describe("nodeExposure response hijack (duplex)", () => {
       register: [duplexTask, exposure],
     });
     const rr = await run(app);
+    const taskId = rr.store.findIdByDefinition(duplexTask);
     const handlers = await rr.getResourceValue(exposure as any);
 
     // Fake raw-body request
     const body = "abc";
     const req: any = new Readable({ read() {} });
     req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(duplexTask.id)}`;
+    req.url = `/__runner/task/${encodeURIComponent(taskId)}`;
     req.headers = { "content-type": "application/octet-stream" };
     setImmediate(() => {
       for (const ch of body) req.push(Buffer.from(ch));

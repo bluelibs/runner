@@ -1,5 +1,6 @@
 import type { StoreRegistry } from "../StoreRegistry";
 import type { ITaggable } from "../../defs";
+import { StoreLookup } from "../StoreLookup";
 
 type SanityCheckTaggable = ITaggable & {
   id: string;
@@ -24,8 +25,10 @@ export type SelfTagDependencyEntry = {
  */
 export class ValidatorContext {
   private readonly registeredIds = new Set<string>();
+  private readonly lookup: StoreLookup;
 
   constructor(public readonly registry: StoreRegistry) {
+    this.lookup = new StoreLookup(registry);
     this.seedRegisteredIds();
   }
 
@@ -50,30 +53,18 @@ export class ValidatorContext {
   }
 
   resolveReferenceId(entry: unknown): string | null {
-    const resolveDefinitionId = (
-      this.registry as unknown as {
-        resolveDefinitionId?: (reference: unknown) => string | undefined;
-      }
-    ).resolveDefinitionId;
-    const resolved = resolveDefinitionId?.call(this.registry, entry);
-    if (resolved && resolved.length > 0) {
-      return resolved;
-    }
-    return null;
+    const resolved = this.registry.resolveDefinitionId?.(entry);
+    return typeof resolved === "string" && resolved.length > 0
+      ? resolved
+      : null;
   }
 
-  toPublicId(reference: unknown): string {
-    const resolveDefinitionId = (
-      this.registry as unknown as {
-        resolveDefinitionId?: (reference: unknown) => string | undefined;
-      }
-    ).resolveDefinitionId;
-    const getDisplayId = (
-      this.registry as unknown as { getDisplayId?: (id: string) => string }
-    ).getDisplayId;
-    const resolved = resolveDefinitionId?.call(this.registry, reference);
-    const id = resolved ?? String(reference);
-    return getDisplayId ? getDisplayId.call(this.registry, id) : id;
+  findIdByDefinition(reference: unknown): string {
+    return (
+      this.lookup.tryCanonicalId(reference) ??
+      this.lookup.extractRequestedId(reference) ??
+      String(reference)
+    );
   }
 
   forEachTaggableEntry(callback: (entry: TaggableEntry) => void): void {

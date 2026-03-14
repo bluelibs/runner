@@ -55,7 +55,7 @@ export const rpcLanesResource = defineResource<
     });
 
     return toRpcLanesResourceValue(resolved, exposure, (id) =>
-      store.toPublicId(id),
+      store.findIdByDefinition(id),
     );
   },
   async cooldown(value) {

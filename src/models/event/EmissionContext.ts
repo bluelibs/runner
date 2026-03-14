@@ -10,7 +10,7 @@ import {
   validationError,
 } from "../../errors";
 import { EventEmissionInterceptor } from "./types";
-import { symbolDefinitionIdentity, symbolRuntimeId } from "../../types/symbols";
+import { symbolDefinitionIdentity } from "../../types/symbols";
 import {
   createEmptyReport,
   executeInParallel,
@@ -22,7 +22,6 @@ import { RuntimeCallSource } from "../../types/runtimeSource";
 export class EventEmissionImpl<TInput> implements IEventEmission<TInput> {
   private propagationStopped = false;
   public readonly [symbolDefinitionIdentity]?: object;
-  public readonly [symbolRuntimeId]?: string;
 
   constructor(
     public readonly id: string,
@@ -33,10 +32,8 @@ export class EventEmissionImpl<TInput> implements IEventEmission<TInput> {
     public readonly meta: Record<string, any>,
     public readonly transactional: boolean,
     public readonly tags: TagType[],
-    runtimeId?: string,
     definitionIdentity?: object,
   ) {
-    this[symbolRuntimeId] = runtimeId;
     this[symbolDefinitionIdentity] = definitionIdentity;
   }
 

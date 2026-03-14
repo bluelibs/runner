@@ -7,12 +7,7 @@ import { IEventDefinition, IEventEmission } from "./event";
 import { HookTagType } from "./tag";
 import { ITaskMeta } from "./meta";
 import type { NormalizedThrowsList, ThrowsList } from "./error";
-import {
-  CommonPayload,
-  symbolFilePath,
-  symbolHook,
-  symbolRuntimeId,
-} from "./utilities";
+import { CommonPayload, symbolFilePath, symbolHook } from "./utilities";
 
 export type HookRevertFn = () => Promise<void>;
 
@@ -82,7 +77,6 @@ export interface IHook<
 > extends Omit<IHookDefinition<TDependencies, TOn, TMeta>, "throws"> {
   id: string;
   path?: string;
-  [symbolRuntimeId]?: string;
   dependencies: TDependencies | (() => TDependencies);
   [symbolFilePath]: string;
   [symbolHook]: true;

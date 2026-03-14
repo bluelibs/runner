@@ -14,7 +14,6 @@ import {
   issueRemoteLaneToken,
   verifyRemoteLaneToken,
 } from "../remote-lanes/laneAuth";
-import { getRuntimeId } from "../../tools/runtimeMetadata";
 
 type Dependencies = {
   eventManager: EventManager;
@@ -45,7 +44,7 @@ export class LocalSimulatedEventLaneTransport {
         return next(emission);
       }
 
-      const resolvedEmissionEventId = getRuntimeId(emission) ?? emission.id;
+      const resolvedEmissionEventId = emission.id;
       const eventRoute = this.context.eventRouteByEventId.get(
         resolvedEmissionEventId,
       );
@@ -53,9 +52,7 @@ export class LocalSimulatedEventLaneTransport {
         return next(emission);
       }
 
-      const publicEventId = this.dependencies.store.toPublicId(
-        resolvedEmissionEventId,
-      );
+      const canonicalEventId = resolvedEmissionEventId;
 
       emission.stopPropagation();
       const bindingAuth = this.resolveBindingAuth(eventRoute.lane.id);
@@ -67,7 +64,7 @@ export class LocalSimulatedEventLaneTransport {
       const message: EventLaneMessage = {
         id: `sim-${++this.sequence}`,
         laneId: eventRoute.lane.id,
-        eventId: publicEventId,
+        eventId: canonicalEventId,
         payload: this.dependencies.serializer.stringify(emission.data),
         source: emission.source,
         authToken,
@@ -77,7 +74,7 @@ export class LocalSimulatedEventLaneTransport {
       };
 
       await this.diagnostics.logEnqueue({
-        eventId: publicEventId,
+        eventId: canonicalEventId,
         laneId: eventRoute.lane.id,
         profile: this.context.profile,
         mode: "local-simulated",

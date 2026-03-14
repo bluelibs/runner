@@ -26,7 +26,7 @@ export async function startRpcLanesExposure(
   }
 
   const policy = toRpcLanesExposurePolicy(resolved, (id) =>
-    dependencies.store.toPublicId(id),
+    dependencies.store.findIdByDefinition(id),
   );
   if (!hasServedEndpoints(policy)) {
     safeLogWarn(dependencies.logger, "rpc-lanes.exposure.skipped", {
@@ -45,8 +45,7 @@ export async function startRpcLanesExposure(
       sourceResourceId: resourceId,
       authorization: {
         authorizeTask: async (req, taskId) => {
-          const canonicalTaskId =
-            dependencies.store.resolveDefinitionId(taskId) ?? taskId;
+          const canonicalTaskId = taskId;
           const lane = resolved.taskLaneByTaskId.get(canonicalTaskId);
           if (!lane || !resolved.serveLaneIds.has(lane.id)) {
             return null;
@@ -55,8 +54,7 @@ export async function startRpcLanesExposure(
           return authorizeRpcLaneRequest(req, lane, binding?.auth);
         },
         authorizeEvent: async (req, eventId) => {
-          const canonicalEventId =
-            dependencies.store.resolveDefinitionId(eventId) ?? eventId;
+          const canonicalEventId = eventId;
           const lane = resolved.eventLaneByEventId.get(canonicalEventId);
           if (!lane || !resolved.serveLaneIds.has(lane.id)) {
             return null;

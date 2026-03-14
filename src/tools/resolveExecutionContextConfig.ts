@@ -43,7 +43,9 @@ function resolveCycleDetection(
 export function resolveExecutionContextConfig(
   executionContext: boolean | ExecutionContextOptions | undefined,
 ): ExecutionContextConfig | null {
-  if (executionContext === false) return null;
+  if (executionContext === false || executionContext === undefined) {
+    return null;
+  }
 
   if (executionContext === true) {
     return {
@@ -52,13 +54,9 @@ export function resolveExecutionContextConfig(
     };
   }
 
-  if (typeof executionContext === "object") {
-    return {
-      createCorrelationId:
-        executionContext.createCorrelationId ?? createDefaultCorrelationId,
-      cycleDetection: resolveCycleDetection(executionContext.cycleDetection),
-    };
-  }
-
-  return null;
+  return {
+    createCorrelationId:
+      executionContext.createCorrelationId ?? createDefaultCorrelationId,
+    cycleDetection: resolveCycleDetection(executionContext.cycleDetection),
+  };
 }

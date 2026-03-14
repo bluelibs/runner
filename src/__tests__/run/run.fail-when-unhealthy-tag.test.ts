@@ -191,6 +191,12 @@ describe("tags.failWhenUnhealthy", () => {
 
     await expect(runtime.runTask(task)).rejects.toMatchObject({
       id: "taskHealthResourceNotReportable",
+      data: {
+        taskId: expect.stringMatching(
+          /task-health-detached-app\.tasks\.task-health-detached-task$/,
+        ),
+        resourceIds: [detached.id],
+      },
     });
 
     await runtime.dispose();

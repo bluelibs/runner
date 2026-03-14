@@ -560,7 +560,7 @@ describe("run-isolate", () => {
     });
 
     const error = await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
-    expect(error.message).toContain(`"${globalResources.store.id}"`);
+    expect(error.message).toContain("system.store");
   });
 
   it("denies middlewareManager when its definition is blocked", async () => {
@@ -586,9 +586,7 @@ describe("run-isolate", () => {
     });
 
     const error = await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
-    expect(error.message).toContain(
-      `"${globalResources.middlewareManager.id}"`,
-    );
+    expect(error.message).toContain("system.middlewareManager");
   });
 
   it("denies eventManager when its definition is blocked", async () => {
@@ -614,7 +612,7 @@ describe("run-isolate", () => {
     });
 
     const error = await expectRunnerErrorId(run(app), POLICY_VIOLATION_ID);
-    expect(error.message).toContain(`"${globalResources.eventManager.id}"`);
+    expect(error.message).toContain("system.eventManager");
   });
 
   it("allows a same-boundary whitelist carve-out for specific consumers", async () => {

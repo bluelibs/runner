@@ -109,8 +109,14 @@ describe("run transactional hooks", () => {
       listenerId: expect.stringContaining("run-tx-runtime-wildcard"),
     });
 
+    const nonTransactionalEventId = runtime.store.findIdByDefinition(
+      nonTransactionalEvent,
+    );
+    const transactionalEventId =
+      runtime.store.findIdByDefinition(transactionalEvent);
+
     expect(seen).toEqual(
-      expect.arrayContaining(["run-tx-runtime-non-tx", "run-tx-runtime-tx"]),
+      expect.arrayContaining([nonTransactionalEventId, transactionalEventId]),
     );
     await runtime.dispose();
   });

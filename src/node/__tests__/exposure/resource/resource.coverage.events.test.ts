@@ -18,13 +18,14 @@ describe("nodeExposure Coverage - Events", () => {
       register: [okEvent, exposure],
     });
     const rr = await run(app);
+    const okEventId = rr.store.findIdByDefinition(okEvent);
     const handlers = await rr.getResourceValue(exposure as any);
 
     // method not allowed
     {
       const rrMock = createReqRes({
         method: "GET",
-        url: `/__runner/event/${encodeURIComponent(okEvent.id)}`,
+        url: `/__runner/event/${encodeURIComponent(okEventId)}`,
         headers: { "x-runner-token": "T" },
       });
       await handlers.handleEvent(rrMock.req, rrMock.res);
@@ -63,10 +64,11 @@ describe("nodeExposure Coverage - Events", () => {
       register: [evt, hook, exposure],
     });
     const rr = await run(app);
+    const eventId = rr.store.findIdByDefinition(evt);
     const handlers = await rr.getResourceValue(exposure as any);
 
     const container = createReqRes({
-      url: `/__runner/event/${encodeURIComponent(evt.id)}`,
+      url: `/__runner/event/${encodeURIComponent(eventId)}`,
       headers: { "x-runner-token": "EVERR" },
       body: "{}",
     });

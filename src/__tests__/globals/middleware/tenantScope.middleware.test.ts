@@ -14,6 +14,10 @@ import {
 import { tenantInvalidContextError } from "../../../errors";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const tenantValue = (tenantId: string) => ({
+  tenantId,
+  region: `${tenantId}-region`,
+});
 
 describe("tenantScope middleware support", () => {
   it("isolates cache entries by tenant by default", async () => {
@@ -40,15 +44,15 @@ describe("tenantScope middleware support", () => {
     const runtime = await run(app);
 
     const acmeFirst = await asyncContexts.tenant.provide(
-      { tenantId: "acme" },
+      tenantValue("acme"),
       () => runtime.runTask(task, "x"),
     );
     const acmeSecond = await asyncContexts.tenant.provide(
-      { tenantId: "acme" },
+      tenantValue("acme"),
       () => runtime.runTask(task, "x"),
     );
     const globex = await asyncContexts.tenant.provide(
-      { tenantId: "globex" },
+      tenantValue("globex"),
       () => runtime.runTask(task, "x"),
     );
 
@@ -75,17 +79,17 @@ describe("tenantScope middleware support", () => {
     const runtime = await run(app);
 
     await expect(
-      asyncContexts.tenant.provide({ tenantId: "acme" }, () =>
+      asyncContexts.tenant.provide(tenantValue("acme"), () =>
         runtime.runTask(task),
       ),
     ).resolves.toBe("ok");
     await expect(
-      asyncContexts.tenant.provide({ tenantId: "globex" }, () =>
+      asyncContexts.tenant.provide(tenantValue("globex"), () =>
         runtime.runTask(task),
       ),
     ).resolves.toBe("ok");
     await expect(
-      asyncContexts.tenant.provide({ tenantId: "acme" }, () =>
+      asyncContexts.tenant.provide(tenantValue("acme"), () =>
         runtime.runTask(task),
       ),
     ).rejects.toThrow(/rate limit exceeded/i);
@@ -115,12 +119,12 @@ describe("tenantScope middleware support", () => {
     const runtime = await run(app);
 
     await expect(
-      asyncContexts.tenant.provide({ tenantId: "acme" }, () =>
+      asyncContexts.tenant.provide(tenantValue("acme"), () =>
         runtime.runTask(task),
       ),
     ).resolves.toBe("ok");
     await expect(
-      asyncContexts.tenant.provide({ tenantId: "globex" }, () =>
+      asyncContexts.tenant.provide(tenantValue("globex"), () =>
         runtime.runTask(task),
       ),
     ).rejects.toThrow(/rate limit exceeded/i);
@@ -171,25 +175,21 @@ describe("tenantScope middleware support", () => {
 
   it("supports explicit helper resolution paths without mutating global tenant state", () => {
     expect(
-      resolveTenantContext("off", () => ({ tenantId: "ignored" })),
+      resolveTenantContext("off", () => tenantValue("ignored")),
     ).toBeUndefined();
     expect(
-      applyTenantScopeToKey("search", "auto", () => ({ tenantId: "acme" })),
+      applyTenantScopeToKey("search", "auto", () => tenantValue("acme")),
     ).toBe("acme:search");
     expect(
-      applyTenantScopeToKey("search", "auto", () => ({
-        tenantId: "acme",
-      })),
+      applyTenantScopeToKey("search", "auto", () => tenantValue("acme")),
     ).toBe("acme:search");
   });
 
   it("fails fast on invalid tenant payloads when resolving tenant scope", () => {
-    expect(() =>
-      resolveTenantContext("auto", () => ({ tenantId: "" })),
-    ).toThrow();
+    expect(() => resolveTenantContext("auto", () => tenantValue(""))).toThrow();
 
     try {
-      resolveTenantContext("auto", () => ({ tenantId: "" }));
+      resolveTenantContext("auto", () => tenantValue(""));
     } catch (error) {
       expect(tenantInvalidContextError.is(error)).toBe(true);
     }
@@ -217,12 +217,12 @@ describe("tenantScope middleware support", () => {
     const runtime = await run(app);
 
     await expect(
-      asyncContexts.tenant.provide({ tenantId: "acme" }, () =>
+      asyncContexts.tenant.provide(tenantValue("acme"), () =>
         runtime.runTask(task),
       ),
     ).resolves.toBe("ok");
     await expect(
-      asyncContexts.tenant.provide({ tenantId: "globex" }, () =>
+      asyncContexts.tenant.provide(tenantValue("globex"), () =>
         runtime.runTask(task),
       ),
     ).resolves.toBe("ok");
@@ -255,10 +255,10 @@ describe("tenantScope middleware support", () => {
     const runtime = await run(app);
 
     await Promise.all([
-      asyncContexts.tenant.provide({ tenantId: "acme" }, () =>
+      asyncContexts.tenant.provide(tenantValue("acme"), () =>
         runtime.runTask(task),
       ),
-      asyncContexts.tenant.provide({ tenantId: "globex" }, () =>
+      asyncContexts.tenant.provide(tenantValue("globex"), () =>
         runtime.runTask(task),
       ),
     ]);
@@ -300,10 +300,10 @@ describe("tenantScope middleware support", () => {
     const runtime = await run(app);
 
     const debouncePromises = [
-      asyncContexts.tenant.provide({ tenantId: "acme" }, () =>
+      asyncContexts.tenant.provide(tenantValue("acme"), () =>
         runtime.runTask(debounced),
       ),
-      asyncContexts.tenant.provide({ tenantId: "globex" }, () =>
+      asyncContexts.tenant.provide(tenantValue("globex"), () =>
         runtime.runTask(debounced),
       ),
     ];
@@ -316,10 +316,10 @@ describe("tenantScope middleware support", () => {
     ]);
 
     const throttlePromises = [
-      asyncContexts.tenant.provide({ tenantId: "acme" }, () =>
+      asyncContexts.tenant.provide(tenantValue("acme"), () =>
         runtime.runTask(throttled),
       ),
-      asyncContexts.tenant.provide({ tenantId: "globex" }, () =>
+      asyncContexts.tenant.provide(tenantValue("globex"), () =>
         runtime.runTask(throttled),
       ),
     ];

@@ -76,7 +76,7 @@ export const fallbackTaskMiddleware = defineTaskMiddleware({
       if (isTask(fallback)) {
         // If it's a task, run it with the same input using the taskRunner
         return await taskRunner.run(fallback, task.input, {
-          source: runtimeSource.middleware("fallback"),
+          source: runtimeSource.taskMiddleware("fallback"),
         });
       }
 

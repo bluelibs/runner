@@ -2,13 +2,13 @@ import { DebugFriendlyConfig } from "../globals/resources/debug";
 import { LogLevels, PrintStrategy } from "../models/Logger";
 import { OnUnhandledError } from "../models/UnhandledError";
 import { IEvent, IEventEmitOptions, IEventEmitReport } from "../defs";
-import { IResource, IResourceHealthReport } from "./resource";
-import { ITask } from "./task";
-import { TaskCallOptions } from "./utilities";
 import type {
   ExecutionContextConfig,
   ExecutionContextOptions,
 } from "./executionContext";
+import { IResource, IResourceHealthReport } from "./resource";
+import { ITask } from "./task";
+import { TaskCallOptions } from "./utilities";
 
 /**
  * Minimal runtime health-reporting contract.
@@ -195,16 +195,6 @@ export type RunOptions = {
    */
   dryRun?: boolean;
   /**
-   * Opt-in execution context. Exposes the current causal chain through
-   * `asyncContexts.execution`, automatically assigns a correlation id
-   * per top-level execution, and enables cycle detection by default.
-   *
-   * - `true` → enabled with default correlation ids and cycle detection
-   * - `false` or omitted → disabled (zero overhead)
-   * - `{ createCorrelationId?, cycleDetection? }` → enabled with custom behavior
-   */
-  executionContext?: boolean | ExecutionContextOptions;
-  /**
    * Defaults to false.
    * When true, startup skips initializing resources that are not used during bootstrap.
    * Such resources can be initialized on-demand via `runResult.getLazyResourceValue(...)`.
@@ -220,6 +210,10 @@ export type RunOptions = {
    * If inside Node this is automatically detected from the NODE_ENV environment variable if not provided.
    */
   mode?: RunnerMode;
+  /**
+   * Enables built-in execution tracing and cycle detection for this runtime.
+   */
+  executionContext?: boolean | ExecutionContextOptions;
 };
 
 /**
@@ -252,7 +246,7 @@ export type ResolvedRunOptions = {
   onUnhandledError: OnUnhandledError;
   /** Whether dry-run mode is active. */
   dryRun: boolean;
-  /** Normalized execution-context config, or `null` when disabled. */
+  /** Normalized execution-context configuration for this runtime. */
   executionContext: ExecutionContextConfig | null;
   /** Whether lazy resource startup is active. */
   lazy: boolean;

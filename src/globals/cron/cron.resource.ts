@@ -38,7 +38,13 @@ export const cronResource = defineResource<
     const scheduler = new CronScheduler({
       cronTasks: cron.tasks,
       logger,
-      resolveDefinitionId: (entry) => store.resolveDefinitionId(entry),
+      resolveDefinitionId: (entry) => {
+        if (store.hasDefinition(entry)) {
+          return store.findIdByDefinition(entry);
+        }
+
+        return typeof entry === "string" ? entry : entry.id;
+      },
       taskRunner,
     });
     context.scheduler = scheduler;

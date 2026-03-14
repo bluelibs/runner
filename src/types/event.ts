@@ -10,7 +10,6 @@ import {
   symbolDefinitionIdentity,
   symbolEvent,
   symbolFilePath,
-  symbolRuntimeId,
 } from "./utilities";
 import { RuntimeCallSource } from "./runtimeSource";
 import {
@@ -135,7 +134,6 @@ export interface IEventDefinition<TPayload = void> {
 export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
   id: string;
   path?: string;
-  [symbolRuntimeId]?: string;
   /**
    * We use this event to discriminate between resources with just 'id' and 'events' as they collide. This is a workaround, should be redone using classes and instanceof.
    */
@@ -192,5 +190,4 @@ export interface IEventEmission<TPayload = any> {
    */
   tags: EventTagType[];
   [symbolDefinitionIdentity]?: object;
-  [symbolRuntimeId]?: string;
 }

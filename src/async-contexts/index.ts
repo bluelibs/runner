@@ -2,7 +2,11 @@ import { executionAsyncContext } from "./execution.asyncContext";
 import { tenantAsyncContext } from "./tenant.asyncContext";
 
 /**
- * Framework-provided async contexts for execution tracing and tenant propagation.
+ * Framework-provided async-local accessors.
+ *
+ * `tenant` is the built-in async context contract for tenant propagation.
+ * `execution` exposes runtime execution tracing state backed by the
+ * ExecutionContextStore.
  */
 export const asyncContexts = Object.freeze({
   execution: executionAsyncContext,
@@ -12,4 +16,4 @@ export const asyncContexts = Object.freeze({
 /**
  * Shape carried by the built-in tenant async context.
  */
-export type { TenantContextValue } from "./tenant.asyncContext";
+export type { ITenant, TenantContextValue } from "../public-types";

@@ -8,7 +8,7 @@ import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
 import { createMessageError } from "../../errors";
-import { RuntimeCallSource, runtimeSource } from "../../types/runtimeSource";
+import { runtimeSource } from "../../types/runtimeSource";
 import { ExecutionContextStore } from "../../models/ExecutionContextStore";
 
 describe("EventManager", () => {
@@ -260,51 +260,7 @@ describe("EventManager", () => {
     expect(handler2).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to the original event definition when store resolution returns no id", () => {
-    const resolveEventDefinition = (
-      eventManager as unknown as {
-        resolveEventDefinition: <T>(eventDefinition: IEvent<T>) => IEvent<T>;
-      }
-    ).resolveEventDefinition.bind(eventManager);
-
-    eventManager.bindStore({
-      createRuntimeSource: () => runtimeSource.runtime("runtime.test"),
-      events: new Map(),
-      getRuntimeMetadata: (event: IEvent<unknown>) => ({
-        id: (event as IEvent<unknown>).id,
-        path: (event as IEvent<unknown>).id,
-        runtimeId: (event as IEvent<unknown>).id,
-      }),
-      resolveDefinitionId: () => undefined,
-      toRuntimeSource: (source: RuntimeCallSource) => source,
-    } as any);
-
-    expect(resolveEventDefinition(eventDefinition)).toBe(eventDefinition);
-  });
-
-  it("falls back to the original event definition when the resolved store entry is missing", () => {
-    const resolveEventDefinition = (
-      eventManager as unknown as {
-        resolveEventDefinition: <T>(eventDefinition: IEvent<T>) => IEvent<T>;
-      }
-    ).resolveEventDefinition.bind(eventManager);
-
-    eventManager.bindStore({
-      createRuntimeSource: () => runtimeSource.runtime("runtime.test"),
-      events: new Map(),
-      getRuntimeMetadata: () => ({
-        id: eventDefinition.id,
-        path: "events.canonical.testEvent",
-        runtimeId: "events.canonical.testEvent",
-      }),
-      resolveDefinitionId: () => "events.canonical.testEvent",
-      toRuntimeSource: (source: RuntimeCallSource) => source,
-    } as any);
-
-    expect(resolveEventDefinition(eventDefinition)).toBe(eventDefinition);
-  });
-
-  it("preserves raw sources when emitting without a bound store", async () => {
+  it("preserves raw sources when emitting", async () => {
     const handler = jest.fn();
     eventManager.addListener(eventDefinition, handler);
 

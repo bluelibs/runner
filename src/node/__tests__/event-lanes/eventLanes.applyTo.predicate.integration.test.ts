@@ -76,9 +76,10 @@ describe("eventLanes applyTo predicate", () => {
 
     const runtime = await run(app);
     await runtime.runTask(emitTask);
+    const canonicalEventId = runtime.store.findIdByDefinition(event);
 
     await waitUntil(() => queue.enqueued.length === 1);
-    expect(queue.enqueued[0].eventId).toBe(event.id);
+    expect(queue.enqueued[0].eventId).toBe(canonicalEventId);
 
     await runtime.dispose();
   });
@@ -122,9 +123,10 @@ describe("eventLanes applyTo predicate", () => {
 
     const runtime = await run(app);
     await runtime.runTask(emitTask);
+    const canonicalRightEventId = runtime.store.findIdByDefinition(rightEvent);
 
     await waitUntil(() => queue.enqueued.length === 1);
-    expect(queue.enqueued[0].eventId).toBe(rightEvent.id);
+    expect(queue.enqueued[0].eventId).toBe(canonicalRightEventId);
     expect(JSON.parse(queue.enqueued[0].payload)).toEqual({ value: 2 });
 
     await runtime.dispose();

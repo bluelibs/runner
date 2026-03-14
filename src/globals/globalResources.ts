@@ -19,6 +19,7 @@ import { loggerResource as logger } from "./resources/logger.resource";
 import { middlewareManagerResource as middlewareManager } from "./resources/middlewareManager.resource";
 import { eventManagerResource as eventManager } from "./resources/eventManager.resource";
 import { taskRunnerResource as taskRunner } from "./resources/taskRunner.resource";
+import { executionContextResource as executionContext } from "./resources/executionContext.resource";
 
 export {
   healthResource as health,
@@ -48,6 +49,7 @@ export const runnerResources = {
   logger,
   debug,
   serializer,
+  executionContext,
   cacheProvider: cacheProviderResource,
   cache: cacheResource,
   cron,

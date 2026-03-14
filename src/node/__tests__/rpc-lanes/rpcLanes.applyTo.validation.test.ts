@@ -101,7 +101,9 @@ describe("rpcLanes applyTo validation", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      `Event "${event.id}" is already assigned to rpcLane "${laneA.id}".`,
+      new RegExp(
+        `Event ".*${event.id}" is already assigned to rpcLane "${laneA.id}"\\.`,
+      ),
     );
   });
 });

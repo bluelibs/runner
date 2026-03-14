@@ -12,6 +12,8 @@ type LifecycleStore = {
   cooldown(): Promise<void>;
   beginDrained(): void;
   waitForDrain(timeoutMs: number): Promise<boolean>;
+  findIdByDefinition(reference: unknown): string;
+  findDefinitionById(id: string): unknown;
 };
 
 type LifecycleEventManager = {
@@ -64,6 +66,7 @@ export async function runShutdownDisposalLifecycle(
   input.store.beginDisposing();
   await disposalBudget.waitWithinBudget(() =>
     emitLifecycleEvent(
+      input.store,
       input.eventManager,
       globalEvents.disposing,
       input.runtimeLifecycleSource,
@@ -109,6 +112,7 @@ export async function runShutdownDisposalLifecycle(
   input.store.beginDrained();
   await disposalBudget.waitWithinBudget(() =>
     emitLifecycleEvent(
+      input.store,
       input.eventManager,
       globalEvents.drained,
       input.runtimeLifecycleSource,
@@ -131,14 +135,23 @@ export async function disposeRunArtifacts(
 }
 
 async function emitLifecycleEvent(
+  store: LifecycleStore,
   eventManager: LifecycleEventManager,
   event: (typeof globalEvents)[keyof typeof globalEvents],
   runtimeLifecycleSource: RuntimeCallSource,
 ): Promise<void> {
-  await eventManager.emitLifecycle(event, undefined, runtimeLifecycleSource, {
-    throwOnError: false,
-    failureMode: "aggregate",
-  });
+  const canonicalId = store.findIdByDefinition(event);
+  const registeredEvent = store.findDefinitionById(canonicalId) as IEvent<void>;
+
+  await eventManager.emitLifecycle(
+    registeredEvent,
+    undefined,
+    runtimeLifecycleSource,
+    {
+      throwOnError: false,
+      failureMode: "aggregate",
+    },
+  );
 }
 
 async function waitForCooldownWindow(

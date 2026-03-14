@@ -82,6 +82,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [Full Guide](./FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
 | [Support & Release Policy](./ENTERPRISE.md)                                                                 | Docs    | Support windows and deprecation     |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
+| [Example: AWS Lambda Quickstart](https://github.com/bluelibs/runner/tree/main/examples/aws-lambda-quickstart)        | Example | API Gateway + Lambda integration    |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
 
@@ -3048,6 +3049,7 @@ For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resou
 ### Execution Context
 
 When enabled, Runner exposes the current execution state via `asyncContexts.execution`.
+Treat that surface as a runtime tracing accessor, not as a peer of user-defined async context contracts created with `r.asyncContext(...)`.
 
 ```typescript
 import { asyncContexts, run } from "@bluelibs/runner";
@@ -3069,6 +3071,9 @@ executionContext.frames;
 With `executionContext: true`, Runner automatically creates execution context for top-level runtime task runs and event emissions. You do not need `provide()` just to turn propagation on.
 
 `use()` fails fast when no execution is active. Use `asyncContexts.execution.tryUse()` when the context is optional.
+
+`asyncContexts.execution` is backed by Runner's `ExecutionContextStore`, which uses async-local storage internally.
+It exists to expose causal-chain metadata such as correlation ids and frames, not to carry arbitrary application state.
 
 The snapshot shape is:
 
@@ -4026,7 +4031,40 @@ middleware.task.rateLimit.with({
 ```
 
 Runner still reads tenant identity from `asyncContexts.tenant`. Destructure it as `const { tenant } = asyncContexts` to keep call sites concise.
+That `tenant` accessor is an application async context contract; unlike `asyncContexts.execution`, it exists to carry your business state rather than expose runtime tracing metadata.
 If a specific provider or middleware family needs extra metadata, keep that on that provider's own config instead of overloading `tenantScope`.
+
+`TenantContextValue` now extends `ITenant`, so you can layer app-specific tenant metadata onto the built-in contract without replacing Runner's `tenantId` requirement.
+
+```typescript
+import { asyncContexts, type TenantContextValue } from "@bluelibs/runner";
+
+declare module "@bluelibs/runner" {
+  interface TenantContextValue {
+    region: string;
+    plan: "free" | "enterprise";
+  }
+}
+
+const { tenant } = asyncContexts;
+
+await tenant.provide(
+  {
+    // type-safety on proide and use()
+    tenantId: "acme",
+    region: "eu-west",
+    plan: "enterprise",
+  },
+  async () => {
+    const currentTenant = tenant.use();
+    await runtime.runTask(listProjects);
+
+    console.log(currentTenant.region);
+  },
+);
+```
+
+Runner still validates `tenantId` at runtime. Extra fields are part of your app-level contract, so validate them where that metadata enters your system if correctness depends on them.
 
 > **Platform Note:** Async context propagation requires `AsyncLocalStorage`, so this same-runtime tenant pattern is Node-only in practice. On platforms without async local storage, `provide()` still runs the callback but does not propagate tenant state, so shared or frontend-compatible code should treat tenant presence as optional and use `tenant.tryUse()` or `tenant.has()` when probing.
 ## Serialization

@@ -14,12 +14,9 @@ import {
   validationError,
 } from "../errors";
 import { isMatchError } from "../tools/check/errors";
+import { EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS } from "../types/executionContext";
 import { IHook } from "../types/hook";
-import {
-  RuntimeCallSource,
-  RuntimeCallSourceKind,
-  runtimeSource,
-} from "../types/runtimeSource";
+import { RuntimeCallSource, runtimeSource } from "../types/runtimeSource";
 import {
   EventEmissionInterceptor,
   HandlerOptionsDefaults,
@@ -30,7 +27,6 @@ import { ListenerRegistry, createListener } from "./event/ListenerRegistry";
 import { composeInterceptors } from "./event/InterceptorPipeline";
 import { ExecutionContextStore } from "./ExecutionContextStore";
 import { type ExecutionFrame } from "../types/executionContext";
-import { EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS } from "../types/executionContext";
 import { EmissionContext, EventEmissionImpl } from "./event/EmissionContext";
 import {
   createAggregateError,
@@ -41,21 +37,10 @@ import {
   RuntimeLifecyclePhase,
 } from "./runtime/LifecycleAdmissionController";
 import { getDefinitionIdentity } from "../tools/isSameDefinition";
-import type { Store } from "./Store";
-import { getRuntimeId } from "../tools/runtimeMetadata";
 
 type EventEmissionInternalOptions = IEventEmitOptions & {
   allowLifecycleBypass?: boolean;
 };
-
-type EventManagerStoreBindings = Pick<
-  Store,
-  | "createRuntimeSource"
-  | "events"
-  | "getRuntimeMetadata"
-  | "resolveDefinitionId"
-  | "toRuntimeSource"
->;
 
 /**
  * EventManager handles event emission, listener registration, and event processing.
@@ -69,7 +54,6 @@ export class EventManager {
   private readonly registry: ListenerRegistry;
   private readonly executionContextStore: ExecutionContextStore;
   private readonly lifecycleAdmissionController: LifecycleAdmissionController;
-  private store?: EventManagerStoreBindings;
 
   #isLocked = false;
 
@@ -79,10 +63,7 @@ export class EventManager {
   }) {
     this.executionContextStore =
       options?.executionContextStore ??
-      new ExecutionContextStore({
-        createCorrelationId: () => "event-manager",
-        cycleDetection: EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
-      });
+      new ExecutionContextStore(EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS);
     this.registry = new ListenerRegistry();
     this.lifecycleAdmissionController =
       options?.lifecycleAdmissionController ??
@@ -104,10 +85,6 @@ export class EventManager {
    */
   lock() {
     this.#isLocked = true;
-  }
-
-  public bindStore(store: EventManagerStoreBindings): void {
-    this.store = store;
   }
 
   // ---- Emission API ----
@@ -189,8 +166,7 @@ export class EventManager {
       filter: options.filter,
       id: options.id,
     });
-    const eventId = this.resolveEventMetadata(event).runtimeId;
-    this.registry.addListener(eventId, newListener);
+    this.registry.addListener(event.id, newListener);
   }
 
   addGlobalListener(
@@ -213,9 +189,7 @@ export class EventManager {
   }
 
   hasListeners<T>(eventDefinition: IEvent<T>): boolean {
-    return this.registry.hasListeners(
-      this.resolveEventDefinition(eventDefinition),
-    );
+    return this.registry.hasListeners(eventDefinition);
   }
 
   // ---- Interceptor API ----
@@ -238,8 +212,6 @@ export class EventManager {
     event: IEventEmission<any>,
     computedDependencies: DependencyValuesType<any>,
   ): Promise<any> {
-    const hookId = hook.id;
-
     const baseExecute = async (
       hookToExecute: IHook<any, any>,
       eventForHook: IEventEmission<any>,
@@ -251,9 +223,7 @@ export class EventManager {
         ? composeInterceptors(this.hookInterceptors, baseExecute)
         : baseExecute;
 
-    const hookSource: RuntimeCallSource =
-      this.store?.createRuntimeSource(RuntimeCallSourceKind.Hook, hook) ??
-      runtimeSource.hook(hookId);
+    const hookSource: RuntimeCallSource = runtimeSource.hook(hook.id);
 
     const hookFrame: ExecutionFrame = {
       kind: "hook",
@@ -312,9 +282,12 @@ export class EventManager {
       shutdownLockdownError.throw();
     }
 
-    const eventDefinition = this.resolveEventDefinition(eventDef);
-    const metadata = this.resolveEventMetadata(eventDefinition);
-    const source = this.store?.toRuntimeSource(rawSource) ?? rawSource;
+    const eventDefinition = eventDef;
+    const metadata = {
+      id: eventDefinition.id,
+      path: eventDefinition.id,
+    };
+    const source = rawSource;
 
     let data = inputData;
     if (eventDefinition.payloadSchema) {
@@ -380,7 +353,7 @@ export class EventManager {
 
     const traceFrame: ExecutionFrame = {
       kind: "event",
-      id: metadata.runtimeId,
+      id: metadata.id,
       source,
       timestamp: Date.now(),
     };
@@ -403,7 +376,7 @@ export class EventManager {
 
   private createEmission<TInput>(
     eventDefinition: IEvent<TInput>,
-    metadata: { id: string; path: string; runtimeId: string },
+    metadata: { id: string; path: string },
     data: TInput,
     source: RuntimeCallSource,
     identity: object | undefined,
@@ -417,7 +390,6 @@ export class EventManager {
       eventDefinition.meta ? { ...eventDefinition.meta } : {},
       Boolean(eventDefinition.transactional),
       eventDefinition.tags.length > 0 ? [...eventDefinition.tags] : [],
-      metadata.runtimeId,
       identity,
     );
   }
@@ -490,28 +462,6 @@ export class EventManager {
       report.errors,
       `${report.errors.length} listeners failed`,
     );
-  }
-
-  private resolveEventDefinition<T>(eventDefinition: IEvent<T>): IEvent<T> {
-    if (!this.store) return eventDefinition;
-
-    const resolvedId = this.store.resolveDefinitionId(eventDefinition);
-    if (!resolvedId) return eventDefinition;
-
-    const storeEvent = this.store.events.get(resolvedId);
-    return (storeEvent?.event ?? eventDefinition) as IEvent<T>;
-  }
-
-  private resolveEventMetadata<T>(eventDefinition: IEvent<T>) {
-    if (!this.store) {
-      return {
-        id: eventDefinition.id,
-        path: eventDefinition.path ?? eventDefinition.id,
-        runtimeId: getRuntimeId(eventDefinition) ?? eventDefinition.id,
-      };
-    }
-
-    return this.store.getRuntimeMetadata(eventDefinition);
   }
 }
 

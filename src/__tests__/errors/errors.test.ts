@@ -39,7 +39,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Task \"test-task\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Task \"app.tasks.test-task\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -114,7 +114,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Event "non-existent-event" not found. Did you forget to register it?',
+      'Definition "non-existent-event" not found.',
     );
   });
 
@@ -215,7 +215,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Tag \"tag1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Tag \"app.tags.tag1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -240,7 +240,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Hook \"hook1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Hook \"app.hooks.hook1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -260,7 +260,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Middleware \"middlewarex\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Middleware \"app.middleware.task.middlewarex\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -278,7 +278,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Event \"ev1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
+      "Event \"app.events.ev1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -358,7 +358,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Middleware inside task "test-task" depends on "mw" but it\'s not registered. Did you forget to register it?',
+      'Middleware inside task "app.tasks.test-task" depends on "mw" but it\'s not registered. Did you forget to register it?',
     );
   });
 

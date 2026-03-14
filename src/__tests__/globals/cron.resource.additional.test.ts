@@ -93,7 +93,7 @@ describe("global cron resource (additional)", () => {
       .build();
 
     const app = createCronApp([duplicateCronTask]);
-    await expect(run(app)).rejects.toThrow(/duplicate tag "cron"/i);
+    await expect(run(app)).rejects.toThrow(/duplicate tag ".*cron"/i);
   });
 
   it("fails when cron tag is present without configuration", async () => {

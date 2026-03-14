@@ -401,6 +401,75 @@ describe("StoreRegistryWriter branches", () => {
     );
   });
 
+  it("keeps owned task middleware attachments on their local id while resolving them by alias", () => {
+    const { store } = createTestFixture();
+    const registry = (store as unknown as { registry: any }).registry;
+    const writer = registry.writer as {
+      compileOwnedDefinition: (
+        ownerResourceId: string,
+        ownerIsFrameworkRoot: boolean,
+        item: ReturnType<typeof defineTask>,
+        kind: "task",
+      ) => ReturnType<typeof defineTask>;
+      normalizeTaskMiddlewareAttachments: (
+        task: ReturnType<typeof defineTask>,
+      ) => Array<{ id: string }>;
+    };
+    const middleware = defineTaskMiddleware({
+      id: "local-task-middleware",
+      run: async ({ next, task }) => next(task.input),
+    });
+    const task = defineTask({
+      id: "owned-task",
+      middleware: [middleware],
+      run: async () => "ok",
+    });
+    const ownedTask = writer.compileOwnedDefinition(
+      "app-owner",
+      false,
+      task as any,
+      "task",
+    );
+
+    const normalized = writer.normalizeTaskMiddlewareAttachments(ownedTask);
+
+    expect(normalized[0]).toBe(middleware);
+    expect(normalized[0]?.id).toBe("local-task-middleware");
+    expect(registry.resolveDefinitionId(middleware)).toBe(
+      "app-owner.middleware.task.local-task-middleware",
+    );
+  });
+
+  it("leaves owned task middleware attachments unchanged when they already use a canonical id", () => {
+    const writer = getWriter();
+    const middleware = {
+      ...defineTaskMiddleware({
+        id: "absolute",
+        run: async ({ next, task }) => next(task.input),
+      }),
+      id: "app-owner.middleware.task.absolute",
+    };
+    const task = defineTask({
+      id: "owned-task",
+      middleware: [middleware],
+      run: async () => "ok",
+    });
+    const ownedTask = writer.compileOwnedDefinition(
+      "app-owner",
+      false,
+      task,
+      "task",
+    ) as ReturnType<typeof defineTask>;
+
+    const normalized = writer.normalizeTaskMiddlewareAttachments(ownedTask) as
+      | Array<{ id: string }>
+      | undefined;
+
+    expect(normalized).toHaveLength(1);
+    expect(normalized?.[0]).toBe(middleware);
+    expect(normalized?.[0]?.id).toBe("app-owner.middleware.task.absolute");
+  });
+
   it("normalizes definition tags through aliases and detects array changes", () => {
     const { store } = createTestFixture();
     const registry = (store as unknown as { registry: any }).registry;

@@ -9,7 +9,6 @@ import {
   assertTaskOwnership,
   type RpcLanesRuntimeContext,
 } from "./rpcLanes.runtime.utils";
-import { getRuntimeId } from "../../tools/runtimeMetadata";
 
 export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
   const { resolved, dependencies, resourceId } = context;
@@ -42,7 +41,7 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
           input?: unknown,
           options?: { headers?: Record<string, string> },
         ) => Promise<unknown>;
-        const remoteTaskId = store.toPublicId(taskEntry.task);
+        const remoteTaskId = store.findIdByDefinition(taskEntry.task);
         const headers = buildRpcLaneRequestHeaders(lane.id);
         return headers
           ? executeRemoteTask(remoteTaskId, input, { headers })
@@ -55,7 +54,7 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
   }
 
   dependencies.eventManager.intercept(async (next, emission) => {
-    const resolvedEmissionEventId = getRuntimeId(emission) ?? emission.id;
+    const resolvedEmissionEventId = emission.id;
     const lane = resolved.eventLaneByEventId.get(resolvedEmissionEventId);
     if (!lane) {
       return next(emission);
@@ -63,7 +62,7 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
 
     const binding = resolved.bindingsByLaneId.get(lane.id)!;
     const isServed = resolved.serveLaneIds.has(lane.id);
-    const remoteEventId = store.toPublicId(resolvedEmissionEventId);
+    const remoteEventId = resolvedEmissionEventId;
     if (isServed) {
       return next(emission);
     }

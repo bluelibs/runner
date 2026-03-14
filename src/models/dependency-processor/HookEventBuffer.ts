@@ -5,6 +5,7 @@ import {
   HookDependencyState,
   HookStoreElementType,
 } from "../../types/storeTypes";
+import { ExecutionContextStore } from "../ExecutionContextStore";
 
 export class HookEventBuffer {
   private static readonly MAX_FLUSH_PASSES_WITHOUT_CYCLE_DETECTION = 128;
@@ -13,7 +14,7 @@ export class HookEventBuffer {
 
   constructor(
     private readonly eventManager: EventManager,
-    private readonly cycleDetectionEnabled: boolean,
+    private readonly executionContextStore: ExecutionContextStore,
   ) {}
 
   enqueue(hookId: string, event: IEventEmission<any>): void {
@@ -45,7 +46,7 @@ export class HookEventBuffer {
       while (true) {
         flushPasses += 1;
         if (
-          !this.cycleDetectionEnabled &&
+          !this.executionContextStore.isCycleDetectionEnabled &&
           flushPasses > HookEventBuffer.MAX_FLUSH_PASSES_WITHOUT_CYCLE_DETECTION
         ) {
           hookEventBufferFlushAbortedError.throw({

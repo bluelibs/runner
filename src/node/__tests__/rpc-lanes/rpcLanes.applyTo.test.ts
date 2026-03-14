@@ -135,7 +135,10 @@ describe("rpcLanes applyTo", () => {
 
     const runtime = await run(app);
     await runtime.runTask(emitTask as any);
-    expect(eventCapture).toHaveBeenCalledWith(event.id, { value: 7 });
+    expect(eventCapture).toHaveBeenCalledWith(
+      runtime.store.findIdByDefinition(event),
+      { value: 7 },
+    );
     expect(localHookRuns).toBe(0);
     await runtime.dispose();
   });

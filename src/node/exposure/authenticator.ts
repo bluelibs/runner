@@ -6,9 +6,11 @@ import type {
   AuthValidatorResult,
 } from "./types";
 import type { ITask } from "../../defs";
+import { resolveRequestedIdFromStore } from "../../models/StoreLookup";
 import type { TaskRunner } from "../../models/TaskRunner";
 import type { Store } from "../../models/Store";
 import { RPC_LANES_RESOURCE_ID } from "../rpc-lanes/rpcLanes.resource";
+import { runtimeSource } from "../../types/runtimeSource";
 
 export interface NodeExposureHttpAuthConfig {
   header?: string;
@@ -22,6 +24,15 @@ export interface NodeExposureHttpAuthConfig {
    * all tasks and events to unauthenticated access.
    */
   allowAnonymous?: boolean;
+}
+
+function resolveExposureSourceId(
+  store: Store,
+  sourceResourceId: string,
+): string {
+  return (
+    resolveRequestedIdFromStore(store, sourceResourceId) ?? sourceResourceId
+  );
 }
 
 function safeCompare(a: string, b: string): boolean {
@@ -46,9 +57,8 @@ export function createAuthenticator(
   sourceResourceId: string = RPC_LANES_RESOURCE_ID,
 ): Authenticator {
   const headerName = (authCfg?.header ?? "x-runner-token").toLowerCase();
-  const exposureSource = store.createRuntimeSource(
-    "resource",
-    sourceResourceId,
+  const exposureSource = runtimeSource.resource(
+    resolveExposureSourceId(store, sourceResourceId),
   );
 
   return async (req) => {

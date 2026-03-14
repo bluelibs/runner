@@ -106,6 +106,7 @@ For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resou
 ### Execution Context
 
 When enabled, Runner exposes the current execution state via `asyncContexts.execution`.
+Treat that surface as a runtime tracing accessor, not as a peer of user-defined async context contracts created with `r.asyncContext(...)`.
 
 ```typescript
 import { asyncContexts, run } from "@bluelibs/runner";
@@ -127,6 +128,9 @@ executionContext.frames;
 With `executionContext: true`, Runner automatically creates execution context for top-level runtime task runs and event emissions. You do not need `provide()` just to turn propagation on.
 
 `use()` fails fast when no execution is active. Use `asyncContexts.execution.tryUse()` when the context is optional.
+
+`asyncContexts.execution` is backed by Runner's `ExecutionContextStore`, which uses async-local storage internally.
+It exists to expose causal-chain metadata such as correlation ids and frames, not to carry arbitrary application state.
 
 The snapshot shape is:
 

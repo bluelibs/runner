@@ -79,10 +79,16 @@ describe("inputFile.utils", () => {
   });
 
   it("propagates pipeline errors for writeInputFileToPath", async () => {
+    let hasFailed = false;
     const src = new Readable({
       read() {
+        if (hasFailed) {
+          return;
+        }
+
+        hasFailed = true;
         this.push("x");
-        process.nextTick(() => this.emit("error", new Error("boom-write")));
+        this.destroy(new Error("boom-write"));
       },
     });
     const file = new NodeInputFile({ name: "err2.bin" } as any, src as any);

@@ -36,6 +36,7 @@ import {
 import { globalResources } from "../globals/globalResources";
 import type { ITimers } from "../types/timers";
 import { RuntimeRecoveryController } from "./runtime/RuntimeRecoveryController";
+import { resolveRequestedIdFromStore } from "./StoreLookup";
 
 /**
  * Options for configuring lazy resource loading behavior.
@@ -536,7 +537,7 @@ export class RunResult<V> implements IRuntime<V> {
       phase === RuntimeLifecyclePhase.Disposed
     ) {
       lazyResourceShutdownAccessError.throw({
-        id: this.store.toPublicId(resourceId),
+        id: this.store.findIdByDefinition(resourceId),
       });
     }
   }
@@ -628,11 +629,9 @@ export class RunResult<V> implements IRuntime<V> {
    * canonical id, with graceful fallback to the original string/object id.
    */
   private resolveRuntimeElementId(reference: string | { id: string }): string {
-    const resolved = this.store.resolveDefinitionId(reference);
-    if (resolved) {
-      return resolved;
-    }
-    return typeof reference === "string" ? reference : reference.id;
+    return (
+      resolveRequestedIdFromStore(this.store, reference) ?? String(reference)
+    );
   }
 
   private ensureAdmissionControlIsAvailable(): void {

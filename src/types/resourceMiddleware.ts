@@ -10,7 +10,6 @@ import { IMiddlewareMeta } from "./meta";
 import {
   symbolFilePath,
   symbolMiddlewareConfigured,
-  symbolRuntimeId,
   symbolResourceMiddleware,
 } from "./symbols";
 import { IContractable } from "./contracts";
@@ -80,7 +79,6 @@ export interface IResourceMiddleware<
 
   id: string;
   path?: string;
-  [symbolRuntimeId]?: string;
   /** Normalized dependency declaration. */
   dependencies: TDependencies | ((config: TConfig) => TDependencies);
   /** Normalized list of error ids declared via `throws`. */

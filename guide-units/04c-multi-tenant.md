@@ -83,6 +83,39 @@ middleware.task.rateLimit.with({
 ```
 
 Runner still reads tenant identity from `asyncContexts.tenant`. Destructure it as `const { tenant } = asyncContexts` to keep call sites concise.
+That `tenant` accessor is an application async context contract; unlike `asyncContexts.execution`, it exists to carry your business state rather than expose runtime tracing metadata.
 If a specific provider or middleware family needs extra metadata, keep that on that provider's own config instead of overloading `tenantScope`.
+
+`TenantContextValue` now extends `ITenant`, so you can layer app-specific tenant metadata onto the built-in contract without replacing Runner's `tenantId` requirement.
+
+```typescript
+import { asyncContexts, type TenantContextValue } from "@bluelibs/runner";
+
+declare module "@bluelibs/runner" {
+  interface TenantContextValue {
+    region: string;
+    plan: "free" | "enterprise";
+  }
+}
+
+const { tenant } = asyncContexts;
+
+await tenant.provide(
+  {
+    // type-safety on proide and use()
+    tenantId: "acme",
+    region: "eu-west",
+    plan: "enterprise",
+  },
+  async () => {
+    const currentTenant = tenant.use();
+    await runtime.runTask(listProjects);
+
+    console.log(currentTenant.region);
+  },
+);
+```
+
+Runner still validates `tenantId` at runtime. Extra fields are part of your app-level contract, so validate them where that metadata enters your system if correctness depends on them.
 
 > **Platform Note:** Async context propagation requires `AsyncLocalStorage`, so this same-runtime tenant pattern is Node-only in practice. On platforms without async local storage, `provide()` still runs the callback but does not propagate tenant state, so shared or frontend-compatible code should treat tenant presence as optional and use `tenant.tryUse()` or `tenant.has()` when probing.

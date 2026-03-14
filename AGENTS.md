@@ -1,7 +1,7 @@
 <general>
 - Be passionate about what you do, be precise, thoughtful and clear.
 - As you are working do not modify, revert other changes without user confirmation.
-- The code should be designed as re-usable without being over-engineered.
+- The code should be designed awithout being over-engineered.
 - The code should be human-friendly (descriptive variables, function names, comments that describe the 'why'), code readability are a big plus.
 - Keep functions small, decouple early on. Make code be read like a story.
 - Keep non-documentation files small (under 300 lines) (including tests). Decouple/destructure early on.
@@ -42,9 +42,22 @@
 - Prefer to use type strings instead of enums
 - When building new features/enhancements/changes, must be implemented with care without affecting the system and not over-polute files.
 - Code retain 100% test coverage.
+- Use check() as much as you can for runtime constraints, it's very useful (and powerful) and avoids typeof hell. (hint: Custom WithMessage error h)
 - Ensure readmes/AI.md (minimal version of README) and that the guide-units with the full guide are updated accordingly.
 - Document 'why' in comments, not 'what' or 'how', as the code should be self-descriptive enough to explain those.
 - Use runner errors instead of 'throw new Error()' for better error handling and consistency.
 - Read guide-units/DOCS_STYLE_GUIDE.md to understand how we compose the main documentation.
 - Do not include deprecated values/information in AI.md.
   </new_feature>
+
+  <work_style>
+  Re-read this document after every todo.
+
+  You will work in LOG.md in which everyone will have a
+
+====dramatic task title===
+{what am I currently doing, updated regularly and safe}
+==========================
+
+It's good to know when other agents are working, after you finish, clean it up.
+</wo

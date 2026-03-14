@@ -89,7 +89,7 @@ describe("run-exports-visibility", () => {
     });
 
     it("returns a visibility error with actionable remediation for private dependencies", async () => {
-      expect.assertions(7);
+      expect.assertions(8);
 
       const publicTask = defineTask({
         id: "exports-error-public",
@@ -117,19 +117,12 @@ describe("run-exports-visibility", () => {
         fail("Expected run() to fail with visibility violation");
       } catch (e: any) {
         expect(e.id).toBe("visibilityViolation");
-        expect(e.message).toContain(
-          'Task "exports-error-private" is internal to resource "exports-error-child"',
-        );
-        expect(e.message).toContain(
-          'cannot be referenced by Resource "exports-error-root"',
-        );
+        expect(e.message).toContain("exports-error-private");
+        expect(e.message).toContain("cannot be referenced by Resource");
         expect(e.message).toContain("Remediation:");
-        expect(e.remediation).toContain(
-          'Resource "exports-error-child" exports: [exports-error-public].',
-        );
-        expect(e.remediation).toContain(
-          'Either add "exports-error-private" to exports-error-child\'s .isolate({ exports: [...] })',
-        );
+        expect(e.remediation).toContain("exports-error-public");
+        expect(e.remediation).toContain("Either add");
+        expect(e.remediation).toContain("exports-error-private");
         expect(e.remediation).toContain(
           "or restructure to use an exported item instead.",
         );

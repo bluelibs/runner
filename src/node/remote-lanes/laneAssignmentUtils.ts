@@ -1,9 +1,27 @@
 import type { Store } from "../../models/Store";
-import { toPublicDefinition } from "../../models/utils/toPublicDefinition";
+import {
+  resolveRequestedIdFromStore,
+  toCanonicalDefinitionFromStore,
+} from "../../models/StoreLookup";
 
 type LaneWithId = {
   id: string;
 };
+
+function resolveCanonicalId(store: Store, id: string): string {
+  return resolveRequestedIdFromStore(store, id) ?? id;
+}
+
+function findEntryByRequestedId<TEntry extends { id: string }>(
+  entries: Iterable<TEntry>,
+  requestedId: string,
+): TEntry | undefined {
+  const matches = Array.from(entries).filter(
+    (entry) => entry.id === requestedId || entry.id.endsWith(`.${requestedId}`),
+  );
+
+  return matches.length === 1 ? matches[0] : undefined;
+}
 
 /**
  * Extracts the id string from a lane applyTo target.
@@ -89,10 +107,10 @@ export function collectCrossLaneApplyToEventIds(
 ): Set<string> {
   const eventIds = new Set<string>();
   const entry =
-    store.resources.get(resourceId) ??
+    store.resources.get(resolveCanonicalId(store, resourceId)) ??
     Array.from(store.resources.values()).find(
       (candidate) =>
-        store.toPublicId(candidate.resource.id) === resourceId ||
+        candidate.resource.id === resourceId ||
         candidate.resource.id.endsWith(`.${resourceId}`),
     );
   const config = entry?.config as Record<string, unknown> | undefined;
@@ -122,7 +140,15 @@ export function collectCrossLaneApplyToEventIds(
         continue;
       }
 
-      const eventEntry = store.events.get(targetId);
+      const eventEntry =
+        store.events.get(resolveCanonicalId(store, targetId)) ??
+        (() => {
+          const matchedEvent = findEntryByRequestedId(
+            Array.from(store.events.values()).map((entry) => entry.event),
+            targetId,
+          );
+          return matchedEvent ? store.events.get(matchedEvent.id) : undefined;
+        })();
       if (eventEntry) {
         eventIds.add(eventEntry.event.id);
       }
@@ -136,7 +162,7 @@ export function toPublicPredicateCandidate<T extends { id: string }>(
   store: Store,
   definition: T,
 ): T {
-  return toPublicDefinition(store, definition);
+  return toCanonicalDefinitionFromStore(store, definition);
 }
 
 export function visitLaneApplyTo<TSource, TResolvedTarget>(options: {
@@ -203,7 +229,7 @@ export function assignLaneTargetOrThrow<TLane extends LaneWithId>(options: {
 
   if (current && current.id !== lane.id) {
     conflictError.throw({
-      [targetField]: store.toPublicId(targetId),
+      [targetField]: resolveCanonicalId(store, targetId),
       currentLaneId: current.id,
       attemptedLaneId: lane.id,
     } as Record<"currentLaneId" | "attemptedLaneId", string> &

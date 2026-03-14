@@ -25,6 +25,8 @@ import { getRequestId } from "../requestIdentity";
 import type { MultipartLimits } from "../multipart";
 import { respondTaskResult } from "./taskResult";
 import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
+import { runtimeSource } from "../../../types/runtimeSource";
+import { resolveRequestedIdFromStore } from "../../../models/StoreLookup";
 
 interface TaskHandlerDeps {
   store: NodeExposureDeps["store"];
@@ -50,6 +52,39 @@ interface TaskHandlerDeps {
   sourceResourceId?: string;
 }
 
+function resolveRequestedTaskId(
+  store: NodeExposureDeps["store"],
+  taskIdInput: string,
+): string {
+  return resolveRequestedIdFromStore(store, taskIdInput) ?? taskIdInput;
+}
+
+function resolveExposureSourceId(
+  store: NodeExposureDeps["store"],
+  sourceResourceId: string,
+): string {
+  return (
+    resolveRequestedIdFromStore(store, sourceResourceId) ?? sourceResourceId
+  );
+}
+
+function resolveAppErrorId(
+  store: NodeExposureDeps["store"],
+  error: unknown,
+): string | undefined {
+  for (const [helperId, helper] of store.errors.entries()) {
+    try {
+      if (helper.is(error)) {
+        return helperId;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return undefined;
+}
+
 export const createTaskHandler = (deps: TaskHandlerDeps) => {
   const {
     store,
@@ -67,9 +102,8 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     sourceResourceId = RPC_LANES_RESOURCE_ID,
   } = deps;
 
-  const exposureSource = store.createRuntimeSource(
-    "resource",
-    sourceResourceId,
+  const exposureSource = runtimeSource.resource(
+    resolveExposureSourceId(store, sourceResourceId),
   );
 
   return async (
@@ -77,10 +111,8 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     res: ServerResponse,
     taskIdInput: string,
   ): Promise<void> => {
-    const taskId = store.resolveDefinitionId(taskIdInput) ?? taskIdInput;
-    const policyTaskId = store.tasks.has(taskId)
-      ? store.toPublicId(taskId)
-      : taskIdInput;
+    const taskId = resolveRequestedTaskId(store, taskIdInput);
+    const policyTaskId = taskId;
     const allowAsyncContextForTask = allowAsyncContext(policyTaskId);
     const asyncContextAllowListForTask =
       resolveAsyncContextAllowList(policyTaskId);
@@ -254,6 +286,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
         serializer,
         logKey: ExposureErrorLogKey.TaskError,
         requestId: getRequestId(req),
+        appErrorId: resolveAppErrorId(store, error),
       });
     }
   };

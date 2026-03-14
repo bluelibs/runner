@@ -742,7 +742,7 @@ export class StoreRegistryWriter {
     }
 
     return attachments.map((attachment) =>
-      this.normalizeMiddlewareAttachment(ownerScope, kind, attachment),
+      this.registerMiddlewareAttachmentAlias(ownerScope, kind, attachment),
     );
   }
 
@@ -781,20 +781,11 @@ export class StoreRegistryWriter {
     kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
     attachment: TAttachment,
   ): TAttachment {
-    const isRegisteredMiddlewareId = (candidateId: string): boolean =>
-      kind === RegisterableKind.TaskMiddleware
-        ? this.collections.taskMiddlewares.has(candidateId)
-        : this.collections.resourceMiddlewares.has(candidateId);
-    const resolvedByAliasCandidate =
-      this.aliasResolver.resolveDefinitionId(attachment);
-    const resolvedByAlias =
-      typeof resolvedByAliasCandidate === "string" &&
-      isRegisteredMiddlewareId(resolvedByAliasCandidate)
-        ? resolvedByAliasCandidate
-        : undefined;
-    const resolvedId =
-      resolvedByAlias ??
-      this.canonicalIdCompiler.compute(ownerScope, kind, attachment.id);
+    const resolvedId = this.resolveMiddlewareAttachmentId(
+      ownerScope,
+      kind,
+      attachment,
+    );
 
     if (resolvedId === attachment.id) {
       return attachment;
@@ -807,6 +798,46 @@ export class StoreRegistryWriter {
     this.aliasResolver.registerDefinitionAlias(attachment, resolvedId);
     this.aliasResolver.registerDefinitionAlias(normalized, resolvedId);
     return normalized;
+  }
+
+  private registerMiddlewareAttachmentAlias<TAttachment extends { id: string }>(
+    ownerScope: OwnerScope,
+    kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
+    attachment: TAttachment,
+  ): TAttachment {
+    const resolvedId = this.resolveMiddlewareAttachmentId(
+      ownerScope,
+      kind,
+      attachment,
+    );
+    if (resolvedId !== attachment.id) {
+      this.aliasResolver.registerDefinitionAlias(attachment, resolvedId);
+    }
+
+    return attachment;
+  }
+
+  private resolveMiddlewareAttachmentId<TAttachment extends { id: string }>(
+    ownerScope: OwnerScope,
+    kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
+    attachment: TAttachment,
+  ): string {
+    const isRegisteredMiddlewareId = (candidateId: string): boolean =>
+      kind === RegisterableKind.TaskMiddleware
+        ? this.collections.taskMiddlewares.has(candidateId)
+        : this.collections.resourceMiddlewares.has(candidateId);
+    const resolvedByAliasCandidate =
+      this.aliasResolver.resolveDefinitionId(attachment);
+    const resolvedByAlias =
+      typeof resolvedByAliasCandidate === "string" &&
+      isRegisteredMiddlewareId(resolvedByAliasCandidate)
+        ? resolvedByAliasCandidate
+        : undefined;
+
+    return (
+      resolvedByAlias ??
+      this.canonicalIdCompiler.compute(ownerScope, kind, attachment.id)
+    );
   }
 
   private resolveOwnerResourceIdFromTaskId(taskId: string): string | null {

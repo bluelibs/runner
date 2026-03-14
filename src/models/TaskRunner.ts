@@ -22,14 +22,18 @@ import type { IResource } from "../defs";
 import {
   RuntimeCallSource,
   RuntimeCallSourceKind,
+  runtimeSource,
 } from "../types/runtimeSource";
 import type { LifecycleAdmissionController } from "./runtime/LifecycleAdmissionController";
 import { RuntimeLifecyclePhase } from "./runtime/LifecycleAdmissionController";
-import { toPublicDefinition } from "./utils/toPublicDefinition";
 import { ExecutionContextStore } from "./ExecutionContextStore";
 import type { ExecutionFrame } from "../types/executionContext";
 import { globalTags } from "../globals/globalTags";
 import { HealthReporter } from "./HealthReporter";
+import {
+  resolveRequestedIdFromStore,
+  toCanonicalDefinitionFromStore,
+} from "./StoreLookup";
 
 type CachedTaskRunner = (
   input: unknown,
@@ -106,7 +110,7 @@ export class TaskRunner {
     input?: TInput,
     options?: TaskCallOptions,
   ): Promise<TOutput | undefined> {
-    const taskId = this.store.resolveDefinitionId(task)!;
+    const taskId = this.store.findIdByDefinition(task);
     const source = options?.source ?? defaultTaskSource;
     if (!this.store.canAdmitTaskCall(source)) {
       if (
@@ -147,7 +151,7 @@ export class TaskRunner {
       }
       return runner(input as TInput, options?.journal, source);
     };
-    const executionSource = this.store.createRuntimeSource("task", task);
+    const executionSource = runtimeSource.task(taskId);
 
     const traceFrame: ExecutionFrame = {
       kind: "task",
@@ -184,11 +188,9 @@ export class TaskRunner {
     ) => {
       if (options?.when) {
         const taskDefinition = input.task.definition;
-        const publicTaskDefinition = toPublicDefinition(
-          this.store,
-          taskDefinition,
-        );
-        if (!options.when(publicTaskDefinition as typeof taskDefinition)) {
+        const canonicalTaskDefinition =
+          this.toCanonicalDefinition(taskDefinition);
+        if (!options.when(canonicalTaskDefinition as typeof taskDefinition)) {
           return next(input);
         }
       }
@@ -243,10 +245,8 @@ export class TaskRunner {
 
     if (nonReportableResourceIds.length > 0) {
       taskHealthResourceNotReportableError.throw({
-        taskId: this.store.getRuntimeMetadata(task).id,
-        resourceIds: nonReportableResourceIds.map((resourceId) =>
-          this.store.toPublicId(resourceId),
-        ),
+        taskId: this.store.findIdByDefinition(task),
+        resourceIds: nonReportableResourceIds,
       });
     }
 
@@ -257,7 +257,7 @@ export class TaskRunner {
 
     if (unhealthyResourceIds.length > 0) {
       taskBlockedByResourceHealthError.throw({
-        taskId: this.store.getRuntimeMetadata(task).id,
+        taskId: this.store.findIdByDefinition(task),
         resourceIds: unhealthyResourceIds,
       });
     }
@@ -266,10 +266,14 @@ export class TaskRunner {
   private resolveResourceId(
     resource: string | IResource<any, any, any, any, any>,
   ): string {
-    if (typeof resource === "string") {
-      return resource;
-    }
+    return (
+      resolveRequestedIdFromStore(this.store, resource) ?? String(resource)
+    );
+  }
 
-    return this.store.getRuntimeDefinitionId(resource);
+  private toCanonicalDefinition<TDefinition extends { id: string }>(
+    definition: TDefinition,
+  ): TDefinition {
+    return toCanonicalDefinitionFromStore(this.store, definition);
   }
 }

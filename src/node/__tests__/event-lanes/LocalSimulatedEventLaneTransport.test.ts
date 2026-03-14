@@ -2,7 +2,6 @@ import { defineEvent } from "../../../define";
 import { Logger } from "../../../models/Logger";
 import { Serializer } from "../../../serializer/Serializer";
 import { runtimeSource } from "../../../types/runtimeSource";
-import { symbolRuntimeId } from "../../../types/symbols";
 import { EventManager } from "../../../models/EventManager";
 import type { Store } from "../../../models/Store";
 import { EventLanesDiagnostics } from "../../event-lanes/EventLanesDiagnostics";
@@ -431,14 +430,13 @@ describe("LocalSimulatedEventLaneTransport", () => {
     await interceptor(
       jest.fn(async () => "next-result"),
       {
-        id: "shared-event",
+        id: "right.shared-event",
         path: "right.shared-event",
         data: { value: 2 },
         source: runtimeSource.task(
           "tests-local-simulated-definition-identity.source",
         ),
         stopPropagation,
-        [symbolRuntimeId]: "right.shared-event",
       },
     );
 

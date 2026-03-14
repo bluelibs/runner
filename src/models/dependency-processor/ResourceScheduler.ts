@@ -5,6 +5,7 @@ import {
   isHook,
   isOptional,
   isResource,
+  isResourceWithConfig,
   isResourceMiddleware,
   isTag,
   isTagStartup,
@@ -19,6 +20,10 @@ import type {
   ITaskMiddleware,
   IResourceMiddleware,
 } from "../../defs";
+import {
+  extractRequestedId,
+  resolveCanonicalIdFromStore,
+} from "../StoreLookup";
 
 type DependencyTraversalState = {
   resourceIds: Set<string>;
@@ -30,6 +35,29 @@ type ResourceDependencyCollectionOptions = {
   includeTransitiveResourceDependencies?: boolean;
   targetSet?: Set<string>;
 };
+
+function readDefinitionSourceId(value: unknown): string | undefined {
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+
+  if (isResourceWithConfig(value)) {
+    return value.resource.id;
+  }
+
+  if (
+    ((typeof value === "object" && value !== null) ||
+      typeof value === "function") &&
+    "id" in value
+  ) {
+    const sourceId = (value as { id?: unknown }).id;
+    if (typeof sourceId === "string" && sourceId.length > 0) {
+      return sourceId;
+    }
+  }
+
+  return undefined;
+}
 
 export class ResourceScheduler {
   constructor(
@@ -407,6 +435,11 @@ export class ResourceScheduler {
   }
 
   private resolveDefinitionId(value: unknown): string {
-    return this.store.resolveDefinitionId(value)!;
+    return (
+      resolveCanonicalIdFromStore(this.store, value) ??
+      extractRequestedId(value) ??
+      readDefinitionSourceId(value) ??
+      String(value)
+    );
   }
 }

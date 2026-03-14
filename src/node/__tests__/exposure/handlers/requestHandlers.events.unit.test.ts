@@ -15,6 +15,13 @@ import {
   type NodeLikeHeaders,
 } from "./requestHandlers.test.utils";
 
+function exposureEventId(
+  runtime: { store: { findIdByDefinition(reference: unknown): string } },
+  event: unknown,
+): string {
+  return runtime.store.findIdByDefinition(event);
+}
+
 describe("requestHandlers - event handling", () => {
   const serializer = new Serializer();
 
@@ -783,7 +790,7 @@ describe("requestHandlers - event handling", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const { req, res } = createReqRes({
           method: HttpMethod.Post,
-          url: `/__runner/event/${encodeURIComponent(ev.id)}`,
+          url: `/__runner/event/${encodeURIComponent(exposureEventId(rr, ev))}`,
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ payload: {} }),
         });

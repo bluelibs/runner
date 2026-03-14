@@ -286,8 +286,8 @@ describe("run behavioral scenarios", () => {
       aggregate.errors.map((error) => Reflect.get(error, "resourceId")),
     ).toEqual(
       expect.arrayContaining([
-        "init-mode-parallel-fail-first",
-        "init-mode-parallel-fail-second",
+        "init-mode-parallel-fail-app.init-mode-parallel-fail-first",
+        "init-mode-parallel-fail-app.init-mode-parallel-fail-second",
       ]),
     );
   });

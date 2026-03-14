@@ -141,7 +141,9 @@ describe("event-lanes: eventLanesResource", () => {
 
     expect(localHookCalls).toBe(0);
     expect(queue.enqueued).toHaveLength(1);
-    expect(queue.enqueued[0].eventId).toBe(tagged.id);
+    expect(queue.enqueued[0].eventId).toBe(
+      runtime.store.findIdByDefinition(tagged),
+    );
     expect(queue.enqueued[0].maxAttempts).toBe(1);
 
     await runtime.dispose();

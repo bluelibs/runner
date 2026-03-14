@@ -24,6 +24,7 @@ import { ResourceLifecycleMode } from "../types/runner";
 import { DependencyExtractor } from "./dependency-processor/DependencyExtractor";
 import { HookEventBuffer } from "./dependency-processor/HookEventBuffer";
 import { ResourceScheduler } from "./dependency-processor/ResourceScheduler";
+import { ExecutionContextStore } from "./ExecutionContextStore";
 
 /**
  * Resolves and caches computed dependencies for store items (resources, tasks, middleware, hooks).
@@ -50,7 +51,9 @@ export class DependencyProcessor {
     logger: Logger,
     lifecycleMode: ResourceLifecycleMode = ResourceLifecycleMode.Sequential,
     lazy = false,
-    cycleDetectionEnabled = false,
+    executionContextStore: ExecutionContextStore = new ExecutionContextStore(
+      null,
+    ),
   ) {
     this.logger = logger.with({ source: "dependencyProcessor" });
     this.lifecycleMode = lifecycleMode;
@@ -62,7 +65,7 @@ export class DependencyProcessor {
     );
     this.hookEventBuffer = new HookEventBuffer(
       eventManager,
-      cycleDetectionEnabled,
+      executionContextStore,
     );
     this.pendingHookEvents = this.hookEventBuffer.pendingHookEvents;
     this.drainingHookIds = this.hookEventBuffer.drainingHookIds;
@@ -267,21 +270,21 @@ export class DependencyProcessor {
   }
 
   private rethrowResourceInitError(resourceId: string, error: unknown): never {
-    const publicResourceId = this.store.toPublicId(resourceId);
-    const prefix = `Resource "${publicResourceId}" initialization failed`;
+    const canonicalResourceId = this.store.findIdByDefinition(resourceId);
+    const prefix = `Resource "${canonicalResourceId}" initialization failed`;
     if (error instanceof Error) {
-      if (!error.message.includes(publicResourceId)) {
+      if (!error.message.includes(canonicalResourceId)) {
         error.message = `${prefix}: ${error.message}`;
       }
       if (!Object.prototype.hasOwnProperty.call(error, "resourceId")) {
         Object.defineProperty(error, "resourceId", {
-          value: publicResourceId,
+          value: canonicalResourceId,
           configurable: true,
         });
       }
       if (!Object.prototype.hasOwnProperty.call(error, "cause")) {
         Object.defineProperty(error, "cause", {
-          value: { resourceId: publicResourceId },
+          value: { resourceId: canonicalResourceId },
           configurable: true,
         });
       }
@@ -290,7 +293,7 @@ export class DependencyProcessor {
 
     const wrapper = new Error(`${prefix}: ${String(error)}`);
     Object.defineProperty(wrapper, "resourceId", {
-      value: publicResourceId,
+      value: canonicalResourceId,
       configurable: true,
     });
     Object.defineProperty(wrapper, "cause", {
@@ -373,7 +376,7 @@ export class DependencyProcessor {
           });
         } else if (Array.isArray(eventDefinition)) {
           const resolvedEvents = (eventDefinition as IEvent[]).map((event) => {
-            const eventId = this.store.resolveDefinitionId(event)!;
+            const eventId = this.store.findIdByDefinition(event);
             const storeEvent = this.store.events.get(eventId);
             if (storeEvent === undefined) {
               eventNotFoundError.throw({ id: eventId });
@@ -385,7 +388,7 @@ export class DependencyProcessor {
             id: hookListenerId,
           });
         } else {
-          const eventId = this.store.resolveDefinitionId(eventDefinition)!;
+          const eventId = this.store.findIdByDefinition(eventDefinition);
           const storeEvent = this.store.events.get(eventId);
           if (storeEvent === undefined) {
             eventNotFoundError.throw({ id: eventId });

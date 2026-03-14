@@ -20,6 +20,7 @@ import { DurableOperator } from "./DurableOperator";
 import { recordFlowShape, type DurableFlowShape } from "./flowShape";
 import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 import { durableExecutionInvariantError } from "../../../errors";
+import { toCanonicalDefinitionFromStore } from "../../../models/StoreLookup";
 
 export type { IDurableResource } from "./interfaces/resource";
 
@@ -111,7 +112,9 @@ export class DurableResource implements IDurableResource {
       .getTagAccessor(durableWorkflowTag)
       .tasks.map((entry) => entry.definition);
 
-    return tasks.map((task) => runnerStore.toPublicDefinition(task));
+    return tasks.map((task) =>
+      toCanonicalDefinitionFromStore(runnerStore, task),
+    );
   }
 
   private requireRunnerStoreForDescribe(): Store {

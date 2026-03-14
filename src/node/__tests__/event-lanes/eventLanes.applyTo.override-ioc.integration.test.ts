@@ -83,13 +83,14 @@ describe("eventLanes applyTo override IoC", () => {
 
     const runtime = await run(app);
     await runtime.runTask(emitTask);
+    const canonicalEventId = runtime.store.findIdByDefinition(event);
 
     await waitUntil(
       () => queueA.enqueued.length + queueB.enqueued.length === 1,
     );
     expect(queueA.enqueued.length).toBe(0);
     expect(queueB.enqueued.length).toBe(1);
-    expect(queueB.enqueued[0].eventId).toBe(event.id);
+    expect(queueB.enqueued[0].eventId).toBe(canonicalEventId);
 
     await runtime.dispose();
   });

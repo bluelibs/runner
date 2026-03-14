@@ -266,7 +266,10 @@ describe("rpcLanesResource", () => {
 
     const rr = await run(app);
     await rr.runTask(emitTask as any);
-    expect(eventCapture).toHaveBeenCalledWith(event.id, { value: 1 });
+    expect(eventCapture).toHaveBeenCalledWith(
+      rr.store.findIdByDefinition(event),
+      { value: 1 },
+    );
     expect(localHookRuns).toBe(0);
     await rr.dispose();
   });
@@ -612,10 +615,12 @@ describe("rpcLanesResource", () => {
 
     const rr = await run(app);
     const lanesValue = await rr.getResourceValue(lanes.resource as any);
-    expect(lanesValue.serveTaskIds).toContain(task.id);
-    expect(lanesValue.taskAllowAsyncContext[task.id]).toBe(false);
-    expect(lanesValue.serveEventIds).toContain(event.id);
-    expect(lanesValue.eventAllowAsyncContext[event.id]).toBe(false);
+    const taskId = rr.store.findIdByDefinition(task);
+    const eventId = rr.store.findIdByDefinition(event);
+    expect(lanesValue.serveTaskIds).toContain(taskId);
+    expect(lanesValue.taskAllowAsyncContext[taskId]).toBe(false);
+    expect(lanesValue.serveEventIds).toContain(eventId);
+    expect(lanesValue.eventAllowAsyncContext[eventId]).toBe(false);
     await rr.dispose();
   });
 
@@ -659,10 +664,12 @@ describe("rpcLanesResource", () => {
 
     const rr = await run(app);
     const lanesValue = await rr.getResourceValue(lanes.resource as any);
-    expect(lanesValue.taskAllowAsyncContext[defaultTask.id]).toBe(false);
-    expect(lanesValue.taskAsyncContextAllowList[defaultTask.id]).toEqual([]);
-    expect(lanesValue.taskAllowAsyncContext[allowedTask.id]).toBe(true);
-    expect(lanesValue.taskAsyncContextAllowList[allowedTask.id]).toEqual([
+    const defaultTaskId = rr.store.findIdByDefinition(defaultTask);
+    const allowedTaskId = rr.store.findIdByDefinition(allowedTask);
+    expect(lanesValue.taskAllowAsyncContext[defaultTaskId]).toBe(false);
+    expect(lanesValue.taskAsyncContextAllowList[defaultTaskId]).toEqual([]);
+    expect(lanesValue.taskAllowAsyncContext[allowedTaskId]).toBe(true);
+    expect(lanesValue.taskAsyncContextAllowList[allowedTaskId]).toEqual([
       allowedCtx.id,
     ]);
     await rr.dispose();
@@ -700,10 +707,12 @@ describe("rpcLanesResource", () => {
 
     const rr = await run(app);
     const lanesValue = await rr.getResourceValue(lanes.resource as any);
-    expect(lanesValue.taskAllowAsyncContext[task.id]).toBe(true);
-    expect(lanesValue.taskAsyncContextAllowList[task.id]).toBeUndefined();
-    expect(lanesValue.eventAllowAsyncContext[event.id]).toBe(true);
-    expect(lanesValue.eventAsyncContextAllowList[event.id]).toBeUndefined();
+    const taskId = rr.store.findIdByDefinition(task);
+    const eventId = rr.store.findIdByDefinition(event);
+    expect(lanesValue.taskAllowAsyncContext[taskId]).toBe(true);
+    expect(lanesValue.taskAsyncContextAllowList[taskId]).toBeUndefined();
+    expect(lanesValue.eventAllowAsyncContext[eventId]).toBe(true);
+    expect(lanesValue.eventAsyncContextAllowList[eventId]).toBeUndefined();
     await rr.dispose();
   });
 

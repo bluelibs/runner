@@ -6,7 +6,8 @@ export const RuntimeCallSourceKind = {
   Resource: "resource",
   Task: "task",
   Hook: "hook",
-  Middleware: "middleware",
+  TaskMiddleware: "task-middleware",
+  ResourceMiddleware: "resource-middleware",
 } as const;
 
 /**
@@ -75,14 +76,20 @@ export const runtimeSource = {
       id,
     };
   },
+  taskMiddleware(id: string): RuntimeCallSource {
+    return {
+      kind: RuntimeCallSourceKind.TaskMiddleware,
+      id,
+    };
+  },
   /**
-   * Creates a middleware-origin source record.
+   * Creates a resource-middleware-origin source record.
    *
    * @param id Canonical runtime id of the source.
    */
-  middleware(id: string): RuntimeCallSource {
+  resourceMiddleware(id: string): RuntimeCallSource {
     return {
-      kind: RuntimeCallSourceKind.Middleware,
+      kind: RuntimeCallSourceKind.ResourceMiddleware,
       id,
     };
   },

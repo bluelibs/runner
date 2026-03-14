@@ -30,6 +30,7 @@ describe("nodeExposure multipart hijack", () => {
       register: [t, exposure],
     });
     const rr = await run(app);
+    const taskId = rr.store.findIdByDefinition(t);
     const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----jest-boundary";
@@ -46,7 +47,7 @@ describe("nodeExposure multipart hijack", () => {
 
     const req: any = new Readable({ read() {} });
     req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(t.id)}`;
+    req.url = `/__runner/task/${encodeURIComponent(taskId)}`;
     req.headers = {
       "content-type": `multipart/form-data; boundary=${boundary}`,
     };

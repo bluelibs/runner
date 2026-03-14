@@ -13,11 +13,11 @@ const mockTaskRunner = {
   run: jest.fn(),
 } as unknown as jest.Mocked<TaskRunner>;
 const mockStore = {
-  createRuntimeSource: jest.fn((kind: "resource", reference: unknown) => ({
-    kind,
-    id: String(reference),
-  })),
-} as unknown as jest.Mocked<Pick<Store, "createRuntimeSource">>;
+  hasDefinition: jest.fn(() => false),
+  findIdByDefinition: jest.fn((reference: unknown) => String(reference)),
+} as unknown as jest.Mocked<
+  Pick<Store, "findIdByDefinition" | "hasDefinition">
+>;
 const authenticatorStore = mockStore as unknown as Store;
 type AuthValidatorTask = ITask<
   AuthValidatorInput,
@@ -28,6 +28,10 @@ type AuthValidatorTask = ITask<
 describe("node exposure - authenticator", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockStore.hasDefinition.mockReturnValue(false);
+    mockStore.findIdByDefinition.mockImplementation((reference: unknown) =>
+      String(reference),
+    );
   });
 
   describe("createAuthenticator", () => {
@@ -197,6 +201,62 @@ describe("node exposure - authenticator", () => {
       );
       const result = await auth({ headers: {} } as unknown as IncomingMessage);
       expect(result.ok).toBe(false);
+    });
+
+    it("canonicalizes the exposure source resource id when the store knows it", async () => {
+      const task = { id: "v1" } as unknown as AuthValidatorTask;
+      mockStore.hasDefinition.mockImplementation(
+        (reference: unknown) => reference === "exposure",
+      );
+      mockStore.findIdByDefinition.mockImplementation((reference: unknown) =>
+        reference === "exposure" ? "app.resources.exposure" : String(reference),
+      );
+      mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: true }));
+
+      const auth = createAuthenticator(
+        undefined,
+        authenticatorStore,
+        mockTaskRunner,
+        [task],
+        "exposure",
+      );
+      await auth({ headers: {} } as unknown as IncomingMessage);
+
+      expect(mockTaskRunner.run).toHaveBeenCalledWith(
+        task,
+        expect.anything(),
+        expect.objectContaining({
+          source: {
+            kind: "resource",
+            id: "app.resources.exposure",
+          },
+        }),
+      );
+    });
+
+    it("falls back to the provided source resource id when canonical resolution returns null", async () => {
+      const task = { id: "v1" } as unknown as AuthValidatorTask;
+      mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: true }));
+
+      const auth = createAuthenticator(
+        undefined,
+        authenticatorStore,
+        mockTaskRunner,
+        [task],
+        "",
+      );
+      await auth({ headers: {} } as unknown as IncomingMessage);
+
+      expect(mockTaskRunner.run).toHaveBeenCalledWith(
+        task,
+        expect.anything(),
+        expect.objectContaining({
+          source: {
+            kind: "resource",
+            id: "",
+          },
+        }),
+      );
     });
   });
 });

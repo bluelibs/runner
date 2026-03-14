@@ -42,7 +42,7 @@ describe("Validation Edge Cases", () => {
 
     await expect(run(app)).rejects.toThrow();
     await expect(run(app)).rejects.toThrow(
-      "Task input validation failed for task-nonErrorValidation: Non-error string thrown",
+      /Task input validation failed for .*task-nonErrorValidation: Non-error string thrown/,
     );
   });
 
@@ -135,7 +135,7 @@ describe("Validation Edge Cases", () => {
 
     await expect(run(app)).rejects.toThrow();
     await expect(run(app)).rejects.toThrow(
-      "Event payload validation failed for event-nonErrorValidation: Event payload error string",
+      /Event payload validation failed for .*event-nonErrorValidation: Event payload error string/,
     );
   });
 });

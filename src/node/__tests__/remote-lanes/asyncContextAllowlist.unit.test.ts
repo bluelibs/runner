@@ -2,6 +2,7 @@ import {
   buildAsyncContextHeader,
   resolveLaneAsyncContextAllowList,
   resolveLaneAsyncContextPolicy,
+  resolveRegistryAsyncContextIds,
 } from "../../remote-lanes/asyncContextAllowlist";
 
 describe("asyncContext allowlist helpers", () => {
@@ -90,5 +91,20 @@ describe("asyncContext allowlist helpers", () => {
         serializer,
       }),
     ).toBeUndefined();
+  });
+
+  it("resolves allowlist ids against registry suffixes only when the match is unique", () => {
+    const registry = new Map([
+      ["app.asyncContexts.trace", { id: "app.asyncContexts.trace" }],
+      ["app.asyncContexts.auth", { id: "app.asyncContexts.auth" }],
+      ["other.asyncContexts.trace", { id: "other.asyncContexts.trace" }],
+    ]);
+
+    expect(resolveRegistryAsyncContextIds(registry as any, ["auth"])).toEqual([
+      "app.asyncContexts.auth",
+    ]);
+    expect(resolveRegistryAsyncContextIds(registry as any, ["trace"])).toEqual([
+      "trace",
+    ]);
   });
 });

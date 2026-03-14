@@ -572,7 +572,7 @@ describe("Store", () => {
 
     store.initializeStore(rootResource, {}, runtimeResult);
 
-    const taggedTaskId = store.resolveDefinitionId(taggedTask)!;
+    const taggedTaskId = store.findIdByDefinition(taggedTask);
     const storeTask = store.tasks.get(taggedTaskId)!;
     store.tasks.set(taggedTaskId, {
       ...storeTask,
@@ -651,7 +651,7 @@ describe("Store", () => {
     store.initializeStore(rootResource, {}, runtimeResult);
 
     const registry = (store as unknown as { registry: any }).registry;
-    const canonicalTagId = store.resolveDefinitionId(tag)!;
+    const canonicalTagId = store.findIdByDefinition(tag);
     const staleBucket = registry.tagIndex.get(canonicalTagId);
     staleBucket.tasks.add("missing-task");
     staleBucket.resources.add("missing-resource");
@@ -735,7 +735,7 @@ describe("Store", () => {
 
     const resourceMatch = accessor.resources[0]!;
     expect(resourceMatch.value).toBeUndefined();
-    const resourceId = store.resolveDefinitionId(resource)!;
+    const resourceId = store.findIdByDefinition(resource);
     const storeResource = store.resources.get(resourceId)!;
     storeResource.isInitialized = true;
     storeResource.value = "resource-value";

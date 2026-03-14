@@ -185,7 +185,7 @@ describe("Middleware", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      `Middleware inside task "test-task" depends on "${nonExistentMw.id}" but it's not registered. Did you forget to register it?`,
+      `Middleware inside task "app.tasks.test-task" depends on "${nonExistentMw.id}" but it's not registered. Did you forget to register it?`,
     );
   });
 
@@ -525,7 +525,7 @@ describe("Configurable Middleware (.with)", () => {
     const result = await run(app);
     expect(String(result.value)).toBe("Sub");
     expect(calls).toContain("res-app:X");
-    expect(calls).toContain("res-sub:X");
+    expect(calls).toContain("res-app.res-sub:X");
   });
 
   it("fails fast when subtree and local resource middleware share the same id", async () => {

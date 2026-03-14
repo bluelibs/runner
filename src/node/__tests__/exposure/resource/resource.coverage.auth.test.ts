@@ -19,10 +19,11 @@ describe("nodeExposure Coverage - Auth", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
+    const okEventId = rr.store.findIdByDefinition(okEvent);
 
     {
       const rrMock = createReqRes({
-        url: `/__runner/event/${encodeURIComponent(okEvent.id)}`,
+        url: `/__runner/event/${encodeURIComponent(okEventId)}`,
         headers: { "x-custom-token": "ABC" },
       });
       await handlers.handleEvent(rrMock.req, rrMock.res);
@@ -30,7 +31,7 @@ describe("nodeExposure Coverage - Auth", () => {
     }
     {
       const rrMock = createReqRes({
-        url: `/__runner/event/${encodeURIComponent(okEvent.id)}`,
+        url: `/__runner/event/${encodeURIComponent(okEventId)}`,
         headers: {},
       });
       await handlers.handleEvent(rrMock.req, rrMock.res);
@@ -54,9 +55,10 @@ describe("nodeExposure Coverage - Auth", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
+    const eventId = rr.store.findIdByDefinition(evt);
 
     const { req, res } = createReqRes({
-      url: `/__runner/event/${encodeURIComponent(evt.id)}`,
+      url: `/__runner/event/${encodeURIComponent(eventId)}`,
       headers: { "x-runner-token": "ARR" },
       body: "{}",
     });
@@ -87,9 +89,10 @@ describe("nodeExposure Coverage - Auth", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
+    const eventId = rr.store.findIdByDefinition(evt);
 
     const { req, res } = createReqRes({
-      url: `/__runner/event/${encodeURIComponent(evt.id)}`,
+      url: `/__runner/event/${encodeURIComponent(eventId)}`,
       headers: {},
       body: "{}",
     });

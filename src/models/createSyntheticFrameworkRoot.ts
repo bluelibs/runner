@@ -1,7 +1,9 @@
 import type { IResource, IResourceWithConfig, RegisterableItem } from "../defs";
 import { defineResource } from "../define";
 import { debugResource } from "../globals/resources/debug";
+import { globalResources } from "../globals/globalResources";
 import type { DebugFriendlyConfig } from "../globals/resources/debug";
+import type { ExecutionContextConfig } from "../types/executionContext";
 import {
   RUNNER_FRAMEWORK_ITEMS,
   SYSTEM_FRAMEWORK_ITEMS,
@@ -14,6 +16,7 @@ export const SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID = "runtime-framework-root";
 type FrameworkRootInput = {
   rootItem: IResource<any, any, any, any, any> | IResourceWithConfig<any, any>;
   debug: DebugFriendlyConfig | undefined;
+  executionContext?: ExecutionContextConfig | null;
 };
 
 function createFrameworkNamespaceResource(
@@ -29,10 +32,22 @@ function createFrameworkNamespaceResource(
 export function createSyntheticFrameworkRoot({
   rootItem,
   debug,
+  executionContext = null,
 }: FrameworkRootInput): IResource<void, Promise<void>> {
-  const runnerRegister = debug
-    ? [...RUNNER_FRAMEWORK_ITEMS, debugResource.with(debug)]
-    : [...RUNNER_FRAMEWORK_ITEMS];
+  const runnerRegister = [...RUNNER_FRAMEWORK_ITEMS];
+
+  if (executionContext) {
+    runnerRegister.push(
+      globalResources.executionContext.with({
+        createCorrelationId: executionContext.createCorrelationId,
+        cycleDetection: executionContext.cycleDetection ?? false,
+      }),
+    );
+  }
+
+  if (debug) {
+    runnerRegister.push(debugResource.with(debug));
+  }
 
   const systemResource = createFrameworkNamespaceResource(
     FRAMEWORK_SYSTEM_RESOURCE_ID,

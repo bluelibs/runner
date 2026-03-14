@@ -92,11 +92,9 @@ describe("run", () => {
 
     const result = await run(app);
 
-    expect(result.store.getRuntimeMetadata(app).id).toBe("app");
-    expect(result.store.getRuntimeMetadata(app).path).toBe("app");
-    expect(result.store.getRuntimeMetadata(parent).id).toBe("resource-x");
-    expect(result.store.getRuntimeMetadata(parent).path).toBe("app.resource-x");
-    expect(result.store.getRuntimeMetadata(child).path).toBe(
+    expect(result.store.findIdByDefinition(app)).toBe("app");
+    expect(result.store.findIdByDefinition(parent)).toBe("app.resource-x");
+    expect(result.store.findIdByDefinition(child)).toBe(
       "app.resource-x.resource-y",
     );
     await expect(
@@ -163,8 +161,8 @@ describe("run", () => {
     });
 
     const result = await run(app);
-    expect(result.store.toPublicId(resourceMiddleware)).toBe(
-      "test-run-root-resource-middleware",
+    expect(result.store.findIdByDefinition(resourceMiddleware)).toBe(
+      "test-run-root-middleware-root.middleware.resource.test-run-root-resource-middleware",
     );
     await result.dispose();
   });

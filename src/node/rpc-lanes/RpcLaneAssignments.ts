@@ -128,7 +128,7 @@ export function resolveRpcLaneAssignments(
     // Without explicit applyTo, IoC tags must not assign the same event to both systems.
     if (globalTags.eventLane.exists(eventEntry.event.tags)) {
       rpcLaneAssignmentEventLaneConflictError.throw({
-        eventId: store.toPublicId(eventId),
+        eventId,
         rpcLaneId: laneConfig.lane.id,
       });
     }
@@ -146,11 +146,11 @@ function assertEventIsNotExplicitlyAssignedToEventLane(
   eventLaneApplyToEventIds: Set<string>,
   eventId: string,
   rpcLaneId: string,
-  store: Store,
+  _store: Store,
 ): void {
   if (eventLaneApplyToEventIds.has(eventId)) {
     rpcLaneAssignmentEventLaneConflictError.throw({
-      eventId: store.toPublicId(eventId),
+      eventId,
       rpcLaneId,
     });
   }
@@ -211,7 +211,7 @@ function resolveRpcLaneTarget(
   if (isRegisteredDefinitionId(store, targetId)) {
     return rpcLaneApplyToTargetTypeError.throw({
       laneId,
-      targetId: store.toPublicId(targetId),
+      targetId,
     });
   }
 

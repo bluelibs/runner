@@ -28,7 +28,6 @@ import {
   symbolResource,
   symbolResourceRegistersChildren,
   symbolResourceSubtreeDeclarations,
-  symbolRuntimeId,
   symbolResourceWithConfig,
 } from "./symbols";
 import {
@@ -487,7 +486,6 @@ export interface IResource<
   >;
   id: string;
   path?: string;
-  [symbolRuntimeId]?: string;
   /** Configures the resource and returns a branded configured instance. */
   with(
     config: HasInputContracts<[...TTags, ...TMiddleware]> extends true
@@ -587,7 +585,6 @@ export interface IResourceWithConfig<
   /** The id of the underlying resource. */
   id: string;
   path?: string;
-  [symbolRuntimeId]?: string;
   /** The underlying resource definition. */
   resource: IResource<
     TConfig,

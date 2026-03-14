@@ -58,4 +58,10 @@ describe("ValidatorContext coverage", () => {
       "validator-context-task",
     ]);
   });
+
+  it("falls back to stringified references when a definition id cannot be resolved", () => {
+    const context = new ValidatorContext(createValidatorRegistry());
+
+    expect(context.findIdByDefinition(123)).toBe("123");
+  });
 });

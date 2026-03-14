@@ -187,7 +187,7 @@ userInput.toJSONSchema(); // machine-readable contract for tooling
 - `runtime.resume()` reopens admissions immediately.
 - `runtime.recoverWhen({ everyMs, check })` registers paused-state recovery conditions; Runner auto-resumes only after all active conditions for the current pause episode pass.
 - `executionContext: true | { createCorrelationId?, cycleDetection? }` enables correlation tracking and execution tree recording (Node-only; requires `AsyncLocalStorage`). See "Execution Context and Request Tracing" below.
-- `asyncContexts.execution.use()` returns the current branch snapshot: `{ correlationId, startedAt, depth, currentFrame, frames }`.
+- `asyncContexts.execution.use()` returns the current branch snapshot: `{ correlationId, startedAt, depth, currentFrame, frames }`. Treat it as runtime tracing access, not as a user-defined async context contract like `r.asyncContext(...)`.
 
 Runtime mode access:
 
@@ -223,6 +223,15 @@ const app = r
   ])
   .build();
 ```
+
+## Serverless / AWS Lambda
+
+- Treat the Lambda handler as a thin ingress adapter: parse the API Gateway event, provide request async context, then call `runtime.runTask(...)`.
+- Cache the `run(app, { shutdownHooks: false })` promise across warm invocations so cold-start bootstrap happens once per container.
+- Prefer task `.inputSchema(...)` for business validation. Keep the handler focused on HTTP adaptation and error mapping.
+- Require request-local business state with `r.asyncContext(...).require()` so missing context fails fast instead of turning into silent cross-request bugs.
+- Use an explicit `disposeRunner()` helper only for tests, local scripts, or environments where you truly control process teardown.
+- See `examples/aws-lambda-quickstart` for a lambdalith and per-route example.
 
 Lifecycle:
 
@@ -751,6 +760,10 @@ Use `provide()` when you want to seed or override the correlation id from an ext
 
 Use `record()` when you want the execution tree back for assertions, tracing, or debugging.
 
+`asyncContexts.execution` is not the same kind of surface as `r.asyncContext(...)` or `asyncContexts.tenant`.
+It is a runtime accessor over Runner's execution-tracing store, which itself uses async-local storage under the hood.
+Use it to inspect or seed execution metadata, not to model arbitrary request-local business state.
+
 Cycle protection comes in layers:
 
 - declared `.dependencies(...)` cycles fail during bootstrap graph validation (it is middleware-aware too)
@@ -761,7 +774,9 @@ Cycle protection comes in layers:
 
 ## Async Context
 
-Defines serializable request-local state scoped to an async execution tree (requires `AsyncLocalStorage`; Node-only in practice).
+Defines serializable request-local application state scoped to an async execution tree (requires `AsyncLocalStorage`; Node-only in practice).
+This is the contract surface for business state such as tenant, auth, locale, or request metadata.
+Do not use `asyncContexts.execution` as the mental model here; that surface is for runtime tracing and happens to be implemented on top of the same async-local mechanism.
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -786,11 +801,13 @@ Contexts can be injected as dependencies or enforced by middleware via `middlewa
 
 ## Multi-Tenant Systems
 
-Runner's official same-runtime multi-tenant pattern uses `asyncContexts` (from runner package). Destructure it for brevity: `const { tenant } = asyncContexts`.
+Runner's official same-runtime multi-tenant pattern uses `asyncContexts.tenant` (from runner package). Destructure it for brevity: `const { tenant } = asyncContexts`.
 
 - `tenant.use()` returns `{ tenantId: string }` and throws when tenant context is required but missing.
 - `tenant.tryUse()` returns `{ tenantId: string } | undefined`, and `tenant.has()` is a safe boolean check for shared or frontend-compatible code.
+- `TenantContextValue` extends `ITenant`. Augment `TenantContextValue` when your app needs extra tenant metadata typed across `tenant.provide()`, `tenant.use()`, and `tenant.tryUse()`.
 - Provide tenant identity at ingress with `tenant.provide({ tenantId }, fn)`.
+- `tenant` is the built-in application async context contract. Unlike `asyncContexts.execution`, it exists to carry your business state.
 - Tenant-sensitive middleware such as `cache`, `rateLimit`, `debounce`, `throttle`, and `concurrency` default to `tenantScope: "auto"`, which prefixes internal keys with `tenantId` when tenant context exists and otherwise falls back to the shared non-tenant keyspace.
 - `tenantScope` modes:
   - `"auto"`: tenant-partition when tenant context exists; otherwise fall back to the normal non-tenant key

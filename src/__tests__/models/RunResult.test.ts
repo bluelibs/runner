@@ -192,7 +192,7 @@ describe("RunResult", () => {
     const runtime = await run(app);
     await runtime.runTask(parent);
 
-    const parentTaskId = runtime.store.resolveDefinitionId(parent)!;
+    const parentTaskId = runtime.store.findIdByDefinition(parent);
     expect(seenChildSources[0]).toEqual(runtimeSource.task(parentTaskId));
     await runtime.dispose();
   });
@@ -309,9 +309,9 @@ describe("RunResult", () => {
 
     const runtime = await run(app, { shutdownHooks: false });
     const report = await runtime.getHealth();
-    const healthyId = runtime.store.getRuntimeMetadata(healthy).path;
-    const degradedId = runtime.store.getRuntimeMetadata(degraded).path;
-    const unhealthyId = runtime.store.getRuntimeMetadata(unhealthy).path;
+    const healthyId = runtime.store.findIdByDefinition(healthy);
+    const degradedId = runtime.store.findIdByDefinition(degraded);
+    const unhealthyId = runtime.store.findIdByDefinition(unhealthy);
 
     expect(report.totals).toEqual({
       resources: 3,
@@ -377,8 +377,8 @@ describe("RunResult", () => {
     });
 
     const runtime = await run(app, { shutdownHooks: false });
-    const healthyId = runtime.store.resolveDefinitionId(healthy)!;
-    const healthyReportId = runtime.store.getRuntimeMetadata(healthy).path;
+    const healthyId = runtime.store.findIdByDefinition(healthy);
+    const healthyReportId = healthyId;
 
     await expect(
       runtime.getHealth(["rr-health-filter-missing"]),
@@ -467,7 +467,7 @@ describe("RunResult", () => {
 
     const runtime = await run(app, { shutdownHooks: false });
     const report = await runtime.getHealth([unhealthy]);
-    const unhealthyId = runtime.store.getRuntimeMetadata(unhealthy).path;
+    const unhealthyId = runtime.store.findIdByDefinition(unhealthy);
 
     expect(report.totals).toEqual({
       resources: 1,
@@ -539,7 +539,7 @@ describe("RunResult", () => {
     });
 
     const runtime = await run(app, { shutdownHooks: false });
-    const resourcePath = runtime.store.getRuntimeMetadata(healthy).path;
+    const resourcePath = runtime.store.findIdByDefinition(healthy);
     const report = await runtime.getHealth([resourcePath]);
 
     expect(report.totals).toEqual({

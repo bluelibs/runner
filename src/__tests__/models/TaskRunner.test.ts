@@ -234,5 +234,15 @@ describe("TaskRunner", () => {
     );
   });
 
+  it("stringifies unresolved monitored-resource references without ids", () => {
+    expect(
+      (
+        taskRunner as unknown as {
+          resolveResourceId: (resource: unknown) => string;
+        }
+      ).resolveResourceId({ missing: true }),
+    ).toBe("[object Object]");
+  });
+
   // Global lifecycle events removed
 });

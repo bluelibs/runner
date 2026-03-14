@@ -250,9 +250,7 @@ describe("MiddlewareManager", () => {
     });
     store.storeGenericItem(owner);
     const result = getMiddlewareResolver().getEverywhereResourceMiddlewares(r);
-    expect(
-      result.some((m) => store.toPublicId(m) === "mw-everywhere-true"),
-    ).toBe(true);
+    expect(result.some((m) => m.id.endsWith(".mw-everywhere-true"))).toBe(true);
   });
 
   it("middleware resolver fails fast on duplicate subtree resource middleware ids", () => {
@@ -332,9 +330,9 @@ describe("MiddlewareManager", () => {
     });
     store.storeGenericItem(owner);
     const res = getMiddlewareResolver().getEverywhereTaskMiddlewares(task);
-    expect(
-      res.some((m) => store.toPublicId(m) === "mw-task-everywhere-true"),
-    ).toBe(true);
+    expect(res.some((m) => m.id.endsWith(".mw-task-everywhere-true"))).toBe(
+      true,
+    );
   });
 
   it("middleware resolver fails fast on duplicate subtree task middleware ids", () => {
@@ -586,16 +584,18 @@ describe("MiddlewareManager", () => {
       const snapshot = middlewareManager.getInterceptorOwnerSnapshot();
 
       expect(snapshot.globalTaskInterceptorOwnerIds).toEqual([
-        ownerResource.id,
+        runtime.store.findIdByDefinition(ownerResource),
       ]);
       expect(snapshot.globalResourceInterceptorOwnerIds).toEqual([
-        ownerResource.id,
+        runtime.store.findIdByDefinition(ownerResource),
       ]);
       expect(snapshot.perTaskMiddlewareInterceptorOwnerIds).toEqual({
-        [taskMiddleware.id]: [ownerResource.id],
+        [taskMiddleware.id]: [runtime.store.findIdByDefinition(ownerResource)],
       });
       expect(snapshot.perResourceMiddlewareInterceptorOwnerIds).toEqual({
-        [resourceMiddleware.id]: [ownerResource.id],
+        [resourceMiddleware.id]: [
+          runtime.store.findIdByDefinition(ownerResource),
+        ],
       });
 
       await runtime.dispose();

@@ -3,6 +3,7 @@ import { ExposureRequestContext } from "../requestContext";
 import type { NodeExposureDeps } from "../resourceTypes";
 import type { SerializerLike } from "../../../serializer";
 import { requestUrl } from "../router";
+import { resolveRegistryAsyncContextIds } from "../../remote-lanes/asyncContextAllowlist";
 
 export interface ExposureContextDeps {
   store: NodeExposureDeps["store"];
@@ -33,8 +34,9 @@ function wrapWithUserContexts<T>(
     options?.allowedAsyncContextIds === undefined
       ? undefined
       : new Set(
-          options.allowedAsyncContextIds.map(
-            (id) => store.resolveDefinitionId(id) ?? id,
+          resolveRegistryAsyncContextIds(
+            store.asyncContexts,
+            options.allowedAsyncContextIds,
           ),
         );
 

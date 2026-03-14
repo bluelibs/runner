@@ -204,7 +204,7 @@ describe("event-lanes: debug routing logs", () => {
 
     expect(enqueueLog).toBeTruthy();
     expect(enqueueLog?.data).toMatchObject({
-      eventId: event.id,
+      eventId: runtime.store.findIdByDefinition(event),
       laneId: lane.id,
       profile: "worker",
       mode: "network",
@@ -213,7 +213,7 @@ describe("event-lanes: debug routing logs", () => {
 
     expect(relayLog).toBeTruthy();
     expect(relayLog?.data).toMatchObject({
-      eventId: event.id,
+      eventId: runtime.store.findIdByDefinition(event),
       laneId: lane.id,
       profile: "worker",
       relaySourceId:

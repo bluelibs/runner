@@ -9,6 +9,7 @@ import { globalEvents } from "../../globals/globalEvents";
 import { run } from "../../run";
 import { createMessageError } from "../../errors";
 import { getPlatform } from "../../platform";
+import { runtimeSource } from "../../types/runtimeSource";
 
 describe("run.ts shutdown hooks & error boundary", () => {
   const capturedExitCalls: number[] = [];
@@ -1086,7 +1087,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
         setTimeout(() => {
           void deps.taskRunner
             .run(drainTask, undefined, {
-              source: deps.store.createRuntimeSource("resource", drainWorker),
+              source: runtimeSource.resource(
+                deps.store.findIdByDefinition(drainWorker),
+              ),
             })
             .catch((error) => {
               taskErrors.push(error);
@@ -1177,9 +1180,8 @@ describe("run.ts shutdown hooks & error boundary", () => {
         setTimeout(() => {
           void deps.taskRunner
             .run(drainTask, undefined, {
-              source: deps.store.createRuntimeSource(
-                "resource",
-                selfDrainingResource,
+              source: runtimeSource.resource(
+                deps.store.findIdByDefinition(selfDrainingResource),
               ),
             })
             .catch((error) => {

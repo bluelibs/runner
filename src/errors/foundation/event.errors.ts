@@ -72,7 +72,7 @@ export const executionDepthExceededError = error<
       `Execution trace exceeded ${maxDepth} frames while processing ${frame.kind} "${frame.id}" (current depth: ${currentDepth}).`,
   )
   .remediation(
-    "Inspect the call chain for runaway recursion. Consider increasing maxDepth in executionContext.cycleDetection if the depth is expected.",
+    "Inspect the call chain for runaway recursion. Consider increasing maxDepth in resources.executionContext.with({ cycleDetection: { maxDepth } }) if the depth is expected.",
   )
   .build();
 

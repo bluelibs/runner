@@ -20,7 +20,7 @@ describe("Store sanity checks (tags)", () => {
     });
 
     await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
-      /duplicate tag "app-tags-duplicate"/i,
+      /duplicate tag ".*app-tags-duplicate"/i,
     );
     expect(rootInit).not.toHaveBeenCalled();
   });
@@ -65,7 +65,7 @@ describe("Store sanity checks (tags)", () => {
     });
 
     await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
-      /cannot depend on tag "app-tags-self-dep" because it already carries the same tag/i,
+      /cannot depend on tag ".*app-tags-self-dep" because it already carries the same tag/i,
     );
     expect(rootInit).not.toHaveBeenCalled();
   });
@@ -88,7 +88,7 @@ describe("Store sanity checks (tags)", () => {
     });
 
     await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
-      /cannot depend on tag "app-tags-self-dep-optional" because it already carries the same tag/i,
+      /cannot depend on tag ".*app-tags-self-dep-optional" because it already carries the same tag/i,
     );
     expect(rootInit).not.toHaveBeenCalled();
   });
@@ -111,7 +111,7 @@ describe("Store sanity checks (tags)", () => {
     });
 
     await expect(run(app, { mode: RunnerMode.TEST })).rejects.toThrow(
-      /cannot depend on tag "app-tags-self-dep-beforeInit" because it already carries the same tag/i,
+      /cannot depend on tag ".*app-tags-self-dep-beforeInit" because it already carries the same tag/i,
     );
     expect(rootInit).not.toHaveBeenCalled();
   });

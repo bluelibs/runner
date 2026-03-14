@@ -9,6 +9,7 @@ import {
 } from "../errors";
 import type { Store } from "./Store";
 import type { IHealthReporter } from "../types/runner";
+import { extractRequestedId, resolveCanonicalIdFromStore } from "./StoreLookup";
 
 type HealthReporterOptions = {
   ensureAvailable: () => void;
@@ -22,6 +23,14 @@ export class HealthReporter implements IHealthReporter {
     private readonly store: Store,
     private readonly options: HealthReporterOptions,
   ) {}
+
+  private resolveDefinitionId(reference: unknown): string {
+    return (
+      resolveCanonicalIdFromStore(this.store, reference) ??
+      extractRequestedId(reference) ??
+      String(reference)
+    );
+  }
 
   public getHealth = async (
     resourceDefs?: Array<string | IResource<any, any, any, any, any>>,
@@ -124,9 +133,8 @@ export class HealthReporter implements IHealthReporter {
     resourceId: string,
   ): Promise<IResourceHealthReportEntry> {
     const entry = this.store.resources.get(resourceId)!;
-    const metadata = this.store.getRuntimeMetadata(entry.resource);
     const baseEntry = {
-      id: metadata.path,
+      id: resourceId,
       initialized: entry.isInitialized === true,
     };
 
@@ -158,11 +166,6 @@ export class HealthReporter implements IHealthReporter {
   private resolveResourceId(
     resource: string | IResource<any, any, any, any, any>,
   ): string {
-    const resolved = this.store.resolveDefinitionId(resource);
-    if (resolved) {
-      return resolved;
-    }
-
-    return typeof resource === "string" ? resource : resource.id;
+    return this.resolveDefinitionId(resource);
   }
 }

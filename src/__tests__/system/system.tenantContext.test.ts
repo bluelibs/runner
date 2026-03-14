@@ -6,6 +6,13 @@ import {
   tenantInvalidContextError,
 } from "../../errors";
 
+function tenantValue(tenantId: string) {
+  return {
+    tenantId,
+    region: `${tenantId}-region`,
+  };
+}
+
 describe("asyncContexts.tenant", () => {
   afterEach(() => {
     resetPlatform();
@@ -21,7 +28,7 @@ describe("asyncContexts.tenant", () => {
 
     expect(asyncContexts.tenant.tryUse()).toBeUndefined();
     expect(asyncContexts.tenant.has()).toBe(false);
-    expect(asyncContexts.tenant.provide({ tenantId: "acme" }, () => "ok")).toBe(
+    expect(asyncContexts.tenant.provide(tenantValue("acme"), () => "ok")).toBe(
       "ok",
     );
   });
@@ -38,11 +45,11 @@ describe("asyncContexts.tenant", () => {
 
   it("rejects invalid tenant payloads", () => {
     expect(() =>
-      asyncContexts.tenant.provide({ tenantId: "" }, () => "nope"),
+      asyncContexts.tenant.provide(tenantValue(""), () => "nope"),
     ).toThrow();
 
     try {
-      asyncContexts.tenant.provide({ tenantId: "" }, () => "nope");
+      asyncContexts.tenant.provide(tenantValue(""), () => "nope");
     } catch (error) {
       expect(tenantInvalidContextError.is(error)).toBe(true);
     }
@@ -82,7 +89,7 @@ describe("asyncContexts.tenant", () => {
 
     const runtime = await run(app, { executionContext: true });
 
-    await asyncContexts.tenant.provide({ tenantId: "acme" }, async () => {
+    await asyncContexts.tenant.provide(tenantValue("acme"), async () => {
       await runtime.runTask(emitTenant);
     });
 
@@ -102,7 +109,7 @@ describe("asyncContexts.tenant", () => {
 
     await expect(runtime.runTask(guardedTask)).rejects.toThrow();
     await expect(
-      asyncContexts.tenant.provide({ tenantId: "globex" }, async () =>
+      asyncContexts.tenant.provide(tenantValue("globex"), async () =>
         runtime.runTask(guardedTask),
       ),
     ).resolves.toBe("globex");
@@ -112,11 +119,11 @@ describe("asyncContexts.tenant", () => {
 
   it("restores the outer tenant when tenant providers are nested", async () => {
     const result = await asyncContexts.tenant.provide(
-      { tenantId: "outer" },
+      tenantValue("outer"),
       async () => {
         const outer = asyncContexts.tenant.use().tenantId;
         const inner = await asyncContexts.tenant.provide(
-          { tenantId: "inner" },
+          tenantValue("inner"),
           async () => asyncContexts.tenant.use().tenantId,
         );
         const restored = asyncContexts.tenant.use().tenantId;

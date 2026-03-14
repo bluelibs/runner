@@ -31,7 +31,6 @@ import {
   applyPrefetchPolicies,
   validateAssignedEventRoutesHaveBindings,
 } from "./eventLanes.routing";
-import { getRuntimeId } from "../../tools/runtimeMetadata";
 export type EventLanesCoreDependencies = Record<string, unknown> & {
   eventManager: EventManager;
   serializer: Serializer;
@@ -158,7 +157,7 @@ export class EventLanesController {
         return next(emission);
       }
 
-      const resolvedEmissionId = getRuntimeId(emission) ?? emission.id;
+      const resolvedEmissionId = emission.id;
       const eventRoute =
         this.context.eventRouteByEventId.get(resolvedEmissionId);
       if (!eventRoute) {
@@ -174,8 +173,7 @@ export class EventLanesController {
         context: this.context,
         config: this.config,
       });
-      const publicEventId =
-        this.dependencies.store.toPublicId(resolvedEmissionId);
+      const canonicalEventId = resolvedEmissionId;
       const authToken = issueRemoteLaneToken({
         laneId: eventRoute.lane.id,
         bindingAuth,
@@ -184,7 +182,7 @@ export class EventLanesController {
 
       await binding.queue.enqueue({
         laneId: eventRoute.lane.id,
-        eventId: publicEventId,
+        eventId: canonicalEventId,
         payload: this.dependencies.serializer.stringify(emission.data),
         source: emission.source,
         authToken,
@@ -192,7 +190,7 @@ export class EventLanesController {
       });
       emission.stopPropagation();
       await this.diagnostics.logEnqueue({
-        eventId: publicEventId,
+        eventId: canonicalEventId,
         laneId: eventRoute.lane.id,
         profile: this.context.profile,
         mode: resolveRemoteLanesMode(this.config.mode),
@@ -203,8 +201,15 @@ export class EventLanesController {
   }
 
   private registerConsumersOnReady() {
-    this.dependencies.eventManager.addListener(
+    const readyEventId = this.dependencies.store.findIdByDefinition(
       events.ready,
+    );
+    const readyEvent = this.dependencies.store.findDefinitionById(
+      readyEventId,
+    ) as typeof events.ready;
+
+    this.dependencies.eventManager.addListener(
+      readyEvent,
       async () => {
         if (this.context.started || this.context.disposed) {
           return;

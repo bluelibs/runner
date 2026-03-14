@@ -20,13 +20,14 @@ describe("nodeExposure - multipart early abort via signal", () => {
       register: [t, exposure],
     });
     const rr = await run(app);
+    const taskId = rr.store.findIdByDefinition(t);
     const handlers = await rr.getResourceValue(exposure as any);
 
     // Prepare a request that claims multipart but will be aborted immediately
     const boundary = "----abortedBoundary";
     const req: any = new Readable({ read() {} });
     req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(t.id)}`;
+    req.url = `/__runner/task/${encodeURIComponent(taskId)}`;
     req.headers = {
       "x-runner-token": "T",
       "content-type": `multipart/form-data; boundary=${boundary}`,

@@ -87,9 +87,10 @@ describe("eventLanes applyTo", () => {
 
     const runtime = await run(app);
     await runtime.runTask(emitTask);
+    const canonicalEventId = runtime.store.findIdByDefinition(event);
 
     await waitUntil(() => queue.enqueued.length === 1);
-    expect(queue.enqueued[0].eventId).toBe(event.id);
+    expect(queue.enqueued[0].eventId).toBe(canonicalEventId);
     expect(localHookRuns).toBe(0);
 
     await runtime.dispose();

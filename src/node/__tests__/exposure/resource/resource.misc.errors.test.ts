@@ -27,11 +27,12 @@ describe("nodeExposure - misc error branches", () => {
       register: [noInputTask, exposure],
     });
     const rr = await run(app);
+    const taskId = rr.store.findIdByDefinition(noInputTask);
     const handlers = await rr.getResourceValue(exposure as any);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
 
     const rrMock = createReqRes({
-      url: `/__runner/task/${encodeURIComponent(noInputTask.id)}`,
+      url: `/__runner/task/${encodeURIComponent(taskId)}`,
       headers,
       manualPush: true,
       body: null,
@@ -65,6 +66,7 @@ describe("nodeExposure - misc error branches", () => {
       register: [badTask, exposure],
     });
     const rr = await run(app);
+    const taskId = rr.store.findIdByDefinition(badTask);
     (rr.logger as any).error = () => {
       throw createMessageError("logger-fail");
     };
@@ -72,7 +74,7 @@ describe("nodeExposure - misc error branches", () => {
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
 
     const rrMock = createReqRes({
-      url: `/__runner/task/${encodeURIComponent(badTask.id)}`,
+      url: `/__runner/task/${encodeURIComponent(taskId)}`,
       headers,
       body: null,
     });
@@ -93,6 +95,7 @@ describe("nodeExposure - misc error branches", () => {
       register: [dummyEvent, exposure],
     });
     const rr = await run(app);
+    const eventId = rr.store.findIdByDefinition(dummyEvent);
     (rr.logger as any).error = () => {
       throw createMessageError("logger-fail");
     };
@@ -100,7 +103,7 @@ describe("nodeExposure - misc error branches", () => {
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
     const req: any = {
       method: "POST",
-      url: `/__runner/event/${encodeURIComponent(dummyEvent.id)}`,
+      url: `/__runner/event/${encodeURIComponent(eventId)}`,
       headers,
       on(event: string, cb: Function) {
         if (event === "end") setImmediate(() => cb(new Error("bad-json")));

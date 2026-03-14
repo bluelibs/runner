@@ -213,6 +213,7 @@ export type {
   MatchPattern,
 } from "./tools/check";
 export type { InferValidationSchemaInput } from "./types/utilities";
+export type { ITenant, TenantContextValue } from "./public-types";
 
 /**
  * Universal HTTP client helpers for talking to exposed Runner tasks and events.

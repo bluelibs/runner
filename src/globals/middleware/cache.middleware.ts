@@ -77,6 +77,17 @@ export const journalKeys = {
 const defaultKeyBuilder = (taskId: string, input: unknown) =>
   `${taskId}-${safeStringify(input)}`;
 
+function toStableTaskId(taskId: string): string {
+  const taskMarker = ".tasks.";
+  const markerIndex = taskId.indexOf(taskMarker);
+
+  if (markerIndex === -1) {
+    return taskId;
+  }
+
+  return taskId.slice(markerIndex + taskMarker.length);
+}
+
 export const cacheMiddleware = defineTaskMiddleware({
   id: "cache",
   configSchema: cacheMiddlewareConfigPattern,
@@ -95,7 +106,7 @@ export const cacheMiddleware = defineTaskMiddleware({
       ...config,
     };
 
-    const taskId = task!.definition.id;
+    const taskId = toStableTaskId(task!.definition.id);
     let cacheHolderForTask = cache.map.get(taskId)!;
     if (!cacheHolderForTask) {
       const { keyBuilder, ...lruOptions } = config;

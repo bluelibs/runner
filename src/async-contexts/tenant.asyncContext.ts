@@ -5,12 +5,9 @@ import {
 import { defineAsyncContext } from "../definers/defineAsyncContext";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
 import { getPlatform } from "../platform";
-import { Match, check } from "../tools/check";
+import type { TenantContextValue } from "../public-types";
+import { Match } from "../tools/check";
 import type { IAsyncContext } from "../types/asyncContext";
-
-export type TenantContextValue = {
-  tenantId: string;
-};
 
 export const TENANT_ASYNC_CONTEXT_ID = "tenant";
 
@@ -51,11 +48,14 @@ function getTenantAsyncContext(): IAsyncContext<TenantContextValue> | null {
 }
 
 export function validateTenantContextValue(value: unknown): TenantContextValue {
-  try {
-    return check(value, tenantContextValuePattern);
-  } catch {
+  if (!Match.test(value, tenantContextValuePattern)) {
     throw tenantInvalidContextError.new({});
   }
+
+  // App-level TenantContextValue augmentation may require fields that Runner
+  // cannot validate generically. At this boundary we only guarantee the
+  // built-in tenant contract and preserve any extra fields that came in.
+  return value as unknown as TenantContextValue;
 }
 
 function tryUse(): TenantContextValue | undefined {

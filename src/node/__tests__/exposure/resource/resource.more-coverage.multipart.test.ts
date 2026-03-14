@@ -26,7 +26,7 @@ describe("nodeExposure - more multipart coverage", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
-    const echoCanonicalId = rr.store.resolveDefinitionId(echo)!;
+    const echoCanonicalId = rr.store.findIdByDefinition(echo);
 
     const boundary = "----moreBoundary1";
     const manifest = JSON.stringify({ input: { n: 7 } });
@@ -65,7 +65,7 @@ describe("nodeExposure - more multipart coverage", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
-    const echoCanonicalId = rr.store.resolveDefinitionId(echo)!;
+    const echoCanonicalId = rr.store.findIdByDefinition(echo);
 
     const boundary = "----moreBoundary1b";
     const manifest = JSON.stringify({ input: { n: 9 } });
@@ -104,7 +104,7 @@ describe("nodeExposure - more multipart coverage", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
-    const fileTaskCanonicalId = rr.store.resolveDefinitionId(fileTask)!;
+    const fileTaskCanonicalId = rr.store.findIdByDefinition(fileTask);
 
     const boundary = "----moreBoundary5";
     const req = createBaseReq();

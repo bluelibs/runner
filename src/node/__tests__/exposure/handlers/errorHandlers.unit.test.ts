@@ -83,10 +83,6 @@ describe("errorHandlers", () => {
           },
         ],
       ]),
-      resolveDefinitionId: (reference: unknown) =>
-        typeof reference === "string"
-          ? reference
-          : (reference as { id?: string })?.id,
     } as unknown as Store;
     const logger = new Logger({
       printThreshold: null,
@@ -146,10 +142,6 @@ describe("errorHandlers", () => {
           },
         ],
       ]),
-      resolveDefinitionId: (reference: unknown) =>
-        typeof reference === "string"
-          ? reference
-          : (reference as { id?: string })?.id,
     } as unknown as Store;
     const logger = new Logger({
       printThreshold: null,
@@ -249,10 +241,6 @@ describe("errorHandlers", () => {
           },
         ],
       ]),
-      resolveDefinitionId: (reference: unknown) =>
-        typeof reference === "string"
-          ? reference
-          : (reference as { id?: string })?.id,
     } as unknown as Store;
     const logger = new Logger({
       printThreshold: null,
@@ -296,7 +284,7 @@ describe("errorHandlers", () => {
     expect(responseError?.httpCode).toBe(409);
   });
 
-  it("serializes the canonical helper id instead of the raw local error name", () => {
+  it("serializes the canonical helper id when passed from higher up", () => {
     const serializer = new Serializer();
     const store = {
       errors: new Map([
@@ -309,15 +297,6 @@ describe("errorHandlers", () => {
           },
         ],
       ]),
-      resolveDefinitionId: (reference: unknown) => {
-        if (reference === "http") {
-          return "app-owner.errors.http";
-        }
-
-        return typeof reference === "string"
-          ? reference
-          : (reference as { id?: string })?.id;
-      },
     } as unknown as Store;
     const logger = new Logger({
       printThreshold: null,
@@ -348,6 +327,7 @@ describe("errorHandlers", () => {
       logger,
       serializer,
       logKey: ExposureErrorLogKey.TaskError,
+      appErrorId: "app-owner.errors.http",
     });
 
     const json = payload
@@ -408,7 +388,7 @@ describe("errorHandlers", () => {
     expect(statusCode).toBe(422);
   });
 
-  it("matches typed helpers by raw error names when id resolution misses", () => {
+  it("does not infer typed helpers from raw error names", () => {
     const serializer = new Serializer();
     const store = {
       errors: new Map([
@@ -421,7 +401,6 @@ describe("errorHandlers", () => {
           },
         ],
       ]),
-      resolveDefinitionId: () => undefined,
     } as unknown as Store;
     const logger = new Logger({
       printThreshold: null,
@@ -451,6 +430,55 @@ describe("errorHandlers", () => {
       logKey: ExposureErrorLogKey.TaskError,
     });
 
-    expect(statusCode).toBe(409);
+    expect(statusCode).toBe(500);
+  });
+
+  it("falls back to helper values() iteration when entries() is unavailable", () => {
+    const serializer = new Serializer();
+    const store = {
+      errors: {
+        values: () =>
+          [{ httpCode: 418 }, { id: "fallback-helper", httpCode: 429 }][
+            Symbol.iterator
+          ](),
+      },
+    } as unknown as Store;
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "plain",
+      bufferLogs: true,
+    });
+    const req = { headers: {}, method: "POST", url: "/x" } as IncomingMessage;
+    let statusCode = 0;
+    let payload: Buffer | undefined;
+    const res = {
+      writableEnded: false,
+      statusCode: 0,
+      setHeader() {},
+      end(buf?: unknown) {
+        statusCode = this.statusCode;
+        if (buf != null) {
+          payload = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
+        }
+      },
+    } as unknown as ServerResponse;
+
+    handleRequestError({
+      error: "boom",
+      req,
+      res,
+      store,
+      logger,
+      serializer,
+      logKey: ExposureErrorLogKey.TaskError,
+      appErrorId: "fallback-helper",
+    });
+
+    expect(statusCode).toBe(429);
+    const json = payload
+      ? (serializer.parse(payload.toString("utf8")) as Record<string, unknown>)
+      : undefined;
+    const responseError = getErrorRecord(json);
+    expect(responseError?.id).toBe("fallback-helper");
   });
 });

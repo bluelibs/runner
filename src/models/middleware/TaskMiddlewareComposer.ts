@@ -10,8 +10,12 @@ import type { ExecutionJournal } from "../../types/executionJournal";
 import type { TaskMiddlewareInterceptor } from "./types";
 import { RuntimeCallSource, runtimeSource } from "../../types/runtimeSource";
 import { LifecycleAdmissionController } from "../runtime/LifecycleAdmissionController";
-import { toPublicDefinition } from "../utils/toPublicDefinition";
 import { composeReverseLayers } from "./composeLayers";
+import {
+  extractRequestedId,
+  resolveCanonicalIdFromStore,
+  toCanonicalDefinitionFromStore,
+} from "../StoreLookup";
 
 /**
  * Composes task execution chains with validation, interceptors, and middlewares.
@@ -29,6 +33,20 @@ export class TaskMiddlewareComposer {
       this.store.getLifecycleAdmissionController();
   }
 
+  private resolveDefinitionId(reference: unknown): string {
+    return (
+      resolveCanonicalIdFromStore(this.store, reference) ??
+      extractRequestedId(reference) ??
+      String(reference)
+    );
+  }
+
+  private toCanonicalDefinition<TDefinition extends { id: string }>(
+    definition: TDefinition,
+  ): TDefinition {
+    return toCanonicalDefinitionFromStore(this.store, definition);
+  }
+
   /**
    * Composes a complete task runner with all middleware and interceptors applied
    */
@@ -43,7 +61,7 @@ export class TaskMiddlewareComposer {
     parentJournal?: ExecutionJournal,
     source?: RuntimeCallSource,
   ) => Promise<Awaited<TOutput>> {
-    const taskId = this.store.resolveDefinitionId(task)!;
+    const taskId = this.resolveDefinitionId(task);
     const storeTask = this.store.tasks.get(taskId)!;
     const storeTaskDefinition = storeTask.task as ITask<TInput, TOutput, TDeps>;
 
@@ -105,7 +123,7 @@ export class TaskMiddlewareComposer {
       const validatedInput = ValidationHelper.validateInput(
         input,
         task.inputSchema,
-        this.store.toPublicId(task),
+        this.resolveDefinitionId(task),
         "Task",
       );
 
@@ -118,7 +136,7 @@ export class TaskMiddlewareComposer {
       return ValidationHelper.validateResult(
         rawResult,
         task.resultSchema,
-        this.store.toPublicId(task),
+        this.resolveDefinitionId(task),
         "Task",
       );
     }) as (
@@ -202,7 +220,7 @@ export class TaskMiddlewareComposer {
     if (interceptors.length === 0) {
       return runner;
     }
-    const publicTaskDefinition = toPublicDefinition(this.store, task);
+    const canonicalTaskDefinition = this.toCanonicalDefinition(task);
 
     const createExecutionInput = (
       input: TInput,
@@ -210,7 +228,7 @@ export class TaskMiddlewareComposer {
       journal: ExecutionJournal,
     ): ITaskMiddlewareExecutionInput<TInput, Awaited<TOutput>> => ({
       task: {
-        definition: publicTaskDefinition,
+        definition: canonicalTaskDefinition,
         input: input,
       },
       next: nextFunc,
@@ -289,18 +307,15 @@ export class TaskMiddlewareComposer {
       return runner;
     }
 
-    const publicTaskDefinition = toPublicDefinition(this.store, task);
+    const canonicalTaskDefinition = this.toCanonicalDefinition(task);
 
     return composeReverseLayers(
       runner,
       middlewares,
       (nextFunction, middleware) => {
-        const middlewareId = this.store.resolveDefinitionId(middleware)!;
+        const middlewareId = this.store.findIdByDefinition(middleware);
         const storeMiddleware = this.store.taskMiddlewares.get(middlewareId)!;
-        const middlewareSource = this.store.createRuntimeSource(
-          "middleware",
-          middlewareId,
-        );
+        const middlewareSource = runtimeSource.taskMiddleware(middlewareId);
 
         const baseMiddlewareRunner = async (
           input: TInput,
@@ -313,7 +328,7 @@ export class TaskMiddlewareComposer {
               storeMiddleware.middleware.run(
                 {
                   task: {
-                    definition: publicTaskDefinition,
+                    definition: canonicalTaskDefinition,
                     input,
                   },
                   next: (...args: [TInput?]) =>
@@ -370,7 +385,7 @@ export class TaskMiddlewareComposer {
       return middlewareRunner;
     }
 
-    const publicTaskDefinition = toPublicDefinition(this.store, task);
+    const canonicalTaskDefinition = this.toCanonicalDefinition(task);
 
     return composeReverseLayers(
       middlewareRunner,
@@ -386,7 +401,7 @@ export class TaskMiddlewareComposer {
             Awaited<TOutput>
           > = {
             task: {
-              definition: publicTaskDefinition,
+              definition: canonicalTaskDefinition,
               input: input,
             },
             next: (...args: [TInput?]) =>

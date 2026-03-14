@@ -13,7 +13,6 @@ import type { ExecutionJournal } from "./executionJournal";
 import type { RuntimeCallSource } from "./runtimeSource";
 import {
   symbolFilePath,
-  symbolRuntimeId,
   symbolTask,
   symbolRpcLanePolicy,
   symbolRpcLaneRoutedBy,
@@ -135,7 +134,6 @@ export interface ITask<
   /** Brand marker used by runtime checks and tooling. */
   [symbolTask]: true;
   path?: string;
-  [symbolRuntimeId]?: string;
   /** Indicates if the task was patched for remote execution through rpc lanes. */
   isRpcRouted?: boolean;
   /** Records which rpc-lanes resource owns the task routing patch (exclusivity). */

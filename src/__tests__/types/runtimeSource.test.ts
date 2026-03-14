@@ -21,9 +21,13 @@ describe("runtimeSource", () => {
       kind: RuntimeCallSourceKind.Hook,
       id: "hook-a",
     });
-    expect(runtimeSource.middleware("middleware-a")).toEqual({
-      kind: RuntimeCallSourceKind.Middleware,
+    expect(runtimeSource.taskMiddleware("middleware-a")).toEqual({
+      kind: RuntimeCallSourceKind.TaskMiddleware,
       id: "middleware-a",
+    });
+    expect(runtimeSource.resourceMiddleware("middleware-b")).toEqual({
+      kind: RuntimeCallSourceKind.ResourceMiddleware,
+      id: "middleware-b",
     });
   });
 });

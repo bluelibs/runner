@@ -100,7 +100,7 @@ export interface CycleDetectionConfig {
 }
 
 /**
- * User-facing cycle-detection overrides for `run(..., { executionContext })`.
+ * User-facing cycle-detection overrides for `resources.executionContext`.
  */
 export interface CycleDetectionOptions {
   /** Overrides the default maximum execution depth. */
@@ -110,7 +110,8 @@ export interface CycleDetectionOptions {
 }
 
 /**
- * User-facing execution-context options accepted by `run(...)`.
+ * User-facing execution-context options accepted by
+ * `resources.executionContext.with(...)`.
  */
 export interface ExecutionContextOptions {
   /** Custom correlation id factory for new top-level executions. */
@@ -120,7 +121,8 @@ export interface ExecutionContextOptions {
 }
 
 /**
- * Normalized execution-context configuration stored on the runtime.
+ * Normalized execution-context configuration stored on the execution-context
+ * resource.
  */
 export interface ExecutionContextConfig {
   /** Normalized correlation id factory used by the runtime. */

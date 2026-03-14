@@ -1,9 +1,7 @@
 import { asyncContexts } from "../../asyncContexts";
-import {
-  validateTenantContextValue,
-  type TenantContextValue,
-} from "../../async-contexts/tenant.asyncContext";
+import { validateTenantContextValue } from "../../async-contexts/tenant.asyncContext";
 import { tenantContextRequiredError } from "../../errors";
+import type { TenantContextValue } from "../../public-types";
 import { Match } from "../../tools/check";
 
 /**

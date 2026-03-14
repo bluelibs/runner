@@ -60,7 +60,7 @@ export const executionAsyncContext: ExecutionContextAccessor = Object.freeze({
     if (!current) {
       contextError.throw({
         details:
-          "Execution context is not available. Enable it via run(..., { executionContext: true }) or run inside an active task/event/hook execution.",
+          "Execution context is not available. Register resources.executionContext on your app, or create one manually via asyncContexts.execution.provide(...) / record(...).",
       });
     }
 
