@@ -1,25 +1,25 @@
-import { Match } from "@bluelibs/runner";
+type ValidationFailure = {
+  path?: string;
+  message?: string;
+  expected?: string;
+};
 
-export const createUserSchema = Match.compile({
-  name: Match.NonEmptyString,
-});
+type ValidationErrorLike = {
+  failures: ValidationFailure[];
+};
 
-export const getUserSchema = Match.compile({
-  id: Match.NonEmptyString,
-});
-
-export function getValidationIssues(error: unknown) {
-  if (
-    error &&
+export function isValidationError(error: unknown): error is ValidationErrorLike {
+  return (
+    !!error &&
     typeof error === "object" &&
     "failures" in error &&
-    Array.isArray((error as { failures?: unknown }).failures)
-  ) {
-    return (
-      error as {
-        failures: Array<{ path?: string; message?: string; expected?: string }>;
-      }
-    ).failures.map((failure) => ({
+    Array.isArray(error.failures)
+  );
+}
+
+export function getValidationIssues(error: unknown) {
+  if (isValidationError(error)) {
+    return error.failures.map((failure) => ({
       path: failure.path ?? "$",
       message: failure.message ?? "Validation failed",
       expected: failure.expected,
