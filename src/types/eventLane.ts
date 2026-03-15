@@ -13,6 +13,10 @@ export interface IEventLaneDefinition {
   applyTo?:
     | readonly (IEventDefinition<any> | string)[]
     | ((event: IEventDefinition<any>) => boolean);
+  /**
+   * Async contexts allowed to cross this lane during relay.
+   * Defaults to an empty allowlist, meaning no async contexts are forwarded.
+   */
   asyncContexts?: readonly (IAsyncContext<unknown> | string)[];
   [symbolFilePath]?: string;
 }

@@ -3,7 +3,7 @@ import { ExposureRequestContext } from "../requestContext";
 import type { NodeExposureDeps } from "../resourceTypes";
 import type { SerializerLike } from "../../../serializer";
 import { requestUrl } from "../router";
-import { resolveRegistryAsyncContextIds } from "../../remote-lanes/asyncContextAllowlist";
+import { withSerializedAsyncContexts } from "../../remote-lanes/asyncContextAllowlist";
 
 export interface ExposureContextDeps {
   store: NodeExposureDeps["store"];
@@ -29,46 +29,16 @@ function wrapWithUserContexts<T>(
   options?: AsyncContextHydrationOptions,
 ): () => Promise<T> {
   const { store, serializer } = deps;
-  const allowAsyncContext = options?.allowAsyncContext !== false;
-  const allowedIds =
-    options?.allowedAsyncContextIds === undefined
-      ? undefined
-      : new Set(
-          resolveRegistryAsyncContextIds(
-            store.asyncContexts,
-            options.allowedAsyncContextIds,
-          ),
-        );
-
   const headerText = readContextHeader(req);
-  let userWrapped = fn;
-  if (!allowAsyncContext || !headerText) {
-    return userWrapped;
-  }
-
-  try {
-    const map = serializer.parse<Record<string, string>>(headerText);
-    for (const [id, ctx] of store.asyncContexts.entries()) {
-      if (allowedIds && !allowedIds.has(id)) {
-        continue;
-      }
-      const raw = map[id];
-      if (typeof raw !== "string") {
-        continue;
-      }
-      try {
-        const value = ctx.parse(raw);
-        const prev = userWrapped;
-        userWrapped = async () => await ctx.provide(value, prev);
-      } catch {
-        // ignore parse/provide errors for individual contexts
-      }
-    }
-  } catch {
-    // ignore bad context header
-  }
-
-  return userWrapped;
+  return async () =>
+    withSerializedAsyncContexts({
+      serializedContexts: headerText,
+      registry: store.asyncContexts,
+      serializer,
+      fn,
+      allowAsyncContext: options?.allowAsyncContext !== false,
+      allowedAsyncContextIds: options?.allowedAsyncContextIds,
+    });
 }
 
 /**

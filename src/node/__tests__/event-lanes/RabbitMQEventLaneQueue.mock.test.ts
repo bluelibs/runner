@@ -224,6 +224,41 @@ describe("event-lanes: RabbitMQEventLaneQueue", () => {
     );
   });
 
+  it("nacks messages with invalid serialized async-context payload metadata", async () => {
+    await queue.init();
+    let consumer:
+      | ((msg: { content: Buffer } | null) => Promise<void>)
+      | undefined;
+    channelMock.consume.mockImplementation(async (_q: string, h: any) => {
+      consumer = h;
+    });
+    const handler = jest.fn();
+    await queue.consume(handler);
+
+    await consumer?.({
+      content: Buffer.from(
+        JSON.stringify({
+          id: "msg-invalid-contexts",
+          laneId: "lane.a",
+          eventId: "event.a",
+          payload: "{}",
+          serializedAsyncContexts: 42,
+          source: { kind: "runtime", id: "tests" },
+          attempts: 0,
+          maxAttempts: 1,
+          createdAt: new Date().toISOString(),
+        }),
+      ),
+    });
+
+    expect(handler).not.toHaveBeenCalled();
+    expect(channelMock.nack).toHaveBeenCalledWith(
+      expect.anything(),
+      false,
+      false,
+    );
+  });
+
   it("disposes connections", async () => {
     await queue.init();
     await queue.consume(async () => {});

@@ -5,7 +5,8 @@
 Event Lanes route lane-assigned events to queues using explicit lane references.
 
 - Runtime boundary: `eventLanesResource` attaches interception at runtime for lane-assigned emissions only; non-lane events keep normal local behavior.
-- Define lanes with `r.eventLane("app.lanes.email").build()` (or `eventLane(...)`).
+- Define lanes with `r.eventLane("email-lane").build()` (or `eventLane(...)`).
+- Lane async-context policy is lane-level: `r.eventLane("...").asyncContexts([...])` (default is `[]`, so none are forwarded unless explicitly allowlisted).
 - Optional lane-side assignment: `r.eventLane("...").applyTo([eventOrId])`.
 - Define topology with `r.eventLane.topology({ profiles, bindings })`.
 - Boundary reminder: Event Lanes are async fire-and-forget queue routing; use RPC Lanes for synchronous task/event RPC (`readmes/REMOTE_LANES.md`).
@@ -20,6 +21,7 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
   - Lane-assigned event emissions (tag or `applyTo`) are intercepted and enqueued to bound queues.
   - Active profile `consume` lanes start dequeue workers on `r.system.events.ready`.
   - Payload is deserialized with `serializer.parse(...)`, then re-emitted in-process.
+  - Allowlisted async contexts are serialized on the producer side and rehydrated on the consumer side.
   - Auth readiness is role-based: consumed lanes require verifier material; non-consumed lanes require signer material.
   - In `jwt_asymmetric`, this enables producer-only private key and consumer-only public key setups.
 - `mode: "transparent"`:
@@ -28,6 +30,7 @@ Event Lanes route lane-assigned events to queues using explicit lane references.
 - `mode: "local-simulated"`:
   - Lane-assigned events use an in-memory simulated relay path.
   - Payload crosses a serializer boundary (`stringify -> parse`) before local re-emit.
+  - Lane `asyncContexts` allowlist still applies in `local-simulated` (default `[]`, so no implicit forwarding).
   - If `binding.auth` is configured, the simulated path also signs+verifies JWT lane tokens before relay emit.
   - In `jwt_asymmetric`, local-simulated must have both signer and verifier key material available.
 - Local emulation options without extra services:
@@ -96,7 +99,7 @@ class CustomEventLaneQueue implements IEventLaneQueue {
 RPC Lanes route lane-assigned tasks/events across runners using profile/topology bindings.
 
 - Runtime boundary: `rpcLanesResource` routes lane-assigned events via interception and lane-assigned tasks via runtime task decoration; non-lane flows remain unchanged.
-- Define lanes with `r.rpcLane("app.lanes.billing").build()`.
+- Define lanes with `r.rpcLane("billing-lane").build()`.
 - Lane async-context policy is lane-level: `r.rpcLane("...").asyncContexts([...])` (default is `[]`, so none are forwarded unless explicitly allowlisted).
 - Optional lane-side assignment: `r.rpcLane("...").applyTo([taskOrEventOrId])`.
 - Tag tasks/events with `r.runner.tags.rpcLane.with({ lane })`.

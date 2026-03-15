@@ -106,10 +106,12 @@ describe("rpcLanesResource", () => {
     const options = remoteTask.mock.calls[0]?.[2];
     const contextHeader = options?.headers?.["x-runner-context"] ?? "";
     const headerMap = serializer.parse(contextHeader) as Record<string, string>;
-    expect(headerMap[allowedContext.id]).toBe(
+    expect(Object.values(headerMap)).toContain(
       allowedContext.serialize({ value: "A" }),
     );
-    expect(headerMap[blockedContext.id]).toBeUndefined();
+    expect(Object.values(headerMap)).not.toContain(
+      blockedContext.serialize({ value: "B" }),
+    );
     await rr.dispose();
   });
 

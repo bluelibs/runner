@@ -97,7 +97,8 @@ await runtime.dispose();
 - Schema resolution prefers `parse(input)` when present; otherwise Runner compiles raw Match patterns once and reuses the compiled schema.
 - Builder schema slots accept plain Match patterns, compiled Match schemas, decorator-backed classes, or any schema object exposing `parse(...)`.
 - Raw Match patterns infer directly in schema slots, including fluent builders and `define*` APIs.
-- Prefer `Match.compile(...)` when you want to reuse the same schema value yourself, or when you want direct access to `.pattern`, `.test()`, or `.toJSONSchema()` before handing it to Runner.
+- Match-native helpers and built-in tokens also expose `.parse()`, `.test()`, and `.toJSONSchema()` directly.
+- Prefer `Match.compile(...)` when you want to reuse the same schema value yourself, or when you want direct access to the original `.pattern` alongside `.parse()`, `.test()`, and `.toJSONSchema()` before handing it to Runner.
 - List builders append by default. Pass `{ override: true }` to replace.
 - `.meta({ ... })` is available across builders for docs and tooling.
 - Builder order is enforced. After terminal methods like `.run()` or `.init()`, mutation surfaces are intentionally reduced.
@@ -497,6 +498,9 @@ import { check, Match } from "@bluelibs/runner";
 
 - `check(value, pattern)` is the low-level runtime validator.
 - `Match.compile(pattern)` creates reusable schemas with `.parse()`, `.test()`, and JSON-Schema export.
+- Match-native helpers and built-in tokens expose the same `.parse()`, `.test()`, and `.toJSONSchema()` surface directly.
+- The supported way to create reusable custom patterns is to compose Match-native helpers into named constants, for example `const AppMatch = { Slug: Match.WithMessage(Match.RegExp(/^[a-z0-9-]+$/), "Slug must be kebab-case.") } as const;`.
+- Those reusable custom patterns work anywhere Match works: `check(value, AppMatch.Slug)`, `AppMatch.Slug.test(value)`, `Match.compile({ slug: AppMatch.Slug })`, and `@Match.Field(AppMatch.Slug)`.
 - Class-backed schemas hydrate on `.parse()`: `Match.fromSchema(UserDto).parse(...)` returns a `UserDto` instance, and any raw Match pattern that contains class-schema nodes hydrates those nested nodes during parse.
 - Hydration uses prototype assignment and does not call class constructors during parse.
 - Compiled schemas do not expose `.extend()`; for object-shaped schemas, compose `compiled.pattern` into a new pattern and call `Match.compile(...)` again.
@@ -511,6 +515,7 @@ import { check, Match } from "@bluelibs/runner";
 - Existing/native `Symbol.metadata` implementations are preserved.
 - Use `Match.fromSchema(() => User)` for self-referencing or forward class-schema links.
 - Use `Match.Lazy(() => pattern)` for recursive plain Match patterns; use `Match.fromSchema(() => User)` when the recursive thing is a decorated class schema.
+- Use `Match.Where(...)` for runtime-only custom predicates and type guards, and prefer `Match.RegExp(...)` / built-ins / object patterns when JSON Schema export needs to stay precise.
 - Validation failures throw the built-in `errors.matchError` Runner error.
 - The thrown error data exposes `.path` as the first recorded leaf-failure path, and `.failures` keeps the raw nested failures even when the top-level message comes from an outer schema/subtree wrapper.
 - `Match.Where((value, parent?) => boolean)` receives the immediate parent when matching compound values.
@@ -840,7 +845,7 @@ await queue.run("uploads", async (signal) => {
 
 Event lanes are async fire-and-forget routing for events across Runner instances. RPC lanes are synchronous cross-runner task or event calls.
 
-Supported modes: `network`, `transparent`, `local-simulated`. Async-context propagation over RPC lanes is allowlist-based.
+Supported modes: `network`, `transparent`, `local-simulated`. Async-context propagation over RPC lanes and event lanes is lane-allowlisted by default.
 
 Full detail: `readmes/REMOTE_LANES_AI.md`, `readmes/REMOTE_LANES.md`
 

@@ -2,6 +2,19 @@ import { EventLanesController } from "../../event-lanes/EventLanesController";
 import { runtimeSource } from "../../../types/runtimeSource";
 
 describe("EventLanesController unit coverage", () => {
+  const createStore = (
+    overrides: {
+      events?: Map<string, unknown>;
+      asyncContexts?: Map<string, unknown>;
+      toPublicId?: (id: string) => string;
+    } = {},
+  ) =>
+    ({
+      events: new Map(),
+      asyncContexts: new Map(),
+      ...overrides,
+    }) as any;
+
   const createBaseConfig = (): any => ({
     profile: "unit",
     mode: "network",
@@ -24,7 +37,7 @@ describe("EventLanesController unit coverage", () => {
       {
         eventManager: eventManager as any,
         serializer: { stringify: JSON.stringify, parse: JSON.parse } as any,
-        store: { events: new Map() } as any,
+        store: createStore(),
         logger: { error: jest.fn() } as any,
       },
       {
@@ -74,7 +87,7 @@ describe("EventLanesController unit coverage", () => {
           stringify: JSON.stringify,
           parse: JSON.parse,
         } as any,
-        store: {
+        store: createStore({
           events: new Map([
             [
               "unit-event",
@@ -83,7 +96,7 @@ describe("EventLanesController unit coverage", () => {
               },
             ],
           ]),
-        } as any,
+        }),
         logger: logger as any,
       },
       {
@@ -164,7 +177,7 @@ describe("EventLanesController unit coverage", () => {
           stringify: JSON.stringify,
           parse: JSON.parse,
         } as any,
-        store: {
+        store: createStore({
           events: new Map([
             [
               "unit-event-retry",
@@ -173,7 +186,7 @@ describe("EventLanesController unit coverage", () => {
               },
             ],
           ]),
-        } as any,
+        }),
         logger: logger as any,
       },
       {
@@ -247,10 +260,9 @@ describe("EventLanesController unit coverage", () => {
           stringify: JSON.stringify,
           parse: JSON.parse,
         } as any,
-        store: {
-          events: new Map(),
+        store: createStore({
           toPublicId: (id: string) => id,
-        } as any,
+        }),
         logger: { error: jest.fn(async () => undefined) } as any,
       },
       {
@@ -325,10 +337,9 @@ describe("EventLanesController unit coverage", () => {
           stringify: JSON.stringify,
           parse: JSON.parse,
         } as any,
-        store: {
-          events: new Map(),
+        store: createStore({
           toPublicId: (id: string) => id,
-        } as any,
+        }),
         logger: { error: jest.fn(async () => undefined) } as any,
       },
       {

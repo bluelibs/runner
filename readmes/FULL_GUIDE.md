@@ -4471,6 +4471,7 @@ For decorated class schemas, use `Match.Schema({ base })` to compose one schema 
 
 ### Additional `check()` Details
 
+- Match-native helpers and built-in tokens also expose `.parse()`, `.test()`, and `.toJSONSchema()` directly.
 - `check(value, pattern, { errorPolicy: "all" })` aggregates all validation issues instead of fail-fast at first mismatch.
 - `Match.WithErrorPolicy(pattern, "all")` stores the same aggregate behavior as the default for that Match-native pattern.
 - `throwAllErrors` still works as a deprecated alias for `errorPolicy`.
@@ -4551,6 +4552,61 @@ Rule of thumb:
 
 - `Match.Lazy(...)` is the general recursion tool for plain objects, arrays, unions, and custom Match composition.
 - `Match.fromSchema(() => Class)` is the class-schema version when you already use `@Match.Schema()` / `@Match.Field(...)`.
+
+### Reusable Custom Patterns
+
+You do not need a separate low-level registration API to create your own Match patterns. The public pattern-authoring story is simple: compose existing `Match.*` helpers into named constants and reuse those constants everywhere.
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+const AppMatch = {
+  UserId: Match.WithMessage(
+    Match.NonEmptyString,
+    "User id must be a non-empty string.",
+  ),
+  Slug: Match.WithMessage(
+    Match.RegExp(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    "Slug must be kebab-case.",
+  ),
+  RetryCount: Match.WithMessage(
+    Match.Where(
+      (value: unknown): value is number =>
+        typeof value === "number" && Number.isInteger(value) && value >= 0,
+    ),
+    "Retry count must be a non-negative integer.",
+  ),
+  UserRecord: Match.ObjectIncluding({
+    id: Match.NonEmptyString,
+    email: Match.Email,
+  }),
+  UserList: Match.ArrayOf(
+    Match.ObjectIncluding({
+      id: Match.NonEmptyString,
+      email: Match.Email,
+    }),
+  ),
+} as const;
+
+check("user-1", AppMatch.UserId);
+AppMatch.Slug.test("runner-core");
+AppMatch.UserRecord.parse({ id: "u1", email: "ada@example.com" });
+```
+
+This gives you reusable, named patterns without exposing internals. Because these are still normal Match-native patterns, they work anywhere Match works:
+
+- `check(value, AppMatch.Slug)`
+- `Match.compile({ slug: AppMatch.Slug })`
+- `@Match.Field(AppMatch.UserId)`
+- `Match.ArrayOf(AppMatch.UserRecord)`
+
+Rule of thumb:
+
+- Prefer composition first. Most custom patterns are just named combinations of built-ins, objects, arrays, unions, regexes, and wrappers.
+- Use `Match.WithMessage(...)` when the main need is a better domain-specific error message.
+- Use `Match.Where(...)` when you need custom runtime logic or a custom type guard.
+- Prefer `Match.RegExp(...)`, built-in tokens, object patterns, and array patterns when you want strong JSON Schema export.
+- `Match.Where(...)` is runtime-only. In non-strict JSON Schema export it becomes metadata; in strict mode it is rejected because arbitrary predicates cannot be represented faithfully.
 
 ### Custom Match Messages
 

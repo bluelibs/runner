@@ -1974,7 +1974,7 @@ import { createHttpClient } from "@bluelibs/runner";
 import { rpcLanesResource } from "@bluelibs/runner/node";
 
 const durableLane = r
-  .rpcLane("app.rpc.durable")
+  .rpcLane("durable-lane")
   .applyTo([processOrder])
   .build();
 

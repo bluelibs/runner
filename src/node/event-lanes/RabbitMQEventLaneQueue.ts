@@ -99,6 +99,15 @@ export class RabbitMQEventLaneQueue implements IEventLaneQueue {
     }
 
     if (
+      parsed.serializedAsyncContexts !== undefined &&
+      typeof parsed.serializedAsyncContexts !== "string"
+    ) {
+      eventLaneMessageMalformedError.throw({
+        reason: `Invalid serializedAsyncContexts for message "${parsed.id}"`,
+      });
+    }
+
+    if (
       parsed.source === undefined ||
       typeof parsed.source !== "object" ||
       typeof (parsed.source as { id?: unknown }).id !== "string" ||
