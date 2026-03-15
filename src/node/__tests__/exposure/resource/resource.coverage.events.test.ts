@@ -2,7 +2,7 @@ import { defineEvent, defineHook, defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 
 describe("nodeExposure Coverage - Events", () => {
   it("covers event not-found branches", async () => {
@@ -50,7 +50,7 @@ describe("nodeExposure Coverage - Events", () => {
       id: "coverage-event-error-hook",
       on: evt,
       run: async () => {
-        throw createMessageError("emit failure");
+        throw genericError.new({ message: "emit failure" });
       },
     });
     const exposure = rpcExposure.with({

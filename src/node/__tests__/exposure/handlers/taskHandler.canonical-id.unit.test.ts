@@ -1,4 +1,4 @@
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 import { Serializer } from "../../../../serializer";
 import { createTaskHandler } from "../../../exposure/handlers/taskHandler";
 import * as errorHandlers from "../../../exposure/handlers/errorHandlers";
@@ -106,7 +106,7 @@ describe("taskHandler canonical id boundaries", () => {
       } as any,
       taskRunner: {
         run: async () => {
-          throw createMessageError("boom");
+          throw genericError.new({ message: "boom" });
         },
       } as any,
       logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } as any,

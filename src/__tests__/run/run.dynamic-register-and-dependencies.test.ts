@@ -1,7 +1,7 @@
 import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
 import { globalResources } from "../../globals/globalResources";
 import { run } from "../../run";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { RunnerMode } from "../../types/runner";
 
 describe("Dynamic Register and Dependencies", () => {
@@ -954,9 +954,9 @@ describe("Dynamic Register and Dependencies", () => {
           const userRole = task?.input?.userRole || "guest";
 
           if (!deps.auth.validateRole(userRole)) {
-            throw createMessageError(
-              `Access denied. Required role: ${deps.auth.getRequiredRole()}`,
-            );
+            throw genericError.new({
+              message: `Access denied. Required role: ${deps.auth.getRequiredRole()}`,
+            });
           }
 
           const auditResult = deps.audit.log("protected-action", userRole);

@@ -2,7 +2,7 @@ import { defineResource } from "../../define";
 import { r } from "../../public";
 import { run } from "../../run";
 import { ResourceLifecycleMode } from "../../types/runner";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("run behavioral scenarios", () => {
   const waitFor = async (
@@ -56,7 +56,7 @@ describe("run behavioral scenarios", () => {
       init: async () => "bad",
       dispose: async () => {
         order.push("bad");
-        throw createMessageError("Disposal failed");
+        throw genericError.new({ message: "Disposal failed" });
       },
     });
 
@@ -105,7 +105,7 @@ describe("run behavioral scenarios", () => {
         return "failing";
       },
       async ready() {
-        throw createMessageError("ready failed");
+        throw genericError.new({ message: "ready failed" });
       },
     });
 
@@ -247,14 +247,14 @@ describe("run behavioral scenarios", () => {
     const first = defineResource({
       id: "init-mode-parallel-fail-first",
       async init() {
-        throw createMessageError("first failed");
+        throw genericError.new({ message: "first failed" });
       },
     });
 
     const second = defineResource({
       id: "init-mode-parallel-fail-second",
       async init() {
-        throw createMessageError("second failed");
+        throw genericError.new({ message: "second failed" });
       },
     });
 

@@ -1,5 +1,5 @@
 import {
-  createMessageError,
+  genericError,
   contextError,
   executionCycleError,
   executionDepthExceededError,
@@ -207,7 +207,9 @@ function toRecordTreeNode(
   const node = nodes.get(nodeId);
   /* istanbul ignore next -- tree corruption is impossible unless internal state is manually mutated */
   if (!node) {
-    throw createMessageError(`Execution record node "${nodeId}" is missing.`);
+    throw genericError.new({
+      message: `Execution record node "${nodeId}" is missing.`,
+    });
   }
 
   return {
@@ -572,9 +574,9 @@ export class ExecutionContextStore {
       const traceSnapshot = toSnapshot(currentContext);
       /* istanbul ignore next -- cycle detection only runs with full frame tracking */
       if (!traceSnapshot || traceSnapshot.framesMode !== "full") {
-        throw createMessageError(
-          "Execution cycle detection requires full frame tracking.",
-        );
+        throw genericError.new({
+          message: "Execution cycle detection requires full frame tracking.",
+        });
       }
       executionCycleError.throw({
         frame,

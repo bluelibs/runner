@@ -6,7 +6,7 @@ import {
   defineTaskMiddleware,
   defineResourceMiddleware,
 } from "../../define";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { globalEvents } from "../../globals/globalEvents";
 import { run } from "../../run";
 
@@ -363,7 +363,7 @@ describe("run", () => {
       const testTask = defineTask({
         id: "test-task",
         run: async () => {
-          throw createMessageError("Task failed");
+          throw genericError.new({ message: "Task failed" });
         },
       });
 
@@ -696,7 +696,7 @@ describe("run", () => {
         init: async () => {
           // we do this so it doesn't become a never.
           if (true === true) {
-            throw createMessageError("Init failed");
+            throw genericError.new({ message: "Init failed" });
           }
         },
       });
@@ -704,7 +704,7 @@ describe("run", () => {
         id: "error-task",
         run: async (_event) => {
           if (true === true) {
-            throw createMessageError("Run failed");
+            throw genericError.new({ message: "Run failed" });
           }
         },
       });

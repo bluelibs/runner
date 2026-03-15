@@ -1,5 +1,5 @@
 import { requireContextTaskMiddleware } from "../../globals/middleware/requireContext.middleware";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 /**
  * Utility function to build a fake Context implementation that allows us to
@@ -36,9 +36,10 @@ describe("requireContextMiddleware", () => {
     // Arrange → a context whose `use` returns undefined, simulating missing provider
     const fakeContext = createFakeContext(() => {
       // ContextError is now a helper; we only check that an error is thrown
-      throw createMessageError(
-        "Context not available. Did you forget to provide the context via ContextName.provide()?",
-      );
+      throw genericError.new({
+        message:
+          "Context not available. Did you forget to provide the context via ContextName.provide()?",
+      });
     });
     const next = jest.fn();
 

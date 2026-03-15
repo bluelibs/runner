@@ -10,7 +10,7 @@ import { EventEmissionFailureMode } from "../../defs";
 import { TaskRunner } from "../../models";
 import { run } from "../../run";
 import { createTestFixture } from "../test-utils";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
 import { ResourceLifecycleMode, RunnerMode } from "../../types/runner";
 
@@ -204,7 +204,7 @@ describe("RunResult", () => {
       id: "rr-report-failFirst",
       on: ping,
       run: async () => {
-        throw createMessageError("first");
+        throw genericError.new({ message: "first" });
       },
     });
 
@@ -212,7 +212,7 @@ describe("RunResult", () => {
       id: "rr-report-failSecond",
       on: ping,
       run: async () => {
-        throw createMessageError("second");
+        throw genericError.new({ message: "second" });
       },
     });
 
@@ -288,7 +288,7 @@ describe("RunResult", () => {
         return "unhealthy-value";
       },
       async health() {
-        throw createMessageError("down");
+        throw genericError.new({ message: "down" });
       },
     });
 
@@ -658,7 +658,7 @@ describe("RunResult", () => {
     fixture.store.storeGenericItem(resource);
     const resourceEntry = fixture.store.resources.get(resource.id);
     if (!resourceEntry) {
-      throw createMessageError("Expected resource entry to exist");
+      throw genericError.new({ message: "Expected resource entry to exist" });
     }
     resourceEntry.value = { ok: true };
 

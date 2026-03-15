@@ -3,7 +3,7 @@ import { defineResource } from "../../define";
 import { run } from "../../run";
 import { error as errorBuilder } from "../../definers/builders/error";
 import { resources } from "../../index";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("errors as registrable items and dependencies", () => {
   it("can be registered and injected", async () => {
@@ -40,7 +40,7 @@ describe("errors as registrable items and dependencies", () => {
       id: "spec-tasks-opt-present",
       dependencies: { e: err.optional() },
       run: async (_input, { e }) => {
-        if (!e) throw createMessageError("expected helper present");
+        if (!e) throw genericError.new({ message: "expected helper present" });
         return e.id;
       },
     });

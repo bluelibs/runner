@@ -1,4 +1,4 @@
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 import type { ILog } from "../../../models/Logger";
 import { Logger } from "../../../models/Logger";
 import { Serializer } from "../../../serializer";
@@ -50,7 +50,7 @@ describe("durable: RedisEventBus logger", () => {
     const serializer = new Serializer();
 
     await bus.subscribe("chan", async () => {
-      throw createMessageError("handler-failed");
+      throw genericError.new({ message: "handler-failed" });
     });
 
     onMessage?.(
@@ -76,13 +76,13 @@ describe("durable: RedisEventBus logger", () => {
       redis: redisMock,
       logger,
       onHandlerError: async () => {
-        throw createMessageError("callback-failed");
+        throw genericError.new({ message: "callback-failed" });
       },
     });
     const serializer = new Serializer();
 
     await bus.subscribe("chan", async () => {
-      throw createMessageError("handler-failed");
+      throw genericError.new({ message: "handler-failed" });
     });
 
     onMessage?.(

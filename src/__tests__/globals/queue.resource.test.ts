@@ -1,7 +1,7 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
 import { queueResource } from "../../globals/resources/queue.resource";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("Queue Resource", () => {
   it("should provide queue functionality with proper isolation and disposal", async () => {
@@ -75,7 +75,7 @@ describe("Queue Resource", () => {
 
         // Test 6: Handle errors in tasks without breaking the queue
         const errorTask = async () => {
-          throw createMessageError("Task failed");
+          throw genericError.new({ message: "Task failed" });
         };
 
         const successTask = async () => {
@@ -115,7 +115,7 @@ describe("Queue Resource", () => {
       async init(_, { queue }) {
         // Test that exceptions from tasks are properly propagated
         const errorTask = async () => {
-          throw createMessageError("Queue resource task error");
+          throw genericError.new({ message: "Queue resource task error" });
         };
 
         const successTask = async () => "success";
@@ -253,7 +253,7 @@ describe("Queue Resource", () => {
     const runtime = await run(app);
     const queue = runtime.value.map.get("failing-queue");
     if (!queue) {
-      throw createMessageError("Expected failing-queue to exist");
+      throw genericError.new({ message: "Expected failing-queue to exist" });
     }
 
     const teardownError = new Error("queue teardown failed");
@@ -278,7 +278,9 @@ describe("Queue Resource", () => {
     const queueB = runtime.value.map.get("failing-queue-b");
 
     if (!queueA || !queueB) {
-      throw createMessageError("Expected both failing queues to exist");
+      throw genericError.new({
+        message: "Expected both failing queues to exist",
+      });
     }
 
     queueA.dispose = jest.fn().mockRejectedValue("string failure");
@@ -313,7 +315,9 @@ describe("Queue Resource", () => {
       const runtime = await run(app);
       const queue = runtime.value.map.get("idle-failure");
       if (!queue) {
-        throw createMessageError("Expected idle-failure queue to exist");
+        throw genericError.new({
+          message: "Expected idle-failure queue to exist",
+        });
       }
 
       queue.dispose = jest

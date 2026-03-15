@@ -4,7 +4,7 @@
  * Extracted from Serializer.ts as a standalone module.
  */
 
-import { createMessageError } from "../errors";
+import { genericError } from "../errors";
 import { assertDepth } from "./validation";
 import type { TypeRegistry } from "./type-registry";
 import {
@@ -67,7 +67,9 @@ export const serializeTreeValue = (
 
     // Functions are intentionally non-serializable (code execution risk + non-portable).
     if (valueType === "function") {
-      createMessageError(`Cannot serialize value of type "${valueType}"`);
+      throw genericError.new({
+        message: `Cannot serialize value of type "${valueType}"`,
+      });
     }
 
     // Symbols are non-JSON primitives; the registry provides safe encodings (Symbol.for + well-known).
@@ -86,7 +88,9 @@ export const serializeTreeValue = (
   const objectValue = value as object;
 
   if (context.stack.has(objectValue)) {
-    createMessageError("Cannot serialize circular structure in tree mode");
+    throw genericError.new({
+      message: "Cannot serialize circular structure in tree mode",
+    });
   }
 
   context.stack.add(objectValue);

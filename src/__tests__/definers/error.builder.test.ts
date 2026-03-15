@@ -1,5 +1,5 @@
 import { definitions, r, RunnerError } from "../..";
-import { builderIncompleteError, createMessageError } from "../../errors";
+import { builderIncompleteError, genericError } from "../../errors";
 
 describe("error builder", () => {
   it("covers builderIncompleteError task label branch", () => {
@@ -20,7 +20,7 @@ describe("error builder", () => {
         parse(input: unknown) {
           const d = input as { code: number; message: string };
           if (typeof d?.code !== "number" || typeof d?.message !== "string") {
-            throw createMessageError("invalid");
+            throw genericError.new({ message: "invalid" });
           }
           return d;
         },
@@ -38,7 +38,7 @@ describe("error builder", () => {
         throw err;
       }
       if (!(err instanceof Error)) {
-        throw createMessageError("Expected an Error instance");
+        throw genericError.new({ message: "Expected an Error instance" });
       }
       // Name and message should reflect id and data.message
       expect(err.name).toBe("tests-errors-app");
@@ -79,7 +79,7 @@ describe("error builder", () => {
         parse(input: unknown) {
           const d = input as { code: number; message: string };
           if (typeof d?.code !== "number" || typeof d?.message !== "string") {
-            throw createMessageError("invalid");
+            throw genericError.new({ message: "invalid" });
           }
           return d;
         },
@@ -173,7 +173,7 @@ describe("error builder", () => {
         parse(input: unknown) {
           const d = input as { code: number; message: string };
           if (typeof d?.code !== "number" || typeof d?.message !== "string") {
-            throw createMessageError("invalid");
+            throw genericError.new({ message: "invalid" });
           }
           return d;
         },
@@ -280,7 +280,8 @@ describe("error builder", () => {
         fail("Expected throw");
       } catch (err) {
         expect(E.is(err)).toBe(true);
-        if (!(err instanceof Error)) throw createMessageError("Expected Error");
+        if (!(err instanceof Error))
+          throw genericError.new({ message: "Expected Error" });
         expect(err.message).toBe(
           "Error code 42\n\nRemediation: Try restarting the service.",
         );
@@ -302,7 +303,8 @@ describe("error builder", () => {
         E.throw({ field: "email" });
         fail("Expected throw");
       } catch (err) {
-        if (!(err instanceof Error)) throw createMessageError("Expected Error");
+        if (!(err instanceof Error))
+          throw genericError.new({ message: "Expected Error" });
         expect(err.message).toContain("Missing field: email");
         expect(err.message).toContain(
           'Remediation: Provide the "email" field in your input.',
@@ -321,7 +323,8 @@ describe("error builder", () => {
         E.throw({ code: 1 });
         fail("Expected throw");
       } catch (err) {
-        if (!(err instanceof Error)) throw createMessageError("Expected Error");
+        if (!(err instanceof Error))
+          throw genericError.new({ message: "Expected Error" });
         expect(err.message).toBe("Error 1");
         expect(err.message).not.toContain("Remediation");
       }
@@ -370,7 +373,8 @@ describe("error builder", () => {
         E.throw({ code: 5 });
         fail("Expected throw");
       } catch (err) {
-        if (!(err instanceof Error)) throw createMessageError("Expected Error");
+        if (!(err instanceof Error))
+          throw genericError.new({ message: "Expected Error" });
         expect(err.message).toBe("Error 5\n\nRemediation: ");
       }
     });

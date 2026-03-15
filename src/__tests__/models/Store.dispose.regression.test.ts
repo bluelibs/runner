@@ -1,6 +1,6 @@
 import { defineResource } from "../../define";
 import { createTestFixture } from "../test-utils";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("Store disposal regressions", () => {
   it("continues disposing resources after a disposer throws", async () => {
@@ -21,7 +21,7 @@ describe("Store disposal regressions", () => {
       id: "store-dispose-failing",
       async dispose() {
         disposeOrder.push("failing");
-        throw createMessageError("failing dispose");
+        throw genericError.new({ message: "failing dispose" });
       },
     });
 
@@ -84,7 +84,7 @@ describe("Store disposal regressions", () => {
     const errorThrowingResource = defineResource({
       id: "store-dispose-error-failure",
       async dispose() {
-        throw createMessageError("error failure");
+        throw genericError.new({ message: "error failure" });
       },
     });
 

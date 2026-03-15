@@ -1,7 +1,7 @@
 import { createExposureFetch } from "../../http-fetch-remote-lane.resource";
 import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
-import { createMessageError, matchError } from "../../errors";
+import { genericError, matchError } from "../../errors";
 
 describe("http-fetch-remote-lane.resource (unit)", () => {
   it("createExposureFetch: throws when baseUrl is empty or '/'", () => {
@@ -157,7 +157,7 @@ describe("http-fetch-remote-lane.resource (unit)", () => {
     const helper = {
       id: "tests-errors-evr",
       throw: (data: any) => {
-        throw createMessageError("typed-evr:" + String(data?.code));
+        throw genericError.new({ message: "typed-evr:" + String(data?.code) });
       },
       is: () => false,
       toString: () => "",

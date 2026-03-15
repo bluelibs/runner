@@ -1,6 +1,6 @@
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
 
 describe("EventManager Consistency", () => {
@@ -51,9 +51,10 @@ describe("EventManager Consistency", () => {
         run: async () => {
           callCount++;
           if (callCount > 5)
-            throw createMessageError(
-              "Infinite Loop Detected manually - CycleContext failed to stop it",
-            );
+            throw genericError.new({
+              message:
+                "Infinite Loop Detected manually - CycleContext failed to stop it",
+            });
           // Emit same event, claiming to be this hook (source=hook.id)
           // This previously triggered the "safeReEmitBySameHook" bypass in CycleContext
           await mgr.emit(event, undefined, runtimeSource.runtime("test-hook"));

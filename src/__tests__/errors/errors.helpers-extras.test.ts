@@ -6,7 +6,7 @@ import {
   overrideTargetNotRegisteredError,
   duplicateRegistrationError,
   validationError,
-  createMessageError,
+  genericError,
   taskRunnerNotSetError,
   queueDisposedError,
   queueDeadlockError,
@@ -29,19 +29,19 @@ import {
 } from "../../errors";
 
 describe("error helpers extra branches", () => {
-  it("createMessageError preserves Error semantics", () => {
+  it("genericError preserves Error semantics", () => {
     expect.assertions(4);
     try {
-      createMessageError("boom");
+      throw genericError.new({ message: "boom" });
       fail("Expected throw");
     } catch (e: any) {
       expect(e).toBeInstanceOf(Error);
-      expect(e.name).toBe("Error");
+      expect(e.name).toBe("genericError");
       expect(e.message).toBe("boom");
     }
 
     try {
-      createMessageError();
+      throw genericError.new({ message: "" });
       fail("Expected throw");
     } catch (e: any) {
       expect(e.message).toBe("");

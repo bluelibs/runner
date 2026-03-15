@@ -576,6 +576,7 @@ Thrown `IRunnerError` has: `.id`, `.data`, `.message` (from `.format()`, default
 
 - `.new()` / `.throw()` / `.is()` work directly on the helper even if it is used outside the Runner graph.
 - Register the error when you want DI, store/discovery visibility, or app definitions to depend on it.
+- `errors.genericError` is the built-in fallback for ad-hoc message-only errors; prefer domain-specific helpers when the contract is stable.
 
 ### Serialization
 

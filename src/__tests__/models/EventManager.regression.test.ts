@@ -2,7 +2,7 @@ import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
 import { EventManager } from "../../models/EventManager";
 import { ExecutionContextStore } from "../../models/ExecutionContextStore";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
 
 describe("EventManager regressions", () => {
@@ -67,9 +67,9 @@ describe("EventManager regressions", () => {
     await Promise.resolve();
     eventManager.dispose();
     if (!releaseFirstInterceptor) {
-      throw createMessageError(
-        "Expected first interceptor gate to be initialized",
-      );
+      throw genericError.new({
+        message: "Expected first interceptor gate to be initialized",
+      });
     }
     releaseFirstInterceptor();
     await emitPromise;

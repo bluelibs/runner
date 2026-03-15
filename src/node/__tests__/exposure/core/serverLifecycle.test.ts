@@ -5,7 +5,7 @@ import {
 } from "../../../exposure/serverLifecycle";
 import { Logger } from "../../../../models/Logger";
 import { EventEmitter } from "events";
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 
 describe("node exposure - server lifecycle", () => {
   describe("makeRequestListener", () => {
@@ -115,7 +115,7 @@ describe("node exposure - server lifecycle", () => {
       const res = createResponse();
       const listener = makeRequestListener({
         handler: async () => {
-          throw createMessageError("boom");
+          throw genericError.new({ message: "boom" });
         },
         respondOnMiss: false,
         logger,
@@ -140,7 +140,7 @@ describe("node exposure - server lifecycle", () => {
       } as unknown as import("http").IncomingMessage;
       const listener = makeRequestListener({
         handler: async () => {
-          throw createMessageError("boom");
+          throw genericError.new({ message: "boom" });
         },
         respondOnMiss: false,
         logger,
@@ -163,7 +163,7 @@ describe("node exposure - server lifecycle", () => {
       res.writableEnded = true;
       const listener = makeRequestListener({
         handler: async () => {
-          throw createMessageError("late");
+          throw genericError.new({ message: "late" });
         },
         respondOnMiss: true,
         logger,
@@ -223,7 +223,7 @@ describe("node exposure - server lifecycle", () => {
     it("cleans temporary error listener when emitter-based listen throws", async () => {
       const fakeServer = Object.assign(new EventEmitter(), {
         listen() {
-          throw createMessageError("sync emitter listen failed");
+          throw genericError.new({ message: "sync emitter listen failed" });
         },
       });
 
@@ -238,7 +238,7 @@ describe("node exposure - server lifecycle", () => {
     it("startHttpServer rejects when fallback listen throws", async () => {
       const fakeServer: any = {
         listen() {
-          throw createMessageError("sync listen failed");
+          throw genericError.new({ message: "sync listen failed" });
         },
       } as unknown as import("net").Server;
 

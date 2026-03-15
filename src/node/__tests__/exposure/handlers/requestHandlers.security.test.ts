@@ -3,7 +3,7 @@ import { run } from "../../../../run";
 import { rpcExposure } from "../testkit/rpcExposure";
 import { error } from "../../../../definers/builders/error";
 import { useExposureContext } from "../../../exposure/requestContext";
-import { cancellationError, createMessageError } from "../../../../errors";
+import { cancellationError, genericError } from "../../../../errors";
 import { createReqRes } from "./security.test.utils";
 
 function exposureTaskId(
@@ -389,7 +389,7 @@ describe("requestHandlers - Security", () => {
       const t = defineTask<void, Promise<void>>({
         id: "tests-security-error-masking",
         async run() {
-          throw createMessageError("SECRET_DATA");
+          throw genericError.new({ message: "SECRET_DATA" });
         },
       });
       const exposure = rpcExposure.with({
@@ -532,7 +532,7 @@ describe("requestHandlers - Security", () => {
       const t = defineTask<void, Promise<void>>({
         id: "tests-security-error-nocode",
         async run() {
-          throw createMessageError("plain");
+          throw genericError.new({ message: "plain" });
         },
       });
       const exposure = rpcExposure.with({

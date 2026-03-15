@@ -6,7 +6,7 @@ import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
 import * as exposureFetchModule from "../../http-fetch-remote-lane.resource";
 import { RemoteLaneTransportError } from "../../remote-lanes/http/protocol";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 type ExposureFetchState = {
   lastCfg?: any;
@@ -116,7 +116,9 @@ describe("http-client (universal)", () => {
     const helper = {
       id: "tests-errors-evret",
       throw: (data: any) => {
-        throw createMessageError("typed-evret:" + String(data?.code));
+        throw genericError.new({
+          message: "typed-evret:" + String(data?.code),
+        });
       },
       is: () => false,
       toString: () => "",
@@ -279,7 +281,7 @@ describe("http-client (universal)", () => {
         {
           id: "ctx-bad-error",
           use: () => {
-            throw createMessageError("missing context error");
+            throw genericError.new({ message: "missing context error" });
           },
           serialize: (v: unknown) => JSON.stringify(v),
           parse: (s: string) => JSON.parse(s),
@@ -341,7 +343,7 @@ describe("http-client (universal)", () => {
     const helper = {
       id: "tests-errors-web",
       throw: (data: any) => {
-        throw createMessageError("typed-web:" + String(data?.code));
+        throw genericError.new({ message: "typed-web:" + String(data?.code) });
       },
       is: () => false,
       toString: () => "",
@@ -367,7 +369,7 @@ describe("http-client (universal)", () => {
     const helper = {
       id: "tests-errors-ev",
       throw: (data: any) => {
-        throw createMessageError("typed-ev:" + String(data?.code));
+        throw genericError.new({ message: "typed-ev:" + String(data?.code) });
       },
       is: () => false,
       toString: () => "",
@@ -481,7 +483,7 @@ describe("http-client (universal)", () => {
     const helper = {
       id: "tests-errors-app",
       throw: (data: any) => {
-        throw createMessageError("typed:" + String(data?.code));
+        throw genericError.new({ message: "typed:" + String(data?.code) });
       },
       is: () => false,
       toString: () => "",
@@ -509,7 +511,9 @@ describe("http-client (universal)", () => {
     const helper = {
       id: "tests-errors-app",
       throw: jest.fn((data: any) => {
-        throw createMessageError("should-not-remap:" + String(data?.code));
+        throw genericError.new({
+          message: "should-not-remap:" + String(data?.code),
+        });
       }),
       is: () => false,
       toString: () => "",

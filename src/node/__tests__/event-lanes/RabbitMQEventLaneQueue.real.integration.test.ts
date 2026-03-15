@@ -1,4 +1,4 @@
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 import { RabbitMQEventLaneQueue } from "../../event-lanes/RabbitMQEventLaneQueue";
 
 const rabbitUrl =
@@ -20,7 +20,9 @@ async function waitUntil(
   const startedAt = Date.now();
   while (!(await predicate())) {
     if (Date.now() - startedAt > timeoutMs) {
-      throw createMessageError("Timed out waiting for RabbitMQ lane messages.");
+      throw genericError.new({
+        message: "Timed out waiting for RabbitMQ lane messages.",
+      });
     }
     await new Promise((resolve) => setTimeout(resolve, 20));
   }

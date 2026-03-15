@@ -20,7 +20,7 @@ import {
   IResourceMiddleware,
   symbolRpcLanePolicy,
 } from "../../defs";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
 
@@ -750,7 +750,7 @@ describe("MiddlewareManager", () => {
       const manager = new MiddlewareManager(store);
 
       manager.intercept("task", async (_next: any, _input: any) => {
-        throw createMessageError("interceptor error");
+        throw genericError.new({ message: "interceptor error" });
       });
 
       const task = defineTask({
@@ -781,7 +781,7 @@ describe("MiddlewareManager", () => {
       const manager = new MiddlewareManager(store);
 
       manager.intercept("resource", async (_next: any, _input: any) => {
-        throw createMessageError("interceptor error");
+        throw genericError.new({ message: "interceptor error" });
       });
 
       const resource = defineResource<{ n: number }, Promise<number>>({
@@ -814,7 +814,7 @@ describe("MiddlewareManager", () => {
       const resource = defineResource<{ n: number }, Promise<number>>({
         id: "resource_with_init_error_reporting",
         init: async () => {
-          throw createMessageError("resource init failed");
+          throw genericError.new({ message: "resource init failed" });
         },
       });
 
@@ -842,7 +842,9 @@ describe("MiddlewareManager", () => {
       const manager = new MiddlewareManager(store);
 
       manager.intercept("resource", async () => {
-        throw createMessageError("global resource interceptor failed");
+        throw genericError.new({
+          message: "global resource interceptor failed",
+        });
       });
 
       const resource = defineResource<{ n: number }, Promise<number>>({

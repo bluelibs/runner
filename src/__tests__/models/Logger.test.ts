@@ -1,5 +1,5 @@
 import { Logger, ILog, PrintStrategy } from "../../models/Logger";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("Logger", () => {
   let consoleSpy: jest.SpyInstance;
@@ -132,7 +132,7 @@ describe("Logger", () => {
     const logger = createLogger({ threshold: "trace" });
     const seen: string[] = [];
     logger.onLog(() => {
-      throw createMessageError("listener failed");
+      throw genericError.new({ message: "listener failed" });
     });
     logger.onLog((log) => {
       seen.push(String(log.message));

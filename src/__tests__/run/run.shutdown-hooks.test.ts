@@ -7,7 +7,7 @@ import {
 import { globalResources } from "../../globals/globalResources";
 import { globalEvents } from "../../globals/globalEvents";
 import { run } from "../../run";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { getPlatform } from "../../platform";
 import { runtimeSource } from "../../types/runtimeSource";
 
@@ -165,9 +165,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     if (!releaseChildInit) {
-      throw createMessageError(
-        "Expected child resource initialization to start",
-      );
+      throw genericError.new({
+        message: "Expected child resource initialization to start",
+      });
     }
     releaseChildInit();
 
@@ -223,7 +223,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
         return "ok" as const;
       },
       async dispose() {
-        throw createMessageError("dispose failed");
+        throw genericError.new({ message: "dispose failed" });
       },
     });
 
@@ -314,7 +314,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     ).rejects.toThrow(/(shutting down|disposed)/i);
 
     if (!releaseTask || !releaseEvent) {
-      throw createMessageError("Expected shutdown gates to be initialized");
+      throw genericError.new({
+        message: "Expected shutdown gates to be initialized",
+      });
     }
 
     expect(disposed).toBe(false);
@@ -450,9 +452,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     ).rejects.toThrow(/(disposed|shutting down)/i);
 
     if (!releaseTask || !releaseEvent) {
-      throw createMessageError(
-        "Expected manual dispose gates to be initialized",
-      );
+      throw genericError.new({
+        message: "Expected manual dispose gates to be initialized",
+      });
     }
 
     releaseTask();
@@ -607,7 +609,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
       },
       async dispose() {
         disposeCalls += 1;
-        throw createMessageError("dispose failure");
+        throw genericError.new({ message: "dispose failure" });
       },
     });
 
@@ -685,14 +687,18 @@ describe("run.ts shutdown hooks & error boundary", () => {
       expect(disposeStarted).toBe(false);
 
       if (!releaseCooldown) {
-        throw createMessageError("Expected cooldown release handler");
+        throw genericError.new({
+          message: "Expected cooldown release handler",
+        });
       }
 
       releaseCooldown();
       await disposeStartedPromise;
       expect(disposeStarted).toBe(true);
       if (!releaseResourceDispose) {
-        throw createMessageError("Expected resource dispose to begin");
+        throw genericError.new({
+          message: "Expected resource dispose to begin",
+        });
       }
 
       releaseResourceDispose();
@@ -986,7 +992,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     expect(disposed).toBe(false);
 
     if (!releaseTaskGate) {
-      throw createMessageError("Expected slow task gate release handler");
+      throw genericError.new({
+        message: "Expected slow task gate release handler",
+      });
     }
 
     releaseTaskGate();
@@ -1005,11 +1013,11 @@ describe("run.ts shutdown hooks & error boundary", () => {
         return "ok";
       },
       async cooldown() {
-        throw createMessageError("cooldown failed");
+        throw genericError.new({ message: "cooldown failed" });
       },
       async dispose() {
         disposeCalled = true;
-        throw createMessageError("dispose failed");
+        throw genericError.new({ message: "dispose failed" });
       },
     });
 
@@ -1220,7 +1228,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     );
 
     if (!releaseGate) {
-      throw createMessageError("Expected release gate handler");
+      throw genericError.new({ message: "Expected release gate handler" });
     }
 
     releaseGate();
@@ -1320,7 +1328,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     expect(calls).toEqual(["cooldown:start", "cooldown:end", "task-start"]);
 
     if (!releaseGate) {
-      throw createMessageError("Expected release gate handler");
+      throw genericError.new({ message: "Expected release gate handler" });
     }
 
     releaseGate();
@@ -1418,7 +1426,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     expect(calls).toEqual(["cooldown", "task-start"]);
 
     if (!releaseGate) {
-      throw createMessageError("Expected implicit self release gate handler");
+      throw genericError.new({
+        message: "Expected implicit self release gate handler",
+      });
     }
 
     releaseGate();

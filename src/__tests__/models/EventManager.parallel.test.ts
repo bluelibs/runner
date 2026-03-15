@@ -1,7 +1,7 @@
 import { EventEmissionFailureMode, IEvent } from "../../defs";
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
 
 describe("EventManager Parallel Execution", () => {
@@ -227,7 +227,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw createMessageError("Parallel Error");
+        throw genericError.new({ message: "Parallel Error" });
       },
       { order: 0 },
     );
@@ -250,7 +250,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw createMessageError("Error 1");
+        throw genericError.new({ message: "Error 1" });
       },
       { order: 0 },
     );
@@ -258,7 +258,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw createMessageError("Error 2");
+        throw genericError.new({ message: "Error 2" });
       },
       { order: 0 },
     );
@@ -266,7 +266,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw createMessageError("Error 3");
+        throw genericError.new({ message: "Error 3" });
       },
       { order: 0 },
     );
@@ -428,7 +428,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw createMessageError("Batch 0 error");
+        throw genericError.new({ message: "Batch 0 error" });
       },
       { order: 0 },
     );
@@ -455,7 +455,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw createMessageError("batch0-fail");
+        throw genericError.new({ message: "batch0-fail" });
       },
       { order: 0, id: "b0" },
     );
@@ -463,7 +463,7 @@ describe("EventManager Parallel Execution", () => {
       parallelEvent,
       async () => {
         results.push("batch1-ran");
-        throw createMessageError("batch1-fail");
+        throw genericError.new({ message: "batch1-fail" });
       },
       { order: 1, id: "b1" },
     );

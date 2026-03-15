@@ -9,7 +9,7 @@ import {
 import { rpcExposure } from "../testkit/rpcExposure";
 import { ExposureRequestContext } from "../../../exposure/requestContext";
 import { storage } from "../../../../definers/defineAsyncContext";
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 
 describe("nodeExposure request context (raw-body)", () => {
   it("provides req/res via useRpcLaneRequestContext() and allows raw-body streaming when content-type is application/octet-stream", async () => {
@@ -20,7 +20,7 @@ describe("nodeExposure request context (raw-body)", () => {
           useRpcLaneRequestContext();
         // Basic sanity assertions on context
         if (!basePath || !url || !method || !headers)
-          throw createMessageError("no ctx");
+          throw genericError.new({ message: "no ctx" });
         return await new Promise<string>((resolve, reject) => {
           const chunks: Buffer[] = [];
           req

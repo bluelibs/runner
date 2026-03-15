@@ -1,7 +1,7 @@
 import { createExposureFetch } from "../../http-fetch-remote-lane.resource";
 import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("createExposureFetch - context header and typed rethrow", () => {
   const baseUrl = "http://127.0.0.1:8080/__runner";
@@ -38,7 +38,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
     const helper = {
       id: "tests-errors-app",
       throw: (data: any) => {
-        throw createMessageError("typed:" + String(data?.code));
+        throw genericError.new({ message: "typed:" + String(data?.code) });
       },
       is: () => false,
       toString: () => "",
@@ -77,7 +77,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
       {
         id: "ctx-none",
         use: () => {
-          throw createMessageError("no ctx");
+          throw genericError.new({ message: "no ctx" });
         },
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),

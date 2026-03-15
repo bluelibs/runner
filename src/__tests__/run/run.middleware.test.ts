@@ -7,7 +7,7 @@ import {
   defineResourceMiddleware,
 } from "../../define";
 import { run } from "../../run";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("Middleware", () => {
   it("should be able to register the middleware and execute it", async () => {
@@ -594,7 +594,7 @@ describe("Middleware behavior (no lifecycle)", () => {
     const mw = defineTaskMiddleware({
       id: "mw-error",
       run: async () => {
-        throw createMessageError("boom");
+        throw genericError.new({ message: "boom" });
       },
     });
 
@@ -623,7 +623,7 @@ describe("Middleware behavior (no lifecycle)", () => {
     defineTaskMiddleware({
       id: "mw-error-global-listener",
       run: async () => {
-        throw createMessageError("boom-global");
+        throw genericError.new({ message: "boom-global" });
       },
     });
 

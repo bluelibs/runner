@@ -3,7 +3,7 @@ import { run } from "../../run";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { ExecutionContextStore } from "../../models/ExecutionContextStore";
 import { createTestFixture } from "../test-utils";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { ResourceLifecycleMode } from "../../types/runner";
 import { runtimeSource } from "../../types/runtimeSource";
 import type { RuntimeCallSource } from "../../types/runtimeSource";
@@ -323,7 +323,7 @@ describe("DependencyProcessor Consistency", () => {
     const broken = r
       .resource(ResourceId.BrokenViaDependency)
       .init(async () => {
-        throw createMessageError(ErrorMessage.Boom);
+        throw genericError.new({ message: ErrorMessage.Boom });
       })
       .build();
 

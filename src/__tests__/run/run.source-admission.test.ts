@@ -5,7 +5,7 @@ import {
   defineTask,
   defineTaskMiddleware,
 } from "../../define";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { run } from "../../run";
 
 const SHUTDOWN_REJECTION = /(shutting down|disposed)/i;
@@ -87,7 +87,9 @@ describe("run source-admission during shutdown drain", () => {
     expect(eventHandler).toHaveBeenCalledTimes(1);
 
     if (!releaseCooldown) {
-      throw createMessageError("Expected coolingDown gate release handler");
+      throw genericError.new({
+        message: "Expected coolingDown gate release handler",
+      });
     }
     releaseCooldown();
     await new Promise((r) => setTimeout(r, 5));

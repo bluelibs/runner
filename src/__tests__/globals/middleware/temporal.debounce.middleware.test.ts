@@ -4,7 +4,7 @@ import {
   debounceTaskMiddleware,
   temporalResource,
 } from "../../../globals/middleware/temporal.middleware";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 describe("Temporal Middleware: Debounce", () => {
   it("should debounce task executions", async () => {
@@ -225,7 +225,7 @@ describe("Temporal Middleware: Debounce", () => {
       middleware: [debounceTaskMiddleware.with({ ms: 50 })],
       run: async () => {
         callCount++;
-        throw createMessageError("Debounce error");
+        throw genericError.new({ message: "Debounce error" });
       },
     });
 

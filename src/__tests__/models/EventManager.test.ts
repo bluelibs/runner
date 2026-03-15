@@ -7,7 +7,7 @@ import {
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
-import { cancellationError, createMessageError } from "../../errors";
+import { cancellationError, genericError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
 import { ExecutionContextStore } from "../../models/ExecutionContextStore";
 
@@ -409,7 +409,7 @@ describe("EventManager", () => {
     eventManager.addListener(
       parallelEvent,
       () => {
-        throw createMessageError("boom-1");
+        throw genericError.new({ message: "boom-1" });
       },
       { order: 0, id: "l2" },
     );
@@ -417,7 +417,7 @@ describe("EventManager", () => {
     eventManager.addListener(
       parallelEvent,
       () => {
-        throw createMessageError("boom-2");
+        throw genericError.new({ message: "boom-2" });
       },
       { order: 0, id: "l3" },
     );
@@ -470,7 +470,7 @@ describe("EventManager", () => {
     eventManager.addListener(
       parallelEvent,
       () => {
-        throw createMessageError("solo-bang");
+        throw genericError.new({ message: "solo-bang" });
       },
       { order: 0, id: "solo" },
     );
@@ -518,7 +518,7 @@ describe("EventManager", () => {
 
   it("should handle handler throwing an error", async () => {
     const handler = jest.fn().mockImplementation(() => {
-      throw createMessageError("Handler error");
+      throw genericError.new({ message: "Handler error" });
     });
 
     eventManager.addListener(eventDefinition, handler);
@@ -534,7 +534,7 @@ describe("EventManager", () => {
 
   it("should stop calling other handlers if one fails", async () => {
     const handler1 = jest.fn().mockImplementation(() => {
-      throw createMessageError("Handler error");
+      throw genericError.new({ message: "Handler error" });
     });
     const handler2 = jest.fn();
 
@@ -554,7 +554,7 @@ describe("EventManager", () => {
 
   it("should stop sequential handlers when the first-by-order fails", async () => {
     const first = jest.fn().mockImplementation(() => {
-      throw createMessageError("first failed");
+      throw genericError.new({ message: "first failed" });
     });
     const second = jest.fn();
 
@@ -576,7 +576,7 @@ describe("EventManager", () => {
   it("returns emission report when report=true", async () => {
     const ok = jest.fn();
     const fail = jest.fn(() => {
-      throw createMessageError("bad");
+      throw genericError.new({ message: "bad" });
     });
 
     eventManager.addListener(eventDefinition, ok, { order: 0, id: "ok" });
@@ -606,7 +606,7 @@ describe("EventManager", () => {
       eventDefinition,
       () => {
         calls.push("first");
-        throw createMessageError("first-failure");
+        throw genericError.new({ message: "first-failure" });
       },
       { order: 0, id: "first" },
     );
@@ -621,7 +621,7 @@ describe("EventManager", () => {
       eventDefinition,
       () => {
         calls.push("third");
-        throw createMessageError("third-failure");
+        throw genericError.new({ message: "third-failure" });
       },
       { order: 2, id: "third" },
     );
@@ -639,14 +639,14 @@ describe("EventManager", () => {
     eventManager.addListener(
       eventDefinition,
       () => {
-        throw createMessageError("e1");
+        throw genericError.new({ message: "e1" });
       },
       { order: 0, id: "l1" },
     );
     eventManager.addListener(
       eventDefinition,
       () => {
-        throw createMessageError("e2");
+        throw genericError.new({ message: "e2" });
       },
       { order: 1, id: "l2" },
     );
@@ -670,7 +670,7 @@ describe("EventManager", () => {
     eventManager.addListener(
       eventDefinition,
       () => {
-        throw createMessageError("single-aggregate-error");
+        throw genericError.new({ message: "single-aggregate-error" });
       },
       { order: 0, id: "only" },
     );
@@ -685,10 +685,10 @@ describe("EventManager", () => {
 
   it("throws first sequential listener failure and stops execution", async () => {
     const first = jest.fn().mockImplementation(() => {
-      throw createMessageError("first failed");
+      throw genericError.new({ message: "first failed" });
     });
     const second = jest.fn().mockImplementation(() => {
-      throw createMessageError("second failed");
+      throw genericError.new({ message: "second failed" });
     });
 
     eventManager.addListener(eventDefinition, first, { order: 1, id: "first" });
@@ -1104,7 +1104,7 @@ describe("EventManager", () => {
       payloadSchema: {
         parse: (data: any) => {
           if (!data || typeof data.x !== "number") {
-            throw createMessageError("Invalid");
+            throw genericError.new({ message: "Invalid" });
           }
           return data;
         },
@@ -1639,7 +1639,7 @@ describe("EventManager", () => {
 
     it("should handle interceptors that throw errors", async () => {
       const interceptor = jest.fn(async (_next, _event) => {
-        throw createMessageError("Interceptor error");
+        throw genericError.new({ message: "Interceptor error" });
       });
 
       eventManager.intercept(interceptor);
@@ -1659,7 +1659,7 @@ describe("EventManager", () => {
 
     it("should handle hook interceptors that throw errors", async () => {
       const interceptor = jest.fn(async (_next, _hook, _event) => {
-        throw createMessageError("Hook interceptor error");
+        throw genericError.new({ message: "Hook interceptor error" });
       });
 
       eventManager.interceptHook(interceptor);

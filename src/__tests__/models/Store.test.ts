@@ -13,7 +13,7 @@ import { run } from "../../run";
 import { MiddlewareManager, RunResult, TaskRunner } from "../../models";
 import { RunnerMode } from "../../types/runner";
 import { createTestFixture } from "../test-utils";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("Store", () => {
   let store: Store;
@@ -828,9 +828,9 @@ describe("Store", () => {
     const firstTask = tasks[0]!;
     const firstResource = resources[0]!;
     if (!firstTask || !firstResource || !firstResource.init) {
-      throw createMessageError(
-        "Expected one tagged task and one tagged resource",
-      );
+      throw genericError.new({
+        message: "Expected one tagged task and one tagged resource",
+      });
     }
 
     await expect(

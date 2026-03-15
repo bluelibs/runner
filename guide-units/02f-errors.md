@@ -66,6 +66,7 @@ Notes:
 - `errorHelper.new(data)` returns the typed `RunnerError` without throwing
 - `.new()` / `.throw()` / `.is()` do not require the helper to be registered
 - registration is required when you want DI, store visibility, tag/discovery participation, or `.throws(...)` contracts to refer to that definition inside the app graph
+- `errors.genericError` is the built-in fallback for ad-hoc message-only errors; prefer domain-specific helpers when the contract is stable
 
 ### Dynamic Remediation
 

@@ -1,5 +1,5 @@
 import { EventEmitter } from "events";
-import { cancellationError, createMessageError } from "../../../errors";
+import { cancellationError, genericError } from "../../../errors";
 import { createAbortControllerForRequest } from "../../exposure/utils";
 
 describe("node exposure utils", () => {
@@ -15,7 +15,7 @@ describe("node exposure utils", () => {
       signal = {} as AbortSignal;
 
       abort(): void {
-        throw createMessageError("abort failed");
+        throw genericError.new({ message: "abort failed" });
       }
     }
 

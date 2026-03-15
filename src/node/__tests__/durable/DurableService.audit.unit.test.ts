@@ -7,7 +7,7 @@ import {
   createBareStore,
   okTask,
 } from "./DurableService.unit.helpers";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 describe("durable: DurableService — audit (unit)", () => {
   it("skips audit persistence when audit is enabled but the store does not support it", async () => {
@@ -37,7 +37,7 @@ describe("durable: DurableService — audit (unit)", () => {
     const service = new DurableService({
       store: createBareStore(base, {
         appendAuditEntry: async () => {
-          throw createMessageError("audit-write-failed");
+          throw genericError.new({ message: "audit-write-failed" });
         },
       }),
       queue,
@@ -58,7 +58,7 @@ describe("durable: DurableService — audit (unit)", () => {
 
     const emitter: DurableAuditEmitter = {
       emit: async () => {
-        throw createMessageError("audit-emitter-failed");
+        throw genericError.new({ message: "audit-emitter-failed" });
       },
     };
 
@@ -83,7 +83,7 @@ describe("durable: DurableService — audit (unit)", () => {
       { enabled: true },
       createBareStore(base, {
         appendAuditEntry: async () => {
-          throw createMessageError("audit-write-failed");
+          throw genericError.new({ message: "audit-write-failed" });
         },
       }),
     );
@@ -102,7 +102,7 @@ describe("durable: DurableService — audit (unit)", () => {
   it("swallows exceptions thrown by the audit emitter", async () => {
     const store = new MemoryStore();
     const emit = jest.fn(async () => {
-      throw createMessageError("audit-emitter-failed");
+      throw genericError.new({ message: "audit-emitter-failed" });
     });
 
     const emitter: DurableAuditEmitter = { emit };

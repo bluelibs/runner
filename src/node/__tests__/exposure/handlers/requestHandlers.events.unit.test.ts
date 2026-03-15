@@ -5,7 +5,7 @@ import { defineResource, defineEvent, defineHook } from "../../../../define";
 import { run } from "../../../../run";
 import { rpcExposure } from "../testkit/rpcExposure";
 import * as requestBody from "../../../exposure/requestBody";
-import { cancellationError, createMessageError } from "../../../../errors";
+import { cancellationError, genericError } from "../../../../errors";
 import { createRequestHandlersDeps } from "./requestHandlers.deps.test.utils";
 import {
   createReqRes,
@@ -812,7 +812,7 @@ describe("requestHandlers - event handling", () => {
         id: "tests-ev-err-hook",
         on: ev,
         async run() {
-          throw createMessageError("boom");
+          throw genericError.new({ message: "boom" });
         },
       });
       const exposure = rpcExposure.with({

@@ -9,7 +9,7 @@ import type { IDurableStore } from "../../durable/core/interfaces/store";
 import type { ITaskExecutor } from "../../durable/core/interfaces/service";
 import type { IDurableQueue } from "../../durable/core/interfaces/queue";
 import type { ITask } from "../../../types/task";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 enum TaskId {
   T = "durable-tests-executionManager-t",
@@ -128,7 +128,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const store: IDurableStore = {
       saveExecution: async () => {
-        throw createMessageError("should not create execution");
+        throw genericError.new({ message: "should not create execution" });
       },
       getExecution: async () => null,
       updateExecution: async () => {},
@@ -155,7 +155,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const taskExecutor: ITaskExecutor = {
       run: async () => {
-        throw createMessageError("should not execute");
+        throw genericError.new({ message: "should not execute" });
       },
     };
 
@@ -171,7 +171,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   it("throws if setExecutionIdByIdempotencyKey fails without an existing mapping", async () => {
     const store: IDurableStore = {
       saveExecution: async () => {
-        throw createMessageError("should not create execution");
+        throw genericError.new({ message: "should not create execution" });
       },
       getExecution: async () => null,
       updateExecution: async () => {},
@@ -194,7 +194,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const taskExecutor: ITaskExecutor = {
       run: async () => {
-        throw createMessageError("should not execute");
+        throw genericError.new({ message: "should not execute" });
       },
     };
 
@@ -212,7 +212,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       saveExecution: async () => {},
       getExecution: async () => null,
       updateExecution: async () => {
-        throw createMessageError("should not update");
+        throw genericError.new({ message: "should not update" });
       },
       listIncompleteExecutions: async () => [],
       getStepResult: async () => null,
@@ -587,7 +587,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const taskExecutor: ITaskExecutor = {
       run: async () => {
-        throw createMessageError("boom");
+        throw genericError.new({ message: "boom" });
       },
     };
 

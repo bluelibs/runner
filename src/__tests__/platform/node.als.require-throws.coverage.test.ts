@@ -1,4 +1,4 @@
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("NodePlatformAdapter builtin async_hooks lookup failure coverage", () => {
   afterEach(() => {
@@ -11,7 +11,7 @@ describe("NodePlatformAdapter builtin async_hooks lookup failure coverage", () =
     const { PlatformAdapter } = await import("../../platform");
     const adapter = new PlatformAdapter("node");
     jest.spyOn(process, "getBuiltinModule").mockImplementation(() => {
-      throw createMessageError("fail");
+      throw genericError.new({ message: "fail" });
     });
     const als = adapter.createAsyncLocalStorage<Map<string, unknown>>();
     expect(als.getStore()).toBeUndefined();

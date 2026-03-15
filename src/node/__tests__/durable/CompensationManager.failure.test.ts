@@ -1,7 +1,7 @@
 import { r, resources, run } from "../../node";
 import { durableResource } from "../../durable/core/resource";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 describe("durable: compensation failure", () => {
   it("marks execution as compensation_failed when rollback compensation throws", async () => {
@@ -23,11 +23,13 @@ describe("durable: compensation failure", () => {
           .step<string>("step-1")
           .up(async () => "ok")
           .down(async () => {
-            throw createMessageError("I am a bad compensation logic");
+            throw genericError.new({
+              message: "I am a bad compensation logic",
+            });
           });
 
         try {
-          throw createMessageError("Triggering rollback");
+          throw genericError.new({ message: "Triggering rollback" });
         } catch (error) {
           await ctx.rollback();
           throw error;

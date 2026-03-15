@@ -1,5 +1,5 @@
 import { Semaphore } from "../..";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("Semaphore", () => {
   let semaphore: Semaphore;
@@ -130,7 +130,7 @@ describe("Semaphore", () => {
       try {
         await semaphore.withPermit(async () => {
           expect(semaphore.getAvailablePermits()).toBe(1);
-          throw createMessageError("Test error");
+          throw genericError.new({ message: "Test error" });
         });
       } catch (error) {
         expect(semaphore.getAvailablePermits()).toBe(2); // Permit still released

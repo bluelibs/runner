@@ -3,7 +3,7 @@ import { Readable } from "stream";
 import { type MultipartRequest } from "../../../exposure/multipart";
 import type { JsonResponse } from "../../../exposure/types";
 import type { InputFile } from "../../../../types/inputFile";
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 
 export const CRLF = "\r\n";
 
@@ -87,7 +87,7 @@ export function assertInputFile(
   label: string,
 ): asserts value is InputFile {
   if (!value || typeof value !== "object") {
-    throw createMessageError(`${label} is not an object`);
+    throw genericError.new({ message: `${label} is not an object` });
   }
   const candidate = value as {
     name?: unknown;
@@ -96,16 +96,16 @@ export function assertInputFile(
     toTempFile?: unknown;
   };
   if (typeof candidate.name !== "string") {
-    throw createMessageError(`${label} is missing required name`);
+    throw genericError.new({ message: `${label} is missing required name` });
   }
   if (typeof candidate.resolve !== "function") {
-    throw createMessageError(`${label} is missing resolve()`);
+    throw genericError.new({ message: `${label} is missing resolve()` });
   }
   if (typeof candidate.stream !== "function") {
-    throw createMessageError(`${label} is missing stream()`);
+    throw genericError.new({ message: `${label} is missing stream()` });
   }
   if (typeof candidate.toTempFile !== "function") {
-    throw createMessageError(`${label} is missing toTempFile()`);
+    throw genericError.new({ message: `${label} is missing toTempFile()` });
   }
 }
 
@@ -115,15 +115,15 @@ export function expectErrorCode(
 ): void {
   const body = response.body;
   if (!body || typeof body !== "object") {
-    throw createMessageError("Error response body is missing");
+    throw genericError.new({ message: "Error response body is missing" });
   }
   const error = (body as { error?: { code?: unknown } }).error;
   if (!error || typeof error !== "object") {
-    throw createMessageError("Error payload is missing details");
+    throw genericError.new({ message: "Error payload is missing details" });
   }
   const code = (error as { code?: unknown }).code;
   if (typeof code !== "string") {
-    throw createMessageError("Error code is not a string");
+    throw genericError.new({ message: "Error code is not a string" });
   }
   expect(code).toBe(expected);
 }

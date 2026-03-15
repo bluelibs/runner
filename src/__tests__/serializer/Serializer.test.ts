@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from "@jest/globals";
 import type { TypeDefinition } from "../../serializer/index";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { matchError } from "../../errors/foundation/match.errors";
 import { Match, Serializer } from "../../decorators/legacy";
 import type { MatchPattern } from "../../tools/check";
@@ -268,14 +268,16 @@ describe("Serializer", () => {
       const dateValue = deserialized.get("date");
       expect(dateValue).toBeInstanceOf(Date);
       if (!(dateValue instanceof Date)) {
-        throw createMessageError("Expected date entry to be a Date");
+        throw genericError.new({ message: "Expected date entry to be a Date" });
       }
       expect(dateValue.getTime()).toBe(originalDate.getTime());
 
       const regexValue = deserialized.get("regex");
       expect(regexValue).toBeInstanceOf(RegExp);
       if (!(regexValue instanceof RegExp)) {
-        throw createMessageError("Expected regex entry to be a RegExp");
+        throw genericError.new({
+          message: "Expected regex entry to be a RegExp",
+        });
       }
       expect(regexValue.source).toBe(originalRegex.source);
       expect(regexValue.flags).toBe(originalRegex.flags);
@@ -283,13 +285,17 @@ describe("Serializer", () => {
       const innerMapValue = deserialized.get("innerMap");
       expect(innerMapValue).toBeInstanceOf(Map);
       if (!(innerMapValue instanceof Map)) {
-        throw createMessageError("Expected innerMap entry to be a Map");
+        throw genericError.new({
+          message: "Expected innerMap entry to be a Map",
+        });
       }
 
       const innerDateValue = innerMapValue.get("innerDate");
       expect(innerDateValue).toBeInstanceOf(Date);
       if (!(innerDateValue instanceof Date)) {
-        throw createMessageError("Expected innerDate entry to be a Date");
+        throw genericError.new({
+          message: "Expected innerDate entry to be a Date",
+        });
       }
       expect(innerDateValue.toISOString()).toBe("2024-02-02T00:00:00.000Z");
     });
@@ -350,19 +356,25 @@ describe("Serializer", () => {
       const referenced = deserialized.referenced;
       expect(referenced).toBeDefined();
       if (!referenced) {
-        throw createMessageError("Expected referenced node to be defined");
+        throw genericError.new({
+          message: "Expected referenced node to be defined",
+        });
       }
       expect(referenced.id).toBe(4);
       const parent = referenced.parent;
       expect(parent).toBeDefined();
       if (!parent) {
-        throw createMessageError("Expected parent node to be defined");
+        throw genericError.new({
+          message: "Expected parent node to be defined",
+        });
       }
       expect(parent.id).toBe(3);
       const grandParent = parent.parent;
       expect(grandParent).toBeDefined();
       if (!grandParent) {
-        throw createMessageError("Expected grandparent node to be defined");
+        throw genericError.new({
+          message: "Expected grandparent node to be defined",
+        });
       }
       expect(grandParent.id).toBe(2);
       expect(grandParent.parent).toBe(deserialized);
@@ -720,7 +732,7 @@ describe("Serializer", () => {
           {
             parse(input: unknown): string {
               if (typeof input !== "string") {
-                throw createMessageError("Expected string");
+                throw genericError.new({ message: "Expected string" });
               }
 
               return input.toUpperCase();

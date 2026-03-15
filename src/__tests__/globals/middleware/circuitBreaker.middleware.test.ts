@@ -5,7 +5,7 @@ import {
   circuitBreakerMiddleware,
   CircuitBreakerOpenError,
 } from "../../../globals/middleware/circuitBreaker.middleware";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 describe("Circuit Breaker Middleware", () => {
   beforeEach(() => {
@@ -46,7 +46,7 @@ describe("Circuit Breaker Middleware", () => {
       id: "task-tripping",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 2 })],
       run: async () => {
-        if (shouldFail) throw createMessageError("fail");
+        if (shouldFail) throw genericError.new({ message: "fail" });
         return "ok";
       },
     });
@@ -79,7 +79,7 @@ describe("Circuit Breaker Middleware", () => {
         }),
       ],
       run: async () => {
-        if (shouldFail) throw createMessageError("fail");
+        if (shouldFail) throw genericError.new({ message: "fail" });
         return "ok";
       },
     });
@@ -121,7 +121,7 @@ describe("Circuit Breaker Middleware", () => {
         }),
       ],
       run: async () => {
-        if (shouldFail) throw createMessageError("fail");
+        if (shouldFail) throw genericError.new({ message: "fail" });
         return "ok";
       },
     });
@@ -163,7 +163,7 @@ describe("Circuit Breaker Middleware", () => {
       ],
       run: async () => {
         if (mode === "fail") {
-          throw createMessageError("fail");
+          throw genericError.new({ message: "fail" });
         }
         if (mode === "probe") {
           await new Promise<void>((resolve) => {
@@ -206,7 +206,7 @@ describe("Circuit Breaker Middleware", () => {
       id: "task-isolate1",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 1 })],
       run: async () => {
-        throw createMessageError("fail");
+        throw genericError.new({ message: "fail" });
       },
     });
 
@@ -239,7 +239,7 @@ describe("Circuit Breaker Middleware", () => {
       id: "task-defaults",
       middleware: [circuitBreakerMiddleware],
       run: async () => {
-        throw createMessageError("fail");
+        throw genericError.new({ message: "fail" });
       },
     });
 
@@ -264,7 +264,7 @@ describe("Circuit Breaker Middleware", () => {
       id: "task-dispose-status",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 2 })],
       run: async () => {
-        throw createMessageError("boom");
+        throw genericError.new({ message: "boom" });
       },
     });
 
@@ -335,7 +335,7 @@ describe("Circuit Breaker Middleware", () => {
       id: "task-eviction-nonstale",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 2 })],
       run: async () => {
-        throw createMessageError("boom");
+        throw genericError.new({ message: "boom" });
       },
     });
 

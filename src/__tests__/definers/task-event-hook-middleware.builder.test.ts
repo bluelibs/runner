@@ -1,5 +1,5 @@
 import { r, run, definitions, defineResource } from "../..";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import type { AnyError } from "../../types/error";
 
 describe("task/event/hook/middleware builders", () => {
@@ -135,7 +135,7 @@ describe("task/event/hook/middleware builders", () => {
           failureMode: definitions.EventEmissionFailureMode.Aggregate,
         });
         if (!report) {
-          throw createMessageError("Expected event emission report");
+          throw genericError.new({ message: "Expected event emission report" });
         }
         return report;
       })
@@ -145,7 +145,7 @@ describe("task/event/hook/middleware builders", () => {
       .hook("tests-builder-event-dep-report-hook-a")
       .on(ev)
       .run(async () => {
-        throw createMessageError("hook-a");
+        throw genericError.new({ message: "hook-a" });
       })
       .build();
 
@@ -153,7 +153,7 @@ describe("task/event/hook/middleware builders", () => {
       .hook("tests-builder-event-dep-report-hook-b")
       .on(ev)
       .run(async () => {
-        throw createMessageError("hook-b");
+        throw genericError.new({ message: "hook-b" });
       })
       .build();
 
@@ -165,9 +165,9 @@ describe("task/event/hook/middleware builders", () => {
     const rr = await run(app);
     const report = await rr.runTask(emitFromTask);
     if (!report) {
-      throw createMessageError(
-        "Expected task to return an event emission report",
-      );
+      throw genericError.new({
+        message: "Expected task to return an event emission report",
+      });
     }
     expect(report.failedListeners).toBe(2);
     expect(report.errors).toHaveLength(2);

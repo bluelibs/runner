@@ -1,4 +1,4 @@
-import { createMessageError } from "../errors";
+import { genericError } from "../errors";
 import type { TypeDefinition } from "./types";
 import type { SerializedValue } from "./types";
 import type { TypeRegistry } from "./type-registry";
@@ -74,9 +74,12 @@ export function serializeSymbolValue<TSerializedValue = SerializedValue>(
   typeRegistry: TypeRegistry,
   serializeNested: (value: unknown) => TSerializedValue,
 ): { __type: string; value: TSerializedValue } {
-  const typeDef =
-    typeRegistry.findTypeDefinition(value, excludedTypeIds) ??
-    createMessageError('Cannot serialize value of type "symbol"');
+  const typeDef = typeRegistry.findTypeDefinition(value, excludedTypeIds);
+  if (!typeDef) {
+    throw genericError.new({
+      message: 'Cannot serialize value of type "symbol"',
+    });
+  }
 
   return serializeTypeRecord(typeDef, value, excludedTypeIds, serializeNested);
 }

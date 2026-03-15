@@ -1,6 +1,6 @@
 import { describe, it, expect } from "@jest/globals";
 import { Serializer } from "../../serializer";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 type RuntimeBufferConstructor = {
   from(data: readonly number[]): Uint8Array;
@@ -118,7 +118,9 @@ describe("Serializer platform built-ins", () => {
     const restoredCause = restored.cause;
     expect(restoredCause).toBeInstanceOf(Error);
     if (!(restoredCause instanceof Error)) {
-      throw createMessageError("Expected restored cause to be an Error");
+      throw genericError.new({
+        message: "Expected restored cause to be an Error",
+      });
     }
     expect(restoredCause.message).toBe("root");
   });
@@ -211,14 +213,16 @@ describe("Serializer platform built-ins", () => {
         typeId
       ] as (new (buffer: ArrayBufferLike) => ArrayBufferView) | undefined;
       if (typeof runtimeConstructor !== "function") {
-        throw createMessageError(`Expected ${typeId} constructor to exist`);
+        throw genericError.new({
+          message: `Expected ${typeId} constructor to exist`,
+        });
       }
 
       expect(restored).toBeInstanceOf(runtimeConstructor);
       if (!ArrayBuffer.isView(restored) || restored instanceof DataView) {
-        throw createMessageError(
-          `Expected restored value to be a ${typeId} view`,
-        );
+        throw genericError.new({
+          message: `Expected restored value to be a ${typeId} view`,
+        });
       }
 
       expect(toBytePayload(restored)).toEqual(toBytePayload(original));

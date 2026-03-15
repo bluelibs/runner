@@ -1,5 +1,5 @@
 import { defineResource } from "../../../../define";
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 import { r } from "../../../../public";
 import type {
   NodeExposureConfig,
@@ -26,19 +26,22 @@ export const rpcExposure = {
       id: `${id}-communicator`,
       init: async () => ({
         task: async () => {
-          throw createMessageError(
-            "Unexpected remote task call while rpc lane is served locally.",
-          );
+          throw genericError.new({
+            message:
+              "Unexpected remote task call while rpc lane is served locally.",
+          });
         },
         event: async () => {
-          throw createMessageError(
-            "Unexpected remote event call while rpc lane is served locally.",
-          );
+          throw genericError.new({
+            message:
+              "Unexpected remote event call while rpc lane is served locally.",
+          });
         },
         eventWithResult: async () => {
-          throw createMessageError(
-            "Unexpected remote eventWithResult call while rpc lane is served locally.",
-          );
+          throw genericError.new({
+            message:
+              "Unexpected remote eventWithResult call while rpc lane is served locally.",
+          });
         },
       }),
     });
@@ -70,9 +73,9 @@ export const rpcExposure = {
           | null
           | undefined;
         if (!handlers) {
-          throw createMessageError(
-            "Failed to resolve rpc-lanes exposure handlers.",
-          );
+          throw genericError.new({
+            message: "Failed to resolve rpc-lanes exposure handlers.",
+          });
         }
         return handlers;
       },

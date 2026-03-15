@@ -3,7 +3,7 @@ import { defineResource, defineTask, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
 import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./resource.test.utils";
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 
 describe("nodeExposure - misc error branches", () => {
   const TOKEN = "unit-secret";
@@ -68,7 +68,7 @@ describe("nodeExposure - misc error branches", () => {
     const rr = await run(app);
     const taskId = rr.store.findIdByDefinition(badTask);
     (rr.logger as any).error = () => {
-      throw createMessageError("logger-fail");
+      throw genericError.new({ message: "logger-fail" });
     };
     const handlers = await rr.getResourceValue(exposure as any);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
@@ -97,7 +97,7 @@ describe("nodeExposure - misc error branches", () => {
     const rr = await run(app);
     const eventId = rr.store.findIdByDefinition(dummyEvent);
     (rr.logger as any).error = () => {
-      throw createMessageError("logger-fail");
+      throw genericError.new({ message: "logger-fail" });
     };
     const handlers = await rr.getResourceValue(exposure as any);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
