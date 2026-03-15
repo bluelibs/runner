@@ -365,6 +365,25 @@ describe("tools/check", () => {
     expectMatchFailure(() => checkRuntime("5", Match.Range({ min: 1 })));
   });
 
+  it("supports Match.Range integer mode", () => {
+    expect(() =>
+      checkRuntime(5, Match.Range({ min: 5, max: 10, integer: true })),
+    ).not.toThrow();
+    expect(() =>
+      checkRuntime(10, Match.Range({ min: 5, max: 10, integer: true })),
+    ).not.toThrow();
+    expect(() =>
+      checkRuntime(7, Match.Range({ min: 5, max: 10, integer: true })),
+    ).not.toThrow();
+
+    expectMatchFailure(() =>
+      checkRuntime(7.5, Match.Range({ min: 5, max: 10, integer: true })),
+    );
+    expectMatchFailure(() =>
+      checkRuntime(5.1, Match.Range({ min: 5, integer: true })),
+    );
+  });
+
   it("fails fast on invalid Match.Range pattern configs", () => {
     expect(() => Match.Range({})).toThrow(
       "Bad pattern: Match.Range requires at least one of min or max.",
@@ -383,6 +402,9 @@ describe("tools/check", () => {
     );
     expect(() => Match.Range({ min: 1, inclusive: "yes" as never })).toThrow(
       "Bad pattern: Match.Range inclusive must be a boolean when provided.",
+    );
+    expect(() => Match.Range({ min: 1, integer: "yes" as never })).toThrow(
+      "Bad pattern: Match.Range integer must be a boolean when provided.",
     );
   });
 

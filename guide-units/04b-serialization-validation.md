@@ -269,28 +269,16 @@ import { Match, check } from "@bluelibs/runner";
 
 const percentage = check(50, Match.Range({ min: 0, max: 100 }));
 const openInterval = Match.Range({ min: 0, max: 1, inclusive: false });
-
-const integerRange = Match.compile({
-  retries: Match.WithMessage(
-    Match.Where((value: unknown): value is number => {
-      return (
-        typeof value === "number" &&
-        Number.isInteger(value) &&
-        Match.Range({ min: 1, max: 10 }).test(value)
-      );
-    }),
-    "Retries must be an integer between 1 and 10.",
-  ),
-});
+const integerRange = Match.Range({ min: 1, max: 10, integer: true });
 
 percentage; // number
 openInterval.test(0.5); // true
-integerRange.parse({ retries: 3 });
+integerRange.parse(3);
 ```
 
-- `Match.Range({ min?, max?, inclusive? })` matches finite numbers within the configured bounds.
+- `Match.Range({ min?, max?, inclusive?, integer? })` matches finite numbers within the configured bounds.
 - `inclusive` defaults to `true`; `inclusive: false` makes both bounds exclusive.
-- Integer-only ranges are still composed from existing helpers such as `Match.Where(...)` plus `Match.Range(...).test(value)`.
+- `integer: true` restricts the range to integers, so `Match.Range({ min: 5, max: 10, integer: true })` is the short form for “integer between 5 and 10”.
 
 ### Shorthand Object Patterns (Real-World)
 
@@ -431,7 +419,7 @@ For decorated class schemas, use `Match.Schema({ base })` to compose one schema 
 | `Match.MapOf(valuePattern)`                                  | Dynamic-key object with uniform value pattern                                |
 | `Match.Any`                                                  | Accepts any value                                                            |
 | `Match.Integer`                                              | Signed 32-bit integer                                                        |
-| `Match.Range({ min?, max?, inclusive? })`                    | Finite-number range with optional inclusive/exclusive min/max bounds         |
+| `Match.Range({ min?, max?, inclusive?, integer? })`         | Finite-number or integer range with optional inclusive/exclusive min/max bounds |
 | `Match.NonEmptyString`                                       | Non-empty string                                                             |
 | `Match.Email`                                                | Email-shaped string                                                          |
 | `Match.UUID`                                                 | Canonical UUID string                                                        |

@@ -262,6 +262,11 @@ import { Match } from "../../../decorators/legacy";
     const narrowedRange: number = candidate;
     void narrowedRange;
   }
+
+  const integerRangePattern = Match.Range({ min: 5, max: 10, integer: true });
+  const parsedIntegerRange = integerRangePattern.parse(7);
+  const integerRangeNumber: number = parsedIntegerRange;
+  void integerRangeNumber;
 }
 
 {

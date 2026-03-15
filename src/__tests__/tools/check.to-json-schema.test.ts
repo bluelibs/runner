@@ -113,6 +113,14 @@ describe("tools/check toJSONSchema", () => {
       maximum: 10,
     });
     expect(
+      Match.toJSONSchema(Match.Range({ min: 1, max: 10, integer: true })),
+    ).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "integer",
+      minimum: 1,
+      maximum: 10,
+    });
+    expect(
       Match.toJSONSchema(Match.Range({ min: 1, max: 10, inclusive: false })),
     ).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
@@ -178,6 +186,11 @@ describe("tools/check toJSONSchema", () => {
       $schema: DRAFT_2020_12_SCHEMA,
       type: "number",
       exclusiveMaximum: 10,
+    });
+    expect(Match.toJSONSchema(Match.Range({ min: 1, integer: true }))).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "integer",
+      minimum: 1,
     });
   });
 

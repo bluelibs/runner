@@ -359,12 +359,14 @@ function regexpPattern(expression: RegExp | string): RegExpPattern<RegExp> {
 
 /**
  * Creates a numeric matcher with optional minimum/maximum bounds.
- * Use `inclusive: false` when both bounds should be strict.
+ * Use `inclusive: false` when both bounds should be strict, and `integer: true`
+ * when the range should only allow integers.
  */
 function rangePattern(options: {
   min?: number;
   max?: number;
   inclusive?: boolean;
+  integer?: boolean;
 }): RangePattern {
   const optionsError = getMatchRangePatternError(options);
   assertPattern(optionsError === null, optionsError ?? "Bad pattern.");
@@ -499,7 +501,7 @@ export const Match = Object.freeze({
     return new OneOfPattern(patterns);
   },
   Where: where,
-  /** Matches finite numbers against optional min/max bounds. */
+  /** Matches finite numbers, or integers when `integer: true`, against optional min/max bounds. */
   Range: rangePattern,
   WithMessage: withMessage,
   WithErrorPolicy: withErrorPolicyPattern,

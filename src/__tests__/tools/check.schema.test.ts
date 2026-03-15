@@ -137,8 +137,12 @@ describe("tools/check schema support", () => {
 
     expect(Match.Range({ min: 1, max: 3 }).parse(1)).toBe(1);
     expect(Match.Range({ min: 1, max: 3, inclusive: false }).parse(2)).toBe(2);
+    expect(Match.Range({ min: 1, max: 3, integer: true }).parse(2)).toBe(2);
     expectMatchFailure(() =>
       Match.Range({ min: 1, max: 3, inclusive: false }).parse(1),
+    );
+    expectMatchFailure(() =>
+      Match.Range({ min: 1, max: 3, integer: true }).parse(2.5),
     );
   });
 
@@ -165,6 +169,10 @@ describe("tools/check schema support", () => {
     const rangePattern = Match.Range({ min: 1, max: 3 });
     expect(rangePattern.test(2)).toBe(true);
     expect(rangePattern.test(4)).toBe(false);
+    expect(Match.Range({ min: 1, max: 3, integer: true }).test(2)).toBe(true);
+    expect(Match.Range({ min: 1, max: 3, integer: true }).test(2.2)).toBe(
+      false,
+    );
   });
 
   it("keeps built-in token kinds aligned with the central registry", () => {
@@ -222,6 +230,14 @@ describe("tools/check schema support", () => {
     expect(Match.Range({ min: 1, max: 10 }).toJSONSchema()).toEqual({
       $schema: "https://json-schema.org/draft/2020-12/schema",
       type: "number",
+      minimum: 1,
+      maximum: 10,
+    });
+    expect(
+      Match.Range({ min: 1, max: 10, integer: true }).toJSONSchema(),
+    ).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "integer",
       minimum: 1,
       maximum: 10,
     });

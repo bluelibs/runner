@@ -163,24 +163,27 @@ function describeRangeExpected(pattern: {
   min?: number;
   max?: number;
   inclusive?: boolean;
+  integer?: boolean;
 }): string {
+  const numericType =
+    pattern.integer === true ? "finite integer" : "finite number";
   const inclusive = pattern.inclusive !== false;
 
   if (pattern.min !== undefined && pattern.max !== undefined) {
     return inclusive
-      ? `finite number between ${pattern.min} and ${pattern.max} (inclusive)`
-      : `finite number greater than ${pattern.min} and less than ${pattern.max}`;
+      ? `${numericType} between ${pattern.min} and ${pattern.max} (inclusive)`
+      : `${numericType} greater than ${pattern.min} and less than ${pattern.max}`;
   }
 
   if (pattern.min !== undefined) {
     return inclusive
-      ? `finite number greater than or equal to ${pattern.min}`
-      : `finite number greater than ${pattern.min}`;
+      ? `${numericType} greater than or equal to ${pattern.min}`
+      : `${numericType} greater than ${pattern.min}`;
   }
 
   return inclusive
-    ? `finite number less than or equal to ${pattern.max}`
-    : `finite number less than ${pattern.max}`;
+    ? `${numericType} less than or equal to ${pattern.max}`
+    : `${numericType} less than ${pattern.max}`;
 }
 
 function normalizeRangePattern(pattern: RangeHolder): MatchRangePatternOptions {
@@ -188,6 +191,7 @@ function normalizeRangePattern(pattern: RangeHolder): MatchRangePatternOptions {
     min: pattern.min as number | undefined,
     max: pattern.max as number | undefined,
     inclusive: pattern.inclusive as boolean | undefined,
+    integer: pattern.integer as boolean | undefined,
   };
 }
 
@@ -211,6 +215,16 @@ export const rangePatternDefinition = defineMatchPatternDefinition<RangeHolder>(
           path,
           describeRangeExpected(normalizedPattern),
           value,
+        );
+      }
+
+      if (normalizedPattern.integer === true && !Number.isInteger(value)) {
+        return fail(
+          context,
+          path,
+          describeRangeExpected(normalizedPattern),
+          value,
+          `Failed Match.Range validation at ${formatPath(path)}.`,
         );
       }
 
@@ -256,7 +270,7 @@ export const rangePatternDefinition = defineMatchPatternDefinition<RangeHolder>(
 
       const inclusive = normalizedPattern.inclusive !== false;
       return {
-        type: "number",
+        type: normalizedPattern.integer === true ? "integer" : "number",
         ...(normalizedPattern.min !== undefined
           ? inclusive
             ? { minimum: normalizedPattern.min }

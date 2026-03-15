@@ -29,6 +29,7 @@ export type RangeHolder = {
   min?: unknown;
   max?: unknown;
   inclusive?: unknown;
+  integer?: unknown;
 };
 export type MatchClassPatternOptions = {
   exact?: boolean;
@@ -38,6 +39,7 @@ export type MatchRangePatternOptions = {
   min?: number;
   max?: number;
   inclusive?: boolean;
+  integer?: boolean;
 };
 
 function normalizeMatchMessageValue(
@@ -231,6 +233,13 @@ export function getMatchRangePatternError(value: unknown): string | null {
     typeof candidate.inclusive !== "boolean"
   ) {
     return "Bad pattern: Match.Range inclusive must be a boolean when provided.";
+  }
+
+  if (
+    candidate.integer !== undefined &&
+    typeof candidate.integer !== "boolean"
+  ) {
+    return "Bad pattern: Match.Range integer must be a boolean when provided.";
   }
 
   if (

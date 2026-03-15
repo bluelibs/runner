@@ -180,12 +180,19 @@ export class RangePattern extends MatchPatternBase<number, RangePattern> {
   public readonly min?: number;
   public readonly max?: number;
   public readonly inclusive?: boolean;
+  public readonly integer?: boolean;
 
-  constructor(options: { min?: number; max?: number; inclusive?: boolean }) {
+  constructor(options: {
+    min?: number;
+    max?: number;
+    inclusive?: boolean;
+    integer?: boolean;
+  }) {
     super(rangePatternDefinition as MatchPatternDefinition<RangePattern>);
     this.min = options.min;
     this.max = options.max;
     this.inclusive = options.inclusive;
+    this.integer = options.integer;
   }
 }
 
