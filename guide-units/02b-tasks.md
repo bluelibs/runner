@@ -221,10 +221,11 @@ Cancellation behavior:
 
 - `signal` is optional
 - top-level callers can pass `runTask(task, input, { signal })`
-- with `run(..., { executionContext: true })`, omitted nested task calls inherit the first signal seen in the current execution tree
-- explicit nested `signal` applies to that direct child call and does not replace the already-inherited ambient signal for deeper automatic propagation
+- with execution context enabled, nested task and event dependency calls can inherit the ambient execution signal automatically
 - timeout middleware, forwarded task journals, and inbound HTTP/RPC request aborts still feed the same cooperative task signal when cancellation is active
 - when no real cancellation source exists, `context.signal` stays `undefined`
+
+For the full propagation model, including `executionContext: { frames: "off", cycleDetection: false }`, see [Execution Context and Signal Propagation](#execution-context-and-signal-propagation).
 
 Export your journal keys when you expect downstream middleware to consume the same execution-local state.
 

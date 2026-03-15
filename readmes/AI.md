@@ -174,7 +174,7 @@ userInput.toJSONSchema(); // machine-readable contract for tooling
   - `shutdownHooks: true`: install `SIGINT` / `SIGTERM` graceful shutdown hooks; signals during bootstrap cancel startup and roll back initialized resources.
   - `dispose: { totalBudgetMs, drainingBudgetMs, cooldownWindowMs }`: control shutdown budget, drain wait, and the short post-`cooldown()` admissions window.
   - `errorBoundary: true`: install process-level unhandled error capture and route it through `onUnhandledError`.
-  - `executionContext: true | { ... }`: enable correlation ids, causal-chain tracking, and cycle detection for task/event execution.
+  - `executionContext: true | { ... }`: enable correlation ids and inherited execution signals, with optional frame tracking and cycle detection for task/event execution.
   - `mode: "dev" | "prod" | "test"`: override environment-based mode detection. The effective resolved mode is always available at runtime as `runtime.mode`, and inside resources as `resources.mode`, even when you did not pass `mode` explicitly.
 - `debug` and `logs` tune observability; they do not change lifecycle semantics.
 - For the full option table, see the `run() and RunOptions` section in [FULL_GUIDE.md](./FULL_GUIDE.md).
@@ -185,8 +185,6 @@ userInput.toJSONSchema(); // machine-readable contract for tooling
 - `runtime.state` is `"running" | "paused"`.
 - `runtime.resume()` reopens admissions immediately.
 - `runtime.recoverWhen({ everyMs, check })` registers paused-state recovery conditions; Runner auto-resumes only after all active conditions for the current pause episode pass.
-- `executionContext: true | { createCorrelationId?, cycleDetection? }` enables correlation tracking and execution tree recording (Node-only; requires `AsyncLocalStorage`). See "Execution Context and Request Tracing" below.
-- `asyncContexts.execution.use()` returns the current branch snapshot: `{ correlationId, startedAt, depth, currentFrame, frames }`. Treat it as runtime tracing access, not as a user-defined async context contract like `r.asyncContext(...)`.
 
 Runtime mode access:
 
@@ -490,14 +488,13 @@ Task calls and event emissions now accept `signal?: AbortSignal`.
 
 - top-level callers can pass `runTask(task, input, { signal })` or `emit(payload, { signal })`
 - when cancellation is active, tasks see `context.signal` and hooks see `event.signal`
-- with `run(..., { executionContext: true })`, omitted nested task calls and event emissions inherit the first signal seen in the current execution tree
-- explicit nested `signal` stays local to that direct child call or emission subtree and does not replace an already-inherited ambient signal
 - injected event emitters accept `emit(payload, { signal })`, and low-level event-manager APIs accept a merged `IEventEmissionCallOptions` object such as `{ source, signal, report }`
-- forwarded task journals preserve the current task cancellation chain, so an explicit nested task signal still composes with that journal-scoped signal path
 - RPC lane calls forward the active task or event signal automatically
 - timeout middleware reuses the same cooperative cancellation path instead of owning a separate public abort API
 - `middleware.task.timeout.journalKeys.abortController` remains available for middleware coordination and compatibility
 - if no cancellation source exists, `context.signal` and `event.signal` stay `undefined` rather than using a shared fake signal
+
+Execution-context-driven inheritance and ambient propagation live in the "Execution Context" section below.
 
 ## Data Contracts
 
@@ -752,13 +749,18 @@ Cron:
 - One cron tag per task is supported.
 - If `resources.cron` is not registered, cron tags remain metadata only.
 
-## Execution Context and Request Tracing
+## Execution Context
 
-> `ExecutionContext`: auto-managed bookkeeping (`correlationId`, `depth`, cycle detection). Different from `AsyncContext` (user-owned state).
+> `ExecutionContext`: auto-managed runtime bookkeeping for `correlationId`, inherited execution `signal`, and optional frame tracing. Different from `AsyncContext`, which is for user-owned business state.
 
 ```ts
-// Enable globally. Top-level runtime task/event calls now get a correlation id automatically.
-const runtime = await run(app, { executionContext: true }); // or { cycleDetection: false }
+// Full tracing mode.
+const runtime = await run(app, { executionContext: true });
+
+// Lightweight signal/correlation mode.
+const fastRuntime = await run(app, {
+  executionContext: { frames: "off", cycleDetection: false },
+});
 
 await runtime.runTask(handleRequest, input);
 await runtime.emitEvent(userSeen, payload);
@@ -767,13 +769,19 @@ await runtime.emitEvent(userSeen, payload);
 const myTask = r
   .task("myTask")
   .run(async () => {
-    const { correlationId, depth, frames } = asyncContexts.execution.use();
+    const execution = asyncContexts.execution.use();
+    const { correlationId, signal } = execution;
+
+    if (execution.framesMode === "full") {
+      execution.currentFrame.kind;
+      execution.frames;
+    }
   })
   .build();
 
-// Optional: seed your own correlation id at an external boundary
+// Optional: seed your own execution metadata at an external boundary
 await asyncContexts.execution.provide(
-  { correlationId: req.headers["x-id"] },
+  { correlationId: req.headers["x-id"], signal: controller.signal },
   () => runtime.runTask(handleRequest, input),
 );
 
@@ -783,21 +791,29 @@ const { result, recording } = await asyncContexts.execution.record(() =>
 );
 ```
 
-`executionContext: true` already creates execution context for top-level runtime task runs and event emissions. You do not need `provide()` just to enable propagation.
+Enabling `executionContext` already creates execution context for top-level runtime task runs and event emissions. You do not need `provide()` just to enable propagation.
 
-Use `provide()` when you want to seed or override the correlation id from an external boundary such as HTTP, RPC, or a queue consumer.
+Use `executionContext: { frames: "off", cycleDetection: false }` when you mainly want cheap signal inheritance and correlation ids without full frame-stack bookkeeping. Use `executionContext: true` when you also want frame tracing and runtime cycle detection.
 
-Use `record()` when you want the execution tree back for assertions, tracing, or debugging.
+Execution signal model:
 
-`asyncContexts.execution` is not the same kind of surface as `r.asyncContext(...)` or `asyncContexts.tenant`.
-It is a runtime accessor over Runner's execution-tracing store, which itself uses async-local storage under the hood.
-Use it to inspect or seed execution metadata, not to model arbitrary request-local business state.
+- pass a signal explicitly at the boundary with `runTask(..., { signal })` or `emit(..., { signal })`
+- once execution context is enabled, nested dependency calls can inherit that ambient execution signal automatically
+- the first signal attached to the execution tree becomes the ambient execution signal
+- explicit nested signals stay local to that child call and do not rewrite the ambient execution signal for deeper propagation
+
+Use `record()` when you want the execution tree back for assertions, tracing, or debugging. It temporarily promotes lightweight execution context to full frame tracking for the recorded callback.
+
+`provide()` and `record()` do not create cancellation on their own. They only seed an existing signal into the execution tree when one already exists at the boundary.
+
+`asyncContexts.execution` is not the same kind of surface as `r.asyncContext(...)`.
+Use it to inspect or seed Runner's execution metadata, not to model arbitrary request-local business state.
 
 Cycle protection comes in layers:
 
 - declared `.dependencies(...)` cycles fail during bootstrap graph validation (it is middleware-aware too)
 - declared hook-driven event bounce graphs fail during bootstrap event-emission validation
-- dynamic runtime loops such as `task -> event -> hook -> task` need `executionContext.cycleDetection` enabled to be stopped at execution time
+- dynamic runtime loops such as `task -> event -> hook -> task` need full execution-context frame tracking with `executionContext.cycleDetection` enabled to be stopped at execution time
 
 `executionContext` is Node-only in practice because it requires `AsyncLocalStorage`.
 

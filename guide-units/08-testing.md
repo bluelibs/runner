@@ -188,7 +188,7 @@ describe("User registration flow", () => {
 
 Sometimes the final assertion is not enough and you want to inspect the exact execution path for one runtime call. Enable `executionContext` and wrap the task run in `asyncContexts.execution.record(...)` to capture the full execution tree.
 
-This is useful when you want to verify that a task emitted an event, that hooks executed downstream, or that Runner followed the path you expect through nested task calls.
+This is useful when you want to verify that a task emitted an event, that hooks executed downstream, or that Runner followed the path you expect through nested task calls. If your runtime uses lightweight execution context with `frames: "off"`, `record(...)` temporarily promotes the callback to full frame tracking.
 
 ```typescript
 import { asyncContexts, run } from "@bluelibs/runner";

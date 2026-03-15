@@ -1,4 +1,5 @@
 import {
+  asyncContexts,
   defineEvent,
   defineHook,
   defineResource,
@@ -156,6 +157,39 @@ describe("Execution context signal inheritance", () => {
     await expect(
       runtime.runTask(parentTask, undefined, { signal: controller.signal }),
     ).resolves.toBeUndefined();
+    await runtime.dispose();
+  });
+
+  it('keeps signal inheritance working in lightweight "frames: off" mode', async () => {
+    const controller = new AbortController();
+    let nestedSnapshotFramesMode: "full" | "off" | undefined;
+
+    const childTask = defineTask({
+      id: "signal-inheritance-light-child-task",
+      run: async (_input, _deps, context) => {
+        nestedSnapshotFramesMode = asyncContexts.execution.use().framesMode;
+        return context?.signal;
+      },
+    });
+    const parentTask = defineTask({
+      id: "signal-inheritance-light-parent-task",
+      dependencies: { childTask },
+      run: async (_input, { childTask: runChildTask }) => runChildTask(),
+    });
+
+    const app = defineResource({
+      id: "signal-inheritance-light-app",
+      register: [childTask, parentTask],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app, {
+      executionContext: { frames: "off", cycleDetection: false },
+    });
+    await expect(
+      runtime.runTask(parentTask, undefined, { signal: controller.signal }),
+    ).resolves.toBe(controller.signal);
+    expect(nestedSnapshotFramesMode).toBe("off");
     await runtime.dispose();
   });
 

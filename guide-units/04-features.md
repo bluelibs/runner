@@ -103,6 +103,171 @@ const app = r
 
 ---
 
+## Execution Context and Signal Propagation
+
+Execution context has two jobs:
+
+- expose runtime execution metadata such as `correlationId`
+- carry the ambient execution `signal` through nested task and event dependency calls
+
+This is a runtime surface, not a business-state async context. Use `r.asyncContext(...)` for tenant, auth, locale, or request metadata you own. Use `asyncContexts.execution` when you want Runner's execution metadata and signal propagation.
+
+That second job matters now because signal propagation has two layers:
+
+- explicit call-site signal: `runTask(task, input, { signal })` or `emit(payload, { signal })`
+- ambient execution signal: when execution context is enabled, nested dependency calls can inherit the first signal already attached to the current execution tree
+
+Think of the explicit signal as the boundary input and execution context as the propagation mechanism.
+
+### Full vs Lightweight Mode
+
+Use full mode when you need tracing and cycle protection:
+
+```typescript
+const runtime = await run(app, {
+  executionContext: true,
+});
+```
+
+Use lightweight mode when you mainly want cheap signal inheritance and correlation ids:
+
+```typescript
+const runtime = await run(app, {
+  executionContext: { frames: "off", cycleDetection: false },
+});
+```
+
+Snapshot behavior:
+
+- both modes expose `correlationId`, `startedAt`, `signal`, and `framesMode`
+- `framesMode: "full"` also exposes `depth`, `currentFrame`, and `frames`
+- `framesMode: "off"` skips frame-stack bookkeeping entirely
+
+Use lightweight mode when you want the signal propagation and correlation benefits without paying for execution-tree tracing on every task or event.
+
+### How Signal Propagation Works
+
+Runner keeps the model intentionally simple:
+
+- the first signal seen in the execution tree becomes the ambient execution signal
+- omitted nested task/event dependency calls inherit that ambient signal
+- an explicit nested `signal` applies only to that direct child call or emission subtree
+- explicit nested signals do not replace the already-inherited ambient execution signal
+- if no real signal exists, `context.signal` and `event.signal` stay `undefined`
+
+This keeps cancellation cheap for normal flows and predictable for nested orchestration.
+
+### Minimal HTTP Boundary Example
+
+This is the smallest useful pattern for request-scoped cancellation:
+
+```typescript
+import express from "express";
+import type { Server } from "node:http";
+import { r, run } from "@bluelibs/runner";
+
+const getProfile = r
+  .task("getProfile")
+  .run(async ({ userId }, _deps, context) => {
+    const response = await fetch(`https://api.example.com/users/${userId}`, {
+      signal: context.signal,
+    });
+
+    return response.json();
+  })
+  .build();
+
+const httpServer = r
+  .resource<{ port: number }>("httpServer")
+  .context(() => ({ listener: null as Server | null }))
+  .dependencies({ getProfile })
+  .ready(async (_value, { port }, { getProfile }, context) => {
+    const app = express();
+
+    app.get("/profile/:userId", async (req, res) => {
+      const controller = new AbortController();
+      req.on("close", () => controller.abort("Client disconnected"));
+
+      try {
+        const profile = await getProfile(
+          { userId: req.params.userId },
+          { signal: controller.signal },
+        );
+
+        res.json(profile);
+      } catch (error) {
+        res.status(499).json({ error: String(error) });
+      }
+    });
+
+    context.listener = app.listen(port);
+  })
+  .dispose(async (_value, _config, _deps, context) => {
+    await new Promise<void>((resolve) => context.listener?.close(() => resolve()));
+  })
+  .build();
+
+const appResource = r
+  .resource("app")
+  .register([getProfile, httpServer.with({ port: 3000 })])
+  .build();
+
+await run(appResource, {
+  executionContext: { frames: "off", cycleDetection: false },
+});
+```
+
+Why this works:
+
+- the Express resource is the ingress boundary
+- the request creates one `AbortController` and passes its `signal` into the injected task call
+- `getProfile` sees that signal as `context.signal`
+- if no boundary signal is passed, `context.signal` stays `undefined`
+
+This is the common shape for routers, RPC handlers, queue consumers, and other ingress points: inject the boundary signal once, then let execution context carry it through the execution tree.
+
+### `provide()` and `record()`
+
+Use `provide()` when the external boundary already has execution metadata you want Runner to reuse:
+
+```typescript
+import { asyncContexts } from "@bluelibs/runner";
+
+await asyncContexts.execution.provide(
+  {
+    correlationId: req.headers["x-request-id"] as string,
+    signal: controller.signal,
+  },
+  () => runtime.runTask(handleRequest, input),
+);
+```
+
+Use `record()` when you want the full execution tree back for tests or debugging:
+
+```typescript
+import { asyncContexts } from "@bluelibs/runner";
+
+const { result, recording } = await asyncContexts.execution.record(() =>
+  runtime.runTask(handleRequest, input, { signal: controller.signal }),
+);
+```
+
+If the runtime uses lightweight mode, `record()` temporarily promotes the callback to full frame tracking.
+
+`provide()` and `record()` do not create cancellation on their own. They only seed an existing signal into the execution tree when you already have one at the boundary.
+
+### Cycle Protection
+
+Cycle protection still comes in layers:
+
+- declared `.dependencies(...)` cycles fail during bootstrap graph validation
+- declared hook-driven event bounce graphs fail during bootstrap event-emission validation
+- dynamic runtime loops such as `task -> event -> hook -> task` need full execution context with cycle detection enabled
+
+Lightweight mode is for propagation, not runtime loop detection.
+
+---
+
 ## Cron Scheduling
 
 Need recurring task execution without bringing in a separate scheduler process? Runner ships with a built-in global cron scheduler.

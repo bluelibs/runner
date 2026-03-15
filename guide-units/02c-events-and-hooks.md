@@ -128,13 +128,14 @@ Cancellation behavior:
 
 - `signal` is optional
 - top-level callers can pass `emit(payload, { signal })`
-- with `run(..., { executionContext: true })`, omitted nested event emissions inherit the first signal seen in the current execution tree
-- explicit nested `signal` applies to that emission subtree and does not replace the already-inherited ambient signal for deeper automatic propagation
+- with execution context enabled, nested task and event dependency calls can inherit the ambient execution signal automatically
 - sequential events stop admitting new listeners once cancelled
 - parallel events let the current batch settle, then stop before the next batch
 - transactional events roll back already-completed listeners before the cancellation escapes
 
 `event.signal` stays `undefined` until a real source is explicitly provided or inherited from the current execution. Internal framework code can call `eventManager.emit(event, payload, { source, signal })` when it needs explicit source control.
+
+For the full propagation model, including lightweight execution context, see [Execution Context and Signal Propagation](#execution-context-and-signal-propagation).
 
 Low-level note:
 

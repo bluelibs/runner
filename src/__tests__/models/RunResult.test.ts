@@ -751,6 +751,7 @@ describe("RunResult", () => {
       dryRun: true,
       executionContext: {
         createCorrelationId: expect.any(Function),
+        frames: "full",
         cycleDetection: {
           maxDepth: 10,
           maxRepetitions: 2,

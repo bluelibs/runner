@@ -1,5 +1,6 @@
 import {
   createMessageError,
+  contextError,
   executionCycleError,
   executionDepthExceededError,
 } from "../errors";
@@ -9,6 +10,7 @@ import type {
   ExecutionRecordNode,
   ExecutionRecordResult,
   ExecutionRecordSnapshot,
+  ExecutionContextFramesMode,
   ExecutionContextSnapshot,
   ExecutionContextConfig,
   CycleDetectionConfig,
@@ -42,9 +44,10 @@ type ActiveExecutionContext = {
   readonly correlationId: string;
   readonly startedAt: number;
   readonly signal?: AbortSignal;
+  readonly framesMode: ExecutionContextFramesMode;
   readonly frameNode: ActiveFrameNode | undefined;
   readonly depth: number;
-  readonly frameCounts: ReadonlyMap<string, number>;
+  readonly frameCounts?: ReadonlyMap<string, number>;
   readonly frameNodeId?: string;
   readonly recording?: ActiveExecutionRecording;
 };
@@ -70,7 +73,19 @@ function getSharedExecutionContextStore(): IAsyncLocalStorage<ActiveExecutionCon
 function toSnapshot(
   value: ActiveExecutionContext | null | undefined,
 ): ExecutionContextSnapshot | undefined {
-  if (!value || !value.frameNode) return undefined;
+  if (!value || value.depth === 0) return undefined;
+
+  if (value.framesMode === "off") {
+    return {
+      correlationId: value.correlationId,
+      startedAt: value.startedAt,
+      signal: value.signal,
+      framesMode: "off",
+    };
+  }
+
+  /* istanbul ignore next -- full mode with positive depth but no frame node is impossible unless internal state is manually corrupted */
+  if (!value.frameNode) return undefined;
 
   const frames = new Array<ExecutionFrame>(value.depth);
   let currentNode: ActiveFrameNode | undefined = value.frameNode;
@@ -83,6 +98,7 @@ function toSnapshot(
     correlationId: value.correlationId,
     startedAt: value.startedAt,
     signal: value.signal,
+    framesMode: "full",
     frames,
     depth: value.depth,
     currentFrame: value.frameNode.frame,
@@ -108,6 +124,7 @@ export function getCurrentExecutionContext():
 
 function createProvidedContext(
   current: ActiveExecutionContext | null | undefined,
+  defaultFramesMode: ExecutionContextFramesMode,
   options?: ExecutionContextProvideOptions,
 ): ActiveExecutionContext {
   return {
@@ -116,12 +133,41 @@ function createProvidedContext(
       options?.correlationId ??
       createFallbackCorrelationId(),
     startedAt: current?.startedAt ?? Date.now(),
-    signal: current?.signal,
+    signal: current?.signal ?? options?.signal,
+    framesMode: current?.framesMode ?? defaultFramesMode,
     frameNode: current?.frameNode,
     depth: current?.depth ?? 0,
-    frameCounts: current?.frameCounts ?? new Map(),
+    frameCounts:
+      current?.frameCounts ??
+      (current?.framesMode === "off" || defaultFramesMode === "off"
+        ? undefined
+        : new Map()),
     frameNodeId: current?.frameNodeId,
     recording: current?.recording,
+  };
+}
+
+function promoteContextForRecording(
+  current: ActiveExecutionContext,
+  recording: ActiveExecutionRecording,
+): ActiveExecutionContext {
+  if (current.recording) {
+    return {
+      ...current,
+      recording,
+    };
+  }
+
+  return {
+    correlationId: current.correlationId,
+    startedAt: current.startedAt,
+    signal: current.signal,
+    framesMode: "full",
+    frameNode: undefined,
+    depth: 0,
+    frameCounts: new Map(),
+    frameNodeId: undefined,
+    recording,
   };
 }
 
@@ -216,10 +262,16 @@ export function provideExecutionContext<T>(
 ): T {
   const store = getSharedExecutionContextStore();
   if (!store) {
-    return fn();
+    contextError.throw({
+      details:
+        "Execution context propagation requires AsyncLocalStorage and is not available in this environment.",
+    });
   }
 
-  return store.run(createProvidedContext(store.getStore(), options), fn);
+  return store.run(
+    createProvidedContext(store.getStore(), "full", options),
+    fn,
+  );
 }
 
 export async function recordExecutionContext<T>(
@@ -228,21 +280,26 @@ export async function recordExecutionContext<T>(
 ): Promise<ExecutionRecordResult<Awaited<T>>> {
   const store = getSharedExecutionContextStore();
   if (!store) {
-    return {
-      result: (await fn()) as Awaited<T>,
-      recording: undefined,
-    };
+    contextError.throw({
+      details:
+        "Execution context propagation requires AsyncLocalStorage and is not available in this environment.",
+    });
   }
 
-  const baseContext = createProvidedContext(store.getStore(), options);
+  const currentContext = store.getStore();
+  const baseContext = createProvidedContext(currentContext, "full", options);
   const recording =
     baseContext.recording ??
     createExecutionRecording(baseContext.correlationId, baseContext.startedAt);
   const result = await store.run(
-    {
-      ...baseContext,
-      recording,
-    },
+    currentContext
+      ? promoteContextForRecording(baseContext, recording)
+      : {
+          ...baseContext,
+          recording,
+          framesMode: "full",
+          frameCounts: new Map(),
+        },
     fn,
   );
 
@@ -265,6 +322,7 @@ export class ExecutionContextStore {
   private isEnabledValue = false;
   private isCycleDetectionEnabledValue = false;
   private createCorrelationIdValue: () => string = createFallbackCorrelationId;
+  private framesModeValue: ExecutionContextFramesMode = "full";
   private cycleDetectionValue: CycleDetectionConfig | null = null;
 
   constructor(config: ExecutionContextConfig | CycleDetectionConfig | null) {
@@ -285,9 +343,11 @@ export class ExecutionContextStore {
     if (config && getSharedExecutionContextStore()) {
       if ("createCorrelationId" in config) {
         this.createCorrelationIdValue = config.createCorrelationId;
+        this.framesModeValue = config.frames;
         this.cycleDetectionValue = config.cycleDetection;
       } else {
         this.createCorrelationIdValue = createFallbackCorrelationId;
+        this.framesModeValue = "full";
         this.cycleDetectionValue = {
           maxDepth: config.maxDepth,
           maxRepetitions: config.maxRepetitions,
@@ -297,6 +357,7 @@ export class ExecutionContextStore {
       this.isCycleDetectionEnabledValue = this.cycleDetectionValue !== null;
     } else {
       this.createCorrelationIdValue = createFallbackCorrelationId;
+      this.framesModeValue = "full";
       this.cycleDetectionValue = null;
       this.isEnabledValue = false;
       this.isCycleDetectionEnabledValue = false;
@@ -318,11 +379,14 @@ export class ExecutionContextStore {
     }
 
     const currentContext = store.getStore();
+    const framesMode = currentContext?.framesMode ?? this.framesModeValue;
     const currentDepth = currentContext?.depth ?? 0;
     const currentRepetitions =
-      currentContext?.frameCounts.get(getFrameKey(frame)) ?? 0;
+      framesMode === "full"
+        ? (currentContext?.frameCounts?.get(getFrameKey(frame)) ?? 0)
+        : 0;
 
-    if (this.cycleDetectionValue) {
+    if (framesMode === "full" && this.cycleDetectionValue) {
       this.assertDepthLimit(currentDepth, frame);
       this.assertNoExcessiveRepetition(
         currentRepetitions,
@@ -345,33 +409,44 @@ export class ExecutionContextStore {
       }
       frameNodeId = node.id;
     }
-    const nextFrameCounts = new Map(currentContext?.frameCounts);
-    nextFrameCounts.set(getFrameKey(frame), currentRepetitions + 1);
+    const nextFrameCounts =
+      framesMode === "full" ? new Map(currentContext?.frameCounts) : undefined;
+    if (framesMode === "full") {
+      nextFrameCounts!.set(getFrameKey(frame), currentRepetitions + 1);
+    }
     const nextContext = currentContext
       ? {
           correlationId: currentContext.correlationId,
           startedAt: currentContext.startedAt,
           signal: currentContext.signal ?? options?.signal,
-          frameNode: {
-            frame,
-            parent: currentContext.frameNode,
-          },
+          framesMode,
+          frameNode:
+            framesMode === "full"
+              ? {
+                  frame,
+                  parent: currentContext.frameNode,
+                }
+              : undefined,
           depth: currentDepth + 1,
           frameCounts: nextFrameCounts,
-          frameNodeId,
+          frameNodeId: framesMode === "full" ? frameNodeId : undefined,
           recording: currentRecording,
         }
       : {
           correlationId: this.createCorrelationIdValue(),
           startedAt: frame.timestamp,
           signal: options?.signal,
-          frameNode: {
-            frame,
-            parent: undefined,
-          },
+          framesMode,
+          frameNode:
+            framesMode === "full"
+              ? {
+                  frame,
+                  parent: undefined,
+                }
+              : undefined,
           depth: 1,
           frameCounts: nextFrameCounts,
-          frameNodeId: undefined,
+          frameNodeId: framesMode === "full" ? undefined : undefined,
           recording: undefined,
         };
 
@@ -460,7 +535,7 @@ export class ExecutionContextStore {
       return signal;
     }
 
-    return getCurrentExecutionContext()?.signal;
+    return getSharedExecutionContextStore()?.getStore()?.signal;
   }
 
   /**
@@ -494,11 +569,18 @@ export class ExecutionContextStore {
       this.cycleDetectionValue &&
       nextRepetitions >= this.cycleDetectionValue.maxRepetitions
     ) {
+      const traceSnapshot = toSnapshot(currentContext);
+      /* istanbul ignore next -- cycle detection only runs with full frame tracking */
+      if (!traceSnapshot || traceSnapshot.framesMode !== "full") {
+        throw createMessageError(
+          "Execution cycle detection requires full frame tracking.",
+        );
+      }
       executionCycleError.throw({
         frame,
         repetitions: nextRepetitions,
         maxRepetitions: this.cycleDetectionValue.maxRepetitions,
-        trace: toSnapshot(currentContext)!.frames,
+        trace: traceSnapshot.frames,
       });
     }
   }

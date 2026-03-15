@@ -6,6 +6,7 @@ import type { ExecutionContextStore } from "../../models/ExecutionContextStore";
 
 const executionContextConfigPattern = Match.ObjectIncluding({
   createCorrelationId: Match.Optional(Function),
+  frames: Match.Optional(Match.OneOf("full", "off")),
   cycleDetection: Match.Optional(
     Match.OneOf(
       false,

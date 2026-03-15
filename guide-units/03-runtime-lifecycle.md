@@ -98,7 +98,7 @@ Pass as the second argument to `run(app, options)`.
 | `dryRun`           | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                                                               |
 | `lazy`             | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `lifecycleMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred.                             |
 | `lifecycleMode`    | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup/disposal scheduling strategy. Use string values directly (for example `lifecycleMode: "parallel"`), no enum import required.                                                                                                                                                                                                                                                                                                                                                            |
-| `executionContext` | `boolean \| ExecutionContextOptions`            | (default: disabled) Opt-in execution context that exposes `asyncContexts.execution`, assigns a correlation id to each top-level task/event execution, and enables cycle detection by default. `true` uses defaults. Pass an object to customize: `{ createCorrelationId?: () => string, cycleDetection?: false \| { maxDepth?: number, maxRepetitions?: number } }`. Distinct runtime hook instances are tracked independently by runtime path. Requires AsyncLocalStorage (Node-only); silently disabled on platforms without it. |
+| `executionContext` | `boolean \| ExecutionContextOptions`            | (default: disabled) Opt-in execution context that exposes `asyncContexts.execution`, assigns a correlation id to each top-level task/event execution, and powers inherited execution signals. `true` uses full tracing defaults. Pass an object to customize: `{ createCorrelationId?: () => string, frames?: "full" \| "off", cycleDetection?: false \| { maxDepth?: number, maxRepetitions?: number } }`. Use `frames: "off"` together with `cycleDetection: false` for lightweight signal/correlation propagation. Requires AsyncLocalStorage (Node-only); silently disabled on platforms without it. |
 | `mode`             | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).
@@ -106,76 +106,35 @@ For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resou
 ### Execution Context
 
 When enabled, Runner exposes the current execution state via `asyncContexts.execution`.
-Treat that surface as a runtime tracing accessor, not as a peer of user-defined async context contracts created with `r.asyncContext(...)`.
+Treat that surface as a runtime-owned accessor for correlation ids, inherited execution signals, and optional frame tracing. Use `r.asyncContext(...)` for business state; use `asyncContexts.execution` for runtime execution metadata.
 
 ```typescript
 import { asyncContexts, run } from "@bluelibs/runner";
 
 const runtime = await run(app, {
-  executionContext: true,
+  executionContext: { frames: "off", cycleDetection: false },
 });
 
-await runtime.runTask(myTask, input);
-await runtime.emitEvent(myEvent, payload);
-
-// Inside a task, hook, or interceptor:
 const executionContext = asyncContexts.execution.use();
 executionContext.correlationId;
-executionContext.currentFrame.kind;
-executionContext.frames;
+executionContext.signal;
 ```
 
-With `executionContext: true`, Runner automatically creates execution context for top-level runtime task runs and event emissions. You do not need `provide()` just to turn propagation on.
+When `executionContext` is enabled, Runner automatically creates execution context for top-level runtime task runs and event emissions. You do not need `provide()` just to turn propagation on.
 
 `use()` fails fast when no execution is active. Use `asyncContexts.execution.tryUse()` when the context is optional.
 
-`asyncContexts.execution` is backed by Runner's `ExecutionContextStore`, which uses async-local storage internally.
-It exists to expose causal-chain metadata such as correlation ids and frames, not to carry arbitrary application state.
+Use `executionContext: true` for full tracing, or `executionContext: { frames: "off", cycleDetection: false }` for the lightweight signal/correlation mode.
 
-The snapshot shape is:
+Use `provide()` only when you want to seed execution metadata from an external boundary such as a correlation id or an existing `AbortSignal`.
+Use `record()` when you want the execution tree back.
 
-```typescript
-{
-  correlationId: string;
-  startedAt: number;
-  depth: number;
-  currentFrame: ExecutionFrame;
-  frames: readonly ExecutionFrame[];
-}
-```
+The important signal split is:
 
-Execution context is branch-local:
+- pass a signal explicitly at the boundary with `runTask(..., { signal })` or `emitEvent(..., { signal })`
+- once execution context is enabled, nested injected task and event calls can inherit that ambient execution signal automatically
 
-- Nested task calls, event emissions, and hook executions append frames to the same causal chain.
-- Multiple hooks listening to the same event share the same `correlationId`, but each hook sees its own `currentFrame`.
-- Parallel child tasks inherit the parent frames and correlation id, then append their own child frame. Sibling branches are not merged into one shared timeline.
-
-Use `executionContext: { cycleDetection: false }` if you only want correlation ids and causal-chain access without repetition/depth guards.
-
-Use `provide()` only when you want to seed or override the correlation id from an external boundary. Use `record()` when you want the execution tree back.
-
-```typescript
-await asyncContexts.execution.provide(
-  { correlationId: "req-123" },
-  async () => {
-    await runtime.runTask(myTask, input);
-  },
-);
-
-const taskResult = await asyncContexts.execution.record(
-  { correlationId: "req-123" },
-  () => runtime.runTask(myTask, input),
-);
-taskResult.result;
-taskResult.recording?.roots[0]?.frame;
-
-const eventResult = await asyncContexts.execution.record(
-  { correlationId: "req-456" },
-  () => runtime.emitEvent(myEvent, payload, { report: true }),
-);
-eventResult.result.attemptedListeners;
-eventResult.recording?.roots;
-```
+See [Execution Context and Signal Propagation](#execution-context-and-signal-propagation) in Advanced Features for the full snapshot shapes, propagation rules, `provide()` / `record()` patterns, and a minimal HTTP request example.
 
 ```typescript
 const result = await run(app, { dryRun: true });

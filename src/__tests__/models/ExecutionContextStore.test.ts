@@ -1,5 +1,6 @@
 import {
   ExecutionContextStore,
+  provideExecutionContext,
   recordExecutionContext,
 } from "../../models/ExecutionContextStore";
 import {
@@ -61,14 +62,22 @@ describe("ExecutionContextStore", () => {
       const disabled = new ExecutionContextStore(null);
 
       enabled.runWithFrame(makeFrame("task", "outer"), () => {
-        expect(enabled.getSnapshot()?.currentFrame.id).toBe("outer");
+        const outerSnapshot = enabled.getSnapshot();
+        if (!outerSnapshot || outerSnapshot.framesMode !== "full") {
+          throw new Error("Expected full execution-context snapshot.");
+        }
+        expect(outerSnapshot.currentFrame.id).toBe("outer");
 
         disabled.runWithFrame(makeFrame("task", "inner"), () => {
           expect(enabled.getSnapshot()).toBeUndefined();
           expect(disabled.getSnapshot()).toBeUndefined();
         });
 
-        expect(enabled.getSnapshot()?.currentFrame.id).toBe("outer");
+        const restoredSnapshot = enabled.getSnapshot();
+        if (!restoredSnapshot || restoredSnapshot.framesMode !== "full") {
+          throw new Error("Expected full execution-context snapshot.");
+        }
+        expect(restoredSnapshot.currentFrame.id).toBe("outer");
       });
     });
   });
@@ -95,9 +104,13 @@ describe("ExecutionContextStore", () => {
       ctx.runWithFrame(makeFrame("task", "t1"), () => {
         const snapshot = ctx.getSnapshot();
         expect(snapshot).toBeDefined();
-        expect(snapshot!.depth).toBe(1);
-        expect(snapshot!.frames[0].kind).toBe("task");
-        expect(snapshot!.frames[0].id).toBe("t1");
+        expect(snapshot?.framesMode).toBe("full");
+        if (snapshot?.framesMode !== "full") {
+          throw new Error("Expected full execution-context snapshot.");
+        }
+        expect(snapshot.depth).toBe(1);
+        expect(snapshot.frames[0].kind).toBe("task");
+        expect(snapshot.frames[0].id).toBe("t1");
       });
     });
 
@@ -109,6 +122,9 @@ describe("ExecutionContextStore", () => {
         ctx.runWithFrame(makeFrame("event", "e1"), () => {
           ctx.runWithFrame(makeFrame("hook", "h1"), () => {
             const snapshot = ctx.getSnapshot()!;
+            if (snapshot.framesMode !== "full") {
+              throw new Error("Expected full execution-context snapshot.");
+            }
             expect(snapshot.depth).toBe(3);
             expect(snapshot.frames.map((f) => f.kind)).toEqual([
               "task",
@@ -144,7 +160,7 @@ describe("ExecutionContextStore", () => {
       });
 
       ctx.runWithFrame(makeFrame("task", "t1"), () => {
-        expect(ctx.getSnapshot()!.correlationId).toMatch(/^exec-/);
+        expect(ctx.getSnapshot()?.correlationId).toMatch(/^exec-/);
       });
 
       Object.defineProperty(globalThis, "crypto", {
@@ -169,6 +185,76 @@ describe("ExecutionContextStore", () => {
       expect(outer.recording?.correlationId).toBe("outer-correlation");
       expect(outer.recording?.roots[0]?.frame.id).toBe("t1");
       expect(outer.result.recording?.correlationId).toBe("outer-correlation");
+    });
+
+    it("seeds the first inherited signal through provideExecutionContext", () => {
+      const controller = new AbortController();
+      const ctx = new ExecutionContextStore(
+        EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
+      );
+
+      provideExecutionContext({ signal: controller.signal }, () => {
+        ctx.runWithFrame(makeFrame("task", "t1"), () => {
+          expect(ctx.getSnapshot()?.signal).toBe(controller.signal);
+        });
+      });
+    });
+
+    it("preserves the outer inherited signal for nested provideExecutionContext calls", () => {
+      const outerController = new AbortController();
+      const innerController = new AbortController();
+      const ctx = new ExecutionContextStore(
+        EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
+      );
+
+      provideExecutionContext({ signal: outerController.signal }, () => {
+        provideExecutionContext({ signal: innerController.signal }, () => {
+          ctx.runWithFrame(makeFrame("task", "t1"), () => {
+            expect(ctx.getSnapshot()?.signal).toBe(outerController.signal);
+          });
+        });
+      });
+    });
+
+    it("seeds the first inherited signal through recordExecutionContext", async () => {
+      const controller = new AbortController();
+      const ctx = new ExecutionContextStore(
+        EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
+      );
+
+      const output = await recordExecutionContext(
+        { correlationId: "record-signal", signal: controller.signal },
+        () =>
+          ctx.runWithFrame(
+            makeFrame("task", "t1"),
+            () => ctx.getSnapshot()?.signal,
+          ),
+      );
+
+      expect(output.result).toBe(controller.signal);
+      expect(output.recording?.correlationId).toBe("record-signal");
+    });
+
+    it("preserves the outer inherited signal for nested recordExecutionContext calls", async () => {
+      const outerController = new AbortController();
+      const innerController = new AbortController();
+      const ctx = new ExecutionContextStore(
+        EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
+      );
+
+      const output = await recordExecutionContext(
+        { signal: outerController.signal },
+        () =>
+          recordExecutionContext({ signal: innerController.signal }, () =>
+            ctx.runWithFrame(
+              makeFrame("task", "t1"),
+              () => ctx.getSnapshot()?.signal,
+            ),
+          ),
+      );
+
+      expect(output.result.result).toBe(outerController.signal);
+      expect(output.recording?.roots[0]?.frame.id).toBe("t1");
     });
 
     it("records failed status for synchronous throws inside a recording", async () => {
@@ -213,7 +299,11 @@ describe("ExecutionContextStore", () => {
         ctx.runWithFrame(makeFrame("event", "e1"), () => {
           ctx.runWithFrame(makeFrame("hook", "h1"), () => {
             // 3 frames exactly — should work
-            expect(ctx.getSnapshot()!.depth).toBe(3);
+            const snapshot = ctx.getSnapshot();
+            if (!snapshot || snapshot.framesMode !== "full") {
+              throw new Error("Expected full execution-context snapshot.");
+            }
+            expect(snapshot.depth).toBe(3);
           });
         });
       });
@@ -245,7 +335,11 @@ describe("ExecutionContextStore", () => {
         ctx.runWithFrame(makeFrame("hook", "h1"), () => {
           ctx.runWithFrame(makeFrame("event", "e1"), () => {
             // 2 appearances with maxRepetitions=4 — allowed
-            expect(ctx.getSnapshot()!.depth).toBe(3);
+            const snapshot = ctx.getSnapshot();
+            if (!snapshot || snapshot.framesMode !== "full") {
+              throw new Error("Expected full execution-context snapshot.");
+            }
+            expect(snapshot.depth).toBe(3);
           });
         });
       });
@@ -260,7 +354,11 @@ describe("ExecutionContextStore", () => {
         ctx.runWithFrame(makeFrame("event", "shared-id"), () => {
           ctx.runWithFrame(makeFrame("hook", "shared-id"), () => {
             // Same id but different kinds — no cycle
-            expect(ctx.getSnapshot()!.depth).toBe(3);
+            const snapshot = ctx.getSnapshot();
+            if (!snapshot || snapshot.framesMode !== "full") {
+              throw new Error("Expected full execution-context snapshot.");
+            }
+            expect(snapshot.depth).toBe(3);
           });
         });
       });
@@ -306,13 +404,80 @@ describe("ExecutionContextStore", () => {
     });
   });
 
+  describe('light mode ("frames: off")', () => {
+    it("exposes a lightweight snapshot without frame fields", () => {
+      const ctx = new ExecutionContextStore({
+        createCorrelationId: () => "light-id",
+        frames: "off",
+        cycleDetection: null,
+      });
+      const controller = new AbortController();
+
+      ctx.runWithFrame(
+        makeFrame("task", "t1"),
+        () => {
+          const snapshot = ctx.getSnapshot();
+          expect(snapshot).toEqual({
+            correlationId: "light-id",
+            startedAt: expect.any(Number),
+            signal: controller.signal,
+            framesMode: "off",
+          });
+          expect(snapshot).not.toHaveProperty("frames");
+          expect(snapshot).not.toHaveProperty("depth");
+          expect(snapshot).not.toHaveProperty("currentFrame");
+        },
+        { signal: controller.signal },
+      );
+    });
+
+    it("keeps signal inheritance working without frame tracking", () => {
+      const ctx = new ExecutionContextStore({
+        createCorrelationId: () => "light-id",
+        frames: "off",
+        cycleDetection: null,
+      });
+      const controller = new AbortController();
+
+      ctx.runWithFrame(
+        makeFrame("task", "outer"),
+        () => {
+          expect(ctx.resolveSignal(undefined)).toBe(controller.signal);
+        },
+        { signal: controller.signal },
+      );
+    });
+
+    it("record promotes lightweight execution context to a full recording", async () => {
+      const ctx = new ExecutionContextStore({
+        createCorrelationId: () => "light-id",
+        frames: "off",
+        cycleDetection: null,
+      });
+
+      const output = await ctx.runWithFrame(makeFrame("task", "outer"), () =>
+        recordExecutionContext(undefined, () =>
+          ctx.runWithFrame(makeFrame("task", "recorded"), () => "ok"),
+        ),
+      );
+
+      expect(output.result).toBe("ok");
+      expect(output.recording?.correlationId).toBe("light-id");
+      expect(output.recording?.roots[0]?.frame.id).toBe("recorded");
+    });
+  });
+
   describe("isolation between runs", () => {
     it("execution context is empty after runWithFrame completes", () => {
       const ctx = new ExecutionContextStore(
         EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
       );
       ctx.runWithFrame(makeFrame("task", "t1"), () => {
-        expect(ctx.getSnapshot()!.depth).toBe(1);
+        const snapshot = ctx.getSnapshot();
+        if (!snapshot || snapshot.framesMode !== "full") {
+          throw new Error("Expected full execution-context snapshot.");
+        }
+        expect(snapshot.depth).toBe(1);
       });
       // Outside the frame — should be undefined
       expect(ctx.getSnapshot()).toBeUndefined();

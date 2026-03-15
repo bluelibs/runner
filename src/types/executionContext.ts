@@ -6,6 +6,11 @@ import type { RuntimeCallSource } from "./runtimeSource";
 export type ExecutionFrameKind = "task" | "event" | "hook";
 
 /**
+ * Frame tracking mode for the built-in execution context.
+ */
+export type ExecutionContextFramesMode = "full" | "off";
+
+/**
  * One step in the current causal execution chain.
  */
 export interface ExecutionFrame {
@@ -21,16 +26,22 @@ export interface ExecutionFrame {
   readonly timestamp: number;
 }
 
-/**
- * Snapshot of the currently active execution context.
- */
-export interface ExecutionContextSnapshot {
+interface ExecutionContextSnapshotBase {
   /** Correlation id shared across the current execution tree. */
   readonly correlationId: string;
   /** Epoch timestamp for the top-level execution start. */
   readonly startedAt: number;
   /** First inherited signal for the active execution tree when one exists. */
   readonly signal?: AbortSignal;
+  /** Whether frame tracking is enabled for the active execution tree. */
+  readonly framesMode: ExecutionContextFramesMode;
+}
+
+/**
+ * Full execution-context snapshot with tracked causal frames.
+ */
+export interface FullExecutionContextSnapshot extends ExecutionContextSnapshotBase {
+  readonly framesMode: "full";
   /** Ordered stack of execution frames from root to current frame. */
   readonly frames: readonly ExecutionFrame[];
   /** Current nesting depth within the execution tree. */
@@ -40,11 +51,27 @@ export interface ExecutionContextSnapshot {
 }
 
 /**
+ * Lightweight execution-context snapshot for signal/correlation propagation.
+ */
+export interface LightExecutionContextSnapshot extends ExecutionContextSnapshotBase {
+  readonly framesMode: "off";
+}
+
+/**
+ * Snapshot of the currently active execution context.
+ */
+export type ExecutionContextSnapshot =
+  | FullExecutionContextSnapshot
+  | LightExecutionContextSnapshot;
+
+/**
  * Optional overrides when manually creating or recording an execution context.
  */
 export interface ExecutionContextProvideOptions {
   /** Overrides the generated correlation id for this execution root. */
   readonly correlationId?: string;
+  /** Seeds the first inherited signal for this execution root when one exists. */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -118,6 +145,8 @@ export interface CycleDetectionOptions {
 export interface ExecutionContextOptions {
   /** Custom correlation id factory for new top-level executions. */
   createCorrelationId?: () => string;
+  /** Controls whether full frame stacks are tracked or skipped. */
+  frames?: ExecutionContextFramesMode;
   /** Enables cycle detection or customizes its thresholds. */
   cycleDetection?: boolean | CycleDetectionOptions;
 }
@@ -129,6 +158,8 @@ export interface ExecutionContextOptions {
 export interface ExecutionContextConfig {
   /** Normalized correlation id factory used by the runtime. */
   readonly createCorrelationId: () => string;
+  /** Normalized frame-tracking mode used by the runtime. */
+  readonly frames: ExecutionContextFramesMode;
   /** Normalized cycle-detection config, or `null` when disabled. */
   readonly cycleDetection: CycleDetectionConfig | null;
 }

@@ -40,6 +40,7 @@ export function createSyntheticFrameworkRoot({
     runnerRegister.push(
       globalResources.executionContext.with({
         createCorrelationId: executionContext.createCorrelationId,
+        frames: executionContext.frames,
         cycleDetection: executionContext.cycleDetection ?? false,
       }),
     );

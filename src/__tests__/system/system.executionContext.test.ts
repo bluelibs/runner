@@ -24,8 +24,9 @@ describe("asyncContexts.execution", () => {
   });
 
   it("provide returns the callback result even when no frames are entered", () => {
+    const controller = new AbortController();
     const result = asyncContexts.execution.provide(
-      { correlationId: "req-seeded" },
+      { correlationId: "req-seeded", signal: controller.signal },
       () => {
         expect(asyncContexts.execution.has()).toBe(false);
         return "ok";
@@ -36,8 +37,9 @@ describe("asyncContexts.execution", () => {
   });
 
   it("record returns the callback result and no recording without frames", async () => {
+    const controller = new AbortController();
     const result = await asyncContexts.execution.record(
-      { correlationId: "req-capture-empty" },
+      { correlationId: "req-capture-empty", signal: controller.signal },
       async () => "ok",
     );
 
@@ -102,15 +104,28 @@ describe("asyncContexts.execution", () => {
     }
   });
 
-  it("provide and record still return callback results without async local storage", async () => {
+  it("fails fast for provide and record without async local storage", async () => {
     setPlatform(new PlatformAdapter("universal"));
+    const controller = new AbortController();
 
-    expect(asyncContexts.execution.provide(() => "provided")).toBe("provided");
+    expect(() =>
+      asyncContexts.execution.provide(
+        { signal: controller.signal },
+        () => "provided",
+      ),
+    ).toThrow(/Execution context propagation requires AsyncLocalStorage/i);
+
+    try {
+      asyncContexts.execution.provide({ signal: controller.signal }, () => "provided");
+    } catch (error) {
+      expect(contextError.is(error)).toBe(true);
+    }
+
     await expect(
-      asyncContexts.execution.record(async () => "captured"),
-    ).resolves.toEqual({
-      result: "captured",
-      recording: undefined,
-    });
+      asyncContexts.execution.record(
+        { signal: controller.signal },
+        async () => "captured",
+      ),
+    ).rejects.toThrow(/Execution context propagation requires AsyncLocalStorage/i);
   });
 });
