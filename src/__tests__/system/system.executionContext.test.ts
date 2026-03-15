@@ -116,7 +116,10 @@ describe("asyncContexts.execution", () => {
     ).toThrow(/Execution context propagation requires AsyncLocalStorage/i);
 
     try {
-      asyncContexts.execution.provide({ signal: controller.signal }, () => "provided");
+      asyncContexts.execution.provide(
+        { signal: controller.signal },
+        () => "provided",
+      );
     } catch (error) {
       expect(contextError.is(error)).toBe(true);
     }
@@ -126,6 +129,8 @@ describe("asyncContexts.execution", () => {
         { signal: controller.signal },
         async () => "captured",
       ),
-    ).rejects.toThrow(/Execution context propagation requires AsyncLocalStorage/i);
+    ).rejects.toThrow(
+      /Execution context propagation requires AsyncLocalStorage/i,
+    );
   });
 });

@@ -260,16 +260,16 @@ export function provideExecutionContext<T>(
   options: ExecutionContextProvideOptions | undefined,
   fn: () => T,
 ): T {
-  const store = getSharedExecutionContextStore();
-  if (!store) {
-    contextError.throw({
+  const executionStore = getSharedExecutionContextStore();
+  if (!executionStore) {
+    throw contextError.new({
       details:
         "Execution context propagation requires AsyncLocalStorage and is not available in this environment.",
     });
   }
 
-  return store.run(
-    createProvidedContext(store.getStore(), "full", options),
+  return executionStore.run(
+    createProvidedContext(executionStore.getStore(), "full", options),
     fn,
   );
 }
@@ -278,20 +278,20 @@ export async function recordExecutionContext<T>(
   options: ExecutionContextProvideOptions | undefined,
   fn: () => T,
 ): Promise<ExecutionRecordResult<Awaited<T>>> {
-  const store = getSharedExecutionContextStore();
-  if (!store) {
-    contextError.throw({
+  const executionStore = getSharedExecutionContextStore();
+  if (!executionStore) {
+    throw contextError.new({
       details:
         "Execution context propagation requires AsyncLocalStorage and is not available in this environment.",
     });
   }
 
-  const currentContext = store.getStore();
+  const currentContext = executionStore.getStore();
   const baseContext = createProvidedContext(currentContext, "full", options);
   const recording =
     baseContext.recording ??
     createExecutionRecording(baseContext.correlationId, baseContext.startedAt);
-  const result = await store.run(
+  const result = await executionStore.run(
     currentContext
       ? promoteContextForRecording(baseContext, recording)
       : {
