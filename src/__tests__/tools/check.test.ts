@@ -329,6 +329,63 @@ describe("tools/check", () => {
     );
   });
 
+  it("supports Match.Range with inclusive and exclusive bounds", () => {
+    expect(() =>
+      checkRuntime(1, Match.Range({ min: 1, max: 10 })),
+    ).not.toThrow();
+    expect(() =>
+      checkRuntime(10, Match.Range({ min: 1, max: 10 })),
+    ).not.toThrow();
+    expect(() =>
+      checkRuntime(5, Match.Range({ min: 1, max: 10 })),
+    ).not.toThrow();
+    expect(() =>
+      checkRuntime(5, Match.Range({ min: 1, max: 10, inclusive: false })),
+    ).not.toThrow();
+    expect(() => checkRuntime(2, Match.Range({ min: 1 }))).not.toThrow();
+    expect(() => checkRuntime(2, Match.Range({ max: 3 }))).not.toThrow();
+
+    expectMatchFailure(() => checkRuntime(0, Match.Range({ min: 1, max: 10 })));
+    expectMatchFailure(() =>
+      checkRuntime(1, Match.Range({ min: 1, max: 10, inclusive: false })),
+    );
+    expectMatchFailure(() =>
+      checkRuntime(10, Match.Range({ min: 1, max: 10, inclusive: false })),
+    );
+    expectMatchFailure(() =>
+      checkRuntime(1, Match.Range({ min: 1, inclusive: false })),
+    );
+    expectMatchFailure(() => checkRuntime(4, Match.Range({ max: 3 })));
+    expectMatchFailure(() =>
+      checkRuntime(3, Match.Range({ max: 3, inclusive: false })),
+    );
+    expectMatchFailure(() =>
+      checkRuntime(Number.POSITIVE_INFINITY, Match.Range({ min: 1 })),
+    );
+    expectMatchFailure(() => checkRuntime("5", Match.Range({ min: 1 })));
+  });
+
+  it("fails fast on invalid Match.Range pattern configs", () => {
+    expect(() => Match.Range({})).toThrow(
+      "Bad pattern: Match.Range requires at least one of min or max.",
+    );
+    expect(() => Match.Range({ min: Number.NaN })).toThrow(
+      "Bad pattern: Match.Range min must be a finite number.",
+    );
+    expect(() => Match.Range({ max: Number.POSITIVE_INFINITY })).toThrow(
+      "Bad pattern: Match.Range max must be a finite number.",
+    );
+    expect(() => Match.Range({ min: 2, max: 1 })).toThrow(
+      "Bad pattern: Match.Range min cannot be greater than max.",
+    );
+    expect(() => Match.Range([] as never)).toThrow(
+      "Bad pattern: Match.Range requires a plain object options bag.",
+    );
+    expect(() => Match.Range({ min: 1, inclusive: "yes" as never })).toThrow(
+      "Bad pattern: Match.Range inclusive must be a boolean when provided.",
+    );
+  });
+
   it("passes parent to Match.Where and Match.WithMessage where applicable", () => {
     const seenParents: unknown[] = [];
 

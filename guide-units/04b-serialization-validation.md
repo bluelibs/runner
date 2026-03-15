@@ -250,7 +250,47 @@ const parsed = check(
   userInputSchema,
 );
 parsed.age; // number
+
+type UserInput = Match.infer<typeof userInputSchema>;
 ```
+
+Hydration rule of thumb:
+
+- `check(value, pattern)` validates and returns the same value reference on success.
+- Any `parse(...)` path may hydrate class-schema nodes.
+  That includes `Match.compile(pattern).parse(...)`, `Match.fromSchema(User).parse(...)`, and Match-native helper `.parse(...)` calls.
+- Hydration uses prototype assignment for decorated class schemas and does not call constructors during parse.
+- `type Output = Match.infer<typeof schema>` is the ergonomic type-level alias for inferring Match patterns and schema-like values.
+
+Numeric ranges:
+
+```typescript
+import { Match, check } from "@bluelibs/runner";
+
+const percentage = check(50, Match.Range({ min: 0, max: 100 }));
+const openInterval = Match.Range({ min: 0, max: 1, inclusive: false });
+
+const integerRange = Match.compile({
+  retries: Match.WithMessage(
+    Match.Where((value: unknown): value is number => {
+      return (
+        typeof value === "number" &&
+        Number.isInteger(value) &&
+        Match.Range({ min: 1, max: 10 }).test(value)
+      );
+    }),
+    "Retries must be an integer between 1 and 10.",
+  ),
+});
+
+percentage; // number
+openInterval.test(0.5); // true
+integerRange.parse({ retries: 3 });
+```
+
+- `Match.Range({ min?, max?, inclusive? })` matches finite numbers within the configured bounds.
+- `inclusive` defaults to `true`; `inclusive: false` makes both bounds exclusive.
+- Integer-only ranges are still composed from existing helpers such as `Match.Where(...)` plus `Match.Range(...).test(value)`.
 
 ### Shorthand Object Patterns (Real-World)
 
@@ -326,6 +366,21 @@ check(
 );
 ```
 
+Object-pattern decision guide:
+
+| If you want...                                  | Prefer                         |
+| ----------------------------------------------- | ------------------------------ |
+| A normal strict object shape                    | Plain object `{ ... }`         |
+| Explicit strictness for readability/composition | `Match.ObjectStrict({ ... })`  |
+| Extra unknown keys allowed                      | `Match.ObjectIncluding({ ... })` |
+| Dynamic string keys with one value shape        | `Match.MapOf(valuePattern)`    |
+
+Rule of thumb:
+
+- Start with a plain object for the common strict case.
+- Use `Match.ObjectStrict(...)` when you want the strictness to be explicit inside larger composed patterns or helpers.
+- Use `Match.ObjectIncluding(...)` when payloads are forward-compatible or intentionally allow extra fields.
+
 ### Extending Schemas
 
 Extend plain object patterns by composition:
@@ -376,6 +431,7 @@ For decorated class schemas, use `Match.Schema({ base })` to compose one schema 
 | `Match.MapOf(valuePattern)`                                  | Dynamic-key object with uniform value pattern                                |
 | `Match.Any`                                                  | Accepts any value                                                            |
 | `Match.Integer`                                              | Signed 32-bit integer                                                        |
+| `Match.Range({ min?, max?, inclusive? })`                    | Finite-number range with optional inclusive/exclusive min/max bounds         |
 | `Match.NonEmptyString`                                       | Non-empty string                                                             |
 | `Match.Email`                                                | Email-shaped string                                                          |
 | `Match.UUID`                                                 | Canonical UUID string                                                        |

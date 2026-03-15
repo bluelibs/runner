@@ -128,6 +128,22 @@ describe("tools/check matcher coverage", () => {
     ).toThrow(
       "Bad pattern: Match.RegExp requires a RegExp instance or source string.",
     );
+
+    const invalidRange = Match.Range({ min: 1 });
+    Object.defineProperty(invalidRange, "min", {
+      value: undefined,
+      configurable: true,
+    });
+    Object.defineProperty(invalidRange, "max", {
+      value: undefined,
+      configurable: true,
+    });
+    expect(() =>
+      invalidRange.match(1, context(), [], undefined, matchesPattern),
+    ).toThrow("Bad pattern: Match.Range requires at least one of min or max.");
+    expect(() => invalidRange.toJSONSchema()).toThrow(
+      "Bad pattern: Match.Range requires at least one of min or max.",
+    );
   });
 
   it("exposes wrapper metadata helpers directly on Match-native patterns", () => {

@@ -10,6 +10,7 @@ export {
   ObjectStrictPattern,
   OneOfPattern,
   OptionalPattern,
+  RangePattern,
   RegExpPattern,
   WithMessagePattern,
   WherePattern,

@@ -7,6 +7,7 @@ export {
 } from "./definitions/objects";
 export {
   oneOfPatternDefinition,
+  rangePatternDefinition,
   regExpPatternDefinition,
   wherePatternDefinition,
 } from "./definitions/predicates";

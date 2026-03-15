@@ -134,6 +134,12 @@ describe("tools/check schema support", () => {
 
     expect(Match.RegExp(/^ok$/).parse("ok")).toBe("ok");
     expectMatchFailure(() => Match.RegExp(/^ok$/).parse("nope"));
+
+    expect(Match.Range({ min: 1, max: 3 }).parse(1)).toBe(1);
+    expect(Match.Range({ min: 1, max: 3, inclusive: false }).parse(2)).toBe(2);
+    expectMatchFailure(() =>
+      Match.Range({ min: 1, max: 3, inclusive: false }).parse(1),
+    );
   });
 
   it("supports test() on Match-native tokens and helper-created patterns", () => {
@@ -155,6 +161,10 @@ describe("tools/check schema support", () => {
     const regexpPattern = Match.RegExp(/^runner$/);
     expect(regexpPattern.test("runner")).toBe(true);
     expect(regexpPattern.test("walker")).toBe(false);
+
+    const rangePattern = Match.Range({ min: 1, max: 3 });
+    expect(rangePattern.test(2)).toBe(true);
+    expect(rangePattern.test(4)).toBe(false);
   });
 
   it("keeps built-in token kinds aligned with the central registry", () => {
@@ -208,6 +218,20 @@ describe("tools/check schema support", () => {
       format: "date-time",
       pattern:
         "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?(?:Z|[+-]\\d{2}:\\d{2})$",
+    });
+    expect(Match.Range({ min: 1, max: 10 }).toJSONSchema()).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "number",
+      minimum: 1,
+      maximum: 10,
+    });
+    expect(
+      Match.Range({ min: 1, max: 10, inclusive: false }).toJSONSchema(),
+    ).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "number",
+      exclusiveMinimum: 1,
+      exclusiveMaximum: 10,
     });
 
     expect(

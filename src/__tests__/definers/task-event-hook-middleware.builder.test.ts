@@ -78,6 +78,51 @@ describe("task/event/hook/middleware builders", () => {
     await rr.dispose();
   });
 
+  it("event builder accepts raw Match patterns for payloadSchema", async () => {
+    const ev = r
+      .event("tests-builder-event-raw-pattern")
+      .payloadSchema({
+        userId: String,
+        email: String,
+      })
+      .build();
+    const handler = jest.fn();
+
+    const listener = r
+      .hook("tests-builder-event-raw-pattern-hook")
+      .on(ev)
+      .run(async (event) => {
+        handler(event.data);
+      })
+      .build();
+
+    const app = defineResource({
+      id: "tests-builder-event-raw-pattern-app",
+      register: [ev, listener],
+    });
+    const rr = await run(app);
+
+    await expect(
+      rr.emitEvent(ev, {
+        userId: "u1",
+        email: "ada@example.com",
+      }),
+    ).resolves.toBeUndefined();
+    expect(handler).toHaveBeenCalledWith({
+      userId: "u1",
+      email: "ada@example.com",
+    });
+
+    await expect(
+      rr.emitEvent(ev, {
+        userId: "u1",
+        email: 123 as unknown as string,
+      }),
+    ).rejects.toThrow(/Expected string/i);
+
+    await rr.dispose();
+  });
+
   it("event dependency supports explicit undefined payload with report mode for void payload events", async () => {
     const ev = r.event("tests-builder-event-dep-report").build();
     const emitFromTask = r

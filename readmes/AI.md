@@ -145,9 +145,7 @@ const app = r
 
 const userCreated = r
   .event("userCreated")
-  .payloadSchema(
-    Match.compile({ id: Match.NonEmptyString, email: Match.Email }),
-  )
+  .payloadSchema({ id: Match.NonEmptyString, email: Match.Email })
   .build();
 
 // Compiled Match schemas expose:
@@ -499,14 +497,17 @@ import { check, Match } from "@bluelibs/runner";
 - `check(value, pattern)` is the low-level runtime validator.
 - `Match.compile(pattern)` creates reusable schemas with `.parse()`, `.test()`, and JSON-Schema export.
 - Match-native helpers and built-in tokens expose the same `.parse()`, `.test()`, and `.toJSONSchema()` surface directly.
+- `type Output = Match.infer<typeof schema>` is the ergonomic type-level inference alias for Match patterns and schema-like values.
+- `check(value, pattern)` validates and returns the same value reference on success; hydration happens on `parse(...)` paths, not on `check(...)`.
 - The supported way to create reusable custom patterns is to compose Match-native helpers into named constants, for example `const AppMatch = { Slug: Match.WithMessage(Match.RegExp(/^[a-z0-9-]+$/), "Slug must be kebab-case.") } as const;`.
 - Those reusable custom patterns work anywhere Match works: `check(value, AppMatch.Slug)`, `AppMatch.Slug.test(value)`, `Match.compile({ slug: AppMatch.Slug })`, and `@Match.Field(AppMatch.Slug)`.
 - Class-backed schemas hydrate on `.parse()`: `Match.fromSchema(UserDto).parse(...)` returns a `UserDto` instance, and any raw Match pattern that contains class-schema nodes hydrates those nested nodes during parse.
 - Hydration uses prototype assignment and does not call class constructors during parse.
 - Compiled schemas do not expose `.extend()`; for object-shaped schemas, compose `compiled.pattern` into a new pattern and call `Match.compile(...)` again.
 - Constructors act as matchers: `String`, `Number`, `Boolean`.
-- Common `Match.*` helpers include `NonEmptyString`, `Email`, `Integer`, `UUID`, `URL`, `Optional()`, `OneOf()`, `ObjectIncluding()`, `MapOf()`, `ArrayOf()`, `Lazy()`, `Where((value, parent?) => boolean)`, and `WithMessage(pattern, messageOrFormatter)`.
+- Common `Match.*` helpers include `NonEmptyString`, `Email`, `Integer`, `UUID`, `URL`, `Range({ min?, max?, inclusive? })`, `Optional()`, `OneOf()`, `ObjectIncluding()`, `MapOf()`, `ArrayOf()`, `Lazy()`, `Where((value, parent?) => boolean)`, and `WithMessage(pattern, messageOrFormatter)`.
 - Plain objects are strict by default, so `check(value, { name: String })` rejects unknown keys.
+- Prefer a plain object for the normal strict case, `Match.ObjectStrict(...)` when you want that strictness to be explicit, and `Match.ObjectIncluding(...)` when extra keys are allowed.
 - `@Match.Schema({ base: BaseClass })` allows subclassing without TypeScript `extends`.
 - `@Match.Schema({ exact, schemaId, errorPolicy })` controls class strictness, schema identity, and the default validation aggregation policy.
 - Default decorator exports target standard ES decorators. For legacy `experimentalDecorators` projects, import `Match` and `Serializer` from `@bluelibs/runner/decorators/legacy`.
@@ -516,6 +517,8 @@ import { check, Match } from "@bluelibs/runner";
 - Use `Match.fromSchema(() => User)` for self-referencing or forward class-schema links.
 - Use `Match.Lazy(() => pattern)` for recursive plain Match patterns; use `Match.fromSchema(() => User)` when the recursive thing is a decorated class schema.
 - Use `Match.Where(...)` for runtime-only custom predicates and type guards, and prefer `Match.RegExp(...)` / built-ins / object patterns when JSON Schema export needs to stay precise.
+- `Match.Range({ min?, max?, inclusive? })` matches finite numbers within the configured bounds; `inclusive` defaults to `true`, and `inclusive: false` makes both bounds exclusive.
+- Integer ranges are still composed from existing helpers, for example `Match.WithMessage(Match.Where((value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && Match.Range({ min: 1, max: 10 }).test(value)), "Expected an integer between 1 and 10.")`.
 - Validation failures throw the built-in `errors.matchError` Runner error.
 - The thrown error data exposes `.path` as the first recorded leaf-failure path, and `.failures` keeps the raw nested failures even when the top-level message comes from an outer schema/subtree wrapper.
 - `Match.Where((value, parent?) => boolean)` receives the immediate parent when matching compound values.

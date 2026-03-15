@@ -23,6 +23,7 @@ import {
   objectStrictPatternDefinition,
   oneOfPatternDefinition,
   optionalPatternDefinition,
+  rangePatternDefinition,
   regExpPatternDefinition,
   wherePatternDefinition,
   withErrorPolicyPatternDefinition,
@@ -171,6 +172,20 @@ export class WherePattern<TGuarded = unknown> extends MatchPatternBase<
     super(
       wherePatternDefinition as MatchPatternDefinition<WherePattern<TGuarded>>,
     );
+  }
+}
+
+export class RangePattern extends MatchPatternBase<number, RangePattern> {
+  public readonly kind = "Match.RangePattern";
+  public readonly min?: number;
+  public readonly max?: number;
+  public readonly inclusive?: boolean;
+
+  constructor(options: { min?: number; max?: number; inclusive?: boolean }) {
+    super(rangePatternDefinition as MatchPatternDefinition<RangePattern>);
+    this.min = options.min;
+    this.max = options.max;
+    this.inclusive = options.inclusive;
   }
 }
 
@@ -370,6 +385,7 @@ namespace TParseResult {
   export type WithMessage<T> = InferMatchPattern<T>;
   export type WithErrorPolicy<T> = InferMatchPattern<T>;
   export type Lazy<T> = InferMatchPattern<T>;
+  export type Range = number;
   export type ObjectIncluding<T extends Record<string, unknown>> =
     InferMatchPattern<T> & Record<string, unknown>;
   export type ObjectStrict<T extends Record<string, unknown>> =

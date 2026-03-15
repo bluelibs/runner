@@ -23,6 +23,29 @@ import { Match } from "../../../decorators/legacy";
 }
 
 {
+  const rawPattern = {
+    id: Match.NonEmptyString,
+    retries: Match.Optional(Match.Integer),
+  };
+
+  type RawPatternInfer = Match.infer<typeof rawPattern>;
+  const rawPatternValue: RawPatternInfer = { id: "u1" };
+  void rawPatternValue;
+
+  const compiledSchema = Match.compile(rawPattern);
+  type CompiledInfer = Match.infer<typeof compiledSchema>;
+  const compiledValue: CompiledInfer = { id: "u1", retries: 1 };
+  void compiledValue;
+
+  const schemaLike = {
+    parse: (_value: unknown) => ({ id: "u1", score: 1 }),
+  };
+  type SchemaLikeInfer = Match.infer<typeof schemaLike>;
+  const schemaLikeValue: SchemaLikeInfer = { id: "u1", score: 1 };
+  void schemaLikeValue;
+}
+
+{
   const pattern: MatchPattern = String;
   void pattern;
 }
@@ -226,6 +249,19 @@ import { Match } from "../../../decorators/legacy";
   const regexB = check("runner", Match.RegExp("^runner$"));
   const regexBString: string = regexB;
   void regexBString;
+}
+
+{
+  const rangePattern = Match.Range({ min: 1, max: 3 });
+  const parsedRange = rangePattern.parse(2);
+  const rangeNumber: number = parsedRange;
+  void rangeNumber;
+
+  const candidate: unknown = 2;
+  if (rangePattern.test(candidate)) {
+    const narrowedRange: number = candidate;
+    void narrowedRange;
+  }
 }
 
 {

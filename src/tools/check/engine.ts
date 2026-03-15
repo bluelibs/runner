@@ -31,6 +31,7 @@ import {
   ObjectStrictPattern,
   OneOfPattern,
   OptionalPattern,
+  RangePattern,
   RegExpPattern,
   WithErrorPolicyPattern,
   WithMessagePattern,
@@ -52,6 +53,7 @@ import type {
   MatchSchemaDecorator,
   MatchToJsonSchemaOptions,
 } from "./types";
+import { getMatchRangePatternError } from "./matcher/definitions/helpers";
 
 export interface CheckOptions {
   errorPolicy?: "first" | "all";
@@ -355,6 +357,20 @@ function regexpPattern(expression: RegExp | string): RegExpPattern<RegExp> {
   );
 }
 
+/**
+ * Creates a numeric matcher with optional minimum/maximum bounds.
+ * Use `inclusive: false` when both bounds should be strict.
+ */
+function rangePattern(options: {
+  min?: number;
+  max?: number;
+  inclusive?: boolean;
+}): RangePattern {
+  const optionsError = getMatchRangePatternError(options);
+  assertPattern(optionsError === null, optionsError ?? "Bad pattern.");
+  return new RangePattern(options);
+}
+
 function lazyPattern<TPattern extends MatchPattern>(
   resolver: () => TPattern,
 ): LazyPattern<TPattern> {
@@ -483,6 +499,8 @@ export const Match = Object.freeze({
     return new OneOfPattern(patterns);
   },
   Where: where,
+  /** Matches finite numbers against optional min/max bounds. */
+  Range: rangePattern,
   WithMessage: withMessage,
   WithErrorPolicy: withErrorPolicyPattern,
   ObjectIncluding: <const TObjectPattern extends Record<string, unknown>>(
@@ -507,3 +525,12 @@ export const Match = Object.freeze({
     options?: MatchToJsonSchemaOptions,
   ): MatchJsonSchema => matchToJsonSchema(pattern, options),
 });
+
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export declare namespace Match {
+  /** Infers the parsed output type of a Match pattern or schema-like value. */
+  type infer<TSchemaOrPattern> =
+    TSchemaOrPattern extends CheckSchemaLike<unknown>
+      ? InferCheckSchema<TSchemaOrPattern>
+      : InferMatchPattern<TSchemaOrPattern>;
+}

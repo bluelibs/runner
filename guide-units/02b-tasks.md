@@ -46,15 +46,11 @@ import { Match, r } from "@bluelibs/runner";
 
 const createUser = r
   .task("createUser")
-  .inputSchema(
-    Match.compile({
-      name: Match.NonEmptyString,
-      email: Match.Email,
-    }),
-  )
-  .resultSchema<{ id: string; name: string }>({
-    parse: (v) => v,
+  .inputSchema({
+    name: Match.NonEmptyString,
+    email: Match.Email,
   })
+  .resultSchema({ id: Match.NonEmptyString, name: Match.NonEmptyString })
   .run(async (input) => {
     return { id: "user-1", name: input.name };
   })

@@ -7,7 +7,13 @@ import {
 import { defineMatchPatternDefinition } from "../contracts";
 import type { MatchContext } from "../shared";
 import { fail, formatPath } from "../utils";
-import { isWhereCondition, type RegExpHolder } from "./helpers";
+import {
+  getMatchRangePatternError,
+  isWhereCondition,
+  type MatchRangePatternOptions,
+  type RangeHolder,
+  type RegExpHolder,
+} from "./helpers";
 
 export const oneOfPatternDefinition = defineMatchPatternDefinition<{
   patterns?: unknown;
@@ -152,3 +158,116 @@ export const regExpPatternDefinition =
       };
     },
   });
+
+function describeRangeExpected(pattern: {
+  min?: number;
+  max?: number;
+  inclusive?: boolean;
+}): string {
+  const inclusive = pattern.inclusive !== false;
+
+  if (pattern.min !== undefined && pattern.max !== undefined) {
+    return inclusive
+      ? `finite number between ${pattern.min} and ${pattern.max} (inclusive)`
+      : `finite number greater than ${pattern.min} and less than ${pattern.max}`;
+  }
+
+  if (pattern.min !== undefined) {
+    return inclusive
+      ? `finite number greater than or equal to ${pattern.min}`
+      : `finite number greater than ${pattern.min}`;
+  }
+
+  return inclusive
+    ? `finite number less than or equal to ${pattern.max}`
+    : `finite number less than ${pattern.max}`;
+}
+
+function normalizeRangePattern(pattern: RangeHolder): MatchRangePatternOptions {
+  return {
+    min: pattern.min as number | undefined,
+    max: pattern.max as number | undefined,
+    inclusive: pattern.inclusive as boolean | undefined,
+  };
+}
+
+export const rangePatternDefinition = defineMatchPatternDefinition<RangeHolder>(
+  {
+    kind: "Match.RangePattern",
+    match(pattern, value, context, path) {
+      const optionsError = getMatchRangePatternError({
+        min: pattern.min,
+        max: pattern.max,
+        inclusive: pattern.inclusive,
+      });
+      if (optionsError) {
+        throw createMatchPatternError(optionsError);
+      }
+
+      const normalizedPattern = normalizeRangePattern(pattern);
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        return fail(
+          context,
+          path,
+          describeRangeExpected(normalizedPattern),
+          value,
+        );
+      }
+
+      const inclusive = normalizedPattern.inclusive !== false;
+      if (
+        normalizedPattern.min !== undefined &&
+        (inclusive
+          ? value < normalizedPattern.min
+          : value <= normalizedPattern.min)
+      ) {
+        return fail(
+          context,
+          path,
+          describeRangeExpected(normalizedPattern),
+          value,
+          `Failed Match.Range validation at ${formatPath(path)}.`,
+        );
+      }
+
+      if (
+        normalizedPattern.max !== undefined &&
+        (inclusive
+          ? value > normalizedPattern.max
+          : value >= normalizedPattern.max)
+      ) {
+        return fail(
+          context,
+          path,
+          describeRangeExpected(normalizedPattern),
+          value,
+          `Failed Match.Range validation at ${formatPath(path)}.`,
+        );
+      }
+
+      return true;
+    },
+    compileToJSONSchema(pattern) {
+      const normalizedPattern = normalizeRangePattern(pattern);
+      const optionsError = getMatchRangePatternError(normalizedPattern);
+      if (optionsError) {
+        throw createMatchPatternError(optionsError);
+      }
+
+      const inclusive = normalizedPattern.inclusive !== false;
+      return {
+        type: "number",
+        ...(normalizedPattern.min !== undefined
+          ? inclusive
+            ? { minimum: normalizedPattern.min }
+            : { exclusiveMinimum: normalizedPattern.min }
+          : {}),
+        ...(normalizedPattern.max !== undefined
+          ? inclusive
+            ? { maximum: normalizedPattern.max }
+            : { exclusiveMaximum: normalizedPattern.max }
+          : {}),
+      };
+    },
+  },
+);

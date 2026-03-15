@@ -3,12 +3,12 @@
 Events let different parts of your app communicate without direct references. Hooks subscribe to those events so producers stay decoupled from listeners.
 
 ```typescript
-import { r } from "@bluelibs/runner";
+import { Match, r } from "@bluelibs/runner";
 
 // Assuming: userService is a resource defined elsewhere.
 const userRegistered = r
   .event("userRegistered")
-  .payloadSchema<{ userId: string; email: string }>({ parse: (value) => value })
+  .payloadSchema({ userId: String, email: Match.Email })
   .build();
 
 const registerUser = r
@@ -62,7 +62,7 @@ Use transactional events when hooks must be reversible.
 ```typescript
 const orderPlaced = r
   .event("orderPlaced")
-  .payloadSchema<{ orderId: string }>({ parse: (value) => value })
+  .payloadSchema({ orderId: Match.NonEmptyString })
   .transactional()
   .build();
 
@@ -116,7 +116,7 @@ For transactional events, fail-fast rollback semantics are enforced regardless o
 
 ### Event-Driven Task Wiring
 
-When a task should announce something happened without owning every downstream side effect, emit an event and let hooks react. This example uses `Match.compile` for schema validation instead of the inline `payloadSchema` shown in the opener:
+When a task should announce something happened without owning every downstream side effect, emit an event and let hooks react. Inline Match patterns are usually the clearest option:
 
 ```typescript
 import { Match, r } from "@bluelibs/runner";
@@ -124,12 +124,10 @@ import { Match, r } from "@bluelibs/runner";
 // Assuming `createUserInDb` is your own persistence collaborator.
 const userCreated = r
   .event("userCreated")
-  .payloadSchema(
-    Match.compile({
-      userId: Match.NonEmptyString,
-      email: Match.Email,
-    }),
-  )
+  .payloadSchema({
+    userId: Match.NonEmptyString,
+    email: Match.Email,
+  })
   .build();
 
 const registerUser = r
@@ -171,16 +169,17 @@ const internalEvent = r
 Use `onAnyOf()` for tuple-friendly inference and `isOneOf()` as a runtime guard.
 
 ```typescript
-import { isOneOf, onAnyOf, r } from "@bluelibs/runner";
+import { Match, isOneOf, onAnyOf, r } from "@bluelibs/runner";
 
 const eUser = r
   .event("userEvent")
-  .payloadSchema<{ id: string; email: string }>({ parse: (v) => v })
+  .payloadSchema({ id: String, email: Match.Email })
   .build();
 const eAdmin = r
   .event("adminEvent")
-  .payloadSchema<{ id: string; role: "admin" | "superadmin" }>({
-    parse: (v) => v,
+  .payloadSchema({
+    id: String,
+    role: Match.OneOf("admin", "superadmin"),
   })
   .build();
 

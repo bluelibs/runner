@@ -14,6 +14,7 @@ import {
   type MatchJsonSchemaCompiler,
 } from "../contracts";
 import type { MatchContext } from "../shared";
+import { isPlainObject } from "../utils";
 
 export type PatternHolder = { pattern?: unknown };
 export type WithMessageHolder = {
@@ -24,9 +25,19 @@ export type WithErrorPolicyHolder = { pattern: unknown };
 export type LazyHolder = { resolve?: unknown };
 export type ClassHolder = { ctor?: unknown; options?: unknown };
 export type RegExpHolder = { expression?: unknown };
+export type RangeHolder = {
+  min?: unknown;
+  max?: unknown;
+  inclusive?: unknown;
+};
 export type MatchClassPatternOptions = {
   exact?: boolean;
   schemaId?: string;
+};
+export type MatchRangePatternOptions = {
+  min?: number;
+  max?: number;
+  inclusive?: boolean;
 };
 
 function normalizeMatchMessageValue(
@@ -188,6 +199,51 @@ export function isMatchClassPatternOptions(
   }
 
   return true;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+export function getMatchRangePatternError(value: unknown): string | null {
+  if (!isPlainObject(value)) {
+    return "Bad pattern: Match.Range requires a plain object options bag.";
+  }
+
+  const candidate = value as RangeHolder;
+  const hasMin = candidate.min !== undefined;
+  const hasMax = candidate.max !== undefined;
+
+  if (!hasMin && !hasMax) {
+    return "Bad pattern: Match.Range requires at least one of min or max.";
+  }
+
+  if (hasMin && !isFiniteNumber(candidate.min)) {
+    return "Bad pattern: Match.Range min must be a finite number.";
+  }
+
+  if (hasMax && !isFiniteNumber(candidate.max)) {
+    return "Bad pattern: Match.Range max must be a finite number.";
+  }
+
+  if (
+    candidate.inclusive !== undefined &&
+    typeof candidate.inclusive !== "boolean"
+  ) {
+    return "Bad pattern: Match.Range inclusive must be a boolean when provided.";
+  }
+
+  if (
+    hasMin &&
+    hasMax &&
+    typeof candidate.min === "number" &&
+    typeof candidate.max === "number" &&
+    candidate.min > candidate.max
+  ) {
+    return "Bad pattern: Match.Range min cannot be greater than max.";
+  }
+
+  return null;
 }
 
 export function getDefinitionId(

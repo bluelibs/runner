@@ -34,6 +34,13 @@ export const Match: LegacyMatchSurface = Object.freeze({
   Field: createLegacyFieldDecorator,
 });
 
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export declare namespace Match {
+  /** Infers the parsed output type of a Match pattern or schema-like value. */
+  type infer<TSchemaOrPattern> =
+    import("../tools/check").Match.infer<TSchemaOrPattern>;
+}
+
 class LegacySerializerImpl extends BaseSerializer {}
 
 type LegacySerializerConstructor = {

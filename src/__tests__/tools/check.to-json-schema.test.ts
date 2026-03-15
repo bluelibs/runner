@@ -106,6 +106,20 @@ describe("tools/check toJSONSchema", () => {
       pattern:
         "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?(?:Z|[+-]\\d{2}:\\d{2})$",
     });
+    expect(Match.toJSONSchema(Match.Range({ min: 1, max: 10 }))).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "number",
+      minimum: 1,
+      maximum: 10,
+    });
+    expect(
+      Match.toJSONSchema(Match.Range({ min: 1, max: 10, inclusive: false })),
+    ).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "number",
+      exclusiveMinimum: 1,
+      exclusiveMaximum: 10,
+    });
     expect(Match.toJSONSchema(Match.RegExp(/^[a-z]+$/))).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
       type: "string",
@@ -150,6 +164,21 @@ describe("tools/check toJSONSchema", () => {
         ...expected,
       });
     }
+  });
+
+  it("converts min-only and max-only Match.Range patterns", () => {
+    expect(Match.toJSONSchema(Match.Range({ min: 1 }))).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "number",
+      minimum: 1,
+    });
+    expect(
+      Match.toJSONSchema(Match.Range({ max: 10, inclusive: false })),
+    ).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "number",
+      exclusiveMaximum: 10,
+    });
   });
 
   it("converts constructor and literal patterns", () => {

@@ -133,7 +133,7 @@ export {
  * import { r, run } from "@bluelibs/runner";
  *
  * const greet = r.task("app.tasks.greet")
- *   .inputSchema<{ name: string }>({ parse: (v) => v })
+ *   .inputSchema({ name: String })
  *   .run(async (input) => `Hello, ${input.name}!`)
  *   .build();
  *
