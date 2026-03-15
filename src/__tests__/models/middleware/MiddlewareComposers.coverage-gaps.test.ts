@@ -2,6 +2,7 @@ import { InterceptorRegistry } from "../../../models/middleware/InterceptorRegis
 import { MiddlewareResolver } from "../../../models/middleware/MiddlewareResolver";
 import { ResourceMiddlewareComposer } from "../../../models/middleware/ResourceMiddlewareComposer";
 import { TaskMiddlewareComposer } from "../../../models/middleware/TaskMiddlewareComposer";
+import { ExecutionContextStore } from "../../../models/ExecutionContextStore";
 import { LifecycleAdmissionController } from "../../../models/runtime/LifecycleAdmissionController";
 
 describe("middleware composers coverage gaps", () => {
@@ -14,6 +15,7 @@ describe("middleware composers coverage gaps", () => {
       onUnhandledError: jest.fn(),
       getOwnerResourceId: () => undefined,
       getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
+      getExecutionContextStore: () => new ExecutionContextStore(null),
       resolveDefinitionId: () => undefined,
       hasDefinition: () => false,
       findIdByDefinition: () => undefined,

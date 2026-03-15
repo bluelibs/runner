@@ -69,12 +69,13 @@ describe("taskHandler canonical id boundaries", () => {
     expect(run).toHaveBeenCalledWith(
       { id: "app.tasks.echo" },
       { ok: true },
-      {
+      expect.objectContaining({
         source: {
           kind: "resource",
           id: "app.resources.exposure",
         },
-      },
+        signal: expect.any(Object),
+      }),
     );
   });
 
@@ -167,12 +168,13 @@ describe("taskHandler canonical id boundaries", () => {
     expect(run).toHaveBeenCalledWith(
       { id: "" },
       { ok: true },
-      {
+      expect.objectContaining({
         source: {
           kind: "resource",
           id: "",
         },
-      },
+        signal: expect.any(Object),
+      }),
     );
   });
 });

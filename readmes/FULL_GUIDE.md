@@ -1104,6 +1104,7 @@ Task context includes:
 
 - `context.journal`: typed state shared with middleware
 - `context.source`: `{ kind, id }` of the current task invocation, where `id` is the canonical runtime source id
+- `context.signal`: the cooperative `AbortSignal` for the current execution when cancellation is active
 
 ```typescript
 import { journal, resources, r } from "@bluelibs/runner";
@@ -1114,6 +1115,9 @@ const sendEmail = r
   .task<{ to: string; body: string }>("sendEmail")
   .dependencies({ logger: resources.logger })
   .run(async (input, { logger }, context) => {
+    if (context.signal?.aborted) {
+      return { delivered: false };
+    }
     context.journal.set(auditKey, { startedAt: Date.now() });
     await logger.info(`Sending email to ${input.to}`);
     return { delivered: true };
@@ -1180,20 +1184,51 @@ export const journalKeys = {
 export const timeoutMiddleware = r.middleware
   .task("timeoutMiddleware")
   .run(async ({ task, next, journal }, _deps, config: { ttl: number }) => {
-    const controller = new AbortController();
-    journal.set(journalKeys.abortController, controller);
+    const controller =
+      journal.get(journalKeys.abortController) ?? new AbortController();
+    if (!journal.has(journalKeys.abortController)) {
+      journal.set(journalKeys.abortController, controller);
+    }
 
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        controller.abort();
-        reject(new Error(`Timeout after ${config.ttl}ms`));
-      }, config.ttl);
-    });
+    const timer = setTimeout(() => {
+      controller.abort(`Timeout after ${config.ttl}ms`);
+    }, config.ttl);
 
-    return Promise.race([next(task.input), timeoutPromise]);
+    try {
+      return await next(task.input);
+    } finally {
+      clearTimeout(timer);
+    }
   })
   .build();
 ```
+
+Prefer `context.signal` for task code and listener code. It stays `undefined` until a real cancellation source is present. Use journal keys only when middleware layers need to share execution-local control surfaces such as the timeout controller.
+
+### Task Cancellation
+
+Task calls can pass a cooperative signal:
+
+```typescript
+const controller = new AbortController();
+
+const promise = runTask(sendEmail, input, {
+  signal: controller.signal,
+});
+
+controller.abort("User cancelled send");
+
+await promise;
+```
+
+Cancellation behavior:
+
+- `signal` is optional
+- top-level callers can pass `runTask(task, input, { signal })`
+- with `run(..., { executionContext: true })`, omitted nested task calls inherit the first signal seen in the current execution tree
+- explicit nested `signal` applies to that direct child call and does not replace the already-inherited ambient signal for deeper automatic propagation
+- timeout middleware, forwarded task journals, and inbound HTTP/RPC request aborts still feed the same cooperative task signal when cancellation is active
+- when no real cancellation source exists, `context.signal` stays `undefined`
 
 Export your journal keys when you expect downstream middleware to consume the same execution-local state.
 
@@ -1420,6 +1455,33 @@ const report = await userRegistered(
 ```
 
 For transactional events, fail-fast rollback semantics are enforced regardless of aggregate options.
+
+### Event Cancellation
+
+Injected event emitters accept a cooperative signal, and listeners receive it as `event.signal` when the emission is cancellation-aware:
+
+```typescript
+const controller = new AbortController();
+
+await userCreated({ userId: "u1" }, { signal: controller.signal });
+```
+
+Cancellation behavior:
+
+- `signal` is optional
+- top-level callers can pass `emit(payload, { signal })`
+- with `run(..., { executionContext: true })`, omitted nested event emissions inherit the first signal seen in the current execution tree
+- explicit nested `signal` applies to that emission subtree and does not replace the already-inherited ambient signal for deeper automatic propagation
+- sequential events stop admitting new listeners once cancelled
+- parallel events let the current batch settle, then stop before the next batch
+- transactional events roll back already-completed listeners before the cancellation escapes
+
+`event.signal` stays `undefined` until a real source is explicitly provided or inherited from the current execution. Internal framework code can call `eventManager.emit(event, payload, { source, signal })` when it needs explicit source control.
+
+Low-level note:
+
+- `EventManager.emit(...)`, `emitLifecycle(...)`, and `emitWithResult(...)` prefer a merged call-options object: `{ source, signal, report, failureMode, throwOnError }`
+- dependency-injected event emitters do not ask for `source` because Runner fills that in for you
 
 ### Event-Driven Task Wiring
 
@@ -4496,7 +4558,7 @@ For decorated class schemas, use `Match.Schema({ base })` to compose one schema 
 | `Match.Optional(pattern)`                                    | `undefined` or pattern                                                       |
 | `Match.Maybe(pattern)`                                       | `undefined`, `null`, or pattern                                              |
 | `Match.OneOf(...patterns)`                                   | Any one of given patterns                                                    |
-| `Match.Where((value, parent?) => boolean)`                   | Custom predicate / type guard                                                |
+| `Match.Where((value, parent?) => boolean, messageOrFormatter?)` | Custom predicate / type guard with optional native message sugar          |
 | `Match.WithMessage(pattern, messageOrFormatter)`             | Wraps a pattern with a custom top-level validation message                   |
 | `Match.Lazy(() => pattern)`                                  | Lazy/recursive pattern                                                       |
 | `Match.Schema(options?)`                                     | Class schema decorator (`exact`, `schemaId`, `errorPolicy`; see also `base`) |
@@ -4531,7 +4593,7 @@ For decorated class schemas, use `Match.Schema({ base })` to compose one schema 
 - Subtree wrappers such as plain objects, arrays, `Match.ObjectIncluding(...)`, `Match.MapOf(...)`, `Match.NonEmptyArray(...)`, `Match.Lazy(...)`, or `Match.fromSchema(...)` can replace the aggregate headline while still preserving the nested failures in `error.failures`.
 - Decorator-backed schemas are not special here: `Match.WithMessage(Match.fromSchema(AddressSchema), ...)` behaves like any other subtree wrapper.
 - In `Match.WithMessage(pattern, fn)`, the callback receives `ctx.error` built from the nested failures collected inside the wrapped pattern. That nested error exposes `path` and `failures`, but its `message` is rebuilt from the raw nested failures and does not preserve any inner `Match.WithMessage(...)` headline from deeper wrappers.
-- `Match.Where((value, parent?) => boolean)` receives the immediate parent object/array when validation happens inside a compound value.
+- `Match.Where((value, parent?) => boolean, messageOrFormatter?)` receives the immediate parent object/array when validation happens inside a compound value.
 
 #### Recursive Patterns: Which Helper to Use
 
@@ -4608,11 +4670,9 @@ const AppMatch = {
     Match.RegExp(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
     "Slug must be kebab-case.",
   ),
-  RetryCount: Match.WithMessage(
-    Match.Where(
-      (value: unknown): value is number =>
-        typeof value === "number" && Number.isInteger(value) && value >= 0,
-    ),
+  RetryCount: Match.Where(
+    (value: unknown): value is number =>
+      typeof value === "number" && Number.isInteger(value) && value >= 0,
     "Retry count must be a non-negative integer.",
   ),
   UserRecord: Match.ObjectIncluding({
@@ -4642,8 +4702,9 @@ This gives you reusable, named patterns without exposing internals. Because thes
 Rule of thumb:
 
 - Prefer composition first. Most custom patterns are just named combinations of built-ins, objects, arrays, unions, regexes, and wrappers.
-- Use `Match.WithMessage(...)` when the main need is a better domain-specific error message.
+- Use `Match.WithMessage(...)` when the main need is a better domain-specific error message for any existing pattern.
 - Use `Match.Where(...)` when you need custom runtime logic or a custom type guard.
+- Use `Match.Where(..., messageOrFormatter)` as shorthand for the common `Match.WithMessage(Match.Where(...), ...)` case.
 - Prefer `Match.RegExp(...)`, built-in tokens, object patterns, and array patterns when you want strong JSON Schema export.
 - `Match.Where(...)` is runtime-only. In non-strict JSON Schema export it becomes metadata; in strict mode it is rejected because arbitrary predicates cannot be represented faithfully.
 
@@ -4725,7 +4786,7 @@ try {
 
 > **Note:** The outer formatter sees the raw nested failure summary, not the inner `"City must be a string"` headline. Inner `Match.WithMessage(...)` wrappers affect the thrown headline at their own level, but outer formatter callbacks receive a fresh nested match error rebuilt from raw failures.
 
-Custom `Match.Where(...)` patterns work the same way and solve the standalone-message case:
+Custom `Match.Where(...)` patterns support the same message contract directly, so the common standalone-message case can stay compact:
 
 ```typescript
 import { Match, check } from "@bluelibs/runner";
@@ -4734,18 +4795,14 @@ const AppMatch = {
   NonZeroPositiveInteger: Match.Where(
     (value: unknown): value is number =>
       typeof value === "number" && Number.isInteger(value) && value > 0,
+    ({ value, path }) =>
+      `Retries must be a non-zero positive integer. Received ${String(value)} at ${path}.`,
   ),
 } as const;
 
 @Match.Schema()
 class JobConfig {
-  @Match.Field(
-    Match.WithMessage(
-      AppMatch.NonZeroPositiveInteger,
-      ({ value, path }) =>
-        `Retries must be a non-zero positive integer. Received ${String(value)} at ${path}.`,
-    ),
-  )
+  @Match.Field(AppMatch.NonZeroPositiveInteger)
   retries!: number;
 }
 
@@ -4755,6 +4812,7 @@ check({ retries: 0 }, Match.fromSchema(JobConfig));
 Notes:
 
 - `messageOrFormatter` accepts a static string, `{ message, code?, params? }`, or a callback.
+- `Match.Where(..., messageOrFormatter)` is ergonomic sugar for `Match.WithMessage(Match.Where(...), messageOrFormatter)`.
 - Callback context is `{ value, error, path, pattern, parent }`.
 - `path` uses `$` for the root value, `$.email` for a root object field, and `$.users[2].email` for nested array/object paths.
 - `value` is intentionally `unknown` because the callback runs only on the failure path.
@@ -4912,6 +4970,65 @@ const timeout = r.middleware
 ```
 
 Any schema library is valid if it implements `parse(input)`. Zod works directly and remains a great fit for richer refinement/transforms.
+
+Minimal custom `CheckSchemaLike` example:
+
+```typescript
+import {
+  check,
+  type CheckSchemaLike,
+  type MatchJsonSchema,
+} from "@bluelibs/runner";
+
+function createStepRange(
+  options: { min?: number; max?: number; step: number },
+): CheckSchemaLike<number> {
+  return {
+    parse(input: unknown): number {
+      const value = Number(input);
+
+      if (!Number.isFinite(value)) {
+        throw new Error("Expected a finite number.");
+      }
+
+      if (options.min !== undefined && value < options.min) {
+        throw new Error(`Expected number >= ${options.min}.`);
+      }
+
+      if (options.max !== undefined && value > options.max) {
+        throw new Error(`Expected number <= ${options.max}.`);
+      }
+
+      if (value % options.step !== 0) {
+        throw new Error(`Expected a multiple of ${options.step}.`);
+      }
+
+      return value;
+    },
+
+    toJSONSchema(): MatchJsonSchema {
+      return {
+        type: "number",
+        ...(options.min !== undefined ? { minimum: options.min } : {}),
+        ...(options.max !== undefined ? { maximum: options.max } : {}),
+        multipleOf: options.step,
+      };
+    },
+  };
+}
+
+const StepRange = createStepRange({ min: 0, max: 10, step: 2 });
+
+check(8, StepRange);
+StepRange.toJSONSchema();
+```
+
+Notes:
+
+- `CheckSchemaLike` is a top-level schema contract: use it with `check(value, schema)` and Runner builder schema slots such as `.inputSchema(...)` / `.configSchema(...)` / `.payloadSchema(...)`.
+- This minimal example uses `throw new Error(...)` to keep the focus on the `parse(...)` / `toJSONSchema()` contract.
+- Runner does not rebase a manually thrown schema-like `errors.matchError` into an enclosing raw Match object or `@Match.Field(...)` path. If you need automatic nested paths such as `$.stepRange`, prefer Match-native composition such as `Match.Range(...)`, `Match.RegExp(...)`, `Match.WithMessage(...)`, or `Match.Where(...)`.
+- `CheckSchemaLike` is not a public nested Match-pattern extension point. A plain object like `{ parse, toJSONSchema }` placed inside a raw Match object shape is interpreted as a plain object pattern, not as a nested parse-schema node.
 
 ### Class Ergonomics for Validation (Great DX, Optional)
 

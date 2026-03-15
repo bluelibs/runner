@@ -2,6 +2,7 @@ import { InterceptorRegistry } from "../../../models/middleware/InterceptorRegis
 import { MiddlewareResolver } from "../../../models/middleware/MiddlewareResolver";
 import { ResourceMiddlewareComposer } from "../../../models/middleware/ResourceMiddlewareComposer";
 import { TaskMiddlewareComposer } from "../../../models/middleware/TaskMiddlewareComposer";
+import { ExecutionContextStore } from "../../../models/ExecutionContextStore";
 import { LifecycleAdmissionController } from "../../../models/runtime/LifecycleAdmissionController";
 
 function createBaseStore() {
@@ -15,6 +16,7 @@ function createBaseStore() {
     toPublicId: (id: string) => id,
     onUnhandledError: jest.fn(),
     getLifecycleAdmissionController: () => new LifecycleAdmissionController(),
+    getExecutionContextStore: () => new ExecutionContextStore(null),
   };
 }
 

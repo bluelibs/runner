@@ -43,6 +43,8 @@ export type TaskRunContext = {
   journal: ExecutionJournal;
   /** Origin metadata describing how this task invocation was admitted. */
   source: RuntimeCallSource;
+  /** Cooperative cancellation signal for the current task execution when one exists. */
+  signal?: AbortSignal;
 };
 
 /**

@@ -2,6 +2,8 @@ import { TaskRunner } from "../../models/TaskRunner";
 import { Store } from "../../models/Store";
 import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
 import { runtimeSource } from "../../types/runtimeSource";
+import { cancellationError } from "../../errors";
+import { getOrCreateTaskAbortController } from "../../models/runtime/taskCancellation";
 
 import { createTestFixture } from "../test-utils";
 
@@ -203,6 +205,103 @@ describe("TaskRunner", () => {
     });
 
     expect(result).toEqual(explicitSource);
+  });
+
+  it("leaves task run context signal undefined when execution has no cancellation source", async () => {
+    const task = defineTask({
+      id: "testTask-signal-context-undefined",
+      run: async (_input: void, _deps, context) => context?.signal,
+    });
+
+    store.tasks.set(task.id, {
+      task,
+      computedDependencies: {},
+      isInitialized: false,
+    });
+
+    await expect(taskRunner.run(task, undefined)).resolves.toBeUndefined();
+  });
+
+  it("injects task call signal into task run context", async () => {
+    const controller = new AbortController();
+    const task = defineTask({
+      id: "testTask-signal-context",
+      run: async (_input: void, _deps, context) => context?.signal,
+    });
+
+    store.tasks.set(task.id, {
+      task,
+      computedDependencies: {},
+      isInitialized: false,
+    });
+
+    const result = await taskRunner.run(task, undefined, {
+      signal: controller.signal,
+    });
+
+    expect(result).toBe(controller.signal);
+  });
+
+  it("rejects the task call when the caller signal aborts", async () => {
+    const controller = new AbortController();
+    const task = defineTask({
+      id: "testTask-signal-abort",
+      run: async (_input: void, _deps, context) => {
+        await new Promise<void>((_resolve, reject) => {
+          context?.signal?.addEventListener(
+            "abort",
+            () => reject(cancellationError.new({ reason: "caller aborted" })),
+            { once: true },
+          );
+        });
+      },
+    });
+
+    store.tasks.set(task.id, {
+      task,
+      computedDependencies: {},
+      isInitialized: false,
+    });
+
+    const promise = taskRunner.run(task, undefined, {
+      signal: controller.signal,
+    });
+    controller.abort("caller aborted");
+
+    await expect(promise).rejects.toMatchObject({ id: "cancellation" });
+  });
+
+  it("fails fast when middleware aborts execution before the task body starts", async () => {
+    const abortingMiddleware = defineTaskMiddleware({
+      id: "taskRunner-preAborted-middleware",
+      run: async ({ task, next, journal }) => {
+        getOrCreateTaskAbortController(journal).abort("middleware aborted");
+        return next(task.input);
+      },
+    });
+
+    const task = defineTask({
+      id: "testTask-pre-aborted-context",
+      middleware: [abortingMiddleware],
+      run: async () => {
+        throw new Error("task body should not run");
+      },
+    });
+
+    store.tasks.set(task.id, {
+      task,
+      computedDependencies: {},
+      isInitialized: false,
+    });
+    store.taskMiddlewares.set(abortingMiddleware.id, {
+      middleware: abortingMiddleware,
+      computedDependencies: {},
+      isInitialized: false,
+    });
+
+    await expect(taskRunner.run(task, undefined)).rejects.toMatchObject({
+      id: "cancellation",
+    });
   });
 
   it("rejects new task runs when shutdown lockdown is active", async () => {

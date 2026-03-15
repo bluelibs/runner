@@ -12,7 +12,6 @@ import {
   taskBlockedByResourceHealthError,
   taskHealthResourceNotReportableError,
 } from "../errors";
-import type { ExecutionJournal } from "../types/executionJournal";
 import type {
   TaskRunnerInterceptOptions,
   TaskRunnerInterceptor,
@@ -30,6 +29,7 @@ import { ExecutionContextStore } from "./ExecutionContextStore";
 import type { ExecutionFrame } from "../types/executionContext";
 import { globalTags } from "../globals/globalTags";
 import { HealthReporter } from "./HealthReporter";
+import { raceWithAbortSignal } from "../tools/abortSignals";
 import {
   resolveRequestedIdFromStore,
   toCanonicalDefinitionFromStore,
@@ -37,8 +37,7 @@ import {
 
 type CachedTaskRunner = (
   input: unknown,
-  journal?: ExecutionJournal,
-  source?: RuntimeCallSource,
+  options?: TaskCallOptions,
 ) => Promise<unknown>;
 
 const defaultTaskSource: RuntimeCallSource = {
@@ -112,6 +111,7 @@ export class TaskRunner {
   ): Promise<TOutput | undefined> {
     const taskId = this.store.findIdByDefinition(task);
     const source = options?.source ?? defaultTaskSource;
+    const signal = this.executionContextStore.resolveSignal(options?.signal);
     if (!this.store.canAdmitTaskCall(source)) {
       if (
         this.lifecycleAdmissionController.getPhase() ===
@@ -130,11 +130,7 @@ export class TaskRunner {
     const canCacheRunner = this.store.isLocked;
     let runner = canCacheRunner
       ? (this.runnerStore.get(taskId) as
-          | ((
-              input: TInput,
-              journal?: ExecutionJournal,
-              source?: RuntimeCallSource,
-            ) => Promise<TOutput>)
+          | ((input: TInput, options?: TaskCallOptions) => Promise<TOutput>)
           | undefined)
       : undefined;
     if (!runner) {
@@ -149,7 +145,14 @@ export class TaskRunner {
       if (healthPolicyCheck) {
         await healthPolicyCheck;
       }
-      return runner(input as TInput, options?.journal, source);
+      return raceWithAbortSignal(
+        runner(input as TInput, {
+          ...(options ?? {}),
+          signal,
+          source,
+        }),
+        signal,
+      );
     };
     const executionSource = runtimeSource.task(taskId);
 
@@ -162,7 +165,10 @@ export class TaskRunner {
 
     return this.lifecycleAdmissionController.trackTaskExecution(
       executionSource,
-      () => this.executionContextStore.runWithFrame(traceFrame, executeTask),
+      () =>
+        this.executionContextStore.runWithFrame(traceFrame, executeTask, {
+          signal,
+        }),
     );
   }
 

@@ -329,6 +329,73 @@ describe("tools/check", () => {
     );
   });
 
+  it("supports Match.Where message sugar with string, descriptor, and formatter values", () => {
+    expect(() =>
+      checkRuntime(
+        "ABC",
+        Match.Where(
+          (value: unknown) => value === "ABC",
+          "value must equal ABC",
+        ),
+      ),
+    ).not.toThrow();
+
+    const localizedPattern = Match.Where(
+      (value: unknown, parent?: unknown): value is number => {
+        expect(parent).toEqual({ retries: 0 });
+        return typeof value === "number" && value > 0;
+      },
+      ({ value, error, path, parent, pattern }) => {
+        expect(parent).toEqual({ retries: 0 });
+        expect(value).toBe(0);
+        expect(error.path).toBe("$.retries");
+        expect(path).toBe("$.retries");
+        expect(pattern).toBe(localizedPattern.pattern);
+        return {
+          message: `Retries are invalid at ${path}.`,
+          code: "validation.retries.invalid",
+          params: { value: String(value) },
+        };
+      },
+    );
+
+    const localizedError = expectMatchFailure(() =>
+      checkRuntime(
+        { retries: 0 },
+        {
+          retries: localizedPattern,
+        },
+      ),
+    );
+
+    expect(localizedError.message).toBe("Retries are invalid at $.retries.");
+    expect(localizedError.data.failures[0]).toMatchObject({
+      path: "$.retries",
+      message: "Failed Match.Where validation at $.retries.",
+      code: "validation.retries.invalid",
+      params: { value: "0" },
+    });
+
+    const directError = expectMatchFailure(() =>
+      checkRuntime(
+        "abc",
+        Match.Where((value: unknown) => value === "ABC", {
+          message: "value must equal ABC",
+          code: "validation.equals",
+          params: { expected: "ABC" },
+        }),
+      ),
+    );
+
+    expect(directError.message).toBe("value must equal ABC");
+    expect(directError.data.failures[0]).toMatchObject({
+      path: "$",
+      message: "Failed Match.Where validation at $.",
+      code: "validation.equals",
+      params: { expected: "ABC" },
+    });
+  });
+
   it("supports Match.Range with inclusive and exclusive bounds", () => {
     expect(() =>
       checkRuntime(1, Match.Range({ min: 1, max: 10 })),
@@ -461,6 +528,33 @@ describe("tools/check", () => {
     ).toThrow("Invalid email bad@example.com at $.email for user-2");
   });
 
+  it("keeps aggregate summaries stable when Match.Where uses message sugar", () => {
+    const aggregateError = expectMatchFailure(() =>
+      checkRuntime(
+        {
+          first: 1,
+          second: 2,
+        } as any,
+        {
+          first: Match.Where(
+            (value: unknown): value is string => value === "one",
+            "first must equal one",
+          ),
+          second: Match.Where(
+            (value: unknown): value is string => value === "two",
+            "second must equal two",
+          ),
+        },
+        { throwAllErrors: true },
+      ),
+    );
+
+    expect(aggregateError.message).toContain(
+      "Match failed with 2 errors:\n- Failed Match.Where validation at $.first.\n- Failed Match.Where validation at $.second.",
+    );
+    expect(aggregateError.data.failures).toHaveLength(2);
+  });
+
   it("supports Match.RegExp with RegExp and source string inputs", () => {
     expect(() =>
       checkRuntime("abc-123", Match.RegExp(/^[a-z]+-\d+$/)),
@@ -500,6 +594,22 @@ describe("tools/check", () => {
     );
   });
 
+  it("keeps raw Match.Where failures when message sugar wraps thrown predicates", () => {
+    const error = expectMatchFailure(() =>
+      checkRuntime(
+        "value",
+        Match.Where(() => {
+          throw new Error("where crashed");
+        }, "custom where message"),
+      ),
+    );
+
+    expect(error.message).toBe("custom where message");
+    expect(error.data.failures[0].message).toBe(
+      "Failed Match.Where validation at $: Error: where crashed.",
+    );
+  });
+
   it("turns thrown non-Error values from Match.Where into Match failures", () => {
     expect(() =>
       checkRuntime(
@@ -520,6 +630,8 @@ describe("tools/check", () => {
         Match.Where("invalid" as unknown as (value: unknown) => boolean),
       ),
     ).toThrow(RunnerError);
+    expect(() => Match.Where(() => true, null as never)).toThrow(RunnerError);
+    expect(() => Match.Where(() => true, 42 as never)).toThrow(RunnerError);
     expect(() =>
       checkRuntime(
         "v",

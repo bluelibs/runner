@@ -143,8 +143,12 @@ describe("DependencyExtractor coverage gaps", () => {
     expect(eventManager.emit).toHaveBeenCalledWith(
       event,
       { ok: true },
-      expect.any(Object),
-      undefined,
+      expect.objectContaining({
+        source: expect.objectContaining({
+          id: "extractor-gap-source",
+          kind: "runtime",
+        }),
+      }),
     );
   });
 

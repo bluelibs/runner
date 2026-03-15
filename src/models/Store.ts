@@ -1,5 +1,6 @@
 import {
   IEvent,
+  IEventEmissionCallOptions,
   IResource,
   ITag,
   RegisterableItem,
@@ -149,6 +150,14 @@ export class Store {
 
   public getLifecycleAdmissionController(): LifecycleAdmissionController {
     return this.lifecycleAdmissionController;
+  }
+
+  /**
+   * Returns the shared execution-context store used by runtime-facing
+   * execution entrypoints and framework internals.
+   */
+  public getExecutionContextStore(): ExecutionContextStore {
+    return this.executionContextStore;
   }
 
   /**
@@ -392,7 +401,6 @@ export class Store {
       ...source,
       id: resolveRequestedIdFromStore(this, source.id) ?? source.id,
     });
-
     const manager = this.eventManager;
 
     return {
@@ -401,37 +409,57 @@ export class Store {
       emit: (<TInput>(
         eventDefinition: IEvent<TInput>,
         data: TInput,
-        source: RuntimeCallSource,
-        options?: unknown,
-      ) =>
-        manager.emit(
+        request: RuntimeCallSource | IEventEmissionCallOptions,
+      ) => {
+        const options =
+          "source" in request
+            ? {
+                ...request,
+                source: resolveRuntimeSource(request.source),
+              }
+            : { source: resolveRuntimeSource(request) };
+        return manager.emit(
           resolveRegisteredEvent(eventDefinition),
           data,
-          resolveRuntimeSource(source),
-          options as any,
-        )) as EventManager["emit"],
+          options,
+        );
+      }) as EventManager["emit"],
       emitLifecycle: (<TInput>(
         eventDefinition: IEvent<TInput>,
         data: TInput,
-        source: RuntimeCallSource,
-        options?: unknown,
-      ) =>
-        manager.emitLifecycle(
+        request: RuntimeCallSource | IEventEmissionCallOptions,
+      ) => {
+        const options =
+          "source" in request
+            ? {
+                ...request,
+                source: resolveRuntimeSource(request.source),
+              }
+            : { source: resolveRuntimeSource(request) };
+        return manager.emitLifecycle(
           resolveRegisteredEvent(eventDefinition),
           data,
-          resolveRuntimeSource(source),
-          options as any,
-        )) as EventManager["emitLifecycle"],
+          options,
+        );
+      }) as EventManager["emitLifecycle"],
       emitWithResult: (<TInput>(
         eventDefinition: IEvent<TInput>,
         data: TInput,
-        source: RuntimeCallSource,
-      ) =>
-        manager.emitWithResult(
+        request: RuntimeCallSource | IEventEmissionCallOptions,
+      ) => {
+        const options =
+          "source" in request
+            ? {
+                ...request,
+                source: resolveRuntimeSource(request.source),
+              }
+            : { source: resolveRuntimeSource(request) };
+        return manager.emitWithResult(
           resolveRegisteredEvent(eventDefinition),
           data,
-          resolveRuntimeSource(source),
-        )) as EventManager["emitWithResult"],
+          options,
+        );
+      }) as EventManager["emitWithResult"],
       addListener: (<TInput>(
         event: IEvent<TInput> | Array<IEvent<TInput>>,
         handler: Parameters<EventManager["addListener"]>[1],

@@ -148,6 +148,22 @@ import { Match } from "../../../decorators/legacy";
   if (Match.test(candidate, guarded)) {
     candidate.getTime();
   }
+
+  const guardedWithMessage = Match.Where(
+    (value: unknown): value is Date => value instanceof Date,
+    ({ value, error, path, pattern }) => {
+      const rawValue: unknown = value;
+      void rawValue;
+      error.path.toUpperCase();
+      path.toUpperCase();
+      const condition = pattern.condition;
+      void condition;
+      return "invalid date";
+    },
+  );
+
+  const checkedDateWithMessage = check(new Date(), guardedWithMessage);
+  checkedDateWithMessage.getTime();
 }
 
 {
@@ -473,6 +489,26 @@ import { Match } from "../../../decorators/legacy";
 
   const parsed = check({ retries: 1 }, Match.fromSchema(JobConfig));
   const retries: number = parsed.retries;
+  void retries;
+}
+
+{
+  const positiveInteger = Match.Where(
+    (value: unknown): value is number =>
+      typeof value === "number" && Number.isInteger(value) && value > 0,
+    ({ value, error, path, pattern }) => {
+      const rawValue: unknown = value;
+      void rawValue;
+      error.path.toUpperCase();
+      path.toUpperCase();
+      const condition = pattern.condition;
+      void condition;
+      return "invalid retries";
+    },
+  );
+
+  const parsed = check(1, positiveInteger);
+  const retries: number = parsed;
   void retries;
 }
 

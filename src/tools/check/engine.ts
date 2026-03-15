@@ -257,18 +257,34 @@ function matchTest<TPattern extends MatchPattern>(
   return collectMatchFailures(value, pattern, false).length === 0;
 }
 
-type MatchWhere = {
-  <TGuarded>(condition: WhereTypeGuard<TGuarded>): WherePattern<TGuarded>;
-  (condition: WherePredicate): WherePattern<unknown>;
-};
-
-const where: MatchWhere = (condition: unknown): WherePattern<unknown> => {
+function where<TGuarded>(
+  condition: WhereTypeGuard<TGuarded>,
+): WherePattern<TGuarded>;
+function where<TGuarded>(
+  condition: WhereTypeGuard<TGuarded>,
+  message: MatchMessageOptions<WherePattern<TGuarded>>,
+): WithMessagePattern<WherePattern<TGuarded>>;
+function where(condition: WherePredicate): WherePattern<unknown>;
+function where(
+  condition: WherePredicate,
+  message: MatchMessageOptions<WherePattern<unknown>>,
+): WithMessagePattern<WherePattern<unknown>>;
+function where(
+  condition: unknown,
+  message?: MatchMessageOptions<WherePattern<unknown>>,
+): WherePattern<unknown> | WithMessagePattern<WherePattern<unknown>> {
   assertPattern(
     typeof condition === "function",
     "Bad pattern: Match.Where requires a function condition.",
   );
-  return new WherePattern(condition as WherePredicate);
-};
+
+  const pattern = new WherePattern(condition as WherePredicate);
+  if (message === undefined) {
+    return pattern;
+  }
+
+  return withMessage(pattern, message);
+}
 
 function withMessage<TPattern extends MatchPattern>(
   pattern: TPattern,

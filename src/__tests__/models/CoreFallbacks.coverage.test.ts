@@ -35,7 +35,9 @@ describe("core fallback coverage", () => {
           emit(
             eventDefinition: unknown,
             data: { value: number },
-            sourceDefinition: unknown,
+            options: {
+              source: ReturnType<typeof runtimeSource.runtime>;
+            },
           ): Promise<void>;
         };
       }
@@ -44,14 +46,17 @@ describe("core fallback coverage", () => {
     await facade.emit(
       event,
       { value: 1 },
-      runtimeSource.runtime("store-core-fallback-source"),
+      {
+        source: runtimeSource.runtime("store-core-fallback-source"),
+      },
     );
 
     expect(emitSpy).toHaveBeenCalledWith(
       expect.anything(),
       { value: 1 },
-      runtimeSource.runtime("store-core-fallback-source"),
-      undefined,
+      {
+        source: runtimeSource.runtime("store-core-fallback-source"),
+      },
     );
 
     const root = defineResource({

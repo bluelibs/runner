@@ -28,6 +28,7 @@ export class EventEmissionImpl<TInput> implements IEventEmission<TInput> {
     public readonly path: string,
     public readonly data: TInput,
     public readonly timestamp: Date,
+    public readonly signal: AbortSignal | undefined,
     public readonly source: RuntimeCallSource,
     public readonly meta: Record<string, any>,
     public readonly transactional: boolean,

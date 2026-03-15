@@ -411,12 +411,10 @@ export class RunResult<V> implements IRuntime<V> {
       return Promise.reject(e);
     }
 
-    return this.eventManager.emit(
-      event,
-      payload,
-      runtimeSource.runtime("runtime.api"),
-      options,
-    );
+    return this.eventManager.emit(event, payload, {
+      source: runtimeSource.runtime("runtime.api"),
+      ...(options ?? {}),
+    });
   }) as {
     <P>(
       event: IEvent<P> | string,

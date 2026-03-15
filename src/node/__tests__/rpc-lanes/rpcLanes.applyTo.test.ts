@@ -138,6 +138,9 @@ describe("rpcLanes applyTo", () => {
     expect(eventCapture).toHaveBeenCalledWith(
       runtime.store.findIdByDefinition(event),
       { value: 7 },
+      {
+        signal: undefined,
+      },
     );
     expect(localHookRuns).toBe(0);
     await runtime.dispose();

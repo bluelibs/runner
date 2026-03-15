@@ -69,7 +69,9 @@ describe("Store fallback coverage", () => {
       emitLifecycle(
         eventDefinition: unknown,
         data: { value: number },
-        source: ReturnType<typeof runtimeSource.runtime>,
+        options: {
+          source: ReturnType<typeof runtimeSource.runtime>;
+        },
       ): Promise<void>;
     };
     const emitLifecycleSpy = jest
@@ -80,8 +82,10 @@ describe("Store fallback coverage", () => {
       event,
       { value: 1 },
       {
-        kind: "runtime",
-        id: sourceId as any,
+        source: {
+          kind: "runtime",
+          id: sourceId as any,
+        },
       },
     );
 
@@ -89,10 +93,55 @@ describe("Store fallback coverage", () => {
       event,
       { value: 1 },
       {
-        kind: "runtime",
-        id: sourceId,
+        source: {
+          kind: "runtime",
+          id: sourceId,
+        },
       },
-      undefined,
+    );
+  });
+
+  it("preserves emitWithResult options through the event-manager facade", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager } = fixture;
+    const event = defineEvent<{ value: number }>({
+      id: "store-fallback-facade-event-with-result",
+    });
+
+    store.storeGenericItem(event);
+    const facade = (store as any).createEventManagerFacade() as {
+      emitWithResult(
+        eventDefinition: unknown,
+        data: { value: number },
+        options: {
+          source: ReturnType<typeof runtimeSource.runtime>;
+          signal: AbortSignal;
+        },
+      ): Promise<{ value: number }>;
+    };
+    const controller = new AbortController();
+    const emitWithResultSpy = jest
+      .spyOn(eventManager, "emitWithResult")
+      .mockResolvedValue({ value: 2 } as never);
+
+    await expect(
+      facade.emitWithResult(
+        event,
+        { value: 1 },
+        {
+          source: runtimeSource.runtime("store-fallback-source"),
+          signal: controller.signal,
+        },
+      ),
+    ).resolves.toEqual({ value: 2 });
+
+    expect(emitWithResultSpy).toHaveBeenCalledWith(
+      event,
+      { value: 1 },
+      {
+        source: runtimeSource.runtime("store-fallback-source"),
+        signal: controller.signal,
+      },
     );
   });
 });

@@ -111,6 +111,46 @@ describe("requestHandlers - event handling", () => {
     expect(emitSpy).not.toHaveBeenCalled();
   });
 
+  it("forwards the request abort signal into event emission", async () => {
+    const emitSpy = jest.fn(async () => undefined);
+    const deps = createRequestHandlersDeps(serializer, {
+      store: {
+        events: new Map([["e-signal", { event: { id: "e-signal" } }]]),
+        errors: new Map(),
+      },
+      taskRunner: {} as any,
+      eventManager: { emit: emitSpy },
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      authenticator: async () => ({ ok: true }),
+      allowList: { ensureTask: () => null, ensureEvent: () => null },
+      router: {
+        basePath: "/api",
+        extract: (_p: string) => ({ kind: "event", id: "e-signal" }),
+        isUnderBase: () => true,
+      },
+      cors: undefined,
+    });
+
+    const { handleEvent } = createRequestHandlers(deps);
+    const { req, res } = createReqRes({
+      method: HttpMethod.Post,
+      url: "/api/event/e-signal",
+      headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
+      body: JSON.stringify({ payload: { x: 1 } }),
+    });
+
+    await handleEvent(req, res);
+
+    expect(emitSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "e-signal" }),
+      { x: 1 },
+      expect.objectContaining({
+        source: expect.any(Object),
+        signal: expect.any(Object),
+      }),
+    );
+  });
+
   describe("Application Errors and Sanitization", () => {
     it("includes id and data for known application errors", async () => {
       const AppError = defineError<{ code: number; message: string }>({

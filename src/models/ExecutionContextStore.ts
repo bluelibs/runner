@@ -41,6 +41,7 @@ type ActiveFrameNode = {
 type ActiveExecutionContext = {
   readonly correlationId: string;
   readonly startedAt: number;
+  readonly signal?: AbortSignal;
   readonly frameNode: ActiveFrameNode | undefined;
   readonly depth: number;
   readonly frameCounts: ReadonlyMap<string, number>;
@@ -81,6 +82,7 @@ function toSnapshot(
   return {
     correlationId: value.correlationId,
     startedAt: value.startedAt,
+    signal: value.signal,
     frames,
     depth: value.depth,
     currentFrame: value.frameNode.frame,
@@ -114,6 +116,7 @@ function createProvidedContext(
       options?.correlationId ??
       createFallbackCorrelationId(),
     startedAt: current?.startedAt ?? Date.now(),
+    signal: current?.signal,
     frameNode: current?.frameNode,
     depth: current?.depth ?? 0,
     frameCounts: current?.frameCounts ?? new Map(),
@@ -304,7 +307,11 @@ export class ExecutionContextStore {
    * Executes `fn` with a new frame appended to the current execution branch.
    * Validates depth limit and repetition threshold before entering.
    */
-  runWithFrame<T>(frame: ExecutionFrame, fn: () => T): T {
+  runWithFrame<T>(
+    frame: ExecutionFrame,
+    fn: () => T,
+    options?: { signal?: AbortSignal },
+  ): T {
     const store = getSharedExecutionContextStore();
     if (!this.isEnabled || !store) {
       return this.runWithoutContext(fn, store);
@@ -344,6 +351,7 @@ export class ExecutionContextStore {
       ? {
           correlationId: currentContext.correlationId,
           startedAt: currentContext.startedAt,
+          signal: currentContext.signal ?? options?.signal,
           frameNode: {
             frame,
             parent: currentContext.frameNode,
@@ -356,6 +364,7 @@ export class ExecutionContextStore {
       : {
           correlationId: this.createCorrelationIdValue(),
           startedAt: frame.timestamp,
+          signal: options?.signal,
           frameNode: {
             frame,
             parent: undefined,
@@ -411,6 +420,47 @@ export class ExecutionContextStore {
         }
       }
     });
+  }
+
+  /**
+   * Seeds the current execution tree with its first inherited signal.
+   *
+   * This is narrower than `runWithFrame(...)`: it only fills the ambient
+   * signal slot when execution context is enabled, a frame is already active,
+   * and no signal has been inherited yet.
+   */
+  runWithSignal<T>(signal: AbortSignal | undefined, fn: () => T): T {
+    const store = getSharedExecutionContextStore();
+    if (!this.isEnabled || !store) {
+      return this.runWithoutContext(fn, store);
+    }
+
+    const currentContext = store.getStore();
+    if (!currentContext || currentContext.signal || !signal) {
+      return fn();
+    }
+
+    return store.run(
+      {
+        ...currentContext,
+        signal,
+      },
+      fn,
+    );
+  }
+
+  /**
+   * Resolves the effective signal for a call.
+   *
+   * When execution context is enabled, omitted signals inherit the first
+   * ambient signal already attached to the current execution tree.
+   */
+  resolveSignal(signal: AbortSignal | undefined): AbortSignal | undefined {
+    if (signal || !this.isEnabled) {
+      return signal;
+    }
+
+    return getCurrentExecutionContext()?.signal;
   }
 
   /**

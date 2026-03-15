@@ -486,6 +486,19 @@ Built-in journal keys exist for middleware introspection:
 - `middleware.task.fallback.journalKeys.active` / `.error`
 - `middleware.task.timeout.journalKeys.abortController`
 
+Task calls and event emissions now accept `signal?: AbortSignal`.
+
+- top-level callers can pass `runTask(task, input, { signal })` or `emit(payload, { signal })`
+- when cancellation is active, tasks see `context.signal` and hooks see `event.signal`
+- with `run(..., { executionContext: true })`, omitted nested task calls and event emissions inherit the first signal seen in the current execution tree
+- explicit nested `signal` stays local to that direct child call or emission subtree and does not replace an already-inherited ambient signal
+- injected event emitters accept `emit(payload, { signal })`, and low-level event-manager APIs accept a merged `IEventEmissionCallOptions` object such as `{ source, signal, report }`
+- forwarded task journals preserve the current task cancellation chain, so an explicit nested task signal still composes with that journal-scoped signal path
+- RPC lane calls forward the active task or event signal automatically
+- timeout middleware reuses the same cooperative cancellation path instead of owning a separate public abort API
+- `middleware.task.timeout.journalKeys.abortController` remains available for middleware coordination and compatibility
+- if no cancellation source exists, `context.signal` and `event.signal` stay `undefined` rather than using a shared fake signal
+
 ## Data Contracts
 
 ### Validation
@@ -501,11 +514,14 @@ import { check, Match } from "@bluelibs/runner";
 - `check(value, pattern)` validates and returns the same value reference on success; hydration happens on `parse(...)` paths, not on `check(...)`.
 - The supported way to create reusable custom patterns is to compose Match-native helpers into named constants, for example `const AppMatch = { Slug: Match.WithMessage(Match.RegExp(/^[a-z0-9-]+$/), "Slug must be kebab-case.") } as const;`.
 - Those reusable custom patterns work anywhere Match works: `check(value, AppMatch.Slug)`, `AppMatch.Slug.test(value)`, `Match.compile({ slug: AppMatch.Slug })`, and `@Match.Field(AppMatch.Slug)`.
+- `CheckSchemaLike<T>` is the minimal custom top-level schema contract: implement `parse(input): T`, and optionally `toJSONSchema()` when you need machine-readable export for that schema.
+- In a custom `CheckSchemaLike`, prefer `throw errors.matchError.new({ path: "$", failures: [...] })` for validation failures instead of `throw new Error(...)`.
+- `CheckSchemaLike` is for top-level schema slots and `check(value, schema)`. It is not a public nested Match-pattern extension point, and manually thrown `path: "$"` values are not rebased into enclosing raw Match/class-schema paths.
 - Class-backed schemas hydrate on `.parse()`: `Match.fromSchema(UserDto).parse(...)` returns a `UserDto` instance, and any raw Match pattern that contains class-schema nodes hydrates those nested nodes during parse.
 - Hydration uses prototype assignment and does not call class constructors during parse.
 - Compiled schemas do not expose `.extend()`; for object-shaped schemas, compose `compiled.pattern` into a new pattern and call `Match.compile(...)` again.
 - Constructors act as matchers: `String`, `Number`, `Boolean`.
-- Common `Match.*` helpers include `NonEmptyString`, `Email`, `Integer`, `UUID`, `URL`, `Range({ min?, max?, inclusive?, integer? })`, `Optional()`, `OneOf()`, `ObjectIncluding()`, `MapOf()`, `ArrayOf()`, `Lazy()`, `Where((value, parent?) => boolean)`, and `WithMessage(pattern, messageOrFormatter)`.
+- Common `Match.*` helpers include `NonEmptyString`, `Email`, `Integer`, `UUID`, `URL`, `Range({ min?, max?, inclusive?, integer? })`, `Optional()`, `OneOf()`, `ObjectIncluding()`, `MapOf()`, `ArrayOf()`, `Lazy()`, `Where((value, parent?) => boolean, messageOrFormatter?)`, and `WithMessage(pattern, messageOrFormatter)`.
 - Plain objects are strict by default, so `check(value, { name: String })` rejects unknown keys.
 - Prefer a plain object for the normal strict case, `Match.ObjectStrict(...)` when you want that strictness to be explicit, and `Match.ObjectIncluding(...)` when extra keys are allowed.
 - `@Match.Schema({ base: BaseClass })` allows subclassing without TypeScript `extends`.
@@ -516,13 +532,14 @@ import { check, Match } from "@bluelibs/runner";
 - Existing/native `Symbol.metadata` implementations are preserved.
 - Use `Match.fromSchema(() => User)` for self-referencing or forward class-schema links.
 - Use `Match.Lazy(() => pattern)` for recursive plain Match patterns; use `Match.fromSchema(() => User)` when the recursive thing is a decorated class schema.
-- Use `Match.Where(...)` for runtime-only custom predicates and type guards, and prefer `Match.RegExp(...)` / built-ins / object patterns when JSON Schema export needs to stay precise.
+- Use `Match.Where(...)` for runtime-only custom predicates and type guards, and prefer `Match.Where(..., messageOrFormatter)` when the main need is predicate-specific message sugar. Prefer `Match.RegExp(...)` / built-ins / object patterns when JSON Schema export needs to stay precise.
 - `Match.Range({ min?, max?, inclusive?, integer? })` matches finite numbers within the configured bounds; `inclusive` defaults to `true`, `inclusive: false` makes both bounds exclusive, and `integer: true` restricts the range to integers.
 - Example: `Match.Range({ min: 5, max: 10, integer: true })` validates integers between 5 and 10 without needing `Match.Where(...)`.
 - Validation failures throw the built-in `errors.matchError` Runner error.
 - The thrown error data exposes `.path` as the first recorded leaf-failure path, and `.failures` keeps the raw nested failures even when the top-level message comes from an outer schema/subtree wrapper.
-- `Match.Where((value, parent?) => boolean)` receives the immediate parent when matching compound values.
+- `Match.Where((value, parent?) => boolean, messageOrFormatter?)` receives the immediate parent when matching compound values.
 - `Match.WithMessage(pattern, messageOrFormatter)` overrides the thrown match-error message.
+- `Match.Where(..., messageOrFormatter)` is ergonomic sugar for `Match.WithMessage(Match.Where(...), messageOrFormatter)` and follows the same runtime semantics.
 - `messageOrFormatter` accepts a string, `{ message, code?, params? }`, or a callback `(ctx) => string | { message, code?, params? }`.
 - When using the callback form, `ctx` is `{ value, error, path, pattern, parent? }`.
 - When `{ code, params }` is provided, Runner copies that metadata onto the owned `failures[]` entries while keeping each leaf failure's raw `message` intact.

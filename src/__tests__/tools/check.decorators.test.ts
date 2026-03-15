@@ -148,7 +148,7 @@ describe("tools/check decorators", () => {
     ).not.toThrow();
   });
 
-  it("supports Match.WithMessage inside decorator schemas", () => {
+  it("supports Match.Where message sugar inside decorator schemas", () => {
     const formatter = jest.fn(
       ({ value, path }: { value: unknown; path: string }) =>
         `retries is invalid. Received ${String(value)} at ${path}.`,
@@ -157,6 +157,7 @@ describe("tools/check decorators", () => {
     const positiveInteger = Match.Where(
       (value: unknown): value is number =>
         typeof value === "number" && Number.isInteger(value) && value > 0,
+      formatter,
     );
 
     class RetriesSchema {
@@ -164,10 +165,7 @@ describe("tools/check decorators", () => {
     }
 
     Match.Schema()(RetriesSchema);
-    Match.Field(Match.WithMessage(positiveInteger, formatter))(
-      RetriesSchema.prototype,
-      "retries",
-    );
+    Match.Field(positiveInteger)(RetriesSchema.prototype, "retries");
 
     const retriesError = expectMatchFailure(() =>
       Match.fromSchema(RetriesSchema).parse({ retries: 0 }),
@@ -185,7 +183,7 @@ describe("tools/check decorators", () => {
       expect.objectContaining({
         value: 0,
         path: "$.retries",
-        pattern: positiveInteger,
+        pattern: positiveInteger.pattern,
       }),
     );
   });
@@ -325,6 +323,20 @@ describe("tools/check decorators", () => {
         params: 42 as never,
       })).parse(1),
     );
+    expectInvalidPatternFailure(() =>
+      Match.Where(
+        () => false,
+        () => {
+          throw new Error("boom");
+        },
+      ).parse(1),
+    );
+    expectInvalidPatternFailure(() =>
+      Match.Where(
+        () => false,
+        () => 42 as never,
+      ).parse(1),
+    );
   });
 
   it("supports Match.WithMessage in plain check()", () => {
@@ -349,8 +361,8 @@ describe("tools/check decorators", () => {
     expect(() =>
       check(
         "abc",
-        Match.WithMessage(
-          Match.Where((value: unknown) => value === "ABC"),
+        Match.Where(
+          (value: unknown) => value === "ABC",
           "value must equal ABC",
         ),
       ),

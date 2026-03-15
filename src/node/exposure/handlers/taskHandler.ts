@@ -197,6 +197,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
           taskResult = await runWithContext(() =>
             taskRunner.run(storeTask.task, multipart.value, {
               source: exposureSource,
+              signal: controller.signal,
             }),
           );
         } catch (err) {
@@ -227,6 +228,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
         const result = await runWithContext(() =>
           taskRunner.run(storeTask.task, undefined, {
             source: exposureSource,
+            signal: controller.signal,
           }),
         );
         respondTaskResult(req, res, result, cors, serializer);
@@ -261,6 +263,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
       const result = await runWithContext(() =>
         taskRunner.run(storeTask.task, payload, {
           source: exposureSource,
+          signal: controller.signal,
         }),
       );
       respondTaskResult(req, res, result, cors, serializer);

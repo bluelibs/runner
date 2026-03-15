@@ -68,6 +68,7 @@ export interface IRpcLaneCommunicator {
  */
 export interface RpcLaneRequestOptions {
   headers?: Record<string, string>;
+  signal?: AbortSignal;
 }
 
 /**

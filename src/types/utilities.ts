@@ -196,6 +196,8 @@ export interface TaskCallOptions {
   journal?: ExecutionJournal;
   /** Source metadata used for lifecycle admission and tracing. */
   source?: RuntimeCallSource;
+  /** Cooperative cancellation signal for this task execution. */
+  signal?: AbortSignal;
 }
 
 /**

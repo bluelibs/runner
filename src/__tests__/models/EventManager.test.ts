@@ -7,7 +7,7 @@ import {
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
-import { createMessageError } from "../../errors";
+import { cancellationError, createMessageError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
 import { ExecutionContextStore } from "../../models/ExecutionContextStore";
 
@@ -38,6 +38,27 @@ describe("EventManager", () => {
         timestamp: expect.any(Date),
       }),
     );
+  });
+
+  it("rejects immediately when emit() receives an already-aborted signal", async () => {
+    const controller = new AbortController();
+    const handler = jest.fn();
+    controller.abort("event cancelled");
+
+    eventManager.addListener(eventDefinition, handler);
+
+    try {
+      await eventManager.emit(eventDefinition, "testData", {
+        source: runtimeSource.runtime("test"),
+        signal: controller.signal,
+      });
+      fail("Expected emit() to reject on aborted signal");
+    } catch (error) {
+      expect(cancellationError.is(error)).toBe(true);
+      expect((error as Error).message).toContain("event cancelled");
+    }
+
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it("should respect listener order", async () => {
@@ -265,9 +286,11 @@ describe("EventManager", () => {
     eventManager.addListener(eventDefinition, handler);
 
     await eventManager.emit(eventDefinition, "testData", {
-      kind: "runtime",
-      id: "raw-source",
-    } as any);
+      source: {
+        kind: "runtime",
+        id: "raw-source",
+      },
+    });
 
     expect(handler).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -275,6 +298,21 @@ describe("EventManager", () => {
           kind: "runtime",
           id: "raw-source",
         },
+      }),
+    );
+  });
+
+  it("leaves event.signal undefined when emission has no cancellation source", async () => {
+    const handler = jest.fn();
+    eventManager.addListener(eventDefinition, handler);
+
+    await eventManager.emit(eventDefinition, "testData", {
+      source: runtimeSource.runtime("no-signal"),
+    });
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        signal: undefined,
       }),
     );
   });
@@ -544,15 +582,11 @@ describe("EventManager", () => {
     eventManager.addListener(eventDefinition, ok, { order: 0, id: "ok" });
     eventManager.addListener(eventDefinition, fail, { order: 1, id: "fail" });
 
-    const report = await eventManager.emit(
-      eventDefinition,
-      "testData",
-      runtimeSource.runtime("test"),
-      {
-        report: true,
-        throwOnError: false,
-      },
-    );
+    const report = await eventManager.emit(eventDefinition, "testData", {
+      source: runtimeSource.runtime("test"),
+      report: true,
+      throwOnError: false,
+    });
 
     expect(report.totalListeners).toBe(2);
     expect(report.attemptedListeners).toBe(2);
@@ -593,14 +627,10 @@ describe("EventManager", () => {
     );
 
     await expect(
-      eventManager.emit(
-        eventDefinition,
-        "testData",
-        runtimeSource.runtime("test"),
-        {
-          failureMode: EventEmissionFailureMode.Aggregate,
-        },
-      ),
+      eventManager.emit(eventDefinition, "testData", {
+        source: runtimeSource.runtime("test"),
+        failureMode: EventEmissionFailureMode.Aggregate,
+      }),
     ).rejects.toMatchObject({ name: "AggregateError" });
     expect(calls).toEqual(["first", "second", "third"]);
   });
@@ -621,16 +651,12 @@ describe("EventManager", () => {
       { order: 1, id: "l2" },
     );
 
-    const report = await eventManager.emit(
-      eventDefinition,
-      "testData",
-      runtimeSource.runtime("test"),
-      {
-        report: true,
-        throwOnError: false,
-        failureMode: EventEmissionFailureMode.Aggregate,
-      },
-    );
+    const report = await eventManager.emit(eventDefinition, "testData", {
+      source: runtimeSource.runtime("test"),
+      report: true,
+      throwOnError: false,
+      failureMode: EventEmissionFailureMode.Aggregate,
+    });
 
     expect(report.failedListeners).toBe(2);
     expect(report.errors).toHaveLength(2);
@@ -650,14 +676,10 @@ describe("EventManager", () => {
     );
 
     await expect(
-      eventManager.emit(
-        eventDefinition,
-        "testData",
-        runtimeSource.runtime("test"),
-        {
-          failureMode: EventEmissionFailureMode.Aggregate,
-        },
-      ),
+      eventManager.emit(eventDefinition, "testData", {
+        source: runtimeSource.runtime("test"),
+        failureMode: EventEmissionFailureMode.Aggregate,
+      }),
     ).rejects.toThrow("single-aggregate-error");
   });
 
@@ -1290,15 +1312,11 @@ describe("EventManager", () => {
       const handler = jest.fn();
       eventManager.addListener(eventDefinition, handler);
 
-      const report = await eventManager.emitLifecycle(
-        eventDefinition,
-        "orig",
-        runtimeSource.runtime("runtime-lifecycle"),
-        {
-          report: true,
-          throwOnError: false,
-        },
-      );
+      const report = await eventManager.emitLifecycle(eventDefinition, "orig", {
+        source: runtimeSource.runtime("runtime-lifecycle"),
+        report: true,
+        throwOnError: false,
+      });
 
       expect(handler).toHaveBeenCalledTimes(1);
       expect(report).toBeDefined();

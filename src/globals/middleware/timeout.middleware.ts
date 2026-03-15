@@ -1,7 +1,10 @@
 import { defineResourceMiddleware } from "../../definers/defineResourceMiddleware";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
-import { journal } from "../../models/ExecutionJournal";
 import { RunnerError } from "../../definers/defineError";
+import {
+  getOrCreateTaskAbortController,
+  taskCancellationJournalKeys,
+} from "../../models/runtime/taskCancellation";
 import { middlewareTimeoutError, RunnerErrorId } from "../../errors";
 import { Match } from "../../tools/check";
 import { symbolDefinitionIdentity } from "../../types/symbols";
@@ -45,9 +48,7 @@ export class TimeoutError extends RunnerError<{ message: string }> {
  */
 export const journalKeys = {
   /** The AbortController created by the timeout middleware */
-  abortController: journal.createKey<AbortController>(
-    "runner.middleware.timeout.abortController",
-  ),
+  abortController: taskCancellationJournalKeys.abortController,
 } as const;
 
 export const timeoutTaskMiddleware = defineTaskMiddleware({
@@ -66,13 +67,7 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
       throw timeoutError;
     }
 
-    const existingController = journal.get(journalKeys.abortController);
-    const controller = existingController ?? new AbortController();
-
-    if (!existingController) {
-      // Expose controller for downstream middleware/tasks
-      journal.set(journalKeys.abortController, controller);
-    }
+    const controller = getOrCreateTaskAbortController(journal);
 
     return await new Promise((resolve, reject) => {
       let settled = false;

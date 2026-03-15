@@ -89,10 +89,17 @@ describe("rpc-lanes interceptor fallback branches", () => {
       interceptor(next, {
         id: "raw-event",
         data: { value: 1 },
+        signal: new AbortController().signal,
         source: runtimeSource.task("rpc-lanes-network-raw-id.source"),
       }),
     ).resolves.toBeUndefined();
-    expect(communicator.event).toHaveBeenCalledWith("raw-event", { value: 1 });
+    expect(communicator.event).toHaveBeenCalledWith(
+      "raw-event",
+      { value: 1 },
+      expect.objectContaining({
+        signal: expect.any(Object),
+      }),
+    );
     expect(next).not.toHaveBeenCalled();
   });
 

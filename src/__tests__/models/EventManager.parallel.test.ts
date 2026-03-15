@@ -119,6 +119,45 @@ describe("EventManager Parallel Execution", () => {
     expect(results).toEqual(["batch1"]);
   });
 
+  it("stops scheduling later batches once the signal aborts", async () => {
+    const controller = new AbortController();
+    const results: string[] = [];
+
+    eventManager.addListener(
+      parallelEvent,
+      async () => {
+        results.push("batch1-first");
+        controller.abort("stop here");
+      },
+      { order: 0 },
+    );
+
+    eventManager.addListener(
+      parallelEvent,
+      async () => {
+        results.push("batch1-second");
+      },
+      { order: 0 },
+    );
+
+    eventManager.addListener(
+      parallelEvent,
+      async () => {
+        results.push("batch2");
+      },
+      { order: 1 },
+    );
+
+    await expect(
+      eventManager.emit(parallelEvent, "data", {
+        source: runtimeSource.runtime("test"),
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ id: "cancellation" });
+
+    expect(results).toEqual(["batch1-first", "batch1-second"]);
+  });
+
   it("should NOT stop propagation within the same batch", async () => {
     const results: string[] = [];
 
@@ -436,16 +475,12 @@ describe("EventManager Parallel Execution", () => {
       { order: 2, id: "b2" },
     );
 
-    const report = await eventManager.emit(
-      parallelEvent,
-      "data",
-      runtimeSource.runtime("test"),
-      {
-        report: true,
-        throwOnError: false,
-        failureMode: EventEmissionFailureMode.Aggregate,
-      },
-    );
+    const report = await eventManager.emit(parallelEvent, "data", {
+      source: runtimeSource.runtime("test"),
+      report: true,
+      throwOnError: false,
+      failureMode: EventEmissionFailureMode.Aggregate,
+    });
 
     expect(results).toEqual(["batch1-ran", "batch2-ran"]);
     expect(report.failedListeners).toBe(2);

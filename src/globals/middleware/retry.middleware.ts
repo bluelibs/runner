@@ -1,8 +1,9 @@
 import { defineResourceMiddleware } from "../../definers/defineResourceMiddleware";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
-import { journalKeys as timeoutJournalKeys } from "./timeout.middleware";
+import { getTaskAbortSignalLink } from "../../models/runtime/taskCancellation";
 import { Match } from "../../tools/check";
+import { createCancellationErrorFromSignal } from "../../tools/abortSignals";
 
 /**
  * Configuration options for the retry middleware
@@ -62,29 +63,28 @@ export const retryTaskMiddleware = defineTaskMiddleware({
         return await next(input);
       } catch (error) {
         const err = error as Error;
+        const signalLink = getTaskAbortSignalLink(journal);
+        const signal = signalLink.signal;
 
-        // Check if timeout middleware has set an abort controller (fetch dynamically)
-        const abortController = journal.get(timeoutJournalKeys.abortController);
+        try {
+          if (signal?.aborted) {
+            throw error;
+          }
 
-        // Don't retry if the operation was aborted (timeout triggered)
-        if (abortController?.signal.aborted) {
-          throw error;
-        }
+          if (shouldStop(err) || attempts >= maxRetries) {
+            throw error;
+          }
 
-        if (shouldStop(err) || attempts >= maxRetries) {
-          throw error;
-        }
+          // Calculate delay using custom strategy or default exponential backoff
+          const delay = config.delayStrategy
+            ? config.delayStrategy(attempts, err)
+            : getDefaultRetryDelayMs(attempts);
 
-        // Calculate delay using custom strategy or default exponential backoff
-        const delay = config.delayStrategy
-          ? config.delayStrategy(attempts, err)
-          : getDefaultRetryDelayMs(attempts);
-
-        if (delay > 0) {
-          const signal = journal.get(
-            timeoutJournalKeys.abortController,
-          )?.signal;
-          await abortableDelay(delay, signal);
+          if (delay > 0) {
+            await abortableDelay(delay, signal);
+          }
+        } finally {
+          signalLink.cleanup();
         }
 
         attempts++;
@@ -141,16 +141,19 @@ export function abortableDelay(
   if (!signal) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
-  if (signal.aborted) return Promise.reject(signal.reason);
+  const activeSignal = signal;
+  if (activeSignal.aborted) {
+    return Promise.reject(createCancellationErrorFromSignal(activeSignal));
+  }
   return new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
+      activeSignal.removeEventListener("abort", onAbort);
       resolve();
     }, ms);
     function onAbort() {
       clearTimeout(timer);
-      reject(signal!.reason);
+      reject(createCancellationErrorFromSignal(activeSignal));
     }
-    signal.addEventListener("abort", onAbort, { once: true });
+    activeSignal.addEventListener("abort", onAbort, { once: true });
   });
 }

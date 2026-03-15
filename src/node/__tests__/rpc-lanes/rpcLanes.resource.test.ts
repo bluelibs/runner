@@ -271,6 +271,9 @@ describe("rpcLanesResource", () => {
     expect(eventCapture).toHaveBeenCalledWith(
       rr.store.findIdByDefinition(event),
       { value: 1 },
+      {
+        signal: undefined,
+      },
     );
     expect(localHookRuns).toBe(0);
     await rr.dispose();

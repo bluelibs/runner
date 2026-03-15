@@ -100,6 +100,7 @@ Task context includes:
 
 - `context.journal`: typed state shared with middleware
 - `context.source`: `{ kind, id }` of the current task invocation, where `id` is the canonical runtime source id
+- `context.signal`: the cooperative `AbortSignal` for the current execution when cancellation is active
 
 ```typescript
 import { journal, resources, r } from "@bluelibs/runner";
@@ -110,6 +111,9 @@ const sendEmail = r
   .task<{ to: string; body: string }>("sendEmail")
   .dependencies({ logger: resources.logger })
   .run(async (input, { logger }, context) => {
+    if (context.signal?.aborted) {
+      return { delivered: false };
+    }
     context.journal.set(auditKey, { startedAt: Date.now() });
     await logger.info(`Sending email to ${input.to}`);
     return { delivered: true };
@@ -176,20 +180,51 @@ export const journalKeys = {
 export const timeoutMiddleware = r.middleware
   .task("timeoutMiddleware")
   .run(async ({ task, next, journal }, _deps, config: { ttl: number }) => {
-    const controller = new AbortController();
-    journal.set(journalKeys.abortController, controller);
+    const controller =
+      journal.get(journalKeys.abortController) ?? new AbortController();
+    if (!journal.has(journalKeys.abortController)) {
+      journal.set(journalKeys.abortController, controller);
+    }
 
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        controller.abort();
-        reject(new Error(`Timeout after ${config.ttl}ms`));
-      }, config.ttl);
-    });
+    const timer = setTimeout(() => {
+      controller.abort(`Timeout after ${config.ttl}ms`);
+    }, config.ttl);
 
-    return Promise.race([next(task.input), timeoutPromise]);
+    try {
+      return await next(task.input);
+    } finally {
+      clearTimeout(timer);
+    }
   })
   .build();
 ```
+
+Prefer `context.signal` for task code and listener code. It stays `undefined` until a real cancellation source is present. Use journal keys only when middleware layers need to share execution-local control surfaces such as the timeout controller.
+
+### Task Cancellation
+
+Task calls can pass a cooperative signal:
+
+```typescript
+const controller = new AbortController();
+
+const promise = runTask(sendEmail, input, {
+  signal: controller.signal,
+});
+
+controller.abort("User cancelled send");
+
+await promise;
+```
+
+Cancellation behavior:
+
+- `signal` is optional
+- top-level callers can pass `runTask(task, input, { signal })`
+- with `run(..., { executionContext: true })`, omitted nested task calls inherit the first signal seen in the current execution tree
+- explicit nested `signal` applies to that direct child call and does not replace the already-inherited ambient signal for deeper automatic propagation
+- timeout middleware, forwarded task journals, and inbound HTTP/RPC request aborts still feed the same cooperative task signal when cancellation is active
+- when no real cancellation source exists, `context.signal` stays `undefined`
 
 Export your journal keys when you expect downstream middleware to consume the same execution-local state.
 

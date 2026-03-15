@@ -29,7 +29,11 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
 
     taskEntry.task = {
       ...taskEntry.task,
-      run: (async (input: unknown) => {
+      run: (async (
+        input: unknown,
+        _deps: unknown,
+        context?: { signal?: AbortSignal },
+      ) => {
         const runRemoteTask = binding.communicator.task;
         if (typeof runRemoteTask !== "function") {
           rpcLaneCommunicatorContractError.throw({
@@ -39,13 +43,21 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
         const executeRemoteTask = runRemoteTask as (
           id: string,
           input?: unknown,
-          options?: { headers?: Record<string, string> },
+          options?: {
+            headers?: Record<string, string>;
+            signal?: AbortSignal;
+          },
         ) => Promise<unknown>;
         const remoteTaskId = store.findIdByDefinition(taskEntry.task);
         const headers = buildRpcLaneRequestHeaders(lane.id);
         return headers
-          ? executeRemoteTask(remoteTaskId, input, { headers })
-          : executeRemoteTask(remoteTaskId, input);
+          ? executeRemoteTask(remoteTaskId, input, {
+              headers,
+              signal: context?.signal,
+            })
+          : executeRemoteTask(remoteTaskId, input, {
+              signal: context?.signal,
+            });
       }) as typeof taskEntry.task.run,
       isRpcRouted: true,
       [symbolRpcLaneRoutedBy]: resourceId,
@@ -71,7 +83,9 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
       const result = await binding.communicator.eventWithResult(
         eventId,
         emission.data,
-        headers ? { headers } : undefined,
+        headers
+          ? { headers, signal: emission.signal }
+          : { signal: emission.signal },
       );
       if (result !== undefined) {
         emission.data = result;
@@ -84,9 +98,12 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
       if (headers) {
         await binding.communicator.event(eventId, emission.data, {
           headers,
+          signal: emission.signal,
         });
       } else {
-        await binding.communicator.event(eventId, emission.data);
+        await binding.communicator.event(eventId, emission.data, {
+          signal: emission.signal,
+        });
       }
       return;
     }

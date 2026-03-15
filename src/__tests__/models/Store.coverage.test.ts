@@ -234,14 +234,13 @@ describe("Store coverage", () => {
     expect(emitLifecycleSpy).toHaveBeenCalledWith(
       event,
       { value: 1 },
-      source,
-      undefined,
+      {
+        source,
+      },
     );
-    expect(emitWithResultSpy).toHaveBeenCalledWith(
-      event,
-      resultPayload,
+    expect(emitWithResultSpy).toHaveBeenCalledWith(event, resultPayload, {
       source,
-    );
+    });
     expect(addListenerSpy).toHaveBeenCalledWith([event], handler, undefined);
     expect(hasListenersSpy).toHaveBeenCalledWith(event);
   });

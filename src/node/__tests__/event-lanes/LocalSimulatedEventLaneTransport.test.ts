@@ -78,7 +78,9 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const logger = createLogger();
     const errorSpy = jest.spyOn(logger, "error").mockResolvedValue();
     const eventManager = new EventManager();
-    const emitSpy = jest.spyOn(eventManager, "emit").mockResolvedValue();
+    const emitSpy = jest
+      .spyOn(eventManager, "emit")
+      .mockResolvedValue(undefined);
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext({ coolingDown: true, disposed: false });
     const store = createStore();
@@ -108,7 +110,9 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const logger = createLogger();
     const errorSpy = jest.spyOn(logger, "error").mockResolvedValue();
     const eventManager = new EventManager();
-    const emitSpy = jest.spyOn(eventManager, "emit").mockResolvedValue();
+    const emitSpy = jest
+      .spyOn(eventManager, "emit")
+      .mockResolvedValue(undefined);
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const store = createStore();
     const context = createContext();
@@ -139,7 +143,9 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const logger = createLogger();
     jest.spyOn(logger, "error").mockResolvedValue();
     const eventManager = new EventManager();
-    const emitSpy = jest.spyOn(eventManager, "emit").mockResolvedValue();
+    const emitSpy = jest
+      .spyOn(eventManager, "emit")
+      .mockResolvedValue(undefined);
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext();
     const event = defineEvent<{ value: number }>({
@@ -174,7 +180,7 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const logger = createLogger();
     const errorSpy = jest.spyOn(logger, "error").mockResolvedValue();
     const eventManager = new EventManager();
-    jest.spyOn(eventManager, "emit").mockResolvedValue();
+    jest.spyOn(eventManager, "emit").mockResolvedValue(undefined);
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext();
     const event = defineEvent<{ value: number }>({
@@ -215,7 +221,9 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const logger = createLogger();
     jest.spyOn(logger, "error").mockResolvedValue();
     const eventManager = new EventManager();
-    const emitSpy = jest.spyOn(eventManager, "emit").mockResolvedValue();
+    const emitSpy = jest
+      .spyOn(eventManager, "emit")
+      .mockResolvedValue(undefined);
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext();
     const laneId = "tests.local-simulated.fallback-auth.lane";
@@ -392,7 +400,9 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const logger = createLogger();
     jest.spyOn(logger, "error").mockResolvedValue();
     const eventManager = new EventManager();
-    const emitSpy = jest.spyOn(eventManager, "emit").mockResolvedValue();
+    const emitSpy = jest
+      .spyOn(eventManager, "emit")
+      .mockResolvedValue(undefined);
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext();
     const event = defineEvent<{ value: number }>({

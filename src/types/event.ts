@@ -69,6 +69,26 @@ export interface IEventEmitOptions {
    * When true, `emit(...)`/dependency event emitter returns `IEventEmitReport`.
    */
   report?: boolean;
+  /**
+   * Cooperative cancellation signal for the emission lifecycle.
+   */
+  signal?: AbortSignal;
+}
+
+/**
+ * Low-level event emission call options used by runtime internals.
+ *
+ * Dependency-injected event emitters already know their source, so they only
+ * expose {@link IEventEmitOptions}. Lower-level APIs such as `EventManager`
+ * still need the caller to provide source metadata explicitly for lifecycle
+ * admission checks and execution tracing.
+ */
+export interface IEventEmissionCallOptions extends IEventEmitOptions {
+  /**
+   * Identifies who is emitting the event for admission control, tracing, and
+   * listener self-skip checks.
+   */
+  source: RuntimeCallSource;
 }
 
 // Helper to keep tuple inference intact for multi-event hooks
@@ -165,6 +185,10 @@ export interface IEventEmission<TPayload = any> {
    * The timestamp when the event was created.
    */
   timestamp: Date;
+  /**
+   * Cooperative cancellation signal for this emission when one exists.
+   */
+  signal?: AbortSignal;
   /**
    * The source of the event. This can be useful for debugging.
    */

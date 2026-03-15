@@ -29,6 +29,8 @@ export interface ExecutionContextSnapshot {
   readonly correlationId: string;
   /** Epoch timestamp for the top-level execution start. */
   readonly startedAt: number;
+  /** First inherited signal for the active execution tree when one exists. */
+  readonly signal?: AbortSignal;
   /** Ordered stack of execution frames from root to current frame. */
   readonly frames: readonly ExecutionFrame[];
   /** Current nesting depth within the execution tree. */

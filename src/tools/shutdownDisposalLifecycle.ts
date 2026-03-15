@@ -1,4 +1,4 @@
-import { IEvent } from "../defs";
+import { IEvent, IEventEmissionCallOptions } from "../defs";
 import { globalEvents } from "../globals/globalEvents";
 import { Logger } from "../models/Logger";
 import { RuntimeCallSource } from "../types/runtimeSource";
@@ -20,11 +20,7 @@ type LifecycleEventManager = {
   emitLifecycle<TInput>(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: RuntimeCallSource,
-    options?: {
-      throwOnError?: boolean;
-      failureMode?: "fail-fast" | "aggregate";
-    },
+    options: IEventEmissionCallOptions,
   ): Promise<void | unknown>;
 };
 
@@ -143,15 +139,11 @@ async function emitLifecycleEvent(
   const canonicalId = store.findIdByDefinition(event);
   const registeredEvent = store.findDefinitionById(canonicalId) as IEvent<void>;
 
-  await eventManager.emitLifecycle(
-    registeredEvent,
-    undefined,
-    runtimeLifecycleSource,
-    {
-      throwOnError: false,
-      failureMode: "aggregate",
-    },
-  );
+  await eventManager.emitLifecycle(registeredEvent, undefined, {
+    source: runtimeLifecycleSource,
+    throwOnError: false,
+    failureMode: "aggregate",
+  });
 }
 
 async function waitForCooldownWindow(

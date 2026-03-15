@@ -165,14 +165,16 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
               return await eventManager.emitWithResult(
                 storeEvent.event,
                 body.value?.payload,
-                exposureSource,
+                {
+                  source: exposureSource,
+                  signal: controller.signal,
+                },
               );
             }
-            await eventManager.emit(
-              storeEvent.event,
-              body.value?.payload,
-              exposureSource,
-            );
+            await eventManager.emit(storeEvent.event, body.value?.payload, {
+              source: exposureSource,
+              signal: controller.signal,
+            });
             return undefined;
           },
           {

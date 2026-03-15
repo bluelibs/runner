@@ -247,12 +247,10 @@ export class DependencyExtractor {
     const effectiveEvent = eventEntry.event;
 
     return async (input: unknown, options?: IEventEmitOptions) => {
-      return this.eventManager.emit(
-        effectiveEvent,
-        input,
-        runtimeCallSource,
-        options,
-      );
+      return this.eventManager.emit(effectiveEvent, input, {
+        source: runtimeCallSource,
+        ...(options ?? {}),
+      });
     };
   }
 

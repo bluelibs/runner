@@ -47,17 +47,17 @@ export interface HttpClient {
   task<I = unknown, O = unknown>(
     id: string,
     input?: I,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<O>;
   event<P = unknown>(
     id: string,
     payload?: P,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<void>;
   eventWithResult?<P = unknown>(
     id: string,
     payload?: P,
-    options?: { headers?: Record<string, string> },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<P>;
 }
 
@@ -176,6 +176,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     manifestText: string,
     files: ReturnType<typeof buildUniversalManifest>["webFiles"],
     headersOverride?: Record<string, string>,
+    signal?: AbortSignal,
   ) {
     const fd = new FormData();
     fd.append("__manifest", manifestText);
@@ -195,6 +196,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       method: "POST",
       body: fd,
       headers,
+      signal,
       // Security: prevent automatic redirects from forwarding auth headers.
       redirect: "error",
     });
@@ -207,7 +209,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     async task<I, O>(
       id: string,
       input?: I,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<O> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
 
@@ -230,6 +232,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
           manifestText,
           manifest.webFiles,
           options?.headers,
+          options?.signal,
         );
         try {
           return assertOkEnvelope<O>(r as ProtocolEnvelope<O>, {
@@ -259,7 +262,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     async event<P>(
       id: string,
       payload?: P,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<void> {
       try {
         return await fetchClient.event<P>(id, payload, options);
@@ -271,7 +274,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     async eventWithResult<P>(
       id: string,
       payload?: P,
-      options?: { headers?: Record<string, string> },
+      options?: { headers?: Record<string, string>; signal?: AbortSignal },
     ): Promise<P> {
       try {
         if (!fetchClient.eventWithResult) {

@@ -70,6 +70,26 @@ describe("httpFetchRemoteLane & createExposureFetch - additional coverage", () =
     await expect(client.task("t1", {})).rejects.toThrow(/aborted/);
   });
 
+  it("forwards caller-provided signals to fetch", async () => {
+    const controller = new AbortController();
+    const fetchMock = jest.fn(async (_url: unknown, init?: RequestInit) => {
+      expect(init?.signal).toBe(controller.signal);
+      return {
+        text: async () => serializer.stringify({ ok: true, result: "ok" }),
+      } as any;
+    });
+
+    const client = createExposureFetch({
+      baseUrl: "http://example.test/__runner",
+      fetchImpl: fetchMock as any,
+      serializer,
+    });
+
+    await expect(
+      client.task("t-signal", {}, { signal: controller.signal }),
+    ).resolves.toBe("ok");
+  });
+
   it("throws when fetchImpl is not a function", () => {
     expect(() =>
       createExposureFetch({

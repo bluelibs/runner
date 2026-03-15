@@ -197,7 +197,10 @@ describe("eventHandler allowAsyncContext option", () => {
     expect(emitWithResult).toHaveBeenCalledWith(
       { id: rawEventId },
       { a: 1 },
-      expect.anything(),
+      expect.objectContaining({
+        source: expect.anything(),
+        signal: expect.any(Object),
+      }),
     );
   });
 
@@ -256,10 +259,13 @@ describe("eventHandler allowAsyncContext option", () => {
     expect(emit).toHaveBeenCalledWith(
       { id: "app.events.user.created" },
       { ok: true },
-      {
-        kind: "resource",
-        id: "app.resources.exposure",
-      },
+      expect.objectContaining({
+        source: {
+          kind: "resource",
+          id: "app.resources.exposure",
+        },
+        signal: expect.any(Object),
+      }),
     );
   });
 
@@ -298,10 +304,13 @@ describe("eventHandler allowAsyncContext option", () => {
     expect(emit).toHaveBeenCalledWith(
       { id: "" },
       { ok: true },
-      {
-        kind: "resource",
-        id: "",
-      },
+      expect.objectContaining({
+        source: {
+          kind: "resource",
+          id: "",
+        },
+        signal: expect.any(Object),
+      }),
     );
   });
 });

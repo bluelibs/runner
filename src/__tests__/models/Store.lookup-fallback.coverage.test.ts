@@ -72,8 +72,9 @@ describe("Store lookup fallback coverage", () => {
     expect(emitSpy).toHaveBeenCalledWith(
       event,
       { value: 1 },
-      expect.objectContaining({ id: "" }),
-      undefined,
+      {
+        source: expect.objectContaining({ id: "" }),
+      },
     );
   });
 

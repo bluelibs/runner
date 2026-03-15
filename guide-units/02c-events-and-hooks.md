@@ -114,6 +114,33 @@ const report = await userRegistered(
 
 For transactional events, fail-fast rollback semantics are enforced regardless of aggregate options.
 
+### Event Cancellation
+
+Injected event emitters accept a cooperative signal, and listeners receive it as `event.signal` when the emission is cancellation-aware:
+
+```typescript
+const controller = new AbortController();
+
+await userCreated({ userId: "u1" }, { signal: controller.signal });
+```
+
+Cancellation behavior:
+
+- `signal` is optional
+- top-level callers can pass `emit(payload, { signal })`
+- with `run(..., { executionContext: true })`, omitted nested event emissions inherit the first signal seen in the current execution tree
+- explicit nested `signal` applies to that emission subtree and does not replace the already-inherited ambient signal for deeper automatic propagation
+- sequential events stop admitting new listeners once cancelled
+- parallel events let the current batch settle, then stop before the next batch
+- transactional events roll back already-completed listeners before the cancellation escapes
+
+`event.signal` stays `undefined` until a real source is explicitly provided or inherited from the current execution. Internal framework code can call `eventManager.emit(event, payload, { source, signal })` when it needs explicit source control.
+
+Low-level note:
+
+- `EventManager.emit(...)`, `emitLifecycle(...)`, and `emitWithResult(...)` prefer a merged call-options object: `{ source, signal, report, failureMode, throwOnError }`
+- dependency-injected event emitters do not ask for `source` because Runner fills that in for you
+
 ### Event-Driven Task Wiring
 
 When a task should announce something happened without owning every downstream side effect, emit an event and let hooks react. Inline Match patterns are usually the clearest option:

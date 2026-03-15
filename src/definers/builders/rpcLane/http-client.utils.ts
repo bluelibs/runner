@@ -3,7 +3,10 @@ import type { SerializerLike } from "../../../serializer";
 import type { Store } from "../../../models/Store";
 import type { IErrorHelper } from "../../../types/error";
 
-type RpcLaneRequestOptions = { headers?: Record<string, string> };
+type RpcLaneRequestOptions = {
+  headers?: Record<string, string>;
+  signal?: AbortSignal;
+};
 
 type RpcLaneCommunicatorLike = {
   task?: (

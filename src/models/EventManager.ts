@@ -4,7 +4,7 @@ import {
   EventHandlerType,
   IEvent,
   IEventEmission,
-  IEventEmitOptions,
+  IEventEmissionCallOptions,
   IEventEmitReport,
 } from "../defs";
 import {
@@ -32,15 +32,26 @@ import {
   createAggregateError,
   createEmptyReport,
 } from "./event/EmissionExecutor";
+import { throwCancellationErrorFromSignal } from "../tools/abortSignals";
 import {
   LifecycleAdmissionController,
   RuntimeLifecyclePhase,
 } from "./runtime/LifecycleAdmissionController";
 import { getDefinitionIdentity } from "../tools/isSameDefinition";
 
-type EventEmissionInternalOptions = IEventEmitOptions & {
+type EventEmissionInternalOptions = IEventEmissionCallOptions & {
   allowLifecycleBypass?: boolean;
 };
+
+type EventEmissionRequest = RuntimeCallSource | IEventEmissionCallOptions;
+type EventEmissionCallResult<TRequest extends EventEmissionRequest> =
+  TRequest extends { report: true } ? IEventEmitReport : void;
+
+function hasEmissionSource(
+  value: EventEmissionRequest,
+): value is IEventEmissionCallOptions {
+  return "source" in value;
+}
 
 /**
  * EventManager handles event emission, listener registration, and event processing.
@@ -89,48 +100,51 @@ export class EventManager {
 
   // ---- Emission API ----
 
-  async emit<TInput>(
+  /**
+   * Emits an event through the normal runtime admission path.
+   */
+  async emit<
+    TInput,
+    TRequest extends EventEmissionRequest = IEventEmissionCallOptions,
+  >(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: RuntimeCallSource,
-  ): Promise<void>;
-  async emit<TInput>(
-    eventDefinition: IEvent<TInput>,
-    data: TInput,
-    source: RuntimeCallSource,
-    options: IEventEmitOptions & { report: true },
-  ): Promise<IEventEmitReport>;
-  async emit<TInput>(
-    eventDefinition: IEvent<TInput>,
-    data: TInput,
-    source: RuntimeCallSource,
-    options?: IEventEmitOptions,
-  ): Promise<void | IEventEmitReport>;
-  async emit<TInput>(
-    eventDefinition: IEvent<TInput>,
-    data: TInput,
-    source: RuntimeCallSource,
-    options?: IEventEmitOptions,
-  ): Promise<void | IEventEmitReport> {
-    const result = await this.emitCore(eventDefinition, data, source, options);
-    if (options?.report) return result.report;
+    request: TRequest,
+  ): Promise<EventEmissionCallResult<TRequest>> {
+    const options = this.resolveEmissionRequest(request);
+    const result = await this.emitCore(eventDefinition, data, options);
+    if (options.report) {
+      return result.report as EventEmissionCallResult<TRequest>;
+    }
+
+    return undefined as EventEmissionCallResult<TRequest>;
   }
 
   /**
    * Emits a lifecycle event that bypasses shutdown admission checks.
-   * Used internally during the dispose sequence.
+   *
+   * This is intentionally narrower than `emit()`: it exists for framework
+   * lifecycle events that must still fire while the runtime is already in the
+   * disposing phase. Business events should keep using `emit()`.
    */
-  async emitLifecycle<TInput>(
+  async emitLifecycle<
+    TInput,
+    TRequest extends EventEmissionRequest = IEventEmissionCallOptions,
+  >(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: RuntimeCallSource,
-    options?: IEventEmitOptions,
-  ): Promise<void | IEventEmitReport> {
-    const result = await this.emitCore(eventDefinition, data, source, {
+    request: TRequest,
+  ): Promise<EventEmissionCallResult<TRequest>> {
+    const options = this.resolveEmissionRequest(request);
+    const result = await this.emitCore(eventDefinition, data, {
       ...options,
       allowLifecycleBypass: true,
     });
-    if (options?.report) return result.report;
+    if (options.report) {
+      return result.report as EventEmissionCallResult<TRequest>;
+    }
+
+    return undefined as EventEmissionCallResult<TRequest>;
   }
 
   /**
@@ -140,9 +154,10 @@ export class EventManager {
   async emitWithResult<TInput>(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: RuntimeCallSource,
+    request: EventEmissionRequest,
   ): Promise<TInput> {
-    const result = await this.emitCore(eventDefinition, data, source);
+    const options = this.resolveEmissionRequest(request);
+    const result = await this.emitCore(eventDefinition, data, options);
     return result.emission.data as TInput;
   }
 
@@ -256,20 +271,33 @@ export class EventManager {
   }
 
   /**
+   * Normalizes the 3rd argument into the merged call-options shape used
+   * internally. A bare source stays supported as a convenience shorthand.
+   */
+  private resolveEmissionRequest(
+    request: EventEmissionRequest,
+  ): IEventEmissionCallOptions {
+    if (hasEmissionSource(request)) {
+      return request;
+    }
+
+    return { source: request };
+  }
+
+  /**
    * Core emission pipeline shared by emit(), emitLifecycle(), and emitWithResult().
    */
   private async emitCore<TInput>(
     eventDef: IEvent<TInput>,
     inputData: TInput,
-    rawSource: RuntimeCallSource,
-    options?: EventEmissionInternalOptions,
+    options: EventEmissionInternalOptions,
   ): Promise<{
     emission: IEventEmission<TInput>;
     report: IEventEmitReport;
     executionContext?: ReturnType<ExecutionContextStore["getSnapshot"]>;
   }> {
     if (
-      !this.lifecycleAdmissionController.canAdmitEvent(rawSource, {
+      !this.lifecycleAdmissionController.canAdmitEvent(options.source, {
         allowLifecycleBypass: options?.allowLifecycleBypass === true,
       })
     ) {
@@ -287,7 +315,12 @@ export class EventManager {
       id: eventDefinition.id,
       path: eventDefinition.id,
     };
-    const source = rawSource;
+    const source = options.source;
+    const signal = this.executionContextStore.resolveSignal(options.signal);
+
+    if (signal?.aborted) {
+      throwCancellationErrorFromSignal(signal);
+    }
 
     let data = inputData;
     if (eventDefinition.payloadSchema) {
@@ -315,6 +348,7 @@ export class EventManager {
         eventDefinition,
         metadata,
         data,
+        signal,
         source,
         identity,
       );
@@ -328,6 +362,8 @@ export class EventManager {
         };
       }
 
+      // The context keeps the deepest event object seen so interceptors can
+      // replace the emission wrapper while preserving execution reporting.
       const context = new EmissionContext<TInput>(
         eventDefinition,
         allListeners,
@@ -364,6 +400,7 @@ export class EventManager {
         const result = await this.executionContextStore.runWithFrame(
           traceFrame,
           processEmission,
+          { signal },
         );
         return {
           emission: result.emission,
@@ -378,6 +415,7 @@ export class EventManager {
     eventDefinition: IEvent<TInput>,
     metadata: { id: string; path: string },
     data: TInput,
+    signal: AbortSignal | undefined,
     source: RuntimeCallSource,
     identity: object | undefined,
   ): EventEmissionImpl<TInput> {
@@ -386,6 +424,7 @@ export class EventManager {
       metadata.path,
       data,
       new Date(),
+      signal,
       source,
       eventDefinition.meta ? { ...eventDefinition.meta } : {},
       Boolean(eventDefinition.transactional),
