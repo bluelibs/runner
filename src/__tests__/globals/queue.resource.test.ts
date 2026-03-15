@@ -192,4 +192,143 @@ describe("Queue Resource", () => {
       jest.useRealTimers();
     }
   });
+
+  it("tears down active queues during runtime disposal and waits for cancellation", async () => {
+    const app = defineResource({
+      id: "queue-runtime-teardown-app",
+      dependencies: { queue: queueResource },
+      async init(_, { queue }) {
+        return queue;
+      },
+    });
+
+    const runtime = await run(app);
+    let startedQueuedTask = false;
+    let runningTaskAborted = false;
+
+    const running = runtime.value.run(
+      "teardown-queue",
+      async (signal: AbortSignal) =>
+        new Promise<void>((resolve) => {
+          signal.addEventListener(
+            "abort",
+            () => {
+              runningTaskAborted = true;
+              resolve();
+            },
+            { once: true },
+          );
+        }),
+    );
+
+    const queued = runtime.value.run("teardown-queue", async () => {
+      startedQueuedTask = true;
+      return "should-not-run";
+    });
+    const queuedResult = queued.catch((error) => error);
+
+    await Promise.resolve();
+
+    const disposePromise = runtime.dispose();
+
+    await expect(running).resolves.toBeUndefined();
+    await expect(queuedResult).resolves.toMatchObject({
+      message: expect.stringContaining("Operation was aborted"),
+    });
+    await expect(disposePromise).resolves.toBeUndefined();
+    expect(runningTaskAborted).toBe(true);
+    expect(startedQueuedTask).toBe(false);
+  });
+
+  it("surfaces queue teardown failures during runtime disposal", async () => {
+    const app = defineResource({
+      id: "queue-runtime-teardown-failure-app",
+      dependencies: { queue: queueResource },
+      async init(_, { queue }) {
+        await queue.run("failing-queue", async () => "ok");
+        return queue;
+      },
+    });
+
+    const runtime = await run(app);
+    const queue = runtime.value.map.get("failing-queue");
+    if (!queue) {
+      throw createMessageError("Expected failing-queue to exist");
+    }
+
+    const teardownError = new Error("queue teardown failed");
+    queue.dispose = jest.fn().mockRejectedValue(teardownError);
+
+    await expect(runtime.dispose()).rejects.toThrow("queue teardown failed");
+  });
+
+  it("aggregates multiple queue teardown failures and normalizes non-Error rejections", async () => {
+    const app = defineResource({
+      id: "queue-runtime-teardown-aggregate-failure-app",
+      dependencies: { queue: queueResource },
+      async init(_, { queue }) {
+        await queue.run("failing-queue-a", async () => "ok-a");
+        await queue.run("failing-queue-b", async () => "ok-b");
+        return queue;
+      },
+    });
+
+    const runtime = await run(app);
+    const queueA = runtime.value.map.get("failing-queue-a");
+    const queueB = runtime.value.map.get("failing-queue-b");
+
+    if (!queueA || !queueB) {
+      throw createMessageError("Expected both failing queues to exist");
+    }
+
+    queueA.dispose = jest.fn().mockRejectedValue("string failure");
+    queueB.dispose = jest.fn().mockRejectedValue(new Error("error failure"));
+
+    await expect(runtime.dispose()).rejects.toMatchObject({
+      name: "AggregateError",
+      message: "One or more queues failed to dispose.",
+      cause: expect.objectContaining({
+        message: "string failure",
+      }),
+      errors: [
+        expect.objectContaining({ message: "string failure" }),
+        expect.objectContaining({ message: "error failure" }),
+      ],
+    });
+  });
+
+  it("swallows idle-eviction teardown failures", async () => {
+    jest.useFakeTimers();
+
+    try {
+      const app = defineResource({
+        id: "queue-idle-eviction-failure-app",
+        dependencies: { queue: queueResource },
+        async init(_, { queue }) {
+          await queue.run("idle-failure", async () => "ok");
+          return queue;
+        },
+      });
+
+      const runtime = await run(app);
+      const queue = runtime.value.map.get("idle-failure");
+      if (!queue) {
+        throw createMessageError("Expected idle-failure queue to exist");
+      }
+
+      queue.dispose = jest
+        .fn()
+        .mockRejectedValue(new Error("idle teardown failed"));
+
+      jest.advanceTimersByTime(60_000);
+      await Promise.resolve();
+
+      expect(queue.dispose).toHaveBeenCalledTimes(1);
+      expect(runtime.value.map.has("idle-failure")).toBe(false);
+
+      await runtime.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

@@ -172,7 +172,7 @@ userInput.toJSONSchema(); // machine-readable contract for tooling
   - `lazy: true`: keep startup-unused resources asleep until `getLazyResourceValue(...)` wakes them; their `ready()` runs when they initialize, and lazy wakeups are rejected once shutdown starts.
   - `lifecycleMode: "parallel"`: keep dependency ordering, but allow same-wave `init`, `ready`, `cooldown`, and `dispose` to run in parallel.
   - `shutdownHooks: true`: install `SIGINT` / `SIGTERM` graceful shutdown hooks; signals during bootstrap cancel startup and roll back initialized resources.
-  - `dispose: { totalBudgetMs, drainingBudgetMs, cooldownWindowMs }`: control shutdown budget, drain wait, and the short post-`cooldown()` admissions window.
+  - `dispose: { totalBudgetMs, drainingBudgetMs, cooldownWindowMs }`: control the bounded shutdown-wait budget, the drain wait, and the short post-`cooldown()` admissions window.
   - `errorBoundary: true`: install process-level unhandled error capture and route it through `onUnhandledError`.
   - `executionContext: true | { ... }`: enable correlation ids and inherited execution signals, with optional frame tracking and cycle detection for task/event execution.
   - `mode: "dev" | "prod" | "test"`: override environment-based mode detection. The effective resolved mode is always available at runtime as `runtime.mode`, and inside resources as `resources.mode`, even when you did not pass `mode` explicitly.
@@ -241,10 +241,10 @@ Lifecycle:
 - Shutdown order:
   - enter `coolingDown`
   - run `cooldown()` in reverse dependency order
-  - keep admissions open during `dispose.cooldownWindowMs`
+  - if budget remains and `dispose.cooldownWindowMs` is greater than `0`, keep admissions open during that bounded window
   - enter `disposing`
   - emit `events.disposing`
-  - drain in-flight work
+  - drain in-flight work (`dispose.drainingBudgetMs`, capped by remaining `dispose.totalBudgetMs`)
   - emit `events.drained`
   - run `dispose()` in reverse dependency order
 
@@ -259,7 +259,7 @@ They are Runner's main composition and ownership unit: a resource can register c
 - `init(config, deps, context)` creates the value.
 - `ready(value, config, deps, context)` starts ingress after startup lock and runs after dependencies are all initialized.
 - `getLazyResourceValue(...)` is only valid before shutdown starts; once the runtime enters `coolingDown` or later, startup-unused resources stay asleep and wakeup attempts fail fast.
-- `cooldown(value, config, deps, context)` stops ingress quickly at shutdown start and runs during `coolingDown`, before `disposing` begins. Task runs and event emissions stay open during `coolingDown`, and if `dispose.cooldownWindowMs` is greater than `0` Runner keeps that broader admission policy open for the extra bounded window after cooldown completes. At the default `0`, Runner skips that wait. Once `disposing` begins, fresh admissions narrow to the cooling resource itself, any additional resource definitions returned from `cooldown()`, and in-flight continuations.
+- `cooldown(value, config, deps, context)` stops ingress quickly at shutdown start and runs during `coolingDown`, before `disposing` begins. Runner fully awaits `cooldown()` before it narrows admissions, and the time spent in `cooldown()` still counts against the remaining `dispose.totalBudgetMs` budget for later bounded waits. Task runs and event emissions stay open during `coolingDown`, and if `dispose.cooldownWindowMs` is greater than `0` Runner keeps that broader admission policy open for the extra bounded window after cooldown completes. At the default `0`, Runner skips that wait. Once `disposing` begins, fresh admissions narrow to the cooling resource itself, any additional resource definitions returned from `cooldown()`, and in-flight continuations.
 - `dispose(value, config, deps, context)` performs final teardown after drain and runs in reverse dependency order.
 - `health(value, config, deps, context)` is an optional async probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.
   Return `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
@@ -868,7 +868,13 @@ Runner's official same-runtime multi-tenant pattern uses `asyncContexts.tenant` 
 
 `resources.queue` provides named FIFO queues. Each queue id gets its own isolated instance.
 
-`queue.run(id, task)` schedules work sequentially. Each queued task receives `(signal: AbortSignal) => Promise<void>`, and the signal fires during `dispose()` — always respect it to avoid hanging shutdown:
+`queue.run(id, task)` schedules work sequentially. Each queued task receives `(signal: AbortSignal) => Promise<void>`.
+
+- `queue.dispose()` drains already-queued work without aborting the active task.
+- `queue.dispose({ cancel: true })` is teardown mode: it aborts the active task cooperatively and rejects queued-but-not-started work.
+- `resources.queue` uses `queue.dispose({ cancel: true })` during runtime teardown and awaits every queue before the resource is considered disposed.
+
+Always respect the signal in tasks that may be cancelled:
 
 ```ts
 await queue.run("uploads", async (signal) => {

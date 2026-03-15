@@ -11,7 +11,6 @@ import { getPlatform } from "./platform";
 import { runtimeSource } from "./types/runtimeSource";
 import {
   disposeRunArtifacts,
-  DisposeRunArtifactsInput,
   runShutdownDisposalLifecycle,
 } from "./tools/shutdownDisposalLifecycle";
 import { BootstrapCoordinator } from "./tools/BootstrapCoordinator";
@@ -136,12 +135,9 @@ export async function run<C, V extends Promise<any>>(
   const bootstrap = new BootstrapCoordinator();
   let unhookShutdown: (() => void) | undefined;
 
-  const disposeAll = async (
-    disposalBudget?: DisposeRunArtifactsInput["disposalBudget"],
-  ) => {
+  const disposeAll = async () => {
     await disposeRunArtifacts({
       store,
-      disposalBudget,
       takeUnhookProcessSafetyNets: () => {
         const current = unhookProcessSafetyNets;
         unhookProcessSafetyNets = undefined;

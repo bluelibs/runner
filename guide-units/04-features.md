@@ -516,7 +516,7 @@ const [result1, result2] = await Promise.all([
 
 ### Cancellation Support
 
-Each task receives an `AbortSignal` for cooperative cancellation:
+Each task receives an `AbortSignal` for cooperative cancellation. Plain `queue.dispose()` drains already-queued work, while `queue.dispose({ cancel: true })` switches into teardown mode and aborts the active task cooperatively:
 
 ```typescript
 import { Queue } from "@bluelibs/runner";
@@ -529,13 +529,13 @@ const result = await queue.run(async (signal) => {
   return "Task completed";
 });
 
-// Graceful shutdown
+// Graceful drain
 await queue.dispose();
 ```
 
 ### AbortController Integration
 
-The Queue provides each task with an `AbortSignal` for cooperative cancellation. Tasks should periodically check this signal to enable early termination.
+The Queue provides each task with an `AbortSignal` for cooperative cancellation. Tasks should periodically check this signal to enable early termination when you explicitly dispose with `{ cancel: true }`.
 
 ### Examples
 

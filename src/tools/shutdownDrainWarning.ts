@@ -1,6 +1,5 @@
 export type ShutdownDrainWarningReason =
   | "drain-budget-timeout"
-  | "dispose-budget-timeout-during-drain"
   | "dispose-budget-exhausted-before-drain";
 
 export type ShutdownDrainWaitResult =
@@ -31,14 +30,10 @@ export function resolveShutdownDrainWarningDecision(
     };
   }
 
-  if (!input.drainWaitResult.completed) {
-    return {
-      shouldWarn: true,
-      reason: "dispose-budget-timeout-during-drain",
-    };
-  }
-
-  if (input.drainWaitResult.drained === false) {
+  if (
+    input.drainWaitResult.completed &&
+    input.drainWaitResult.drained === false
+  ) {
     return { shouldWarn: true, reason: "drain-budget-timeout" };
   }
 

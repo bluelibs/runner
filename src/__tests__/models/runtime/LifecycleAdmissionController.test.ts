@@ -164,4 +164,22 @@ describe("LifecycleAdmissionController", () => {
     controller.allowShutdownResourceSource("resource-no-path");
     expect(controller.canAdmitTask(resourceSource)).toBe(true);
   });
+
+  it("returns false immediately when waitForDrain receives a non-positive timeout", async () => {
+    const controller = new LifecycleAdmissionController();
+    let releaseTask: (() => void) | undefined;
+
+    const pendingTask = controller.trackTaskExecution(
+      runtimeSource.task("task-pending"),
+      async () =>
+        new Promise<void>((resolve) => {
+          releaseTask = resolve;
+        }),
+    );
+
+    await expect(controller.waitForDrain(0)).resolves.toBe(false);
+
+    releaseTask?.();
+    await pendingTask;
+  });
 });

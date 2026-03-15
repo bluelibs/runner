@@ -4,7 +4,10 @@ import { Logger } from "../models/Logger";
 import { RuntimeCallSource } from "../types/runtimeSource";
 import { createDisposalBudget } from "./disposalBudget";
 import { waitForDisposeDrainBudget } from "./processShutdownHooks";
-import { resolveShutdownDrainWarningDecision } from "./shutdownDrainWarning";
+import {
+  resolveShutdownDrainWarningDecision,
+  ShutdownDrainWaitResult,
+} from "./shutdownDrainWarning";
 
 type LifecycleStore = {
   beginCoolingDown(): void;
@@ -34,16 +37,13 @@ export type ShutdownDisposalLifecycleInput = {
     drainingBudgetMs: number;
     cooldownWindowMs: number;
   };
-  disposeAll: (
-    disposalBudget: ReturnType<typeof createDisposalBudget>,
-  ) => Promise<void>;
+  disposeAll: () => Promise<void>;
 };
 
 export type DisposeRunArtifactsInput = {
   store: {
     dispose(): Promise<void>;
   };
-  disposalBudget?: ReturnType<typeof createDisposalBudget>;
   takeUnhookProcessSafetyNets: () => (() => void) | undefined;
   takeUnhookShutdown: () => (() => void) | undefined;
   onBeforeStoreDispose: () => void;
@@ -55,35 +55,29 @@ export async function runShutdownDisposalLifecycle(
   const disposalBudget = createDisposalBudget(input.dispose.totalBudgetMs);
   input.store.beginCoolingDown();
 
-  await disposalBudget.waitWithinBudget(() => input.store.cooldown());
+  await input.store.cooldown();
   await waitForCooldownWindow(disposalBudget, input.dispose.cooldownWindowMs);
   // Freeze admissions only after all cooldown hooks had a chance to stop ingress
   // and register any shutdown-specific source allowances.
   input.store.beginDisposing();
-  await disposalBudget.waitWithinBudget(() =>
-    emitLifecycleEvent(
-      input.store,
-      input.eventManager,
-      globalEvents.disposing,
-      input.runtimeLifecycleSource,
-    ),
+  await emitLifecycleEvent(
+    input.store,
+    input.eventManager,
+    globalEvents.disposing,
+    input.runtimeLifecycleSource,
   );
 
   const effectiveDrainBudgetMs = disposalBudget.capByRemainingBudget(
     input.dispose.drainingBudgetMs,
   );
-  const drainWait = await disposalBudget.waitWithinBudget(() =>
-    waitForDisposeDrainBudget(input.store, effectiveDrainBudgetMs),
+  const drainWaitResult = await waitForDrainWithinBudget(
+    input.store,
+    effectiveDrainBudgetMs,
   );
   const drainWarning = resolveShutdownDrainWarningDecision({
     requestedDrainBudgetMs: input.dispose.drainingBudgetMs,
     effectiveDrainBudgetMs,
-    drainWaitResult: drainWait.completed
-      ? {
-          completed: true,
-          drained: drainWait.value,
-        }
-      : { completed: false },
+    drainWaitResult,
   });
 
   if (drainWarning.shouldWarn) {
@@ -106,16 +100,14 @@ export async function runShutdownDisposalLifecycle(
   }
 
   input.store.beginDrained();
-  await disposalBudget.waitWithinBudget(() =>
-    emitLifecycleEvent(
-      input.store,
-      input.eventManager,
-      globalEvents.drained,
-      input.runtimeLifecycleSource,
-    ),
+  await emitLifecycleEvent(
+    input.store,
+    input.eventManager,
+    globalEvents.drained,
+    input.runtimeLifecycleSource,
   );
 
-  await input.disposeAll(disposalBudget);
+  await input.disposeAll();
 }
 
 export async function disposeRunArtifacts(
@@ -123,7 +115,7 @@ export async function disposeRunArtifacts(
 ): Promise<void> {
   try {
     input.onBeforeStoreDispose();
-    await waitForStoreDisposeWithinBudget(input.store, input.disposalBudget);
+    await input.store.dispose();
   } finally {
     input.takeUnhookProcessSafetyNets()?.();
     input.takeUnhookShutdown()?.();
@@ -156,30 +148,21 @@ async function waitForCooldownWindow(
     return;
   }
 
-  await disposalBudget.waitWithinBudget(
-    () =>
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, effectiveCooldownWindowMs);
-      }),
-  );
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, effectiveCooldownWindowMs);
+  });
 }
 
-async function waitForStoreDisposeWithinBudget(
-  store: {
-    dispose(): Promise<void>;
-  },
-  disposalBudget?: ReturnType<typeof createDisposalBudget>,
-): Promise<void> {
-  if (!disposalBudget) {
-    await store.dispose();
-    return;
+async function waitForDrainWithinBudget(
+  store: LifecycleStore,
+  effectiveDrainBudgetMs: number,
+): Promise<ShutdownDrainWaitResult> {
+  if (effectiveDrainBudgetMs <= 0) {
+    return { completed: false };
   }
 
-  const remainingBudgetMs = disposalBudget.remainingMs();
-  if (remainingBudgetMs <= 0) {
-    void store.dispose().catch(() => undefined);
-    return;
-  }
-
-  await disposalBudget.waitWithinBudget(() => store.dispose());
+  return {
+    completed: true,
+    drained: await waitForDisposeDrainBudget(store, effectiveDrainBudgetMs),
+  };
 }

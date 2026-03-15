@@ -6,6 +6,28 @@ const IDLE_QUEUE_EVICTION_MS = 60_000;
 
 type CleanupTimer = ReturnType<typeof setTimeout>;
 
+function normalizeQueueDisposalError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function throwQueueDisposalErrors(errors: readonly Error[]): void {
+  if (errors.length === 0) {
+    return;
+  }
+
+  if (errors.length === 1) {
+    throw errors[0];
+  }
+
+  const aggregateError = new Error("One or more queues failed to dispose.");
+  aggregateError.name = "AggregateError";
+
+  throw Object.assign(aggregateError, {
+    errors,
+    cause: errors[0],
+  });
+}
+
 export const queueResource = defineResource({
   id: "queue",
   context: () => ({
@@ -27,7 +49,7 @@ export const queueResource = defineResource({
     const disposeQueue = (id: string, queue: Queue): void => {
       clearCleanupTimer(id);
       map.delete(id);
-      void queue.dispose();
+      void queue.dispose().catch(() => undefined);
     };
 
     const scheduleIdleCleanup = (id: string): void => {
@@ -90,10 +112,20 @@ export const queueResource = defineResource({
       clearTimeout(timer);
     });
     context.cleanupTimers.clear();
-    context.map.forEach((queue: Queue) => {
-      void queue.dispose();
-    });
+    const queues = Array.from(context.map.values());
     context.map.clear();
+
+    const results = await Promise.allSettled(
+      queues.map((queue) => queue.dispose({ cancel: true })),
+    );
+    const errors = results
+      .filter(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected",
+      )
+      .map((result) => normalizeQueueDisposalError(result.reason));
+
+    throwQueueDisposalErrors(errors);
   },
   meta: {
     title: "Queue Map",

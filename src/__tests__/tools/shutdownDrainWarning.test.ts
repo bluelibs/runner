@@ -34,19 +34,6 @@ describe("shutdownDrainWarning", () => {
     });
   });
 
-  it("warns when total dispose budget expires during drain wait", () => {
-    expect(
-      resolveShutdownDrainWarningDecision({
-        requestedDrainBudgetMs: 200,
-        effectiveDrainBudgetMs: 150,
-        drainWaitResult: { completed: false },
-      }),
-    ).toEqual({
-      shouldWarn: true,
-      reason: "dispose-budget-timeout-during-drain",
-    });
-  });
-
   it("warns when dispose budget is already exhausted before drain starts", () => {
     expect(
       resolveShutdownDrainWarningDecision({
