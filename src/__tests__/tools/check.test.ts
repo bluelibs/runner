@@ -81,6 +81,38 @@ describe("tools/check", () => {
     expectMatchFailure(() => checkRuntime("", Match.NonEmptyString));
   });
 
+  it("keeps built-in matcher failure expectations stable", () => {
+    const cases = [
+      {
+        pattern: Match.Integer,
+        value: 1.2,
+        expected: "32-bit integer",
+      },
+      {
+        pattern: Match.NonEmptyString,
+        value: "",
+        expected: "non-empty string",
+      },
+      {
+        pattern: Match.URL,
+        value: "not a url",
+        expected: "url",
+      },
+      {
+        pattern: Match.IsoDateString,
+        value: "2026-01-01",
+        expected: "ISO date string",
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const error = expectMatchFailure(() =>
+        checkRuntime(testCase.value, testCase.pattern),
+      );
+      expect(error.data.failures[0]?.expected).toBe(testCase.expected);
+    }
+  });
+
   it("handles Maybe and Optional wrappers", () => {
     expect(() => checkRuntime(undefined, Match.Optional(String))).not.toThrow();
     expect(() => checkRuntime("ok", Match.Optional(String))).not.toThrow();

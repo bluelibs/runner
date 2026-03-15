@@ -267,9 +267,9 @@ describe("DependencyExtractor coverage gaps", () => {
     ]);
 
     store.isLocked = true;
-    expect(() =>
-      tasksFirstRead[0].intercept(passThroughIntercept),
-    ).toThrow(/after the runtime has been locked/i);
+    expect(() => tasksFirstRead[0].intercept(passThroughIntercept)).toThrow(
+      /after the runtime has been locked/i,
+    );
     store.isLocked = false;
 
     const resources = accessorWithOwner.resources;

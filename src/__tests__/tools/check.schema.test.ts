@@ -3,6 +3,7 @@ import {
   matchError,
 } from "../../errors";
 import { type MatchJsonSchema, check } from "../../tools/check";
+import { builtInMatcherDefinitions } from "../../tools/check/matcher/builtins";
 import { Match } from "../../decorators/legacy";
 
 function expectMatchFailure(
@@ -30,6 +31,17 @@ function expectSchemaError(
     >;
   }
 }
+
+const builtInPublicTokens = Object.freeze({
+  Any: Match.Any,
+  Integer: Match.Integer,
+  PositiveInteger: Match.PositiveInteger,
+  NonEmptyString: Match.NonEmptyString,
+  Email: Match.Email,
+  UUID: Match.UUID,
+  URL: Match.URL,
+  IsoDateString: Match.IsoDateString,
+});
 
 describe("tools/check schema support", () => {
   it("allows Match tokens to behave as schemas via parse()", () => {
@@ -122,6 +134,37 @@ describe("tools/check schema support", () => {
 
     expect(Match.RegExp(/^ok$/).parse("ok")).toBe("ok");
     expectMatchFailure(() => Match.RegExp(/^ok$/).parse("nope"));
+  });
+
+  it("supports test() on Match-native tokens and helper-created patterns", () => {
+    expect(Match.NonEmptyString.test("ok")).toBe(true);
+    expect(Match.NonEmptyString.test("")).toBe(false);
+
+    const optionalString = Match.Optional(String);
+    expect(optionalString.test(undefined)).toBe(true);
+    expect(optionalString.test("ok")).toBe(true);
+    expect(optionalString.test(1)).toBe(false);
+
+    const objectPattern = Match.ObjectIncluding({
+      id: Match.NonEmptyString,
+      retries: Match.Optional(Match.Integer),
+    });
+    expect(objectPattern.test({ id: "u1", retries: 1 })).toBe(true);
+    expect(objectPattern.test({ id: "", retries: 1 })).toBe(false);
+
+    const regexpPattern = Match.RegExp(/^runner$/);
+    expect(regexpPattern.test("runner")).toBe(true);
+    expect(regexpPattern.test("walker")).toBe(false);
+  });
+
+  it("keeps built-in token kinds aligned with the central registry", () => {
+    for (const [name, definition] of Object.entries(
+      builtInMatcherDefinitions,
+    )) {
+      expect(
+        builtInPublicTokens[name as keyof typeof builtInPublicTokens].kind,
+      ).toBe(definition.kind);
+    }
   });
 
   it("supports toJSONSchema() on Match schema-like tokens and wrappers", () => {

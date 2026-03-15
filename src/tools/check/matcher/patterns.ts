@@ -5,14 +5,114 @@ import type {
   MatchMessageOptions,
   MatchToJsonSchemaOptions,
 } from "../types";
+import type {
+  MatchJsonSchemaCompiler,
+  MatchPatternDefinition,
+  MatchPatternMatcher,
+} from "./contracts";
+import { collectMatchFailures } from "./core";
 import type { NonEmptyArrayElement, WhereCondition } from "./shared";
 import { parsePatternValue } from "./parse";
+import {
+  classPatternDefinition,
+  lazyPatternDefinition,
+  mapOfPatternDefinition,
+  maybePatternDefinition,
+  nonEmptyArrayPatternDefinition,
+  objectIncludingPatternDefinition,
+  objectStrictPatternDefinition,
+  oneOfPatternDefinition,
+  optionalPatternDefinition,
+  regExpPatternDefinition,
+  wherePatternDefinition,
+  withErrorPolicyPatternDefinition,
+  withMessagePatternDefinition,
+} from "./patternDefinitions";
 
 // ── Base class: provides parse() + toJSONSchema() for all pattern classes ────
 
-export class MatchPatternBase<TParseResult = unknown> {
+const patternDefinitionByInstance = new WeakMap<
+  object,
+  MatchPatternDefinition<object>
+>();
+
+export class MatchPatternBase<
+  TParseResult = unknown,
+  TSelf extends object = object,
+> {
+  constructor(definition: MatchPatternDefinition<TSelf>) {
+    // We store definitions out-of-band so pattern instances stay structurally
+    // simple for TypeScript inference, especially around optional-property
+    // wrappers used inside object patterns.
+    patternDefinitionByInstance.set(
+      this,
+      definition as MatchPatternDefinition<object>,
+    );
+  }
+
+  private getDefinition(): MatchPatternDefinition<TSelf> {
+    const definition = patternDefinitionByInstance.get(this);
+    if (!definition) {
+      throw createMatchPatternError("Bad pattern: missing Match definition.");
+    }
+
+    return definition as MatchPatternDefinition<TSelf>;
+  }
+
   parse(value: unknown): TParseResult {
     return parsePatternValue(value, this) as TParseResult;
+  }
+
+  test(value: unknown): value is TParseResult {
+    return collectMatchFailures(value, this, false).length === 0;
+  }
+
+  match(
+    value: unknown,
+    context: Parameters<MatchPatternMatcher>[2],
+    path: Parameters<MatchPatternMatcher>[3],
+    parent: unknown,
+    matchesPattern: MatchPatternMatcher,
+  ): value is TParseResult {
+    return this.getDefinition().match(
+      this as unknown as TSelf,
+      value,
+      context,
+      path,
+      parent,
+      matchesPattern,
+    );
+  }
+
+  compileToJSONSchema(
+    context: Parameters<MatchJsonSchemaCompiler>[1],
+    path: Parameters<MatchJsonSchemaCompiler>[2],
+    mode: Parameters<MatchJsonSchemaCompiler>[3],
+    compilePattern: MatchJsonSchemaCompiler,
+  ): MatchJsonSchema {
+    return this.getDefinition().compileToJSONSchema(
+      this as unknown as TSelf,
+      context,
+      path,
+      mode,
+      compilePattern,
+    );
+  }
+
+  appliesMessageOverrideToAggregate(): boolean {
+    return (
+      this.getDefinition().appliesMessageOverrideToAggregate?.(
+        this as unknown as TSelf,
+      ) ?? false
+    );
+  }
+
+  isOptionalObjectProperty(): boolean {
+    return (
+      this.getDefinition().isOptionalObjectProperty?.(
+        this as unknown as TSelf,
+      ) ?? false
+    );
   }
 
   toJSONSchema(options?: MatchToJsonSchemaOptions): MatchJsonSchema {
@@ -23,76 +123,106 @@ export class MatchPatternBase<TParseResult = unknown> {
 // ── Pattern classes ──────────────────────────────────────────────────────────
 
 export class MaybePattern<TPattern = unknown> extends MatchPatternBase<
-  TParseResult.Maybe<TPattern>
+  TParseResult.Maybe<TPattern>,
+  MaybePattern<TPattern>
 > {
   public readonly kind = "Match.MaybePattern";
   constructor(public readonly pattern: TPattern) {
-    super();
+    super(
+      maybePatternDefinition as MatchPatternDefinition<MaybePattern<TPattern>>,
+    );
   }
 }
 
 export class OptionalPattern<TPattern = unknown> extends MatchPatternBase<
-  TParseResult.Optional<TPattern>
+  TParseResult.Optional<TPattern>,
+  OptionalPattern<TPattern>
 > {
   public readonly kind = "Match.OptionalPattern";
   constructor(public readonly pattern: TPattern) {
-    super();
+    super(
+      optionalPatternDefinition as MatchPatternDefinition<
+        OptionalPattern<TPattern>
+      >,
+    );
   }
 }
 
 export class OneOfPattern<
   TPatterns extends readonly unknown[] = readonly [],
-> extends MatchPatternBase<TParseResult.OneOf<TPatterns>> {
+> extends MatchPatternBase<
+  TParseResult.OneOf<TPatterns>,
+  OneOfPattern<TPatterns>
+> {
   public readonly kind = "Match.OneOfPattern";
   constructor(public readonly patterns: TPatterns) {
-    super();
+    super(
+      oneOfPatternDefinition as MatchPatternDefinition<OneOfPattern<TPatterns>>,
+    );
   }
 }
 
-export class WherePattern<
-  TGuarded = unknown,
-> extends MatchPatternBase<TGuarded> {
+export class WherePattern<TGuarded = unknown> extends MatchPatternBase<
+  TGuarded,
+  WherePattern<TGuarded>
+> {
   public readonly kind = "Match.WherePattern";
   constructor(public readonly condition: WhereCondition<TGuarded>) {
-    super();
+    super(
+      wherePatternDefinition as MatchPatternDefinition<WherePattern<TGuarded>>,
+    );
   }
 }
 
 export class WithMessagePattern<TPattern = unknown> extends MatchPatternBase<
-  TParseResult.WithMessage<TPattern>
+  TParseResult.WithMessage<TPattern>,
+  WithMessagePattern<TPattern>
 > {
   public readonly kind = "Match.WithMessagePattern";
   constructor(
     public readonly pattern: TPattern,
     public readonly message: MatchMessageOptions,
   ) {
-    super();
+    super(
+      withMessagePatternDefinition as MatchPatternDefinition<
+        WithMessagePattern<TPattern>
+      >,
+    );
   }
 }
 
 export class WithErrorPolicyPattern<
   TPattern = unknown,
-> extends MatchPatternBase<TParseResult.WithErrorPolicy<TPattern>> {
+> extends MatchPatternBase<
+  TParseResult.WithErrorPolicy<TPattern>,
+  WithErrorPolicyPattern<TPattern>
+> {
   public readonly kind = "Match.WithErrorPolicyPattern";
   constructor(
     public readonly pattern: TPattern,
     public readonly errorPolicy: "first" | "all",
   ) {
-    super();
+    super(
+      withErrorPolicyPatternDefinition as MatchPatternDefinition<
+        WithErrorPolicyPattern<TPattern>
+      >,
+    );
   }
 }
 
 export class LazyPattern<TPattern = unknown> extends MatchPatternBase<
-  TParseResult.Lazy<TPattern>
+  TParseResult.Lazy<TPattern>,
+  LazyPattern<TPattern>
 > {
   public readonly kind = "Match.LazyPattern";
-
   private hasResolved = false;
   private resolvedPattern?: TPattern;
   private isResolving = false;
 
   constructor(private readonly resolver: () => TPattern) {
-    super();
+    super(
+      lazyPatternDefinition as MatchPatternDefinition<LazyPattern<TPattern>>,
+    );
   }
 
   resolve(): TPattern {
@@ -129,9 +259,8 @@ export class LazyPattern<TPattern = unknown> extends MatchPatternBase<
 
 export class ClassPattern<
   TCtor extends abstract new (...args: never[]) => unknown,
-> extends MatchPatternBase<InstanceType<TCtor>> {
+> extends MatchPatternBase<InstanceType<TCtor>, ClassPattern<TCtor>> {
   public readonly kind = "Match.ClassPattern";
-
   constructor(
     public readonly ctor: TCtor,
     public readonly options?: {
@@ -141,18 +270,24 @@ export class ClassPattern<
       throwAllErrors?: boolean;
     },
   ) {
-    super();
+    super(
+      classPatternDefinition as MatchPatternDefinition<ClassPattern<TCtor>>,
+    );
   }
 }
 
 export class RegExpPattern<
   TExpression extends RegExp = RegExp,
-> extends MatchPatternBase<string> {
+> extends MatchPatternBase<string, RegExpPattern<TExpression>> {
   public readonly kind = "Match.RegExpPattern";
   public readonly expression: TExpression;
 
   constructor(expression: TExpression) {
-    super();
+    super(
+      regExpPatternDefinition as MatchPatternDefinition<
+        RegExpPattern<TExpression>
+      >,
+    );
     this.expression = new RegExp(
       expression.source,
       expression.flags,
@@ -162,37 +297,61 @@ export class RegExpPattern<
 
 export class ObjectIncludingPattern<
   TObjectPattern extends Record<string, unknown> = Record<string, unknown>,
-> extends MatchPatternBase<TParseResult.ObjectIncluding<TObjectPattern>> {
+> extends MatchPatternBase<
+  TParseResult.ObjectIncluding<TObjectPattern>,
+  ObjectIncludingPattern<TObjectPattern>
+> {
   public readonly kind = "Match.ObjectIncludingPattern";
   constructor(public readonly pattern: TObjectPattern) {
-    super();
+    super(
+      objectIncludingPatternDefinition as MatchPatternDefinition<
+        ObjectIncludingPattern<TObjectPattern>
+      >,
+    );
   }
 }
 
 export class ObjectStrictPattern<
   TObjectPattern extends Record<string, unknown> = Record<string, unknown>,
-> extends MatchPatternBase<TParseResult.ObjectStrict<TObjectPattern>> {
+> extends MatchPatternBase<
+  TParseResult.ObjectStrict<TObjectPattern>,
+  ObjectStrictPattern<TObjectPattern>
+> {
   public readonly kind = "Match.ObjectStrictPattern";
   constructor(public readonly pattern: TObjectPattern) {
-    super();
+    super(
+      objectStrictPatternDefinition as MatchPatternDefinition<
+        ObjectStrictPattern<TObjectPattern>
+      >,
+    );
   }
 }
 
 export class MapOfPattern<TPattern = unknown> extends MatchPatternBase<
-  TParseResult.MapOf<TPattern>
+  TParseResult.MapOf<TPattern>,
+  MapOfPattern<TPattern>
 > {
   public readonly kind = "Match.MapOfPattern";
   constructor(public readonly pattern: TPattern) {
-    super();
+    super(
+      mapOfPatternDefinition as MatchPatternDefinition<MapOfPattern<TPattern>>,
+    );
   }
 }
 
 export class NonEmptyArrayPattern<
   TPattern = undefined,
-> extends MatchPatternBase<TParseResult.NonEmptyArray<TPattern>> {
+> extends MatchPatternBase<
+  TParseResult.NonEmptyArray<TPattern>,
+  NonEmptyArrayPattern<TPattern>
+> {
   public readonly kind = "Match.NonEmptyArrayPattern";
   constructor(public readonly pattern?: TPattern) {
-    super();
+    super(
+      nonEmptyArrayPatternDefinition as MatchPatternDefinition<
+        NonEmptyArrayPattern<TPattern>
+      >,
+    );
   }
 }
 

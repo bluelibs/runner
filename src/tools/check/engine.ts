@@ -450,12 +450,14 @@ function objectStrict<const TObjectPattern extends Record<string, unknown>>(
 
 export const Match = Object.freeze({
   Any: matchAnyToken,
-  ArrayOf: arrayOf,
   Email: matchEmailToken,
   IsoDateString: matchIsoDateStringToken,
   Integer: matchIntegerToken,
   PositiveInteger: matchPositiveIntegerToken,
   NonEmptyString: matchNonEmptyStringToken,
+  URL: matchUrlToken,
+  UUID: matchUuidToken,
+  NonEmptyArray: nonEmptyArray,
   RegExp: regexpPattern,
   Lazy: lazyPattern,
   fromSchema,
@@ -463,10 +465,8 @@ export const Match = Object.freeze({
   fromClass: fromSchema,
   Class: schemaDecorator,
   Field: fieldDecorator,
+  ArrayOf: arrayOf,
   MapOf: mapOf,
-  URL: matchUrlToken,
-  UUID: matchUuidToken,
-  NonEmptyArray: nonEmptyArray,
   Optional: <TPattern extends MatchPattern>(
     pattern: TPattern,
   ): OptionalPattern<TPattern> => new OptionalPattern(pattern),

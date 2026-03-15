@@ -171,12 +171,27 @@ import { Match } from "../../../decorators/legacy";
     const retries: number = parsed.retries;
     void retries;
   }
+
+  const candidate: unknown = { id: "u1", retries: 2 };
+  if (patternSchema.test(candidate)) {
+    candidate.id.toUpperCase();
+    if (candidate.retries !== undefined) {
+      const retries: number = candidate.retries;
+      void retries;
+    }
+  }
 }
 
 {
   const parsedInteger = Match.Integer.parse(10);
   const n: number = parsedInteger;
   void n;
+
+  const candidate: unknown = 10;
+  if (Match.Integer.test(candidate)) {
+    const narrowedInteger: number = candidate;
+    void narrowedInteger;
+  }
 
   const parsedPositiveInteger = Match.PositiveInteger.parse(10);
   const p: number = parsedPositiveInteger;
