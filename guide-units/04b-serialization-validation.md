@@ -115,18 +115,20 @@ serializer.addType({
 });
 ```
 
-### Class Ergonomics for Serialization (Great DX, Optional)
+### Decorator Compatibility
 
-When DTO classes are your preferred style, combine `@Match.Schema()` with `@Serializer.Field(...)`.
-This is purely ergonomic on top of the same runtime contracts.
-
-Decorator compatibility note:
+Decorator-backed schemas and DTOs share the same compatibility rules across both serialization and validation:
 
 - `@bluelibs/runner` uses standard ES decorators by default.
 - They do not rely on `emitDecoratorMetadata` or `reflect-metadata`; Runner stores its own schema and serializer field metadata explicitly.
 - The default `@bluelibs/runner` package now ensures `Symbol.metadata` exists when the runtime does not provide it yet, so ES decorators work out of the box from the main import path.
 - Native/runtime-provided `Symbol.metadata` values are preserved; Runner only initializes the symbol when it is absent.
 - For legacy TypeScript decorators (`experimentalDecorators`), import `Match` and `Serializer` from `@bluelibs/runner/decorators/legacy`. That compatibility entrypoint still includes the full `Match` helper surface (`ObjectIncluding`, `ArrayOf`, `fromSchema`, and `check(...)`), not only decorator helpers.
+
+### Class Ergonomics for Serialization (Great DX, Optional)
+
+When DTO classes are your preferred style, combine `@Match.Schema()` with `@Serializer.Field(...)`.
+This is purely ergonomic on top of the same runtime contracts.
 
 ```typescript
 import { Match, Serializer } from "@bluelibs/runner";
@@ -196,6 +198,45 @@ class ValidatedInboundUser {
 
 serializer.deserialize(payload, { schema: ValidatedInboundUser }); // ValidatedInboundUser { id: "u1" }
 ```
+
+### Combine Validation + Serialization on the Same Class
+
+You can combine `@Match.Field(...)` and `@Serializer.Field(...)` to validate and transform wire payloads with one DTO contract.
+
+```typescript
+import { Match, Serializer } from "@bluelibs/runner";
+
+@Match.Schema()
+class PaymentDto {
+  @Serializer.Field({ from: "order_id" })
+  @Match.Field(Match.NonEmptyString)
+  orderId!: string;
+
+  @Serializer.Field({
+    from: "amount_cents",
+    deserialize: (value) => Number(value),
+    serialize: (value: number) => String(value),
+  })
+  @Match.Field(Match.Integer)
+  amountCents!: number;
+
+  @Match.Field(Match.OneOf("USD", "EUR", "GBP"))
+  currency!: string;
+}
+
+const serializer = new Serializer();
+
+const payment = serializer.deserialize(
+  '{"order_id":"ord-1","amount_cents":"2599","currency":"USD"}',
+  { schema: PaymentDto },
+);
+```
+
+Why this is powerful:
+
+- Alias inbound/outbound wire keys (`order_id` <-> `orderId`).
+- Transform values at field level (for example string cents <-> numeric cents).
+- Keep runtime validation and serialization mapping in one place.
 
 > **Note:** File uploads are handled by Remote Lanes HTTP multipart support, not by the serializer.
 
@@ -368,42 +409,6 @@ Rule of thumb:
 - Start with a plain object for the common strict case.
 - Use `Match.ObjectStrict(...)` when you want the strictness to be explicit inside larger composed patterns or helpers.
 - Use `Match.ObjectIncluding(...)` when payloads are forward-compatible or intentionally allow extra fields.
-
-### Extending Schemas
-
-Extend plain object patterns by composition:
-
-```typescript
-import { Match } from "@bluelibs/runner";
-
-const baseUser = {
-  id: Match.NonEmptyString,
-  email: Match.Email,
-};
-
-const adminUser = Match.compile({
-  ...baseUser,
-  role: Match.OneOf("admin", "owner"),
-});
-```
-
-Compiled schemas do not expose `.extend()`. When the compiled schema was created from an object-shaped pattern, extend it by composing `compiled.pattern` into a new pattern and compiling again:
-
-```typescript
-import { Match } from "@bluelibs/runner";
-
-const baseUser = Match.compile({
-  id: Match.NonEmptyString,
-  email: Match.Email,
-});
-
-const adminUser = Match.compile({
-  ...baseUser.pattern,
-  role: Match.OneOf("admin", "owner"),
-});
-```
-
-For decorated class schemas, use `Match.Schema({ base })` to compose one schema class from another, with `base` accepting either a class or a lazy `() => Class` resolver.
 
 ### Match Reference
 
@@ -796,59 +801,34 @@ Notes:
 ### Boundary Validation in Runner APIs
 
 All builder schema entry points share the same parse contract: `{ parse(input): T }`.
+The cross-cutting idea here is simple: Runner consumes parsed values, so the same schema source can validate and transform data at every boundary.
 
 ```typescript
 import { Match, r } from "@bluelibs/runner";
 
+const createUserInput = Match.compile({
+  name: Match.NonEmptyString,
+  email: Match.Email,
+});
+
 const createUser = r
-  .task("app.tasks.createUser")
-  .inputSchema(
-    Match.ObjectStrict({
-      name: Match.NonEmptyString,
-      email: Match.Email,
-    }),
-  )
+  .task("createUser")
+  .inputSchema(createUserInput)
   .run(async (input) => ({ id: "user-1", ...input }))
-  .build();
-
-const database = r
-  .resource("app.resources.database")
-  .configSchema(
-    Match.ObjectStrict({
-      host: Match.NonEmptyString,
-      port: Match.Integer,
-    }),
-  )
-  .init(async (config) => config)
-  .build();
-
-const userCreated = r
-  .event("app.events.userCreated")
-  .payloadSchema(
-    Match.ObjectStrict({
-      userId: Match.NonEmptyString,
-    }),
-  )
-  .build();
-
-const timeout = r.middleware
-  .task("app.middleware.timeout")
-  .configSchema(
-    Match.ObjectStrict({
-      ttl: Match.Integer,
-    }),
-  )
-  .run(async ({ next }) => next())
   .build();
 ```
 
-Any schema library is valid if it implements `parse(input)`. Zod works directly and remains a great fit for richer refinement/transforms.
+- `.inputSchema(...)`, `.resultSchema(...)`, `.configSchema(...)`, `.payloadSchema(...)`, and `.dataSchema(...)` all follow this same parse contract.
+- Decorated class shorthand such as `.inputSchema(UserDto)` or `.configSchema(AppConfig)` requires `@Match.Schema()` metadata.
+- Detailed builder-specific examples belong in the task/resource/event/error chapters; this section focuses on the shared schema contract across all of them.
+- Any schema library is valid if it implements `parse(input)`. Zod works directly and remains a great fit for richer refinement/transforms.
 
 Minimal custom `CheckSchemaLike` example:
 
 ```typescript
 import {
   check,
+  errors,
   type CheckSchemaLike,
   type MatchJsonSchema,
 } from "@bluelibs/runner";
@@ -858,22 +838,26 @@ function createStepRange(
 ): CheckSchemaLike<number> {
   return {
     parse(input: unknown): number {
+      const fail = (message: string): never => {
+        throw errors.genericError.new({ message });
+      };
+
       const value = Number(input);
 
       if (!Number.isFinite(value)) {
-        throw new Error("Expected a finite number.");
+        fail("Expected a finite number.");
       }
 
       if (options.min !== undefined && value < options.min) {
-        throw new Error(`Expected number >= ${options.min}.`);
+        fail(`Expected number >= ${options.min}.`);
       }
 
       if (options.max !== undefined && value > options.max) {
-        throw new Error(`Expected number <= ${options.max}.`);
+        fail(`Expected number <= ${options.max}.`);
       }
 
       if (value % options.step !== 0) {
-        throw new Error(`Expected a multiple of ${options.step}.`);
+        fail(`Expected a multiple of ${options.step}.`);
       }
 
       return value;
@@ -899,7 +883,8 @@ StepRange.toJSONSchema();
 Notes:
 
 - `CheckSchemaLike` is a top-level schema contract: use it with `check(value, schema)` and Runner builder schema slots such as `.inputSchema(...)` / `.configSchema(...)` / `.payloadSchema(...)`.
-- This minimal example uses `throw new Error(...)` to keep the focus on the `parse(...)` / `toJSONSchema()` contract.
+- Prefer a normal thrown error or `errors.genericError` for `CheckSchemaLike` validation failures.
+- Use `errors.matchError.new(...)` only when you intentionally want Match-style `path` / `failures` metadata at the top level.
 - Runner does not rebase a manually thrown schema-like `errors.matchError` into an enclosing raw Match object or `@Match.Field(...)` path. If you need automatic nested paths such as `$.stepRange`, prefer Match-native composition such as `Match.Range(...)`, `Match.RegExp(...)`, `Match.WithMessage(...)`, or `Match.Where(...)`.
 - `CheckSchemaLike` is not a public nested Match-pattern extension point. A plain object like `{ parse, toJSONSchema }` placed inside a raw Match object shape is interpreted as a plain object pattern, not as a nested parse-schema node.
 
@@ -926,46 +911,7 @@ const createUser = r
   .build();
 ```
 
-Keep the same rule: classes are optional ergonomics over runtime validation primitives.
-
-### Combine Validation + Serialization on the Same Class
-
-You can combine `@Match.Field(...)` and `@Serializer.Field(...)` to validate and transform wire payloads with one DTO contract.
-
-```typescript
-import { Match, Serializer } from "@bluelibs/runner";
-
-@Match.Schema()
-class PaymentDto {
-  @Serializer.Field({ from: "order_id" })
-  @Match.Field(Match.NonEmptyString)
-  orderId!: string;
-
-  @Serializer.Field({
-    from: "amount_cents",
-    deserialize: (value) => Number(value),
-    serialize: (value: number) => String(value),
-  })
-  @Match.Field(Match.Integer)
-  amountCents!: number;
-
-  @Match.Field(Match.OneOf("USD", "EUR", "GBP"))
-  currency!: string;
-}
-
-const serializer = new Serializer();
-
-const payment = serializer.deserialize(
-  '{"order_id":"ord-1","amount_cents":"2599","currency":"USD"}',
-  { schema: PaymentDto },
-);
-```
-
-Why this is powerful:
-
-- Alias inbound/outbound wire keys (`order_id` <-> `orderId`).
-- Transform values at field level (for example string cents <-> numeric cents).
-- Keep runtime validation and serialization mapping in one place.
+Keep the same rule: classes are optional ergonomics over runtime validation primitives, and the same decorator compatibility rules from earlier in this chapter apply here too.
 
 ### JSON Schema Export
 
