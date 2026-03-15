@@ -8,8 +8,6 @@ describe("asyncContext raw builder coverage", () => {
     expect(b1.id).toBe("tests-ctx-raw");
 
     const b2 = b1
-      .serialize((d) => JSON.stringify(d))
-      .parse((s) => JSON.parse(s))
       .configSchema({
         parse(input: unknown) {
           const d = input as T;
@@ -17,8 +15,9 @@ describe("asyncContext raw builder coverage", () => {
             throw genericError.new({ message: "invalid" });
           return d;
         },
-      });
-
+      })
+      .serialize((d) => JSON.stringify(d))
+      .parse((s) => JSON.parse(s));
     const ctx = b2.build();
     expect(ctx.id).toBe("tests-ctx-raw");
     // Exercise require() branch

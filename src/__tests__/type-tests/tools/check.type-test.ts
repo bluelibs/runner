@@ -390,6 +390,10 @@ import { Match } from "../../../decorators/legacy";
     "all",
   );
 
+  type AggregatedInfer = InferMatchPattern<typeof aggregatedPattern>;
+  const inferredValue: AggregatedInfer = { id: "u1" };
+  void inferredValue;
+
   const parsed = check({ id: "u1" }, aggregatedPattern, {
     errorPolicy: "first",
   });

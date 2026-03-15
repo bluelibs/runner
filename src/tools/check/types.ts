@@ -270,13 +270,15 @@ type InferMatchWrapperPattern<TPattern> =
         ? InferMatchPattern<TCandidates[number]>
         : TPattern extends WithMessagePattern<infer TInner>
           ? InferMatchPattern<TInner>
-          : TPattern extends WherePattern<infer TGuarded>
-            ? TGuarded
-            : TPattern extends RangePattern
-              ? number
-              : TPattern extends LazyPattern<infer TLazyPattern>
-                ? InferMatchPattern<TLazyPattern>
-                : never;
+          : TPattern extends WithErrorPolicyPattern<infer TInner>
+            ? InferMatchPattern<TInner>
+            : TPattern extends WherePattern<infer TGuarded>
+              ? TGuarded
+              : TPattern extends RangePattern
+                ? number
+                : TPattern extends LazyPattern<infer TLazyPattern>
+                  ? InferMatchPattern<TLazyPattern>
+                  : never;
 
 // Match-native collection and object helpers.
 type InferMatchStructuredPattern<TPattern> =

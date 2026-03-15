@@ -124,6 +124,16 @@ describe("tools/check Match.WithMessage aggregate behavior", () => {
       path: "$.child.name",
       message: "plain object is invalid",
     },
+    {
+      label: "with error policy subtree",
+      pattern: Match.WithMessage(
+        Match.WithErrorPolicy({ name: String }, "all"),
+        "with-error-policy child is invalid",
+      ),
+      value: { name: 42 },
+      path: "$.child.name",
+      message: "with-error-policy child is invalid",
+    },
   ])(
     "keeps subtree wrappers as aggregate headlines for $label",
     ({ pattern, value, path, message }) => {

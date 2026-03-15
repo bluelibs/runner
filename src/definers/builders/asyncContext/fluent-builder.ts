@@ -4,11 +4,20 @@ import type {
   ResolveValidationSchemaInput,
   ValidationSchemaInput,
 } from "../../../defs";
+import { genericError } from "../../../errors";
 import { deepFreeze } from "../../../tools/deepFreeze";
 import { defineAsyncContext } from "../../defineAsyncContext";
 import type { AsyncContextFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
 import { clone } from "./utils";
+
+function assertSchemaRebindAllowed<T>(state: BuilderState<T>): void {
+  if (state.serialize || state.parse) {
+    genericError.throw({
+      message: `Async context "${state.id}" cannot call .configSchema() after .serialize() or .parse(). Declare .configSchema() first so serializer and parser callbacks stay aligned with the resolved schema type.`,
+    });
+  }
+}
 
 /**
  * Creates an AsyncContextFluentBuilder from the given state.
@@ -35,6 +44,7 @@ export function makeAsyncContextBuilder<T>(
         [TNew] extends [never] ? any : TNew
       > = ValidationSchemaInput<[TNew] extends [never] ? any : TNew>,
     >(schema: TSchema) {
+      assertSchemaRebindAllowed(state);
       const next = clone(state as BuilderState<any>, {
         configSchema: schema,
       }) as BuilderState<ResolveValidationSchemaInput<TNew, TSchema>>;

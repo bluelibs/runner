@@ -117,6 +117,9 @@ export const withErrorPolicyPatternDefinition =
         compilePattern(pattern.pattern, context, path, mode),
       );
     },
+    appliesMessageOverrideToAggregate(pattern) {
+      return shouldPatternApplyMessageOverrideToAggregate(pattern.pattern);
+    },
   });
 
 export const lazyPatternDefinition = defineMatchPatternDefinition<LazyHolder>({

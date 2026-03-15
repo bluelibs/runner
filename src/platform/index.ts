@@ -19,6 +19,22 @@ declare const __TARGET__: string | undefined;
 let platformInstance: IPlatformAdapter | null = null;
 let detectedEnvironment: PlatformId | null = null;
 
+function resolvePlatformIdForChecks(): PlatformId {
+  if (platformInstance) {
+    return platformInstance.id;
+  }
+
+  if (detectedEnvironment) {
+    return detectedEnvironment;
+  }
+
+  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
+    return __TARGET__ as PlatformId;
+  }
+
+  return detectEnvironment();
+}
+
 /**
  * Detects the current runtime environment without instantiating the active adapter.
  */
@@ -72,43 +88,28 @@ export function getDetectedEnvironment(): PlatformId {
  * Reports whether the current runtime should behave like the Node build.
  */
 export function isNode(): boolean {
-  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
-    return __TARGET__ === "node";
-  }
-  // Use fresh runtime detection to allow tests to mutate globals within a single run
-  return detectEnvironment() === "node";
+  return resolvePlatformIdForChecks() === "node";
 }
 
 /**
  * Reports whether the current runtime should behave like the browser build.
  */
 export function isBrowser(): boolean {
-  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
-    return __TARGET__ === "browser";
-  }
-  // Use fresh runtime detection to allow tests to mutate globals within a single run
-  return detectEnvironment() === "browser";
+  return resolvePlatformIdForChecks() === "browser";
 }
 
 /**
  * Reports whether the current runtime is using the universal fallback behavior.
  */
 export function isUniversal(): boolean {
-  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
-    return __TARGET__ === "universal";
-  }
-  // Use fresh runtime detection to allow tests to mutate globals within a single run
-  return detectEnvironment() === "universal";
+  return resolvePlatformIdForChecks() === "universal";
 }
 
 /**
  * Reports whether the current runtime should behave like the edge build.
  */
 export function isEdge(): boolean {
-  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
-    return __TARGET__ === "edge";
-  }
-  return detectEnvironment() === "edge";
+  return resolvePlatformIdForChecks() === "edge";
 }
 
 export type {
