@@ -98,9 +98,7 @@ export function isMatchDefinedPattern(
 }
 
 export function isOptionalObjectPropertyPattern(pattern: unknown): boolean {
-  return (
-    isMatchDefinedPattern(pattern) && pattern.isOptionalObjectProperty()
-  );
+  return isMatchDefinedPattern(pattern) && pattern.isOptionalObjectProperty();
 }
 
 export function shouldPatternApplyMessageOverrideToAggregate(

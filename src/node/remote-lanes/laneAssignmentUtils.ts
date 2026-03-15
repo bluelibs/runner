@@ -8,6 +8,8 @@ type LaneWithId = {
   id: string;
 };
 
+type EventLaneConflictField = "rpcLaneId" | "eventLaneId";
+
 function resolveCanonicalId(store: Store, id: string): string {
   return resolveRequestedIdFromStore(store, id) ?? id;
 }
@@ -208,6 +210,35 @@ export function visitLaneApplyTo<TSource, TResolvedTarget>(options: {
   for (const target of applyTo as readonly unknown[]) {
     onResolvedTarget(resolveTarget(target, laneId, store));
   }
+}
+
+export function assertEventNotAssignedToOtherLane<
+  TField extends EventLaneConflictField,
+>(options: {
+  conflictingEventIds: ReadonlySet<string>;
+  eventId: string;
+  attemptedLaneId: string;
+  laneIdField: TField;
+  conflictError: {
+    throw: (data: { eventId: string } & Record<TField, string>) => never;
+  };
+}): void {
+  const {
+    conflictingEventIds,
+    eventId,
+    attemptedLaneId,
+    laneIdField,
+    conflictError,
+  } = options;
+
+  if (!conflictingEventIds.has(eventId)) {
+    return;
+  }
+
+  conflictError.throw({
+    eventId,
+    [laneIdField]: attemptedLaneId,
+  } as { eventId: string } & Record<TField, string>);
 }
 
 export function assignLaneTargetOrThrow<TLane extends LaneWithId>(options: {

@@ -1,13 +1,15 @@
 import { createHttpClient } from "../../../http-client";
-import { Serializer } from "../../../serializer";
-import type { IErrorHelper } from "../../../types/error";
 import type { Store } from "../../../models/Store";
 import type { IRpcLaneCommunicator } from "../../../defs";
-import type { SerializerLike } from "../../../serializer";
 import {
   rpcLaneCommunicatorContractError,
   rpcLaneHttpClientPresetNotFoundError,
 } from "../../../errors";
+import {
+  createErrorRegistry,
+  createForwardingRpcLaneCommunicator,
+  resolveSerializer,
+} from "./http-client.utils";
 
 export interface RpcLaneHttpClientConfig {
   client?: "fetch" | "mixed" | "smart" | (string & {});
@@ -41,25 +43,6 @@ export function registerRpcLaneHttpClientPreset(
   rpcLaneHttpClientPresets.set(id, handler);
 }
 
-function createErrorRegistry(store?: Store): Map<string, IErrorHelper<any>> {
-  const map = new Map<string, IErrorHelper<any>>();
-  if (!store) return map;
-
-  for (const [id, helper] of store.errors) {
-    map.set(id, helper);
-  }
-
-  return map;
-}
-
-function resolveSerializer(
-  dependencies: Record<string, unknown>,
-): SerializerLike {
-  const serializer = dependencies.serializer as SerializerLike | undefined;
-  if (serializer) return serializer;
-  return new Serializer();
-}
-
 registerRpcLaneHttpClientPreset("fetch", (config, dependencies) => {
   const store = dependencies.store as Store | undefined;
   const serializer = resolveSerializer(dependencies);
@@ -74,16 +57,7 @@ registerRpcLaneHttpClientPreset("fetch", (config, dependencies) => {
     errorRegistry: createErrorRegistry(store),
   });
 
-  return {
-    task: async (id, input, options) =>
-      options ? client.task(id, input, options) : client.task(id, input),
-    event: async (id, payload, options) =>
-      options ? client.event(id, payload, options) : client.event(id, payload),
-    eventWithResult: async (id, payload, options) =>
-      options
-        ? client.eventWithResult?.(id, payload, options)
-        : client.eventWithResult?.(id, payload),
-  };
+  return createForwardingRpcLaneCommunicator(client);
 });
 
 export function rpcLaneHttpClient(config: RpcLaneHttpClientConfig) {

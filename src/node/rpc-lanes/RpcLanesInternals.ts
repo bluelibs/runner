@@ -47,6 +47,21 @@ export interface RpcLaneResolvedState {
   communicatorByLaneId: Map<string, IRpcLaneCommunicator>;
 }
 
+function toFrozenRecord<TValue>(
+  entries: Iterable<readonly [string, TValue]>,
+  mapId: (id: string) => string,
+): Readonly<Record<string, Exclude<TValue, undefined>>> {
+  const record: Record<string, Exclude<TValue, undefined>> = {};
+
+  for (const [id, value] of entries) {
+    if (value !== undefined) {
+      record[mapId(id)] = value as Exclude<TValue, undefined>;
+    }
+  }
+
+  return Object.freeze(record);
+}
+
 export function collectRpcLaneCommunicatorResourceDependencies(
   config: RpcLanesResourceConfig,
 ): Record<string, any> {
@@ -160,41 +175,21 @@ export function toRpcLanesResourceValue(
     mode: resolved.mode,
     serveTaskIds: Array.from(resolved.serveTaskIds, mapId),
     serveEventIds: Array.from(resolved.serveEventIds, mapId),
-    taskAllowAsyncContext: Object.freeze(
-      Array.from(resolved.taskAllowAsyncContext.entries()).reduce<
-        Record<string, boolean>
-      >((acc, [taskId, allow]) => {
-        acc[mapId(taskId)] = allow;
-        return acc;
-      }, {}),
+    taskAllowAsyncContext: toFrozenRecord(
+      resolved.taskAllowAsyncContext.entries(),
+      mapId,
     ),
-    eventAllowAsyncContext: Object.freeze(
-      Array.from(resolved.eventAllowAsyncContext.entries()).reduce<
-        Record<string, boolean>
-      >((acc, [eventId, allow]) => {
-        acc[mapId(eventId)] = allow;
-        return acc;
-      }, {}),
+    eventAllowAsyncContext: toFrozenRecord(
+      resolved.eventAllowAsyncContext.entries(),
+      mapId,
     ),
-    taskAsyncContextAllowList: Object.freeze(
-      Array.from(resolved.taskAsyncContextAllowList.entries()).reduce<
-        Record<string, readonly string[]>
-      >((acc, [taskId, allowList]) => {
-        if (allowList !== undefined) {
-          acc[mapId(taskId)] = allowList;
-        }
-        return acc;
-      }, {}),
+    taskAsyncContextAllowList: toFrozenRecord(
+      resolved.taskAsyncContextAllowList.entries(),
+      mapId,
     ),
-    eventAsyncContextAllowList: Object.freeze(
-      Array.from(resolved.eventAsyncContextAllowList.entries()).reduce<
-        Record<string, readonly string[]>
-      >((acc, [eventId, allowList]) => {
-        if (allowList !== undefined) {
-          acc[mapId(eventId)] = allowList;
-        }
-        return acc;
-      }, {}),
+    eventAsyncContextAllowList: toFrozenRecord(
+      resolved.eventAsyncContextAllowList.entries(),
+      mapId,
     ),
     communicatorByLaneId: resolved.communicatorByLaneId,
     exposure: exposure ?? null,
@@ -205,41 +200,21 @@ export function toRpcLanesExposurePolicy(
   resolved: RpcLaneResolvedState,
   mapId: (id: string) => string = (id) => id,
 ): NodeExposurePolicySnapshot {
-  const taskAllowAsyncContext = Object.freeze(
-    Array.from(resolved.taskAllowAsyncContext.entries()).reduce<
-      Record<string, boolean>
-    >((acc, [taskId, allow]) => {
-      acc[mapId(taskId)] = allow;
-      return acc;
-    }, {}),
+  const taskAllowAsyncContext = toFrozenRecord(
+    resolved.taskAllowAsyncContext.entries(),
+    mapId,
   );
-  const eventAllowAsyncContext = Object.freeze(
-    Array.from(resolved.eventAllowAsyncContext.entries()).reduce<
-      Record<string, boolean>
-    >((acc, [eventId, allow]) => {
-      acc[mapId(eventId)] = allow;
-      return acc;
-    }, {}),
+  const eventAllowAsyncContext = toFrozenRecord(
+    resolved.eventAllowAsyncContext.entries(),
+    mapId,
   );
-  const taskAsyncContextAllowList = Object.freeze(
-    Array.from(resolved.taskAsyncContextAllowList.entries()).reduce<
-      Record<string, readonly string[]>
-    >((acc, [taskId, allowList]) => {
-      if (allowList !== undefined) {
-        acc[mapId(taskId)] = allowList;
-      }
-      return acc;
-    }, {}),
+  const taskAsyncContextAllowList = toFrozenRecord(
+    resolved.taskAsyncContextAllowList.entries(),
+    mapId,
   );
-  const eventAsyncContextAllowList = Object.freeze(
-    Array.from(resolved.eventAsyncContextAllowList.entries()).reduce<
-      Record<string, readonly string[]>
-    >((acc, [eventId, allowList]) => {
-      if (allowList !== undefined) {
-        acc[mapId(eventId)] = allowList;
-      }
-      return acc;
-    }, {}),
+  const eventAsyncContextAllowList = toFrozenRecord(
+    resolved.eventAsyncContextAllowList.entries(),
+    mapId,
   );
   const taskIds = Object.freeze(Array.from(resolved.serveTaskIds, mapId));
   const eventIds = Object.freeze(Array.from(resolved.serveEventIds, mapId));

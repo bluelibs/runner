@@ -1,4 +1,9 @@
-import { appendIndex, appendKey, throwUnsupported, withCycleGuard } from "../../toJsonSchema.helpers";
+import {
+  appendIndex,
+  appendKey,
+  throwUnsupported,
+  withCycleGuard,
+} from "../../toJsonSchema.helpers";
 import { defineMatchPatternDefinition } from "../contracts";
 import { appendPath, fail, formatPath, isPlainObject } from "../utils";
 import { matchesObjectPattern } from "../matchingObject";

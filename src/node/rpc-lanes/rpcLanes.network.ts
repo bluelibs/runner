@@ -54,15 +54,14 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
   }
 
   dependencies.eventManager.intercept(async (next, emission) => {
-    const resolvedEmissionEventId = emission.id;
-    const lane = resolved.eventLaneByEventId.get(resolvedEmissionEventId);
+    const eventId = emission.id;
+    const lane = resolved.eventLaneByEventId.get(eventId);
     if (!lane) {
       return next(emission);
     }
 
     const binding = resolved.bindingsByLaneId.get(lane.id)!;
     const isServed = resolved.serveLaneIds.has(lane.id);
-    const remoteEventId = resolvedEmissionEventId;
     if (isServed) {
       return next(emission);
     }
@@ -70,7 +69,7 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
     if (typeof binding.communicator.eventWithResult === "function") {
       const headers = buildRpcLaneRequestHeaders(lane.id);
       const result = await binding.communicator.eventWithResult(
-        remoteEventId,
+        eventId,
         emission.data,
         headers ? { headers } : undefined,
       );
@@ -83,11 +82,11 @@ export function applyNetworkModeRouting(context: RpcLanesRuntimeContext): void {
     if (typeof binding.communicator.event === "function") {
       const headers = buildRpcLaneRequestHeaders(lane.id);
       if (headers) {
-        await binding.communicator.event(remoteEventId, emission.data, {
+        await binding.communicator.event(eventId, emission.data, {
           headers,
         });
       } else {
-        await binding.communicator.event(remoteEventId, emission.data);
+        await binding.communicator.event(eventId, emission.data);
       }
       return;
     }

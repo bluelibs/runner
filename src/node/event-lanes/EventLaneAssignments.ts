@@ -11,9 +11,10 @@ import type { Store } from "../../models/Store";
 import { collectRpcTopologyLanes } from "../remote-lanes/topologyLanes";
 import {
   assignLaneTargetOrThrow,
-  readTargetId,
-  isRegisteredDefinitionId,
+  assertEventNotAssignedToOtherLane,
   collectCrossLaneApplyToEventIds,
+  isRegisteredDefinitionId,
+  readTargetId,
   toPublicPredicateCandidate,
   visitLaneApplyTo,
 } from "../remote-lanes/laneAssignmentUtils";
@@ -113,7 +114,6 @@ function assignEventToLane(options: {
     rpcLaneApplyToEventIds,
     eventId,
     lane.id,
-    store,
   );
 
   assignLaneTargetOrThrow({
@@ -130,14 +130,14 @@ function assertEventIsNotExplicitlyAssignedToRpcLane(
   rpcLaneApplyToEventIds: Set<string>,
   eventId: string,
   eventLaneId: string,
-  _store: Store,
 ): void {
-  if (rpcLaneApplyToEventIds.has(eventId)) {
-    eventLaneAssignmentRpcLaneConflictError.throw({
-      eventId,
-      eventLaneId,
-    });
-  }
+  assertEventNotAssignedToOtherLane({
+    conflictingEventIds: rpcLaneApplyToEventIds,
+    eventId,
+    attemptedLaneId: eventLaneId,
+    laneIdField: "eventLaneId",
+    conflictError: eventLaneAssignmentRpcLaneConflictError,
+  });
 }
 
 function resolveEventLaneTarget(

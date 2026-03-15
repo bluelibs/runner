@@ -23,9 +23,9 @@ describe("tools/check matcher coverage", () => {
       MatchPatternBase.prototype,
     ) as MatchPatternBase<unknown>;
 
-    expect(() =>
-      orphanPattern.appliesMessageOverrideToAggregate(),
-    ).toThrow("Bad pattern: missing Match definition.");
+    expect(() => orphanPattern.appliesMessageOverrideToAggregate()).toThrow(
+      "Bad pattern: missing Match definition.",
+    );
     expect(() => orphanPattern.isOptionalObjectProperty()).toThrow(
       "Bad pattern: missing Match definition.",
     );
@@ -131,8 +131,9 @@ describe("tools/check matcher coverage", () => {
   });
 
   it("exposes wrapper metadata helpers directly on Match-native patterns", () => {
-    expect(Match.WithMessage(String, "nope").appliesMessageOverrideToAggregate())
-      .toBe(false);
+    expect(
+      Match.WithMessage(String, "nope").appliesMessageOverrideToAggregate(),
+    ).toBe(false);
     expect(
       Match.WithMessage(
         Match.ObjectIncluding({

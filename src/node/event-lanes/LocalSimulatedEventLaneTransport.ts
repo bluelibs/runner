@@ -48,15 +48,11 @@ export class LocalSimulatedEventLaneTransport {
         return next(emission);
       }
 
-      const resolvedEmissionEventId = emission.id;
-      const eventRoute = this.context.eventRouteByEventId.get(
-        resolvedEmissionEventId,
-      );
+      const eventId = emission.id;
+      const eventRoute = this.context.eventRouteByEventId.get(eventId);
       if (!eventRoute) {
         return next(emission);
       }
-
-      const canonicalEventId = resolvedEmissionEventId;
 
       emission.stopPropagation();
       const bindingAuth = this.resolveBindingAuth(eventRoute.lane.id);
@@ -68,7 +64,7 @@ export class LocalSimulatedEventLaneTransport {
       const message: EventLaneMessage = {
         id: `sim-${++this.sequence}`,
         laneId: eventRoute.lane.id,
-        eventId: canonicalEventId,
+        eventId,
         payload: this.dependencies.serializer.stringify(emission.data),
         serializedAsyncContexts: buildSerializedEventLaneAsyncContexts({
           lane: eventRoute.lane,
@@ -83,7 +79,7 @@ export class LocalSimulatedEventLaneTransport {
       };
 
       await this.diagnostics.logEnqueue({
-        eventId: canonicalEventId,
+        eventId,
         laneId: eventRoute.lane.id,
         profile: this.context.profile,
         mode: "local-simulated",

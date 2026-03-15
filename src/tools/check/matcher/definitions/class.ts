@@ -13,83 +13,85 @@ import {
   type ClassHolder,
 } from "./helpers";
 
-export const classPatternDefinition = defineMatchPatternDefinition<ClassHolder>({
-  kind: "Match.ClassPattern",
-  match(pattern, value, context, path, _parent, matchesPattern) {
-    if (typeof pattern.ctor !== "function") {
-      throw createMatchPatternError(
-        "Bad pattern: Match.fromSchema requires a class constructor.",
-      );
-    }
+export const classPatternDefinition = defineMatchPatternDefinition<ClassHolder>(
+  {
+    kind: "Match.ClassPattern",
+    match(pattern, value, context, path, _parent, matchesPattern) {
+      if (typeof pattern.ctor !== "function") {
+        throw createMatchPatternError(
+          "Bad pattern: Match.fromSchema requires a class constructor.",
+        );
+      }
 
-    const ctor = pattern.ctor as abstract new (...args: never[]) => unknown;
-    const options = isMatchClassPatternOptions(pattern.options)
-      ? pattern.options
-      : undefined;
-    const classSchema = getClassSchemaDefinition(ctor);
-    const allowUnknownKeys = resolveClassAllowUnknownKeys(
-      options?.exact,
-      classSchema.exact,
-    );
-    return matchesObjectPattern(
-      value,
-      classSchema.pattern,
-      context,
-      path,
-      allowUnknownKeys,
-      matchesPattern,
-      (candidate): candidate is Record<string, unknown> =>
-        isPlainObject(candidate) || candidate instanceof ctor,
-    );
-  },
-  compileToJSONSchema(pattern, context, path, _mode, compilePattern) {
-    if (
-      typeof pattern.ctor !== "function" ||
-      !isMatchClassPatternOptions(pattern.options)
-    ) {
-      throwUnsupported(
+      const ctor = pattern.ctor as abstract new (...args: never[]) => unknown;
+      const options = isMatchClassPatternOptions(pattern.options)
+        ? pattern.options
+        : undefined;
+      const classSchema = getClassSchemaDefinition(ctor);
+      const allowUnknownKeys = resolveClassAllowUnknownKeys(
+        options?.exact,
+        classSchema.exact,
+      );
+      return matchesObjectPattern(
+        value,
+        classSchema.pattern,
+        context,
         path,
-        "Match.fromClass requires a class constructor.",
-        pattern,
+        allowUnknownKeys,
+        matchesPattern,
+        (candidate): candidate is Record<string, unknown> =>
+          isPlainObject(candidate) || candidate instanceof ctor,
       );
-    }
-
-    const ctor = pattern.ctor as abstract new (...args: never[]) => unknown;
-    const options = pattern.options as MatchClassPatternOptions | undefined;
-    const classDefinition = getClassSchemaDefinition(ctor);
-    const definitionId = getDefinitionId(
-      context,
-      ctor,
-      options?.schemaId ?? classDefinition.schemaId,
-    );
-
-    if (!context.definitions[definitionId]) {
-      if (context.compilingDefinitionIds.has(definitionId)) {
-        return { $ref: `#/$defs/${definitionId}` };
-      }
-
-      context.compilingDefinitionIds.add(definitionId);
-      try {
-        const allowUnknownKeys = resolveClassAllowUnknownKeys(
-          options?.exact,
-          classDefinition.exact,
-        );
-
-        context.definitions[definitionId] = compileObjectPattern(
-          classDefinition.pattern,
-          context,
+    },
+    compileToJSONSchema(pattern, context, path, _mode, compilePattern) {
+      if (
+        typeof pattern.ctor !== "function" ||
+        !isMatchClassPatternOptions(pattern.options)
+      ) {
+        throwUnsupported(
           path,
-          allowUnknownKeys,
-          compilePattern,
+          "Match.fromClass requires a class constructor.",
+          pattern,
         );
-      } finally {
-        context.compilingDefinitionIds.delete(definitionId);
       }
-    }
 
-    return { $ref: `#/$defs/${definitionId}` };
+      const ctor = pattern.ctor as abstract new (...args: never[]) => unknown;
+      const options = pattern.options as MatchClassPatternOptions | undefined;
+      const classDefinition = getClassSchemaDefinition(ctor);
+      const definitionId = getDefinitionId(
+        context,
+        ctor,
+        options?.schemaId ?? classDefinition.schemaId,
+      );
+
+      if (!context.definitions[definitionId]) {
+        if (context.compilingDefinitionIds.has(definitionId)) {
+          return { $ref: `#/$defs/${definitionId}` };
+        }
+
+        context.compilingDefinitionIds.add(definitionId);
+        try {
+          const allowUnknownKeys = resolveClassAllowUnknownKeys(
+            options?.exact,
+            classDefinition.exact,
+          );
+
+          context.definitions[definitionId] = compileObjectPattern(
+            classDefinition.pattern,
+            context,
+            path,
+            allowUnknownKeys,
+            compilePattern,
+          );
+        } finally {
+          context.compilingDefinitionIds.delete(definitionId);
+        }
+      }
+
+      return { $ref: `#/$defs/${definitionId}` };
+    },
+    appliesMessageOverrideToAggregate() {
+      return true;
+    },
   },
-  appliesMessageOverrideToAggregate() {
-    return true;
-  },
-});
+);
