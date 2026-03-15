@@ -5,7 +5,7 @@ import { defineTask } from "../../../../definers/defineTask";
 import { defineEvent } from "../../../../definers/defineEvent";
 import { run } from "../../../../run";
 import { rpcExposure } from "../testkit/rpcExposure";
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 
 export const TOKEN = "unit-secret";
 
@@ -41,7 +41,7 @@ export async function startExposureServer() {
   const handlers = await rr.getResourceValue(exposure as any);
   const addr = handlers.server?.address();
   if (!addr || typeof addr === "string")
-    throw createMessageError("No server address");
+    throw genericError.new({ message: "No server address" });
   const baseUrl = `http://127.0.0.1:${addr.port}${handlers.basePath}`;
   return { rr, handlers, baseUrl } as const;
 }

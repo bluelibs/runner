@@ -2,9 +2,9 @@ import { defineEvent } from "../../../define";
 import { Logger } from "../../../models/Logger";
 import { Serializer } from "../../../serializer/Serializer";
 import { runtimeSource } from "../../../types/runtimeSource";
-import { symbolRuntimeId } from "../../../types/symbols";
 import { EventManager } from "../../../models/EventManager";
 import type { Store } from "../../../models/Store";
+import { r } from "../../../public";
 import { EventLanesDiagnostics } from "../../event-lanes/EventLanesDiagnostics";
 import { LocalSimulatedEventLaneTransport } from "../../event-lanes/LocalSimulatedEventLaneTransport";
 import type { EventLanesResourceContext } from "../../event-lanes/EventLanesInternals";
@@ -55,6 +55,14 @@ function createLogger() {
   });
 }
 
+function createStore(overrides: Record<string, unknown> = {}): Store {
+  return {
+    events: new Map(),
+    asyncContexts: new Map(),
+    ...overrides,
+  } as unknown as Store;
+}
+
 async function relay(
   transport: LocalSimulatedEventLaneTransport,
   message: EventLaneMessage,
@@ -70,10 +78,12 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const logger = createLogger();
     const errorSpy = jest.spyOn(logger, "error").mockResolvedValue();
     const eventManager = new EventManager();
-    const emitSpy = jest.spyOn(eventManager, "emit").mockResolvedValue();
+    const emitSpy = jest
+      .spyOn(eventManager, "emit")
+      .mockResolvedValue(undefined);
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext({ coolingDown: true, disposed: false });
-    const store = { events: new Map() } as unknown as Store;
+    const store = createStore();
     const transport = new LocalSimulatedEventLaneTransport(
       {
         eventManager,
@@ -100,9 +110,11 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const logger = createLogger();
     const errorSpy = jest.spyOn(logger, "error").mockResolvedValue();
     const eventManager = new EventManager();
-    const emitSpy = jest.spyOn(eventManager, "emit").mockResolvedValue();
+    const emitSpy = jest
+      .spyOn(eventManager, "emit")
+      .mockResolvedValue(undefined);
     const diagnostics = new EventLanesDiagnostics(logger, true);
-    const store = { events: new Map() } as unknown as Store;
+    const store = createStore();
     const context = createContext();
     const transport = new LocalSimulatedEventLaneTransport(
       {
@@ -131,15 +143,17 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const logger = createLogger();
     jest.spyOn(logger, "error").mockResolvedValue();
     const eventManager = new EventManager();
-    const emitSpy = jest.spyOn(eventManager, "emit").mockResolvedValue();
+    const emitSpy = jest
+      .spyOn(eventManager, "emit")
+      .mockResolvedValue(undefined);
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext();
     const event = defineEvent<{ value: number }>({
       id: "tests-local-simulated-present",
     });
-    const store = {
+    const store = createStore({
       events: new Map([[event.id, { event }]]),
-    } as unknown as Store;
+    });
     const transport = new LocalSimulatedEventLaneTransport(
       {
         eventManager,
@@ -166,7 +180,7 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const logger = createLogger();
     const errorSpy = jest.spyOn(logger, "error").mockResolvedValue();
     const eventManager = new EventManager();
-    jest.spyOn(eventManager, "emit").mockResolvedValue();
+    jest.spyOn(eventManager, "emit").mockResolvedValue(undefined);
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext();
     const event = defineEvent<{ value: number }>({
@@ -176,9 +190,9 @@ describe("LocalSimulatedEventLaneTransport", () => {
     jest.spyOn(serializer, "parse").mockImplementation(() => {
       throw "parse-failed";
     });
-    const store = {
+    const store = createStore({
       events: new Map([[event.id, { event }]]),
-    } as unknown as Store;
+    });
     const transport = new LocalSimulatedEventLaneTransport(
       {
         eventManager,
@@ -207,7 +221,9 @@ describe("LocalSimulatedEventLaneTransport", () => {
     const logger = createLogger();
     jest.spyOn(logger, "error").mockResolvedValue();
     const eventManager = new EventManager();
-    const emitSpy = jest.spyOn(eventManager, "emit").mockResolvedValue();
+    const emitSpy = jest
+      .spyOn(eventManager, "emit")
+      .mockResolvedValue(undefined);
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext();
     const laneId = "tests.local-simulated.fallback-auth.lane";
@@ -217,9 +233,9 @@ describe("LocalSimulatedEventLaneTransport", () => {
     context.eventRouteByEventId.set(event.id, {
       lane: { id: laneId },
     } as any);
-    const store = {
+    const store = createStore({
       events: new Map([[event.id, { event }]]),
-    } as unknown as Store;
+    });
     const bindingAuth = { secret: "fallback-secret" };
     const token = issueRemoteLaneToken({
       laneId,
@@ -263,9 +279,9 @@ describe("LocalSimulatedEventLaneTransport", () => {
         serializer: {
           stringify: JSON.stringify,
         } as unknown as Serializer,
-        store: {
+        store: createStore({
           toPublicId: (id: string) => id,
-        } as unknown as Store,
+        }),
         logger: createLogger(),
       },
       {
@@ -311,11 +327,82 @@ describe("LocalSimulatedEventLaneTransport", () => {
     );
   });
 
+  it("serializes allowlisted async contexts onto scheduled local-simulated messages", async () => {
+    const logger = createLogger();
+    const intercept = jest.fn();
+    const context = createContext();
+    const diagnostics = {
+      logEnqueue: jest.fn(async () => undefined),
+    };
+    const allowedContext = r
+      .asyncContext<{ value: string }>("tests-local-simulated-ctx-allowed")
+      .build();
+    const blockedContext = r
+      .asyncContext<{ value: string }>("tests-local-simulated-ctx-blocked")
+      .build();
+    const lane = {
+      id: "tests-local-simulated-ctx-lane",
+      asyncContexts: [allowedContext.id],
+    };
+    context.eventRouteByEventId.set("tests-local-simulated-ctx-event", {
+      lane,
+    } as any);
+
+    const transport = new LocalSimulatedEventLaneTransport(
+      {
+        eventManager: { intercept } as any,
+        serializer: new Serializer(),
+        store: createStore({
+          asyncContexts: new Map([
+            [allowedContext.id, allowedContext],
+            [blockedContext.id, blockedContext],
+          ]),
+        }) as any,
+        logger,
+      },
+      context,
+      diagnostics as any,
+    );
+    const scheduleRelay = jest
+      .spyOn(transport as any, "scheduleRelay")
+      .mockImplementation(() => undefined);
+
+    transport.register();
+    const interceptor = intercept.mock.calls[0][0];
+
+    await allowedContext.provide({ value: "A" }, async () =>
+      blockedContext.provide({ value: "B" }, async () =>
+        interceptor(
+          jest.fn(async () => "next-result"),
+          {
+            id: "tests-local-simulated-ctx-event",
+            data: { value: 1 },
+            source: runtimeSource.task("tests-local-simulated-ctx.source"),
+            stopPropagation: jest.fn(),
+          },
+        ),
+      ),
+    );
+
+    const message = scheduleRelay.mock.calls[0]?.[0] as EventLaneMessage;
+    expect(typeof message?.serializedAsyncContexts).toBe("string");
+    const parsed = JSON.parse(message.serializedAsyncContexts!) as Record<
+      string,
+      string
+    >;
+    expect(parsed[allowedContext.id]).toBe(
+      allowedContext.serialize({ value: "A" }),
+    );
+    expect(parsed[blockedContext.id]).toBeUndefined();
+  });
+
   it("falls back to no lane policy when lane id is not found in routing table", async () => {
     const logger = createLogger();
     jest.spyOn(logger, "error").mockResolvedValue();
     const eventManager = new EventManager();
-    const emitSpy = jest.spyOn(eventManager, "emit").mockResolvedValue();
+    const emitSpy = jest
+      .spyOn(eventManager, "emit")
+      .mockResolvedValue(undefined);
     const diagnostics = new EventLanesDiagnostics(logger, true);
     const context = createContext();
     const event = defineEvent<{ value: number }>({
@@ -324,9 +411,9 @@ describe("LocalSimulatedEventLaneTransport", () => {
     context.eventRouteByEventId.set(event.id, {
       lane: { id: "tests-local-simulated-policy-miss-other-lane" },
     } as any);
-    const store = {
+    const store = createStore({
       events: new Map([[event.id, { event }]]),
-    } as unknown as Store;
+    });
     const transport = new LocalSimulatedEventLaneTransport(
       {
         eventManager,
@@ -365,10 +452,9 @@ describe("LocalSimulatedEventLaneTransport", () => {
       {
         eventManager: { intercept } as any,
         serializer: new Serializer(),
-        store: {
-          events: new Map(),
+        store: createStore({
           toPublicId: (id: string) => id,
-        } as any,
+        }) as any,
         logger,
       },
       context,
@@ -411,10 +497,9 @@ describe("LocalSimulatedEventLaneTransport", () => {
       {
         eventManager: { intercept } as any,
         serializer: new Serializer(),
-        store: {
-          events: new Map(),
+        store: createStore({
           toPublicId: (id: string) => id,
-        } as any,
+        }) as any,
         logger,
       },
       context,
@@ -431,14 +516,13 @@ describe("LocalSimulatedEventLaneTransport", () => {
     await interceptor(
       jest.fn(async () => "next-result"),
       {
-        id: "shared-event",
+        id: "right.shared-event",
         path: "right.shared-event",
         data: { value: 2 },
         source: runtimeSource.task(
           "tests-local-simulated-definition-identity.source",
         ),
         stopPropagation,
-        [symbolRuntimeId]: "right.shared-event",
       },
     );
 

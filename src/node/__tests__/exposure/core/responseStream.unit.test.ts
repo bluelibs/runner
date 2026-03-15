@@ -90,9 +90,10 @@ describe("nodeExposure - task returned stream", () => {
     const rr = await run(app);
     try {
       const handlers = await rr.getResourceValue(exposure as any);
+      const streamTaskId = rr.store.findIdByDefinition(streamTask);
       const transport = createReqRes({
         method: "POST",
-        url: `/__runner/task/${encodeURIComponent(streamTask.id)}`,
+        url: `/__runner/task/${encodeURIComponent(streamTaskId)}`,
         headers: { "content-type": "application/json" },
         body: "{}",
       });
@@ -138,9 +139,10 @@ describe("nodeExposure - task returned stream", () => {
     const rr = await run(app);
     try {
       const handlers = await rr.getResourceValue(exposure as any);
+      const streamTaskId = rr.store.findIdByDefinition(streamTask);
       const transport = createReqRes({
         method: "POST",
-        url: `/__runner/task/${encodeURIComponent(streamTask.id)}`,
+        url: `/__runner/task/${encodeURIComponent(streamTaskId)}`,
         headers: { "content-type": "application/octet-stream" },
       });
       await handlers.handleTask(transport.req, transport.res);

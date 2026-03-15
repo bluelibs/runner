@@ -3,7 +3,7 @@
 // This prevents malformed or malicious input from entering business logic.
 import { defineResource, defineTask } from "../../define";
 import { run } from "../../run";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("Security: Validation guards", () => {
   it("rejects invalid task input before execution", async () => {
@@ -19,7 +19,7 @@ describe("Security: Validation guards", () => {
             typeof input.email !== "string" ||
             !input.email.includes("@")
           ) {
-            throw createMessageError("Invalid email");
+            throw genericError.new({ message: "Invalid email" });
           }
           return input;
         },

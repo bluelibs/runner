@@ -31,9 +31,12 @@ describe("hooks with multiple events (array on)", () => {
     await rr.emitEvent(e1, { x: 1 });
     await rr.emitEvent(e2, { y: "a" });
 
+    const e1Id = rr.store.findIdByDefinition(e1);
+    const e2Id = rr.store.findIdByDefinition(e2);
+
     expect(calls).toEqual([
-      { id: e1.id, data: { x: 1 } },
-      { id: e2.id, data: { y: "a" } },
+      { id: e1Id, data: { x: 1 } },
+      { id: e2Id, data: { y: "a" } },
     ]);
 
     await rr.dispose();

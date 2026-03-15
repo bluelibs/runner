@@ -9,7 +9,7 @@ import {
   TagType,
   ITask,
   ITaskMiddleware,
-  RegisterableItems,
+  RegisterableItem,
   EventStoreElementType,
   HookStoreElementType,
   ResourceMiddlewareStoreElementType,
@@ -24,6 +24,7 @@ import {
 import { unknownItemTypeError } from "../../errors";
 import { IAsyncContext } from "../../types/asyncContext";
 import { IErrorHelper } from "../../types/error";
+import type { RunnerMode } from "../../types/runner";
 import { HookDependencyState } from "../../types/storeTypes";
 import { VisibilityTracker } from "../VisibilityTracker";
 import { StoreRegistryDefinitionPreparer } from "./StoreRegistryDefinitionPreparer";
@@ -71,9 +72,10 @@ export class StoreRegistryWriter {
     private readonly tagIndex: StoreRegistryTagIndex,
     private readonly definitionPreparer: StoreRegistryDefinitionPreparer,
     private readonly aliasResolver: StoreRegistryAliasResolver,
+    private readonly getRuntimeMode: () => RunnerMode,
   ) {}
 
-  storeGenericItem<_C>(item: RegisterableItems) {
+  storeGenericItem<_C>(item: RegisterableItem) {
     const kind = resolveRegisterableKind(item);
 
     switch (kind) {
@@ -150,6 +152,7 @@ export class StoreRegistryWriter {
       collection: this.collections.hooks,
       key: "hook",
       mode: overrideMode,
+      runtimeMode: this.getRuntimeMode(),
       overrideTargetType: "Hook",
     });
 
@@ -181,6 +184,7 @@ export class StoreRegistryWriter {
       collection: this.collections.taskMiddlewares,
       key: "middleware",
       mode: storingMode,
+      runtimeMode: this.getRuntimeMode(),
       overrideTargetType: "Task middleware",
     });
 
@@ -211,6 +215,7 @@ export class StoreRegistryWriter {
       collection: this.collections.resourceMiddlewares,
       key: "middleware",
       mode: storingMode,
+      runtimeMode: this.getRuntimeMode(),
       overrideTargetType: "Resource middleware",
     });
 
@@ -258,16 +263,19 @@ export class StoreRegistryWriter {
       key: "resource",
       mode: storingMode,
       config: item.config,
+      runtimeMode: this.getRuntimeMode(),
       overrideTargetType: "Resource",
     });
     prepared.isolate = resolveIsolatePolicyDeclarations(
       prepared[symbolResourceIsolateDeclarations],
       item.config,
+      this.getRuntimeMode(),
       prepared.id,
     );
     prepared.subtree = this.normalizeResourceSubtreeMiddlewareAttachments(
       prepared,
       item.config,
+      this.getRuntimeMode(),
     );
 
     this.collections.resources.set(prepared.id, {
@@ -291,14 +299,22 @@ export class StoreRegistryWriter {
     );
     this.visibilityTracker.recordDefinitionTags(prepared.id, tags);
 
-    this.computeRegistrationDeeply(prepared, item.config);
+    this.computeRegistrationDeeply(
+      prepared,
+      item.config,
+      this.getRuntimeMode(),
+    );
     return prepared;
   }
 
-  computeRegistrationDeeply<_C>(element: IResource<_C>, config?: _C) {
+  computeRegistrationDeeply<_C>(
+    element: IResource<_C>,
+    config: _C | undefined,
+    runtimeMode: RunnerMode,
+  ) {
     const registerEntries =
       typeof element.register === "function"
-        ? element.register(config as _C)
+        ? element.register(config as _C, runtimeMode)
         : element.register;
     const items = registerEntries ?? [];
     this.assignNormalizedRegisterEntries(element, items);
@@ -324,7 +340,7 @@ export class StoreRegistryWriter {
 
   private assignNormalizedRegisterEntries<_C>(
     element: IResource<_C>,
-    items: RegisterableItems[],
+    items: RegisterableItem[],
   ): void {
     const descriptor = Object.getOwnPropertyDescriptor(element, "register");
 
@@ -337,8 +353,8 @@ export class StoreRegistryWriter {
 
   private compileOwnedItem(
     ownerScope: OwnerScope,
-    item: RegisterableItems,
-  ): RegisterableItems {
+    item: RegisterableItem,
+  ): RegisterableItem {
     const kind = resolveRegisterableKind(item);
     if (!kind) {
       return item;
@@ -348,7 +364,7 @@ export class StoreRegistryWriter {
       const withConfig = item as IResourceWithConfig<any, any, any>;
       const compiledResource = this.compileOwnedDefinitionWithScope(
         ownerScope,
-        withConfig.resource as RegisterableItems,
+        withConfig.resource as RegisterableItem,
         RegisterableKind.Resource,
       ) as IResource<any, any, any>;
       const compiledWithConfig = this.cloneDefinitionWithId(
@@ -386,9 +402,9 @@ export class StoreRegistryWriter {
 
   private compileOwnedDefinitionWithScope(
     ownerScope: OwnerScope,
-    item: RegisterableItems,
+    item: RegisterableItem,
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
-  ): RegisterableItems {
+  ): RegisterableItem {
     const currentId = item.id;
     const nextId = this.canonicalIdCompiler.compute(
       ownerScope,
@@ -400,7 +416,7 @@ export class StoreRegistryWriter {
     }
 
     return this.cloneDefinitionWithId(
-      item as RegisterableItems & { id: string },
+      item as RegisterableItem & { id: string },
       nextId,
     );
   }
@@ -424,9 +440,9 @@ export class StoreRegistryWriter {
   public compileOwnedDefinition(
     ownerResourceId: string,
     ownerUsesFrameworkRootIds: boolean,
-    item: RegisterableItems,
+    item: RegisterableItem,
     kind: Exclude<RegisterableKind, RegisterableKind.ResourceWithConfig>,
-  ): RegisterableItems {
+  ): RegisterableItem {
     return this.compileOwnedDefinitionWithScope(
       {
         resourceId: ownerResourceId,
@@ -478,7 +494,7 @@ export class StoreRegistryWriter {
     });
   }
 
-  private resolveRegisterableId(item: RegisterableItems): string | undefined {
+  private resolveRegisterableId(item: RegisterableItem): string | undefined {
     if (item === null || item === undefined) {
       return undefined;
     }
@@ -512,17 +528,20 @@ export class StoreRegistryWriter {
       key: "resource",
       mode: overrideMode,
       config: configForResource,
+      runtimeMode: this.getRuntimeMode(),
       overrideTargetType: "Resource",
     });
     prepared.isolate = resolveIsolatePolicyDeclarations(
       prepared[symbolResourceIsolateDeclarations],
       configForResource,
+      this.getRuntimeMode(),
       prepared.id,
     );
     prepared.middleware = this.normalizeResourceMiddlewareAttachments(prepared);
     prepared.subtree = this.normalizeResourceSubtreeMiddlewareAttachments(
       prepared,
       configForResource as _C,
+      this.getRuntimeMode(),
     );
 
     this.collections.resources.set(prepared.id, {
@@ -545,7 +564,11 @@ export class StoreRegistryWriter {
     );
     this.visibilityTracker.recordDefinitionTags(prepared.id, tags);
 
-    this.computeRegistrationDeeply(prepared, configForResource as _C);
+    this.computeRegistrationDeeply(
+      prepared,
+      configForResource as _C,
+      this.getRuntimeMode(),
+    );
     return prepared as AnyResource;
   }
 
@@ -560,6 +583,7 @@ export class StoreRegistryWriter {
       collection: this.collections.tasks,
       key: "task",
       mode: storingMode,
+      runtimeMode: this.getRuntimeMode(),
       overrideTargetType: "Task",
     });
     task.middleware = this.normalizeTaskMiddlewareAttachments(task);
@@ -605,10 +629,12 @@ export class StoreRegistryWriter {
   private normalizeResourceSubtreeMiddlewareAttachments(
     resource: IResource<any, any, any>,
     config: unknown,
+    runtimeMode: RunnerMode,
   ): IResource<any, any, any>["subtree"] {
     const subtree = resolveResourceSubtreeDeclarations(
       resource[symbolResourceSubtreeDeclarations],
       config,
+      runtimeMode,
     );
     if (!subtree) {
       return subtree;
@@ -716,7 +742,7 @@ export class StoreRegistryWriter {
     }
 
     return attachments.map((attachment) =>
-      this.normalizeMiddlewareAttachment(ownerScope, kind, attachment),
+      this.registerMiddlewareAttachmentAlias(ownerScope, kind, attachment),
     );
   }
 
@@ -755,20 +781,11 @@ export class StoreRegistryWriter {
     kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
     attachment: TAttachment,
   ): TAttachment {
-    const isRegisteredMiddlewareId = (candidateId: string): boolean =>
-      kind === RegisterableKind.TaskMiddleware
-        ? this.collections.taskMiddlewares.has(candidateId)
-        : this.collections.resourceMiddlewares.has(candidateId);
-    const resolvedByAliasCandidate =
-      this.aliasResolver.resolveDefinitionId(attachment);
-    const resolvedByAlias =
-      typeof resolvedByAliasCandidate === "string" &&
-      isRegisteredMiddlewareId(resolvedByAliasCandidate)
-        ? resolvedByAliasCandidate
-        : undefined;
-    const resolvedId =
-      resolvedByAlias ??
-      this.canonicalIdCompiler.compute(ownerScope, kind, attachment.id);
+    const resolvedId = this.resolveMiddlewareAttachmentId(
+      ownerScope,
+      kind,
+      attachment,
+    );
 
     if (resolvedId === attachment.id) {
       return attachment;
@@ -781,6 +798,46 @@ export class StoreRegistryWriter {
     this.aliasResolver.registerDefinitionAlias(attachment, resolvedId);
     this.aliasResolver.registerDefinitionAlias(normalized, resolvedId);
     return normalized;
+  }
+
+  private registerMiddlewareAttachmentAlias<TAttachment extends { id: string }>(
+    ownerScope: OwnerScope,
+    kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
+    attachment: TAttachment,
+  ): TAttachment {
+    const resolvedId = this.resolveMiddlewareAttachmentId(
+      ownerScope,
+      kind,
+      attachment,
+    );
+    if (resolvedId !== attachment.id) {
+      this.aliasResolver.registerDefinitionAlias(attachment, resolvedId);
+    }
+
+    return attachment;
+  }
+
+  private resolveMiddlewareAttachmentId<TAttachment extends { id: string }>(
+    ownerScope: OwnerScope,
+    kind: RegisterableKind.TaskMiddleware | RegisterableKind.ResourceMiddleware,
+    attachment: TAttachment,
+  ): string {
+    const isRegisteredMiddlewareId = (candidateId: string): boolean =>
+      kind === RegisterableKind.TaskMiddleware
+        ? this.collections.taskMiddlewares.has(candidateId)
+        : this.collections.resourceMiddlewares.has(candidateId);
+    const resolvedByAliasCandidate =
+      this.aliasResolver.resolveDefinitionId(attachment);
+    const resolvedByAlias =
+      typeof resolvedByAliasCandidate === "string" &&
+      isRegisteredMiddlewareId(resolvedByAliasCandidate)
+        ? resolvedByAliasCandidate
+        : undefined;
+
+    return (
+      resolvedByAlias ??
+      this.canonicalIdCompiler.compute(ownerScope, kind, attachment.id)
+    );
   }
 
   private resolveOwnerResourceIdFromTaskId(taskId: string): string | null {

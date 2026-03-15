@@ -1,4 +1,5 @@
-import { CheckJsonSchemaPatternError } from "../../tools/check";
+import { checkJsonSchemaUnsupportedPatternError } from "../../errors";
+import type { CheckJsonSchemaPatternRuntimeError } from "../../tools/check/errors";
 import {
   appendIndex,
   appendKey,
@@ -6,13 +7,15 @@ import {
   withCycleGuard,
 } from "../../tools/check/toJsonSchema.helpers";
 
-function expectHelperError(run: () => unknown): CheckJsonSchemaPatternError {
+function expectHelperError(
+  run: () => unknown,
+): CheckJsonSchemaPatternRuntimeError {
   try {
     run();
-    throw new Error("Expected CheckJsonSchemaPatternError");
+    throw new Error("Expected checkJsonSchemaUnsupportedPatternError");
   } catch (error) {
-    expect(error).toBeInstanceOf(CheckJsonSchemaPatternError);
-    return error as CheckJsonSchemaPatternError;
+    expect(checkJsonSchemaUnsupportedPatternError.is(error)).toBe(true);
+    return error as CheckJsonSchemaPatternRuntimeError;
   }
 }
 

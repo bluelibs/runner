@@ -8,6 +8,7 @@ describe("EventLanesInternals", () => {
           id: "event.alpha",
           data: {},
           timestamp: new Date(),
+          signal: new AbortController().signal,
           source: {
             kind: "runtime",
             id: "relay:raw-source",

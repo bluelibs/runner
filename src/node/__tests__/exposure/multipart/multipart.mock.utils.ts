@@ -2,7 +2,7 @@ import type { IncomingHttpHeaders } from "http";
 import { PassThrough } from "node:stream";
 import { type MultipartRequest } from "../../../exposure/multipart";
 import type { JsonResponse } from "../../../exposure/types";
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 
 // We mock busboy logic here to be used in multiple test files
 export const setupBusboyMock = () => {
@@ -45,10 +45,10 @@ export function expectErrorCode(
 ): void {
   const body = response.body;
   if (!body || typeof body !== "object")
-    throw createMessageError("Missing body");
+    throw genericError.new({ message: "Missing body" });
   const error = (body as { error?: any }).error;
   if (!error || typeof error !== "object")
-    throw createMessageError("Missing error");
+    throw genericError.new({ message: "Missing error" });
   expect(error.code).toBe(expected);
 }
 

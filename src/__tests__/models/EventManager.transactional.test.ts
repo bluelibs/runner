@@ -66,7 +66,7 @@ describe("EventManager transactional execution", () => {
     await expect(
       eventManager.emit(invalidEvent, undefined, runtimeSource.runtime("src")),
     ).rejects.toMatchObject({
-      id: "runner.errors.transactionalParallelConflict",
+      id: "transactionalParallelConflict",
     });
   });
 
@@ -157,7 +157,7 @@ describe("EventManager transactional execution", () => {
     await expect(
       eventManager.emit(event, undefined, runtimeSource.runtime("source")),
     ).rejects.toMatchObject({
-      id: "runner.errors.transactionalMissingUndoClosure",
+      id: "transactionalMissingUndoClosure",
       listenerId: "l2",
       listenerOrder: 1,
     });
@@ -214,7 +214,7 @@ describe("EventManager transactional execution", () => {
     } catch (error: unknown) {
       expect(transactionalRollbackFailureError.is(error)).toBe(true);
       expect(error).toMatchObject({
-        id: "runner.errors.transactionalRollbackFailure",
+        id: "transactionalRollbackFailure",
       });
 
       const rollbackError = error as {
@@ -335,7 +335,8 @@ describe("EventManager transactional execution", () => {
     );
 
     await expect(
-      eventManager.emit(event, undefined, runtimeSource.runtime("source"), {
+      eventManager.emit(event, undefined, {
+        source: runtimeSource.runtime("source"),
         failureMode: "aggregate",
         throwOnError: false,
       }),
@@ -363,5 +364,44 @@ describe("EventManager transactional execution", () => {
     await eventManager.emit(event, undefined, runtimeSource.runtime("source"));
 
     expect(seen).toEqual([true]);
+  });
+
+  it("rolls back completed listeners when cancellation is observed before the next transactional listener", async () => {
+    const controller = new AbortController();
+    const event = defineEvent<void>({
+      id: "tx-cancelled-before-next",
+      transactional: true,
+    });
+    const execution: string[] = [];
+
+    eventManager.addListener(
+      event,
+      async () => {
+        execution.push("run-1");
+        controller.abort("cancelled");
+        return async () => {
+          execution.push("undo-1");
+        };
+      },
+      { id: "l1", order: 0 },
+    );
+
+    eventManager.addListener(
+      event,
+      async () => {
+        execution.push("run-2");
+        return async () => {};
+      },
+      { id: "l2", order: 1 },
+    );
+
+    await expect(
+      eventManager.emit(event, undefined, {
+        source: runtimeSource.runtime("source"),
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ id: "cancellation" });
+
+    expect(execution).toEqual(["run-1", "undo-1"]);
   });
 });

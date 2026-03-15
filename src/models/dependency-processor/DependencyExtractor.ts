@@ -41,8 +41,36 @@ import type {
   TaskMiddlewareInterceptor,
 } from "../middleware/types";
 import { RuntimeCallSource, runtimeSource } from "../../types/runtimeSource";
+import { globalResources } from "../../globals/globalResources";
+import {
+  extractRequestedId,
+  resolveCanonicalIdFromStore,
+} from "../StoreLookup";
 
-const MIDDLEWARE_MANAGER_RESOURCE_ID = "system.middlewareManager";
+const MIDDLEWARE_MANAGER_RESOURCE_ID = globalResources.middlewareManager.id;
+
+function readDefinitionSourceId(value: unknown): string | undefined {
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+
+  if (utils.isResourceWithConfig(value)) {
+    return value.resource.id;
+  }
+
+  if (
+    ((typeof value === "object" && value !== null) ||
+      typeof value === "function") &&
+    "id" in value
+  ) {
+    const sourceId = (value as { id?: unknown }).id;
+    if (typeof sourceId === "string" && sourceId.length > 0) {
+      return sourceId;
+    }
+  }
+
+  return undefined;
+}
 
 export class DependencyExtractor {
   private readonly inFlightTaskInitializations = new Map<
@@ -177,11 +205,11 @@ export class DependencyExtractor {
       item = item.tag;
     }
 
-    const resolvedItemId = this.store.resolveDefinitionId(item)!;
     const strategy = findDependencyStrategy(item);
     if (!strategy) {
       return unknownItemTypeError.throw({ item });
     }
+    const resolvedItemId = this.resolveDefinitionId(item);
 
     if (isOpt) {
       const exists = strategy.getStoreMap(this.store).has(resolvedItemId);
@@ -206,7 +234,7 @@ export class DependencyExtractor {
 
   extractEventDependency(object: IEvent<any>, source: string) {
     const runtimeCallSource = this.resolveRuntimeCallSource(source);
-    const eventId = this.store.resolveDefinitionId(object);
+    const eventId = this.resolveDefinitionId(object);
     if (!eventId) {
       return dependencyNotFoundError.throw({ key: `Event ${object.id}` });
     }
@@ -219,17 +247,15 @@ export class DependencyExtractor {
     const effectiveEvent = eventEntry.event;
 
     return async (input: unknown, options?: IEventEmitOptions) => {
-      return this.eventManager.emit(
-        effectiveEvent,
-        input,
-        runtimeCallSource,
-        options,
-      );
+      return this.eventManager.emit(effectiveEvent, input, {
+        source: runtimeCallSource,
+        ...(options ?? {}),
+      });
     };
   }
 
   async extractTaskDependency(object: ITask<any, any, {}>, source?: string) {
-    const taskId = this.store.resolveDefinitionId(object)!;
+    const taskId = this.resolveDefinitionId(object);
     const storeTask = this.store.tasks.get(taskId);
     if (storeTask === undefined) {
       dependencyNotFoundError.throw({ key: `Task ${taskId}` });
@@ -250,7 +276,7 @@ export class DependencyExtractor {
   }
 
   async extractResourceDependency(object: IResource<any, any, any>) {
-    const resourceId = this.store.resolveDefinitionId(object)!;
+    const resourceId = this.resolveDefinitionId(object);
     const storeResource = this.store.resources.get(resourceId);
     if (storeResource === undefined) {
       dependencyNotFoundError.throw({ key: `Resource ${resourceId}` });
@@ -266,7 +292,7 @@ export class DependencyExtractor {
     tag: TTag,
     source: string,
   ): Promise<TagDependencyAccessor<TTag>> {
-    const tagId = this.store.resolveDefinitionId(tag)!;
+    const tagId = this.resolveDefinitionId(tag);
     if (!this.store.tags.has(tagId)) {
       dependencyNotFoundError.throw({ key: `Tag ${tagId}` });
     }
@@ -418,7 +444,7 @@ export class DependencyExtractor {
     original: ITask<I, O, D>,
     ownerResourceId: string,
   ): TaskDependencyWithIntercept<I, O> {
-    const taskId = this.store.resolveDefinitionId(original)!;
+    const taskId = this.store.findIdByDefinition(original);
     const fn: (input: I, options?: TaskCallOptions) => O = (input, options) => {
       const storeTask = this.getStoreTaskOrThrow(taskId);
       const effective = storeTask.task as ITask<I, O, D>;
@@ -435,8 +461,8 @@ export class DependencyExtractor {
         // cached runners would miss this interceptor, creating silent inconsistency.
         if (this.store.isLocked) {
           interceptAfterLockError.throw({
-            taskId: this.store.toPublicId(taskId),
-            source: this.store.toPublicId(ownerResourceId),
+            taskId: this.resolveDefinitionId(taskId),
+            source: this.resolveDefinitionId(ownerResourceId),
           });
         }
         const storeTask = this.getStoreTaskOrThrow(taskId);
@@ -453,7 +479,7 @@ export class DependencyExtractor {
         const ownerIds = new Set<string>();
         for (const interceptor of interceptors) {
           if (interceptor.ownerResourceId) {
-            ownerIds.add(this.store.toPublicId(interceptor.ownerResourceId));
+            ownerIds.add(this.resolveDefinitionId(interceptor.ownerResourceId));
           }
         }
         return Object.freeze(Array.from(ownerIds));
@@ -470,7 +496,7 @@ export class DependencyExtractor {
     }
 
     const middlewareManager = value as MiddlewareManager;
-    const publicOwnerResourceId = this.store.toPublicId(ownerResourceId);
+    const canonicalOwnerResourceId = this.resolveDefinitionId(ownerResourceId);
     if (
       typeof middlewareManager.interceptOwned !== "function" ||
       typeof middlewareManager.interceptMiddlewareOwned !== "function"
@@ -491,7 +517,7 @@ export class DependencyExtractor {
               target.interceptOwned(
                 "task",
                 interceptor as TaskMiddlewareInterceptor,
-                publicOwnerResourceId,
+                canonicalOwnerResourceId,
               );
               return;
             }
@@ -499,7 +525,7 @@ export class DependencyExtractor {
             target.interceptOwned(
               "resource",
               interceptor as ResourceMiddlewareInterceptor,
-              publicOwnerResourceId,
+              canonicalOwnerResourceId,
             );
           };
         }
@@ -517,7 +543,7 @@ export class DependencyExtractor {
               target.interceptMiddlewareOwned(
                 middleware,
                 interceptor as TaskMiddlewareInterceptor,
-                publicOwnerResourceId,
+                canonicalOwnerResourceId,
               );
               return;
             }
@@ -526,7 +552,7 @@ export class DependencyExtractor {
               target.interceptMiddlewareOwned(
                 middleware,
                 interceptor as ResourceMiddlewareInterceptor,
-                publicOwnerResourceId,
+                canonicalOwnerResourceId,
               );
             }
           };
@@ -551,21 +577,32 @@ export class DependencyExtractor {
     return storeTask;
   }
 
+  private resolveDefinitionId(value: unknown): string {
+    return (
+      resolveCanonicalIdFromStore(this.store, value) ??
+      extractRequestedId(value) ??
+      readDefinitionSourceId(value) ??
+      String(value)
+    );
+  }
+
   private resolveRuntimeCallSource(sourceId: string): RuntimeCallSource {
     if (this.store.tasks.has(sourceId)) {
-      return this.store.createRuntimeSource("task", sourceId);
+      return runtimeSource.task(sourceId);
     }
     if (this.store.hooks.has(sourceId)) {
-      return this.store.createRuntimeSource("hook", sourceId);
+      return runtimeSource.hook(sourceId);
     }
     if (
       this.store.taskMiddlewares.has(sourceId) ||
       this.store.resourceMiddlewares.has(sourceId)
     ) {
-      return this.store.createRuntimeSource("middleware", sourceId);
+      return this.store.taskMiddlewares.has(sourceId)
+        ? runtimeSource.taskMiddleware(sourceId)
+        : runtimeSource.resourceMiddleware(sourceId);
     }
     if (this.store.resources.has(sourceId)) {
-      return this.store.createRuntimeSource("resource", sourceId);
+      return runtimeSource.resource(sourceId);
     }
     return runtimeSource.runtime(sourceId);
   }

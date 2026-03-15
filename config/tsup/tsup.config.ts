@@ -30,7 +30,11 @@ const outExtension = (ctx: { format: BuildFormat }) => ({
 export default defineConfig([
   {
     ...COMMON,
-    entry: { index: "src/index.ts" },
+    entry: {
+      index: "src/index.ts",
+      "decorators/es": "src/decorators/es.ts",
+      "decorators/legacy": "src/decorators/legacy.ts",
+    },
     outDir: "dist/universal",
     platform: "neutral",
     format: ["esm", "cjs"],
@@ -51,7 +55,11 @@ export default defineConfig([
   },
   {
     ...COMMON,
-    entry: { index: "src/index.ts" },
+    entry: {
+      index: "src/index.ts",
+      "decorators/es": "src/decorators/es.ts",
+      "decorators/legacy": "src/decorators/legacy.ts",
+    },
     outDir: "dist/browser",
     platform: "browser",
     format: ["esm", "cjs"],
@@ -61,7 +69,11 @@ export default defineConfig([
   },
   {
     ...COMMON,
-    entry: { index: "src/index.ts" },
+    entry: {
+      index: "src/index.ts",
+      "decorators/es": "src/decorators/es.ts",
+      "decorators/legacy": "src/decorators/legacy.ts",
+    },
     outDir: "dist/edge",
     platform: "neutral",
     format: ["esm", "cjs"],

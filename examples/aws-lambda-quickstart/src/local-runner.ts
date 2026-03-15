@@ -1,3 +1,4 @@
+import { disposeRunner } from "./bootstrap";
 import { handler as lambdalith } from "./handler.lambdalith";
 import { handler as getUser } from "./handlers/getUser";
 import { handler as createUser } from "./handlers/createUser";
@@ -76,10 +77,14 @@ async function runPerRoute() {
 }
 
 async function main() {
-  console.log("— Lambdalith demo —");
-  await runLambdalith();
-  console.log("— Per-route demo —");
-  await runPerRoute();
+  try {
+    console.log("-- Lambdalith demo --");
+    await runLambdalith();
+    console.log("-- Per-route demo --");
+    await runPerRoute();
+  } finally {
+    await disposeRunner();
+  }
 }
 
 main().catch((e) => {

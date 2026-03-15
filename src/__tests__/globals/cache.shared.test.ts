@@ -4,19 +4,14 @@ import {
   createBudgetedCacheInstance,
   createDefaultCacheProvider,
   createSharedCacheBudgetState,
-  createTaskScopedCacheInstance,
   isBuiltInCacheProvider,
-  shouldClearCacheOnDispose,
-  supportsTaskScopedCacheProvider,
-  withCacheDisposeBehavior,
 } from "../../globals/middleware/cache.shared";
 
 describe("cache.shared", () => {
-  it("marks the built-in provider and rejects custom providers", async () => {
+  it("marks the built-in provider and creates task-scoped caches", async () => {
     const provider = createDefaultCacheProvider();
 
     expect(isBuiltInCacheProvider(provider)).toBe(true);
-    expect(supportsTaskScopedCacheProvider(provider)).toBe(true);
     expect(
       isBuiltInCacheProvider(async () => ({
         get: () => undefined,
@@ -24,50 +19,13 @@ describe("cache.shared", () => {
         clear: () => undefined,
       })),
     ).toBe(false);
-    expect(
-      supportsTaskScopedCacheProvider(async () => ({
-        get: () => undefined,
-        set: () => undefined,
-        clear: () => undefined,
-      })),
-    ).toBe(false);
 
-    const defaultCache = await provider({ max: 1 });
+    const defaultCache = await provider({
+      taskId: "task",
+      options: { max: 1 },
+    });
 
     expect(defaultCache).toBeInstanceOf(LRUCache);
-    expect(shouldClearCacheOnDispose(defaultCache)).toBe(true);
-    await expect(
-      createTaskScopedCacheInstance(provider, {
-        taskId: "task",
-        options: { max: 1 },
-      }),
-    ).resolves.toBeInstanceOf(LRUCache);
-
-    expect(() =>
-      createTaskScopedCacheInstance(async () => new LRUCache({ max: 1 }), {
-        taskId: "task",
-        options: { max: 1 },
-      }),
-    ).toThrow(/does not support task-scoped cache instances/i);
-  });
-
-  it("defaults cache disposal to clear and supports persistent overrides", () => {
-    const ephemeralCache = {
-      get: () => undefined,
-      set: () => undefined,
-      clear: () => undefined,
-    };
-    const persistentCache = withCacheDisposeBehavior(
-      {
-        get: () => undefined,
-        set: () => undefined,
-        clear: () => undefined,
-      },
-      "keep",
-    );
-
-    expect(shouldClearCacheOnDispose(ephemeralCache)).toBe(true);
-    expect(shouldClearCacheOnDispose(persistentCache)).toBe(false);
   });
 
   it("does not track entries rejected by local cache size rules", () => {

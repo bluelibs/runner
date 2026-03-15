@@ -23,7 +23,8 @@ type DrainWaiter = {
 const internalSourceKinds = new Set<RuntimeCallSourceKind>([
   RuntimeCallSourceKind.Task,
   RuntimeCallSourceKind.Hook,
-  RuntimeCallSourceKind.Middleware,
+  RuntimeCallSourceKind.TaskMiddleware,
+  RuntimeCallSourceKind.ResourceMiddleware,
 ]);
 
 export class LifecycleAdmissionController {
@@ -202,7 +203,7 @@ export class LifecycleAdmissionController {
         return false;
       }
       if (source.kind === RuntimeCallSourceKind.Resource) {
-        return this.shutdownAllowedResourcePaths.has(source.path ?? source.id);
+        return this.shutdownAllowedResourcePaths.has(source.id);
       }
       return this.getActiveInternalSourceCount(source) > 0;
     }
@@ -285,7 +286,7 @@ export class LifecycleAdmissionController {
   }
 
   private sourceKey(source: RuntimeCallSource): string {
-    return `${source.kind}:${source.path}`;
+    return `${source.kind}:${source.id}`;
   }
 
   private isBusinessWorkDrained(): boolean {

@@ -70,6 +70,7 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
 
 ## Real-World Examples
 
+- [AWS Lambda Quickstart](./examples/aws-lambda-quickstart/README.md)
 - [Express + OpenAPI + SQLite](./examples/express-openapi-sqlite/README.md)
 - [Fastify + MikroORM + PostgreSQL](./examples/fastify-mikroorm/README.md)
 

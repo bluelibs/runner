@@ -204,6 +204,44 @@ describe("run shutdown drain warning", () => {
     expect(warns).toHaveLength(0);
   });
 
+  it("warns when cooldown consumes the remaining dispose budget before drain starts", async () => {
+    const warns: unknown[] = [];
+
+    const app = defineResource({
+      id: "tests-shutdown-drain-warning-budget-exhausted-app",
+      async init() {
+        return "ok";
+      },
+      async cooldown() {
+        await tick(30);
+      },
+    });
+
+    const runtime = await run(app, {
+      shutdownHooks: false,
+      errorBoundary: false,
+      dispose: {
+        totalBudgetMs: 20,
+        drainingBudgetMs: 50,
+      },
+    });
+
+    runtime.logger.onLog((log) => {
+      if (log.level === "warn") {
+        warns.push(log.data);
+      }
+    });
+
+    await runtime.dispose();
+
+    expect(warns).toHaveLength(1);
+    expect(warns[0]).toMatchObject({
+      reason: "dispose-budget-exhausted-before-drain",
+      requestedDrainBudgetMs: 50,
+      effectiveDrainBudgetMs: 0,
+    });
+  });
+
   it("continues disposal when warning emission fails", async () => {
     const warnSpy = jest
       .spyOn(Logger.prototype, "warn")

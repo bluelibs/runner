@@ -7,7 +7,7 @@ import {
   ITag,
   ITask,
   ITaskMiddleware,
-  RegisterableItems,
+  RegisterableItem,
   TagDependencyAccessor,
   TaskMiddlewareStoreElementType,
   TaskStoreElementType,
@@ -15,6 +15,7 @@ import {
   ResourceStoreElementType,
   EventStoreElementType,
   HookStoreElementType,
+  symbolMiddlewareConfiguredFrom,
   symbolTagConfiguredFrom,
 } from "../defs";
 import { isResourceWithConfig } from "../define";
@@ -34,7 +35,7 @@ import { StoreRegistryWriter } from "./store-registry/StoreRegistryWriter";
 import { StoringMode, TagIndexBucket } from "./store-registry/types";
 import { validationError } from "../errors";
 import { getDefinitionIdentity } from "../tools/isSameDefinition";
-import { FRAMEWORK_ROOT_RESOURCE_ID } from "./createFrameworkRootGateway";
+import type { RunnerMode } from "../types/runner";
 
 /**
  * Any object reference used as a definition identity key.
@@ -49,6 +50,7 @@ type DefinitionReferenceWithOptionalId = {
 
 type DefinitionReferenceWithConfiguredFrom = {
   [symbolTagConfiguredFrom]?: unknown;
+  [symbolMiddlewareConfiguredFrom]?: unknown;
 };
 
 function isObjectReference(value: unknown): value is DefinitionReference {
@@ -73,9 +75,11 @@ function getReferenceSourceId(
 function getConfiguredFromReference(
   reference: DefinitionReference,
 ): DefinitionReference | undefined {
-  const configuredFrom = (reference as DefinitionReferenceWithConfiguredFrom)[
-    symbolTagConfiguredFrom
-  ];
+  const configuredReference =
+    reference as DefinitionReferenceWithConfiguredFrom;
+  const configuredFrom =
+    configuredReference[symbolMiddlewareConfiguredFrom] ??
+    configuredReference[symbolTagConfiguredFrom];
 
   return isObjectReference(configuredFrom) ? configuredFrom : undefined;
 }
@@ -111,7 +115,6 @@ export class StoreRegistry {
   >();
   private readonly definitionAliasesBySourceId = new Map<string, Set<string>>();
   private readonly sourceIdsByCanonicalId = new Map<string, Set<string>>();
-  private readonly displayIdsByCanonicalId = new Map<string, string>();
 
   // Kept on the registry for backward compatibility in tests/tools.
   public readonly tagIndex: Map<string, TagIndexBucket>;
@@ -172,11 +175,16 @@ export class StoreRegistry {
           this.registerDefinitionAlias(reference, canonicalId),
         resolveDefinitionId: (reference) => this.resolveDefinitionId(reference),
       },
+      () => this.store.mode,
     );
   }
 
   getValidator(): StoreValidator {
     return this.validator;
+  }
+
+  public getStoreMode(): RunnerMode {
+    return this.store.mode;
   }
 
   registerDefinitionAlias(reference: unknown, canonicalId: string): void {
@@ -197,7 +205,6 @@ export class StoreRegistry {
     this.recordDefinitionIdentityAlias(reference, canonicalId);
     this.recordSourceIdAlias(reference, canonicalId);
     this.recordCanonicalSourceId(reference, canonicalId);
-    this.computeAndStoreDisplayId(canonicalId);
   }
 
   resolveDefinitionId(reference: unknown): string | undefined {
@@ -312,43 +319,17 @@ export class StoreRegistry {
     return candidates.values().next().value as string;
   }
 
-  getDisplayId(id: string): string {
-    return this.displayIdsByCanonicalId.get(id) ?? id;
-  }
-
-  private stripFrameworkRootPrefix(id: string): string {
-    const prefix = `${FRAMEWORK_ROOT_RESOURCE_ID}.`;
-    return id.startsWith(prefix) ? id.slice(prefix.length) : id;
-  }
-
-  private computeAndStoreDisplayId(canonicalId: string): void {
-    if (
-      canonicalId === FRAMEWORK_ROOT_RESOURCE_ID ||
-      canonicalId.startsWith(`${FRAMEWORK_ROOT_RESOURCE_ID}.`)
-    ) {
-      this.displayIdsByCanonicalId.set(
-        canonicalId,
-        this.stripFrameworkRootPrefix(canonicalId),
-      );
-      return;
-    }
-
-    const sourceIds = this.sourceIdsByCanonicalId.get(canonicalId);
-    if (!sourceIds || sourceIds.size === 0) {
-      this.displayIdsByCanonicalId.set(canonicalId, canonicalId);
-      return;
-    }
-
-    for (const sourceId of sourceIds) {
-      if (sourceId !== canonicalId) {
-        this.displayIdsByCanonicalId.set(canonicalId, sourceId);
-        return;
-      }
-    }
-
-    this.displayIdsByCanonicalId.set(
-      canonicalId,
-      sourceIds.values().next().value as string,
+  findDefinitionById(canonicalId: string): RegisterableItem | undefined {
+    return (
+      this.tasks.get(canonicalId)?.task ??
+      this.resources.get(canonicalId)?.resource ??
+      this.events.get(canonicalId)?.event ??
+      this.taskMiddlewares.get(canonicalId)?.middleware ??
+      this.resourceMiddlewares.get(canonicalId)?.middleware ??
+      this.hooks.get(canonicalId)?.hook ??
+      this.tags.get(canonicalId) ??
+      this.asyncContexts.get(canonicalId) ??
+      this.errors.get(canonicalId)
     );
   }
 
@@ -365,7 +346,7 @@ export class StoreRegistry {
     this.errors.lock();
   }
 
-  storeGenericItem<_C>(item: RegisterableItems) {
+  storeGenericItem<_C>(item: RegisterableItem) {
     return this.writer.storeGenericItem<_C>(item);
   }
 
@@ -411,7 +392,11 @@ export class StoreRegistry {
   }
 
   computeRegistrationDeeply<_C>(element: IResource<_C>, config?: _C) {
-    return this.writer.computeRegistrationDeeply(element, config);
+    return this.writer.computeRegistrationDeeply(
+      element,
+      config,
+      this.store.mode,
+    );
   }
 
   storeResource<_C>(

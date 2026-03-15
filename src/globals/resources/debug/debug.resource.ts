@@ -1,5 +1,4 @@
 import { defineResource } from "../../../definers/defineResource";
-import { markFrameworkDefinition } from "../../../definers/markFrameworkDefinition";
 import { debugConfig } from "./debugConfig.resource";
 import { DebugFriendlyConfig } from "./types";
 import { globalEventListener } from "./globalEvent.hook";
@@ -8,22 +7,20 @@ import { middlewareInterceptorResource } from "./middleware.hook";
 import { hookInterceptorResource } from "./hook.hook";
 import { executionTrackerResource } from "./executionTracker.resource";
 
-export const debugResource = defineResource(
-  markFrameworkDefinition({
-    id: "runner.debug",
-    register: (config: DebugFriendlyConfig) => {
-      return [
-        debugConfig.with(config),
-        globalEventListener,
-        middlewareInterceptorResource,
-        hookInterceptorResource,
-        executionTrackerResource,
-      ];
-    },
-    meta: {
-      title: "Debug",
-      description: "Debug resource. This is used to debug the system.",
-    },
-    tags: [globalTags.system],
-  }),
-);
+export const debugResource = defineResource({
+  id: "debug",
+  register: (config: DebugFriendlyConfig) => {
+    return [
+      debugConfig.with(config),
+      globalEventListener,
+      middlewareInterceptorResource,
+      hookInterceptorResource,
+      executionTrackerResource,
+    ];
+  },
+  meta: {
+    title: "Debug",
+    description: "Debug resource. This is used to debug the system.",
+  },
+  tags: [globalTags.system],
+});

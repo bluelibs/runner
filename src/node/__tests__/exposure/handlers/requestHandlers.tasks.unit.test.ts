@@ -58,6 +58,47 @@ describe("requestHandlers - task handling", () => {
     expect(json?.error?.code).toBe("UNAUTHORIZED");
   });
 
+  it("forwards the request abort signal into task execution", async () => {
+    const runSpy = jest.fn(async () => "ok");
+    const deps = createRequestHandlersDeps(serializer, {
+      store: {
+        tasks: new Map([["t-signal", { task: { id: "t-signal" } }]]),
+        errors: new Map(),
+      },
+      taskRunner: {
+        run: runSpy,
+      },
+      eventManager: {},
+      router: {
+        extract: () => ({ kind: "task", id: "t-signal" }),
+      },
+    });
+
+    const { handleTask } = createRequestHandlers(deps);
+    const { req, res } = createReqRes({
+      method: HttpMethod.Post,
+      url: "/api/task/t-signal",
+      headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
+      body: JSON.stringify({ input: { a: 1 } }),
+    });
+
+    await handleTask(req, res);
+
+    expect(runSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "t-signal" }),
+      { a: 1 },
+      expect.objectContaining({
+        signal: expect.any(Object),
+      }),
+    );
+    const call = runSpy.mock.calls[0] as unknown as [
+      unknown,
+      unknown,
+      { signal: AbortSignal },
+    ];
+    expect(call[2].signal).toBeDefined();
+  });
+
   describe("Application Errors and Sanitization", () => {
     it("includes id and data for known application errors", async () => {
       const AppError = defineError<{ code: number; message: string }>({
@@ -150,7 +191,7 @@ describe("requestHandlers - task handling", () => {
         ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
         : undefined;
       expect(res._status).toBe(500);
-      expect(json?.error?.id).toBeUndefined();
+      expect(json?.error?.id).toBe("tests-errors-non-string-name");
       expect(json?.error?.data).toEqual({ reason: "x" });
     });
   });

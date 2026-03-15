@@ -55,12 +55,45 @@ export function resolveLaneAsyncContextPolicy(options: {
   };
 }
 
+export function resolveRegistryAsyncContextIds(
+  registry: ReadonlyMap<string, IAsyncContext<unknown>>,
+  allowList: readonly string[] | undefined,
+): readonly string[] | undefined {
+  if (allowList === undefined) {
+    return undefined;
+  }
+
+  const registeredIds = Array.from(registry.keys());
+  const resolvedIds = new Set<string>();
+
+  for (const requestedId of allowList) {
+    if (registeredIds.includes(requestedId)) {
+      resolvedIds.add(requestedId);
+      continue;
+    }
+
+    const suffixMatches = registeredIds.filter((registeredId) =>
+      registeredId.endsWith(`.${requestedId}`),
+    );
+
+    if (suffixMatches.length === 1) {
+      resolvedIds.add(suffixMatches[0]!);
+      continue;
+    }
+
+    resolvedIds.add(requestedId);
+  }
+
+  return Array.from(resolvedIds);
+}
+
 export function buildAsyncContextHeader(options: {
   allowList: readonly string[] | undefined;
   registry: ReadonlyMap<string, IAsyncContext<unknown>>;
   serializer: SerializerLike;
 }): string | undefined {
-  const { allowList, registry, serializer } = options;
+  const { registry, serializer } = options;
+  const allowList = resolveRegistryAsyncContextIds(registry, options.allowList);
   const map: Record<string, string> = {};
 
   const collect = (id: string) => {
@@ -93,4 +126,62 @@ export function buildAsyncContextHeader(options: {
   }
 
   return Object.keys(map).length > 0 ? serializer.stringify(map) : undefined;
+}
+
+export async function withSerializedAsyncContexts<T>(options: {
+  serializedContexts?: string;
+  registry: ReadonlyMap<string, IAsyncContext<unknown>>;
+  serializer: SerializerLike;
+  fn: () => Promise<T>;
+  allowAsyncContext?: boolean;
+  allowedAsyncContextIds?: readonly string[];
+}): Promise<T> {
+  const {
+    serializedContexts,
+    registry,
+    serializer,
+    fn,
+    allowAsyncContext = true,
+    allowedAsyncContextIds,
+  } = options;
+
+  if (!allowAsyncContext || !serializedContexts) {
+    return fn();
+  }
+
+  const allowedIds =
+    allowedAsyncContextIds === undefined
+      ? undefined
+      : new Set(
+          resolveRegistryAsyncContextIds(registry, allowedAsyncContextIds),
+        );
+
+  let wrapped = fn;
+
+  try {
+    const map = serializer.parse<Record<string, string>>(serializedContexts);
+    for (const [id, context] of registry.entries()) {
+      if (allowedIds && !allowedIds.has(id)) {
+        continue;
+      }
+
+      const raw = map[id];
+      if (typeof raw !== "string") {
+        continue;
+      }
+
+      try {
+        const value = context.parse(raw);
+        const previous = wrapped;
+        wrapped = async () => await context.provide(value, previous);
+      } catch {
+        // Ignore per-context hydration failures so one bad context does not
+        // block the rest of the lane/request execution.
+      }
+    }
+  } catch {
+    // Ignore malformed serialized context payloads.
+  }
+
+  return wrapped();
 }

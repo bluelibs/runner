@@ -5,6 +5,7 @@ import {
   defineTask,
   defineTaskMiddleware,
 } from "../../../define";
+import { RunnerMode } from "../../../types/runner";
 
 // Type-only tests for define dependencies and registration typing.
 
@@ -144,6 +145,22 @@ import {
       dummyResource, // should throw
       dummyResourceOptionalConfig.with("hello"),
     ],
+  });
+
+  defineResource<{ enabled: boolean }, Promise<RunnerMode>>({
+    id: "test-resource-dynamic-mode-deps",
+    dependencies: (config, mode) => {
+      config.enabled;
+      const runtimeMode: RunnerMode | undefined = mode;
+      void runtimeMode;
+      // @ts-expect-error mode remains a strict runner mode union
+      const invalidMode: "staging" = mode;
+      void invalidMode;
+      return {
+        dummyResource,
+      };
+    },
+    init: async (_config, _deps) => RunnerMode.TEST,
   });
 }
 

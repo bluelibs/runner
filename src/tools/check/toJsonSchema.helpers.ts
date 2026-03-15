@@ -1,4 +1,4 @@
-import { CheckJsonSchemaPatternError } from "./errors";
+import { createCheckJsonSchemaPatternError } from "./errors";
 import { isPlainObject } from "../typeChecks";
 import type { MatchJsonSchema } from "./types";
 
@@ -71,7 +71,7 @@ export function throwUnsupported(
   reason: string,
   pattern: unknown,
 ): never {
-  throw new CheckJsonSchemaPatternError(
+  throw createCheckJsonSchemaPatternError(
     path,
     reason,
     describePatternKind(pattern),

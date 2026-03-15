@@ -15,7 +15,11 @@ export function getResourcesInDisposeWaves(
   initWaves: readonly InitWave[],
 ): DisposeWave[] {
   const initializedResources = getInitializedResources(resources);
-  const fastPathWaves = getTrackedInitWaves(initializedResources, initWaves);
+  const fastPathWaves = getTrackedInitWaves(
+    resources,
+    initializedResources,
+    initWaves,
+  );
 
   if (fastPathWaves) {
     return fastPathWaves.slice().reverse();
@@ -46,7 +50,11 @@ export function getResourcesInReadyWaves(
   initWaves: readonly InitWave[],
 ): DisposeWave[] {
   const initializedResources = getInitializedResources(resources);
-  const fastPathWaves = getTrackedInitWaves(initializedResources, initWaves);
+  const fastPathWaves = getTrackedInitWaves(
+    resources,
+    initializedResources,
+    initWaves,
+  );
 
   if (fastPathWaves) {
     return fastPathWaves;
@@ -70,41 +78,50 @@ function getInitializedResources(
 }
 
 function getTrackedInitWaves(
+  resources: Map<string, ResourceStoreElementType>,
   initializedResources: ResourceStoreElementType[],
   initWaves: readonly InitWave[],
 ): DisposeWave[] | undefined {
-  // Fast path: use fully-tracked initialization waves to preserve the original
-  // dependency-ready parallel grouping.
-  const initWaveIds = initWaves.flatMap((wave) => wave.resourceIds);
-  const initializedIdSet = new Set(
-    initializedResources.map((resource) => resource.resource.id),
+  const byId = new Map(
+    initializedResources.map(
+      (resource) => [resource.resource.id, resource] as const,
+    ),
   );
-  const initWavesCoverAllInitialized =
-    initWaveIds.length === initializedResources.length &&
-    initWaveIds.every((id) => initializedIdSet.has(id));
+  const trackedWaves = initWaves
+    .map((wave) => {
+      const waveResources = wave.resourceIds
+        .map((id) => byId.get(id))
+        .filter((resource): resource is ResourceStoreElementType =>
+          Boolean(resource),
+        );
 
-  if (initWavesCoverAllInitialized) {
-    const byId = new Map(
-      initializedResources.map((r) => [r.resource.id, r] as const),
-    );
-    return initWaves
-      .slice()
-      .map((wave) => {
-        const waveResources = wave.resourceIds
-          .map((id) => byId.get(id))
-          .filter((resource): resource is ResourceStoreElementType =>
-            Boolean(resource),
-          );
+      return {
+        resources: waveResources,
+        parallel: wave.parallel && waveResources.length > 1,
+      };
+    })
+    .filter((wave) => wave.resources.length > 0);
 
-        return {
-          resources: waveResources,
-          parallel: wave.parallel && waveResources.length > 1,
-        };
-      })
-      .filter((wave) => wave.resources.length > 0);
+  if (trackedWaves.length === 0) {
+    return undefined;
   }
 
-  return undefined;
+  const trackedResourceIds = new Set(
+    trackedWaves.flatMap((wave) =>
+      wave.resources.map((resource) => resource.resource.id),
+    ),
+  );
+  const fallbackSingles = getTopologicalInitOrder(
+    resources,
+    initializedResources,
+  )
+    .filter((resource) => !trackedResourceIds.has(resource.resource.id))
+    .map((resource) => ({
+      resources: [resource],
+      parallel: false,
+    }));
+
+  return [...fallbackSingles, ...trackedWaves];
 }
 
 function getTopologicalInitOrder(

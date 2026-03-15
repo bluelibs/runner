@@ -9,6 +9,7 @@ import { symbolOverrideTargetDefinition } from "../../defs";
 import { createTestFixture } from "../test-utils";
 import { OverrideManager } from "../../models/OverrideManager";
 import { r } from "../..";
+import { RunnerMode } from "../../types/runner";
 
 describe("OverrideManager override graph recursion", () => {
   it("supports storeOverridesDeeply without explicitly passing a visited set", () => {
@@ -174,9 +175,100 @@ describe("OverrideManager override graph recursion", () => {
       overrides: [overrideA, overrideB],
     });
 
+    store.mode = RunnerMode.DEV;
+
     expect(() => store.initializeStore(root, {}, runtimeResult)).toThrow(
       /declared more than once/,
     );
+  });
+
+  it("resolves duplicate targets to the outermost override in test mode", () => {
+    const fixture = createTestFixture();
+    const { store } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+    const runtimeResult = fixture.createRuntimeResult(taskRunner);
+
+    const baseTask = defineTask({
+      id: "override-duplicate-target-test-base",
+      run: async () => "base",
+    });
+
+    const childOverride = r.override(baseTask, async () => "child");
+    const rootOverride = r.override(baseTask, async () => "root");
+    const child = defineResource({
+      id: "override-duplicate-target-test-child",
+      register: [baseTask],
+      overrides: [childOverride],
+    });
+    const root = defineResource({
+      id: "override-duplicate-target-test-root",
+      register: [child],
+      overrides: [rootOverride],
+    });
+
+    expect(() => store.initializeStore(root, {}, runtimeResult)).not.toThrow();
+
+    const registry = (store as any).registry as any;
+    const targetId = registry.resolveDefinitionId(baseTask);
+    expect(store.overrides.get(targetId)).toBe(rootOverride);
+  });
+
+  it("prefers an ancestor candidate when resolving test-mode winners", () => {
+    const fixture = createTestFixture();
+    const { store } = fixture;
+
+    const baseTask = defineTask({
+      id: "override-winner-ancestor-base",
+      run: async () => "base",
+    });
+    const childOverride = r.override(baseTask, async () => "child");
+    const rootOverride = r.override(baseTask, async () => "root");
+    const registry = (store as any).registry as any;
+    const manager = new OverrideManager(registry);
+
+    jest
+      .spyOn(registry.visibilityTracker, "isWithinResourceSubtree")
+      .mockImplementation((...args: unknown[]) => {
+        const [sourceId, itemId] = args;
+        return sourceId === "root" && itemId === "child";
+      });
+
+    const winner = (manager as any).resolveWinningOverride("task", [
+      { source: "child", override: childOverride },
+      { source: "root", override: rootOverride },
+    ]);
+
+    expect(winner.override).toBe(rootOverride);
+  });
+
+  it("fails fast when test-mode duplicate sources are unrelated", () => {
+    const fixture = createTestFixture();
+    const { store } = fixture;
+    const baseTask = defineTask({
+      id: "override-winner-unrelated-base",
+      run: async () => "base",
+    });
+    const overrideA = r.override(baseTask, async () => "a");
+    const overrideB = r.override(baseTask, async () => "b");
+    const registry = (store as any).registry as any;
+    const manager = new OverrideManager(registry);
+
+    jest
+      .spyOn(registry.visibilityTracker, "isWithinResourceSubtree")
+      .mockReturnValue(false);
+
+    (manager as any).overrideCandidatesByTarget.set("task", [
+      { source: "sibling-a", override: overrideA },
+      { source: "sibling-b", override: overrideB },
+    ]);
+
+    expect(() =>
+      (manager as any).resolveWinningOverride("task", [
+        { source: "sibling-a", override: overrideA },
+        { source: "sibling-b", override: overrideB },
+      ]),
+    ).toThrow(/declared more than once/);
   });
 
   it("fails fast when override target reference cannot be resolved", () => {

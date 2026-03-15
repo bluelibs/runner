@@ -2,7 +2,7 @@ import type { BusEvent, IEventBus } from "../../durable/core/interfaces/bus";
 import { WaitManager } from "../../durable/core/managers/WaitManager";
 import { ExecutionStatus } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 class SilentEventBus implements IEventBus {
   async publish(_channel: string, _event: BusEvent): Promise<void> {}
@@ -114,7 +114,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
     jest.spyOn(store, "getExecution").mockImplementation(async (id) => {
       calls += 1;
       if (calls >= 3) {
-        throw createMessageError("getExecution-failed");
+        throw genericError.new({ message: "getExecution-failed" });
       }
       return await originalGet(id);
     });
@@ -224,7 +224,7 @@ describe("durable: WaitManager (event bus fallback)", () => {
     const bus = {
       publish: async (_channel: string, _event: BusEvent) => undefined,
       subscribe: async () => {
-        throw createMessageError("subscribe-failed");
+        throw genericError.new({ message: "subscribe-failed" });
       },
       unsubscribe: async () => undefined,
     } satisfies IEventBus;

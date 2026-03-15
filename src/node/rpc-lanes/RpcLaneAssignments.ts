@@ -13,9 +13,10 @@ import { collectEventTopologyLanes } from "../remote-lanes/topologyLanes";
 import { EVENT_LANES_RESOURCE_ID } from "../event-lanes/eventLanes.resource";
 import {
   assignLaneTargetOrThrow,
-  readTargetId,
-  isRegisteredDefinitionId,
+  assertEventNotAssignedToOtherLane,
   collectCrossLaneApplyToEventIds,
+  isRegisteredDefinitionId,
+  readTargetId,
   toPublicPredicateCandidate,
   visitLaneApplyTo,
 } from "../remote-lanes/laneAssignmentUtils";
@@ -70,7 +71,6 @@ export function resolveRpcLaneAssignments(
           eventLaneApplyToEventIds,
           candidate.entry.event.id,
           lane.id,
-          store,
         );
         assignEvent(eventLaneByEventId, candidate.entry.event.id, lane, store);
       },
@@ -85,7 +85,6 @@ export function resolveRpcLaneAssignments(
           eventLaneApplyToEventIds,
           resolvedTarget.id,
           lane.id,
-          store,
         );
         assignEvent(eventLaneByEventId, resolvedTarget.id, lane, store);
       },
@@ -128,7 +127,7 @@ export function resolveRpcLaneAssignments(
     // Without explicit applyTo, IoC tags must not assign the same event to both systems.
     if (globalTags.eventLane.exists(eventEntry.event.tags)) {
       rpcLaneAssignmentEventLaneConflictError.throw({
-        eventId: store.toPublicId(eventId),
+        eventId,
         rpcLaneId: laneConfig.lane.id,
       });
     }
@@ -146,14 +145,14 @@ function assertEventIsNotExplicitlyAssignedToEventLane(
   eventLaneApplyToEventIds: Set<string>,
   eventId: string,
   rpcLaneId: string,
-  store: Store,
 ): void {
-  if (eventLaneApplyToEventIds.has(eventId)) {
-    rpcLaneAssignmentEventLaneConflictError.throw({
-      eventId: store.toPublicId(eventId),
-      rpcLaneId,
-    });
-  }
+  assertEventNotAssignedToOtherLane({
+    conflictingEventIds: eventLaneApplyToEventIds,
+    eventId,
+    attemptedLaneId: rpcLaneId,
+    laneIdField: "rpcLaneId",
+    conflictError: rpcLaneAssignmentEventLaneConflictError,
+  });
 }
 
 function assignTask(
@@ -211,7 +210,7 @@ function resolveRpcLaneTarget(
   if (isRegisteredDefinitionId(store, targetId)) {
     return rpcLaneApplyToTargetTypeError.throw({
       laneId,
-      targetId: store.toPublicId(targetId),
+      targetId,
     });
   }
 

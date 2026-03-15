@@ -5,7 +5,7 @@ import { defineResource, defineEvent, defineHook } from "../../../../define";
 import { run } from "../../../../run";
 import { rpcExposure } from "../testkit/rpcExposure";
 import * as requestBody from "../../../exposure/requestBody";
-import { cancellationError, createMessageError } from "../../../../errors";
+import { cancellationError, genericError } from "../../../../errors";
 import { createRequestHandlersDeps } from "./requestHandlers.deps.test.utils";
 import {
   createReqRes,
@@ -14,6 +14,13 @@ import {
   MimeType,
   type NodeLikeHeaders,
 } from "./requestHandlers.test.utils";
+
+function exposureEventId(
+  runtime: { store: { findIdByDefinition(reference: unknown): string } },
+  event: unknown,
+): string {
+  return runtime.store.findIdByDefinition(event);
+}
 
 describe("requestHandlers - event handling", () => {
   const serializer = new Serializer();
@@ -102,6 +109,46 @@ describe("requestHandlers - event handling", () => {
       : undefined;
     expect(json?.error?.code).toBe("NOT_FOUND");
     expect(emitSpy).not.toHaveBeenCalled();
+  });
+
+  it("forwards the request abort signal into event emission", async () => {
+    const emitSpy = jest.fn(async () => undefined);
+    const deps = createRequestHandlersDeps(serializer, {
+      store: {
+        events: new Map([["e-signal", { event: { id: "e-signal" } }]]),
+        errors: new Map(),
+      },
+      taskRunner: {} as any,
+      eventManager: { emit: emitSpy },
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      authenticator: async () => ({ ok: true }),
+      allowList: { ensureTask: () => null, ensureEvent: () => null },
+      router: {
+        basePath: "/api",
+        extract: (_p: string) => ({ kind: "event", id: "e-signal" }),
+        isUnderBase: () => true,
+      },
+      cors: undefined,
+    });
+
+    const { handleEvent } = createRequestHandlers(deps);
+    const { req, res } = createReqRes({
+      method: HttpMethod.Post,
+      url: "/api/event/e-signal",
+      headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
+      body: JSON.stringify({ payload: { x: 1 } }),
+    });
+
+    await handleEvent(req, res);
+
+    expect(emitSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "e-signal" }),
+      { x: 1 },
+      expect.objectContaining({
+        source: expect.any(Object),
+        signal: expect.any(Object),
+      }),
+    );
   });
 
   describe("Application Errors and Sanitization", () => {
@@ -210,7 +257,7 @@ describe("requestHandlers - event handling", () => {
         ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
         : undefined;
       expect(res._status).toBe(500);
-      expect(json?.error?.id).toBeUndefined();
+      expect(json?.error?.id).toBe("tests-errors-non-string-name-ev");
       expect(json?.error?.data).toEqual({ reason: "ev" });
     });
 
@@ -765,7 +812,7 @@ describe("requestHandlers - event handling", () => {
         id: "tests-ev-err-hook",
         on: ev,
         async run() {
-          throw createMessageError("boom");
+          throw genericError.new({ message: "boom" });
         },
       });
       const exposure = rpcExposure.with({
@@ -783,7 +830,7 @@ describe("requestHandlers - event handling", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const { req, res } = createReqRes({
           method: HttpMethod.Post,
-          url: `/__runner/event/${encodeURIComponent(ev.id)}`,
+          url: `/__runner/event/${encodeURIComponent(exposureEventId(rr, ev))}`,
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ payload: {} }),
         });

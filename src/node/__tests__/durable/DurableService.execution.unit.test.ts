@@ -14,7 +14,7 @@ import {
   okTask,
   pendingExecution,
 } from "./DurableService.unit.helpers";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 async function advanceTimers(ms: number): Promise<void> {
   const asyncAdvance = (
@@ -54,7 +54,7 @@ describe("durable: DurableService — execution (unit)", () => {
       store,
       queue: {
         async enqueue() {
-          throw createMessageError("queue-down");
+          throw genericError.new({ message: "queue-down" });
         },
         async consume() {},
         async ack() {},
@@ -102,7 +102,7 @@ describe("durable: DurableService — execution (unit)", () => {
             input === null ||
             typeof (input as { v?: unknown }).v !== "number"
           ) {
-            throw createMessageError("Expected { v: number } input");
+            throw genericError.new({ message: "Expected { v: number } input" });
           }
           return { v: (input as { v: number }).v * 2 };
         },
@@ -225,7 +225,7 @@ describe("durable: DurableService — execution (unit)", () => {
     const task = r
       .task("t-fail")
       .run(async () => {
-        throw createMessageError("x");
+        throw genericError.new({ message: "x" });
       })
       .build();
 
@@ -233,7 +233,7 @@ describe("durable: DurableService — execution (unit)", () => {
       store,
       taskExecutor: createTaskExecutor({
         [task.id]: async () => {
-          throw createMessageError("x");
+          throw genericError.new({ message: "x" });
         },
       }),
       tasks: [task],
@@ -264,14 +264,14 @@ describe("durable: DurableService — execution (unit)", () => {
     const task = r
       .task("t-throw")
       .run(async () => {
-        throw createMessageError("boom");
+        throw genericError.new({ message: "boom" });
       })
       .build();
     const service = new DurableService({
       store,
       taskExecutor: createTaskExecutor({
         [task.id]: async () => {
-          throw createMessageError("boom");
+          throw genericError.new({ message: "boom" });
         },
       }),
       tasks: [task],

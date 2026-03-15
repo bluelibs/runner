@@ -5,6 +5,7 @@ import {
   resolveIsolatePolicyDeclarations,
 } from "../../definers/isolatePolicy";
 import { r } from "../..";
+import { RunnerMode } from "../../types/runner";
 
 describe("isolatePolicy helpers", () => {
   it("preserves existing deny entries and throws on merged deny/only conflicts", () => {
@@ -61,9 +62,7 @@ describe("isolatePolicy helpers", () => {
 
     expect(() =>
       mergeIsolationPolicy({ deny: [denied] }, { only: [allowed] }),
-    ).toThrow(
-      expect.objectContaining({ id: "runner.errors.isolationConflict" }),
-    );
+    ).toThrow(expect.objectContaining({ id: "isolationConflict" }));
   });
 
   it("asserts conflicts for static builder-style composition", () => {
@@ -82,9 +81,7 @@ describe("isolatePolicy helpers", () => {
         { deny: [denied] },
         { only: [allowed] },
       ),
-    ).toThrow(
-      expect.objectContaining({ id: "runner.errors.isolationConflict" }),
-    );
+    ).toThrow(expect.objectContaining({ id: "isolationConflict" }));
 
     expect(() =>
       assertIsolationConflict(
@@ -92,9 +89,7 @@ describe("isolatePolicy helpers", () => {
         { deny: [] },
         { only: [allowed] },
       ),
-    ).toThrow(
-      expect.objectContaining({ id: "runner.errors.isolationConflict" }),
-    );
+    ).toThrow(expect.objectContaining({ id: "isolationConflict" }));
   });
 
   it("creates a dynamic display policy when declarations include config-driven entries", () => {
@@ -120,18 +115,20 @@ describe("isolatePolicy helpers", () => {
       return;
     }
 
-    expect(display({ strict: true })).toEqual({
+    expect(display({ strict: true }, RunnerMode.TEST)).toEqual({
       deny: [denied],
       exports: [allowed],
     });
-    expect(display({ strict: false })).toEqual({
+    expect(display({ strict: false }, RunnerMode.TEST)).toEqual({
       deny: [denied],
       exports: "none",
     });
   });
 
   it("resolves undefined when isolate declarations are missing", () => {
-    expect(resolveIsolatePolicyDeclarations(undefined, {})).toBeUndefined();
+    expect(
+      resolveIsolatePolicyDeclarations(undefined, {}, RunnerMode.TEST),
+    ).toBeUndefined();
     expect(createDisplayIsolatePolicy(undefined)).toBeUndefined();
   });
 
@@ -149,6 +146,7 @@ describe("isolatePolicy helpers", () => {
       resolveIsolatePolicyDeclarations(
         [{ policy: { deny: { bad: true } as any } }, { policy: {} }],
         {},
+        RunnerMode.TEST,
         "tests-isolatePolicy-invalid-resolve",
       ),
     ).toEqual({
@@ -173,11 +171,12 @@ describe("isolatePolicy helpers", () => {
           { policy: () => ({ only: [allowed] }) },
         ],
         {},
+        RunnerMode.TEST,
         "tests-isolatePolicy-conflict-id-resource",
       ),
     ).toThrow(
       expect.objectContaining({
-        id: "runner.errors.isolationConflict",
+        id: "isolationConflict",
         message: expect.stringContaining(
           '"tests-isolatePolicy-conflict-id-resource"',
         ),

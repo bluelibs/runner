@@ -6,7 +6,7 @@ import {
   assertInputFile,
 } from "./multipart.test.utils";
 import type { InputFile } from "../../../../types/inputFile";
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 
 const serializer = new Serializer();
 
@@ -14,7 +14,9 @@ function assertFilePair(
   value: unknown,
 ): asserts value is { fileA: InputFile; fileB: InputFile } {
   if (!value || typeof value !== "object") {
-    throw createMessageError("Expected multipart value to contain files");
+    throw genericError.new({
+      message: "Expected multipart value to contain files",
+    });
   }
   const record = value as { fileA?: unknown; fileB?: unknown };
   assertInputFile(record.fileA, "fileA");
@@ -77,7 +79,8 @@ describe("parseMultipartInput - Hydration", () => {
     ]);
 
     const parsed = await parseMultipartInput(req, undefined, serializer);
-    if (!parsed.ok) throw createMessageError("Expected multipart success");
+    if (!parsed.ok)
+      throw genericError.new({ message: "Expected multipart success" });
 
     assertFilePair(parsed.value);
     const { fileA, fileB } = parsed.value;

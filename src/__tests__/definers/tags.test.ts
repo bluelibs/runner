@@ -9,7 +9,7 @@ import { run } from "../../run";
 import { TagType } from "../../defs";
 import { globalResources } from "../../globals/globalResources";
 import { globalTags } from "../../globals/globalTags";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("Configurable Tags", () => {
   describe("Tag Definition", () => {
@@ -36,7 +36,7 @@ describe("Configurable Tags", () => {
         id: "simple-tag",
         configSchema: {
           parse: (_input) => {
-            throw createMessageError("Validation Error");
+            throw genericError.new({ message: "Validation Error" });
           },
         },
       });

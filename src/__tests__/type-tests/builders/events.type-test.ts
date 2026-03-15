@@ -9,7 +9,7 @@ import type { HookRevertFn } from "../../../types/hook";
 {
   const hookEvent = r
     .event("hook-event")
-    .payloadSchema<{ message: string }>({ parse: (x: any) => x })
+    .payloadSchema({ message: String })
     .build();
 
   const task = r
@@ -88,7 +88,7 @@ import type { HookRevertFn } from "../../../types/hook";
 {
   const ev = r
     .event("events-type-infer-report")
-    .payloadSchema<{ id: string }>({ parse: (x: any) => x })
+    .payloadSchema({ id: String })
     .build();
 
   r.task("events-type-infer-report-task")
@@ -112,6 +112,27 @@ import type { HookRevertFn } from "../../../types/hook";
       const mustBeReport: IEventEmitReport = dynamicResult;
 
       return "ok";
+    })
+    .build();
+}
+
+// Scenario: raw Match patterns should infer payload types directly for event builders.
+{
+  const userRegistered = r
+    .event("events-type-raw-pattern")
+    .payloadSchema({
+      userId: String,
+      email: String,
+    })
+    .build();
+
+  r.hook("events-type-raw-pattern-hook")
+    .on(userRegistered)
+    .run(async (event) => {
+      event.data.userId.toUpperCase();
+      event.data.email.toLowerCase();
+      // @ts-expect-error payload should remain strict
+      event.data.missing;
     })
     .build();
 }

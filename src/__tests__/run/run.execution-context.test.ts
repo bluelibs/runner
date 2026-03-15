@@ -16,6 +16,10 @@ describe("Execution Context (integration)", () => {
       run: async () => {
         const executionContext = asyncContexts.execution.use();
         taskCorrelationId = executionContext.correlationId;
+        expect(executionContext.framesMode).toBe("full");
+        if (executionContext.framesMode !== "full") {
+          throw new Error("Expected full execution-context snapshot.");
+        }
         expect(executionContext.currentFrame.kind).toBe("task");
         expect(executionContext.currentFrame.id).toBe(
           "execution-context-app.tasks.execution-context-task",
@@ -31,6 +35,10 @@ describe("Execution Context (integration)", () => {
         taskRunner.intercept(async (next, input) => {
           const executionContext = asyncContexts.execution.use();
           interceptorCorrelationId = executionContext.correlationId;
+          expect(executionContext.framesMode).toBe("full");
+          if (executionContext.framesMode !== "full") {
+            throw new Error("Expected full execution-context snapshot.");
+          }
           expect(executionContext.currentFrame.kind).toBe("task");
           expect(executionContext.currentFrame.id).toBe(
             "execution-context-app.tasks.execution-context-task",
@@ -66,6 +74,9 @@ describe("Execution Context (integration)", () => {
       on: event,
       run: async () => {
         const executionContext = asyncContexts.execution.use();
+        if (executionContext.framesMode !== "full") {
+          throw new Error("Expected full execution-context snapshot.");
+        }
         snapshots.push({
           kind: executionContext.currentFrame.kind,
           depth: executionContext.depth,
@@ -79,6 +90,9 @@ describe("Execution Context (integration)", () => {
       dependencies: { eventManager: resources.eventManager },
       run: async (_input, { eventManager }) => {
         const executionContext = asyncContexts.execution.use();
+        if (executionContext.framesMode !== "full") {
+          throw new Error("Expected full execution-context snapshot.");
+        }
         snapshots.push({
           kind: executionContext.currentFrame.kind,
           depth: executionContext.depth,
@@ -87,7 +101,6 @@ describe("Execution Context (integration)", () => {
         await eventManager.emit(event, "hello", {
           kind: "task",
           id: "execution-context-emitter-task",
-          path: "execution-context-emitter-task",
         });
       },
     });
@@ -136,6 +149,36 @@ describe("Execution Context (integration)", () => {
     await runtime.dispose();
   });
 
+  it("supports lightweight execution context for signal/correlation flows", async () => {
+    let seenFramesMode: "full" | "off" | undefined;
+    let seenCorrelationId = "";
+
+    const task = defineTask({
+      id: "execution-context-light-mode-task",
+      run: async () => {
+        const executionContext = asyncContexts.execution.use();
+        seenFramesMode = executionContext.framesMode;
+        seenCorrelationId = executionContext.correlationId;
+        expect(executionContext).not.toHaveProperty("currentFrame");
+      },
+    });
+
+    const app = defineResource({
+      id: "execution-context-light-mode-app",
+      register: [task],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app, {
+      executionContext: { frames: "off", cycleDetection: false },
+    });
+
+    await expect(runtime.runTask(task)).resolves.toBeUndefined();
+    expect(seenFramesMode).toBe("off");
+    expect(seenCorrelationId).toEqual(expect.any(String));
+    await runtime.dispose();
+  });
+
   it("provide seeds a custom correlation id for top-level execution", async () => {
     let seenCorrelationId = "";
 
@@ -159,6 +202,68 @@ describe("Execution Context (integration)", () => {
     );
 
     expect(seenCorrelationId).toBe("req-123");
+    await runtime.dispose();
+  });
+
+  it("provide seeds the ambient signal for top-level task execution", async () => {
+    const controller = new AbortController();
+
+    const task = defineTask({
+      id: "execution-context-provided-signal-task",
+      run: async (_input, _deps, context) => context?.signal,
+    });
+
+    const app = defineResource({
+      id: "execution-context-provided-signal-app",
+      register: [task],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app, { executionContext: true });
+    await expect(
+      asyncContexts.execution.provide({ signal: controller.signal }, () =>
+        runtime.runTask(task),
+      ),
+    ).resolves.toBe(controller.signal);
+
+    await runtime.dispose();
+  });
+
+  it("provide seeds correlation id and signal together for top-level event execution", async () => {
+    const controller = new AbortController();
+    let seenCorrelationId = "";
+    let seenSignal: AbortSignal | undefined;
+
+    const event = defineEvent<void>({
+      id: "execution-context-provided-event",
+    });
+    const hook = defineHook({
+      id: "execution-context-provided-event-hook",
+      on: event,
+      run: async (emission) => {
+        const executionContext = asyncContexts.execution.use();
+        seenCorrelationId = executionContext.correlationId;
+        seenSignal = emission.signal;
+      },
+    });
+
+    const app = defineResource({
+      id: "execution-context-provided-event-app",
+      register: [event, hook],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app, { executionContext: true });
+    await asyncContexts.execution.provide(
+      {
+        correlationId: "req-event-provided",
+        signal: controller.signal,
+      },
+      () => runtime.emitEvent(event),
+    );
+
+    expect(seenCorrelationId).toBe("req-event-provided");
+    expect(seenSignal).toBe(controller.signal);
     await runtime.dispose();
   });
 
@@ -231,6 +336,34 @@ describe("Execution Context (integration)", () => {
     expect(nestedSnapshots).toEqual(["req-record-nested"]);
     expect(output.recording?.roots).toHaveLength(1);
 
+    await runtime.dispose();
+  });
+
+  it("record seeds the ambient signal for the recorded execution", async () => {
+    const controller = new AbortController();
+
+    const task = defineTask({
+      id: "execution-context-record-signal-task",
+      run: async (_input, _deps, context) => context?.signal,
+    });
+
+    const app = defineResource({
+      id: "execution-context-record-signal-app",
+      register: [task],
+      init: async () => "ok",
+    });
+
+    const runtime = await run(app, { executionContext: true });
+    const output = await asyncContexts.execution.record(
+      {
+        correlationId: "req-record-signal",
+        signal: controller.signal,
+      },
+      () => runtime.runTask(task),
+    );
+
+    expect(output.result).toBe(controller.signal);
+    expect(output.recording?.correlationId).toBe("req-record-signal");
     await runtime.dispose();
   });
 

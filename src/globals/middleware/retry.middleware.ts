@@ -1,9 +1,9 @@
 import { defineResourceMiddleware } from "../../definers/defineResourceMiddleware";
 import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
-import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
-import { journalKeys as timeoutJournalKeys } from "./timeout.middleware";
+import { getTaskAbortSignalLink } from "../../models/runtime/taskCancellation";
 import { Match } from "../../tools/check";
+import { createCancellationErrorFromSignal } from "../../tools/abortSignals";
 
 /**
  * Configuration options for the retry middleware
@@ -44,34 +44,30 @@ export const journalKeys = {
   ),
 } as const;
 
-export const retryTaskMiddleware = defineTaskMiddleware(
-  markFrameworkDefinition({
-    id: "runner.middleware.retry.task",
-    configSchema: retryConfigPattern,
-    async run({ task, next, journal }, _deps, config: RetryMiddlewareConfig) {
-      const input = task?.input;
-      let attempts = 0;
+export const retryTaskMiddleware = defineTaskMiddleware({
+  id: "retry",
+  configSchema: retryConfigPattern,
+  async run({ task, next, journal }, _deps, config: RetryMiddlewareConfig) {
+    const input = task?.input;
+    let attempts = 0;
 
-      // Set defaults for required parameters
-      const maxRetries = config.retries ?? 3;
-      const shouldStop = config.stopRetryIf ?? (() => false);
+    // Set defaults for required parameters
+    const maxRetries = config.retries ?? 3;
+    const shouldStop = config.stopRetryIf ?? (() => false);
 
-      // Set initial attempt count
-      journal.set(journalKeys.attempt, attempts, { override: true });
+    // Set initial attempt count
+    journal.set(journalKeys.attempt, attempts, { override: true });
 
-      while (true) {
+    while (true) {
+      try {
+        return await next(input);
+      } catch (error) {
+        const err = error as Error;
+        const signalLink = getTaskAbortSignalLink(journal);
+        const signal = signalLink.signal;
+
         try {
-          return await next(input);
-        } catch (error) {
-          const err = error as Error;
-
-          // Check if timeout middleware has set an abort controller (fetch dynamically)
-          const abortController = journal.get(
-            timeoutJournalKeys.abortController,
-          );
-
-          // Don't retry if the operation was aborted (timeout triggered)
-          if (abortController?.signal.aborted) {
+          if (signal?.aborted) {
             throw error;
           }
 
@@ -85,51 +81,48 @@ export const retryTaskMiddleware = defineTaskMiddleware(
             : getDefaultRetryDelayMs(attempts);
 
           if (delay > 0) {
-            const signal = journal.get(
-              timeoutJournalKeys.abortController,
-            )?.signal;
             await abortableDelay(delay, signal);
           }
-
-          attempts++;
-          // Update journal with current attempt and last error
-          journal.set(journalKeys.attempt, attempts, { override: true });
-          journal.set(journalKeys.lastError, err, { override: true });
+        } finally {
+          signalLink.cleanup();
         }
-      }
-    },
-  }),
-);
 
-export const retryResourceMiddleware = defineResourceMiddleware(
-  markFrameworkDefinition({
-    id: "runner.middleware.retry.resource",
-    configSchema: retryConfigPattern,
-    async run({ resource, next }, _deps, config: RetryMiddlewareConfig) {
-      const input = resource?.config;
-      let attempts = 0;
-      const maxRetries = config.retries ?? 3;
-      const shouldStop = config.stopRetryIf ?? (() => false);
-      while (true) {
-        try {
-          return await next(input);
-        } catch (error) {
-          const err = error as Error;
-          if (shouldStop(err) || attempts >= maxRetries) {
-            throw error;
-          }
-          const delay = config.delayStrategy
-            ? config.delayStrategy(attempts, err)
-            : getDefaultRetryDelayMs(attempts);
-          if (delay > 0) {
-            await abortableDelay(delay);
-          }
-          attempts++;
-        }
+        attempts++;
+        // Update journal with current attempt and last error
+        journal.set(journalKeys.attempt, attempts, { override: true });
+        journal.set(journalKeys.lastError, err, { override: true });
       }
-    },
-  }),
-);
+    }
+  },
+});
+
+export const retryResourceMiddleware = defineResourceMiddleware({
+  id: "retry",
+  configSchema: retryConfigPattern,
+  async run({ resource, next }, _deps, config: RetryMiddlewareConfig) {
+    const input = resource?.config;
+    let attempts = 0;
+    const maxRetries = config.retries ?? 3;
+    const shouldStop = config.stopRetryIf ?? (() => false);
+    while (true) {
+      try {
+        return await next(input);
+      } catch (error) {
+        const err = error as Error;
+        if (shouldStop(err) || attempts >= maxRetries) {
+          throw error;
+        }
+        const delay = config.delayStrategy
+          ? config.delayStrategy(attempts, err)
+          : getDefaultRetryDelayMs(attempts);
+        if (delay > 0) {
+          await abortableDelay(delay);
+        }
+        attempts++;
+      }
+    }
+  },
+});
 
 function getDefaultRetryDelayMs(attempt: number): number {
   const baseDelayMs = 100 * Math.pow(2, attempt);
@@ -148,16 +141,19 @@ export function abortableDelay(
   if (!signal) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
-  if (signal.aborted) return Promise.reject(signal.reason);
+  const activeSignal = signal;
+  if (activeSignal.aborted) {
+    return Promise.reject(createCancellationErrorFromSignal(activeSignal));
+  }
   return new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
+      activeSignal.removeEventListener("abort", onAbort);
       resolve();
     }, ms);
     function onAbort() {
       clearTimeout(timer);
-      reject(signal!.reason);
+      reject(createCancellationErrorFromSignal(activeSignal));
     }
-    signal.addEventListener("abort", onAbort, { once: true });
+    activeSignal.addEventListener("abort", onAbort, { once: true });
   });
 }

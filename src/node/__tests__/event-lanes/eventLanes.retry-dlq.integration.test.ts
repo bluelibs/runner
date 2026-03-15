@@ -1,4 +1,4 @@
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 import { r, run, tags } from "../../..";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
@@ -88,7 +88,7 @@ async function waitUntil(
   const startedAt = Date.now();
   while (!(await predicate())) {
     if (Date.now() - startedAt > timeoutMs) {
-      throw createMessageError("waitUntil timed out");
+      throw genericError.new({ message: "waitUntil timed out" });
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
@@ -108,7 +108,7 @@ describe("event-lanes: failure settlement + retries", () => {
       .hook("tests-event-lanes-failure-settle-failing-hook")
       .on(tagged)
       .run(async () => {
-        throw createMessageError("hook failed");
+        throw genericError.new({ message: "hook failed" });
       })
       .build();
 
@@ -210,7 +210,7 @@ describe("event-lanes: failure settlement + retries", () => {
       .hook("tests-event-lanes-retry-multiple-failing-hook")
       .on(tagged)
       .run(async () => {
-        throw createMessageError("hook failed on retry");
+        throw genericError.new({ message: "hook failed on retry" });
       })
       .build();
 

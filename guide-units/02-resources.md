@@ -193,8 +193,9 @@ Resources move through a deliberate sequence of phases. Understanding which phas
 
 - `init(config, deps, context)` creates the resource value
 - `ready(value, config, deps, context)` starts ingress after startup lock
+- `runtime.getLazyResourceValue(...)` can wake a startup-unused lazy resource only before shutdown starts; once the runtime enters `coolingDown` or later, that wakeup is rejected fail-fast.
 - `cooldown(value, config, deps, context)` stops new ingress **quickly**, a way of saying "stop any additional work, but let in-flight work finish".
-  When `dispose.cooldownWindowMs` is greater than `0`, Runner keeps the broader `coolingDown` admission policy open for that bounded post-cooldown window before it enters `disposing`. At the default `0`, Runner skips that wait. Once `disposing` begins, admissions narrow to in-flight continuations plus resource-origin calls from the cooling resource itself and any additional resource definitions returned from `cooldown()`.
+  Runner fully awaits `cooldown()` before it enters `disposing`, so cooldown-specific admission targets are registered before admissions narrow. Time spent in `cooldown()` still consumes the remaining `dispose.totalBudgetMs` budget for the later bounded waits, but cooldown itself is not cut off early. When `dispose.cooldownWindowMs` is greater than `0`, Runner keeps the broader `coolingDown` admission policy open for that bounded post-cooldown window before it enters `disposing`. At the default `0`, Runner skips that wait. Once `disposing` begins, admissions narrow to in-flight continuations plus resource-origin calls from the cooling resource itself and any additional resource definitions returned from `cooldown()`.
 - `dispose(value, config, deps, context)` performs final teardown after task/event drain.
 - Config-only resources can omit `.init()` and resolve to `undefined`
 - user resources contribute their own ownership segment to canonical ids
@@ -239,9 +240,11 @@ const app = r
   .build();
 ```
 
-### Dynamic Registration
+### Dynamic Registration and Dependencies
 
-`.register()` accepts a function when the registered set depends on config.
+Both `.register()` and `.dependencies()` accept functions when behavior depends on config or environment.
+
+`.register()` as a function — when the registered set depends on config:
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -258,11 +261,68 @@ const feature = r
   .build();
 ```
 
-Use function-based registration when:
+`.dependencies()` as a function — when dependencies are conditional or config-driven:
 
-- registered components depend on config
+```typescript
+const advancedService = r
+  .resource("app.services.advanced")
+  .dependencies((_config, mode) => ({
+    database,
+    logger,
+    conditionalService: mode === "prod" ? serviceA : serviceB,
+  }))
+  .init(async (_config, { database, logger, conditionalService }) => {
+    // Same interface as static dependencies
+  })
+  .build();
+```
+
+Use function-based patterns when:
+
+- registered components or dependencies depend on config
 - you want one reusable template with environment-specific wiring
 - you need to avoid registering optional components in every environment
+- you have conditional dependencies based on the resource's `.with(...)` config
+
+**Performance note**: Function-based dependencies have minimal overhead — they're called once during dependency resolution.
+
+### Dependency Resolution Strategy
+
+Runner resolves dependency trees into ordered initialization waves during `run(app)`.
+By default, initialized resources run `init()` sequentially.
+Set `lifecycleMode: "parallel"` to execute independent resources concurrently within their dependency-safe wave:
+
+```typescript
+const runtime = await run(app, {
+  lifecycleMode: "parallel",
+  // lazy: true // Only init resources explicitly requested or needed
+});
+```
+
+This speeds up boot times when multiple resources (like DBs or queues) don't depend on each other.
+
+### Circular Type Dependencies (TypeScript)
+
+In the rare scenarios, when your file structure creates mutual imports for example:
+
+- resources 'A' registers task 'T'
+- task 'T' depends on resource 'A'
+- both 'A' and 'T' are defined in separate files
+
+This is allowed in runtime, but TypeScript's static analysis will complain about circular type dependencies. And it defaults it to `any` and transforming register() and dependencies() to functions does not help because the circular dependency is still there.
+
+The solution is to cast register() from resource 'A' to return `RegisterableItem[]` instead of the inferred tuple type. This breaks the circular type dependency while preserving autocompletion.
+
+```typescript
+import { r } from "@bluelibs/runner";
+import type { RegisterableItem } from "@bluelibs/runner";
+
+const t = r.resource("A").register((): RegisterableItem[] => {
+  return [taskT];
+});
+```
+
+If you encounter other, more complex circular type dependencies, consider casting the entire resource to `IResource`.
 
 ### Resource Forking
 
@@ -422,6 +482,7 @@ Keep the two APIs distinct:
 - `.subtree((config) => ({ ... }))` and `.subtree((config) => [{ ... }, { ... }])` let subtree policy depend on the owning resource config
 - `subtree.validate` can be one function or an array of functions
 - typed validator branches are also available on `tasks`, `resources`, `hooks`, `events`, `tags`, `taskMiddleware`, and `resourceMiddleware`
+- if subtree middleware and local middleware resolve to the same middleware id on one target, Runner fails fast
 
 Use the generic validator with exported type guards when you need type-specific checks:
 
@@ -509,29 +570,64 @@ Validation rules:
 
 ### Optional Dependencies
 
-Mark dependencies as optional when a component may not be registered.
+Optional dependencies are for components that may not be registered in a given runtime (for example local dev, feature-flagged modules, or partial deployments).
+They are not a substitute for retry/circuit-breaker logic when a registered dependency fails at runtime.
 
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const analyticsService = r
-  .resource("analyticsService")
-  .init(async () => ({ track: (event: string) => console.log(event) }))
-  .build();
-
-const doWork = r
-  .task("doWork")
+const registerUser = r
+  .task("app.tasks.registerUser")
   .dependencies({
-    analytics: analyticsService.optional(),
+    database, // Required - task fails if missing
+    analytics: analyticsService.optional(), // Optional - undefined if missing
+    email: emailService.optional(), // Optional - graceful degradation
   })
-  .run(async (_input, { analytics }) => {
-    analytics?.track("task.executed");
-    return { done: true };
+  .run(async (input, { database, analytics, email }) => {
+    // Core logic always runs
+    const user = await database.create(input);
+
+    // Optional dependencies are undefined if missing
+    await analytics?.track("user.registered");
+    await email?.sendWelcome(user.email);
+
+    return user;
   })
   .build();
 ```
 
+`optional()` handles dependency absence (`undefined`) at wiring time.
+If a registered dependency throws, handle that with retry/fallback/circuit-breaker patterns.
+
 Optional dependencies work on tasks, resources, events, async contexts, and errors.
+
+| Use Case                  | Example                                            |
+| ------------------------- | -------------------------------------------------- |
+| **Non-critical services** | Analytics, metrics, feature flags                  |
+| **External integrations** | Third-party APIs that may be flaky                 |
+| **Development shortcuts** | Skip services not running locally                  |
+| **Feature toggles**       | Conditionally enable functionality                 |
+| **Gradual rollouts**      | New services that might not be deployed everywhere |
+
+For components that accept config (like resources), you can compute dependencies from `.with(...)` config:
+
+```typescript
+const analyticsAdapter = r
+  .resource<{ enableAnalytics?: boolean }>("app.services.analyticsAdapter")
+  .dependencies((config) => ({
+    database,
+    // Only include analytics when enabled in resource config
+    ...(config?.enableAnalytics ? { analytics } : {}),
+  }))
+  .init(async (_config, deps) => ({
+    async record(eventName: string) {
+      await deps.analytics?.track(eventName);
+    },
+  }))
+  .build();
+```
+
+For tasks, prefer static dependencies (required or `.optional()`) and branch at execution time.
 
 ### Private Context
 
@@ -561,5 +657,115 @@ const dbResource = r
   // same for ready() and cooldown() if needed
   .build();
 ```
+
+### Overrides
+
+Use `r.override(base, fn)` when you need to replace a component's behavior while keeping the same `id` — common in integration testing or when swapping out a library.
+
+Override direction is downstream-only: declare `.overrides([...])` from the resource that owns the target subtree, or from one of its ancestors. Child resources cannot replace definitions owned by a parent or sibling subtree.
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const productionEmailer = r
+  .resource("app.emailer")
+  .init(async () => new SMTPEmailer())
+  .build();
+
+const mockEmailer = r.override(
+  productionEmailer,
+  async () => new MockEmailer(),
+);
+
+const app = r
+  .resource("app")
+  .register([productionEmailer])
+  .overrides([mockEmailer])
+  .build();
+```
+
+Overrides work on tasks, resources, hooks, and middleware:
+
+```typescript
+// Task
+const overriddenTask = r.override(originalTask, async () => 2);
+
+// Resource
+const overriddenResource = r.override(
+  originalResource,
+  async () => "mock-conn",
+);
+
+const overriddenLifecycleResource = r.override(originalResource, {
+  context: () => ({ closed: false }),
+  init: async () => "mock-conn",
+  dispose: async (_value, _config, _deps, context) => {
+    context.closed = true;
+  },
+});
+
+// Middleware
+const overriddenMiddleware = r.override(
+  originalMiddleware,
+  async ({ task, next }) => {
+    const result = await next(task?.input);
+    return { wrapped: result };
+  },
+);
+```
+
+`r.override(base, fn)` is behavior-only for tasks, hooks, and middleware:
+
+- task/hook/task-middleware/resource-middleware: callback replaces `run`
+- resource function shorthand: callback replaces `init`
+- resource object form may override any subset of `context`, `init`, `ready`, `cooldown`, `dispose`
+- resource object-form overrides inherit unspecified lifecycle hooks from the base resource
+- resource object-form overrides may add `ready`, `cooldown`, or `dispose` even if the base resource did not define them
+- hook overrides keep the same `.on` target
+- override APIs do not change structural boundaries (dependencies, register tree, subtree policies)
+- duplicate override targets fail fast outside `test`; in `test`, the outermost declaring resource wins, and same-resource duplicates use the last declaration
+
+Use the resource object form intentionally: overriding `context` changes the private lifecycle-state contract that `init()`, `ready()`, `cooldown()`, and `dispose()` share.
+
+**`r.override(...)` vs `.overrides([...])` — critical distinction**:
+
+| API                    | What it does                                                          | Applies replacement? |
+| ---------------------- | --------------------------------------------------------------------- | -------------------- |
+| `r.override(base, fn)` | Creates a new definition with replaced behavior                       | No (not by itself)   |
+| `.overrides([...])`    | Registers override requests Runner validates and applies at bootstrap | Yes                  |
+
+Think of `r.override(...)` as _"build replacement definition"_ and `.overrides([...])` as _"apply replacement in this app"_.
+
+Direct registration of an override definition is also valid when you control the composition and only register one version for that id:
+
+```typescript
+const customMailer = r.override(realMailer, async () => new MockMailer());
+
+const app = r
+  .resource("app")
+  .register([customMailer]) // works: only one definition registered for that id
+  .build();
+```
+
+Common pitfalls:
+
+1. **Creating an override but never applying it** — register it directly or add it to `.overrides([...])`.
+2. **Registering both base and override in `.register([...])`** — keep base in `register`, put replacement in `.overrides([...])`.
+3. **Override target not in the graph** — ensure the base is registered first. For a separate instance, use a different id or `.fork("new-id")`.
+4. **Passing raw definitions to `.overrides([...])`** — wrap with `r.override(base, fn)` first.
+5. **Overriding the root app in tests** — prefer a wrapper resource:
+
+```typescript
+r.resource("test")
+  .register([app])
+  .overrides([
+    /* mocks */
+  ])
+  .build();
+```
+
+If multiple overrides target the same id, Runner rejects the graph with a duplicate-target override error outside `test` mode. In `test` mode, duplicates are allowed so a wrapper harness can replace a deeper mock, and the outermost declaring resource wins. Overriding something not registered still throws, with a remediation hint.
+
+> **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
 
 > **runtime:** "Resources: I nurse them to life, let them work, then mercifully pull the plug in reverse order. It's a lot like IT support, except I actually follow the runbook."

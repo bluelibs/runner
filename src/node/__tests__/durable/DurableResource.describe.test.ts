@@ -1,5 +1,5 @@
 import { r, resources, run } from "../../node";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 describe("durable: describe()", () => {
   it("describes a task using real non-durable deps and shimmed durable.use()", async () => {
@@ -18,12 +18,12 @@ describe("durable: describe()", () => {
       .run(async (_input: undefined, deps) => {
         // Access a non-"use" property to cover the proxy passthrough path.
         if (typeof (deps.durable as any).start !== "function") {
-          throw createMessageError("unexpected durable.start");
+          throw genericError.new({ message: "unexpected durable.start" });
         }
 
         // This must work in describe mode; recorder uses real computed deps.
         if (deps.other.n !== 2) {
-          throw createMessageError("unexpected other.n");
+          throw genericError.new({ message: "unexpected other.n" });
         }
 
         const ctx = deps.durable.use();

@@ -28,7 +28,7 @@ describe("runner.health", () => {
       dependencies: { health: globalResources.health },
       async init(_config, { health }) {
         await expect(health.getHealth([monitored])).rejects.toMatchObject({
-          id: "runner.errors.runtimeHealthDuringBootstrap",
+          id: "runtimeHealthDuringBootstrap",
         });
         snapshot.bootstrapBlocked = true;
         snapshot.hasRuntimeApi = "runTask" in (health as object);
@@ -66,8 +66,8 @@ describe("runner.health", () => {
   });
 
   it("is intentionally not system-tagged", () => {
-    expect(globalResources.health.tags?.includes(globalTags.system)).not.toBe(
-      true,
+    expect(globalResources.health.tags?.includes(globalTags.system)).toBe(
+      false,
     );
   });
 
@@ -96,7 +96,7 @@ describe("runner.health", () => {
     const disposePromise = runtime.dispose();
 
     await expect(health.getHealth([monitored])).rejects.toMatchObject({
-      id: "runner.errors.runResultDisposed",
+      id: "runResultDisposed",
     });
 
     await disposePromise;

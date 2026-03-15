@@ -5,25 +5,30 @@ import { ThrowsList, IErrorHelper } from "../../types/error";
 describe("normalizeThrows()", () => {
   const owner = { kind: "task" as const, id: "spec-task" };
 
+  function createErrorHelper(id: string): IErrorHelper {
+    return {
+      id,
+      [definitions.symbolError]: true,
+    } as unknown as IErrorHelper;
+  }
+
   it("returns undefined when not provided", () => {
     expect(normalizeThrows(owner, undefined)).toBeUndefined();
   });
 
-  it("normalizes ids and deduplicates", () => {
-    const err = {
-      id: "spec-errors-fake",
-      [definitions.symbolError]: true,
-    } as unknown as IErrorHelper;
-    expect(normalizeThrows(owner, ["a", err, "a"])).toEqual([
-      "a",
-      "spec-errors-fake",
+  it("normalizes helper ids and deduplicates", () => {
+    const errA = createErrorHelper("spec-errors-a");
+    const errB = createErrorHelper("spec-errors-b");
+    expect(normalizeThrows(owner, [errA, errB, errA])).toEqual([
+      "spec-errors-a",
+      "spec-errors-b",
     ]);
   });
 
-  it("throws on whitespace-only string ids", () => {
-    expect(() => normalizeThrows(owner, ["   "])).toThrow(
-      /Invalid throws entry/,
-    );
+  it("throws on string ids", () => {
+    expect(() =>
+      normalizeThrows(owner, ["spec-errors-string"] as unknown as ThrowsList),
+    ).toThrow(/Invalid throws entry/);
   });
 
   it("throws on invalid error helpers (empty id)", () => {
@@ -48,7 +53,9 @@ describe("normalizeThrows()", () => {
 
   it("works with hook ThrowOwner kind", () => {
     const hookOwner = { kind: "hook" as const, id: "spec-hook" };
-    expect(normalizeThrows(hookOwner, ["err.id"])).toEqual(["err.id"]);
+    expect(normalizeThrows(hookOwner, [createErrorHelper("err.id")])).toEqual([
+      "err.id",
+    ]);
   });
 
   it("works with task-middleware ThrowOwner kind", () => {
@@ -56,10 +63,12 @@ describe("normalizeThrows()", () => {
       kind: "task-middleware" as const,
       id: "spec-tmw",
     };
-    expect(normalizeThrows(mwOwner, ["err.id"])).toEqual(["err.id"]);
-    expect(() => normalizeThrows(mwOwner, ["   "])).toThrow(
-      /Invalid throws entry for task-middleware/,
-    );
+    expect(normalizeThrows(mwOwner, [createErrorHelper("err.id")])).toEqual([
+      "err.id",
+    ]);
+    expect(() =>
+      normalizeThrows(mwOwner, ["   "] as unknown as ThrowsList),
+    ).toThrow(/Invalid throws entry for task-middleware/);
   });
 
   it("works with resource-middleware ThrowOwner kind", () => {
@@ -67,9 +76,11 @@ describe("normalizeThrows()", () => {
       kind: "resource-middleware" as const,
       id: "spec-rmw",
     };
-    expect(normalizeThrows(mwOwner, ["err.id"])).toEqual(["err.id"]);
-    expect(() => normalizeThrows(mwOwner, ["   "])).toThrow(
-      /Invalid throws entry for resource-middleware/,
-    );
+    expect(normalizeThrows(mwOwner, [createErrorHelper("err.id")])).toEqual([
+      "err.id",
+    ]);
+    expect(() =>
+      normalizeThrows(mwOwner, ["   "] as unknown as ThrowsList),
+    ).toThrow(/Invalid throws entry for resource-middleware/);
   });
 });

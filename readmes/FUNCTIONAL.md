@@ -315,7 +315,7 @@ Use events and hooks for decoupled communication.
 // 1. The subject emits events
 const userRegistered = r
   .event("app.events.userRegistered")
-  .payloadSchema<{ userId: string }>({ parse: (v) => v })
+  .payloadSchema({ userId: String })
   .build();
 
 const userService = r

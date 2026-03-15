@@ -1,5 +1,5 @@
 import { LogPrinter } from "../../models/LogPrinter";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("LogPrinter", () => {
   const origLog = console.log;
@@ -117,10 +117,10 @@ describe("LogPrinter", () => {
     logs = [];
     const bad = {
       toJSON() {
-        throw createMessageError("no json 4u");
+        throw genericError.new({ message: "no json 4u" });
       },
       toString() {
-        throw createMessageError("no string 4u");
+        throw genericError.new({ message: "no string 4u" });
       },
     } as unknown as any;
     // Should not throw and should return [Unserializable]

@@ -328,7 +328,7 @@ describe("StoreRegistry facade delegates", () => {
       { id: "registry-coverage-same" },
       "registry-coverage-same",
     );
-    expect(registry.getDisplayId("registry-coverage-same")).toBe(
+    expect(registry.resolveDefinitionId("registry-coverage-same")).toBe(
       "registry-coverage-same",
     );
 

@@ -1,7 +1,7 @@
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { IEvent } from "../../defs";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
 
 describe("EventManager Parallel Failure Behavior", () => {
@@ -24,7 +24,7 @@ describe("EventManager Parallel Failure Behavior", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw createMessageError("Fail immediately");
+        throw genericError.new({ message: "Fail immediately" });
       },
       { order: 0 },
     );

@@ -1,8 +1,9 @@
 import { r } from "../../index";
 import { run } from "../../run";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
+import { ExecutionContextStore } from "../../models/ExecutionContextStore";
 import { createTestFixture } from "../test-utils";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { ResourceLifecycleMode } from "../../types/runner";
 import { runtimeSource } from "../../types/runtimeSource";
 import type { RuntimeCallSource } from "../../types/runtimeSource";
@@ -30,6 +31,11 @@ enum ErrorMessage {
 }
 
 describe("DependencyProcessor Consistency", () => {
+  const expectCanonicalIdSuffix = (value: unknown, suffix: string) => {
+    expect(typeof value).toBe("string");
+    expect(value as string).toMatch(new RegExp(`${suffix}$`));
+  };
+
   it("should rethrow non-Error resource init failures with a helpful message", async () => {
     const broken = r
       .resource(ResourceId.Broken)
@@ -45,12 +51,12 @@ describe("DependencyProcessor Consistency", () => {
       .build();
 
     await expect(run(root)).rejects.toThrow(
-      /Resource "broken-resource" initialization failed: boom/,
+      /Resource ".*broken-resource" initialization failed: boom/,
     );
   });
 
   it("should annotate Error failures with resourceId and cause", async () => {
-    expect.assertions(4);
+    expect.assertions(6);
 
     const error = new Error(ErrorMessage.Boom);
     const broken = r
@@ -76,14 +82,18 @@ describe("DependencyProcessor Consistency", () => {
     expect(caught).toBeInstanceOf(Error);
     const caughtError = caught as Error;
     expect(caughtError.message).toContain(ResourceId.Broken);
-    expect(Reflect.get(caughtError, "resourceId")).toBe(ResourceId.Broken);
-    expect(Reflect.get(caughtError, "cause")).toEqual({
-      resourceId: ResourceId.Broken,
-    });
+    expectCanonicalIdSuffix(
+      Reflect.get(caughtError, "resourceId"),
+      ResourceId.Broken,
+    );
+    expectCanonicalIdSuffix(
+      Reflect.get(caughtError, "cause")?.resourceId,
+      ResourceId.Broken,
+    );
   });
 
   it("should keep existing resourceId and cause when present", async () => {
-    expect.assertions(4);
+    expect.assertions(6);
 
     const error = new Error(ErrorMessage.WithResource);
     Object.defineProperty(error, "resourceId", {
@@ -117,13 +127,15 @@ describe("DependencyProcessor Consistency", () => {
 
     expect(caught).toBeInstanceOf(Error);
     const caughtError = caught as Error;
-    expect(caughtError.message).toBe(ErrorMessage.WithResource);
-    expect(Reflect.get(caughtError, "resourceId")).toBe(
+    expect(caughtError.message).toContain(ErrorMessage.WithResource);
+    expectCanonicalIdSuffix(
+      Reflect.get(caughtError, "resourceId"),
       ResourceId.BrokenWithMeta,
     );
-    expect(Reflect.get(caughtError, "cause")).toEqual({
-      resourceId: ResourceId.BrokenWithMeta,
-    });
+    expectCanonicalIdSuffix(
+      Reflect.get(caughtError, "cause")?.resourceId,
+      ResourceId.BrokenWithMeta,
+    );
   });
 
   // Regression test for: https://github.com/bluelibs/runner/issues/BUG-ID-OR-CONTEXT
@@ -150,7 +162,7 @@ describe("DependencyProcessor Consistency", () => {
       .build();
 
     const runtime = await run(root);
-    const resourceId = runtime.store.resolveDefinitionId(resource);
+    const resourceId = runtime.store.findIdByDefinition(resource);
     expect(resourceId).toBeDefined();
     const resEntry = runtime.store.resources.get(resourceId!);
 
@@ -306,12 +318,12 @@ describe("DependencyProcessor Consistency", () => {
   });
 
   it("should annotate dependency-triggered resource initialization errors", async () => {
-    expect.assertions(4);
+    expect.assertions(6);
 
     const broken = r
       .resource(ResourceId.BrokenViaDependency)
       .init(async () => {
-        throw createMessageError(ErrorMessage.Boom);
+        throw genericError.new({ message: ErrorMessage.Boom });
       })
       .build();
 
@@ -338,12 +350,14 @@ describe("DependencyProcessor Consistency", () => {
     expect(caught).toBeInstanceOf(Error);
     const caughtError = caught as Error;
     expect(caughtError.message).toContain(ResourceId.BrokenViaDependency);
-    expect(Reflect.get(caughtError, "resourceId")).toBe(
+    expectCanonicalIdSuffix(
+      Reflect.get(caughtError, "resourceId"),
       ResourceId.BrokenViaDependency,
     );
-    expect(Reflect.get(caughtError, "cause")).toEqual({
-      resourceId: ResourceId.BrokenViaDependency,
-    });
+    expectCanonicalIdSuffix(
+      Reflect.get(caughtError, "cause")?.resourceId,
+      ResourceId.BrokenViaDependency,
+    );
   });
 
   it("should skip hook execution when dependencies are not ready yet", async () => {
@@ -413,7 +427,6 @@ describe("DependencyProcessor Consistency", () => {
       {
         kind: "runtime",
         id: "unknown-owner-id",
-        path: "unknown-owner-id",
       },
     ]);
   });
@@ -505,7 +518,7 @@ describe("DependencyProcessor Consistency", () => {
       logger,
       ResourceLifecycleMode.Sequential,
       false,
-      false,
+      new ExecutionContextStore(null),
     );
     type HookEvent = { source: RuntimeCallSource; data: unknown };
     type HookStoreElementShape = {

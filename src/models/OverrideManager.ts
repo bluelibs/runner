@@ -4,7 +4,7 @@ import {
   IResourceMiddleware,
   ITask,
   ITaskMiddleware,
-  RegisterableItems,
+  RegisterableItem,
   symbolOverrideTargetDefinition,
 } from "../defs";
 import * as utils from "../define";
@@ -15,6 +15,7 @@ import {
   overrideTargetNotRegisteredError,
   unknownItemTypeError,
 } from "../errors";
+import { RunnerMode } from "../types/runner";
 import { StoreRegistry } from "./StoreRegistry";
 
 type OverrideTargetType =
@@ -31,17 +32,27 @@ type SupportedOverride =
   | IResourceMiddleware
   | IHook;
 
+type OverrideCandidate = {
+  source: string;
+  override: SupportedOverride;
+};
+
 export class OverrideManager {
   public overrides: Map<string, SupportedOverride> = new Map();
 
   public overrideRequests: Array<{
     source: string;
-    override: RegisterableItems;
+    override: RegisterableItem;
   }> = [];
+
+  private readonly overrideCandidatesByTarget = new Map<
+    string,
+    OverrideCandidate[]
+  >();
 
   constructor(private readonly registry: StoreRegistry) {}
 
-  private toSupportedOverride(override: RegisterableItems): SupportedOverride {
+  private toSupportedOverride(override: RegisterableItem): SupportedOverride {
     if (
       utils.isTask(override) ||
       utils.isResource(override) ||
@@ -95,6 +106,13 @@ export class OverrideManager {
   }
 
   private getOverrideSourcesById(targetId: string): string[] {
+    const candidates = this.overrideCandidatesByTarget.get(targetId);
+    if (candidates && candidates.length > 0) {
+      return Array.from(
+        new Set(candidates.map((candidate) => candidate.source)),
+      );
+    }
+
     const sources = new Set<string>();
     for (const request of this.overrideRequests) {
       try {
@@ -148,15 +166,84 @@ export class OverrideManager {
     });
   }
 
-  private isOverrideBranded(override: RegisterableItems): boolean {
+  private isOverrideBranded(override: RegisterableItem): boolean {
     return utils.isOverrideDefinition(override);
   }
 
-  private getMaybeOverrideId(override: RegisterableItems): string | undefined {
+  private getMaybeOverrideId(override: RegisterableItem): string | undefined {
     if (override && typeof override === "object" && "id" in override) {
       return (override as { id: string }).id;
     }
     return undefined;
+  }
+
+  private isTestMode(): boolean {
+    return this.registry.getStoreMode() === RunnerMode.TEST;
+  }
+
+  private resolveWinningOverride(
+    targetId: string,
+    candidates: OverrideCandidate[],
+  ): OverrideCandidate {
+    const [firstCandidate, ...remainingCandidates] = candidates;
+    let winner = firstCandidate;
+
+    for (const candidate of remainingCandidates) {
+      if (candidate.source === winner.source) {
+        winner = candidate;
+        continue;
+      }
+
+      const candidateIsAncestor =
+        this.registry.visibilityTracker.isWithinResourceSubtree(
+          candidate.source,
+          winner.source,
+        );
+      if (candidateIsAncestor) {
+        winner = candidate;
+        continue;
+      }
+
+      const winnerIsAncestor =
+        this.registry.visibilityTracker.isWithinResourceSubtree(
+          winner.source,
+          candidate.source,
+        );
+      if (winnerIsAncestor) {
+        continue;
+      }
+
+      overrideDuplicateTargetError.throw({
+        targetId: this.getOverrideId(candidate.override),
+        sources: this.getOverrideSourcesById(targetId),
+      });
+    }
+
+    return winner;
+  }
+
+  private storeOverrideCandidate(
+    targetId: string,
+    candidate: OverrideCandidate,
+  ): void {
+    const candidates = this.overrideCandidatesByTarget.get(targetId) ?? [];
+    candidates.push(candidate);
+    this.overrideCandidatesByTarget.set(targetId, candidates);
+
+    if (candidates.length === 1) {
+      this.overrides.set(targetId, candidate.override);
+      return;
+    }
+
+    if (!this.isTestMode()) {
+      overrideDuplicateTargetError.throw({
+        targetId: this.getOverrideId(candidate.override),
+        sources: this.getOverrideSourcesById(targetId),
+      });
+    }
+
+    const winner = this.resolveWinningOverride(targetId, candidates);
+    this.overrides.set(targetId, winner.override);
   }
 
   storeOverridesDeeply<C>(
@@ -169,7 +256,8 @@ export class OverrideManager {
 
     visited.add(element.id);
 
-    element.overrides.forEach((override) => {
+    const overrides = element.overrides as Array<RegisterableItem>;
+    overrides.forEach((override) => {
       if (!override) {
         return;
       }
@@ -194,13 +282,10 @@ export class OverrideManager {
         );
       }
       this.overrideRequests.push({ source: element.id, override });
-      if (this.overrides.has(targetId)) {
-        overrideDuplicateTargetError.throw({
-          targetId: this.getOverrideId(supportedOverride),
-          sources: this.getOverrideSourcesById(targetId),
-        });
-      }
-      this.overrides.set(targetId, supportedOverride);
+      this.storeOverrideCandidate(targetId, {
+        source: element.id,
+        override: supportedOverride,
+      });
     });
   }
 

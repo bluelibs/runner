@@ -18,11 +18,21 @@ export function createRequestHandlersDeps(
       events: new Map(),
       errors: new Map(),
       asyncContexts: new Map(),
-      resolveDefinitionId: resolveMockDefinitionId,
-      toPublicId: (reference: unknown) =>
-        typeof reference === "string"
-          ? reference
-          : ((reference as { id?: string })?.id ?? String(reference)),
+      hasDefinition(reference: unknown) {
+        const resolved = resolveMockDefinitionId(reference);
+        return typeof resolved === "string" && this.hasId(resolved);
+      },
+      hasId(id: string) {
+        return (
+          this.tasks.has(id) ||
+          this.events.has(id) ||
+          this.errors.has(id) ||
+          this.asyncContexts.has(id)
+        );
+      },
+      findIdByDefinition(reference: unknown) {
+        return resolveMockDefinitionId(reference) ?? String(reference);
+      },
       createRuntimeSource: createMockRuntimeSource,
     },
     taskRunner: { run: async () => undefined },

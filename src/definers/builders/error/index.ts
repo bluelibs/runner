@@ -11,7 +11,6 @@ export * from "./types";
 export * from "./utils";
 
 type InternalErrorBuilderOptions = {
-  framework?: boolean;
   filePath: string;
 };
 
@@ -29,11 +28,13 @@ function createErrorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
     meta: {} as IErrorMeta,
   });
 
-  return makeErrorBuilder(initial, options.framework === true);
+  return makeErrorBuilder(initial);
 }
 
 /**
- * Entry point for creating an error builder.
+ * Creates a fluent Runner error builder.
+ *
+ * Use this when you want typed error data, stable ids, and helper methods such as `.throw()` and `.is(...)`.
  */
 export function errorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
   id: string,
@@ -44,9 +45,7 @@ export function errorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
 }
 
 /**
- * Check if an error is any Runner error (not just a specific one).
- * @param error - The error to check
- * @returns true if the error is a RunnerError instance
+ * Checks whether a value is a Runner error, optionally matching a subset of its data payload.
  */
 function isRunnerError(error: unknown): error is RunnerError;
 function isRunnerError(
@@ -68,6 +67,9 @@ function isRunnerError(
   );
 }
 
+/**
+ * Error builder namespace with a shared `is(...)` type guard attached.
+ */
 export const error = Object.assign(errorBuilder, {
   is: isRunnerError,
 });
@@ -77,6 +79,5 @@ export function frameworkError<
 >(id: string): ErrorFluentBuilder<TData> {
   return createErrorBuilder(id, {
     filePath: getCallerFile(),
-    framework: true,
   });
 }

@@ -11,7 +11,7 @@ Runner provides the integration points (interceptors, context propagation, struc
 
 For resource-level operational status, Runner also supports optional async `resource.health(...)` probes and aggregates them through `resources.health.getHealth(...)` and `runtime.getHealth(...)`. Only resources that explicitly opt in are counted, and sleeping lazy resources are skipped, which keeps the report aligned with the checks you actually trust.
 
-### Naming conventions
+### Naming Conventions
 
 Keep names stable and low-cardinality:
 
@@ -20,7 +20,7 @@ Keep names stable and low-cardinality:
 - **Trace spans**: `{component}:{operation}` (for example: `task:app.tasks.createUser`, `resource:app.db.init`)
 - **Log source**: always include a stable `source` (task/resource id)
 
-### Baseline production dashboard
+### Baseline Production Dashboard
 
 At minimum, chart these for every service:
 
@@ -30,7 +30,7 @@ At minimum, chart these for every service:
 - Resource saturation (queue depth, semaphore utilization, event-loop lag)
 - Dependency health (database/cache/external API failure and latency)
 
-### Baseline alerts
+### Baseline Alerts
 
 Start with practical, non-noisy alerts:
 
@@ -40,7 +40,7 @@ Start with practical, non-noisy alerts:
 - Dependency outage (consecutive failures crossing a threshold)
 - Event-loop lag sustained above operational limit
 
-### Correlation checklist
+### Correlation Checklist
 
 For incident response, ensure each signal can be joined:
 

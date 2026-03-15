@@ -13,6 +13,8 @@ export interface EventLaneMessage {
   laneId: string;
   eventId: string;
   payload: string;
+  /** Serializer-encoded async-context map forwarded by the producing lane. */
+  serializedAsyncContexts?: string;
   source: RuntimeCallSource;
   authToken?: string;
   createdAt: Date;

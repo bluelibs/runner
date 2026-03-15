@@ -1,4 +1,5 @@
 import { StoringMode } from "./types";
+import type { RunnerMode } from "../../types/runner";
 import {
   overrideTargetNotRegisteredError,
   validationError,
@@ -14,6 +15,7 @@ type OverrideTargetType =
 type PreparedDefinition = {
   id: string;
   dependencies?: unknown;
+  overrides?: unknown;
   config?: unknown;
 };
 
@@ -23,6 +25,7 @@ type PrepareFreshValueInput<T extends PreparedDefinition, TMapValue> = {
   key: keyof TMapValue;
   mode: StoringMode;
   config?: unknown;
+  runtimeMode?: RunnerMode;
   overrideTargetType?: OverrideTargetType;
 };
 
@@ -48,6 +51,7 @@ export class StoreRegistryDefinitionPreparer {
     key,
     mode,
     config,
+    runtimeMode,
     overrideTargetType,
   }: PrepareFreshValueInput<T, TMapValue>): T {
     let currentItem: T;
@@ -68,11 +72,25 @@ export class StoreRegistryDefinitionPreparer {
     if (typeof currentItem.dependencies === "function") {
       const dependencyFactory = currentItem.dependencies as (
         cfg: unknown,
+        mode: RunnerMode,
       ) => unknown;
       const effectiveConfig = config ?? currentItem.config;
       currentItem.dependencies = dependencyFactory(
         effectiveConfig,
+        runtimeMode!,
       ) as T["dependencies"];
+    }
+
+    if (typeof currentItem.overrides === "function") {
+      const overridesFactory = currentItem.overrides as (
+        cfg: unknown,
+        mode: RunnerMode,
+      ) => unknown;
+      const effectiveConfig = config ?? currentItem.config;
+      currentItem.overrides = overridesFactory(
+        effectiveConfig,
+        runtimeMode!,
+      ) as T["overrides"];
     }
 
     this.ensureDependenciesShape(currentItem.id, currentItem.dependencies);

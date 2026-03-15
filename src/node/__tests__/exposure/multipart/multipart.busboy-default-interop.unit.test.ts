@@ -45,7 +45,7 @@ import {
 import { Serializer } from "../../../../serializer";
 import { PassThrough } from "node:stream";
 import { NodeInputFile } from "../../../files/inputFile.model";
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 
 const serializer = new Serializer();
 
@@ -100,7 +100,9 @@ describe("parseMultipartInput - busboy default export interop", () => {
     const parsed = await parseMultipartInput(req, undefined, serializer);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) {
-      throw createMessageError("Expected multipart parsing to succeed");
+      throw genericError.new({
+        message: "Expected multipart parsing to succeed",
+      });
     }
 
     await expect(parsed.finalize).resolves.toEqual({ ok: true });
@@ -127,7 +129,7 @@ describe("parseMultipartInput - busboy default export interop", () => {
     const parsed = await parseMultipartInput(req, undefined, serializer);
     expect(parsed.ok).toBe(false);
     if (parsed.ok) {
-      throw createMessageError("Expected multipart parsing to fail");
+      throw genericError.new({ message: "Expected multipart parsing to fail" });
     }
     expect(parsed.response.status).toBe(413);
     expect(
@@ -170,12 +172,14 @@ describe("parseMultipartInput - busboy default export interop", () => {
     const parsed = await parseMultipartInput(req, undefined, serializer);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) {
-      throw createMessageError("Expected multipart parsing to succeed");
+      throw genericError.new({
+        message: "Expected multipart parsing to succeed",
+      });
     }
     const finalized = await parsed.finalize;
     expect(finalized.ok).toBe(false);
     if (finalized.ok) {
-      throw createMessageError("Expected finalize() to fail");
+      throw genericError.new({ message: "Expected finalize() to fail" });
     }
     expect(finalized.response.status).toBe(413);
     expect(
@@ -211,12 +215,14 @@ describe("parseMultipartInput - busboy default export interop", () => {
     const parsed = await parseMultipartInput(req, undefined, serializer);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) {
-      throw createMessageError("Expected multipart parsing to succeed");
+      throw genericError.new({
+        message: "Expected multipart parsing to succeed",
+      });
     }
     const finalized = await parsed.finalize;
     expect(finalized.ok).toBe(false);
     if (finalized.ok) {
-      throw createMessageError("Expected finalize() to fail");
+      throw genericError.new({ message: "Expected finalize() to fail" });
     }
     expect(finalized.response.status).toBe(413);
     expect(
@@ -268,20 +274,24 @@ describe("parseMultipartInput - busboy default export interop", () => {
     const parsed = await parseMultipartInput(req, undefined, serializer);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) {
-      throw createMessageError("Expected multipart parsing to succeed");
+      throw genericError.new({
+        message: "Expected multipart parsing to succeed",
+      });
     }
 
     await expect(parsed.finalize).resolves.toEqual({ ok: true });
 
     const value = parsed.value;
     if (!isRecord(value)) {
-      throw createMessageError("Expected parsed.value to be an object");
+      throw genericError.new({
+        message: "Expected parsed.value to be an object",
+      });
     }
     const file = value.file;
     if (!(file instanceof NodeInputFile)) {
-      throw createMessageError(
-        "Expected parsed.value.file to be a NodeInputFile",
-      );
+      throw genericError.new({
+        message: "Expected parsed.value.file to be a NodeInputFile",
+      });
     }
     expect(file.name).toBe("from-manifest.txt");
     expect(file.size).toBe(123);
@@ -338,20 +348,24 @@ describe("parseMultipartInput - busboy default export interop", () => {
     const parsed = await parseMultipartInput(req, undefined, serializer);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) {
-      throw createMessageError("Expected multipart parsing to succeed");
+      throw genericError.new({
+        message: "Expected multipart parsing to succeed",
+      });
     }
 
     await expect(parsed.finalize).resolves.toEqual({ ok: true });
 
     const value = parsed.value;
     if (!isRecord(value)) {
-      throw createMessageError("Expected parsed.value to be an object");
+      throw genericError.new({
+        message: "Expected parsed.value to be an object",
+      });
     }
     const file = value.file;
     if (!(file instanceof NodeInputFile)) {
-      throw createMessageError(
-        "Expected parsed.value.file to be a NodeInputFile",
-      );
+      throw genericError.new({
+        message: "Expected parsed.value.file to be a NodeInputFile",
+      });
     }
 
     expect(file.name).toBe("manifest-name.txt");

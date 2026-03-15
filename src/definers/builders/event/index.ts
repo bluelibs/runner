@@ -10,7 +10,9 @@ export * from "./types";
 export * from "./utils";
 
 /**
- * Entry point for creating an event builder.
+ * Creates a fluent event builder.
+ *
+ * Use this when payload schema, tags, and delivery semantics should stay explicit at the declaration site.
  */
 export function eventBuilder<TPayload = void>(
   id: string,
@@ -29,4 +31,7 @@ export function eventBuilder<TPayload = void>(
   return makeEventBuilder<TPayload, undefined>(initial);
 }
 
+/**
+ * Shorthand for {@link eventBuilder}.
+ */
 export const event = eventBuilder;

@@ -103,8 +103,8 @@ Use when you want lane assignments present but transport bypassed entirely.
 import { r } from "@bluelibs/runner";
 import { eventLanesResource, rpcLanesResource } from "@bluelibs/runner/node";
 
-const lane = r.eventLane("app.lanes.notifications").build();
-const rpc = r.rpcLane("app.rpc.billing").build();
+const lane = r.eventLane("notifications-lane").build();
+const rpc = r.rpcLane("billing-lane").build();
 
 const topologyEvents = r.eventLane.topology({
   profiles: { local: { consume: [] } },
@@ -144,8 +144,8 @@ Use when you want local execution with transport-like serialization behavior.
 import { r } from "@bluelibs/runner";
 import { eventLanesResource, rpcLanesResource } from "@bluelibs/runner/node";
 
-const eventLane = r.eventLane("app.lanes.audit").build();
-const rpcLane = r.rpcLane("app.rpc.users").build();
+const eventLane = r.eventLane("audit-lane").build();
+const rpcLane = r.rpcLane("users-lane").build();
 
 const app = r
   .resource("app")
@@ -184,7 +184,7 @@ import {
   MemoryEventLaneQueue,
 } from "@bluelibs/runner/node";
 
-const lane = r.eventLane("app.lanes.notifications").build();
+const lane = r.eventLane("notifications-lane").build();
 const queue = new MemoryEventLaneQueue();
 
 const topology = r.eventLane.topology({
@@ -229,7 +229,7 @@ import {
 } from "@bluelibs/runner/node";
 
 // 1. Define a lane — a logical routing channel
-const notificationsLane = r.eventLane("app.lanes.notifications").build();
+const notificationsLane = r.eventLane("notifications-lane").build();
 
 // 2. Tag the event for lane routing
 const notificationRequested = r
@@ -398,7 +398,7 @@ import { r } from "@bluelibs/runner";
 import { rpcLanesResource } from "@bluelibs/runner/node";
 
 // 1. Define a lane
-const billingLane = r.rpcLane("app.rpc.billing").build();
+const billingLane = r.rpcLane("billing-lane").build();
 
 // 2. Tag the task for lane routing
 const chargeCard = r
@@ -635,7 +635,7 @@ import {
   MemoryEventLaneQueue,
 } from "@bluelibs/runner/node";
 
-const lane = r.eventLane("app.lanes.test").build();
+const lane = r.eventLane("test-lane").build();
 const queue = new MemoryEventLaneQueue();
 
 const topology = r.eventLane.topology({
@@ -711,7 +711,7 @@ You usually want both.
 
 ```typescript
 const activeProfile = (process.env.RUNNER_PROFILE as "api" | "billing") ?? "api";
-const billingLane = r.rpcLane("app.rpc.billing").build();
+const billingLane = r.rpcLane("billing-lane").build();
 const topology = r.rpcLane.topology({
   profiles: {
     api: { serve: [] },
@@ -795,12 +795,12 @@ Fail-fast proof snippets (recommended in integration tests):
 ```typescript
 // 1) Producer with only public key -> signer missing (cannot mint lane token)
 await expect(run(producerAppWithPublicKeyOnly)).rejects.toMatchObject({
-  name: "runner.errors.remoteLanes.auth.signerMissing",
+  name: "remoteLanes-auth-signerMissing",
 });
 
 // 2) Consumer with only private key -> verifier missing (cannot verify lane token)
 await expect(run(consumerAppWithPrivateKeyOnly)).rejects.toMatchObject({
-  name: "runner.errors.remoteLanes.auth.verifierMissing",
+  name: "remoteLanes-auth-verifierMissing",
 });
 ```
 
@@ -808,7 +808,7 @@ Event Lane parity example (same asymmetric role split):
 
 ```typescript
 const activeProfile = (process.env.RUNNER_PROFILE as "api" | "worker") ?? "api";
-const notificationsLane = r.eventLane("app.events.notifications").build();
+const notificationsLane = r.eventLane("notifications-lane").build();
 const topology = r.eventLane.topology({
   profiles: {
     api: { consume: [] }, // producer profile
@@ -838,6 +838,7 @@ eventLanesResource.with({
 
 - Auth is still enforced.
 - For `jwt_asymmetric`, the same runtime signs and verifies during simulation, so binding auth must provide both sides of material.
+- Event lane `asyncContexts` allowlist still applies in `local-simulated` (default `[]`, so no implicit forwarding).
 - RPC lane `asyncContexts` allowlist still applies in `local-simulated` (default `[]`, so no implicit forwarding).
 
 ## Migration Notes (v6)
@@ -882,7 +883,7 @@ When routing does not behave as expected, check in this order:
 
 | Concept          | API                                                              |
 | ---------------- | ---------------------------------------------------------------- |
-| Lane definition  | `r.eventLane("...").applyTo([...])` or `r.eventLane("...").applyTo((event) => boolean)` |
+| Lane definition  | `r.eventLane("...").asyncContexts([...]).applyTo([...])` or `r.eventLane("...").asyncContexts([...]).applyTo((event) => boolean)` |
 | Event tagging    | `r.runner.tags.eventLane.with({ lane })` |
 | Topology         | `r.eventLane.topology({ profiles, bindings })`                   |
 | Profile consume  | `profiles[profile].consume: lane[]`                              |
@@ -893,7 +894,7 @@ When routing does not behave as expected, check in this order:
 
 | Concept            | API                                                              |
 | ------------------ | ---------------------------------------------------------------- |
-| Lane definition    | `r.rpcLane("...").applyTo([...])` or `r.rpcLane("...").applyTo((taskOrEvent) => boolean)` |
+| Lane definition    | `r.rpcLane("...").asyncContexts([...]).applyTo([...])` or `r.rpcLane("...").asyncContexts([...]).applyTo((taskOrEvent) => boolean)` |
 | Task/event tagging | `r.runner.tags.rpcLane.with({ lane })`                            |
 | Topology           | `r.rpcLane.topology({ profiles, bindings })`                     |
 | Profile serve      | `profiles[profile].serve: lane[]`                                |

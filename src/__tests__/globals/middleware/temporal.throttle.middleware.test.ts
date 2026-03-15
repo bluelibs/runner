@@ -6,7 +6,7 @@ import {
   temporalResource,
   throttleTaskMiddleware,
 } from "../../../globals/middleware/temporal.middleware";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 const createTemporalDeps = () => ({
   state: {
@@ -217,7 +217,9 @@ describe("Temporal Middleware: Throttle", () => {
 
         expect(keyedStates?.size).toBe(1);
         expect(keyedStates?.has("stale-key-0")).toBe(false);
-        expect(keyedStates?.has("throttle-prune-idle")).toBe(true);
+        expect(
+          keyedStates?.has("app-prune-idle.tasks.throttle-prune-idle"),
+        ).toBe(true);
       },
     });
 
@@ -272,7 +274,7 @@ describe("Temporal Middleware: Throttle", () => {
       dependencies: { task },
       async init(_, { task }) {
         await expect(task()).rejects.toThrow(
-          "Middleware config validation failed for throttle-keyBuilder-invalid-return: Temporal middleware keyBuilder must return a string. Received object.",
+          "Middleware config validation failed for app-throttle-keyBuilder-invalid-return.tasks.throttle-keyBuilder-invalid-return: Temporal middleware keyBuilder must return a string. Received object.",
         );
       },
     });
@@ -337,7 +339,7 @@ describe("Temporal Middleware: Throttle", () => {
       middleware: [throttleTaskMiddleware.with({ ms: 50 })],
       run: async () => {
         callCount++;
-        throw createMessageError("Throttle error");
+        throw genericError.new({ message: "Throttle error" });
       },
     });
 
@@ -364,7 +366,7 @@ describe("Temporal Middleware: Throttle", () => {
 
     const next = async (input?: string) => {
       if (input === "b") {
-        throw createMessageError("Throttle error");
+        throw genericError.new({ message: "Throttle error" });
       }
       return input;
     };
@@ -454,7 +456,7 @@ describe("Temporal Middleware: Throttle", () => {
     const next = async (input?: string) => {
       callCount += 1;
       if (input === "c") {
-        throw createMessageError("boom");
+        throw genericError.new({ message: "boom" });
       }
       return input;
     };
@@ -529,7 +531,9 @@ describe("Temporal Middleware: Throttle", () => {
         fn: TimerHandler,
       ): ReturnType<typeof setTimeout> => {
         if (typeof fn !== "function") {
-          throw createMessageError("Expected function timer callback");
+          throw genericError.new({
+            message: "Expected function timer callback",
+          });
         }
         scheduled = fn as () => Promise<void>;
         return 1 as unknown as ReturnType<typeof setTimeout>;

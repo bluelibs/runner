@@ -18,6 +18,7 @@ describe("resolveExecutionContextConfig", () => {
   it("returns defaults when executionContext is true", () => {
     const config = resolveExecutionContextConfig(true);
 
+    expect(config?.frames).toBe("full");
     expect(config?.cycleDetection).toEqual(
       EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
     );
@@ -27,6 +28,7 @@ describe("resolveExecutionContextConfig", () => {
   it("uses default cycle detection when executionContext options omit it", () => {
     expect(resolveExecutionContextConfig({})).toEqual({
       createCorrelationId: expect.any(Function),
+      frames: "full",
       cycleDetection: EXECUTION_CONTEXT_CYCLE_DETECTION_DEFAULTS,
     });
   });
@@ -34,8 +36,30 @@ describe("resolveExecutionContextConfig", () => {
   it("allows disabling cycle detection while keeping execution context", () => {
     expect(resolveExecutionContextConfig({ cycleDetection: false })).toEqual({
       createCorrelationId: expect.any(Function),
+      frames: "full",
       cycleDetection: null,
     });
+  });
+
+  it('supports the lightweight "frames: off" mode', () => {
+    expect(
+      resolveExecutionContextConfig({
+        frames: "off",
+        cycleDetection: false,
+      }),
+    ).toEqual({
+      createCorrelationId: expect.any(Function),
+      frames: "off",
+      cycleDetection: null,
+    });
+  });
+
+  it('rejects "frames: off" when cycle detection stays enabled', () => {
+    expect(() =>
+      resolveExecutionContextConfig({
+        frames: "off",
+      }),
+    ).toThrow('executionContext.frames "off" requires cycleDetection: false.');
   });
 
   it("merges custom cycle detection options", () => {
@@ -45,6 +69,7 @@ describe("resolveExecutionContextConfig", () => {
       }),
     ).toEqual({
       createCorrelationId: expect.any(Function),
+      frames: "full",
       cycleDetection: {
         maxDepth: 250,
         maxRepetitions:

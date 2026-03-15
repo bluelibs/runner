@@ -38,6 +38,7 @@ describe("package root exports coverage", () => {
     expect((root.r as any).system).toBeUndefined();
     expect((root.r as any).runner).toBeUndefined();
     expect((root.r as any).debug).toBeUndefined();
+    expect(typeof root.resources.mode).toBe("object");
     expect(typeof root.resources.runtime).toBe("object");
     expect(typeof root.events.ready).toBe("object");
     expect(typeof root.middleware.task.retry).toBe("object");
@@ -75,9 +76,7 @@ describe("package root exports coverage", () => {
     expect((root as any).runner).toBeUndefined();
     expect((root as any).system).toBeUndefined();
     expect((root as any).asyncContexts).toBeDefined();
-    expect((root as any).asyncContexts.execution.id).toBe(
-      "asyncContexts.execution",
-    );
+    expect((root as any).asyncContexts.execution.id).toBe("executionContext");
   });
 
   it("deduplicates built-in tags when composing framework registries", () => {

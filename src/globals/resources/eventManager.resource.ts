@@ -1,11 +1,10 @@
 import { defineResource } from "../../definers/defineResource";
-import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import type { EventManager } from "../../models/EventManager";
 import { globalTags } from "../globalTags";
 
 export const eventManagerResource = defineResource<void, Promise<EventManager>>(
-  markFrameworkDefinition({
-    id: "system.eventManager",
+  {
+    id: "eventManager",
     meta: {
       title: "Event Manager",
       description:
@@ -15,5 +14,5 @@ export const eventManagerResource = defineResource<void, Promise<EventManager>>(
     dispose: async (eventManager) => {
       eventManager.dispose();
     },
-  }),
+  },
 );

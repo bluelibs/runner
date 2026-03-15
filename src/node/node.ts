@@ -10,6 +10,9 @@ import { redisCacheProviderResource } from "./cache/redisCacheProvider.resource"
 
 registerRpcLaneHttpPresetsForNode();
 
+/**
+ * Node-only built-in resources layered on top of the universal Runner resource set.
+ */
 export const resources = Object.freeze({
   ...baseResources,
   durable: durableSupportResource,
@@ -18,6 +21,9 @@ export const resources = Object.freeze({
   redisCacheProvider: redisCacheProviderResource,
 });
 
+/**
+ * Node-only tags layered on top of the universal Runner tag set.
+ */
 export const tags = Object.freeze({
   ...baseTags,
   durableWorkflow: durableWorkflowTag,

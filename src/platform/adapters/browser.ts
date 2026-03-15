@@ -4,6 +4,7 @@ import type {
   PlatformId,
 } from "../types";
 import { platformUnsupportedFunctionError } from "../../errors";
+import { readEnvironmentVariable } from "./env";
 
 /**
  * Interface representing a browser-like event target with optional event methods.
@@ -88,15 +89,7 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
   }
 
   getEnv(key: string) {
-    const g = globalThis as BrowserGlobalScope;
-    if (g.__ENV__ && typeof g.__ENV__ === "object") return g.__ENV__[key];
-    if (
-      typeof process !== "undefined" &&
-      (process as { env: Record<string, string> }).env
-    )
-      return (process as { env: Record<string, string> }).env[key];
-    if (g.env && typeof g.env === "object") return g.env[key];
-    return undefined;
+    return readEnvironmentVariable(key);
   }
 
   hasAsyncLocalStorage() {

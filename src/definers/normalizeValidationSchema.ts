@@ -1,5 +1,5 @@
 import { validationError } from "../errors";
-import { check, Match } from "../tools/check";
+import { Match } from "../tools/check";
 import { hasClassSchemaMetadata } from "../tools/check/classSchema";
 import { isClassConstructor, hasParseFunction } from "../tools/typeChecks";
 import type {
@@ -32,11 +32,7 @@ export function normalizeValidationSchema<T>(
     return Match.fromSchema(input) as IValidationSchema<T>;
   }
 
-  return {
-    parse(value: unknown): T {
-      return check(value, input) as T;
-    },
-  };
+  return Match.compile(input as never) as IValidationSchema<T>;
 }
 
 export function normalizeOptionalValidationSchema<T>(

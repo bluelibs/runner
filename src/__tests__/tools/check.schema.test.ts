@@ -1,10 +1,47 @@
 import {
-  CheckJsonSchemaPatternError,
-  Match,
-  MatchError,
-  type MatchJsonSchema,
-  check,
-} from "../../tools/check";
+  checkJsonSchemaUnsupportedPatternError,
+  matchError,
+} from "../../errors";
+import { type MatchJsonSchema, check } from "../../tools/check";
+import { builtInMatcherDefinitions } from "../../tools/check/matcher/builtins";
+import { Match } from "../../decorators/legacy";
+
+function expectMatchFailure(
+  run: () => unknown,
+): ReturnType<typeof matchError.new> {
+  try {
+    run();
+    throw new Error("Expected matchError");
+  } catch (error) {
+    expect(matchError.is(error)).toBe(true);
+    return error as ReturnType<typeof matchError.new>;
+  }
+}
+
+function expectSchemaError(
+  run: () => unknown,
+): ReturnType<typeof checkJsonSchemaUnsupportedPatternError.new> {
+  try {
+    run();
+    throw new Error("Expected checkJsonSchemaUnsupportedPatternError");
+  } catch (error) {
+    expect(checkJsonSchemaUnsupportedPatternError.is(error)).toBe(true);
+    return error as ReturnType<
+      typeof checkJsonSchemaUnsupportedPatternError.new
+    >;
+  }
+}
+
+const builtInPublicTokens = Object.freeze({
+  Any: Match.Any,
+  Integer: Match.Integer,
+  PositiveInteger: Match.PositiveInteger,
+  NonEmptyString: Match.NonEmptyString,
+  Email: Match.Email,
+  UUID: Match.UUID,
+  URL: Match.URL,
+  IsoDateString: Match.IsoDateString,
+});
 
 describe("tools/check schema support", () => {
   it("allows Match tokens to behave as schemas via parse()", () => {
@@ -21,14 +58,14 @@ describe("tools/check schema support", () => {
     expect(Match.IsoDateString.parse("2026-01-01T10:20:30Z")).toBe(
       "2026-01-01T10:20:30Z",
     );
-    expect(() => Match.Integer.parse(1.1)).toThrow(MatchError);
-    expect(() => Match.PositiveInteger.parse(-1)).toThrow(MatchError);
-    expect(() => Match.PositiveInteger.parse(1.1)).toThrow(MatchError);
-    expect(() => Match.NonEmptyString.parse("")).toThrow(MatchError);
-    expect(() => Match.Email.parse("not-an-email")).toThrow(MatchError);
-    expect(() => Match.UUID.parse("not-a-uuid")).toThrow(MatchError);
-    expect(() => Match.URL.parse("not a url")).toThrow(MatchError);
-    expect(() => Match.IsoDateString.parse("2026-01-01")).toThrow(MatchError);
+    expectMatchFailure(() => Match.Integer.parse(1.1));
+    expectMatchFailure(() => Match.PositiveInteger.parse(-1));
+    expectMatchFailure(() => Match.PositiveInteger.parse(1.1));
+    expectMatchFailure(() => Match.NonEmptyString.parse(""));
+    expectMatchFailure(() => Match.Email.parse("not-an-email"));
+    expectMatchFailure(() => Match.UUID.parse("not-a-uuid"));
+    expectMatchFailure(() => Match.URL.parse("not a url"));
+    expectMatchFailure(() => Match.IsoDateString.parse("2026-01-01"));
   });
 
   it("allows Match patterns to behave as schemas via parse()", () => {
@@ -41,7 +78,7 @@ describe("tools/check schema support", () => {
       id: "u1",
       retries: 1,
     });
-    expect(() => schema.parse({ id: "", retries: 1 })).toThrow(MatchError);
+    expectMatchFailure(() => schema.parse({ id: "", retries: 1 }));
   });
 
   it("supports parse() on Optional/Maybe/OneOf/Where patterns", () => {
@@ -54,24 +91,22 @@ describe("tools/check schema support", () => {
 
     expect(Match.OneOf(String, Number).parse("ok")).toBe("ok");
     expect(Match.OneOf(String, Number).parse(10)).toBe(10);
-    expect(() => Match.OneOf(String, Number).parse(false)).toThrow(MatchError);
+    expectMatchFailure(() => Match.OneOf(String, Number).parse(false));
 
     const positiveNumber = Match.Where(
       (value: unknown): value is number =>
         typeof value === "number" && value > 0,
     );
     expect(positiveNumber.parse(1)).toBe(1);
-    expect(() => positiveNumber.parse(0)).toThrow(MatchError);
+    expectMatchFailure(() => positiveNumber.parse(0));
 
     expect(Match.NonEmptyArray().parse([1])).toEqual([1]);
     expect(Match.NonEmptyArray(String).parse(["a"])).toEqual(["a"]);
-    expect(() => Match.NonEmptyArray().parse([])).toThrow(MatchError);
-    expect(() => Match.NonEmptyArray(String).parse([1])).toThrow(MatchError);
+    expectMatchFailure(() => Match.NonEmptyArray().parse([]));
+    expectMatchFailure(() => Match.NonEmptyArray(String).parse([1]));
 
     expect(check([1, 2], Match.ArrayOf(Number))).toEqual([1, 2]);
-    expect(() => check(["1"] as never, Match.ArrayOf(Number))).toThrow(
-      MatchError,
-    );
+    expectMatchFailure(() => check(["1"] as never, Match.ArrayOf(Number)));
 
     const map = check(
       {
@@ -93,12 +128,61 @@ describe("tools/check schema support", () => {
         worker: { id: "lane-worker" },
       }).worker.id,
     ).toBe("lane-worker");
-    expect(() =>
+    expectMatchFailure(() =>
       check({ worker: { id: 123 } }, Match.MapOf({ id: String })),
-    ).toThrow(MatchError);
+    );
 
     expect(Match.RegExp(/^ok$/).parse("ok")).toBe("ok");
-    expect(() => Match.RegExp(/^ok$/).parse("nope")).toThrow(MatchError);
+    expectMatchFailure(() => Match.RegExp(/^ok$/).parse("nope"));
+
+    expect(Match.Range({ min: 1, max: 3 }).parse(1)).toBe(1);
+    expect(Match.Range({ min: 1, max: 3, inclusive: false }).parse(2)).toBe(2);
+    expect(Match.Range({ min: 1, max: 3, integer: true }).parse(2)).toBe(2);
+    expectMatchFailure(() =>
+      Match.Range({ min: 1, max: 3, inclusive: false }).parse(1),
+    );
+    expectMatchFailure(() =>
+      Match.Range({ min: 1, max: 3, integer: true }).parse(2.5),
+    );
+  });
+
+  it("supports test() on Match-native tokens and helper-created patterns", () => {
+    expect(Match.NonEmptyString.test("ok")).toBe(true);
+    expect(Match.NonEmptyString.test("")).toBe(false);
+
+    const optionalString = Match.Optional(String);
+    expect(optionalString.test(undefined)).toBe(true);
+    expect(optionalString.test("ok")).toBe(true);
+    expect(optionalString.test(1)).toBe(false);
+
+    const objectPattern = Match.ObjectIncluding({
+      id: Match.NonEmptyString,
+      retries: Match.Optional(Match.Integer),
+    });
+    expect(objectPattern.test({ id: "u1", retries: 1 })).toBe(true);
+    expect(objectPattern.test({ id: "", retries: 1 })).toBe(false);
+
+    const regexpPattern = Match.RegExp(/^runner$/);
+    expect(regexpPattern.test("runner")).toBe(true);
+    expect(regexpPattern.test("walker")).toBe(false);
+
+    const rangePattern = Match.Range({ min: 1, max: 3 });
+    expect(rangePattern.test(2)).toBe(true);
+    expect(rangePattern.test(4)).toBe(false);
+    expect(Match.Range({ min: 1, max: 3, integer: true }).test(2)).toBe(true);
+    expect(Match.Range({ min: 1, max: 3, integer: true }).test(2.2)).toBe(
+      false,
+    );
+  });
+
+  it("keeps built-in token kinds aligned with the central registry", () => {
+    for (const [name, definition] of Object.entries(
+      builtInMatcherDefinitions,
+    )) {
+      expect(
+        builtInPublicTokens[name as keyof typeof builtInPublicTokens].kind,
+      ).toBe(definition.kind);
+    }
   });
 
   it("supports toJSONSchema() on Match schema-like tokens and wrappers", () => {
@@ -142,6 +226,28 @@ describe("tools/check schema support", () => {
       format: "date-time",
       pattern:
         "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?(?:Z|[+-]\\d{2}:\\d{2})$",
+    });
+    expect(Match.Range({ min: 1, max: 10 }).toJSONSchema()).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "number",
+      minimum: 1,
+      maximum: 10,
+    });
+    expect(
+      Match.Range({ min: 1, max: 10, integer: true }).toJSONSchema(),
+    ).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "integer",
+      minimum: 1,
+      maximum: 10,
+    });
+    expect(
+      Match.Range({ min: 1, max: 10, inclusive: false }).toJSONSchema(),
+    ).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "number",
+      exclusiveMinimum: 1,
+      exclusiveMaximum: 10,
     });
 
     expect(
@@ -193,9 +299,10 @@ describe("tools/check schema support", () => {
     Match.Schema()(UserSchema);
     Match.Field(Match.NonEmptyString)(UserSchema.prototype, "name");
 
-    expect(Match.fromSchema(UserSchema).parse({ name: "Ada" })).toEqual({
-      name: "Ada",
-    });
+    const parsed = Match.fromSchema(UserSchema).parse({ name: "Ada" });
+
+    expect(parsed).toBeInstanceOf(UserSchema);
+    expect(parsed).toEqual({ name: "Ada" });
 
     expect(Match.fromSchema(UserSchema).toJSONSchema()).toEqual({
       $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -214,21 +321,60 @@ describe("tools/check schema support", () => {
         },
       },
     });
-    expect(() => Match.Optional(String).toJSONSchema()).toThrow(
-      CheckJsonSchemaPatternError,
+
+    class RecursiveUserSchema {
+      public name!: string;
+      public self!: RecursiveUserSchema;
+      public children!: RecursiveUserSchema[];
+    }
+    Match.Schema()(RecursiveUserSchema);
+    Match.Field(Match.NonEmptyString)(RecursiveUserSchema.prototype, "name");
+    Match.Field(Match.fromSchema(() => RecursiveUserSchema))(
+      RecursiveUserSchema.prototype,
+      "self",
     );
-    expect(() => Match.Maybe(String).toJSONSchema()).toThrow(
-      CheckJsonSchemaPatternError,
+    Match.Field(Match.ArrayOf(Match.fromSchema(() => RecursiveUserSchema)))(
+      RecursiveUserSchema.prototype,
+      "children",
     );
+
+    expect(Match.fromSchema(RecursiveUserSchema).toJSONSchema()).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $ref: "#/$defs/RecursiveUserSchema",
+      $defs: {
+        RecursiveUserSchema: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              minLength: 1,
+            },
+            self: {
+              $ref: "#/$defs/RecursiveUserSchema",
+            },
+            children: {
+              type: "array",
+              items: {
+                $ref: "#/$defs/RecursiveUserSchema",
+              },
+            },
+          },
+          required: ["name", "self", "children"],
+          additionalProperties: true,
+        },
+      },
+    });
+    expectSchemaError(() => Match.Optional(String).toJSONSchema());
+    expectSchemaError(() => Match.Maybe(String).toJSONSchema());
     expect(Match.Where(() => true).toJSONSchema()).toEqual({
       $schema: "https://json-schema.org/draft/2020-12/schema",
       description:
         "Custom runtime predicate from Match.Where; not representable in strict JSON Schema.",
       "x-runner-match-kind": "Match.Where",
     });
-    expect(() =>
+    expectSchemaError(() =>
       Match.Where(() => true).toJSONSchema({ strict: true }),
-    ).toThrow(CheckJsonSchemaPatternError);
+    );
   });
 
   it("returns schema.parse output and supports transforms", () => {
@@ -241,6 +387,24 @@ describe("tools/check schema support", () => {
 
     const parsed = check({ id: "  user-1  " }, schema);
     expect(parsed).toEqual({ id: "user-1" });
+  });
+
+  it("supports Match.WithMessage as a schema wrapper", () => {
+    const schema = Match.WithMessage(
+      Match.NonEmptyString,
+      ({ value, path }) =>
+        `Expected non-empty string for ${path}, got ${String(value)}`,
+    );
+
+    expect(schema.parse("ok")).toBe("ok");
+    expect(() => schema.parse("")).toThrow(
+      "Expected non-empty string for $, got ",
+    );
+    expect(schema.toJSONSchema()).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "string",
+      minLength: 1,
+    });
   });
 
   it("rethrows errors thrown by schema.parse", () => {
@@ -270,12 +434,12 @@ describe("tools/check schema support", () => {
       enabled: 123,
     };
 
-    expect(() =>
+    expectMatchFailure(() =>
       check(candidate, {
         parse: Function,
         enabled: Boolean,
       }),
-    ).toThrow(MatchError);
+    );
   });
 
   it("accepts options alongside schema-based checks", () => {
@@ -283,7 +447,7 @@ describe("tools/check schema support", () => {
       parse: (value: unknown): number => Number(value),
     };
 
-    expect(check("41", schema, { throwAllErrors: true })).toBe(41);
+    expect(check("41", schema, { errorPolicy: "all" })).toBe(41);
   });
 
   it("accepts plain schema objects with parse() and toJSONSchema()", () => {
@@ -308,7 +472,7 @@ describe("tools/check schema support", () => {
       toJSONSchema: 123,
     };
 
-    expect(() => check("x", candidate as never)).toThrow(MatchError);
+    expectMatchFailure(() => check("x", candidate as never));
   });
 
   it("supports a unified compiled schema shape from Match.compile()", () => {
@@ -325,7 +489,7 @@ describe("tools/check schema support", () => {
       id: "u1",
       retries: 1,
     });
-    expect(() => compiled.parse({ id: "", retries: 1 })).toThrow(MatchError);
+    expectMatchFailure(() => compiled.parse({ id: "", retries: 1 }));
     expect(() => compiled.test("x")).not.toThrow();
     expect(check({ id: "u1" }, compiled)).toEqual({ id: "u1" });
     expect(compiled.toJSONSchema()).toEqual({
@@ -344,14 +508,32 @@ describe("tools/check schema support", () => {
     });
   });
 
-  it("rethrows non-match errors from compiled.test()", () => {
-    const plannedError = new Error("boom");
+  it("keeps Match.WithErrorPolicy wrappers transparent for toJSONSchema()", () => {
+    const pattern = Match.WithErrorPolicy(
+      {
+        id: Match.NonEmptyString,
+      },
+      "all",
+    );
+
+    expect(Match.toJSONSchema(pattern)).toEqual({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      properties: {
+        id: { type: "string", minLength: 1 },
+      },
+      required: ["id"],
+      additionalProperties: false,
+    });
+  });
+
+  it("returns false when Match.Where throws inside compiled.test()", () => {
     const compiled = Match.compile(
       Match.Where(() => {
-        throw plannedError;
+        throw new Error("boom");
       }),
     );
 
-    expect(() => compiled.test("x")).toThrow(plannedError);
+    expect(compiled.test("x")).toBe(false);
   });
 });

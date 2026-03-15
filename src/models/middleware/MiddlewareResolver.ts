@@ -8,11 +8,20 @@ import {
   type RpcLaneMiddlewareId,
 } from "../../defs";
 import { Store } from "../Store";
-import { taskNotRegisteredError } from "../../errors";
 import {
+  subtreeMiddlewareConflictError,
+  taskNotRegisteredError,
+  validationError,
+} from "../../errors";
+import {
+  getSubtreeMiddlewareDuplicateKey,
   resolveApplicableSubtreeResourceMiddlewares,
   resolveApplicableSubtreeTaskMiddlewares,
 } from "../../tools/subtreeMiddleware";
+import {
+  extractRequestedId,
+  resolveCanonicalIdFromStore,
+} from "../StoreLookup";
 
 /**
  * Resolves which middlewares should be applied to tasks and resources.
@@ -31,11 +40,40 @@ export class MiddlewareResolver {
 
   constructor(private readonly store: Store) {}
 
+  private resolveDefinitionId(reference: unknown): string {
+    return (
+      resolveCanonicalIdFromStore(this.store, reference) ??
+      extractRequestedId(reference) ??
+      String(reference)
+    );
+  }
+
+  private resolveRegisteredMiddlewareId(
+    reference: unknown,
+    taskId: string,
+  ): string {
+    const resolvedId =
+      resolveCanonicalIdFromStore(this.store, reference) ??
+      extractRequestedId(reference);
+    if (resolvedId) {
+      return resolvedId;
+    }
+
+    validationError.throw({
+      subject: "rpcLane middlewareAllowList",
+      id: taskId,
+      originalError: `Middleware "${extractRequestedId(reference) ?? String(reference)}" is not registered.`,
+    });
+
+    return undefined as never;
+  }
+
   /**
-   * Gets all applicable middlewares for a task (global + local, deduplicated)
+   * Gets all applicable middlewares for a task.
+   * Fails fast when subtree and local middleware resolve to the same id.
    */
   getApplicableTaskMiddlewares(task: ITask<any, any, any>): ITaskMiddleware[] {
-    const taskId = this.store.resolveDefinitionId(task)!;
+    const taskId = this.resolveDefinitionId(task);
     const effectiveTask = this.store.tasks.get(taskId)?.task ?? task;
     if (this.store.isLocked) {
       const cached = this.taskMiddlewareCache.get(taskId);
@@ -46,9 +84,26 @@ export class MiddlewareResolver {
 
     const local = effectiveTask.middleware;
     const globalMiddlewares = this.getEverywhereTaskMiddlewares(effectiveTask);
-    const localIds = new Set(local.map((middleware) => middleware.id));
+    const localIds = new Set(
+      local.map((middleware) =>
+        getSubtreeMiddlewareDuplicateKey(middleware.id),
+      ),
+    );
+    const conflictingGlobal = globalMiddlewares.find((middleware) =>
+      localIds.has(getSubtreeMiddlewareDuplicateKey(middleware.id)),
+    );
 
-    const globalFiltered = globalMiddlewares.filter((m) => !localIds.has(m.id));
+    if (conflictingGlobal) {
+      subtreeMiddlewareConflictError.throw({
+        middlewareId: getSubtreeMiddlewareDuplicateKey(conflictingGlobal.id),
+        targetKind: "task",
+      });
+    }
+
+    const globalFiltered = globalMiddlewares.filter(
+      (middleware) =>
+        !localIds.has(getSubtreeMiddlewareDuplicateKey(middleware.id)),
+    );
 
     // Global middlewares run FIRST, then local ones.
     // This allows cross-cutting policies (like logging, tracing) to wrap
@@ -63,12 +118,13 @@ export class MiddlewareResolver {
   }
 
   /**
-   * Gets all applicable middlewares for a resource (global + local, deduplicated)
+   * Gets all applicable middlewares for a resource.
+   * Fails fast when subtree and local middleware resolve to the same id.
    */
   getApplicableResourceMiddlewares(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
-    const resourceId = this.store.resolveDefinitionId(resource)!;
+    const resourceId = this.resolveDefinitionId(resource);
     const effectiveResource =
       this.store.resources.get(resourceId)?.resource ?? resource;
     if (this.store.isLocked) {
@@ -81,9 +137,26 @@ export class MiddlewareResolver {
     const local = effectiveResource.middleware;
     const globalMiddlewares =
       this.getEverywhereResourceMiddlewares(effectiveResource);
-    const localIds = new Set(local.map((middleware) => middleware.id));
+    const localIds = new Set(
+      local.map((middleware) =>
+        getSubtreeMiddlewareDuplicateKey(middleware.id),
+      ),
+    );
+    const conflictingGlobal = globalMiddlewares.find((middleware) =>
+      localIds.has(getSubtreeMiddlewareDuplicateKey(middleware.id)),
+    );
 
-    const globalFiltered = globalMiddlewares.filter((m) => !localIds.has(m.id));
+    if (conflictingGlobal) {
+      subtreeMiddlewareConflictError.throw({
+        middlewareId: getSubtreeMiddlewareDuplicateKey(conflictingGlobal.id),
+        targetKind: "resource",
+      });
+    }
+
+    const globalFiltered = globalMiddlewares.filter(
+      (middleware) =>
+        !localIds.has(getSubtreeMiddlewareDuplicateKey(middleware.id)),
+    );
 
     const result = [...globalFiltered, ...local];
 
@@ -102,7 +175,7 @@ export class MiddlewareResolver {
     task: ITask<any, any, any>,
     middlewares: ITaskMiddleware[],
   ): ITaskMiddleware[] {
-    const taskId = this.store.resolveDefinitionId(task)!;
+    const taskId = this.resolveDefinitionId(task);
     const entry = this.store.tasks.get(taskId);
     if (!entry) {
       return taskNotRegisteredError.throw({ taskId });
@@ -140,10 +213,12 @@ export class MiddlewareResolver {
     }
 
     const allowList = getMiddlewareAllowList(policy);
-    const toId = (x: string | { id: string }) =>
-      this.store.resolveDefinitionId(x);
     const allowSet = Array.isArray(allowList)
-      ? new Set(allowList.map(toId).filter((id): id is string => !!id))
+      ? new Set(
+          allowList.map((entry) =>
+            this.resolveRegisteredMiddlewareId(entry, taskId),
+          ),
+        )
       : null;
 
     if (this.store.isLocked) {
@@ -159,7 +234,7 @@ export class MiddlewareResolver {
   public getEverywhereTaskMiddlewares(
     task: ITask<any, any, any>,
   ): ITaskMiddleware[] {
-    const taskId = this.store.resolveDefinitionId(task)!;
+    const taskId = this.resolveDefinitionId(task);
     const effectiveTask = this.store.tasks.get(taskId)?.task ?? task;
 
     return resolveApplicableSubtreeTaskMiddlewares(
@@ -178,7 +253,7 @@ export class MiddlewareResolver {
   public getEverywhereResourceMiddlewares(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
-    const resourceId = this.store.resolveDefinitionId(resource)!;
+    const resourceId = this.resolveDefinitionId(resource);
     const effectiveResource =
       this.store.resources.get(resourceId)?.resource ?? resource;
 

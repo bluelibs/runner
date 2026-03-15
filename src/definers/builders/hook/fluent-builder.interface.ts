@@ -26,22 +26,28 @@ export interface HookFluentBuilderWithoutOn<
   TMeta extends ITaskMeta = ITaskMeta,
 > {
   id: string;
+  /** Declares which event or event set this hook subscribes to. */
   on<TNewOn extends ValidOnTarget>(
     on: TNewOn,
   ): HookFluentBuilderWithOn<TDeps, TNewOn, TMeta>;
+  /** Sets hook execution priority; lower numbers run earlier. */
   order(order: number): HookFluentBuilderWithoutOn<TDeps, TMeta>;
+  /** Adds hook dependencies, merging by default unless `override: true` is used. */
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | (() => TNewDeps),
     options?: { override?: false },
   ): HookFluentBuilderWithoutOn<TDeps & TNewDeps, TMeta>;
+  /** Replaces previously declared hook dependencies. */
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | (() => TNewDeps),
     options: { override: true },
   ): HookFluentBuilderWithoutOn<TNewDeps, TMeta>;
+  /** Adds or replaces hook tags. */
   tags<TNewTags extends HookTagType[]>(
     t: EnsureTagsForTarget<"hooks", TNewTags>,
     options?: { override?: boolean },
   ): HookFluentBuilderWithoutOn<TDeps, TMeta>;
+  /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends ITaskMeta>(
     m: TNewMeta,
   ): HookFluentBuilderWithoutOn<TDeps, TNewMeta>;
@@ -58,22 +64,28 @@ export interface HookFluentBuilderWithOn<
   TMeta extends ITaskMeta = ITaskMeta,
 > {
   id: string;
+  /** Declares which event or event set this hook subscribes to. */
   on<TNewOn extends ValidOnTarget>(
     on: TNewOn,
   ): HookFluentBuilderWithOn<TDeps, TNewOn, TMeta>;
+  /** Sets hook execution priority; lower numbers run earlier. */
   order(order: number): HookFluentBuilderWithOn<TDeps, TOn, TMeta>;
+  /** Adds hook dependencies, merging by default unless `override: true` is used. */
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | (() => TNewDeps),
     options?: { override?: false },
   ): HookFluentBuilderWithOn<TDeps & TNewDeps, TOn, TMeta>;
+  /** Replaces previously declared hook dependencies. */
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | (() => TNewDeps),
     options: { override: true },
   ): HookFluentBuilderWithOn<TNewDeps, TOn, TMeta>;
+  /** Adds or replaces hook tags. */
   tags<TNewTags extends HookTagType[]>(
     t: EnsureTagsForTarget<"hooks", TNewTags>,
     options?: { override?: boolean },
   ): HookFluentBuilderWithOn<TDeps, TOn, TMeta>;
+  /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends ITaskMeta>(
     m: TNewMeta,
   ): HookFluentBuilderWithOn<TDeps, TOn, TNewMeta>;
@@ -95,15 +107,19 @@ export interface HookFluentBuilderAfterRun<
   TMeta extends ITaskMeta = ITaskMeta,
 > {
   id: string;
+  /** Sets hook execution priority; lower numbers run earlier. */
   order(order: number): HookFluentBuilderAfterRun<TDeps, TOn, TMeta>;
+  /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends ITaskMeta>(
     m: TNewMeta,
   ): HookFluentBuilderAfterRun<TDeps, TOn, TNewMeta>;
   /** Declare which typed errors this hook may throw (declarative only). */
   throws(list: ThrowsList): HookFluentBuilderAfterRun<TDeps, TOn, TMeta>;
   /**
-   * Build the hook definition. Requires .on() and .run() to be called first.
-   * @throws {Error} if on or run are not set
+   * Materializes the final hook definition for registration or reuse.
+   *
+   * At this phase the subscription and handler are already locked in, so `build()`
+   * only materializes the final definition shape for registration.
    */
   build(): IHook<TDeps, ResolvedOn<TOn>, TMeta>;
 }

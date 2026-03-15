@@ -7,7 +7,7 @@ import { SuspensionSignal } from "../../durable/core/interfaces/context";
 import type { IDurableStore } from "../../durable/core/interfaces/store";
 import { ExecutionStatus } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 describe("durable: DurableContext", () => {
   const Paid = defineEvent<{ paidAt: number }>({ id: "durable-tests-paid" });
@@ -192,7 +192,7 @@ describe("durable: DurableContext", () => {
     let attempts = 0;
     const retried = await ctx1.step("retry", { retries: 1 }, async () => {
       attempts += 1;
-      if (attempts === 1) throw createMessageError("fail-once");
+      if (attempts === 1) throw genericError.new({ message: "fail-once" });
       return "recovered";
     });
     expect(retried).toBe("recovered");
@@ -218,7 +218,7 @@ describe("durable: DurableContext", () => {
 
     await expect(
       ctx.step("timeout-fast-reject", { timeout: 50 }, async () => {
-        throw createMessageError("boom");
+        throw genericError.new({ message: "boom" });
       }),
     ).rejects.toThrow("boom");
   });
@@ -655,7 +655,7 @@ describe("durable: DurableContext", () => {
       auditEnabled: true,
       auditEmitter: {
         emit: async () => {
-          throw createMessageError("boom");
+          throw genericError.new({ message: "boom" });
         },
       },
     });
@@ -666,7 +666,7 @@ describe("durable: DurableContext", () => {
   it("ignores audit store failures", async () => {
     class ThrowingAuditStore extends MemoryStore {
       async appendAuditEntry(): Promise<void> {
-        throw createMessageError("fail");
+        throw genericError.new({ message: "fail" });
       }
     }
 

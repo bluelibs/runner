@@ -21,7 +21,6 @@ function createTaskEventHookTaskLoopFixture() {
         await eventManager.emit(event, input, {
           kind: "task",
           id: "trace-loop-task-a",
-          path: "trace-loop-task-a",
         });
       }
 
@@ -71,7 +70,7 @@ describe("Execution Trace (integration)", () => {
           await eventManager.emit(
             e2,
             { v: ev.data.v + 1 },
-            { kind: "hook", id: "trace-onE1", path: "trace-onE1" },
+            { kind: "hook", id: "trace-onE1" },
           );
         },
       });
@@ -84,7 +83,7 @@ describe("Execution Trace (integration)", () => {
           await eventManager.emit(
             e1,
             { v: ev.data.v + 1 },
-            { kind: "hook", id: "trace-onE2", path: "trace-onE2" },
+            { kind: "hook", id: "trace-onE2" },
           );
         },
       });
@@ -147,7 +146,6 @@ describe("Execution Trace (integration)", () => {
           await eventManager.emit(event, input, {
             kind: "task",
             id: "trace-chain-task",
-            path: "trace-chain-task",
           });
           return `processed: ${input}`;
         },
@@ -207,7 +205,6 @@ describe("Execution Trace (integration)", () => {
           await eventManager.emit(e2, undefined, {
             kind: "hook",
             id: "custom-thresh-onE1",
-            path: "custom-thresh-onE1",
           });
         },
       });
@@ -220,7 +217,6 @@ describe("Execution Trace (integration)", () => {
           await eventManager.emit(e1, undefined, {
             kind: "hook",
             id: "custom-thresh-onE2",
-            path: "custom-thresh-onE2",
           });
         },
       });

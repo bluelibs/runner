@@ -3,7 +3,7 @@ import type { BusEvent } from "../../durable/core/interfaces/bus";
 import type { Execution, Schedule, Timer } from "../../durable/core/types";
 import { MemoryQueue } from "../../durable/queue/MemoryQueue";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 import { Logger, type ILog } from "../../../models/Logger";
 
 describe("durable: memory backends", () => {
@@ -208,7 +208,7 @@ describe("durable: memory backends", () => {
       await queue.consume(async (msg) => {
         calls += 1;
         if (msg.attempts === 1) {
-          throw createMessageError("handler-crash");
+          throw genericError.new({ message: "handler-crash" });
         }
         await queue.ack(msg.id);
       });
@@ -223,7 +223,7 @@ describe("durable: memory backends", () => {
 
       await queue.consume(async () => {
         calls += 1;
-        throw createMessageError("handler-crash-no-requeue");
+        throw genericError.new({ message: "handler-crash-no-requeue" });
       });
 
       await new Promise((resolve) => setTimeout(resolve, 25));
@@ -271,7 +271,7 @@ describe("durable: memory backends", () => {
         timestamp: new Date(),
       });
       await bus.subscribe("topic", async () => {
-        throw createMessageError("handler-fail");
+        throw genericError.new({ message: "handler-fail" });
       });
 
       await bus.publish("topic", {
@@ -296,7 +296,7 @@ describe("durable: memory backends", () => {
 
       const bus = new MemoryEventBus({ logger });
       await bus.subscribe("topic", async () => {
-        throw createMessageError("logger-path");
+        throw genericError.new({ message: "logger-path" });
       });
 
       await bus.publish("topic", {
@@ -329,11 +329,11 @@ describe("durable: memory backends", () => {
       const bus = new MemoryEventBus({
         logger,
         onHandlerError: async () => {
-          throw createMessageError("callback-failed");
+          throw genericError.new({ message: "callback-failed" });
         },
       });
       await bus.subscribe("topic", async () => {
-        throw createMessageError("handler-failed");
+        throw genericError.new({ message: "handler-failed" });
       });
 
       await bus.publish("topic", {

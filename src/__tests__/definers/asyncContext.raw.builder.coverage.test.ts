@@ -1,5 +1,5 @@
 import { asyncContext as rawAsyncContextBuilder } from "../../definers/builders/asyncContext";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("asyncContext raw builder coverage", () => {
   it("exposes id and supports all fluent methods", () => {
@@ -8,16 +8,16 @@ describe("asyncContext raw builder coverage", () => {
     expect(b1.id).toBe("tests-ctx-raw");
 
     const b2 = b1
-      .serialize((d) => JSON.stringify(d))
-      .parse((s) => JSON.parse(s))
       .configSchema({
         parse(input: unknown) {
           const d = input as T;
-          if (typeof d?.id !== "number") throw createMessageError("invalid");
+          if (typeof d?.id !== "number")
+            throw genericError.new({ message: "invalid" });
           return d;
         },
-      });
-
+      })
+      .serialize((d) => JSON.stringify(d))
+      .parse((s) => JSON.parse(s));
     const ctx = b2.build();
     expect(ctx.id).toBe("tests-ctx-raw");
     // Exercise require() branch

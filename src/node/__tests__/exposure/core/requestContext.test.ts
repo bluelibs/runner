@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { defineTask } from "../../../../definers/defineTask";
@@ -8,7 +9,7 @@ import {
 import { rpcExposure } from "../testkit/rpcExposure";
 import { ExposureRequestContext } from "../../../exposure/requestContext";
 import { storage } from "../../../../definers/defineAsyncContext";
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 
 describe("nodeExposure request context (raw-body)", () => {
   it("provides req/res via useRpcLaneRequestContext() and allows raw-body streaming when content-type is application/octet-stream", async () => {
@@ -19,7 +20,7 @@ describe("nodeExposure request context (raw-body)", () => {
           useRpcLaneRequestContext();
         // Basic sanity assertions on context
         if (!basePath || !url || !method || !headers)
-          throw createMessageError("no ctx");
+          throw genericError.new({ message: "no ctx" });
         return await new Promise<string>((resolve, reject) => {
           const chunks: Buffer[] = [];
           req
@@ -43,13 +44,14 @@ describe("nodeExposure request context (raw-body)", () => {
       register: [rawTask, exposure],
     });
     const rr = await run(app);
+    const taskId = rr.store.findIdByDefinition(rawTask);
     const handlers = await rr.getResourceValue(exposure as any);
 
     // Create raw-body request with content-type application/octet-stream
     const body = "streamme";
-    const req: any = new (require("stream").Readable)({ read() {} });
+    const req: any = new Readable({ read() {} });
     req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(rawTask.id)}`;
+    req.url = `/__runner/task/${encodeURIComponent(taskId)}`;
     req.headers = {
       "content-type": "application/octet-stream",
     };

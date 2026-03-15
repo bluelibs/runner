@@ -699,7 +699,7 @@ const durableRegistration = durable.with({
 // 3. Define a task that uses durable context
 const processOrder = r
   .task("app.tasks.processOrder")
-  .inputSchema<{ orderId: string; customerId: string }>()
+  .inputSchema({ orderId: String, customerId: String })
   .dependencies({ durable })
   .run(async (input, { durable }) => {
     const durableContext = durable.use();
@@ -1974,7 +1974,7 @@ import { createHttpClient } from "@bluelibs/runner";
 import { rpcLanesResource } from "@bluelibs/runner/node";
 
 const durableLane = r
-  .rpcLane("app.rpc.durable")
+  .rpcLane("durable-lane")
   .applyTo([processOrder])
   .build();
 

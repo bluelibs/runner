@@ -1,9 +1,29 @@
 import type { Store } from "../../models/Store";
-import { toPublicDefinition } from "../../models/utils/toPublicDefinition";
+import {
+  resolveRequestedIdFromStore,
+  toCanonicalDefinitionFromStore,
+} from "../../models/StoreLookup";
 
 type LaneWithId = {
   id: string;
 };
+
+type EventLaneConflictField = "rpcLaneId" | "eventLaneId";
+
+function resolveCanonicalId(store: Store, id: string): string {
+  return resolveRequestedIdFromStore(store, id) ?? id;
+}
+
+function findEntryByRequestedId<TEntry extends { id: string }>(
+  entries: Iterable<TEntry>,
+  requestedId: string,
+): TEntry | undefined {
+  const matches = Array.from(entries).filter(
+    (entry) => entry.id === requestedId || entry.id.endsWith(`.${requestedId}`),
+  );
+
+  return matches.length === 1 ? matches[0] : undefined;
+}
 
 /**
  * Extracts the id string from a lane applyTo target.
@@ -88,7 +108,13 @@ export function collectCrossLaneApplyToEventIds(
   collectTopologyLanes: (topology: unknown) => readonly { applyTo?: unknown }[],
 ): Set<string> {
   const eventIds = new Set<string>();
-  const entry = store.resources.get(resourceId);
+  const entry =
+    store.resources.get(resolveCanonicalId(store, resourceId)) ??
+    Array.from(store.resources.values()).find(
+      (candidate) =>
+        candidate.resource.id === resourceId ||
+        candidate.resource.id.endsWith(`.${resourceId}`),
+    );
   const config = entry?.config as Record<string, unknown> | undefined;
   const topology = config?.topology;
   if (!topology) {
@@ -116,7 +142,15 @@ export function collectCrossLaneApplyToEventIds(
         continue;
       }
 
-      const eventEntry = store.events.get(targetId);
+      const eventEntry =
+        store.events.get(resolveCanonicalId(store, targetId)) ??
+        (() => {
+          const matchedEvent = findEntryByRequestedId(
+            Array.from(store.events.values()).map((entry) => entry.event),
+            targetId,
+          );
+          return matchedEvent ? store.events.get(matchedEvent.id) : undefined;
+        })();
       if (eventEntry) {
         eventIds.add(eventEntry.event.id);
       }
@@ -130,7 +164,7 @@ export function toPublicPredicateCandidate<T extends { id: string }>(
   store: Store,
   definition: T,
 ): T {
-  return toPublicDefinition(store, definition);
+  return toCanonicalDefinitionFromStore(store, definition);
 }
 
 export function visitLaneApplyTo<TSource, TResolvedTarget>(options: {
@@ -178,6 +212,35 @@ export function visitLaneApplyTo<TSource, TResolvedTarget>(options: {
   }
 }
 
+export function assertEventNotAssignedToOtherLane<
+  TField extends EventLaneConflictField,
+>(options: {
+  conflictingEventIds: ReadonlySet<string>;
+  eventId: string;
+  attemptedLaneId: string;
+  laneIdField: TField;
+  conflictError: {
+    throw: (data: { eventId: string } & Record<TField, string>) => never;
+  };
+}): void {
+  const {
+    conflictingEventIds,
+    eventId,
+    attemptedLaneId,
+    laneIdField,
+    conflictError,
+  } = options;
+
+  if (!conflictingEventIds.has(eventId)) {
+    return;
+  }
+
+  conflictError.throw({
+    eventId,
+    [laneIdField]: attemptedLaneId,
+  } as { eventId: string } & Record<TField, string>);
+}
+
 export function assignLaneTargetOrThrow<TLane extends LaneWithId>(options: {
   assignments: Map<string, TLane>;
   targetId: string;
@@ -197,7 +260,7 @@ export function assignLaneTargetOrThrow<TLane extends LaneWithId>(options: {
 
   if (current && current.id !== lane.id) {
     conflictError.throw({
-      [targetField]: store.toPublicId(targetId),
+      [targetField]: resolveCanonicalId(store, targetId),
       currentLaneId: current.id,
       attemptedLaneId: lane.id,
     } as Record<"currentLaneId" | "attemptedLaneId", string> &

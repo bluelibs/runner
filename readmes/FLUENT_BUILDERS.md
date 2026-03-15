@@ -9,7 +9,7 @@ This guide shows how to use the new fluent Builder API exposed via a single `r` 
 ### Import
 
 ```ts
-import { r, run } from "@bluelibs/runner";
+import { Match, r, run } from "@bluelibs/runner";
 ```
 
 You'll primarily use `r`:
@@ -99,8 +99,8 @@ const app = r
   .tags([tag])
   .middleware([loggingMw])
   .context(() => ({ reqId: Math.random() }))
-  .configSchema<{ feature: boolean }>({ parse: (x: any) => x }) // or configSchema(zodObject)
-  .resultSchema<{ status: string }>({ parse: (x: any) => x }) // or resultSchema(zodObject)
+  .configSchema({ feature: Boolean }) // or configSchema(zodObject)
+  .resultSchema({ status: String }) // or resultSchema(zodObject)
   .init(async (config, deps, resourceContext) => {
     const sum = deps.svc.add(2, 3);
     return {
@@ -139,7 +139,7 @@ const r3 = r
 ```ts
 const adder = r
   .task("tasks.add")
-  .inputSchema<{ a: number; b: number }>({ parse: (x: any) => x })
+  .inputSchema({ a: Number, b: Number })
   .run(async (input) => input!.a + input!.b)
   .build();
 ```
@@ -160,7 +160,7 @@ const calc = r
   .dependencies({ adder })
   .tags([])
   .middleware([tmw])
-  .resultSchema<number>({ parse: (x: any) => x })
+  .resultSchema(Number)
   .meta({ title: "Calculator" } as any)
   .run(async (n: number, deps) => deps.adder({ a: n, b: 1 }))
   .build();
@@ -175,7 +175,7 @@ Events:
 ```ts
 const userCreated = r
   .event("events.userCreated")
-  .payloadSchema<{ id: string }>({ parse: (x: any) => x })
+  .payloadSchema({ id: String })
   .tags([])
   .meta({ title: "User Created" } as any)
   .build();
@@ -216,7 +216,7 @@ Task middleware:
 const tmw = r.middleware
   .task("tmw.log")
   .dependencies({})
-  .configSchema<{ level: "info" | "warn" | "error" }>({ parse: (x: any) => x })
+  .configSchema({ level: Match.OneOf("info", "warn", "error") })
   .tags([])
   .meta({ title: "TaskLogger" } as any)
   .run(async ({ next, task }, _deps, config) => {
@@ -231,7 +231,7 @@ Resource middleware:
 const rmw = r.middleware
   .resource("rmw.wrap")
   .dependencies({})
-  .configSchema<{ ttl?: number }>({ parse: (x: any) => x })
+  .configSchema({ ttl: Match.Optional(Number) })
   .tags([])
   .meta({ title: "ResourceWrapper" } as any)
   .run(async ({ next }) => next())
@@ -284,6 +284,8 @@ const appWithConditional = r
   })
   .build();
 ```
+
+If subtree middleware and local middleware resolve to the same middleware id on one target, Runner fails fast instead of letting the local middleware override it.
 
 Use `taskRunner.intercept(interceptor, { when })` for cross-cutting catch-all task interception.
 

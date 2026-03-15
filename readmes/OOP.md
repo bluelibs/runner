@@ -56,7 +56,7 @@ class UserService {
 Runner wires this class exactly as written — no modifications needed:
 
 ```ts
-import { r } from "@bluelibs/runner";
+import { Match, r } from "@bluelibs/runner";
 
 const userServiceResource = r
   .resource("app.services.user")
@@ -133,7 +133,7 @@ import { r } from "@bluelibs/runner";
 // Infrastructure: database connection
 const databaseResource = r
   .resource("app.resources.database")
-  .schema<{ connectionString: string }>({ parse: (v) => v })
+  .schema({ connectionString: String })
   .init(async ({ connectionString }) => {
     const client = new DatabaseClient(connectionString);
     await client.connect();
@@ -154,7 +154,7 @@ const userRepository = r
 // Mailer: class instance with lifecycle
 const mailerResource = r
   .resource("app.resources.mailer")
-  .schema<{ host: string; port: number }>({ parse: (v) => v })
+  .schema({ host: String, port: Number })
   .dependencies({ logger: r.runner.logger })
   .init(async (config, { logger }) => {
     const transport = await SmtpTransport.create(config);
@@ -181,7 +181,7 @@ Tasks are the boundary layer — thin async functions that receive input, delega
 ```ts
 const registerUser = r
   .task("app.tasks.registerUser")
-  .schema<{ name: string; email: string }>({ parse: (v) => v })
+  .schema({ name: String, email: Match.Email })
   .dependencies({ userService: userServiceResource, mailer: mailerResource })
   .run(async (input, { userService, mailer }) => {
     const user = await userService.register(input);
@@ -222,7 +222,7 @@ Tasks start small — a few lines, a couple of dependencies, done. That's fine. 
 // Small task: inline is perfectly fine
 const getUser = r
   .task("app.tasks.getUser")
-  .schema<{ id: string }>({ parse: (v) => v })
+  .schema({ id: String })
   .dependencies({ repo: userRepository })
   .run(async (input, { repo }) => {
     return repo.findById(input.id);
@@ -280,8 +280,10 @@ const registerUserCommand = r
 
 const registerUser = r
   .task("app.tasks.registerUser")
-  .schema<{ name: string; email: string; password: string }>({
-    parse: (v) => v,
+  .schema({
+    name: String,
+    email: Match.Email,
+    password: Match.NonEmptyString,
   })
   .dependencies({ command: registerUserCommand })
   .run(async (input, { command }) => command.execute(input))
@@ -313,7 +315,7 @@ class RedisCache {
 
 const cacheResource = r
   .resource("app.resources.cache")
-  .schema<{ url: string }>({ parse: (v) => v })
+  .schema({ url: Match.URL })
   .init(async ({ url }) => {
     const client = createClient({ url });
     await client.connect(); // async — can't do this in a constructor
@@ -344,7 +346,7 @@ class HttpServer {
 
 const httpServer = r
   .resource("app.resources.httpServer")
-  .schema<{ port: number }>({ parse: (v) => v })
+  .schema({ port: Number })
   .init(async ({ port }) => {
     const app = express();
     const listener = app.listen(port);
@@ -416,7 +418,7 @@ const paymentGateway = r
 // Task with its own middleware
 const chargeCustomer = r
   .task("app.tasks.chargeCustomer")
-  .schema<{ customerId: string; amount: number }>({ parse: (v) => v })
+  .schema({ customerId: String, amount: Number })
   .dependencies({ gateway: paymentGateway })
   .middleware([
     r.runner.middleware.task.rateLimit.with({ max: 100, windowMs: 60_000 }),
@@ -499,7 +501,7 @@ class ReportBuilder {
 
 const reportFactory = r
   .resource("app.factories.report")
-  .schema<{ defaultLocale: string }>({ parse: (v) => v })
+  .schema({ defaultLocale: String })
   .dependencies({ templates: templateEngine })
   .init(async (config, { templates }) => {
     // Resource value is a factory function, not a class instance
@@ -510,7 +512,11 @@ const reportFactory = r
 
 const generateReport = r
   .task("app.tasks.generateReport")
-  .schema<{ type: string; data: unknown; locale?: string }>({ parse: (v) => v })
+  .schema({
+    type: String,
+    data: Match.Any,
+    locale: Match.Optional(String),
+  })
   .dependencies({ createReport: reportFactory })
   .run(async (input, { createReport }) => {
     const builder = createReport(input.locale);

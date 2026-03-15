@@ -31,6 +31,21 @@ describe("HealthReporter", () => {
     ).toBe("raw-health-object-id");
   });
 
+  it("stringifies unresolved object references without ids", () => {
+    const reporter = new HealthReporter(
+      {
+        resolveDefinitionId: () => undefined,
+      } as any,
+      {
+        ensureAvailable: () => undefined,
+      },
+    );
+
+    expect((reporter as any).resolveResourceId({ missing: true })).toBe(
+      "[object Object]",
+    );
+  });
+
   it("passes an empty dependency object when computed dependencies are absent", async () => {
     const health = jest.fn(async () => ({ status: "healthy" as const }));
     const reporter = new HealthReporter(

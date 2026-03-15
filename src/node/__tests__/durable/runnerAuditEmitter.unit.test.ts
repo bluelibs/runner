@@ -189,7 +189,6 @@ describe("durable: createDurableRunnerAuditEmitter", () => {
       {
         kind: "resource",
         id: "durable.runtime",
-        path: "durable.runtime",
       },
     ]);
   });

@@ -1,5 +1,6 @@
 import { r, run, definitions, defineResource } from "../..";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
+import type { AnyError } from "../../types/error";
 
 describe("task/event/hook/middleware builders", () => {
   it("task builder infers input type from run signature", async () => {
@@ -77,6 +78,51 @@ describe("task/event/hook/middleware builders", () => {
     await rr.dispose();
   });
 
+  it("event builder accepts raw Match patterns for payloadSchema", async () => {
+    const ev = r
+      .event("tests-builder-event-raw-pattern")
+      .payloadSchema({
+        userId: String,
+        email: String,
+      })
+      .build();
+    const handler = jest.fn();
+
+    const listener = r
+      .hook("tests-builder-event-raw-pattern-hook")
+      .on(ev)
+      .run(async (event) => {
+        handler(event.data);
+      })
+      .build();
+
+    const app = defineResource({
+      id: "tests-builder-event-raw-pattern-app",
+      register: [ev, listener],
+    });
+    const rr = await run(app);
+
+    await expect(
+      rr.emitEvent(ev, {
+        userId: "u1",
+        email: "ada@example.com",
+      }),
+    ).resolves.toBeUndefined();
+    expect(handler).toHaveBeenCalledWith({
+      userId: "u1",
+      email: "ada@example.com",
+    });
+
+    await expect(
+      rr.emitEvent(ev, {
+        userId: "u1",
+        email: 123 as unknown as string,
+      }),
+    ).rejects.toThrow(/Expected string/i);
+
+    await rr.dispose();
+  });
+
   it("event dependency supports explicit undefined payload with report mode for void payload events", async () => {
     const ev = r.event("tests-builder-event-dep-report").build();
     const emitFromTask = r
@@ -89,7 +135,7 @@ describe("task/event/hook/middleware builders", () => {
           failureMode: definitions.EventEmissionFailureMode.Aggregate,
         });
         if (!report) {
-          throw createMessageError("Expected event emission report");
+          throw genericError.new({ message: "Expected event emission report" });
         }
         return report;
       })
@@ -99,7 +145,7 @@ describe("task/event/hook/middleware builders", () => {
       .hook("tests-builder-event-dep-report-hook-a")
       .on(ev)
       .run(async () => {
-        throw createMessageError("hook-a");
+        throw genericError.new({ message: "hook-a" });
       })
       .build();
 
@@ -107,7 +153,7 @@ describe("task/event/hook/middleware builders", () => {
       .hook("tests-builder-event-dep-report-hook-b")
       .on(ev)
       .run(async () => {
-        throw createMessageError("hook-b");
+        throw genericError.new({ message: "hook-b" });
       })
       .build();
 
@@ -119,9 +165,9 @@ describe("task/event/hook/middleware builders", () => {
     const rr = await run(app);
     const report = await rr.runTask(emitFromTask);
     if (!report) {
-      throw createMessageError(
-        "Expected task to return an event emission report",
-      );
+      throw genericError.new({
+        message: "Expected task to return an event emission report",
+      });
     }
     expect(report.failedListeners).toBe(2);
     expect(report.errors).toHaveLength(2);
@@ -325,7 +371,7 @@ describe("task/event/hook/middleware builders", () => {
 
     const t = r
       .task("tests-builder-task-throws")
-      .throws([errA, errB.id, errA])
+      .throws([errA, errB, errA])
       .run(async () => Promise.resolve("ok"))
       .build();
 
@@ -336,7 +382,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(() =>
       r
         .task("tests-builder-task-throws-invalid")
-        .throws([{} as unknown as string])
+        .throws([{} as AnyError])
         .run(async () => Promise.resolve("ok"))
         .build(),
     ).toThrow(/Invalid throws entry/);
@@ -350,7 +396,7 @@ describe("task/event/hook/middleware builders", () => {
     const h = r
       .hook("tests-builder-hook-throws")
       .on(ev)
-      .throws([errA, errB.id, errA])
+      .throws([errA, errB, errA])
       .run(async () => {})
       .build();
 
@@ -363,7 +409,7 @@ describe("task/event/hook/middleware builders", () => {
       r
         .hook("tests-builder-hook-throws-invalid")
         .on(ev)
-        .throws([{} as unknown as string])
+        .throws([{} as AnyError])
         .run(async () => {})
         .build(),
     ).toThrow(/Invalid throws entry/);
@@ -375,7 +421,7 @@ describe("task/event/hook/middleware builders", () => {
 
     const mw = r.middleware
       .task("tests-builder-tmw-throws")
-      .throws([errA, errB.id, errA])
+      .throws([errA, errB, errA])
       .run(async ({ next, task }) => next(task.input))
       .build();
 
@@ -386,7 +432,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(() =>
       r.middleware
         .task("tests-builder-tmw-throws-invalid")
-        .throws([{} as unknown as string])
+        .throws([{} as AnyError])
         .run(async ({ next, task }) => next(task.input))
         .build(),
     ).toThrow(/Invalid throws entry/);
@@ -398,7 +444,7 @@ describe("task/event/hook/middleware builders", () => {
 
     const mw = r.middleware
       .resource("tests-builder-rmw-throws")
-      .throws([errA, errB.id, errA])
+      .throws([errA, errB, errA])
       .run(async ({ next }) => next())
       .build();
 
@@ -409,7 +455,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(() =>
       r.middleware
         .resource("tests-builder-rmw-throws-invalid")
-        .throws([{} as unknown as string])
+        .throws([{} as AnyError])
         .run(async ({ next }) => next())
         .build(),
     ).toThrow(/Invalid throws entry/);

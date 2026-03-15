@@ -70,7 +70,7 @@ describe("requestBody branches", () => {
     const ac = new AbortController();
     ac.abort();
     await expect(readRequestBody(req, ac.signal)).rejects.toMatchObject({
-      name: "runner.errors.cancellation",
+      name: "cancellation",
     });
   });
 
@@ -80,7 +80,7 @@ describe("requestBody branches", () => {
     const p = readRequestBody(req, ac.signal);
     ac.abort();
     await expect(p).rejects.toMatchObject({
-      name: "runner.errors.cancellation",
+      name: "cancellation",
     });
     // emit end afterwards; if onEnd runs, it should early-return and not throw
     req.emit("end");
@@ -122,7 +122,7 @@ describe("requestBody branches", () => {
     const p = readRequestBody(req);
     req.emit("close");
     await expect(p).rejects.toMatchObject({
-      name: "runner.errors.cancellation",
+      name: "cancellation",
     });
   });
 
@@ -140,7 +140,7 @@ describe("requestBody branches", () => {
     const p = readRequestBody(req);
     req.emit("close");
     await expect(p).rejects.toMatchObject({
-      name: "runner.errors.cancellation",
+      name: "cancellation",
     });
     req.emit("close");
   });
@@ -166,7 +166,7 @@ describe("requestBody branches", () => {
     ac.abort();
 
     await expect(readRequestBody(req as any, ac.signal)).rejects.toMatchObject({
-      name: "runner.errors.cancellation",
+      name: "cancellation",
     });
     expect(req.offCalls.map((c) => c.event).sort()).toEqual([
       "close",

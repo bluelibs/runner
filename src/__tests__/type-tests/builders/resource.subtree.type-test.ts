@@ -1,4 +1,5 @@
 import { r } from "../../../";
+import { RunnerMode } from "../../../types/runner";
 
 {
   const taskMiddleware = r.middleware
@@ -20,17 +21,25 @@ import { r } from "../../../";
     .build();
 
   r.resource<{ enabled: boolean }>("types-subtree-dynamic-array")
-    .subtree((config) => [
-      {
-        validate: [],
-      },
-      {
-        tasks: {
-          middleware: [],
-          validate: config.enabled ? [() => []] : [],
+    .subtree((config, mode) => {
+      const runtimeMode: RunnerMode | undefined = mode;
+      void runtimeMode;
+      // @ts-expect-error mode remains a strict union
+      const invalidMode: "staging" = mode;
+      void invalidMode;
+
+      return [
+        {
+          validate: [],
         },
-      },
-    ])
+        {
+          tasks: {
+            middleware: [],
+            validate: config.enabled ? [() => []] : [],
+          },
+        },
+      ];
+    })
     .build();
 
   r.resource("types-subtree-invalid-array")

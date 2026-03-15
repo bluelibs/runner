@@ -1,12 +1,19 @@
-import { MatchError } from "../errors";
+import { createMatchError } from "../errors";
+import { hydrateMatchedValue } from "../hydration";
 import type { InferMatchPattern } from "../types";
-import { collectMatchFailures } from "./core";
+import { collectMatchResult } from "./core";
 
 export function parsePatternValue<TPattern>(
   value: unknown,
   pattern: TPattern,
 ): InferMatchPattern<TPattern> {
-  const failures = collectMatchFailures(value, pattern, false);
-  if (failures.length === 0) return value as InferMatchPattern<TPattern>;
-  throw new MatchError(failures);
+  const { failures, messageOverride } = collectMatchResult(
+    value,
+    pattern,
+    false,
+  );
+  if (failures.length === 0) {
+    return hydrateMatchedValue(value, pattern) as InferMatchPattern<TPattern>;
+  }
+  throw createMatchError(failures, messageOverride);
 }

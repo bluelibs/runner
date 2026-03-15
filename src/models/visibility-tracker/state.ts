@@ -2,7 +2,7 @@ import type {
   IResourceWithConfig,
   IsolationPolicy,
   ItemType,
-  RegisterableItems,
+  RegisterableItem,
 } from "../../defs";
 import * as utils from "../../define";
 import type { CompiledIsolationPolicy } from "./contracts";
@@ -30,7 +30,7 @@ export function createVisibilityTrackerState(): VisibilityTrackerState {
   };
 }
 
-function deriveItemType(item: RegisterableItems): ItemType | undefined {
+function deriveItemType(item: RegisterableItem): ItemType | undefined {
   if (utils.isTask(item)) return "task";
   if (utils.isResource(item) || utils.isResourceWithConfig(item)) {
     return "resource";
@@ -45,7 +45,7 @@ function deriveItemType(item: RegisterableItems): ItemType | undefined {
   return undefined;
 }
 
-function getItemId(item: RegisterableItems): string | undefined {
+function getItemId(item: RegisterableItem): string | undefined {
   if (!item || (typeof item !== "object" && typeof item !== "function")) {
     return undefined;
   }
@@ -97,7 +97,7 @@ export function recordIsolation(
 export function recordOwnership(
   state: VisibilityTrackerState,
   ownerResourceId: string,
-  item: RegisterableItems,
+  item: RegisterableItem,
 ): void {
   const id = getItemId(item);
   if (!id) {
@@ -132,7 +132,7 @@ export function recordOwnership(
 export function recordExports(
   state: VisibilityTrackerState,
   resourceId: string,
-  exports: Array<RegisterableItems | string>,
+  exports: Array<RegisterableItem | string>,
 ): void {
   const ids = new Set<string>();
 

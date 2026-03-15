@@ -1,6 +1,10 @@
 import { ExecutionJournalImpl } from "../../models/ExecutionJournal";
 import { journal as journalFactory } from "../../index";
 import { defineResource, defineTask } from "../../define";
+import {
+  getTaskAbortSignalLink,
+  setTaskCallerSignal,
+} from "../../models/runtime/taskCancellation";
 import { run } from "../../run";
 
 describe("ExecutionJournal", () => {
@@ -86,6 +90,22 @@ describe("ExecutionJournal", () => {
   });
 
   describe("Journal Forwarding", () => {
+    it("treats caller-signal cleanup as idempotent", () => {
+      const executionJournal = journalFactory.create();
+      const controller = new AbortController();
+      const cleanupCallerSignal = setTaskCallerSignal(
+        executionJournal,
+        controller.signal,
+      );
+
+      cleanupCallerSignal();
+      expect(() => cleanupCallerSignal()).not.toThrow();
+
+      const signalLink = getTaskAbortSignalLink(executionJournal);
+      expect(signalLink.signal).toBeUndefined();
+      signalLink.cleanup();
+    });
+
     it("forwards journal to nested task when options passed", async () => {
       const traceKey = journalFactory.createKey<string[]>("trace-steps");
 
@@ -160,6 +180,76 @@ describe("ExecutionJournal", () => {
         dependencies: { outer: outerTask },
         async init(_, { outer }) {
           await outer(undefined);
+        },
+      });
+
+      await run(app);
+    });
+
+    it("composes nested task signals with the forwarded journal signal and restores the parent afterwards", async () => {
+      const childController = new AbortController();
+
+      const innerTask = defineTask({
+        id: "innerTaskSignalCompose",
+        run: async (_input, _deps, context) => {
+          if (!context) {
+            return "missing-context";
+          }
+
+          childController.abort("child-cancel");
+          return {
+            innerAborted: context.signal?.aborted,
+            innerReason: context.signal?.reason,
+          };
+        },
+      });
+
+      const outerTask = defineTask({
+        id: "outerTaskSignalCompose",
+        dependencies: { inner: innerTask },
+        run: async (_input, { inner }, context) => {
+          if (!context) {
+            return "missing-context";
+          }
+
+          try {
+            await inner(undefined, {
+              journal: context.journal,
+              signal: childController.signal,
+            });
+            return {
+              innerRejected: false,
+              outerAborted: context.signal?.aborted,
+              outerReason: context.signal?.reason,
+            };
+          } catch (error) {
+            return {
+              innerRejected: true,
+              innerMessage:
+                error instanceof Error ? error.message : String(error),
+              outerAborted: context.signal?.aborted,
+              outerReason: context.signal?.reason,
+            };
+          }
+        },
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [innerTask, outerTask],
+        dependencies: { outer: outerTask },
+        async init(_, { outer }) {
+          const parentController = new AbortController();
+          const result = await outer(undefined, {
+            signal: parentController.signal,
+          });
+
+          expect(result).toMatchObject({
+            innerRejected: true,
+            innerMessage: expect.stringContaining("child-cancel"),
+            outerAborted: false,
+            outerReason: undefined,
+          });
         },
       });
 

@@ -10,8 +10,9 @@ export * from "./types";
 export * from "./utils";
 
 /**
- * Entry point for creating a hook builder.
- * Requires calling .on() and .run() before .build().
+ * Creates a fluent hook builder.
+ *
+ * Hooks must declare both their subscription and their handler before they can be built.
  */
 export function hookBuilder(
   id: string,
@@ -32,4 +33,7 @@ export function hookBuilder(
   return makeHookBuilder(initial);
 }
 
+/**
+ * Shorthand for {@link hookBuilder}.
+ */
 export const hook = hookBuilder;

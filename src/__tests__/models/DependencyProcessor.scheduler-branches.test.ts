@@ -7,8 +7,9 @@ import {
   defineTask,
   defineTaskMiddleware,
 } from "../../define";
-import type { DependencyMapType } from "../../defs";
+import { symbolResourceWithConfig, type DependencyMapType } from "../../defs";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
+import * as storeLookup from "../../models/StoreLookup";
 import { HookDependencyState } from "../../types/storeTypes";
 import { ResourceLifecycleMode } from "../../types/runner";
 import { createTestFixture } from "../test-utils";
@@ -213,6 +214,70 @@ describe("DependencyProcessor scheduler branches", () => {
     expect(collected).toContain(taggedResource.id);
   });
 
+  it("uses canonical resource ids for nested dependency readiness checks", () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const dependency = defineResource({
+      id: "scheduler-canonical-dependency",
+      init: async () => "dependency",
+    });
+    const consumer = defineResource({
+      id: "scheduler-canonical-consumer",
+      dependencies: { dependency },
+      init: async () => "consumer",
+    });
+    const group = defineResource({
+      id: "scheduler-canonical-group",
+      register: [dependency, consumer],
+      init: async () => "group",
+    });
+    const root = defineResource({
+      id: "scheduler-canonical-root",
+      register: [group],
+      init: async () => "root",
+    });
+
+    const runtimeResult = fixture.createRuntimeResult(taskRunner);
+    store.initializeStore(root, {}, runtimeResult);
+
+    const dependencyId = store.findIdByDefinition(dependency);
+    const consumerId = store.findIdByDefinition(consumer);
+    expect(dependencyId).not.toBe(dependency.id);
+    expect(consumerId).not.toBe(consumer.id);
+
+    const processor = new DependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+      ResourceLifecycleMode.Parallel,
+    ) as unknown as {
+      resourceScheduler: {
+        isResourceReadyForParallelInit: (
+          resource: typeof store.resources extends Map<any, infer V>
+            ? V
+            : never,
+        ) => boolean;
+      };
+    };
+
+    const dependencyEntry = store.resources.get(dependencyId)!;
+    const consumerEntry = store.resources.get(consumerId)!;
+
+    dependencyEntry.isInitialized = false;
+    expect(
+      processor.resourceScheduler.isResourceReadyForParallelInit(consumerEntry),
+    ).toBe(false);
+
+    dependencyEntry.isInitialized = true;
+    expect(
+      processor.resourceScheduler.isResourceReadyForParallelInit(consumerEntry),
+    ).toBe(true);
+  });
+
   it("marks hook dependency state as error when hook dependency extraction fails", async () => {
     const fixture = createTestFixture();
     const { store, eventManager, logger } = fixture;
@@ -291,6 +356,130 @@ describe("DependencyProcessor scheduler branches", () => {
       ResourceLifecycleMode.Parallel,
     );
 
-    expect(() => processor.attachListeners()).not.toThrow();
+    const addListenerSpy = jest.spyOn(eventManager, "addListener");
+    const addGlobalListenerSpy = jest.spyOn(eventManager, "addGlobalListener");
+
+    processor.attachListeners();
+
+    expect(addListenerSpy).not.toHaveBeenCalled();
+    expect(addGlobalListenerSpy).not.toHaveBeenCalled();
+  });
+
+  it("covers scheduler source-id fallbacks when store lookup helpers miss", () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const processor = new DependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+      ResourceLifecycleMode.Parallel,
+    ) as unknown as {
+      resourceScheduler: { resolveDefinitionId(value: unknown): string };
+    };
+
+    const resourceWithConfig = {
+      [symbolResourceWithConfig]: true,
+      resource: { id: "scheduler-source-id-fallback-resource" },
+    };
+    const functionWithId = Object.assign(() => undefined, {
+      id: "scheduler-source-id-fallback-function",
+    });
+    const functionWithoutId = () => undefined;
+
+    jest
+      .spyOn(storeLookup, "resolveCanonicalIdFromStore")
+      .mockReturnValue(null);
+    jest.spyOn(storeLookup, "extractRequestedId").mockReturnValue(null);
+
+    expect(schedulerResolve(processor, "scheduler-source-id-fallback")).toBe(
+      "scheduler-source-id-fallback",
+    );
+    expect(schedulerResolve(processor, resourceWithConfig)).toBe(
+      "scheduler-source-id-fallback-resource",
+    );
+    expect(schedulerResolve(processor, functionWithId)).toBe(
+      "scheduler-source-id-fallback-function",
+    );
+    expect(schedulerResolve(processor, functionWithoutId)).toBe(
+      String(functionWithoutId),
+    );
+    expect(schedulerResolve(processor, { id: "" })).toBe("[object Object]");
+  });
+
+  it("fails fast when hook array event dependencies cannot be resolved", () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const missingEvent = defineEvent({
+      id: "dependency-processor-missing-array-event",
+    });
+    const hook = defineHook({
+      id: "dependency-processor-missing-array-event-hook",
+      on: [missingEvent],
+      async run() {},
+    });
+    store.hooks.set(hook.id, {
+      hook,
+      dependencyState: HookDependencyState.Ready,
+      computedDependencies: {},
+    } as any);
+
+    const processor = new DependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+    );
+
+    expect(() => processor.attachListeners()).toThrow(
+      /Definition "dependency-processor-missing-array-event" not found/i,
+    );
+  });
+
+  it("fails fast when hook single event dependencies cannot be resolved", () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const missingEvent = defineEvent({
+      id: "dependency-processor-missing-single-event",
+    });
+    const hook = defineHook({
+      id: "dependency-processor-missing-single-event-hook",
+      on: missingEvent,
+      async run() {},
+    });
+    store.hooks.set(hook.id, {
+      hook,
+      dependencyState: HookDependencyState.Ready,
+      computedDependencies: {},
+    } as any);
+
+    const processor = new DependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+    );
+
+    expect(() => processor.attachListeners()).toThrow(
+      /Definition "dependency-processor-missing-single-event" not found/i,
+    );
   });
 });
+
+function schedulerResolve(
+  processor: {
+    resourceScheduler: { resolveDefinitionId(value: unknown): string };
+  },
+  value: unknown,
+): string {
+  return processor.resourceScheduler.resolveDefinitionId(value);
+}

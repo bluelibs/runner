@@ -1,4 +1,4 @@
-import { AsyncResource } from "async_hooks";
+import { AsyncResource } from "node:async_hooks";
 import { eventLaneEventNotRegisteredError } from "../../errors";
 import { runtimeSource } from "../../types/runtimeSource";
 import type { RemoteLaneBindingAuth } from "../../defs";
@@ -14,7 +14,10 @@ import {
   issueRemoteLaneToken,
   verifyRemoteLaneToken,
 } from "../remote-lanes/laneAuth";
-import { getRuntimeId } from "../../tools/runtimeMetadata";
+import {
+  buildSerializedEventLaneAsyncContexts,
+  withEventLaneAsyncContexts,
+} from "./eventLanes.asyncContext";
 
 type Dependencies = {
   eventManager: EventManager;
@@ -25,7 +28,7 @@ type Dependencies = {
 
 export class LocalSimulatedEventLaneTransport {
   private sequence = 0;
-  private readonly asyncScope = new AsyncResource(
+  private readonly relayScope = new AsyncResource(
     "runner.eventLanes.localSimulated",
   );
 
@@ -45,18 +48,11 @@ export class LocalSimulatedEventLaneTransport {
         return next(emission);
       }
 
-      const resolvedEmissionEventId =
-        getRuntimeId(emission) ?? emission.path ?? emission.id;
-      const eventRoute = this.context.eventRouteByEventId.get(
-        resolvedEmissionEventId,
-      );
+      const eventId = emission.id;
+      const eventRoute = this.context.eventRouteByEventId.get(eventId);
       if (!eventRoute) {
         return next(emission);
       }
-
-      const publicEventId = this.dependencies.store.toPublicId(
-        resolvedEmissionEventId,
-      );
 
       emission.stopPropagation();
       const bindingAuth = this.resolveBindingAuth(eventRoute.lane.id);
@@ -68,8 +64,13 @@ export class LocalSimulatedEventLaneTransport {
       const message: EventLaneMessage = {
         id: `sim-${++this.sequence}`,
         laneId: eventRoute.lane.id,
-        eventId: publicEventId,
+        eventId,
         payload: this.dependencies.serializer.stringify(emission.data),
+        serializedAsyncContexts: buildSerializedEventLaneAsyncContexts({
+          lane: eventRoute.lane,
+          store: this.dependencies.store,
+          serializer: this.dependencies.serializer,
+        }),
         source: emission.source,
         authToken,
         createdAt: new Date(),
@@ -78,12 +79,12 @@ export class LocalSimulatedEventLaneTransport {
       };
 
       await this.diagnostics.logEnqueue({
-        eventId: publicEventId,
+        eventId,
         laneId: eventRoute.lane.id,
         profile: this.context.profile,
         mode: "local-simulated",
         sourceKind: emission.source.kind,
-        sourceId: emission.source.path ?? emission.source.id,
+        sourceId: emission.source.id,
       });
 
       this.scheduleRelay(message);
@@ -91,7 +92,7 @@ export class LocalSimulatedEventLaneTransport {
   }
 
   private scheduleRelay(message: EventLaneMessage): void {
-    this.asyncScope.runInAsyncScope(() => {
+    this.relayScope.runInAsyncScope(() => {
       setTimeout(() => {
         void this.relay(message);
       }, 0);
@@ -104,6 +105,7 @@ export class LocalSimulatedEventLaneTransport {
     }
 
     try {
+      const eventRoute = this.context.eventRouteByEventId.get(message.eventId);
       const eventStoreEntry = this.dependencies.store.events.get(
         message.eventId,
       );
@@ -127,11 +129,18 @@ export class LocalSimulatedEventLaneTransport {
         profile: this.context.profile,
         relaySourceId,
       });
-      await this.dependencies.eventManager.emit(
-        eventStoreEntry!.event,
-        payload,
-        runtimeSource.runtime(relaySourceId),
-      );
+      await withEventLaneAsyncContexts({
+        lane: eventRoute?.lane,
+        serializedAsyncContexts: message.serializedAsyncContexts,
+        store: this.dependencies.store,
+        serializer: this.dependencies.serializer,
+        fn: async () =>
+          await this.dependencies.eventManager.emit(
+            eventStoreEntry!.event,
+            payload,
+            runtimeSource.runtime(relaySourceId),
+          ),
+      });
     } catch (error) {
       await this.dependencies.logger.error(
         "Event lane simulated consume failed.",

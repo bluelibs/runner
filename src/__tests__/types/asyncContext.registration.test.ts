@@ -8,7 +8,7 @@ describe("asyncContext registration", () => {
     const app = defineResource({ id: "spec-app-ctx", register: [ctx] });
     const runtime = await run(app);
     const store = await runtime.getResourceValue(resources.store);
-    const resolvedId = store.resolveDefinitionId(ctx)!;
+    const resolvedId = store.findIdByDefinition(ctx);
     const registered = store.asyncContexts.get(resolvedId);
     expect(registered?.id).toBe(resolvedId);
     await runtime.dispose();

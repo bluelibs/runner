@@ -1,5 +1,5 @@
 import type {
-  RegisterableItems,
+  RegisterableItem,
   IsolationSubtreeFilter,
   IResourceWithConfig,
 } from "../defs";
@@ -10,20 +10,20 @@ import { isSubtreeFilter, isIsolationScope, isTag } from "../define";
 export type ClassifiedIsolationEntry =
   | { kind: "scope"; scope: IsolationScope }
   | { kind: "subtreeFilter"; filter: IsolationSubtreeFilter }
-  | { kind: "tag"; id: string; entry: RegisterableItems }
-  | { kind: "definition"; id: string; entry: RegisterableItems }
+  | { kind: "tag"; id: string; entry: RegisterableItem }
+  | { kind: "definition"; id: string; entry: RegisterableItem }
   | { kind: "string"; value: string }
   | { kind: "unknown"; entry: unknown };
 
 export type ClassifiedScopeTarget =
   | { kind: "subtreeFilter"; filter: IsolationSubtreeFilter }
-  | { kind: "tag"; id: string; entry: RegisterableItems }
-  | { kind: "definition"; id: string; entry: RegisterableItems }
+  | { kind: "tag"; id: string; entry: RegisterableItem }
+  | { kind: "definition"; id: string; entry: RegisterableItem }
   | { kind: "wildcard" }
   | { kind: "string"; value: string }
   | { kind: "unknown"; entry: unknown };
 
-function extractItemId(item: RegisterableItems): string | undefined {
+function extractItemId(item: RegisterableItem): string | undefined {
   if (!item || typeof item !== "object") {
     return undefined;
   }
@@ -56,14 +56,14 @@ export function classifyIsolationEntry(
   if (typeof entry === "string") {
     return { kind: "string", value: entry };
   }
-  const id = extractItemId(entry as RegisterableItems);
+  const id = extractItemId(entry as RegisterableItem);
   if (!id) {
     return { kind: "unknown", entry };
   }
   if (isTag(entry)) {
-    return { kind: "tag", id, entry: entry as RegisterableItems };
+    return { kind: "tag", id, entry: entry as RegisterableItem };
   }
-  return { kind: "definition", id, entry: entry as RegisterableItems };
+  return { kind: "definition", id, entry: entry as RegisterableItem };
 }
 
 /**
@@ -81,12 +81,12 @@ export function classifyScopeTarget(
   if (typeof target === "string") {
     return { kind: "string", value: target };
   }
-  const id = extractItemId(target as RegisterableItems);
+  const id = extractItemId(target as RegisterableItem);
   if (!id) {
     return { kind: "unknown", entry: target };
   }
   if (isTag(target)) {
-    return { kind: "tag", id, entry: target as RegisterableItems };
+    return { kind: "tag", id, entry: target as RegisterableItem };
   }
-  return { kind: "definition", id, entry: target as RegisterableItems };
+  return { kind: "definition", id, entry: target as RegisterableItem };
 }

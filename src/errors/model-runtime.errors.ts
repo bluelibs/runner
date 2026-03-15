@@ -3,7 +3,7 @@ import type { DefaultErrorType } from "../types/error";
 
 // Store: TaskRunner not set
 export const taskRunnerNotSetError = error<DefaultErrorType>(
-  "runner.errors.store.taskRunnerNotSet",
+  "store-taskRunnerNotSet",
 )
   .format(
     () =>
@@ -15,9 +15,7 @@ export const taskRunnerNotSetError = error<DefaultErrorType>(
   .build();
 
 // Queue: Queue disposed
-export const queueDisposedError = error<DefaultErrorType>(
-  "runner.errors.queue.disposed",
-)
+export const queueDisposedError = error<DefaultErrorType>("queue-disposed")
   .format(() => "Queue has been disposed")
   .remediation(
     "The queue has already been disposed. Create a new Queue instance to continue enqueueing tasks.",
@@ -25,9 +23,7 @@ export const queueDisposedError = error<DefaultErrorType>(
   .build();
 
 // Queue: Deadlock detected
-export const queueDeadlockError = error<DefaultErrorType>(
-  "runner.errors.queue.deadlock",
-)
+export const queueDeadlockError = error<DefaultErrorType>("queue-deadlock")
   .format(
     () => "Deadlock detected: a queued task attempted to queue another task",
   )
@@ -38,7 +34,7 @@ export const queueDeadlockError = error<DefaultErrorType>(
 
 // Queue: Task ID overflow
 export const queueTaskIdOverflowError = error<DefaultErrorType>(
-  "runner.errors.queue.taskIdOverflow",
+  "queue-taskIdOverflow",
 )
   .format(
     () =>
@@ -52,7 +48,7 @@ export const queueTaskIdOverflowError = error<DefaultErrorType>(
 // Semaphore: Invalid permits (must be > 0)
 export const semaphoreInvalidPermitsError = error<
   { maxPermits: number } & DefaultErrorType
->("runner.errors.semaphore.invalidPermits")
+>("semaphore-invalidPermits")
   .format(
     ({ maxPermits }) =>
       `maxPermits must be greater than 0. Received: ${maxPermits}`,
@@ -65,7 +61,7 @@ export const semaphoreInvalidPermitsError = error<
 // Semaphore: Non-integer permits
 export const semaphoreNonIntegerPermitsError = error<
   { maxPermits: number } & DefaultErrorType
->("runner.errors.semaphore.nonIntegerPermits")
+>("semaphore-nonIntegerPermits")
   .format(
     ({ maxPermits }) =>
       `maxPermits must be an integer. Received: ${maxPermits}`,
@@ -77,7 +73,7 @@ export const semaphoreNonIntegerPermitsError = error<
 
 // Semaphore: Disposed
 export const semaphoreDisposedError = error<DefaultErrorType>(
-  "runner.errors.semaphore.disposed",
+  "semaphore-disposed",
 )
   .format(() => "Semaphore has been disposed")
   .remediation(
@@ -88,7 +84,7 @@ export const semaphoreDisposedError = error<DefaultErrorType>(
 // Semaphore: Acquire timeout
 export const semaphoreAcquireTimeoutError = error<
   { timeoutMs: number } & DefaultErrorType
->("runner.errors.semaphore.acquireTimeout")
+>("semaphore-acquireTimeout")
   .format(({ timeoutMs }) => `Semaphore acquire timeout after ${timeoutMs}ms`)
   .remediation(
     ({ timeoutMs }) =>
@@ -99,7 +95,7 @@ export const semaphoreAcquireTimeoutError = error<
 // ExecutionJournal: Duplicate key
 export const journalDuplicateKeyError = error<
   { keyId: string } & DefaultErrorType
->("runner.errors.journal.duplicateKey")
+>("journal-duplicateKey")
   .format(
     ({ keyId }) =>
       `Journal key "${keyId}" already exists. Use { override: true } to overwrite.`,
@@ -112,7 +108,7 @@ export const journalDuplicateKeyError = error<
 
 // MiddlewareManager: Unknown middleware type
 export const unknownMiddlewareTypeError = error<DefaultErrorType>(
-  "runner.errors.middleware.unknownType",
+  "middleware-unknownType",
 )
   .format(() => "Unknown middleware type")
   .remediation(
@@ -132,7 +128,7 @@ export const parallelInitSchedulingError = error<
       dependencyIds: string[];
     }>;
   } & DefaultErrorType
->("runner.errors.dependencyProcessor.parallelInitScheduling")
+>("dependencyProcessor-parallelInitScheduling")
   .format(
     (input?: {
       pendingResourceIds?: string[];
@@ -165,7 +161,7 @@ export const hookEventBufferFlushAbortedError = error<
     hookId: string;
     flushPasses: number;
   } & DefaultErrorType
->("runner.errors.dependencyProcessor.hookEventBufferFlushAborted")
+>("dependencyProcessor-hookEventBufferFlushAborted")
   .format(
     ({ hookId, flushPasses }) =>
       `Buffered hook event flush for "${hookId}" exceeded ${flushPasses} passes while runtime event cycle detection is disabled.`,

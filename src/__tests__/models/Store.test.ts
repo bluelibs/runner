@@ -13,7 +13,7 @@ import { run } from "../../run";
 import { MiddlewareManager, RunResult, TaskRunner } from "../../models";
 import { RunnerMode } from "../../types/runner";
 import { createTestFixture } from "../test-utils";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("Store", () => {
   let store: Store;
@@ -78,6 +78,17 @@ describe("Store", () => {
     store.recordResourceInitialized("dup");
     store.recordResourceInitialized("other");
     store.recordResourceInitialized("dup");
+
+    const initWaves = (
+      store as unknown as {
+        initWaves: Array<{ resourceIds: string[]; parallel: boolean }>;
+      }
+    ).initWaves;
+
+    expect(initWaves).toEqual([
+      { resourceIds: ["dup"], parallel: false },
+      { resourceIds: ["other"], parallel: false },
+    ]);
   });
 
   it("should ignore init waves when all resource ids were already tracked", () => {
@@ -333,7 +344,7 @@ describe("Store", () => {
 
     expect(() => store.storeGenericItem(weirdDepsResource)).toThrow(
       expect.objectContaining({
-        id: "runner.errors.validation",
+        id: "validation",
       }),
     );
   });
@@ -561,7 +572,7 @@ describe("Store", () => {
 
     store.initializeStore(rootResource, {}, runtimeResult);
 
-    const taggedTaskId = store.resolveDefinitionId(taggedTask)!;
+    const taggedTaskId = store.findIdByDefinition(taggedTask);
     const storeTask = store.tasks.get(taggedTaskId)!;
     store.tasks.set(taggedTaskId, {
       ...storeTask,
@@ -640,7 +651,7 @@ describe("Store", () => {
     store.initializeStore(rootResource, {}, runtimeResult);
 
     const registry = (store as unknown as { registry: any }).registry;
-    const canonicalTagId = store.resolveDefinitionId(tag)!;
+    const canonicalTagId = store.findIdByDefinition(tag);
     const staleBucket = registry.tagIndex.get(canonicalTagId);
     staleBucket.tasks.add("missing-task");
     staleBucket.resources.add("missing-resource");
@@ -724,7 +735,7 @@ describe("Store", () => {
 
     const resourceMatch = accessor.resources[0]!;
     expect(resourceMatch.value).toBeUndefined();
-    const resourceId = store.resolveDefinitionId(resource)!;
+    const resourceId = store.findIdByDefinition(resource);
     const storeResource = store.resources.get(resourceId)!;
     storeResource.isInitialized = true;
     storeResource.value = "resource-value";
@@ -817,9 +828,9 @@ describe("Store", () => {
     const firstTask = tasks[0]!;
     const firstResource = resources[0]!;
     if (!firstTask || !firstResource || !firstResource.init) {
-      throw createMessageError(
-        "Expected one tagged task and one tagged resource",
-      );
+      throw genericError.new({
+        message: "Expected one tagged task and one tagged resource",
+      });
     }
 
     await expect(

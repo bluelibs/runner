@@ -31,7 +31,7 @@ describe("subtreeOf()", () => {
       subtreeOf(resource, {
         types: ["not-a-real-type"] as any,
       }),
-    ).toThrow(expect.objectContaining({ id: "runner.errors.validation" }));
+    ).toThrow(expect.objectContaining({ id: "validation" }));
   });
 
   it("fails fast when types is not an array", () => {
@@ -41,7 +41,7 @@ describe("subtreeOf()", () => {
       subtreeOf(resource, {
         types: "task" as any,
       }),
-    ).toThrow(expect.objectContaining({ id: "runner.errors.validation" }));
+    ).toThrow(expect.objectContaining({ id: "validation" }));
   });
 
   it("fails fast when an item type is not a string", () => {
@@ -51,7 +51,7 @@ describe("subtreeOf()", () => {
       subtreeOf(resource, {
         types: [123] as any,
       }),
-    ).toThrow(expect.objectContaining({ id: "runner.errors.validation" }));
+    ).toThrow(expect.objectContaining({ id: "validation" }));
   });
 
   it("falls back to String(value) when invalid types cannot be JSON stringified", () => {
@@ -61,6 +61,6 @@ describe("subtreeOf()", () => {
       subtreeOf(resource, {
         types: [undefined] as any,
       }),
-    ).toThrow(expect.objectContaining({ id: "runner.errors.validation" }));
+    ).toThrow(expect.objectContaining({ id: "validation" }));
   });
 });

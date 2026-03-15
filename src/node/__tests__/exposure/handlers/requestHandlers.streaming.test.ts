@@ -4,6 +4,13 @@ import { run } from "../../../../run";
 import { rpcExposure } from "../testkit/rpcExposure";
 import { createReqRes } from "./streaming.test.utils";
 
+function exposureTaskId(
+  runtime: { store: { findIdByDefinition(reference: unknown): string } },
+  task: unknown,
+): string {
+  return runtime.store.findIdByDefinition(task);
+}
+
 describe("requestHandlers - streaming", () => {
   it("handles content-type as array and returns 405 for wrong method", async () => {
     const t = defineTask<void, Promise<string>>({
@@ -27,7 +34,7 @@ describe("requestHandlers - streaming", () => {
       const handlers = await rr.getResourceValue(exposure as any);
       const transport = createReqRes({
         method: "GET",
-        url: `/__runner/task/${encodeURIComponent(t.id)}`,
+        url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
         headers: { "content-type": ["application/json"] as any },
       });
       await handlers.handleTask(transport.req as any, transport.res as any);
@@ -70,7 +77,7 @@ describe("requestHandlers - streaming", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "application/json" },
           body: "{}",
         });
@@ -111,7 +118,7 @@ describe("requestHandlers - streaming", () => {
         const handlers = await rr.getResourceValue(exposure as any);
         const transport = createReqRes({
           method: "POST",
-          url: `/__runner/task/${encodeURIComponent(t.id)}`,
+          url: `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`,
           headers: { "content-type": "application/octet-stream" },
         });
         await handlers.handleTask(transport.req, transport.res);
@@ -171,7 +178,7 @@ describe("requestHandlers - streaming", () => {
       try {
         const handlers = await rr.getResourceValue(exposure as any);
         const req = getMultipartReq("boundary1", JSON.stringify({ input: {} }));
-        req.url = `/__runner/task/${encodeURIComponent(t.id)}`;
+        req.url = `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`;
         const transport = createReqRes({ method: "POST", url: req.url });
         await handlers.handleTask(req, transport.res);
         await new Promise((r) => setImmediate(r));
@@ -215,7 +222,7 @@ describe("requestHandlers - streaming", () => {
       try {
         const handlers = await rr.getResourceValue(exposure as any);
         const req = getMultipartReq("boundary2", JSON.stringify({ input: {} }));
-        req.url = `/__runner/task/${encodeURIComponent(t.id)}`;
+        req.url = `/__runner/task/${encodeURIComponent(exposureTaskId(rr, t))}`;
         const transport = createReqRes({ method: "POST", url: req.url });
         await handlers.handleTask(req, transport.res);
         await new Promise((r) => setImmediate(r));

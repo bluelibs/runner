@@ -82,6 +82,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [Full Guide](./readmes/FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
 | [Support & Release Policy](./readmes/ENTERPRISE.md)                                                                 | Docs    | Support windows and deprecation     |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
+| [Example: AWS Lambda Quickstart](https://github.com/bluelibs/runner/tree/main/examples/aws-lambda-quickstart)        | Example | API Gateway + Lambda integration    |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
 
@@ -120,7 +121,7 @@ Use these minimums before starting:
 
 | Requirement     | Minimum                 | Notes                                                                   |
 | --------------- | ----------------------- | ----------------------------------------------------------------------- |
-| Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                                 |
+| Node.js         | `22.x+`                 | Enforced by `package.json#engines.node`                                 |
 | TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository                   |
 | Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works                  |
 | `fetch` runtime | Built-in or polyfilled  | Required for explicit remote lane clients (`createHttpClient`) |
@@ -200,6 +201,7 @@ For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs
 
 ## Real-World Examples
 
+- [AWS Lambda Quickstart](./examples/aws-lambda-quickstart/README.md)
 - [Express + OpenAPI + SQLite](./examples/express-openapi-sqlite/README.md)
 - [Fastify + MikroORM + PostgreSQL](./examples/fastify-mikroorm/README.md)
 

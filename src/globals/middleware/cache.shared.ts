@@ -13,31 +13,30 @@ export type CacheFactoryOptions = Partial<
   LRUCache.Options<string, CacheStoredValue, unknown>
 >;
 
-export type CacheProvider = (
-  options: CacheFactoryOptions,
-) => Promise<ICacheProvider>;
-
-export type CacheDisposeBehavior = "clear" | "keep";
-
-export type TaskScopedCacheProviderInput = {
+/**
+ * Context passed to each cache provider instance factory.
+ * Providers always create a cache instance for one task at a time.
+ */
+export type CacheProviderInput = {
+  /** Canonical task id for the cache instance being created. */
   taskId: string;
+  /** Effective cache options after resource and middleware defaults are merged. */
   options: CacheFactoryOptions;
+  /** Shared budget passed through when the runtime enables cache-wide byte limits. */
   totalBudgetBytes?: number;
+  /** Shared in-memory budget state used by the built-in provider. */
   sharedBudget?: SharedCacheBudgetState;
 };
 
+/**
+ * Creates the cache instance used by one task.
+ */
+export type CacheProvider = (
+  input: CacheProviderInput,
+) => Promise<ICacheProvider>;
+
 type BuiltInCacheProvider = CacheProvider & {
   [builtInCacheProviderSymbol]: true;
-};
-
-type TaskScopedCacheProvider = CacheProvider & {
-  [taskScopedCacheProviderSymbol]: (
-    input: TaskScopedCacheProviderInput,
-  ) => Promise<ICacheProvider>;
-};
-
-type CacheProviderWithDisposeBehavior = ICacheProvider & {
-  [cacheDisposeBehaviorSymbol]?: CacheDisposeBehavior;
 };
 
 type BudgetEntry = {
@@ -56,50 +55,30 @@ export type SharedCacheBudgetState = {
 };
 
 const builtInCacheProviderSymbol = Symbol("runner.builtInCacheProvider");
-const taskScopedCacheProviderSymbol = Symbol("runner.taskScopedCacheProvider");
-const cacheDisposeBehaviorSymbol = Symbol("runner.cacheDisposeBehavior");
 
 export function createDefaultCacheProvider(): CacheProvider {
-  const provider: CacheProvider = async (
-    options: CacheFactoryOptions,
-  ): Promise<ICacheProvider> =>
-    withCacheDisposeBehavior(
-      new LRUCache<string, CacheStoredValue, unknown>(
-        options as LRUCache.Options<string, CacheStoredValue, unknown>,
-      ),
-      "clear",
-    );
-
   return Object.assign(
-    createTaskScopedCacheProvider(
-      provider,
-      async ({ options, sharedBudget, taskId }) => {
-        if (sharedBudget) {
-          return createBudgetedCacheInstance({
-            taskId,
-            options,
-            sharedBudget,
-          });
-        }
+    async ({
+      options,
+      sharedBudget,
+      taskId,
+    }: CacheProviderInput): Promise<ICacheProvider> => {
+      if (sharedBudget) {
+        return createBudgetedCacheInstance({
+          taskId,
+          options,
+          sharedBudget,
+        });
+      }
 
-        return provider(options);
-      },
-    ),
+      return new LRUCache<string, CacheStoredValue, unknown>(
+        options as LRUCache.Options<string, CacheStoredValue, unknown>,
+      );
+    },
     {
       [builtInCacheProviderSymbol]: true as const,
     },
   ) as BuiltInCacheProvider;
-}
-
-export function createTaskScopedCacheProvider(
-  provider: CacheProvider,
-  createInstance: (
-    input: TaskScopedCacheProviderInput,
-  ) => Promise<ICacheProvider>,
-): CacheProvider {
-  return Object.assign(provider, {
-    [taskScopedCacheProviderSymbol]: createInstance,
-  }) as TaskScopedCacheProvider;
 }
 
 export function isBuiltInCacheProvider(
@@ -110,47 +89,6 @@ export function isBuiltInCacheProvider(
     (value as Partial<BuiltInCacheProvider>)[builtInCacheProviderSymbol] ===
       true
   );
-}
-
-export function supportsTaskScopedCacheProvider(
-  value: unknown,
-): value is TaskScopedCacheProvider {
-  return (
-    typeof value === "function" &&
-    typeof (value as Partial<TaskScopedCacheProvider>)[
-      taskScopedCacheProviderSymbol
-    ] === "function"
-  );
-}
-
-export function createTaskScopedCacheInstance(
-  provider: CacheProvider,
-  input: TaskScopedCacheProviderInput,
-) {
-  if (!supportsTaskScopedCacheProvider(provider)) {
-    throw new TypeError(
-      "Cache provider does not support task-scoped cache instances.",
-    );
-  }
-
-  return provider[taskScopedCacheProviderSymbol](input);
-}
-
-export function withCacheDisposeBehavior<T extends ICacheProvider>(
-  provider: T,
-  behavior: CacheDisposeBehavior,
-): T {
-  return Object.assign(provider, {
-    [cacheDisposeBehaviorSymbol]: behavior,
-  }) as T;
-}
-
-export function shouldClearCacheOnDispose(provider: ICacheProvider) {
-  const behavior = (provider as CacheProviderWithDisposeBehavior)[
-    cacheDisposeBehaviorSymbol
-  ];
-
-  return behavior !== "keep";
 }
 
 export function createSharedCacheBudgetState(
@@ -177,48 +115,45 @@ export function createBudgetedCacheInstance({
   const localCache = createLocalCache(taskId, options, sharedBudget);
   sharedBudget.localCaches.set(taskId, localCache);
 
-  return withCacheDisposeBehavior(
-    {
-      get(key: string) {
-        const value = localCache.get(key);
+  return {
+    get(key: string) {
+      const value = localCache.get(key);
 
-        if (value !== undefined || localCache.has(key)) {
-          touchBudgetEntry(sharedBudget, taskId, key);
-        }
+      if (value !== undefined || localCache.has(key)) {
+        touchBudgetEntry(sharedBudget, taskId, key);
+      }
 
-        return value;
-      },
-      set(key: string, value: unknown) {
-        localCache.set(key, value as CacheStoredValue);
-
-        if (!localCache.has(key)) {
-          return;
-        }
-
-        upsertBudgetEntry(
-          sharedBudget,
-          taskId,
-          key,
-          computeEntrySize(options, key, value),
-        );
-        enforceTotalBudget(sharedBudget);
-      },
-      clear() {
-        localCache.clear();
-        removeBudgetEntriesForTask(sharedBudget, taskId);
-      },
-      has(key: string) {
-        const present = localCache.has(key);
-
-        if (present) {
-          touchBudgetEntry(sharedBudget, taskId, key);
-        }
-
-        return present;
-      },
+      return value;
     },
-    "clear",
-  );
+    set(key: string, value: unknown) {
+      localCache.set(key, value as CacheStoredValue);
+
+      if (!localCache.has(key)) {
+        return;
+      }
+
+      upsertBudgetEntry(
+        sharedBudget,
+        taskId,
+        key,
+        computeEntrySize(options, key, value),
+      );
+      enforceTotalBudget(sharedBudget);
+    },
+    clear() {
+      localCache.clear();
+      removeBudgetEntriesForTask(sharedBudget, taskId);
+    },
+    has(key: string) {
+      const present = localCache.has(key);
+
+      if (present) {
+        touchBudgetEntry(sharedBudget, taskId, key);
+      }
+
+      return present;
+    },
+  };
 }
 
 function createLocalCache(

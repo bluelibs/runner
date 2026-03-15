@@ -59,7 +59,7 @@ function rpcLane(
 
 describe("EventLaneAssignments", () => {
   it("fails when two function-based lanes target the same event", () => {
-    const event = { id: "tests-event-lane-assignments-event" };
+    const event = { id: "assign-event" };
     const store = createStore({ events: [event] });
     const lanes = [
       eventLane("lane.a", () => true),
@@ -67,12 +67,12 @@ describe("EventLaneAssignments", () => {
     ];
 
     expect(() => resolveEventLaneAssignments(store, lanes)).toThrow(
-      'Event "tests-event-lane-assignments-event" is already assigned to eventLane "lane.a". Cannot also assign eventLane "lane.b" via applyTo().',
+      'Event "assign-event" is already assigned to eventLane "lane.a". Cannot also assign eventLane "lane.b" via applyTo().',
     );
   });
 
   it("fails when two id-list lanes target the same event", () => {
-    const event = { id: "tests-event-lane-assignments-by-id-event" };
+    const event = { id: "assign-by-id-event" };
     const store = createStore({ events: [event] });
     const lanes = [
       eventLane("lane.a", [event.id]),
@@ -80,12 +80,12 @@ describe("EventLaneAssignments", () => {
     ];
 
     expect(() => resolveEventLaneAssignments(store, lanes)).toThrow(
-      'Event "tests-event-lane-assignments-by-id-event" is already assigned to eventLane "lane.a". Cannot also assign eventLane "lane.b" via applyTo().',
+      'Event "assign-by-id-event" is already assigned to eventLane "lane.a". Cannot also assign eventLane "lane.b" via applyTo().',
     );
   });
 
   it("fails fast when applyTo is not a function or array", () => {
-    const store = createStore({ events: [{ id: "tests-event-lane-invalid" }] });
+    const store = createStore({ events: [{ id: "invalid-event" }] });
     const lanes = [eventLane("lane.invalid", 42 as unknown as string[])];
 
     expect(() => resolveEventLaneAssignments(store, lanes)).toThrow(
@@ -123,7 +123,7 @@ describe("EventLaneAssignments", () => {
     const eventLaneDefinition = eventLane("lane.tagged");
     const rpcLaneDefinition = rpcLane("rpc.tagged");
     const event = {
-      id: "tests-event-lane-tag-conflict-event",
+      id: "tag-conflict-event",
       tags: [
         globalTags.eventLane.with({ lane: eventLaneDefinition }),
         globalTags.rpcLane.with({ lane: rpcLaneDefinition }),
@@ -132,7 +132,7 @@ describe("EventLaneAssignments", () => {
     const store = createStore({ events: [event] });
 
     expect(() => resolveEventLaneAssignments(store, [])).toThrow(
-      'Event "tests-event-lane-tag-conflict-event" cannot be assigned to eventLane "lane.tagged" because it is already assigned to an rpcLane.',
+      'Event "tag-conflict-event" cannot be assigned to eventLane "lane.tagged" because it is already assigned to an rpcLane.',
     );
   });
 

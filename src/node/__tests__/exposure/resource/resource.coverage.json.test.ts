@@ -21,9 +21,10 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
+    const okTaskId = rr.store.findIdByDefinition(okTask);
 
     const rrMock = createReqRes({
-      url: `/__runner/task/${encodeURIComponent(okTask.id)}`,
+      url: `/__runner/task/${encodeURIComponent(okTaskId)}`,
       headers: { "content-type": "application/json" },
       manualPush: true,
     });
@@ -54,9 +55,10 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
+    const echoId = rr.store.findIdByDefinition(echo);
 
     const rrMock = createReqRes({
-      url: `/__runner/task/${encodeURIComponent(echo.id)}`,
+      url: `/__runner/task/${encodeURIComponent(echoId)}`,
       headers: { "x-runner-token": "ARR", "content-type": "application/json" },
       manualPush: true,
     });
@@ -88,9 +90,10 @@ describe("nodeExposure Coverage - JSON and Buffers", () => {
     });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure as any);
+    const echoId = rr.store.findIdByDefinition(echo);
 
     const rrMock = createReqRes({
-      url: `/__runner/task/${encodeURIComponent(echo.id)}`,
+      url: `/__runner/task/${encodeURIComponent(echoId)}`,
       headers: { "x-runner-token": "AB", "content-type": "application/json" },
       manualPush: true,
     });

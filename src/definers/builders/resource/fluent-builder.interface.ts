@@ -6,16 +6,18 @@ import type {
   IResourceMeta,
   IsolationPolicyInput,
   OverridableElements,
-  RegisterableItems,
+  RegisterableItem,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   ResourceSubtreePolicyInput,
   ResourceTagType,
   SubtreePolicyOptions,
   TagType,
+  ResolveValidationSchemaInput,
   ValidationSchemaInput,
 } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
+import type { RunnerMode } from "../../../types/runner";
 import type { ResolveConfig } from "./types";
 
 /**
@@ -33,9 +35,9 @@ export interface ResourceFluentBuilderBeforeInit<
 > {
   id: string;
 
-  // Append signature (default)
+  /** Adds resource dependencies, merging by default unless `override: true` is used. */
   dependencies<TNewDeps extends DependencyMapType>(
-    deps: TNewDeps | ((config: TConfig) => TNewDeps),
+    deps: TNewDeps | ((config: TConfig, mode: RunnerMode) => TNewDeps),
     options?: { override?: false },
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
@@ -47,9 +49,9 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
-  // Override signature (replace)
+  /** Replaces previously declared resource dependencies. */
   dependencies<TNewDeps extends DependencyMapType>(
-    deps: TNewDeps | ((config: TConfig) => TNewDeps),
+    deps: TNewDeps | ((config: TConfig, mode: RunnerMode) => TNewDeps),
     options: { override: true },
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
@@ -61,6 +63,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /** Attaches resource middleware. */
   middleware<TNewMw extends ResourceMiddlewareAttachmentType[]>(
     mw: TNewMw,
     options?: { override?: boolean },
@@ -74,7 +77,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TNewMw
   >;
 
-  // Append signature (default)
+  /** Adds resource tags, merging by default unless `override: true` is used. */
   tags<const TNewTags extends TagType[]>(
     tags: EnsureTagsForTarget<"resources", TNewTags>,
     options?: { override?: false },
@@ -88,7 +91,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
-  // Override signature (replace)
+  /** Replaces previously declared resource tags. */
   tags<const TNewTags extends TagType[]>(
     tags: EnsureTagsForTarget<"resources", TNewTags>,
     options: { override: true },
@@ -102,6 +105,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /** Creates private mutable context shared across the resource lifecycle hooks. */
   context<TNewCtx>(
     factory: () => TNewCtx,
   ): ResourceFluentBuilderBeforeInit<
@@ -114,10 +118,16 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
-  configSchema<TNewConfig>(
-    schema: ValidationSchemaInput<TNewConfig>,
+  /** Declares the resource configuration schema. */
+  configSchema<
+    TNewConfig = never,
+    TSchema extends ValidationSchemaInput<
+      [TNewConfig] extends [never] ? any : TNewConfig
+    > = ValidationSchemaInput<[TNewConfig] extends [never] ? any : TNewConfig>,
+  >(
+    schema: TSchema,
   ): ResourceFluentBuilderBeforeInit<
-    TNewConfig,
+    ResolveValidationSchemaInput<TNewConfig, TSchema>,
     TValue,
     TDeps,
     TContext,
@@ -129,10 +139,15 @@ export interface ResourceFluentBuilderBeforeInit<
   /**
    * Alias for configSchema. Use this to define the resource configuration validation contract.
    */
-  schema<TNewConfig>(
-    schema: ValidationSchemaInput<TNewConfig>,
+  schema<
+    TNewConfig = never,
+    TSchema extends ValidationSchemaInput<
+      [TNewConfig] extends [never] ? any : TNewConfig
+    > = ValidationSchemaInput<[TNewConfig] extends [never] ? any : TNewConfig>,
+  >(
+    schema: TSchema,
   ): ResourceFluentBuilderBeforeInit<
-    TNewConfig,
+    ResolveValidationSchemaInput<TNewConfig, TSchema>,
     TValue,
     TDeps,
     TContext,
@@ -141,11 +156,17 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
-  resultSchema<TResolved>(
-    schema: ValidationSchemaInput<TResolved>,
+  /** Declares the resolved resource value schema. */
+  resultSchema<
+    TResolved = never,
+    TSchema extends ValidationSchemaInput<
+      [TResolved] extends [never] ? any : TResolved
+    > = ValidationSchemaInput<[TResolved] extends [never] ? any : TResolved>,
+  >(
+    schema: TSchema,
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
-    Promise<TResolved>,
+    Promise<ResolveValidationSchemaInput<TResolved, TSchema>>,
     TDeps,
     TContext,
     TMeta,
@@ -153,6 +174,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /** Attaches metadata used by docs and tooling. */
   meta<TNewMeta extends IResourceMeta>(
     m: TNewMeta,
   ): ResourceFluentBuilderBeforeInit<
@@ -165,6 +187,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /** Sets the resource initializer and advances the builder into its post-init phase. */
   init<TNewConfig = TConfig, TNewValue extends Promise<any> = TValue>(
     fn: ResourceInitFn<
       ResolveConfig<TConfig, TNewConfig>,
@@ -185,12 +208,15 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
-  // Kept available pre-init for compatibility and ergonomic ordering.
+  /** Registers child definitions owned by this resource. */
   register(
     items:
-      | RegisterableItems
-      | Array<RegisterableItems>
-      | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>),
+      | RegisterableItem
+      | Array<RegisterableItem>
+      | ((
+          config: TConfig,
+          mode: RunnerMode,
+        ) => RegisterableItem | Array<RegisterableItem>),
     options?: { override?: boolean },
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
@@ -202,6 +228,7 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /** Declares the resource dispose hook. */
   dispose(
     fn: NonNullable<
       IResourceDefinition<
@@ -226,6 +253,12 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /**
+   * Declares the resource `ready()` hook.
+   *
+   * Use this when the resource should begin admitting external work only after
+   * startup wiring is complete. The impact is startup ordering, not value creation.
+   */
   ready(
     fn: NonNullable<
       IResourceDefinition<
@@ -250,6 +283,12 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /**
+   * Declares the resource `cooldown()` hook.
+   *
+   * Use this to stop new intake quickly during shutdown. The impact is on admission
+   * control during `coolingDown`, not on final teardown.
+   */
   cooldown(
     fn: NonNullable<
       IResourceDefinition<
@@ -274,6 +313,12 @@ export interface ResourceFluentBuilderBeforeInit<
     TMiddleware
   >;
 
+  /**
+   * Declares the resource `health()` probe.
+   *
+   * Resources without this hook are omitted from runtime health reports, so adding
+   * it changes operator visibility rather than lifecycle behavior.
+   */
   health(
     fn: NonNullable<
       IResourceDefinition<
@@ -341,7 +386,9 @@ export interface ResourceFluentBuilderBeforeInit<
   >;
 
   overrides(
-    o: Array<OverridableElements>,
+    o:
+      | Array<OverridableElements>
+      | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>),
     options?: { override?: boolean },
   ): ResourceFluentBuilderBeforeInit<
     TConfig,
@@ -381,9 +428,12 @@ export interface ResourceFluentBuilderAfterInit<
   id: string;
   register(
     items:
-      | RegisterableItems
-      | Array<RegisterableItems>
-      | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>),
+      | RegisterableItem
+      | Array<RegisterableItem>
+      | ((
+          config: TConfig,
+          mode: RunnerMode,
+        ) => RegisterableItem | Array<RegisterableItem>),
     options?: { override?: boolean },
   ): ResourceFluentBuilderAfterInit<
     TConfig,
@@ -533,7 +583,9 @@ export interface ResourceFluentBuilderAfterInit<
     TMiddleware
   >;
   overrides(
-    o: Array<OverridableElements>,
+    o:
+      | Array<OverridableElements>
+      | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>),
     options?: { override?: boolean },
   ): ResourceFluentBuilderAfterInit<
     TConfig,

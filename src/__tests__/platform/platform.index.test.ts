@@ -62,6 +62,16 @@ describe("Platform Index", () => {
       expect(secondPlatform).toBe(customAdapter);
       expect(secondPlatform).not.toBe(firstPlatform);
     });
+
+    it("keeps the platform helpers aligned with the override", () => {
+      setPlatform(new BrowserPlatformAdapter());
+
+      expect(getDetectedEnvironment()).toBe("browser");
+      expect(isBrowser()).toBe(true);
+      expect(isNode()).toBe(false);
+      expect(isUniversal()).toBe(false);
+      expect(isEdge()).toBe(false);
+    });
   });
 
   describe("resetPlatform", () => {

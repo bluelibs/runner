@@ -1,5 +1,14 @@
-import { MatchError } from "../../../tools/check";
+import { matchError } from "../../../errors/foundation/match.errors";
 import { rpcLanesResourceConfigSchema } from "../../rpc-lanes/configSchema";
+
+function expectMatchFailure(run: () => unknown): void {
+  try {
+    run();
+    throw new Error("Expected matchError");
+  } catch (error) {
+    expect(matchError.is(error)).toBe(true);
+  }
+}
 
 describe("rpcLanes resource config schema", () => {
   it("accepts valid rpc-lanes config shape", () => {
@@ -31,7 +40,7 @@ describe("rpcLanes resource config schema", () => {
   it("rejects invalid mode values", () => {
     const lane = { id: "lane-invalid-mode" };
 
-    expect(() =>
+    expectMatchFailure(() =>
       rpcLanesResourceConfigSchema.parse({
         profile: "client",
         topology: {
@@ -42,11 +51,11 @@ describe("rpcLanes resource config schema", () => {
         },
         mode: "unsupported-mode",
       } as never),
-    ).toThrow(MatchError);
+    );
   });
 
   it("rejects invalid binding lane shapes", () => {
-    expect(() =>
+    expectMatchFailure(() =>
       rpcLanesResourceConfigSchema.parse({
         profile: "client",
         topology: {
@@ -61,13 +70,13 @@ describe("rpcLanes resource config schema", () => {
           ],
         },
       } as never),
-    ).toThrow(MatchError);
+    );
   });
 
   it("rejects invalid profiles shape", () => {
     const lane = { id: "lane-invalid-profile" };
 
-    expect(() =>
+    expectMatchFailure(() =>
       rpcLanesResourceConfigSchema.parse({
         profile: "client",
         topology: {
@@ -75,13 +84,13 @@ describe("rpcLanes resource config schema", () => {
           bindings: [{ lane, communicator: { id: "communicator-resource" } }],
         },
       } as never),
-    ).toThrow(MatchError);
+    );
   });
 
   it("rejects invalid profile entries", () => {
     const lane = { id: "lane-invalid-profile-entry" };
 
-    expect(() =>
+    expectMatchFailure(() =>
       rpcLanesResourceConfigSchema.parse({
         profile: "client",
         topology: {
@@ -91,6 +100,6 @@ describe("rpcLanes resource config schema", () => {
           bindings: [{ lane, communicator: { id: "communicator-resource" } }],
         },
       } as never),
-    ).toThrow(MatchError);
+    );
   });
 });

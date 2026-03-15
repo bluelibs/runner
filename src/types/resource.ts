@@ -4,7 +4,7 @@ import {
   IValidationSchema,
   ValidationSchemaInput,
   OverridableElements,
-  RegisterableItems,
+  RegisterableItem,
   ResourceDependencyValuesType,
 } from "./utilities";
 import {
@@ -13,7 +13,8 @@ import {
 } from "./resourceMiddleware";
 import { ResourceTagType } from "./tag";
 import { IResourceMeta } from "./meta";
-import type { ThrowsList } from "./error";
+import type { NormalizedThrowsList, ThrowsList } from "./error";
+import type { RunnerMode } from "./runner";
 import type { IsolationChannels, IsolationScope } from "../tools/scope";
 export type {
   IsolationScope,
@@ -27,7 +28,6 @@ import {
   symbolResource,
   symbolResourceRegistersChildren,
   symbolResourceSubtreeDeclarations,
-  symbolRuntimeId,
   symbolResourceWithConfig,
 } from "./symbols";
 import {
@@ -49,7 +49,7 @@ export type {
   IValidationSchema,
   ValidationSchemaInput,
   OverridableElements,
-  RegisterableItems,
+  RegisterableItem as RegisterableItems,
   ResourceDependencyValuesType,
 } from "./utilities";
 export type { ResourceMiddlewareAttachmentType } from "./resourceMiddleware";
@@ -121,11 +121,11 @@ export interface IsolationSubtreeFilter {
  * Raw strings are **not** valid here.
  */
 export type IsolationTarget =
-  | RegisterableItems
+  | RegisterableItem
   | IsolationSubtreeFilter
   | IsolationScope;
 export type IsolationExportsTarget =
-  | RegisterableItems
+  | RegisterableItem
   | IResource<any, any, any, any, any, any, any>;
 
 export type IsolationExportsConfig =
@@ -181,6 +181,7 @@ export interface IsolationWhitelistEntry {
 
 export type IsolationPolicyResolver<TConfig = unknown> = (
   config: TConfig,
+  mode: RunnerMode,
 ) => IsolationPolicy;
 
 export type IsolationPolicyInput<TConfig = unknown> =
@@ -204,19 +205,31 @@ export type IsUnspecified<T> = [T] extends [undefined]
       ? true
       : false;
 
+/**
+ * Supported resource health states reported by Runner.
+ */
 export type ResourceHealthStatus = "healthy" | "degraded" | "unhealthy";
 
+/**
+ * Result returned by a single resource health probe.
+ */
 export interface IResourceHealthResult {
   status: ResourceHealthStatus;
   message?: string;
   details?: unknown;
 }
 
+/**
+ * One resource entry inside a runtime health report.
+ */
 export interface IResourceHealthReportEntry extends IResourceHealthResult {
   id: string;
   initialized: boolean;
 }
 
+/**
+ * Aggregated runtime health report.
+ */
 export interface IResourceHealthReport {
   totals: {
     resources: number;
@@ -230,10 +243,18 @@ export interface IResourceHealthReport {
   ): IResourceHealthReportEntry;
 }
 
+/**
+ * Extra resource definitions that remain admissible during the cooldown-to-dispose transition.
+ */
 export type ResourceCooldownAdmissionTargets = ReadonlyArray<
   IResource<any, any, any, any, any, any, any>
 >;
 
+/**
+ * Declarative resource definition contract.
+ *
+ * Resources own lifecycle, subtree registration, and isolation boundaries.
+ */
 export interface IResourceDefinition<
   TConfig = any,
   TValue extends Promise<any> = Promise<any>,
@@ -249,14 +270,16 @@ export interface IResourceDefinition<
   /** Stable identifier. */
   id: string;
   /** Static or lazy dependency map. Receives `config` when provided. */
-  dependencies?: TDependencies | ((config: TConfig) => TDependencies);
+  dependencies?:
+    | TDependencies
+    | ((config: TConfig, mode: RunnerMode) => TDependencies);
   /**
    * Register other registerables (resources/tasks/middleware/events). Accepts a
    * static array or a function of `config` to support dynamic wiring.
    */
   register?:
-    | Array<RegisterableItems>
-    | ((config: TConfig) => Array<RegisterableItems>);
+    | Array<RegisterableItem>
+    | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItem>);
   /**
    * Initialize and return the resource value. Called once during boot.
    */
@@ -336,6 +359,7 @@ export interface IResourceDefinition<
     dependencies: ResourceDependencyValuesType<TDependencies>,
     context: TContext,
   ) => Promise<IResourceHealthResult>;
+  /** Optional metadata used by docs and tooling. */
   meta?: TMeta;
   /**
    * Declares which typed errors are part of this resource's contract.
@@ -344,7 +368,7 @@ export interface IResourceDefinition<
    * - It does not imply dependency injection
    * - It does not enforce that only these errors can be thrown
    *
-   * Use string ids or Error helpers.
+   * Use Runner error helpers only.
    */
   throws?: ThrowsList;
   /**
@@ -356,9 +380,17 @@ export interface IResourceDefinition<
    * Safe overrides to swap behavior while preserving identities. See
    * README: Overrides.
    */
-  overrides?: Array<OverridableElements>;
+  overrides?:
+    | Array<OverridableElements>
+    | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>);
 
-  /** Middleware applied around init/cooldown/dispose. */
+  /**
+   * Middleware applied around resource creation.
+   *
+   * This affects how initialization is performed and what value the resource resolves to.
+   * It does not wrap `ready()`, `cooldown()`, or `dispose()`, so shutdown behavior should
+   * still be modeled with lifecycle hooks.
+   */
   middleware?: TMiddleware;
   /**
    * Create a private, mutable context shared between `init`, `ready`,
@@ -390,6 +422,7 @@ export interface IResourceDefinition<
   [symbolResourceIsolateDeclarations]?: ReadonlyArray<
     IsolationPolicyDeclaration<TConfig>
   >;
+  /** Tags attached to this resource definition. */
   tags?: TTags;
 }
 
@@ -419,6 +452,9 @@ export type ResourceInitFn<
   >["init"]
 >;
 
+/**
+ * Normalized runtime resource definition.
+ */
 export interface IResource<
   TConfig = void,
   TValue extends Promise<any> = Promise<any>,
@@ -428,24 +464,29 @@ export interface IResource<
   TTags extends ResourceTagType[] = ResourceTagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[] =
     ResourceMiddlewareAttachmentType[],
-> extends IResourceDefinition<
-  TConfig,
-  TValue,
-  TDependencies,
-  TContext,
-  any,
-  any,
-  TMeta,
-  TTags,
-  TMiddleware
+> extends Omit<
+  IResourceDefinition<
+    TConfig,
+    TValue,
+    TDependencies,
+    TContext,
+    any,
+    any,
+    TMeta,
+    TTags,
+    TMiddleware
+  >,
+  "throws"
 > {
+  /** Normalized validation schema for resource config. */
   configSchema?: IValidationSchema<TConfig>;
+  /** Normalized validation schema for the resolved resource value. */
   resultSchema?: IValidationSchema<
     TValue extends Promise<infer U> ? U : TValue
   >;
   id: string;
   path?: string;
-  [symbolRuntimeId]?: string;
+  /** Configures the resource and returns a branded configured instance. */
   with(
     config: HasInputContracts<[...TTags, ...TMiddleware]> extends true
       ? IsUnspecified<TConfig> extends true
@@ -462,9 +503,13 @@ export interface IResource<
     TMiddleware
   >;
   register:
-    | Array<RegisterableItems>
-    | ((config: TConfig) => Array<RegisterableItems>);
-  overrides: Array<OverridableElements>;
+    | Array<RegisterableItem>
+    | ((config: TConfig, mode: RunnerMode) => Array<RegisterableItem>);
+  /** Safe override declarations applied to this resource. */
+  overrides:
+    | Array<OverridableElements>
+    | ((config: TConfig, mode: RunnerMode) => Array<OverridableElements>);
+  /** Normalized middleware attachments applied to the resource lifecycle. */
   middleware: TMiddleware;
   [symbolFilePath]: string;
   [symbolResource]: true;
@@ -473,7 +518,7 @@ export interface IResource<
   /** Present only on forked resources. */
   [symbolForkedFrom]?: ResourceForkInfo;
   /** Normalized list of error ids declared via `throws`. */
-  throws?: readonly string[];
+  throws?: NormalizedThrowsList;
   /**
    * Wiring isolation policy for this resource and its subtree.
    */
@@ -504,6 +549,7 @@ export interface IResource<
       TMiddleware
     >
   >;
+  /** Normalized tags attached to the resource. */
   tags: TTags;
   /**
    * Create a new resource with a different id but the same definition.
@@ -539,7 +585,6 @@ export interface IResourceWithConfig<
   /** The id of the underlying resource. */
   id: string;
   path?: string;
-  [symbolRuntimeId]?: string;
   /** The underlying resource definition. */
   resource: IResource<
     TConfig,

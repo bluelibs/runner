@@ -14,6 +14,7 @@ import type { Store } from "./Store";
 import type { TaskRunner } from "./TaskRunner";
 import {
   lazyResourceAccessDisabledError,
+  lazyResourceShutdownAccessError,
   lazyResourceSyncAccessError,
   runResultDisposeDuringBootstrapError,
   runResultDisposedError,
@@ -35,6 +36,7 @@ import {
 import { globalResources } from "../globals/globalResources";
 import type { ITimers } from "../types/timers";
 import { RuntimeRecoveryController } from "./runtime/RuntimeRecoveryController";
+import { resolveRequestedIdFromStore } from "./StoreLookup";
 
 /**
  * Options for configuring lazy resource loading behavior.
@@ -180,6 +182,13 @@ export class RunResult<V> implements IRuntime<V> {
   }
 
   /**
+   * Returns the runtime mode (e.g., "test", "dev", "prod") as specified in run options.
+   */
+  public get mode() {
+    return this.runOptions.mode;
+  }
+
+  /**
    * Returns the root value initialized by the root resource.
    * Only available after the root resource has been initialized.
    */
@@ -192,6 +201,9 @@ export class RunResult<V> implements IRuntime<V> {
     return this.getRuntimeState();
   }
 
+  /**
+   * Returns the root definition that started the runtime.
+   */
   public get root(): IResource<any, Promise<V>, any, any, any> {
     return this.getRootOrThrow().resource as IResource<
       any,
@@ -399,12 +411,10 @@ export class RunResult<V> implements IRuntime<V> {
       return Promise.reject(e);
     }
 
-    return this.eventManager.emit(
-      event,
-      payload,
-      runtimeSource.runtime("runtime.api"),
-      options,
-    );
+    return this.eventManager.emit(event, payload, {
+      source: runtimeSource.runtime("runtime.api"),
+      ...(options ?? {}),
+    });
   }) as {
     <P>(
       event: IEvent<P> | string,
@@ -505,6 +515,7 @@ export class RunResult<V> implements IRuntime<V> {
     }
 
     this.assertRuntimeAccess(resourceId, "Resource");
+    this.assertLazyResourceWakeupAllowed(resourceId);
 
     if (!this.lazyOptions.lazyResourceLoader) {
       return this.store.resources.get(resourceId)!.value;
@@ -514,6 +525,20 @@ export class RunResult<V> implements IRuntime<V> {
       Output extends Promise<infer U> ? U : Output
     >(resourceId);
   };
+
+  private assertLazyResourceWakeupAllowed(resourceId: string): void {
+    const phase = this.store.getLifecycleAdmissionController().getPhase();
+    if (
+      phase === RuntimeLifecyclePhase.CoolingDown ||
+      phase === RuntimeLifecyclePhase.Disposing ||
+      phase === RuntimeLifecyclePhase.Drained ||
+      phase === RuntimeLifecyclePhase.Disposed
+    ) {
+      lazyResourceShutdownAccessError.throw({
+        id: this.store.findIdByDefinition(resourceId),
+      });
+    }
+  }
 
   /**
    * Retrieves the configuration that was passed to a resource.
@@ -602,11 +627,9 @@ export class RunResult<V> implements IRuntime<V> {
    * canonical id, with graceful fallback to the original string/object id.
    */
   private resolveRuntimeElementId(reference: string | { id: string }): string {
-    const resolved = this.store.resolveDefinitionId(reference);
-    if (resolved) {
-      return resolved;
-    }
-    return typeof reference === "string" ? reference : reference.id;
+    return (
+      resolveRequestedIdFromStore(this.store, reference) ?? String(reference)
+    );
   }
 
   private ensureAdmissionControlIsAvailable(): void {

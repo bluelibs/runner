@@ -19,6 +19,8 @@ import { withUserContexts } from "./contextWrapper";
 import { ExposureErrorLogKey, handleRequestError } from "./errorHandlers";
 import { getRequestId } from "../requestIdentity";
 import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
+import { runtimeSource } from "../../../types/runtimeSource";
+import { resolveRequestedIdFromStore } from "../../../models/StoreLookup";
 
 interface EventHandlerDeps {
   store: NodeExposureDeps["store"];
@@ -42,6 +44,22 @@ interface EventHandlerDeps {
   sourceResourceId?: string;
 }
 
+function resolveRequestedEventId(
+  store: NodeExposureDeps["store"],
+  eventIdInput: string,
+): string {
+  return resolveRequestedIdFromStore(store, eventIdInput) ?? eventIdInput;
+}
+
+function resolveExposureSourceId(
+  store: NodeExposureDeps["store"],
+  sourceResourceId: string,
+): string {
+  return (
+    resolveRequestedIdFromStore(store, sourceResourceId) ?? sourceResourceId
+  );
+}
+
 export const createEventHandler = (deps: EventHandlerDeps) => {
   const {
     store,
@@ -57,9 +75,8 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     authorizeEvent = () => null,
     sourceResourceId = RPC_LANES_RESOURCE_ID,
   } = deps;
-  const exposureSource = store.createRuntimeSource(
-    "resource",
-    sourceResourceId,
+  const exposureSource = runtimeSource.resource(
+    resolveExposureSourceId(store, sourceResourceId),
   );
 
   return async (
@@ -67,10 +84,8 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     res: ServerResponse,
     eventIdInput: string,
   ): Promise<void> => {
-    const eventId = store.resolveDefinitionId(eventIdInput) ?? eventIdInput;
-    const policyEventId = store.events.has(eventId)
-      ? store.toPublicId(eventId)
-      : eventIdInput;
+    const eventId = resolveRequestedEventId(store, eventIdInput);
+    const policyEventId = eventId;
     const allowAsyncContextForEvent = allowAsyncContext(policyEventId);
     const asyncContextAllowListForEvent =
       resolveAsyncContextAllowList(policyEventId);
@@ -150,14 +165,16 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
               return await eventManager.emitWithResult(
                 storeEvent.event,
                 body.value?.payload,
-                exposureSource,
+                {
+                  source: exposureSource,
+                  signal: controller.signal,
+                },
               );
             }
-            await eventManager.emit(
-              storeEvent.event,
-              body.value?.payload,
-              exposureSource,
-            );
+            await eventManager.emit(storeEvent.event, body.value?.payload, {
+              source: exposureSource,
+              signal: controller.signal,
+            });
             return undefined;
           },
           {

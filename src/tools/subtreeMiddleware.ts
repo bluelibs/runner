@@ -6,6 +6,7 @@ import type {
   SubtreeResourceMiddlewareEntry,
   SubtreeTaskMiddlewareEntry,
 } from "../defs";
+import { isResourceMiddleware, isTaskMiddleware } from "../definers/tools";
 import { getStoredSubtreePolicy } from "../definers/subtreePolicy";
 import { validationError } from "../errors";
 
@@ -23,10 +24,7 @@ type MiddlewareWithId = {
 const taskMiddlewareScopeMarker = ".middleware.task.";
 const resourceMiddlewareScopeMarker = ".middleware.resource.";
 
-function getSubtreeMiddlewareDuplicateKey(
-  _ownerResourceId: string,
-  id: string,
-): string {
+export function getSubtreeMiddlewareDuplicateKey(id: string): string {
   const taskScopeIndex = id.lastIndexOf(taskMiddlewareScopeMarker);
   if (taskScopeIndex >= 0) {
     return id.slice(taskScopeIndex + taskMiddlewareScopeMarker.length);
@@ -88,7 +86,15 @@ function throwInvalidSubtreeMiddlewareEntry(kind: MiddlewareTargetKind): never {
 function getMiddlewareAttachment<TAttachment extends MiddlewareWithId>(
   entry: MiddlewareAttachmentCandidate<TAttachment>,
 ): TAttachment | undefined {
-  if (!entry || typeof entry !== "object" || !("id" in entry)) {
+  if (!entry || typeof entry !== "object") {
+    return;
+  }
+
+  if (isTaskMiddleware(entry) || isResourceMiddleware(entry)) {
+    return entry as unknown as TAttachment;
+  }
+
+  if (!("id" in entry)) {
     return undefined;
   }
 
@@ -278,10 +284,7 @@ function resolveApplicableSubtreeMiddlewares<
         continue;
       }
 
-      const duplicateKey = getSubtreeMiddlewareDuplicateKey(
-        ownerResourceId,
-        middleware.id,
-      );
+      const duplicateKey = getSubtreeMiddlewareDuplicateKey(middleware.id);
       const existing = byMiddlewareId.get(duplicateKey);
       if (existing) {
         validationError.throw({

@@ -1,5 +1,5 @@
 import { Queue, Semaphore } from "../..";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 const flushUnhandledRejections = async (): Promise<void> => {
   await new Promise<void>((resolve) => setImmediate(resolve));
@@ -17,7 +17,7 @@ describe("Event lifecycle emissions", () => {
       const q = new Queue();
 
       q.on("finish", () => {
-        throw createMessageError();
+        throw genericError.new({ message: "" });
       });
 
       await expect(q.run(async () => "ok")).resolves.toBe("ok");
@@ -40,7 +40,7 @@ describe("Event lifecycle emissions", () => {
       const semaphore = new Semaphore(1);
 
       semaphore.on("acquired", () => {
-        throw createMessageError();
+        throw genericError.new({ message: "" });
       });
 
       await expect(semaphore.acquire()).resolves.toBeUndefined();

@@ -77,7 +77,7 @@ describe("run tag identity matching", () => {
     expect(runtime.value).toBe("right");
     expect(observations).toEqual([
       {
-        taskId: "right-task",
+        taskId: "app.right.tasks.right-task",
         leftExists: false,
         rightExists: true,
         leftScope: undefined,

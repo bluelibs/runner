@@ -5,7 +5,7 @@ import { Serializer } from "../../../../serializer";
 import * as multipartModule from "../../../exposure/multipart";
 import * as requestBodyModule from "../../../exposure/requestBody";
 import * as errorHandlers from "../../../exposure/handlers/errorHandlers";
-import { createMessageError } from "../../../../errors";
+import { genericError } from "../../../../errors";
 import { cancellationError } from "../../../../errors";
 import {
   createMockRuntimeSource,
@@ -120,7 +120,7 @@ describe("taskHandler", () => {
     const res = createRes();
     const taskRunner = {
       run: async () => {
-        throw createMessageError(ErrorMessage.Boom);
+        throw genericError.new({ message: ErrorMessage.Boom });
       },
     };
 

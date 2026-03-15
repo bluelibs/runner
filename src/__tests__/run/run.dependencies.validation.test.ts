@@ -16,7 +16,7 @@ describe("run dependency map validation", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      id: "runner.errors.validation",
+      id: "validation",
     });
   });
 
@@ -28,7 +28,7 @@ describe("run dependency map validation", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      id: "runner.errors.validation",
+      id: "validation",
     });
   });
 
@@ -81,7 +81,7 @@ describe("run dependency map validation", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      id: "runner.errors.subtreeValidationFailed",
+      id: "subtreeValidationFailed",
     });
     expect(sawNormalizedDependencies).toBe(true);
   });

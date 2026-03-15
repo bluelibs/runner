@@ -7,8 +7,15 @@ import {
 import { globalResources } from "../../globals/globalResources";
 import { globalEvents } from "../../globals/globalEvents";
 import { run } from "../../run";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 import { getPlatform } from "../../platform";
+import { runtimeSource } from "../../types/runtimeSource";
+
+async function flushMicrotasks(iterations: number = 12): Promise<void> {
+  for (let i = 0; i < iterations; i += 1) {
+    await Promise.resolve();
+  }
+}
 
 describe("run.ts shutdown hooks & error boundary", () => {
   const capturedExitCalls: number[] = [];
@@ -158,9 +165,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     if (!releaseChildInit) {
-      throw createMessageError(
-        "Expected child resource initialization to start",
-      );
+      throw genericError.new({
+        message: "Expected child resource initialization to start",
+      });
     }
     releaseChildInit();
 
@@ -216,7 +223,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
         return "ok" as const;
       },
       async dispose() {
-        throw createMessageError("dispose failed");
+        throw genericError.new({ message: "dispose failed" });
       },
     });
 
@@ -307,7 +314,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     ).rejects.toThrow(/(shutting down|disposed)/i);
 
     if (!releaseTask || !releaseEvent) {
-      throw createMessageError("Expected shutdown gates to be initialized");
+      throw genericError.new({
+        message: "Expected shutdown gates to be initialized",
+      });
     }
 
     expect(disposed).toBe(false);
@@ -443,9 +452,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     ).rejects.toThrow(/(disposed|shutting down)/i);
 
     if (!releaseTask || !releaseEvent) {
-      throw createMessageError(
-        "Expected manual dispose gates to be initialized",
-      );
+      throw genericError.new({
+        message: "Expected manual dispose gates to be initialized",
+      });
     }
 
     releaseTask();
@@ -591,7 +600,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     }
   });
 
-  it("does not wait for resource disposal when dispose budget is zero", async () => {
+  it("waits for resource disposal even when dispose budget is zero", async () => {
     let disposeCalls = 0;
     const app = defineResource({
       id: "tests-app-shutdown-dispose-budget-zero",
@@ -600,7 +609,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
       },
       async dispose() {
         disposeCalls += 1;
-        throw createMessageError("detached dispose failure");
+        throw genericError.new({ message: "dispose failure" });
       },
     });
 
@@ -613,26 +622,38 @@ describe("run.ts shutdown hooks & error boundary", () => {
       },
     });
 
-    await expect(runtime.dispose()).resolves.toBeUndefined();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await expect(runtime.dispose()).rejects.toThrow("dispose failure");
     expect(disposeCalls).toBe(1);
   });
 
-  it("stops waiting for resource disposal when dispose budget expires", async () => {
+  it("waits for resource disposal even when total budget expires first", async () => {
     jest.useFakeTimers();
 
+    let releaseCooldown: (() => void) | undefined;
+    let releaseResourceDispose: (() => void) | undefined;
+    let disposePromise: Promise<void> | undefined;
+
     try {
-      let releaseResourceDispose: (() => void) | undefined;
       let disposeStarted = false;
       let disposeCompleted = false;
+      let resolveDisposeStarted: (() => void) | undefined;
+      const disposeStartedPromise = new Promise<void>((resolve) => {
+        resolveDisposeStarted = resolve;
+      });
 
       const app = defineResource({
         id: "tests-app-shutdown-dispose-budget-resource-timeout",
         async init() {
           return "ok" as const;
         },
+        async cooldown() {
+          await new Promise<void>((resolve) => {
+            releaseCooldown = resolve;
+          });
+        },
         async dispose() {
           disposeStarted = true;
+          resolveDisposeStarted?.();
           await new Promise<void>((resolve) => {
             releaseResourceDispose = resolve;
           });
@@ -649,30 +670,116 @@ describe("run.ts shutdown hooks & error boundary", () => {
         },
       });
 
-      const disposePromise = runtime.dispose();
-      jest.advanceTimersByTime(1);
-      for (let i = 0; i < 10; i += 1) {
-        await Promise.resolve();
-      }
+      disposePromise = runtime.dispose();
+      let disposeResolved = false;
+      void disposePromise.finally(() => {
+        disposeResolved = true;
+      });
+      await flushMicrotasks();
 
       expect(disposeCompleted).toBe(false);
+      expect(disposeStarted).toBe(false);
 
       jest.advanceTimersByTime(20);
-      await Promise.resolve();
-      await expect(disposePromise).resolves.toBeUndefined();
-      for (let i = 0; i < 10; i += 1) {
-        await Promise.resolve();
-      }
-      expect(disposeStarted).toBe(true);
+      await flushMicrotasks();
       expect(disposeCompleted).toBe(false);
+      expect(disposeResolved).toBe(false);
+      expect(disposeStarted).toBe(false);
 
+      if (!releaseCooldown) {
+        throw genericError.new({
+          message: "Expected cooldown release handler",
+        });
+      }
+
+      releaseCooldown();
+      await disposeStartedPromise;
+      expect(disposeStarted).toBe(true);
       if (!releaseResourceDispose) {
-        throw createMessageError("Expected resource dispose to begin");
+        throw genericError.new({
+          message: "Expected resource dispose to begin",
+        });
       }
 
       releaseResourceDispose();
-      await Promise.resolve();
+      await flushMicrotasks();
+      await expect(disposePromise).resolves.toBeUndefined();
       expect(disposeCompleted).toBe(true);
+    } finally {
+      releaseCooldown?.();
+      releaseResourceDispose?.();
+      await disposePromise?.catch(() => undefined);
+      jest.useRealTimers();
+    }
+  });
+
+  it("awaits cooldown completion before emitting lifecycle events or disposing even after budget expires", async () => {
+    jest.useFakeTimers();
+
+    try {
+      const lifecycle: string[] = [];
+
+      const disposingHook = defineHook({
+        id: "tests-app-shutdown-cooldown-order-disposing-hook",
+        on: globalEvents.disposing,
+        async run() {
+          lifecycle.push("disposing");
+        },
+      });
+
+      const drainedHook = defineHook({
+        id: "tests-app-shutdown-cooldown-order-drained-hook",
+        on: globalEvents.drained,
+        async run() {
+          lifecycle.push("drained");
+        },
+      });
+
+      const app = defineResource({
+        id: "tests-app-shutdown-cooldown-order",
+        register: [disposingHook, drainedHook],
+        async init() {
+          return "ok" as const;
+        },
+        async cooldown() {
+          lifecycle.push("cooldown:start");
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 40);
+          });
+          lifecycle.push("cooldown:end");
+        },
+        async dispose() {
+          lifecycle.push("dispose");
+        },
+      });
+
+      const runtime = await run(app, {
+        errorBoundary: false,
+        shutdownHooks: false,
+        dispose: {
+          totalBudgetMs: 20,
+          drainingBudgetMs: 10,
+          cooldownWindowMs: 10,
+        },
+      });
+
+      const disposePromise = runtime.dispose();
+      await Promise.resolve();
+
+      jest.advanceTimersByTime(39);
+      await Promise.resolve();
+      expect(lifecycle).toEqual(["cooldown:start"]);
+
+      jest.advanceTimersByTime(1);
+      await Promise.resolve();
+      await expect(disposePromise).resolves.toBeUndefined();
+      expect(lifecycle).toEqual([
+        "cooldown:start",
+        "cooldown:end",
+        "disposing",
+        "drained",
+        "dispose",
+      ]);
     } finally {
       jest.useRealTimers();
     }
@@ -885,7 +992,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     expect(disposed).toBe(false);
 
     if (!releaseTaskGate) {
-      throw createMessageError("Expected slow task gate release handler");
+      throw genericError.new({
+        message: "Expected slow task gate release handler",
+      });
     }
 
     releaseTaskGate();
@@ -904,11 +1013,11 @@ describe("run.ts shutdown hooks & error boundary", () => {
         return "ok";
       },
       async cooldown() {
-        throw createMessageError("cooldown failed");
+        throw genericError.new({ message: "cooldown failed" });
       },
       async dispose() {
         disposeCalled = true;
-        throw createMessageError("dispose failed");
+        throw genericError.new({ message: "dispose failed" });
       },
     });
 
@@ -1086,7 +1195,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
         setTimeout(() => {
           void deps.taskRunner
             .run(drainTask, undefined, {
-              source: deps.store.createRuntimeSource("resource", drainWorker),
+              source: runtimeSource.resource(
+                deps.store.findIdByDefinition(drainWorker),
+              ),
             })
             .catch((error) => {
               taskErrors.push(error);
@@ -1117,7 +1228,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     );
 
     if (!releaseGate) {
-      throw createMessageError("Expected release gate handler");
+      throw genericError.new({ message: "Expected release gate handler" });
     }
 
     releaseGate();
@@ -1127,6 +1238,106 @@ describe("run.ts shutdown hooks & error boundary", () => {
       "cooldown",
       "task-start",
       "disposing-hook",
+      "task-end",
+      "dispose",
+    ]);
+  });
+
+  it("registers cooldown admission targets before disposing even when cooldown is slow", async () => {
+    let releaseGate: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    let resolveTaskStarted: (() => void) | undefined;
+    const taskStarted = new Promise<void>((resolve) => {
+      resolveTaskStarted = resolve;
+    });
+    const calls: string[] = [];
+    const taskErrors: unknown[] = [];
+
+    const drainTask = defineTask({
+      id: "tests-app-dispose-cooldown-slow-drain-task",
+      async run() {
+        calls.push("task-start");
+        resolveTaskStarted?.();
+        await gate;
+        calls.push("task-end");
+      },
+    });
+
+    const drainWorker = defineResource({
+      id: "tests-app-dispose-cooldown-slow-drain-worker",
+      async init() {
+        return "worker";
+      },
+    });
+
+    const disposingHook = defineHook({
+      id: "tests-app-dispose-cooldown-slow-disposing-hook",
+      on: globalEvents.disposing,
+      dependencies: {
+        store: globalResources.store,
+        taskRunner: globalResources.taskRunner,
+      },
+      async run(_event, deps) {
+        await deps.taskRunner
+          .run(drainTask, undefined, {
+            source: runtimeSource.resource(
+              deps.store.findIdByDefinition(drainWorker),
+            ),
+          })
+          .catch((error) => {
+            taskErrors.push(error);
+          });
+      },
+    });
+
+    const drainingIngress = defineResource({
+      id: "tests-app-dispose-cooldown-slow-drain-resource",
+      register: [drainTask, drainWorker, disposingHook],
+      dependencies: {
+        store: globalResources.store,
+      },
+      async init() {
+        return "ready";
+      },
+      async cooldown() {
+        calls.push("cooldown:start");
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        calls.push("cooldown:end");
+        return [drainWorker];
+      },
+      async dispose() {
+        calls.push("dispose");
+      },
+    });
+
+    const runtime = await run(drainingIngress, {
+      shutdownHooks: false,
+      errorBoundary: false,
+      dispose: {
+        totalBudgetMs: 20,
+        drainingBudgetMs: 100,
+      },
+    });
+
+    const disposePromise = runtime.dispose();
+    await taskStarted;
+
+    expect(taskErrors).toEqual([]);
+    expect(calls).toEqual(["cooldown:start", "cooldown:end", "task-start"]);
+
+    if (!releaseGate) {
+      throw genericError.new({ message: "Expected release gate handler" });
+    }
+
+    releaseGate();
+    await disposePromise;
+
+    expect(calls).toEqual([
+      "cooldown:start",
+      "cooldown:end",
+      "task-start",
       "task-end",
       "dispose",
     ]);
@@ -1177,9 +1388,8 @@ describe("run.ts shutdown hooks & error boundary", () => {
         setTimeout(() => {
           void deps.taskRunner
             .run(drainTask, undefined, {
-              source: deps.store.createRuntimeSource(
-                "resource",
-                selfDrainingResource,
+              source: runtimeSource.resource(
+                deps.store.findIdByDefinition(selfDrainingResource),
               ),
             })
             .catch((error) => {
@@ -1216,7 +1426,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
     expect(calls).toEqual(["cooldown", "task-start"]);
 
     if (!releaseGate) {
-      throw createMessageError("Expected implicit self release gate handler");
+      throw genericError.new({
+        message: "Expected implicit self release gate handler",
+      });
     }
 
     releaseGate();

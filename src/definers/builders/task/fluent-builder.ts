@@ -7,6 +7,7 @@ import type {
   TagType,
   TaskTagType,
   TaskMiddlewareAttachmentType,
+  ResolveValidationSchemaInput,
   ValidationSchemaInput,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
@@ -150,7 +151,12 @@ export function makeTaskBuilder<
       >(next);
     },
 
-    inputSchema<TNewInput>(schema: ValidationSchemaInput<TNewInput>) {
+    inputSchema<
+      TNewInput = never,
+      TSchema extends ValidationSchemaInput<
+        [TNewInput] extends [never] ? any : TNewInput
+      > = ValidationSchemaInput<[TNewInput] extends [never] ? any : TNewInput>,
+    >(schema: TSchema) {
       const next = clone<
         TInput,
         TOutput,
@@ -158,7 +164,7 @@ export function makeTaskBuilder<
         TMeta,
         TTags,
         TMiddleware,
-        TNewInput,
+        ResolveValidationSchemaInput<TNewInput, TSchema>,
         TOutput,
         TDeps,
         TMeta,
@@ -166,7 +172,7 @@ export function makeTaskBuilder<
         TMiddleware
       >(state, { inputSchema: schema });
       return makeTaskBuilder<
-        TNewInput,
+        ResolveValidationSchemaInput<TNewInput, TSchema>,
         TOutput,
         TDeps,
         TMeta,
@@ -176,11 +182,21 @@ export function makeTaskBuilder<
       >(next);
     },
 
-    schema<TNewInput>(schema: ValidationSchemaInput<TNewInput>) {
+    schema<
+      TNewInput = never,
+      TSchema extends ValidationSchemaInput<
+        [TNewInput] extends [never] ? any : TNewInput
+      > = ValidationSchemaInput<[TNewInput] extends [never] ? any : TNewInput>,
+    >(schema: TSchema) {
       return builder.inputSchema(schema);
     },
 
-    resultSchema<TResolved>(schema: ValidationSchemaInput<TResolved>) {
+    resultSchema<
+      TResolved = never,
+      TSchema extends ValidationSchemaInput<
+        [TResolved] extends [never] ? any : TResolved
+      > = ValidationSchemaInput<[TResolved] extends [never] ? any : TResolved>,
+    >(schema: TSchema) {
       const next = clone<
         TInput,
         TOutput,
@@ -189,7 +205,7 @@ export function makeTaskBuilder<
         TTags,
         TMiddleware,
         TInput,
-        Promise<TResolved>,
+        Promise<ResolveValidationSchemaInput<TResolved, TSchema>>,
         TDeps,
         TMeta,
         TTags,
@@ -197,7 +213,7 @@ export function makeTaskBuilder<
       >(state, { resultSchema: schema });
       return makeTaskBuilder<
         TInput,
-        Promise<TResolved>,
+        Promise<ResolveValidationSchemaInput<TResolved, TSchema>>,
         TDeps,
         TMeta,
         TTags,

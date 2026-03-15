@@ -35,7 +35,7 @@ export const createMockRuntimeSource = (kind: string, reference: unknown) => {
     case "hook":
       return runtimeSource.hook(id);
     case "middleware":
-      return runtimeSource.middleware(id);
+      return runtimeSource.taskMiddleware(id);
     case "resource":
       return runtimeSource.resource(id);
     default:

@@ -82,6 +82,9 @@ describe("nodeExposure auto-discovery (rpc lanes)", () => {
       register: [allowed, notAllowed, allowedEvent, communicator, lanes],
     });
     const rr = await run(app);
+    const allowedTaskId = rr.store.findIdByDefinition(allowed);
+    const notAllowedTaskId = rr.store.findIdByDefinition(notAllowed);
+    const allowedEventId = rr.store.findIdByDefinition(allowedEvent);
     const lanesValue = await rr.getResourceValue(lanes.resource as any);
     const handlers = lanesValue.exposure?.getHandlers?.();
     expect(handlers).toBeTruthy();
@@ -94,7 +97,7 @@ describe("nodeExposure auto-discovery (rpc lanes)", () => {
       const body = JSON.stringify({ input: { v: 1 } });
       const rrMock = makeJsonReqRes(
         body,
-        `/__runner/task/${encodeURIComponent(allowed.id)}`,
+        `/__runner/task/${encodeURIComponent(allowedTaskId)}`,
       );
       await handlers.handleTask(rrMock.req, rrMock.res);
       expect(rrMock.resStatus).toBe(200);
@@ -105,7 +108,7 @@ describe("nodeExposure auto-discovery (rpc lanes)", () => {
       const body = JSON.stringify({ input: { v: 1 } });
       const rrMock = makeJsonReqRes(
         body,
-        `/__runner/task/${encodeURIComponent(notAllowed.id)}`,
+        `/__runner/task/${encodeURIComponent(notAllowedTaskId)}`,
       );
       await handlers.handleTask(rrMock.req, rrMock.res);
       expect(rrMock.resStatus).toBe(403);
@@ -116,7 +119,7 @@ describe("nodeExposure auto-discovery (rpc lanes)", () => {
       const body = JSON.stringify({ payload: { n: 1 } });
       const rrMock = makeJsonReqRes(
         body,
-        `/__runner/event/${encodeURIComponent(allowedEvent.id)}`,
+        `/__runner/event/${encodeURIComponent(allowedEventId)}`,
       );
       await handlers.handleEvent(rrMock.req, rrMock.res);
       expect(rrMock.resStatus).toBe(200);

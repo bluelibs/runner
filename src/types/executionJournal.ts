@@ -5,7 +5,9 @@
 declare const journalKeyBrand: unique symbol;
 
 export type JournalKey<T> = {
+  /** Stable storage slot id used inside the journal. */
   readonly id: string;
+  /** Phantom brand preserving the key's value type in TypeScript. */
   readonly [journalKeyBrand]?: (value: T) => T;
 };
 
@@ -25,7 +27,10 @@ export interface JournalSetOptions {
  * A new journal is created for each top-level task execution unless explicitly forwarded.
  */
 export interface ExecutionJournal {
+  /** Stores a value under the given key. */
   set<T>(key: JournalKey<T>, value: T, options?: JournalSetOptions): void;
+  /** Reads a value previously stored for the given key. */
   get<T>(key: JournalKey<T>): T | undefined;
+  /** Reports whether a value exists for the given key. */
   has<T>(key: JournalKey<T>): boolean;
 }

@@ -228,7 +228,7 @@ describe("system.runtime", () => {
     const runtimeResult = await run(app, { shutdownHooks: false });
     const runtime = runtimeResult.getResourceValue(globalResources.runtime);
     const report = await runtime.getHealth([monitored]);
-    const monitoredId = runtimeResult.store.getRuntimeMetadata(monitored).path;
+    const monitoredId = runtimeResult.store.findIdByDefinition(monitored);
 
     expect(report.totals).toEqual({
       resources: 1,
@@ -263,7 +263,7 @@ describe("system.runtime", () => {
       dependencies: { runtime: globalResources.runtime },
       async init(_config, { runtime }) {
         await expect(runtime.getHealth([monitored])).rejects.toMatchObject({
-          id: "runner.errors.runtimeHealthDuringBootstrap",
+          id: "runtimeHealthDuringBootstrap",
         });
         return "ok";
       },

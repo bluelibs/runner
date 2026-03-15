@@ -11,9 +11,10 @@ import type { Store } from "../../models/Store";
 import { collectRpcTopologyLanes } from "../remote-lanes/topologyLanes";
 import {
   assignLaneTargetOrThrow,
-  readTargetId,
-  isRegisteredDefinitionId,
+  assertEventNotAssignedToOtherLane,
   collectCrossLaneApplyToEventIds,
+  isRegisteredDefinitionId,
+  readTargetId,
   toPublicPredicateCandidate,
   visitLaneApplyTo,
 } from "../remote-lanes/laneAssignmentUtils";
@@ -84,7 +85,7 @@ export function resolveEventLaneAssignments(
     // Without explicit applyTo, IoC tags must not assign the same event to both systems.
     if (globalTags.rpcLane.exists(eventEntry.event.tags)) {
       eventLaneAssignmentRpcLaneConflictError.throw({
-        eventId: store.toPublicId(eventId),
+        eventId,
         eventLaneId: laneConfig.lane.id,
       });
     }
@@ -113,7 +114,6 @@ function assignEventToLane(options: {
     rpcLaneApplyToEventIds,
     eventId,
     lane.id,
-    store,
   );
 
   assignLaneTargetOrThrow({
@@ -130,14 +130,14 @@ function assertEventIsNotExplicitlyAssignedToRpcLane(
   rpcLaneApplyToEventIds: Set<string>,
   eventId: string,
   eventLaneId: string,
-  store: Store,
 ): void {
-  if (rpcLaneApplyToEventIds.has(eventId)) {
-    eventLaneAssignmentRpcLaneConflictError.throw({
-      eventId: store.toPublicId(eventId),
-      eventLaneId,
-    });
-  }
+  assertEventNotAssignedToOtherLane({
+    conflictingEventIds: rpcLaneApplyToEventIds,
+    eventId,
+    attemptedLaneId: eventLaneId,
+    laneIdField: "eventLaneId",
+    conflictError: eventLaneAssignmentRpcLaneConflictError,
+  });
 }
 
 function resolveEventLaneTarget(
@@ -158,7 +158,7 @@ function resolveEventLaneTarget(
   if (isRegisteredDefinitionId(store, targetId)) {
     return eventLaneApplyToTargetTypeError.throw({
       laneId,
-      targetId: store.toPublicId(targetId),
+      targetId,
     });
   }
 

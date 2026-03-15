@@ -27,8 +27,16 @@ describe("requestHandlers - audit and request id", () => {
         events: new Map(),
         asyncContexts: new Map(),
         errors: new Map(),
-        resolveDefinitionId: resolveMockDefinitionId,
-        toPublicId: resolveMockDefinitionId,
+        hasDefinition(reference: unknown) {
+          const resolved = resolveMockDefinitionId(reference);
+          return typeof resolved === "string" && this.hasId(resolved);
+        },
+        hasId(id: string) {
+          return this.tasks.has(id);
+        },
+        findIdByDefinition(reference: unknown) {
+          return resolveMockDefinitionId(reference) ?? String(reference);
+        },
         createRuntimeSource: createMockRuntimeSource,
       } as unknown as RequestProcessingDeps["store"],
       taskRunner: {

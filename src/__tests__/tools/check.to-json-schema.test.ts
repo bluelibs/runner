@@ -1,18 +1,61 @@
-import {
-  CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID,
-  CheckJsonSchemaPatternError,
-  Match,
-} from "../../tools/check";
+import { CHECK_JSON_SCHEMA_UNSUPPORTED_PATTERN_ERROR_ID } from "../../tools/check";
+import { checkJsonSchemaUnsupportedPatternError } from "../../errors";
+import type { CheckJsonSchemaPatternRuntimeError } from "../../tools/check/errors";
+import { Match } from "../../decorators/legacy";
 
 const DRAFT_2020_12_SCHEMA = "https://json-schema.org/draft/2020-12/schema";
+const builtInPublicTokens = Object.freeze({
+  Integer: Match.Integer,
+  PositiveInteger: Match.PositiveInteger,
+  NonEmptyString: Match.NonEmptyString,
+  Email: Match.Email,
+  UUID: Match.UUID,
+  URL: Match.URL,
+  IsoDateString: Match.IsoDateString,
+});
+const builtInJsonSchemaExpectations = Object.freeze({
+  Integer: {
+    type: "integer",
+    minimum: -2147483648,
+    maximum: 2147483647,
+  },
+  PositiveInteger: {
+    type: "integer",
+    minimum: 0,
+  },
+  NonEmptyString: {
+    type: "string",
+    minLength: 1,
+  },
+  Email: {
+    type: "string",
+    format: "email",
+  },
+  UUID: {
+    type: "string",
+    format: "uuid",
+  },
+  URL: {
+    type: "string",
+    format: "uri",
+  },
+  IsoDateString: {
+    type: "string",
+    format: "date-time",
+    pattern:
+      "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?(?:Z|[+-]\\d{2}:\\d{2})$",
+  },
+});
 
-function expectSchemaError(run: () => unknown): CheckJsonSchemaPatternError {
+function expectSchemaError(
+  run: () => unknown,
+): CheckJsonSchemaPatternRuntimeError {
   try {
     run();
-    throw new Error("Expected CheckJsonSchemaPatternError");
+    throw new Error("Expected checkJsonSchemaUnsupportedPatternError");
   } catch (error) {
-    expect(error).toBeInstanceOf(CheckJsonSchemaPatternError);
-    return error as CheckJsonSchemaPatternError;
+    expect(checkJsonSchemaUnsupportedPatternError.is(error)).toBe(true);
+    return error as CheckJsonSchemaPatternRuntimeError;
   }
 }
 
@@ -63,6 +106,28 @@ describe("tools/check toJSONSchema", () => {
       pattern:
         "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?(?:Z|[+-]\\d{2}:\\d{2})$",
     });
+    expect(Match.toJSONSchema(Match.Range({ min: 1, max: 10 }))).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "number",
+      minimum: 1,
+      maximum: 10,
+    });
+    expect(
+      Match.toJSONSchema(Match.Range({ min: 1, max: 10, integer: true })),
+    ).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "integer",
+      minimum: 1,
+      maximum: 10,
+    });
+    expect(
+      Match.toJSONSchema(Match.Range({ min: 1, max: 10, inclusive: false })),
+    ).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "number",
+      exclusiveMinimum: 1,
+      exclusiveMaximum: 10,
+    });
     expect(Match.toJSONSchema(Match.RegExp(/^[a-z]+$/))).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
       type: "string",
@@ -91,6 +156,41 @@ describe("tools/check toJSONSchema", () => {
         "Regex flags are not represented by JSON Schema pattern and are ignored during schema export.",
       "x-runner-match-kind": "Match.RegExp",
       "x-runner-regexp-flags": "im",
+    });
+  });
+
+  it("keeps built-in token JSON Schema exports stable", () => {
+    for (const [name, expected] of Object.entries(
+      builtInJsonSchemaExpectations,
+    )) {
+      expect(
+        Match.toJSONSchema(
+          builtInPublicTokens[name as keyof typeof builtInPublicTokens],
+        ),
+      ).toEqual({
+        $schema: DRAFT_2020_12_SCHEMA,
+        ...expected,
+      });
+    }
+  });
+
+  it("converts min-only and max-only Match.Range patterns", () => {
+    expect(Match.toJSONSchema(Match.Range({ min: 1 }))).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "number",
+      minimum: 1,
+    });
+    expect(
+      Match.toJSONSchema(Match.Range({ max: 10, inclusive: false })),
+    ).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "number",
+      exclusiveMaximum: 10,
+    });
+    expect(Match.toJSONSchema(Match.Range({ min: 1, integer: true }))).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "integer",
+      minimum: 1,
     });
   });
 
@@ -310,6 +410,25 @@ describe("tools/check toJSONSchema", () => {
     });
   });
 
+  it("exports Match.WithMessage using the wrapped inner pattern", () => {
+    expect(
+      Match.toJSONSchema({
+        email: Match.WithMessage(Match.Email, "Invalid email"),
+      }),
+    ).toEqual({
+      $schema: DRAFT_2020_12_SCHEMA,
+      type: "object",
+      properties: {
+        email: {
+          type: "string",
+          format: "email",
+        },
+      },
+      required: ["email"],
+      additionalProperties: false,
+    });
+  });
+
   it("fails fast for unsupported patterns with path metadata in strict mode", () => {
     const whereError = expectSchemaError(() =>
       Match.toJSONSchema(
@@ -402,53 +521,58 @@ describe("tools/check toJSONSchema", () => {
     );
     expect(unsupportedObjectError.path).toBe("$");
 
-    const invalidOneOf = {
-      kind: "Match.OneOfPattern",
-      parse: () => undefined,
-      patterns: "invalid",
-    };
+    const invalidOneOf = Match.OneOf(String);
+    Object.defineProperty(invalidOneOf, "patterns", {
+      value: "invalid",
+      configurable: true,
+    });
     expect(Match.toJSONSchema(invalidOneOf as never)).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
       anyOf: [],
     });
 
-    const invalidObjectIncluding = {
-      kind: "Match.ObjectIncludingPattern",
-      parse: () => undefined,
-      pattern: 123,
-    };
+    const invalidObjectIncluding = Match.ObjectIncluding({
+      value: String,
+    });
+    Object.defineProperty(invalidObjectIncluding, "pattern", {
+      value: 123,
+      configurable: true,
+    });
     const objectIncludingError = expectSchemaError(() =>
       Match.toJSONSchema(invalidObjectIncluding as never),
     );
     expect(objectIncludingError.path).toBe("$");
     expect(objectIncludingError.reason).toContain("plain object pattern");
 
-    const invalidObjectStrict = {
-      kind: "Match.ObjectStrictPattern",
-      parse: () => undefined,
-      pattern: 123,
-    };
+    const invalidObjectStrict = Match.ObjectStrict({
+      value: String,
+    });
+    Object.defineProperty(invalidObjectStrict, "pattern", {
+      value: 123,
+      configurable: true,
+    });
     const objectStrictError = expectSchemaError(() =>
       Match.toJSONSchema(invalidObjectStrict as never),
     );
     expect(objectStrictError.path).toBe("$");
     expect(objectStrictError.reason).toContain("plain object pattern");
 
-    const invalidMapOf = {
-      kind: "Match.MapOfPattern",
-      parse: () => undefined,
-    };
+    const invalidMapOf = Match.MapOf(String);
+    Object.defineProperty(invalidMapOf, "pattern", {
+      value: undefined,
+      configurable: true,
+    });
     expect(Match.toJSONSchema(invalidMapOf as never)).toEqual({
       $schema: DRAFT_2020_12_SCHEMA,
       type: "object",
       additionalProperties: {},
     });
 
-    const invalidRegExpPattern = {
-      kind: "Match.RegExpPattern",
-      parse: () => undefined,
-      expression: 123,
-    };
+    const invalidRegExpPattern = Match.RegExp(/^value$/);
+    Object.defineProperty(invalidRegExpPattern, "expression", {
+      value: 123,
+      configurable: true,
+    });
     const regexpPatternError = expectSchemaError(() =>
       Match.toJSONSchema(invalidRegExpPattern as never),
     );
@@ -642,32 +766,32 @@ describe("tools/check toJSONSchema", () => {
   });
 
   it("fails fast for invalid lazy and class pattern internals in toJSONSchema", () => {
-    const invalidLazy = {
-      kind: "Match.LazyPattern",
-      parse: () => undefined,
-      resolve: 123,
-    };
+    const invalidLazy = Match.Lazy(() => String);
+    Object.defineProperty(invalidLazy, "resolve", {
+      value: 123,
+      configurable: true,
+    });
     const lazyError = expectSchemaError(() =>
       Match.toJSONSchema(invalidLazy as never),
     );
     expect(lazyError.reason).toContain("resolver");
 
-    const invalidClass = {
-      kind: "Match.ClassPattern",
-      parse: () => undefined,
-      ctor: class ValidClass {},
-      options: 123,
-    };
+    class ValidClass {}
+    const invalidClass = Match.fromSchema(ValidClass);
+    Object.defineProperty(invalidClass, "options", {
+      value: 123,
+      configurable: true,
+    });
     const classError = expectSchemaError(() =>
       Match.toJSONSchema(invalidClass as never),
     );
     expect(classError.reason).toContain("class constructor");
 
-    const invalidClassCtor = {
-      kind: "Match.ClassPattern",
-      parse: () => undefined,
-      ctor: 123,
-    };
+    const invalidClassCtor = Match.fromSchema(ValidClass);
+    Object.defineProperty(invalidClassCtor, "ctor", {
+      value: 123,
+      configurable: true,
+    });
     const classCtorError = expectSchemaError(() =>
       Match.toJSONSchema(invalidClassCtor as never),
     );

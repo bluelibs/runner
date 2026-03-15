@@ -13,7 +13,7 @@ import {
   okTask,
   sleepingExecution,
 } from "./DurableService.unit.helpers";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 import { Logger, type ILog } from "../../../models/Logger";
 
 describe("durable: DurableService — polling & lifecycle (unit)", () => {
@@ -135,9 +135,9 @@ describe("durable: DurableService — polling & lifecycle (unit)", () => {
             resolveFirstAssigned = true;
           });
         }
-        throw createMessageError(
-          "getReadyTimers should not be called after stop",
-        );
+        throw genericError.new({
+          message: "getReadyTimers should not be called after stop",
+        });
       }
     }
 
@@ -153,7 +153,9 @@ describe("durable: DurableService — polling & lifecycle (unit)", () => {
     await service.stop();
 
     if (!resolveFirstAssigned) {
-      throw createMessageError("Expected getReadyTimers to have been called");
+      throw genericError.new({
+        message: "Expected getReadyTimers to have been called",
+      });
     }
     resolveFirst([]);
 
@@ -252,7 +254,7 @@ describe("durable: DurableService — polling & lifecycle (unit)", () => {
       public shouldThrow = false;
       override async getReadyTimers(now?: Date) {
         if (this.shouldThrow) {
-          throw createMessageError("boom");
+          throw genericError.new({ message: "boom" });
         }
         return super.getReadyTimers(now);
       }

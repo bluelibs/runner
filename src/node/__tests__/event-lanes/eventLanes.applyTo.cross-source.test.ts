@@ -1,26 +1,21 @@
 import { defineResource, r, run } from "../../..";
-import { markFrameworkDefinition } from "../../../definers/markFrameworkDefinition";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import { RPC_LANES_RESOURCE_ID } from "../../rpc-lanes/rpcLanes.resource";
 
-const fakeRpcLanesState = defineResource<any, Promise<null>>(
-  markFrameworkDefinition({
-    id: RPC_LANES_RESOURCE_ID,
-    init: async () => null,
-  }),
-);
+const fakeRpcLanesState = defineResource({
+  id: RPC_LANES_RESOURCE_ID,
+  configSchema: {
+    parse: (value: unknown) => value,
+  },
+  init: async () => null,
+});
 
 describe("eventLanes applyTo cross-source topology checks", () => {
   it("detects rpc lane assignment from string applyTo ids in topology state", async () => {
-    const event = r
-      .event("tests-event-lanes-apply-to-rpc-string-event")
-      .build();
-    const lane = r
-      .eventLane("tests-event-lanes-apply-to-rpc-string-event-lane")
-      .applyTo([event])
-      .build();
+    const event = r.event("cross-event").build();
+    const lane = r.eventLane("cross-lane").applyTo([event]).build();
     const app = r
-      .resource("tests-event-lanes-apply-to-rpc-string-app")
+      .resource("cross-app")
       .register([
         event,
         fakeRpcLanesState.with({
@@ -28,10 +23,7 @@ describe("eventLanes applyTo cross-source topology checks", () => {
             profiles: { client: { serve: [] } },
             bindings: [
               {
-                lane: r
-                  .rpcLane("tests-event-lanes-apply-to-rpc-string-rpc")
-                  .applyTo([event.id])
-                  .build(),
+                lane: r.rpcLane("cross-rpc").applyTo([event.id]).build(),
               },
             ],
           },
@@ -48,7 +40,7 @@ describe("eventLanes applyTo cross-source topology checks", () => {
       .build();
 
     await expect(run(app)).rejects.toThrow(
-      `Event "${event.id}" cannot be assigned to eventLane "${lane.id}" because it is already assigned to an rpcLane.`,
+      /Event ".*cross-event" cannot be assigned to eventLane "cross-lane" because it is already assigned to an rpcLane\./,
     );
   });
 

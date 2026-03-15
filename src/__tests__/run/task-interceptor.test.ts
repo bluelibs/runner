@@ -31,8 +31,9 @@ describe("Per-task interceptors inside resources", () => {
     });
     const rr = await run(appHarness);
     const installerValue = rr.getResourceValue(installer);
+    const installerId = rr.store.findIdByDefinition(installer);
     expect(installerValue.adder.getInterceptingResourceIds()).toEqual([
-      installer.id,
+      installerId,
     ]);
 
     const result = await rr.runTask(adder, { value: 10 });
@@ -79,9 +80,11 @@ describe("Per-task interceptors inside resources", () => {
 
     const rr = await run(appHarness);
     const firstInstallerValue = rr.getResourceValue(firstInstaller);
+    const firstInstallerId = rr.store.findIdByDefinition(firstInstaller);
+    const secondInstallerId = rr.store.findIdByDefinition(secondInstaller);
     expect(firstInstallerValue.adder.getInterceptingResourceIds()).toEqual([
-      firstInstaller.id,
-      secondInstaller.id,
+      firstInstallerId,
+      secondInstallerId,
     ]);
 
     const result = await rr.runTask(adder, { value: 10 });
@@ -147,7 +150,8 @@ describe("taskRunner.intercept()", () => {
             return `filtered:${result}`;
           },
           {
-            when: (taskDefinition) => taskDefinition.id === matchedTask.id,
+            when: (taskDefinition) =>
+              taskDefinition.id.endsWith(`.${matchedTask.id}`),
           },
         );
         return undefined;

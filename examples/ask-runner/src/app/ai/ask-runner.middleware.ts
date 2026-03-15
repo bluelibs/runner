@@ -1,4 +1,4 @@
-import { Match, r } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 import { aiDocsPrompt } from "./ai-docs.resource";
 import { estimateProjectedCostUsd } from "../http/query-request";
@@ -23,10 +23,6 @@ interface AskRunnerBudgetedOutput {
     output_tokens?: number;
   } | null;
 }
-
-export const streamWriterSchema = Match.ObjectIncluding({
-  write: Function,
-});
 
 export const askRunnerBudgetMiddleware = r.middleware
   .task<void, AskRunnerBudgetedInput, AskRunnerBudgetedOutput>(

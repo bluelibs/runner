@@ -68,8 +68,6 @@ export const symbolTag: unique symbol = Symbol.for("runner.tag");
 export const symbolDefinitionIdentity: unique symbol = Symbol.for(
   "runner.definitionIdentity",
 );
-/** @internal Run-scoped canonical id stamped onto runtime-facing objects. */
-export const symbolRuntimeId: unique symbol = Symbol.for("runner.runtimeId");
 export const symbolTagConfigured: unique symbol = Symbol.for(
   "runner.tagConfigured",
 );
@@ -89,11 +87,6 @@ export const symbolOptionalDependency: unique symbol = Symbol.for(
 
 /** @internal Path to aid anonymous id generation and error messages */
 export const symbolFilePath: unique symbol = Symbol.for("runner.filePath");
-
-/** @internal Marks framework-owned definitions allowed to use reserved dotted namespaces. */
-export const symbolFrameworkDefinition: unique symbol = Symbol.for(
-  "runner.frameworkDefinition",
-);
 
 /** @internal Marks an async context definition */
 export const symbolAsyncContext: unique symbol = Symbol.for(

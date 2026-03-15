@@ -122,6 +122,19 @@ describe("Context System", () => {
     expect(maybe).toBeDefined();
   });
 
+  test("tryUse() and has() provide safe optional access", async () => {
+    expect(TestContext.tryUse()).toBeUndefined();
+    expect(TestContext.has()).toBe(false);
+
+    await TestContext.provide({ id: "safe" }, async () => {
+      expect(TestContext.tryUse()).toEqual({ id: "safe" });
+      expect(TestContext.has()).toBe(true);
+    });
+
+    expect(TestContext.tryUse()).toBeUndefined();
+    expect(TestContext.has()).toBe(false);
+  });
+
   test("require() returns middleware attachment", () => {
     const req = TestContext.require();
     expect(req).toBeDefined();

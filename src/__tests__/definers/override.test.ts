@@ -7,6 +7,7 @@ import {
   defineResourceMiddleware,
   defineTaskMiddleware,
 } from "../../define";
+import { RunnerMode } from "../../types/runner";
 
 describe("override() helper", () => {
   it("should preserve id and override run for tasks", async () => {
@@ -159,7 +160,7 @@ describe("override() helper", () => {
       .overrides([viaAlias, viaNamespace])
       .build();
 
-    await expect(run(app)).rejects.toThrow(
+    await expect(run(app, { mode: RunnerMode.DEV })).rejects.toThrow(
       'Override target "test-alias-task" is declared more than once.',
     );
   });
@@ -199,7 +200,9 @@ describe("override() helper", () => {
       runtimeOverride(base, {
         run: async () => "changed",
       }),
-    ).toThrow(/second argument must be a function/);
+    ).toThrow(
+      /resource patch objects are supported only when the base is a resource/,
+    );
   });
 
   it("should reject patch-form defineOverride usage at runtime", () => {
@@ -217,7 +220,9 @@ describe("override() helper", () => {
       runtimeDefineOverride(base, {
         run: async () => "changed",
       }),
-    ).toThrow(/second argument must be a function/);
+    ).toThrow(
+      /resource patch objects are supported only when the base is a resource/,
+    );
   });
 
   it("should throw when fn shorthand is provided with an unrecognized base type", () => {
@@ -244,5 +249,51 @@ describe("override() helper", () => {
 
     const result = await run(app);
     expect(result.value).toBe("changed");
+  });
+
+  it("supports defineOverride resource object form", async () => {
+    const calls: string[] = [];
+    const baseResource = defineResource<
+      { name: string },
+      Promise<string>,
+      {},
+      { disposed: boolean; marker: string }
+    >({
+      id: "test-override-define-resource-object-form-base",
+      context: () => ({ disposed: false, marker: "base" }),
+      init: async (config, _deps, context) => {
+        context.marker = config.name;
+        return `base:${config.name}`;
+      },
+      dispose: async (_value, _config, _deps, context) => {
+        calls.push(`base-dispose:${context.marker}`);
+      },
+    });
+
+    const highLevelOverride = defineOverride(baseResource, {
+      context: () => ({ disposed: false, marker: "override" }),
+      init: async (config, _deps, context) => {
+        context.marker = `patched:${config.name}`;
+        return context.marker;
+      },
+      dispose: async (_value, _config, _deps, context) => {
+        context.disposed = true;
+        calls.push(`override-dispose:${context.marker}:${context.disposed}`);
+      },
+    });
+
+    const app = defineResource({
+      id: "test-override-define-resource-object-form-app",
+      register: [baseResource.with({ name: "alpha" })],
+      overrides: [highLevelOverride],
+      dependencies: { baseResource },
+      init: async (_config, deps) => deps.baseResource,
+    });
+
+    const result = await run(app);
+    expect(result.value).toBe("patched:alpha");
+    await result.dispose();
+
+    expect(calls).toEqual(["override-dispose:patched:alpha:true"]);
   });
 });

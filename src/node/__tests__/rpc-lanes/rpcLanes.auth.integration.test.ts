@@ -8,7 +8,7 @@ import { rpcLanesResource } from "../../rpc-lanes";
 import { r } from "../../../public";
 import { issueRemoteLaneToken } from "../../remote-lanes/laneAuth";
 import { runtimeSource } from "../../../types/runtimeSource";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 describe("rpcLanes auth", () => {
   const allocatePort = async (): Promise<number> => {
@@ -19,7 +19,7 @@ describe("rpcLanes auth", () => {
     });
     const address = probe.address();
     if (!address || typeof address === "string") {
-      throw createMessageError("Could not allocate test port.");
+      throw genericError.new({ message: "Could not allocate test port." });
     }
     await new Promise<void>((resolve, reject) => {
       probe.close((error) => {
@@ -104,7 +104,7 @@ describe("rpcLanes auth", () => {
     });
 
     await expect(run(app)).rejects.toMatchObject({
-      name: "runner.errors.remoteLanes.auth.signerMissing",
+      name: "remoteLanes-auth-signerMissing",
     });
   });
 

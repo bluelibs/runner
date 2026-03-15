@@ -1,7 +1,7 @@
 import { RedisEventBus } from "../../durable/bus/RedisEventBus";
 import type * as IoredisMod from "../../durable/optionalDeps/ioredis";
 import type * as AmqplibMod from "../../durable/optionalDeps/amqplib";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 describe("durable: optional deps helpers", () => {
   it("createIORedisClient() throws when ioredis is missing", () => {
@@ -10,7 +10,7 @@ describe("durable: optional deps helpers", () => {
       jest.doMock(
         "ioredis",
         () => {
-          throw createMessageError("Cannot find module 'ioredis'");
+          throw genericError.new({ message: "Cannot find module 'ioredis'" });
         },
         { virtual: true },
       );
@@ -119,7 +119,7 @@ describe("durable: optional deps helpers", () => {
     jest.doMock(
       "amqplib",
       () => {
-        throw createMessageError("Cannot find module 'amqplib'");
+        throw genericError.new({ message: "Cannot find module 'amqplib'" });
       },
       { virtual: true },
     );

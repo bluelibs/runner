@@ -69,3 +69,21 @@ export type {
 export type { ResourceCooldownAdmissionTargets } from "./types/resource";
 
 export type { ITimerHandle, ITimers } from "./types/timers";
+
+/**
+ * Minimal tenant identity contract used by Runner's built-in tenant async context.
+ */
+export interface ITenant {
+  /**
+   * Stable non-empty tenant identifier used to partition tenant-aware state.
+   */
+  tenantId: string;
+}
+
+/**
+ * Value carried by `asyncContexts.tenant`.
+ *
+ * Augment this interface when your app needs extra tenant metadata to flow
+ * through `tenant.provide()`, `tenant.use()`, and `tenant.tryUse()`.
+ */
+export interface TenantContextValue extends ITenant {}

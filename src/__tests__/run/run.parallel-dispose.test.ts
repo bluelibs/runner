@@ -1,7 +1,7 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
 import { ResourceLifecycleMode } from "../../types/runner";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("run parallel disposal lifecycle", () => {
   it("runs cooldown in reverse waves and same-wave parallel before disposal", async () => {
@@ -140,7 +140,7 @@ describe("run parallel disposal lifecycle", () => {
       },
       async dispose() {
         calls.push("a");
-        throw createMessageError("a dispose failed");
+        throw genericError.new({ message: "a dispose failed" });
       },
     });
 

@@ -1,4 +1,6 @@
 import {
+  Errors,
+  Match,
   defineAsyncContext,
   defineEvent,
   defineEventLane,
@@ -26,6 +28,7 @@ import {
   isTagStartup,
   isTask,
   isTaskMiddleware,
+  errors,
   r,
   scope,
   subtreeOf,
@@ -96,7 +99,10 @@ describe("public barrel coverage", () => {
     expect(isOverrideDefinition(override)).toBe(true);
     expect(isSubtreeFilter(filter)).toBe(true);
     expect(isIsolationScope(scoped)).toBe(true);
-    expect(asyncContexts.execution.id).toBe("asyncContexts.execution");
+    expect(asyncContexts.execution.id).toBe("executionContext");
+    expect(errors.matchError.id).toBe("matchError");
+    expect(Errors.matchError.id).toBe("matchError");
+    expect("Error" in (Match as Record<string, unknown>)).toBe(false);
     expect(isTask({ id: "plain-object" })).toBe(false);
   });
 });

@@ -109,7 +109,7 @@ Security contact: theodor@bluelibs.com
 ## Compatibility & Environments
 
 - TypeScript-first (strong types across tasks/resources/events)
-- Node.js: `>=18` (matches package engines)
+- Node.js: `>=22` (matches package engines)
 - TypeScript: `5.6+` recommended for best type inference and tooling parity
 - Integrations:
   - HTTP servers (e.g., Express)

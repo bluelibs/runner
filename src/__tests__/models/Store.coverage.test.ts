@@ -1,40 +1,27 @@
-import { defineResource } from "../../define";
-import { validationError } from "../../errors";
-import { createFrameworkRootResource } from "../../models/createFrameworkRootGateway";
-import { symbolRuntimeId } from "../../types/symbols";
+import { defineEvent, defineResource } from "../../define";
+import { runtimeElementNotFoundError, validationError } from "../../errors";
+import { createSyntheticFrameworkRoot } from "../../models/createSyntheticFrameworkRoot";
 import { runtimeSource } from "../../types/runtimeSource";
 import { createTestFixture } from "../test-utils";
 
 describe("Store coverage", () => {
-  it("derives runtime metadata from stamped ids and literal strings", () => {
+  it("finds canonical ids from registered definitions and literal strings", () => {
     const { store } = createTestFixture();
-    const registry = (store as unknown as { registry: any }).registry;
-    const stamped = {
-      id: "ignored",
-      [symbolRuntimeId]: "tasks.store-coverage-runtime",
-    };
-
-    jest
-      .spyOn(registry, "getDisplayId")
-      .mockImplementation((id: unknown) =>
-        id === "tasks.store-coverage-runtime" ? "store-coverage-runtime" : id,
-      );
-
-    expect(store.getRuntimeDefinitionId(stamped)).toBe(
-      "tasks.store-coverage-runtime",
-    );
-    expect(store.getRuntimeMetadata(stamped)).toEqual({
+    const definition = defineResource({
       id: "store-coverage-runtime",
-      path: "tasks.store-coverage-runtime",
-      runtimeId: "tasks.store-coverage-runtime",
     });
-    expect(store.toPublicPath(stamped)).toBe("tasks.store-coverage-runtime");
-    expect(store.createRuntimeSource("runtime", "runtime.literal")).toEqual(
+
+    store.storeGenericItem(definition);
+    const canonicalId = Array.from(store.resources.keys())[0]!;
+
+    expect(store.findIdByDefinition(definition)).toBe(canonicalId);
+    expect(store.findIdByDefinition(canonicalId)).toBe(canonicalId);
+    expect(runtimeSource.runtime("runtime.literal")).toEqual(
       runtimeSource.runtime("runtime.literal"),
     );
   });
 
-  it("falls back to raw ids for owner lookup and fails fast on unresolved public ids", () => {
+  it("falls back to raw ids for owner lookup and fails fast on unresolved lookups", () => {
     const { store } = createTestFixture();
     const registry = (store as unknown as { registry: any }).registry;
     const ownerSpy = jest.spyOn(
@@ -42,46 +29,54 @@ describe("Store coverage", () => {
       "getOwnerResourceId",
     );
 
-    jest.spyOn(store, "resolveDefinitionId").mockReturnValue(undefined);
-
     expect(store.getOwnerResourceId("store-coverage-raw")).toBeUndefined();
     expect(ownerSpy).toHaveBeenCalledWith("store-coverage-raw");
-    expect(() => store.toPublicId({ invalid: true } as any)).toThrow(
-      /Unable to resolve a definition id/,
+    jest.spyOn(registry, "resolveDefinitionId").mockReturnValueOnce(undefined);
+    expect(store.getOwnerResourceId("store-coverage-fallback")).toBeUndefined();
+    expect(ownerSpy).toHaveBeenCalledWith("store-coverage-fallback");
+    expect(() => store.findIdByDefinition({ invalid: true } as any)).toThrow(
+      /Expected non-empty string, got (undefined|null) at \$\./,
+    );
+    jest
+      .spyOn(registry, "resolveDefinitionId")
+      .mockReturnValue("missing.alias");
+    expect(() => store.findIdByDefinition("store-coverage-source-id")).toThrow(
+      'Definition "store-coverage-source-id" not found.',
+    );
+    expect(() => store.findDefinitionById("store-coverage-missing")).toThrow(
+      'Definition "store-coverage-missing" not found.',
     );
   });
 
-  it("strips the internal framework root prefix from public ids", () => {
+  it("resolves canonical ids for owner lookup when aliases exist", () => {
     const { store } = createTestFixture();
     const registry = (store as unknown as { registry: any }).registry;
-    const frameworkChild = {
-      id: "ignored-framework-child",
-      [symbolRuntimeId]: "runtime-framework-root.framework-child-x",
-    };
+    const canonicalId = "store-coverage-owned-root.resources.owned";
+    jest.spyOn(registry, "resolveDefinitionId").mockReturnValue(canonicalId);
+    const ownerSpy = jest
+      .spyOn(registry.visibilityTracker, "getOwnerResourceId")
+      .mockReturnValue("store-coverage-owner");
+
+    expect(store.getOwnerResourceId("owned")).toBe("store-coverage-owner");
+    expect(ownerSpy).toHaveBeenCalledWith(canonicalId);
+  });
+
+  it("keeps framework-root canonical ids unchanged", () => {
+    const { store } = createTestFixture();
+    const registry = (store as unknown as { registry: any }).registry;
+    const frameworkChild = { id: "framework-child-x" };
+    const hasIdSpy = jest.spyOn(store, "hasId").mockReturnValue(true);
 
     registry.registerDefinitionAlias(
-      { id: "framework-child-x" },
+      frameworkChild,
       "runtime-framework-root.framework-child-x",
     );
 
-    expect(store.getRuntimeMetadata(frameworkChild)).toEqual({
-      id: "framework-child-x",
-      path: "runtime-framework-root.framework-child-x",
-      runtimeId: "runtime-framework-root.framework-child-x",
-    });
-  });
-
-  it("keeps non-framework ids unchanged when stripping the internal framework prefix", () => {
-    const { store } = createTestFixture();
-    const registry = (
-      store as unknown as {
-        registry: { stripFrameworkRootPrefix: (id: string) => string };
-      }
-    ).registry;
-
-    expect(registry.stripFrameworkRootPrefix("plain.resource")).toBe(
-      "plain.resource",
+    expect(store.findIdByDefinition(frameworkChild)).toBe(
+      "runtime-framework-root.framework-child-x",
     );
+
+    hasIdSpy.mockRestore();
   });
 
   it("preserves the original root resource during framework composition", () => {
@@ -89,7 +84,7 @@ describe("Store coverage", () => {
       id: "store-coverage-root-resource",
     });
 
-    const frameworkRoot = createFrameworkRootResource({
+    const frameworkRoot = createSyntheticFrameworkRoot({
       rootItem: root,
       debug: undefined,
     });
@@ -171,6 +166,119 @@ describe("Store coverage", () => {
       id: root.id,
       originalError:
         "Root resource was not registered during framework bootstrap. This indicates an inconsistent runtime setup.",
+    });
+  });
+
+  it("forwards facade event operations through registered canonical events", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager } = fixture;
+    const event = defineEvent<{ value: number }>({
+      id: "store-coverage-facade-event",
+    });
+    const source = runtimeSource.runtime("store-coverage-facade");
+    const handler = jest.fn();
+    const lifecycleReport = { report: "ok" };
+    const resultPayload = { value: 2 };
+
+    store.storeGenericItem(event);
+
+    const facade = (
+      store as unknown as {
+        createEventManagerFacade: () => {
+          enterShutdownLockdown(): void;
+          lock(): void;
+          emitLifecycle(
+            eventDefinition: unknown,
+            data: { value: number },
+            sourceDefinition: unknown,
+          ): Promise<unknown>;
+          emitWithResult(
+            eventDefinition: unknown,
+            data: { value: number },
+            sourceDefinition: unknown,
+          ): Promise<{ value: number }>;
+          addListener(eventDefinitions: unknown[], eventHandler: unknown): void;
+          hasListeners(eventDefinition: unknown): boolean;
+          readonly isLocked: boolean;
+        };
+      }
+    ).createEventManagerFacade();
+
+    const shutdownSpy = jest.spyOn(eventManager, "enterShutdownLockdown");
+    const lockSpy = jest.spyOn(eventManager, "lock");
+    const emitLifecycleSpy = jest
+      .spyOn(eventManager, "emitLifecycle")
+      .mockResolvedValue(lifecycleReport as never);
+    const emitWithResultSpy = jest
+      .spyOn(eventManager, "emitWithResult")
+      .mockResolvedValue(resultPayload);
+    const addListenerSpy = jest.spyOn(eventManager, "addListener");
+    const hasListenersSpy = jest
+      .spyOn(eventManager, "hasListeners")
+      .mockReturnValue(true);
+
+    facade.addListener([event], handler);
+    facade.enterShutdownLockdown();
+    facade.lock();
+    await expect(
+      facade.emitLifecycle(event, { value: 1 }, source),
+    ).resolves.toBe(lifecycleReport);
+    await expect(
+      facade.emitWithResult(event, resultPayload, source),
+    ).resolves.toEqual(resultPayload);
+    expect(facade.hasListeners(event)).toBe(true);
+    expect(facade.isLocked).toBe(true);
+
+    expect(shutdownSpy).toHaveBeenCalledTimes(1);
+    expect(lockSpy).toHaveBeenCalledTimes(1);
+    expect(emitLifecycleSpy).toHaveBeenCalledWith(
+      event,
+      { value: 1 },
+      {
+        source,
+      },
+    );
+    expect(emitWithResultSpy).toHaveBeenCalledWith(event, resultPayload, {
+      source,
+    });
+    expect(addListenerSpy).toHaveBeenCalledWith([event], handler, undefined);
+    expect(hasListenersSpy).toHaveBeenCalledWith(event);
+  });
+
+  it("fails fast when a facade event resolves canonically but is missing from the event registry", () => {
+    const { store } = createTestFixture();
+    const event = defineEvent({
+      id: "store-coverage-facade-missing-event",
+    });
+
+    store.storeGenericItem(event);
+    const canonicalId = store.findIdByDefinition(event);
+    const facade = (
+      store as unknown as {
+        createEventManagerFacade: () => {
+          hasListeners(eventDefinition: unknown): boolean;
+        };
+      }
+    ).createEventManagerFacade();
+
+    jest.spyOn(store.events, "get").mockImplementation((eventId) => {
+      if (eventId === canonicalId) {
+        return undefined;
+      }
+
+      return Map.prototype.get.call(store.events, eventId);
+    });
+
+    const runtimeElementNotFoundSpy = jest
+      .spyOn(Object.getPrototypeOf(runtimeElementNotFoundError), "throw")
+      .mockImplementation(() => undefined as never);
+
+    expect(() => facade.hasListeners(event)).toThrow(
+      /Cannot read properties of undefined \(reading 'id'\)/,
+    );
+    expect(runtimeElementNotFoundSpy).toHaveBeenCalledWith({
+      type: "Event",
+      elementId: canonicalId,
     });
   });
 });

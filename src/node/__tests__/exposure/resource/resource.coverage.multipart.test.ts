@@ -23,6 +23,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       register: [fileTask, exposure],
     });
     const rr = await run(app);
+    const fileTaskId = rr.store.findIdByDefinition(fileTask);
     const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----covboundaryOK";
@@ -42,7 +43,7 @@ describe("nodeExposure Coverage - Multipart", () => {
     ].join("");
 
     const rrMock = createReqRes({
-      url: `/__runner/task/${encodeURIComponent(fileTask.id)}`,
+      url: `/__runner/task/${encodeURIComponent(fileTaskId)}`,
       headers: {
         "x-runner-token": "T",
         "content-type": `multipart/form-data; boundary=${boundary}`,
@@ -75,6 +76,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       register: [fileTask, exposure],
     });
     const rr = await run(app);
+    const fileTaskId = rr.store.findIdByDefinition(fileTask);
     const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----covboundaryExtra";
@@ -94,7 +96,7 @@ describe("nodeExposure Coverage - Multipart", () => {
     ].join("");
 
     const rrMock = createReqRes({
-      url: `/__runner/task/${encodeURIComponent(fileTask.id)}`,
+      url: `/__runner/task/${encodeURIComponent(fileTaskId)}`,
       headers: {
         "x-runner-token": "T",
         "content-type": `multipart/form-data; boundary=${boundary}`,
@@ -123,6 +125,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       register: [fileTask, exposure],
     });
     const rr = await run(app);
+    const fileTaskId = rr.store.findIdByDefinition(fileTask);
     const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----covboundaryMissing";
@@ -135,7 +138,7 @@ describe("nodeExposure Coverage - Multipart", () => {
     ].join("");
 
     const rrMock = createReqRes({
-      url: `/__runner/task/${encodeURIComponent(fileTask.id)}`,
+      url: `/__runner/task/${encodeURIComponent(fileTaskId)}`,
       headers: {
         "x-runner-token": "T",
         "content-type": `multipart/form-data; boundary=${boundary}`,
@@ -164,6 +167,7 @@ describe("nodeExposure Coverage - Multipart", () => {
       register: [fileTask, exposure],
     });
     const rr = await run(app);
+    const fileTaskId = rr.store.findIdByDefinition(fileTask);
     const handlers = await rr.getResourceValue(exposure as any);
 
     const boundary = "----covboundaryArray";
@@ -183,7 +187,7 @@ describe("nodeExposure Coverage - Multipart", () => {
     ].join("");
 
     const rrMock = createReqRes({
-      url: `/__runner/task/${encodeURIComponent(fileTask.id)}`,
+      url: `/__runner/task/${encodeURIComponent(fileTaskId)}`,
       headers: {
         "x-runner-token": "T",
         "content-type": `multipart/form-data; boundary=${boundary}`,

@@ -10,7 +10,7 @@ import { debugResource } from "../../../globals/resources/debug/debug.resource";
 import { globalResources } from "../../../globals/globalResources";
 import { debug } from "../../../globals/debug";
 import { ILog } from "../../../models";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 const { verbose: levelVerbose } = debug.levels;
 
@@ -250,7 +250,7 @@ describe("runner.debug", () => {
     const failingTask = defineTask({
       id: "tests-failing-task",
       async run() {
-        throw createMessageError("boom");
+        throw genericError.new({ message: "boom" });
       },
     });
 
@@ -319,7 +319,7 @@ describe("runner.debug", () => {
     const failingResource = defineResource({
       id: "tests-failing-resource",
       async init() {
-        throw createMessageError("resource-bad");
+        throw genericError.new({ message: "resource-bad" });
       },
     });
 
@@ -465,18 +465,6 @@ describe("runner.debug", () => {
     );
     expect(taskComplete?.data).toBeUndefined();
 
-    const resourceStart = logs.find((l) =>
-      String(l.message).includes(
-        "Resource tests.flags.resource is initializing",
-      ),
-    );
-    expect(resourceStart?.data).toBeUndefined();
-
-    const resourceComplete = logs.find((l) =>
-      String(l.message).includes("Resource tests.flags.resource initialized"),
-    );
-    expect(resourceComplete?.data).toBeUndefined();
-
     const eventLog = logs.find((l) =>
       /Event .*tests-flags-event emitted/.test(String(l.message)),
     );
@@ -497,7 +485,7 @@ describe("runner.debug", () => {
     const failingTask = defineTask({
       id: "tests-failing-task-swallow",
       async run() {
-        throw createMessageError("Original Task Error");
+        throw genericError.new({ message: "Original Task Error" });
       },
     });
 

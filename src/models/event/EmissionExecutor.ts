@@ -10,6 +10,10 @@ import {
   transactionalRollbackFailureError,
 } from "../../errors";
 import { normalizeError } from "../../tools/normalizeError";
+import {
+  createCancellationErrorFromSignal,
+  throwCancellationErrorFromSignal,
+} from "../../tools/abortSignals";
 import { IListenerStorage } from "./types";
 
 interface ExecuteOptions {
@@ -17,6 +21,12 @@ interface ExecuteOptions {
   event: IEventEmission<any>;
   isPropagationStopped?: () => boolean;
   failureMode: EventEmissionFailureMode;
+}
+
+function throwIfCancelled(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throwCancellationErrorFromSignal(signal);
+  }
 }
 
 /**
@@ -81,7 +91,11 @@ export async function executeSequentially({
 }: ExecuteOptions): Promise<IEventEmitReport> {
   const report = createEmptyReport(listeners.length);
 
+  throwIfCancelled(event.signal);
+
   for (const listener of listeners) {
+    throwIfCancelled(event.signal);
+
     if (isPropagationStopped?.()) {
       report.propagationStopped = true;
       break;
@@ -137,7 +151,38 @@ export async function executeTransactionally({
     revert: HookRevertFn;
   }> = [];
 
+  throwIfCancelled(event.signal);
+
   for (const listener of listeners) {
+    const signal = event.signal;
+    if (signal?.aborted) {
+      const rollbackErrors =
+        await rollbackTransactionalListeners(listenersToRollback);
+      const cancellation = createCancellationErrorFromSignal(signal);
+
+      if (rollbackErrors.length > 0) {
+        const rollbackError = transactionalRollbackFailureError.new({
+          eventId: event.id,
+          triggerMessage: cancellation.message,
+          triggerListenerId: undefined,
+          triggerListenerOrder: undefined,
+          rollbackFailures: rollbackErrors.map((rollbackFailure) => ({
+            message: rollbackFailure.message,
+            listenerId: rollbackFailure.listenerId,
+            listenerOrder: rollbackFailure.listenerOrder,
+          })),
+        });
+
+        throw Object.assign(rollbackError, {
+          cause: cancellation,
+          triggerError: cancellation,
+          rollbackErrors,
+        });
+      }
+
+      throw cancellation;
+    }
+
     if (isPropagationStopped?.()) {
       report.propagationStopped = true;
       break;
@@ -206,6 +251,8 @@ export async function executeInParallel({
 }: Omit<ExecuteOptions, "isPropagationStopped">): Promise<IEventEmitReport> {
   const report = createEmptyReport(listeners.length);
 
+  throwIfCancelled(event.signal);
+
   if (listeners.length === 0 || event.isPropagationStopped()) {
     report.propagationStopped = event.isPropagationStopped();
     return report;
@@ -255,6 +302,8 @@ export async function executeInParallel({
       currentBatch = [];
       currentOrder = listener.order;
 
+      throwIfCancelled(event.signal);
+
       if (event.isPropagationStopped()) {
         report.propagationStopped = true;
         break;
@@ -267,6 +316,8 @@ export async function executeInParallel({
     await executeBatch(currentBatch);
   }
 
+  throwIfCancelled(event.signal);
+
   report.propagationStopped =
     report.propagationStopped || event.isPropagationStopped();
   return report;
@@ -276,7 +327,7 @@ export function shouldExecuteListener(
   listener: IListenerStorage,
   event: IEventEmission<any>,
 ): boolean {
-  if (listener.id && listener.id === event.source.path) {
+  if (listener.id && listener.id === event.source.id) {
     return false;
   }
   return !listener.filter || listener.filter(event);

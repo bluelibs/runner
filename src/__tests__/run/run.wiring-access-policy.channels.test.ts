@@ -9,7 +9,7 @@ import {
 import { scope } from "../../public";
 import { run } from "../../run";
 
-const POLICY_VIOLATION_ID = "runner.errors.isolationViolation";
+const POLICY_VIOLATION_ID = "isolationViolation";
 
 async function expectRunnerErrorId(
   promise: Promise<unknown>,

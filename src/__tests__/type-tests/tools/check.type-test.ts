@@ -1,6 +1,5 @@
 import {
   type CheckSchemaLike,
-  Match,
   check,
   type InferCheckSchema,
   type InferMatchPattern,
@@ -8,6 +7,7 @@ import {
   type MatchJsonSchema,
   type MatchPattern,
 } from "../../../";
+import { Match } from "../../../decorators/legacy";
 
 // Type-only tests for check() pattern inference and overlap safety.
 
@@ -20,6 +20,29 @@ import {
   type Inferred = InferCheckSchema<typeof schema>;
   const value: Inferred = { ok: true };
   void value;
+}
+
+{
+  const rawPattern = {
+    id: Match.NonEmptyString,
+    retries: Match.Optional(Match.Integer),
+  };
+
+  type RawPatternInfer = Match.infer<typeof rawPattern>;
+  const rawPatternValue: RawPatternInfer = { id: "u1" };
+  void rawPatternValue;
+
+  const compiledSchema = Match.compile(rawPattern);
+  type CompiledInfer = Match.infer<typeof compiledSchema>;
+  const compiledValue: CompiledInfer = { id: "u1", retries: 1 };
+  void compiledValue;
+
+  const schemaLike = {
+    parse: (_value: unknown) => ({ id: "u1", score: 1 }),
+  };
+  type SchemaLikeInfer = Match.infer<typeof schemaLike>;
+  const schemaLikeValue: SchemaLikeInfer = { id: "u1", score: 1 };
+  void schemaLikeValue;
 }
 
 {
@@ -125,6 +148,22 @@ import {
   if (Match.test(candidate, guarded)) {
     candidate.getTime();
   }
+
+  const guardedWithMessage = Match.Where(
+    (value: unknown): value is Date => value instanceof Date,
+    ({ value, error, path, pattern }) => {
+      const rawValue: unknown = value;
+      void rawValue;
+      error.path.toUpperCase();
+      path.toUpperCase();
+      const condition = pattern.condition;
+      void condition;
+      return "invalid date";
+    },
+  );
+
+  const checkedDateWithMessage = check(new Date(), guardedWithMessage);
+  checkedDateWithMessage.getTime();
 }
 
 {
@@ -171,12 +210,27 @@ import {
     const retries: number = parsed.retries;
     void retries;
   }
+
+  const candidate: unknown = { id: "u1", retries: 2 };
+  if (patternSchema.test(candidate)) {
+    candidate.id.toUpperCase();
+    if (candidate.retries !== undefined) {
+      const retries: number = candidate.retries;
+      void retries;
+    }
+  }
 }
 
 {
   const parsedInteger = Match.Integer.parse(10);
   const n: number = parsedInteger;
   void n;
+
+  const candidate: unknown = 10;
+  if (Match.Integer.test(candidate)) {
+    const narrowedInteger: number = candidate;
+    void narrowedInteger;
+  }
 
   const parsedPositiveInteger = Match.PositiveInteger.parse(10);
   const p: number = parsedPositiveInteger;
@@ -211,6 +265,24 @@ import {
   const regexB = check("runner", Match.RegExp("^runner$"));
   const regexBString: string = regexB;
   void regexBString;
+}
+
+{
+  const rangePattern = Match.Range({ min: 1, max: 3 });
+  const parsedRange = rangePattern.parse(2);
+  const rangeNumber: number = parsedRange;
+  void rangeNumber;
+
+  const candidate: unknown = 2;
+  if (rangePattern.test(candidate)) {
+    const narrowedRange: number = candidate;
+    void narrowedRange;
+  }
+
+  const integerRangePattern = Match.Range({ min: 5, max: 10, integer: true });
+  const parsedIntegerRange = integerRangePattern.parse(7);
+  const integerRangeNumber: number = parsedIntegerRange;
+  void integerRangeNumber;
 }
 
 {
@@ -311,6 +383,25 @@ import {
 }
 
 {
+  const aggregatedPattern = Match.WithErrorPolicy(
+    {
+      id: Match.NonEmptyString,
+    },
+    "all",
+  );
+
+  type AggregatedInfer = InferMatchPattern<typeof aggregatedPattern>;
+  const inferredValue: AggregatedInfer = { id: "u1" };
+  void inferredValue;
+
+  const parsed = check({ id: "u1" }, aggregatedPattern, {
+    errorPolicy: "first",
+  });
+  const id: string = parsed.id;
+  void id;
+}
+
+{
   class User {
     public name!: string;
     public items!: Item[];
@@ -345,6 +436,103 @@ import {
   void userName;
   const firstItemTitle: string = checkedUser.items[0].title;
   void firstItemTitle;
+}
+
+{
+  class RecursiveUser {
+    public name!: string;
+    public self!: RecursiveUser;
+    public children!: RecursiveUser[];
+  }
+
+  Match.Schema()(RecursiveUser);
+  Match.Field(Match.NonEmptyString)(RecursiveUser.prototype, "name");
+  Match.Field(Match.fromSchema(() => RecursiveUser))(
+    RecursiveUser.prototype,
+    "self",
+  );
+  Match.Field(Match.ArrayOf(Match.fromSchema(() => RecursiveUser)))(
+    RecursiveUser.prototype,
+    "children",
+  );
+
+  const candidateRecursiveUser = null as unknown as RecursiveUser;
+  const checkedRecursiveUser = check(
+    candidateRecursiveUser,
+    Match.fromSchema(RecursiveUser),
+  );
+
+  const recursiveName: string = checkedRecursiveUser.self.name;
+  void recursiveName;
+  const recursiveChild: RecursiveUser[] = checkedRecursiveUser.children;
+  void recursiveChild;
+}
+
+{
+  const positiveInteger = Match.Where(
+    (value: unknown): value is number =>
+      typeof value === "number" && Number.isInteger(value) && value > 0,
+  );
+
+  class JobConfig {
+    public retries!: number;
+  }
+
+  Match.Schema()(JobConfig);
+  Match.Field(
+    Match.WithMessage(positiveInteger, ({ value, error, path, pattern }) => {
+      const rawValue: unknown = value;
+      void rawValue;
+      error.path.toUpperCase();
+      path.toUpperCase();
+      const samePattern = pattern;
+      void samePattern;
+      return "invalid retries";
+    }),
+  )(JobConfig.prototype, "retries");
+
+  const parsed = check({ retries: 1 }, Match.fromSchema(JobConfig));
+  const retries: number = parsed.retries;
+  void retries;
+}
+
+{
+  const positiveInteger = Match.Where(
+    (value: unknown): value is number =>
+      typeof value === "number" && Number.isInteger(value) && value > 0,
+    ({ value, error, path, pattern }) => {
+      const rawValue: unknown = value;
+      void rawValue;
+      error.path.toUpperCase();
+      path.toUpperCase();
+      const condition = pattern.condition;
+      void condition;
+      return "invalid retries";
+    },
+  );
+
+  const parsed = check(1, positiveInteger);
+  const retries: number = parsed;
+  void retries;
+}
+
+{
+  const emailPattern = Match.WithMessage(
+    Match.Email,
+    ({ value, error, path, pattern }) => {
+      const rawValue: unknown = value;
+      void rawValue;
+      error.path.toUpperCase();
+      path.toUpperCase();
+      const samePattern = pattern;
+      void samePattern;
+      return "invalid email";
+    },
+  );
+
+  const parsed = check("dev@example.com", emailPattern);
+  const email: string = parsed;
+  void email;
 }
 
 {

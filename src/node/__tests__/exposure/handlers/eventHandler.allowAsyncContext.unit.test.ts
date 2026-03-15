@@ -18,11 +18,16 @@ function createStore(eventId: string, asyncContexts: Map<string, unknown>) {
     events: new Map([[eventId, { event: { id: eventId } }]]),
     asyncContexts,
     errors: new Map(),
-    resolveDefinitionId: resolveMockDefinitionId,
-    toPublicId: (reference: unknown) =>
-      typeof reference === "string"
-        ? reference
-        : ((reference as { id?: string })?.id ?? String(reference)),
+    hasDefinition(reference: unknown) {
+      const resolved = resolveMockDefinitionId(reference);
+      return typeof resolved === "string" && this.hasId(resolved);
+    },
+    hasId(id: string) {
+      return this.events.has(id);
+    },
+    findIdByDefinition(reference: unknown) {
+      return resolveMockDefinitionId(reference) ?? String(reference);
+    },
     createRuntimeSource: createMockRuntimeSource,
   };
 }
@@ -192,7 +197,120 @@ describe("eventHandler allowAsyncContext option", () => {
     expect(emitWithResult).toHaveBeenCalledWith(
       { id: rawEventId },
       { a: 1 },
-      expect.anything(),
+      expect.objectContaining({
+        source: expect.anything(),
+        signal: expect.any(Object),
+      }),
+    );
+  });
+
+  it("canonicalizes event ids and exposure source ids through the store contract", async () => {
+    const serializer = new Serializer();
+    const emit = jest.fn(async () => undefined);
+    jest.spyOn(requestBodyModule, "readJsonBody").mockResolvedValue({
+      ok: true,
+      value: { payload: { ok: true } },
+    });
+
+    const handler = createEventHandler({
+      store: {
+        events: new Map([
+          [
+            "app.events.user.created",
+            { event: { id: "app.events.user.created" } },
+          ],
+        ]),
+        asyncContexts: new Map(),
+        errors: new Map(),
+        hasDefinition(reference: unknown) {
+          return reference === "created" || reference === "exposure";
+        },
+        findIdByDefinition(reference: unknown) {
+          if (reference === "created") {
+            return "app.events.user.created";
+          }
+          if (reference === "exposure") {
+            return "app.resources.exposure";
+          }
+          return String(reference);
+        },
+      } as any,
+      eventManager: {
+        emit,
+        emitWithResult: async () => undefined,
+      } as any,
+      logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } as any,
+      authenticator: async () => ({ ok: true }),
+      allowList: { ensureTask: () => null, ensureEvent: jest.fn(() => null) },
+      serializer,
+      sourceResourceId: "exposure",
+    });
+
+    const { req, res } = createReqRes({
+      method: HttpMethod.Post,
+      url: "/api/event/created",
+      headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
+      body: JSON.stringify({ payload: { ok: true } }),
+    });
+
+    await handler(req, res, "created");
+
+    expect(res._status).toBe(200);
+    expect(emit).toHaveBeenCalledWith(
+      { id: "app.events.user.created" },
+      { ok: true },
+      expect.objectContaining({
+        source: {
+          kind: "resource",
+          id: "app.resources.exposure",
+        },
+        signal: expect.any(Object),
+      }),
+    );
+  });
+
+  it("falls back to raw ids when canonical resolution returns null", async () => {
+    const serializer = new Serializer();
+    const emit = jest.fn(async () => undefined);
+    jest.spyOn(requestBodyModule, "readJsonBody").mockResolvedValue({
+      ok: true,
+      value: { payload: { ok: true } },
+    });
+
+    const handler = createEventHandler({
+      store: {
+        events: new Map([["", { event: { id: "" } }]]),
+        asyncContexts: new Map(),
+        errors: new Map(),
+      } as any,
+      eventManager: { emit, emitWithResult: async () => undefined } as any,
+      logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } as any,
+      authenticator: async () => ({ ok: true }),
+      allowList: { ensureTask: () => null, ensureEvent: jest.fn(() => null) },
+      serializer,
+      sourceResourceId: "",
+    });
+
+    const { req, res } = createReqRes({
+      method: HttpMethod.Post,
+      url: "/api/event/",
+      headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
+      body: JSON.stringify({ payload: { ok: true } }),
+    });
+
+    await handler(req, res, "");
+
+    expect(res._status).toBe(200);
+    expect(emit).toHaveBeenCalledWith(
+      { id: "" },
+      { ok: true },
+      expect.objectContaining({
+        source: {
+          kind: "resource",
+          id: "",
+        },
+        signal: expect.any(Object),
+      }),
     );
   });
 });

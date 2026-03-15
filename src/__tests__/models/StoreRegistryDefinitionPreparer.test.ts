@@ -1,4 +1,5 @@
 import { StoreRegistryDefinitionPreparer } from "../../models/store-registry/StoreRegistryDefinitionPreparer";
+import { RunnerMode } from "../../types/runner";
 
 describe("StoreRegistryDefinitionPreparer", () => {
   it("throws a typed override error when override target is missing and target type is explicit", () => {
@@ -28,5 +29,26 @@ describe("StoreRegistryDefinitionPreparer", () => {
         mode: "override",
       }),
     ).toThrow(/Override target Resource "tests-override-missing-resource"/);
+  });
+
+  it("materializes dynamic overrides using the stored item config when no explicit config is provided", () => {
+    const preparer = new StoreRegistryDefinitionPreparer();
+    const item = {
+      id: "tests-preparer-dynamic-overrides",
+      config: { enabled: true },
+      overrides: (config: { enabled: boolean }, mode: RunnerMode) => [
+        `${mode}:${String(config.enabled)}`,
+      ],
+    };
+
+    const prepared = preparer.prepareFreshValue({
+      item,
+      collection: new Map<string, { resource: typeof item }>(),
+      key: "resource",
+      mode: "normal",
+      runtimeMode: RunnerMode.TEST,
+    });
+
+    expect(prepared.overrides).toEqual(["test:true"]);
   });
 });

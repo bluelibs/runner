@@ -1,6 +1,6 @@
 import { defineEvent, defineResource, defineTask } from "../../define";
 import { run } from "../../run";
-import { createMessageError } from "../../errors";
+import { genericError } from "../../errors";
 
 describe("RunResult disposal guards", () => {
   it("throws clear errors when accessed after dispose and allows idempotent double-dispose", async () => {
@@ -63,7 +63,9 @@ describe("RunResult disposal guards", () => {
     expect(secondDispose).toBe(firstDispose);
 
     if (!releaseDispose) {
-      throw createMessageError("Dispose release handler was not initialized");
+      throw genericError.new({
+        message: "Dispose release handler was not initialized",
+      });
     }
     releaseDispose();
 
@@ -86,7 +88,7 @@ describe("RunResult disposal guards", () => {
       .spyOn(runtime.store, "dispose")
       .mockImplementation(async () => {
         if (disposeSpy.mock.calls.length === 1) {
-          throw createMessageError("first dispose failure");
+          throw genericError.new({ message: "first dispose failure" });
         }
       });
 

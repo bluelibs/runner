@@ -1,5 +1,4 @@
 import { defineResource } from "../../definers/defineResource";
-import { markFrameworkDefinition } from "../../definers/markFrameworkDefinition";
 import type { Logger } from "../../models/Logger";
 import { globalTags } from "../globalTags";
 
@@ -52,15 +51,13 @@ import { globalTags } from "../globalTags";
  * Preferred access: `resources.logger`.
  * Legacy shorthand: `r.logger`.
  */
-export const loggerResource = defineResource<void, Promise<Logger>>(
-  markFrameworkDefinition({
-    id: "runner.logger",
-    meta: {
-      // We skip system tag for logger because it's part of the utility toolkit.
-      title: "Logger",
-      description:
-        "Logs all events and errors. This is meant to be used internally for most use-cases. Emits a runner.log event for each log.",
-    },
-    tags: [globalTags.system],
-  }),
-);
+export const loggerResource = defineResource<void, Promise<Logger>>({
+  id: "logger",
+  meta: {
+    // We skip system tag for logger because it's part of the utility toolkit.
+    title: "Logger",
+    description:
+      "Logs all events and errors. This is meant to be used internally for most use-cases. Emits a runner.log event for each log.",
+  },
+  tags: [globalTags.system],
+});

@@ -1,4 +1,4 @@
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 import { eventLanesResource } from "../../event-lanes/eventLanes.resource";
 import type {
   EventLaneMessage,
@@ -88,7 +88,7 @@ async function waitUntil(
   const startedAt = Date.now();
   while (!(await predicate())) {
     if (Date.now() - startedAt > timeoutMs) {
-      throw createMessageError("waitUntil timed out");
+      throw genericError.new({ message: "waitUntil timed out" });
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
@@ -141,7 +141,9 @@ describe("event-lanes: eventLanesResource", () => {
 
     expect(localHookCalls).toBe(0);
     expect(queue.enqueued).toHaveLength(1);
-    expect(queue.enqueued[0].eventId).toBe(tagged.id);
+    expect(queue.enqueued[0].eventId).toBe(
+      runtime.store.findIdByDefinition(tagged),
+    );
     expect(queue.enqueued[0].maxAttempts).toBe(1);
 
     await runtime.dispose();

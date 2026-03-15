@@ -4,7 +4,7 @@ import {
   defineTaskMiddleware,
 } from "../../../define";
 import { middleware, resources, run } from "../../../index";
-import { createMessageError } from "../../../errors";
+import { genericError } from "../../../errors";
 
 const retryJournalKeys = middleware.task.retry.journalKeys;
 const cacheJournalKeys = middleware.task.cache.journalKeys;
@@ -30,7 +30,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
 
           callCount++;
           if (callCount < 2) {
-            throw createMessageError("Transient failure");
+            throw genericError.new({ message: "Transient failure" });
           }
           return "success";
         },
@@ -143,7 +143,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
 
           callCount++;
           if (callCount < 2) {
-            throw createMessageError("Transient failure");
+            throw genericError.new({ message: "Transient failure" });
           }
           return "ok";
         },
@@ -151,7 +151,7 @@ describe("Middleware Journal Keys (Cache + Retry)", () => {
 
       const app = defineResource({
         id: "test-journal-cache-retry-app",
-        register: [resources.cache, middleware.task.cache, task],
+        register: [resources.cache, task],
       });
       const runtime = await run(app);
 
