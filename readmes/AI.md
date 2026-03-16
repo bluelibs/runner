@@ -807,11 +807,20 @@ Cycle protection comes in layers:
 - declared hook-driven event bounce graphs fail during bootstrap event-emission validation
 - dynamic runtime loops such as `task -> event -> hook -> task` need full execution-context frame tracking with `executionContext.cycleDetection` enabled to be stopped at execution time
 
-`executionContext` is Node-only in practice because it requires `AsyncLocalStorage`.
+`executionContext` requires `AsyncLocalStorage`.
+In practice that means the Node build works, and Bun or Deno can also support it
+when their runtime exposes compatible async-local storage.
+On runtimes without `AsyncLocalStorage`, `run(..., { executionContext: ... })`
+fails fast with a typed context error, and
+`asyncContexts.execution.provide()` / `record()` also throw when called
+directly.
 
 ## Async Context
 
-Defines serializable request-local application state scoped to an async execution tree (requires `AsyncLocalStorage`; Node-only in practice).
+Defines serializable request-local application state scoped to an async
+execution tree (requires `AsyncLocalStorage`).
+That includes Node, plus compatible Bun or Deno runtimes when the async-local
+primitive is available.
 This is the contract surface for business state such as tenant, auth, locale, or request metadata.
 Do not use `asyncContexts.execution` as the mental model here; that surface is for runtime tracing and happens to be implemented on top of the same async-local mechanism.
 
@@ -854,7 +863,9 @@ Runner's official same-runtime multi-tenant pattern uses `asyncContexts.tenant` 
 - Omit `tenantScope` for the default `"auto"` behavior, or set it explicitly when that helps readability.
 - Use `"off"` only for intentional cross-tenant sharing such as a truly global cache, limit bucket, or semaphore namespace.
 - Use `tenant.require()` when a task must never run outside tenant context.
-- Async context propagation is Node-only in practice. On platforms without `AsyncLocalStorage`, `provide()` still runs the callback but does not propagate tenant state, so safe accessors matter in multi-platform code.
+- Tenant propagation requires `AsyncLocalStorage`. On runtimes without it,
+  `tenant.provide()` still runs the callback but does not propagate tenant
+  state, so safe accessors matter in multi-platform code.
 
 ## Queue
 

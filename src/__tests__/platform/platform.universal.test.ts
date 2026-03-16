@@ -83,6 +83,17 @@ describe("UniversalPlatformAdapter", () => {
       expect(detectEnvironment()).toBe("node");
     });
 
+    it("prefers Deno over node compat globals", () => {
+      delete mutableGlobal.window;
+      delete mutableGlobal.document;
+      mutableGlobal.process = {
+        versions: { node: "22.0.0" },
+      };
+      mutableGlobal.Deno = {};
+
+      expect(detectEnvironment()).toBe("universal");
+    });
+
     it("should detect Deno universal environment", () => {
       delete mutableGlobal.window;
       delete mutableGlobal.document;
@@ -109,6 +120,17 @@ describe("UniversalPlatformAdapter", () => {
       delete mutableGlobal.Bun;
       mutableGlobal.process = {
         versions: { bun: "1.0.0" },
+      };
+
+      expect(detectEnvironment()).toBe("universal");
+    });
+
+    it("prefers Bun over node compat globals", () => {
+      delete mutableGlobal.window;
+      delete mutableGlobal.document;
+      delete mutableGlobal.Deno;
+      mutableGlobal.process = {
+        versions: { node: "22.0.0", bun: "1.2.0" },
       };
 
       expect(detectEnvironment()).toBe("universal");
@@ -206,6 +228,33 @@ describe("UniversalPlatformAdapter", () => {
 
       if (originalDeno === undefined) delete mutableGlobal.Deno;
       else mutableGlobal.Deno = originalDeno;
+      if (originalAddEventListener === undefined)
+        delete mutableGlobal.addEventListener;
+      else mutableGlobal.addEventListener = originalAddEventListener;
+      if (originalDocument === undefined) delete mutableGlobal.document;
+      else mutableGlobal.document = originalDocument;
+      if (originalProcess === undefined) delete mutableGlobal.process;
+      else mutableGlobal.process = originalProcess;
+    });
+
+    it("should keep Bun on GenericUniversalPlatformAdapter even with addEventListener", async () => {
+      const originalBun = mutableGlobal.Bun;
+      const originalAddEventListener = mutableGlobal.addEventListener;
+      const originalDocument = mutableGlobal.document;
+      const originalProcess = mutableGlobal.process;
+
+      delete mutableGlobal.document;
+      delete mutableGlobal.process;
+      mutableGlobal.Bun = {};
+      mutableGlobal.addEventListener = () => {};
+
+      await adapter.init();
+      expect((adapter as unknown as { inner: unknown }).inner).toBeInstanceOf(
+        GenericUniversalPlatformAdapter,
+      );
+
+      if (originalBun === undefined) delete mutableGlobal.Bun;
+      else mutableGlobal.Bun = originalBun;
       if (originalAddEventListener === undefined)
         delete mutableGlobal.addEventListener;
       else mutableGlobal.addEventListener = originalAddEventListener;

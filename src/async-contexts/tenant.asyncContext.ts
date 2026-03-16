@@ -25,10 +25,7 @@ type TenantAsyncContextAccessor = Omit<
   require(): ReturnType<typeof requireContextTaskMiddleware.with>;
 };
 
-let sharedTenantAsyncContext:
-  | IAsyncContext<TenantContextValue>
-  | null
-  | undefined;
+let sharedTenantAsyncContext: IAsyncContext<TenantContextValue> | undefined;
 let sharedTenantAsyncContextPlatform:
   | ReturnType<typeof getPlatform>
   | undefined;
@@ -37,14 +34,22 @@ function getTenantAsyncContext(): IAsyncContext<TenantContextValue> | null {
   const platform = getPlatform();
   if (sharedTenantAsyncContextPlatform !== platform) {
     sharedTenantAsyncContextPlatform = platform;
-    sharedTenantAsyncContext = platform.hasAsyncLocalStorage()
-      ? defineAsyncContext<TenantContextValue>({
-          id: TENANT_ASYNC_CONTEXT_ID,
-        })
-      : null;
+    sharedTenantAsyncContext = undefined;
   }
 
-  return sharedTenantAsyncContext ?? null;
+  if (sharedTenantAsyncContext) {
+    return sharedTenantAsyncContext;
+  }
+
+  if (!platform.hasAsyncLocalStorage()) {
+    return null;
+  }
+
+  sharedTenantAsyncContext = defineAsyncContext<TenantContextValue>({
+    id: TENANT_ASYNC_CONTEXT_ID,
+  });
+
+  return sharedTenantAsyncContext;
 }
 
 export function validateTenantContextValue(value: unknown): TenantContextValue {

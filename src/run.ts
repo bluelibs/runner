@@ -18,6 +18,7 @@ import { createRuntimeServices } from "./tools/createRuntimeServices";
 import { extractResourceAndConfig } from "./tools/extractResourceAndConfig";
 import { detectRunnerMode } from "./tools/detectRunnerMode";
 import { resolveExecutionContextConfig } from "./tools/resolveExecutionContextConfig";
+import { contextError } from "./errors";
 
 function resolveRegisteredEvent<TInput>(
   store: {
@@ -76,6 +77,21 @@ function normalizeRunOptions(options: RunOptions | undefined): Omit<
   };
 }
 
+function assertExecutionContextSupport(
+  executionContext: ResolvedRunOptions["executionContext"],
+): void {
+  if (!executionContext) {
+    return;
+  }
+
+  if (!getPlatform().hasAsyncLocalStorage()) {
+    contextError.throw({
+      details:
+        "Execution context requires AsyncLocalStorage and is not available in this environment.",
+    });
+  }
+}
+
 /**
  * This is the central function that kicks off your runner. You can run as many resources as you want in a single process, they will run in complete isolation.
  *
@@ -105,6 +121,7 @@ export async function run<C, V extends Promise<any>>(
 ): Promise<RunResult<V extends Promise<infer U> ? U : V>> {
   await getPlatform().init();
   const normalizedOptions = normalizeRunOptions(options);
+  assertExecutionContextSupport(normalizedOptions.executionContext);
 
   // --- Service creation ---
   const { resource, config } = extractResourceAndConfig(

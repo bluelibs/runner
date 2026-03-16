@@ -1,7 +1,26 @@
 import { definitions, r, defineAsyncContext } from "../..";
 import { genericError } from "../../errors";
+import {
+  getPlatform,
+  PlatformAdapter,
+  resetPlatform,
+  setPlatform,
+} from "../../platform";
 
 describe("async context builder and defineAsyncContext", () => {
+  const globalScope = globalThis as typeof globalThis & {
+    AsyncLocalStorage?: new <T>() => {
+      getStore(): T | undefined;
+      run<R>(store: T, callback: () => R): R;
+    };
+  };
+  const originalAsyncLocalStorage = globalScope.AsyncLocalStorage;
+
+  afterEach(() => {
+    globalScope.AsyncLocalStorage = originalAsyncLocalStorage;
+    resetPlatform();
+  });
+
   it("builder.build produces context with id and custom serializer/parse", () => {
     type Ctx = { id: number };
     const ctx = r
@@ -98,6 +117,38 @@ describe("async context builder and defineAsyncContext", () => {
     expect(
       (ctx as unknown as Record<symbol, any>)[definitions.symbolFilePath],
     ).toContain("asyncContext.builder.test");
+  });
+
+  it("can be defined before universal async-local storage becomes available", async () => {
+    globalScope.AsyncLocalStorage = class MockALS<T> {
+      private store: T | undefined;
+
+      getStore(): T | undefined {
+        return this.store;
+      }
+
+      run<R>(store: T, callback: () => R): R {
+        const previous = this.store;
+        this.store = store;
+        try {
+          return callback();
+        } finally {
+          this.store = previous;
+        }
+      }
+    };
+
+    setPlatform(new PlatformAdapter("universal"));
+
+    const ctx = r
+      .asyncContext<{ id: string }>("tests-ctx-lazy-universal")
+      .build();
+
+    await getPlatform().init();
+
+    await ctx.provide({ id: "acme" }, async () => {
+      expect(ctx.use()).toEqual({ id: "acme" });
+    });
   });
 
   it("fails fast when configSchema is declared after custom parse or serialize", () => {

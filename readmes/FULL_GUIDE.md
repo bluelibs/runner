@@ -108,7 +108,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | Capability                                             | Node.js | Browser | Edge | Notes                                      |
 | ------------------------------------------------------ | ------- | ------- | ---- | ------------------------------------------ |
 | Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
-| Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
+| Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires `AsyncLocalStorage`; Bun/Deno may support it via the universal build when available |
 | Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                           |
 | Remote Lanes client (`createHttpClient`)               | Full    | Full    | Full | Explicit universal client for `fetch` runtimes |
 | Remote Lanes server (`@bluelibs/runner/node`)          | Full    | None    | None | Exposes tasks/events over HTTP             |
@@ -2309,7 +2309,7 @@ const listProjects = r
 - Logging and auditing tasks that silently lose request correlation ids.
 - Hidden bugs where context is only present in some call paths.
 
-> **Platform Note:** Async context requires `AsyncLocalStorage`, which is Node-only. In browsers and edge runtimes, async context APIs are not available.
+> **Platform Note:** Async context requires `AsyncLocalStorage`. The Node build supports it directly, and compatible Bun/Deno runtimes can support it through the universal path when that primitive is available. In browsers and runtimes without async-local storage, async context APIs are not available.
 
 **What you just learned**: `requireContext` turns missing async context into an immediate, explicit failure instead of a delayed business-logic bug.
 
@@ -3102,7 +3102,7 @@ Pass as the second argument to `run(app, options)`.
 | `dryRun`           | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                                                               |
 | `lazy`             | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `lifecycleMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred.                             |
 | `lifecycleMode`    | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup/disposal scheduling strategy. Use string values directly (for example `lifecycleMode: "parallel"`), no enum import required.                                                                                                                                                                                                                                                                                                                                                            |
-| `executionContext` | `boolean \| ExecutionContextOptions`            | (default: disabled) Opt-in execution context that exposes `asyncContexts.execution`, assigns a correlation id to each top-level task/event execution, and powers inherited execution signals. `true` uses full tracing defaults. Pass an object to customize: `{ createCorrelationId?: () => string, frames?: "full" \| "off", cycleDetection?: false \| { maxDepth?: number, maxRepetitions?: number } }`. Use `frames: "off"` together with `cycleDetection: false` for lightweight signal/correlation propagation. Requires AsyncLocalStorage (Node-only); silently disabled on platforms without it. |
+| `executionContext` | `boolean \| ExecutionContextOptions`            | (default: disabled) Opt-in execution context that exposes `asyncContexts.execution`, assigns a correlation id to each top-level task/event execution, and powers inherited execution signals. `true` uses full tracing defaults. Pass an object to customize: `{ createCorrelationId?: () => string, frames?: "full" \| "off", cycleDetection?: false \| { maxDepth?: number, maxRepetitions?: number } }`. Use `frames: "off"` together with `cycleDetection: false` for lightweight signal/correlation propagation. Requires `AsyncLocalStorage`; available on the Node build and compatible Bun/Deno runtimes, and `run(...)` fails fast when you enable it on a platform without async-local storage. |
 | `mode`             | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).
@@ -4251,7 +4251,7 @@ await tenant.provide(
 
 Runner still validates `tenantId` at runtime. Extra fields are part of your app-level contract, so validate them where that metadata enters your system if correctness depends on them.
 
-> **Platform Note:** Async context propagation requires `AsyncLocalStorage`, so this same-runtime tenant pattern is Node-only in practice. On platforms without async local storage, `provide()` still runs the callback but does not propagate tenant state, so shared or frontend-compatible code should treat tenant presence as optional and use `tenant.tryUse()` or `tenant.has()` when probing.
+> **Platform Note:** Tenant propagation requires `AsyncLocalStorage`. That works on the Node build and on compatible Bun/Deno runtimes when async-local storage is exposed. On platforms without it, `provide()` still runs the callback but does not propagate tenant state, so shared or frontend-compatible code should treat tenant presence as optional and use `tenant.tryUse()` or `tenant.has()` when probing.
 ## Serialization
 
 Serialization is where data crosses boundaries: HTTP, queues, storage, or process hops.
@@ -6226,7 +6226,7 @@ interface ExecutionRecordSnapshot {
 }
 ```
 
-> **Platform Note:** Execution context relies on `AsyncLocalStorage`, so this pattern is Node-only in practice.
+> **Platform Note:** Execution context relies on `AsyncLocalStorage`. The Node build supports it directly, and compatible Bun/Deno runtimes can support it when that primitive is available.
 
 ### Observation Strategies For Integration Tests
 

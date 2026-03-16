@@ -118,4 +118,4 @@ await tenant.provide(
 
 Runner still validates `tenantId` at runtime. Extra fields are part of your app-level contract, so validate them where that metadata enters your system if correctness depends on them.
 
-> **Platform Note:** Async context propagation requires `AsyncLocalStorage`, so this same-runtime tenant pattern is Node-only in practice. On platforms without async local storage, `provide()` still runs the callback but does not propagate tenant state, so shared or frontend-compatible code should treat tenant presence as optional and use `tenant.tryUse()` or `tenant.has()` when probing.
+> **Platform Note:** Tenant propagation requires `AsyncLocalStorage`. That works on the Node build and on compatible Bun/Deno runtimes when async-local storage is exposed. On platforms without it, `provide()` still runs the callback but does not propagate tenant state, so shared or frontend-compatible code should treat tenant presence as optional and use `tenant.tryUse()` or `tenant.has()` when probing.

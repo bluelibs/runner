@@ -250,7 +250,7 @@ interface ExecutionRecordSnapshot {
 }
 ```
 
-> **Platform Note:** Execution context relies on `AsyncLocalStorage`, so this pattern is Node-only in practice.
+> **Platform Note:** Execution context relies on `AsyncLocalStorage`. The Node build supports it directly, and compatible Bun/Deno runtimes can support it when that primitive is available.
 
 ### Observation Strategies For Integration Tests
 

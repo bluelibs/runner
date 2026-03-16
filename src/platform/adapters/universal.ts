@@ -19,16 +19,16 @@ export function detectEnvironment(): PlatformId {
     addEventListener?: unknown;
   };
 
-  if (global.process?.versions?.node) {
-    return "node";
-  }
-
   if (typeof global.Deno !== "undefined") {
     return "universal";
   }
 
   if (typeof global.Bun !== "undefined" || global.process?.versions?.bun) {
     return "universal";
+  }
+
+  if (global.process?.versions?.node) {
+    return "node";
   }
 
   // Heuristics for WebWorker-like environments
@@ -67,11 +67,18 @@ export class UniversalPlatformAdapter implements IPlatformAdapter {
       document?: unknown;
       addEventListener?: unknown;
       Deno?: unknown;
+      Bun?: unknown;
+      process?: { versions?: { bun?: string } };
     };
 
-    // Deno exposes web-like globals (including addEventListener), but we keep
-    // it on the universal adapter path and let the generic adapter probe ALS.
-    if (typeof global.Deno !== "undefined") {
+    // Deno and Bun can expose a mixture of web-like and Node-like globals, but
+    // the root universal bundle should stay on the universal adapter path and
+    // let the generic adapter probe the exact capabilities it can use.
+    if (
+      typeof global.Deno !== "undefined" ||
+      typeof global.Bun !== "undefined" ||
+      typeof global.process?.versions?.bun === "string"
+    ) {
       this.inner = new GenericUniversalPlatformAdapter();
       return;
     }

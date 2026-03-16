@@ -1,8 +1,8 @@
 /* istanbul ignore file */
-import { getPlatform } from "../platform";
+import { getPlatform, IAsyncLocalStorage } from "../platform";
 import { ITaskMiddlewareConfigured } from "../defs";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
-import { contextError, platformUnsupportedFunctionError } from "../errors";
+import { contextError } from "../errors";
 import { IAsyncContext, IAsyncContextDefinition } from "../types/asyncContext";
 import type {
   InferValidationSchemaInput,
@@ -21,9 +21,37 @@ import { normalizeOptionalValidationSchema } from "./normalizeValidationSchema";
 
 export { contextError as ContextError };
 
-// The internal storage maps Context identifiers (symbols) to their values
-const platform = getPlatform();
-export const storage = platform.createAsyncLocalStorage<Map<string, unknown>>();
+let sharedStorage: IAsyncLocalStorage<Map<string, unknown>> | undefined;
+let sharedStoragePlatform: ReturnType<typeof getPlatform> | undefined;
+
+function getStorage() {
+  const platform = getPlatform();
+  if (sharedStoragePlatform !== platform) {
+    sharedStoragePlatform = platform;
+    sharedStorage = undefined;
+  }
+
+  if (sharedStorage) {
+    return sharedStorage;
+  }
+
+  if (!platform.hasAsyncLocalStorage()) {
+    return platform.createAsyncLocalStorage<Map<string, unknown>>();
+  }
+
+  sharedStorage = platform.createAsyncLocalStorage<Map<string, unknown>>();
+  return sharedStorage;
+}
+
+// The internal storage maps Context identifiers (symbols) to their values.
+export const storage = {
+  getStore() {
+    return getStorage().getStore();
+  },
+  run<R>(store: Map<string, unknown>, callback: () => R): R {
+    return getStorage().run(store, callback);
+  },
+};
 
 /** Returns the currently active store or undefined. */
 /* istanbul ignore next */
@@ -53,12 +81,6 @@ export function defineAsyncContext<T>(
   def: IAsyncContextDefinition<T>,
   filePath?: string,
 ): IAsyncContext<T> {
-  if (!platform.hasAsyncLocalStorage()) {
-    platformUnsupportedFunctionError.throw({
-      functionName: `createAsyncLocalStorage: Cannot create context ${def.id}: no async storage available in this environment`,
-    });
-  }
-
   const resolvedFilePath = filePath ?? getCallerFile();
   const ctxId = def.id;
   assertDefinitionId("Async context", ctxId);

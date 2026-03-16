@@ -52,22 +52,27 @@ type ActiveExecutionContext = {
   readonly recording?: ActiveExecutionRecording;
 };
 
-let sharedStore:
-  | IAsyncLocalStorage<ActiveExecutionContext | null>
-  | null
-  | undefined;
+let sharedStore: IAsyncLocalStorage<ActiveExecutionContext | null> | undefined;
 let sharedStorePlatform: ReturnType<typeof getPlatform> | undefined;
 
 function getSharedExecutionContextStore(): IAsyncLocalStorage<ActiveExecutionContext | null> | null {
   const platform = getPlatform();
   if (sharedStorePlatform !== platform) {
     sharedStorePlatform = platform;
-    sharedStore = platform.hasAsyncLocalStorage()
-      ? platform.createAsyncLocalStorage<ActiveExecutionContext | null>()
-      : null;
+    sharedStore = undefined;
   }
 
-  return sharedStore ?? null;
+  if (sharedStore) {
+    return sharedStore;
+  }
+
+  if (!platform.hasAsyncLocalStorage()) {
+    return null;
+  }
+
+  sharedStore =
+    platform.createAsyncLocalStorage<ActiveExecutionContext | null>();
+  return sharedStore;
 }
 
 function toSnapshot(
@@ -313,7 +318,7 @@ export async function recordExecutionContext<T>(
 
 /**
  * Tracks the full causal chain of task calls, event emissions, and hook executions.
- * Uses AsyncLocalStorage (Node-only). When ALS is unavailable, execution context is disabled.
+ * Uses AsyncLocalStorage. When ALS is unavailable, execution context is disabled.
  *
  * Replaces the former event-only CycleContext with a unified approach:
  * - Detects cycles via configurable repetition threshold (same kind+id appearing N times)

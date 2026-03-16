@@ -1,9 +1,24 @@
-import { asyncContexts } from "../../asyncContexts";
+import { asyncContexts, r, run } from "../..";
 import { contextError } from "../../errors";
-import { PlatformAdapter, resetPlatform, setPlatform } from "../../platform";
+import {
+  PlatformAdapter,
+  getPlatform,
+  resetPlatform,
+  setPlatform,
+} from "../../platform";
 
 describe("asyncContexts.execution", () => {
+  const globalScope = globalThis as typeof globalThis & {
+    AsyncLocalStorage?: new <T>() => {
+      getStore(): T | undefined;
+      run<R>(store: T, callback: () => R): R;
+    };
+  };
+  const originalAsyncLocalStorage = globalScope.AsyncLocalStorage;
+
   afterEach(() => {
+    globalScope.AsyncLocalStorage = originalAsyncLocalStorage;
+    jest.restoreAllMocks();
     resetPlatform();
   });
 
@@ -105,6 +120,10 @@ describe("asyncContexts.execution", () => {
   });
 
   it("fails fast for provide and record without async local storage", async () => {
+    const builtinSpy = jest
+      .spyOn(process, "getBuiltinModule")
+      .mockReturnValue(undefined);
+    globalScope.AsyncLocalStorage = undefined;
     setPlatform(new PlatformAdapter("universal"));
     const controller = new AbortController();
 
@@ -131,6 +150,54 @@ describe("asyncContexts.execution", () => {
       ),
     ).rejects.toThrow(
       /Execution context propagation requires AsyncLocalStorage/i,
+    );
+
+    builtinSpy.mockRestore();
+  });
+
+  it("rechecks async-local availability after platform init", async () => {
+    globalScope.AsyncLocalStorage = class MockALS<T> {
+      private store: T | undefined;
+
+      getStore(): T | undefined {
+        return this.store;
+      }
+
+      run<R>(store: T, callback: () => R): R {
+        const previous = this.store;
+        this.store = store;
+        try {
+          return callback();
+        } finally {
+          this.store = previous;
+        }
+      }
+    };
+
+    setPlatform(new PlatformAdapter("universal"));
+
+    expect(asyncContexts.execution.tryUse()).toBeUndefined();
+    await getPlatform().init();
+
+    const controller = new AbortController();
+    const result = asyncContexts.execution.provide(
+      { correlationId: "req-recheck", signal: controller.signal },
+      () => {
+        expect(asyncContexts.execution.has()).toBe(false);
+        return "ok";
+      },
+    );
+
+    expect(result).toBe("ok");
+  });
+
+  it("fails fast when run(...) enables execution context without async local storage", async () => {
+    setPlatform(new PlatformAdapter("browser"));
+
+    const app = r.resource("app").build();
+
+    await expect(run(app, { executionContext: true })).rejects.toThrow(
+      /Execution context requires AsyncLocalStorage/i,
     );
   });
 });

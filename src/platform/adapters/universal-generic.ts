@@ -14,6 +14,7 @@ interface GenericEventTarget extends Record<string, unknown> {
     listener: (event: unknown) => void,
   ) => void;
   document?: { visibilityState?: unknown };
+  AsyncLocalStorage?: new <T>() => IAsyncLocalStorage<T>;
 }
 
 // A generic, non-detecting adapter that uses globalThis listeners and no Node APIs.
@@ -33,16 +34,14 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
 
     const g = globalThis as GenericEventTarget;
 
-    // Keep universal behavior unchanged for non-Deno runtimes.
-    if (typeof g.Deno === "undefined") return;
-
     if (typeof g.AsyncLocalStorage === "function") {
       this.alsClass = g.AsyncLocalStorage as new <T>() => IAsyncLocalStorage<T>;
       return;
     }
 
     try {
-      // Prefer node:async_hooks compat when available in Deno.
+      // Some universal runtimes expose Node compatibility modules without
+      // exposing a global AsyncLocalStorage constructor.
       this.alsClass =
         getBuiltinAsyncLocalStorageClass() ??
         ((await loadAsyncLocalStorageClass()) as new <
@@ -132,11 +131,6 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   hasAsyncLocalStorage(): boolean {
     if (!this.alsProbed) {
       const g = globalThis as GenericEventTarget;
-      if (typeof g.Deno === "undefined") {
-        this.alsProbed = true;
-        return false;
-      }
-
       if (typeof g.AsyncLocalStorage === "function") {
         this.alsClass = g.AsyncLocalStorage as new <
           T,

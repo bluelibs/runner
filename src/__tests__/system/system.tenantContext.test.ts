@@ -1,6 +1,11 @@
 import { asyncContexts, r, run } from "../..";
 import { storage } from "../../definers/defineAsyncContext";
-import { PlatformAdapter, resetPlatform, setPlatform } from "../../platform";
+import {
+  PlatformAdapter,
+  getPlatform,
+  resetPlatform,
+  setPlatform,
+} from "../../platform";
 import {
   tenantContextRequiredError,
   tenantInvalidContextError,
@@ -14,7 +19,17 @@ function tenantValue(tenantId: string) {
 }
 
 describe("asyncContexts.tenant", () => {
+  const globalScope = globalThis as typeof globalThis & {
+    AsyncLocalStorage?: new <T>() => {
+      getStore(): T | undefined;
+      run<R>(store: T, callback: () => R): R;
+    };
+  };
+  const originalAsyncLocalStorage = globalScope.AsyncLocalStorage;
+
   afterEach(() => {
+    globalScope.AsyncLocalStorage = originalAsyncLocalStorage;
+    jest.restoreAllMocks();
     resetPlatform();
   });
 
@@ -24,6 +39,8 @@ describe("asyncContexts.tenant", () => {
   });
 
   it("stays safely unavailable on platforms without async local storage", () => {
+    jest.spyOn(process, "getBuiltinModule").mockReturnValue(undefined);
+    globalScope.AsyncLocalStorage = undefined;
     setPlatform(new PlatformAdapter("universal"));
 
     expect(asyncContexts.tenant.tryUse()).toBeUndefined();
@@ -150,5 +167,39 @@ describe("asyncContexts.tenant", () => {
     expect(() =>
       storage.run(invalidStore, () => asyncContexts.tenant.tryUse()),
     ).toThrow();
+  });
+
+  it("rechecks async-local availability after platform init", async () => {
+    globalScope.AsyncLocalStorage = class MockALS<T> {
+      private store: T | undefined;
+
+      getStore(): T | undefined {
+        return this.store;
+      }
+
+      run<R>(store: T, callback: () => R): R {
+        const previous = this.store;
+        this.store = store;
+        try {
+          return callback();
+        } finally {
+          this.store = previous;
+        }
+      }
+    };
+
+    setPlatform(new PlatformAdapter("universal"));
+    expect(
+      asyncContexts.tenant.provide(tenantValue("acme"), () => "before"),
+    ).toBe("before");
+
+    await getPlatform().init();
+
+    const result = await asyncContexts.tenant.provide(
+      tenantValue("acme"),
+      async () => asyncContexts.tenant.use().tenantId,
+    );
+
+    expect(result).toBe("acme");
   });
 });

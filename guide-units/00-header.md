@@ -108,7 +108,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | Capability                                             | Node.js | Browser | Edge | Notes                                      |
 | ------------------------------------------------------ | ------- | ------- | ---- | ------------------------------------------ |
 | Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
-| Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
+| Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires `AsyncLocalStorage`; Bun/Deno may support it via the universal build when available |
 | Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                           |
 | Remote Lanes client (`createHttpClient`)               | Full    | Full    | Full | Explicit universal client for `fetch` runtimes |
 | Remote Lanes server (`@bluelibs/runner/node`)          | Full    | None    | None | Exposes tasks/events over HTTP             |

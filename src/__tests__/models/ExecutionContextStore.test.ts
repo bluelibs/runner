@@ -24,6 +24,7 @@ function makeFrame(
 
 describe("ExecutionContextStore", () => {
   afterEach(() => {
+    jest.restoreAllMocks();
     resetPlatform();
   });
 
@@ -45,6 +46,7 @@ describe("ExecutionContextStore", () => {
     });
 
     it("returns the wrapped result when async local storage is unavailable", () => {
+      jest.spyOn(process, "getBuiltinModule").mockReturnValue(undefined);
       setPlatform(new PlatformAdapter("universal"));
       const ctx = new ExecutionContextStore({
         maxDepth: 2,

@@ -664,7 +664,7 @@ const listProjects = r
 - Logging and auditing tasks that silently lose request correlation ids.
 - Hidden bugs where context is only present in some call paths.
 
-> **Platform Note:** Async context requires `AsyncLocalStorage`, which is Node-only. In browsers and edge runtimes, async context APIs are not available.
+> **Platform Note:** Async context requires `AsyncLocalStorage`. The Node build supports it directly, and compatible Bun/Deno runtimes can support it through the universal path when that primitive is available. In browsers and runtimes without async-local storage, async context APIs are not available.
 
 **What you just learned**: `requireContext` turns missing async context into an immediate, explicit failure instead of a delayed business-logic bug.
 
