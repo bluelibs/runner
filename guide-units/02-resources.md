@@ -28,6 +28,7 @@ Once `run(app)` resolves, the returned runtime is your operator-facing handle. T
 - `runtime.getHealth(...)` to evaluate resource health probes
 - `runtime.pause()`, `runtime.resume()`, and `runtime.recoverWhen(...)` to control admissions
 - `runtime.dispose()` to stop the runtime cleanly
+- `runtime.dispose({ force: true })` to skip graceful shutdown orchestration and jump directly to resource `dispose()`
 
 ```typescript
 import { r } from "@bluelibs/runner";

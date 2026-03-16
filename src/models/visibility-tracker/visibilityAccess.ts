@@ -6,6 +6,13 @@ export type RootAccessInfo = {
   exportedIds: string[];
 };
 
+export function hasExportsDeclaration(
+  state: VisibilityTrackerState,
+  resourceId: string,
+): boolean {
+  return state.exportSets.has(resourceId);
+}
+
 export function getRootAccessInfo(
   state: VisibilityTrackerState,
   targetId: string,
@@ -16,7 +23,10 @@ export function getRootAccessInfo(
     return { accessible: true, exportedIds: [] };
   }
 
-  return { accessible: exportSet.has(targetId), exportedIds: [...exportSet] };
+  return {
+    accessible: isTargetAllowedByExports(state, targetId, rootId),
+    exportedIds: [...exportSet],
+  };
 }
 
 export function findVisibilityViolation(

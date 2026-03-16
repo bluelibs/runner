@@ -32,6 +32,29 @@ describe("Store", () => {
     expect(store.getMiddlewareManager()).toBeInstanceOf(MiddlewareManager);
   });
 
+  it("should skip cooldown wave resources once force escalation requests a stop", async () => {
+    const cooldownResource = {
+      isInitialized: true,
+      resource: {
+        id: "store-cooldown-wave-resource",
+        cooldown: jest.fn(),
+      },
+    };
+
+    const errors = await (store as any).cooldownWave(
+      {
+        parallel: false,
+        resources: [cooldownResource],
+      },
+      {
+        shouldStop: () => true,
+      },
+    );
+
+    expect(errors).toEqual([]);
+    expect(cooldownResource.resource.cooldown).not.toHaveBeenCalled();
+  });
+
   it("should expose visibility helper methods", () => {
     const rootResource = defineResource({
       id: "store-visibility-helpers-root",

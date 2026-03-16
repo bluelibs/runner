@@ -242,6 +242,7 @@ export const runtimeAccessViolationError = error<
     targetType: "Task" | "Event" | "Resource";
     rootId: string;
     exportedIds: string[];
+    exportsDeclared: boolean;
   } & DefaultErrorType
 >("runtimeAccessViolation")
   .format(
@@ -252,7 +253,7 @@ export const runtimeAccessViolationError = error<
     const exported =
       exportedIds.length > 0
         ? `Root "${rootId}" currently exports: [${exportedIds.join(", ")}].`
-        : `Root "${rootId}" has no exports declared.`;
+        : `Root "${rootId}" explicitly exports nothing.`;
     return `${exported} Add "${targetId}" to the root's .isolate({ exports: [...] }) to allow runtime API access.`;
   })
   .build();

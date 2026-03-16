@@ -157,6 +157,7 @@ export async function run<C, V extends Promise<any>>(
     taskRunner,
     runOptions,
     () => shutdownController.disposeWithShutdownLifecycle(),
+    () => shutdownController.requestForceDispose(),
   );
   const shutdownController: RunShutdownController = createRunShutdownController(
     {

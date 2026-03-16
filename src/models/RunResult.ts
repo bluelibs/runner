@@ -31,6 +31,7 @@ import {
   IRuntimeRecoveryHandle,
   IRuntimeRecoveryOptions,
   ResolvedRunOptions,
+  RuntimeDisposeOptions,
   RuntimeState,
 } from "../types/runner";
 import { globalResources } from "../globals/globalResources";
@@ -153,10 +154,15 @@ export class RunResult<V> implements IRuntime<V> {
      */
     public readonly runOptions: ResolvedRunOptions,
     /**
-     * Function to call during disposal.
-     * Disposes all resources in reverse initialization order.
+     * Function to call during disposal after the synchronous shutdown
+     * admission state has already been updated.
      */
     private readonly disposeFn: () => Promise<void>,
+    /**
+     * Requests that any in-flight graceful shutdown stop waiting at the next
+     * safe Runner-owned checkpoint and jump to direct resource disposal.
+     */
+    private readonly requestForceDispose: () => void,
   ) {
     this.healthReporter = new HealthReporter(this.store, {
       ensureAvailable: () => {
@@ -268,6 +274,7 @@ export class RunResult<V> implements IRuntime<V> {
         targetType,
         rootId,
         exportedIds,
+        exportsDeclared: this.store.hasExportsDeclaration(rootId),
       });
     }
   }
@@ -669,9 +676,10 @@ export class RunResult<V> implements IRuntime<V> {
    *
    * @example
    * await runtime.dispose();
+   * await runtime.dispose({ force: true });
    * // All resources cleaned up, runtime is now inactive
    */
-  public dispose = () => {
+  public dispose = (options: RuntimeDisposeOptions = {}) => {
     if (this.#isBootstrapping) {
       runResultDisposeDuringBootstrapError.throw();
     }
@@ -680,13 +688,23 @@ export class RunResult<V> implements IRuntime<V> {
       return Promise.resolve();
     }
 
+    if (options.force) {
+      this.requestForceDispose();
+      this.store.beginDisposing();
+      this.store.cancelDrainWaiters();
+    }
+
     if (this.#disposePromise) {
       return this.#disposePromise;
     }
 
     this.#disposing = true;
     this.recoveryController.dispose();
-    this.store.beginCoolingDown();
+    if (options.force) {
+      this.store.beginDisposing();
+    } else {
+      this.store.beginCoolingDown();
+    }
 
     this.#disposePromise = Promise.resolve()
       .then(() => this.disposeFn())

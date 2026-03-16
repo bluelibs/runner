@@ -59,6 +59,7 @@ export function createTestFixture() {
         taskRunner ?? new TaskRunner(store, eventManager, logger),
         testRunOptions,
         async () => store.dispose(),
+        () => {},
       ),
   };
 }

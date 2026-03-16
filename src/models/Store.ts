@@ -271,6 +271,13 @@ export class Store {
     return this.registry.visibilityTracker.getRootAccessInfo(targetId, rootId);
   }
 
+  /**
+   * Returns whether the resource explicitly declared an exports boundary.
+   */
+  public hasExportsDeclaration(resourceId: string): boolean {
+    return this.registry.visibilityTracker.hasExportsDeclaration(resourceId);
+  }
+
   get isLocked() {
     return this.#isLocked;
   }
@@ -324,6 +331,10 @@ export class Store {
 
   public async waitForDrain(drainingBudgetMs: number): Promise<boolean> {
     return this.lifecycleAdmissionController.waitForDrain(drainingBudgetMs);
+  }
+
+  public cancelDrainWaiters(): void {
+    this.lifecycleAdmissionController.cancelDrainWaiters();
   }
 
   public markDisposed() {
@@ -669,7 +680,7 @@ export class Store {
     await this.runReadyResource(resource);
   }
 
-  public async cooldown() {
+  public async cooldown(options?: { shouldStop?: () => boolean }) {
     if (this.hasRunCooldown) {
       return;
     }
@@ -677,7 +688,11 @@ export class Store {
     this.hasRunCooldown = true;
 
     for (const wave of this.getResourcesInDisposeWaves()) {
-      const waveErrors = await this.cooldownWave(wave);
+      if (options?.shouldStop?.()) {
+        return;
+      }
+
+      const waveErrors = await this.cooldownWave(wave, options);
       await this.logCooldownErrors(waveErrors);
     }
   }
@@ -735,8 +750,17 @@ export class Store {
     return errors;
   }
 
-  private async cooldownWave(wave: DisposeWave): Promise<Error[]> {
-    return this.executeWave(wave, (r) => this.cooldownResource(r));
+  private async cooldownWave(
+    wave: DisposeWave,
+    options?: { shouldStop?: () => boolean },
+  ): Promise<Error[]> {
+    return this.executeWave(wave, async (resource) => {
+      if (options?.shouldStop?.()) {
+        return;
+      }
+
+      await this.cooldownResource(resource);
+    });
   }
 
   private async readyWave(wave: DisposeWave): Promise<void> {

@@ -37,6 +37,7 @@ describe("Store regressions", () => {
         mode: RunnerMode.TEST,
       },
       async () => store.dispose(),
+      () => {},
     );
     const root = defineResource({
       id: ResourceId.Root,

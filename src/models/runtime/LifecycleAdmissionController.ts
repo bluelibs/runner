@@ -179,6 +179,14 @@ export class LifecycleAdmissionController {
     });
   }
 
+  public cancelDrainWaiters(): void {
+    for (const waiter of Array.from(this.drainWaiters)) {
+      clearTimeout(waiter.timeout);
+      waiter.resolve(false);
+      this.drainWaiters.delete(waiter);
+    }
+  }
+
   private canAdmit(source: RuntimeCallSource): boolean {
     if (this.phase === RuntimeLifecyclePhase.Running) {
       return true;

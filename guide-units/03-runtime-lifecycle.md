@@ -45,8 +45,9 @@ An object with the following properties and methods:
 | `logger`                    | Logger instance for the runtime. |
 | `store`                     | Runtime store with registered definitions and internals. |
 | `dispose()`                 | Start graceful shutdown and await full disposal. |
+| `dispose({ force: true })`  | Skip graceful shutdown orchestration and jump straight to resource disposal. |
 
-Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.
+Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes. `force: true` is manual-only; signal-based shutdown stays graceful.
 
 This object is your main interface to interact with the running application. It can also be declared as a dependency via `resources.runtime`.
 
@@ -358,7 +359,7 @@ Signal-based shutdown follows the standard disposal lifecycle sequence described
 
 If a signal arrives while `run(...)` is still bootstrapping, Runner cancels startup and performs the same graceful teardown path.
 
-Signal-based shutdown, `run(..., { signal })`, and manual `runtime.dispose()` follow the same shutdown lifecycle (`coolingDown`, `disposing`, `drained`) and the same admission rules.
+Signal-based shutdown, `run(..., { signal })`, and manual `runtime.dispose()` follow the same graceful shutdown lifecycle (`coolingDown`, `disposing`, `drained`) and the same admission rules.
 
 ```typescript
 await run(app, {
@@ -411,6 +412,16 @@ Manual `runtime.dispose()` and signal-based shutdown both follow:
 8. `events.drained` (lifecycle-bypassed, awaited)
 9. fully awaited resource disposal
 
+`runtime.dispose({ force: true })` is the exception:
+
+1. transition directly to shutdown lockdown
+2. skip `cooldown()`
+3. skip `dispose.cooldownWindowMs`
+4. skip `events.disposing`
+5. skip drain wait
+6. skip `events.drained`
+7. fully awaited resource disposal
+
 ```mermaid
 sequenceDiagram
     participant App
@@ -447,6 +458,8 @@ sequenceDiagram
 ```
 
 Important: hooks registered on `events.drained` **do fire** (the emission is lifecycle-bypassed), but those hooks cannot start new tasks or emit additional events — all regular business admissions are blocked once `drained` begins.
+
+Important: `runtime.dispose({ force: true })` does not emit `events.disposing` or `events.drained`. It is meant for operator-controlled "stop waiting and tear down now" situations.
 
 ### Error Boundary Integration
 

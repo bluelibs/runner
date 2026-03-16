@@ -16,9 +16,11 @@ import {
   type RunDisposalSignalController,
 } from "./runDisposalSignal";
 import type { OnUnhandledError } from "../models/UnhandledError";
+import { ForceDisposalController } from "./ForceDisposalController";
 
 export type RunShutdownController = {
   readonly bootstrap: BootstrapCoordinator;
+  requestForceDispose(): void;
   assertNotAborted(): void;
   disposeAll(): Promise<void>;
   disposeWithShutdownLifecycle(): Promise<void>;
@@ -46,6 +48,7 @@ export function createRunShutdownController(
   input: CreateRunShutdownControllerInput,
 ): RunShutdownController {
   const bootstrap = new BootstrapCoordinator();
+  const forceDisposal = new ForceDisposalController();
   let unhookShutdown: (() => void) | undefined;
 
   const runLifecycleSource = runtimeSource.runtime("runtime.lifecycle");
@@ -83,6 +86,7 @@ export function createRunShutdownController(
       runLogger,
       runtimeLifecycleSource: runLifecycleSource,
       dispose: input.dispose,
+      forceDisposal,
       disposeAll,
     });
 
@@ -106,6 +110,9 @@ export function createRunShutdownController(
 
   return {
     bootstrap,
+    requestForceDispose() {
+      forceDisposal.request();
+    },
     assertNotAborted() {
       runDisposalSignal.assertNotAborted();
     },

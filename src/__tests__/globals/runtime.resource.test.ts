@@ -173,6 +173,7 @@ describe("system.runtime", () => {
         mode: RunnerMode.TEST,
       },
       async () => {},
+      () => {},
     );
 
     expect(() => runtime.root).toThrow("Root resource is not available.");

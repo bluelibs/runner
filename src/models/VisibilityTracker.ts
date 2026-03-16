@@ -7,6 +7,7 @@ import type { StoreRegistry } from "./StoreRegistry";
 import {
   getAccessViolation,
   getRootAccessInfo,
+  hasExportsDeclaration,
   isAccessible,
 } from "./visibility-tracker/accessEvaluator";
 import type { AccessViolation } from "./visibility-tracker/contracts";
@@ -79,6 +80,10 @@ export class VisibilityTracker {
     rootId: string,
   ): { accessible: boolean; exportedIds: string[] } {
     return getRootAccessInfo(this.state, targetId, rootId);
+  }
+
+  hasExportsDeclaration(resourceId: string): boolean {
+    return hasExportsDeclaration(this.state, resourceId);
   }
 
   /**

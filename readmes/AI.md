@@ -155,7 +155,7 @@ Main runtime helpers:
 - `getLazyResourceValue`
 - `getResourceConfig`
 - `getHealth`
-- `dispose`
+- `dispose(options?)`
 
 The returned runtime also exposes:
 
@@ -202,6 +202,17 @@ Lifecycle order:
   - drain in-flight work within the remaining shutdown budget
   - emit `events.drained`
   - run `dispose()` in reverse dependency order
+
+Disposal modes:
+
+- `runtime.dispose()` is the normal graceful path above.
+- `runtime.dispose({ force: true })` is a manual fast path:
+  - skip `cooldown()`
+  - skip `dispose.cooldownWindowMs`
+  - skip `events.disposing`
+  - skip drain wait
+  - skip `events.drained`
+  - jump directly to resource `dispose()` in reverse dependency order
 
 Pause and recovery:
 
@@ -254,7 +265,9 @@ Resources model shared services and state. They are Runner's primary composition
   Runner fully awaits it before narrowing admissions, and its time still counts against the remaining `dispose.totalBudgetMs` budget.
   During `coolingDown`, task runs and event emissions stay open; if `dispose.cooldownWindowMs > 0`, Runner keeps that broader admission policy open for the extra bounded window after `cooldown()` completes.
   Once `disposing` begins, fresh admissions narrow to the cooling resource itself, any additional resource definitions returned from `cooldown()`, and in-flight continuations.
+  `runtime.dispose({ force: true })` skips `cooldown()` entirely.
 - `dispose(value, config, deps, context)` performs final teardown after drain.
+  With `runtime.dispose({ force: true })`, this becomes the first resource lifecycle phase reached during shutdown.
 - `health(value, config, deps, context)` is an optional probe used by `resources.health.getHealth(...)` and `runtime.getHealth(...)`.
   Return `{ status: "healthy" | "degraded" | "unhealthy", message?, details? }`.
 - Config-only resources can omit `.init()`. Their resolved value is `undefined`.

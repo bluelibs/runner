@@ -47,6 +47,18 @@ export interface IRuntimeRecoveryOptions {
 }
 
 /**
+ * Optional controls for runtime disposal.
+ */
+export type RuntimeDisposeOptions = {
+  /**
+   * Skips graceful shutdown orchestration and jumps directly to resource
+   * disposal. This bypasses `cooldown()`, `dispose.cooldownWindowMs`,
+   * `events.disposing`, drain wait, and `events.drained`.
+   */
+  force?: boolean;
+};
+
+/**
  * Common interface for the Runner runtime instance.
  * Provides access to tasks, events, resources, and lifecycle management.
  */
@@ -110,7 +122,7 @@ export interface IRuntime<V = unknown> extends IHealthReporter {
   recoverWhen(options: IRuntimeRecoveryOptions): IRuntimeRecoveryHandle;
 
   /** Disposes the runtime and all resources. */
-  dispose(): Promise<void>;
+  dispose(options?: RuntimeDisposeOptions): Promise<void>;
 }
 
 /**
