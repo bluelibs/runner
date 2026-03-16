@@ -1,6 +1,11 @@
 import { defineEvent, defineResource } from "../../define";
 import { runtimeElementNotFoundError, validationError } from "../../errors";
-import { createSyntheticFrameworkRoot } from "../../models/createSyntheticFrameworkRoot";
+import {
+  createSyntheticFrameworkRoot,
+  FRAMEWORK_RUNNER_RESOURCE_ID,
+  FRAMEWORK_SYSTEM_RESOURCE_ID,
+  SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID,
+} from "../../models/createSyntheticFrameworkRoot";
 import { runtimeSource } from "../../types/runtimeSource";
 import { createTestFixture } from "../test-utils";
 
@@ -91,8 +96,32 @@ describe("Store coverage", () => {
 
     const registerEntries = frameworkRoot.register as unknown as Array<{
       id: string;
+      meta?: {
+        title?: string;
+        description?: string;
+      };
       [key: symbol]: unknown;
     }>;
+    expect(frameworkRoot.id).toBe(SYNTHETIC_FRAMEWORK_ROOT_RESOURCE_ID);
+    expect(frameworkRoot.meta).toEqual({
+      title: "Framework Root",
+      description:
+        "Transparent synthetic bootstrap root that registers the system namespace, runner namespace, and the user app root into a single runtime graph.",
+    });
+    expect(registerEntries[0]).toMatchObject({
+      id: FRAMEWORK_SYSTEM_RESOURCE_ID,
+      meta: {
+        title: "System Namespace",
+        description: expect.stringContaining("locked internal infrastructure"),
+      },
+    });
+    expect(registerEntries[1]).toMatchObject({
+      id: FRAMEWORK_RUNNER_RESOURCE_ID,
+      meta: {
+        title: "Runner Namespace",
+        description: expect.stringContaining("built-in Runner utilities"),
+      },
+    });
     expect(registerEntries[2]?.id).toBe(root.id);
   });
 

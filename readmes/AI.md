@@ -276,6 +276,10 @@ Ownership and ids:
 - Child resources continue that chain, for example `app.billing.tasks.createInvoice`.
 - Only the internal synthetic framework root is invisible to user-facing ids.
 - `runtime-framework-root` is reserved and cannot be used as a user resource id.
+- Runner also creates two real framework namespace resources:
+  - `system`: owns locked internals such as `resources.store`, `resources.eventManager`, `resources.taskRunner`, `resources.middlewareManager`, `resources.runtime`, lifecycle events, and the internal system tag
+  - `runner`: owns built-in utility globals such as `resources.mode`, `resources.health`, `resources.timers`, `resources.logger`, `resources.serializer`, `resources.queue`, core tags, middleware, and framework errors
+- `system` and `runner` carry proper `.meta.title` and `.meta.description` for docs and tooling, even though the transparent `runtime-framework-root` stays internal-only.
 
 Lazy resources:
 
